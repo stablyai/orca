@@ -58,14 +58,49 @@ export async function openAuthenticatedDirectEndpoint(
   openDirect: (endpoint: string) => RpcClient,
   timeoutMs: number
 ): Promise<{ client: RpcClient; path: Exclude<MobileConnectionPath, 'relay'> } | null> {
-  for (const endpoint of directEndpointUrls(host)) {
-    const client = openDirect(endpoint)
-    try {
-      await waitForAuthenticatedSession(client, timeoutMs)
-      return { client, path: directPathForEndpoint(host, endpoint) }
-    } catch {
-      client.close()
+  const endpoints = directEndpointUrls(host)
+  return await new Promise((resolve) => {
+    const clients = new Set<RpcClient>()
+    let remaining = endpoints.length
+    let settled = false
+    const rejectCandidate = (): void => {
+      remaining--
+      if (!settled && remaining === 0) {
+        settled = true
+        resolve(null)
+      }
     }
-  }
-  return null
+    for (const endpoint of endpoints) {
+      let client: RpcClient
+      try {
+        client = openDirect(endpoint)
+      } catch {
+        rejectCandidate()
+        continue
+      }
+      clients.add(client)
+      void waitForAuthenticatedSession(client, timeoutMs).then(
+        () => {
+          if (settled) {
+            client.close()
+            return
+          }
+          settled = true
+          for (const candidate of clients) {
+            if (candidate !== client) {
+              candidate.close()
+            }
+          }
+          resolve({ client, path: directPathForEndpoint(host, endpoint) })
+        },
+        () => {
+          if (settled) {
+            return
+          }
+          client.close()
+          rejectCandidate()
+        }
+      )
+    }
+  })
 }

@@ -11,6 +11,7 @@ import {
 import { isPowerShellProcess } from '../../shared/shell-process-detection'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
 import type { TuiAgent } from '../../shared/types'
+import { randomUUID } from 'node:crypto'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import {
   PtyStartupIngress,
@@ -24,6 +25,7 @@ import type {
   TakePendingOutputResult,
   TerminalSnapshot
 } from './types'
+import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
 // Why: Codex skips marker-gated command delivery; this only bounds older daemon/local paths that still report shell-ready for Codex.
@@ -78,23 +80,25 @@ export type SessionOptions = {
   subprocess: SubprocessHandle
   shellReadySupported: boolean
   shellReadyTimeoutMs?: number
-  historySeed?: string
+  historySeedChunks?: readonly string[]
   scrollback?: number
   wslDistro?: string
   // Fired once the session reaches a terminal state so the owner (TerminalHost) can reap it; without
   // a reaper, dead sessions and their scrollback emulators accumulate for the daemon's lifetime.
   onExit?: (code: number) => void
   startupIngress?: PtyStartupIngressIntent
+  ownerBackend?: PtyOwnerBackend
 }
 
 type AttachedClient = {
   token: symbol
   onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
-  onExit: (code: number) => void
+  onExit: (code: number, incarnationId: string) => void
 }
 
 export class Session {
   readonly sessionId: string
+  readonly incarnationId = randomUUID()
   readonly terminalHandle: string | null
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
@@ -142,8 +146,12 @@ export class Session {
       // the authoritative responder and a daemon reply would race ahead and clobber it. See HeadlessEmulator.
     })
     // Why: seed recovery must precede listener registration; shells can emit their prompt synchronously once onData subscribes.
+    // Why the every() short-circuit is safe: writeSync only fails emulator-wide (disposed / no sync write API), so later
+    // chunks could not land either — and writing them past a dropped chunk would seed a torn stream.
     this._historySeeded =
-      opts.historySeed === undefined ? undefined : this.emulator.writeSync(opts.historySeed)
+      opts.historySeedChunks === undefined
+        ? undefined
+        : opts.historySeedChunks.every((chunk) => this.emulator.writeSync(chunk))
 
     if (opts.shellReadySupported) {
       this._shellState = 'pending'
@@ -158,6 +166,7 @@ export class Session {
     this.postReadyFlushGate = new PostReadyFlushGate(() => this.flushPreReadyQueue())
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
+      ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.emitSubprocessOutput(emission)
     })
@@ -522,7 +531,7 @@ export class Session {
     this.emulator.dispose()
 
     for (const client of clientsToNotify) {
-      client.onExit(-1)
+      client.onExit(-1, this.incarnationId)
     }
   }
 
@@ -667,7 +676,7 @@ export class Session {
     this.disposeSubprocessHandle()
 
     for (const client of this.attachedClients) {
-      client.onExit(code)
+      client.onExit(code, this.incarnationId)
     }
 
     // Why: hand off to the owner's reaper (disposes emulator, drops session from host map); else dead sessions accumulate.

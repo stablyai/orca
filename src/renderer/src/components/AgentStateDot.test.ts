@@ -47,12 +47,14 @@ describe('AgentStateDot', () => {
   })
 
   it.each(['permission', 'waiting'] satisfies AgentDotState[])(
-    'renders %s as an amber attention dot',
+    'renders %s as an amber question glyph',
     (state) => {
-      const classNames = renderDotClassNames(state)
+      const markup = renderMarkup(state)
 
-      expect(classNames).toContain('bg-amber-500')
-      expect(classNames).not.toContain('bg-red-500')
+      expect(markup).toContain('lucide-message-circle-question-mark')
+      expect(markup).toContain('text-amber-500')
+      expect(markup).not.toContain('bg-amber-500')
+      expect(markup).not.toContain('data-agent-spinner')
     }
   )
 

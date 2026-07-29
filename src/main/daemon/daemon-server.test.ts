@@ -184,6 +184,9 @@ describe('DaemonServer', () => {
         isNew: true,
         pid: 55555
       })
+      await expect(
+        c.request('closeStartupQueryAuthority', { sessionId: 'test-session' })
+      ).resolves.toEqual({ appliedSeq: 0 })
     })
 
     it('keeps RPC responsive and creates one subprocess while spawn preparation is pending', async () => {

@@ -344,7 +344,8 @@ describe('ai vault resume command runtime', () => {
         agentCommand: "claude '--dangerously-skip-permissions' '--effort' 'max'",
         agentArgs: '--dangerously-skip-permissions --effort max',
         agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
-      }
+      },
+      providerSession: { key: 'session_id', id: 'session-1' }
     })
   })
 
@@ -472,6 +473,29 @@ describe('ai vault resume command runtime', () => {
     ).toBe("cd '/home/alice/repo' && CODEX_HOME='/home/alice/.codex' codex 'resume' 'session one'")
   })
 
+  it('converts WSL UNC OMP transcript paths before building Linux resume commands', () => {
+    const state = makeState({
+      worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
+    })
+
+    expect(
+      buildQueuedAiVaultResumeCommand({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'omp',
+          sessionId: '019f27cd-4268-7000-96e7-62f42a55c144',
+          filePath:
+            '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl',
+          cwd: '/home/alice/repo',
+          codexHome: null
+        }
+      })
+    ).toBe(
+      "cd '/home/alice/repo' && omp --resume '/home/alice/.omp/agent/sessions/repo/sess.jsonl'"
+    )
+  })
+
   it('deletes inherited Codex homes when resuming a real-home session', () => {
     const state = makeState({ worktreePath: '/home/alice/repo' })
 
@@ -511,7 +535,8 @@ describe('ai vault resume command runtime', () => {
       })
     ).toMatchObject({
       command: "cd '/home/alice/repo' && codex 'resume' 'session one'",
-      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME']
+      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+      providerSession: { key: 'session_id', id: 'session one' }
     })
   })
 

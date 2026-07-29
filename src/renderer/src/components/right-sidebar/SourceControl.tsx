@@ -45,7 +45,8 @@ import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
-import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -96,6 +97,7 @@ import {
   namespaceSourceControlTreeDirectoryKeys,
   type SourceControlTreeNode
 } from './source-control-tree'
+import { compareGitStatusEntries } from './source-control-status-sort'
 import {
   collectListSelectionEntries,
   getSubmoduleExpansionKey,
@@ -809,7 +811,6 @@ function SourceControlInner(): React.JSX.Element {
   const activeRepoConnectionId = activeRepo?.connectionId ?? null
   const activeRepoExecutionHostId = activeRepo?.executionHostId ?? null
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
-  const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
   const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
   const entries = useAppStore((s) =>
     activeWorktreeId
@@ -4710,6 +4711,13 @@ function SourceControlInner(): React.JSX.Element {
     runCreatePrIntent
   ])
 
+  const handleSourceControlKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>): void => {
+      handleSourceControlCommitShortcut(event, primaryAction, handlePrimaryClick)
+    },
+    [handlePrimaryClick, primaryAction]
+  )
+
   const handleCreatePrHeaderClick = useCallback((): void => {
     if (!createPrHeaderAction || createPrHeaderAction.disabled) {
       return
@@ -5450,7 +5458,11 @@ function SourceControlInner(): React.JSX.Element {
 
   return (
     <>
-      <div ref={setSourceControlRoot} className="relative flex h-full flex-col overflow-hidden">
+      <div
+        ref={setSourceControlRoot}
+        className="relative flex h-full flex-col overflow-hidden"
+        onKeyDown={handleSourceControlKeyDown}
+      >
         <SourceControlHeaderToolbar
           filterQuery={filterQuery}
           filterExpanded={filterExpanded}
@@ -5472,15 +5484,10 @@ function SourceControlInner(): React.JSX.Element {
           onExpandNotes={() => setDiffCommentsExpanded(true)}
           branchSummary={branchSummary}
           compareBaseRef={compareBaseRef}
+          headDisplay={gitIdentityDisplay}
           upstreamStatus={remoteStatus}
           manualReviewUrl={manualReviewUrl}
         />
-
-        {detachedHeadDisplay && (
-          <div className="border-b border-border px-3 py-2">
-            <DetachedHeadBadge display={detachedHeadDisplay} side="bottom" />
-          </div>
-        )}
 
         {/* Why: hidden when count is 0 — notes are created from the diff view, so an empty Notes shelf here is pure chrome. */}
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
@@ -5525,6 +5532,7 @@ function SourceControlInner(): React.JSX.Element {
                   groupId={activeGroupId ?? activeWorktreeId}
                   comments={diffCommentsForActive}
                   triggerClassName="size-6"
+                  respondToOpenRequest
                 />
                 {diffCommentCount > 0 && (
                   <TooltipProvider delayDuration={400}>
@@ -5769,7 +5777,6 @@ function SourceControlInner(): React.JSX.Element {
                 groupId={activeGroupId ?? activeWorktreeId}
                 showComposer={!showGenericEmptyState}
                 sourceControlAiActionsVisible={sourceControlAiActionsVisible}
-                aiEnabled={sourceControlAiActionsVisible && resolvedCommitMessageAi?.ok === true}
                 aiAgentConfigured={resolvedCommitMessageAi?.ok === true}
                 isGenerating={isGenerating}
                 generateError={generateError}
@@ -6330,6 +6337,7 @@ function SourceControlInner(): React.JSX.Element {
         settings={settings}
         repo={activeRepo ?? null}
         discoveryHostKey={sourceControlAiDiscoveryHostKey}
+        linkedIssue={activeWorktree?.linkedIssue ?? null}
         onGenerate={(params) => {
           void handleGenerate({ sourceControlAiResolvedParams: params })
         }}
@@ -6351,6 +6359,7 @@ function SourceControlInner(): React.JSX.Element {
         settings={settings}
         repo={activeRepo ?? null}
         discoveryHostKey={sourceControlAiDiscoveryHostKey}
+        linkedIssue={activeWorktree?.linkedIssue ?? null}
         onGenerate={(params) => {
           void handleGeneratePullRequestFields({ sourceControlAiResolvedParams: params })
         }}
@@ -6362,6 +6371,20 @@ function SourceControlInner(): React.JSX.Element {
 
 const SourceControl = React.memo(SourceControlInner)
 export default SourceControl
+
+export function handleSourceControlCommitShortcut(
+  event: React.KeyboardEvent<HTMLElement>,
+  primaryAction: Pick<PrimaryAction, 'disabled' | 'kind'>,
+  onCommit: () => void
+): void {
+  if (primaryAction.disabled || primaryAction.kind !== 'commit' || !isScreenSubmitShortcut(event)) {
+    return
+  }
+  // Why: the handler lives on the Source Control root, so the shortcut cannot fire from the editor, terminal, or another sidebar tab.
+  event.preventDefault()
+  event.stopPropagation()
+  onCommit()
+}
 
 type CommitAreaProps = {
   worktreeId: string | null
@@ -6382,7 +6405,6 @@ type CommitAreaProps = {
   isCreatePrIntentInFlight?: boolean
   showComposer?: boolean
   sourceControlAiActionsVisible: boolean
-  aiEnabled: boolean
   aiAgentConfigured: boolean
   isGenerating: boolean
   generateError: string | null
@@ -6429,7 +6451,6 @@ export function CommitArea({
   isCreatePrIntentInFlight = false,
   showComposer = true,
   sourceControlAiActionsVisible,
-  aiEnabled,
   aiAgentConfigured,
   isGenerating,
   generateError,
@@ -6506,29 +6527,23 @@ export function CommitArea({
     .filter(Boolean)
     .join(' ')
 
-  // Why: only render Generate when it has a runnable path; else keep the composer focused on Commit.
+  // Why: config errors are surfaced by the generation dialog, so entry-point visibility only follows the feature toggle.
   // Why: Create PR intent owns generation, so a second composer spinner would stack on the primary spinner.
-  const showGenerate =
-    showComposer && aiEnabled && !isCreatePrIntentInFlight && (aiAgentConfigured || isGenerating)
-  let generateDisabledReason: string | undefined
+  const showGenerate = showComposer && sourceControlAiActionsVisible && !isCreatePrIntentInFlight
+  let generateTooltip: string | undefined
   if (isGenerating) {
-    generateDisabledReason = 'Generating commit message…'
+    generateTooltip = 'Generating commit message…'
   } else if (isCommitting) {
-    generateDisabledReason = 'Commit in progress…'
-  } else if (!aiAgentConfigured) {
-    generateDisabledReason = 'Pick an agent in Settings -> Git -> Source Control AI.'
+    generateTooltip = 'Commit in progress…'
   } else if (stagedCount === 0) {
-    generateDisabledReason = 'Stage at least one file to generate a message.'
+    generateTooltip = 'Stage at least one file to generate a message.'
   } else if (hasMessage) {
-    generateDisabledReason = 'Clear the message to regenerate.'
+    generateTooltip = 'Clear the message to regenerate.'
+  } else if (!aiAgentConfigured) {
+    generateTooltip = 'Pick an agent in Settings -> Git -> Source Control AI.'
   }
   const isGenerateDisabled =
-    !aiAgentConfigured ||
-    isGenerating ||
-    isCommitting ||
-    stagedCount === 0 ||
-    hasMessage ||
-    hasUnresolvedConflicts
+    isGenerating || isCommitting || stagedCount === 0 || hasMessage || hasUnresolvedConflicts
   const moreCommitAndRemoteActionsLabel = translate(
     'auto.components.right.sidebar.SourceControl.cc199ccc5f',
     'More commit and remote actions'
@@ -6646,7 +6661,7 @@ export function CommitArea({
                       onGenerate()
                     }}
                     title={
-                      generateDisabledReason ??
+                      generateTooltip ??
                       translate(
                         'auto.components.right.sidebar.SourceControl.b16b8f0e4b',
                         'ai commit msg'
@@ -6666,7 +6681,7 @@ export function CommitArea({
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="left" sideOffset={6}>
-                  {generateDisabledReason ??
+                  {generateTooltip ??
                     translate(
                       'auto.components.right.sidebar.SourceControl.b16b8f0e4b',
                       'ai commit msg'
@@ -6703,8 +6718,11 @@ export function CommitArea({
                 </Button>
               </span>
             </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={6} className="max-w-72">
-              {primaryAction.title}
+            <TooltipContent side="top" sideOffset={6} className="flex max-w-72 items-center gap-2">
+              <span>{primaryAction.title}</span>
+              {primaryAction.kind === 'commit' ? (
+                <ShortcutKeyCombo keys={[getScreenSubmitModifierLabel(), 'Enter']} />
+              ) : null}
             </TooltipContent>
           </Tooltip>
           <DropdownMenu>
@@ -7836,6 +7854,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
     <SourceControlEntryContextMenu
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
+      relativePath={entry.path}
       connectionId={connectionId}
       onView={() => onOpen(entry)}
       onRevealInExplorer={onRevealInExplorer}
@@ -8085,6 +8104,7 @@ function BranchEntryRow({
     <SourceControlEntryContextMenu
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
+      relativePath={entry.path}
       connectionId={connectionId}
       onView={() => onOpen()}
       onRevealInExplorer={onRevealInExplorer}
@@ -8193,21 +8213,4 @@ export function ActionButton({
       </TooltipContent>
     </Tooltip>
   )
-}
-
-function compareGitStatusEntries(a: GitStatusEntry, b: GitStatusEntry): number {
-  return (
-    getConflictSortRank(a) - getConflictSortRank(b) ||
-    a.path.localeCompare(b.path, undefined, { numeric: true })
-  )
-}
-
-function getConflictSortRank(entry: GitStatusEntry): number {
-  if (entry.conflictStatus === 'unresolved') {
-    return 0
-  }
-  if (entry.conflictStatus === 'resolved_locally') {
-    return 1
-  }
-  return 2
 }

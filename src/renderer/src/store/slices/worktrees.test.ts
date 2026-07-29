@@ -18,6 +18,11 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import type {
+  HostQualifiedDetectedWorktreeResult,
+  ListDetectedWorktreesArgs
+} from '../../../../shared/detected-worktree-provider-contract'
+import type { DirectSshAuthority, SshProviderEpoch } from '../../../../shared/ssh-types'
 import {
   beginHugeRepoWarningProbe,
   clearHugeRepoWarningDismissalsForTests,
@@ -58,14 +63,48 @@ function makeDetectedResult(
   }
 }
 
+const TEST_SSH_AUTHORITY: DirectSshAuthority = {
+  targetId: 'ssh-1',
+  providerEpoch: 'provider-ssh-1' as SshProviderEpoch,
+  connectionGeneration: 1
+}
+
+function qualifyDetectedResult(
+  args: ListDetectedWorktreesArgs,
+  result: DetectedWorktreeListResult
+): HostQualifiedDetectedWorktreeResult {
+  return {
+    status: result.authoritative ? 'complete' : 'non-authoritative',
+    providerRequestId: args.providerRequestId,
+    repoId: args.repoId,
+    authority:
+      args.executionHostId === LOCAL_EXECUTION_HOST_ID
+        ? { kind: 'local', executionHostId: LOCAL_EXECUTION_HOST_ID }
+        : {
+            kind: 'direct-ssh',
+            executionHostId: args.executionHostId,
+            ...args.expectedAuthority
+          },
+    result
+  }
+}
+
+const listDetectedMock = vi.fn<
+  (
+    args: ListDetectedWorktreesArgs
+  ) => Promise<DetectedWorktreeListResult | HostQualifiedDetectedWorktreeResult>
+>(async (args) => {
+  const result = makeDetectedResult(args.repoId, await worktreeListMock({ repoId: args.repoId }))
+  return qualifyDetectedResult(args, result)
+})
+
 const mockApi = {
   worktrees: {
     create: vi.fn(),
     prefetchCreateBase: vi.fn().mockResolvedValue(undefined),
     list: worktreeListMock,
-    listDetected: vi.fn(async ({ repoId }: { repoId: string }) =>
-      makeDetectedResult(repoId, await worktreeListMock({ repoId }))
-    ),
+    listDetected: listDetectedMock,
+    cancelListDetected: vi.fn().mockResolvedValue(undefined),
     listLineage: vi.fn().mockResolvedValue({}),
     remove: vi.fn().mockResolvedValue(undefined),
     forceDeletePreservedBranch: vi.fn().mockResolvedValue({ deleted: true }),
@@ -95,6 +134,7 @@ globalThis.window = { api: mockApi }
 
 import {
   WORKTREE_REFRESH_CONCURRENCY,
+  acquireDirectSshDetectedWorktreeRefresh,
   createWorktreeSlice,
   getHostedReviewLinkMutationGenerationForTests,
   getHostedReviewLinkWorktreeAliasCountForTests,
@@ -109,6 +149,7 @@ import {
 } from '../../components/browser-pane/webview-registry'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { useAppStore } from '@/store'
 
 function resetRemoteRuntimeMocks() {
   clearRuntimeCompatibilityCacheForTests()
@@ -127,9 +168,23 @@ function createTestStore() {
         // Why: this test isolates the worktree slice, so it provides only the state surface createWorktreeSlice touches.
         ...createWorktreeSlice(...a),
         trustedOrcaHooks: {},
+        sshConnectionStates: new Map([
+          [
+            TEST_SSH_AUTHORITY.targetId,
+            {
+              targetId: TEST_SSH_AUTHORITY.targetId,
+              status: 'connected',
+              error: null,
+              reconnectAttempt: 0,
+              providerEpoch: TEST_SSH_AUTHORITY.providerEpoch,
+              connectionGeneration: TEST_SSH_AUTHORITY.connectionGeneration
+            }
+          ]
+        ]),
         repos: [],
         projectHostSetups: [],
         deleteProjectHostSetup: vi.fn().mockResolvedValue(null),
+        updateFolderWorkspace: vi.fn().mockResolvedValue(true),
         updateSettings: vi.fn().mockResolvedValue(undefined),
         openModal: vi.fn(),
         shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
@@ -235,6 +290,22 @@ function makeLineage(overrides: Partial<WorktreeLineage> = {}): WorktreeLineage 
     createdAt: 1,
     ...overrides
   }
+}
+
+function createLocalLineageTestStore(lineage: WorktreeLineage) {
+  const store = createTestStore()
+  store.setState({
+    worktreesByRepo: {
+      repo1: [
+        makeWorktree({
+          id: lineage.worktreeId,
+          repoId: 'repo1',
+          hostId: LOCAL_EXECUTION_HOST_ID
+        })
+      ]
+    }
+  } as Partial<AppState>)
+  return store
 }
 
 function makeWorkspaceLineage(overrides: Partial<WorkspaceLineage> = {}): WorkspaceLineage {
@@ -740,23 +811,23 @@ describe('fetchWorktrees', () => {
     let releaseSsh!: () => void
     const localStarted = new Promise<void>((resolve) => {
       mockApi.worktrees.listDetected.mockImplementationOnce(
-        async ({ repoId }: { repoId: string }) => {
+        async (args: ListDetectedWorktreesArgs) => {
           resolve()
           await new Promise<void>((release) => {
             releaseLocal = release
           })
-          return makeDetectedResult(repoId, [localWorktree])
+          return qualifyDetectedResult(args, makeDetectedResult(args.repoId, [localWorktree]))
         }
       )
     })
     const sshStarted = new Promise<void>((resolve) => {
       mockApi.worktrees.listDetected.mockImplementationOnce(
-        async ({ repoId }: { repoId: string }) => {
+        async (args: ListDetectedWorktreesArgs) => {
           resolve()
           await new Promise<void>((release) => {
             releaseSsh = release
           })
-          return makeDetectedResult(repoId, [sshWorktree])
+          return qualifyDetectedResult(args, makeDetectedResult(args.repoId, [sshWorktree]))
         }
       )
     })
@@ -808,12 +879,12 @@ describe('fetchWorktrees', () => {
     let releaseScan!: () => void
     const scanStarted = new Promise<void>((resolve) => {
       mockApi.worktrees.listDetected.mockImplementationOnce(
-        async ({ repoId }: { repoId: string }) => {
+        async (args: ListDetectedWorktreesArgs) => {
           resolve()
           await new Promise<void>((release) => {
             releaseScan = release
           })
-          return makeDetectedResult(repoId, [sshWorktree])
+          return qualifyDetectedResult(args, makeDetectedResult(args.repoId, [sshWorktree]))
         }
       )
     })
@@ -860,12 +931,12 @@ describe('fetchWorktrees', () => {
     let releaseScan!: () => void
     const scanStarted = new Promise<void>((resolve) => {
       mockApi.worktrees.listDetected.mockImplementationOnce(
-        async ({ repoId }: { repoId: string }) => {
+        async (args: ListDetectedWorktreesArgs) => {
           resolve()
           await new Promise<void>((release) => {
             releaseScan = release
           })
-          return makeDetectedResult(repoId, [sshWorktree])
+          return qualifyDetectedResult(args, makeDetectedResult(args.repoId, [sshWorktree]))
         }
       )
     })
@@ -900,6 +971,414 @@ describe('fetchWorktrees', () => {
       expect.objectContaining({ id: sshWorktree.id, hostId: 'ssh:ssh-1' })
     ])
     expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(1)
+  })
+
+  it('exposes shared direct leases and reports cancellation only for the last waiter', async () => {
+    const store = createTestStore()
+    let request!: ListDetectedWorktreesArgs
+    let resolveProvider!: (result: HostQualifiedDetectedWorktreeResult) => void
+    const provider = new Promise<HostQualifiedDetectedWorktreeResult>((resolve) => {
+      resolveProvider = resolve
+    })
+    mockApi.worktrees.listDetected.mockImplementationOnce(
+      async (args: ListDetectedWorktreesArgs) => {
+        request = args
+        return provider
+      }
+    )
+
+    const input = {
+      repoId: 'repo-ssh',
+      executionHostId: 'ssh:ssh-1' as const,
+      authority: TEST_SSH_AUTHORITY
+    }
+    const first = acquireDirectSshDetectedWorktreeRefresh(store, input)
+    const second = acquireDirectSshDetectedWorktreeRefresh(store, input)
+
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(1)
+    expect(first.providerRequestId).toBe(second.providerRequestId)
+    expect(first.waiterLeaseId).not.toBe(second.waiterLeaseId)
+    expect(first.release('superseded')).toBe('retained')
+    expect(mockApi.worktrees.cancelListDetected).not.toHaveBeenCalled()
+    expect(second.release('invalidated')).toBe('cancel-started')
+    expect(second.release('stopped')).toBe('already-settled')
+    expect(mockApi.worktrees.cancelListDetected).toHaveBeenCalledWith({
+      providerRequestId: first.providerRequestId
+    })
+
+    resolveProvider(qualifyDetectedResult(request, makeDetectedResult('repo-ssh', [])))
+    await provider
+    await Promise.resolve()
+  })
+
+  it('merges one exact direct provider result once without a second scan', async () => {
+    const store = createTestStore()
+    const worktree = makeWorktree({
+      id: 'repo-ssh::/home/orca/feature',
+      repoId: 'repo-ssh',
+      path: '/home/orca/feature'
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/home/orca/repo',
+          displayName: 'SSH Repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ]
+    } as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockImplementationOnce(async (args: ListDetectedWorktreesArgs) =>
+      qualifyDetectedResult(args, makeDetectedResult(args.repoId, [worktree]))
+    )
+    const subscriber = vi.fn()
+    const unsubscribe = store.subscribe(subscriber)
+
+    const lease = acquireDirectSshDetectedWorktreeRefresh(store, {
+      repoId: 'repo-ssh',
+      executionHostId: 'ssh:ssh-1',
+      authority: TEST_SSH_AUTHORITY
+    })
+    const providerResult = await lease.result
+    const firstMerge = lease.merge(providerResult)
+    const secondMerge = lease.merge(providerResult)
+
+    expect(firstMerge).toBe(providerResult)
+    expect(secondMerge).toBe(providerResult)
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(1)
+    expect(subscriber).toHaveBeenCalledTimes(1)
+    expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
+      { ...worktree, hostId: 'ssh:ssh-1' }
+    ])
+    unsubscribe()
+  })
+
+  it('rejects a late duplicate exact-host owner with zero mutation publications', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo-ssh::/home/orca/existing',
+      repoId: 'repo-ssh',
+      path: '/home/orca/existing',
+      branch: 'refs/heads/old',
+      hostId: 'ssh:ssh-1'
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/home/orca/repo',
+          displayName: 'SSH Repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-ssh': [existing] },
+      detectedWorktreesByRepo: {
+        'repo-ssh': makeDetectedResult('repo-ssh', [existing])
+      }
+    } as Partial<AppState>)
+    let request!: ListDetectedWorktreesArgs
+    let resolveProvider!: (result: HostQualifiedDetectedWorktreeResult) => void
+    mockApi.worktrees.listDetected.mockImplementationOnce(
+      (args: ListDetectedWorktreesArgs) =>
+        new Promise<HostQualifiedDetectedWorktreeResult>((resolve) => {
+          request = args
+          resolveProvider = resolve
+        })
+    )
+    const lease = acquireDirectSshDetectedWorktreeRefresh(store, {
+      repoId: 'repo-ssh',
+      executionHostId: 'ssh:ssh-1',
+      authority: TEST_SSH_AUTHORITY
+    })
+
+    store.setState((state) => ({
+      repos: [
+        ...state.repos,
+        {
+          id: 'repo-ssh',
+          path: '/home/orca/duplicate',
+          displayName: 'Duplicate SSH Repo',
+          badgeColor: '#111',
+          addedAt: 1,
+          connectionId: 'ssh-1'
+        }
+      ]
+    }))
+    const beforeWorktrees = store.getState().worktreesByRepo
+    const beforeDetected = store.getState().detectedWorktreesByRepo
+    const subscriber = vi.fn()
+    const unsubscribe = store.subscribe(subscriber)
+    resolveProvider(
+      qualifyDetectedResult(
+        request,
+        makeDetectedResult('repo-ssh', [
+          {
+            ...existing,
+            branch: 'refs/heads/new'
+          }
+        ])
+      )
+    )
+
+    expect(lease.merge(await lease.result)).toMatchObject({ status: 'stale' })
+    expect(store.getState().worktreesByRepo).toBe(beforeWorktrees)
+    expect(store.getState().detectedWorktreesByRepo).toBe(beforeDetected)
+    expect(subscriber).not.toHaveBeenCalled()
+    unsubscribe()
+  })
+
+  it('fails closed before provider acquisition when direct authority is partial', async () => {
+    const store = createTestStore()
+    const worktreesByRepo = store.getState().worktreesByRepo
+    const detectedWorktreesByRepo = store.getState().detectedWorktreesByRepo
+    store.setState({
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/home/orca/repo',
+          displayName: 'SSH Repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      sshConnectionStates: new Map([
+        [
+          'ssh-1',
+          {
+            targetId: 'ssh-1',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            providerEpoch: TEST_SSH_AUTHORITY.providerEpoch
+          }
+        ]
+      ])
+    } as Partial<AppState>)
+
+    await expect(store.getState().fetchWorktrees('repo-ssh')).resolves.toBe(false)
+    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo).toBe(worktreesByRepo)
+    expect(store.getState().detectedWorktreesByRepo).toBe(detectedWorktreesByRepo)
+  })
+
+  it('keeps worktree maps byte-identical for stale and malformed direct results', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo-ssh::/home/orca/existing',
+      repoId: 'repo-ssh',
+      path: '/home/orca/existing',
+      hostId: 'ssh:ssh-1'
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'repo-ssh',
+          path: '/home/orca/repo',
+          displayName: 'SSH Repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-ssh': [existing] },
+      detectedWorktreesByRepo: {
+        'repo-ssh': makeDetectedResult('repo-ssh', [existing])
+      }
+    } as Partial<AppState>)
+    const beforeWorktrees = store.getState().worktreesByRepo
+    const beforeDetected = store.getState().detectedWorktreesByRepo
+    const beforeBytes = JSON.stringify([beforeWorktrees, beforeDetected])
+    let request!: ListDetectedWorktreesArgs
+    let resolveProvider!: (result: HostQualifiedDetectedWorktreeResult) => void
+    mockApi.worktrees.listDetected.mockImplementationOnce(
+      async (args: ListDetectedWorktreesArgs) => {
+        request = args
+        return new Promise<HostQualifiedDetectedWorktreeResult>((resolve) => {
+          resolveProvider = resolve
+        })
+      }
+    )
+    const lease = acquireDirectSshDetectedWorktreeRefresh(store, {
+      repoId: 'repo-ssh',
+      executionHostId: 'ssh:ssh-1',
+      authority: TEST_SSH_AUTHORITY
+    })
+    const nextAuthority = {
+      ...TEST_SSH_AUTHORITY,
+      providerEpoch: 'provider-ssh-2' as SshProviderEpoch,
+      connectionGeneration: 2
+    }
+    store.setState({
+      sshConnectionStates: new Map([
+        [
+          'ssh-1',
+          {
+            targetId: 'ssh-1',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            providerEpoch: nextAuthority.providerEpoch,
+            connectionGeneration: nextAuthority.connectionGeneration
+          }
+        ]
+      ])
+    } as Partial<AppState>)
+    const subscriber = vi.fn()
+    const unsubscribe = store.subscribe(subscriber)
+    resolveProvider(
+      qualifyDetectedResult(
+        request,
+        makeDetectedResult('repo-ssh', [
+          makeWorktree({
+            id: 'repo-ssh::/home/orca/stale',
+            repoId: 'repo-ssh',
+            path: '/home/orca/stale'
+          })
+        ])
+      )
+    )
+    const staleResult = await lease.result
+
+    expect(lease.merge(staleResult)).toMatchObject({ status: 'stale' })
+    expect(store.getState().worktreesByRepo).toBe(beforeWorktrees)
+    expect(store.getState().detectedWorktreesByRepo).toBe(beforeDetected)
+    expect(JSON.stringify([beforeWorktrees, beforeDetected])).toBe(beforeBytes)
+    expect(subscriber).not.toHaveBeenCalled()
+    unsubscribe()
+
+    store.setState({
+      sshConnectionStates: new Map([
+        [
+          'ssh-1',
+          {
+            targetId: 'ssh-1',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            providerEpoch: nextAuthority.providerEpoch,
+            connectionGeneration: nextAuthority.connectionGeneration
+          }
+        ]
+      ])
+    } as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockImplementationOnce(
+      async (args: ListDetectedWorktreesArgs) => ({
+        ...qualifyDetectedResult(args, makeDetectedResult(args.repoId, [])),
+        repoId: 'wrong-repo'
+      })
+    )
+    const malformed = acquireDirectSshDetectedWorktreeRefresh(store, {
+      repoId: 'repo-ssh',
+      executionHostId: 'ssh:ssh-1',
+      authority: nextAuthority
+    })
+    const malformedResult = await malformed.result
+
+    expect(malformed.merge(malformedResult)).toMatchObject({
+      status: 'rejected'
+    })
+    expect(store.getState().worktreesByRepo).toBe(beforeWorktrees)
+    expect(store.getState().detectedWorktreesByRepo).toBe(beforeDetected)
+  })
+
+  it('keeps duplicate repo IDs isolated across direct SSH hosts', async () => {
+    const store = createTestStore()
+    const authorityA = {
+      targetId: 'ssh-a',
+      providerEpoch: 'provider-a' as SshProviderEpoch,
+      connectionGeneration: 1
+    }
+    const authorityB = {
+      targetId: 'ssh-b',
+      providerEpoch: 'provider-b' as SshProviderEpoch,
+      connectionGeneration: 4
+    }
+    const worktreeA = makeWorktree({
+      id: 'same-repo::/srv/a',
+      repoId: 'same-repo',
+      path: '/srv/a'
+    })
+    const worktreeB = makeWorktree({
+      id: 'same-repo::/srv/b',
+      repoId: 'same-repo',
+      path: '/srv/b'
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'same-repo',
+          path: '/srv/repo-a',
+          displayName: 'Repo A',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-a'
+        },
+        {
+          id: 'same-repo',
+          path: '/srv/repo-b',
+          displayName: 'Repo B',
+          badgeColor: '#111',
+          addedAt: 1,
+          connectionId: 'ssh-b'
+        }
+      ],
+      sshConnectionStates: new Map([
+        [
+          'ssh-a',
+          {
+            targetId: 'ssh-a',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            providerEpoch: authorityA.providerEpoch,
+            connectionGeneration: authorityA.connectionGeneration
+          }
+        ],
+        [
+          'ssh-b',
+          {
+            targetId: 'ssh-b',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            providerEpoch: authorityB.providerEpoch,
+            connectionGeneration: authorityB.connectionGeneration
+          }
+        ]
+      ])
+    } as Partial<AppState>)
+    mockApi.worktrees.listDetected
+      .mockImplementationOnce(async (args: ListDetectedWorktreesArgs) =>
+        qualifyDetectedResult(args, makeDetectedResult(args.repoId, [worktreeA]))
+      )
+      .mockImplementationOnce(async (args: ListDetectedWorktreesArgs) =>
+        qualifyDetectedResult(args, makeDetectedResult(args.repoId, [worktreeB]))
+      )
+
+    const refreshA = acquireDirectSshDetectedWorktreeRefresh(store, {
+      repoId: 'same-repo',
+      executionHostId: 'ssh:ssh-a',
+      authority: authorityA
+    })
+    const refreshB = acquireDirectSshDetectedWorktreeRefresh(store, {
+      repoId: 'same-repo',
+      executionHostId: 'ssh:ssh-b',
+      authority: authorityB
+    })
+    refreshA.merge(await refreshA.result)
+    refreshB.merge(await refreshB.result)
+
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(2)
+    expect(refreshA.providerRequestId).not.toBe(refreshB.providerRequestId)
+    expect(store.getState().worktreesByRepo['same-repo']).toEqual([
+      { ...worktreeA, hostId: 'ssh:ssh-a' },
+      { ...worktreeB, hostId: 'ssh:ssh-b' }
+    ])
   })
 
   it('purges remembered right sidebar tabs for worktrees removed by a committed refresh', async () => {
@@ -1222,6 +1701,87 @@ describe('fetchWorktrees', () => {
     expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
   })
 
+  it('pins the list fetch to the local host when forceLocalOwner is set', async () => {
+    // Regression: a local `worktrees:changed` event for an unbound
+    // repo while a remote runtime is active must refresh against the local
+    // host, not the runtime — otherwise CLI-created local worktrees stay
+    // invisible in the sidebar until an app restart.
+    const store = createTestStore()
+    const local = makeWorktree({
+      id: 'repo1::/local/wt1',
+      repoId: 'repo1',
+      path: '/local/wt1',
+      branch: 'refs/heads/local'
+    })
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(makeDetectedResult('repo1', [local]))
+
+    await store.getState().fetchWorktrees('repo1', { forceLocalOwner: true })
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([local])
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(1)
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('pins a duplicate repo id to its local owner without replacing runtime worktrees', async () => {
+    const store = createTestStore()
+    const local = makeWorktree({
+      id: 'same-repo::/local/wt',
+      repoId: 'same-repo',
+      path: '/local/wt',
+      hostId: 'local'
+    })
+    const remote = makeWorktree({
+      id: 'same-repo::/remote/wt',
+      repoId: 'same-repo',
+      path: '/remote/wt',
+      hostId: 'runtime:env-1'
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [
+        {
+          id: 'same-repo',
+          path: '/repos/local',
+          displayName: 'local',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'local'
+        },
+        {
+          id: 'same-repo',
+          path: '/repos/remote',
+          displayName: 'remote',
+          badgeColor: '#111',
+          addedAt: 1,
+          executionHostId: 'runtime:env-1'
+        }
+      ],
+      worktreesByRepo: { 'same-repo': [remote] },
+      detectedWorktreesByRepo: {
+        'same-repo': makeDetectedResult('same-repo', [remote])
+      }
+    } as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(makeDetectedResult('same-repo', [local]))
+
+    await store.getState().fetchWorktrees('same-repo', { forceLocalOwner: true })
+
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'same-repo',
+        executionHostId: 'local'
+      })
+    )
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['same-repo']).toEqual([remote, local])
+    expect(store.getState().detectedWorktreesByRepo['same-repo']?.worktrees).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: remote.id, hostId: 'runtime:env-1' }),
+        expect.objectContaining({ id: local.id, hostId: 'local' })
+      ])
+    )
+  })
+
   it('fetches SSH repo worktrees through local IPC even when a runtime is focused', async () => {
     const store = createTestStore()
     const sshWorktree = makeWorktree({
@@ -1243,18 +1803,68 @@ describe('fetchWorktrees', () => {
         }
       ]
     } as Partial<AppState>)
-    mockApi.worktrees.listDetected.mockResolvedValueOnce(
-      makeDetectedResult('repo-ssh', [sshWorktree], { source: 'git' })
+    mockApi.worktrees.listDetected.mockImplementationOnce(async (args: ListDetectedWorktreesArgs) =>
+      qualifyDetectedResult(args, makeDetectedResult('repo-ssh', [sshWorktree], { source: 'git' }))
     )
 
-    await store.getState().fetchWorktrees('repo-ssh')
+    await store.getState().fetchWorktrees('repo-ssh', { forceLocalOwner: true })
 
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({ repoId: 'repo-ssh' })
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'repo-ssh',
+        executionHostId: 'ssh:ssh-1',
+        expectedAuthority: TEST_SSH_AUTHORITY
+      })
+    )
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     // Why: SSH worktrees are fetched via local IPC but belong to the SSH host, so they carry the repo's ssh host id.
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
       { ...sshWorktree, hostId: 'ssh:ssh-1' }
     ])
+  })
+
+  it('fetches the requested host when duplicate repo ids exist', async () => {
+    const store = createTestStore()
+    const localWorktree = makeWorktree({
+      id: 'same-repo::/local/wt',
+      repoId: 'same-repo',
+      path: '/local/wt'
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [
+        {
+          id: 'same-repo',
+          path: '/local/repo',
+          displayName: 'Local',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'local'
+        },
+        {
+          id: 'same-repo',
+          path: '/remote/repo',
+          displayName: 'Runtime',
+          badgeColor: '#111',
+          addedAt: 1,
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    } as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(
+      makeDetectedResult('same-repo', [localWorktree])
+    )
+
+    await store.getState().fetchWorktrees('same-repo', { executionHostId: 'local' })
+
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'same-repo',
+        executionHostId: 'local'
+      })
+    )
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
   })
 
   it('stamps remote runtime worktrees with the owning repo runtime host', async () => {
@@ -1286,11 +1896,73 @@ describe('fetchWorktrees', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
 
-    await store.getState().fetchWorktrees('repo-remote')
+    await store.getState().fetchWorktrees('repo-remote', { forceLocalOwner: true })
 
     expect(store.getState().worktreesByRepo['repo-remote']).toEqual([
-      { ...remote, hostId: 'runtime:env-1' }
+      { ...remote, hostId: 'runtime:env-1', runtimeOwnerEnvironmentId: 'env-1' }
     ])
+  })
+
+  it('rejects a pre-reconnect runtime listing after a newer generation publishes', async () => {
+    const store = createTestStore()
+    const stale = makeWorktree({
+      id: 'repo-remote::/remote/stale',
+      repoId: 'repo-remote',
+      path: '/remote/stale',
+      hostId: 'local'
+    })
+    const fresh = makeWorktree({
+      id: 'repo-remote::/remote/fresh',
+      repoId: 'repo-remote',
+      path: '/remote/fresh',
+      hostId: 'local'
+    })
+    let resolveStale!: (value: unknown) => void
+    let resolveFresh!: (value: unknown) => void
+    const staleResponse = new Promise((resolve) => {
+      resolveStale = resolve
+    })
+    const freshResponse = new Promise((resolve) => {
+      resolveFresh = resolve
+    })
+    runtimeEnvironmentCall.mockReturnValueOnce(staleResponse).mockReturnValueOnce(freshResponse)
+    store.setState({
+      repos: [
+        {
+          id: 'repo-remote',
+          path: '/remote',
+          displayName: 'Remote',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    } as Partial<AppState>)
+
+    const staleRefresh = store.getState().fetchWorktrees('repo-remote')
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+    useAppStore.getState().markEnvironmentSshStateStale('env-1')
+    const freshRefresh = store.getState().fetchWorktrees('repo-remote')
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2))
+    resolveFresh({
+      id: 'fresh',
+      ok: true,
+      result: makeDetectedResult('repo-remote', [fresh]),
+      _meta: { runtimeId: 'runtime-fresh' }
+    })
+    await expect(freshRefresh).resolves.toBe(true)
+    resolveStale({
+      id: 'stale',
+      ok: true,
+      result: makeDetectedResult('repo-remote', [stale]),
+      _meta: { runtimeId: 'runtime-stale' }
+    })
+
+    await expect(staleRefresh).resolves.toBe(false)
+    expect(store.getState().worktreesByRepo['repo-remote']).toEqual([
+      { ...fresh, hostId: 'runtime:env-1', runtimeOwnerEnvironmentId: 'env-1' }
+    ])
+    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
   })
 
   it('stamps runtime worktrees with the owning project host setup', async () => {
@@ -1341,6 +2013,7 @@ describe('fetchWorktrees', () => {
       {
         ...remote,
         hostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1',
         projectId: 'github:stablyai/orca',
         projectHostSetupId: 'repo-remote'
       }
@@ -1349,6 +2022,7 @@ describe('fetchWorktrees', () => {
       expect.objectContaining({
         id: remote.id,
         hostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1',
         projectId: 'github:stablyai/orca',
         projectHostSetupId: 'repo-remote'
       })
@@ -1631,8 +2305,8 @@ describe('worktree lineage state', () => {
   })
 
   it('updates a child lineage entry and bumps sortEpoch', async () => {
-    const store = createTestStore()
     const lineage = makeLineage()
+    const store = createLocalLineageTestStore(lineage)
     mockApi.worktrees.updateLineage.mockResolvedValue(lineage)
     store.setState({ sortEpoch: 3 } as Partial<AppState>)
 
@@ -1649,8 +2323,8 @@ describe('worktree lineage state', () => {
   })
 
   it('removes child lineage entries when the backend clears the parent link', async () => {
-    const store = createTestStore()
     const lineage = makeLineage()
+    const store = createLocalLineageTestStore(lineage)
     const workspaceLineage = makeWorkspaceLineage({
       childWorkspaceKey: worktreeWorkspaceKey(lineage.worktreeId)
     })
@@ -1668,12 +2342,48 @@ describe('worktree lineage state', () => {
     expect(store.getState().sortEpoch).toBe(4)
   })
 
-  it('syncs workspace lineage when a child is manually reparented', async () => {
+  it('clears inline local lineage immediately when an inline-only child is unnested', async () => {
     const store = createTestStore()
+    const lineage = makeLineage()
+    const parent = {
+      ...makeWorktree({
+        id: lineage.parentWorktreeId,
+        instanceId: lineage.parentWorktreeInstanceId,
+        repoId: 'repo1'
+      }),
+      childWorktreeIds: [lineage.worktreeId],
+      lineage: null
+    }
+    const child = {
+      ...makeWorktree({
+        id: lineage.worktreeId,
+        instanceId: lineage.worktreeInstanceId,
+        repoId: 'repo1'
+      }),
+      parentWorktreeId: lineage.parentWorktreeId,
+      childWorktreeIds: [],
+      lineage
+    }
+    mockApi.worktrees.updateLineage.mockResolvedValue(null)
+    store.setState({
+      worktreesByRepo: { repo1: [parent, child] },
+      worktreeLineageById: {}
+    } as Partial<AppState>)
+
+    await store.getState().updateWorktreeLineage(child.id, { noParent: true })
+
+    expect(store.getState().worktreesByRepo.repo1).toMatchObject([
+      { id: parent.id, childWorktreeIds: [] },
+      { id: child.id, parentWorktreeId: null, lineage: null }
+    ])
+  })
+
+  it('syncs workspace lineage when a child is manually reparented', async () => {
     const lineage = makeLineage({
       origin: 'manual',
       capture: { source: 'manual-action', confidence: 'explicit' }
     })
+    const store = createLocalLineageTestStore(lineage)
     const oldWorkspaceLineage = makeWorkspaceLineage({
       childWorkspaceKey: worktreeWorkspaceKey(lineage.worktreeId),
       parentWorkspaceKey: folderWorkspaceKey('folder-1')
@@ -1701,8 +2411,8 @@ describe('worktree lineage state', () => {
   })
 
   it('refetches lineage after an update failure', async () => {
-    const store = createTestStore()
     const lineage = makeLineage()
+    const store = createLocalLineageTestStore(lineage)
     mockApi.worktrees.updateLineage.mockRejectedValueOnce(new Error('stale parent'))
     mockApi.worktrees.listLineage.mockResolvedValue({ [lineage.worktreeId]: lineage })
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -1716,8 +2426,8 @@ describe('worktree lineage state', () => {
   })
 
   it('refetches lineage and rethrows when explicit parent assignment fails', async () => {
-    const store = createTestStore()
     const lineage = makeLineage()
+    const store = createLocalLineageTestStore(lineage)
     mockApi.worktrees.updateLineage.mockRejectedValueOnce(new Error('stale parent'))
     mockApi.worktrees.listLineage.mockResolvedValue({ [lineage.worktreeId]: lineage })
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -1755,6 +2465,22 @@ describe('worktree lineage state', () => {
       timeoutMs: 15_000
     })
     expect(mockApi.worktrees.listLineage).not.toHaveBeenCalled()
+    expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+  })
+
+  it('pins lineage refresh to the local host when forceLocalOwner is set', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: {}
+    } as Partial<AppState>)
+    mockApi.worktrees.listLineage.mockResolvedValue({ [lineage.worktreeId]: lineage })
+
+    await store.getState().fetchWorktreeLineage({ forceLocalOwner: true })
+
+    expect(mockApi.worktrees.listLineage).toHaveBeenCalledTimes(1)
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
   })
 
@@ -1837,7 +2563,8 @@ describe('worktree lineage state', () => {
 
     expect(store.getState().worktreesByRepo['repo-remote']?.[0]).toEqual({
       ...updatedChild,
-      hostId: 'runtime:env-1'
+      hostId: 'runtime:env-1',
+      runtimeOwnerEnvironmentId: 'env-1'
     })
   })
 
@@ -2986,7 +3713,8 @@ describe('createWorktree base status merge', () => {
     expect(mockApi.worktrees.create).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['repo-remote']?.[0]).toEqual({
       ...created,
-      hostId: 'runtime:env-1'
+      hostId: 'runtime:env-1',
+      runtimeOwnerEnvironmentId: 'env-1'
     })
   })
 
@@ -4239,6 +4967,70 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1).toEqual([])
   })
 
+  it('removes a HUB-owned SSH worktree through its exact HUB transport owner', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo-ssh::/srv/nested-wt',
+      repoId: 'repo-ssh',
+      path: '/srv/nested-wt',
+      hostId: 'ssh:hub-private-target',
+      runtimeOwnerEnvironmentId: 'owner-hub'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-rm-nested',
+      ok: true,
+      result: { removed: true },
+      _meta: { runtimeId: 'runtime-owner-hub' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'different-hub' } as never,
+      worktreesByRepo: { 'repo-ssh': [wt] }
+    } as Partial<AppState>)
+
+    const result = await store.getState().removeWorktree(wt.id)
+
+    expect(result).toEqual({ ok: true })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'owner-hub',
+      method: 'worktree.rm',
+      params: { worktree: `id:${wt.id}`, force: undefined, runHooks: true },
+      timeoutMs: 60_000
+    })
+    expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
+  })
+
+  it('fails HUB-owned SSH removal closed when the exact id has two HUB owners', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-ssh::/srv/same-wt'
+    store.setState({
+      worktreesByRepo: {
+        'repo-ssh': [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-ssh',
+            hostId: 'ssh:same-private-target',
+            runtimeOwnerEnvironmentId: 'hub-a'
+          }),
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-ssh',
+            hostId: 'ssh:same-private-target',
+            runtimeOwnerEnvironmentId: 'hub-b'
+          })
+        ]
+      }
+    } as Partial<AppState>)
+
+    const result = await store.getState().removeWorktree(worktreeId)
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
+  })
+
   it('removes SSH-owned worktrees through local IPC even when a runtime is focused', async () => {
     const store = createTestStore()
     const wt = makeWorktree({
@@ -4331,6 +5123,77 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0]?.comment).toBe('remote note')
+  })
+
+  it('force-deletes a preserved HUB-owned SSH branch through its HUB', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo-ssh::/srv/nested-wt',
+      repoId: 'repo-ssh',
+      hostId: 'ssh:hub-private-target',
+      runtimeOwnerEnvironmentId: 'owner-hub'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-force-delete-branch',
+      ok: true,
+      result: { deleted: true },
+      _meta: { runtimeId: 'runtime-owner-hub' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'different-hub' } as never,
+      worktreesByRepo: { 'repo-ssh': [wt] }
+    } as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .forceDeletePreservedBranch(wt.id, 'feature/nested', 'abc123')
+
+    expect(result).toEqual({ ok: true, deleted: true })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'owner-hub',
+      method: 'worktree.forceDeleteBranch',
+      params: {
+        worktree: `id:${wt.id}`,
+        branchName: 'feature/nested',
+        expectedHead: 'abc123'
+      },
+      timeoutMs: 15_000
+    })
+    expect(mockApi.worktrees.forceDeletePreservedBranch).not.toHaveBeenCalled()
+  })
+
+  it('fails preserved branch deletion closed for two HUB owners', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-ssh::/srv/same-wt'
+    store.setState({
+      worktreesByRepo: {
+        'repo-ssh': [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-ssh',
+            hostId: 'ssh:same-private-target',
+            runtimeOwnerEnvironmentId: 'hub-a'
+          }),
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-ssh',
+            hostId: 'ssh:same-private-target',
+            runtimeOwnerEnvironmentId: 'hub-b'
+          })
+        ]
+      }
+    } as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .forceDeletePreservedBranch(worktreeId, 'feature/nested', 'abc123')
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.forceDeletePreservedBranch).not.toHaveBeenCalled()
   })
 
   it('persists SSH-owned worktree metadata through local IPC even when a runtime is focused', async () => {
@@ -5333,6 +6196,107 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 
+  it('persists activity on the folder workspace record instead of failing on owner routing (#10251)', async () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace({ id: 'folder-local' })
+    const folderKey = folderWorkspaceKey(folderWorkspace.id)
+    store.setState({
+      folderWorkspaces: [folderWorkspace],
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    const sortEpochBefore = store.getState().sortEpoch
+
+    expect(() => store.getState().bumpWorktreeActivity(folderKey)).not.toThrow()
+    expect(store.getState().folderWorkspaces[0]?.lastActivityAt).toEqual(expect.any(Number))
+    expect(store.getState().sortEpoch).toBe(sortEpochBefore + 1)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    // Why: worktreeMeta['folder:…'] rows are write-only — folder meta must land on the FolderWorkspace record.
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    expect(store.getState().updateFolderWorkspace).toHaveBeenCalledWith(
+      folderWorkspace.id,
+      expect.objectContaining({ lastActivityAt: expect.any(Number) })
+    )
+  })
+
+  it('skips the sort-epoch bump when the active folder workspace reports activity', async () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace({ id: 'folder-active' })
+    const folderKey = folderWorkspaceKey(folderWorkspace.id)
+    store.setState({
+      folderWorkspaces: [folderWorkspace],
+      activeWorktreeId: folderKey
+    } as Partial<AppState>)
+    const sortEpochBefore = store.getState().sortEpoch
+
+    store.getState().bumpWorktreeActivity(folderKey)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(store.getState().updateFolderWorkspace).toHaveBeenCalledWith(
+      folderWorkspace.id,
+      expect.objectContaining({ lastActivityAt: expect.any(Number) })
+    )
+    expect(store.getState().sortEpoch).toBe(sortEpochBefore)
+  })
+
+  it('clears folder workspace unread on its record and dedupes repeat calls', async () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace({ id: 'folder-unread', isUnread: true })
+    const folderKey = folderWorkspaceKey(folderWorkspace.id)
+    store.setState({ folderWorkspaces: [folderWorkspace] } as Partial<AppState>)
+
+    store.getState().clearWorktreeUnread(folderKey)
+    store.getState().clearWorktreeUnread(folderKey)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(store.getState().folderWorkspaces[0]?.isUnread).toBe(false)
+    expect(store.getState().updateFolderWorkspace).toHaveBeenCalledTimes(1)
+    expect(store.getState().updateFolderWorkspace).toHaveBeenCalledWith(folderWorkspace.id, {
+      isUnread: false
+    })
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('marks a folder workspace unread on its record', async () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace({ id: 'folder-read' })
+    const folderKey = folderWorkspaceKey(folderWorkspace.id)
+    store.setState({ folderWorkspaces: [folderWorkspace] } as Partial<AppState>)
+
+    store.getState().markWorktreeUnread(folderKey)
+    expect(store.getState().folderWorkspaces[0]).toEqual(
+      expect.objectContaining({ isUnread: true, lastActivityAt: expect.any(Number) })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(store.getState().updateFolderWorkspace).toHaveBeenCalledWith(
+      folderWorkspace.id,
+      expect.objectContaining({ isUnread: true, lastActivityAt: expect.any(Number) })
+    )
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('clears a folder unread mark even when persistence has not settled yet', () => {
+    const store = createTestStore()
+    const folderWorkspace = makeFolderWorkspace({ id: 'folder-racing-unread' })
+    const folderKey = folderWorkspaceKey(folderWorkspace.id)
+    store.setState({ folderWorkspaces: [folderWorkspace] } as Partial<AppState>)
+
+    store.getState().markWorktreeUnread(folderKey)
+    store.getState().clearWorktreeUnread(folderKey)
+
+    expect(store.getState().folderWorkspaces[0]?.isUnread).toBe(false)
+    expect(store.getState().updateFolderWorkspace).toHaveBeenNthCalledWith(
+      1,
+      folderWorkspace.id,
+      expect.objectContaining({ isUnread: true })
+    )
+    expect(store.getState().updateFolderWorkspace).toHaveBeenNthCalledWith(2, folderWorkspace.id, {
+      isUnread: false
+    })
+  })
+
   it('persists activity for hidden detected worktrees', async () => {
     const store = createTestStore()
     const hidden = makeWorktree({
@@ -5571,6 +6535,140 @@ describe('worktree unread (show-until-interact)', () => {
     )
   })
 
+  it('routes multi-host project unread persistence by the worktree host (#10634)', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo-shared::/home/user/wt',
+      repoId: 'repo-shared',
+      path: '/home/user/wt',
+      hostId: 'ssh:ssh-1'
+    })
+    store.setState({
+      repos: [
+        { id: 'repo-shared', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 0 },
+        {
+          id: 'repo-shared',
+          path: '/home/user/repo',
+          displayName: 'SSH',
+          badgeColor: '#111',
+          addedAt: 1,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: { 'repo-shared': [wt] }
+    } as Partial<AppState>)
+
+    expect(() => store.getState().markWorktreeUnread(wt.id)).not.toThrow()
+
+    expect(store.getState().worktreesByRepo['repo-shared'][0].isUnread).toBe(true)
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: wt.id,
+        updates: expect.objectContaining({ isUnread: true })
+      })
+    )
+  })
+
+  it('keeps unread state local instead of throwing for genuinely ambiguous owners (#10634)', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-shared::/same/path'
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
+      worktreesByRepo: {
+        'repo-shared': [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-shared',
+            hostId: 'ssh:ssh-a',
+            runtimeOwnerEnvironmentId: 'hub-a'
+          }),
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-shared',
+            hostId: 'ssh:ssh-b',
+            runtimeOwnerEnvironmentId: 'hub-b'
+          })
+        ]
+      }
+    } as Partial<AppState>)
+
+    expect(() => store.getState().markWorktreeUnread(worktreeId)).not.toThrow()
+
+    expect(store.getState().worktreesByRepo['repo-shared'][0].isUnread).toBe(true)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('never throws from any passive path for a genuinely ambiguous owner (#10634)', () => {
+    // Why every passive path, not just markWorktreeUnread: each one runs from a background
+    // notification, so any that still throws reproduces the uncaught renderer error.
+    const worktreeId = 'repo-shared::/same/path'
+    const ambiguousState = (): Partial<AppState> =>
+      ({
+        settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
+        worktreesByRepo: {
+          'repo-shared': [
+            makeWorktree({
+              id: worktreeId,
+              repoId: 'repo-shared',
+              hostId: 'ssh:ssh-a',
+              runtimeOwnerEnvironmentId: 'hub-a',
+              isUnread: true
+            }),
+            makeWorktree({
+              id: worktreeId,
+              repoId: 'repo-shared',
+              hostId: 'ssh:ssh-b',
+              runtimeOwnerEnvironmentId: 'hub-b',
+              isUnread: true
+            })
+          ]
+        }
+      }) as Partial<AppState>
+
+    for (const [label, run] of [
+      ['clearWorktreeUnread', (s: AppState) => s.clearWorktreeUnread(worktreeId)],
+      ['bumpWorktreeActivity', (s: AppState) => s.bumpWorktreeActivity(worktreeId)]
+    ] as const) {
+      const store = createTestStore()
+      store.setState(ambiguousState())
+      mockApi.worktrees.updateMeta.mockClear()
+
+      expect(() => run(store.getState()), `${label} threw for an ambiguous owner`).not.toThrow()
+      expect(
+        mockApi.worktrees.updateMeta,
+        `${label} persisted to a guessed host`
+      ).not.toHaveBeenCalled()
+    }
+  })
+
+  it('warns once per workspace rather than on every activity event (#10634)', () => {
+    // Why: activity bumps fire on every PTY event; an unbounded warn would flood the console.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const worktreeId = 'repo-spam::/same/path'
+      const store = createTestStore()
+      store.setState({
+        settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
+        worktreesByRepo: {
+          'repo-spam': [
+            makeWorktree({ id: worktreeId, repoId: 'repo-spam', hostId: 'ssh:ssh-a' }),
+            makeWorktree({ id: worktreeId, repoId: 'repo-spam', hostId: 'ssh:ssh-b' })
+          ]
+        }
+      } as Partial<AppState>)
+
+      const before = warn.mock.calls.length
+      for (let i = 0; i < 5; i++) {
+        store.getState().bumpWorktreeActivity(worktreeId)
+      }
+
+      expect(warn.mock.calls.length - before).toBe(1)
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('clearWorktreeUnread clears isUnread and persists the change', async () => {
     const store = createTestStore()
     const wt = makeWorktree({
@@ -5679,6 +6777,64 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     badgeColor: '#111',
     addedAt: 0
   }
+
+  it('preserves resolved inline legacy lineage when side-map hydration is absent', async () => {
+    const store = createTestStore()
+    const parent = makeWorktree({
+      id: 'repoA::/a/parent',
+      instanceId: 'parent-instance',
+      repoId: 'repoA',
+      path: '/a/parent'
+    })
+    const child = makeWorktree({
+      id: 'repoA::/a/child',
+      instanceId: 'child-instance',
+      repoId: 'repoA',
+      path: '/a/child'
+    })
+    const lineage = makeLineage({
+      worktreeId: child.id,
+      worktreeInstanceId: child.instanceId!,
+      parentWorktreeId: parent.id,
+      parentWorktreeInstanceId: parent.instanceId!
+    })
+    const resolvedParent = {
+      ...parent,
+      parentWorktreeId: null,
+      childWorktreeIds: [child.id],
+      lineage: null,
+      workspaceLineage: null
+    }
+    const resolvedChild = {
+      ...child,
+      parentWorktreeId: parent.id,
+      childWorktreeIds: [],
+      lineage,
+      workspaceLineage: null
+    }
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(
+      makeDetectedResult('repoA', [resolvedParent, resolvedChild])
+    )
+    store.setState({
+      repos: [repoA],
+      hasHydratedWorktreePurge: true,
+      worktreeLineageById: {}
+    } as Partial<AppState>)
+
+    await store.getState().fetchAllWorktrees()
+
+    expect(store.getState().worktreeLineageById).toEqual({})
+    expect(store.getState().worktreesByRepo.repoA).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: child.id,
+          parentWorktreeId: parent.id,
+          lineage,
+          workspaceLineage: null
+        })
+      ])
+    )
+  })
 
   it('defers the purge when a sibling repo fetch fails (F1 regression)', async () => {
     const store = createTestStore()
@@ -5986,7 +7142,11 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     expect(refreshed).toEqual(
       expect.arrayContaining([
         localWorktree,
-        { ...refreshedRemoteWorktree, hostId: 'runtime:env-1' }
+        {
+          ...refreshedRemoteWorktree,
+          hostId: 'runtime:env-1',
+          runtimeOwnerEnvironmentId: 'env-1'
+        }
       ])
     )
     expect(refreshed.map((worktree) => worktree.id)).not.toContain(staleRemoteWorktree.id)
@@ -5996,7 +7156,12 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
         expect.objectContaining({ id: refreshedRemoteWorktree.id, hostId: 'runtime:env-1' })
       ])
     )
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({ repoId: 'same-repo' })
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'same-repo',
+        executionHostId: 'local'
+      })
+    )
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'worktree.detectedList',
@@ -6605,6 +7770,34 @@ describe('markWorktreeVisited', () => {
       'repo1::/a': 100,
       'ssh-repo::/b': 200
     })
+  })
+
+  it('pruneLastVisitedTimestamps clears a stale activeWorktreeId gone from a hydrated repo', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: 'repo1::/gone',
+      lastVisitedAtByWorktreeId: {}
+    } as Partial<AppState>)
+    store.getState().pruneLastVisitedTimestamps()
+    expect(store.getState().activeWorktreeId).toBeNull()
+  })
+
+  it('pruneLastVisitedTimestamps keeps a live activeWorktreeId and defers unhydrated repos', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: 'repo1::/a'
+    } as Partial<AppState>)
+    store.getState().pruneLastVisitedTimestamps()
+    expect(store.getState().activeWorktreeId).toBe('repo1::/a')
+
+    // A pointer into a not-yet-hydrated (e.g. SSH pre-connect) repo is deferred.
+    store.setState({ activeWorktreeId: 'ssh-repo::/b' } as Partial<AppState>)
+    store.getState().pruneLastVisitedTimestamps()
+    expect(store.getState().activeWorktreeId).toBe('ssh-repo::/b')
   })
 
   it('pruneLastVisitedTimestamps defers when the detected list is non-authoritative', () => {

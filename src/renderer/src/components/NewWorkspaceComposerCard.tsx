@@ -1,30 +1,27 @@
 /* eslint-disable max-lines -- Why: keep the full composer card markup together so the inline and modal variants share one UI surface. */
 import React from 'react'
-import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
   Check,
   ChevronDown,
-  ChevronRight,
-  ChevronsUpDown,
-  Cloud,
   CornerDownLeft,
   FolderPlus,
   LoaderCircle,
   PlugZap,
-  Settings2,
-  Server
+  Settings2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Command, CommandEmpty, CommandItem, CommandList } from '@/components/ui/command'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SettingsSwitch } from '@/components/settings/SettingsFormControls'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { getAgentCatalog } from '@/lib/agent-catalog'
+import {
+  DEFAULT_DISABLED_TUI_AGENTS,
+  filterEnabledTuiAgents
+} from '../../../shared/tui-agent-selection'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
@@ -36,7 +33,6 @@ import {
 } from '@/lib/text-control-paste'
 import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
-import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
 import type {
   GitHubWorkItem,
   GitLabWorkItem,
@@ -52,15 +48,22 @@ import SmartWorkspaceNameField, {
 } from '@/components/new-workspace/SmartWorkspaceNameField'
 import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
 import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
+import RunTargetCombobox from '@/components/new-workspace/RunTargetCombobox'
+import {
+  AddRemoteHostDialog,
+  type AddRemoteHostMode
+} from '@/components/sidebar/AddRemoteHostDialog'
 import type { SetupConfig } from '@/lib/new-workspace'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type {
-  ProjectHostSetupOption,
-  ReadyProjectHostSetupOption
+  NeedsSetupProjectHostOption,
+  ProjectHostSetupOption
 } from '@/lib/project-host-setup-options'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { RuntimeStatus } from '../../../shared/runtime-types'
+import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
@@ -203,338 +206,41 @@ function getSshStatusLabel(status: SshConnectionStatus): string {
   return SSH_STATUS_LABELS[status] ?? status
 }
 
-function getRecipeCommandDisplay(command: string): string {
-  const trimmed = command.trim()
-  const quoted = trimmed.match(/^"([^"]+)"/) ?? trimmed.match(/^'([^']+)'/)
-  return quoted?.[1] ?? trimmed.split(/\s+/)[0] ?? trimmed
-}
+// Why: bound how long the run-target picker waits on a host connect so a stalled backend
+// connect can't leave the row's disabled/spinner state stuck forever. The backend keeps going.
+const RUN_TARGET_CONNECT_UI_TIMEOUT_MS = 20_000
 
-function getRecipeDestroyLabel(recipe: EphemeralVmRecipeOption): string {
-  if (recipe.destroyDisabled) {
-    return translate('auto.components.NewWorkspaceComposerCard.destroyDisabled', 'destroy disabled')
-  }
-  if (recipe.destroy) {
-    return translate(
-      'auto.components.NewWorkspaceComposerCard.destroyConfigured',
-      'destroy configured'
-    )
-  }
-  return translate('auto.components.NewWorkspaceComposerCard.noDestroyConfigured', 'no destroy')
-}
-
-type WorkspaceRunTargetComboboxProps = {
-  hostOptions: readonly ReadyProjectHostSetupOption[]
-  hostValue: string | null
-  onHostChange?: (setupId: string) => void
-  recipes: EphemeralVmRecipeOption[]
-  recipeValue: string | null
-  onRecipeChange?: (recipeId: string | null) => void
-}
-
-type HostPathTooltipPosition = {
-  left: number
-  top: number
-  maxWidth: number
-}
-
-const HOST_PATH_TOOLTIP_DELAY_MS = 400
-const HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX = 8
-const HOST_PATH_TOOLTIP_TRIGGER_GAP_PX = 4
-
-function HostPathTooltip({ path }: { path: string }): React.JSX.Element {
-  const tooltipId = React.useId()
-  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pointerInsideRef = React.useRef(false)
-  const [position, setPosition] = React.useState<HostPathTooltipPosition | null>(null)
-
-  const hideTooltip = React.useCallback((): void => {
-    pointerInsideRef.current = false
-    if (timerRef.current !== null) {
-      clearTimeout(timerRef.current)
-      timerRef.current = null
-    }
-    setPosition(null)
-  }, [])
-
-  React.useEffect(() => hideTooltip, [hideTooltip])
-
-  const handlePointerEnter = React.useCallback((event: React.PointerEvent<HTMLElement>): void => {
-    pointerInsideRef.current = true
-    const trigger = event.currentTarget
-    if (timerRef.current !== null) {
-      clearTimeout(timerRef.current)
-    }
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null
-      if (!pointerInsideRef.current || !trigger.isConnected) {
-        return
-      }
-      const rect = trigger.getBoundingClientRect()
-      // Why: anchor under the hovered path, capping width to the viewport edge so a long path wraps instead of flying off-screen.
-      const left = Math.max(HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX, rect.left)
-      setPosition({
-        left,
-        top: rect.bottom + HOST_PATH_TOOLTIP_TRIGGER_GAP_PX,
-        maxWidth: window.innerWidth - left - HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX
-      })
-    }, HOST_PATH_TOOLTIP_DELAY_MS)
-  }, [])
-
-  return (
-    <>
-      {/* Trigger is the truncated path line itself, so the tooltip only appears when hovering it. */}
-      <div
-        className="mt-0.5 truncate text-[11px] text-muted-foreground"
-        aria-describedby={position ? tooltipId : undefined}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={hideTooltip}
-        onPointerDown={hideTooltip}
-      >
-        {path}
-      </div>
-      {/* Why: a fixed, pointer-transparent portal cannot reflow cmdk or become the hover target. */}
-      {position
-        ? createPortal(
-            <div
-              id={tooltipId}
-              role="tooltip"
-              data-slot="host-path-tooltip"
-              className="pointer-events-none fixed z-[100] w-max break-all rounded-sm border border-border bg-popover px-1.5 py-1 font-mono text-[11px] leading-tight text-popover-foreground shadow-xs"
-              style={{ left: position.left, top: position.top, maxWidth: position.maxWidth }}
-            >
-              {path}
-            </div>,
-            document.body
+async function withUiConnectTimeout<T>(promise: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(
+        new Error(
+          translate(
+            'auto.components.NewWorkspaceComposerCard.connectTimedOut',
+            'Connection timed out. It may still be connecting in the background.'
           )
-        : null}
-    </>
-  )
-}
-
-function WorkspaceRunTargetCombobox({
-  hostOptions,
-  hostValue,
-  onHostChange,
-  recipes,
-  recipeValue,
-  onRecipeChange
-}: WorkspaceRunTargetComboboxProps): React.JSX.Element {
-  const [open, setOpen] = React.useState(false)
-  const [vmRecipesOpen, setVmRecipesOpen] = React.useState(false)
-  const selectedHost =
-    hostOptions.find((option) => option.id === hostValue) ?? hostOptions[0] ?? null
-  const selectedRecipe = recipes.find((recipe) => recipe.id === recipeValue) ?? null
-  const selectedValue = selectedRecipe
-    ? `recipe:${selectedRecipe.id}`
-    : selectedHost
-      ? `host:${selectedHost.id}`
-      : ''
-  const ephemeralVmLabel = translate(
-    'auto.components.NewWorkspaceComposerCard.ephemeralVm',
-    'Per-Workspace Environment'
-  )
-
-  const handleHostSelect = React.useCallback(
-    (setupId: string): void => {
-      if (!hostOptions.some((candidate) => candidate.id === setupId)) {
-        return
-      }
-      onHostChange?.(setupId)
-      onRecipeChange?.(null)
-      setOpen(false)
-    },
-    [hostOptions, onHostChange, onRecipeChange]
-  )
-
-  const handleRecipeSelect = React.useCallback(
-    (recipeId: string): void => {
-      if (!recipes.some((recipe) => recipe.id === recipeId)) {
-        return
-      }
-      onRecipeChange?.(recipeId)
-      setVmRecipesOpen(false)
-      setOpen(false)
-    },
-    [onRecipeChange, recipes]
-  )
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="h-9 w-full justify-between border-input px-3 text-sm font-normal focus:border-ring focus:ring-[3px] focus:ring-ring/50"
-        >
-          {selectedRecipe ? (
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              <Cloud className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="truncate">
-                {ephemeralVmLabel} / {selectedRecipe.name}
-              </span>
-            </span>
-          ) : selectedHost ? (
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              <Server className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="truncate">{selectedHost.label}</span>
-            </span>
-          ) : (
-            <span className="text-muted-foreground">
-              {translate(
-                'auto.components.NewWorkspaceComposerCard.chooseRunTarget',
-                'Choose target'
-              )}
-            </span>
-          )}
-          <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        className="w-[var(--radix-popover-trigger-width)] min-w-[18rem] p-0"
-      >
-        <Command value={selectedValue}>
-          <CommandList>
-            <CommandEmpty>
-              {translate(
-                'auto.components.NewWorkspaceComposerCard.noRunTargets',
-                'No run targets are ready for this project.'
-              )}
-            </CommandEmpty>
-            {hostOptions.map((option) => (
-              <CommandItem
-                key={option.id}
-                value={`host:${option.id}`}
-                onSelect={() => handleHostSelect(option.id)}
-                className="items-center gap-2 px-3 py-2"
-              >
-                <Check
-                  className={cn(
-                    'size-4 text-foreground',
-                    !selectedRecipe && option.id === selectedHost?.id ? 'opacity-100' : 'opacity-0'
-                  )}
-                />
-                <Server className="size-3.5 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm">{option.label}</div>
-                  <HostPathTooltip path={option.path} />
-                </div>
-              </CommandItem>
-            ))}
-            {recipes.length > 0 ? (
-              <Popover open={vmRecipesOpen} onOpenChange={setVmRecipesOpen}>
-                <PopoverTrigger asChild>
-                  {/* Why: a real CommandItem (not a raw button) so cmdk registers it — fixes missing rows, uneven height, and double-highlight. */}
-                  <CommandItem
-                    value="per-workspace-env"
-                    onSelect={() => setVmRecipesOpen(true)}
-                    className="items-center gap-2 px-3 py-2"
-                  >
-                    <Check
-                      className={cn(
-                        'size-4 text-foreground',
-                        selectedRecipe ? 'opacity-100' : 'opacity-0'
-                      )}
-                    />
-                    <Cloud className="size-3.5 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm">{ephemeralVmLabel}</div>
-                      {/* Why: a second line so this row matches the two-line host options above and hints what it opens. */}
-                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                        {translate(
-                          'auto.components.NewWorkspaceComposerCard.perWorkspaceEnvHint',
-                          'Provision an on-demand environment from a recipe'
-                        )}
-                      </div>
-                    </div>
-                    <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-                  </CommandItem>
-                </PopoverTrigger>
-                <PopoverContent side="right" align="start" sideOffset={6} className="w-72 p-0">
-                  <Command value={selectedRecipe ? `recipe:${selectedRecipe.id}` : ''}>
-                    <CommandList>
-                      {recipes.map((recipe) => (
-                        <CommandItem
-                          key={recipe.id}
-                          value={`recipe:${recipe.id}`}
-                          onSelect={() => handleRecipeSelect(recipe.id)}
-                          className="items-center gap-2 px-3 py-2"
-                        >
-                          <Check
-                            className={cn(
-                              'size-4 text-foreground',
-                              recipe.id === selectedRecipe?.id ? 'opacity-100' : 'opacity-0'
-                            )}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm">{recipe.name}</div>
-                            <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                              {getRecipeCommandDisplay(recipe.create)} ·{' '}
-                              {getRecipeDestroyLabel(recipe)}
-                            </div>
-                            {recipe.description ? (
-                              <div className="truncate text-[11px] text-muted-foreground">
-                                {recipe.description}
-                              </div>
-                            ) : null}
-                          </div>
-                        </CommandItem>
-                      ))}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            ) : null}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  )
-}
-
-function SetupCommandPreview({
-  setupConfig,
-  headerAction
-}: {
-  setupConfig: SetupConfig
-  headerAction?: React.ReactNode
-}): React.JSX.Element {
-  if (setupConfig.source === 'yaml') {
-    return (
-      <div className="rounded-2xl border border-border/60 bg-muted/40 shadow-inner">
-        <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-2.5">
-          <div className="font-mono text-[11px] text-muted-foreground">
-            {translate('auto.components.NewWorkspaceComposerCard.23bb365554', 'orca.yaml')}
-          </div>
-          {headerAction}
-        </div>
-        {/* Why: long orca.yaml scripts must not grow the create dialog past the viewport. */}
-        <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words px-4 py-3 font-mono text-[12px] leading-5 text-emerald-700 scrollbar-sleek dark:text-emerald-300/95">
-          {setupConfig.command}
-        </pre>
-      </div>
-    )
+        )
+      )
+    }, RUN_TARGET_CONNECT_UI_TIMEOUT_MS)
+  })
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    if (timer) {
+      clearTimeout(timer)
+    }
   }
+}
 
+function SetupCommandPreview({ setupConfig }: { setupConfig: SetupConfig }): React.JSX.Element {
+  // Why: just the script in a quiet monochrome card — the source label (orca.yaml / local) and
+  // the run-setup toggle live in the section header above, so the card carries no chrome of its
+  // own. Neutral foreground avoids the colored-terminal look. max-h keeps long scripts from
+  // growing the dialog past the viewport.
   return (
-    <div className="rounded-2xl border border-border/60 bg-muted/35 px-4 py-3 shadow-inner">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-          {setupConfig.source === 'both'
-            ? translate(
-                'auto.components.NewWorkspaceComposerCard.e5db1b0419',
-                'Combined setup command'
-              )
-            : translate(
-                'auto.components.NewWorkspaceComposerCard.7711ad5122',
-                'Local setup command'
-              )}
-        </div>
-        {headerAction}
-      </div>
-      <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-foreground scrollbar-sleek">
+    <div className="rounded-md border border-border/60 bg-muted/40 shadow-inner">
+      <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words px-4 py-3 font-mono text-[12px] leading-5 text-foreground/90 scrollbar-sleek">
         {setupConfig.command}
       </pre>
     </div>
@@ -693,7 +399,9 @@ export default function NewWorkspaceComposerCard({
   const openModal = useAppStore((s) => s.openModal)
   const activeModal = useAppStore((s) => s.activeModal)
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
-  const disabledTuiAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
+  const disabledTuiAgents = useAppStore(
+    (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
+  )
   const updateSettings = useAppStore((s) => s.updateSettings)
   const nameInputFocusFrameRef = React.useRef<number | null>(null)
   const branchNameInputId = React.useId()
@@ -801,6 +509,61 @@ export default function NewWorkspaceComposerCard({
     }
     openModal('add-repo')
   }, [onAddProjectOverride, openModal])
+  // Why: open the host-add form inline over the composer (not via Settings) so the user's
+  // in-progress workspace form survives; the new host lands in the store and flows straight
+  // back into the run-target picker without a navigation round-trip.
+  const [addRemoteHostMode, setAddRemoteHostMode] = React.useState<AddRemoteHostMode | null>(null)
+  const handleAddSshHost = React.useCallback((): void => {
+    setAddRemoteHostMode('ssh')
+  }, [])
+  const handleAddRemoteServer = React.useCallback((): void => {
+    setAddRemoteHostMode('server')
+  }, [])
+  const handleConnectRunTargetHost = React.useCallback(
+    async (option: NeedsSetupProjectHostOption): Promise<void> => {
+      const action = option.connectAction
+      if (!action) {
+        return
+      }
+      try {
+        if (action.kind === 'ssh') {
+          // Why: ssh.connect has no built-in timeout; a stalled connect would otherwise leave the
+          // row's spinner/disabled state stuck forever. Bound the UI wait — the backend keeps
+          // connecting and the picker updates from store SSH state if it later succeeds.
+          await withUiConnectTimeout(window.api.ssh.connect({ targetId: action.targetId }))
+          return
+        }
+
+        const response = await window.api.runtimeEnvironments.getStatus({
+          selector: action.environmentId,
+          timeoutMs: 15_000
+        })
+        const runtimeStatus = unwrapRuntimeRpcResult<RuntimeStatus>(response)
+        // Why: the composer button is only a reachability retry; the separate
+        // project setup flow remains a follow-up once the host is online.
+        useAppStore.getState().setRuntimeEnvironmentStatus(action.environmentId, {
+          status: runtimeStatus,
+          checkedAt: Date.now()
+        })
+      } catch (error) {
+        if (action.kind === 'runtime') {
+          useAppStore.getState().setRuntimeEnvironmentStatus(action.environmentId, {
+            status: null,
+            checkedAt: Date.now()
+          })
+        }
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.NewWorkspaceComposerCard.hostConnectionFailed',
+                'Connection failed'
+              )
+        )
+      }
+    },
+    []
+  )
   const handleNotePaste = React.useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const text = event.clipboardData.getData('text/plain')
     const byteLengthMeasurement = measureTextControlPasteByteLength(text, {
@@ -838,6 +601,16 @@ export default function NewWorkspaceComposerCard({
     () => projectHostSetupOptions.filter((option) => option.kind === 'ready'),
     [projectHostSetupOptions]
   )
+  const needsSetupProjectHostSetupOptions = React.useMemo(
+    () => projectHostSetupOptions.filter((option) => option.kind === 'needs-setup'),
+    [projectHostSetupOptions]
+  )
+  // Why: the picker now also hosts the Add host handoff; even a single ready
+  // host needs this affordance for users who have not registered the target yet.
+  const shouldShowRunTargetPicker =
+    readyProjectHostSetupOptions.length > 0 ||
+    ephemeralVmRecipes.length > 0 ||
+    needsSetupProjectHostSetupOptions.length > 0
   const handleProjectHostSetupChange = React.useCallback(
     (setupId: string): void => {
       onProjectHostSetupChange?.(setupId)
@@ -925,18 +698,24 @@ export default function NewWorkspaceComposerCard({
                 )}
             </p>
           ) : null}
-          {readyProjectHostSetupOptions.length > 1 || ephemeralVmRecipes.length > 0 ? (
-            <div className="space-y-1">
+          {shouldShowRunTargetPicker ? (
+            // Why: Run on is nested in the Project block (so they share the
+            // error/empty states), which put it on the block's 4px rhythm. It's
+            // its own field, so give it the 16px other fields get.
+            <div className="space-y-1 pt-3">
               <label className="block min-w-0 truncate text-xs font-medium text-muted-foreground">
                 {translate('auto.components.NewWorkspaceComposerCard.runOn', 'Run on')}
               </label>
-              <WorkspaceRunTargetCombobox
-                hostOptions={readyProjectHostSetupOptions}
+              <RunTargetCombobox
+                hostOptions={projectHostSetupOptions}
                 hostValue={selectedProjectHostSetupId ?? null}
                 onHostChange={handleProjectHostSetupChange}
                 recipes={ephemeralVmRecipes}
                 recipeValue={selectedEphemeralVmRecipeId}
                 onRecipeChange={onEphemeralVmRecipeChange}
+                onAddSshHost={handleAddSshHost}
+                onAddRemoteServer={handleAddRemoteServer}
+                onConnectHost={handleConnectRunTargetHost}
               />
               {ephemeralVmRecipeError ? (
                 <p className="whitespace-pre-line text-[11px] text-destructive">
@@ -1091,7 +870,7 @@ export default function NewWorkspaceComposerCard({
           </div>
         </div>
 
-        <div className="space-y-1" data-contextual-tour-target="workspace-creation-agent">
+        <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-agent">
           <div className="flex items-center justify-between gap-2">
             <label className="text-xs font-medium text-muted-foreground">
               {translate('auto.components.NewWorkspaceComposerCard.01d1e8f601', 'Agent')}
@@ -1129,13 +908,18 @@ export default function NewWorkspaceComposerCard({
             onOpenManageAgents={onOpenAgentSettings}
             defaultAgent={defaultTuiAgent}
             onSetDefault={handleSetDefaultAgent}
-            triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
+            // Why: match Project/Run-on — full-width form row, no 260px min that can overflow the dialog column.
+            allowNarrowTrigger
+            triggerClassName="h-9 w-full min-w-0 border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
             onTriggerEnter={createDisabled ? undefined : onCreate}
           />
         </div>
 
         {/* Why: keep the Advanced disclosure header grouped with the content below while preserving spacing from the Agent field above. */}
         <div className="!mb-2">
+          {/* Why: -ml-2 pulls the button so its label aligns flush-left with the field labels above
+              while the padded hover highlight extends past the label on the left. The scroll
+              container's px-2 inset gives that overhang room so it isn't clipped. */}
           <Button
             type="button"
             variant="ghost"
@@ -1244,7 +1028,9 @@ export default function NewWorkspaceComposerCard({
                     <label className="text-xs font-medium text-muted-foreground">
                       {setupConfigLabel}
                     </label>
-                    <span className="rounded-full border border-border/70 bg-muted/45 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-foreground/70">
+                    {/* Why: a quiet monospace filename chip (not an uppercase tag) — orca.yaml is a
+                        literal filename, so it reads as code, matching the app's path styling. */}
+                    <span className="rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                       {setupConfig.source === 'yaml'
                         ? translate(
                             'auto.components.NewWorkspaceComposerCard.23bb365554',
@@ -1262,40 +1048,73 @@ export default function NewWorkspaceComposerCard({
                     </span>
                   </div>
 
-                  {/* Why: `orca.yaml` is the committed source of truth, so the preview reconstructs the real YAML shape rather than a raw shell blob. */}
-                  <SetupCommandPreview
-                    setupConfig={setupConfig}
-                    headerAction={
-                      requiresExplicitSetupChoice ? null : (
-                        <label className="group flex items-center gap-2 text-xs text-foreground">
+                  {/* Why: `orca.yaml` is the committed source of truth for shared setup,
+                      so the preview reconstructs the real YAML shape instead of showing a raw
+                      shell blob that hides where the command came from. */}
+                  <SetupCommandPreview setupConfig={setupConfig} />
+
+                  {/* Why: group the run-setup and wait-for-setup toggles in one bordered box so
+                      they read as a single settings cluster, aligned hard-right. */}
+                  {!requiresExplicitSetupChoice || showSetupAgentStartupPolicy ? (
+                    <div className="rounded-md border border-border/60 bg-muted/25">
+                      {requiresExplicitSetupChoice ? null : (
+                        <div className="flex items-center justify-between gap-3 p-3">
+                          <span className="text-xs font-medium text-foreground">
+                            {setupRunLabel}
+                          </span>
+                          <SettingsSwitch
+                            checked={resolvedSetupDecision === 'run'}
+                            onChange={() =>
+                              onSetupDecisionChange(
+                                resolvedSetupDecision === 'run' ? 'skip' : 'run'
+                              )
+                            }
+                            ariaLabel={setupRunLabel}
+                          />
+                        </div>
+                      )}
+                      {showSetupAgentStartupPolicy ? (
+                        // Why: nothing to wait for when setup won't run — disable the toggle and
+                        // dim the label so it reads as inactive (the switch dims itself).
+                        <div className="flex items-start justify-between gap-3 p-3">
                           <span
                             className={cn(
-                              'flex size-4 items-center justify-center rounded-[3px] border transition shadow-sm',
-                              resolvedSetupDecision === 'run'
-                                ? 'border-emerald-500/60 bg-emerald-500 text-white'
-                                : 'border-foreground/20 bg-background dark:border-white/20 dark:bg-muted/10'
+                              'min-w-0 space-y-1',
+                              resolvedSetupDecision === 'run' ? '' : 'opacity-50'
                             )}
                           >
-                            <Check
-                              className={cn(
-                                'size-3 transition-opacity',
-                                resolvedSetupDecision === 'run' ? 'opacity-100' : 'opacity-0'
+                            <span className="block text-xs font-medium text-foreground">
+                              {translate(
+                                'auto.components.NewWorkspaceComposerCard.waitForSetupBeforeAgent',
+                                'Wait for setup to complete before starting agent'
                               )}
-                            />
+                            </span>
+                            <span className="block text-[11px] text-muted-foreground">
+                              {translate(
+                                'auto.components.NewWorkspaceComposerCard.waitForSetupBeforeAgentHelp',
+                                'Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup.'
+                              )}
+                            </span>
                           </span>
-                          <input
-                            type="checkbox"
-                            checked={resolvedSetupDecision === 'run'}
-                            onChange={(event) =>
-                              onSetupDecisionChange(event.target.checked ? 'run' : 'skip')
+                          <SettingsSwitch
+                            checked={setupAgentStartupPolicy === 'wait-for-setup'}
+                            disabled={resolvedSetupDecision !== 'run'}
+                            onChange={() =>
+                              onSetupAgentStartupPolicyChange(
+                                setupAgentStartupPolicy === 'wait-for-setup'
+                                  ? 'start-immediately'
+                                  : 'wait-for-setup'
+                              )
                             }
-                            className="sr-only"
+                            ariaLabel={translate(
+                              'auto.components.NewWorkspaceComposerCard.waitForSetupBeforeAgent',
+                              'Wait for setup to complete before starting agent'
+                            )}
                           />
-                          <span>{setupRunLabel}</span>
-                        </label>
-                      )
-                    }
-                  />
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   {requiresExplicitSetupChoice ? (
                     <div className="space-y-2">
@@ -1333,39 +1152,6 @@ export default function NewWorkspaceComposerCard({
                               )}
                         </div>
                       ) : null}
-                    </div>
-                  ) : null}
-
-                  {showSetupAgentStartupPolicy ? (
-                    <div className="flex items-start justify-between gap-3 rounded-md border border-border/60 bg-muted/25 p-3">
-                      <span className="min-w-0 space-y-1">
-                        <span className="block text-xs font-medium text-foreground">
-                          {translate(
-                            'auto.components.NewWorkspaceComposerCard.waitForSetupBeforeAgent',
-                            'Wait for setup to complete before starting agent'
-                          )}
-                        </span>
-                        <span className="block text-[11px] text-muted-foreground">
-                          {translate(
-                            'auto.components.NewWorkspaceComposerCard.waitForSetupBeforeAgentHelp',
-                            'Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup.'
-                          )}
-                        </span>
-                      </span>
-                      <SettingsSwitch
-                        checked={setupAgentStartupPolicy === 'wait-for-setup'}
-                        onChange={() =>
-                          onSetupAgentStartupPolicyChange(
-                            setupAgentStartupPolicy === 'wait-for-setup'
-                              ? 'start-immediately'
-                              : 'wait-for-setup'
-                          )
-                        }
-                        ariaLabel={translate(
-                          'auto.components.NewWorkspaceComposerCard.waitForSetupBeforeAgent',
-                          'Wait for setup to complete before starting agent'
-                        )}
-                      />
                     </div>
                   ) : null}
                 </div>
@@ -1465,6 +1251,10 @@ export default function NewWorkspaceComposerCard({
           </span>
         </Button>
       </div>
+      {/* Why: layer the host-add form over the composer instead of navigating to Settings so
+          the in-progress workspace form is preserved; on success the new host flows back into
+          the run-target picker via the store. */}
+      <AddRemoteHostDialog mode={addRemoteHostMode} onOpenChange={setAddRemoteHostMode} />
     </div>
   )
 }

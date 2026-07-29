@@ -35,11 +35,21 @@ function makeSnapshot(
   } = {}
 ): AccountsSnapshot {
   return {
-    claude: { accounts: overrides.claudeAccounts ?? [], activeAccountId: null },
-    codex: { accounts: overrides.codexAccounts ?? [], activeAccountId: null },
+    claude: {
+      accounts: overrides.claudeAccounts ?? [],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: {} }
+    },
+    codex: {
+      accounts: overrides.codexAccounts ?? [],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: {} }
+    },
     rateLimits: {
       claude: overrides.claudeLimits ?? null,
       codex: overrides.codexLimits ?? null,
+      claudeTarget: { runtime: 'host', wslDistro: null },
+      codexTarget: { runtime: 'host', wslDistro: null },
       inactiveClaudeAccounts: overrides.inactiveClaudeAccounts ?? [],
       inactiveCodexAccounts: overrides.inactiveCodexAccounts ?? []
     }

@@ -75,6 +75,8 @@ const aiVaultListResultSchema = z.object({
       messageCount: z.number(),
       totalTokens: z.number(),
       previewMessages: z.array(aiVaultSessionPreviewMessageSchema),
+      // Optional keeps paired hosts on older builds compatible.
+      lastUserPrompt: z.string().nullable().optional(),
       // Default keeps remote hosts running an older build (no recoverable-signal
       // fields) parseable; they simply report no recoverable-empty sessions.
       queuedMessageCount: z.number().default(0),
@@ -103,7 +105,12 @@ const aiVaultListResultSchema = z.object({
   scannedAt: z.string()
 })
 
-const aiVaultPrepareSessionResumeResultSchema = z.object({ useRealCodexHome: z.boolean() })
+// Why: zod strips unknown keys, so the repin home must be declared or the
+// parent would silently drop it and resume under the wrong account's home.
+const aiVaultPrepareSessionResumeResultSchema = z.object({
+  useRealCodexHome: z.boolean(),
+  substituteCodexHome: z.string().optional()
+})
 
 export function getSavedRuntimeAiVaultHostInfos(
   userDataPath: string

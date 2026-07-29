@@ -142,7 +142,7 @@ describe('ExperimentalPane', () => {
 
     expect(settings.experimentalAgentDashboardPopout).toBe(false)
     expect(markup).toContain('Agent Dashboard')
-    expect(markup).toContain('monitor attention, working, and idle agents')
+    expect(markup).toContain('Monitor agents that need you, are working, or are done')
     expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(
       'Agent Dashboard'
     )
@@ -163,6 +163,31 @@ describe('ExperimentalPane', () => {
     })
 
     expect(updateSettings).toHaveBeenCalledWith({ experimentalAgentDashboardPopout: true })
+    root.unmount()
+  })
+
+  it('exposes idle-agent visibility for pop-out dashboards', async () => {
+    const updateSettings = vi.fn()
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      experimentalAgentDashboardPopout: true
+    }
+    const { root, container } = await renderExperimentalPane({
+      settings,
+      updateSettings
+    })
+    const idleSwitch = container.querySelector<HTMLButtonElement>(
+      '#experimental-agent-dashboard button[role="switch"][aria-label="Show idle agents"]'
+    )
+    if (!idleSwitch) {
+      throw new Error('Idle-agent visibility switch was not rendered')
+    }
+
+    await act(async () => {
+      idleSwitch.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ experimentalAgentDashboardShowIdle: true })
     root.unmount()
   })
 
@@ -213,13 +238,13 @@ describe('ExperimentalPane', () => {
     expect(markup).toContain('aria-checked="true"')
   })
 
-  it('shows native chat default-mode as a child setting only when native chat is enabled', async () => {
+  it('shows Chat UI default-mode as a child setting only when Chat UI is enabled', async () => {
     const updateSettings = vi.fn()
     const disabledSettings = getDefaultSettings('/tmp')
     const disabledMarkup = renderToStaticMarkup(
       <ExperimentalPane settings={disabledSettings} updateSettings={vi.fn()} />
     )
-    expect(disabledMarkup).toContain('Native chat')
+    expect(disabledMarkup).toContain('Chat UI')
     expect(disabledMarkup).not.toContain('Default view')
 
     const settings = {
@@ -231,7 +256,7 @@ describe('ExperimentalPane', () => {
 
     expect(container.textContent).toContain('Default view')
     expect(container.textContent).toContain('Terminal chat')
-    expect(container.textContent).toContain('Native chat')
+    expect(container.textContent).toContain('Chat UI')
     expect(
       container
         .querySelector('[data-slot="native-chat-default-view-select"]')
@@ -242,7 +267,7 @@ describe('ExperimentalPane', () => {
       container.querySelectorAll<HTMLButtonElement>('[data-slot="select-item"]')
     ).find((button) => button.getAttribute('data-value') === 'native-chat')
     if (!nativeChatOption) {
-      throw new Error('Native chat default-view option was not rendered')
+      throw new Error('Chat UI default-view option was not rendered')
     }
 
     await act(async () => {

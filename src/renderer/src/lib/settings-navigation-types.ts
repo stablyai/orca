@@ -8,6 +8,7 @@ export type SettingsNavInstallStatus =
   | 'installed'
   | 'up-to-date'
   | 'update-available'
+  | 'needs-attention'
   | 'checking'
 
 export type SettingsNavTarget =
@@ -33,6 +34,7 @@ export type SettingsNavTarget =
   | 'stats'
   | 'ssh'
   | 'experimental'
+  | 'plugins'
   | 'agents'
   | 'orchestration'
   | 'linear'

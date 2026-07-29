@@ -10,7 +10,8 @@ import en from './locales/en.json'
 import { isPseudoLocalizationLocale, pseudoLocalizeString } from './pseudo-localization'
 import { DEFAULT_LOCALE, resolveUiLocale } from './supported-languages'
 import type { SupportedUiLocale } from '../../../shared/ui-locale'
-import type { UiLanguage } from '../../../shared/ui-language'
+import { isPluginUiLanguage, type UiLanguage } from '../../../shared/ui-language'
+import type { PluginLanguagePackRegistration } from '../../../shared/plugins/plugin-language-pack-artifact'
 
 export const i18n: I18nInstance = i18next.createInstance()
 
@@ -78,10 +79,36 @@ export function translate(key: string, fallback: string, options?: TOptions): st
 }
 
 export async function setRendererUiLanguage(language: UiLanguage): Promise<void> {
-  const locale = resolveUiLocale(language)
+  const resolved = resolveUiLocale(language)
+  const resourceLanguage = resolveRendererResourceLanguage(resolved)
+  const locale =
+    isPluginUiLanguage(language) && resourceLanguage === resolved
+      ? DEFAULT_LOCALE
+      : resourceLanguage
   if (i18n.language !== locale) {
     // changeLanguage triggers the lazy backend load for non-English locales and
     // resolves once the catalog is in memory.
     await i18n.changeLanguage(locale)
+  }
+}
+
+const registeredPluginLanguages = new Set<string>()
+let pluginLanguagePacks: readonly PluginLanguagePackRegistration[] = []
+
+export function resolveRendererResourceLanguage(language: string): string {
+  return pluginLanguagePacks.find((pack) => pack.id === language)?.resourceLanguage ?? language
+}
+
+export function setRendererPluginLanguagePacks(
+  packs: readonly PluginLanguagePackRegistration[]
+): void {
+  for (const language of registeredPluginLanguages) {
+    i18n.removeResourceBundle(language, 'translation')
+  }
+  registeredPluginLanguages.clear()
+  pluginLanguagePacks = packs
+  for (const pack of packs) {
+    i18n.addResourceBundle(pack.resourceLanguage, 'translation', pack.catalog, true, true)
+    registeredPluginLanguages.add(pack.resourceLanguage)
   }
 }

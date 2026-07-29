@@ -11,6 +11,7 @@ import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 
 // Why: narrow the dashboard's rollup states to shared dot states, defaulting unknowns to 'idle' so a row never crashes.
 function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
@@ -155,9 +156,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   )
   const startedAt = agent.startedAt > 0 ? agent.startedAt : null
   const doneAt = lastEnteredDoneAt(agent)
-  const prompt = getAgentRowPrimaryText(agent.entry)
+  const conversationName = useAgentRowConversationName(agent)
+  const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
   const displayLabel = prompt || agentStateLabel(asDotState(agent.state))
+  const model = agent.entry.model?.trim() ?? ''
   // Why: gate tool fields on 'working' — a stale tool line on a done row reads as still-running.
   const isWorking = agent.state === 'working'
   const toolName = isWorking ? (agent.entry.toolName?.trim() ?? '') : ''
@@ -173,7 +176,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       ? `${formatAgentTypeLabel(agent.agentType)} - dispatched ${lineageChildCount} ${
           lineageChildCount === 1 ? 'agent' : 'agents'
         }`
-      : formatAgentTypeLabel(agent.agentType)
+      : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Why: interrupted is a terminal outcome, so surface it in the leading state dot.
   const dotState: AgentDotState = isInterrupted ? 'interrupted' : asDotState(agent.state)
   const dotTooltipLabel = stateDotTooltipLabel(agent, dotState)
@@ -283,6 +286,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         >
           {displayLabel}
         </span>
+        {model && (
+          <span
+            className="max-w-24 shrink-0 truncate font-mono text-[10px] text-muted-foreground/70"
+            title={model}
+          >
+            {model}
+          </span>
+        )}
         {/* Why: "+N" badge shows the hidden child count when collapsed; redundant once children are expanded below. */}
         {hasChildDisclosure && !childAgentsExpanded && (
           <span

@@ -1,92 +1,28 @@
-import {
-  getRepoExecutionHostId,
-  parseExecutionHostId,
-  toSshExecutionHostId
-} from '../../../shared/execution-host'
-import type { ExecutionHostId, ParsedExecutionHost } from '../../../shared/execution-host'
-import type {
-  FolderWorkspace,
-  GlobalSettings,
-  ProjectGroup,
-  Repo,
-  Worktree
-} from '../../../shared/types'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { GlobalSettings, Worktree } from '../../../shared/types'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import {
-  findIndexedFolderWorkspaceOwner,
-  findIndexedProjectGroupOwner,
   findIndexedRepoOwner as findRepoRecord,
-  findIndexedWorktreeOwner as findWorktreeRecord
+  findIndexedWorktreeOwner as findWorktreeRecord,
+  resolveIndexedRepoOwner,
+  resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
-
-type RuntimeExecutionHost = Extract<ParsedExecutionHost, { kind: 'runtime' }>
-
-export type WorktreeRuntimeOwnerState = {
-  repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
-  worktreesByRepo?: Record<string, readonly Pick<Worktree, 'id' | 'repoId' | 'hostId'>[]>
-  folderWorkspaces?: readonly Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId'>[]
-  projectGroups?: readonly Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>[]
-  restoredRuntimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
-}
-
-function findFolderProjectGroup(
-  state: WorktreeRuntimeOwnerState,
-  folderWorkspaceId: string
-): Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'> | null {
-  const folderWorkspace = findFolderWorkspace(state, folderWorkspaceId)
-  if (!folderWorkspace) {
-    return null
-  }
-  return findIndexedProjectGroupOwner(state.projectGroups, folderWorkspace.projectGroupId)
-}
-
-function findFolderWorkspace(
-  state: WorktreeRuntimeOwnerState,
-  folderWorkspaceId: string
-): Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId'> | null {
-  return findIndexedFolderWorkspaceOwner(state.folderWorkspaces, folderWorkspaceId)
-}
-
-function getRuntimeEnvironmentIdForFolderWorkspace(
-  state: WorktreeRuntimeOwnerState,
-  folderWorkspaceId: string
-): string | null {
-  const folderWorkspace = findFolderWorkspace(state, folderWorkspaceId)
-  const projectGroup = findFolderProjectGroup(state, folderWorkspaceId)
-  const parsed = parseExecutionHostId(projectGroup?.executionHostId)
-  if (parsed?.kind === 'runtime') {
-    return parsed.environmentId
-  }
-  if (
-    parsed?.kind === 'local' ||
-    parsed?.kind === 'ssh' ||
-    folderWorkspace?.connectionId?.trim() ||
-    projectGroup?.connectionId?.trim()
-  ) {
-    return null
-  }
-  const restoredRuntimeHost = getRestoredRuntimeHostForFolderWorkspace(state, folderWorkspaceId)
-  if (restoredRuntimeHost) {
-    return restoredRuntimeHost.environmentId
-  }
-  return state.settings?.activeRuntimeEnvironmentId?.trim() || null
-}
-
-function getRestoredRuntimeHostForFolderWorkspace(
-  state: WorktreeRuntimeOwnerState,
-  folderWorkspaceId: string
-): RuntimeExecutionHost | null {
-  // Why: runtime folder catalogs load after session hydration; the saved
-  // per-host session partition is the only owner evidence during that gap.
-  const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
-  const parsed = parseExecutionHostId(
-    state.restoredRuntimeHostIdByWorkspaceSessionKey?.[workspaceKey]
-  )
-  return parsed?.kind === 'runtime' ? parsed : null
-}
+import { getSingleFocusedRuntimeEnvironmentId } from './single-runtime-legacy-owner'
+import {
+  getExecutionHostIdForFolderWorkspace,
+  getExplicitRuntimeEnvironmentIdForFolderWorkspace,
+  getRuntimeEnvironmentIdForFolderWorkspace
+} from './folder-workspace-runtime-owner'
+import {
+  resolveExplicitWorktreeOperationRouteResult,
+  resolveWorktreeOperationRouteResult
+} from './worktree-operation-route'
+import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+export type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+export { getRuntimeSessionMirrorEnvironmentIds } from './runtime-session-mirror-owners'
 
 function getExplicitRuntimeEnvironmentIdFromHost(
   executionHostId: string | null | undefined
@@ -95,57 +31,16 @@ function getExplicitRuntimeEnvironmentIdFromHost(
   return parsed?.kind === 'runtime' ? parsed.environmentId : null
 }
 
-function getRuntimeEnvironmentIdFromWorktreeHost(
-  hostId: string | null | undefined
-): string | null | undefined {
-  if (!hostId?.trim()) {
-    return undefined
-  }
-  return getExplicitRuntimeEnvironmentIdFromHost(hostId)
+function getProjectedRuntimeOwnerEnvironmentId(
+  worktree: Pick<Worktree, 'runtimeOwnerEnvironmentId'> | null | undefined
+): string | null {
+  return worktree?.runtimeOwnerEnvironmentId?.trim() || null
 }
 
 function getExecutionHostIdFromWorktreeHost(
   hostId: string | null | undefined
 ): ExecutionHostId | null {
   return parseExecutionHostId(hostId)?.id ?? null
-}
-
-function getExplicitRuntimeEnvironmentIdForFolderWorkspace(
-  state: WorktreeRuntimeOwnerState,
-  folderWorkspaceId: string
-): string | null {
-  const folderWorkspace = findFolderWorkspace(state, folderWorkspaceId)
-  const projectGroup = findFolderProjectGroup(state, folderWorkspaceId)
-  const parsed = parseExecutionHostId(projectGroup?.executionHostId)
-  if (parsed) {
-    return parsed.kind === 'runtime' ? parsed.environmentId : null
-  }
-  if (folderWorkspace?.connectionId?.trim() || projectGroup?.connectionId?.trim()) {
-    return null
-  }
-  return getRestoredRuntimeHostForFolderWorkspace(state, folderWorkspaceId)?.environmentId ?? null
-}
-
-function getExecutionHostIdForFolderWorkspace(
-  state: WorktreeRuntimeOwnerState,
-  folderWorkspaceId: string
-): ExecutionHostId {
-  const folderWorkspace = findFolderWorkspace(state, folderWorkspaceId)
-  const projectGroup = findFolderProjectGroup(state, folderWorkspaceId)
-  const parsed = parseExecutionHostId(projectGroup?.executionHostId)
-  if (parsed) {
-    return parsed.id
-  }
-  const connectionId = folderWorkspace?.connectionId?.trim() || projectGroup?.connectionId?.trim()
-  if (connectionId) {
-    return toSshExecutionHostId(connectionId)
-  }
-  const restoredRuntimeHost = getRestoredRuntimeHostForFolderWorkspace(state, folderWorkspaceId)
-  if (restoredRuntimeHost) {
-    return restoredRuntimeHost.id
-  }
-  const environmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
-  return environmentId ? `runtime:${encodeURIComponent(environmentId)}` : 'local'
 }
 
 export function getRuntimeEnvironmentIdForWorktree(
@@ -162,21 +57,40 @@ export function getRuntimeEnvironmentIdForWorktree(
   if (workspaceScope?.type === 'folder') {
     return getRuntimeEnvironmentIdForFolderWorkspace(state, workspaceScope.folderWorkspaceId)
   }
-  const worktree = findWorktreeRecord(state.worktreesByRepo, worktreeId)
-  const worktreeRuntimeEnvironmentId = getRuntimeEnvironmentIdFromWorktreeHost(worktree?.hostId)
-  if (worktreeRuntimeEnvironmentId !== undefined) {
-    // Why: the same repo can exist on local and remote hosts; a concrete
-    // worktree host must override the repo-level default owner.
-    return worktreeRuntimeEnvironmentId
+  const indexedOwner = resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
+  if (indexedOwner.kind === 'ambiguous') {
+    return null
   }
-  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  const repo = findRepoRecord(state.repos, repoId)
-  const hasExplicitOwner = Boolean(repo?.executionHostId?.trim() || repo?.connectionId?.trim())
-  if (repo && hasExplicitOwner) {
-    const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-    return parsed?.kind === 'runtime' ? parsed.environmentId : null
+  if (indexedOwner.kind === 'resolved') {
+    const owner = indexedOwner.owner
+    const projectedRuntimeOwner = getProjectedRuntimeOwnerEnvironmentId(owner)
+    const parsedHost = parseExecutionHostId(owner.hostId)
+    const hasDetectedOwner = Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
+      result.worktrees.some((worktree) => worktree.id === worktreeId)
+    )
+    if (!hasDetectedOwner && (projectedRuntimeOwner || parsedHost)) {
+      return (
+        projectedRuntimeOwner || (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null)
+      )
+    }
+    if (!hasDetectedOwner) {
+      const repoResolution = resolveIndexedRepoOwner(state.repos, owner.repoId)
+      if (repoResolution.kind === 'ambiguous') {
+        return null
+      }
+      if (
+        repoResolution.kind === 'resolved' &&
+        (repoResolution.owner.executionHostId?.trim() || repoResolution.owner.connectionId?.trim())
+      ) {
+        const repoHost = parseExecutionHostId(getRepoExecutionHostId(repoResolution.owner))
+        if (repoHost) {
+          return repoHost.kind === 'runtime' ? repoHost.environmentId : null
+        }
+      }
+    }
   }
-  return state.settings?.activeRuntimeEnvironmentId?.trim() || null
+  const resolution = resolveWorktreeOperationRouteResult(state, worktreeId)
+  return resolution.kind === 'resolved' ? resolution.route.runtimeEnvironmentId : null
 }
 
 export function getExplicitRuntimeEnvironmentIdForWorktree(
@@ -193,9 +107,29 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
       workspaceScope.folderWorkspaceId
     )
   }
+  const hasDetectedOwner = Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
+    result.worktrees.some((worktree) => worktree.id === worktreeId)
+  )
+  if (hasDetectedOwner) {
+    // Why: detected-only rows are selectable before the primary catalog lands; use the same
+    // ambiguity-aware explicit provenance as filesystem and terminal operations.
+    const resolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
+    return resolution.kind === 'resolved' ? resolution.route.runtimeEnvironmentId : null
+  }
+  if (resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId).kind === 'ambiguous') {
+    return null
+  }
   const worktree = findWorktreeRecord(state.worktreesByRepo, worktreeId)
-  if (worktree?.hostId) {
-    return getExplicitRuntimeEnvironmentIdFromHost(worktree.hostId)
+  const projectedRuntimeOwner = getProjectedRuntimeOwnerEnvironmentId(worktree)
+  if (projectedRuntimeOwner) {
+    return projectedRuntimeOwner
+  }
+  const parsedWorktreeHost = parseExecutionHostId(worktree?.hostId)
+  if (parsedWorktreeHost?.kind === 'runtime') {
+    return parsedWorktreeHost.environmentId
+  }
+  if (parsedWorktreeHost?.kind === 'local') {
+    return null
   }
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
   const repo = findRepoRecord(state.repos, repoId)
@@ -205,41 +139,6 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
   // Why: session mirroring is expensive; a merely focused runtime must not make
   // legacy/local worktrees look remote-owned.
   return getExplicitRuntimeEnvironmentIdFromHost(getRepoExecutionHostId(repo))
-}
-
-export function getRuntimeSessionMirrorEnvironmentIds(state: WorktreeRuntimeOwnerState): string[] {
-  const ids = new Set<string>()
-  const activeRuntimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
-  if (activeRuntimeEnvironmentId) {
-    ids.add(activeRuntimeEnvironmentId)
-  }
-  for (const repo of state.repos ?? []) {
-    const environmentId = getExplicitRuntimeEnvironmentIdFromHost(getRepoExecutionHostId(repo))
-    if (environmentId) {
-      ids.add(environmentId)
-    }
-  }
-  for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
-    for (const worktree of worktrees) {
-      const environmentId = getRuntimeEnvironmentIdFromWorktreeHost(worktree.hostId)
-      if (environmentId) {
-        ids.add(environmentId)
-      }
-    }
-  }
-  for (const group of state.projectGroups ?? []) {
-    const environmentId = getExplicitRuntimeEnvironmentIdFromHost(group.executionHostId)
-    if (environmentId) {
-      ids.add(environmentId)
-    }
-  }
-  for (const hostId of Object.values(state.restoredRuntimeHostIdByWorkspaceSessionKey ?? {})) {
-    const parsed = parseExecutionHostId(hostId)
-    if (parsed?.kind === 'runtime') {
-      ids.add(parsed.environmentId)
-    }
-  }
-  return [...ids].sort()
 }
 
 export function getExecutionHostIdForWorktree(
@@ -256,6 +155,20 @@ export function getExecutionHostIdForWorktree(
   if (workspaceScope?.type === 'folder') {
     return getExecutionHostIdForFolderWorkspace(state, workspaceScope.folderWorkspaceId)
   }
+  const hasDetectedOwner = Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
+    result.worktrees.some((worktree) => worktree.id === worktreeId)
+  )
+  if (hasDetectedOwner) {
+    const resolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
+    if (resolution.kind === 'resolved') {
+      return (
+        resolution.route.executionHostId ??
+        `runtime:${encodeURIComponent(resolution.route.runtimeEnvironmentId ?? 'unresolved-owner')}`
+      )
+    }
+    // Why: conflicting detected publications must never enable paired-client-local PTY behavior.
+    return 'runtime:unresolved-owner'
+  }
   const worktree = findWorktreeRecord(state.worktreesByRepo, worktreeId)
   const worktreeHostId = getExecutionHostIdFromWorktreeHost(worktree?.hostId)
   if (worktreeHostId) {
@@ -269,7 +182,7 @@ export function getExecutionHostIdForWorktree(
   if (repo && hasExplicitOwner) {
     return getRepoExecutionHostId(repo)
   }
-  const environmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
+  const environmentId = getSingleFocusedRuntimeEnvironmentId(state)
   return environmentId ? `runtime:${encodeURIComponent(environmentId)}` : 'local'
 }
 

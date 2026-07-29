@@ -34,7 +34,10 @@ type RelayControlClientOptions = {
   onDrain: (message: RelayDrainMessage) => void
   onClose: (code: number) => void
   createSocket?: (url: string, relayJwt: string) => WebSocket
+  connectDeadlineMs?: number
 }
+
+const RELAY_CONTROL_CONNECT_DEADLINE_MS = 15_000
 
 function controlWebSocketUrl(cellUrl: string): { origin: string; url: string } {
   const parsed = new URL(cellUrl)
@@ -62,6 +65,7 @@ export class RelayControlClient {
   private state: RelayControlState = 'idle'
   private connectResolve: ((ack: RelayHostHelloAckMessage) => void) | null = null
   private connectReject: ((error: Error) => void) | null = null
+  private connectTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(options: RelayControlClientOptions) {
     this.options = options
@@ -100,6 +104,12 @@ export class RelayControlClient {
       }
     })
     socket.once('close', (code) => this.handleClose(code))
+    // Recovery cannot advance while an upgrade/proof promise remains pending forever.
+    this.connectTimer = setTimeout(
+      () => this.expireConnect(),
+      this.options.connectDeadlineMs ?? RELAY_CONTROL_CONNECT_DEADLINE_MS
+    )
+    this.connectTimer.unref()
     return new Promise((resolve, reject) => {
       this.connectResolve = resolve
       this.connectReject = reject
@@ -153,7 +163,12 @@ export class RelayControlClient {
   }
 
   closeNow(): void {
+    const wasConnecting = this.state === 'opening' || this.state === 'proving'
     this.state = 'closed'
+    if (wasConnecting) {
+      this.connectReject?.(new Error('relay_control_closed'))
+      this.clearConnectPromise()
+    }
     this.requests.rejectAll(new Error('relay_control_closed'))
     this.socket?.terminate()
     this.socket = null
@@ -277,7 +292,20 @@ export class RelayControlClient {
     this.options.onClose(code)
   }
 
+  private expireConnect(): void {
+    if (this.state !== 'opening' && this.state !== 'proving') {
+      return
+    }
+    this.connectReject?.(new Error('relay_control_connect_timeout'))
+    this.clearConnectPromise()
+    this.socket?.terminate()
+  }
+
   private clearConnectPromise(): void {
+    if (this.connectTimer) {
+      clearTimeout(this.connectTimer)
+      this.connectTimer = null
+    }
     this.connectResolve = null
     this.connectReject = null
   }

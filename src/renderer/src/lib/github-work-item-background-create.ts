@@ -29,8 +29,7 @@ import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
-import type { GitHubWorkItem, SetupDecision } from '../../../shared/types'
-import type { Repo } from '../../../shared/types'
+import type { GitHubWorkItem, SetupDecision, Repo } from '../../../shared/types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 
@@ -242,12 +241,13 @@ export async function createGitHubWorkItemWorkspaceInBackground(
     if (!deps.hasPendingCreate(creationId)) {
       return { kind: 'background-started' }
     }
-    const { startupPlan, quickPrompt, quickTelemetry } = buildGitHubWorkItemStartupPlan({
-      agent,
-      item: args.item,
-      repo,
-      store
-    })
+    const { startupPlan, quickPrompt, launchDraftPrompt, quickTelemetry } =
+      buildGitHubWorkItemStartupPlan({
+        agent,
+        item: args.item,
+        repo,
+        store
+      })
     if (agent && !startupPlan) {
       deps.toastError(agentLaunchCommandErrorMessage())
       abandonStagedCreate(creationId, restoreView, deps)
@@ -311,6 +311,7 @@ export async function createGitHubWorkItemWorkspaceInBackground(
       ...(issueCommand ? { issueCommand } : {}),
       startupPlan,
       quickPrompt,
+      ...(launchDraftPrompt ? { launchDraftPrompt } : {}),
       quickTelemetry
     }
 

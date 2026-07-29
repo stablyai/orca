@@ -199,6 +199,7 @@ export class DaemonClient {
 
     const id = `req-${++this.requestCounter}`
     const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
+    const encoded = encodeNdjson(msg)
 
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -212,18 +213,25 @@ export class DaemonClient {
         timer
       })
 
-      this.controlSocket!.write(encodeNdjson(msg))
+      this.controlSocket!.write(encoded)
     })
   }
 
-  notify(type: string, payload: unknown): void {
+  // Why: fire-and-forget writes need a local delivery signal to trigger dead-endpoint recovery.
+  notify(type: string, payload: unknown): boolean {
     if (!this.connected || !this.controlSocket) {
-      return
+      return false
     }
 
     const id = `${NOTIFY_PREFIX}${++this.requestCounter}`
     const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
-    this.controlSocket.write(encodeNdjson(msg))
+    try {
+      this.controlSocket.write(encodeNdjson(msg))
+      return true
+    } catch {
+      // Notifications are best-effort; an oversized payload must not tear down the caller.
+      return false
+    }
   }
 
   onEvent(listener: (event: unknown) => void): () => void {

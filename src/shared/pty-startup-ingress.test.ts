@@ -14,9 +14,9 @@ function createHarness(options: { projection?: boolean; nested?: (data: string) 
   ingress = new PtyStartupIngress({
     intent: {
       colors: COLORS,
-      deadlineMs: 5_000,
-      ...(options.projection ? { echoProjection: 'windows-conpty-esc-stripped' as const } : {})
+      deadlineMs: 5_000
     },
+    ...(options.projection ? { ownerBackend: 'windows-conpty' as const } : {}),
     write: (data) => {
       writes.push(data)
       options.nested?.(data)
@@ -33,26 +33,13 @@ function visible(emissions: readonly PtyIngressEmission[]): string {
 describe('PtyStartupIngress', () => {
   afterEach(() => vi.useRealTimers())
 
-  it('validates intent bounds and rejects a Windows projection on isolated hosts', () => {
+  it('validates intent colors and deadline bounds', () => {
     const intent = {
       colors: COLORS,
-      deadlineMs: 5_000,
-      echoProjection: 'windows-conpty-esc-stripped'
+      deadlineMs: 5_000
     }
-    expect(parsePtyStartupIngressIntent(intent, { allowWindowsEchoProjection: true })).toEqual(
-      intent
-    )
-    expect(parsePtyStartupIngressIntent(intent, { allowWindowsEchoProjection: false })).toBe(
-      undefined
-    )
-    expect(
-      parsePtyStartupIngressIntent(
-        { ...intent, deadlineMs: 30_001 },
-        {
-          allowWindowsEchoProjection: true
-        }
-      )
-    ).toBeUndefined()
+    expect(parsePtyStartupIngressIntent(intent)).toEqual(intent)
+    expect(parsePtyStartupIngressIntent({ ...intent, deadlineMs: 30_001 })).toBeUndefined()
   })
 
   it('recognizes BEL/ST queries at every split and emits canonical replies', () => {
@@ -144,6 +131,133 @@ describe('PtyStartupIngress', () => {
       { data: 'after', transformed: false },
       { data: 'nested', transformed: false }
     ])
+  })
+
+  it('consumes a native ConPTY color query before any downstream responder at every split', () => {
+    const query = '\x1b]11;?\x1b\\'
+    for (let split = 0; split <= query.length; split += 1) {
+      const writes: string[] = []
+      const emissions: PtyIngressEmission[] = []
+      const ingress = new PtyStartupIngress({
+        ownerBackend: 'windows-conpty',
+        write: (data) => writes.push(data),
+        onEmission: (emission) => emissions.push(emission)
+      })
+      ingress.closeQueryAuthority()
+      ingress.accept(query.slice(0, split))
+      ingress.accept(query.slice(split))
+      ingress.drainAndClose()
+
+      expect(writes, `split ${split}`).toEqual([])
+      expect(visible(emissions), `split ${split}`).toBe('')
+      expect(emissions, `split ${split}`).toEqual([
+        { data: '', rawStartSeq: 0, rawEndSeq: query.length, transformed: true }
+      ])
+    }
+  })
+
+  it('keeps native ConPTY startup authority until it can answer with owner-supplied colors', () => {
+    const writes: string[] = []
+    const emissions: PtyIngressEmission[] = []
+    const ingress = new PtyStartupIngress({
+      intent: { colors: COLORS, deadlineMs: 5_000 },
+      ownerBackend: 'windows-conpty',
+      write: (data) => writes.push(data),
+      onEmission: (emission) => emissions.push(emission)
+    })
+
+    ingress.accept('\x1b]10;')
+    ingress.closeQueryAuthority()
+    ingress.accept('?\x07')
+
+    expect(writes).toEqual(['\x1b]10;rgb:2e2e/3434/3434\x1b\\'])
+    expect(visible(emissions)).toBe('')
+  })
+
+  it('keeps a split native ConPTY query private across close, expiry, and snapshot barriers', () => {
+    vi.useFakeTimers()
+    for (const barrier of ['close', 'expire', 'snapshot'] as const) {
+      const emissions: PtyIngressEmission[] = []
+      const ingress = new PtyStartupIngress({
+        ...(barrier === 'expire' ? { intent: { colors: COLORS, deadlineMs: 5_000 } } : {}),
+        ownerBackend: 'windows-conpty',
+        write: () => {},
+        onEmission: (emission) => emissions.push(emission)
+      })
+      ingress.accept('\x1b]10;')
+      if (barrier === 'close') {
+        ingress.closeQueryAuthority()
+      } else if (barrier === 'expire') {
+        vi.advanceTimersByTime(5_000)
+      } else {
+        ingress.snapshotBarrier()
+      }
+      expect(emissions, barrier).toEqual([])
+
+      ingress.accept('?\x07')
+
+      expect(visible(emissions), barrier).toBe('')
+      expect(emissions, barrier).toEqual([
+        { data: '', rawStartSeq: 0, rawEndSeq: '\x1b]10;?\x07'.length, transformed: true }
+      ])
+    }
+
+    const malformedEmissions: PtyIngressEmission[] = []
+    const malformed = new PtyStartupIngress({
+      ownerBackend: 'windows-conpty',
+      write: () => {},
+      onEmission: (emission) => malformedEmissions.push(emission)
+    })
+    malformed.accept('\x1b]10;')
+    malformed.snapshotBarrier()
+    malformed.accept('not-a-query\x07')
+
+    expect(visible(malformedEmissions)).toBe('\x1b]10;not-a-query\x07')
+  })
+
+  it('releases a partial query immediately when source authority closes', () => {
+    const emissions: PtyIngressEmission[] = []
+    const ingress = new PtyStartupIngress({
+      intent: { colors: COLORS, deadlineMs: 5_000 },
+      ownerBackend: 'posix-pty',
+      write: () => {},
+      onEmission: (emission) => emissions.push(emission)
+    })
+
+    ingress.accept('\x1b]10;')
+    expect(emissions).toEqual([])
+    ingress.closeQueryAuthority()
+
+    expect(visible(emissions)).toBe('\x1b]10;')
+  })
+
+  it('keeps POSIX, WSL, malformed, and unrelated output unchanged', () => {
+    const input = 'typed\x1b[A\x1b]12;?\x1b\\\x1b]10;not-a-query\x07'
+    vi.useFakeTimers()
+    for (const ownerBackend of ['posix-pty', 'windows-wsl'] as const) {
+      const emissions: PtyIngressEmission[] = []
+      const ingress = new PtyStartupIngress({
+        ownerBackend,
+        write: () => {},
+        onEmission: (emission) => emissions.push(emission)
+      })
+      ingress.accept(`\x1b]10;?\x07${input}`)
+      expect(visible(emissions)).toBe(`\x1b]10;?\x07${input}`)
+    }
+
+    const writes: string[] = []
+    const emissions: PtyIngressEmission[] = []
+    const nativeIngress = new PtyStartupIngress({
+      intent: { colors: COLORS, deadlineMs: 5_000 },
+      ownerBackend: 'windows-conpty',
+      write: (data) => writes.push(data),
+      onEmission: (emission) => emissions.push(emission)
+    })
+    vi.advanceTimersByTime(5_001)
+    nativeIngress.accept(`${input}\x1b]10;?\x07`)
+
+    expect(writes).toEqual([])
+    expect(visible(emissions)).toBe(input)
   })
 
   it('ignores callbacks after teardown without recreating the raw sequence domain', () => {

@@ -117,7 +117,6 @@ import {
   _resetMergeQueueCacheForTests,
   _resetOwnerRepoCache
 } from './client'
-import { _resetGhCwdRepoNegativeCache } from './gh-cwd-repo-negative-cache'
 import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from '../../shared/github-work-items-query-bounds'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
@@ -158,7 +157,6 @@ describe('listWorkItems query paging', () => {
     getOwnerRepoForRemoteMock.mockResolvedValue(null)
     _resetOwnerRepoCache()
     _resetMergeQueueCacheForTests()
-    _resetGhCwdRepoNegativeCache()
   })
 
   it('returns zero for oversized count queries before resolving repo sources', async () => {

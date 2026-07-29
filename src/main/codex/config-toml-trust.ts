@@ -31,6 +31,8 @@ export type CodexEventLabel =
   | 'post_compact'
   | 'session_start'
   | 'user_prompt_submit'
+  | 'subagent_start'
+  | 'subagent_stop'
   | 'stop'
 
 export type CodexTrustEntry = {
@@ -114,6 +116,8 @@ function matcherPatternForEvent(
     case 'pre_compact':
     case 'post_compact':
     case 'session_start':
+    case 'subagent_start':
+    case 'subagent_stop':
       return matcher
   }
 }
@@ -315,6 +319,8 @@ function isCodexEventLabel(value: string): value is CodexEventLabel {
     value === 'post_compact' ||
     value === 'session_start' ||
     value === 'user_prompt_submit' ||
+    value === 'subagent_start' ||
+    value === 'subagent_stop' ||
     value === 'stop'
   )
 }

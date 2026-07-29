@@ -44,7 +44,8 @@ import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import {
   getSettingsFocusedExecutionHostId,
-  parseExecutionHostId
+  parseExecutionHostId,
+  getRepoExecutionHostId
 } from '../../../shared/execution-host'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -179,8 +180,6 @@ import {
   readLinearBoardIssueDragData,
   writeLinearBoardIssueDragData
 } from '@/lib/linear-board-drag-payload'
-import { isGitRepoKind } from '../../../shared/repo-kind'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import {
@@ -199,6 +198,7 @@ import {
   reconcileTaskPagePagesAfterLandingRefresh,
   reconcileTaskPagePagesWithWorkItemsCache,
   shouldResetTaskPagePaginationAfterLandingRefresh,
+  selectTaskPageUnresolvedSourceRepos,
   selectTaskPageWorkItemsCacheEntries,
   shouldReplaceTaskPageItemsAfterRefresh,
   type TaskPageRepoSourceState
@@ -237,6 +237,7 @@ import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selecto
 import { getRepoBackedTaskEmptyState } from '@/components/task-page-empty-state'
 import {
   getDefaultTaskRepoSelection,
+  getTaskEligibleRepos,
   getTaskProjectPickerGroups,
   normalizeTaskRepoSelection
 } from '@/components/task-page-default-repo-selection'
@@ -3140,7 +3141,7 @@ export default function TaskPage(): React.JSX.Element {
   const linearConnected = linearStatusCurrent && linearStatus.connected
   const jiraConnected = jiraStatusCurrent && jiraStatus.connected
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
-  const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
+  const eligibleRepos = useMemo(() => getTaskEligibleRepos(repos), [repos])
 
   // Why: initial selection precedence — explicit preselection > persisted defaultRepoSelection > all eligible; preselection wins so "open tasks for this repo" lands single-repo.
   const resolvedInitialSelection = useMemo<ReadonlySet<string>>(() => {
@@ -3983,6 +3984,12 @@ export default function TaskPage(): React.JSX.Element {
   const perRepoSourceState = useMemo<TaskPageRepoSourceState[]>(
     () => buildTaskPageRepoSourceState(selectedRepos, selectedWorkItemsCacheEntries),
     [selectedRepos, selectedWorkItemsCacheEntries]
+  )
+
+  // Why: repos that fetched but resolved no GitHub source (#9660) show empty like a genuine zero-result; surface them explicitly with Retry.
+  const unresolvedSourceRepos = useMemo(
+    () => selectTaskPageUnresolvedSourceRepos(selectedRepos, perRepoSourceState),
+    [selectedRepos, perRepoSourceState]
   )
 
   useEffect(() => {
@@ -7104,6 +7111,7 @@ export default function TaskPage(): React.JSX.Element {
     // Why: when a modal is open, let it own Esc dismissal.
     if (
       dialogWorkItem ||
+      selectedJiraIssue ||
       selectedLinearIssue ||
       newIssueOpen ||
       newLinearIssueOpen ||
@@ -7148,7 +7156,8 @@ export default function TaskPage(): React.JSX.Element {
     newIssueOpen,
     newLinearIssueOpen,
     newJiraIssueOpen,
-    selectedLinearIssue
+    selectedLinearIssue,
+    selectedJiraIssue
   ])
 
   useEffect(() => {
@@ -8611,7 +8620,8 @@ export default function TaskPage(): React.JSX.Element {
                             workspaceId={selectedLinearWorkspaceId ?? null}
                             isAllWorkspaces={selectedLinearWorkspaceId === 'all'}
                             primaryTeam={linearAttributePrimaryTeam}
-                            selectedTeamCount={linearTeamSelection.size}
+                            selectedTeamIds={[...linearTeamSelection]}
+                            availableTeams={linearTeamOptions}
                             settings={linearTaskSourceContext ?? settings}
                           />
                         ) : null}
@@ -9138,6 +9148,43 @@ export default function TaskPage(): React.JSX.Element {
                     )
                   })}
 
+                {unresolvedSourceRepos.map((r) => (
+                  // Why: null-source repos (#9660) render empty like genuine zero — name the repo and offer Retry so a transient resolve blip is recoverable.
+                  <div
+                    key={`source-unresolved-${r.repoId}`}
+                    role="status"
+                    aria-atomic="true"
+                    className="flex items-center justify-between gap-3 border-b border-border/50 bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
+                  >
+                    <span>
+                      {translate(
+                        'auto.components.TaskPage.noGithubSourceDetected',
+                        'No GitHub source detected for'
+                      )}{' '}
+                      <span className="font-mono">{r.label}</span> —{' '}
+                      {translate(
+                        'auto.components.TaskPage.noGithubSourceDetectedHint',
+                        'it may have no GitHub remote, or the source could not be resolved.'
+                      )}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRetryIssuesFetch(r.sourceKey)}
+                      disabled={tasksLoading || retryingSourceKeys.has(r.sourceKey)}
+                    >
+                      {retryingSourceKeys.has(r.sourceKey) ? (
+                        <span className="flex items-center gap-1">
+                          <LoaderCircle className="h-3 w-3 animate-spin" />
+                          {translate('auto.components.TaskPage.5b6b2af943', 'Retrying…')}
+                        </span>
+                      ) : (
+                        translate('auto.components.TaskPage.0bfbf62f75', 'Retry')
+                      )}
+                    </Button>
+                  </div>
+                ))}
+
                 {showGitHubTaskSkeletons ? (
                   // Why: fill a typical viewport with shimmer rows so the table doesn't jump in height when results land.
                   <div className="divide-y divide-border/50">
@@ -9189,6 +9236,7 @@ export default function TaskPage(): React.JSX.Element {
                 !tasksError &&
                 !githubUnavailable &&
                 failedCount === 0 &&
+                unresolvedSourceRepos.length === 0 &&
                 perRepoSourceState.every((s) => !s.error) ? (
                   <div className="px-4 py-10 text-center">
                     <p className="text-base font-medium text-foreground">

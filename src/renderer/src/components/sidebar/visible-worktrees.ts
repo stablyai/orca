@@ -2,7 +2,11 @@ import type { Worktree, Repo, TerminalTab, WorktreeLineage } from '../../../../s
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
-import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
+import {
+  getAllWorktreesFromState,
+  getRepoMapFromState,
+  getWorktreeMapFromState
+} from '@/store/selectors'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
@@ -11,6 +15,12 @@ import {
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
+import {
+  getCyclicProjectedWorktreeLineageIds,
+  getLineageRenderInfo
+} from './worktree-lineage-projection'
+import { computeRenderedSidebarWorktreeOrder } from './rendered-sidebar-worktree-order'
+import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 
 /**
  * Whether a worktree represents the repo's default-branch row that the
@@ -29,12 +39,30 @@ export function isAutomationGeneratedWorkspace(worktree: Worktree): boolean {
   return worktree.automationProvenance?.kind === 'created-by-automation'
 }
 
+export function isCliCreatedWorkspace(worktree: Worktree): boolean {
+  return worktree.cliProvenance?.kind === 'created-by-cli'
+}
+
+/**
+ * Whether a worktree sits on a detached HEAD (a commit, not a branch).
+ *
+ * Why the head check: folder workspaces and SSH-synthesized rows carry both an
+ * empty branch and an empty head, so branch-emptiness alone would sweep them
+ * into this filter. Requiring a real head keeps the predicate to genuine
+ * detached-HEAD checkouts, matching what DetachedHeadBadge renders on the card.
+ */
+export function isDetachedHeadWorkspace(worktree: Worktree): boolean {
+  return getWorktreeGitIdentityDisplay(worktree)?.kind === 'detached'
+}
+
 /** Inputs describing sidebar filter settings that the Clear Filters path owns. */
 export type SidebarFilterState = {
   showSleepingWorkspaces: boolean
   filterRepoIds: readonly string[]
   hideDefaultBranchWorkspace: boolean
   hideAutomationGeneratedWorkspaces: boolean
+  hideCliCreatedWorkspaces: boolean
+  hideDetachedHeadWorkspaces: boolean
   visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
   workspaceHostScope?: ExecutionHostScope
 }
@@ -54,6 +82,8 @@ export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
     state.filterRepoIds.length > 0 ||
     state.hideDefaultBranchWorkspace ||
     state.hideAutomationGeneratedWorkspaces ||
+    state.hideCliCreatedWorkspaces ||
+    state.hideDetachedHeadWorkspaces ||
     state.visibleWorkspaceHostIds != null ||
     (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE)
   )
@@ -66,6 +96,8 @@ export type ClearFilterActions = {
   resetFilterRepoIds: boolean
   resetHideDefaultBranchWorkspace: boolean
   resetHideAutomationGeneratedWorkspaces: boolean
+  resetHideCliCreatedWorkspaces: boolean
+  resetHideDetachedHeadWorkspaces: boolean
   resetVisibleWorkspaceHostIds: boolean
 }
 
@@ -85,6 +117,8 @@ export function computeClearFilterActions(state: SidebarFilterState): ClearFilte
     resetFilterRepoIds: state.filterRepoIds.length > 0,
     resetHideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     resetHideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
+    resetHideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
+    resetHideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
     resetVisibleWorkspaceHostIds:
       state.visibleWorkspaceHostIds != null ||
       (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE)
@@ -119,11 +153,15 @@ export function computeVisibleWorktreeIds(
     // forgetting to pass it.
     hideDefaultBranchWorkspace: boolean
     hideAutomationGeneratedWorkspaces: boolean
+    hideCliCreatedWorkspaces: boolean
+    hideDetachedHeadWorkspaces: boolean
     repoMap: Map<string, Repo>
     workspaceHostScope: ExecutionHostScope
     visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
     defaultHostId: ExecutionHostId
     worktreeLineageById: Record<string, WorktreeLineage>
+    injectLineageAncestors?: boolean
+    forcedVisibleWorktreeIds?: readonly string[]
   }
 ): string[] {
   let all: Worktree[] = getAllWorktreesFromState({ worktreesByRepo })
@@ -141,6 +179,14 @@ export function computeVisibleWorktreeIds(
 
   if (opts.hideAutomationGeneratedWorkspaces) {
     all = all.filter((w) => !isAutomationGeneratedWorkspace(w))
+  }
+
+  if (opts.hideCliCreatedWorkspaces) {
+    all = all.filter((w) => !isCliCreatedWorkspace(w))
+  }
+
+  if (opts.hideDetachedHeadWorkspaces) {
+    all = all.filter((w) => !isDetachedHeadWorkspace(w))
   }
 
   const visibleHostIds =
@@ -177,6 +223,17 @@ export function computeVisibleWorktreeIds(
     )
   }
 
+  if (opts.forcedVisibleWorktreeIds && opts.forcedVisibleWorktreeIds.length > 0) {
+    const includedIds = new Set(all.map((worktree) => worktree.id))
+    for (const worktreeId of opts.forcedVisibleWorktreeIds) {
+      const worktree = lineageAncestorById.get(worktreeId)
+      if (worktree && !includedIds.has(worktreeId)) {
+        includedIds.add(worktreeId)
+        all.push(worktree)
+      }
+    }
+  }
+
   // Apply cached sort order. Items not yet in the cache (e.g. brand-new
   // worktrees before the next sortEpoch bump) are appended at the end.
   const orderIndex = new Map(sortedIds.map((id, i) => [id, i]))
@@ -186,11 +243,10 @@ export function computeVisibleWorktreeIds(
     return ai - bi
   })
 
-  return addVisibleLineageAncestors(
-    all.map((w) => w.id),
-    lineageAncestorById,
-    opts.worktreeLineageById
-  )
+  const visibleIds = all.map((w) => w.id)
+  return opts.injectLineageAncestors === false
+    ? visibleIds
+    : addVisibleLineageAncestors(visibleIds, lineageAncestorById, opts.worktreeLineageById)
 }
 
 function addVisibleLineageAncestors(
@@ -201,6 +257,7 @@ function addVisibleLineageAncestors(
   const result: string[] = []
   const included = new Set<string>()
   const visiting = new Set<string>()
+  const cyclicLineageIds = getCyclicProjectedWorktreeLineageIds(lineageById, worktreeById)
 
   const addWithAncestors = (id: string): void => {
     if (included.has(id) || visiting.has(id)) {
@@ -211,16 +268,11 @@ function addVisibleLineageAncestors(
       return
     }
     visiting.add(id)
-    const lineage = lineageById[id]
-    const parent = lineage ? worktreeById.get(lineage.parentWorktreeId) : undefined
-    if (
-      parent &&
-      worktree.instanceId === lineage.worktreeInstanceId &&
-      parent.instanceId === lineage.parentWorktreeInstanceId
-    ) {
+    const lineage = getLineageRenderInfo(worktree, lineageById, worktreeById, cyclicLineageIds)
+    if (lineage.state === 'valid') {
       // Why: sidebar lineage is structural. If a filtered child is visible,
       // its valid parent must be rendered too so the hierarchy remains legible.
-      addWithAncestors(parent.id)
+      addWithAncestors(lineage.parent.id)
     }
     visiting.delete(id)
     if (!included.has(id)) {
@@ -245,15 +297,19 @@ function addVisibleLineageAncestors(
  * could target a different worktree than what's rendered at that sidebar
  * position. By caching the IDs that WorktreeList actually rendered, the
  * shortcut numbering always matches the sidebar card order.
+ *
+ * Why null vs []: [] is a real rendered order (everything collapsed/filtered);
+ * null means WorktreeList is unmounted.
  */
-let _cachedVisibleIds: string[] = []
+let _publishedVisibleIds: string[] | null = null
 
 /**
  * Called by WorktreeList after computing visible worktrees so the Cmd+1–9
- * handler can read the exact same ordering the user sees on screen.
+ * handler can read the exact same ordering the user sees on screen. Pass null
+ * on unmount.
  */
-export function setVisibleWorktreeIds(ids: string[]): void {
-  _cachedVisibleIds = ids
+export function setVisibleWorktreeIds(ids: string[] | null): void {
+  _publishedVisibleIds = ids
 }
 
 /**
@@ -261,17 +317,16 @@ export function setVisibleWorktreeIds(ids: string[]): void {
  * state. Called by the App-level Cmd+1–9 handler (not a React hook — reads
  * store snapshot at call time).
  *
- * If WorktreeList has rendered at least once, returns the cached IDs so the
- * shortcut numbering matches the sidebar. Falls back to a live recomputation
- * only before WorktreeList's first render (e.g. app startup).
+ * If WorktreeList is mounted, returns the exact IDs it rendered. Otherwise
+ * recomputes the order the sidebar *would* render from the same row pipeline,
+ * so a closed sidebar numbers workspaces the same way an open one does (#9497).
  */
 export function getVisibleWorktreeIds(): string[] {
-  // Prefer the cached IDs that mirror the rendered sidebar order.
-  if (_cachedVisibleIds.length > 0) {
-    return _cachedVisibleIds
+  // Prefer the published IDs that mirror the rendered sidebar order.
+  if (_publishedVisibleIds) {
+    return _publishedVisibleIds
   }
 
-  // Fallback: live recomputation for the window before WorktreeList renders.
   const state = useAppStore.getState()
   const allWorktrees = getAllWorktreesFromState(state).filter((w) => !w.isArchived)
 
@@ -300,7 +355,7 @@ export function getVisibleWorktreeIds(): string[] {
     sortedIds = sorted.map((w) => w.id)
   }
 
-  return computeVisibleWorktreeIds(state.worktreesByRepo, sortedIds, {
+  const visibleIds = computeVisibleWorktreeIds(state.worktreesByRepo, sortedIds, {
     filterRepoIds: state.filterRepoIds,
     showSleepingWorkspaces: state.showSleepingWorkspaces,
     tabsByWorktree: state.tabsByWorktree,
@@ -313,10 +368,19 @@ export function getVisibleWorktreeIds(): string[] {
     ),
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
+    hideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
+    hideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
     repoMap,
     workspaceHostScope: state.workspaceHostScope,
     visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
     defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
     worktreeLineageById: state.worktreeLineageById
   })
+
+  const worktreeMap = getWorktreeMapFromState(state)
+  // Why the row pipeline: grouping, pinning and main-worktree hoisting reorder cards, so a flat sort numbers the wrong workspace.
+  return computeRenderedSidebarWorktreeOrder(
+    state,
+    visibleIds.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
+  )
 }

@@ -1,5 +1,13 @@
 import React from 'react'
-import { Bell, CalendarClock, EyeOff, LayoutDashboard, Search, Smartphone } from 'lucide-react'
+import {
+  Bell,
+  CalendarClock,
+  EyeOff,
+  LayoutDashboard,
+  MessageCircleQuestion,
+  Search,
+  Smartphone
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -32,6 +40,14 @@ export function shouldShowAgentDashboardButton(
   return settings?.experimentalAgentDashboardPopout === true
 }
 
+// Why: in-window is the default surface; only an explicit 'popout' choice opens
+// the separate OS window.
+function isAgentDashboardPopoutMode(
+  settings: Pick<GlobalSettings, 'experimentalAgentDashboardMode'> | null | undefined
+): boolean {
+  return settings?.experimentalAgentDashboardMode === 'popout'
+}
+
 export function shouldShowMobileButton(
   settings: Pick<GlobalSettings, 'showMobileButton'> | null | undefined
 ): boolean {
@@ -44,11 +60,9 @@ export function shouldShowAutomationsButton(
   return settings?.showAutomationsButton !== false
 }
 
-// Per-state dot colors mirror AgentStateDot so the sidebar counts read the same
-// as the board (amber = needs you, yellow = working, neutral = idle, emerald = done).
-const DASHBOARD_BUCKET_DOT_CLASS: Record<DashboardBucket, string> = {
-  attention: 'bg-amber-500',
+const DASHBOARD_BUCKET_DOT_CLASS: Record<'working' | 'done' | 'idle', string> = {
   working: 'bg-yellow-500',
+  done: 'bg-emerald-500',
   idle: 'bg-neutral-500/50'
 }
 
@@ -58,17 +72,23 @@ function dashboardBucketLabel(bucket: DashboardBucket): string {
       return translate('dashboardPopout.bucket.attention', 'Needs You')
     case 'working':
       return translate('dashboardPopout.bucket.working', 'Working')
+    case 'done':
+      return translate('dashboardPopout.bucket.done', 'Done')
     case 'idle':
       return translate('dashboardPopout.bucket.idle', 'Idle')
   }
 }
 
 function DashboardBucketCounts({
-  counts
+  counts,
+  showIdle
 }: {
   counts: Record<DashboardBucket, number>
+  showIdle: boolean
 }): React.JSX.Element | null {
-  const active = DASHBOARD_BUCKET_ORDER.filter((bucket) => counts[bucket] > 0)
+  const active = DASHBOARD_BUCKET_ORDER.filter(
+    (bucket) => counts[bucket] > 0 && (bucket !== 'idle' || showIdle)
+  )
   if (active.length === 0) {
     return null
   }
@@ -80,7 +100,11 @@ function DashboardBucketCounts({
           aria-label={`${dashboardBucketLabel(bucket)}: ${counts[bucket]}`}
           className="inline-flex items-center gap-1 text-[10px] tabular-nums text-worktree-sidebar-foreground/55"
         >
-          <span className={cn('size-1.5 rounded-full', DASHBOARD_BUCKET_DOT_CLASS[bucket])} />
+          {bucket === 'attention' ? (
+            <MessageCircleQuestion className="size-2.5 text-amber-500" aria-hidden />
+          ) : (
+            <span className={cn('size-1.5 rounded-full', DASHBOARD_BUCKET_DOT_CLASS[bucket])} />
+          )}
           {counts[bucket]}
         </span>
       ))}
@@ -92,12 +116,22 @@ function DashboardBucketCounts({
 // agent-status churn only updates this opt-in row, not the full navigation.
 function AgentDashboardSidebarEntry(): React.JSX.Element {
   const dashboardBucketCounts = useAgentBucketCounts()
+  const showIdle = useAppStore((s) => s.settings?.experimentalAgentDashboardShowIdle === true)
+  const openAsPopout = useAppStore((s) => isAgentDashboardPopoutMode(s.settings))
+  const drawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
+  const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
 
   return (
     <button
       type="button"
       onClick={() => {
-        void window.api.dashboard.openPopout()
+        if (openAsPopout) {
+          void window.api.dashboard.openPopout()
+        } else {
+          // Why: like the workspace board trigger, the entry toggles its
+          // companion drawer — sidebar clicks do not auto-dismiss it.
+          setAgentDashboardDrawerOpen(!drawerOpen)
+        }
       }}
       className={cn(
         'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
@@ -109,7 +143,7 @@ function AgentDashboardSidebarEntry(): React.JSX.Element {
         strokeWidth={1.75}
       />
       <span className="flex-1">{translate('dashboard.sidebar.label', 'Agent Dashboard')}</span>
-      <DashboardBucketCounts counts={dashboardBucketCounts} />
+      <DashboardBucketCounts counts={dashboardBucketCounts} showIdle={showIdle} />
     </button>
   )
 }

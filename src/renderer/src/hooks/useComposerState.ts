@@ -77,6 +77,7 @@ import {
   resolveQuickCreateLinkedWorkItemPrompt
 } from '@/lib/linked-work-item-context'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import {
   buildLinearIssueLinkedWorkItem,
   getLinearLinkedWorkItemBranchName,
@@ -126,6 +127,7 @@ import {
   type NewWorkspaceProjectOption
 } from '@/lib/new-workspace-project-options'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { useEphemeralVmRecipeOptions } from '@/hooks/useEphemeralVmRecipeOptions'
 import {
   getFolderSourceRepos,
   getLinkedItemDisplayName,
@@ -138,12 +140,13 @@ import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/folde
 import { submitFolderWorkspaceCreate } from '@/components/sidebar/folder-workspace-composer-submit'
 import { buildExecutionHostRegistry } from '../../../shared/execution-host-registry'
 import {
+  getRepoExecutionHostId,
   normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
-import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-focus'
+import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
@@ -177,6 +180,7 @@ import {
   getComposerRepoWorktreeBranches
 } from './composer-branch-selection'
 import { isCurrentComposerDropOwner } from './composer-drop-owner'
+import { applyComposerNativeFileDrop } from './composer-native-file-drop'
 import {
   collectComposerDropUploadResult,
   shouldReportComposerDropUploadFailure
@@ -721,13 +725,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
   const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
   const selectedRepoIsGit = selectedRepo ? isGitRepoKind(selectedRepo) : false
-  const [ephemeralVmRecipes, setEphemeralVmRecipes] = useState<
-    NonNullable<OrcaHooks['environmentRecipes']>
-  >([])
-  const [selectedEphemeralVmRecipeId, setSelectedEphemeralVmRecipeId] = useState<string | null>(
-    null
-  )
-  const [ephemeralVmRecipeError, setEphemeralVmRecipeError] = useState<string | null>(null)
   const selectedRepoAgentLaunchPlatform = useMemo(() => {
     if (!selectedRepo) {
       return CLIENT_PLATFORM
@@ -820,64 +817,20 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const selectedRecipeRepoConnectionId = selectedRepo?.connectionId ?? null
   // Why: gate recipe probing on the experimental toggle, since discovery can surface setup errors for a hidden feature.
   const ephemeralVmsEnabled = settings?.experimentalEphemeralVms === true
-  useEffect(() => {
-    let cancelled = false
-    setEphemeralVmRecipes([])
-    setSelectedEphemeralVmRecipeId(null)
-    setEphemeralVmRecipeError(null)
-    if (
-      !ephemeralVmsEnabled ||
-      !selectedRecipeRepoId ||
-      !selectedRepoIsGit ||
-      selectedRecipeRepoConnectionId ||
-      isProjectGroupTarget
-    ) {
-      return () => {
-        cancelled = true
-      }
-    }
-    void window.api.ephemeralVm
-      .listRecipes({ repoId: selectedRecipeRepoId })
-      .then((result) => {
-        if (cancelled) {
-          return
-        }
-        setEphemeralVmRecipes(result.recipes ?? [])
-        setSelectedEphemeralVmRecipeId(
-          initialEphemeralVmRecipeId &&
-            result.recipes?.some((recipe) => recipe.id === initialEphemeralVmRecipeId)
-            ? initialEphemeralVmRecipeId
-            : null
-        )
-        const diagnosticMessages = (result.diagnostics ?? []).map((diagnostic) => {
-          const recipeLabel = `environmentRecipes[${diagnostic.index}]`
-          const fieldLabel = diagnostic.field ? `.${diagnostic.field}` : ''
-          return `${recipeLabel}${fieldLabel}: ${diagnostic.message}`
-        })
-        setEphemeralVmRecipeError(
-          [result.status === 'error' ? result.message : null, ...diagnosticMessages]
-            .filter((message): message is string => Boolean(message))
-            .join('\n') || null
-        )
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return
-        }
-        setEphemeralVmRecipes([])
-        setEphemeralVmRecipeError(error instanceof Error ? error.message : String(error))
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [
-    ephemeralVmsEnabled,
-    initialEphemeralVmRecipeId,
-    isProjectGroupTarget,
-    selectedRecipeRepoConnectionId,
-    selectedRecipeRepoId,
-    selectedRepoIsGit
-  ])
+  const {
+    recipes: ephemeralVmRecipes,
+    selectedRecipeId: selectedEphemeralVmRecipeId,
+    setSelectedRecipeId: setSelectedEphemeralVmRecipeId,
+    error: ephemeralVmRecipeError
+  } = useEphemeralVmRecipeOptions({
+    enabled: ephemeralVmsEnabled,
+    repoId: selectedRecipeRepoId,
+    repoIsGit: selectedRepoIsGit,
+    repoConnectionId: selectedRecipeRepoConnectionId,
+    repoExecutionHostId: selectedRepo ? getRepoExecutionHostId(selectedRepo) : null,
+    projectGroupTarget: isProjectGroupTarget,
+    initialRecipeId: initialEphemeralVmRecipeId
+  })
   const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
   const selectedRepoSshState = selectedRepoConnectionId
     ? (sshConnectionStates.get(selectedRepoConnectionId) ?? null)
@@ -1195,15 +1148,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const selectedRepoSettingsRef = useRef(selectedRepoSettings)
   selectedRepoSettingsRef.current = selectedRepoSettings
 
+  // Why: depend on the persisted policy *value*, not the selectedRepo object. Background repo
+  // refetches (git polling) hand back a new repo reference with the same hookSettings; keying on
+  // the object would re-run this and briefly flip the toggle back to the stale value — the glitch.
+  const persistedSetupAgentStartupPolicy = getRepoSetupAgentStartupPolicy(selectedRepo)
   useEffect(() => {
-    const nextPolicy = getRepoSetupAgentStartupPolicy(selectedRepo)
     const draft = setupAgentStartupPolicyDraftRef.current
-    if (draft?.repoId === repoId && draft.policy !== nextPolicy) {
+    if (draft?.repoId === repoId && draft.policy !== persistedSetupAgentStartupPolicy) {
       return
     }
-    setupAgentStartupPolicyRef.current = nextPolicy
-    setSetupAgentStartupPolicy(nextPolicy)
-  }, [repoId, selectedRepo])
+    setupAgentStartupPolicyRef.current = persistedSetupAgentStartupPolicy
+    setSetupAgentStartupPolicy(persistedSetupAgentStartupPolicy)
+  }, [repoId, persistedSetupAgentStartupPolicy])
 
   const persistSetupAgentStartupPolicy = useCallback(
     async (
@@ -1691,7 +1647,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
     }
 
-    void readRuntimeIssueCommand(selectedRepoSettings, repoId)
+    void readRuntimeIssueCommand(selectedRepoSettingsRef.current, repoId)
       .then((result) => {
         if (!cancelled) {
           setIssueCommandTemplate(result.effectiveContent ?? '')
@@ -1708,13 +1664,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
+    // Why: key on the stable runtime-env id, not the selectedRepoSettings object. `updateRepo`
+    // (e.g. saving the setup toggle from this very composer) replaces selectedRepo — and thus the
+    // memoized selectedRepoSettings — by reference; depending on the object would re-run this
+    // effect, blank yamlHooks to null, and make the whole setup section vanish for a frame.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     commitHookCheckIfCurrent,
     enableIssueAutomation,
     loadHookCheckForRepo,
     repoId,
     selectedRepoIsGit,
-    selectedRepoSettings
+    runtimeEnvironmentId
   ])
 
   const onConnectSelectedRepo = useCallback(async (): Promise<void> => {
@@ -2373,16 +2334,44 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         return { filePaths: [], folderPaths: [] }
       }
       const destinationDir = joinPath(targetRepoPath, '.orca/drops')
+      const sshExpectation = targetConnectionId
+        ? captureDirectSshMutationExpectation(
+            useAppStore.getState(),
+            targetConnectionId,
+            targetSettings?.activeRuntimeEnvironmentId
+          )
+        : {
+            expectedExecutionHostId: 'local' as const,
+            expectedSshTargetId: undefined,
+            expectedSshConnectionGeneration: undefined
+          }
+      const assertCurrent = targetConnectionId
+        ? () => {
+            const current = captureDirectSshMutationExpectation(
+              useAppStore.getState(),
+              targetConnectionId,
+              targetSettings?.activeRuntimeEnvironmentId
+            )
+            if (
+              current.expectedSshTargetId !== sshExpectation.expectedSshTargetId ||
+              current.expectedSshConnectionGeneration !==
+                sshExpectation.expectedSshConnectionGeneration
+            ) {
+              throw new Error('Attachment upload host changed; retry the upload.')
+            }
+          }
+        : undefined
       const { results } = await importExternalPathsToRuntime(
         {
           settings: targetSettings,
           worktreeId: targetRepoPath,
           worktreePath: targetRepoPath,
-          connectionId: targetConnectionId ?? undefined
+          connectionId: targetConnectionId ?? undefined,
+          ...sshExpectation
         },
         sourcePaths,
         destinationDir,
-        { ensureDestinationDir: true }
+        { ensureDestinationDir: true, assertCurrent }
       )
       const uploadResult = collectComposerDropUploadResult(results)
       if (shouldReportComposerDropUploadFailure(uploadResult, canReportFailure)) {
@@ -2465,26 +2454,25 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       if (!isCurrentComposerDropOwner(composerDropStack, instanceId)) {
         return
       }
-      void (async () => {
-        const isStillDropOwner = (): boolean =>
-          isCurrentComposerDropOwner(composerDropStack, instanceId)
-        const uploaded = await uploadComposerPathsRef.current(
-          data.paths,
-          selectedRepoSettingsRef.current,
-          connectionIdRef.current,
-          selectedRepoPathRef.current,
-          isStillDropOwner
-        )
-        if (!isStillDropOwner()) {
-          return
-        }
-        if (uploaded) {
-          addComposerAttachmentsRef.current(uploaded.filePaths)
-          insertComposerFolderPathsRef.current(uploaded.folderPaths)
-          return
-        }
-        await applyLocalComposerDropRef.current(data.paths, isStillDropOwner)
-      })()
+      const isStillDropOwner = (): boolean =>
+        isCurrentComposerDropOwner(composerDropStack, instanceId)
+      void applyComposerNativeFileDrop({
+        paths: data.paths,
+        isCurrentOwner: isStillDropOwner,
+        uploadPaths: (paths) =>
+          uploadComposerPathsRef.current(
+            paths,
+            selectedRepoSettingsRef.current,
+            connectionIdRef.current,
+            selectedRepoPathRef.current,
+            isStillDropOwner
+          ),
+        applyLocalPaths: applyLocalComposerDropRef.current,
+        addAttachments: addComposerAttachmentsRef.current,
+        insertFolderPaths: insertComposerFolderPathsRef.current,
+        onError: (error) =>
+          toast.error(error instanceof Error ? error.message : 'Failed to drop files.')
+      })
     })
     return () => {
       unsubscribe()
@@ -3574,7 +3562,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         clearNewWorkspaceDraft()
       }
       onCreated?.()
-      queueNewWorkspaceTerminalFocus(worktree.id, activation)
+      queueWorkspaceActivationTerminalFocus(worktree.id, activation)
     } catch (error) {
       const formattedError = formatWorkspaceCreateError(error)
       setCreateError(formattedError)
@@ -4011,6 +3999,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           note: trimmedNote,
           startupPlan,
           quickPrompt,
+          ...(quickDraftPrompt ? { launchDraftPrompt: quickDraftPrompt } : {}),
           quickTelemetry,
           ...(createMultiple ? { suppressTerminalFocusOnCompletion: true } : {})
         }

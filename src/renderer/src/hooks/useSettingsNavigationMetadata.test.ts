@@ -133,6 +133,20 @@ describe('settings navigation metadata', () => {
     expect(entry?.targetSectionId).toBe('ephemeral-vms')
   })
 
+  it('places Plugins under Experimental on desktop and omits it on the web', () => {
+    const desktopSections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const desktopIds = desktopSections.map((section) => section.id)
+
+    expect(desktopSections.find((section) => section.id === 'plugins')?.group).toBe('experimental')
+    expect(desktopIds.indexOf('plugins')).toBe(desktopIds.indexOf('experimental') + 1)
+    expect(ids({ isWebClient: true })).not.toContain('plugins')
+  })
+
   it('omits Windows project runtime search entries when the active host is unsupported', () => {
     const sections = buildSettingsNavigationMetadata({
       isMac: false,

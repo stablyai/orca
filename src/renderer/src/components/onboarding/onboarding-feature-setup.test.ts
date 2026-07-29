@@ -274,6 +274,39 @@ describe('onboarding feature setup runner', () => {
     expect(deps.clipboardWrites).toEqual([])
   })
 
+  it('skips openSetup and warns when the macOS Computer Use helper app is unavailable', async () => {
+    // Why: getComputerUsePermissionStatus reports helperUnavailableReason with
+    // all permissions set to not-granted when the helper app is missing (e.g.
+    // a dev build that never ran `pnpm build:computer-macos`). The runner must
+    // not call openSetup in that case, or the IPC handler throws.
+    const unavailableStatus: ComputerUsePermissionStatusResult = {
+      platform: 'darwin',
+      helperAppPath: null,
+      helperUnavailableReason: 'Orca Computer Use.app was not found',
+      permissions: [
+        { id: 'accessibility', status: 'not-granted' },
+        { id: 'screenshots', status: 'not-granted' }
+      ]
+    }
+    const openComputerUsePermissionSetup = vi.fn(async () => OPENED_COMPUTER_USE_SETUP)
+    const deps = createDeps({
+      getComputerUsePermissionStatus: vi.fn(async () => unavailableStatus),
+      openComputerUsePermissionSetup
+    })
+
+    const result = await runOnboardingFeatureSetup(
+      { browserUse: true, computerUse: true, orchestration: true, linearTickets: true },
+      deps
+    )
+
+    expect(result.computerUsePermissionsOpened).toBe(false)
+    expect(openComputerUsePermissionSetup).not.toHaveBeenCalled()
+    expect(result.warnings).toContainEqual({
+      featureId: 'computerUse',
+      message: 'Orca Computer Use.app was not found'
+    })
+  })
+
   it('shows CLI registration context before installing a missing CLI during onboarding', async () => {
     const staleStatus: CliInstallStatus = {
       ...INSTALLED_CLI_STATUS,

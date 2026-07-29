@@ -28,6 +28,8 @@ import {
   updateTerminalSubscriptionViewport as updateCachedTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
 import { describeSocketEvent } from './socket-event-debug'
+import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
 
@@ -42,8 +44,16 @@ type ConnectWaiter = {
   timeout: ReturnType<typeof setTimeout> | null
 }
 
-type SendRequestOptions = {
+export type SendRequestOptions = {
   timeoutMs?: number
+  /** Spend `timeoutMs` across connect-wait AND the request instead of giving each
+   *  phase its own. Interactive chat writes need it: they run as sequential loops
+   *  under one shared budget, so a per-phase clock lets the composer sit `sending`
+   *  for a multiple of the stated ceiling. Off by default — the long-running
+   *  callers (worktree create, dictation finish, credit reset) sized their budgets
+   *  against the post-connect clock, and squeezing them to the floor after a slow
+   *  reconnect would fail sends that used to land. */
+  budgetSpansConnect?: boolean
 }
 
 type SubscribeOptions = {
@@ -97,7 +107,12 @@ const GIVE_UP_AFTER_ATTEMPTS = 12
 const TRICKLE_RECONNECT_DELAY_MS = 90_000
 // Why: one unauthorized isn't proof the pairing is dead (issue #5200) — retry the handshake this many times before latching auth-failed.
 const AUTH_RETRY_BUDGET = 3
+// Why: a desktop that regenerated its E2EE keypair sends an e2ee_error we can't decrypt — the 4001 close code is the only surviving auth-failure signal.
+const UNAUTHORIZED_CLOSE_CODE = 4001
 const REQUEST_TIMEOUT_MS = 30_000
+// Why: an explicit `timeoutMs` is one budget for the whole call. If the connect wait
+// ate nearly all of it, still give the written frame a moment to be answered rather
+// than arming a 1ms timer.
 const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 5_000
 // Why: RN may not expose WebSocket.readyState constants, but the CONNECTING protocol value (0) is stable across runtimes.
@@ -602,7 +617,7 @@ export function connect(
       })
       lastWsClosedAt = closeAt
       currentWsOpenedAt = null
-      handleSocketClosed(openingWs)
+      handleSocketClosed(openingWs, { closeCode: e?.code })
     }
 
     ws.onerror = (event) => {
@@ -622,7 +637,10 @@ export function connect(
     }
   }
 
-  function handleSocketClosed(closedWs: WebSocket, opts: { timedOut?: boolean } = {}) {
+  function handleSocketClosed(
+    closedWs: WebSocket,
+    opts: { timedOut?: boolean; closeCode?: number } = {}
+  ) {
     if (ws !== closedWs) {
       console.log('[net] handleSocketClosed STALE — ignoring (ws already swapped)', {
         state,
@@ -644,7 +662,17 @@ export function connect(
     if (intentionallyClosed) {
       console.log('[net] handleSocketClosed — intentional close')
       setState('disconnected')
-      rejectAllPending('Connection closed')
+      rejectAllPending('Connection closed', { deliveryUnknown: true })
+      return
+    }
+    // Why: a bare 4001 close means the desktop rejected our pairing but the encrypted
+    // e2ee_error never arrived (or was undecryptable) — count it against the auth
+    // retry budget instead of looping the generic reconnect forever.
+    if (opts.closeCode === UNAUTHORIZED_CLOSE_CODE) {
+      console.log('[net] handleSocketClosed — unauthorized close code', {
+        attempt: reconnectAttempt
+      })
+      handleAuthRejection('Unauthorized — pairing may be revoked')
       return
     }
     console.log('[net] handleSocketClosed → reconnect', {
@@ -654,7 +682,7 @@ export function connect(
       attempt: reconnectAttempt
     })
     emitLog('warn', 'WebSocket closed', 'Will attempt to reconnect')
-    rejectAllPending('Connection interrupted')
+    rejectAllPending('Connection interrupted', { deliveryUnknown: true })
     setState('reconnecting')
     scheduleReconnect()
   }
@@ -788,8 +816,12 @@ export function connect(
     }
   }
 
-  function rejectAllPending(reason: string) {
-    const error = new Error(reason)
+  function rejectAllPending(reason: string, options?: { deliveryUnknown?: boolean }) {
+    // Why: pending entries only exist after a successful socket write, so a close
+    // here means the host may have processed them — mark the ambiguity for callers.
+    const error = options?.deliveryUnknown
+      ? markRpcDeliveryUnknown(new Error(reason))
+      : new Error(reason)
     for (const [id, req] of pending) {
       pending.delete(id)
       queueMicrotask(() => req.reject(error))
@@ -965,7 +997,8 @@ export function connect(
       params?: unknown,
       options?: SendRequestOptions
     ): Promise<RpcResponse> {
-      const waitStart = Date.now()
+      const budget = openRpcRequestBudget(options)
+      const waitStart = budget.startedAt
       const wasConnected = state === 'connected'
       await waitForConnected(options?.timeoutMs)
       if (!wasConnected) {
@@ -977,7 +1010,7 @@ export function connect(
 
       return new Promise((resolve, reject) => {
         const id = nextId()
-        const timeoutMs = options?.timeoutMs ?? REQUEST_TIMEOUT_MS
+        const timeoutMs = resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS)
         const timeout = setTimeout(() => {
           pending.delete(id)
           console.log('[net] sendRequest TIMEOUT', {
@@ -985,7 +1018,8 @@ export function connect(
             timeoutMs,
             state
           })
-          reject(new Error(`Request timed out: ${method}`))
+          // Why: the frame was written 30s ago — the host may have processed it.
+          reject(markRpcDeliveryUnknown(new Error(`Request timed out: ${method}`)))
         }, timeoutMs)
 
         pending.set(id, {
@@ -1144,7 +1178,8 @@ export function connect(
       }
       sharedKey = null
       setState('disconnected')
-      rejectAllPending('Client closed')
+      // Why: closing the client cannot retract request frames already written.
+      rejectAllPending('Client closed', { deliveryUnknown: true })
     }
   }
 }

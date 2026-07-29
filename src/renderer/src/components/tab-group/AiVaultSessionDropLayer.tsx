@@ -12,12 +12,17 @@ import {
   hasAiVaultSessionDragData,
   readAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
+import {
+  buildAiVaultDropRepinStartup,
+  getAiVaultAgentProviderSession
+} from '@/lib/ai-vault-resume-command'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
+import { aiVaultSessionNeedsResumePreparation } from '@/lib/ai-vault-session-resume-preparation'
 import { useAppStore } from '@/store'
 import { resolveDropZone } from './tab-drop-zone'
 import type { TabDropZone } from './useTabDragSplit'
 import { translate } from '@/i18n/i18n'
-import { isLegacySharedCodexHome } from '../../../../shared/ai-vault-resume-preparation'
+import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault-resume-preparation'
 
 type PaneDropTarget = {
   groupId: string
@@ -209,24 +214,48 @@ export default function AiVaultSessionDropLayer({
         )
       }
       const preparation =
-        payload.agent === 'codex' &&
-        isLegacySharedCodexHome(payload.codexHome ?? null) &&
         payload.sessionFilePath &&
         payload.sessionExecutionHostId &&
-        payload.codexHome !== undefined
+        payload.codexHome !== undefined &&
+        aiVaultSessionNeedsResumePreparation({
+          agent: payload.agent,
+          codexHome: payload.codexHome,
+          executionHostId: payload.sessionExecutionHostId
+        })
           ? window.api.aiVault.prepareSessionResume({
               agent: payload.agent,
               filePath: payload.sessionFilePath,
               executionHostId: payload.sessionExecutionHostId,
               codexHome: payload.codexHome
             })
-          : Promise.resolve({ useRealCodexHome: false })
+          : Promise.resolve<AiVaultPrepareSessionResumeResult>({ useRealCodexHome: false })
       void preparation
         .then((result) => {
-          const startup = result.useRealCodexHome ? payload.realHomeStartup : payload
+          const startup = result.useRealCodexHome
+            ? payload.realHomeStartup
+            : result.substituteCodexHome
+              ? buildAiVaultDropRepinStartup({
+                  state: useAppStore.getState(),
+                  payload,
+                  substituteCodexHome: result.substituteCodexHome,
+                  worktreeId
+                })
+              : payload
           if (!startup) {
-            throw new Error('Orca could not prepare this legacy Codex session. Retry resume.')
+            // Why: the host just proved the prebuilt command pins another
+            // account's home, so an unrepinnable payload (older serializer)
+            // must fail loudly rather than silently resume under it.
+            throw new Error(
+              result.substituteCodexHome
+                ? 'This session was dragged from an older Orca window, so Orca cannot retarget it to the selected Codex account. Resume it from the Session History panel instead.'
+                : 'Orca could not prepare this legacy Codex session. Retry resume.'
+            )
           }
+          const providerSession = getAiVaultAgentProviderSession({
+            agent: payload.agent,
+            sessionId: payload.sessionId,
+            filePath: payload.sessionFilePath
+          })
           const launchResult = launchAiVaultSessionInNewTab({
             agent: payload.agent,
             worktreeId,
@@ -234,18 +263,20 @@ export default function AiVaultSessionDropLayer({
             ...(startup.env ? { env: startup.env } : {}),
             ...(startup.envToDelete ? { envToDelete: startup.envToDelete } : {}),
             ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
+            ...(providerSession ? { providerSession } : {}),
             targetGroupId: dropTarget.groupId,
             splitDirection: dropTarget.zone === 'center' ? undefined : dropTarget.zone
           })
           if (launchResult.tabId === null) {
-            void launchResult.runtimeLaunch.then((created) => {
-              if (!created) {
+            void launchResult.runtimeLaunch.then((outcome) => {
+              if (outcome.status === 'failed') {
                 toast.error(
-                  translate(
-                    'auto.lib.launch.agent.in.new.tab.11cce5cc77',
-                    'Could not launch {{value0}} in a new terminal.',
-                    { value0: payload.agent }
-                  )
+                  outcome.message ||
+                    translate(
+                      'auto.lib.launch.agent.in.new.tab.11cce5cc77',
+                      'Could not launch {{value0}} in a new terminal.',
+                      { value0: payload.agent }
+                    )
                 )
                 return
               }
@@ -257,7 +288,12 @@ export default function AiVaultSessionDropLayer({
         })
         .catch((error: unknown) => {
           toast.error(
-            error instanceof Error ? error.message : 'Could not prepare this session for resume.'
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.right.sidebar.AiVaultPanel.prepareSessionResumeFailed',
+                  'Could not prepare this session for resume.'
+                )
           )
         })
       return true

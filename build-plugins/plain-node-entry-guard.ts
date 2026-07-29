@@ -1,6 +1,10 @@
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
-import type { NormalizedOutputOptions, OutputBundle, OutputChunk, Plugin } from 'rollup'
+import type { Plugin, Rollup } from 'vite'
+
+type NormalizedOutputOptions = Rollup.NormalizedOutputOptions
+type OutputBundle = Rollup.OutputBundle
+type OutputChunk = Rollup.OutputChunk
 
 // Why: v1.4.129-rc.1 shipped a dead terminal daemon because a shared main
 // chunk gained `require("electron")` (an import edge added in #7642), and the
@@ -17,6 +21,7 @@ import type { NormalizedOutputOptions, OutputBundle, OutputChunk, Plugin } from 
 const PLAIN_NODE_ENTRY_NAMES = [
   'daemon-entry',
   'parcel-watcher-process-entry',
+  'main-thread-hang-watchdog-entry',
   'computer-sidecar',
   'agent-hooks/managed-agent-hook-controls',
   'codex/codex-app-server-grant-entry'
@@ -97,6 +102,8 @@ function smokeLoadDaemonEntry(outputDir: string): void {
 }
 
 export function createPlainNodeEntryGuardPlugin(): Plugin {
+  let daemonOutputDir: string | undefined
+
   return {
     name: 'orca-plain-node-entry-guard',
     writeBundle(options: NormalizedOutputOptions, bundle: OutputBundle) {
@@ -124,7 +131,14 @@ export function createPlainNodeEntryGuardPlugin(): Plugin {
       }
 
       if (entryByName.has('daemon-entry') && options.dir) {
-        smokeLoadDaemonEntry(options.dir)
+        daemonOutputDir = options.dir
+      }
+    },
+    closeBundle() {
+      if (daemonOutputDir) {
+        const outputDir = daemonOutputDir
+        daemonOutputDir = undefined
+        smokeLoadDaemonEntry(outputDir)
       }
     }
   }

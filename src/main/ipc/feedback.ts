@@ -7,7 +7,6 @@ import { app, ipcMain, net } from 'electron'
 // subject to CORS, so we proxy the submission through IPC. This mirrors the
 // same pattern used by updater-changelog.ts and updater-nudge.ts.
 const FEEDBACK_API_URL = 'https://www.onorca.dev/v1/feedback'
-const FEEDBACK_API_FALLBACK_URL = 'https://api.onorca.dev/v1/feedback'
 const FEEDBACK_REQUEST_TIMEOUT_MS = 10_000
 const FEEDBACK_ATTACHMENT_REQUEST_TIMEOUT_MS = 60_000
 const DIAGNOSTIC_BUNDLE_CONTENT_TYPE = 'application/x-ndjson'
@@ -171,46 +170,49 @@ function errorFailure(error: unknown): FeedbackRequestFailure {
   return { status: null, error: messageFromError(error) }
 }
 
-async function submitFallbackFeedback(
+async function retryFeedbackOnPrimary(
   body: FeedbackSubmitBody,
   primaryError?: unknown
 ): Promise<FeedbackSubmitResult> {
   try {
-    const fallback = await postFeedback(FEEDBACK_API_FALLBACK_URL, body)
-    if (fallback.ok) {
+    const retry = await postFeedback(FEEDBACK_API_URL, body)
+    if (retry.ok) {
       return { ok: true }
     }
-    return { ok: false, status: fallback.status, error: `status ${fallback.status}` }
-  } catch (fallbackError) {
-    const message = messageFromError(fallbackError)
+    const retryMessage = `status ${retry.status}`
+    if (primaryError === undefined) {
+      return { ok: false, status: retry.status, error: retryMessage }
+    }
+    // Why: keep the first failure visible so support can see 5xx → retry outcome,
+    // not only the last error in a same-host retry chain.
+    return {
+      ok: false,
+      status: retry.status,
+      error: `${messageFromError(primaryError)}; retry: ${retryMessage}`
+    }
+  } catch (retryError) {
+    const message = messageFromError(retryError)
     if (primaryError === undefined) {
       return { ok: false, status: null, error: message }
     }
     return {
       ok: false,
       status: null,
-      error: `${messageFromError(primaryError)}; fallback: ${message}`
+      error: `${messageFromError(primaryError)}; retry: ${message}`
     }
   }
 }
 
-function diagnosticRetryUrl(status: number): string | null {
-  if (DIAGNOSTIC_BUNDLE_JSON_RETRY_STATUSES.has(status)) {
-    return FEEDBACK_API_URL
-  }
-  if (status === 404 || status >= 500) {
-    return FEEDBACK_API_FALLBACK_URL
-  }
-  return null
+function shouldRetryWithoutDiagnosticBundle(status: number): boolean {
+  return DIAGNOSTIC_BUNDLE_JSON_RETRY_STATUSES.has(status) || status === 404 || status >= 500
 }
 
 async function submitFeedbackWithoutDiagnosticBundle(
-  url: string,
   body: FeedbackSubmitBody,
   diagnosticBundleFailure: FeedbackRequestFailure
 ): Promise<FeedbackSubmitResult> {
   try {
-    const response = await postFeedback(url, body)
+    const response = await postFeedback(FEEDBACK_API_URL, body)
     if (response.ok) {
       return { ok: true, diagnosticBundleFailure }
     }
@@ -236,21 +238,14 @@ async function submitFeedbackWithDiagnosticBundle(
       return { ok: true }
     }
     const failure = responseFailure(response)
-    if (bodyWithoutDiagnosticBundle) {
-      const retryUrl = diagnosticRetryUrl(response.status)
-      if (retryUrl) {
-        return submitFeedbackWithoutDiagnosticBundle(retryUrl, bodyWithoutDiagnosticBundle, failure)
-      }
+    if (bodyWithoutDiagnosticBundle && shouldRetryWithoutDiagnosticBundle(response.status)) {
+      return submitFeedbackWithoutDiagnosticBundle(bodyWithoutDiagnosticBundle, failure)
     }
     return { ok: false, ...failure }
   } catch (error) {
     const failure = errorFailure(error)
     return bodyWithoutDiagnosticBundle
-      ? submitFeedbackWithoutDiagnosticBundle(
-          FEEDBACK_API_FALLBACK_URL,
-          bodyWithoutDiagnosticBundle,
-          failure
-        )
+      ? submitFeedbackWithoutDiagnosticBundle(bodyWithoutDiagnosticBundle, failure)
       : { ok: false, ...failure }
   }
 }
@@ -275,17 +270,14 @@ export async function submitFeedback(
     if (res.ok) {
       return { ok: true }
     }
-    // Why: keep api.onorca.dev as a compatibility fallback, but prefer the
-    // website API because it owns the Slack file/snippet crash delivery path.
-    if (res.status === 404 || res.status >= 500) {
-      return submitFallbackFeedback(body)
+    // Why: api.onorca.dev serves a different product, so transient failures
+    // retry the endpoint that owns feedback and crash delivery.
+    if (res.status >= 500) {
+      return retryFeedbackOnPrimary(body, new Error(`status ${res.status}`))
     }
     return { ok: false, status: res.status, error: `status ${res.status}` }
   } catch (error) {
-    // Why: falling back on any network-level failure preserves the prior
-    // behavior where DNS/connect failures on the primary host transparently
-    // try the legacy API endpoint.
-    return submitFallbackFeedback(body, error)
+    return retryFeedbackOnPrimary(body, error)
   }
 }
 

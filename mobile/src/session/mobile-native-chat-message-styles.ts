@@ -141,6 +141,14 @@ export const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: TEXT_SIZE
   },
+  imageThumb: {
+    width: 200,
+    height: 150,
+    borderRadius: radii.card,
+    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle
+  },
   diff: {
     borderRadius: radii.button,
     backgroundColor: colors.bgPanel,

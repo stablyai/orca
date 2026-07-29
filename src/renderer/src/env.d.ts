@@ -79,6 +79,7 @@ declare global {
 
 // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
 interface ImportMetaEnv {
+  readonly VITE_DIRECT_SSH_RECONNECT_COORDINATOR?: string
   readonly VITE_EXPOSE_STORE?: boolean
 }
 

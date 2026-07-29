@@ -15,6 +15,7 @@ export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-rea
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
 import type { GlobalSettings, TuiAgent } from '../../shared/types'
+import { toSshExecutionHostId } from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
 import type {
@@ -24,6 +25,11 @@ import type {
 } from '../../shared/pty-renderer-delivery-health'
 import { extractHiddenStartupRendererQueryData } from '../../shared/terminal-reply-query-extraction'
 import {
+  INITIAL_MODE_2031_REPLY_SCAN_STATE,
+  scanMode2031ReplyDecision,
+  type Mode2031ReplyScanState
+} from '../../shared/terminal-color-scheme-protocol'
+import {
   type PtyMainDeliveryDiagnostics,
   type PtyPerPtyDeliveryDiagnostics,
   EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS,
@@ -32,7 +38,11 @@ import {
 } from '../../shared/pty-delivery-diagnostics'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { isTuiAgent } from '../../shared/tui-agent-config'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import {
+  normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
+} from '../../shared/agent-session-resume'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import {
   isWslShellName,
@@ -53,15 +63,25 @@ import { detectPiAgentKindFromCommand, type PiAgentKind } from '../../shared/pi-
 import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import { isPtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
+import { inspectPtyProviderProcess } from '../providers/pty-process-inspection'
+import {
+  PtyProcessListAdmission,
+  visitPtyProcessListingsInBatches
+} from '../providers/pty-process-list-admission'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import {
   SSH_SESSION_EXPIRED_ERROR,
   isSshPtyIdentityMismatchError,
   isSshPtyNotFoundError
-} from '../providers/ssh-pty-provider'
+} from '../providers/ssh-pty-errors'
 import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { createPtySpawnTiming } from './pty-spawn-timing'
-import { mintPtySessionId, isSafePtySessionId } from '../daemon/pty-session-id'
+import {
+  isSafePtySessionId,
+  mintPtySessionId,
+  ptySessionIdForAgentCreateOperation
+} from '../daemon/pty-session-id'
 import { resolveWslSessionContext } from '../daemon/wsl-session-context'
 import { addNodePtyRecoveryHint } from '../daemon/node-pty-error-hints'
 import { recordDaemonStreamBacklogEvent } from '../daemon/daemon-stream-backlog-probe'
@@ -109,6 +129,11 @@ import {
 } from '../../shared/terminal-startup-cwd'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+import {
+  agentSessionOwnerBindingsEqual,
+  ClaimedAgentPtyOwnerRegistry
+} from '../../shared/claimed-agent-pty-owner'
 import {
   clearMigrationUnsupportedPty,
   clearMigrationUnsupportedPtysForPaneKey
@@ -132,6 +157,7 @@ import {
   shouldDropHiddenRendererPtyData,
   unmarkHiddenRendererPty
 } from './pty-hidden-delivery-gate'
+import { PtyPendingDataDrainQueue, type PendingPtyData } from './pty-pending-data-drain-queue'
 import {
   clearNativeWindowsConptyPty,
   isNativeWindowsLocalPtySpawn,
@@ -141,10 +167,22 @@ import { setTerminalViewAttributes } from '../runtime/terminal-view-attribute-st
 import { validateTerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { PtyModelRestoreReason } from '../../shared/pty-model-restore-marker'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
+import {
+  forgetCodexPaneAccount,
+  recordCodexPaneAccount
+} from '../codex/codex-pane-account-registry'
+import { resolveCodexPaneLaunchAccount } from '../codex/codex-pane-launch-account'
+import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
+import type { CodexSessionResumePreparation } from '../codex/codex-session-resume-home'
+import { dropUnverifiedCodexResumeArgv } from '../codex/codex-unverified-resume-launch'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
-import { resolveSetupAgentSequenceLaunchCommand } from '../../shared/setup-agent-sequencing'
+import {
+  resolveSetupAgentSequenceLaunchCommand,
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
+} from '../../shared/setup-agent-sequencing'
+import { dropAgentResumeArgvFromCommand } from '../../shared/agent-resume-argv-drop'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getStartupTerminalColorQueryReplyColors } from './terminal-startup-color-query-replies'
 import {
@@ -153,6 +191,8 @@ import {
 } from '../project-groups/folder-workspace-path-status'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
+import { isPtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtyListedSession } from '../../shared/pty-listed-session'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId (null = local provider).
@@ -162,11 +202,30 @@ type FreshLocalFallbackProvider = IPtyProvider & {
   routesFreshSpawnsToLocalProvider?: true
 }
 const sshProviders = new Map<string, IPtyProvider>()
+
+type RegisteredPtyProvider = {
+  provider: IPtyProvider
+  connectionId: string | null
+}
+
+function registeredPtyProviders(): RegisteredPtyProvider[] {
+  return [
+    { provider: localProvider, connectionId: null },
+    ...Array.from(sshProviders, ([connectionId, provider]) => ({ provider, connectionId }))
+  ]
+}
+
 const SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS = 30_000
 // Why: kill switch — flip to disable producer flow control (pause/resume) without untangling the wiring.
 const PRODUCER_FLOW_CONTROL_ENABLED = true
 // Why: post-spawn write/resize/kill calls carry only the PTY ID; map it to its connectionId so ops route to the right provider.
 const ptyOwnership = new Map<string, string | null>()
+const ptyIncarnationById = new Map<string, string>()
+
+export function isCurrentPtyExit(payload: { id: string; incarnationId?: string }): boolean {
+  const current = ptyIncarnationById.get(payload.id)
+  return !current || payload.incarnationId === current
+}
 // Why: mobile clients must mirror desktop PTY geometry even before the renderer can provide an xterm snapshot (e.g. right after tab creation).
 const ptySizes = new Map<string, { cols: number; rows: number }>()
 // Why: the "recent user input" signal is PTY-scoped and must be cleared by every teardown path, incl. SSH/daemon shutdowns that skip the local exit listener.
@@ -175,6 +234,8 @@ const interactiveOutputCharsByPty = new Map<string, number>()
 const activeRendererPtys = new Set<string>()
 const visibleRendererPtys = new Set<string>()
 const rendererVisibilityKnownPtys = new Set<string>()
+let invalidatePendingPtyDrainPriority = (_id?: string, _schedule?: boolean): void => {}
+let invalidatePendingPtyDrainPolicy = (_id?: string, _schedule?: boolean): void => {}
 const pendingHiddenRendererResizeOutputPtys = new Set<string>()
 const deliveredHiddenRendererResizeOutputPtys = new Set<string>()
 const KEEP_HISTORY_STOP_SETTLE_MS = 1_000
@@ -192,6 +253,13 @@ const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_ENDPOINT',
   // Why: PR 2778 briefly exported this path; keep deleting stale inherited values so older PTYs can't leak the reverted path.
   'ORCA_CLAUDE_AGENT_STATUS_SETTINGS'
+] as const
+
+// Why: Orca never sets these, so an inherited value means a pty host launched from inside a Claude session — Claude reads it as a nested child and silently stops persisting the transcript.
+const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
+  'CLAUDE_CODE_CHILD_SESSION',
+  'CLAUDE_CODE_SESSION_ID',
+  'CLAUDE_CODE_BRIDGE_SESSION_ID'
 ] as const
 
 export function getPtyIdForPaneKey(paneKey: string): string | undefined {
@@ -222,7 +290,84 @@ type PaneSpawnReservationResult = {
 } & Partial<PtySpawnResult>
 // Why: mobile materialization and a newly-focused pane can race to spawn the same leaf; key by paneKey so the loser adopts the winner's PTY.
 const paneSpawnReservationsByPaneKey = new Map<string, PaneSpawnReservation>()
-// Why: PTY ids are reusable and teardown callbacks carry no incarnation token; bind the generation to its spawn result so teardown never guesses.
+// Why: one main process can route the same remote provider namespace through
+// multiple SSH relays; coordinate claims above every provider boundary too.
+const agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
+let agentSessionOwnerReconciliation: Promise<void> | null = null
+
+function assertSpawnReplyWasLive(result: PtySpawnResult): void {
+  if (!result.exitedBeforeSpawnReply) {
+    return
+  }
+  // Why: lower owners can resolve a different canonical id, so controller-local pending ids cannot prove this exit.
+  throw Object.assign(new Error('agent_session_exited_during_start'), {
+    agentSessionOperationOutcome: 'unknown' as const
+  })
+}
+
+async function reconcileAgentSessionOwnerListings(): Promise<void> {
+  if (agentSessionOwnerReconciliation) {
+    return await agentSessionOwnerReconciliation
+  }
+  const reconciliation = (async () => {
+    const providers: { provider: IPtyProvider; connectionId: string | null }[] = [
+      { provider: localProvider, connectionId: null },
+      ...Array.from(sshProviders, ([connectionId, provider]) => ({ provider, connectionId }))
+    ]
+    const listings = await Promise.all(
+      providers.map(async ({ provider, connectionId }) => ({
+        connectionId,
+        sessions: await provider.listProcesses()
+      }))
+    )
+    const advertisedOwners: AgentSessionOwnerBinding[] = []
+    const advertisedOwnerSessions: {
+      id: string
+      connectionId: string | null
+      incarnationId: string
+    }[] = []
+    for (const { connectionId, sessions } of listings) {
+      for (const session of sessions) {
+        const incarnationId = session.incarnationId
+        let hasAdvertisedOwner = false
+        for (const owner of session.agentSessionOwners ?? []) {
+          if (owner.ptyId !== session.id || !isPtyIncarnationId(incarnationId)) {
+            // Why: a recovered claim without process-incarnation proof cannot safely reject a delayed exit.
+            throw new Error('agent_session_ownership_unknown')
+          }
+          advertisedOwners.push(owner)
+          hasAdvertisedOwner = true
+        }
+        if (hasAdvertisedOwner && isPtyIncarnationId(incarnationId)) {
+          advertisedOwnerSessions.push({ id: session.id, connectionId, incarnationId })
+        }
+      }
+    }
+    agentSessionOwners.reconcileAuthoritative(advertisedOwners, {
+      // Why: an unregistered relay can still own a live PTY during reconnect;
+      // only providers that serialize claims may make listing absence authoritative.
+      isInAuthoritativeScope: (owner) => {
+        const provider = tryGetProviderForAgentSessionOwner(owner.ptyId)
+        return provider?.providesAgentSessionOwnerListings?.(owner.ptyId) === true
+      }
+    })
+    for (const session of advertisedOwnerSessions) {
+      ptyOwnership.set(session.id, session.connectionId)
+      ptyIncarnationById.set(session.id, session.incarnationId)
+    }
+  })()
+  agentSessionOwnerReconciliation = reconciliation
+  try {
+    await reconciliation
+  } finally {
+    if (agentSessionOwnerReconciliation === reconciliation) {
+      agentSessionOwnerReconciliation = null
+    }
+  }
+}
+// Why: bind the declaration generation directly to its spawn result. PTY ids
+// are reusable and teardown callbacks carry no incarnation token, so teardown
+// must never guess which pending renderer generation it owns.
 const pendingPtyIdBySerializerGeneration = new Map<number, string>()
 // Why: hasRendererSerializer probe needs a ptyId-keyed signal; a later spawn starts a fresh incarnation, subscription abort owns waiter cleanup.
 const rendererSerializerReadiness = new RendererTerminalSerializerReadiness()
@@ -365,6 +510,11 @@ function getProvider(connectionId: string | null | undefined): IPtyProvider {
 function getProviderForPty(ptyId: string): IPtyProvider {
   const connectionId = ptyOwnership.get(ptyId)
   if (connectionId === undefined) {
+    const parsedSshId = parseAppSshPtyId(ptyId)
+    if (parsedSshId) {
+      // Why: disconnected SSH PTYs retain their encoded owner and must never fall through to the HUB-local provider.
+      return getProvider(parsedSshId.connectionId)
+    }
     return localProvider
   }
   return getProvider(connectionId)
@@ -426,6 +576,16 @@ function closeStartupQueryAuthorityForPty(ptyId: string): void {
   }
 }
 
+function tryGetProviderForAgentSessionOwner(ptyId: string): IPtyProvider | undefined {
+  const ownedConnectionId = ptyOwnership.get(ptyId)
+  const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(ptyId) : null
+  try {
+    return getProvider(parsedSshId?.connectionId ?? ownedConnectionId)
+  } catch {
+    return undefined
+  }
+}
+
 function normalizeNodePtySpawnError(err: unknown): Error {
   const rawMessage = err instanceof Error ? err.message : String(err)
   const hintedMessage = addNodePtyRecoveryHint(rawMessage)
@@ -466,6 +626,27 @@ async function isProviderPtyLive(
   )
 }
 
+async function isProviderAgentSessionOwnerLive(
+  provider: IPtyProvider,
+  owner: AgentSessionOwnerBinding
+): Promise<boolean> {
+  const session = (await provider.listProcesses()).find((candidate) => candidate.id === owner.ptyId)
+  if (!session) {
+    return false
+  }
+  if (provider.providesAgentSessionOwnerListings?.(owner.ptyId) !== true) {
+    // Why: in-process local owners cannot serialize the controller claim; exact incarnation
+    // liveness keeps that claim authoritative until the normal PTY exit releases it.
+    const expectedIncarnation = ptyIncarnationById.get(owner.ptyId)
+    return expectedIncarnation !== undefined && session.incarnationId === expectedIncarnation
+  }
+  return Boolean(
+    session.agentSessionOwners?.some((candidate) =>
+      agentSessionOwnerBindingsEqual(candidate, owner)
+    )
+  )
+}
+
 async function verifyPtyStopped(
   provider: IPtyProvider,
   ptyId: string,
@@ -491,13 +672,15 @@ function finishPtyShutdown(
   id: string,
   connectionId: string | null | undefined,
   store: Store | undefined
-): void {
+): string | undefined {
+  const incarnationId = ptyIncarnationById.get(id)
   clearProviderPtyState(id)
   if (connectionId) {
     store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), 'terminated')
   }
   ptyOwnership.delete(id)
   markClaudePtyExited(id)
+  return incarnationId
 }
 
 // ─── Host PTY env assembly ──────────────────────────────────────────
@@ -624,6 +807,12 @@ export type GetSelectedCodexHomePath = (
   launchEnv?: NodeJS.ProcessEnv,
   launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
 ) => string | null
+export type PrepareCodexSessionResume = (args: {
+  providerSession: AgentProviderSessionMetadata
+  target: CodexAccountSelectionTarget
+  launchEnv?: NodeJS.ProcessEnv
+  workspacePath?: string
+}) => Promise<CodexSessionResumePreparation | null>
 type PrepareClaudeAuth = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -654,6 +843,40 @@ function getCompatibleSelectedCodexHomePath(
   return wslInfo || (process.platform === 'win32' && isWslCodexHomeForHost(selectedCodexHomePath))
     ? null
     : selectedCodexHomePath
+}
+
+// Why: CODEX_HOME is fixed in a shell's environment at spawn and the daemon
+// keeps that shell alive across app restarts, so the launch account is the only
+// way to tell later that a pane still runs Codex as the previously selected
+// account. A reattach inherits that baked environment rather than choosing one,
+// so re-recording it under the current selection would erase the very evidence
+// that the pane is stale.
+function recordCodexPaneAccountForSpawn(args: {
+  ptyId: string | undefined
+  isDaemonHostSpawn: boolean
+  isReattach: boolean
+  pinnedByResume: boolean
+  launchCodexHomePath: string | null
+  target: CodexAccountSelectionTarget
+  settings: GlobalSettings | undefined
+}): void {
+  if (!args.ptyId || !args.isDaemonHostSpawn || args.isReattach) {
+    return
+  }
+  const record = args.settings
+    ? resolveCodexPaneLaunchAccount({
+        pinnedByResume: args.pinnedByResume,
+        launchCodexHomePath: args.launchCodexHomePath,
+        systemCodexHomePath: getSystemCodexHomePath(),
+        settings: args.settings,
+        target: args.target
+      })
+    : null
+  if (!record) {
+    forgetCodexPaneAccount(args.ptyId)
+    return
+  }
+  recordCodexPaneAccount(args.ptyId, record)
 }
 
 function readEnvWithProcessFallback(
@@ -737,14 +960,21 @@ function exposePiManagedExtensionEnv(
   }
 }
 
+// Why: variadic because a nested call per source made intermediate `string[] | undefined` collide with the parameter type.
 function mergePtyEnvDeletions(
   existingKeys: string[] | undefined,
-  additionalKeys: readonly string[]
+  ...additionalKeyGroups: readonly (readonly string[])[]
 ): string[] | undefined {
-  if (!existingKeys && additionalKeys.length === 0) {
+  if (!existingKeys && additionalKeyGroups.every((keys) => keys.length === 0)) {
     return undefined
   }
-  return Array.from(new Set([...(existingKeys ?? []), ...additionalKeys]))
+  return Array.from(new Set([...(existingKeys ?? []), ...additionalKeyGroups.flat()]))
+}
+
+function removeCodexHomeDeletionRequests(keys: string[] | undefined): string[] | undefined {
+  // Why: resume provenance is launch-authoritative; late deletions must not fall back to the current account.
+  const filtered = keys?.filter((key) => key !== 'CODEX_HOME' && key !== 'ORCA_CODEX_HOME')
+  return filtered?.length ? filtered : undefined
 }
 
 function getInheritedAgentHookEnvKeysToDelete(
@@ -753,6 +983,15 @@ function getInheritedAgentHookEnvKeysToDelete(
   const env = spawnEnv ?? {}
   // Why: providers merge process.env after cleanup; delete stale hook keys without dropping fresh coordinates buildPtyHostEnv set.
   return AGENT_HOOK_RUNTIME_ENV_KEYS.filter((key) => env[key] === undefined)
+}
+
+function getInheritedClaudeSessionStampEnvKeysToDelete(
+  spawnEnv: Record<string, string> | undefined
+): string[] {
+  const env = spawnEnv ?? {}
+  // Why: strip only values inherited from the pty host; a caller that explicitly
+  // provides a stamp (deliberately spawning a nested Claude child) keeps it.
+  return CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS.filter((key) => env[key] === undefined)
 }
 
 // Why: a nested terminal can inherit prior OpenCode/Pi/OMP overlay env; restore the user's recorded source dir, else strip only Orca-owned values.
@@ -906,6 +1145,18 @@ export function buildPtyHostEnv(
       const guestEndpoint = wslHookRelayManager.getGuestEndpointFilePath(distro)
       if (guestEndpoint) {
         baseEnv.ORCA_AGENT_HOOK_ENDPOINT = guestEndpoint
+      }
+      // Why: OpenCode loads its status plugin from a guest config overlay, so point OPENCODE_CONFIG_DIR at the guest dir the relay materialized.
+      const opencodeOverlayDir = wslHookRelayManager.getOpenCodeOverlayDir(distro)
+      if (opencodeOverlayDir) {
+        baseEnv.OPENCODE_CONFIG_DIR = opencodeOverlayDir
+        baseEnv.ORCA_OPENCODE_CONFIG_DIR = opencodeOverlayDir
+        delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+      } else {
+        // Why: relay not connected yet (or older guest bundle) — never cross the Windows overlay path into WSL; drop it so in-guest OpenCode uses its own config (pre-fix behavior, no status but no regression).
+        delete baseEnv.OPENCODE_CONFIG_DIR
+        delete baseEnv.ORCA_OPENCODE_CONFIG_DIR
+        delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
       }
     }
   }
@@ -1082,14 +1333,16 @@ export function getPtyIdsForConnection(connectionId: string): string[] {
 }
 
 /**
- * Remove all PTY ownership entries for a given connectionId.
- * Why: SSH close leaves stale ownership entries that route later spawns to a dead provider and grow unbounded.
+ * Remove transient PTY routing entries for a disconnected connection.
+ * Claimed agent owners remain fenced because the relay process may survive and
+ * prove the exact same generation after reconnect.
  */
 export function clearPtyOwnershipForConnection(connectionId: string): void {
   for (const [ptyId, connId] of ptyOwnership) {
     if (connId === connectionId) {
-      // Why: SSH close bypasses the local onExit, so sweep paneKey-scoped caches manually or they leak.
-      clearProviderPtyState(ptyId)
+      // Why: pane-scoped caches cannot route while disconnected, but claimed
+      // ownership must survive until reconnect makes absence authoritative.
+      clearProviderPtyState(ptyId, { preserveAgentSessionOwners: true })
       ptyOwnership.delete(ptyId)
     }
   }
@@ -1097,22 +1350,42 @@ export function clearPtyOwnershipForConnection(connectionId: string): void {
 
 // ─── Provider-scoped PTY state cleanup ──────────────────────────────
 
-export function clearProviderPtyState(id: string): void {
-  // Why: OpenCode and Pi allocate PTY-scoped state outside the node-pty process table; centralizing cleanup avoids a teardown path forgetting one provider's overlay/hook state.
+export function clearProviderPtyState(
+  id: string,
+  opts: { preserveAgentSessionOwners?: boolean } = {}
+): void {
+  if (!opts.preserveAgentSessionOwners) {
+    agentSessionOwners.release(id)
+    // Why: the launch-account record outlives the app, so only a real teardown
+    // may drop it — a disconnect that can reconnect is not a death, and a reused
+    // id must never inherit a dead pane's Codex account.
+    forgetCodexPaneAccount(id)
+  }
+  // Why: OpenCode and Pi both allocate PTY-scoped runtime state outside the
+  // node-pty process table. Centralizing provider cleanup avoids drift where a
+  // new teardown path forgets to remove one provider's overlay/hook state.
   openCodeHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
   // Why: SSH exit/teardown paths bypass pty.ts's local onExit but still must release Claude account-switch guards.
   markClaudePtyExited(id)
   ptySizes.delete(id)
+  ptyIncarnationById.delete(id)
   lastInputAtByPty.delete(id)
   interactiveOutputCharsByPty.delete(id)
-  activeRendererPtys.delete(id)
+  const activeChanged = activeRendererPtys.delete(id)
   visibleRendererPtys.delete(id)
   rendererVisibilityKnownPtys.delete(id)
   pendingHiddenRendererResizeOutputPtys.delete(id)
   deliveredHiddenRendererResizeOutputPtys.delete(id)
   // Why: every teardown path funnels through here — hidden/interest gate bits must not outlive the PTY or a reused map entry could silently gate a new one.
+  const deliveryPolicyChanged = isHiddenRendererPty(id)
   clearHiddenRendererPtyDeliveryState(id)
+  if (activeChanged) {
+    invalidatePendingPtyDrainPriority(id, false)
+  }
+  if (deliveryPolicyChanged) {
+    invalidatePendingPtyDrainPolicy(id, false)
+  }
   clearBackgroundedDeliverySyncForPty(id)
   providerSnapshotRequiredPtys.delete(id)
   // Why: the Phase-5 ConPTY DA1 spawn record must not leak onto a reused id.
@@ -1162,10 +1435,21 @@ export function setPtyOwnership(id: string, connectionId: string | null): void {
   ptyOwnership.set(id, connectionId)
 }
 
-// Why: store onData/onExit unsubscribers so macOS re-activation re-calling registerPtyHandlers doesn't leak duplicate listeners forwarding every event twice.
+export function restorePtyIncarnation(id: string, incarnationId: string): void {
+  if (!isPtyIncarnationId(incarnationId)) {
+    throw new Error('Invalid PTY incarnation')
+  }
+  ptyIncarnationById.set(id, incarnationId)
+}
+
+// Why: localProvider.onData/onExit return unsubscribe functions. Without
+// storing and calling these on re-registration, macOS app re-activation
+// creates a new BrowserWindow and re-calls registerPtyHandlers, leaking
+// duplicate listeners that forward every event twice.
 let localDataUnsub: (() => void) | null = null
 let localExitUnsub: (() => void) | null = null
 let localBackgroundStreamUnsub: (() => void) | null = null
+let localWriteUnavailableUnsub: (() => void) | null = null
 let didFinishLoadHandler: (() => void) | null = null
 let didFinishLoadWebContents: WebContents | null = null
 let rendererLifecycleResetWebContents: WebContents | null = null
@@ -1299,10 +1583,14 @@ function markRendererPtysHiddenForRendererLifecycleReset(): void {
   // A reload/crash in the breadcrumb history is load-bearing context for any freeze report.
   mainDeliveryBreadcrumbs.record('renderer-lifecycle-reset')
   // Why: renderer-owned hints die with the page; clear visibility so surviving daemon/SSH PTYs fail closed until the new renderer reports.
+  const activePriorityChanged = activeRendererPtys.size > 0
   activeRendererPtys.clear()
   visibleRendererPtys.clear()
   // Why: the dead page never ACKs its in-flight bytes, so leaked accounting would delivery-gate surviving PTYs forever after a reload/crash.
   resetRendererDeliveryAccountingForLifecycleReset()
+  if (activePriorityChanged) {
+    invalidatePendingPtyDrainPriority()
+  }
 }
 
 function clearRendererLifecycleResetHandlers(): void {
@@ -1366,9 +1654,11 @@ export function unbindLocalProviderListeners(): void {
   localDataUnsub?.()
   localExitUnsub?.()
   localBackgroundStreamUnsub?.()
+  localWriteUnavailableUnsub?.()
   localDataUnsub = null
   localExitUnsub = null
   localBackgroundStreamUnsub = null
+  localWriteUnavailableUnsub = null
 }
 
 // ─── IPC Registration ───────────────────────────────────────────────
@@ -1381,6 +1671,7 @@ export function registerPtyHandlers(
   prepareClaudeAuth?: PrepareClaudeAuth,
   store?: Store,
   options?: {
+    prepareCodexSessionResume?: PrepareCodexSessionResume
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
     // Why: returns true once for the crash-recovery reload so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
@@ -1390,6 +1681,8 @@ export function registerPtyHandlers(
   // Why: a re-registration means a new window owns delivery — cancel the prior closure's watchdog and neutralize its bridged reset so mark-hidden below can't arm a timer against the dead closure.
   clearRendererDispatcherReadyWatchdog()
   resetRendererDeliveryAccountingForLifecycleReset = () => {}
+  invalidatePendingPtyDrainPriority = () => {}
+  invalidatePendingPtyDrainPolicy = () => {}
   registerRendererLifecycleResetHandlers(mainWindow.webContents)
 
   const getLocalPtyStartupPromise = (connectionId?: string | null): Promise<void> | undefined => {
@@ -1416,6 +1709,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')
   ipcMain.removeHandler('pty:getForegroundProcess')
+  ipcMain.removeHandler('pty:inspectProcess')
   ipcMain.removeHandler('pty:confirmForegroundProcess')
   ipcMain.removeHandler('pty:getCwd')
   ipcMain.removeHandler('pty:getSize')
@@ -1453,10 +1747,12 @@ export function registerPtyHandlers(
             : { runtime: 'host' }
         const selectedCodexHomePath = getCompatibleSelectedCodexHomePath(
           codexSelectionTarget,
-          getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
-            workspacePath: ctx?.cwd,
-            launchAgent: ctx?.launchAgent
-          }) ?? null
+          ctx?.codexHomePathOverride
+            ? ctx.codexHomePathOverride.value
+            : (getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
+                workspacePath: ctx?.cwd,
+                launchAgent: ctx?.launchAgent
+              }) ?? null)
         )
         const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
         const env = buildPtyHostEnv(id, baseEnv, {
@@ -1496,27 +1792,19 @@ export function registerPtyHandlers(
         }
         return env
       },
-      onSpawned: (id) => runtime?.onPtySpawned(id),
-      onExit: (id, code) => {
+      onSpawned: (id, incarnationId) => runtime?.onPtySpawned(id, incarnationId),
+      onExit: (id, code, incarnationId) => {
+        if (!isCurrentPtyExit({ id, incarnationId })) {
+          return
+        }
         clearProviderPtyState(id)
         ptyOwnership.delete(id)
         markClaudePtyExited(id)
-        runtime?.onPtyExit(id, code)
+        runtime?.onPtyExit(id, code, incarnationId)
       },
       onData: (id, data, timestamp, sequenceChars, transformed) =>
         runtime?.onPtyData(id, data, timestamp, sequenceChars ?? data.length, transformed)
     })
-  }
-
-  // Why: batching PTY data into short flush windows cuts IPC round-trips from hundreds/sec to ~120/sec; keystroke echo/redraws bypass it below.
-  type PendingPtyData = {
-    data: string
-    startSeq?: number
-    rawLength?: number
-    transformed?: true
-    containsBackgroundOutput?: boolean
-    // Why droppedOutput (not main's droppedBacklog trim): this branch's drop-to-sentinel + snapshot-restore supersedes #7630's 2MB-tail trim; both would race two cap policies over one buffer.
-    droppedOutput?: true
   }
 
   type PtyDataPayload = {
@@ -1529,7 +1817,47 @@ export function registerPtyHandlers(
     droppedOutput?: boolean
   }
 
-  const pendingData = new Map<string, PendingPtyData>()
+  // Why: bounded batch windows amortize renderer IPC; keystroke echo/redraws bypass them below.
+  const pendingData = new PtyPendingDataDrainQueue(
+    (id) => {
+      const runnableLane = activeRendererPtys.has(id) ? 'active' : 'background'
+      // Why first: hidden bytes are dropped from main's pending queue even when renderer credit is exhausted.
+      if (shouldDropHiddenRendererPtyData(id, getSettings?.())) {
+        return runnableLane
+      }
+      if (
+        !rendererPtyDispatcherReady ||
+        !canSendPtyDataToRenderer(id, { interactive: activeRendererPtys.has(id) })
+      ) {
+        return 'blocked'
+      }
+      return runnableLane
+    },
+    () => isHiddenPtyDeliveryGateEnabled(getSettings?.())
+  )
+  // Why: resuming a paused producer during exit can synchronously emit; those bytes must not queue behind pty:exit.
+  const rendererExitingPtyIds = new Set<string>()
+  const rendererDeliveryRestoreNeededPtys = new Set<string>()
+
+  function transitionHiddenRendererPtyDeliveryState(id: string, hidden: boolean) {
+    const settings = getSettings?.()
+    const wasDroppable = shouldDropHiddenRendererPtyData(id, settings)
+    let droppedWhileHidden = false
+    if (hidden) {
+      markHiddenRendererPty(id)
+    } else {
+      droppedWhileHidden = unmarkHiddenRendererPty(id).droppedWhileHidden
+    }
+    const droppable = shouldDropHiddenRendererPtyData(id, settings)
+    return { droppable, droppedWhileHidden, policyChanged: wasDroppable !== droppable }
+  }
+
+  function transitionSpawnHiddenRendererPtyDeliveryState(id: string, hidden: boolean): void {
+    const transition = transitionHiddenRendererPtyDeliveryState(id, hidden)
+    if (transition.policyChanged) {
+      invalidatePendingPtyDrainPolicy(id)
+    }
+  }
   // Why: one restore marker per overflow episode — cleared on full drain so a later overflow re-marks exactly once.
   const pendingOverflowMarkedPtys = new Set<string>()
   // Why: TCP-style cumulative accounting — monotonic sent/acked totals self-heal on any later ACK, where relative in-flight counters would make each lost ACK a permanent debt.
@@ -1542,6 +1870,8 @@ export function registerPtyHandlers(
   const rendererDeliveryAccountingByPty = new Map<string, RendererPtyDeliveryAccounting>()
   const trustedTerminalHandleEnv = new Set<string>()
   let flushTimer: ReturnType<typeof setTimeout> | null = null
+  let pendingDataFlushActive = false
+  let pendingDataCreditReleasedDuringFlush = false
   let rendererInFlightTotalChars = 0
   let pendingDroppedChars = 0
   let deliveryResyncRequestSerial = 0
@@ -1639,6 +1969,33 @@ export function registerPtyHandlers(
   function getRendererInFlightCharsForPty(id: string): number {
     const accounting = rendererDeliveryAccountingByPty.get(id)
     return accounting ? accounting.sentChars - accounting.ackedChars : 0
+  }
+
+  // Why touched PTY only: pressure peaks are monotonic between explicit resets.
+  function recordPtyRendererDeliveryPressure(id: string): void {
+    peakPendingChars = Math.max(peakPendingChars, pendingData.totalPendingChars)
+    peakMaxPendingCharsByPty = Math.max(
+      peakMaxPendingCharsByPty,
+      pendingData.get(id)?.data.length ?? 0
+    )
+    peakRendererInFlightChars = Math.max(peakRendererInFlightChars, rendererInFlightTotalChars)
+    peakMaxRendererInFlightCharsByPty = Math.max(
+      peakMaxRendererInFlightCharsByPty,
+      getRendererInFlightCharsForPty(id)
+    )
+  }
+
+  function setPendingPtyData(id: string, pending: PendingPtyData): void {
+    pendingData.set(id, pending)
+    recordPtyRendererDeliveryPressure(id)
+  }
+
+  function deletePendingPtyData(id: string): void {
+    pendingData.delete(id)
+  }
+
+  function clearPendingPtyData(): void {
+    pendingData.clear()
   }
 
   function readCurrentPtyRendererDeliveryDebugSnapshot(): PtyRendererDeliveryDebugSnapshot {
@@ -1767,8 +2124,7 @@ export function registerPtyHandlers(
     })
   }
 
-  function recordPtyRendererDeliveryPressure(): void {
-    // Why update peaks directly: this fires on every delivery event, so avoid allocating a full 13-field snapshot object per call (only needed when the debug getter is read).
+  function seedPtyRendererDeliveryPeaksFromCurrentState(): void {
     let pendingChars = 0
     let maxPendingCharsByPty = 0
     for (const pending of pendingData.values()) {
@@ -1776,10 +2132,9 @@ export function registerPtyHandlers(
       pendingChars += chars
       maxPendingCharsByPty = Math.max(maxPendingCharsByPty, chars)
     }
-    peakPendingChars = Math.max(peakPendingChars, pendingChars)
-    peakMaxPendingCharsByPty = Math.max(peakMaxPendingCharsByPty, maxPendingCharsByPty)
-    peakRendererInFlightChars = Math.max(peakRendererInFlightChars, rendererInFlightTotalChars)
-    // Why derived per entry: this tracks cumulative sent/acked totals (TCP-style), not a per-pty in-flight map — in-flight is the difference.
+    peakPendingChars = pendingChars
+    peakMaxPendingCharsByPty = maxPendingCharsByPty
+    peakRendererInFlightChars = rendererInFlightTotalChars
     let maxRendererInFlightCharsByPty = 0
     for (const accounting of rendererDeliveryAccountingByPty.values()) {
       maxRendererInFlightCharsByPty = Math.max(
@@ -1787,10 +2142,7 @@ export function registerPtyHandlers(
         accounting.sentChars - accounting.ackedChars
       )
     }
-    peakMaxRendererInFlightCharsByPty = Math.max(
-      peakMaxRendererInFlightCharsByPty,
-      maxRendererInFlightCharsByPty
-    )
+    peakMaxRendererInFlightCharsByPty = maxRendererInFlightCharsByPty
   }
 
   readPtyRendererDeliveryDebugSnapshot = readCurrentPtyRendererDeliveryDebugSnapshot
@@ -1802,7 +2154,7 @@ export function registerPtyHandlers(
     ackGatedFlushSkipCount = 0
     pendingDroppedChars = 0
     resetHiddenRendererPtyDeliveryDebugCounters()
-    recordPtyRendererDeliveryPressure()
+    seedPtyRendererDeliveryPeaksFromCurrentState()
   }
   resetRendererDeliveryAccountingForLifecycleReset = () => {
     // Why lossless: pendingData bytes were bound for the dead page; the replacement repaints from main's authoritative sources, which superset it.
@@ -1814,13 +2166,13 @@ export function registerPtyHandlers(
     deliveryResyncUnansweredWarnLogged = false
     rendererDeliveryAccountingByPty.clear()
     rendererInFlightTotalChars = 0
-    pendingData.clear()
+    clearPendingPtyData()
     pendingOverflowMarkedPtys.clear()
+    rendererDeliveryRestoreNeededPtys.clear()
     // Why hold sends: the reloading page's pty:data listener is gone until it re-registers/handshakes, so bytes would drop into a listener-less page and re-pin the gate.
     rendererPtyDispatcherReady = false
     // Why: arm the self-heal watchdog so a never-arriving handshake can't hold the gate forever; the real handshake cancels it.
     armDispatcherReadyWatchdog()
-    recordPtyRendererDeliveryPressure()
   }
   // Why the bridge: let a later re-registration cancel this closure's watchdog (armed via a hoisted fn, so this assignment can precede its definition).
   clearRendererDispatcherReadyWatchdog = clearDispatcherReadyWatchdog
@@ -1911,6 +2263,15 @@ export function registerPtyHandlers(
     return acknowledged
   }
 
+  function schedulePendingDataAfterCreditReport(creditedAny: boolean): void {
+    if (creditedAny) {
+      pendingData.reactivateBlocked()
+    }
+    if (pendingData.size > 0 && !flushTimer) {
+      schedulePendingDataFlush(0)
+    }
+  }
+
   function clearDeliveryResyncProbe(): void {
     deliveryResyncOutstandingRequestId = null
     if (deliveryResyncTimer) {
@@ -1971,7 +2332,7 @@ export function registerPtyHandlers(
       const pending = pendingData.get(id)
       if (pending) {
         pendingDroppedChars += pending.data.length
-        pendingData.delete(id)
+        deletePendingPtyData(id)
         pendingOverflowMarkedPtys.delete(id)
         updateProducerFlowControl(id)
       }
@@ -1999,9 +2360,10 @@ export function registerPtyHandlers(
     return writtenOff
   }
 
-  function sendPtyDataToRenderer(id: string, payload: PtyDataPayload): void {
+  function sendPtyDataToRenderer(id: string, payload: PtyDataPayload): boolean {
     const charCount = getPtyPayloadCharCount(payload)
     const accounting = rendererDeliveryAccountingByPty.get(id)
+    const hadAccounting = accounting !== undefined
     if (accounting) {
       accounting.sentChars += charCount
       accounting.lastSendAtMs = Date.now()
@@ -2014,8 +2376,44 @@ export function registerPtyHandlers(
       })
     }
     rendererInFlightTotalChars += charCount
-    recordPtyRendererDeliveryPressure()
-    mainWindow.webContents.send('pty:data', payload)
+    recordPtyRendererDeliveryPressure(id)
+    try {
+      mainWindow.webContents.send('pty:data', payload)
+    } catch (error) {
+      const current = rendererDeliveryAccountingByPty.get(id)
+      if (current) {
+        const inFlightBeforeRollback = current.sentChars - current.ackedChars
+        current.sentChars = Math.max(0, current.sentChars - charCount)
+        current.ackedChars = Math.min(current.ackedChars, current.sentChars)
+        const inFlightAfterRollback = current.sentChars - current.ackedChars
+        rendererInFlightTotalChars = Math.max(
+          0,
+          rendererInFlightTotalChars - (inFlightBeforeRollback - inFlightAfterRollback)
+        )
+        if (!hadAccounting && current.sentChars === 0) {
+          rendererDeliveryAccountingByPty.delete(id)
+        }
+      }
+      rendererDeliveryRestoreNeededPtys.add(id)
+      mainDeliveryBreadcrumbs.record('pty-data-send-failed', {
+        id: redactPtyIdForDiagnostics(id),
+        chars: charCount
+      })
+      console.error('[pty] renderer data send failed; payload will not be retried', error)
+      return false
+    }
+    if (rendererDeliveryRestoreNeededPtys.has(id)) {
+      try {
+        sendModelRestoreNeededMarker(id, 'delivery-heal', runtime?.getPtyOutputSequence(id))
+        rendererDeliveryRestoreNeededPtys.delete(id)
+      } catch (error) {
+        console.error(
+          '[pty] renderer delivery-heal marker send failed; restore remains pending',
+          error
+        )
+      }
+    }
+    return true
   }
 
   function rendererPtyIsKnownHidden(id: string): boolean {
@@ -2061,20 +2459,6 @@ export function registerPtyHandlers(
     })
   }
 
-  function getPendingPtyFlushEntries(): [string, PendingPtyData][] {
-    const entries = Array.from(pendingData.entries())
-    const active: [string, PendingPtyData][] = []
-    const background: [string, PendingPtyData][] = []
-    for (const entry of entries) {
-      if (activeRendererPtys.has(entry[0])) {
-        active.push(entry)
-      } else {
-        background.push(entry)
-      }
-    }
-    return [...active, ...background]
-  }
-
   const pendingDataDropWarnedPtys = new Set<string>()
 
   // Why capped: keeps O(1) memory per PTY; salvaged query bytes are tiny, so past the cap a pathological stream can degrade to the plain sentinel.
@@ -2087,6 +2471,29 @@ export function registerPtyHandlers(
     }
     const extracted = extractHiddenStartupRendererQueryData(data, '')
     return extracted.statelessQueryData + extracted.statefulQueryData + extracted.oscColorQueryData
+  }
+
+  function scanDroppedMode2031Data(
+    data: string,
+    previous: Mode2031ReplyScanState
+  ): { data: string; state: Mode2031ReplyScanState } {
+    const result = scanMode2031ReplyDecision(previous, data)
+    const decisionData =
+      result.decision === 'subscribed'
+        ? '\x1b[?2031h'
+        : result.decision === 'unsubscribed'
+          ? '\x1b[?2031l'
+          : ''
+    return { data: decisionData, state: result.state }
+  }
+
+  function getDroppedMode2031RendererData(pending: PendingPtyData): string {
+    const state = pending.droppedMode2031ScanState
+    if (!state) {
+      return pending.droppedMode2031Data ?? ''
+    }
+    const pendingSubscribe = state.pendingSubscribe ? '\x1b[?2031h' : ''
+    return (pending.droppedMode2031Data ?? '') + pendingSubscribe + state.tail
   }
 
   function dropOversizedPendingPtyData(id: string, pending: PendingPtyData): PendingPtyData {
@@ -2105,16 +2512,17 @@ export function registerPtyHandlers(
         capChars
       })
     }
-    // Why the marker: the snapshot can recover the dropped middle; emit it once per overflow episode so a fresh or reloaded view latches restore too.
     if (isHiddenPtyDeliveryGateEnabled(getSettings?.()) && !pendingOverflowMarkedPtys.has(id)) {
       pendingOverflowMarkedPtys.add(id)
-      sendModelRestoreNeededMarker(id, 'pending-cap', runtime?.getPtyOutputSequence(id))
     }
     pendingDroppedChars += pending.data.length
+    const mode2031 = scanDroppedMode2031Data(pending.data, INITIAL_MODE_2031_REPLY_SCAN_STATE)
     // Why no trimmed content tail: a mid-stream gap would corrupt the pane; the droppedOutput sentinel repaints from the snapshot and realigns by sequence (only query bytes ride along).
     return {
       data: extractDroppedPtyQueryBytes(pending.data).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS),
-      droppedOutput: true
+      droppedOutput: true,
+      droppedMode2031Data: mode2031.data,
+      droppedMode2031ScanState: mode2031.state
     }
   }
 
@@ -2130,11 +2538,21 @@ export function registerPtyHandlers(
   ): PendingPtyData {
     // Why stay dropped at O(1): once over the cap the restore sentinel supersedes interim bytes; queries still get carved out (bounded) so replies survive the whole episode.
     if (existing?.droppedOutput === true) {
-      if (existing.data.length >= DROPPED_QUERY_SALVAGE_MAX_CHARS) {
-        return existing
+      const mode2031 = scanDroppedMode2031Data(
+        data,
+        existing.droppedMode2031ScanState ?? INITIAL_MODE_2031_REPLY_SCAN_STATE
+      )
+      const remainingQueryCapacity = Math.max(
+        0,
+        DROPPED_QUERY_SALVAGE_MAX_CHARS - existing.data.length
+      )
+      const salvaged = extractDroppedPtyQueryBytes(data).slice(0, remainingQueryCapacity)
+      return {
+        ...existing,
+        data: existing.data + salvaged,
+        droppedMode2031Data: mode2031.data || existing.droppedMode2031Data,
+        droppedMode2031ScanState: mode2031.state
       }
-      const salvaged = extractDroppedPtyQueryBytes(data)
-      return salvaged ? { ...existing, data: existing.data + salvaged } : existing
     }
     const nextContainsBackgroundOutput =
       existing?.containsBackgroundOutput === true || containsBackgroundOutput
@@ -2168,6 +2586,16 @@ export function registerPtyHandlers(
     flushTimer = setTimeout(flushPendingData, delayMs)
   }
 
+  function invalidatePendingPtyDrainClassification(id?: string, schedule = true): void {
+    const invalidated =
+      typeof id === 'string' ? pendingData.invalidate(id) : pendingData.invalidateAll()
+    if (invalidated && schedule && !flushTimer) {
+      schedulePendingDataFlush(0)
+    }
+  }
+  invalidatePendingPtyDrainPriority = invalidatePendingPtyDrainClassification
+  invalidatePendingPtyDrainPolicy = invalidatePendingPtyDrainClassification
+
   function clearDispatcherReadyWatchdog(): void {
     if (dispatcherReadyWatchdogTimer) {
       clearTimeout(dispatcherReadyWatchdogTimer)
@@ -2188,6 +2616,7 @@ export function registerPtyHandlers(
       }
       rendererPtyDispatcherReady = true
       rendererDispatcherReadyForcedCount += 1
+      pendingData.reactivateBlocked()
       schedulePendingDataFlush(0)
     }, PTY_DISPATCHER_READY_WATCHDOG_MS)
     dispatcherReadyWatchdogTimer.unref?.()
@@ -2199,84 +2628,117 @@ export function registerPtyHandlers(
       // Why release now: bookkeeping is being wiped, so no future drain can resume these producers — local shells would wedge.
       producerFlowControl.releaseAll()
       clearDeliveryResyncProbe()
-      pendingData.clear()
+      clearPendingPtyData()
       pendingOverflowMarkedPtys.clear()
       rendererDeliveryAccountingByPty.clear()
       rendererInFlightTotalChars = 0
       clearDispatcherReadyWatchdog()
-      recordPtyRendererDeliveryPressure()
       return
     }
-    // Why hold: the page's pty:data listener isn't registered yet; bytes accrue in pendingData (rebuilt losslessly) and the ready handshake reschedules this flush.
-    if (!rendererPtyDispatcherReady) {
-      return
-    }
+    // Ordinary boot-window data is blocked in the queue; hidden-droppable entries still retire before renderer readiness.
     const settings = getSettings?.()
     let writes = 0
-    for (const [id, pending] of getPendingPtyFlushEntries()) {
-      if (writes >= PTY_BATCH_FLUSH_MAX_WRITES) {
-        break
-      }
-      // Why drop, never re-queue: the model already ingested hidden-gated bytes; reveal restores from the snapshot+seq machinery.
-      if (shouldDropHiddenRendererPtyData(id, settings)) {
-        pendingData.delete(id)
-        pendingOverflowMarkedPtys.delete(id)
-        updateProducerFlowControl(id)
-        const drop = recordHiddenRendererPtyDataDrop(id, pending.data.length)
-        warnIfDroppingHiddenBytesForVisiblePty(id, pending.data.length)
-        if (drop.shouldEmitRestoreMarker) {
-          sendModelRestoreNeededMarker(id, 'hidden-drop', runtime?.getPtyOutputSequence(id))
+    let sendFailed = false
+    const round = pendingData.beginRound()
+    let creditReleasedDuringFlush = false
+    pendingDataFlushActive = true
+    pendingDataCreditReleasedDuringFlush = false
+    try {
+      while (writes < PTY_BATCH_FLUSH_MAX_WRITES) {
+        const selection = pendingData.takeNext(round)
+        if (!selection) {
+          break
         }
-        continue
-      }
-      if (!canSendPtyDataToRenderer(id, { interactive: activeRendererPtys.has(id) })) {
-        continue
-      }
-      pendingData.delete(id)
-      if (pending.droppedOutput === true) {
+        const { id, pending } = selection
+        // Why drop, never re-queue: the model already ingested hidden-gated bytes; reveal restores from the snapshot+seq machinery.
+        if (shouldDropHiddenRendererPtyData(id, settings)) {
+          pendingData.remove(selection)
+          pendingOverflowMarkedPtys.delete(id)
+          updateProducerFlowControl(id)
+          const drop = recordHiddenRendererPtyDataDrop(id, pending.data.length)
+          warnIfDroppingHiddenBytesForVisiblePty(id, pending.data.length)
+          if (drop.shouldEmitRestoreMarker) {
+            sendModelRestoreNeededMarker(id, 'hidden-drop', runtime?.getPtyOutputSequence(id))
+          }
+          continue
+        }
+        if (!canSendPtyDataToRenderer(id, { interactive: activeRendererPtys.has(id) })) {
+          pendingData.block(selection)
+          continue
+        }
+        if (pending.droppedOutput === true) {
+          pendingData.remove(selection)
+          updateProducerFlowControl(id)
+          // Why droppedOutput sentinel: pending-cap drop means the pane must repaint from the snapshot, not continue a gapped stream (data = carved query bytes only).
+          if (
+            !sendPtyDataToRenderer(id, {
+              id,
+              data: pending.data + getDroppedMode2031RendererData(pending),
+              droppedOutput: true
+            })
+          ) {
+            sendFailed = true
+            break
+          }
+          writes++
+          continue
+        }
+        const { data } = pending
+        const indivisible = pending.transformed === true
+        const chunk = indivisible ? data : data.slice(0, PTY_BATCH_FLUSH_CHUNK_CHARS)
+        const remaining = indivisible ? '' : data.slice(PTY_BATCH_FLUSH_CHUNK_CHARS)
+        if (remaining) {
+          const nextPending: PendingPtyData = { data: remaining }
+          if (typeof pending.startSeq === 'number') {
+            nextPending.startSeq = pending.startSeq + chunk.length
+          }
+          if (pending.containsBackgroundOutput === true) {
+            nextPending.containsBackgroundOutput = true
+          }
+          pendingData.replaceWithRemainder(selection, nextPending)
+        } else {
+          pendingData.remove(selection)
+          pendingOverflowMarkedPtys.delete(id)
+        }
         updateProducerFlowControl(id)
-        // Why droppedOutput sentinel: pending-cap drop means the pane must repaint from the snapshot, not continue a gapped stream (data = carved query bytes only).
-        sendPtyDataToRenderer(id, { id, data: pending.data, droppedOutput: true })
+        if (
+          !sendPtyDataToRenderer(
+            id,
+            makePtyDataPayload(
+              id,
+              chunk,
+              pending.startSeq,
+              pending.containsBackgroundOutput,
+              pending.rawLength,
+              pending.transformed
+            )
+          )
+        ) {
+          sendFailed = true
+          break
+        }
         writes++
-        continue
       }
-      const { data } = pending
-      const indivisible = pending.transformed === true
-      const chunk = indivisible ? data : data.slice(0, PTY_BATCH_FLUSH_CHUNK_CHARS)
-      const remaining = indivisible ? '' : data.slice(PTY_BATCH_FLUSH_CHUNK_CHARS)
-      if (remaining) {
-        const nextPending: PendingPtyData = { data: remaining }
-        if (typeof pending.startSeq === 'number') {
-          nextPending.startSeq = pending.startSeq + chunk.length
-        }
-        if (pending.containsBackgroundOutput === true) {
-          nextPending.containsBackgroundOutput = true
-        }
-        pendingData.set(id, nextPending)
-      } else {
-        pendingOverflowMarkedPtys.delete(id)
-      }
-      updateProducerFlowControl(id)
-      sendPtyDataToRenderer(
-        id,
-        makePtyDataPayload(
-          id,
-          chunk,
-          pending.startSeq,
-          pending.containsBackgroundOutput,
-          pending.rawLength,
-          pending.transformed
-        )
-      )
-      writes++
+    } finally {
+      pendingDataFlushActive = false
+      creditReleasedDuringFlush = pendingDataCreditReleasedDuringFlush
+      pendingDataCreditReleasedDuringFlush = false
+      pendingData.endRound(round)
     }
-    if (pendingData.size > 0 && writes === 0) {
+    if (rendererPtyDispatcherReady && pendingData.size > 0 && writes === 0 && !sendFailed) {
       ackGatedFlushSkipCount++
     }
-    recordPtyRendererDeliveryPressure()
-    if (pendingData.size > 0 && writes > 0) {
-      // Why yield between slices: a background terminal can dump megabytes at once, and keystroke writes must not stall behind one flush.
+    if (sendFailed && pendingData.size > 0) {
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+        flushTimer = null
+      }
       schedulePendingDataFlush(PTY_BATCH_DRAIN_CONTINUE_MS)
+      return
+    }
+    if (pendingData.size > 0 && (writes > 0 || creditReleasedDuringFlush)) {
+      // Why yield between slices: a background terminal can dump megabytes at once, and keystroke writes must not stall behind one flush.
+      schedulePendingDataFlush(writes > 0 ? PTY_BATCH_DRAIN_CONTINUE_MS : 0)
     }
   }
 
@@ -2289,6 +2751,7 @@ export function registerPtyHandlers(
   }
 
   const syntheticKillExitPtyIds = new Map<string, NodeJS.Timeout>()
+  const reversibleStopOwnersByPtyId = new Map<string, number>()
 
   function rememberSyntheticKillExit(id: string): void {
     const existing = syntheticKillExitPtyIds.get(id)
@@ -2317,44 +2780,69 @@ export function registerPtyHandlers(
     if (mainWindow.isDestroyed()) {
       return
     }
-    // Why flush before exit: the renderer tears down the terminal on pty:exit, so any batched output not yet flushed would be silently lost.
-    const remaining = pendingData.get(payload.id)
-    if (remaining) {
-      if (remaining.droppedOutput === true) {
-        // Sentinel entry: only salvaged query bytes remain; keep the flag so the renderer knows the span was dropped.
-        sendPtyDataToRenderer(payload.id, {
-          id: payload.id,
-          data: remaining.data,
-          droppedOutput: true
-        })
-      } else {
-        sendPtyDataToRenderer(
-          payload.id,
-          makePtyDataPayload(
-            payload.id,
-            remaining.data,
-            remaining.startSeq,
-            remaining.containsBackgroundOutput,
-            remaining.rawLength,
-            remaining.transformed
-          )
-        )
-      }
-      pendingData.delete(payload.id)
+    if (rendererExitingPtyIds.has(payload.id)) {
+      return
     }
-    // Why resume a dead PTY (no-op): avoid leaving a stale paused mark behind for a reused id.
-    producerFlowControl.release(payload.id)
-    pendingOverflowMarkedPtys.delete(payload.id)
-    lastInputAtByPty.delete(payload.id)
-    interactiveOutputCharsByPty.delete(payload.id)
-    rendererInFlightTotalChars = Math.max(
-      0,
-      rendererInFlightTotalChars - getRendererInFlightCharsForPty(payload.id)
-    )
-    // Why: the renderer also drops its cumulative total on pty:exit, so a reused id restarts aligned at zero on both sides.
-    rendererDeliveryAccountingByPty.delete(payload.id)
-    recordPtyRendererDeliveryPressure()
-    mainWindow.webContents.send('pty:exit', payload)
+    rendererExitingPtyIds.add(payload.id)
+    try {
+      const hadReleasableRendererCredit = getRendererInFlightCharsForPty(payload.id) > 0
+      // Why flush before exit: the renderer tears down the terminal on pty:exit, so any batched output not yet flushed would be silently lost.
+      const remaining = pendingData.delete(payload.id)
+      clearFlushTimerIfIdle()
+      if (remaining) {
+        if (remaining.droppedOutput === true) {
+          // Sentinel entry: only salvaged query bytes remain; keep the flag so the renderer knows the span was dropped.
+          sendPtyDataToRenderer(payload.id, {
+            id: payload.id,
+            data: remaining.data,
+            droppedOutput: true
+          })
+        } else {
+          sendPtyDataToRenderer(
+            payload.id,
+            makePtyDataPayload(
+              payload.id,
+              remaining.data,
+              remaining.startSeq,
+              remaining.containsBackgroundOutput,
+              remaining.rawLength,
+              remaining.transformed
+            )
+          )
+        }
+      }
+      // Why resume a dead PTY (no-op): avoid leaving a stale paused mark behind for a reused id.
+      producerFlowControl.release(payload.id)
+      pendingOverflowMarkedPtys.delete(payload.id)
+      rendererDeliveryRestoreNeededPtys.delete(payload.id)
+      lastInputAtByPty.delete(payload.id)
+      interactiveOutputCharsByPty.delete(payload.id)
+      const releasedRendererCredit = getRendererInFlightCharsForPty(payload.id)
+      rendererInFlightTotalChars = Math.max(0, rendererInFlightTotalChars - releasedRendererCredit)
+      // Why: the renderer also drops its cumulative total on pty:exit, so a reused id restarts aligned at zero on both sides.
+      rendererDeliveryAccountingByPty.delete(payload.id)
+      if (hadReleasableRendererCredit) {
+        if (pendingDataFlushActive) {
+          // Why: let the open round coalesce this wake into its one post-round continuation.
+          const reactivatedBlocked = pendingData.reactivateBlocked()
+          pendingDataCreditReleasedDuringFlush ||= reactivatedBlocked
+        } else {
+          schedulePendingDataAfterCreditReport(true)
+        }
+      }
+      mainWindow.webContents.send('pty:exit', {
+        ...payload,
+        ...(reversibleStopOwnersByPtyId.has(payload.id) ? { preserveRendererBinding: true } : {})
+      })
+    } finally {
+      rendererExitingPtyIds.delete(payload.id)
+    }
+  }
+
+  function sendPtySpawnedToRenderer(id: string): void {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('pty:spawned', { id })
+    }
   }
 
   async function shutdownProviderAndDetectExit(
@@ -2363,8 +2851,12 @@ export function registerPtyHandlers(
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<boolean> {
     let providerExitObserved = false
+    const expectedIncarnationId = ptyIncarnationById.get(id)
     const unsubscribe = provider.onExit((payload) => {
-      if (payload.id === id) {
+      if (
+        payload.id === id &&
+        (!expectedIncarnationId || payload.incarnationId === expectedIncarnationId)
+      ) {
         providerExitObserved = true
       }
     })
@@ -2381,6 +2873,27 @@ export function registerPtyHandlers(
     localDataUnsub?.()
     localExitUnsub?.()
     localBackgroundStreamUnsub?.()
+    localWriteUnavailableUnsub?.()
+
+    // Why: a daemon death takes down every session at once. The provider signals
+    // each affected pane here so background panes remount + re-attach too, not
+    // just the pane whose write happened to detect the dead endpoint (STA-2373).
+    // Typed at the call site (not on the capped IPtyProvider): only respawnable
+    // endpoints like the daemon adapter implement it.
+    const writeUnavailableSource = localProvider as {
+      onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
+    }
+    localWriteUnavailableUnsub =
+      writeUnavailableSource.onWriteUnavailable?.((payload) => {
+        if (
+          mainWindow.isDestroyed() ||
+          (typeof mainWindow.webContents.isDestroyed === 'function' &&
+            mainWindow.webContents.isDestroyed())
+        ) {
+          return
+        }
+        mainWindow.webContents.send('pty:writeUnavailable', { id: payload.id })
+      }) ?? null
 
     // Daemon keep-tail thinning facts, in byte order with onData: markers flip transient-fact scan authority; a gap forces renderer restore from the snapshot.
     localBackgroundStreamUnsub =
@@ -2389,7 +2902,8 @@ export function registerPtyHandlers(
           runtime?.setPtyTransientFactDelegation(
             payload.id,
             payload.background,
-            payload.scanSeedAnsi
+            payload.scanSeedAnsi,
+            payload.mode2031PendingSubscribe
           )
           return
         }
@@ -2426,12 +2940,14 @@ export function registerPtyHandlers(
         }
         producerFlowControl.releaseAll()
         clearDeliveryResyncProbe()
-        pendingData.clear()
+        clearPendingPtyData()
         pendingOverflowMarkedPtys.clear()
         rendererDeliveryAccountingByPty.clear()
         rendererInFlightTotalChars = 0
         clearDispatcherReadyWatchdog()
-        recordPtyRendererDeliveryPressure()
+        return
+      }
+      if (rendererExitingPtyIds.size > 0 && rendererExitingPtyIds.has(payload.id)) {
         return
       }
       const settings = getSettings?.()
@@ -2453,6 +2969,7 @@ export function registerPtyHandlers(
         markHiddenRendererResizeOutputDelivered(payload.id)
       }
       const existing = pendingData.get(payload.id)
+      const overflowMarkedBeforeAppend = pendingOverflowMarkedPtys.has(payload.id)
       const pending = appendPendingPtyData(
         payload.id,
         existing,
@@ -2463,7 +2980,11 @@ export function registerPtyHandlers(
         rawLength,
         payload.transformed === true
       )
-      const nextData = pending.data
+      const shouldEmitPendingCapRestoreMarker =
+        pending.droppedOutput === true &&
+        !overflowMarkedBeforeAppend &&
+        pendingOverflowMarkedPtys.has(payload.id)
+      const nextData = pending.data + getDroppedMode2031RendererData(pending)
       const isInteractiveOutput = shouldSendInteractiveOutputNow(
         payload.id,
         nextData,
@@ -2473,35 +2994,45 @@ export function registerPtyHandlers(
       if (isInteractiveOutput && rendererPtyDispatcherReady) {
         // Why the reserve: keep input echo from being pinned behind unrelated bulk output; it's bounded and the per-PTY cap still prevents an active TUI runaway.
         if (!canSendPtyDataToRenderer(payload.id, { interactive: true })) {
-          requestDeliveryResyncForGatedPty()
-          pendingData.set(payload.id, pending)
+          setPendingPtyData(payload.id, pending)
+          if (shouldEmitPendingCapRestoreMarker) {
+            sendModelRestoreNeededMarker(payload.id, 'pending-cap', outputSeq)
+          }
           updateProducerFlowControl(payload.id)
-          recordPtyRendererDeliveryPressure()
+          requestDeliveryResyncForGatedPty()
           return
         }
-        pendingData.delete(payload.id)
-        updateProducerFlowControl(payload.id)
-        pendingOverflowMarkedPtys.delete(payload.id)
+        deletePendingPtyData(payload.id)
         clearFlushTimerIfIdle()
+        if (shouldEmitPendingCapRestoreMarker) {
+          sendModelRestoreNeededMarker(payload.id, 'pending-cap', outputSeq)
+        }
+        pendingOverflowMarkedPtys.delete(payload.id)
         // Why immediate: agent TUIs redraw small prompt regions per keystroke; the throughput batch timer would add visible input latency.
-        sendPtyDataToRenderer(payload.id, {
-          id: payload.id,
-          data: nextData,
-          ...(typeof pending.startSeq === 'number'
-            ? {
-                seq: pending.startSeq + (pending.rawLength ?? nextData.length),
-                rawLength: pending.rawLength ?? nextData.length
-              }
-            : {}),
-          ...(pending.transformed ? { transformed: true } : {}),
-          ...(pending.containsBackgroundOutput === true ? { background: true } : {}),
-          ...(pending.droppedOutput === true ? { droppedOutput: true } : {})
-        })
+        try {
+          sendPtyDataToRenderer(payload.id, {
+            id: payload.id,
+            data: nextData,
+            ...(typeof pending.startSeq === 'number'
+              ? {
+                  seq: pending.startSeq + (pending.rawLength ?? nextData.length),
+                  rawLength: pending.rawLength ?? nextData.length
+                }
+              : {}),
+            ...(pending.transformed ? { transformed: true } : {}),
+            ...(pending.containsBackgroundOutput === true ? { background: true } : {}),
+            ...(pending.droppedOutput === true ? { droppedOutput: true } : {})
+          })
+        } finally {
+          updateProducerFlowControl(payload.id)
+        }
         return
       }
-      pendingData.set(payload.id, pending)
+      setPendingPtyData(payload.id, pending)
+      if (shouldEmitPendingCapRestoreMarker) {
+        sendModelRestoreNeededMarker(payload.id, 'pending-cap', outputSeq)
+      }
       updateProducerFlowControl(payload.id)
-      recordPtyRendererDeliveryPressure()
       // Why probe on data arrival (not flush skips): new output for a fully gated PTY is the moment stuck delivery becomes observable.
       if (
         !canSendPtyDataToRenderer(payload.id, { interactive: activeRendererPtys.has(payload.id) })
@@ -2513,6 +3044,9 @@ export function registerPtyHandlers(
       }
     })
     localExitUnsub = localProvider.onExit((payload) => {
+      if (!isCurrentPtyExit(payload)) {
+        return
+      }
       if (consumeSyntheticKillExit(payload.id)) {
         return
       }
@@ -2520,7 +3054,7 @@ export function registerPtyHandlers(
         clearProviderPtyState(payload.id)
         ptyOwnership.delete(payload.id)
         markClaudePtyExited(payload.id)
-        runtime?.onPtyExit(payload.id, payload.code)
+        runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId)
       }
       sendPtyExitToRenderer(payload)
     })
@@ -2629,15 +3163,17 @@ export function registerPtyHandlers(
 
   // Why: reload/crash orphans delivery-interest holds and hidden marks; reset so surviving PTYs aren't stuck force-fed or gated — each pane's first sync re-marks.
   clearRendererGateResetHandlers()
-  rendererGateResetLoadHandler = () => {
+  const resetRendererPtyDeliveryGateState = (): void => {
+    const gateDebug = getHiddenRendererPtyDeliveryDebug()
     resetRendererScopedHiddenPtyDeliveryState()
+    if (gateDebug.hiddenDeliveryGatedPtyCount > 0 || gateDebug.deliveryInterestPtyCount > 0) {
+      invalidatePendingPtyDrainPolicy()
+    }
     // Why: the daemon pacer must not keep throttling ptys whose hidden marks died with the renderer; the fresh renderer's sync re-marks the still-hidden ones.
     resyncBackgroundedDeliveriesAfterGateReset()
   }
-  rendererGateResetGoneHandler = () => {
-    resetRendererScopedHiddenPtyDeliveryState()
-    resyncBackgroundedDeliveriesAfterGateReset()
-  }
+  rendererGateResetLoadHandler = resetRendererPtyDeliveryGateState
+  rendererGateResetGoneHandler = resetRendererPtyDeliveryGateState
   rendererGateResetWebContents = mainWindow.webContents
   mainWindow.webContents.on('did-finish-load', rendererGateResetLoadHandler)
   mainWindow.webContents.on('render-process-gone', rendererGateResetGoneHandler)
@@ -2699,6 +3235,108 @@ export function registerPtyHandlers(
     }
   }
 
+  const prepareCodexResumeHome = (args: {
+    connectionId?: string | null
+    launchAgent?: TuiAgent
+    providerSession?: AgentProviderSessionMetadata
+    target: CodexAccountSelectionTarget
+    launchEnv?: NodeJS.ProcessEnv
+    workspacePath?: string
+  }): {
+    providerSession: AgentProviderSessionMetadata
+    preparation: Promise<CodexSessionResumePreparation | null>
+  } | null => {
+    if (args.connectionId || args.launchAgent !== 'codex' || !options?.prepareCodexSessionResume) {
+      return null
+    }
+    const providerSession = normalizeAgentProviderSession(args.providerSession)
+    if (!providerSession) {
+      return null
+    }
+    return {
+      providerSession,
+      preparation: options.prepareCodexSessionResume({
+        providerSession,
+        target: args.target,
+        launchEnv: args.launchEnv,
+        workspacePath: args.workspacePath
+      })
+    }
+  }
+
+  type CodexResumeLaunch = {
+    codexResumeHome: { codexHomePath: string } | null
+    command: string | undefined
+    notifyResumeUnavailable: boolean
+    droppedResumeArgv: boolean
+    providerSession: AgentProviderSessionMetadata | null
+  }
+
+  /** Kept separate from resolveCodexResumeLaunch so non-Codex spawns never await:
+   *  an extra tick reorders the pane-spawn reservation races this handler arbitrates. */
+  const noCodexResumeLaunch = (command: string | undefined): CodexResumeLaunch => ({
+    codexResumeHome: null,
+    command,
+    notifyResumeUnavailable: false,
+    droppedResumeArgv: false,
+    providerSession: null
+  })
+
+  /** The command a Codex launch actually runs: unchanged when provenance is verified,
+   *  stripped of `resume <id>` when it is not. */
+  const resolveCodexResumeLaunch = (
+    command: string | undefined,
+    preparation: NonNullable<ReturnType<typeof prepareCodexResumeHome>>
+  ): Promise<CodexResumeLaunch> =>
+    preparation.preparation.then((prepared) => {
+      const providerSession = preparation.providerSession
+      if (prepared?.outcome !== 'fresh') {
+        return {
+          codexResumeHome: prepared ?? null,
+          command,
+          notifyResumeUnavailable: false,
+          droppedResumeArgv: false,
+          providerSession
+        }
+      }
+      const dropped = dropUnverifiedCodexResumeArgv({
+        command,
+        providerSession,
+        claimedCodexProvenance: prepared.claimedCodexProvenance
+      })
+      return {
+        codexResumeHome: null,
+        command: dropped.command,
+        // Why: staying silent only makes sense for metadata that positively belongs to
+        // another agent; a resume with no transcript path at all still owes the user a notice.
+        notifyResumeUnavailable:
+          dropped.droppedResumeArgv &&
+          (prepared.claimedCodexProvenance || !providerSession.transcriptPath),
+        droppedResumeArgv: dropped.droppedResumeArgv,
+        providerSession
+      }
+    })
+
+  /** Why: buildPtyHostEnv prefers ORCA_SEQUENCED_STARTUP_COMMAND over the launch command
+   *  and the sequenced wrapper `eval`s it, so a dropped resume argv has to go there too. */
+  const stripSequencedStartupResumeArgv = <T extends Record<string, string> | undefined>(
+    env: T,
+    launch: CodexResumeLaunch
+  ): T => {
+    const sequenced = env?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
+    if (!env || !sequenced || !launch.droppedResumeArgv || !launch.providerSession) {
+      return env
+    }
+    const drop = dropAgentResumeArgvFromCommand({
+      command: sequenced,
+      agent: 'codex',
+      providerSession: launch.providerSession
+    })
+    return drop.status === 'dropped'
+      ? { ...env, [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: drop.command }
+      : env
+  }
+
   // Why: route through getProviderForPty() so CLI commands work for remote PTYs too; localProvider would silently fail for them.
   runtime?.setPtyController({
     spawn: async (args) => {
@@ -2729,6 +3367,21 @@ export function registerPtyHandlers(
         cwd,
         terminalRuntimeOptions.terminalWindowsWslDistro ?? null
       )
+      const codexResumePreparation = prepareCodexResumeHome({
+        connectionId: args.connectionId,
+        launchAgent: args.launchAgent,
+        providerSession: args.resumeProviderSession,
+        target: codexSelectionTarget,
+        launchEnv: args.env,
+        workspacePath: cwd
+      })
+      const codexResumeLaunch = codexResumePreparation
+        ? await resolveCodexResumeLaunch(args.command, codexResumePreparation)
+        : noCodexResumeLaunch(args.command)
+      const codexResumeHome = codexResumeLaunch.codexResumeHome
+      // Why: the drop still applies here, but this controller's result has no field for
+      // notifyResumeUnavailable — runtime/relay panes start fresh without the notice.
+      const launchCommand = codexResumeLaunch.command
       const claudeAuth =
         isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth(codexSelectionTarget) : null
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
@@ -2744,14 +3397,19 @@ export function registerPtyHandlers(
         !args.connectionId &&
         !(provider instanceof LocalPtyProvider) &&
         !routesFreshSpawnsToLocalProvider(provider)
-      const requestedSessionId = args.sessionId?.trim()
+      const callerRequestedSessionId = args.sessionId?.trim()
+      const requestedSessionId =
+        callerRequestedSessionId ??
+        (isDaemonHostSpawn && args.agentSessionCreateOperationId
+          ? ptySessionIdForAgentCreateOperation(args.worktreeId, args.agentSessionCreateOperationId)
+          : undefined)
       const sessionId =
         requestedSessionId ?? (isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
       const effectiveSessionRelayId =
         sessionId !== undefined ? getRelayPtyId(args.connectionId, sessionId) : undefined
       const effectiveSessionAppId =
         sessionId !== undefined ? getAppPtyId(args.connectionId, sessionId) : undefined
-      const isMintedSessionId = requestedSessionId === undefined && isDaemonHostSpawn
+      const isMintedSessionId = callerRequestedSessionId === undefined && isDaemonHostSpawn
       const expectedWslDistro = !args.connectionId
         ? (resolveWslSessionContext({
             cwd,
@@ -2792,16 +3450,19 @@ export function registerPtyHandlers(
         ? { ...sshScopedEnv, ...claudeAuth.envPatch }
         : sshScopedEnv
       const requestedAgentTeamsPath = env?.ORCA_AGENT_TEAMS_TEAM_ID ? env.PATH : undefined
+      env = stripSequencedStartupResumeArgv(env, codexResumeLaunch)
       if (args.preAllocatedHandle) {
         env = { ...env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
       }
       const selectedCodexHomePath = isDaemonHostSpawn
         ? getCompatibleSelectedCodexHomePath(
             codexSelectionTarget,
-            getSelectedCodexHomePath?.(codexSelectionTarget, env, {
-              workspacePath: cwd,
-              launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
-            }) ?? null
+            codexResumeHome
+              ? codexResumeHome.codexHomePath
+              : (getSelectedCodexHomePath?.(codexSelectionTarget, env, {
+                  workspacePath: cwd,
+                  launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+                }) ?? null)
           )
         : null
       const skipCodexHomeEnv =
@@ -2827,7 +3488,7 @@ export function registerPtyHandlers(
           skipCodexHomeEnv,
           stripInheritedOrcaCodexHome,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
-          launchCommand: args.command,
+          launchCommand,
           launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
           shellPath: daemonShellOverride ?? process.env.COMSPEC,
           isWsl: shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd),
@@ -2849,9 +3510,30 @@ export function registerPtyHandlers(
         env,
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
+      if (!isDaemonHostSpawn && codexResumeHome) {
+        spawnOptions.codexHomePathOverride = { value: codexResumeHome.codexHomePath }
+      }
+      const startupTerminalColorQueryReplyColors = getStartupTerminalColorQueryReplyColors(args)
+      if (startupTerminalColorQueryReplyColors) {
+        spawnOptions.startupIngress = {
+          colors: startupTerminalColorQueryReplyColors,
+          deadlineMs: 5_000
+        }
+      }
+      let ptySpawnCommitReported = false
+      const reportPtySpawnCommitted = (): void => {
+        if (ptySpawnCommitReported) {
+          return
+        }
+        ptySpawnCommitReported = true
+        args.onPtySpawnCommitted?.()
+      }
       spawnOptions.envToDelete = mergePtyEnvDeletions(
-        mergePtyEnvDeletions(authEnvToDelete, args.envToDelete ?? []),
-        isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : []
+        authEnvToDelete,
+        args.envToDelete ?? [],
+        isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : [],
+        // Why: ungated, unlike the agent-hook keys — the local provider and the relay host also spread their own process.env into every spawn.
+        getInheritedClaudeSessionStampEnvKeysToDelete(env)
       )
       if (skipCodexHomeEnv) {
         spawnOptions.envToDelete = mergePtyEnvDeletions(
@@ -2865,10 +3547,13 @@ export function registerPtyHandlers(
           'ORCA_CODEX_HOME'
         ])
       }
+      if (codexResumeHome?.codexHomePath) {
+        spawnOptions.envToDelete = removeCodexHomeDeletionRequests(spawnOptions.envToDelete)
+      }
       deleteRequestedEnvKeys(env, spawnOptions.envToDelete)
       promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
-      if (args.command !== undefined) {
-        spawnOptions.command = args.command
+      if (launchCommand !== undefined) {
+        spawnOptions.command = launchCommand
       }
       if (args.commandDelivery !== undefined) {
         spawnOptions.commandDelivery = args.commandDelivery
@@ -2917,6 +3602,35 @@ export function registerPtyHandlers(
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined
       }
+      if (
+        args.agentSessionEnsure &&
+        (await (provider as IPtyProvider).supportsAgentSessionClaims?.()) === false
+      ) {
+        // Why: runtime routing must select legacy before dispatch; never downgrade here after it began.
+        throw new Error('agent_session_claim_unavailable')
+      }
+      if (
+        args.agentSessionCreateOperationId &&
+        (await (provider as IPtyProvider).supportsAgentSessionCreateOperations?.()) === false
+      ) {
+        throw new Error('execution_owner_unavailable')
+      }
+      if (args.agentSessionEnsure) {
+        spawnOptions.agentSessionEnsure = args.agentSessionEnsure
+      }
+      if (args.agentSessionCreateOperationId) {
+        spawnOptions.agentSessionCreateOperationId = args.agentSessionCreateOperationId
+      }
+      if (args.signal) {
+        spawnOptions.signal = args.signal
+      }
+      if (
+        args.onPtySpawnCommitted &&
+        (provider instanceof LocalPtyProvider || routesFreshSpawnsToLocalProvider(provider))
+      ) {
+        // Why: local fallback has no lower operation ledger, so commit must be reported at native spawn.
+        spawnOptions.onPtySpawnCommitted = reportPtySpawnCommitted
+      }
 
       const existingPaneSpawn = materializedPaneKey
         ? paneSpawnReservationsByPaneKey.get(materializedPaneKey)
@@ -2933,13 +3647,21 @@ export function registerPtyHandlers(
         ? reservePaneSpawn(materializedPaneKey)
         : null
       let result: PtySpawnResult
+      let rejectedRegistrationCandidate: PtySpawnResult | null = null
+      let pendingRegistrationPtyId: string | null = null
       let preparedProvisionalExecutionContext = false
+      let releaseWorktreeSpawn: (() => void) | undefined
       try {
+        releaseWorktreeSpawn = await runtime?.acquireWorktreeTerminalSpawn?.(args.worktreeId)
         try {
           if (args.preAllocatedHandle) {
             trustedTerminalHandleEnv.add(args.preAllocatedHandle)
           }
           const expectedPtyId = effectiveSessionAppId ?? sessionId
+          if (expectedPtyId) {
+            runtime?.beginPtyRegistration?.(expectedPtyId)
+            pendingRegistrationPtyId = expectedPtyId
+          }
           if (isDaemonHostSpawn && expectedPtyId) {
             preparedProvisionalExecutionContext =
               runtime?.preparePtyExecutionContext?.(expectedPtyId, expectedWslDistro, {
@@ -2950,7 +3672,93 @@ export function registerPtyHandlers(
           const sequenceBeforeProviderSpawn = expectedPtyId
             ? (runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
             : 0
-          result = await provider.spawn(spawnOptions)
+          const assertClientStillConnected = (): void => {
+            if (args.signal?.aborted) {
+              throw new Error('client_disconnected')
+            }
+          }
+          if (args.agentSessionEnsure) {
+            // Why: daemon-backed claims can outlive this controller; import all
+            // proven owners before deciding that an identity is absent.
+            await reconcileAgentSessionOwnerListings()
+            const recoveredOwner = agentSessionOwners.find(args.agentSessionEnsure.claim)
+            if (recoveredOwner && pendingRegistrationPtyId !== recoveredOwner.ptyId) {
+              if (pendingRegistrationPtyId) {
+                runtime?.cancelPendingPtyRegistration?.(pendingRegistrationPtyId)
+              }
+              runtime?.beginPtyRegistration?.(
+                recoveredOwner.ptyId,
+                ptyIncarnationById.get(recoveredOwner.ptyId)
+              )
+              pendingRegistrationPtyId = recoveredOwner.ptyId
+            }
+            let providerResult: PtySpawnResult | null = null
+            const ensured = await agentSessionOwners.ensure({
+              claim: args.agentSessionEnsure.claim,
+              surface: args.agentSessionEnsure.surface,
+              spawn: async () => {
+                assertClientStillConnected()
+                providerResult = await provider.spawn(spawnOptions)
+                rejectedRegistrationCandidate = providerResult
+                // Why: a successful lower-owner return proves physical work committed even if admission sees an early exit.
+                reportPtySpawnCommitted()
+                assertSpawnReplyWasLive(providerResult)
+                runtime?.assertPtyRegistrationAllowed?.(
+                  providerResult.id,
+                  providerResult.incarnationId
+                )
+                if (providerResult.incarnationId) {
+                  // Why: local providers cannot serialize controller claims, so liveness proof
+                  // needs the exact incarnation before the registry promotes the new owner.
+                  ptyIncarnationById.set(providerResult.id, providerResult.incarnationId)
+                }
+                const providerEnsure = providerResult.agentSessionEnsure
+                return {
+                  ptyId: providerResult.id,
+                  ...(providerEnsure
+                    ? {
+                        owner: providerEnsure.owner,
+                        disposition: providerEnsure.disposition
+                      }
+                    : {})
+                }
+              },
+              isLive: async (owner) => {
+                const ownerProvider = tryGetProviderForAgentSessionOwner(owner.ptyId)
+                if (!ownerProvider) {
+                  // Why: a disconnected relay may keep its PTY alive during the
+                  // grace window; missing transport is unknown, never absence.
+                  throw new Error('execution_owner_unavailable')
+                }
+                return await isProviderAgentSessionOwnerLive(ownerProvider, owner)
+              }
+            })
+            result = providerResult ?? {
+              id: ensured.owner.ptyId,
+              isReattach: true,
+              // Why: adoption from an authoritative listing must preserve the
+              // incarnation proof used to reject a delayed exit from an older process.
+              incarnationId: ptyIncarnationById.get(ensured.owner.ptyId)
+            }
+            result.agentSessionEnsure = ensured
+          } else {
+            assertClientStillConnected()
+            result = await provider.spawn(spawnOptions)
+            rejectedRegistrationCandidate = result
+            // Why: daemon/relay returns cross the physical commit boundary before controller admission.
+            reportPtySpawnCommitted()
+            assertSpawnReplyWasLive(result)
+          }
+          rejectedRegistrationCandidate ??= result
+          if (pendingRegistrationPtyId !== result.id) {
+            if (pendingRegistrationPtyId) {
+              runtime?.cancelPendingPtyRegistration?.(pendingRegistrationPtyId)
+            }
+            runtime?.beginPtyRegistration?.(result.id, result.incarnationId)
+            pendingRegistrationPtyId = result.id
+          }
+          // Why: admission precedes sequence/context state and every durable publication below.
+          runtime?.assertPtyRegistrationAllowed?.(result.id, result.incarnationId)
           if (result.providerSequence) {
             runtime?.synchronizePtyOutputSequenceFromProvider?.(
               result.id,
@@ -2973,6 +3781,19 @@ export function registerPtyHandlers(
             })
           }
           const rawMessage = err instanceof Error ? err.message : String(err)
+          if (rawMessage === 'agent_session_exited_during_start' && rejectedRegistrationCandidate) {
+            runtime?.releaseRejectedPtyRegistrationFence?.(
+              rejectedRegistrationCandidate.id,
+              rejectedRegistrationCandidate.incarnationId
+            )
+          }
+          if (pendingRegistrationPtyId) {
+            runtime?.cancelPendingPtyRegistration?.(
+              pendingRegistrationPtyId,
+              rejectedRegistrationCandidate?.incarnationId
+            )
+            pendingRegistrationPtyId = null
+          }
           const spawnError = normalizeNodePtySpawnError(err)
           const isIdentityMismatch =
             isSshPtyIdentityMismatchError(spawnError) || isSshPtyIdentityMismatchError(rawMessage)
@@ -3006,7 +3827,28 @@ export function registerPtyHandlers(
             trustedTerminalHandleEnv.delete(args.preAllocatedHandle)
           }
         }
+        if (result.agentSessionEnsure?.disposition === 'adopted') {
+          const owner = result.agentSessionEnsure.owner
+          ptyOwnership.set(result.id, args.connectionId ?? ptyOwnership.get(result.id) ?? null)
+          runtime?.registerPreAllocatedHandleForPty(result.id, owner.surface.terminalHandle)
+          if (result.incarnationId) {
+            ptyIncarnationById.set(result.id, result.incarnationId)
+          }
+          runtime?.registerPty(result.id, owner.surface.worktreeId, args.connectionId ?? null, {
+            tabId: owner.surface.tabId,
+            leafId: owner.surface.leafId,
+            ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
+          })
+          return {
+            id: result.id,
+            ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
+            agentSessionEnsure: result.agentSessionEnsure
+          }
+        }
         ptyOwnership.set(result.id, args.connectionId ?? null)
+        if (result.incarnationId) {
+          ptyIncarnationById.set(result.id, result.incarnationId)
+        }
         // Why: record the native-Windows-local-PTY determination before any byte reaches the emulator, so its ConPTY DA1 override exists from byte zero.
         if (
           isNativeWindowsLocalPtySpawn({
@@ -3042,15 +3884,33 @@ export function registerPtyHandlers(
         if (effectiveSessionAppId !== undefined && effectiveSessionAppId !== result.id) {
           ptySizes.delete(effectiveSessionAppId)
         }
+        recordCodexPaneAccountForSpawn({
+          ptyId: result.id,
+          isDaemonHostSpawn,
+          isReattach: result.isReattach === true,
+          pinnedByResume: Boolean(codexResumeHome),
+          launchCodexHomePath: selectedCodexHomePath,
+          target: codexSelectionTarget,
+          settings: getSettings?.()
+        })
         if (hostSessionBinding) {
           try {
-            hostSessionBinding.store.persistPtyBinding({
+            const binding = {
               worktreeId: hostSessionBinding.worktreeId,
               tabId: hostSessionBinding.tabId,
               leafId: hostSessionBinding.leafId,
               ptyId: result.id,
+              ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
               ...(cwd ? { startupCwd: cwd } : {})
-            })
+            }
+            if (args.connectionId) {
+              hostSessionBinding.store.persistPtyBinding(
+                binding,
+                toSshExecutionHostId(args.connectionId)
+              )
+            } else {
+              hostSessionBinding.store.persistPtyBinding(binding)
+            }
           } catch (err) {
             console.error('[pty] failed to persist runtime PTY binding after spawn:', err)
             deletePtyOwnership(result.id)
@@ -3062,7 +3922,9 @@ export function registerPtyHandlers(
               }
               clearProviderPtyState(result.id)
             }
-            throw new Error(createTerminalSessionStateSaveFailureMessage())
+            throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+              agentSessionOperationOutcome: 'unknown' as const
+            })
           }
           persistSshLease()
         }
@@ -3079,15 +3941,22 @@ export function registerPtyHandlers(
               isValidTerminalTabId(args.tabId) &&
               args.tabId.length <= 512 &&
               metadataLeafId !== null
-              ? { tabId: args.tabId, leafId: metadataLeafId }
+              ? {
+                  tabId: args.tabId,
+                  leafId: metadataLeafId,
+                  ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
+                }
               : undefined,
             !args.connectionId
               ? shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd)
               : undefined
           )
+        } else {
+          // Why: non-worktree PTYs have no later surface-registration phase to clear admission intent.
+          runtime?.cancelPendingPtyRegistration?.(result.id, result.incarnationId)
         }
         // Why: arms main's per-PTY Command Code output detector from the launch command (renderer startupCommand parity).
-        runtime?.noteTerminalSpawnCommand?.(result.id, args.command ?? null)
+        runtime?.noteTerminalSpawnCommand?.(result.id, launchCommand ?? null)
         if (isClaudeLaunch) {
           markClaudePtySpawned(result.id)
         }
@@ -3127,20 +3996,38 @@ export function registerPtyHandlers(
                 : null
           })
         }
-        const response = { id: result.id }
+        // Why: runtime-owned/background spawns bypass mounted-pane state, so inventory consumers need an explicit signal.
+        sendPtySpawnedToRenderer(result.id)
+        const response = {
+          id: result.id,
+          ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
+          ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {})
+        }
         return resolvePaneSpawnReservation(materializedPaneKey, paneSpawnReservation, response)
       } catch (err) {
-        // Why: any later throw must settle the reservation, or it lingers and every future spawn for this pane awaits a promise that never resolves (reject no-ops if already resolved).
+        if (pendingRegistrationPtyId) {
+          runtime?.cancelPendingPtyRegistration?.(
+            pendingRegistrationPtyId,
+            rejectedRegistrationCandidate?.incarnationId
+          )
+          pendingRegistrationPtyId = null
+        }
+        // Why: once the reservation is created, any later throw — spawn
+        // failure, persist failure, or a post-spawn helper such as
+        // registerPty/rememberPaneKeyForPty/track — must settle it. Otherwise
+        // it lingers in paneSpawnReservationsByPaneKey and every future spawn
+        // for this pane awaits a promise that never resolves. reject is a
+        // no-op once the reservation has already resolved.
         rejectPaneSpawnReservation(materializedPaneKey, paneSpawnReservation, err)
         throw err
       } finally {
+        releaseWorktreeSpawn?.()
         finishTerminalInstall()
       }
     },
     write: (ptyId, data) => {
-      const provider = getProviderForPty(ptyId)
       try {
-        provider.write(ptyId, data)
+        getProviderForPty(ptyId).write(ptyId, data)
         return true
       } catch {
         return false
@@ -3156,9 +4043,11 @@ export function registerPtyHandlers(
           provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
         } catch {
           if (connectionId) {
-            // Why: runtime/CLI close can target a detached SSH PTY after its provider was unregistered; tombstone the lease so reconnect can't revive it.
-            finishPtyShutdown(ptyId, connectionId, store)
-            runtime?.onPtyExit(ptyId, -1)
+            // Why: runtime/CLI close can target a detached SSH PTY after its
+            // provider was unregistered. Tombstone the lease so reconnect does
+            // not revive a terminal the user explicitly closed.
+            const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
+            runtime?.onPtyExit(ptyId, -1, incarnationId)
             rememberSyntheticKillExit(ptyId)
             sendPtyExitToRenderer({ id: ptyId, code: -1 })
             return true
@@ -3168,17 +4057,17 @@ export function registerPtyHandlers(
         // Why: controller is synchronous, but keep ownership until async shutdown proves whether the provider emitted an exit.
         void shutdownProviderAndDetectExit(provider, ptyId, { immediate: false })
           .then((providerExitObserved) => {
-            finishPtyShutdown(ptyId, connectionId, store)
+            const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
             if (!providerExitObserved) {
-              runtime?.onPtyExit(ptyId, -1)
+              runtime?.onPtyExit(ptyId, -1, incarnationId)
               rememberSyntheticKillExit(ptyId)
               sendPtyExitToRenderer({ id: ptyId, code: -1 })
             }
           })
           .catch((err) => {
             if (isPtyAlreadyGoneError(err)) {
-              finishPtyShutdown(ptyId, connectionId, store)
-              runtime?.onPtyExit(ptyId, -1)
+              const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
+              runtime?.onPtyExit(ptyId, -1, incarnationId)
               rememberSyntheticKillExit(ptyId)
               sendPtyExitToRenderer({ id: ptyId, code: -1 })
               return
@@ -3186,8 +4075,9 @@ export function registerPtyHandlers(
             console.warn(
               `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
             )
-            // Why: close runtime tails but keep provider ownership so a retry can still target a PTY that survived the failed shutdown.
-            runtime?.onPtyExit(ptyId, -1)
+            // Why: close runtime tails without clearing provider ownership, so
+            // a retry can still target a PTY that survived the failed shutdown.
+            runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
           })
         return true
       }
@@ -3198,11 +4088,31 @@ export function registerPtyHandlers(
           console.warn(
             `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
           )
-          runtime?.onPtyExit(ptyId, -1)
+          runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
         })
         return true
       }
       return killWithCurrentProvider()
+    },
+    markReversibleStops: (ptyIds) => {
+      for (const ptyId of ptyIds) {
+        reversibleStopOwnersByPtyId.set(ptyId, (reversibleStopOwnersByPtyId.get(ptyId) ?? 0) + 1)
+      }
+      let released = false
+      return () => {
+        if (released) {
+          return
+        }
+        released = true
+        for (const ptyId of ptyIds) {
+          const owners = (reversibleStopOwnersByPtyId.get(ptyId) ?? 0) - 1
+          if (owners > 0) {
+            reversibleStopOwnersByPtyId.set(ptyId, owners)
+          } else {
+            reversibleStopOwnersByPtyId.delete(ptyId)
+          }
+        }
+      }
     },
     stopAndWait: async (ptyId, opts) => {
       let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
@@ -3240,9 +4150,10 @@ export function registerPtyHandlers(
         provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
       } catch {
         if (connectionId) {
-          // Why: an absent SSH provider means no live target to await, but the relay lease must still be tombstoned.
-          finishPtyShutdown(ptyId, connectionId, store)
-          runtime?.onPtyExit(ptyId, -1)
+          // Why: an absent SSH provider means there is no live target left to
+          // await, but the relay lease must still be tombstoned.
+          const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
+          runtime?.onPtyExit(ptyId, -1, incarnationId)
           rememberSyntheticKillExit(ptyId)
           sendPtyExitToRenderer({ id: ptyId, code: -1 })
           return true
@@ -3276,9 +4187,9 @@ export function registerPtyHandlers(
         )
         return false
       }
-      finishPtyShutdown(ptyId, connectionId, store)
+      const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
       if (!providerExitObserved) {
-        runtime?.onPtyExit(ptyId, -1)
+        runtime?.onPtyExit(ptyId, -1, incarnationId)
         rememberSyntheticKillExit(ptyId)
         sendPtyExitToRenderer({ id: ptyId, code: -1 })
       }
@@ -3291,6 +4202,7 @@ export function registerPtyHandlers(
         return null
       }
     },
+    inspectProcess: async (ptyId) => inspectPtyProviderProcess(getProviderForPty(ptyId), ptyId),
     confirmForegroundProcess: async (ptyId) => {
       try {
         const provider = getProviderForPty(ptyId)
@@ -3322,6 +4234,13 @@ export function registerPtyHandlers(
         await getProviderForPty(ptyId).clearBuffer(ptyId)
       } catch {
         /* best effort: renderer clear still handles local PTYs */
+      }
+    },
+    hasPty: (ptyId) => {
+      try {
+        return getProviderForPty(ptyId).hasPty?.(ptyId) ?? null
+      } catch {
+        return null
       }
     },
     listProcesses: async () => {
@@ -3466,6 +4385,7 @@ export function registerPtyHandlers(
         command?: string
         commandDelivery?: 'renderer' | 'provider'
         launchConfig?: SleepingAgentLaunchConfig
+        resumeProviderSession?: AgentProviderSessionMetadata
         launchAgent?: TuiAgent
         startupCommandDelivery?: StartupCommandDelivery
         connectionId?: string | null
@@ -3674,7 +4594,6 @@ export function registerPtyHandlers(
       // Why: SSH can strip ORCA_PANE_KEY when remote hooks are off; IPC tab/leaf metadata still names the pane.
       const reservationPaneKey = metadataPaneKey ?? validatedPaneKey
       const validatedLeafId = verifiedLeafId ?? metadataLeafId
-      let env: Record<string, string> | undefined = baseEnv
       const effectiveShellOverride = terminalRuntimeOptions.shellOverride
       const nativeWindowsConptySpawn = isNativeWindowsLocalPtySpawn({
         connectionId: args.connectionId,
@@ -3686,13 +4605,32 @@ export function registerPtyHandlers(
         cwd,
         terminalRuntimeOptions.terminalWindowsWslDistro ?? null
       )
+      const codexResumePreparation = prepareCodexResumeHome({
+        connectionId: args.connectionId,
+        launchAgent: args.launchAgent,
+        providerSession: args.resumeProviderSession,
+        target: codexSelectionTarget,
+        launchEnv: baseEnv,
+        workspacePath: cwd
+      })
+      const codexResumeLaunch = codexResumePreparation
+        ? await resolveCodexResumeLaunch(args.command, codexResumePreparation)
+        : noCodexResumeLaunch(args.command)
+      const codexResumeHome = codexResumeLaunch.codexResumeHome
+      const launchCommand = codexResumeLaunch.command
+      baseEnv = stripSequencedStartupResumeArgv(baseEnv, codexResumeLaunch)
+      // Why: declared after the strip so a local-provider spawn cannot capture the
+      // pre-strip env — only the daemon branch below re-derives this from baseEnv.
+      let env: Record<string, string> | undefined = baseEnv
       const selectedCodexHomePath = isDaemonHostSpawn
         ? getCompatibleSelectedCodexHomePath(
             codexSelectionTarget,
-            getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
-              workspacePath: cwd,
-              launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
-            }) ?? null
+            codexResumeHome
+              ? codexResumeHome.codexHomePath
+              : (getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv, {
+                  workspacePath: cwd,
+                  launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+                }) ?? null)
           )
         : null
       const skipCodexHomeEnv =
@@ -3727,7 +4665,7 @@ export function registerPtyHandlers(
             skipCodexHomeEnv,
             stripInheritedOrcaCodexHome,
             githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
-            launchCommand: args.command,
+            launchCommand,
             launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
             shellPath: effectiveShellOverride ?? process.env.COMSPEC,
             isWsl: shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd),
@@ -3754,21 +4692,20 @@ export function registerPtyHandlers(
       const envToDelete = claudeAuth?.stripAuthEnv
         ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
         : undefined
-      const combinedEnvToDelete = mergePtyEnvDeletions(
-        mergePtyEnvDeletions(
-          mergePtyEnvDeletions(
-            mergePtyEnvDeletions(
-              mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
-              agentTeamsEnvToDelete ?? []
-            ),
-            isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : []
-          ),
-          skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : []
-        ),
+      let combinedEnvToDelete = mergePtyEnvDeletions(
+        envToDelete,
+        args.envToDelete ?? [],
+        agentTeamsEnvToDelete ?? [],
+        isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : [],
+        getInheritedClaudeSessionStampEnvKeysToDelete(spawnEnv),
+        skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
         // Why: the persistent daemon compares its own merged CODEX_HOME pair;
         // main cannot safely decide ownership for a process it may not parent.
         stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : []
       )
+      if (codexResumeHome?.codexHomePath) {
+        combinedEnvToDelete = removeCodexHomeDeletionRequests(combinedEnvToDelete)
+      }
       deleteRequestedEnvKeys(spawnEnv, combinedEnvToDelete)
       promoteAgentTeamsShimPath(spawnEnv, requestedAgentTeamsPath)
       const spawnOptions: PtySpawnOptions = {
@@ -3778,11 +4715,14 @@ export function registerPtyHandlers(
         env: spawnEnv,
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
+      if (!isDaemonHostSpawn && codexResumeHome) {
+        spawnOptions.codexHomePathOverride = { value: codexResumeHome.codexHomePath }
+      }
       if (combinedEnvToDelete) {
         spawnOptions.envToDelete = combinedEnvToDelete
       }
-      if (args.command !== undefined) {
-        spawnOptions.command = args.command
+      if (launchCommand !== undefined) {
+        spawnOptions.command = launchCommand
       }
       if (args.commandDelivery !== undefined) {
         spawnOptions.commandDelivery = args.commandDelivery
@@ -3831,10 +4771,7 @@ export function registerPtyHandlers(
       if (startupTerminalColorQueryReplyColors) {
         spawnOptions.startupIngress = {
           colors: startupTerminalColorQueryReplyColors,
-          deadlineMs: 5_000,
-          ...(nativeWindowsConptySpawn
-            ? { echoProjection: 'windows-conpty-esc-stripped' as const }
-            : {})
+          deadlineMs: 5_000
         }
       }
       const existingPaneSpawn = reservationPaneKey
@@ -3856,17 +4793,25 @@ export function registerPtyHandlers(
           ? effectiveSessionAppId
           : null
       if (preSpawnHiddenMarkId !== null) {
-        markHiddenRendererPty(preSpawnHiddenMarkId)
+        transitionSpawnHiddenRendererPtyDeliveryState(preSpawnHiddenMarkId, true)
       }
       let result: PtySpawnResult
+      let rejectedRegistrationCandidate: PtySpawnResult | null = null
+      let pendingRegistrationPtyId: string | null = null
       let preparedProvisionalExecutionContext = false
+      let releaseWorktreeSpawn: (() => void) | undefined
       try {
+        releaseWorktreeSpawn = await runtime?.acquireWorktreeTerminalSpawn?.(args.worktreeId)
         try {
           if (preAllocatedHandle) {
             trustedTerminalHandleEnv.add(preAllocatedHandle)
           }
           spawnTiming.mark('options')
           const expectedPtyId = effectiveSessionAppId ?? effectiveSessionId
+          if (expectedPtyId) {
+            runtime?.beginPtyRegistration?.(expectedPtyId)
+            pendingRegistrationPtyId = expectedPtyId
+          }
           if (isDaemonHostSpawn && expectedPtyId) {
             preparedProvisionalExecutionContext =
               runtime?.preparePtyExecutionContext?.(expectedPtyId, expectedWslDistro, {
@@ -3878,6 +4823,16 @@ export function registerPtyHandlers(
             ? (runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
             : 0
           result = await provider.spawn(spawnOptions)
+          rejectedRegistrationCandidate = result
+          if (pendingRegistrationPtyId !== result.id) {
+            if (pendingRegistrationPtyId) {
+              runtime?.cancelPendingPtyRegistration?.(pendingRegistrationPtyId)
+            }
+            runtime?.beginPtyRegistration?.(result.id, result.incarnationId)
+            pendingRegistrationPtyId = result.id
+          }
+          assertSpawnReplyWasLive(result)
+          runtime?.assertPtyRegistrationAllowed?.(result.id, result.incarnationId)
           if (result.providerSequence) {
             runtime?.synchronizePtyOutputSequenceFromProvider?.(
               result.id,
@@ -3902,9 +4857,22 @@ export function registerPtyHandlers(
           }
           // Why: a stale hidden mark on this session id would gate a later visible attach that reuses it.
           if (preSpawnHiddenMarkId !== null) {
-            unmarkHiddenRendererPty(preSpawnHiddenMarkId)
+            transitionSpawnHiddenRendererPtyDeliveryState(preSpawnHiddenMarkId, false)
           }
           const rawMessage = err instanceof Error ? err.message : String(err)
+          if (rawMessage === 'agent_session_exited_during_start' && rejectedRegistrationCandidate) {
+            runtime?.releaseRejectedPtyRegistrationFence?.(
+              rejectedRegistrationCandidate.id,
+              rejectedRegistrationCandidate.incarnationId
+            )
+          }
+          if (pendingRegistrationPtyId) {
+            runtime?.cancelPendingPtyRegistration?.(
+              pendingRegistrationPtyId,
+              rejectedRegistrationCandidate?.incarnationId
+            )
+            pendingRegistrationPtyId = null
+          }
           const spawnError = normalizeNodePtySpawnError(err)
           const isIdentityMismatch =
             isSshPtyIdentityMismatchError(spawnError) || isSshPtyIdentityMismatchError(rawMessage)
@@ -3962,13 +4930,25 @@ export function registerPtyHandlers(
           daemon: isDaemonHostSpawn,
           reattach: result.isReattach ?? false
         })
+        recordCodexPaneAccountForSpawn({
+          ptyId: result.id,
+          isDaemonHostSpawn,
+          isReattach: result.isReattach === true,
+          pinnedByResume: Boolean(codexResumeHome),
+          launchCodexHomePath: selectedCodexHomePath,
+          target: codexSelectionTarget,
+          settings: getSettings?.()
+        })
         ptyOwnership.set(result.id, args.connectionId ?? null)
+        if (result.incarnationId) {
+          ptyIncarnationById.set(result.id, result.incarnationId)
+        }
         if (initiallyHidden) {
           // Why marked synchronously here: provider data events dispatch on later tasks, so this still lands ahead of the first byte's delivery decision (idempotent if already marked pre-spawn).
-          markHiddenRendererPty(result.id)
+          transitionSpawnHiddenRendererPtyDeliveryState(result.id, true)
           if (preSpawnHiddenMarkId !== null && preSpawnHiddenMarkId !== result.id) {
             // Defense: never strand a mark on an id the provider renamed.
-            unmarkHiddenRendererPty(preSpawnHiddenMarkId)
+            transitionSpawnHiddenRendererPtyDeliveryState(preSpawnHiddenMarkId, false)
           }
           // Why after ptyOwnership.set: provider lookup routes by ownership, and a hidden-spawned agent should be paceable from its first flood.
           syncPtyBackgroundedDelivery(result.id, 'spawn')
@@ -3997,20 +4977,25 @@ export function registerPtyHandlers(
         ptySizes.set(result.id, { cols: args.cols, rows: args.rows })
         // Why: patch the load-bearing ptyId binding synchronously so a force-quit in the renderer's ~450 ms debounce window can't orphan daemon history or an SSH relay lease (Issue #217).
         if (
-          (isDaemonHostSpawn || args.connectionId) &&
           store &&
           typeof args.worktreeId === 'string' &&
           typeof args.tabId === 'string' &&
           validatedLeafId !== null
         ) {
           try {
-            store.persistPtyBinding({
+            const binding = {
               worktreeId: args.worktreeId,
               tabId: args.tabId,
               leafId: validatedLeafId,
               ptyId: result.id,
+              ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
               ...(cwd ? { startupCwd: cwd } : {})
-            })
+            }
+            if (args.connectionId) {
+              store.persistPtyBinding(binding, toSshExecutionHostId(args.connectionId))
+            } else {
+              store.persistPtyBinding(binding)
+            }
           } catch (err) {
             console.error('[pty] failed to persist PTY binding after spawn:', err)
             if (!result.isReattach) {
@@ -4025,7 +5010,9 @@ export function registerPtyHandlers(
             if (!result.isReattach && args.connectionId && store) {
               store.removeSshRemotePtyLease(args.connectionId, relayResultId)
             }
-            throw new Error(createTerminalSessionStateSaveFailureMessage())
+            throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+              agentSessionOperationOutcome: 'unknown' as const
+            })
           }
         }
         // Why: when the renderer has declared it will own the serializer for this paneKey, suppress the daemon-snapshot seed so its hydration path is sole authority (keyed on paneKey since the ptyId isn't known yet). See docs/mobile-prefer-renderer-scrollback.md.
@@ -4098,17 +5085,25 @@ export function registerPtyHandlers(
               isValidTerminalTabId(args.tabId) &&
               args.tabId.length <= 512 &&
               metadataLeafId !== null
-              ? { tabId: args.tabId, leafId: metadataLeafId }
+              ? {
+                  tabId: args.tabId,
+                  leafId: metadataLeafId,
+                  ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
+                }
               : undefined,
             !args.connectionId
               ? shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd)
               : undefined
           )
+          pendingRegistrationPtyId = null
+        } else if (pendingRegistrationPtyId) {
+          runtime?.cancelPendingPtyRegistration?.(pendingRegistrationPtyId, result.incarnationId)
+          pendingRegistrationPtyId = null
         }
         // Why: arm main's per-PTY Command Code output detector from the launch command (startupCommand parity); banner detection covers PTYs without one.
         runtime?.noteTerminalSpawnCommand?.(
           result.id,
-          typeof args.command === 'string' ? args.command : null
+          typeof launchCommand === 'string' ? launchCommand : null
         )
         if (isClaudeLaunch) {
           markClaudePtySpawned(result.id)
@@ -4178,18 +5173,50 @@ export function registerPtyHandlers(
             ? { launchConfig: effectiveLaunchConfig }
             : {}),
           // Why: a daemon-retry race can surface isReattach even for a minted session id, and a reattach must never claim its cwd was remapped.
-          ...(startupCwdFallback && !result.isReattach ? { startupCwdFallback } : {})
+          ...(startupCwdFallback && !result.isReattach ? { startupCwdFallback } : {}),
+          // Why: the pane asked to resume and got a fresh session instead; only the
+          // renderer can say so, and a reattach never ran this launch command.
+          ...(codexResumeLaunch.notifyResumeUnavailable && !result.isReattach
+            ? { agentResumeUnavailable: true as const }
+            : {})
         }
+        // Why: renderer tab state cannot reliably infer background and reattached PTYs in the daemon inventory.
+        sendPtySpawnedToRenderer(result.id)
         return resolvePaneSpawnReservation(reservationPaneKey, paneSpawnReservation, response)
       } catch (err) {
-        // Why: any later throw must settle the reservation, else it lingers and every future spawn for this pane awaits a promise that never resolves (reject no-ops if already resolved).
+        if (pendingRegistrationPtyId) {
+          runtime?.cancelPendingPtyRegistration?.(
+            pendingRegistrationPtyId,
+            rejectedRegistrationCandidate?.incarnationId
+          )
+          pendingRegistrationPtyId = null
+        }
+        // Why: once the reservation is created, any later throw —
+        // spawn failure, persist failure, or a post-spawn helper such as
+        // seedHeadlessTerminal/registerPty/track — must settle it. Otherwise
+        // it lingers in paneSpawnReservationsByPaneKey and every future spawn
+        // for this pane awaits a promise that never resolves. reject is a
+        // no-op once the reservation has already resolved.
         rejectPaneSpawnReservation(reservationPaneKey, paneSpawnReservation, err)
         throw err
       } finally {
+        releaseWorktreeSpawn?.()
         finishTerminalInstall()
       }
     }
   )
+
+  const reportUnavailablePtyWrite = (id: string, error: unknown): void => {
+    if (
+      !isPtyWriteUnavailableError(error) ||
+      mainWindow.isDestroyed() ||
+      (typeof mainWindow.webContents.isDestroyed === 'function' &&
+        mainWindow.webContents.isDestroyed())
+    ) {
+      return
+    }
+    mainWindow.webContents.send('pty:writeUnavailable', { id })
+  }
 
   const writePtyProviderInputWithinLimit = (
     provider: IPtyProvider,
@@ -4222,8 +5249,12 @@ export function registerPtyHandlers(
       }
       return tooLarge
         .then((result) => (result ? false : writePtyProviderInputWithinLimit(provider, id, data)))
-        .catch(() => false)
-    } catch {
+        .catch((error) => {
+          reportUnavailablePtyWrite(id, error)
+          return false
+        })
+    } catch (error) {
+      reportUnavailablePtyWrite(id, error)
       return false
     }
   }
@@ -4247,7 +5278,8 @@ export function registerPtyHandlers(
         nextChunk = chunks.next()
       }
       return true
-    } catch {
+    } catch (error) {
+      reportUnavailablePtyWrite(id, error)
       return false
     }
   }
@@ -4451,10 +5483,7 @@ export function registerPtyHandlers(
         acknowledged = accounting ? applyCumulativeAck(args.id, accounting.ackedChars + delta) : 0
       }
       tryGetProviderForPty(args.id)?.acknowledgeDataEvent(args.id, acknowledged)
-      recordPtyRendererDeliveryPressure()
-      if (pendingData.size > 0 && !flushTimer) {
-        schedulePendingDataFlush(0)
-      }
+      schedulePendingDataAfterCreditReport(acknowledged > 0)
     }
   )
 
@@ -4470,19 +5499,18 @@ export function registerPtyHandlers(
       clearDeliveryResyncProbe()
       deliveryResyncUnansweredWarnLogged = false
       // Why max-merge: the renderer's cumulative totals are authoritative for what it processed, draining exactly the in-flight debt from lost ACKs.
+      let creditedAny = false
       for (const [id, processedChars] of Object.entries(args.processedCharsByPty ?? {})) {
         if (typeof processedChars !== 'number' || !Number.isFinite(processedChars)) {
           continue
         }
         const acknowledged = applyCumulativeAck(id, Math.max(0, processedChars))
         if (acknowledged > 0) {
+          creditedAny = true
           tryGetProviderForPty(id)?.acknowledgeDataEvent(id, acknowledged)
         }
       }
-      recordPtyRendererDeliveryPressure()
-      if (pendingData.size > 0 && !flushTimer) {
-        schedulePendingDataFlush(0)
-      }
+      schedulePendingDataAfterCreditReport(creditedAny)
     }
   )
 
@@ -4491,12 +5519,14 @@ export function registerPtyHandlers(
     'pty:reportRendererDeliveryState',
     (_event, args: PtyRendererDeliveryStateReport): PtyRendererDeliveryHealthReply => {
       // Extra repair lane for the lost-ACK variant: identical max-merge to the resync response, so a heal is only reached when merging cannot drain.
+      let creditedAny = false
       for (const [id, processedChars] of Object.entries(args?.processedCharsByPty ?? {})) {
         if (typeof processedChars !== 'number' || !Number.isFinite(processedChars)) {
           continue
         }
         const acknowledged = applyCumulativeAck(id, Math.max(0, processedChars))
         if (acknowledged > 0) {
+          creditedAny = true
           tryGetProviderForPty(id)?.acknowledgeDataEvent(id, acknowledged)
         }
       }
@@ -4509,11 +5539,9 @@ export function registerPtyHandlers(
           Date.now() - lastAckReceivedAtMs >= PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS)
       ) {
         writtenOff = writeOffLostRendererDelivery(args)
+        creditedAny ||= writtenOff.length > 0
       }
-      recordPtyRendererDeliveryPressure()
-      if (pendingData.size > 0 && !flushTimer) {
-        schedulePendingDataFlush(0)
-      }
+      schedulePendingDataAfterCreditReport(creditedAny)
       let inFlightPtyCount = 0
       for (const accounting of rendererDeliveryAccountingByPty.values()) {
         if (accounting.sentChars - accounting.ackedChars > 0) {
@@ -4543,6 +5571,7 @@ export function registerPtyHandlers(
     // Why: real handshake landed — cancel the self-heal watchdog so it can't later force-open the gate.
     clearDispatcherReadyWatchdog()
     rendererPtyDispatcherReady = true
+    pendingData.reactivateBlocked()
     schedulePendingDataFlush(0)
   })
 
@@ -4553,13 +5582,14 @@ export function registerPtyHandlers(
     }
     // Why: renderer scheduling hint only — active panes just get first chance at the bounded output reserve; reads/state/notifications continue for inactive terminals.
     if (args.active) {
+      if (activeRendererPtys.has(args.id)) {
+        return
+      }
       activeRendererPtys.add(args.id)
-    } else {
-      activeRendererPtys.delete(args.id)
+    } else if (!activeRendererPtys.delete(args.id)) {
+      return
     }
-    if (pendingData.size > 0 && !flushTimer) {
-      schedulePendingDataFlush(0)
-    }
+    invalidatePendingPtyDrainPriority(args.id)
   })
 
   ipcMain.removeAllListeners('pty:setRendererPtyVisible')
@@ -4586,12 +5616,12 @@ export function registerPtyHandlers(
     mainDeliveryBreadcrumbs.record(args.hidden === true ? 'gate-mark' : 'gate-unmark', {
       id: redactPtyIdForDiagnostics(args.id)
     })
+    const transition = transitionHiddenRendererPtyDeliveryState(args.id, args.hidden === true)
     if (args.hidden === true) {
-      markHiddenRendererPty(args.id)
       closeStartupQueryAuthorityForPty(args.id)
       // Why: drop bytes queued for a newly hidden PTY instead of holding them under ACK starvation; reveal restores from the snapshot.
       const pending = pendingData.get(args.id)
-      if (pending && shouldDropHiddenRendererPtyData(args.id, getSettings?.())) {
+      if (pending && transition.droppable) {
         pendingData.delete(args.id)
         updateProducerFlowControl(args.id)
         pendingOverflowMarkedPtys.delete(args.id)
@@ -4603,15 +5633,19 @@ export function registerPtyHandlers(
             runtime?.getPtyOutputSequence(args.id)
           )
         }
-        recordPtyRendererDeliveryPressure()
+      }
+      if (transition.policyChanged) {
+        invalidatePendingPtyDrainPolicy(args.id)
       }
       syncPtyBackgroundedDelivery(args.id, 'gate-mark')
       return
     }
-    const { droppedWhileHidden } = unmarkHiddenRendererPty(args.id)
+    if (transition.policyChanged) {
+      invalidatePendingPtyDrainPolicy(args.id)
+    }
     syncPtyBackgroundedDelivery(args.id, 'gate-unmark')
     // Why: a reload/remount may have replaced the view that latched restore-needed, so re-emit on unhide; a redundant replay is cheap/idempotent, a missed restore corrupts the pane.
-    if (droppedWhileHidden) {
+    if (transition.droppedWhileHidden) {
       sendModelRestoreNeededMarker(args.id, 'unhide', runtime?.getPtyOutputSequence(args.id))
     }
   })
@@ -4631,7 +5665,12 @@ export function registerPtyHandlers(
       return
     }
     // Why: any delivery interest suppresses the hidden-delivery gate (raw-byte consumers keep receiving while hidden); not synced to the daemon pacer so interest churn can't un-pace a flood.
+    const settings = getSettings?.()
+    const wasDroppable = shouldDropHiddenRendererPtyData(args.id, settings)
     setRendererPtyDeliveryInterest(args.id, args.interested === true)
+    if (wasDroppable !== shouldDropHiddenRendererPtyData(args.id, settings)) {
+      invalidatePendingPtyDrainPolicy(args.id)
+    }
   })
 
   ipcMain.removeAllListeners('pty:signal')
@@ -4665,9 +5704,11 @@ export function registerPtyHandlers(
     }
     const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
     if (!provider && connectionId) {
-      // Why: detached SSH PTYs keep ownership after provider unregister, and hydrated app-scoped ids may arrive pre-ownership; tombstone instead of falling back local.
-      finishPtyShutdown(args.id, connectionId, store)
-      runtime?.onPtyExit(args.id, -1)
+      // Why: detached SSH PTYs intentionally keep ownership after their
+      // provider is unregistered; hydrated app-scoped ids can also arrive
+      // before ownership is rebuilt. Tombstone instead of falling back local.
+      const incarnationId = finishPtyShutdown(args.id, connectionId, store)
+      runtime?.onPtyExit(args.id, -1, incarnationId)
       rememberSyntheticKillExit(args.id)
       sendPtyExitToRenderer({ id: args.id, code: -1 })
       return
@@ -4686,39 +5727,47 @@ export function registerPtyHandlers(
       }
       /* session already dead — cleanup below handles the rest */
     }
-    // Why: some shutdown paths don't emit onExit via the provider listener; this cleanup is idempotent and covers already-dead PTYs.
-    finishPtyShutdown(args.id, connectionId, store)
+    // Why: some shutdown paths do not emit onExit through the provider listener.
+    // Explicit cleanup is idempotent and covers already-dead PTYs.
+    const incarnationId = finishPtyShutdown(args.id, connectionId, store)
     if (!providerExitObserved) {
-      runtime?.onPtyExit(args.id, -1)
+      runtime?.onPtyExit(args.id, -1, incarnationId)
       rememberSyntheticKillExit(args.id)
       sendPtyExitToRenderer({ id: args.id, code: -1 })
     }
   })
 
-  ipcMain.handle(
-    'pty:listSessions',
-    async (): Promise<{ id: string; cwd: string; title: string }[]> => {
-      const providerSessions = await Promise.all([
-        Promise.resolve({
-          connectionId: null as string | null,
-          sessions: await localProvider.listProcesses()
-        }),
-        ...Array.from(sshProviders.entries(), async ([connectionId, provider]) => ({
-          connectionId,
-          sessions: await provider.listProcesses().catch(() => [])
-        }))
-      ])
-      const deduped = new Map<string, { id: string; cwd: string; title: string }>()
-      for (const { connectionId, sessions } of providerSessions) {
-        for (const session of sessions) {
+  ipcMain.handle('pty:listSessions', async (): Promise<PtyListedSession[]> => {
+    const deduped = new Map<string, PtyListedSession>()
+    const admission = new PtyProcessListAdmission()
+    await visitPtyProcessListingsInBatches(
+      registeredPtyProviders(),
+      ({ provider, connectionId }) =>
+        connectionId === null ? provider.listProcesses() : provider.listProcesses().catch(() => []),
+      ({ provider, connectionId }, sessions) => {
+        for (const rawSession of sessions) {
+          const session = admission.admit(rawSession)
           // Why: kill actions only send back the PTY id, so rebuild ownership while listing to keep reconnect-discovered remote sessions routed to their provider.
           ptyOwnership.set(session.id, connectionId)
-          deduped.set(session.id, session)
+          deduped.set(session.id, {
+            id: session.id,
+            cwd: session.cwd,
+            title: session.title,
+            // Why: the renderer's binding map is empty during restore, so ownership is the only
+            // liveness evidence it has. Absence is authoritative only from a provider that
+            // serializes claims — otherwise it is 'unknown', never 'absent' (#8459).
+            agentOwnership:
+              (session.agentSessionOwners?.length ?? 0) > 0
+                ? 'present'
+                : provider.providesAgentSessionOwnerListings?.(session.id) === true
+                  ? 'absent'
+                  : 'unknown'
+          })
         }
       }
-      return Array.from(deduped.values())
-    }
-  )
+    )
+    return Array.from(deduped.values())
+  })
 
   ipcMain.on(
     'pty:getAuthoritativeBufferSnapshotCapabilitiesSync',
@@ -4787,6 +5836,10 @@ export function registerPtyHandlers(
       }
       return getProviderForPty(args.id).getForegroundProcess(args.id)
     }
+  )
+
+  ipcMain.handle('pty:inspectProcess', async (_event, args: { id: string }) =>
+    inspectPtyProviderProcess(getProviderForPty(args.id), args.id)
   )
 
   ipcMain.handle(
@@ -4888,7 +5941,8 @@ export function registerHeadlessPtyRuntime(
   getSelectedCodexHomePath?: GetSelectedCodexHomePath,
   getSettings?: () => GlobalSettings,
   prepareClaudeAuth?: PrepareClaudeAuth,
-  store?: Store
+  store?: Store,
+  prepareCodexSessionResume?: PrepareCodexSessionResume
 ): void {
   // Why: headless `orca serve` has no renderer window but still needs the same PTY handlers so remote clients can drive terminals.
   const headlessWindow = {
@@ -4905,7 +5959,8 @@ export function registerHeadlessPtyRuntime(
     getSelectedCodexHomePath,
     getSettings,
     prepareClaudeAuth,
-    store
+    store,
+    { prepareCodexSessionResume }
   )
 }
 

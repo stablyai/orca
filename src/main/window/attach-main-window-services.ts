@@ -2,30 +2,43 @@
 import { randomUUID } from 'node:crypto'
 
 import { app, ipcMain } from 'electron'
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type { Store } from '../persistence'
 import type {
   CreateWorktreeResult,
   UpdateCheckOptions,
   WorktreeStartupLaunch
 } from '../../shared/types'
+import {
+  acknowledgePendingTccPromptNotice,
+  consumePendingTccPromptNotice,
+  dismissTccPromptNotice,
+  releasePendingTccPromptNotice
+} from '../macos-tcc-prompt-notice'
 import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
-import { getLocalPtyProvider, registerPtyHandlers, type GetSelectedCodexHomePath } from '../ipc/pty'
+import {
+  getLocalPtyProvider,
+  registerPtyHandlers,
+  type GetSelectedCodexHomePath,
+  type PrepareCodexSessionResume
+} from '../ipc/pty'
 import { registerDaemonManagementHandlers } from '../ipc/pty-management'
 import { registerSshHandlers } from '../ipc/ssh'
 import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import {
   checkForUpdatesFromMenu,
   downloadUpdate,
   getUpdateStatus,
   quitAndInstall,
   setupAutoUpdater,
-  dismissNudge
+  dismissAvailableUpdate,
+  dismissNudge,
+  type UpdateInstallMode
 } from '../updater'
 import { scheduleHistoryGc } from '../terminal-history'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
@@ -58,6 +71,8 @@ export function ensureAutoUpdaterConfigured(): void {
 
 let appReloadHandlerTokenCounter = 0
 let activeAppReloadHandlerToken: number | null = null
+let tccPromptHandlerTokenCounter = 0
+let activeTccPromptHandlerToken: number | null = null
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
 
@@ -70,17 +85,22 @@ export function attachMainWindowServices(
     target?: ClaudeAccountSelectionTarget
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
+    prepareCodexSessionResume?: PrepareCodexSessionResume
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
     // Why: lets the PTY orphan sweep skip the one crash-recovery reload (#5787).
     isRecoveryReloadInFlight?: (webContentsId: number) => boolean
     onBeforeUpdateQuit?: () => void | Promise<void>
+    updateInstallMode?: UpdateInstallMode
+    onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void
   }
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store)
-  registerWorktreeHandlers(mainWindow, store, runtime)
+  registerWorktreeHandlers(mainWindow, store, runtime, {
+    onWorktreeLifecycle: options?.onWorktreeLifecycle
+  })
   // Why: repo/settings mutations resync watchers through this attached main-window context.
   setWorktreeBaseDirectoryWatcherSyncContext(store, mainWindow)
   scheduleWorktreeBaseDirectoryWatcherSync(store, mainWindow)
@@ -93,6 +113,7 @@ export function attachMainWindowServices(
     prepareClaudeAuth,
     store,
     {
+      prepareCodexSessionResume: options?.prepareCodexSessionResume,
       awaitLocalPtyStartup: options?.awaitLocalPtyStartup,
       awaitLocalPtyProviderStartup: options?.awaitLocalPtyProviderStartup,
       isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight
@@ -120,6 +141,7 @@ export function attachMainWindowServices(
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
+  registerTccPromptNoticeHandlers(mainWindow)
   // Why: setupAutoUpdater sync-require()s electron-updater (slow on cold Windows w/ Defender, #7225), so defer past first paint; timer fallback covers crash-looping renderers.
   let updaterSetupDone = false
   const setupAutoUpdaterDeferred = (): void => {
@@ -151,7 +173,8 @@ export function attachMainWindowServices(
       },
       setDismissedUpdateNudgeId: (id) => {
         store.updateUI({ dismissedUpdateNudgeId: id })
-      }
+      },
+      installMode: options?.updateInstallMode
     })
     logStartupMilestone('updater-setup-done')
   }
@@ -186,6 +209,63 @@ export function attachMainWindowServices(
   mainWindow.on('closed', () => {
     // Why: clear main-owned guest registrations on close so stale tab→webContents ids don't leak across relaunch/hot-reload.
     browserManager.unregisterAll()
+  })
+}
+
+function registerTccPromptNoticeHandlers(mainWindow: BrowserWindow): void {
+  const handlerToken = ++tccPromptHandlerTokenCounter
+  if (activeTccPromptHandlerToken !== null) {
+    releasePendingTccPromptNotice(activeTccPromptHandlerToken)
+  }
+  activeTccPromptHandlerToken = handlerToken
+  const consumeChannel = 'macosTccPrompts:consumePending'
+  const acknowledgeChannel = 'macosTccPrompts:acknowledgePending'
+  const releaseChannel = 'macosTccPrompts:releasePending'
+  const dismissChannel = 'macosTccPrompts:dismiss'
+  ipcMain.removeHandler(consumeChannel)
+  ipcMain.removeHandler(acknowledgeChannel)
+  ipcMain.removeHandler(releaseChannel)
+  ipcMain.removeHandler(dismissChannel)
+  const mainWebContents = mainWindow.webContents
+  const releaseOwnerClaim = (): void => releasePendingTccPromptNotice(handlerToken)
+  // Why: a renderer reload/crash destroys its claim callbacks without closing the BrowserWindow.
+  mainWebContents.on('did-start-loading', () => {
+    if (mainWebContents.isLoadingMainFrame()) {
+      releaseOwnerClaim()
+    }
+  })
+  mainWebContents.on('render-process-gone', releaseOwnerClaim)
+  const ownsNotice = (event: IpcMainInvokeEvent): boolean =>
+    !mainWindow.isDestroyed() && !mainWebContents.isDestroyed() && event.sender === mainWebContents
+  ipcMain.handle(consumeChannel, (event) =>
+    ownsNotice(event) ? consumePendingTccPromptNotice(handlerToken) : null
+  )
+  ipcMain.handle(acknowledgeChannel, (event, claimId: number) => {
+    if (ownsNotice(event) && Number.isSafeInteger(claimId)) {
+      acknowledgePendingTccPromptNotice(handlerToken, claimId)
+    }
+  })
+  ipcMain.handle(releaseChannel, (event, claimId: number) => {
+    if (ownsNotice(event) && Number.isSafeInteger(claimId)) {
+      releasePendingTccPromptNotice(handlerToken, claimId)
+    }
+  })
+  ipcMain.handle(dismissChannel, (event) => {
+    if (ownsNotice(event)) {
+      dismissTccPromptNotice()
+    }
+  })
+  // Why: macOS can stay windowless; drop stale closures without letting an old close clear newer handlers.
+  mainWindow.on('closed', () => {
+    if (activeTccPromptHandlerToken !== handlerToken) {
+      return
+    }
+    releaseOwnerClaim()
+    ipcMain.removeHandler(consumeChannel)
+    ipcMain.removeHandler(acknowledgeChannel)
+    ipcMain.removeHandler(releaseChannel)
+    ipcMain.removeHandler(dismissChannel)
+    activeTccPromptHandlerToken = null
   })
 }
 
@@ -413,6 +493,7 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.removeHandler('updater:download')
   ipcMain.removeHandler('updater:quitAndInstall')
   ipcMain.removeHandler('updater:dismissNudge')
+  ipcMain.removeHandler('updater:dismissAvailableUpdate')
 
   ipcMain.handle('updater:getStatus', () => getUpdateStatus())
   ipcMain.handle('updater:getVersion', () => app.getVersion())
@@ -423,4 +504,5 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.handle('updater:download', () => downloadUpdate())
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())
+  ipcMain.handle('updater:dismissAvailableUpdate', () => dismissAvailableUpdate())
 }

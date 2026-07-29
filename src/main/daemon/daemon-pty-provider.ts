@@ -1,5 +1,6 @@
 import { DaemonClient } from './client'
 import type { DaemonEvent, CreateOrAttachResult } from './types'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 
 export type DaemonPtyProviderOptions = {
   socketPath: string
@@ -18,6 +19,7 @@ export type DaemonSpawnOptions = {
 
 export type DaemonSpawnResult = {
   id: string
+  incarnationId?: PtyIncarnationId
   isNew: boolean
   pid: number | null
 }
@@ -25,7 +27,11 @@ export type DaemonSpawnResult = {
 export class DaemonPtyProvider {
   private client: DaemonClient
   private dataListeners: ((payload: { id: string; data: string }) => void)[] = []
-  private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
+  private exitListeners: ((payload: {
+    id: string
+    code: number
+    incarnationId?: PtyIncarnationId
+  }) => void)[] = []
   private removeEventListener: (() => void) | null = null
 
   constructor(opts: DaemonPtyProviderOptions) {
@@ -51,6 +57,7 @@ export class DaemonPtyProvider {
 
     return {
       id: opts.sessionId,
+      ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
       isNew: result.isNew,
       pid: result.pid
     }
@@ -87,7 +94,9 @@ export class DaemonPtyProvider {
     }
   }
 
-  onExit(callback: (payload: { id: string; code: number }) => void): () => void {
+  onExit(
+    callback: (payload: { id: string; code: number; incarnationId?: PtyIncarnationId }) => void
+  ): () => void {
     this.exitListeners.push(callback)
     return () => {
       const idx = this.exitListeners.indexOf(callback)
@@ -120,7 +129,11 @@ export class DaemonPtyProvider {
         }
       } else if (event.event === 'exit') {
         for (const listener of this.exitListeners) {
-          listener({ id: event.sessionId, code: event.payload.code })
+          listener({
+            id: event.sessionId,
+            code: event.payload.code,
+            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {})
+          })
         }
       }
     })

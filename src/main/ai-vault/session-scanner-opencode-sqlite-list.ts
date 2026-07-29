@@ -1,6 +1,8 @@
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
-import { buildOpenCodeSqliteCandidatePath } from './session-scanner-opencode-sqlite-paths'
-import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
+import {
+  buildOpenCodeSqliteCandidatePath,
+  splitOpenCodeSqliteCandidate
+} from './session-scanner-opencode-sqlite-paths'
 import type { SessionFileCandidate } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 import SyncDatabase from '../sqlite/sync-database'

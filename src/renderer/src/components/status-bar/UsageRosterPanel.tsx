@@ -20,9 +20,13 @@ import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mod
 type ProviderId = ProviderRateLimits['provider']
 export type UsageSection = { label: string; window: RateLimitWindow }
 
-// Windows/buckets that actually carry data — the null ones are absent limits.
+// Windows/buckets that actually carry data — absent limits arrive as null, but a
+// partial/rehydrated provider can also carry an undefined window; both must be
+// dropped so downstream consumers never dereference `window.usedPercent`.
 function usedSections(p: ProviderRateLimits): UsageSection[] {
-  return getWindowSections(p).filter((s): s is UsageSection => s.window !== null)
+  return getWindowSections(p).filter(
+    (s): s is UsageSection => s.window !== null && s.window !== undefined
+  )
 }
 
 function providerMaxUsed(sections: UsageSection[]): number {
@@ -236,11 +240,19 @@ export function UsageRosterPanel({
           options={[
             {
               value: 'verbose',
-              label: translate('auto.components.status.bar.UsageRosterPanel.detailed', 'Detailed')
+              label: translate('auto.components.status.bar.UsageRosterPanel.detailed', 'Detailed'),
+              tooltip: translate(
+                'auto.components.status.bar.UsageRosterPanel.detailedTooltip',
+                'Full usage with bars, labels, and percentages'
+              )
             },
             {
               value: 'compact',
-              label: translate('auto.components.status.bar.UsageRosterPanel.compact', 'Compact')
+              label: translate('auto.components.status.bar.UsageRosterPanel.compact', 'Compact'),
+              tooltip: translate(
+                'auto.components.status.bar.UsageRosterPanel.compactTooltip',
+                'Condensed usage: only the tightest window'
+              )
             }
           ]}
         />

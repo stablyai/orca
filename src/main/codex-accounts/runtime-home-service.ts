@@ -34,11 +34,14 @@ import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
 import { writeFileAtomically } from './fs-utils'
 import {
   getOrcaManagedCodexHomePath,
+  getOrcaUserDataPath,
   getCodexSessionBackfillStateDirPath,
   getSystemCodexHomePath,
+  resolveOrcaManagedCodexHomePath,
   syncCodexGlobalInstructionsIntoManagedHome,
   syncSystemCodexResourcesIntoManagedHome
 } from '../codex/codex-home-paths'
+import { startCodexAccountSessionBridgeInBackground } from '../codex/codex-account-session-bridge'
 import { startSystemCodexSessionBridgeInBackground } from '../codex/codex-session-bridge'
 import {
   resolveHostCodexSessionSourceHome,
@@ -250,7 +253,31 @@ export class CodexRuntimeHomeService {
       runtimeHomePath: perAccountHome,
       systemHomePath: getSystemCodexHomePath()
     })
+    this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
     return perAccountHome
+  }
+
+  // Why: Codex's own `/resume` picker only lists rollouts under the launch
+  // CODEX_HOME, so a self-contained account home starts out with no history at
+  // all. Hardlink every other Orca-visible home's rollouts in — after launch,
+  // since history trees can be large — so switching accounts no longer hides
+  // the user's conversations.
+  private startSelfContainedSessionBridgeForLaunch(perAccountHome: string): void {
+    void startCodexAccountSessionBridgeInBackground({
+      targetCodexHomePath: perAccountHome,
+      sourceCodexHomePaths: this.getSelfContainedSessionBridgeSourceHomes()
+    })
+  }
+
+  private getSelfContainedSessionBridgeSourceHomes(): string[] {
+    return [
+      // Why: history-only override lets custom-CODEX_HOME users bridge from the
+      // home they actually record sessions in; falls back to the real ~/.codex.
+      resolveHostCodexSessionSourceHome(this.store.getSettings()) ?? getSystemCodexHomePath(),
+      // Why: path only — a per-account install must not materialize the mirror.
+      resolveOrcaManagedCodexHomePath(),
+      ...this.getManagedHostAccountHomesForSessionDiscovery()
+    ]
   }
 
   // Why: the per-account home is both the launch CODEX_HOME and the credential
@@ -262,6 +289,9 @@ export class CodexRuntimeHomeService {
     if (perAccountHome && existsSync(join(perAccountHome, 'auth.json'))) {
       this.lastSyncedAccountId = account.id
       this.lastHostAccountUsedSelfContainedHome = true
+      // Why: selection runs well before the user restarts a pane, so history is
+      // already linked in by the time the newly launched Codex opens /resume.
+      this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
       return
     }
     this.clearSelfContainedManagedSelection(account)
@@ -359,6 +389,22 @@ export class CodexRuntimeHomeService {
       homes.push(perAccountHome)
     }
     return homes.filter((home, index) => homes.indexOf(home) === index)
+  }
+
+  /**
+   * The account-owned CODEX_HOME the current HOST selection runs against, or
+   * null when the selection is not routed to one (system default, or the
+   * flag-OFF shared mirror, which every account hot-swaps and so names no
+   * account).
+   *
+   * Read-only on purpose: session discovery ranks homes with this before any
+   * launch prep, so it must create no directories and sync no auth.
+   */
+  getSelectedHostAccountCodexHomePath(): string | null {
+    const selfContainedAccount = this.getSelfContainedManagedHostAccount()
+    return selfContainedAccount
+      ? this.getTrustedSelfContainedManagedHomePath(selfContainedAccount)
+      : null
   }
 
   // Why: the real-home hook installer flips this gate off when the trust-grant
@@ -1148,6 +1194,27 @@ export class CodexRuntimeHomeService {
 
   private getRuntimeHomePath(): string {
     return getOrcaManagedCodexHomePath()
+  }
+
+  /**
+   * Resolves the managed home the config mirror actually targets for the
+   * current HOST selection, or null when no mirror runs for it.
+   *
+   * Read-only on purpose: unlike the launch and quota-fetch paths this prepares
+   * nothing and creates no directories, so surfacing sync health cannot alter
+   * the state it is reporting on. Returns null for the system default on the
+   * real-home lane, which runs Codex directly against ~/.codex — there is no
+   * mirror there, so there is nothing that can fall behind.
+   */
+  getMirroredHostHomePathForStatus(): string | null {
+    const selfContainedAccount = this.getSelfContainedManagedHostAccount()
+    if (selfContainedAccount) {
+      return this.getTrustedSelfContainedManagedHomePath(selfContainedAccount)
+    }
+    if (this.isHostSystemDefaultRealHome()) {
+      return null
+    }
+    return join(getOrcaUserDataPath(), 'codex-runtime-home', 'home')
   }
 
   private getRuntimeAuthPath(): string {

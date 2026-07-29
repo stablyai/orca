@@ -205,7 +205,7 @@ export default function MobilePage(): React.JSX.Element {
     }
     // Why: signed-out Anywhere cannot serve Relay; auto-minting here would show a
     // scannable local-only QR under the Relay label. Wait for sign-in or a switch
-    // to Local network (both flip canGenerate and re-run this effect) instead.
+    // to LAN (both flip canGenerate and re-run this effect) instead.
     if (!canGenerate) {
       return
     }

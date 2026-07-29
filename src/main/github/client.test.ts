@@ -3530,6 +3530,44 @@ describe('getPRForBranch', () => {
     })
   })
 
+  it('pins explicit origin push-target lookup when upstream has the same PR number', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'fork', repo: 'orca' })
+    resolvePRRepositoryCandidatesMock.mockResolvedValue({
+      candidates: [
+        { owner: 'upstream', repo: 'orca' },
+        { owner: 'fork', repo: 'orca' }
+      ],
+      headRepo: { owner: 'fork', repo: 'orca' }
+    })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        head: {
+          ref: 'contributor/fix',
+          repo: {
+            full_name: 'contributor/orca',
+            name: 'orca',
+            clone_url: 'https://github.com/contributor/orca.git',
+            ssh_url: 'git@github.com:contributor/orca.git',
+            owner: { login: 'contributor' }
+          }
+        }
+      })
+    })
+    getRemoteUrlForRepoMock.mockResolvedValueOnce('git@github.com:fork/orca.git')
+
+    await getPullRequestPushTarget('/repo-root', 1738, null, {}, 'origin')
+
+    expect(resolvePRRepositoryCandidatesMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(['api', 'repos/fork/orca/pulls/1738'], {
+      cwd: '/repo-root',
+      host: 'github.com'
+    })
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalledWith(
+      ['api', 'repos/upstream/orca/pulls/1738'],
+      expect.anything()
+    )
+  })
+
   it('surfaces maintainer_can_modify=false alongside a fork PR push target', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })

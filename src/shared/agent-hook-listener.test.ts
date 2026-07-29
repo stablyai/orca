@@ -971,6 +971,342 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
+  it('reads the last assistant message behind an oversized line without quadratic copying', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-assistant-huge-line-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    const originalConcat = Buffer.concat
+    let concatenatedBytes = 0
+    try {
+      // The shared backward reader (readLastTextFromTranscriptOnce) stitches a
+      // line spanning many read blocks. Re-joining the carry per block copies
+      // O(line^2); the chunk list defers to one join.
+      const lineBytes = 2 * 1024 * 1024
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          role: 'assistant',
+          content: [{ type: 'text', text: 'answer behind a huge line' }]
+        })}\n${JSON.stringify({
+          role: 'user',
+          content: [{ type: 'text', text: 'x'.repeat(lineBytes) }]
+        })}\n`
+      )
+
+      Buffer.concat = ((list: readonly Uint8Array[], totalLength?: number) => {
+        const joined = originalConcat(list as Uint8Array[], totalLength)
+        concatenatedBytes += joined.length
+        return joined
+      }) as typeof Buffer.concat
+
+      const done = normalizeHookPayload(
+        state,
+        'claude',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: { hook_event_name: 'Stop', transcript_path: transcriptPath }
+        },
+        'production'
+      )
+
+      expect(done?.payload.lastAssistantMessage).toBe('answer behind a huge line')
+      // Linear copies once (~lineBytes); the quadratic form copied many times that.
+      expect(concatenatedBytes).toBeLessThan(lineBytes * 4)
+    } finally {
+      Buffer.concat = originalConcat
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  // Why these three: the prompt read scans backward from EOF and stops at the
+  // first user line, so the cases that can break are a prompt spanning a chunk
+  // boundary, a later prompt that must win over an earlier one, and the byte
+  // offset in interactionKey, which the old forward pass computed absolutely.
+  it('reads a Command Code prompt that straddles the backward-scan chunk boundary', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-chunk-straddle-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      const promptLine = JSON.stringify({
+        role: 'user',
+        content: [{ type: 'text', text: 'straddling prompt' }]
+      })
+      // Place the prompt so it spans the 64 KiB read boundary counted back from
+      // EOF: the scan must stitch the two reads together to see the whole line.
+      const chunkBytes = 64 * 1024
+      const bytesAfterPrompt = chunkBytes - Math.floor(Buffer.byteLength(promptLine) / 2)
+      const tail = Array.from({ length: 271 }, (_value, index) =>
+        JSON.stringify({
+          role: 'assistant',
+          content: [{ type: 'text', text: `${'t'.repeat(180)}${index}` }]
+        })
+      )
+      let tailText = `${tail.join('\n')}\n`
+      const padBytes = bytesAfterPrompt - Buffer.byteLength(tailText)
+      expect(padBytes).toBeGreaterThan(0)
+      tailText = `${'x'.repeat(padBytes - 1)}\n${tailText}`
+      expect(Buffer.byteLength(tailText)).toBe(bytesAfterPrompt)
+      const head = Array.from({ length: 200 }, (_value, index) =>
+        JSON.stringify({
+          role: 'assistant',
+          content: [{ type: 'text', text: `${'h'.repeat(180)}${index}` }]
+        })
+      )
+      writeFileSync(transcriptPath, `${head.join('\n')}\n${promptLine}\n${tailText}`)
+
+      const tool = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )
+      expect(tool?.payload.prompt).toBe('straddling prompt')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('reads a prompt behind one oversized line without quadratic carry copying', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-huge-line-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    const originalConcat = Buffer.concat
+    let concatenatedBytes = 0
+    try {
+      // A single tool result spanning many 64 KiB read blocks. Re-joining the
+      // accumulated carry per block copies O(line^2) bytes; the chunk list defers
+      // to one join, so total copied bytes stay proportional to the line.
+      const lineBytes = 2 * 1024 * 1024
+      const hugeLine = JSON.stringify({
+        role: 'assistant',
+        content: [{ type: 'text', text: 'x'.repeat(lineBytes) }]
+      })
+      const promptLine = JSON.stringify({
+        role: 'user',
+        content: [{ type: 'text', text: 'prompt behind a huge tool result' }]
+      })
+      writeFileSync(transcriptPath, `${promptLine}\n${hugeLine}\n`)
+
+      Buffer.concat = ((list: readonly Uint8Array[], totalLength?: number) => {
+        const joined = originalConcat(list as Uint8Array[], totalLength)
+        concatenatedBytes += joined.length
+        return joined
+      }) as typeof Buffer.concat
+
+      const tool = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )
+
+      expect(tool?.payload.prompt).toBe('prompt behind a huge tool result')
+      // Linear copies once (~lineBytes). The quadratic form copied ~16x that at
+      // this size and grows with the square, so 4x separates them decisively.
+      expect(concatenatedBytes).toBeLessThan(lineBytes * 4)
+    } finally {
+      Buffer.concat = originalConcat
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('reads a Command Code prompt line that spans several read blocks', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-long-line-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      // A prompt longer than one 64 KiB block: the scan sees consecutive blocks
+      // with no newline at all and must stitch them before parsing.
+      const promptText = `pasted prompt ${'W'.repeat(150 * 1024)}`
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'earlier' }] })}\n${JSON.stringify(
+          { role: 'user', content: [{ type: 'text', text: promptText }] }
+        )}\n${JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'tail' }] })}\n`
+      )
+
+      const tool = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )
+
+      expect(tool?.payload.prompt.startsWith('pasted prompt WWW')).toBe(true)
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('ignores a Command Code prompt older than the transcript scan cap', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-over-cap-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      // The only user line sits beyond the 4 MB cap, so the bounded scan must not
+      // reach it — dropping the cap would restore the unbounded read this avoids.
+      const filler = JSON.stringify({
+        role: 'assistant',
+        content: [{ type: 'text', text: 'f'.repeat(64 * 1024) }]
+      })
+      const lines = [
+        JSON.stringify({ role: 'user', content: [{ type: 'text', text: 'ancient prompt' }] })
+      ]
+      for (let index = 0; index < 80; index += 1) {
+        lines.push(filler)
+      }
+      writeFileSync(transcriptPath, `${lines.join('\n')}\n`)
+      expect(statSync(transcriptPath).size).toBeGreaterThan(4 * 1024 * 1024)
+
+      const tool = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )
+
+      expect(tool?.payload.prompt ?? '').toBe('')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('resolves the last Command Code prompt, not an earlier one', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-last-prompt-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      writeFileSync(
+        transcriptPath,
+        `${[
+          JSON.stringify({ role: 'user', content: [{ type: 'text', text: 'first ask' }] }),
+          JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'first answer' }] }),
+          JSON.stringify({ role: 'user', content: [{ type: 'text', text: 'second ask' }] }),
+          JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'second answer' }] })
+        ].join('\n')}\n`
+      )
+
+      const tool = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )
+      expect(tool?.payload.prompt).toBe('second ask')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('keys the Command Code interaction by the absolute prompt line offset', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-offset-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      const prompt = JSON.stringify({
+        role: 'user',
+        content: [{ type: 'text', text: 'same text' }]
+      })
+      const answer = JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'a' }] })
+      // Why past one chunk: the offset is absolute over the whole file, so the
+      // prompt must sit beyond a single backward-scan read for a chunk-relative
+      // offset to be distinguishable from the correct one.
+      const filler = Array.from({ length: 900 }, (_value, index) =>
+        JSON.stringify({
+          role: 'assistant',
+          content: [{ type: 'text', text: `${'f'.repeat(200)}${index}` }]
+        })
+      )
+      const head = `${filler.join('\n')}\n`
+      writeFileSync(transcriptPath, `${head}${prompt}\n${answer}\n`)
+      const promptOffset = Buffer.byteLength(head)
+      expect(promptOffset).toBeGreaterThan(64 * 1024)
+
+      const key = normalizeHookPayload(
+        createHookListenerState(),
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )?.promptInteractionKey
+
+      // The offset segment must be the prompt line's real position in the file;
+      // a chunk-relative value would make two turns collide across reads.
+      // Key shape: command-code-transcript-<pathHash>-<offset>-<textHash>.
+      expect(key?.split('-')[4]).toBe(String(promptOffset))
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
   it('trims surrounding whitespace from extracted prompt text', () => {
     const event = normalizeHookPayload(
       state,
@@ -2519,6 +2855,82 @@ describe('shared agent-hook-listener', () => {
     expect(next?.payload.toolInput).toBeUndefined()
   })
 
+  it('maps Codex request_user_input PreToolUse to waiting with the question card, then clears on the answer', () => {
+    // Real Codex 0.145 shapes: PreToolUse fires while blocked on the answer (no Stop),
+    // PostToolUse carries the answers, Stop ends the turn.
+    const questions = {
+      questions: [
+        {
+          id: 'color_preference',
+          header: 'Color',
+          question: 'Which color do you prefer: red or blue?',
+          options: [{ label: 'Blue', description: 'Choose blue.' }]
+        }
+      ]
+    }
+    const waiting = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'request_user_input',
+          tool_input: questions,
+          tool_use_id: 'call_1'
+        }
+      },
+      'production'
+    )
+    expect(waiting?.payload.state).toBe('waiting')
+    expect(waiting?.payload.toolName).toBe('request_user_input')
+    expect(waiting?.payload.interactivePrompt).toBe(JSON.stringify(questions))
+
+    const answered = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'request_user_input',
+          tool_input: questions,
+          tool_response: '{"answers":{"color_preference":{"answers":["Blue"]}}}',
+          tool_use_id: 'call_1'
+        }
+      },
+      'production'
+    )
+    expect(answered?.payload.state).toBe('working')
+    expect(answered?.payload.interactivePrompt).toBeUndefined()
+
+    const stop = normalizeHookPayload(
+      state,
+      'codex',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'Stop' } },
+      'production'
+    )
+    expect(stop?.payload.state).toBe('done')
+  })
+
+  it('keeps ordinary Codex PreToolUse mapped to working', () => {
+    const working = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'shell',
+          tool_input: { command: 'ls' }
+        }
+      },
+      'production'
+    )
+    expect(working?.payload.state).toBe('working')
+    expect(working?.payload.interactivePrompt).toBeUndefined()
+  })
+
   it('clears stale Droid tool input when a same-tool update has explicit unpreviewable input', () => {
     normalizeHookPayload(
       state,
@@ -2698,12 +3110,12 @@ describe('shared agent-hook-listener', () => {
       expect(stopped?.payload.state).toBe('done')
     })
 
-    it('removes a finished teammate/named agent on SubagentStop despite its task reading running', () => {
-      // Why: the interactive agent-teams / orchestration shape observed live —
+    it('parks a teammate as a persistent idle row across its stop/idle/lead-Stop cycle', () => {
+      // Why: the interactive agent-teams shape observed live on 2.1.217 —
       // lifecycle events use `a<name>-<hex>` agent ids while background_tasks
-      // uses unrelated `type: "teammate"` task ids that report "running"
-      // forever, even after the named agent finished. The finished row must
-      // leave the sidebar at once (the reported "long idle list" symptom).
+      // uses unrelated `type: "teammate"` task ids. SubagentStop + TeammateIdle
+      // fire at every TURN end while the teammate stays alive awaiting mail,
+      // so the row must park idle and survive lead Stops, not vanish.
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'spawn probe' })
       claudeEvent({
         hook_event_name: 'SubagentStart',
@@ -2725,15 +3137,16 @@ describe('shared agent-hook-listener', () => {
         expect.objectContaining({ id: 'aprobe1-6d3cb5b52120b7bf', state: 'working' })
       ])
 
-      // SubagentStop is the reliable finish signal — the row goes even though
-      // its teammate task is still listed "running".
+      // Turn boundary: the row parks idle instead of leaving the sidebar.
       const stopped = claudeEvent({
         hook_event_name: 'SubagentStop',
         agent_id: 'aprobe1-6d3cb5b52120b7bf',
         agent_type: 'probe1',
         background_tasks: [teammateTask]
       })
-      expect(stopped?.payload.subagents).toBeUndefined()
+      expect(stopped?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'aprobe1-6d3cb5b52120b7bf', state: 'idle' })
+      ])
 
       claudeEvent({
         hook_event_name: 'TeammateIdle',
@@ -2741,15 +3154,19 @@ describe('shared agent-hook-listener', () => {
         team_name: 'session-56c87269'
       })
 
+      // The confirmed idle row survives the lead Stop (its teammate task is
+      // still listed) without pinning the pane working.
       const wakeStop = claudeEvent({
         hook_event_name: 'Stop',
         background_tasks: [teammateTask]
       })
       expect(wakeStop?.payload.state).toBe('done')
-      expect(wakeStop?.payload.subagents).toBeUndefined()
+      expect(wakeStop?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'aprobe1-6d3cb5b52120b7bf', state: 'idle' })
+      ])
     })
 
-    it('removes a working teammate via TeammateIdle when its id prefix matches the name', () => {
+    it('parks a working teammate via TeammateIdle when its id prefix matches the name', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'spawn reviewer' })
       claudeEvent({
         hook_event_name: 'SubagentStart',
@@ -2765,15 +3182,17 @@ describe('shared agent-hook-listener', () => {
 
       // Why: teammate name and agent type are separate Agent-tool inputs; the
       // lifecycle id embeds the former while the hook reports the latter.
-      // TeammateIdle keyed by name reaps it via the id prefix (fallback when
-      // its SubagentStop was lost), so the finished row leaves and the pane
-      // can settle back to the lead's done state.
+      // TeammateIdle keyed by name parks it via the id prefix (fallback when
+      // its SubagentStop was lost), so the pane settles back to the lead's
+      // done state while the row stays visible as idle.
       const idled = claudeEvent({
         hook_event_name: 'TeammateIdle',
         teammate_name: 'reviewer',
         team_name: 'session-x'
       })
-      expect(idled?.payload.subagents).toBeUndefined()
+      expect(idled?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'areviewer-6d3cb5b52120b7bf', state: 'idle' })
+      ])
       expect(idled?.payload.state).toBe('done')
     })
 
@@ -3018,8 +3437,10 @@ describe('shared agent-hook-listener', () => {
         teammate_name: 'lane-hooks',
         team_name: 'session-x'
       })
-      // Why: idle means finished — the exact-name match reaps the row.
-      expect(idled?.payload.subagents).toBeUndefined()
+      // Why: the exact-name match parks the row idle (turn over, still alive).
+      expect(idled?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'alane-hooks-6d3cb5b5', state: 'idle' })
+      ])
     })
 
     it('keeps an inferred interrupt terminal across later child lifecycle events', () => {

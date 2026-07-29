@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { DaemonClient } from './client'
-import { encodeNdjson } from './ndjson'
+import { encodeNdjson, NDJSON_MAX_LINE_BYTES, NdjsonLineTooLongError } from './ndjson'
 import type { HelloMessage, DaemonRequest, DaemonEvent } from './types'
 import { getDaemonSocketPath } from './daemon-spawner'
 
@@ -328,6 +328,30 @@ describe('DaemonClient', () => {
   })
 
   describe('RPC', () => {
+    it('rejects an oversized request before installing a timer or writing', async () => {
+      await startMockDaemon()
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+      const internals = client as unknown as {
+        controlSocket: Socket
+        pendingRequests: Map<string, unknown>
+      }
+      const writeSpy = vi.spyOn(internals.controlSocket, 'write')
+      const timerSpy = vi.spyOn(globalThis, 'setTimeout')
+      try {
+        await expect(
+          client.request('write', { data: 'x'.repeat(NDJSON_MAX_LINE_BYTES) })
+        ).rejects.toBeInstanceOf(NdjsonLineTooLongError)
+
+        expect(timerSpy).not.toHaveBeenCalled()
+        expect(writeSpy).not.toHaveBeenCalled()
+        expect(internals.pendingRequests.size).toBe(0)
+      } finally {
+        timerSpy.mockRestore()
+        writeSpy.mockRestore()
+      }
+    })
+
     it('sends request and receives response', async () => {
       await startMockDaemon({
         onControlMessage: (msg) => {
@@ -548,12 +572,43 @@ describe('DaemonClient', () => {
       client = new DaemonClient({ socketPath, tokenPath })
       await client.ensureConnected()
 
-      client.notify('write', { sessionId: 'session-1', data: 'hello' })
+      const delivered = client.notify('write', { sessionId: 'session-1', data: 'hello' })
+      expect(delivered).toBe(true)
 
       await waitFor(() => received.length > 0)
       const msg = received[0] as { id: string; type: string }
       expect(msg.id).toMatch(/^notify_/)
       expect(msg.type).toBe('write')
+    })
+
+    it('reports a dropped delivery when not connected', () => {
+      // Why: STA-2373 relies on this false to detect a write silently swallowed by a dead socket.
+      client = new DaemonClient({ socketPath, tokenPath })
+      expect(client.notify('write', { sessionId: 'session-1', data: 'hello' })).toBe(false)
+    })
+
+    it('reports a dropped delivery for an oversized payload without writing', async () => {
+      await startMockDaemon()
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+      const internals = client as unknown as { controlSocket: Socket }
+      const writeSpy = vi.spyOn(internals.controlSocket, 'write')
+
+      expect(client.notify('write', { data: 'x'.repeat(NDJSON_MAX_LINE_BYTES) })).toBe(false)
+      expect(writeSpy).not.toHaveBeenCalled()
+    })
+
+    it('reports a dropped delivery when the socket write throws', async () => {
+      await startMockDaemon()
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+      const internals = client as unknown as { controlSocket: Socket }
+      vi.spyOn(internals.controlSocket, 'write').mockImplementation(() => {
+        throw new Error('EPIPE')
+      })
+
+      // Swallowed, not rethrown: a dead socket must not tear down the caller.
+      expect(client.notify('write', { sessionId: 'session-1', data: 'hello' })).toBe(false)
     })
   })
 })

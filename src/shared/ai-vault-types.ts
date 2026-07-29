@@ -91,6 +91,8 @@ export type AiVaultSession = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  /** Latest provider-authenticated user prompt; absent when the transcript has no trustworthy signal. */
+  lastUserPrompt?: string | null
   // Recoverable signal for sessions whose conversation transcript persisted zero
   // user/assistant turns: queued (never-flushed) prompts survive even when the
   // main conversation was lost.
@@ -321,6 +323,7 @@ function buildAgentResumeInvocation(
     // Why: Kimi Code resumes with `kimi --session <id>` (alias `-S`). Sessions
     // are work-dir-scoped, so the cwd prefix from buildAiVaultResumeCommand is
     // required — resuming from another directory is rejected by the CLI.
+    // falls through
     case 'kimi':
       return `${baseCommand} --session ${sessionArg}`
     case 'copilot':
@@ -335,6 +338,7 @@ function buildAgentResumeInvocation(
     case 'droid':
     // Why: OMP resumes by absolute transcript path (see buildAiVaultResumeCommand),
     // but the `--resume <arg>` invocation form is identical to the others here.
+    // falls through
     case 'omp':
       return `${baseCommand} --resume ${sessionArg}`
     case 'antigravity':

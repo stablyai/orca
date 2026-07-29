@@ -25,8 +25,7 @@ import type {
   TabGroupLayoutNode,
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
-  TerminalTab,
-  TuiAgent
+  TerminalTab
 } from '../../../shared/types'
 import type { OpenFile } from '../store/slices/editor'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
@@ -50,12 +49,19 @@ import {
 import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
 import { resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
-import { clearWebSessionFocusIntent, peekWebSessionFocusIntent } from './web-session-focus-intent'
 import {
+  clearWebSessionFocusIntent,
+  clearWebSessionFocusIntentsForOwner,
+  peekWebSessionFocusIntent
+} from './web-session-focus-intent'
+import {
+  clearWebSessionCloseIntentsForOwner,
+  clearWebSessionCloseIntentsForWorktree,
   isWebSessionCloseIntentPending,
   reconcileWebSessionCloseIntents
 } from './web-session-close-intent'
 import {
+  clearWebSessionReorderIntentsForOwner,
   clearWebSessionReorderIntentsForWorktree,
   resolveWebSessionReorderedOrder
 } from './web-session-reorder-intent'
@@ -68,6 +74,15 @@ import {
 } from './web-runtime-wake-terminal-respawn'
 import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
 import { queueAcceptedWebSessionTerminalSnapshot } from './web-session-terminal-handle-events'
+import { recoverWebSessionTerminalOrphansBeforeApply } from './web-session-terminal-orphan-recovery'
+import {
+  clearWebAgentSessionHandoff,
+  clearWebAgentSessionHandoffsForEnvironment,
+  clearWebAgentSessionHandoffsForWorktree,
+  isWebAgentSessionHandoffPostCreateSnapshotConfirmed,
+  resolveWebAgentSessionHandoff
+} from './web-agent-session-handoff'
+import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 
@@ -86,6 +101,7 @@ type SnapshotFreshness = {
 }
 
 const latestSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
+const replayableSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
 const lastHostTerminalTabCountByWorktree = new Map<string, number>()
 const hostSessionTabIdByLocalKey = new Map<string, string>()
 
@@ -144,7 +160,8 @@ export type WebSessionTabsSyncState = Pick<
   | 'unifiedTabsByWorktree'
   | 'unreadTerminalTabs'
   | 'sortEpoch'
->
+> &
+  Partial<Pick<AppState, 'automaticAgentResumeClaimsByTabId' | 'pendingStartupByTabId'>>
 
 function isSessionTabsListAllResult(value: unknown): value is SessionTabsListAllResult {
   return (
@@ -176,12 +193,27 @@ export function getLastKnownHostTerminalTabCount(
   )
 }
 
-// Why: a post-reconnect replay re-emits the snapshot with unchanged epoch/version; dropping the freshness entry lets the monotonic gate accept it instead of freezing the mirror (#7718).
+export function getLatestWebSessionTabsPublicationEpoch(
+  environmentId: string,
+  worktreeId: string
+): string | null {
+  return (
+    latestSessionTabsSnapshotByWorktree.get(sessionTabsFreshnessKey(environmentId, worktreeId))
+      ?.publicationEpoch ?? null
+  )
+}
+
+// Why: a replay may repeat the current epoch/version; permit only that exact
+// identity once so an older concurrent frame cannot bypass monotonic ordering.
 export function acceptReplayedWebSessionTabsSnapshot(
   environmentId: string,
   worktreeId: string
 ): void {
-  latestSessionTabsSnapshotByWorktree.delete(sessionTabsFreshnessKey(environmentId, worktreeId))
+  const key = sessionTabsFreshnessKey(environmentId, worktreeId)
+  const current = latestSessionTabsSnapshotByWorktree.get(key)
+  if (current) {
+    replayableSessionTabsSnapshotByWorktree.set(key, current)
+  }
 }
 
 export function shouldApplyWebSessionTabsSnapshot(
@@ -201,14 +233,25 @@ export function shouldApplyWebSessionTabsSnapshot(
   }
   rememberHostTerminalTabCount(environmentId, snapshot)
   const current = latestSessionTabsSnapshotByWorktree.get(key)
+  const replayable = replayableSessionTabsSnapshotByWorktree.get(key)
+  const isExactCurrentReplay = Boolean(
+    current &&
+    replayable &&
+    current.publicationEpoch === replayable.publicationEpoch &&
+    current.snapshotVersion === replayable.snapshotVersion &&
+    snapshot.publicationEpoch === replayable.publicationEpoch &&
+    snapshot.snapshotVersion === replayable.snapshotVersion
+  )
   // Why: snapshotVersion is monotonic only within one publicationEpoch (resets on host restart); reject as stale only within the same epoch, since a different epoch is a new generation and must apply.
   if (
     current &&
     current.publicationEpoch === snapshot.publicationEpoch &&
-    snapshot.snapshotVersion <= current.snapshotVersion
+    snapshot.snapshotVersion <= current.snapshotVersion &&
+    !isExactCurrentReplay
   ) {
     return false
   }
+  replayableSessionTabsSnapshotByWorktree.delete(key)
   latestSessionTabsSnapshotByWorktree.set(key, {
     publicationEpoch: snapshot.publicationEpoch,
     snapshotVersion: snapshot.snapshotVersion
@@ -283,6 +326,7 @@ export function shouldSyncAllRuntimeSessionTabs(args: {
 
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   latestSessionTabsSnapshotByWorktree.clear()
+  replayableSessionTabsSnapshotByWorktree.clear()
   lastHostTerminalTabCountByWorktree.clear()
   hostSessionTabIdByLocalKey.clear()
 }
@@ -300,9 +344,12 @@ export function _getWebSessionTabsTrackingCountsForTest(): {
 function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeId: string): void {
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   latestSessionTabsSnapshotByWorktree.delete(key)
+  replayableSessionTabsSnapshotByWorktree.delete(key)
   lastHostTerminalTabCountByWorktree.delete(key)
   clearWebRuntimeWakeTerminalRespawnForWorktree(worktreeId)
-  clearWebSessionReorderIntentsForWorktree(worktreeId)
+  clearWebSessionReorderIntentsForWorktree({ environmentId }, worktreeId)
+  clearWebSessionCloseIntentsForWorktree({ environmentId }, worktreeId)
+  clearWebAgentSessionHandoffsForWorktree(environmentId, worktreeId)
   const keyPrefix = `${environmentId}:${worktreeId}:`
   for (const key of hostSessionTabIdByLocalKey.keys()) {
     if (key.startsWith(keyPrefix)) {
@@ -322,6 +369,11 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
       latestSessionTabsSnapshotByWorktree.delete(key)
     }
   }
+  for (const key of replayableSessionTabsSnapshotByWorktree.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      replayableSessionTabsSnapshotByWorktree.delete(key)
+    }
+  }
   for (const key of lastHostTerminalTabCountByWorktree.keys()) {
     if (key.startsWith(keyPrefix)) {
       lastHostTerminalTabCountByWorktree.delete(key)
@@ -332,6 +384,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
       hostSessionTabIdByLocalKey.delete(key)
     }
   }
+  clearWebAgentSessionHandoffsForEnvironment(trimmedEnvironmentId)
   clearAllWebRuntimeWakeTerminalRespawn()
 }
 
@@ -351,7 +404,16 @@ export function resolveHostSessionTabIdForWebSessionTab(
     tabId: string
   }
 ): string | null {
-  return hostSessionTabIdByLocalKey.get(hostSessionTabMappingKey(args)) ?? null
+  return (
+    hostSessionTabIdByLocalKey.get(hostSessionTabMappingKey(args)) ??
+    // Why: structured create returns canonical identity before its confirming
+    // snapshot; an immediate user close must already target that host tab.
+    resolveWebAgentSessionHandoff({
+      environmentId: args.environmentId,
+      worktreeId: args.worktreeId,
+      provisionalTabId: args.tabId
+    })
+  )
 }
 
 function isReadyTerminalTab(
@@ -406,7 +468,8 @@ function isMirroredTerminalSurfaceId(tabId: string): boolean {
 function chooseRemoteTerminalLayout(
   surfaces: readonly TerminalSurface[],
   ptyIdsByLeafId: Record<string, string>,
-  existingLayout?: TerminalLayoutSnapshot
+  existingLayout?: TerminalLayoutSnapshot,
+  requestedActiveLeafId?: string
 ): TerminalLayoutSnapshot {
   const leafIds = surfaces.map((surface) => surface.leafId)
   const knownLeafIds = new Set(leafIds)
@@ -417,6 +480,9 @@ function chooseRemoteTerminalLayout(
       ])
     : undefined
   const activeLeafId =
+    (requestedActiveLeafId && knownLeafIds.has(requestedActiveLeafId)
+      ? requestedActiveLeafId
+      : null) ??
     // Why: host title/status snapshots may still mark an agent pane active after this client selected a different split pane.
     (existingLayout?.activeLeafId && knownLeafIds.has(existingLayout.activeLeafId)
       ? existingLayout.activeLeafId
@@ -428,9 +494,12 @@ function chooseRemoteTerminalLayout(
     leafIds[0] ??
     null
   const expandedLeafId =
-    parentLayout?.expandedLeafId && knownLeafIds.has(parentLayout.expandedLeafId)
-      ? parentLayout.expandedLeafId
-      : null
+    requestedActiveLeafId &&
+    (Boolean(existingLayout?.expandedLeafId) || Boolean(parentLayout?.expandedLeafId))
+      ? requestedActiveLeafId
+      : parentLayout?.expandedLeafId && knownLeafIds.has(parentLayout.expandedLeafId)
+        ? parentLayout.expandedLeafId
+        : null
   return {
     // Why: host parentLayout is authoritative for split direction; else keep the prior client tree, then degenerate — never re-guess a direction.
     root: resolveTerminalLayoutRoot({
@@ -455,14 +524,11 @@ function shouldReplaceTerminalTab(
   environmentId: string,
   nextRemotePtyIds: ReadonlySet<string>,
   nextMirroredTerminalIds: ReadonlySet<string>,
-  nextMirroredLaunchAgents: ReadonlySet<TuiAgent>
+  exactProvisionalHandoffs: ReadonlySet<string>
 ): boolean {
-  if (
-    tab.launchAgent &&
-    !isMirroredTerminalSurfaceId(tab.id) &&
-    nextMirroredLaunchAgents.has(tab.launchAgent)
-  ) {
-    // Why: agent quick-launch created a local-only tab before the host snapshot landed; retire only the matching agent's stale row.
+  if (exactProvisionalHandoffs.has(tab.id)) {
+    // Why: agent kind is not session identity; retire only the provisional tab
+    // whose request or structured response identifies this exact host surface.
     return true
   }
   if (isMirroredTerminalSurfaceId(tab.id)) {
@@ -490,7 +556,8 @@ function buildMirroredTerminalTabs(
   existingById: ReadonlyMap<string, TerminalTab>,
   existingLayoutsByTabId: Readonly<Record<string, TerminalLayoutSnapshot>>,
   sortOffset: number,
-  now: number
+  now: number,
+  focusTarget?: { parentTabId: string; leafId: string }
 ): MirroredTerminalTab[] {
   const groups = new Map<string, TerminalSurface[]>()
   for (const tab of snapshot.tabs.filter(isTerminalSurfaceTab)) {
@@ -502,7 +569,12 @@ function buildMirroredTerminalTabs(
   return [...groups.entries()].map(([parentTabId, surfaces], index) => {
     const localTabId = toWebTerminalSurfaceTabId(parentTabId)
     const existingLayout = existingLayoutsByTabId[localTabId]
+    const requestedActiveLeafId =
+      focusTarget?.parentTabId === parentTabId ? focusTarget.leafId : undefined
     const activeSurface =
+      (requestedActiveLeafId
+        ? surfaces.find((surface) => surface.leafId === requestedActiveLeafId)
+        : undefined) ??
       (existingLayout?.activeLeafId
         ? surfaces.find((surface) => surface.leafId === existingLayout.activeLeafId)
         : undefined) ??
@@ -570,7 +642,12 @@ function buildMirroredTerminalTabs(
       },
       hostTabId: parentTabId,
       ptyIds,
-      layout: chooseRemoteTerminalLayout(surfaces, ptyIdsByLeafId, existingLayout)
+      layout: chooseRemoteTerminalLayout(
+        surfaces,
+        ptyIdsByLeafId,
+        existingLayout,
+        requestedActiveLeafId
+      )
     }
   })
 }
@@ -1145,6 +1222,7 @@ function buildMirroredHostGroups({
   nextActiveUnifiedTabId,
   now,
   validUnifiedTabIds,
+  environmentId,
   worktreeId
 }: {
   currentGroups: readonly TabGroup[]
@@ -1154,6 +1232,7 @@ function buildMirroredHostGroups({
   nextActiveUnifiedTabId: string | null
   now: number
   validUnifiedTabIds: ReadonlySet<string>
+  environmentId: string
   worktreeId: string
 }): TabGroup[] | null {
   const strippedGroups = currentGroups.map((group) => {
@@ -1180,7 +1259,13 @@ function buildMirroredHostGroups({
       ...localHostOrder
     ]
     // Why: a pending client reorder wins over a stale pre-move host order until the host echoes the move (or membership changes).
-    const tabOrder = resolveWebSessionReorderedOrder(worktreeId, hostGroup.id, hostTabOrder, now)
+    const tabOrder = resolveWebSessionReorderedOrder(
+      { environmentId },
+      worktreeId,
+      hostGroup.id,
+      hostTabOrder,
+      now
+    )
     if (tabOrder.length === 0) {
       continue
     }
@@ -1630,33 +1715,53 @@ export function applyWebSessionTabsSnapshot(
   const snapshotHostTabId = (tab: RuntimeMobileSessionTabsResult['tabs'][number]): string =>
     tab.type === 'terminal' ? tab.parentTabId : tab.id
   reconcileWebSessionCloseIntents(
+    { environmentId },
     worktreeId,
     new Set(rawSnapshot.tabs.map((tab) => snapshotHostTabId(tab)))
   )
   const snapshot: RuntimeMobileSessionTabsResult = rawSnapshot.tabs.some((tab) =>
-    isWebSessionCloseIntentPending(worktreeId, snapshotHostTabId(tab), now)
+    isWebSessionCloseIntentPending({ environmentId }, worktreeId, snapshotHostTabId(tab), now)
   )
     ? {
         ...rawSnapshot,
         tabs: rawSnapshot.tabs.filter(
-          (tab) => !isWebSessionCloseIntentPending(worktreeId, snapshotHostTabId(tab), now)
+          (tab) =>
+            !isWebSessionCloseIntentPending(
+              { environmentId },
+              worktreeId,
+              snapshotHostTabId(tab),
+              now
+            )
         )
       }
     : rawSnapshot
-  // Why: follow the snapshot's active tab over the user's focus only when this client initiated the activation; unsolicited server-active must not steal focus (#5435).
-  const focusIntentHostTabId = peekWebSessionFocusIntent(worktreeId)
-  const honorSnapshotActiveFocus =
-    focusIntentHostTabId !== null &&
-    snapshot.activeTabId !== null &&
-    (snapshot.activeTabId === focusIntentHostTabId ||
-      snapshot.tabs.some(
-        (tab) =>
-          tab.id === snapshot.activeTabId &&
-          tab.type === 'browser' &&
-          tab.browserPageId === focusIntentHostTabId
-      ))
-  if (honorSnapshotActiveFocus) {
-    clearWebSessionFocusIntent(worktreeId)
+  // Why: only a caller-recorded create intent may focus its arriving tab; unsolicited server-active must not steal focus (#5435).
+  const focusIntent = peekWebSessionFocusIntent({ environmentId }, worktreeId)
+  const focusIntentHostTabId = focusIntent?.hostTabId ?? null
+  const callerFocusIntentTab =
+    focusIntentHostTabId === null
+      ? null
+      : focusIntent?.leafId
+        ? (snapshot.tabs.find(
+            (tab) =>
+              tab.type === 'terminal' &&
+              tab.leafId === focusIntent.leafId &&
+              (tab.id === focusIntentHostTabId || tab.parentTabId === focusIntentHostTabId)
+          ) ?? null)
+        : (snapshot.tabs.find(
+            (tab) =>
+              tab.id === focusIntentHostTabId ||
+              (tab.type === 'terminal' && tab.parentTabId === focusIntentHostTabId) ||
+              (tab.type === 'browser' && tab.browserPageId === focusIntentHostTabId)
+          ) ?? null)
+  const followIntentTab =
+    snapshot.navigationIntent === 'follow'
+      ? (snapshot.tabs.find((tab) => tab.id === snapshot.activeTabId) ?? null)
+      : null
+  const navigationIntentTab = callerFocusIntentTab ?? followIntentTab
+  const honorSnapshotActiveFocus = navigationIntentTab !== null
+  if (callerFocusIntentTab) {
+    clearWebSessionFocusIntent({ environmentId }, worktreeId)
   }
   const currentTerminalTabs = state.tabsByWorktree[worktreeId] ?? []
   const existingTerminalById = new Map(currentTerminalTabs.map((tab) => [tab.id, tab]))
@@ -1668,10 +1773,27 @@ export function applyWebSessionTabsSnapshot(
   const nextMirroredTerminalIds = new Set(
     terminalSurfaceTabs.map((tab) => toWebTerminalSurfaceTabId(tab.parentTabId))
   )
-  const nextMirroredLaunchAgents = new Set(
-    terminalSurfaceTabs
-      .map((tab) => tab.launchAgent)
-      .filter((agent): agent is TuiAgent => Boolean(agent))
+  const nextHostTerminalTabIds = new Set(terminalSurfaceTabs.map((tab) => tab.parentTabId))
+  const exactProvisionalHandoffs = new Set(
+    currentTerminalTabs
+      .filter((tab) => !isMirroredTerminalSurfaceId(tab.id))
+      .filter((tab) => {
+        if (nextHostTerminalTabIds.has(tab.id)) {
+          return true
+        }
+        const handoff = {
+          environmentId,
+          worktreeId,
+          provisionalTabId: tab.id
+        }
+        const hostTabId = resolveWebAgentSessionHandoff(handoff)
+        return (
+          hostTabId !== null &&
+          (nextHostTerminalTabIds.has(hostTabId) ||
+            isWebAgentSessionHandoffPostCreateSnapshotConfirmed(handoff))
+        )
+      })
+      .map((tab) => tab.id)
   )
   const retainedTerminalTabs = currentTerminalTabs.filter(
     (tab) =>
@@ -1680,7 +1802,7 @@ export function applyWebSessionTabsSnapshot(
         environmentId,
         nextRemotePtyIds,
         nextMirroredTerminalIds,
-        nextMirroredLaunchAgents
+        exactProvisionalHandoffs
       )
   )
   const mirroredTerminalTabs = buildMirroredTerminalTabs(
@@ -1689,7 +1811,13 @@ export function applyWebSessionTabsSnapshot(
     existingTerminalById,
     state.terminalLayoutsByTabId,
     retainedTerminalTabs.length,
-    now
+    now,
+    callerFocusIntentTab?.type === 'terminal'
+      ? {
+          parentTabId: callerFocusIntentTab.parentTabId,
+          leafId: callerFocusIntentTab.leafId
+        }
+      : undefined
   )
   const mirroredTerminalTabEntries = mirroredTerminalTabs.map((entry) => entry.tab)
   const retainedTerminalIds = new Set(retainedTerminalTabs.map((tab) => tab.id))
@@ -1701,6 +1829,9 @@ export function applyWebSessionTabsSnapshot(
   const removedTerminalIds = new Set(
     currentTerminalTabs.filter((tab) => !retainedTerminalIds.has(tab.id)).map((tab) => tab.id)
   )
+  for (const provisionalTabId of exactProvisionalHandoffs) {
+    clearWebAgentSessionHandoff({ environmentId, worktreeId, provisionalTabId })
+  }
 
   const targetGroupId = chooseTargetGroupId(state, snapshot)
   const hostGroupIdByTabId = buildHostGroupIdByTabId(snapshot.tabGroups)
@@ -1860,15 +1991,31 @@ export function applyWebSessionTabsSnapshot(
     : null
   const activeMirroredEditorFileId = activeMirroredEditor?.file.id ?? null
   const activeMirroredEditorTabId = activeMirroredEditor?.unifiedTab.id ?? null
+  const intentMirroredTerminalId =
+    navigationIntentTab?.type === 'terminal'
+      ? toWebTerminalSurfaceTabId(navigationIntentTab.parentTabId)
+      : null
+  const intentMirroredBrowser =
+    navigationIntentTab?.type === 'browser'
+      ? (mirroredBrowserTabs.find(
+          (entry) =>
+            entry.hostTabId === navigationIntentTab.id ||
+            entry.remotePageId === navigationIntentTab.browserPageId
+        ) ?? null)
+      : null
+  const intentMirroredEditor =
+    navigationIntentTab?.type === 'markdown' || navigationIntentTab?.type === 'file'
+      ? (mirroredEditorTabs.find((entry) => entry.hostTabId === navigationIntentTab.id) ?? null)
+      : null
   const currentActiveTerminalStillExists =
     state.activeTabIdByWorktree[worktreeId] &&
     (nextTerminalTabs ?? []).some((tab) => tab.id === state.activeTabIdByWorktree[worktreeId])
       ? state.activeTabIdByWorktree[worktreeId]
       : null
-  // Why: on a client-initiated activation (honorSnapshotActiveFocus), the snapshot's active terminal wins over sticky current focus.
+  // Why: caller intent targets the requested tab even when an older host leaves its own active tab unchanged.
   const intentTerminalId =
-    honorSnapshotActiveFocus && snapshot.activeTabType === 'terminal'
-      ? activeMirroredTerminalId
+    honorSnapshotActiveFocus && navigationIntentTab?.type === 'terminal'
+      ? intentMirroredTerminalId
       : null
   const nextActiveTerminalId =
     intentTerminalId ??
@@ -1883,8 +2030,8 @@ export function applyWebSessionTabsSnapshot(
       ? state.activeBrowserTabIdByWorktree[worktreeId]
       : null
   const intentBrowserWorkspaceId =
-    honorSnapshotActiveFocus && snapshot.activeTabType === 'browser'
-      ? activeMirroredBrowserWorkspaceId
+    honorSnapshotActiveFocus && navigationIntentTab?.type === 'browser'
+      ? (intentMirroredBrowser?.workspace.id ?? null)
       : null
   const nextActiveBrowserWorkspaceId =
     intentBrowserWorkspaceId ??
@@ -1901,7 +2048,11 @@ export function applyWebSessionTabsSnapshot(
     )
       ? state.activeFileIdByWorktree[worktreeId]
       : null
+  const intentEditorFileId = honorSnapshotActiveFocus
+    ? (intentMirroredEditor?.file.id ?? null)
+    : null
   const nextActiveEditorFileId =
+    intentEditorFileId ??
     currentActiveEditorStillExists ??
     (snapshot.activeTabType === 'markdown' || snapshot.activeTabType === 'file'
       ? (activeMirroredEditorFileId ?? mirroredEditorTabs[0]?.file.id)
@@ -1914,12 +2065,12 @@ export function applyWebSessionTabsSnapshot(
   })
   // Why: a client-initiated activation also drives the visible unified tab, overriding the sticky current-visible tab.
   const intentUnifiedTabId = honorSnapshotActiveFocus
-    ? snapshot.activeTabType === 'browser'
-      ? activeMirroredBrowserTabId
-      : snapshot.activeTabType === 'terminal'
+    ? navigationIntentTab?.type === 'browser'
+      ? (intentMirroredBrowser?.unifiedTab.id ?? null)
+      : navigationIntentTab?.type === 'terminal'
         ? intentTerminalId
-        : snapshot.activeTabType === 'markdown' || snapshot.activeTabType === 'file'
-          ? activeMirroredEditorTabId
+        : navigationIntentTab?.type === 'markdown' || navigationIntentTab?.type === 'file'
+          ? (intentMirroredEditor?.unifiedTab.id ?? null)
           : null
     : null
   const nextActiveUnifiedTabId =
@@ -1966,6 +2117,7 @@ export function applyWebSessionTabsSnapshot(
         nextActiveUnifiedTabId,
         now,
         validUnifiedTabIds,
+        environmentId,
         worktreeId
       })
     }
@@ -2088,6 +2240,27 @@ export function applyWebSessionTabsSnapshot(
           ? { ...state.unreadTerminalTabs }
           : nextUnreadTerminalTabs
       delete nextUnreadTerminalTabs[removedId]
+    }
+  }
+
+  const pendingStartupByTabId = state.pendingStartupByTabId ?? {}
+  let nextPendingStartupByTabId = pendingStartupByTabId
+  const automaticAgentResumeClaimsByTabId = state.automaticAgentResumeClaimsByTabId ?? {}
+  let nextAutomaticAgentResumeClaimsByTabId = automaticAgentResumeClaimsByTabId
+  for (const removedId of exactProvisionalHandoffs) {
+    if (nextPendingStartupByTabId[removedId]) {
+      nextPendingStartupByTabId =
+        nextPendingStartupByTabId === pendingStartupByTabId
+          ? { ...pendingStartupByTabId }
+          : nextPendingStartupByTabId
+      delete nextPendingStartupByTabId[removedId]
+    }
+    if (nextAutomaticAgentResumeClaimsByTabId[removedId]) {
+      nextAutomaticAgentResumeClaimsByTabId =
+        nextAutomaticAgentResumeClaimsByTabId === automaticAgentResumeClaimsByTabId
+          ? { ...automaticAgentResumeClaimsByTabId }
+          : nextAutomaticAgentResumeClaimsByTabId
+      delete nextAutomaticAgentResumeClaimsByTabId[removedId]
     }
   }
 
@@ -2255,6 +2428,14 @@ export function applyWebSessionTabsSnapshot(
       ? { ...state.activeFileIdByWorktree, [worktreeId]: nextActiveEditorFileId }
       : state.activeFileIdByWorktree
   const isActiveWorktree = state.activeWorktreeId === worktreeId
+  const focusIntentVisibleTabType =
+    navigationIntentTab?.type === 'browser' && intentBrowserWorkspaceId
+      ? ('browser' as const)
+      : navigationIntentTab?.type === 'terminal' && intentTerminalId
+        ? ('terminal' as const)
+        : intentEditorFileId
+          ? ('editor' as const)
+          : null
   const snapshotVisibleTabType =
     snapshot.activeTabType === 'browser' && nextActiveBrowserWorkspaceId
       ? ('browser' as const)
@@ -2290,7 +2471,10 @@ export function applyWebSessionTabsSnapshot(
             : ('terminal' as const)
   // Why: don't keep pointing shortcuts at a removed browser/editor; a client-initiated activation lets the snapshot's type switch the visible pane.
   const nextVisibleTabType = honorSnapshotActiveFocus
-    ? (snapshotVisibleTabType ?? currentVisibleTabTypeStillValid ?? fallbackVisibleTabType)
+    ? (focusIntentVisibleTabType ??
+      currentVisibleTabTypeStillValid ??
+      snapshotVisibleTabType ??
+      fallbackVisibleTabType)
     : (currentVisibleTabTypeStillValid ?? snapshotVisibleTabType ?? fallbackVisibleTabType)
   const currentActiveTerminalStillValid =
     state.activeTabId && (nextTerminalTabs ?? []).some((tab) => tab.id === state.activeTabId)
@@ -2354,6 +2538,12 @@ export function applyWebSessionTabsSnapshot(
       : {}),
     ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
       ? { unreadTerminalTabs: nextUnreadTerminalTabs }
+      : {}),
+    ...(nextPendingStartupByTabId !== pendingStartupByTabId
+      ? { pendingStartupByTabId: nextPendingStartupByTabId }
+      : {}),
+    ...(nextAutomaticAgentResumeClaimsByTabId !== automaticAgentResumeClaimsByTabId
+      ? { automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId }
       : {}),
     ...(nextBrowserPagesByWorkspace !== state.browserPagesByWorkspace
       ? { browserPagesByWorkspace: nextBrowserPagesByWorkspace }
@@ -2451,27 +2641,67 @@ export function applyWebSessionTabsStorePatch(
 export function useWebSessionTabsSync(): void {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const runtimeSessionMirrorEnvironmentKey = useAppStore((state) =>
-    getRuntimeSessionMirrorEnvironmentIds(state).join('\u0000')
+    getRuntimeSessionMirrorEnvironmentIds(state)
+      .map((environmentId) => {
+        const status = state.runtimeStatusByEnvironmentId.get(environmentId)
+        const environment = state.runtimeEnvironments.find(
+          (candidate) => candidate.id === environmentId
+        )
+        const pairingRevision = environment
+          ? (environment.pairingRevision ?? environment.createdAt)
+          : ''
+        return `${environmentId}\u0001${status?.status?.runtimeId ?? ''}\u0001${status?.connectionGeneration ?? 0}\u0001${pairingRevision}`
+      })
+      .join('\u0000')
   )
   const activeWorktreeRuntimeEnvironmentId = useAppStore((state) =>
     getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
   )
+  const activeWorktreeRuntimeId = useAppStore((state) => {
+    const environmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
+    return environmentId
+      ? (state.runtimeStatusByEnvironmentId.get(environmentId)?.status?.runtimeId ?? null)
+      : null
+  })
+  const activeWorktreeRuntimeConnectionGeneration = useAppStore((state) => {
+    const environmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
+    return environmentId
+      ? (state.runtimeStatusByEnvironmentId.get(environmentId)?.connectionGeneration ?? 0)
+      : 0
+  })
+  const activeWorktreeRuntimePairingRevision = useAppStore((state) => {
+    const environmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
+    const environment = state.runtimeEnvironments.find(
+      (candidate) => candidate.id === environmentId
+    )
+    return environment ? (environment.pairingRevision ?? environment.createdAt) : undefined
+  })
   const workspaceSessionReady = useAppStore((state) => state.workspaceSessionReady)
 
   useEffect(() => {
-    const environmentIds = runtimeSessionMirrorEnvironmentKey
-      ? runtimeSessionMirrorEnvironmentKey.split('\u0000').filter((id) => id.trim())
+    const environments = runtimeSessionMirrorEnvironmentKey
+      ? runtimeSessionMirrorEnvironmentKey
+          .split('\u0000')
+          .map((entry) => {
+            const [environmentId = '', , , rawRevision = ''] = entry.split('\u0001')
+            return {
+              environmentId,
+              expectedEnvironmentPairingRevision:
+                rawRevision === '' ? undefined : Number(rawRevision)
+            }
+          })
+          .filter(({ environmentId }) => environmentId.trim())
       : []
     // Why: mirror all paired runtimes' sessions, not just the selected worktree, so background worktrees don't look asleep (selectedness isn't liveness).
     // Why: applying the host snapshot before startup hydration writes browser-local session state clobbers it and leaves the sidebar stale.
-    if (!workspaceSessionReady || environmentIds.length === 0) {
+    if (!workspaceSessionReady || environments.length === 0) {
       return
     }
 
     let disposed = false
     const unsubscribes: (() => void)[] = []
     // Why: the stream's initial snapshot can land after first render, so a one-shot fetch makes initial parity deterministic.
-    for (const environmentId of environmentIds) {
+    for (const { environmentId, expectedEnvironmentPairingRevision } of environments) {
       if (
         !shouldSyncAllRuntimeSessionTabs({
           activeRuntimeEnvironmentId: environmentId,
@@ -2485,10 +2715,14 @@ export function useWebSessionTabsSync(): void {
           selector: environmentId,
           method: 'session.tabs.listAll',
           params: {},
-          timeoutMs: 15_000
+          timeoutMs: 15_000,
+          expectedEnvironmentPairingRevision
         })
-        .then((response: RuntimeRpcResponse<unknown>) => {
-          if (disposed) {
+        .then(async (response: RuntimeRpcResponse<unknown>) => {
+          if (
+            disposed ||
+            getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
+          ) {
             return
           }
           if (response.ok === false) {
@@ -2500,8 +2734,23 @@ export function useWebSessionTabsSync(): void {
             console.warn('[web-session-tabs-sync] initial listAll returned an invalid payload')
             return
           }
+          const recovered = await Promise.all(
+            result.snapshots.map((snapshot) =>
+              recoverWebSessionTerminalOrphansBeforeApply(
+                useAppStore.getState(),
+                snapshot,
+                environmentId
+              )
+            )
+          )
+          if (disposed) {
+            return
+          }
+          const applicable = recovered.filter(
+            (snapshot): snapshot is RuntimeMobileSessionTabsResult => snapshot !== null
+          )
           applyWebSessionTabsStorePatch((state) =>
-            applyFreshWebSessionTabsSnapshots(state, result.snapshots, environmentId)
+            applyFreshWebSessionTabsSnapshots(state, applicable, environmentId)
           )
         })
         .catch((error) => {
@@ -2519,11 +2768,15 @@ export function useWebSessionTabsSync(): void {
             selector: environmentId,
             method: 'session.tabs.subscribeAll',
             params: {},
-            timeoutMs: 15_000
+            timeoutMs: 15_000,
+            expectedEnvironmentPairingRevision
           },
           {
             onResponse: (response: RuntimeRpcResponse<unknown>) => {
-              if (disposed) {
+              if (
+                disposed ||
+                getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
+              ) {
                 return
               }
               if (response.ok === false) {
@@ -2536,25 +2789,60 @@ export function useWebSessionTabsSync(): void {
               const event = response.result as SessionTabsStreamEvent
               const replayed = isRuntimeSubscriptionReplayResponse(response)
               if (event.type === 'snapshots') {
-                if (replayed) {
-                  for (const snapshot of event.snapshots) {
-                    acceptReplayedWebSessionTabsSnapshot(environmentId, snapshot.worktree)
-                  }
-                }
-                applyWebSessionTabsStorePatch((state) =>
-                  applyFreshWebSessionTabsSnapshots(state, event.snapshots, environmentId)
+                void Promise.all(
+                  event.snapshots.map((snapshot) =>
+                    recoverWebSessionTerminalOrphansBeforeApply(
+                      useAppStore.getState(),
+                      snapshot,
+                      environmentId
+                    )
+                  )
                 )
+                  .then((recovered) => {
+                    if (!disposed) {
+                      const applicable = recovered.filter(
+                        (snapshot): snapshot is RuntimeMobileSessionTabsResult => snapshot !== null
+                      )
+                      if (replayed) {
+                        for (const snapshot of applicable) {
+                          acceptReplayedWebSessionTabsSnapshot(environmentId, snapshot.worktree)
+                        }
+                      }
+                      applyWebSessionTabsStorePatch((state) =>
+                        applyFreshWebSessionTabsSnapshots(state, applicable, environmentId)
+                      )
+                    }
+                  })
+                  .catch((error) => {
+                    if (!disposed) {
+                      console.warn('[web-session-tabs-sync] snapshot recovery failed:', error)
+                    }
+                  })
                 return
               }
               if (event.type !== 'snapshot' && event.type !== 'updated') {
                 return
               }
-              if (replayed) {
-                acceptReplayedWebSessionTabsSnapshot(environmentId, event.worktree)
-              }
-              applyWebSessionTabsStorePatch((state) =>
-                applyFreshWebSessionTabsSnapshot(state, event, environmentId)
+              void recoverWebSessionTerminalOrphansBeforeApply(
+                useAppStore.getState(),
+                event,
+                environmentId
               )
+                .then((recovered) => {
+                  if (!disposed && recovered) {
+                    if (replayed) {
+                      acceptReplayedWebSessionTabsSnapshot(environmentId, recovered.worktree)
+                    }
+                    applyWebSessionTabsStorePatch((state) =>
+                      applyFreshWebSessionTabsSnapshot(state, recovered, environmentId)
+                    )
+                  }
+                })
+                .catch((error) => {
+                  if (!disposed) {
+                    console.warn('[web-session-tabs-sync] snapshot recovery failed:', error)
+                  }
+                })
             },
             onError: (error) => {
               console.warn('[web-session-tabs-sync] global subscription error:', error.message)
@@ -2584,14 +2872,22 @@ export function useWebSessionTabsSync(): void {
         unsubscribe()
       }
       // Why: environment ids churn as paired runtimes reconnect; don't leak stale tracking for the renderer lifetime.
-      for (const environmentId of environmentIds) {
+      for (const { environmentId, expectedEnvironmentPairingRevision } of environments) {
         clearWebSessionTabsTrackingForEnvironment(environmentId)
+        const owner = {
+          environmentId,
+          pairingRevision: expectedEnvironmentPairingRevision
+        }
+        clearWebSessionCloseIntentsForOwner(owner)
+        clearWebSessionFocusIntentsForOwner(owner)
+        clearWebSessionReorderIntentsForOwner(owner)
       }
     }
   }, [runtimeSessionMirrorEnvironmentKey, workspaceSessionReady])
 
   useEffect(() => {
     const environmentId = activeWorktreeRuntimeEnvironmentId?.trim()
+    const expectedEnvironmentPairingRevision = activeWorktreeRuntimePairingRevision
     if (
       !shouldSyncRuntimeSessionTabs({
         activeWorktreeId,
@@ -2604,21 +2900,92 @@ export function useWebSessionTabsSync(): void {
       return
     }
 
+    // Why: activating a worktree can clear its local mirror after the global stream already recorded this host revision.
+    acceptReplayedWebSessionTabsSnapshot(environmentId, activeWorktreeId)
     let disposed = false
     let requestedInitialTerminal = false
     let requestedRespawnAfterWake = false
     let unsubscribe: (() => void) | null = null
+    const applyActiveSnapshot = async (
+      event: RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' },
+      response: RuntimeRpcResponse<unknown>
+    ): Promise<void> => {
+      const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
+        useAppStore.getState(),
+        event,
+        environmentId
+      )
+      if (disposed || !recovered) {
+        return
+      }
+      if (isRuntimeSubscriptionReplayResponse(response)) {
+        acceptReplayedWebSessionTabsSnapshot(environmentId, recovered.worktree)
+      }
+      const recoveredEvent: SessionTabsStreamEvent = { ...recovered, type: event.type }
+      const fresh = shouldApplyWebSessionTabsSnapshot(recovered, environmentId)
+      const syncState = useAppStore.getState()
+      const localWorktreeTabs = syncState.tabsByWorktree[activeWorktreeId] ?? []
+      const localTerminalCount = localWorktreeTabs.length
+      const hasLiveLocalPty = localWorktreeTabs.some(
+        (tab) => (syncState.ptyIdsByTabId[tab.id] ?? []).length > 0
+      )
+      const shouldBootstrapInitialTerminal = shouldBootstrapInitialWebRuntimeTerminal({
+        event: recoveredEvent,
+        activeWorktreeId,
+        requestedInitialTerminal,
+        snapshotIsFresh: fresh,
+        localTerminalCount
+      })
+      const shouldRespawnAfterWake = shouldRespawnWebRuntimeTerminalAfterWake({
+        event: recoveredEvent,
+        activeWorktreeId,
+        requestedRespawnAfterWake,
+        snapshotIsFresh: fresh,
+        localTerminalCount,
+        hasLiveLocalPty,
+        skipWakeRespawn: shouldSkipWebRuntimeWakeTerminalRespawn(activeWorktreeId)
+      })
+      if (fresh) {
+        applyWebSessionTabsStorePatch((state) =>
+          applyWebSessionTabsSnapshot(state, recovered, environmentId)
+        )
+      }
+      if (!disposed && shouldBootstrapInitialTerminal) {
+        requestedInitialTerminal = true
+        await createWebRuntimeSessionTerminal({
+          worktreeId: activeWorktreeId,
+          environmentId,
+          activate: true
+        })
+      } else if (
+        !disposed &&
+        shouldRespawnAfterWake &&
+        beginWebRuntimeWakeTerminalRespawn(activeWorktreeId)
+      ) {
+        requestedRespawnAfterWake = true
+        await createWebRuntimeSessionTerminal({
+          worktreeId: activeWorktreeId,
+          environmentId,
+          activate: true,
+          selectWorktree: false
+        }).finally(() => endWebRuntimeWakeTerminalRespawn(activeWorktreeId))
+      }
+    }
     void window.api.runtimeEnvironments
       .subscribe(
         {
           selector: environmentId,
           method: 'session.tabs.subscribe',
           params: { worktree: toRuntimeWorktreeSelector(activeWorktreeId) },
-          timeoutMs: 15_000
+          timeoutMs: 15_000,
+          expectedEnvironmentPairingRevision
         },
         {
           onResponse: (response: RuntimeRpcResponse<unknown>) => {
-            if (disposed) {
+            if (
+              disposed ||
+              getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
+            ) {
               return
             }
             if (response.ok === false) {
@@ -2629,60 +2996,11 @@ export function useWebSessionTabsSync(): void {
             if (event.type !== 'snapshot' && event.type !== 'updated') {
               return
             }
-            if (isRuntimeSubscriptionReplayResponse(response)) {
-              acceptReplayedWebSessionTabsSnapshot(environmentId, event.worktree)
-            }
-            const fresh = shouldApplyWebSessionTabsSnapshot(event, environmentId)
-            const syncState = useAppStore.getState()
-            const localWorktreeTabs = syncState.tabsByWorktree[activeWorktreeId] ?? []
-            const localTerminalCount = localWorktreeTabs.length
-            const hasLiveLocalPty = localWorktreeTabs.some(
-              (tab) => (syncState.ptyIdsByTabId[tab.id] ?? []).length > 0
-            )
-            const shouldBootstrapInitialTerminal = shouldBootstrapInitialWebRuntimeTerminal({
-              event,
-              activeWorktreeId,
-              requestedInitialTerminal,
-              snapshotIsFresh: fresh,
-              localTerminalCount
+            void applyActiveSnapshot(event, response).catch((error) => {
+              if (!disposed) {
+                console.warn('[web-session-tabs-sync] active snapshot recovery failed:', error)
+              }
             })
-            const shouldRespawnAfterWake = shouldRespawnWebRuntimeTerminalAfterWake({
-              event,
-              activeWorktreeId,
-              requestedRespawnAfterWake,
-              snapshotIsFresh: fresh,
-              localTerminalCount,
-              hasLiveLocalPty,
-              skipWakeRespawn: shouldSkipWebRuntimeWakeTerminalRespawn(activeWorktreeId)
-            })
-            if (fresh) {
-              applyWebSessionTabsStorePatch((state) =>
-                applyWebSessionTabsSnapshot(state, event, environmentId)
-              )
-            }
-            if (!disposed && shouldBootstrapInitialTerminal) {
-              requestedInitialTerminal = true
-              void createWebRuntimeSessionTerminal({
-                worktreeId: activeWorktreeId,
-                environmentId,
-                activate: true
-              })
-            } else if (
-              !disposed &&
-              shouldRespawnAfterWake &&
-              beginWebRuntimeWakeTerminalRespawn(activeWorktreeId)
-            ) {
-              requestedRespawnAfterWake = true
-              // Why: recreate the terminal without changing selected worktree to avoid re-triggering activation churn.
-              void createWebRuntimeSessionTerminal({
-                worktreeId: activeWorktreeId,
-                environmentId,
-                activate: true,
-                selectWorktree: false
-              }).finally(() => {
-                endWebRuntimeWakeTerminalRespawn(activeWorktreeId)
-              })
-            }
           },
           onError: (error) => {
             console.warn('[web-session-tabs-sync] subscription error:', error.message)
@@ -2709,5 +3027,12 @@ export function useWebSessionTabsSync(): void {
       disposed = true
       unsubscribe?.()
     }
-  }, [activeWorktreeId, activeWorktreeRuntimeEnvironmentId, workspaceSessionReady])
+  }, [
+    activeWorktreeId,
+    activeWorktreeRuntimeEnvironmentId,
+    activeWorktreeRuntimeConnectionGeneration,
+    activeWorktreeRuntimeId,
+    activeWorktreeRuntimePairingRevision,
+    workspaceSessionReady
+  ])
 }

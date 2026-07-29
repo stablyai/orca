@@ -16,7 +16,8 @@ import {
   type TestInfo
 } from '@stablyai/playwright-test'
 import { execSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
@@ -33,9 +34,22 @@ type LaunchedOrca = {
   page: Page
 }
 
+type LaunchOptions = {
+  /**
+   * Called for each chunk the relaunched main process writes to stderr. The
+   * listener is attached before `firstWindow()` resolves so main-process
+   * startup logs (e.g. the daemon health-check guard) can't be emitted before
+   * the test starts capturing.
+   */
+  onStderr?: (chunk: string) => void
+  /** Merged into this launch only (not baked into the session's shared env). */
+  extraEnv?: Record<string, string>
+}
+
 type RestartSession = {
   userDataDir: string
-  launch: () => Promise<LaunchedOrca>
+  seedCodexResumeRollout: (sessionId: string, cwd: string) => string
+  launch: (options?: LaunchOptions) => Promise<LaunchedOrca>
   /** Gracefully close a launch, letting beforeunload flush session state. */
   close: (app: ElectronApplication) => Promise<void>
   /** Remove the shared userDataDir after the test is done. */
@@ -46,6 +60,22 @@ async function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     const timeout = setTimeout(resolve, ms)
     timeout.unref?.()
+  })
+}
+
+async function reserveRestartRuntimeWsPort(): Promise<number> {
+  const server = createServer()
+  return new Promise<number>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        server.close()
+        reject(new Error('Restart fixture could not reserve a runtime WebSocket port'))
+        return
+      }
+      server.close((error) => (error ? reject(error) : resolve(address.port)))
+    })
   })
 }
 
@@ -71,7 +101,8 @@ function shouldLaunchHeadful(testInfo: TestInfo): boolean {
 
 function createRestartLaunchIsolation(
   userDataDir: string,
-  headful: boolean
+  headful: boolean,
+  extraEnv: Record<string, string>
 ): ElectronHomeIsolation {
   const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
   void _unused
@@ -79,6 +110,13 @@ function createRestartLaunchIsolation(
     inheritedEnv: cleanEnv,
     launchEnv: {
       NODE_ENV: 'development',
+      ...((process.env.ORCA_E2E_SSH_LOCALHOST === '1' ||
+        process.env.ORCA_E2E_SSH_DOCKER === '1' ||
+        process.env.ORCA_E2E_NESTED_RUNTIME_SSH === '1') &&
+      !cleanEnv.ORCA_RELAY_PATH
+        ? { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') }
+        : {}),
+      ...extraEnv,
       ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
     },
     extraEnv: {},
@@ -94,11 +132,15 @@ function createRestartLaunchIsolation(
  * env stripping, headful toggle) so behavior differences between fixtures
  * don't leak in as false positives for persistence bugs.
  */
-export function createRestartSession(testInfo: TestInfo): RestartSession {
+export function createRestartSession(
+  testInfo: TestInfo,
+  extraEnv: Record<string, string> = {}
+): RestartSession {
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-restart-'))
   const headful = shouldLaunchHeadful(testInfo)
-  const homeIsolation = createRestartLaunchIsolation(userDataDir, headful)
+  const homeIsolation = createRestartLaunchIsolation(userDataDir, headful, extraEnv)
+  let runtimeWsPort: number | null = null
 
   // Why: this helper bypasses the shared `electronApp` fixture, so it must
   // seed the same completed onboarding profile or first-run overlays cover
@@ -108,11 +150,44 @@ export function createRestartSession(testInfo: TestInfo): RestartSession {
     `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
   )
 
-  const launch = async (): Promise<LaunchedOrca> => {
+  const seedCodexResumeRollout = (sessionId: string, cwd: string): string => {
+    const sessionsDir = path.join(
+      homeIsolation.isolatedHome,
+      '.codex',
+      'sessions',
+      '2026',
+      '07',
+      '28'
+    )
+    mkdirSync(sessionsDir, { recursive: true })
+    const transcriptPath = path.join(sessionsDir, `rollout-2026-07-28T00-00-00-${sessionId}.jsonl`)
+    writeFileSync(
+      transcriptPath,
+      `${JSON.stringify({
+        timestamp: '2026-07-28T00:00:00.000Z',
+        type: 'session_meta',
+        payload: { id: sessionId, cwd }
+      })}\n`
+    )
+    return transcriptPath
+  }
+
+  const launch = async (options?: LaunchOptions): Promise<LaunchedOrca> => {
+    runtimeWsPort ??= await reserveRestartRuntimeWsPort()
     const app = await electron.launch({
       args: getOrcaElectronLaunchArgs(mainPath, headful),
-      env: homeIsolation.env
+      env: {
+        ...homeIsolation.env,
+        ...options?.extraEnv,
+        ORCA_E2E_RUNTIME_WS_PORT: String(runtimeWsPort)
+      }
     })
+    // Why: attach before firstWindow — the main-process daemon guard and the
+    // plugin-system startup metrics can both emit before the renderer is ready.
+    if (options?.onStderr) {
+      const onStderr = options.onStderr
+      app.process().stderr?.on('data', (chunk: Buffer) => onStderr(chunk.toString()))
+    }
     try {
       const resolvedHome = await app.evaluate(({ app }) => app.getPath('home'))
       assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
@@ -132,12 +207,16 @@ export function createRestartSession(testInfo: TestInfo): RestartSession {
 
   const dispose = async (): Promise<void> => {
     await cleanupE2EDaemons(userDataDir)
+    if (process.env.ORCA_E2E_PRESERVE_RESTART_PROFILE === '1') {
+      console.log(`[e2e] Preserved restart profile at ${userDataDir}`)
+      return
+    }
     if (existsSync(userDataDir)) {
       await removeProfileDir(userDataDir)
     }
   }
 
-  return { userDataDir, launch, close, dispose }
+  return { userDataDir, seedCodexResumeRollout, launch, close, dispose }
 }
 
 /**

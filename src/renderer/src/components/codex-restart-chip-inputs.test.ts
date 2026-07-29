@@ -32,9 +32,32 @@ describe('selectCodexRestartInputs', () => {
     )
   })
 
+  it('re-idles once every surviving notice is answered', () => {
+    // Why: answered notices linger as launch-account memory for the pty's whole
+    // life, so existence alone would keep every chip subscribed to pty churn.
+    const dismissed: CodexRestartInputsState = {
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      codexRestartNoticeByPtyId: {
+        'pty-1': { previousAccountLabel: 'a', nextAccountLabel: 'b', dismissed: true }
+      }
+    }
+    expect(selectCodexRestartInputs(dismissed)).toBe(EMPTY_CODEX_RESTART_INPUTS)
+
+    const alsoUnanswered: CodexRestartInputsState = {
+      ...dismissed,
+      codexRestartNoticeByPtyId: {
+        ...dismissed.codexRestartNoticeByPtyId,
+        'pty-2': { previousAccountLabel: 'a', nextAccountLabel: 'b' }
+      }
+    }
+    expect(selectCodexRestartInputs(alsoUnanswered)).not.toBe(EMPTY_CODEX_RESTART_INPUTS)
+  })
+
   it('exposes both live maps the instant a restart notice exists', () => {
     const ptyIdsByTabId = { 'tab-1': ['pty-1'] }
-    const codexRestartNoticeByPtyId = { 'pty-1': {} as never }
+    const codexRestartNoticeByPtyId = {
+      'pty-1': { previousAccountLabel: 'a', nextAccountLabel: 'b' }
+    }
     const state: CodexRestartInputsState = { ptyIdsByTabId, codexRestartNoticeByPtyId }
     const selected = selectCodexRestartInputs(state)
     // Live references pass straight through so the stale-pty memo + notice lookup derive fully.
@@ -47,7 +70,9 @@ describe('selectCodexRestartInputs', () => {
     const ptyIdsByTabId = { 'tab-1': ['pty-1'] }
     const s1: CodexRestartInputsState = {
       ptyIdsByTabId,
-      codexRestartNoticeByPtyId: { 'pty-1': {} as never }
+      codexRestartNoticeByPtyId: {
+        'pty-1': { previousAccountLabel: 'a', nextAccountLabel: 'b' }
+      }
     }
     const r1 = selectCodexRestartInputs(s1)
     expect(shallow(r1, selectCodexRestartInputs(s1))).toBe(true)

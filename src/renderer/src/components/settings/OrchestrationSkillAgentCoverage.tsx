@@ -73,7 +73,7 @@ export function OrchestrationSkillAgentCoverage(props: {
   className?: string
 }): React.JSX.Element {
   const { skills, loading: skillsLoading, embedded = false, className } = props
-  const { detectedIds, isLoading: agentsLoading } = useDetectedAgents()
+  const { detectedIds, isLoading: agentsLoading } = useDetectedAgents({ kind: 'local' })
   const loading = skillsLoading || agentsLoading || detectedIds === null
   const agentStatuses = getOrchestrationSkillAgentStatuses(skills, detectedIds ?? [])
   const installedCount = agentStatuses.filter((status) => status.installed).length

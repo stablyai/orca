@@ -654,7 +654,7 @@ export class CliInstaller {
   private isWindowsPackagedBundledCommand(
     commandPath: string | null,
     launcherPath: string | null
-  ): commandPath is string {
+  ): boolean {
     return (
       this.platform === 'win32' &&
       this.isPackaged &&

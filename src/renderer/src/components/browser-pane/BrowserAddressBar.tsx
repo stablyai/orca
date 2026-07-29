@@ -1,12 +1,14 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: dropdown visibility depends on DOM focus plus browser-history suggestions, so the close path is an imperative popover sync. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Globe, Search } from 'lucide-react'
+import { Globe } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
+import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../shared/browser-url'
 import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
+import { shouldOverlayBrowserAddressBar } from './browser-address-bar-expansion'
+import BrowserAddressBarSuggestionList from './BrowserAddressBarSuggestionList'
 
 type BrowserAddressBarProps = {
   value: string
@@ -38,6 +40,24 @@ export default function BrowserAddressBar({
   const openedAtRef = useRef(0)
   const blurCloseTimerRef = useRef<number | null>(null)
   const closingResetTimerRef = useRef<number | null>(null)
+  const slotRef = useRef<HTMLDivElement | null>(null)
+  const [inlineWidth, setInlineWidth] = useState<number | null>(null)
+
+  // Why: the slot keeps its flex width even while the bar overlays the toolbar,
+  // so measuring it here (not the form) cannot oscillate with the overlay.
+  useEffect(() => {
+    const slot = slotRef.current
+    if (!slot || typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const syncWidth = (): void => setInlineWidth(slot.getBoundingClientRect().width)
+    syncWidth()
+    const observer = new ResizeObserver(syncWidth)
+    observer.observe(slot)
+    return () => observer.disconnect()
+  }, [])
+
+  const overlay = shouldOverlayBrowserAddressBar({ inlineWidth, focused: open })
 
   const clearAddressBarTimers = useCallback((): void => {
     if (blurCloseTimerRef.current !== null) {
@@ -338,111 +358,102 @@ export default function BrowserAddressBar({
   }, [dismissSuggestions, dismissSuggestionsRef])
 
   return (
-    <Popover
-      modal={false}
-      open={open}
-      onOpenChange={(next) => {
-        // Why: Radix fires onOpenChange(false) when it detects an outside
-        // interaction, but during the focus-retry loop the input may still
-        // hold focus. Only allow programmatic closes (setOpen(false) from
-        // our handlers) or genuine outside dismissals.
-        if (!next && inputRef.current && document.activeElement === inputRef.current) {
-          return
-        }
-        if (!next) {
-          restoreTypedQuery()
-        }
-        setOpen(next)
-      }}
-    >
-      <PopoverTrigger asChild>
-        <form
-          ref={setAddressBarFormRef}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-background px-3 py-1 shadow-sm"
-          onSubmit={(event) => {
-            event.preventDefault()
-            setOpen(false)
-            clearSuggestionPreview()
-            setAutocompleteQuery(value)
-            onSubmit()
-          }}
-        >
-          <Globe className="size-4 shrink-0 text-muted-foreground" />
-          <Input
-            ref={inputRef}
-            value={value}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            onKeyDown={handleKeyDown}
-            data-orca-browser-address-bar="true"
-            className="h-auto border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
-            spellCheck={false}
-            autoCapitalize="none"
-            autoCorrect="off"
-            onChange={(event) => {
-              const nextValue = event.target.value
-              // Why: typing creates a new suggestion list, so keyboard selection
-              // should return to the derived top match instead of a stale row.
-              // Clearing preview state here also prevents stale hover/selection
-              // from repopulating the input after Cmd+A → Delete.
-              prePreviewValueRef.current = null
-              setSelectedValueOverride(null)
-              setAutocompleteQuery(nextValue)
-              onChange(nextValue)
+    // Why: min-w-11 keeps the leading globe a real hit target once the toolbar
+    // squeezes the bar away — without it neighbouring buttons overlap the only
+    // affordance for reopening the URL field.
+    <div ref={slotRef} className="flex min-w-11 flex-1 items-center">
+      <Popover
+        modal={false}
+        open={open}
+        onOpenChange={(next) => {
+          // Why: Radix fires onOpenChange(false) when it detects an outside
+          // interaction, but during the focus-retry loop the input may still
+          // hold focus. Only allow programmatic closes (setOpen(false) from
+          // our handlers) or genuine outside dismissals.
+          if (!next && inputRef.current && document.activeElement === inputRef.current) {
+            return
+          }
+          if (!next) {
+            restoreTypedQuery()
+          }
+          setOpen(next)
+        }}
+      >
+        <PopoverTrigger asChild>
+          <form
+            ref={setAddressBarFormRef}
+            data-orca-browser-address-bar-overlay={overlay ? 'true' : undefined}
+            className={cn(
+              'flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-1 shadow-sm',
+              // Why: the toolbar row is the positioned ancestor, so the overlay
+              // spans it edge to edge (matching its px-3) instead of the few
+              // pixels the squeezed slot has left.
+              overlay
+                ? 'absolute inset-x-3 top-1/2 z-30 -translate-y-1/2 shadow-[0_10px_24px_rgba(0,0,0,0.18)]'
+                : 'min-w-0 flex-1'
+            )}
+            // Why: when squeezed the input is zero-width, so clicks land on the
+            // form padding — forward them to the input so it expands and edits.
+            onClick={() => inputRef.current?.focus()}
+            onSubmit={(event) => {
+              event.preventDefault()
+              setOpen(false)
+              clearSuggestionPreview()
+              setAutocompleteQuery(value)
+              onSubmit()
             }}
-            role="combobox"
-            aria-expanded={open}
-            aria-controls="browser-history-listbox"
-            aria-autocomplete="list"
-          />
-        </form>
-      </PopoverTrigger>
-      {suggestions.length > 0 && (
-        <PopoverContent
-          align="start"
-          sideOffset={4}
-          className="w-[var(--radix-popover-trigger-width)] p-0"
-          onOpenAutoFocus={(e) => {
-            // Why: prevent the popover from stealing focus away from the
-            // address bar input. The user is still typing; the popover is
-            // an overlay of suggestions, not a focus target.
-            e.preventDefault()
-          }}
-        >
-          <Command
-            shouldFilter={false}
-            value={selectedValue}
-            onValueChange={setSelectedValueOverride}
           >
-            <CommandList id="browser-history-listbox" role="listbox">
-              <CommandGroup>
-                {suggestions.map((entry) => (
-                  <CommandItem
-                    key={entry.url}
-                    value={entry.url}
-                    onSelect={() => handleSelect(entry.url)}
-                    className="flex items-center gap-2 px-3 py-2"
-                  >
-                    {entry.isSearch ? (
-                      <Search className="size-3.5 shrink-0 text-muted-foreground" />
-                    ) : (
-                      <Globe className="size-3.5 shrink-0 text-muted-foreground" />
-                    )}
-                    <div className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate text-sm">{entry.title}</span>
-                      {entry.subtitle ? (
-                        <span className="truncate text-xs text-muted-foreground">
-                          {entry.subtitle}
-                        </span>
-                      ) : null}
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      )}
-    </Popover>
+            <Globe className="size-4 shrink-0 text-muted-foreground" />
+            <Input
+              ref={inputRef}
+              value={value}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              onKeyDown={handleKeyDown}
+              data-orca-browser-address-bar="true"
+              className="h-auto border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+              spellCheck={false}
+              autoCapitalize="none"
+              autoCorrect="off"
+              onChange={(event) => {
+                const nextValue = event.target.value
+                // Why: typing creates a new suggestion list, so keyboard selection
+                // should return to the derived top match instead of a stale row.
+                // Clearing preview state here also prevents stale hover/selection
+                // from repopulating the input after Cmd+A → Delete.
+                prePreviewValueRef.current = null
+                setSelectedValueOverride(null)
+                setAutocompleteQuery(nextValue)
+                onChange(nextValue)
+              }}
+              role="combobox"
+              aria-expanded={open}
+              aria-controls="browser-history-listbox"
+              aria-autocomplete="list"
+            />
+          </form>
+        </PopoverTrigger>
+        {suggestions.length > 0 && (
+          <PopoverContent
+            align="start"
+            sideOffset={4}
+            className="w-[var(--radix-popover-trigger-width)] p-0"
+            onOpenAutoFocus={(e) => {
+              // Why: prevent the popover from stealing focus away from the
+              // address bar input. The user is still typing; the popover is
+              // an overlay of suggestions, not a focus target.
+              e.preventDefault()
+            }}
+          >
+            <BrowserAddressBarSuggestionList
+              suggestions={suggestions}
+              selectedValue={selectedValue}
+              onSelectedValueChange={setSelectedValueOverride}
+              onSelect={handleSelect}
+            />
+          </PopoverContent>
+        )}
+      </Popover>
+    </div>
   )
 }

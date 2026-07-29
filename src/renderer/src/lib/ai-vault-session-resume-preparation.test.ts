@@ -33,17 +33,52 @@ describe('prepareAiVaultSessionForResume', () => {
     ).rejects.toThrow('Retry resume.')
   })
 
-  it.each(['/custom/codex', '/tmp/orca/codex-accounts/account-1/home'])(
-    'preserves a non-legacy home without materialization: %s',
-    async (codexHome) => {
-      const prepareSessionResume = vi.fn()
-      stubPreparation(prepareSessionResume)
-      const current = session({ codexHome })
+  it('preserves a custom home without materialization', async () => {
+    const prepareSessionResume = vi.fn()
+    stubPreparation(prepareSessionResume)
+    const current = session({ codexHome: '/custom/codex' })
 
-      await expect(prepareAiVaultSessionForResume(current)).resolves.toBe(current)
-      expect(prepareSessionResume).not.toHaveBeenCalled()
-    }
-  )
+    await expect(prepareAiVaultSessionForResume(current)).resolves.toBe(current)
+    expect(prepareSessionResume).not.toHaveBeenCalled()
+  })
+
+  it('repins a per-account session to the home the host substitutes', async () => {
+    const prepareSessionResume = vi.fn().mockResolvedValue({
+      useRealCodexHome: false,
+      substituteCodexHome: '/tmp/orca/codex-accounts/account-2/home'
+    })
+    stubPreparation(prepareSessionResume)
+    const current = session({ codexHome: '/tmp/orca/codex-accounts/account-1/home' })
+
+    const prepared = await prepareAiVaultSessionForResume(current)
+
+    expect(prepared.codexHome).toBe('/tmp/orca/codex-accounts/account-2/home')
+    expect(prepareSessionResume).toHaveBeenCalledWith({
+      agent: 'codex',
+      filePath: current.filePath,
+      codexHome: current.codexHome,
+      executionHostId: 'local'
+    })
+  })
+
+  it('keeps a per-account session unchanged when the host declines to repin', async () => {
+    stubPreparation(vi.fn().mockResolvedValue({ useRealCodexHome: false }))
+    const current = session({ codexHome: '/tmp/orca/codex-accounts/account-1/home' })
+
+    await expect(prepareAiVaultSessionForResume(current)).resolves.toBe(current)
+  })
+
+  it('does not ask a remote host to repin a per-account session', async () => {
+    const prepareSessionResume = vi.fn()
+    stubPreparation(prepareSessionResume)
+    const current = session({
+      codexHome: '/home/user/.orca/codex-accounts/account-1/home',
+      executionHostId: 'ssh:server-1' as AiVaultSession['executionHostId']
+    })
+
+    await expect(prepareAiVaultSessionForResume(current)).resolves.toBe(current)
+    expect(prepareSessionResume).not.toHaveBeenCalled()
+  })
 })
 
 function stubPreparation(prepareSessionResume: ReturnType<typeof vi.fn>): void {

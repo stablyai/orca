@@ -1,10 +1,17 @@
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TuiAgent } from '../../shared/types'
+import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 
 export type PtySpawnResult = {
+  agentSessionEnsure?: AgentSessionClaimedSpawnResult
   /** App-facing PTY id. Remote providers must return globally routable ids,
    *  not relay-local handles, because renderer/runtime IPC routes by this key. */
   id: string
+  /** Opaque provider-owned identity for this process behind a reusable PTY id. */
+  incarnationId?: PtyIncarnationId
+  /** The provider observed this exact spawn exit before its control reply settled. */
+  exitedBeforeSpawnReply?: true
   /** OS-level pid of the shell process, when available at spawn time.
    *  Why: the memory collector needs this to walk each PTY's process
    *  subtree. Daemon-backed providers return it from the RPC result;

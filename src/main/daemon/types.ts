@@ -1,26 +1,40 @@
 import type {
   ConfirmForegroundProcessRequest,
-  GetForegroundProcessRequest
+  GetForegroundProcessRequest,
+  InspectProcessRequest
 } from './daemon-foreground-process-protocol'
 
 export type {
   ConfirmForegroundProcessRequest,
-  GetForegroundProcessRequest
+  GetForegroundProcessRequest,
+  InspectProcessRequest
 } from './daemon-foreground-process-protocol'
 
 // ─── Protocol Version ────────────────────────────────────────────────
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/types'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
+import type {
+  AgentSessionExecutionClaim,
+  AgentSessionOwnerBinding,
+  AgentSessionSurfaceBinding
+} from '../../shared/agent-session-host-authority'
+import type * as HistorySeedProtocol from './terminal-history-seed-transfer-protocol'
 export type { TerminalModes } from './terminal-modes'
 import type { TerminalSnapshot } from './terminal-snapshot'
 export type { TerminalSnapshot } from './terminal-snapshot'
 export {
+  AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
+  AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
+  COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
+  GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION,
   PTY_STARTUP_INGRESS_PROTOCOL_VERSION,
+  MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION,
+  supportsMode2031UnsubscribeFact,
   supportsPtyStartupIngress
 } from './daemon-protocol-version'
 
@@ -44,7 +58,7 @@ export type { DaemonEndpointIdentity, HelloMessage, HelloResponse } from './daem
 export type CreateOrAttachRequest = {
   id: string
   type: 'createOrAttach'
-  payload: {
+  payload: HistorySeedProtocol.CreateOrAttachHistorySeedPayload & {
     sessionId: string
     cols: number
     rows: number
@@ -69,9 +83,11 @@ export type CreateOrAttachRequest = {
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
     shellReadySupported?: boolean
     shellReadyTimeoutMs?: number
-    /** Recovered ANSI applied before the new subprocess can emit startup output. */
-    historySeed?: string
     startupIngress?: PtyStartupIngressIntent
+    agentSessionEnsure?: {
+      claim: AgentSessionExecutionClaim
+      surface: AgentSessionSurfaceBinding
+    }
   }
 }
 
@@ -84,9 +100,7 @@ export type CloseStartupQueryAuthorityRequest = {
 export type CancelCreateOrAttachRequest = {
   id: string
   type: 'cancelCreateOrAttach'
-  payload: {
-    sessionId: string
-  }
+  payload: { sessionId: string }
 }
 
 export type WriteRequest = {
@@ -278,6 +292,7 @@ export type TakePendingOutputResult = {
 
 export type DaemonRequest =
   | CreateOrAttachRequest
+  | HistorySeedProtocol.TerminalHistorySeedTransferRequest
   | CancelCreateOrAttachRequest
   | WriteRequest
   | ResizeRequest
@@ -291,6 +306,7 @@ export type DaemonRequest =
   | DetachRequest
   | GetCwdRequest
   | GetForegroundProcessRequest
+  | InspectProcessRequest
   | ConfirmForegroundProcessRequest
   | ClearScrollbackRequest
   | ShutdownRequest
@@ -339,15 +355,18 @@ export type SystemResolverHealthResult = {
 
 export type SessionInfo = {
   sessionId: string
+  incarnationId?: string
   state: SessionState
   shellState: ShellReadyState
   isAlive: boolean
   terminalHandle?: string
+  wslDistro?: string | null
   pid: number | null
   cwd: string | null
   cols: number
   rows: number
   createdAt: number
+  agentSessionOwners?: AgentSessionOwnerBinding[]
 }
 
 // Why: SessionInfo + source protocol version, so the Manage Sessions UI can

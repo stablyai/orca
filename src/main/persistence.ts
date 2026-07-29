@@ -11,7 +11,8 @@ import {
   statSync,
   realpathSync
 } from 'node:fs'
-import { writeFile, rename, mkdir, rm, copyFile } from 'node:fs/promises'
+import { rename, mkdir, rm, copyFile, open } from 'node:fs/promises'
+import { renameDurable, writeFileDurableSync } from './durable-file-write'
 import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { createHash, randomUUID } from 'node:crypto'
@@ -48,6 +49,7 @@ import type {
   ProjectGroup,
   FolderWorkspace,
   SparsePreset,
+  PersistedMobileClientTabSelections,
   WorktreeMeta,
   WorktreeLineage,
   WorkspaceLineage,
@@ -70,6 +72,7 @@ import {
   normalizeProjectRuntimePreference
 } from '../shared/project-execution-runtime'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
+import { isPluginPanelTabKey } from '../shared/plugins/plugin-manifest'
 import type { GitRemoteIdentity } from '../shared/git-remote-identity'
 import {
   buildTaskSourceContextFromRepo,
@@ -77,6 +80,12 @@ import {
 } from '../shared/task-source-context'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
+import { normalizePersistedMobileClientTabSelections } from './runtime/client-session-tab-selection-persistence'
+import { sanitizeWorkspaceSessionTerminalRetirements } from './runtime/mobile-session-terminal-persistence-retirement'
+import {
+  removeRepoFromHostWorkspaceSessions,
+  removeRepoFromWorkspaceSession
+} from './orca-profiles/profile-project-session-state'
 import { hardenExistingSecureFile } from '../shared/secure-file'
 import {
   LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
@@ -85,7 +94,16 @@ import {
   type SshTarget
 } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostOrder,
+  normalizeExecutionHostId,
+  normalizeVisibleExecutionHostIds,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../shared/execution-host'
 import {
   getDefaultPersistedState,
   getDefaultNotificationSettings,
@@ -107,14 +125,6 @@ import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../shared/usage-percentage-display-change-notice'
 import { normalizePRBotAuthorOverrides } from '../shared/pr-bot-author-overrides'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostOrder,
-  normalizeExecutionHostId,
-  normalizeVisibleExecutionHostIds,
-  toSshExecutionHostId,
-  type ExecutionHostId
-} from '../shared/execution-host'
 import { toRelaySshPtyId } from './providers/ssh-pty-id'
 import {
   migrateUiHostScopeSshTargetId,
@@ -171,6 +181,10 @@ import {
 } from '../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../shared/contextual-tours'
 import { normalizeFeatureTipIds } from '../shared/feature-tips'
+import {
+  parseCodexResetCreditAttemptLedger,
+  type CodexResetCreditAttemptLedger
+} from '../shared/codex-reset-credit-attempt-ledger'
 import { normalizeManualRepoOrder } from '../shared/manual-repo-order'
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
@@ -180,6 +194,7 @@ import {
   normalizeWorkspaceStatuses
 } from '../shared/workspace-statuses'
 import { clampMarkdownTocPanelWidth } from '../shared/markdown-toc-panel-width'
+import { clampCombinedDiffFileTreeWidth } from '../shared/combined-diff-file-tree-width'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree-ownership'
 import { sanitizeRepoIcon } from '../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../shared/repo-badge-color'
@@ -212,6 +227,10 @@ import {
   normalizeTuiAgentEnvRecord
 } from '../shared/tui-agent-launch-defaults'
 import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
+import {
+  normalizeOsc52ClipboardDefaultOn,
+  osc52ClipboardDefaultOnOverridesPersistedOff
+} from '../shared/osc52-clipboard-settings'
 import { normalizeTerminalLineHeight } from '../shared/terminal-line-height-settings'
 import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
@@ -264,10 +283,6 @@ function decrypt(ciphertext: string): string {
     )
     return ciphertext
   }
-}
-
-function encryptOptionalSecret(value: string | null | undefined): string | null {
-  return value ? encrypt(value) : null
 }
 
 function decryptOptionalSecret(value: string | null | undefined): string | null {
@@ -769,16 +784,22 @@ function normalizeProjectOrderBy(projectOrderBy: unknown): PersistedState['ui'][
   return getDefaultUIState().projectOrderBy
 }
 
-function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
+export function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
   if (
     tab === 'explorer' ||
     tab === 'search' ||
     tab === 'vault' ||
     tab === 'workspaces' ||
+    tab === 'pr-checks' ||
     tab === 'source-control' ||
     tab === 'checks' ||
     tab === 'ports'
   ) {
+    return tab
+  }
+  // Why: plugin tabs are open-ended `plugin:<publisher>.<id>/<panel>` keys; validate the
+  // shape so a persisted plugin tab doesn't reset to Explorer on restart.
+  if (typeof tab === 'string' && isPluginPanelTabKey(tab)) {
     return tab
   }
   return getDefaultUIState().rightSidebarTab
@@ -1308,7 +1329,12 @@ function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
   return owner && repo ? { owner, repo } : undefined
 }
 
-function sanitizeGitRemoteIdentity(value: unknown): GitRemoteIdentity | undefined {
+function sanitizeGitRemoteIdentity(value: unknown): GitRemoteIdentity | null | undefined {
+  // Why: `null` is a resolved "no usable remote" marker; dropping it would make
+  // a settled repo indistinguishable from one whose identity probe is pending.
+  if (value === null) {
+    return null
+  }
   if (!value || typeof value !== 'object') {
     return undefined
   }
@@ -1367,7 +1393,7 @@ function sanitizeRepoUpdatesForPersistence<
       sanitized.repoIcon = repoIcon
     }
   }
-  // Why: `null` is a valid "not a fork" marker; only drop malformed shapes.
+  // Why: `null` is a valid "not a fork" / "no usable remote" marker; only drop malformed shapes.
   if ('upstream' in sanitized) {
     const upstream = sanitizeRepoUpstream(sanitized.upstream)
     if (upstream === undefined) {
@@ -2345,25 +2371,36 @@ function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSe
   return structuredClone(session)
 }
 
-function removeWorkspaceSessionOwner(
-  session: WorkspaceSessionState | undefined,
-  ownerKey: string
-): WorkspaceSessionState | undefined {
-  if (!session) {
-    return session
-  }
-  const next = cloneWorkspaceSessionState(session)
+// Deletes the O(1) owner-keyed fields for `ownerKey` from an already-cloned
+// session in place, recording removed tab ids into `removedTabIds`. The
+// pane-key-scanned maps (pty incarnations, surface tombstones, sleeping agents)
+// and the shutdown list are handled by deleteScannedSessionFieldsForOwners so a
+// batch prune scans each collection once instead of once per owner.
+function deleteOwnerKeyedSessionFields(
+  next: WorkspaceSessionState,
+  ownerKey: string,
+  removedTabIds: Set<string>,
+  options: { advanceTerminalTopologyRevision?: boolean } = {}
+): void {
   const removedTerminalTabs = next.tabsByWorktree?.[ownerKey] ?? []
   if (next.tabsByWorktree) {
     delete next.tabsByWorktree[ownerKey]
   }
   for (const tab of removedTerminalTabs) {
+    removedTabIds.add(tab.id)
     delete next.terminalLayoutsByTabId[tab.id]
     if (next.activeTabId === tab.id) {
       next.activeTabId = null
     }
   }
-
+  if (options.advanceTerminalTopologyRevision) {
+    const repoId = getRepoIdFromWorktreeId(ownerKey)
+    const previousTopologyRevision = next.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
+    next.terminalTopologyRevisionByRepoId = {
+      ...next.terminalTopologyRevisionByRepoId,
+      [repoId]: previousTopologyRevision + 1
+    }
+  }
   if (next.openFilesByWorktree) {
     delete next.openFilesByWorktree[ownerKey]
   }
@@ -2406,21 +2443,83 @@ function removeWorkspaceSessionOwner(
   if (next.defaultTerminalTabsAppliedByWorktreeId) {
     delete next.defaultTerminalTabsAppliedByWorktreeId[ownerKey]
   }
-  if (next.sleepingAgentSessionsByPaneKey) {
-    for (const [paneKey, record] of Object.entries(next.sleepingAgentSessionsByPaneKey)) {
-      if (record.worktreeId === ownerKey) {
-        delete next.sleepingAgentSessionsByPaneKey[paneKey]
-      }
-    }
-  }
   if (next.activeWorkspaceKey === ownerKey) {
     next.activeWorkspaceKey = null
   }
   if (next.activeWorktreeId === ownerKey) {
     next.activeWorktreeId = null
   }
+}
+
+// Scans the pane-key-keyed maps and the shutdown list once, removing every entry
+// owned by a key matched by `isRemovedOwner` (or, for pty incarnations, whose tab
+// was removed). Kept separate from the O(1) deletes so a batch prune scans each
+// collection a single time regardless of how many owners are being removed.
+function deleteScannedSessionFieldsForOwners(
+  next: WorkspaceSessionState,
+  removedTabIds: ReadonlySet<string>,
+  isRemovedOwner: (worktreeId: string) => boolean
+): void {
+  if (next.terminalPtyIncarnationsByPaneKey) {
+    next.terminalPtyIncarnationsByPaneKey = Object.fromEntries(
+      Object.entries(next.terminalPtyIncarnationsByPaneKey).filter(([paneKey]) => {
+        const separator = paneKey.lastIndexOf(':')
+        return separator < 1 || !removedTabIds.has(paneKey.slice(0, separator))
+      })
+    )
+  }
+  if (next.terminalSurfaceTombstonesByPaneKey) {
+    next.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(
+      Object.entries(next.terminalSurfaceTombstonesByPaneKey).filter(
+        ([, tombstone]) => !isRemovedOwner(tombstone.worktreeId)
+      )
+    )
+  }
+  if (next.sleepingAgentSessionsByPaneKey) {
+    for (const [paneKey, record] of Object.entries(next.sleepingAgentSessionsByPaneKey)) {
+      if (isRemovedOwner(record.worktreeId)) {
+        delete next.sleepingAgentSessionsByPaneKey[paneKey]
+      }
+    }
+  }
   next.activeWorktreeIdsOnShutdown = next.activeWorktreeIdsOnShutdown?.filter(
-    (worktreeId) => worktreeId !== ownerKey
+    (worktreeId) => !isRemovedOwner(worktreeId)
+  )
+}
+
+function removeWorkspaceSessionOwner(
+  session: WorkspaceSessionState | undefined,
+  ownerKey: string,
+  options: { advanceTerminalTopologyRevision?: boolean } = {}
+): WorkspaceSessionState | undefined {
+  if (!session) {
+    return session
+  }
+  const next = cloneWorkspaceSessionState(session)
+  const removedTabIds = new Set<string>()
+  deleteOwnerKeyedSessionFields(next, ownerKey, removedTabIds, options)
+  deleteScannedSessionFieldsForOwners(next, removedTabIds, (worktreeId) => worktreeId === ownerKey)
+  return next
+}
+
+// Batch variant of removeWorkspaceSessionOwner: prunes every owner in `ownerKeys`
+// with a single structuredClone and a single scan of each collection, instead of
+// one clone+scan per owner. Project removal can touch many worktrees across many
+// host partitions, so the per-owner clones added up to O(worktrees × hosts).
+function removeWorkspaceSessionOwners(
+  session: WorkspaceSessionState | undefined,
+  ownerKeys: ReadonlySet<string>
+): WorkspaceSessionState | undefined {
+  if (!session || ownerKeys.size === 0) {
+    return session
+  }
+  const next = cloneWorkspaceSessionState(session)
+  const removedTabIds = new Set<string>()
+  for (const ownerKey of ownerKeys) {
+    deleteOwnerKeyedSessionFields(next, ownerKey, removedTabIds)
+  }
+  deleteScannedSessionFieldsForOwners(next, removedTabIds, (worktreeId) =>
+    ownerKeys.has(worktreeId)
   )
   return next
 }
@@ -2536,7 +2635,7 @@ export class Store {
   private writeGeneration = 0
   // Why: after a profile transfer rewrites this file on disk, a late flush of stale in-memory state would resurrect the moved project.
   private writesFrozen = false
-  // Plaintext hash at last write, to skip no-op writes; not the payload, since encrypt() uses a random IV per call.
+  // Content hash at last write, to skip no-op writes; derived from the payload with encrypted blobs normalized back to plaintext (see buildStateToSave), since encrypt() uses a random IV per call.
   private lastWrittenStateHash: string | null = null
   private firstPendingSaveAt: number | null = null
   private githubCacheDirty = false
@@ -2824,6 +2923,14 @@ export class Store {
         const migratedFloatingTerminalEnabled = floatingTerminalDefaultedForAllUsers
           ? (parsed.settings?.floatingTerminalEnabled ?? true)
           : true
+        // Why: the old off default persisted `false` for every profile, indistinguishable from a real opt-out — flip unmigrated profiles once (#10567).
+        const migratedOsc52Clipboard = normalizeOsc52ClipboardDefaultOn(parsed.settings)
+        const osc52ClipboardNoticePending =
+          osc52ClipboardDefaultOnOverridesPersistedOff(parsed.settings) ||
+          parsed.ui?.osc52ClipboardDefaultOnNoticePending === true
+        if (parsed.settings?.terminalAllowOsc52ClipboardDefaultedOnForAllUsers !== true) {
+          this.loadNeedsSave = true
+        }
         const floatingTerminalCwdMigrated =
           parsed.settings?.floatingTerminalCwdMigratedToAppWorkspace === true
         // Why: an earlier migration wrote '' for the notes dir; floating terminals still open at home, notes use a separate IPC.
@@ -3008,6 +3115,9 @@ export class Store {
             normalizedProjectGroups
           ),
           worktreeLineageById: parsed.worktreeLineageById ?? {},
+          mobileClientTabSelectionsByDeviceId: normalizePersistedMobileClientTabSelections(
+            parsed.mobileClientTabSelectionsByDeviceId
+          ),
           workspaceLineageByChildKey: normalizeWorkspaceLineageByChildKey(
             parsed.workspaceLineageByChildKey
           ),
@@ -3053,6 +3163,7 @@ export class Store {
             localWindowsRuntimeDefault: migratedWindowsRuntimeDefault,
             localAccountRuntime: migratedLocalAccountRuntime,
             localAccountRuntimeDefaultedToAutoForAllUsers: true,
+            ...migratedOsc52Clipboard,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
             floatingTerminalDefaultedForAllUsers: true,
             floatingTerminalCwd: migratedFloatingTerminalCwd,
@@ -3237,6 +3348,9 @@ export class Store {
                   : false,
               setupGuideBrowserMilestoneLegacyComplete:
                 parsed.ui?.setupGuideBrowserMilestoneLegacyComplete === true,
+              // Why persist rather than notify inline: the flip lands during load, before any
+              // window exists, and it must survive a crash before the user ever sees the notice.
+              osc52ClipboardDefaultOnNoticePending: osc52ClipboardNoticePending,
               sortBy: migrate ? ('smart' as const) : sort,
               showDotfilesByWorktree: normalizeShowDotfilesByWorktree(
                 parsed.ui?.showDotfilesByWorktree
@@ -3506,27 +3620,61 @@ export class Store {
     return durable
   }
 
-  private computeStateHash(): string {
-    return createHash('sha1').update(JSON.stringify(this.getDurableState())).digest('hex')
-  }
-
-  // Why: build payload synchronously so hash and serialized bytes reflect the same state tick (no await interleave).
-  private buildStateToSave(): string {
+  // Why: build payload synchronously so hash and serialized bytes reflect the same state tick (no await interleave). One full-state stringify serves both the on-disk payload and the no-op-write guard hash: each secret slot is serialized as a fresh unguessable sentinel, then sentinels are substituted to ciphertext for the payload and to plaintext for the hash. The hash is thus a pure function of plaintext state (skips a byte-identical rewrite) without a second stringify.
+  private buildStateToSave(): { payload: string; stateHash: string } {
+    // Why sentinels (not a blob/key string match): the substitution must be
+    // position-exact. A plain search for the ciphertext — or even for a
+    // `"key":"blob"` token — can be mimicked by user-controlled state (e.g. an
+    // agentDefaultEnv var named after a secret field, or a value equal to a
+    // ciphertext), which would substitute the wrong site and let two DISTINCT
+    // states normalize equal → a silently dropped write (data loss), reachable
+    // on deterministic-IV platforms (macOS/legacy-Linux OSCrypt). A per-slot
+    // random UUID can't occur anywhere else in the serialized state (the user
+    // sets their data before it is minted), so it appears exactly once.
+    const secretSubs: { sentinel: string; blob: string; plaintext: string }[] = []
+    const encryptToSentinel = (plaintext: string): string => {
+      const blob = encrypt(plaintext)
+      // Deterministic already (empty secret / safeStorage unavailable / encrypt
+      // failure): blob === plaintext, so no normalization — and no sentinel,
+      // which also avoids substituting an empty or plaintext-shaped slot.
+      if (blob === plaintext) {
+        return blob
+      }
+      const sentinel = `orca-secret-slot-${randomUUID()}`
+      secretSubs.push({ sentinel, blob, plaintext })
+      return sentinel
+    }
     // Why: clone before encrypting secrets so in-memory this.state stays plaintext.
     const stateToSave = {
       ...this.getDurableState(),
       settings: {
         ...this.state.settings,
-        opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie),
-        httpProxyUrl: encrypt(this.state.settings.httpProxyUrl ?? '')
+        opencodeSessionCookie: encryptToSentinel(this.state.settings.opencodeSessionCookie),
+        httpProxyUrl: encryptToSentinel(this.state.settings.httpProxyUrl ?? '')
       },
       ui: {
         ...this.state.ui,
-        browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
+        browserKagiSessionLink: this.state.ui.browserKagiSessionLink
+          ? encryptToSentinel(this.state.ui.browserKagiSessionLink)
+          : null
       }
     }
     // Why compact: ~20% fewer bytes and less serialize time; all readers JSON.parse so formatting is irrelevant.
-    return JSON.stringify(stateToSave)
+    // One full-state stringify; secret slots currently hold sentinels.
+    const serialized = JSON.stringify(stateToSave)
+    // Substitute each unique sentinel exactly once: ciphertext for the on-disk
+    // payload, plaintext for the guard hash. Function-form replacement keeps
+    // `$` in blob/plaintext inert; both sides read the sentinel as JSON-escaped
+    // in `serialized`, so each replace is byte-for-byte position-exact.
+    let payload = serialized
+    let hashInput = serialized
+    for (const { sentinel, blob, plaintext } of secretSubs) {
+      const escapedSentinel = JSON.stringify(sentinel).slice(1, -1)
+      payload = payload.replace(escapedSentinel, () => blob)
+      hashInput = hashInput.replace(escapedSentinel, () => JSON.stringify(plaintext).slice(1, -1))
+    }
+    const stateHash = createHash('sha1').update(hashInput).digest('hex')
+    return { payload, stateHash }
   }
 
   // Why: async writes avoid blocking the main Electron thread on every debounced save.
@@ -3535,12 +3683,11 @@ export class Store {
       return
     }
     const gen = this.writeGeneration
-    const stateHash = this.computeStateHash()
+    const { payload, stateHash } = this.buildStateToSave()
     // Why: don't rewrite a byte-identical multi-MB file when state nets out to already-persisted.
     if (stateHash === this.lastWrittenStateHash) {
       return
     }
-    const payload = this.buildStateToSave()
     const dataFile = this.dataFile
     const dir = dirname(dataFile)
     await mkdir(dir, { recursive: true }).catch(() => {})
@@ -3549,12 +3696,19 @@ export class Store {
     // Why: on any write/rename failure, remove the tmp file so it doesn't leave a multi-MB orphan.
     let renamed = false
     try {
-      await writeFile(tmpFile, payload, 'utf-8')
+      // Why: fsync before rename, then fsync the directory; see writeFileDurable.
+      const handle = await open(tmpFile, 'w')
+      try {
+        await handle.writeFile(payload, 'utf-8')
+        await handle.sync()
+      } finally {
+        await handle.close()
+      }
       // Why: if flush() bumped writeGeneration mid-write, it already wrote fresher state; don't overwrite it.
       if (this.writeGeneration !== gen) {
         return
       }
-      await rename(tmpFile, dataFile)
+      await renameDurable(tmpFile, dataFile)
       renamed = true
       // Why re-check gen: a sync flush during the rename await may have written fresher state; don't record a stale hash over it.
       if (this.writeGeneration === gen) {
@@ -3580,7 +3734,7 @@ export class Store {
     if (this.writesFrozen) {
       return
     }
-    const stateHash = this.computeStateHash()
+    const { payload, stateHash } = this.buildStateToSave()
     // Why: matching hash means the file already holds this state; force overrides when an async rename may be racing past the gen check.
     if (!opts.force && stateHash === this.lastWrittenStateHash) {
       return
@@ -3592,13 +3746,12 @@ export class Store {
     }
     const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
 
-    const payload = this.buildStateToSave()
-
     // Why: on any write/rename failure, remove the tmp file so shutdown crashes don't leak orphans.
     let renamed = false
     try {
-      writeFileSync(tmpFile, payload, 'utf-8')
-      renameSync(tmpFile, dataFile)
+      // Why: fsync the temp file and the directory; a bare rename can survive as stale or empty
+      // content after power loss, losing projects/tabs back to the newest usable .bak slot.
+      writeFileDurableSync(tmpFile, dataFile, payload)
       renamed = true
       this.lastWrittenStateHash = stateHash
     } finally {
@@ -3631,6 +3784,29 @@ export class Store {
 
   flushActiveViewPreferenceOrThrow(): void {
     this.activeViewPreference.flushOrThrow()
+  }
+
+  getCodexResetCreditAttemptLedger(): CodexResetCreditAttemptLedger {
+    return parseCodexResetCreditAttemptLedger(this.state.codexResetCreditAttemptLedger)
+  }
+
+  replaceCodexResetCreditAttemptLedgerAndFlush(ledger: CodexResetCreditAttemptLedger): void {
+    if (this.writesFrozen) {
+      throw new Error('Cannot persist Codex reset-credit attempts while writes are frozen')
+    }
+    const next = parseCodexResetCreditAttemptLedger(ledger)
+    const previous = this.state.codexResetCreditAttemptLedger
+      ? structuredClone(this.state.codexResetCreditAttemptLedger)
+      : undefined
+    this.state.codexResetCreditAttemptLedger = next
+    try {
+      this.flushOrThrow()
+    } catch (error) {
+      // Why: callers use a successful return as the durability barrier before
+      // handing a scarce-credit mutation to the provider.
+      this.state.codexResetCreditAttemptLedger = previous
+      throw error
+    }
   }
 
   // ── Repos ──────────────────────────────────────────────────────────
@@ -3853,8 +4029,10 @@ export class Store {
         ? { ...repo, projectGroupId: null }
         : repo
     )
+    const removedFolderWorkspaceKeys = new Set<string>()
     for (const workspace of this.state.folderWorkspaces ?? []) {
       if (deletedGroupIds.has(workspace.projectGroupId)) {
+        removedFolderWorkspaceKeys.add(folderWorkspaceKey(workspace.id))
         this.state.workspaceSession = removeWorkspaceSessionOwner(
           this.state.workspaceSession,
           folderWorkspaceKey(workspace.id)
@@ -3865,6 +4043,7 @@ export class Store {
     this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
       (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
     )
+    this.pruneMobileClientTabSelections((worktreeId) => removedFolderWorkspaceKeys.has(worktreeId))
     this.scheduleSave()
     return true
   }
@@ -4014,6 +4193,7 @@ export class Store {
       folderWorkspaceKey(id)
     )!
     this.removeWorkspaceLineageForFolderParent(id)
+    this.pruneMobileClientTabSelections((worktreeId) => worktreeId === folderWorkspaceKey(id))
     this.scheduleSave()
     return true
   }
@@ -4110,6 +4290,11 @@ export class Store {
     // Why: presets are repo-scoped and unreachable once the repo is gone, so drop them with it.
     delete this.state.sparsePresetsByRepo[id]
     this.pruneWorktreeStateForRepo(id, null)
+    this.state.workspaceSession = removeRepoFromWorkspaceSession(this.state.workspaceSession, id)
+    this.state.workspaceSessionsByHostId = removeRepoFromHostWorkspaceSessions(
+      this.state.workspaceSessionsByHostId,
+      id
+    )
     this.scheduleSave()
   }
 
@@ -4126,6 +4311,21 @@ export class Store {
     this.syncProjectHostSetupCompatibilityState()
     // Why: prune only this host's worktree metas if the id survives elsewhere; otherwise prune everything (matches removeProject).
     this.pruneWorktreeStateForRepo(id, idStillPresent ? hostId : null)
+    if (!idStillPresent) {
+      this.state.workspaceSession = removeRepoFromWorkspaceSession(this.state.workspaceSession, id)
+      this.state.workspaceSessionsByHostId = removeRepoFromHostWorkspaceSessions(
+        this.state.workspaceSessionsByHostId,
+        id
+      )
+    } else if (parseExecutionHostId(hostId)?.kind === 'runtime') {
+      const session = this.state.workspaceSessionsByHostId?.[hostId]
+      if (session) {
+        this.state.workspaceSessionsByHostId = {
+          ...this.state.workspaceSessionsByHostId,
+          [hostId]: removeRepoFromWorkspaceSession(session, id)
+        }
+      }
+    }
     this.scheduleSave()
   }
 
@@ -4151,9 +4351,63 @@ export class Store {
       hostMembership.set(key, result)
       return result
     }
+    // Why: session state (legacy blob + per-host partitions) references worktrees
+    // by the same `${repoId}::${path}` owner key; if it is not pruned here, a
+    // deleted project's worktrees stay in lastVisitedAtByWorktreeId /
+    // sleepingAgentSessionsByPaneKey and get re-materialized into worktreeMeta on
+    // the next launch, surfacing as an orphaned "unknown" workspace.
+    // worktreeMeta is host-classified via belongsToHost, but session partitions
+    // are keyed by host directly. A session owner key carries no host, and the
+    // same key can exist in multiple partitions (shared repo id/path across
+    // hosts). So for session cleanup we collect every prefix-matching owner key
+    // regardless of belongsToHost, and let the per-partition host gating below
+    // decide which partition to touch. (belongsToHost still governs
+    // worktreeMeta/lineage deletion. Collect before deleting worktreeMeta.)
+    const ownerKeysToPrune = new Set<string>()
+    const collectPrefixedKeys = (keys: Iterable<string>): void => {
+      for (const key of keys) {
+        if (key.startsWith(prefix)) {
+          ownerKeysToPrune.add(key)
+        }
+      }
+    }
+    collectPrefixedKeys(Object.keys(this.state.worktreeMeta))
+    collectPrefixedKeys(Object.keys(this.state.workspaceSession?.lastVisitedAtByWorktreeId ?? {}))
+    for (const session of Object.values(this.state.workspaceSessionsByHostId ?? {})) {
+      collectPrefixedKeys(Object.keys(session?.lastVisitedAtByWorktreeId ?? {}))
+    }
+
     for (const key of Object.keys(this.state.worktreeMeta)) {
       if (belongsToHost(key)) {
         delete this.state.worktreeMeta[key]
+      }
+    }
+    // Why: owner keys are `${repoId}::${path}` and do not carry a host, so a
+    // host-scoped prune (hostId != null) must only touch that host's session:
+    // the legacy blob is the local host's session, and each
+    // workspaceSessionsByHostId partition is one non-local host. Pruning every
+    // partition here would wipe a surviving host's tabs, sleeping-agent state,
+    // and active-worktree pointer for a shared repo id/path. A full removal
+    // (hostId === null) still clears every host.
+    const pruneLegacyLocalSession = hostId === null || hostId === LOCAL_EXECUTION_HOST_ID
+    const pruneAllHostPartitions = hostId === null
+    if (pruneLegacyLocalSession) {
+      this.state.workspaceSession = removeWorkspaceSessionOwners(
+        this.state.workspaceSession,
+        ownerKeysToPrune
+      )!
+    }
+    if (this.state.workspaceSessionsByHostId) {
+      for (const [partitionHostId, session] of Object.entries(
+        this.state.workspaceSessionsByHostId
+      )) {
+        if (!pruneAllHostPartitions && partitionHostId !== hostId) {
+          continue
+        }
+        const pruned = removeWorkspaceSessionOwners(session, ownerKeysToPrune)
+        if (pruned) {
+          this.state.workspaceSessionsByHostId[partitionHostId] = pruned
+        }
       }
     }
     for (const [childId, lineage] of Object.entries(this.state.worktreeLineageById)) {
@@ -4170,6 +4424,22 @@ export class Store {
       }
       if (parentScope?.type === 'worktree' && belongsToHost(parentScope.worktreeId)) {
         delete this.state.workspaceLineageByChildKey[childKey as WorkspaceKey]
+      }
+    }
+    this.pruneMobileClientTabSelections(belongsToHost)
+  }
+
+  private pruneMobileClientTabSelections(matchesWorktreeId: (worktreeId: string) => boolean): void {
+    for (const [clientNavigationId, selectionsByWorktree] of Object.entries(
+      this.state.mobileClientTabSelectionsByDeviceId ?? {}
+    )) {
+      for (const worktreeId of Object.keys(selectionsByWorktree)) {
+        if (matchesWorktreeId(worktreeId)) {
+          delete selectionsByWorktree[worktreeId]
+        }
+      }
+      if (Object.keys(selectionsByWorktree).length === 0) {
+        delete this.state.mobileClientTabSelectionsByDeviceId?.[clientNavigationId]
       }
     }
   }
@@ -4410,6 +4680,17 @@ export class Store {
   }
 
   // ── Sparse Presets ─────────────────────────────────────────────────
+
+  // ── Mobile client tab selections ──────────────────────────────────
+
+  getMobileClientTabSelections(): PersistedMobileClientTabSelections {
+    return this.state.mobileClientTabSelectionsByDeviceId ?? {}
+  }
+
+  setMobileClientTabSelections(next: PersistedMobileClientTabSelections): void {
+    this.state.mobileClientTabSelectionsByDeviceId = next
+    this.scheduleSave()
+  }
 
   getSparsePresets(repoId: string): SparsePreset[] {
     return [...(this.state.sparsePresetsByRepo[repoId] ?? [])].sort((left, right) =>
@@ -4745,6 +5026,11 @@ export class Store {
     delete this.state.worktreeMeta[worktreeId]
     delete this.state.worktreeLineageById[worktreeId]
     delete this.state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
+    this.state.workspaceSession = removeWorkspaceSessionOwner(
+      this.state.workspaceSession,
+      worktreeId,
+      { advanceTerminalTopologyRevision: true }
+    )!
     this.scheduleSave()
   }
 
@@ -4888,6 +5174,21 @@ export class Store {
           sessionChanged = true
         }
       }
+      if (session.terminalSurfaceTombstonesByPaneKey) {
+        let tombstonesChanged = false
+        const nextTombstones = { ...session.terminalSurfaceTombstonesByPaneKey }
+        for (const [paneKey, tombstone] of Object.entries(nextTombstones)) {
+          if (tombstone.worktreeId !== oldWorktreeId) {
+            continue
+          }
+          nextTombstones[paneKey] = { ...tombstone, worktreeId: newWorktreeId }
+          tombstonesChanged = true
+        }
+        if (tombstonesChanged) {
+          session.terminalSurfaceTombstonesByPaneKey = nextTombstones
+          sessionChanged = true
+        }
+      }
       return sessionChanged
     }
 
@@ -4937,6 +5238,11 @@ export class Store {
     changed = migrateSession(this.state.workspaceSession) || changed
     for (const session of Object.values(this.state.workspaceSessionsByHostId ?? {})) {
       changed = migrateSession(session) || changed
+    }
+    for (const selectionsByWorktree of Object.values(
+      this.state.mobileClientTabSelectionsByDeviceId ?? {}
+    )) {
+      changed = moveKey(selectionsByWorktree) || changed
     }
     const showDotfiles = this.state.ui?.showDotfilesByWorktree
     if (showDotfiles) {
@@ -5199,7 +5505,12 @@ export class Store {
       statusBarUsageMode: normalizeStatusBarUsageMode(this.state.ui?.statusBarUsageMode),
       // Why: strict boolean coercion so a missing/legacy value reads as false (first-run notice still fires).
       trayMinimizeNoticeShown: this.state.ui?.trayMinimizeNoticeShown === true,
+      osc52ClipboardDefaultOnNoticePending:
+        this.state.ui?.osc52ClipboardDefaultOnNoticePending === true,
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(this.state.ui?.markdownTocPanelWidth),
+      combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
+        this.state.ui?.combinedDiffFileTreeWidth
+      ),
       visibleWorkspaceHostIds: normalizeVisibleExecutionHostIds(
         this.state.ui?.visibleWorkspaceHostIds
       ),
@@ -5299,6 +5610,9 @@ export class Store {
       ),
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(
         sanitizedUpdates.markdownTocPanelWidth ?? this.state.ui?.markdownTocPanelWidth
+      ),
+      combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
+        sanitizedUpdates.combinedDiffFileTreeWidth ?? this.state.ui?.combinedDiffFileTreeWidth
       ),
       visibleWorkspaceHostIds:
         updates.visibleWorkspaceHostIds !== undefined
@@ -5475,6 +5789,11 @@ export class Store {
 
   /** Persist a non-'local' host partition; remote hosts skip setLocalWorkspaceSession's local-daemon PTY-binding race guards. */
   private setHostWorkspaceSession(hostId: ExecutionHostId, session: WorkspaceSessionState): void {
+    // Why: each partition owns its topology fence; renderer writes omit it and must rebase locally.
+    session = sanitizeWorkspaceSessionTerminalRetirements(
+      session,
+      this.state.workspaceSessionsByHostId?.[hostId]
+    )
     const pruned = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
     )
@@ -5486,12 +5805,13 @@ export class Store {
   }
 
   private setLocalWorkspaceSession(session: PersistedState['workspaceSession']): void {
+    const prior = this.state.workspaceSession
+    session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
     session = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
     )
 
     // Why (Issue #217): merge existing bindings when the incoming binding is empty, so a stale pre-spawn snapshot can't overwrite the durable PTY binding.
-    const prior = this.state.workspaceSession
     const normalized = normalizeWorkspaceSessionPaneIdentities(
       session,
       prior?.terminalLayoutsByTabId
@@ -5766,23 +6086,68 @@ export class Store {
   }
 
   // Why: sync-flush the pty binding before pty:spawn returns to close the spawn/persist SIGKILL race (Issue #217).
-  persistPtyBinding(args: {
-    worktreeId: string
-    tabId: string
-    leafId: string
-    ptyId: string
-    startupCwd?: string
-  }): void {
-    const session = this.state.workspaceSession
-    if (!session) {
-      return
+  persistPtyBinding(
+    args: {
+      worktreeId: string
+      tabId: string
+      leafId: string
+      ptyId: string
+      incarnationId?: string
+      startupCwd?: string
+    },
+    hostId?: string | null
+  ): void {
+    const resolvedHostId = this.resolveHostId(hostId)
+    const session = this.getWorkspaceSession(resolvedHostId)
+    if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
+      this.state.workspaceSessionsByHostId = {
+        ...this.state.workspaceSessionsByHostId,
+        [resolvedHostId]: session
+      }
     }
     const sessionBeforeBinding = cloneWorkspaceSessionState(session)
+    const paneKey = `${args.tabId}:${args.leafId}`
+    let terminalMembershipChanged = false
+    const advanceTopologyAfterMembershipChange = (): void => {
+      const repoId = getRepoIdFromWorktreeId(args.worktreeId)
+      const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
+      if (!terminalMembershipChanged || currentRevision <= 0) {
+        return
+      }
+      // Why: a real host-admitted spawn after a retirement must be distinguishable from a stale renderer replay.
+      session.terminalTopologyRevisionByRepoId = {
+        ...session.terminalTopologyRevisionByRepoId,
+        [repoId]: currentRevision + 1
+      }
+    }
+    const restoreSession = (): void => {
+      if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
+        this.state.workspaceSession = sessionBeforeBinding
+      } else {
+        this.state.workspaceSessionsByHostId = {
+          ...this.state.workspaceSessionsByHostId,
+          [resolvedHostId]: sessionBeforeBinding
+        }
+      }
+    }
+    if (args.incarnationId) {
+      session.terminalPtyIncarnationsByPaneKey = {
+        ...session.terminalPtyIncarnationsByPaneKey,
+        [paneKey]: args.incarnationId
+      }
+      if (session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
+        session.terminalSurfaceTombstonesByPaneKey = {
+          ...session.terminalSurfaceTombstonesByPaneKey
+        }
+        delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
+      }
+    }
     const tabs = session.tabsByWorktree?.[args.worktreeId]
     const tab = tabs?.find((t) => t.id === args.tabId)
     if (tab) {
       tab.ptyId = args.ptyId
     } else {
+      terminalMembershipChanged = true
       // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
       const nextTabs = [
         ...(tabs ?? []),
@@ -5804,10 +6169,11 @@ export class Store {
     }
     if (!isTerminalLeafId(args.leafId)) {
       // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
+      advanceTopologyAfterMembershipChange()
       try {
         this.flushOrThrow()
       } catch (err) {
-        this.state.workspaceSession = sessionBeforeBinding
+        restoreSession()
         throw err
       }
       return
@@ -5815,11 +6181,13 @@ export class Store {
     const layout = session.terminalLayoutsByTabId?.[args.tabId]
     if (layout) {
       if (!layout.root) {
+        terminalMembershipChanged = true
         // Why: createTab can persist an empty layout before TerminalPane mounts; the sync binding still needs a durable root.
         layout.root = { type: 'leaf', leafId: args.leafId }
         layout.activeLeafId = args.leafId
         layout.expandedLeafId = null
       } else if (!layoutContainsLeafId(layout.root, args.leafId)) {
+        terminalMembershipChanged = true
         // Why: splitPane spawns before its snapshot reaches main; add a minimal leaf so a crash can't strand the pane's binding.
         layout.root = {
           type: 'split',
@@ -5837,6 +6205,7 @@ export class Store {
         [args.leafId]: args.ptyId
       }
     } else {
+      terminalMembershipChanged = true
       // Why: first tab spawn — persist a minimal layout so a SIGKILL before the renderer snapshot can't lose ptyIdsByLeafId.
       session.terminalLayoutsByTabId = {
         ...session.terminalLayoutsByTabId,
@@ -5848,10 +6217,11 @@ export class Store {
         }
       }
     }
+    advanceTopologyAfterMembershipChange()
     try {
       this.flushOrThrow()
     } catch (err) {
-      this.state.workspaceSession = sessionBeforeBinding
+      restoreSession()
       throw err
     }
   }
@@ -6216,54 +6586,61 @@ export class Store {
     targetId: string,
     leases: SshRemotePtyLease[]
   ): boolean {
-    const session = this.state.workspaceSession
-    if (!leases?.length || !session) {
+    if (!leases?.length) {
       return false
     }
     let changed = false
-    for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
-      for (const tab of tabs) {
-        if (
-          tab.ptyId &&
-          leases.some((lease) =>
-            this.sshRemotePtyLeaseMayReferenceBinding(lease, {
-              ptyId: tab.ptyId!,
-              worktreeId,
-              targetId,
-              tabId: tab.id
-            })
-          )
-        ) {
-          tab.ptyId = null
-          changed = true
-        }
-      }
-    }
-    for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
-      const bindings = layout.ptyIdsByLeafId
-      if (!bindings) {
-        continue
-      }
-      const worktreeId = Object.entries(session.tabsByWorktree ?? {}).find(([, tabs]) =>
-        tabs.some((tab) => tab.id === tabId)
-      )?.[0]
-      const nextBindings = Object.fromEntries(
-        Object.entries(bindings).filter(
-          ([leafId, ptyId]) =>
-            !leases.some((lease) =>
+    const sessions = new Set(
+      [
+        this.state.workspaceSession,
+        this.state.workspaceSessionsByHostId?.[toSshExecutionHostId(targetId)]
+      ].filter((session): session is WorkspaceSessionState => Boolean(session))
+    )
+    for (const session of sessions) {
+      for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
+        for (const tab of tabs) {
+          if (
+            tab.ptyId &&
+            leases.some((lease) =>
               this.sshRemotePtyLeaseMayReferenceBinding(lease, {
-                ptyId,
-                targetId,
+                ptyId: tab.ptyId!,
                 worktreeId,
-                tabId,
-                leafId
+                targetId,
+                tabId: tab.id
               })
             )
+          ) {
+            tab.ptyId = null
+            changed = true
+          }
+        }
+      }
+      for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
+        const bindings = layout.ptyIdsByLeafId
+        if (!bindings) {
+          continue
+        }
+        const worktreeId = Object.entries(session.tabsByWorktree ?? {}).find(([, tabs]) =>
+          tabs.some((tab) => tab.id === tabId)
+        )?.[0]
+        const nextBindings = Object.fromEntries(
+          Object.entries(bindings).filter(
+            ([leafId, ptyId]) =>
+              !leases.some((lease) =>
+                this.sshRemotePtyLeaseMayReferenceBinding(lease, {
+                  ptyId,
+                  targetId,
+                  worktreeId,
+                  tabId,
+                  leafId
+                })
+              )
+          )
         )
-      )
-      if (Object.keys(nextBindings).length !== Object.keys(bindings).length) {
-        layout.ptyIdsByLeafId = nextBindings
-        changed = true
+        if (Object.keys(nextBindings).length !== Object.keys(bindings).length) {
+          layout.ptyIdsByLeafId = nextBindings
+          changed = true
+        }
       }
     }
     if (changed) {

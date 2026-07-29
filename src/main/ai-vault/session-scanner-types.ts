@@ -1,5 +1,5 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type {
+  AiVaultAgent,
   AiVaultScanIssue,
   AiVaultSession,
   AiVaultSessionPreviewMessage
@@ -110,6 +110,7 @@ export type SessionAccumulator = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  lastUserPrompt: string | null
   // Recoverable signal for a zero-turn transcript (see AiVaultSession).
   queuedMessageCount: number
   subagentTranscriptCount: number

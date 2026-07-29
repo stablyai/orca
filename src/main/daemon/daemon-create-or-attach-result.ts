@@ -1,5 +1,7 @@
 import type { TuiAgent } from '../../shared/types'
 import type { ShellReadyState, TerminalSnapshot } from './types'
+import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 
 export type DaemonCreateOrAttachResult = {
   isNew: boolean
@@ -10,6 +12,8 @@ export type DaemonCreateOrAttachResult = {
   launchAgent?: TuiAgent
   /** Undefined only when talking to a daemon predating WSL session context. */
   wslDistro?: string | null
+  agentSessionEnsure?: AgentSessionClaimedSpawnResult
+  incarnationId?: PtyIncarnationId
 }
 
 export function getDaemonSessionResultMetadata(session: {

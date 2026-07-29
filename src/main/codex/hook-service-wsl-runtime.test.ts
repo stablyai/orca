@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, win32 as pathWin32 } from 'node:path'
 
 import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installer-utils'
+import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from '../agent-hooks/hook-stdin-contract'
 import {
   computeTrustKey,
   computeTrustedHash,
@@ -33,6 +34,8 @@ const managedEvents = [
   'PreToolUse',
   'PermissionRequest',
   'PostToolUse',
+  'SubagentStart',
+  'SubagentStop',
   'Stop'
 ] as const
 
@@ -75,7 +78,7 @@ function getManagedTrustEntry(
 }
 
 function expectedManagedCommand(scriptPath: string): string {
-  return `if [ -f '${scriptPath}' ] && [ -r '${scriptPath}' ]; then /bin/sh '${scriptPath}'; else cat >/dev/null 2>&1 || :; fi`
+  return `if [ -f '${scriptPath}' ] && [ -r '${scriptPath}' ]; then /bin/sh '${scriptPath}'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
 }
 
 describe('Codex WSL runtime hook install', () => {

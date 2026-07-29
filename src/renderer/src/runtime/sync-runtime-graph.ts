@@ -68,6 +68,15 @@ type TabsProjectionCache = {
   entries: Map<string, TabsProjectionCacheEntry>
   projection: string
 }
+type AgentStatusProjectionCacheEntry = {
+  entry: AppState['agentStatusByPaneKey'][string]
+  projection: string
+}
+type AgentStatusProjectionCache = {
+  source: AppState['agentStatusByPaneKey']
+  entries: Map<string, AgentStatusProjectionCacheEntry>
+  projection: string
+}
 
 const registeredTabs = new Map<string, RegisteredTerminalTab>()
 // Why: registration time suppresses the "no live transport" warning during the async PTY-connect window; after the grace period it's a real stuck state.
@@ -87,7 +96,49 @@ let syncEnabled = false
 let syncTimer: ReturnType<typeof setTimeout> | null = null
 let getStoreState: (() => AppState) | null = null
 let mobileSessionSnapshotVersion = 0
+// Why: main gates per-worktree mobile fanout on (publicationEpoch,
+// snapshotVersion), so that pair must be a semantic revision: reuse the cached
+// snapshot (same version) whenever a worktree's mobile-visible content is
+// unchanged, and bump the version only for worktrees that actually changed.
+const mobileSessionSnapshotCacheByWorktree = new Map<
+  string,
+  { content: unknown; snapshot: RuntimeMobileSessionTabsSnapshot }
+>()
+
+// Structural equality under JSON-serialization semantics (undefined-valued
+// keys are absent), so version reuse matches a JSON fingerprint exactly
+// without allocating a serialized copy of the payload on every graph sync.
+// Any value strict-equality can't prove equal (e.g. NaN) reads as changed,
+// which only costs a redundant fanout — never a suppressed one.
+function jsonContentEquals(a: unknown, b: unknown): boolean {
+  if (a === b) {
+    return true
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+      return false
+    }
+    return a.every((item, index) => jsonContentEquals(item, b[index]))
+  }
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) {
+    return false
+  }
+  const aRecord = a as Record<string, unknown>
+  const bRecord = b as Record<string, unknown>
+  for (const key of Object.keys(aRecord)) {
+    if (!jsonContentEquals(aRecord[key], bRecord[key])) {
+      return false
+    }
+  }
+  for (const key of Object.keys(bRecord)) {
+    if (bRecord[key] !== undefined && aRecord[key] === undefined) {
+      return false
+    }
+  }
+  return true
+}
 let cachedTabsProjection: TabsProjectionCache | null = null
+let cachedAgentStatusProjection: AgentStatusProjectionCache | null = null
 let cachedOpenFileIndexesSource: AppState['openFiles'] | null = null
 let cachedOpenFileIndexes: OpenFileIndexes | null = null
 let cachedEditorDraftsSource: AppState['editorDrafts'] | null = null
@@ -194,6 +245,7 @@ export type RuntimeMobileSessionSyncKey = {
   // Why: compared by reference; reallocation signals a real layout/title change, avoiding stringifying thousands of tabs. See docs/agent-working-pane-typing-lag.md.
   terminalLayoutsByTabId: AppState['terminalLayoutsByTabId']
   runtimePaneTitlesByTabId: AppState['runtimePaneTitlesByTabId']
+  nativeChatLaunchDraftByTabId: AppState['nativeChatLaunchDraftByTabId']
   groupsByWorktree: AppState['groupsByWorktree']
   activeGroupIdByWorktree: AppState['activeGroupIdByWorktree']
   layoutByWorktree: AppState['layoutByWorktree']
@@ -249,6 +301,7 @@ export function canSkipRuntimeMobileSessionSyncKeyBuild(
     state.activeTabId === previousState.activeTabId &&
     state.terminalLayoutsByTabId === previousState.terminalLayoutsByTabId &&
     state.runtimePaneTitlesByTabId === previousState.runtimePaneTitlesByTabId &&
+    state.nativeChatLaunchDraftByTabId === previousState.nativeChatLaunchDraftByTabId &&
     state.agentStatusEpoch === previousState.agentStatusEpoch &&
     state.agentStatusByPaneKey === previousState.agentStatusByPaneKey
   )
@@ -285,6 +338,7 @@ export function getRuntimeMobileSessionSyncKey(
   return {
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
+    nativeChatLaunchDraftByTabId: state.nativeChatLaunchDraftByTabId,
     groupsByWorktree: state.groupsByWorktree,
     activeGroupIdByWorktree: state.activeGroupIdByWorktree,
     layoutByWorktree: state.layoutByWorktree ?? EMPTY_LAYOUT_BY_WORKTREE,
@@ -450,35 +504,76 @@ function buildRuntimeMobileEditorDraftsProjection(editorDrafts: AppState['editor
   )
 }
 
+function serializeRuntimeMobileAgentStatusEntry(
+  paneKey: string,
+  entry: AppState['agentStatusByPaneKey'][string]
+): string {
+  return JSON.stringify({
+    paneKey,
+    entryPaneKey: entry.paneKey,
+    state: entry.state,
+    prompt: entry.prompt,
+    updatedAtBucket: Math.floor(entry.updatedAt / AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS),
+    stateStartedAt: entry.stateStartedAt,
+    agentType: entry.agentType ?? null,
+    terminalTitle: entry.terminalTitle ?? null,
+    stateHistory: entry.stateHistory.map((history) => ({
+      state: history.state,
+      prompt: history.prompt,
+      startedAt: history.startedAt,
+      interrupted: history.interrupted ?? null
+    })),
+    toolName: entry.toolName ?? null,
+    toolInput: entry.toolInput ?? null,
+    // Why: include so a newly-captured AskUserQuestion prompt re-fires the mobile republish even when no other field changed.
+    interactivePrompt: entry.interactivePrompt ?? null,
+    lastAssistantMessage: entry.lastAssistantMessage ?? null,
+    interrupted: entry.interrupted ?? null
+  })
+}
+
 function buildRuntimeMobileAgentStatusProjection(
   agentStatusByPaneKey: AppState['agentStatusByPaneKey']
 ): string {
-  return JSON.stringify(
-    Object.entries(agentStatusByPaneKey)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([paneKey, entry]) => ({
-        paneKey,
-        entryPaneKey: entry.paneKey,
-        state: entry.state,
-        prompt: entry.prompt,
-        updatedAtBucket: Math.floor(entry.updatedAt / AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS),
-        stateStartedAt: entry.stateStartedAt,
-        agentType: entry.agentType ?? null,
-        terminalTitle: entry.terminalTitle ?? null,
-        stateHistory: entry.stateHistory.map((history) => ({
-          state: history.state,
-          prompt: history.prompt,
-          startedAt: history.startedAt,
-          interrupted: history.interrupted ?? null
-        })),
-        toolName: entry.toolName ?? null,
-        toolInput: entry.toolInput ?? null,
-        // Why: include so a newly-captured AskUserQuestion prompt re-fires the mobile republish even when no other field changed.
-        interactivePrompt: entry.interactivePrompt ?? null,
-        lastAssistantMessage: entry.lastAssistantMessage ?? null,
-        interrupted: entry.interrupted ?? null
-      }))
-  )
+  if (cachedAgentStatusProjection?.source === agentStatusByPaneKey) {
+    return cachedAgentStatusProjection.projection
+  }
+
+  // Why per-entry: a status ping replaces one entry and re-spreads the map, so
+  // without this every other live agent — each carrying a 20-entry history and an
+  // 8 KB message — is re-serialized to discover it did not change.
+  const previousEntries = cachedAgentStatusProjection?.entries
+  const entries = new Map<string, AgentStatusProjectionCacheEntry>()
+  const parts: string[] = []
+
+  for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey).sort(([a], [b]) =>
+    a.localeCompare(b)
+  )) {
+    const previous = previousEntries?.get(paneKey)
+    const cached =
+      previous?.entry === entry
+        ? previous
+        : { entry, projection: serializeRuntimeMobileAgentStatusEntry(paneKey, entry) }
+    entries.set(paneKey, cached)
+    parts.push(cached.projection)
+  }
+
+  const projection = `[${parts.join(',')}]`
+  cachedAgentStatusProjection = { source: agentStatusByPaneKey, entries, projection }
+  return projection
+}
+
+export function buildRuntimeMobileAgentStatusProjectionForTests(
+  agentStatusByPaneKey: AppState['agentStatusByPaneKey']
+): string {
+  return buildRuntimeMobileAgentStatusProjection(agentStatusByPaneKey)
+}
+
+export const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS =
+  AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS
+
+export function resetRuntimeMobileAgentStatusProjectionCacheForTests(): void {
+  cachedAgentStatusProjection = null
 }
 
 export function runtimeMobileSessionSyncKeysEqual(
@@ -488,6 +583,7 @@ export function runtimeMobileSessionSyncKeysEqual(
   return (
     a.terminalLayoutsByTabId === b.terminalLayoutsByTabId &&
     a.runtimePaneTitlesByTabId === b.runtimePaneTitlesByTabId &&
+    a.nativeChatLaunchDraftByTabId === b.nativeChatLaunchDraftByTabId &&
     a.groupsByWorktree === b.groupsByWorktree &&
     a.activeGroupIdByWorktree === b.activeGroupIdByWorktree &&
     a.layoutByWorktree === b.layoutByWorktree &&
@@ -821,17 +917,38 @@ export function buildMobileSessionTabSnapshots(
             new Set(tabGroups.map((group) => group.id))
           )
         : groupProjection.tabGroupLayout
-    snapshots.push({
-      worktree: worktreeId,
-      publicationEpoch: mobileSessionPublicationEpoch,
-      snapshotVersion: ++mobileSessionSnapshotVersion,
+    const content = {
       activeGroupId,
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
       ...(tabGroups && tabGroups.length > 0 ? { tabGroups } : {}),
       ...(tabGroupLayout ? { tabGroupLayout } : {}),
       tabs
-    })
+    }
+    // Why: main suppresses per-worktree fanout on an unchanged (epoch, version)
+    // pair, so reuse the cached version for structurally-identical content. The
+    // global counter still advances per worktree per build (as before caching)
+    // so a changed worktree's fresh version stays ahead of main's +1 bumps.
+    const candidateVersion = ++mobileSessionSnapshotVersion
+    const cached = mobileSessionSnapshotCacheByWorktree.get(worktreeId)
+    if (cached && jsonContentEquals(cached.content, content)) {
+      snapshots.push(cached.snapshot)
+      continue
+    }
+    const snapshot: RuntimeMobileSessionTabsSnapshot = {
+      worktree: worktreeId,
+      publicationEpoch: mobileSessionPublicationEpoch,
+      snapshotVersion: candidateVersion,
+      ...content
+    }
+    mobileSessionSnapshotCacheByWorktree.set(worktreeId, { content, snapshot })
+    snapshots.push(snapshot)
+  }
+
+  for (const worktreeId of mobileSessionSnapshotCacheByWorktree.keys()) {
+    if (!worktreeIds.has(worktreeId)) {
+      mobileSessionSnapshotCacheByWorktree.delete(worktreeId)
+    }
   }
 
   return snapshots
@@ -1250,6 +1367,12 @@ function buildMobileTerminalSurfaceTabs(
     : undefined
   const savedPtyIdsByLeafId = sanitizedSavedLayout?.ptyIdsByLeafId ?? {}
   const terminalTheme = resolveMobileTerminalTheme(state, systemPrefersDark)
+  // Agent-matched like the desktop consumer: a pane whose agent changed keeps its
+  // tab id, so an unmatched seed would prefill the new agent's chat with stale text.
+  const seededLaunchDraft = state.nativeChatLaunchDraftByTabId?.[terminal.id]
+  const launchDraftEntry =
+    seededLaunchDraft && seededLaunchDraft.agent === terminal.launchAgent ? seededLaunchDraft : null
+  const launchDraftText = launchDraftEntry?.text.trim() ? launchDraftEntry.text : null
   const container = registered?.getContainer()
   const firstChild = container?.firstElementChild
   const liveLayoutRoot = serializePaneTree(
@@ -1310,6 +1433,9 @@ function buildMobileTerminalSurfaceTabs(
       ...(terminalTheme ? { terminalTheme } : {}),
       ...(agentStatus ? { agentStatus } : {}),
       ...(terminal.launchAgent ? { launchAgent: terminal.launchAgent } : {}),
+      // Launch context that exists only as an unsent TUI-input draft; mobile
+      // prefills its chat composer from it (desktop keeps its own seed store).
+      ...(launchDraftText ? { launchDraft: launchDraftText } : {}),
       parentLayout,
       isActive: isDesktopTabActive && leafId === activeLeafId
     }

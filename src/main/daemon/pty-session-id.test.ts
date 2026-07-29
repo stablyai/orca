@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { isSafePtySessionId, mintPtySessionId, parsePtySessionId } from './pty-session-id'
+import {
+  isSafePtySessionId,
+  mintPtySessionId,
+  parsePtySessionId,
+  ptySessionIdForAgentCreateOperation
+} from './pty-session-id'
 
 const USER_DATA = '/tmp/orca-userdata'
 
@@ -20,6 +25,32 @@ describe('mintPtySessionId', () => {
     // splits on `@@` to recover the worktreeId.
     const id = mintPtySessionId('repo-123::/Users/me/work/wt-1')
     expect(id).toMatch(/^repo-123::\/Users\/me\/work\/wt-1@@[0-9a-f]{8}$/)
+  })
+})
+
+describe('ptySessionIdForAgentCreateOperation', () => {
+  it('derives the same daemon session for retries of one host operation', () => {
+    const operationId = 'a'.repeat(43)
+
+    expect(ptySessionIdForAgentCreateOperation('repo::/tmp/worktree', operationId)).toBe(
+      'repo::/tmp/worktree@@aaaaaaaa'
+    )
+    expect(ptySessionIdForAgentCreateOperation(undefined, operationId)).toBe('aaaaaaaa')
+  })
+
+  it('produces a safe session id for a path-shaped worktree', () => {
+    const id = ptySessionIdForAgentCreateOperation('repo::/Users/dev/worktree', 'b'.repeat(43))
+
+    expect(isSafePtySessionId(id, USER_DATA)).toBe(true)
+    expect(parsePtySessionId(id)).toEqual({ worktreeId: 'repo::/Users/dev/worktree' })
+  })
+
+  it('preserves the legacy worktree length boundary', () => {
+    const worktreeId = `repo::/${'w'.repeat(495)}`
+    const id = ptySessionIdForAgentCreateOperation(worktreeId, 'c'.repeat(43))
+
+    expect(id).toHaveLength(512)
+    expect(isSafePtySessionId(id, USER_DATA)).toBe(true)
   })
 })
 

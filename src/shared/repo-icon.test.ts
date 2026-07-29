@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { githubAvatarIcon, sanitizeRepoIcon } from './repo-icon'
 
+const PNG_1X1_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
+const WEBP_1X1_BASE64 = 'UklGRhoAAABXRUJQVlA4IA4AAAAwAQCdASoBAAEAAQIlSkwAAA=='
+
+function pngBase64(width: number, height: number): string {
+  const bytes = Buffer.alloc(24)
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes)
+  bytes.writeUInt32BE(13, 8)
+  bytes.write('IHDR', 12, 'ascii')
+  bytes.writeUInt32BE(width, 16)
+  bytes.writeUInt32BE(height, 20)
+  return bytes.toString('base64')
+}
+
 describe('sanitizeRepoIcon', () => {
   it('accepts lucide, emoji, and supported image icons', () => {
     expect(sanitizeRepoIcon({ type: 'lucide', name: 'Folder' })).toEqual({
@@ -51,23 +65,34 @@ describe('sanitizeRepoIcon', () => {
     expect(
       sanitizeRepoIcon({
         type: 'image',
-        src: 'data:image/png;base64,aGVsbG8=',
+        src: `data:image/png;base64,${PNG_1X1_BASE64}`,
         source: 'upload'
       })
     ).toEqual({
       type: 'image',
-      src: 'data:image/png;base64,aGVsbG8=',
+      src: `data:image/png;base64,${PNG_1X1_BASE64}`,
       source: 'upload'
     })
     expect(
       sanitizeRepoIcon({
         type: 'image',
-        src: 'data:image/png;base64,aGVsbG8=',
+        src: `data:image/png;base64,${PNG_1X1_BASE64}`,
         source: 'file'
       })
     ).toEqual({
       type: 'image',
-      src: 'data:image/png;base64,aGVsbG8=',
+      src: `data:image/png;base64,${PNG_1X1_BASE64}`,
+      source: 'file'
+    })
+    expect(
+      sanitizeRepoIcon({
+        type: 'image',
+        src: `data:image/webp;base64,${WEBP_1X1_BASE64}`,
+        source: 'file'
+      })
+    ).toEqual({
+      type: 'image',
+      src: `data:image/webp;base64,${WEBP_1X1_BASE64}`,
       source: 'file'
     })
   })
@@ -87,6 +112,13 @@ describe('sanitizeRepoIcon', () => {
     expect(
       sanitizeRepoIcon({
         type: 'image',
+        src: `data:image/png;base64,${pngBase64(32_769, 1)}`,
+        source: 'upload'
+      })
+    ).toBeUndefined()
+    expect(
+      sanitizeRepoIcon({
+        type: 'image',
         src: `data:image/png;base64,${'a'.repeat(401 * 1024)}`,
         source: 'upload'
       })
@@ -96,6 +128,13 @@ describe('sanitizeRepoIcon', () => {
         type: 'image',
         src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
         source: 'upload'
+      })
+    ).toBeUndefined()
+    expect(
+      sanitizeRepoIcon({
+        type: 'image',
+        src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
+        source: 'file'
       })
     ).toBeUndefined()
     expect(

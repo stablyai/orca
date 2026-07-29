@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT } from '@/constants/terminal'
-import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
-import { resetRemoteRuntimeTerminalMultiplexersForTests } from '@/runtime/remote-runtime-terminal-multiplexer'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
+import {
+  AGENT_BACKGROUND_SESSION_UUID_RE as UUID_RE,
+  createAgentBackgroundSessionTestState,
+  expectReservedAgentBackgroundTabId,
+  expectStableAgentBackgroundPaneSpawn,
+  resetAgentBackgroundSessionTestHarness
+} from '@/lib/agent-background-session-test-state'
 
 const mockSpawn = vi.fn()
 const mockKill = vi.fn()
@@ -24,74 +28,20 @@ const mockPasteDraftWhenAgentReady = vi.fn()
 const mockMarkTrusted = vi.fn()
 const mockDispatchEvent = vi.fn()
 const mockGetAgentLaunchPlatformForRepo = vi.fn<() => NodeJS.Platform>()
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-
-function expectStablePaneSpawn(): string {
-  const spawnArgs = mockSpawn.mock.calls[0]?.[0]
-  const paneKey = spawnArgs?.env?.ORCA_PANE_KEY
-  const leafId = spawnArgs?.leafId
-  expect(typeof paneKey).toBe('string')
-  expect(typeof leafId).toBe('string')
-  expect(leafId).toMatch(UUID_RE)
-  expect(paneKey).toBe(`tab-1:${leafId}`)
-  return paneKey
-}
-
-const state = {
-  activeRepoId: 'repo-1',
-  activeWorktreeId: 'wt-1',
-  settings: {
-    agentCmdOverrides: {},
-    activeRuntimeEnvironmentId: null as string | null,
-    terminalMainSideEffectAuthority: undefined as boolean | undefined
-  },
-  projects: [
-    {
-      id: 'repo-1',
-      localWindowsRuntimePreference: { kind: 'inherit-global' as const }
-    }
-  ] as {
-    id: string
-    localWindowsRuntimePreference:
-      | { kind: 'inherit-global' }
-      | { kind: 'windows-host' }
-      | { kind: 'wsl'; distro: string | null }
-  }[],
-  repos: [{ id: 'repo-1', connectionId: null as string | null, path: '/repo' }],
-  worktreesByRepo: {
-    'repo-1': [
-      {
-        id: 'wt-1',
-        repoId: 'repo-1',
-        projectId: 'repo-1',
-        path: '/repo/worktree',
-        displayName: 'main'
-      }
-    ]
-  },
-  tabsByWorktree: { 'wt-1': [] as { id: string; title: string }[] },
-  terminalLayoutsByTabId: {} as Record<
-    string,
-    { ptyIdsByLeafId?: Record<string, string | undefined> }
-  >,
-  ptyIdsByTabId: {} as Record<string, string[]>,
-  sshConnectionStates: new Map<string, { status: string }>(),
-  transientClearedAgentStatusConnectionIds: {} as Record<string, true>,
-  allWorktrees: vi.fn(() => state.worktreesByRepo['repo-1']),
+const state = createAgentBackgroundSessionTestState({
   createTab: mockCreateTab,
   setTabCustomTitle: mockSetTabCustomTitle,
   updateTabPtyId: mockUpdateTabPtyId,
   closeTab: mockCloseTab,
   setTabLayout: mockSetTabLayout,
-  clearTabPtyId: vi.fn(),
-  setAgentStatus: vi.fn(),
-  registerAgentLaunchConfig: mockRegisterAgentLaunchConfig,
-  clearAgentLaunchConfig: vi.fn()
-}
+  registerAgentLaunchConfig: mockRegisterAgentLaunchConfig
+})
+let currentStoreState = state
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => state
+    getState: () => currentStoreState,
+    subscribe: vi.fn(() => () => {})
   }
 }))
 
@@ -119,92 +69,28 @@ vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
 
 describe('launchAgentBackgroundSession', () => {
   beforeEach(() => {
-    resetRemoteRuntimeTerminalMultiplexersForTests()
-    clearRuntimeCompatibilityCacheForTests()
-    vi.clearAllMocks()
-    mockGetAgentLaunchPlatformForRepo.mockReturnValue('linux')
-    mockRuntimeEnvironmentTransportCall.mockImplementation(
-      (args) =>
-        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? mockRuntimeEnvironmentCall(args)
-    )
-    state.activeRepoId = 'repo-1'
-    state.activeWorktreeId = 'wt-1'
-    state.settings = {
-      agentCmdOverrides: {},
-      activeRuntimeEnvironmentId: null,
-      terminalMainSideEffectAuthority: undefined
-    }
-    state.projects = [
-      {
-        id: 'repo-1',
-        localWindowsRuntimePreference: { kind: 'inherit-global' }
-      }
-    ]
-    state.repos = [{ id: 'repo-1', connectionId: null, path: '/repo' }]
-    state.worktreesByRepo = {
-      'repo-1': [
-        {
-          id: 'wt-1',
-          repoId: 'repo-1',
-          projectId: 'repo-1',
-          path: '/repo/worktree',
-          displayName: 'main'
-        }
-      ]
-    }
-    state.tabsByWorktree = { 'wt-1': [] }
-    state.terminalLayoutsByTabId = {}
-    state.ptyIdsByTabId = {}
-    state.sshConnectionStates = new Map()
-    state.transientClearedAgentStatusConnectionIds = {}
-    mockCreateTab.mockImplementation(() => {
-      const tab = { id: 'tab-1', title: 'Terminal 1' }
-      state.tabsByWorktree['wt-1'].push(tab)
-      return tab
-    })
-    mockCloseTab.mockImplementation((tabId: string) => {
-      state.tabsByWorktree['wt-1'] = state.tabsByWorktree['wt-1'].filter((tab) => tab.id !== tabId)
-    })
-    mockSetTabLayout.mockImplementation((tabId: string, layout) => {
-      state.terminalLayoutsByTabId[tabId] = layout
-    })
-    mockUpdateTabPtyId.mockImplementation((tabId: string, ptyId: string) => {
-      state.ptyIdsByTabId[tabId] = [ptyId]
-    })
-    mockSpawn.mockResolvedValue({ id: 'pty-1' })
-    mockRuntimeEnvironmentCall.mockResolvedValue({
-      ok: true,
-      result: { terminal: { handle: 'terminal-1', worktreeId: 'wt-1', title: null } }
-    })
-    mockRuntimeEnvironmentSubscribe.mockImplementation(async (_args, callbacks) => {
-      queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
-      return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
-    })
-    mockSubscribeToPtyData.mockReturnValue(vi.fn())
-    mockSubscribeToPtyExit.mockReturnValue(vi.fn())
-    vi.stubGlobal('window', {
+    currentStoreState = state
+    resetAgentBackgroundSessionTestHarness({
+      state,
+      createTab: mockCreateTab,
+      closeTab: mockCloseTab,
+      getLaunchPlatform: mockGetAgentLaunchPlatformForRepo,
+      runtimeCall: mockRuntimeEnvironmentCall,
+      runtimeTransportCall: mockRuntimeEnvironmentTransportCall,
+      runtimeSubscribe: mockRuntimeEnvironmentSubscribe,
+      subscribeToData: mockSubscribeToPtyData,
+      subscribeToExit: mockSubscribeToPtyExit,
+      setTabLayout: mockSetTabLayout,
+      updateTabPtyId: mockUpdateTabPtyId,
       dispatchEvent: mockDispatchEvent,
-      api: {
-        pty: {
-          spawn: mockSpawn,
-          write: mockWrite,
-          kill: mockKill
-        },
-        agentTrust: {
-          markTrusted: mockMarkTrusted
-        },
-        runtime: {
-          call: vi.fn()
-        },
-        runtimeEnvironments: {
-          call: mockRuntimeEnvironmentTransportCall,
-          subscribe: mockRuntimeEnvironmentSubscribe
-        }
-      }
+      kill: mockKill,
+      markTrusted: mockMarkTrusted,
+      spawn: mockSpawn,
+      write: mockWrite
     })
   })
 
-  it('spawns a PTY immediately and adopts it in an inactive tab', async () => {
+  it('spawns a PTY first and creates the inactive tab already bound to it', async () => {
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
     const result = await launchAgentBackgroundSession({
@@ -214,14 +100,21 @@ describe('launchAgentBackgroundSession', () => {
       title: 'Nightly audit'
     })
 
+    const tabId = expectReservedAgentBackgroundTabId(mockSpawn)
+    // A store-visible PTY-less run tab fresh-spawns a shell (#2989).
+    expect(mockSpawn.mock.invocationCallOrder[0]).toBeLessThan(
+      mockCreateTab.mock.invocationCallOrder[0] ?? 0
+    )
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      id: tabId,
+      initialPtyId: 'pty-1',
       activate: false,
       recordInteraction: false
     })
     expect(mockDispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
-        detail: { worktreeId: 'wt-1', tabIds: ['tab-1'] }
+        detail: { worktreeId: 'wt-1', tabIds: [tabId] }
       })
     )
     expect(mockUpdateTabPtyId.mock.invocationCallOrder[0]).toBeLessThan(
@@ -232,18 +125,18 @@ describe('launchAgentBackgroundSession', () => {
         cwd: '/repo/worktree',
         command: "claude '--dangerously-skip-permissions' 'run the automation'",
         env: expect.objectContaining({
-          ORCA_TAB_ID: 'tab-1',
+          ORCA_TAB_ID: tabId,
           ORCA_WORKTREE_ID: 'wt-1'
         }),
         connectionId: null,
         worktreeId: 'wt-1',
-        tabId: 'tab-1'
+        tabId
       })
     )
-    const paneKey = expectStablePaneSpawn()
-    const leafId = paneKey.slice('tab-1:'.length)
+    const paneKey = expectStableAgentBackgroundPaneSpawn(mockSpawn)
+    const leafId = paneKey.slice(`${tabId}:`.length)
     expect(mockSetTabLayout).toHaveBeenCalledWith(
-      'tab-1',
+      tabId,
       expect.objectContaining({
         root: { type: 'leaf', leafId },
         activeLeafId: leafId,
@@ -263,17 +156,17 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSpawn.mock.calls[0]?.[0].launchToken).toBe(
       mockSpawn.mock.calls[0]?.[0].env.ORCA_AGENT_LAUNCH_TOKEN
     )
-    expect(mockSetTabCustomTitle).toHaveBeenCalledWith('tab-1', 'Nightly audit', {
+    expect(mockSetTabCustomTitle).toHaveBeenCalledWith(tabId, 'Nightly audit', {
       recordInteraction: false
     })
-    expect(mockUpdateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-1')
+    expect(mockUpdateTabPtyId).toHaveBeenCalledWith(tabId, 'pty-1')
     expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyData).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyExit).toHaveBeenCalledWith('pty-1', expect.any(Function))
-    expect(result).toMatchObject({ tabId: 'tab-1', paneKey, ptyId: 'pty-1' })
+    expect(result).toMatchObject({ tabId, paneKey, ptyId: 'pty-1' })
   })
 
-  it('does not mount the tab while the explicit PTY spawn is unresolved', async () => {
+  it('does not create or mount the tab while the explicit PTY spawn is unresolved', async () => {
     let resolveSpawn!: (result: { id: string }) => void
     mockSpawn.mockReturnValueOnce(
       new Promise<{ id: string }>((resolve) => {
@@ -289,18 +182,24 @@ describe('launchAgentBackgroundSession', () => {
     })
     await Promise.resolve()
 
-    expect(mockCreateTab).toHaveBeenCalled()
+    // Publishing a PTY-less tab here reproduces #2989.
+    expect(mockCreateTab).not.toHaveBeenCalled()
     expect(mockDispatchEvent).not.toHaveBeenCalled()
 
     resolveSpawn({ id: 'pty-slow' })
     await expect(launch).resolves.toMatchObject({ ptyId: 'pty-slow' })
-    expect(mockUpdateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-slow')
+    const tabId = expectReservedAgentBackgroundTabId(mockSpawn)
+    expect(mockCreateTab.mock.calls[0]?.[3]).toMatchObject({
+      id: tabId,
+      initialPtyId: 'pty-slow'
+    })
+    expect(mockUpdateTabPtyId).toHaveBeenCalledWith(tabId, 'pty-slow')
     expect(mockDispatchEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ detail: { worktreeId: 'wt-1', tabIds: ['tab-1'] } })
+      expect.objectContaining({ detail: { worktreeId: 'wt-1', tabIds: [tabId] } })
     )
   })
 
-  it('kills a local PTY when its tab closes before spawn resolves', async () => {
+  it('kills a local PTY when its worktree disappears before spawn resolves', async () => {
     let resolveSpawn!: (result: { id: string }) => void
     mockSpawn.mockReturnValueOnce(
       new Promise<{ id: string }>((resolve) => {
@@ -314,68 +213,66 @@ describe('launchAgentBackgroundSession', () => {
       worktreeId: 'wt-1',
       prompt: 'run slowly'
     })
-    await vi.waitFor(() => expect(mockCreateTab).toHaveBeenCalledOnce())
-    state.tabsByWorktree['wt-1'] = []
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalledOnce())
+    state.worktreesByRepo['repo-1'] = []
     resolveSpawn({ id: 'pty-after-close' })
 
     await expect(launch).resolves.toBeNull()
     expect(mockKill).toHaveBeenCalledWith('pty-after-close')
+    expect(mockCreateTab).not.toHaveBeenCalled()
     expect(mockUpdateTabPtyId).not.toHaveBeenCalled()
     expect(mockSubscribeToPtyData).not.toHaveBeenCalled()
     expect(mockDispatchEvent).not.toHaveBeenCalled()
   })
 
-  it('closes a runtime terminal when its tab closes before creation resolves', async () => {
-    state.settings = {
-      agentCmdOverrides: {},
-      activeRuntimeEnvironmentId: 'env-1',
-      terminalMainSideEffectAuthority: undefined
-    }
-    let resolveCreate!: (result: {
-      ok: true
-      result: { terminal: { handle: string; worktreeId: string; title: null } }
-    }) => void
-    const createResult = new Promise<{
-      ok: true
-      result: { terminal: { handle: string; worktreeId: string; title: null } }
-    }>((resolve) => {
-      resolveCreate = resolve
-    })
-    mockRuntimeEnvironmentCall.mockImplementation((args: { method: string }) => {
-      if (args.method === 'terminal.create') {
-        return createResult
-      }
-      return Promise.resolve({ ok: true, result: {} })
-    })
+  it('launches into a folder workspace that is absent from worktreesByRepo throughout', async () => {
+    // Folder workspaces never appear in worktreesByRepo.
+    state.worktreesByRepo['repo-1'] = []
+    state.folderWorkspaces = [
+      { id: 'fw-1', projectGroupId: 'grp-1', folderPath: '/tmp/folder-workspace' }
+    ]
+    state.projectGroups = [{ id: 'grp-1', connectionId: null }]
+    state.getKnownWorktreeById = (worktreeId: string) =>
+      worktreeId === 'folder:fw-1'
+        ? { id: 'folder:fw-1', path: '/tmp/folder-workspace' }
+        : undefined
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
     const launch = launchAgentBackgroundSession({
       agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt: 'run remotely'
-    })
-    await vi.waitFor(() => expect(mockCreateTab).toHaveBeenCalledOnce())
-    await vi.waitFor(() =>
-      expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
-        expect.objectContaining({ method: 'terminal.create' })
-      )
-    )
-    state.tabsByWorktree['wt-1'] = []
-    resolveCreate({
-      ok: true,
-      result: { terminal: { handle: 'terminal-after-close', worktreeId: 'wt-1', title: null } }
+      worktreeId: 'folder:fw-1',
+      prompt: 'run in a folder workspace'
     })
 
-    await expect(launch).resolves.toBeNull()
-    expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
+    await expect(launch).resolves.toMatchObject({ ptyId: 'pty-1' })
+    expect(mockKill).not.toHaveBeenCalled()
+    expect(mockCreateTab).toHaveBeenCalledOnce()
+  })
+
+  it('launches a local WSL folder through wsl.exe', async () => {
+    const folderPath = '\\\\wsl.localhost\\Ubuntu\\home\\me\\project'
+    state.worktreesByRepo['repo-1'] = []
+    state.folderWorkspaces = [
+      { id: 'fw-wsl', projectGroupId: 'grp-wsl', folderPath, connectionId: null }
+    ]
+    state.projectGroups = [{ id: 'grp-wsl', connectionId: null }]
+    state.getKnownWorktreeById = (worktreeId: string) =>
+      worktreeId === 'folder:fw-wsl' ? { id: worktreeId, path: folderPath } : undefined
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'folder:fw-wsl',
+      prompt: 'run the automation'
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({
-        method: 'terminal.close',
-        params: { terminal: 'terminal-after-close' }
+        cwd: folderPath,
+        shellOverride: 'wsl.exe',
+        command: "claude '--dangerously-skip-permissions' 'run the automation'"
       })
     )
-    expect(mockUpdateTabPtyId).not.toHaveBeenCalled()
-    expect(mockRuntimeEnvironmentSubscribe).not.toHaveBeenCalled()
-    expect(mockDispatchEvent).not.toHaveBeenCalled()
   })
 
   it('records effective launch config returned by local PTY spawn', async () => {
@@ -393,12 +290,13 @@ describe('launchAgentBackgroundSession', () => {
       prompt: 'run the automation'
     })
 
-    const paneKey = expectStablePaneSpawn()
-    const leafId = paneKey.slice('tab-1:'.length)
+    const paneKey = expectStableAgentBackgroundPaneSpawn(mockSpawn)
+    const tabId = expectReservedAgentBackgroundTabId(mockSpawn)
+    const leafId = paneKey.slice(`${tabId}:`.length)
     expect(mockRegisterAgentLaunchConfig).toHaveBeenLastCalledWith(paneKey, effectiveLaunchConfig, {
       agentType: 'claude',
       launchToken: mockSpawn.mock.calls[0]?.[0].env.ORCA_AGENT_LAUNCH_TOKEN,
-      tabId: 'tab-1',
+      tabId,
       leafId
     })
   })
@@ -437,7 +335,7 @@ describe('launchAgentBackgroundSession', () => {
         command: "claude '--dangerously-skip-permissions' 'don'\\''t use powershell quoting'",
         connectionId: null,
         worktreeId: 'wt-1',
-        tabId: 'tab-1'
+        tabId: expect.stringMatching(UUID_RE)
       })
     )
   })
@@ -476,11 +374,15 @@ describe('launchAgentBackgroundSession', () => {
     const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
     dataSidecar('\x1b]9999;{"state":"done","prompt":"ok","agentType":"codex"}\x07')
 
-    expectStablePaneSpawn()
-    expect(state.setAgentStatus.mock.calls.at(-1)?.[4]).toEqual({ connectionId: 'ssh-a' })
-    expect(state.setAgentStatus.mock.calls.at(-1)?.[5]).toEqual({
-      launchToken: expect.stringMatching(UUID_RE)
-    })
+    const paneKey = expectStableAgentBackgroundPaneSpawn(mockSpawn)
+    expect(state.setAgentStatus).toHaveBeenCalledWith(
+      paneKey,
+      expect.objectContaining({ state: 'done', prompt: 'ok', agentType: 'codex' }),
+      undefined,
+      undefined,
+      { connectionId: 'ssh-a' },
+      { launchToken: expect.stringMatching(UUID_RE) }
+    )
   })
 
   it('skips the duplicate OSC store write under main side-effect authority', async () => {
@@ -518,16 +420,26 @@ describe('launchAgentBackgroundSession', () => {
       prompt: 'check the status spinner'
     })
 
-    expectStablePaneSpawn()
-    expect(state.setAgentStatus.mock.calls.at(-1)?.[4]).toEqual({ connectionId: 'ssh-a' })
-    expect(state.setAgentStatus.mock.calls.at(-1)?.[5]).toEqual({
-      launchConfig: {
-        agentCommand: "command-code --trust '--yolo'",
-        agentArgs: '--yolo',
-        agentEnv: {}
+    const paneKey = expectStableAgentBackgroundPaneSpawn(mockSpawn)
+    expect(state.setAgentStatus).toHaveBeenCalledWith(
+      paneKey,
+      {
+        state: 'working',
+        prompt: 'check the status spinner',
+        agentType: 'command-code'
       },
-      launchToken: expect.stringMatching(UUID_RE)
-    })
+      undefined,
+      undefined,
+      { connectionId: 'ssh-a' },
+      {
+        launchConfig: {
+          agentCommand: "command-code --trust '--yolo'",
+          agentArgs: '--yolo',
+          agentEnv: {}
+        },
+        launchToken: expect.stringMatching(UUID_RE)
+      }
+    )
   })
 
   it('uses a sidecar exit watcher so completion survives terminal attachment', async () => {
@@ -546,13 +458,16 @@ describe('launchAgentBackgroundSession', () => {
     const sidecar = mockSubscribeToPtyExit.mock.calls[0]?.[1] as (code: number) => void
     sidecar(0)
 
-    expect(state.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-1')
-    expect(state.clearAgentLaunchConfig).toHaveBeenCalledWith(expect.stringMatching(/^tab-1:/))
+    const tabId = expectReservedAgentBackgroundTabId(mockSpawn)
+    expect(state.clearTabPtyId).toHaveBeenCalledWith(tabId, 'pty-1')
+    expect(state.clearAgentLaunchConfig).toHaveBeenCalledWith(
+      expect.stringMatching(new RegExp(`^${tabId}:`))
+    )
     expect(onExit).toHaveBeenCalledWith('pty-1', 0)
     expect(unsubscribe).toHaveBeenCalled()
   })
 
-  it('removes the inactive tab if PTY spawn fails', async () => {
+  it('leaves no tab behind if PTY spawn fails', async () => {
     mockSpawn.mockRejectedValueOnce(new Error('spawn failed'))
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
@@ -564,11 +479,63 @@ describe('launchAgentBackgroundSession', () => {
       })
     ).rejects.toThrow('spawn failed')
 
-    expect(mockCloseTab).toHaveBeenCalledWith('tab-1', {
+    // Why: the tab is only created once a PTY is live, so a failed spawn has nothing to close.
+    expect(mockCreateTab).not.toHaveBeenCalled()
+    expect(mockCloseTab).not.toHaveBeenCalled()
+    expect(state.clearAgentLaunchConfig).toHaveBeenCalledWith(
+      expect.stringMatching(new RegExp(`^${expectReservedAgentBackgroundTabId(mockSpawn)}:`))
+    )
+    expect(mockUpdateTabPtyId).not.toHaveBeenCalled()
+  })
+
+  it('closes the adopted tab if binding fails after the PTY is live', async () => {
+    mockSubscribeToPtyData.mockImplementationOnce(() => {
+      throw new Error('subscribe failed')
+    })
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await expect(
+      launchAgentBackgroundSession({
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        prompt: 'run the automation'
+      })
+    ).rejects.toThrow('subscribe failed')
+
+    const tabId = expectReservedAgentBackgroundTabId(mockSpawn)
+    expect(mockCloseTab).toHaveBeenCalledWith(tabId, {
       recordInteraction: false,
       reason: 'cleanup'
     })
-    expect(mockUpdateTabPtyId).not.toHaveBeenCalled()
+    expect(mockKill).toHaveBeenCalledWith('pty-1')
+  })
+
+  it('retires the launch instead of adopting a colliding tab id', async () => {
+    mockSpawn.mockImplementationOnce((args: { tabId: string }) => {
+      currentStoreState = {
+        ...state,
+        tabsByWorktree: {
+          ...state.tabsByWorktree,
+          'wt-1': [{ id: args.tabId, title: 'Squatter' }]
+        }
+      }
+      return Promise.resolve({ id: 'pty-1' })
+    })
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await expect(
+      launchAgentBackgroundSession({
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        prompt: 'run the automation'
+      })
+    ).resolves.toBeNull()
+
+    expect(mockCreateTab).not.toHaveBeenCalled()
+    expect(mockKill).toHaveBeenCalledWith('pty-1')
+    expect(state.clearAgentLaunchConfig).toHaveBeenCalledWith(
+      expectStableAgentBackgroundPaneSpawn(mockSpawn)
+    )
   })
 
   it('submits prompts for stdin-after-start agents in background mode', async () => {
@@ -585,7 +552,7 @@ describe('launchAgentBackgroundSession', () => {
     )
     expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
       expect.objectContaining({
-        tabId: 'tab-1',
+        tabId: expectReservedAgentBackgroundTabId(mockSpawn),
         content: 'run the automation',
         agent: 'aider',
         submit: true
@@ -628,265 +595,5 @@ describe('launchAgentBackgroundSession', () => {
         env: expect.objectContaining({ ORCA_HERMES_STARTUP_QUERY: 'run the automation' })
       })
     )
-  })
-
-  it('forwards Hermes startup queries through SSH command transport', async () => {
-    state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
-    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-    await launchAgentBackgroundSession({
-      agent: 'hermes',
-      worktreeId: 'wt-1',
-      prompt: 'remote automation prompt'
-    })
-
-    expect(mockSpawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: expect.stringContaining('ORCA_HERMES_STARTUP_QUERY'),
-        connectionId: 'ssh-1',
-        env: expect.objectContaining({ ORCA_HERMES_STARTUP_QUERY: 'remote automation prompt' })
-      })
-    )
-  })
-
-  it('injects fast startup commands into SSH background sessions after shell output arrives', async () => {
-    vi.useFakeTimers()
-    try {
-      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
-      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-      await launchAgentBackgroundSession({
-        agent: 'claude',
-        worktreeId: 'wt-1',
-        prompt: 'run the automation',
-        title: 'Nightly audit'
-      })
-
-      expect(mockSpawn.mock.calls[0]?.[0]?.command).toBe(
-        "claude '--dangerously-skip-permissions' 'run the automation'"
-      )
-      expect(mockSpawn.mock.calls[0]?.[0]?.startupCommandDelivery).toBeUndefined()
-      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
-      dataSidecar('user@remote repo % ')
-      vi.advanceTimersByTime(50)
-
-      expect(mockWrite).toHaveBeenCalledWith(
-        'pty-1',
-        "claude '--dangerously-skip-permissions' 'run the automation'\r"
-      )
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('waits for shell-ready before injecting payload-bearing SSH background commands', async () => {
-    vi.useFakeTimers()
-    try {
-      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
-      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-      await launchAgentBackgroundSession({
-        agent: 'codex',
-        worktreeId: 'wt-1',
-        prompt: 'run the automation',
-        title: 'Nightly audit'
-      })
-
-      expect(mockSpawn.mock.calls[0]?.[0]).toEqual(
-        expect.objectContaining({
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'",
-          startupCommandDelivery: 'shell-ready'
-        })
-      )
-      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
-      dataSidecar('user@remote repo % ')
-      vi.advanceTimersByTime(50)
-      expect(mockWrite).not.toHaveBeenCalled()
-
-      dataSidecar('\x1b]777;orca-shell-ready\x07user@remote repo % ')
-      vi.advanceTimersByTime(50)
-
-      expect(mockWrite).toHaveBeenCalledWith(
-        'pty-1',
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r"
-      )
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('waits for shell-ready for SSH background Codex native prefill commands without a hint', async () => {
-    vi.useFakeTimers()
-    try {
-      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
-      state.settings = {
-        agentCmdOverrides: { codex: "codex --prefill 'draft from override'" },
-        activeRuntimeEnvironmentId: null,
-        terminalMainSideEffectAuthority: undefined
-      }
-      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-      await launchAgentBackgroundSession({
-        agent: 'codex',
-        worktreeId: 'wt-1',
-        title: 'Nightly audit'
-      })
-
-      expect(mockSpawn.mock.calls[0]?.[0]).toEqual(
-        expect.objectContaining({
-          command:
-            "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox'"
-        })
-      )
-      expect(mockSpawn.mock.calls[0]?.[0]).not.toHaveProperty('startupCommandDelivery')
-      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
-      dataSidecar('user@remote repo % ')
-      vi.advanceTimersByTime(50)
-      expect(mockWrite).not.toHaveBeenCalled()
-
-      dataSidecar('\x1b]777;orca-shell-ready\x07user@remote repo % ')
-      vi.advanceTimersByTime(50)
-
-      expect(mockWrite).toHaveBeenCalledWith(
-        'pty-1',
-        "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox'\r"
-      )
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not rearm SSH background startup delivery after exit cleanup', async () => {
-    vi.useFakeTimers()
-    try {
-      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
-      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-      await launchAgentBackgroundSession({
-        agent: 'codex',
-        worktreeId: 'wt-1',
-        prompt: 'run the automation',
-        title: 'Nightly audit'
-      })
-
-      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
-      const exitSidecar = mockSubscribeToPtyExit.mock.calls[0]?.[1] as (code: number) => void
-      exitSidecar(0)
-
-      dataSidecar('\x1b]777;orca-shell-ready\x07user@remote repo % ')
-      vi.advanceTimersByTime(50)
-
-      expect(mockWrite).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('creates background sessions on the active runtime environment', async () => {
-    state.settings = {
-      agentCmdOverrides: {},
-      activeRuntimeEnvironmentId: 'env-1',
-      terminalMainSideEffectAuthority: undefined
-    }
-    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-    const result = await launchAgentBackgroundSession({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt: 'run the automation'
-    })
-
-    expect(mockSpawn).not.toHaveBeenCalled()
-    const params = mockRuntimeEnvironmentCall.mock.calls[0]?.[0]?.params
-    const paneKey = params?.env?.ORCA_PANE_KEY
-    const leafId = typeof paneKey === 'string' ? paneKey.slice('tab-1:'.length) : ''
-    expect(leafId).toMatch(UUID_RE)
-    expect(mockRegisterAgentLaunchConfig).toHaveBeenCalledWith(
-      `tab-1:${leafId}`,
-      {
-        agentCommand: "claude '--dangerously-skip-permissions'",
-        agentArgs: '--dangerously-skip-permissions',
-        agentEnv: {}
-      },
-      {
-        agentType: 'claude',
-        launchToken: expect.stringMatching(UUID_RE),
-        tabId: 'tab-1',
-        leafId
-      }
-    )
-    expect(mockSetTabLayout).toHaveBeenCalledWith(
-      'tab-1',
-      expect.objectContaining({
-        root: { type: 'leaf', leafId },
-        activeLeafId: leafId,
-        ptyIdsByLeafId: { [leafId]: 'remote:env-1@@terminal-1' }
-      })
-    )
-    expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'terminal.create',
-      params: expect.objectContaining({
-        worktree: 'id:wt-1',
-        command: "claude '--dangerously-skip-permissions' 'run the automation'",
-        launchAgent: 'claude',
-        env: expect.objectContaining({
-          ORCA_PANE_KEY: `tab-1:${leafId}`,
-          ORCA_TAB_ID: 'tab-1',
-          ORCA_WORKTREE_ID: 'wt-1'
-        }),
-        tabId: 'tab-1',
-        leafId,
-        presentation: 'background'
-      }),
-      timeoutMs: 15_000
-    })
-    expect(mockUpdateTabPtyId).toHaveBeenCalledWith('tab-1', 'remote:env-1@@terminal-1')
-    expect(mockRegisterEagerPtyBuffer).not.toHaveBeenCalled()
-    expect(mockRuntimeEnvironmentSubscribe).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'env-1',
-        method: 'terminal.multiplex',
-        params: {}
-      }),
-      expect.any(Object)
-    )
-    expect(result).toMatchObject({
-      tabId: 'tab-1',
-      paneKey: `tab-1:${leafId}`,
-      ptyId: 'remote:env-1@@terminal-1'
-    })
-  })
-
-  it('closes a created runtime terminal when its data subscription fails', async () => {
-    state.settings = {
-      agentCmdOverrides: {},
-      activeRuntimeEnvironmentId: 'env-1',
-      terminalMainSideEffectAuthority: undefined
-    }
-    mockRuntimeEnvironmentSubscribe.mockRejectedValueOnce(new Error('subscription failed'))
-    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-    await expect(
-      launchAgentBackgroundSession({
-        agent: 'claude',
-        worktreeId: 'wt-1',
-        prompt: 'run the automation'
-      })
-    ).rejects.toThrow('subscription failed')
-
-    expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'terminal.close',
-      params: { terminal: 'terminal-1' },
-      timeoutMs: undefined
-    })
-    expect(state.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'remote:env-1@@terminal-1')
-    expect(state.clearAgentLaunchConfig).toHaveBeenCalledWith(expect.stringMatching(/^tab-1:/))
-    expect(mockCloseTab).toHaveBeenCalledWith('tab-1', {
-      recordInteraction: false,
-      reason: 'cleanup'
-    })
-    expect(mockDispatchEvent).not.toHaveBeenCalled()
   })
 })

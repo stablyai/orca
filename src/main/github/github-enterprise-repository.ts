@@ -12,6 +12,11 @@ import {
   parseGitHubRemoteIdentity,
   type LocalGitExecOptions
 } from './github-repository-identity'
+import {
+  effectiveGitHubRemoteHost,
+  gitHubSshConfigHostAlias
+} from './github-remote-identity-parsing'
+import { resolveSshConfigHostname } from './github-ssh-host-alias-resolution'
 import { parseWslPath } from '../wsl'
 
 export type GitHubEnterpriseRepoSlug = GitHubOwnerRepo & { host: string }
@@ -90,10 +95,8 @@ function normalizeGitHubHost(host: string): NormalizedGitHubHost | null {
     return null
   }
   const hostname = match[1]
-  const rawPort = match[2] ?? null
-  // Why: default web ports do not distinguish a gh auth host from the same
-  // hostname without an explicit port.
-  const port = rawPort === '80' || rawPort === '443' ? null : rawPort
+  // Why: remote URL parsing already removes protocol-default ports; any port left here identifies the endpoint.
+  const port = match[2] ?? null
   return { hostname, port, authority: port ? `${hostname}:${port}` : hostname }
 }
 
@@ -114,10 +117,11 @@ function authenticatedHostFromInventory(host: string, output: string): string | 
   if (exact) {
     return exact.authority
   }
-  const compatible = inventory.filter(
-    (candidate) =>
-      candidate.hostname === requested.hostname && (!requested.port || candidate.port === null)
-  )
+  // Why: a non-default web port identifies the API endpoint; portless credentials target a different server.
+  if (requested.port) {
+    return null
+  }
+  const compatible = inventory.filter((candidate) => candidate.hostname === requested.hostname)
   // Why: an SSH remote has no API port. Only a unique auth-inventory host can
   // safely supply it; multiple ported endpoints on one hostname are ambiguous.
   return compatible.length === 1 ? compatible[0].authority : null
@@ -226,11 +230,32 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
     return null
   }
   const identity = remoteUrl ? parseGitHubRemoteIdentity(remoteUrl) : null
-  if (!identity || identity.host === 'github.com') {
+  if (!identity) {
+    return null
+  }
+  // Why: GHES routing needs the effective host behind an SSH alias.
+  let effectiveHost = identity.host
+  const aliasHost = remoteUrl ? gitHubSshConfigHostAlias(remoteUrl) : null
+  if (aliasHost) {
+    const { hostname, resolved } = await resolveSshConfigHostname(aliasHost, context)
+    if (!resolved || !hostname) {
+      const authenticatedLiteralHost = await resolveAuthenticatedGitHubHost(
+        identity.host,
+        repoPath,
+        connectionId,
+        localGitOptions
+      )
+      return authenticatedLiteralHost
+        ? { owner: identity.owner, repo: identity.repo, host: authenticatedLiteralHost }
+        : undefined
+    }
+    effectiveHost = effectiveGitHubRemoteHost(identity.host, hostname)
+  }
+  if (effectiveHost === 'github.com') {
     return null
   }
   const authenticatedHost = await resolveAuthenticatedGitHubHost(
-    identity.host,
+    effectiveHost,
     repoPath,
     connectionId,
     localGitOptions

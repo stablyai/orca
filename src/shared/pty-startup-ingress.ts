@@ -4,61 +4,24 @@ import {
   type TerminalOscColorQuerySlot
 } from './terminal-osc-color-reply'
 import type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
+import type { PtyOwnerBackend } from './pty-owner-backend'
+import {
+  combinePtyIngressSourceSpans,
+  slicePtyIngressSourceSpan,
+  type PtyIngressEmission,
+  type PtyIngressSourceSpan,
+  type PtyStartupIngressOperation,
+  type PtyStartupIngressOptions
+} from './pty-startup-ingress-contract'
 
 export {
   PTY_STARTUP_INGRESS_VERSION,
   parsePtyStartupIngressIntent
 } from './pty-startup-ingress-intent'
 export type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
-
-export type PtyIngressEmission = {
-  data: string
-  rawStartSeq: number
-  rawEndSeq: number
-  transformed: boolean
-}
-
-type PtyIngressSourceChunk = {
-  data: string
-  rawStartSeq: number
-  rawEndSeq: number
-}
-
-type PendingOperation =
-  | { kind: 'data'; chunk: PtyIngressSourceChunk }
-  | { kind: 'close-query' }
-  | { kind: 'snapshot' }
-  | { kind: 'teardown' }
-  | { kind: 'expire' }
-
-type PendingSpan = PtyIngressSourceChunk
-
-export type PtyStartupIngressOptions = {
-  intent?: PtyStartupIngressIntent
-  write: (data: string) => void
-  onEmission: (emission: PtyIngressEmission) => void
-}
+export type { PtyIngressEmission, PtyStartupIngressOptions } from './pty-startup-ingress-contract'
 
 const MAX_QUERY_CANDIDATE_CHARS = 64
-
-function spanSlice(span: PendingSpan, start: number, end = span.data.length): PendingSpan {
-  return {
-    data: span.data.slice(start, end),
-    rawStartSeq: span.rawStartSeq + start,
-    rawEndSeq: span.rawStartSeq + end
-  }
-}
-
-function combineSpans(first: PendingSpan | null, second: PendingSpan): PendingSpan {
-  if (!first) {
-    return second
-  }
-  return {
-    data: first.data + second.data,
-    rawStartSeq: first.rawStartSeq,
-    rawEndSeq: second.rawEndSeq
-  }
-}
 
 function projectedWindowsConptyReply(reply: string): string {
   // Why: the native provider harness observes ConPTY's cooked echo with ESC removed.
@@ -71,21 +34,23 @@ function projectedWindowsConptyReply(reply: string): string {
  */
 export class PtyStartupIngress {
   private readonly intent: PtyStartupIngressIntent | undefined
+  private readonly ownerBackend: PtyOwnerBackend
   private readonly writeProvider: (data: string) => void
   private readonly onEmission: (emission: PtyIngressEmission) => void
-  private readonly operations: PendingOperation[] = []
+  private readonly operations: PtyStartupIngressOperation[] = []
   private readonly answeredSlots = new Set<TerminalOscColorQuerySlot>()
   private readonly expectedEchoes: string[] = []
   private processing = false
   private closed = false
   private queryOpen: boolean
   private rawHighWater = 0
-  private queryPending: PendingSpan | null = null
-  private echoPending: PendingSpan | null = null
+  private queryPending: PtyIngressSourceSpan | null = null
+  private echoPending: PtyIngressSourceSpan | null = null
   private deadlineTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(options: PtyStartupIngressOptions) {
     this.intent = options.intent
+    this.ownerBackend = options.ownerBackend ?? 'posix-pty'
     this.writeProvider = options.write
     this.onEmission = options.onEmission
     this.queryOpen = options.intent !== undefined
@@ -129,7 +94,7 @@ export class PtyStartupIngress {
     return this.rawHighWater
   }
 
-  private enqueue(operation: PendingOperation): void {
+  private enqueue(operation: PtyStartupIngressOperation): void {
     if (this.closed) {
       return
     }
@@ -139,7 +104,7 @@ export class PtyStartupIngress {
     }
     this.processing = true
     try {
-      let next: PendingOperation | undefined
+      let next: PtyStartupIngressOperation | undefined
       while ((next = this.operations.shift())) {
         this.applyOperation(next)
       }
@@ -148,18 +113,24 @@ export class PtyStartupIngress {
     }
   }
 
-  private applyOperation(operation: PendingOperation): void {
+  private applyOperation(operation: PtyStartupIngressOperation): void {
     switch (operation.kind) {
       case 'data':
         this.processEchoSpan(operation.chunk)
         return
       case 'close-query':
-        this.queryOpen = false
-        this.releaseQueryPending()
+        if (this.ownerBackend !== 'windows-conpty') {
+          this.queryOpen = false
+          this.releaseQueryPending()
+        }
+        // Why: ConPTY cannot safely transfer color-query authority to a downstream view.
         return
       case 'expire':
         this.queryOpen = false
-        this.releaseAllPending()
+        this.releaseEchoPending()
+        if (this.ownerBackend !== 'windows-conpty') {
+          this.releaseQueryPending()
+        }
         this.expectedEchoes.length = 0
         this.clearDeadline()
         return
@@ -175,8 +146,8 @@ export class PtyStartupIngress {
     }
   }
 
-  private processEchoSpan(span: PendingSpan): void {
-    let input = combineSpans(this.echoPending, span)
+  private processEchoSpan(span: PtyIngressSourceSpan): void {
+    let input = combinePtyIngressSourceSpans(this.echoPending, span)
     this.echoPending = null
 
     while (this.expectedEchoes.length > 0) {
@@ -197,8 +168,8 @@ export class PtyStartupIngress {
       }
 
       this.expectedEchoes.shift()
-      this.emit(spanSlice(input, 0, expected.length), true, '')
-      input = spanSlice(input, expected.length)
+      this.emit(slicePtyIngressSourceSpan(input, 0, expected.length), true, '')
+      input = slicePtyIngressSourceSpan(input, expected.length)
       if (input.data.length === 0) {
         return
       }
@@ -207,32 +178,33 @@ export class PtyStartupIngress {
     this.processQuerySpan(input)
   }
 
-  private processQuerySpan(span: PendingSpan): void {
-    const input = combineSpans(this.queryPending, span)
+  private processQuerySpan(span: PtyIngressSourceSpan): void {
+    const input = combinePtyIngressSourceSpans(this.queryPending, span)
     this.queryPending = null
-    if (!this.queryOpen || !this.intent) {
+    const suppressConptyQuery = this.ownerBackend === 'windows-conpty'
+    if ((!this.queryOpen || !this.intent) && !suppressConptyQuery) {
       this.emit(input, false)
       return
     }
 
-    let offset = 0
-    while (offset < input.data.length) {
-      const candidateIndex = input.data.indexOf('\x1b', offset)
+    let scanOffset = 0
+    let emittedOffset = 0
+    while (scanOffset < input.data.length) {
+      const candidateIndex = input.data.indexOf('\x1b', scanOffset)
       if (candidateIndex === -1) {
-        this.emit(spanSlice(input, offset), false)
+        this.emit(slicePtyIngressSourceSpan(input, emittedOffset), false)
         return
-      }
-      if (candidateIndex > offset) {
-        this.emit(spanSlice(input, offset, candidateIndex), false)
       }
       const query = parseTerminalOscColorQuery(input.data, candidateIndex)
       if (query.kind === 'none') {
-        this.emit(spanSlice(input, candidateIndex, candidateIndex + 1), false)
-        offset = candidateIndex + 1
+        scanOffset = candidateIndex + 1
         continue
       }
       if (query.kind === 'partial') {
-        const candidate = spanSlice(input, candidateIndex)
+        if (candidateIndex > emittedOffset) {
+          this.emit(slicePtyIngressSourceSpan(input, emittedOffset, candidateIndex), false)
+        }
+        const candidate = slicePtyIngressSourceSpan(input, candidateIndex)
         if (candidate.data.length <= MAX_QUERY_CANDIDATE_CHARS) {
           this.queryPending = candidate
         } else {
@@ -241,13 +213,18 @@ export class PtyStartupIngress {
         return
       }
 
-      const querySpan = spanSlice(input, candidateIndex, query.endIndex)
-      if (!this.answerQuery(query.slots)) {
-        this.emit(querySpan, false)
-      } else {
-        this.emit(querySpan, true, '')
+      if (candidateIndex > emittedOffset) {
+        this.emit(slicePtyIngressSourceSpan(input, emittedOffset, candidateIndex), false)
       }
-      offset = query.endIndex
+      const querySpan = slicePtyIngressSourceSpan(input, candidateIndex, query.endIndex)
+      const answered = this.queryOpen && this.intent && this.answerQuery(query.slots)
+      if (answered || suppressConptyQuery) {
+        this.emit(querySpan, true, '')
+      } else {
+        this.emit(querySpan, false)
+      }
+      scanOffset = query.endIndex
+      emittedOffset = query.endIndex
     }
   }
 
@@ -268,9 +245,7 @@ export class PtyStartupIngress {
       }
       this.answeredSlots.add(slot)
       const projected =
-        this.intent.echoProjection === 'windows-conpty-esc-stripped'
-          ? projectedWindowsConptyReply(reply)
-          : null
+        this.ownerBackend === 'windows-conpty' ? projectedWindowsConptyReply(reply) : null
       if (projected) {
         // Why: register before write because node-pty can synchronously re-enter onData.
         this.expectedEchoes.push(projected)
@@ -303,25 +278,30 @@ export class PtyStartupIngress {
   }
 
   private releaseAllPending(): void {
-    const pending = this.echoPending ?? this.queryPending
-    this.echoPending = null
-    this.queryPending = null
-    if (pending) {
-      this.emit(pending, false)
+    this.releaseEchoPending()
+    this.releaseQueryPending()
+  }
+
+  private releaseEchoPending(): void {
+    if (!this.echoPending) {
+      return
     }
+    const pending = this.echoPending
+    this.echoPending = null
+    this.emit(pending, false)
   }
 
   private releaseSnapshotPending(): void {
     if (this.echoPending) {
-      const pending = this.echoPending
-      this.echoPending = null
       this.expectedEchoes.shift()
-      this.emit(pending, false)
+      this.releaseEchoPending()
     }
-    this.releaseQueryPending()
+    if (this.ownerBackend !== 'windows-conpty') {
+      this.releaseQueryPending()
+    }
   }
 
-  private emit(span: PendingSpan, transformed: boolean, data = span.data): void {
+  private emit(span: PtyIngressSourceSpan, transformed: boolean, data = span.data): void {
     this.onEmission({
       data,
       rawStartSeq: span.rawStartSeq,

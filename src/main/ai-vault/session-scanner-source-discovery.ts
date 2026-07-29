@@ -21,7 +21,6 @@ const COPILOT_SESSIONS_DIR = join(
   'session-state'
 )
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
-const GROK_SESSIONS_DIR = resolveGrokSessionsDir()
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
 const OPENCLAW_STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() || join(homedir(), '.openclaw')
@@ -175,7 +174,9 @@ function grokDiscoveries(
   limit: number,
   issues: AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery>[] {
-  return sessionRootDirs(options.grokSessionsDir ?? GROK_SESSIONS_DIR, wslHomeDirs, [
+  // Resolved lazily: a module-scope call binds across chunks at init time, which
+  // breaks whenever bundle ordering puts this module before its import.
+  return sessionRootDirs(options.grokSessionsDir ?? resolveGrokSessionsDir(), wslHomeDirs, [
     '.grok',
     'sessions'
   ]).map((rootDir) =>

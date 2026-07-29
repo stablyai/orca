@@ -112,6 +112,8 @@ const JSON_INSTALLERS = [
 ] as const
 
 const MANAGED_HOOKS_DIR_NEEDLE = '/.orca/agent-hooks/'
+// Why: statusLine is not a hook — Claude's schema has no timeout field (type/command/padding/refreshInterval), and a slow statusline can't block agent turns.
+const STATUSLINE_SCRIPT_NEEDLE = '-statusline.'
 
 // Walk the parsed config and assert every Orca-managed command carrier (a node
 // with a `command`/`bash`/`powershell` string pointing at the managed script
@@ -121,8 +123,13 @@ const MANAGED_HOOKS_DIR_NEEDLE = '/.orca/agent-hooks/'
 function countManagedCarriersWithTimeout(
   node: unknown,
   expectedTimeout: number,
-  isManagedCarrier = (value: string): boolean =>
-    value.replaceAll('\\', '/').includes(MANAGED_HOOKS_DIR_NEEDLE)
+  isManagedCarrier = (value: string): boolean => {
+    const normalized = value.replaceAll('\\', '/')
+    return (
+      normalized.includes(MANAGED_HOOKS_DIR_NEEDLE) &&
+      !normalized.includes(STATUSLINE_SCRIPT_NEEDLE)
+    )
+  }
 ): number {
   if (Array.isArray(node)) {
     return node.reduce<number>(

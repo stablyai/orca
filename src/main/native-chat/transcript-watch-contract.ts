@@ -28,6 +28,8 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   debounceMs?: number
   /** Test-only override for the production resolve-poll backoff. */
   resolvePollIntervalMs?: number
+  /** Test-only override for the host-side watcher reconciliation interval. */
+  reconciliationIntervalMs?: number
 }
 
 export type NativeChatTranscriptSubscription = {
