@@ -20,7 +20,7 @@ on:
         default: '12'
         type: string
       warmup:
-        description: Discarded launches before the measured pairs
+        description: Discarded rounds before the measured pairs; a round warms both arms, so each is two launches.
         required: false
         default: '2'
         type: string
@@ -61,11 +61,16 @@ jobs:
     timeout-minutes: 90
     env:
       NODE_OPTIONS: --max-old-space-size=4096
-      # Outside the repo: each arm is a full worktree with its own node_modules,
-      # not a stray untracked directory inside the checkout.
-      ARMS_DIR: ${{ runner.temp }}/orca-bench-arms
 
     steps:
+      # Why: the arms live outside the repo — each is a full worktree with its
+      # own node_modules, not a stray untracked directory inside the checkout.
+      # RUNNER_TEMP rather than the runner context: job-level env is evaluated
+      # before the job reaches a runner, so ${{ runner.temp }} is not available
+      # there and would make the workflow invalid.
+      - name: Resolve the arm workspace
+        run: echo "ARMS_DIR=$RUNNER_TEMP/orca-bench-arms" >> "$GITHUB_ENV"
+
       # Why: both arms are built from this checkout, so the baseline ref must be
       # reachable — a shallow clone would fail to check it out. Credentials are
       # not persisted: build scripts from a caller-chosen ref run in this job.
