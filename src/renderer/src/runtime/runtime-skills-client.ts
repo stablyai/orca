@@ -9,10 +9,11 @@ const SKILL_DISCOVERY_TIMEOUT_MS = 15_000
  * when one is active. This keeps install badges in sync with where the skill
  * files land instead of always reading the client's disk (#6789).
  *
- * `runtime`/`wslDistro`/`projectRuntime` describe the *client's* host, so they
- * are dropped for a remote call — forwarding them would ask a Linux server to
- * resolve a WSL distro it does not have. Only workspace identity travels; the
- * server resolves its own project runtime from `worktreeId`.
+ * `target` only ever describes the *client's* host — a WSL distro or a local
+ * project-runtime resolution — none of which means anything to the server, and
+ * forwarding it would ask a Linux server to resolve a WSL distro it does not
+ * have. A remote runtime scans its own home roots and its own repos, so the
+ * target is dropped entirely for the remote call.
  */
 export async function discoverSkillsForRuntimeTarget(
   runtimeTarget: RuntimeClientTarget,
@@ -21,12 +22,10 @@ export async function discoverSkillsForRuntimeTarget(
   if (runtimeTarget.kind === 'local') {
     return window.api.skills.discover(target)
   }
-  const cwd = target?.cwd?.trim() || undefined
-  const worktreeId = target?.worktreeId?.trim() || undefined
   return callRuntimeRpc<SkillDiscoveryResult>(
     runtimeTarget,
     'skills.discover',
-    { ...(cwd ? { cwd } : {}), ...(worktreeId ? { worktreeId } : {}) },
+    {},
     { timeoutMs: SKILL_DISCOVERY_TIMEOUT_MS }
   )
 }

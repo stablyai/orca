@@ -3784,13 +3784,13 @@
           "dc4c3328ee": "Reveal file",
           "9963dff6d3": "No description found.",
           "995fde8337": "Could not reveal skill file",
-          "ab5b777350": "Checked local home, repository, bundled, and plugin skill folders.",
+          "ab5b777350": "Checked home, repository, bundled, and plugin skill folders.",
           "08a321a984": "Adjust the search or filters.",
-          "4acd6d68ec": "No local skills found",
+          "4acd6d68ec": "No skills found",
           "6a62a0168c": "No matches",
           "cd7893fbc1": "Scanning skills",
           "35b9a724a0": "Available",
-          "0c74e7ff34": "Local"
+          "0c74e7ff34": "Installed"
         },
         "SkillFreshnessNudge": {
           "titleOne": "An installed Orca skill is out of date",

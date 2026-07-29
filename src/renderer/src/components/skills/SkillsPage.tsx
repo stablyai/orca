@@ -82,7 +82,7 @@ function SkillCard({ skill }: { skill: DiscoveredSkill }): React.JSX.Element {
                 className="h-5 text-[10px]"
               >
                 {skill.installed
-                  ? translate('auto.components.skills.SkillsPage.0c74e7ff34', 'Local')
+                  ? translate('auto.components.skills.SkillsPage.0c74e7ff34', 'Installed')
                   : translate('auto.components.skills.SkillsPage.35b9a724a0', 'Available')}
               </Badge>
               <Badge variant="outline" className="h-5 text-[10px]">
@@ -167,10 +167,7 @@ function EmptyState({
               ? translate('auto.components.skills.SkillsPage.cd7893fbc1', 'Scanning skills')
               : hasSkills
                 ? translate('auto.components.skills.SkillsPage.6a62a0168c', 'No matches')
-                : translate(
-                    'auto.components.skills.SkillsPage.4acd6d68ec',
-                    'No local skills found'
-                  )}
+                : translate('auto.components.skills.SkillsPage.4acd6d68ec', 'No skills found')}
           </h3>
           <p className="text-xs leading-5 text-muted-foreground">
             {hasSkills
@@ -180,7 +177,7 @@ function EmptyState({
                 )
               : translate(
                   'auto.components.skills.SkillsPage.ab5b777350',
-                  'Checked local home, repository, bundled, and plugin skill folders.'
+                  'Checked home, repository, bundled, and plugin skill folders.'
                 )}
           </p>
         </div>
@@ -209,6 +206,11 @@ export default function SkillsPage(): React.JSX.Element {
 
   const loadSkills = useCallback(async (): Promise<void> => {
     setLoading(true)
+    if (!runtimeTarget) {
+      // Why: keep scanning until the owning runtime is known, rather than
+      // showing the client's skills to someone whose skills live remotely.
+      return
+    }
     try {
       const nextResult = await discoverSkillsForRuntimeTarget(runtimeTarget)
       if (mountedRef.current) {

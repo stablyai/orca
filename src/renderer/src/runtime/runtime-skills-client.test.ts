@@ -81,23 +81,7 @@ describe('discoverSkillsForRuntimeTarget', () => {
     )
   })
 
-  it('forwards an explicit cwd to the remote runtime', async () => {
-    const result = discoveryResult('orchestration')
-    runtimeEnvironmentCall.mockResolvedValueOnce({ id: 'skills', ok: true, result })
-
-    await discoverSkillsForRuntimeTarget(
-      { kind: 'environment', environmentId: 'env-1' },
-      { cwd: '/workspace/app' }
-    )
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'skills.discover', params: { cwd: '/workspace/app' } })
-    )
-  })
-
-  // Why: the server resolves its own project runtime from worktree identity, so
-  // dropping this would scan the wrong roots for a WSL-configured remote project.
-  it('forwards worktree identity so the remote resolves its own project runtime', async () => {
+  it('drops a caller cwd and worktree id the server cannot use', async () => {
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'skills',
       ok: true,
@@ -106,11 +90,11 @@ describe('discoverSkillsForRuntimeTarget', () => {
 
     await discoverSkillsForRuntimeTarget(
       { kind: 'environment', environmentId: 'env-1' },
-      { worktreeId: 'wt-1', runtime: 'wsl', wslDistro: 'Ubuntu' }
+      { cwd: '/workspace/app', worktreeId: 'wt-1' }
     )
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'skills.discover', params: { worktreeId: 'wt-1' } })
+      expect.objectContaining({ method: 'skills.discover', params: {} })
     )
   })
 })

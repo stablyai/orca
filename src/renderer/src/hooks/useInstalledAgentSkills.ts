@@ -18,6 +18,9 @@ import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-c
 import { useActiveSkillDiscoveryRuntimeTarget } from './use-active-skill-discovery-runtime-target'
 import { useMountedRef } from './useMountedRef'
 
+/** Placeholder key while the owning runtime is unknown; nothing is cached under it. */
+const UNRESOLVED_RUNTIME_DISCOVERY_KEY = 'runtime:unresolved'
+
 export { notifyInstalledAgentSkillsChanged } from './installed-agent-skill-discovery'
 
 export const GLOBAL_AGENT_SKILL_SOURCE_KINDS = [
@@ -104,7 +107,9 @@ export function useInstalledAgentSkillNames(
   const skillNamesKey = skillNames.map(normalizeSkillName).join('\n')
   const candidateSkillNames = useMemo(() => skillNamesKey.split('\n'), [skillNamesKey])
   const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
-  const discoveryTargetKey = getRuntimeScopedSkillDiscoveryKey(runtimeTarget, discoveryTarget)
+  const discoveryTargetKey = runtimeTarget
+    ? getRuntimeScopedSkillDiscoveryKey(runtimeTarget, discoveryTarget)
+    : UNRESOLVED_RUNTIME_DISCOVERY_KEY
   const cachedDiscovery = getCachedSkillDiscovery(discoveryTargetKey)
   const [result, setResult] = useState<SkillDiscoveryResult | null>(cachedDiscovery)
   const [loading, setLoading] = useState(enabled && !cachedDiscovery)
@@ -157,6 +162,11 @@ export function useInstalledAgentSkillNames(
       writeIfCurrent(() => {
         setLoading(true)
       })
+      if (!runtimeTarget) {
+        // Why: stay in the loading state rather than scanning the wrong host and
+        // reporting "not installed" before the owning runtime is known.
+        return false
+      }
       let installedAfterRefresh = false
       try {
         const next = await discoverInstalledAgentSkills(force, discoveryTarget, runtimeTarget)

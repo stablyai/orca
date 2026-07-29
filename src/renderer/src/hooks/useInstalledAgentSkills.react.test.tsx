@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
@@ -109,7 +109,11 @@ afterEach(async () => {
   latestState = null
   _installedAgentSkillDiscoveryInternalsForTests.reset()
   clearRuntimeCompatibilityCacheForTests()
-  useAppStore.setState({ settings: null })
+  useAppStore.setState({
+    settings: null,
+    runtimeEnvironments: [],
+    runtimeEnvironmentCatalogHydrated: false
+  })
   vi.restoreAllMocks()
   Reflect.deleteProperty(window, 'api')
 })
@@ -123,11 +127,24 @@ async function flushMicrotasks(): Promise<void> {
   })
 }
 
-function setActiveRuntimeEnvironment(environmentId: string | null): void {
+/**
+ * Hydrate the store the way a running app does. `savedEnvironmentIds` defaults to
+ * just the focused one, which is the only shape that resolves to a remote owner.
+ */
+function setRuntimeOwner(
+  environmentId: string | null,
+  savedEnvironmentIds: readonly string[] = environmentId ? [environmentId] : []
+): void {
   useAppStore.setState({
-    settings: { activeRuntimeEnvironmentId: environmentId } as GlobalSettings
+    settings: { activeRuntimeEnvironmentId: environmentId } as GlobalSettings,
+    runtimeEnvironments: savedEnvironmentIds.map((id) => ({ id })) as never,
+    runtimeEnvironmentCatalogHydrated: true
   })
 }
+
+beforeEach(() => {
+  setRuntimeOwner(null)
+})
 
 describe('useInstalledAgentSkill', () => {
   it('ignores stale discovery results after the discovery target changes', async () => {
@@ -283,7 +300,7 @@ describe('useInstalledAgentSkill', () => {
       configurable: true,
       value: { skills: { discover }, runtimeEnvironments: { call } }
     })
-    setActiveRuntimeEnvironment('env-1')
+    setRuntimeOwner('env-1')
 
     await renderProbe()
     await flushMicrotasks()
@@ -297,11 +314,56 @@ describe('useInstalledAgentSkill', () => {
     // Why: the remote hit is keyed per environment, so switching back to the
     // local host must re-scan the client instead of replaying the server's list.
     await act(async () => {
-      setActiveRuntimeEnvironment(null)
+      setRuntimeOwner(null)
     })
     await flushMicrotasks()
 
     expect(discover).toHaveBeenCalledTimes(1)
+    expect(latestState?.installed).toBe(false)
+  })
+
+  // Why: the skill INSTALL terminal routes through getSingleFocusedRuntimeEnvironmentId,
+  // which refuses to guess an owner while several runtimes are saved. Scanning the
+  // focused remote here would leave the badge stuck on "Not installed" forever,
+  // because the install actually lands on the local client.
+  it('scans the local host when several saved runtimes make the install host ambiguous', async () => {
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockResolvedValue(discoveryResult([skill({ name: 'linear-tickets' })]))
+    const call = vi.fn()
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover }, runtimeEnvironments: { call } }
+    })
+    setRuntimeOwner('env-1', ['env-1', 'env-2'])
+
+    await renderProbe()
+    await flushMicrotasks()
+
+    expect(call).not.toHaveBeenCalled()
+    expect(discover).toHaveBeenCalledTimes(1)
+    expect(latestState?.installed).toBe(true)
+  })
+
+  it('keeps loading instead of scanning the wrong host before the runtime catalog hydrates', async () => {
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockResolvedValue(discoveryResult([]))
+    const call = vi.fn()
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover }, runtimeEnvironments: { call } }
+    })
+    useAppStore.setState({ settings: null, runtimeEnvironmentCatalogHydrated: false })
+
+    await renderProbe()
+    await flushMicrotasks()
+
+    // Why: resolving to "local" here would cache a client scan and flash
+    // "Not installed" at a user whose skills live on the remote.
+    expect(discover).not.toHaveBeenCalled()
+    expect(call).not.toHaveBeenCalled()
+    expect(latestState?.loading).toBe(true)
     expect(latestState?.installed).toBe(false)
   })
 })
