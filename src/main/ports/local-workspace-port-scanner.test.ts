@@ -233,6 +233,55 @@ describe('scanWorkspacePorts attribution work', () => {
     expect(win32WorktreePathResolveCalls).toHaveLength(0)
     expect(posixWorktreePathResolveCalls).toHaveLength(worktrees.length)
   })
+
+  it('labels the dev server behind each port and leaves plain processes unlabelled', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    const invokeCallback = (callback: unknown, stdout: string): void => {
+      if (typeof callback !== 'function') {
+        throw new Error('missing execFile callback')
+      }
+      ;(callback as (error: Error | null, stdout: string) => void)(null, stdout)
+    }
+    execFileMock.mockImplementation(
+      (command: string, args: string[], _options: unknown, callback: unknown) => {
+        if (command === 'lsof' && args.includes('-iTCP')) {
+          invokeCallback(
+            callback,
+            ['p123', 'cnode', 'n127.0.0.1:5173', 'p124', 'cnode', 'n127.0.0.1:4000'].join('\n')
+          )
+        } else if (command === 'lsof') {
+          invokeCallback(
+            callback,
+            ['p123', 'n/repo/worktrees/feature', 'p124', 'n/repo'].join('\n')
+          )
+        } else if (command === 'ps') {
+          invokeCallback(
+            callback,
+            [
+              '123 node /repo/worktrees/feature/node_modules/.bin/vite --port 5173',
+              '124 node /repo/server.js'
+            ].join('\n')
+          )
+        } else {
+          invokeCallback(callback, '')
+        }
+        return { kill: vi.fn() }
+      }
+    )
+
+    const scan = await scanWorkspacePorts(worktrees, {
+      lookup: () => undefined,
+      reconcileScan: vi.fn()
+    })
+
+    const vitePort = scan.ports.find((port) => port.port === 5173)
+    expect(vitePort?.devServer).toEqual({ id: 'vite', label: 'Vite' })
+    // The raw process name still rides along so the UI can show it as detail.
+    expect(vitePort?.processName).toBe('node')
+
+    // A bare `node server.js` stays unlabelled rather than guessing.
+    expect(scan.ports.find((port) => port.port === 4000)?.devServer).toBeUndefined()
+  })
 })
 
 describe('scanWorkspacePorts command timeout', () => {

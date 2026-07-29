@@ -11,6 +11,7 @@ import type {
 } from '../../shared/workspace-ports'
 import { getProcessOutputFields } from '../../shared/process-output-field-scanner'
 import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from './advertised-url-watcher'
+import { identifyDevServer } from './dev-server-signature'
 import { WorkspacePortScanTimeoutBackoff } from './workspace-port-scan-timeout-backoff'
 
 const COMMAND_TIMEOUT_MS = 4_000
@@ -454,6 +455,7 @@ function enrichPort(
   urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup'>
 ): WorkspacePort {
   const owner = attributePortToNormalizedWorkspaces(port, worktrees)
+  const devServer = identifyDevServer(port)
   const base = {
     id: `${port.host}:${port.port}:${port.pid ?? 'unknown'}`,
     bindHost: port.host,
@@ -461,6 +463,7 @@ function enrichPort(
     port: port.port,
     pid: port.pid,
     processName: port.processName,
+    ...(devServer ? { devServer } : {}),
     protocol: inferProtocol(port.port)
   }
 

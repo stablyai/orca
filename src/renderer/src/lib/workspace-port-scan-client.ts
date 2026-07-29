@@ -33,6 +33,15 @@ function isOptionalFiniteNumber(value: unknown): boolean {
   return value === undefined || (typeof value === 'number' && Number.isFinite(value))
 }
 
+function isOptionalDevServerIdentity(value: unknown): boolean {
+  if (value === undefined) {
+    return true
+  }
+  // Why validated like every other field here: a remote runtime supplies this,
+  // and the label is rendered directly. A non-string label would crash the row.
+  return isRecord(value) && typeof value.id === 'string' && typeof value.label === 'string'
+}
+
 function isWorkspacePortOwner(value: unknown): boolean {
   if (!isRecord(value)) {
     return false
@@ -56,6 +65,7 @@ function isWorkspacePort(value: unknown): value is WorkspacePort {
     !Number.isFinite(value.port) ||
     !isOptionalFiniteNumber(value.pid) ||
     !isOptionalString(value.processName) ||
+    !isOptionalDevServerIdentity(value.devServer) ||
     !WORKSPACE_PORT_PROTOCOLS.has(value.protocol as WorkspacePort['protocol'])
   ) {
     return false
