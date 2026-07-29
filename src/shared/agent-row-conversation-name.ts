@@ -124,11 +124,8 @@ export function getAgentRowConversationName(
   if (quickCommandLabel) {
     return quickCommandLabel
   }
-  // Why: `tab.title` carries only the focused pane's live title (pty-connection
-  // keeps it that way so split agents don't make the tab flicker). In a split
-  // tab it names one pane and mislabels its siblings, and it flips as focus
-  // moves — so drop it there and let each row keep its own per-pane label. The
-  // tab-owned names above stay: the user gave those to the whole tab.
+  // Why: pty-connection only propagates the focused pane's title to the tab
+  // (deliberately, to stop split agents flickering), so in a split it mislabels siblings.
   const liveTitle = tabHasSplitPanes ? '' : (tab.title?.trim() ?? '')
   if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
     return liveTitle
