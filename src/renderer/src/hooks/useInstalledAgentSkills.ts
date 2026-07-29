@@ -6,28 +6,31 @@ import type {
   SkillSourceKind
 } from '../../../shared/skills'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
-import {
-  hasInstalledAgentSkillNamed,
-  normalizeSkillName
-} from '@/lib/installed-agent-skill-matching'
 import { markOrchestrationSetupComplete } from '@/lib/orchestration-setup-state'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
-import { discoverSkillsForRuntimeTarget } from '@/runtime/runtime-skills-client'
+import {
+  discoverInstalledAgentSkills,
+  getCachedSkillDiscovery,
+  getRuntimeScopedSkillDiscoveryKey,
+  getSkillDiscoveryTargetKey,
+  resetSkillDiscoveryCacheForTests
+} from './installed-agent-skill-discovery'
 import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
 import { useActiveSkillDiscoveryRuntimeTarget } from './use-active-skill-discovery-runtime-target'
 import { useMountedRef } from './useMountedRef'
 
-const LOCAL_RUNTIME_TARGET: RuntimeClientTarget = { kind: 'local' }
+export { notifyInstalledAgentSkillsChanged } from './installed-agent-skill-discovery'
 
-export {
-  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  hasInstalledAgentSkill,
-  hasInstalledAgentSkillNamed
-} from '@/lib/installed-agent-skill-matching'
+export const GLOBAL_AGENT_SKILL_SOURCE_KINDS = [
+  'home'
+] as const satisfies readonly SkillSourceKind[]
 
 type InstalledAgentSkillOptions = {
   enabled?: boolean
   discoveryTarget?: SkillDiscoveryTarget
+  sourceKinds?: readonly SkillSourceKind[]
+}
+
+type InstalledAgentSkillMatchOptions = {
   sourceKinds?: readonly SkillSourceKind[]
 }
 
@@ -39,133 +42,51 @@ export type InstalledAgentSkillState = {
   refresh: () => Promise<boolean>
 }
 
-let cachedDiscoveryByTarget = new Map<string, SkillDiscoveryResult>()
-let pendingDiscoveryByTarget = new Map<string, Promise<SkillDiscoveryResult>>()
-let pendingDiscoverySatisfiesForcedRefreshByTarget = new Map<string, boolean>()
+function normalizeSkillName(value: string): string {
+  return value.trim().toLowerCase()
+}
 
 function isOrchestrationSkillName(skillName: string): boolean {
   return normalizeSkillName(skillName) === ORCHESTRATION_SKILL_NAME
 }
 
-export function notifyInstalledAgentSkillsChanged(): void {
-  cachedDiscoveryByTarget.clear()
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(INSTALLED_AGENT_SKILLS_CHANGED_EVENT))
-  }
+function basenameFromPath(pathValue: string): string {
+  return pathValue.split(/[\\/]/).findLast(Boolean) ?? pathValue
 }
 
-function normalizeSkillDiscoveryTarget(
-  target: SkillDiscoveryTarget | undefined
-): SkillDiscoveryTarget | undefined {
-  const projectRuntime = target?.projectRuntime
-  if (projectRuntime) {
-    if (projectRuntime.status === 'repair-required') {
-      return { projectRuntime }
-    }
-    if (projectRuntime.runtime.kind === 'wsl') {
-      return {
-        runtime: 'wsl',
-        wslDistro: projectRuntime.runtime.distro,
-        projectRuntime
-      }
-    }
-    return {
-      runtime: 'host',
-      projectRuntime
-    }
-  }
-
-  if (target?.runtime !== 'wsl') {
-    return undefined
-  }
-  return { runtime: 'wsl', wslDistro: target.wslDistro?.trim() || null }
+export function hasInstalledAgentSkill(
+  skills: readonly DiscoveredSkill[],
+  skillName: string,
+  options: InstalledAgentSkillMatchOptions = {}
+): boolean {
+  return hasInstalledAgentSkillNamed(skills, [skillName], options)
 }
 
-function getSkillDiscoveryTargetKey(target: SkillDiscoveryTarget | undefined): string {
-  if (target?.projectRuntime) {
-    return target.projectRuntime.status === 'resolved'
-      ? target.projectRuntime.runtime.cacheKey
-      : target.projectRuntime.repair.cacheKey
-  }
-  const normalizedTarget = normalizeSkillDiscoveryTarget(target)
-  return normalizedTarget?.runtime === 'wsl' ? `wsl:${normalizedTarget.wslDistro ?? ''}` : 'host'
-}
-
-// Why: a connected remote runtime scans its own disk. Sharing the local key
-// would keep showing the client's skills after switching environments.
-function getRuntimeScopedSkillDiscoveryKey(
-  runtimeTarget: RuntimeClientTarget,
-  target: SkillDiscoveryTarget | undefined
-): string {
-  const base = getSkillDiscoveryTargetKey(target)
-  return runtimeTarget.kind === 'environment'
-    ? `runtime:${runtimeTarget.environmentId}::${base}`
-    : base
-}
-
-function startInstalledAgentSkillDiscovery(
-  force: boolean,
-  target: SkillDiscoveryTarget | undefined,
-  runtimeTarget: RuntimeClientTarget
-): Promise<SkillDiscoveryResult> {
-  const key = getRuntimeScopedSkillDiscoveryKey(runtimeTarget, target)
-  const normalizedTarget = normalizeSkillDiscoveryTarget(target)
-  const discovery = discoverSkillsForRuntimeTarget(runtimeTarget, normalizedTarget)
-    .then((result) => {
-      cachedDiscoveryByTarget.set(key, result)
-      return result
-    })
-    .finally(() => {
-      if (pendingDiscoveryByTarget.get(key) === discovery) {
-        pendingDiscoveryByTarget.delete(key)
-        pendingDiscoverySatisfiesForcedRefreshByTarget.delete(key)
-      }
-    })
-  pendingDiscoveryByTarget.set(key, discovery)
-  pendingDiscoverySatisfiesForcedRefreshByTarget.set(key, force)
-  return discovery
-}
-
-async function discoverInstalledAgentSkills(
-  force: boolean,
-  target?: SkillDiscoveryTarget,
-  runtimeTarget: RuntimeClientTarget = LOCAL_RUNTIME_TARGET
-): Promise<SkillDiscoveryResult> {
-  const key = getRuntimeScopedSkillDiscoveryKey(runtimeTarget, target)
-  const cachedDiscovery = cachedDiscoveryByTarget.get(key)
-  if (!force && cachedDiscovery) {
-    return cachedDiscovery
-  }
-
-  const inFlightDiscovery = pendingDiscoveryByTarget.get(key)
-  if (inFlightDiscovery) {
-    if (!force || pendingDiscoverySatisfiesForcedRefreshByTarget.get(key)) {
-      return inFlightDiscovery
+export function hasInstalledAgentSkillNamed(
+  skills: readonly DiscoveredSkill[],
+  skillNames: readonly string[],
+  options: InstalledAgentSkillMatchOptions = {}
+): boolean {
+  const expected = new Set(skillNames.map(normalizeSkillName))
+  return skills.some((skill) => {
+    if (!skill.installed) {
+      return false
     }
-    try {
-      await inFlightDiscovery
-    } catch {
-      // Why: an explicit re-check should still read current disk state even if
-      // the older background scan failed.
+    if (options.sourceKinds && !options.sourceKinds.includes(skill.sourceKind)) {
+      return false
     }
-    const nextPendingDiscovery = pendingDiscoveryByTarget.get(key)
-    if (nextPendingDiscovery && nextPendingDiscovery !== inFlightDiscovery) {
-      return nextPendingDiscovery
-    }
-  }
-
-  return startInstalledAgentSkillDiscovery(force, target, runtimeTarget)
+    return (
+      expected.has(normalizeSkillName(skill.name)) ||
+      expected.has(normalizeSkillName(basenameFromPath(skill.directoryPath)))
+    )
+  })
 }
 
 export const _installedAgentSkillDiscoveryInternalsForTests = {
   discoverInstalledAgentSkills,
   getSkillDiscoveryTargetKey,
   isOrchestrationSkillName,
-  reset(): void {
-    cachedDiscoveryByTarget = new Map()
-    pendingDiscoveryByTarget = new Map()
-    pendingDiscoverySatisfiesForcedRefreshByTarget = new Map()
-  }
+  reset: resetSkillDiscoveryCacheForTests
 }
 
 export function useInstalledAgentSkill(
@@ -184,7 +105,7 @@ export function useInstalledAgentSkillNames(
   const candidateSkillNames = useMemo(() => skillNamesKey.split('\n'), [skillNamesKey])
   const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
   const discoveryTargetKey = getRuntimeScopedSkillDiscoveryKey(runtimeTarget, discoveryTarget)
-  const cachedDiscovery = cachedDiscoveryByTarget.get(discoveryTargetKey) ?? null
+  const cachedDiscovery = getCachedSkillDiscovery(discoveryTargetKey)
   const [result, setResult] = useState<SkillDiscoveryResult | null>(cachedDiscovery)
   const [loading, setLoading] = useState(enabled && !cachedDiscovery)
   const [error, setError] = useState<string | null>(null)
@@ -202,7 +123,7 @@ export function useInstalledAgentSkillNames(
     stateResetInputRef.current.discoveryTargetKey !== discoveryTargetKey ||
     stateResetInputRef.current.enabled !== enabled
   ) {
-    const nextCachedDiscovery = cachedDiscoveryByTarget.get(discoveryTargetKey) ?? null
+    const nextCachedDiscovery = getCachedSkillDiscovery(discoveryTargetKey)
     const nextLoading = enabled && !nextCachedDiscovery
     stateResetInputRef.current = { discoveryTargetKey, enabled }
     resultForRender = nextCachedDiscovery
