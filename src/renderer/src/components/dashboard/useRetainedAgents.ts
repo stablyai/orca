@@ -190,24 +190,25 @@ function sameAgentRun(
   previous: { row: DashboardAgentRow },
   current: { row: DashboardAgentRow }
 ): boolean {
+  // Why: resume identity arrives on its own IPC event, so one side can be stamped
+  // while the other is not. Only a session present on BOTH sides is decisive.
   const previousSession = previous.row.entry.providerSession
   const currentSession = current.row.entry.providerSession
-  if (previousSession || currentSession) {
-    return (
-      previousSession?.key === currentSession?.key && previousSession?.id === currentSession?.id
-    )
+  if (previousSession && currentSession) {
+    return previousSession.key === currentSession.key && previousSession.id === currentSession.id
   }
   // Why: terminalHandle identifies the TERMINAL, not the run — a later agent started
   // in the same pty inherits it, so it only corroborates a matching run identity.
-  if (
-    previous.row.startedAt !== current.row.startedAt ||
-    previous.row.agentType !== current.row.agentType
-  ) {
-    return false
-  }
+  // It is absent for ordinary local PTY agents, so it cannot be required.
   const previousHandle = previous.row.entry.terminalHandle
   const currentHandle = current.row.entry.terminalHandle
-  return previousHandle === currentHandle
+  if (previousHandle && currentHandle && previousHandle !== currentHandle) {
+    return false
+  }
+  return (
+    previous.row.startedAt === current.row.startedAt &&
+    previous.row.agentType === current.row.agentType
+  )
 }
 
 export function collectRetainedAgentsOnDisappear(args: {

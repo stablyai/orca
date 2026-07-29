@@ -34,6 +34,7 @@ function makeDoneEntry(args: {
   startedAt: number
   agentType: AgentStatusEntry['agentType']
   terminalHandle?: string
+  providerSession?: AgentStatusEntry['providerSession']
 }): AgentStatusEntry {
   return {
     state: 'done',
@@ -46,6 +47,7 @@ function makeDoneEntry(args: {
     stateHistory: [],
     agentType: args.agentType,
     terminalHandle: args.terminalHandle,
+    providerSession: args.providerSession,
     interrupted: false
   }
 }
@@ -54,7 +56,11 @@ function makeRow(
   paneKey: string,
   tabId: string,
   startedAt = 100,
-  overrides?: { agentType?: AgentStatusEntry['agentType']; terminalHandle?: string }
+  overrides?: {
+    agentType?: AgentStatusEntry['agentType']
+    terminalHandle?: string
+    providerSession?: AgentStatusEntry['providerSession']
+  }
 ): DashboardAgentRow {
   const agentType = overrides?.agentType ?? 'claude'
   return {
@@ -64,7 +70,8 @@ function makeRow(
       tabId,
       startedAt,
       agentType,
-      terminalHandle: overrides?.terminalHandle
+      terminalHandle: overrides?.terminalHandle,
+      providerSession: overrides?.providerSession
     }),
     tab: makeTab({ id: tabId, worktreeId: WORKTREE_ID }),
     agentType,
@@ -120,6 +127,8 @@ function collect(args: {
   currentStartedAt?: number
   currentAgentType?: AgentStatusEntry['agentType']
   terminalHandle?: string
+  previousProviderSession?: AgentStatusEntry['providerSession']
+  currentProviderSession?: AgentStatusEntry['providerSession']
   retiredPaneKeys?: Record<string, true>
   tabIndex?: Map<string, { tab: TerminalTab }>
 }) {
@@ -128,7 +137,10 @@ function collect(args: {
       [
         SOURCE_PANE_KEY,
         {
-          row: makeRow(SOURCE_PANE_KEY, SOURCE_TAB, 100, { terminalHandle: args.terminalHandle }),
+          row: makeRow(SOURCE_PANE_KEY, SOURCE_TAB, 100, {
+            terminalHandle: args.terminalHandle,
+            providerSession: args.previousProviderSession
+          }),
           worktreeId: WORKTREE_ID
         }
       ]
@@ -141,7 +153,8 @@ function collect(args: {
               {
                 row: makeRow(args.currentPaneKey, args.currentTabId, args.currentStartedAt, {
                   agentType: args.currentAgentType,
-                  terminalHandle: args.terminalHandle
+                  terminalHandle: args.terminalHandle,
+                  providerSession: args.currentProviderSession
                 }),
                 worktreeId: WORKTREE_ID
               }
@@ -263,6 +276,102 @@ describe('detach completed split pane → sidebar retention', () => {
 
     expect(result.toRetain).toHaveLength(1)
     expect(result.toRetain[0]?.entry.paneKey).toBe(SOURCE_PANE_KEY)
+  })
+
+  it('treats differing terminal handles as different runs', () => {
+    const store = createDetachStore()
+    store.getState().setAgentStatus(SOURCE_PANE_KEY, {
+      state: 'done',
+      prompt: 'Fix it',
+      agentType: 'claude'
+    })
+
+    detach(store, SOURCE_TAB, TARGET_TAB)
+    // Why: identical startedAt/agentType can collide, so a differing handle is the
+    // only signal that these are separate terminals.
+    const result = collectRetainedAgentsOnDisappear({
+      previousAgents: new Map([
+        [
+          SOURCE_PANE_KEY,
+          {
+            row: makeRow(SOURCE_PANE_KEY, SOURCE_TAB, 100, { terminalHandle: 'term_source' }),
+            worktreeId: WORKTREE_ID
+          }
+        ]
+      ]),
+      currentAgents: new Map([
+        [
+          TARGET_PANE_KEY,
+          {
+            row: makeRow(TARGET_PANE_KEY, TARGET_TAB, 100, { terminalHandle: 'term_other' }),
+            worktreeId: WORKTREE_ID
+          }
+        ]
+      ]),
+      retainedAgentsByPaneKey: {},
+      retentionSuppressedPaneKeys: {},
+      recentlyClosedAgentStatusTabIds: {},
+      recentlyRetiredAgentStatusPaneKeys: {}
+    })
+
+    expect(result.toRetain).toHaveLength(1)
+  })
+
+  it('recognizes the same run when resume identity lands only after the move', () => {
+    const store = createDetachStore()
+    store.getState().setAgentStatus(SOURCE_PANE_KEY, {
+      state: 'done',
+      prompt: 'Fix it',
+      agentType: 'claude'
+    })
+
+    detach(store, SOURCE_TAB, TARGET_TAB)
+    // Why: recordAgentProviderSession is its own IPC event, so the destination can be
+    // stamped while the pre-move snapshot is not. A one-sided session is not evidence
+    // of a different run.
+    const result = collect({
+      currentPaneKey: TARGET_PANE_KEY,
+      currentTabId: TARGET_TAB,
+      currentProviderSession: { key: 'session_id', id: 'session-1' }
+    })
+
+    expect(result.toRetain).toEqual([])
+  })
+
+  it('treats mismatched resume identities as different runs', () => {
+    const store = createDetachStore()
+    store.getState().setAgentStatus(SOURCE_PANE_KEY, {
+      state: 'done',
+      prompt: 'Fix it',
+      agentType: 'claude'
+    })
+
+    detach(store, SOURCE_TAB, TARGET_TAB)
+    const result = collect({
+      currentPaneKey: TARGET_PANE_KEY,
+      currentTabId: TARGET_TAB,
+      previousProviderSession: { key: 'session_id', id: 'session-1' },
+      currentProviderSession: { key: 'session_id', id: 'session-2' }
+    })
+
+    expect(result.toRetain).toHaveLength(1)
+  })
+
+  it('recognizes a handle-less local pty run at its transferred authority', () => {
+    const store = createDetachStore()
+    store.getState().setAgentStatus(SOURCE_PANE_KEY, {
+      state: 'done',
+      prompt: 'Fix it',
+      agentType: 'claude'
+    })
+
+    detach(store, SOURCE_TAB, TARGET_TAB)
+    // Why: ordinary local PTY statuses route with connectionId only, so terminalHandle
+    // is undefined on both sides — requiring a handle here would resurrect the ghost.
+    const result = collect({ currentPaneKey: TARGET_PANE_KEY, currentTabId: TARGET_TAB })
+
+    expect(result.toRetain[0]?.entry.terminalHandle).toBeUndefined()
+    expect(result.toRetain).toEqual([])
   })
 
   it('does not resurrect the source when the transferred owner immediately closes', () => {
