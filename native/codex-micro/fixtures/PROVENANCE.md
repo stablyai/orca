@@ -33,7 +33,7 @@ fields. Values are unchanged.
 
 ## `device-status.json`
 
-`known` reproduces the `device.status` response fields captured in
+`known` reproduces the exact `device.status` response field names captured in
 `directed-analysis.json.device_status_responses[0]` (firmware `v0.4.1`,
 profile `0`, layer `1`, battery `81`, charging `true`). The device serial
 returned alongside that response is intentionally omitted — the shared

@@ -148,14 +148,14 @@ fn run_hardware() -> Result<(), String> {
     let mut out = stdout.lock();
     let status_result = status.as_ref().and_then(|value| value.get("result"));
     let firmware = status_result
-        .and_then(|value| value.get("firmware"))
+        .and_then(|value| value.get("version"))
         .and_then(Value::as_str);
     let battery = status_result
         .and_then(|value| value.get("battery"))
         .and_then(Value::as_u64)
         .and_then(|value| u8::try_from(value).ok());
     let charging = status_result
-        .and_then(|value| value.get("charging"))
+        .and_then(|value| value.get("is_charging"))
         .and_then(Value::as_bool);
     write_frame(&mut out, &handshake_frame()).map_err(|error| format!("{error:?}"))?;
     write_frame(

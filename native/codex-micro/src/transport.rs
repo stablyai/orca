@@ -25,6 +25,15 @@ fn is_protocol_collection(
         && product_name == Some(PRODUCT_NAME)
 }
 
+#[cfg(target_os = "macos")]
+fn configure_open_mode(api: &hidapi::HidApi) {
+    // Composite keyboard devices must not be seized from macOS input handling.
+    api.set_open_exclusive(false);
+}
+
+#[cfg(not(target_os = "macos"))]
+fn configure_open_mode(_api: &hidapi::HidApi) {}
+
 #[derive(Debug)]
 pub enum TransportError {
     Hid(String),
@@ -70,6 +79,7 @@ impl HidTransport {
     /// Opens only the vendor protocol collection; the same VID/PID also
     /// exposes keyboard, mouse, gamepad, and consumer-control collections.
     pub fn open_by_vid_pid(api: &hidapi::HidApi) -> Result<Self, TransportError> {
+        configure_open_mode(api);
         let info = api
             .device_list()
             .find(|device| {

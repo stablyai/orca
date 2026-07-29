@@ -201,7 +201,7 @@ pub fn query_status<T: DeviceTransport>(
     let firmware = value
         .as_ref()
         .and_then(|v| v.get("result"))
-        .and_then(|r| r.get("firmware"))
+        .and_then(|r| r.get("version"))
         .and_then(Value::as_str);
     Ok((classify_firmware(firmware), value, events))
 }
@@ -408,14 +408,14 @@ mod tests {
     #[test]
     fn query_status_classifies_known_firmware_as_read_write() {
         let status =
-            br#"{"result":{"firmware":"v0.4.1","battery":81},"id":3,"method":"device.status"}"#;
+            br#"{"result":{"version":"v0.4.1","profile_index":0,"layer_index":1,"battery":81,"is_charging":true},"id":3,"method":"device.status"}"#;
         let transport = FakeTransport::new(pack_reports(status));
         let mut parser = Report6Parser::new();
 
         let (access, value, _events) = query_status(&transport, &mut parser, 3, 3, 0).unwrap();
 
         assert_eq!(access, FirmwareAccess::ReadWrite);
-        assert_eq!(value.unwrap()["result"]["firmware"], "v0.4.1");
+        assert_eq!(value.unwrap()["result"]["version"], "v0.4.1");
     }
 
     #[test]
