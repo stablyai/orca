@@ -3,7 +3,10 @@ import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { parseAntigravitySessionContent } from './session-scanner-antigravity-parser'
 import { isAntigravityTranscriptPath } from './session-scanner-antigravity-paths'
-import { parseCodexSessionContent } from './session-scanner-codex-parser'
+import {
+  createCodexSessionResumeState,
+  parseCodexSessionContent
+} from './session-scanner-codex-parser'
 import { parseDevinSessionContent } from './session-scanner-devin-parser'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
 import { parseMessageGraphSessionContent } from './session-scanner-graph-parsers'
@@ -13,6 +16,7 @@ import { parseCopilotSessionContent } from './session-scanner-copilot-parser'
 import { parseCursorSessionContent } from './session-scanner-cursor-parser'
 import { parseHermesSessionContent } from './session-scanner-hermes-parser'
 import type { FileWithMtime } from './session-scanner-types'
+import { resumableStateFactoryFor } from './session-scanner-parse-cache'
 import { normalizeAgentSessionsDir } from './session-scanner-values'
 import { remoteCodexIndexTitles } from './remote-session-scanner-codex-index'
 import type {
@@ -152,6 +156,8 @@ function source(
     extensions,
     filePredicate,
     directoryPredicate,
+    createParseState: (file) =>
+      resumableStateFactoryFor({ agent, file, codexHome: null })?.() ?? null,
     parse: (file, content, context) =>
       Promise.resolve(
         parseContent(file, content, context.hostPlatform.os, parserOptions(context), context.signal)
@@ -190,6 +196,10 @@ function remoteCodexSources(
     rootDir: joinRemotePath(hostPlatform, codexHome, 'sessions'),
     codexHome,
     extensions: ['.jsonl'],
+    createParseState: (file, context) =>
+      createCodexSessionResumeState(file, codexHome, (sessionId) =>
+        readRemoteCodexTitle(context, codexHome, hostPlatform, sessionId)
+      ),
     parse: (file, content, context) =>
       parseCodexSessionContent({
         file,
@@ -199,18 +209,26 @@ function remoteCodexSources(
         executionHostId: context.executionHostId,
         executionHostPlatform: context.hostPlatform.os,
         signal: context.signal,
-        readIndexedTitle: async (sessionId) =>
-          (
-            await remoteCodexIndexTitles({
-              provider: context.provider,
-              codexHome,
-              hostPlatform,
-              titleCaches: context.titleCaches,
-              signal: context.signal
-            })
-          ).get(sessionId) ?? null
+        readIndexedTitle: (sessionId) =>
+          readRemoteCodexTitle(context, codexHome, hostPlatform, sessionId)
       })
   }))
+}
+
+async function readRemoteCodexTitle(
+  context: RemoteScannerContext,
+  codexHome: string,
+  hostPlatform: RemoteHostPlatform,
+  sessionId: string
+): Promise<string | null> {
+  const titles = await remoteCodexIndexTitles({
+    provider: context.provider,
+    codexHome,
+    hostPlatform,
+    titleCaches: context.titleCaches,
+    signal: context.signal
+  })
+  return titles.get(sessionId) ?? null
 }
 
 function remoteOpenClawSources(

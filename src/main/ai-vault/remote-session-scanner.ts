@@ -13,6 +13,10 @@ import {
   dedupeCodexSessionsBySessionId
 } from './codex-session-root-dedup'
 import { discoverRemoteSourceCandidates } from './remote-session-scanner-discovery'
+import {
+  REMOTE_SESSION_IN_MEMORY_LIMIT_BYTES,
+  tryParseLargeRemoteSession
+} from './remote-session-scanner-large-file'
 import { remoteSessionSources } from './remote-session-scanner-sources'
 import type {
   RemoteScannerContext,
@@ -150,9 +154,7 @@ async function parseRemoteSessionCandidates(args: {
       parsedFilePaths.add(candidate.file.path)
     }
     throwIfAiVaultScanCancelled(args.context.signal)
-    const results = await Promise.all(
-      batch.map((candidate) => parseRemoteSessionCandidate(candidate, args.context, args.issues))
-    )
+    const results = await parseRemoteSessionCandidateBatch(batch, args.context, args.issues)
     sessions.push(...results.filter(isAiVaultSession))
     const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
     sessions.splice(0, sessions.length, ...uniqueSessions)
@@ -189,11 +191,10 @@ async function scanRemoteInScopeSessions(args: {
   // sessions; out-of-scope candidates no longer end the search.
   while (index < bound && sessions.length < args.limit) {
     const batchEnd = Math.min(index + REMOTE_SCAN_CONCURRENCY, bound)
-    const results = await mapRemoteScanBatches(
+    const results = await parseRemoteSessionCandidateBatch(
       candidates.slice(index, batchEnd),
-      REMOTE_SCAN_CONCURRENCY,
-      (candidate) => parseRemoteSessionCandidate(candidate, args.context, args.issues),
-      args.context.signal
+      args.context,
+      args.issues
     )
     sessions.push(
       ...results.filter(
@@ -224,12 +225,18 @@ async function parseRemoteSessionCandidate(
 ): Promise<AiVaultSession | null> {
   try {
     throwIfAiVaultScanCancelled(context.signal)
-    const read = await context.provider.readFile(candidate.file.path)
-    throwIfAiVaultScanCancelled(context.signal)
-    if (read.isBinary) {
-      return null
+    const largeResult = await tryParseLargeRemoteSession(candidate, context)
+    let session: AiVaultSession | null
+    if (largeResult.handled) {
+      session = largeResult.session
+    } else {
+      const read = await context.provider.readFile(candidate.file.path)
+      throwIfAiVaultScanCancelled(context.signal)
+      if (read.isBinary) {
+        return null
+      }
+      session = await candidate.source.parse(candidate.file, read.content, context)
     }
-    const session = await candidate.source.parse(candidate.file, read.content, context)
     throwIfAiVaultScanCancelled(context.signal)
     // Mirror the local rule: every session carries its sibling subagent
     // transcript count (row badge; recoverable signal at zero turns). The
@@ -249,6 +256,32 @@ async function parseRemoteSessionCandidate(
     })
     return null
   }
+}
+
+async function parseRemoteSessionCandidateBatch(
+  candidates: readonly RemoteSessionCandidate[],
+  context: RemoteScannerContext,
+  issues: AiVaultScanIssue[]
+): Promise<(AiVaultSession | null)[]> {
+  const regular = candidates.filter(
+    (candidate) =>
+      candidate.file.sizeBytes === undefined ||
+      candidate.file.sizeBytes <= REMOTE_SESSION_IN_MEMORY_LIMIT_BYTES
+  )
+  const large = candidates.filter(
+    (candidate) =>
+      candidate.file.sizeBytes !== undefined &&
+      candidate.file.sizeBytes > REMOTE_SESSION_IN_MEMORY_LIMIT_BYTES
+  )
+  throwIfAiVaultScanCancelled(context.signal)
+  const results = await Promise.all(
+    regular.map((candidate) => parseRemoteSessionCandidate(candidate, context, issues))
+  )
+  for (const candidate of large) {
+    throwIfAiVaultScanCancelled(context.signal)
+    results.push(await parseRemoteSessionCandidate(candidate, context, issues))
+  }
+  return results
 }
 
 function mergeRemoteSessions(
