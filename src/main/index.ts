@@ -163,6 +163,10 @@ import {
   shouldBypassSingleInstanceLock,
   shouldSkipSingleInstanceLock
 } from './startup/single-instance-lock'
+import {
+  createOsFileOpenRequestQueue,
+  registerOsFileOpenRequests
+} from './startup/os-file-open-requests'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe'
 import {
@@ -578,6 +582,15 @@ if (app.isPackaged && process.platform !== 'win32') {
 configureDevUserDataPath(is.dev)
 configureOrcaUserDataPathEnv()
 installServeSupervisorDisconnectQuit(isServeMode)
+
+// Why: macOS fires open-file before app.ready, so the queue must exist and be subscribed at module load.
+const osFileOpenRequests = createOsFileOpenRequestQueue()
+registerOsFileOpenRequests({
+  app,
+  queue: osFileOpenRequests,
+  platform: process.platform,
+  argv: process.argv
+})
 
 // Why: just past createMainWindow's 10s ready-to-show fallback, so a window revealed that way still gets its tray icon.
 const TRAY_CREATE_FALLBACK_MS = 12_000
@@ -1336,7 +1349,8 @@ function openMainWindow(): BrowserWindow {
     pluginService ?? undefined,
     pluginMarketplaceService && pluginMarketplaceInstaller
       ? { marketplace: pluginMarketplaceService, installer: pluginMarketplaceInstaller }
-      : undefined
+      : undefined,
+    osFileOpenRequests
   )
   automations.setWebContents(window.webContents)
   automations.start()

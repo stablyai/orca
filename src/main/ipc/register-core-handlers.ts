@@ -92,6 +92,8 @@ import {
 } from '../ai-vault/runtime-session-scanner'
 import type { PluginService } from '../plugins/plugin-service'
 import type { PluginMarketplaceHandlerServices } from './plugin-marketplaces'
+import { registerOsFileOpenHandlers } from './os-file-open'
+import type { OsFileOpenRequestQueue } from '../startup/os-file-open-requests'
 
 let registered = false
 
@@ -123,7 +125,8 @@ export function registerCoreHandlers(
   keybindings?: KeybindingService,
   lifecycleOptions: CoreHandlerLifecycleOptions = {},
   pluginService?: PluginService,
-  marketplaceServices?: PluginMarketplaceHandlerServices
+  marketplaceServices?: PluginMarketplaceHandlerServices,
+  osFileOpenRequests?: OsFileOpenRequestQueue
 ): void {
   // Why: on macOS the app can stay alive after all windows close, then
   // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
@@ -198,6 +201,9 @@ export function registerCoreHandlers(
   })
   registerBrowserHandlers()
   registerShellHandlers(store)
+  if (osFileOpenRequests) {
+    registerOsFileOpenHandlers(osFileOpenRequests)
+  }
   registerPetHandlers()
   registerSessionHandlers(store)
   registerUIHandlers(store)
