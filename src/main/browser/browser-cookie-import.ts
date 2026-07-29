@@ -171,6 +171,15 @@ const CHROMIUM_BROWSERS: ChromiumBrowserDef[] = [
     keychainAccount: 'Helium',
     macRoot: 'net.imput.helium'
     // winRoot/linuxRoot intentionally omitted — only the macOS install is verified
+  },
+  {
+    family: 'vivaldi',
+    label: 'Vivaldi',
+    keychainService: 'Vivaldi Safe Storage',
+    keychainAccount: 'Vivaldi',
+    macRoot: 'Vivaldi',
+    winRoot: 'Vivaldi/User Data',
+    linuxRoot: 'vivaldi'
   }
 ]
 
@@ -768,6 +777,79 @@ export async function importCookiesFromFile(
     targetPartition,
     'replace-imported-domains'
   )
+}
+
+// ---------------------------------------------------------------------------
+// Direct import from installed Chromium browser
+// ---------------------------------------------------------------------------
+
+/** Return a source-browser-compatible User-Agent for cookie authentication.
+ * Services bind auth cookies to the User-Agent that created them. */
+export function getUserAgentForBrowser(
+  family: BrowserSessionProfileSource['browserFamily']
+): string | null {
+  // Why: UA version comes from macOS-only plist reading; elsewhere the default Electron UA is acceptable.
+  if (process.platform !== 'darwin') {
+    return null
+  }
+
+  const platform = 'Macintosh; Intel Mac OS X 10_15_7'
+  const chromeBase = 'AppleWebKit/537.36 (KHTML, like Gecko)'
+
+  /** Read a macOS browser bundle version without surfacing plist failures. */
+  function readBrowserVersion(
+    appPath: string,
+    plistKey = 'CFBundleShortVersionString'
+  ): string | null {
+    try {
+      return (
+        execFileSync('defaults', ['read', join(appPath, 'Contents', 'Info'), plistKey], {
+          encoding: 'utf-8',
+          timeout: 5_000
+        }).trim() || null
+      )
+    } catch {
+      return null
+    }
+  }
+
+  switch (family) {
+    case 'chrome': {
+      const v = readBrowserVersion('/Applications/Google Chrome.app')
+      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
+    }
+    case 'edge': {
+      const v = readBrowserVersion('/Applications/Microsoft Edge.app')
+      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36 Edg/${v}` : null
+    }
+    case 'arc': {
+      const v = readBrowserVersion('/Applications/Arc.app')
+      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
+    }
+    case 'chromium': {
+      const v = readBrowserVersion('/Applications/Brave Browser.app')
+      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
+    }
+    case 'comet': {
+      // Why: Comet is Chromium-based; use Chrome's UA shape so Google-bound auth cookies survive import.
+      const v = readBrowserVersion('/Applications/Comet.app')
+      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
+    }
+    case 'helium': {
+      // Why: Helium is Chromium-based; use Chrome's UA shape so Google-bound auth cookies survive import.
+      const v = readBrowserVersion('/Applications/Helium.app')
+      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
+    }
+    case 'vivaldi': {
+      // Why: Vivaldi is Chromium-based; use Chrome's UA shape so Google-bound auth cookies survive import.
+      const v = readBrowserVersion('/Applications/Vivaldi.app')
+      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
+    }
+    case 'firefox':
+    case 'safari':
+    case 'manual':
+      return null
+  }
 }
 
 const PBKDF2_ITERATIONS = 1003

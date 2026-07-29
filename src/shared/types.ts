@@ -1049,6 +1049,7 @@ export type BrowserSessionProfileSource = {
     | 'safari'
     | 'comet'
     | 'helium'
+    | 'vivaldi'
     | 'manual'
   profileName?: string
   importedAt: number
