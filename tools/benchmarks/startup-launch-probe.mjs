@@ -13,13 +13,23 @@ import { resolve } from 'node:path'
 const repoRoot = resolve(import.meta.dirname, '..', '..')
 const require = createRequire(import.meta.url)
 
+// Why: Electron leaves helper processes behind, and the gh shim's `sleep` is a
+// grandchild that deliberately outlives its parent. Killing only the direct
+// child lets those accumulate across launches and add exactly the machine noise
+// the A/B design exists to cancel. Windows gets tree semantics from taskkill /T;
+// POSIX needs the process group, which is why the child is spawned detached.
 function killProcessTree(proc) {
-  if (proc.exitCode !== null || proc.signalCode !== null) {
+  if (proc.exitCode !== null || proc.signalCode !== null || proc.pid === undefined) {
     return
   }
   if (process.platform === 'win32') {
     spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' })
-  } else {
+    return
+  }
+  try {
+    // A negative pid signals the whole group; requires detached: true at spawn.
+    process.kill(-proc.pid, 'SIGKILL')
+  } catch {
     try {
       proc.kill('SIGKILL')
     } catch {
@@ -77,10 +87,33 @@ export function runIteration({ exe, appDir, timeoutMs, lingerMs, waitForEvent, l
     const startedAt = process.hrtime.bigint()
     const child = spawn(command, commandArgs, {
       env: launchEnv,
+      // Own process group on POSIX so teardown can reach Electron's helpers.
+      detached: process.platform !== 'win32',
       stdio: ['ignore', 'ignore', 'pipe']
     })
     let finished = false
     let buffer = ''
+    const recordLine = (line) => {
+      const parsed = parseStartupLine(line)
+      if (!parsed) {
+        return
+      }
+      const harnessMs = Number(process.hrtime.bigint() - startedAt) / 1e6
+      events.push({ ...parsed, harnessMs: Math.round(harnessMs * 10) / 10 })
+      if (parsed.event === waitForEvent) {
+        finish('ok')
+      }
+    }
+    // Why: an abrupt exit can leave the last milestone without its newline.
+    // Dropping it turns a good launch into a null phase, which reads as missing
+    // data rather than the measurement it actually was.
+    const flushBuffer = () => {
+      const trailing = buffer.trimEnd()
+      buffer = ''
+      if (trailing) {
+        recordLine(trailing)
+      }
+    }
     const finish = (outcome) => {
       if (finished) {
         return
@@ -90,6 +123,7 @@ export function runIteration({ exe, appDir, timeoutMs, lingerMs, waitForEvent, l
       // Keep the app alive briefly so trailing diagnostic lines (and, with
       // --linger-ms raised, background work like the async ACL grant) finish.
       setTimeout(() => {
+        flushBuffer()
         killProcessTree(child)
         resolvePromise({ outcome, events })
       }, lingerMs)
@@ -103,17 +137,12 @@ export function runIteration({ exe, appDir, timeoutMs, lingerMs, waitForEvent, l
         const line = buffer.slice(0, newlineIndex).trimEnd()
         buffer = buffer.slice(newlineIndex + 1)
         newlineIndex = buffer.indexOf('\n')
-        const parsed = parseStartupLine(line)
-        if (!parsed) {
-          continue
-        }
-        const harnessMs = Number(process.hrtime.bigint() - startedAt) / 1e6
-        events.push({ ...parsed, harnessMs: Math.round(harnessMs * 10) / 10 })
-        if (parsed.event === waitForEvent) {
-          finish('ok')
-        }
+        recordLine(line)
       }
     })
+    // Flush before the exit handler so a trailing awaited milestone can still
+    // resolve the launch as 'ok' rather than 'early-exit'.
+    child.stderr.on('end', flushBuffer)
     child.on('exit', () => finish('early-exit'))
     child.on('error', () => finish('spawn-error'))
   })
