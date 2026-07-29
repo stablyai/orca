@@ -1,0 +1,78 @@
+Categories:
+  - Development
+License: MIT
+AuthorName: Lovecast Inc.
+WebSite: https://www.onorca.dev
+SourceCode: https://github.com/stablyai/orca
+IssueTracker: https://github.com/stablyai/orca/issues
+Changelog: https://github.com/stablyai/orca/releases
+
+AutoName: Orca
+Name: Orca Mobile
+Summary: Mobile companion for the Orca desktop agent IDE
+Description: |-
+  Orca Mobile pairs with the Orca desktop app so you can monitor worktrees,
+  view terminal output, and steer agents from your phone.
+
+  Pairing uses a local QR code / WebSocket connection to your desktop (or
+  another reachable Orca host). The companion does not require Google Play
+  Services for its core workflow.
+
+  This metadata describes a free-software-from-source Android build path.
+  Listing on f-droid.org still requires a separate merge into fdroiddata and
+  a successful build on F-Droid infrastructure.
+
+RepoType: git
+Repo: https://github.com/stablyai/orca.git
+
+Builds:
+  - versionName: 0.0.32
+    versionCode: 8
+    commit: mobile-android-v0.0.32
+    subdir: mobile
+    sudo:
+      - apt-get update
+      - apt-get install -y openjdk-17-jdk-headless curl ca-certificates gnupg
+      - update-alternatives --auto java
+      # Node 24 matches repo engines / mobile Android CI (Expo SDK 55).
+      - curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
+      - apt-get install -y nodejs
+      - corepack enable
+    output: android/app/build/outputs/apk/release/*.apk
+    # Why: hermesc + assorted RN gradle plugin bits ship as prebuilts in npm;
+    # F-Droid policy allows scanignore for Hermes (same as other Expo apps).
+    scanignore:
+      - node_modules/hermes-compiler/hermesc/linux64-bin/hermesc
+      - node_modules/react-native/sdks/hermesc/linux64-bin/hermesc
+      - node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
+      - node_modules/expo-modules-autolinking/scripts/android/autolinking_implementation.gradle
+      - node_modules/@react-native-async-storage/async-storage/android/build.gradle
+      - node_modules/react-native-safe-area-context/android/build.gradle
+      - node_modules/react-native-screens/android/build.gradle
+      - node_modules/react-native-svg/android/build.gradle
+      - node_modules/react-native-webview/android/build.gradle
+      - node_modules/react-native-gesture-handler/android/build.gradle
+      - node_modules/react-native-reanimated/android/build.gradle
+      - node_modules/react-native-worklets/android/build.gradle
+    scandelete:
+      - node_modules
+    # Why: FOSS prep is inlined in this recipe so Builds.commit can pin the release
+    # tag mobile-android-v0.0.32 (that tag predates any in-tree packaging helper).
+    # Same path as CI: pnpm install → expo prebuild → assembleRelease.
+    prebuild:
+      - corepack prepare pnpm@10.24.0 --activate
+      - pnpm install --frozen-lockfile
+      # Prefer compiling RN/Expo Android modules from source on F-Droid builders.
+      - node -e "const fs=require('fs');const p='package.json';const j=JSON.parse(fs.readFileSync(p,'utf8'));const expo={...(j.expo||{})};const autolinking={...(expo.autolinking||{})};const android={...(autolinking.android||{})};android.buildFromSource=['.*'];autolinking.android=android;expo.autolinking=autolinking;j.expo=expo;fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n');"
+      - npx expo prebuild --platform android --no-install
+      # F-Droid re-signs; drop app signingConfig so assembleRelease needs no private keystore.
+      - sed -i -e '/signingConfig /d' android/app/build.gradle
+    build:
+      - cd android
+      - gradle assembleRelease
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^mobile-android-v.*$
+UpdateCheckData: mobile/app.json|"versionCode":\s(\d+)|.|"version":\s"([\d.]+)"
+CurrentVersion: 0.0.32
+CurrentVersionCode: 8
