@@ -106,4 +106,29 @@ describe('parseTeammateCommand', () => {
       })
     })
   })
+
+  describe('an env prefix carrying no assignments', () => {
+    it('still strips the prefix, since PowerShell has no env command', () => {
+      expect(parseTeammateCommand('env claude --flag', 'win32')).toEqual({
+        env: {},
+        command: 'claude --flag'
+      })
+    })
+
+    it('strips it after a cd clause too', () => {
+      expect(parseTeammateCommand("cd '/repo' && env claude --flag", 'win32')).toEqual({
+        cwd: '/repo',
+        env: {},
+        command: 'claude --flag'
+      })
+    })
+
+    it('leaves a command that merely starts with the word env alone', () => {
+      // `envsubst` shares the prefix but is not the env command.
+      expect(parseTeammateCommand('envsubst < t.txt', 'win32')).toEqual({
+        env: {},
+        command: 'envsubst < t.txt'
+      })
+    })
+  })
 })

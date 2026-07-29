@@ -41,7 +41,7 @@ internal static class OrcaTmuxShim
         if (IsBatchFile(shimBin))
         {
             string[] batchArgs = Prepend(Subcommand, args);
-            RejectLineBreaks(batchArgs);
+            RejectUnrepresentableForCmd(batchArgs);
             return new ProcessStartInfo
             {
                 FileName = "cmd.exe",
@@ -60,9 +60,12 @@ internal static class OrcaTmuxShim
         };
     }
 
-    // Why: cmd ends the command at a line break and no quoting suppresses that, so a multi-line
-    // send-keys payload would run its tail as a separate command. Direct .exe targets are unaffected.
-    private static void RejectLineBreaks(string[] args)
+    // Why: two things survive any quoting cmd.exe accepts, so the only safe answer is to refuse.
+    // A line break ends the command, running the tail separately. A %NAME% reference is expanded
+    // AFTER quoting, so a variable whose *value* holds a quote or operator escapes the quoted region
+    // entirely — measured: a value of INJECTED"&whoami ran whoami. Direct .exe targets are unaffected;
+    // tmux's own %1 / %99 pane ids are not variable references and pass through untouched.
+    private static void RejectUnrepresentableForCmd(string[] args)
     {
         foreach (string arg in args)
         {
@@ -71,7 +74,46 @@ internal static class OrcaTmuxShim
                 throw new ArgumentException(
                     "arguments containing line breaks cannot be forwarded through a batch shim bin");
             }
+            if (ContainsEnvironmentReference(arg))
+            {
+                throw new ArgumentException(
+                    "arguments containing a %NAME% environment reference cannot be forwarded through a batch shim bin");
+            }
         }
+    }
+
+    // Matches %NAME% with a shell-variable-shaped NAME regardless of whether it is currently defined,
+    // so the verdict does not depend on the environment the child happens to inherit.
+    private static bool ContainsEnvironmentReference(string value)
+    {
+        for (int index = 0; index < value.Length; index += 1)
+        {
+            if (value[index] != '%')
+            {
+                continue;
+            }
+
+            int scan = index + 1;
+            if (scan >= value.Length)
+            {
+                break;
+            }
+            if (!Char.IsLetter(value[scan]) && value[scan] != '_')
+            {
+                continue;
+            }
+
+            scan += 1;
+            while (scan < value.Length && (Char.IsLetterOrDigit(value[scan]) || value[scan] == '_'))
+            {
+                scan += 1;
+            }
+            if (scan < value.Length && value[scan] == '%')
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static bool IsBatchFile(string path)

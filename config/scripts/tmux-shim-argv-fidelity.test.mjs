@@ -234,6 +234,51 @@ describe('windows tmux shim', () => {
       })
     })
 
+    itWindows('refuses a %NAME% reference on the batch path but keeps tmux pane ids', () => {
+      // cmd expands %NAME% AFTER quoting, so a variable whose value holds a quote escapes the
+      // quoted region — measured: a value of INJECTED"&whoami ran whoami. %1/%99 are tmux pane
+      // ids, not variable references, and must keep working.
+      const shim = requireShim()
+      withTempRoots(1, (root) => {
+        const recorder = buildStub(root, 'recorder', RECORDER_SOURCE)
+        const batchPath = join(root, 'shim-bin.cmd')
+        writeFileSync(batchPath, `@echo off\r\n"${recorder}" %*\r\n`, 'utf8')
+        const env = { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: batchPath }
+
+        const refused = spawnSync(shim, ['send-keys', '-t', '%1', '%PATH%'], { env, encoding: 'utf8' })
+        expect(refused.status).toBe(1)
+        expect(refused.stderr).toContain('%NAME%')
+
+        const allowed = spawnSync(shim, ['send-keys', '-t', '%1', '%99', '100%'], {
+          env,
+          encoding: 'utf8'
+        })
+        expect(allowed.status, allowed.stderr).toBe(0)
+        expect(readReceived(recorder)).toEqual([
+          'agent-teams-tmux',
+          'send-keys',
+          '-t',
+          '%1',
+          '%99',
+          '100%'
+        ])
+      })
+    })
+
+    itWindows('forwards a %NAME% reference unchanged to a direct executable target', () => {
+      // The packaged path is unaffected by the batch restriction.
+      const shim = requireShim()
+      withTempRoots(1, (root) => {
+        const recorder = buildStub(root, 'recorder', RECORDER_SOURCE)
+        const result = spawnSync(shim, ['send-keys', '%PATH%'], {
+          env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: recorder },
+          encoding: 'utf8'
+        })
+        expect(result.status, result.stderr).toBe(0)
+        expect(readReceived(recorder)).toEqual(['agent-teams-tmux', 'send-keys', '%PATH%'])
+      })
+    })
+
     itWindows('refuses a line break on the batch path instead of splitting the command', () => {
       // cmd ends the command at a newline and no quoting suppresses it, so the only safe
       // answer is to refuse. Direct .exe targets forward line breaks fine.

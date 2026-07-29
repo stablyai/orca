@@ -34,7 +34,9 @@ export function parseTeammateCommand(
   }
 
   const env: Record<string, string> = {}
+  let sawEnvPrefix = false
   if (tokens[index]?.value === 'env') {
+    sawEnvPrefix = true
     index += 1
     while (index < tokens.length) {
       const match = ENV_ASSIGNMENT_RE.exec(tokens[index]!.value)
@@ -50,7 +52,9 @@ export function parseTeammateCommand(
   // quotes around arguments such as a prompt containing spaces.
   const command = index < tokens.length ? raw.slice(tokens[index]!.start).trim() : ''
 
-  if (cwd === undefined && Object.keys(env).length === 0) {
+  // Why: `env cmd` with no assignments still has to lose its `env` prefix — PowerShell has no such
+  // command — so the passthrough only applies when nothing at all was recognised.
+  if (cwd === undefined && !sawEnvPrefix && Object.keys(env).length === 0) {
     return { env: {}, command: raw.trim() }
   }
   return cwd === undefined ? { env, command } : { cwd, env, command }

@@ -52,7 +52,12 @@ On Windows the agent SHALL be launched such that its standard input is a TTY. Th
 
 The compiled `tmux.exe` shim SHALL invoke the Orca CLI with the `agent-teams-tmux` subcommand as the first argument, followed by its own arguments byte-for-byte, and SHALL NOT include its target's program name among those arguments. It SHALL NOT emit any response of its own; `tmux -V` is answered by the dispatcher.
 
-Byte-for-byte fidelity is guaranteed for a **direct executable target**, which is what the packaged path resolves to. A **batch target** (`orca.cmd`, `orca-dev.cmd` — the dev path) must go through `cmd.exe`, which parses the command line a second time, so fidelity there is best-effort with two stated limits: `%VAR%` is expanded by cmd and cannot be suppressed, and an argument containing a line break is refused outright because cmd ends the command at a newline and no quoting prevents it. Everything else — including `&`, `|`, `<`, `>`, `^`, `(`, `)`, embedded quotes and spaces — SHALL arrive unchanged on both paths.
+Byte-for-byte fidelity is guaranteed for a **direct executable target**, which is what the packaged path resolves to. A **batch target** (`orca.cmd`, `orca-dev.cmd` — the dev path) must go through `cmd.exe`, which parses the command line a second time. Two constructs survive every quoting cmd accepts, so the shim SHALL refuse them there rather than forward something it cannot represent:
+
+- an argument containing a **line break**, because cmd ends the command at a newline;
+- an argument containing a **`%NAME%` environment reference**, because cmd expands it *after* quoting and the substituted value is re-parsed — a variable whose value contains a quote or an operator therefore escapes the quoted region entirely. Refusal is keyed on the `%NAME%` shape, not on whether the variable is currently defined, so the verdict does not depend on the environment the child inherits.
+
+Everything else SHALL arrive unchanged on both paths, including `&`, `|`, `<`, `>`, `^`, `(`, `)`, embedded quotes, spaces, a bare trailing `%`, and tmux's own `%1`/`%99` pane ids — which are not variable references.
 
 #### Scenario: Subcommand dispatch
 - **WHEN** the shim is invoked with any tmux arguments
@@ -70,9 +75,17 @@ Byte-for-byte fidelity is guaranteed for a **direct executable target**, which i
 - **WHEN** the shim is invoked against a `.cmd` target with an argument containing a carriage return or newline
 - **THEN** the shim exits non-zero with a message naming line breaks, rather than letting `cmd.exe` execute the remainder as a separate command
 
-#### Scenario: Percent expansion on the batch path
-- **WHEN** the shim is invoked against a `.cmd` target with an argument containing `%VAR%`
-- **THEN** `cmd.exe` may expand it; this is an accepted limit of batch targets and the reason the packaged path resolves to `orca.exe` and runs it directly
+#### Scenario: An environment reference is refused on the batch path
+- **WHEN** the shim is invoked against a `.cmd` target with an argument containing `%NAME%`
+- **THEN** the shim exits non-zero naming `%NAME%`, rather than letting cmd substitute a value whose contents are then re-parsed as command syntax
+
+#### Scenario: Pane ids and bare percents still pass on the batch path
+- **WHEN** the shim is invoked against a `.cmd` target with `%1`, `%99` or `100%`
+- **THEN** each arrives unchanged, because none is a variable reference
+
+#### Scenario: An environment reference is forwarded to a direct executable target
+- **WHEN** the shim is invoked against an `.exe` target with an argument containing `%NAME%`
+- **THEN** it arrives unchanged — the restriction belongs to `cmd.exe`, not to the shim, and the packaged path is unaffected
 
 #### Scenario: No fabricated version response
 - **WHEN** the shim forwards any command
