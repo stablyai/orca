@@ -219,17 +219,29 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
 
   it('skips the Windows preflight while a remote runtime environment is focused', () => {
     const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+    const windowsHost = { runtime: 'host', label: 'Windows' } as const
+    const previous = useAppStore.getState()
     useAppStore.setState({
-      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'remote-linux' }
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'remote-linux' },
+      runtimeEnvironments: [{ id: 'remote-linux' }] as never
     })
 
     try {
       // Setup terminals spawn on the focused runtime, so cmd.exe would not exist there.
-      expect(
-        buildSkillCommandForRuntime(installCommand, { runtime: 'host', label: 'Windows' }, 'win32')
-      ).toBe(installCommand)
+      expect(buildSkillCommandForRuntime(installCommand, windowsHost, 'win32')).toBe(installCommand)
+
+      // A second saved environment routes the terminal back to the Windows host.
+      useAppStore.setState({
+        runtimeEnvironments: [{ id: 'remote-linux' }, { id: 'other' }] as never
+      })
+      expect(buildSkillCommandForRuntime(installCommand, windowsHost, 'win32')).toContain(
+        'where.exe npx'
+      )
     } finally {
-      useAppStore.setState({ settings: getDefaultSettings('/tmp') })
+      useAppStore.setState({
+        settings: previous.settings,
+        runtimeEnvironments: previous.runtimeEnvironments
+      })
     }
   })
 

@@ -9,6 +9,7 @@ import {
 } from '../../../../shared/powershell-native-argument'
 import { buildWslLoginShellCommand } from '../../../../shared/wsl-login-shell-command'
 import { getProjectAgentSkillTerminalShellOverride } from '@/lib/project-skill-runtime'
+import { getSingleFocusedRuntimeEnvironmentId } from '@/lib/single-runtime-legacy-owner'
 import { useAppStore } from '@/store'
 import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
 import { toast } from 'sonner'
@@ -150,7 +151,9 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
 }
 
 function isRemoteRuntimeEnvironmentFocused(): boolean {
-  return Boolean(useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim())
+  // Why: match the resolver the setup terminal itself routes through, so the
+  // wrapper is skipped exactly when the terminal lands off the Windows host.
+  return getSingleFocusedRuntimeEnvironmentId(useAppStore.getState()) !== null
 }
 
 function getSkillCommandPlatform(): NodeJS.Platform {
