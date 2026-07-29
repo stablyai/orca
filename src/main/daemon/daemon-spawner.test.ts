@@ -154,6 +154,27 @@ describe('DaemonSpawner', () => {
   })
 
   describe('shutdown', () => {
+    it('fences and shuts down a launch that is still in flight', async () => {
+      let finishLaunch!: (handle: { shutdown: () => Promise<void> }) => void
+      const handle = { shutdown: vi.fn(async () => {}) }
+      const launcher = vi.fn(
+        () =>
+          new Promise<{ shutdown: () => Promise<void> }>((resolve) => {
+            finishLaunch = resolve
+          })
+      )
+      spawner = new DaemonSpawner({ runtimeDir: dir, launcher })
+
+      const launching = spawner.ensureRunning()
+      const shuttingDown = spawner.shutdown()
+      finishLaunch(handle)
+
+      await shuttingDown
+      await expect(launching).rejects.toThrow('interrupted by shutdown')
+      expect(handle.shutdown).toHaveBeenCalledOnce()
+      expect(spawner.getHandle()).toBeNull()
+    })
+
     it('stops the daemon', async () => {
       const s = createSpawner()
       const info = await s.ensureRunning()

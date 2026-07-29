@@ -95,7 +95,9 @@ const {
   const daemonClientMock = vi.fn().mockImplementation(function MockDaemonClient() {
     return {
       ensureConnected: vi.fn(async () => {}),
+      ensureConnectedWithin: vi.fn(async () => {}),
       request: vi.fn(async () => ({ sessions: [] })),
+      hasObservedAuthenticatedDisconnect: vi.fn(() => false),
       disconnect: vi.fn()
     }
   })
@@ -426,7 +428,9 @@ async function importFresh() {
   daemonClientMock.mockImplementation(function MockDaemonClient() {
     return {
       ensureConnected: vi.fn(async () => {}),
+      ensureConnectedWithin: vi.fn(async () => {}),
       request: vi.fn(async () => ({ sessions: [] })),
+      hasObservedAuthenticatedDisconnect: vi.fn(() => false),
       disconnect: vi.fn()
     }
   })
@@ -522,6 +526,29 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(adapterInstances[0].establishLifecycleLease.mock.invocationCallOrder[0]).toBeLessThan(
       adoptionLeaseReleases[0].mock.invocationCallOrder[0]
     )
+  })
+
+  it('fences daemon initialization when shutdown starts before publication', async () => {
+    const mod = await importFresh()
+    let finishEnsureRunning!: (value: { socketPath: string; tokenPath: string }) => void
+    ensureRunningOverrides.push(
+      () =>
+        new Promise((resolve) => {
+          finishEnsureRunning = resolve
+        })
+    )
+    const initialization = mod.initDaemonPtyProvider().catch((error: unknown) => error)
+    await vi.waitFor(() => expect(spawnerInstances).toHaveLength(1))
+
+    const shutdown = mod.shutdownDaemon()
+    finishEnsureRunning({ socketPath: '/fake/pending-socket', tokenPath: '/fake/pending-token' })
+
+    await shutdown
+    expect(await initialization).toEqual(
+      expect.objectContaining({ message: expect.stringContaining('interrupted by shutdown') })
+    )
+    expect(spawnerInstances[0].shutdown).toHaveBeenCalled()
+    expect(setLocalPtyProviderMock).not.toHaveBeenCalled()
   })
 
   it('uses daemon-owned idle retirement when a fresh launch fails permanent adoption', async () => {
@@ -635,6 +662,32 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(adapterInstances[0].disconnectOnly).toHaveBeenCalledOnce()
     expect(adapterInstances[1].disconnectOnly).toHaveBeenCalledOnce()
     expect(setLocalPtyProviderMock).not.toHaveBeenCalled()
+    expect(mod.getDaemonProvider()).toBeNull()
+  })
+
+  it('starts legacy teardown before stalled startup discovery settles', async () => {
+    const mod = await importFresh()
+    probeSocketExistsMock.mockImplementation((p?: string) => p?.endsWith('daemon-v9.sock') ?? false)
+    mockOnlyDaemonSocketAlive('daemon-v9.sock')
+    let resolveDiscovery!: (sessions: { sessionId: string }[]) => void
+    listProcessesControl.current = () =>
+      new Promise((resolve) => {
+        resolveDiscovery = resolve
+      })
+    const started = mod.initDaemonPtyProvider().catch((error: unknown) => error)
+    await vi.waitFor(() => expect(resolveDiscovery).toBeTypeOf('function'))
+    const clientsBeforeShutdown = daemonClientMock.mock.calls.length
+
+    const shutdown = mod.shutdownDaemon()
+    await vi.waitFor(() =>
+      expect(daemonClientMock.mock.calls.length).toBeGreaterThan(clientsBeforeShutdown)
+    )
+    resolveDiscovery([])
+
+    await shutdown
+    expect(await started).toEqual(
+      expect.objectContaining({ message: expect.stringContaining('interrupted by shutdown') })
+    )
     expect(mod.getDaemonProvider()).toBeNull()
   })
 
@@ -786,6 +839,32 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(spawnerInstances).toHaveLength(1)
     expect(originalSpawner.resetHandle).toHaveBeenCalledTimes(1)
     expect(originalSpawner.ensureRunning).toHaveBeenCalledTimes(2)
+  })
+
+  it('prevents an in-progress manual restart from publishing after shutdown', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const originalProvider = mod.getDaemonProvider()
+    let finishRestartLaunch!: (value: { socketPath: string; tokenPath: string }) => void
+    ensureRunningOverrides.push(
+      () =>
+        new Promise((resolve) => {
+          finishRestartLaunch = resolve
+        })
+    )
+    const restart = mod.restartDaemon().catch((error: unknown) => error)
+    await vi.waitFor(() => expect(spawnerInstances[0].ensureRunning).toHaveBeenCalledTimes(2))
+
+    const shutdown = mod.shutdownDaemon()
+    finishRestartLaunch({ socketPath: '/fake/restart-race', tokenPath: '/fake/restart-token' })
+
+    await shutdown
+    expect(await restart).toEqual(
+      expect.objectContaining({ message: expect.stringContaining('interrupted by shutdown') })
+    )
+    expect(mod.getDaemonProvider()).toBeNull()
+    expect(setLocalPtyProviderMock).toHaveBeenCalledOnce()
+    expect(setLocalPtyProviderMock).toHaveBeenCalledWith(originalProvider)
   })
 
   it('builds a fresh adapter whose respawn callback closes over the same spawner', async () => {
@@ -1027,6 +1106,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       return {
         ensureConnected: ensureConnectedMock,
         request: requestMock,
+        hasObservedAuthenticatedDisconnect: vi.fn(() => false),
         disconnect: disconnectMock
       }
     })

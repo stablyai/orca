@@ -31,7 +31,8 @@ import {
   checkDaemonHealth,
   isDaemonStaleForCurrentBundle,
   killStaleDaemon,
-  parseDaemonPidFile
+  parseDaemonPidFile,
+  terminateDaemonProcessIdentity
 } from './daemon-health'
 import {
   collectPinnedDaemonVersions,
@@ -53,6 +54,10 @@ import {
   confirmSeededClaudeLivePtys,
   hasSeededUnconfirmedClaudePtys
 } from '../claude-accounts/live-pty-gate'
+import {
+  runGracefulDaemonShutdownWithFallback,
+  shutdownAdoptedDaemonGenerations
+} from './daemon-quit-teardown'
 
 // Why: daemon init runs concurrent with window load, so an in-process t timestamp (not harness stderr timing) measures cold-start.
 function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
@@ -66,11 +71,17 @@ export const WEDGED_DAEMON_GRACE_RETRIES = 11
 const DAEMON_SELF_SHUTDOWN_WAIT_MS = 5_000
 const DAEMON_CHILD_TERMINATION_GRACE_MS = 5_000
 const DAEMON_CHILD_FORCE_EXIT_WAIT_MS = 1_000
+const DAEMON_QUIT_RPC_TIMEOUT_MS = 1_500
+const DAEMON_QUIT_FALLBACK_DELAY_MS = 8_000
 
 let spawner: DaemonSpawner | null = null
 type DaemonProvider = DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProvider
 
 let adapter: DaemonProvider | null = null
+let initializationInFlight: Promise<void> | null = null
+let initializingSpawner: DaemonSpawner | null = null
+let initializingLegacyProtocolVersions: number[] = []
+let daemonShutdownRequested = false
 // Why: coalesce concurrent restartDaemon() calls so two entries can't race the 7-step sequence against a half-spawned replacement.
 let restartInFlight: Promise<RestartDaemonResult> | null = null
 
@@ -695,11 +706,32 @@ export async function initDaemonPtyProvider(
   signal?: AbortSignal,
   options: { macosLoginSessionWatch?: boolean } = {}
 ): Promise<void> {
+  if (daemonShutdownRequested) {
+    throw new Error('Daemon initialization was interrupted by shutdown')
+  }
+  const initialization = runDaemonPtyProviderInitialization(signal, options)
+  initializationInFlight = initialization
+  try {
+    await initialization
+  } finally {
+    if (initializationInFlight === initialization) {
+      initializationInFlight = null
+    }
+  }
+}
+
+async function runDaemonPtyProviderInitialization(
+  signal?: AbortSignal,
+  options: { macosLoginSessionWatch?: boolean } = {}
+): Promise<void> {
   logDaemonMilestone('daemon-init-start')
   // Why: e2e coverage for the startup PTY gate (#5232) needs a daemon init that deterministically outlasts the first-window timeout.
   const e2eInitDelayMs = Number(process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS)
   if (Number.isFinite(e2eInitDelayMs) && e2eInitDelayMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, e2eInitDelayMs))
+  }
+  if (daemonShutdownRequested) {
+    throw new Error('Daemon initialization was interrupted by shutdown')
   }
   const runtimeDir = getRuntimeDir()
 
@@ -707,9 +739,14 @@ export async function initDaemonPtyProvider(
     runtimeDir,
     launcher: createOutOfProcessLauncher(runtimeDir, options.macosLoginSessionWatch ?? false)
   })
+  initializingSpawner = newSpawner
 
   // Why: assign the module-level spawner/adapter only after both succeed, so a failed ensureRunning() leaves no stale spawner.
   const info = await newSpawner.ensureRunning()
+  if (daemonShutdownRequested) {
+    await newSpawner.shutdown()
+    throw new Error('Daemon initialization was interrupted by shutdown')
+  }
   // Why: reclaim superseded daemon-host copies on EVERY launch (spawns are rare), keeping current + live-daemon-pinned versions.
   pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
   const launchMode = newSpawner.getHandle()?.mode
@@ -731,6 +768,7 @@ export async function initDaemonPtyProvider(
     historyPath: getHistoryDir(),
     // Why: on daemon death, ensureConnected() detects the dead socket and calls this to fork a replacement before retrying.
     respawn: async (reason: DaemonRespawnReason) => {
+      throwIfDaemonShutdownRequested()
       // Why: attribute rather than emit — the launcher below is the one that completes the
       // replacement, and emitting here would fire before the outcome is known.
       // Caveat: a wedged-but-alive daemon (#8689) can still report died_respawn here and
@@ -759,6 +797,10 @@ export async function initDaemonPtyProvider(
     releaseDaemonAdoptionLease(newSpawner.getHandle())
 
     legacyAdapters = await createLegacyDaemonAdapters(runtimeDir)
+    initializingLegacyProtocolVersions = legacyAdapters.map((legacy) => legacy.protocolVersion)
+    if (daemonShutdownRequested) {
+      throw new Error('Daemon initialization was interrupted by shutdown')
+    }
     routedAdapter =
       launchMode === 'degraded-new-pty-fallback'
         ? new DegradedDaemonPtyProvider({
@@ -778,12 +820,21 @@ export async function initDaemonPtyProvider(
     } else if (routedAdapter instanceof DaemonPtyRouter) {
       await routedAdapter.discoverLegacySessions()
     }
+    throwIfDaemonShutdownRequested()
     if (signal?.aborted) {
       // Why: same late-swap guard after legacy discovery; release uninstalled adapter leases without killing live sessions.
       await routedAdapter.disconnectOnly()
       return
     }
   } catch (error) {
+    if (daemonShutdownRequested) {
+      releaseDaemonAdoptionLease(newSpawner.getHandle())
+      newAdapter.dispose()
+      for (const legacy of legacyAdapters) {
+        legacy.dispose()
+      }
+      throw error
+    }
     try {
       await cleanupFailedDaemonAdoption(newSpawner, newAdapter, legacyAdapters)
     } catch (cleanupError) {
@@ -798,6 +849,10 @@ export async function initDaemonPtyProvider(
   rebindLocalProviderListeners()
   logDaemonMilestone('daemon-init-done', { legacyAdapters: legacyAdapters.length })
   await reconcileSeededClaudeLivePtys(routedAdapter)
+  if (initializingSpawner === newSpawner) {
+    initializingSpawner = null
+    initializingLegacyProtocolVersions = []
+  }
 }
 
 // Why: release gate ids only for daemon-confirmed-dead sessions; keep seeds on listing failure since releasing early can rotate a live CLI's refresh token.
@@ -867,6 +922,7 @@ export type RestartDaemonResult = {
 
 // Why: the 7-step restart sequence from docs/daemon-staleness-ux.md §Phase 1; current-protocol only (legacy adapters preserved).
 export async function restartDaemon(): Promise<RestartDaemonResult> {
+  throwIfDaemonShutdownRequested()
   if (restartInFlight) {
     return restartInFlight
   }
@@ -877,6 +933,7 @@ export async function restartDaemon(): Promise<RestartDaemonResult> {
 }
 
 async function runRestartDaemon(): Promise<RestartDaemonResult> {
+  throwIfDaemonShutdownRequested()
   const currentSpawner = spawner
   const currentAdapter = adapter
   if (!currentSpawner || !currentAdapter) {
@@ -911,10 +968,12 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   let info: Awaited<ReturnType<DaemonSpawner['ensureRunning']>>
   try {
     await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+    throwIfDaemonShutdownRequested()
 
     // Step 4: reuse the existing spawner so the respawn closure baked into long-lived adapters stays valid (do NOT new one).
     currentSpawner.resetHandle()
     info = await currentSpawner.ensureRunning()
+    throwIfDaemonShutdownRequested()
   } catch (error) {
     // Why: old provider stays authoritative until the final swap; rebind since relaunch failed after teardown.
     rebindLocalProviderListeners()
@@ -927,6 +986,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
     tokenPath: info.tokenPath,
     historyPath: getHistoryDir(),
     respawn: async (reason: DaemonRespawnReason) => {
+      throwIfDaemonShutdownRequested()
       // Why: attribute rather than emit — the launcher below is the one that completes the
       // replacement, and emitting here would fire before the outcome is known.
       // Caveat: a wedged-but-alive daemon (#8689) can still report died_respawn here and
@@ -951,6 +1011,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   try {
     // Temporary launcher lease overlaps this permanent pair so a manual restart can't strand a newly spawned daemon during adoption.
     await newCurrent.establishLifecycleLease()
+    throwIfDaemonShutdownRequested()
     releaseDaemonAdoptionLease(currentSpawner.getHandle())
 
     // Re-wrap in a router only if legacy adapters exist; they're preserved by reference and still route to their pre-upgrade daemons.
@@ -960,8 +1021,16 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
         : newCurrent
     if (newProvider instanceof DaemonPtyRouter) {
       await newProvider.discoverLegacySessions()
+      throwIfDaemonShutdownRequested()
     }
   } catch (error) {
+    if (daemonShutdownRequested) {
+      if (newProvider instanceof DaemonPtyRouter) {
+        newProvider.disposeRouterOnly()
+      }
+      newCurrent.dispose()
+      throw error
+    }
     let cleanupError: unknown
     try {
       if (newProvider instanceof DaemonPtyRouter) {
@@ -980,6 +1049,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   }
 
   // Drain the old router's subscriptions via the router-only variant (plain dispose() would tear down the shared legacy adapters), after the new provider exists (no unhandled events) and before the swap (atomic for the renderer).
+  throwIfDaemonShutdownRequested()
   disposeProviderSubscriptionsOnly(currentAdapter)
 
   // Step 6: swap module state (adapter + localProvider) atomically.
@@ -991,6 +1061,12 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   return { killedCount }
 }
 
+function throwIfDaemonShutdownRequested(): void {
+  if (daemonShutdownRequested) {
+    throw new Error('Daemon operation was interrupted by shutdown')
+  }
+}
+
 // Disconnect without killing: the daemon survives app quit so sessions stay warm for reattach.
 // Leave history sessions marked "unclean" so a daemon crash while Orca is closed stays recoverable.
 export async function disconnectDaemon(): Promise<void> {
@@ -1000,10 +1076,111 @@ export async function disconnectDaemon(): Promise<void> {
 
 /** Kill the daemon and all its sessions. Use for full cleanup only. */
 export async function shutdownDaemon(): Promise<void> {
-  adapter?.dispose()
+  daemonShutdownRequested = true
+  const pendingInitialization = initializationInFlight
+  const pendingRestart = restartInFlight
+  const runtimeDir = getRuntimeDir()
+  const eagerLegacyProtocolVersions = [
+    ...(adapter && !(adapter instanceof DaemonPtyAdapter)
+      ? adapter.getLegacyAdapters().map((legacy) => legacy.protocolVersion)
+      : []),
+    ...initializingLegacyProtocolVersions
+  ]
+  const legacyShutdowns = new Map<number, Promise<void>>()
+  for (const protocolVersion of new Set(eagerLegacyProtocolVersions)) {
+    legacyShutdowns.set(protocolVersion, shutdownDaemonProtocolAndWait(runtimeDir, protocolVersion))
+  }
+  const currentSpawner = spawner ?? initializingSpawner
+  const currentShutdown = currentSpawner
+    ? (async () => {
+        try {
+          await shutdownDaemonProtocolAndWait(runtimeDir, PROTOCOL_VERSION)
+        } finally {
+          await currentSpawner.shutdown()
+        }
+      })()
+    : undefined
+
+  await Promise.all([pendingInitialization?.catch(() => {}), pendingRestart?.catch(() => {})])
+  const ownedAdapter = adapter
+  const legacyProtocolVersions =
+    ownedAdapter && !(ownedAdapter instanceof DaemonPtyAdapter)
+      ? ownedAdapter.getLegacyAdapters().map((legacy) => legacy.protocolVersion)
+      : []
+  legacyProtocolVersions.push(...initializingLegacyProtocolVersions)
   adapter = null
-  await spawner?.shutdown()
+  ownedAdapter?.dispose()
   spawner = null
+  initializingSpawner = null
+  await shutdownAdoptedDaemonGenerations({
+    ...(currentShutdown
+      ? {
+          shutdownCurrent: () => currentShutdown
+        }
+      : {}),
+    legacyProtocolVersions,
+    shutdownLegacy: async (protocolVersion) => {
+      let shutdown = legacyShutdowns.get(protocolVersion)
+      if (!shutdown) {
+        shutdown = shutdownDaemonProtocolAndWait(runtimeDir, protocolVersion)
+        legacyShutdowns.set(protocolVersion, shutdown)
+      }
+      await shutdown
+    }
+  })
+}
+
+async function shutdownDaemonProtocolAndWait(
+  runtimeDir: string,
+  protocolVersion: number
+): Promise<void> {
+  const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
+  const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
+  let identity:
+    | (NonNullable<ReturnType<typeof parseDaemonPidFile>> & { launchNonce: string | null })
+    | null = null
+  try {
+    const pidContents = readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
+    const parsed = parseDaemonPidFile(pidContents)
+    if (parsed) {
+      const pidRecord = JSON.parse(pidContents) as { launchNonce?: unknown }
+      identity = {
+        ...parsed,
+        launchNonce: typeof pidRecord.launchNonce === 'string' ? pidRecord.launchNonce : null
+      }
+    }
+  } catch {
+    // The spawner handle still provides a current-generation fallback.
+  }
+  const graceful = async (): Promise<void> => {
+    await cleanupDaemonForProtocol(runtimeDir, protocolVersion, {
+      rpcTimeoutMs: DAEMON_QUIT_RPC_TIMEOUT_MS
+    })
+  }
+  if (!identity) {
+    await graceful()
+    return
+  }
+  await runGracefulDaemonShutdownWithFallback({
+    graceful,
+    fallback: async () => {
+      await terminateDaemonProcessIdentity(
+        identity.pid,
+        socketPath,
+        tokenPath,
+        identity.startedAtMs
+      )
+    },
+    fallbackDelayMs: DAEMON_QUIT_FALLBACK_DELAY_MS
+  })
+  await terminateDaemonProcessIdentity(identity.pid, socketPath, tokenPath, identity.startedAtMs)
+  if (identity.launchNonce) {
+    unlinkOwnedDaemonPidFile(
+      getDaemonPidPath(runtimeDir, protocolVersion),
+      identity.pid,
+      identity.launchNonce
+    )
+  }
 }
 
 export type OrphanedDaemonCleanupResult = {
@@ -1015,7 +1192,8 @@ export type OrphanedDaemonCleanupResult = {
 
 export async function cleanupDaemonForProtocol(
   runtimeDir: string,
-  protocolVersion: number
+  protocolVersion: number,
+  options: { rpcTimeoutMs?: number } = {}
 ): Promise<OrphanedDaemonCleanupResult> {
   const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
   const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
@@ -1048,16 +1226,29 @@ export async function cleanupDaemonForProtocol(
   let didRequestShutdown = false
   let didKillStaleDaemon = false
   try {
-    await client.ensureConnected()
-    const sessions = await client
-      .request<ListSessionsResult>('listSessions', undefined)
-      .catch(() => ({ sessions: [] }))
+    await (options.rpcTimeoutMs === undefined
+      ? client.ensureConnected()
+      : client.ensureConnectedWithin(options.rpcTimeoutMs))
+    const sessionsRequest =
+      options.rpcTimeoutMs === undefined
+        ? client.request<ListSessionsResult>('listSessions', undefined)
+        : client.request<ListSessionsResult>('listSessions', undefined, options.rpcTimeoutMs)
+    const sessions = await sessionsRequest.catch(() => ({ sessions: [] }))
     killedCount = sessions.sessions.filter((s) => s.isAlive).length
 
     // Use the single-shot `shutdown` RPC (kills all sessions then exits) to avoid racing per-session `kill` calls against the daemon exiting.
-    await client.request('shutdown', { killSessions: true }).catch(() => {
-      // Daemon exits immediately after the RPC, so the socket may close before the reply arrives; treat as success.
-    })
+    const shutdownRequest =
+      options.rpcTimeoutMs === undefined
+        ? client.request('shutdown', { killSessions: true })
+        : client.request('shutdown', { killSessions: true }, options.rpcTimeoutMs)
+    try {
+      await shutdownRequest
+    } catch (error) {
+      // A post-auth socket close is the expected no-reply exit; timeouts still require PID cleanup.
+      if (!client.hasObservedAuthenticatedDisconnect()) {
+        throw error
+      }
+    }
     didRequestShutdown = true
   } catch {
     // Previous-protocol daemons may be wedged or too old for the RPC path; fall back to PID cleanup (only unlinks a live socket after proving the process is killed).

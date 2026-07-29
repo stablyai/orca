@@ -16,7 +16,7 @@ import { ensureActiveOrcaProfile, initOrcaProfilePaths } from './orca-profiles/p
 import { getOrcaCloudAuthConfig } from './orca-profiles/profile-cloud-auth-config'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { applyAppIcon } from './app-icon'
-import { relaunchApp } from './app-relaunch'
+import { isAppRelaunchRequested, relaunchApp } from './app-relaunch'
 import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
@@ -31,6 +31,7 @@ import {
   registerHeadlessPtyRuntime
 } from './ipc/pty'
 import { initDaemonPtyProvider, disconnectDaemon, shutdownDaemon } from './daemon/daemon-init'
+import { resolveDaemonQuitMode } from './daemon/daemon-quit-teardown'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
@@ -2864,8 +2865,14 @@ app.on('will-quit', (e) => {
       : Promise.resolve()
     // Why: allSettled (not all) keeps fail-open — a daemon-disconnect rejection still quits instead of hanging.
     // Why: telemetry flush folds in before app.quit() (bounded 2s); catch defensively so a flush failure can't cancel the quit chain.
-    // Why: normal quits keep the detached daemon for warm reattach, but a dead dev parent leaves the temp/dev profile ownerless.
-    const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
+    // Why: ordinary Windows exit must not orphan a detached daemon; relaunch/update still preserve warm sessions.
+    const daemonQuitMode = resolveDaemonQuitMode({
+      platform: process.platform,
+      updateQuitInProgress,
+      relaunchRequested: isAppRelaunchRequested(),
+      devParentShutdownRequested: isDevParentShutdownRequested()
+    })
+    const daemonTeardown = daemonQuitMode === 'shutdown' ? shutdownDaemon() : disconnectDaemon()
     // Why: a wedged transport (half-open post-sleep socket) can leave one
     // member unsettled forever and block app.quit() until Force Quit (#9447).
     settleTeardownWithinDeadline([

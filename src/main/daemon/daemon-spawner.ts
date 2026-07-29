@@ -41,6 +41,8 @@ export class DaemonSpawner {
   private socketPath: string
   private tokenPath: string
   private pidPath: string
+  private launchInFlight: Promise<DaemonProcessHandle> | null = null
+  private shutdownInFlight: Promise<void> | null = null
 
   constructor(opts: DaemonSpawnerOptions) {
     this.runtimeDir = opts.runtimeDir
@@ -55,9 +57,28 @@ export class DaemonSpawner {
       return { socketPath: this.socketPath, tokenPath: this.tokenPath }
     }
 
-    // Why: a detached daemon may clean up after its parent exits. A unique
-    // launch identity keeps it from deleting a replacement daemon's PID file.
-    this.handle = await this.launcher(this.socketPath, this.tokenPath, this.pidPath, randomUUID())
+    if (this.shutdownInFlight) {
+      await this.shutdownInFlight
+      throw new Error('Daemon launch was interrupted by shutdown')
+    }
+    const launch =
+      this.launchInFlight ??
+      this.launcher(this.socketPath, this.tokenPath, this.pidPath, randomUUID()).then((handle) => {
+        this.handle = handle
+        return handle
+      })
+    this.launchInFlight = launch
+    try {
+      await launch
+    } finally {
+      if (this.launchInFlight === launch) {
+        this.launchInFlight = null
+      }
+    }
+    if (this.shutdownInFlight) {
+      await this.shutdownInFlight
+      throw new Error('Daemon launch was interrupted by shutdown')
+    }
 
     return { socketPath: this.socketPath, tokenPath: this.tokenPath }
   }
@@ -74,12 +95,23 @@ export class DaemonSpawner {
   }
 
   async shutdown(): Promise<void> {
-    if (!this.handle) {
-      return
+    if (this.shutdownInFlight) {
+      return this.shutdownInFlight
     }
-    const handle = this.handle
-    this.handle = null
-    await handle.shutdown()
+    const shutdown = (async () => {
+      await this.launchInFlight?.catch(() => {})
+      const handle = this.handle
+      this.handle = null
+      await handle?.shutdown()
+    })()
+    this.shutdownInFlight = shutdown
+    try {
+      await shutdown
+    } finally {
+      if (this.shutdownInFlight === shutdown) {
+        this.shutdownInFlight = null
+      }
+    }
   }
 }
 

@@ -50,7 +50,7 @@ type RestartSession = {
   userDataDir: string
   seedCodexResumeRollout: (sessionId: string, cwd: string) => string
   launch: (options?: LaunchOptions) => Promise<LaunchedOrca>
-  /** Gracefully close a launch, letting beforeunload flush session state. */
+  /** End a launch through Orca's production restart path without auto-spawning its replacement. */
   close: (app: ElectronApplication) => Promise<void>
   /** Remove the shared userDataDir after the test is done. */
   dispose: () => Promise<void>
@@ -202,7 +202,31 @@ export function createRestartSession(
   }
 
   const close = async (app: ElectronApplication): Promise<void> => {
-    await closeElectronAppForE2E(app)
+    let proc: ReturnType<ElectronApplication['process']>
+    try {
+      proc = app.process()
+    } catch {
+      return
+    }
+    try {
+      const page = await app.firstWindow()
+      await app.evaluate(({ app: electronApp }) => {
+        // Why: the fixture launches the replacement itself against the same profile.
+        Object.defineProperty(electronApp, 'relaunch', { configurable: true, value: () => {} })
+      })
+      const exited = new Promise<void>((resolve) => proc.once('exit', () => resolve()))
+      await page.evaluate(() => {
+        void window.api.app.restart()
+      })
+      await Promise.race([
+        exited,
+        delay(30_000).then(() => {
+          throw new Error('Timed out waiting for Orca restart shutdown')
+        })
+      ])
+    } catch {
+      await closeElectronAppForE2E(app)
+    }
   }
 
   const dispose = async (): Promise<void> => {

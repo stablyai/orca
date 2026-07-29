@@ -139,7 +139,12 @@ async function forceKillProcessTree(proc: ChildProcess): Promise<void> {
 }
 
 export async function closeElectronAppForE2E(app: ElectronApplication): Promise<void> {
-  const proc = app.process()
+  let proc: ChildProcess
+  try {
+    proc = app.process()
+  } catch {
+    return
+  }
   try {
     await withTimeout(app.close(), GRACEFUL_CLOSE_TIMEOUT_MS, 'Timed out closing Electron app')
     if (proc) {

@@ -10,7 +10,7 @@ vi.mock('./crash-reporting/durable-crash-breadcrumb', () => ({
   recordDurableCrashBreadcrumb: recordDurableCrashBreadcrumbMock
 }))
 
-import { relaunchApp } from './app-relaunch'
+import { isAppRelaunchRequested, relaunchApp } from './app-relaunch'
 
 beforeEach(() => {
   appRelaunchMock.mockReset()
@@ -19,8 +19,11 @@ beforeEach(() => {
 
 describe('relaunchApp', () => {
   it('durably records the reason before scheduling the replacement process', () => {
+    expect(isAppRelaunchRequested()).toBe(false)
+
     relaunchApp('gpu-fallback', { processReason: 'crashed', exitCode: 5 })
 
+    expect(isAppRelaunchRequested()).toBe(true)
     expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledOnce()
     expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledWith('app_relaunch_requested', {
       processReason: 'crashed',

@@ -648,42 +648,13 @@ export async function killStaleDaemon(
   let killedDaemon = false
   try {
     const parsedPid = parseDaemonPidFile(readFileSync(pidPath, 'utf8'))
-    if (
-      parsedPid &&
-      (await isDaemonProcess(parsedPid.pid, socketPath, tokenPath, parsedPid.startedAtMs))
-    ) {
-      const { pid, startedAtMs } = parsedPid
-      process.kill(pid, 'SIGTERM')
-      const deadline = Date.now() + KILL_WAIT_MS
-      let exited = false
-      while (Date.now() < deadline) {
-        try {
-          process.kill(pid, 0)
-        } catch {
-          exited = true
-          break
-        }
-        await new Promise((resolve) => setTimeout(resolve, KILL_POLL_MS))
-      }
-      if (!exited) {
-        // Why: re-check process identity before SIGKILL. The SIGTERM-then-wait
-        // window is long enough for the pid to be recycled if the original
-        // daemon died during the wait. Without this, we'd SIGKILL an unrelated
-        // process that happens to now own the same pid.
-        if (!(await isDaemonProcess(pid, socketPath, tokenPath, startedAtMs))) {
-          console.warn('[daemon] Skipping SIGKILL for stale daemon: reason=pid_recycled')
-          exited = true
-          killedDaemon = true
-        } else {
-          try {
-            process.kill(pid, 'SIGKILL')
-            exited = true
-          } catch {
-            // Already dead
-          }
-        }
-      }
-      killedDaemon = killedDaemon || exited
+    if (parsedPid) {
+      killedDaemon = await terminateDaemonProcessIdentity(
+        parsedPid.pid,
+        socketPath,
+        tokenPath,
+        parsedPid.startedAtMs
+      )
     }
   } catch {
     // PID file missing or process already dead
@@ -704,4 +675,36 @@ export async function killStaleDaemon(
     }
   }
   return killedDaemon
+}
+
+export async function terminateDaemonProcessIdentity(
+  pid: number,
+  socketPath: string,
+  tokenPath: string,
+  startedAtMs: number | null
+): Promise<boolean> {
+  if (!(await isDaemonProcess(pid, socketPath, tokenPath, startedAtMs))) {
+    return false
+  }
+  process.kill(pid, 'SIGTERM')
+  const deadline = Date.now() + KILL_WAIT_MS
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0)
+    } catch {
+      return true
+    }
+    await new Promise((resolve) => setTimeout(resolve, KILL_POLL_MS))
+  }
+  // Why: the graceful wait is long enough for PID reuse; re-verify before force-killing.
+  if (!(await isDaemonProcess(pid, socketPath, tokenPath, startedAtMs))) {
+    console.warn('[daemon] Skipping SIGKILL for stale daemon: reason=pid_recycled')
+    return true
+  }
+  try {
+    process.kill(pid, 'SIGKILL')
+  } catch {
+    // Already dead
+  }
+  return true
 }
