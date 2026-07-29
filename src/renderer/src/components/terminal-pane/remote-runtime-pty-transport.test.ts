@@ -825,6 +825,92 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(latestSubscribePayload()).toMatchObject({ terminal: 'legacy-terminal-1' })
   })
 
+  it('uses the remaining recovery deadline to verify a legacy pane owner', async () => {
+    vi.useFakeTimers()
+    try {
+      let resolvePaneCalls = 0
+      runtimeCall.mockImplementation(
+        (request: { method: string; params?: unknown; timeoutMs?: number }) => {
+          if (request.method === 'terminal.resolvePane') {
+            resolvePaneCalls += 1
+            const params = request.params as { paneKey: string; worktreeId: string }
+            const separator = params.paneKey.indexOf(':')
+            const response = {
+              ok: true,
+              result: {
+                terminal: {
+                  handle: 'legacy-terminal-1',
+                  tabId: params.paneKey.slice(0, separator),
+                  leafId: params.paneKey.slice(separator + 1),
+                  ptyId: 'ssh:hub-private@@pty-2',
+                  ...(resolvePaneCalls === 1 ? { worktreeId: params.worktreeId } : {})
+                }
+              }
+            }
+            return resolvePaneCalls === 1
+              ? Promise.resolve(response)
+              : new Promise((resolve) => setTimeout(() => resolve(response), 2_000))
+          }
+          if (request.method === 'session.tabs.list') {
+            return Promise.resolve({
+              ok: true,
+              result: {
+                worktree: 'id:wt-1',
+                publicationEpoch: 'legacy-epoch',
+                snapshotVersion: 1,
+                activeGroupId: 'group-1',
+                activeTabId: 'tab-1',
+                activeTabType: 'terminal',
+                tabs: [
+                  {
+                    type: 'terminal',
+                    id: 'tab-1::pane:1',
+                    parentTabId: 'tab-1',
+                    leafId: 'pane:1',
+                    title: 'Terminal',
+                    isActive: true,
+                    status: 'ready',
+                    terminal: 'legacy-terminal-1'
+                  }
+                ]
+              }
+            })
+          }
+          throw new Error(`Unexpected method ${request.method}`)
+        }
+      )
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('legacy-env', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1'
+      })
+
+      transport.attach({
+        existingPtyId: 'remote:legacy-env@@legacy-terminal-1',
+        callbacks: {}
+      })
+      await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+      const initialCallbacks = subscriptionCallbacks
+
+      initialCallbacks?.onClose?.()
+      await vi.advanceTimersByTimeAsync(2_000)
+      await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+
+      const recoveryResolve = runtimeCall.mock.calls
+        .map(([request]) => request as { method: string; timeoutMs?: number })
+        .findLast((request) => request.method === 'terminal.resolvePane')
+      const legacyInventory = runtimeCall.mock.calls
+        .map(([request]) => request as { method: string; timeoutMs?: number })
+        .find((request) => request.method === 'session.tabs.list')
+      expect(recoveryResolve?.timeoutMs).toBe(5_000)
+      expect(legacyInventory?.timeoutMs).toBe(3_000)
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('rejects a legacy pane handle absent from the requested worktree session', async () => {
     runtimeCall.mockImplementation(async (request: { method: string }) => {
       if (request.method === 'terminal.resolvePane') {
@@ -1406,8 +1492,8 @@ describe('createRemoteRuntimePtyTransport', () => {
         .map(([args]) => args)
         .filter((args) => args.method === 'session.tabs.list')
         .map((args) => args.timeoutMs as number)
-      expect(listTimeouts[0]).toBe(15_000)
-      expect(listTimeouts.every((timeoutMs) => timeoutMs > 0 && timeoutMs <= 15_000)).toBe(true)
+      expect(listTimeouts[0]).toBe(5_000)
+      expect(listTimeouts.every((timeoutMs) => timeoutMs > 0 && timeoutMs <= 5_000)).toBe(true)
       expect(listTimeouts.at(-1)).toBeLessThanOrEqual(1_000)
       expect(onError).not.toHaveBeenCalled()
       expect(onPtyExit).not.toHaveBeenCalled()
@@ -3114,11 +3200,13 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('keeps retrying when the first post-partition terminal reattach fails', async () => {
     let subscribeAttempt = 0
+    const connectionTimeouts: number[] = []
     const recoveryPhases: string[] = []
     const transportCallbacks: NonNullable<typeof subscriptionCallbacks>[] = []
     runtimeSubscribe.mockImplementation(
-      async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
+      async (args: { timeoutMs: number }, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
         subscribeAttempt += 1
+        connectionTimeouts.push(args.timeoutMs)
         transportCallbacks.push(callbacks)
         subscriptionCallbacks = callbacks
         if (subscribeAttempt === 2) {
@@ -3151,6 +3239,13 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(3))
     expect(onError).not.toHaveBeenCalled()
     expect(recoveryPhases).toContain('backoff')
+    expect(connectionTimeouts).toEqual([15_000, 5_000, 5_000])
+    expect(
+      runtimeCall.mock.calls
+        .map(([args]) => args as { method: string; timeoutMs?: number })
+        .filter((args) => args.method === 'terminal.resolvePane')
+        .map((args) => args.timeoutMs)
+    ).toEqual([5_000, 5_000])
     transport.destroy?.()
   })
 
@@ -3343,7 +3438,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     rejectReconnect(new Error('reconnect failed'))
 
     await expect(accepted).resolves.toBe(false)
-    expect(onError).toHaveBeenCalledWith('reconnect failed')
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledWith('reconnect failed'))
   })
 
   it('releases pending claimed input when the remote terminal ends', async () => {

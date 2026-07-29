@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS,
+  REMOTE_RUNTIME_RECOVERY_ATTEMPT_TIMEOUT_MS,
   RemoteRuntimePtyRecoveryState,
   retryAllRemoteRuntimePtyRecoveriesNow
 } from './remote-runtime-pty-recovery-state'
@@ -69,6 +70,26 @@ describe('RemoteRuntimePtyRecoveryState', () => {
     expect(state.isActive).toBe(false)
     expect(state.isCurrent(epoch)).toBe(false)
     expect(onChange).toHaveBeenCalled()
+  })
+
+  it('completes eight timed-out attempts inside the bounded recovery window', async () => {
+    vi.useFakeTimers()
+    const state = new RemoteRuntimePtyRecoveryState()
+    let completedAttempts = 0
+    const runAttempt = (epoch: number): void => {
+      setTimeout(() => {
+        completedAttempts += 1
+        state.schedule(epoch, runAttempt)
+      }, REMOTE_RUNTIME_RECOVERY_ATTEMPT_TIMEOUT_MS)
+    }
+    const epoch = state.begin()
+
+    runAttempt(epoch)
+    await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+
+    expect(completedAttempts).toBe(8)
+    expect(state.attemptCount).toBe(8)
+    expect(state.currentPhase).toBe('disconnected')
   })
 
   it('advances a pending backoff immediately via retryNow and the active registry', async () => {

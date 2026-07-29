@@ -1,4 +1,6 @@
-const RECOVERY_DELAYS_MS = [250, 500, 1000, 2000, 4000, 8000, 15_000, 30_000] as const
+export const REMOTE_RUNTIME_RECOVERY_ATTEMPT_TIMEOUT_MS = 5_000
+// Why: 4 秒退避上限与 5 秒探测共同保证一分钟内能完成至少 8 次恢复尝试。
+const RECOVERY_DELAYS_MS = [250, 500, 1000, 2000, 4000] as const
 export const REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS = 60_000
 
 export type RemoteRuntimePtyRecoveryPhase =

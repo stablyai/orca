@@ -54,6 +54,7 @@ import {
 } from './remote-runtime-pty-batching'
 import {
   REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS,
+  REMOTE_RUNTIME_RECOVERY_ATTEMPT_TIMEOUT_MS,
   RemoteRuntimePtyRecoveryState
 } from './remote-runtime-pty-recovery-state'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -105,6 +106,36 @@ function isRemoteTerminalGoneMessage(message: string): boolean {
     message.includes('no_connected_pty') ||
     message.toLocaleLowerCase('en-US').includes('explicitly killed')
   )
+}
+
+function createRemoteRuntimeAttemptTimeoutError(): Error {
+  return Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
+    code: 'runtime_timeout'
+  })
+}
+
+function waitForRemoteRuntimeResult<T>(request: Promise<T>, timeoutMs: number): Promise<T> {
+  if (timeoutMs <= 0) {
+    return Promise.reject(createRemoteRuntimeAttemptTimeoutError())
+  }
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(createRemoteRuntimeAttemptTimeoutError())
+    }, timeoutMs)
+    if (typeof timer.unref === 'function') {
+      timer.unref()
+    }
+    void request.then(
+      (result) => {
+        clearTimeout(timer)
+        resolve(result)
+      },
+      (error: unknown) => {
+        clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
 }
 
 /** PTY transport for a renderer pane backed by a terminal on a remote Orca runtime, over runtime RPC plus the multiplexed stream. */
@@ -419,7 +450,8 @@ export function createRemoteRuntimePtyTransport(
   async function waitForResubscribeHostSessionHandle(
     hostTabId: string,
     previousHandle: string,
-    requireReplacement: boolean
+    requireReplacement: boolean,
+    timeoutMs = HOST_SESSION_ATTACH_TIMEOUT_MS
   ): Promise<string | null | undefined> {
     if (!worktreeId) {
       return null
@@ -439,7 +471,7 @@ export function createRemoteRuntimePtyTransport(
       return undefined
     }
     while (!destroyed && connected && handle === previousHandle) {
-      const requestRemainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
+      const requestRemainingMs = timeoutMs - (Date.now() - startedAt)
       if (requestRemainingMs <= 0) {
         return finishWithUnknownLiveness()
       }
@@ -468,7 +500,7 @@ export function createRemoteRuntimePtyTransport(
         // Why: the inventory can race the reconnect that invalidated the handle; unknown liveness must not retire the pane.
         lastListError = error
       }
-      const remainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
+      const remainingMs = timeoutMs - (Date.now() - startedAt)
       if (remainingMs <= 0) {
         return finishWithUnknownLiveness()
       }
@@ -750,7 +782,9 @@ export function createRemoteRuntimePtyTransport(
     return null
   }
 
-  async function resolvePersistedHostPane(): Promise<RuntimeTerminalResolvePane | null> {
+  async function resolvePersistedHostPane(
+    timeoutMs?: number
+  ): Promise<RuntimeTerminalResolvePane | null> {
     if (!tabId || !leafId || !worktreeId) {
       return null
     }
@@ -758,11 +792,13 @@ export function createRemoteRuntimePtyTransport(
     if (resolvePaneUnavailable) {
       return null
     }
+    const deadlineAt = timeoutMs === undefined ? null : Date.now() + timeoutMs
     let terminal: RuntimeTerminalResolvePane
     try {
       const resolved = await callRuntime<{ terminal: RuntimeTerminalResolvePane }>(
         'terminal.resolvePane',
-        { paneKey, worktreeId }
+        { paneKey, worktreeId },
+        timeoutMs
       )
       terminal = resolved.terminal
     } catch (error) {
@@ -785,14 +821,26 @@ export function createRemoteRuntimePtyTransport(
     }
     if (terminal.worktreeId === undefined) {
       const worktree = toRuntimeWorktreeSelector(worktreeId)
-      const listed = await listRemoteRuntimeSessionTabsDeduped({
+      const inventoryTimeoutMs =
+        deadlineAt === null ? null : Math.max(0, Math.ceil(deadlineAt - Date.now()))
+      if (inventoryTimeoutMs === 0) {
+        throw createRemoteRuntimeAttemptTimeoutError()
+      }
+      const inventoryRequest = listRemoteRuntimeSessionTabsDeduped({
         environmentId: currentRuntimeEnvironmentId,
         worktreeId,
         load: () =>
-          callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
-            worktree
-          })
+          callRuntime<RuntimeMobileSessionTabsResult>(
+            'session.tabs.list',
+            { worktree },
+            inventoryTimeoutMs ?? undefined
+          )
       })
+      // Why: 去重可能复用其他窗格的慢请求，恢复验证仍必须受当前尝试的剩余预算约束。
+      const listed =
+        inventoryTimeoutMs === null
+          ? await inventoryRequest
+          : await waitForRemoteRuntimeResult(inventoryRequest, inventoryTimeoutMs)
       const exactLegacyOwner = getHostSessionTerminalSurfaces(listed, tabId, {
         matchRequestedLeaf: true
       }).some((surface) => surface.status === 'ready' && surface.terminal === terminal.handle)
@@ -1188,7 +1236,8 @@ export function createRemoteRuntimePtyTransport(
       const nextHandle = await waitForResubscribeHostSessionHandle(
         hostTabId,
         previousHandle,
-        requireReplacement
+        requireReplacement,
+        REMOTE_RUNTIME_RECOVERY_ATTEMPT_TIMEOUT_MS
       )
       if (
         destroyed ||
@@ -1210,7 +1259,7 @@ export function createRemoteRuntimePtyTransport(
         rebindRemoteTerminalHandle(nextHandle)
       }
     } else if (tabId && leafId && worktreeId) {
-      const resolved = await resolvePersistedHostPane()
+      const resolved = await resolvePersistedHostPane(REMOTE_RUNTIME_RECOVERY_ATTEMPT_TIMEOUT_MS)
       if (destroyed || !connected || handle !== previousHandle) {
         return
       }
@@ -1329,6 +1378,9 @@ export function createRemoteRuntimePtyTransport(
       terminal: subscribedHandle,
       client: { id: clientId, type: 'desktop' },
       viewport: subscribedViewport ?? undefined,
+      connectionTimeoutMs: recovery.isActive
+        ? REMOTE_RUNTIME_RECOVERY_ATTEMPT_TIMEOUT_MS
+        : undefined,
       callbacks: {
         onData: (data, meta) => {
           if (isCurrentSubscription()) {

@@ -1,6 +1,9 @@
 /* eslint-disable max-lines -- Why: the remote terminal multiplexer owns one bridged subscription, stream lifecycle, binary frame parsing, and remote lock events as a single transport contract. */
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { isRecoverableRemoteRuntimeConnectionError } from '../../../shared/remote-runtime-client-error-classification'
+import {
+  isRecoverableRemoteRuntimeConnectionError,
+  toRemoteRuntimeClientErrorLike
+} from '../../../shared/remote-runtime-client-error-classification'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -133,6 +136,9 @@ type RemoteRuntimeSnapshotRequest = {
 }
 
 const CONTROL_STREAM_ID = 0
+const REMOTE_TERMINAL_CONNECTION_TIMEOUT_MS = 15_000
+const REMOTE_TERMINAL_CONNECTION_TIMEOUT_MESSAGE =
+  'Timed out waiting for the remote Orca runtime subscription to start.'
 const MAX_REMOTE_TERMINAL_SNAPSHOT_BYTES = 2 * 1024 * 1024
 const REMOTE_TERMINAL_SNAPSHOT_REQUEST_TIMEOUT_MS = 10_000
 const REMOTE_TERMINAL_RESYNC_TIMEOUT_MS = 10_000
@@ -144,6 +150,48 @@ const REMOTE_TERMINAL_RESYNC_RETRY_MAX_MS = 5_000
 // skipped but live output continues, so it must not surface a fatal red banner.
 export const REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE =
   'Remote terminal snapshot exceeded the 2 MiB replay limit; live output will continue.'
+
+function createRemoteTerminalConnectionTimeoutError(): Error {
+  return Object.assign(new Error(REMOTE_TERMINAL_CONNECTION_TIMEOUT_MESSAGE), {
+    code: 'runtime_timeout'
+  })
+}
+
+function isRemoteTerminalConnectionTimeout(error: unknown): boolean {
+  const clientError = toRemoteRuntimeClientErrorLike(error)
+  return (
+    clientError.code === 'runtime_timeout' ||
+    clientError.code === 'timeout' ||
+    clientError.message.toLowerCase().includes('timed out waiting for the remote orca runtime')
+  )
+}
+
+function waitForRemoteTerminalConnection(
+  connection: Promise<void>,
+  timeoutMs: number
+): Promise<void> {
+  if (timeoutMs <= 0) {
+    return Promise.reject(createRemoteTerminalConnectionTimeoutError())
+  }
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(createRemoteTerminalConnectionTimeoutError())
+    }, timeoutMs)
+    if (typeof timer.unref === 'function') {
+      timer.unref()
+    }
+    void connection.then(
+      () => {
+        clearTimeout(timer)
+        resolve()
+      },
+      (error: unknown) => {
+        clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
+}
 
 type E2eRemoteTerminalMultiplexAckGateSnapshot = {
   heldTerminalCount: number
@@ -216,6 +264,7 @@ class RemoteRuntimeTerminalMultiplexer {
   private readonly streams = new Map<number, RemoteRuntimeMultiplexedTerminalState>()
   private subscription: RuntimeEnvironmentSubscriptionHandle | null = null
   private connectPromise: Promise<void> | null = null
+  private connectAttemptDeadlineAt: number | null = null
   private readyResolver: (() => void) | null = null
   private readyRejecter: ((error: Error) => void) | null = null
   private ready = false
@@ -243,6 +292,7 @@ class RemoteRuntimeTerminalMultiplexer {
     terminal: string
     client: { id: string; type: 'desktop' | 'mobile' }
     viewport?: { cols: number; rows: number }
+    connectionTimeoutMs?: number
     callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
   }): Promise<RemoteRuntimeMultiplexedTerminal> {
     const streamId = this.allocateStreamId()
@@ -311,7 +361,7 @@ class RemoteRuntimeTerminalMultiplexer {
     }
 
     try {
-      await this.ensureConnected()
+      await this.ensureConnected(args.connectionTimeoutMs ?? REMOTE_TERMINAL_CONNECTION_TIMEOUT_MS)
       if (this.streams.get(streamId) !== state) {
         return stream
       }
@@ -355,13 +405,37 @@ class RemoteRuntimeTerminalMultiplexer {
     throw new Error('No remote terminal stream ids available.')
   }
 
-  private ensureConnected(): Promise<void> {
-    if (this.ready && this.subscription) {
-      return Promise.resolve()
+  private async ensureConnected(timeoutMs: number): Promise<void> {
+    const callerDeadlineAt = Date.now() + timeoutMs
+    while (!this.ready || !this.subscription) {
+      const callerRemainingMs = callerDeadlineAt - Date.now()
+      if (callerRemainingMs <= 0) {
+        throw createRemoteTerminalConnectionTimeoutError()
+      }
+      const connectPromise = this.connectPromise ?? this.startConnection(callerRemainingMs)
+      const attemptRemainingMs = Math.max(
+        0,
+        (this.connectAttemptDeadlineAt ?? callerDeadlineAt) - Date.now()
+      )
+      try {
+        // Why: 共享连接可由 15 秒普通订阅或 5 秒恢复订阅创建，但每个调用者都必须遵守自己的截止时间。
+        await waitForRemoteTerminalConnection(connectPromise, callerRemainingMs)
+        return
+      } catch (error) {
+        const remainingAfterFailureMs = callerDeadlineAt - Date.now()
+        if (
+          !isRemoteTerminalConnectionTimeout(error) ||
+          remainingAfterFailureMs <= 0 ||
+          attemptRemainingMs >= callerRemainingMs
+        ) {
+          throw error
+        }
+        // Why: 较短调用者创建的共享尝试超时后，较长调用者仍应使用自己的剩余预算继续连接。
+      }
     }
-    if (this.connectPromise) {
-      return this.connectPromise
-    }
+  }
+
+  private startConnection(timeoutMs: number): Promise<void> {
     const connectPromise = new Promise<void>((resolve, reject) => {
       this.readyResolver = resolve
       this.readyRejecter = reject
@@ -371,7 +445,7 @@ class RemoteRuntimeTerminalMultiplexer {
             selector: this.environmentId,
             method: 'terminal.multiplex',
             params: {},
-            timeoutMs: 15_000,
+            timeoutMs,
             expectedEnvironmentPairingRevision: this.environmentRevision
           },
           {
@@ -401,6 +475,7 @@ class RemoteRuntimeTerminalMultiplexer {
         .catch((error) => {
           if (this.connectPromise === connectPromise) {
             this.connectPromise = null
+            this.connectAttemptDeadlineAt = null
             this.readyResolver = null
             this.readyRejecter = null
           }
@@ -408,7 +483,8 @@ class RemoteRuntimeTerminalMultiplexer {
         })
     })
     this.connectPromise = connectPromise
-    return this.connectPromise
+    this.connectAttemptDeadlineAt = Date.now() + timeoutMs
+    return connectPromise
   }
 
   private handleResponse(response: RuntimeRpcResponse<unknown>): void {
@@ -973,6 +1049,7 @@ class RemoteRuntimeTerminalMultiplexer {
     const closingSubscription = this.subscription
     this.ready = false
     this.connectPromise = null
+    this.connectAttemptDeadlineAt = null
     this.readyRejecter?.(new Error(message ?? 'Remote runtime connection closed.'))
     this.readyResolver = null
     this.readyRejecter = null
@@ -1001,6 +1078,7 @@ class RemoteRuntimeTerminalMultiplexer {
     this.subscription?.unsubscribe()
     this.subscription = null
     this.connectPromise = null
+    this.connectAttemptDeadlineAt = null
     this.ready = false
     this.releaseIfCurrent(this.environmentId, this)
   }
