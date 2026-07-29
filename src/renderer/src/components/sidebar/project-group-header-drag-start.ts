@@ -1,8 +1,8 @@
 import type { PointerEvent } from 'react'
 
 import {
+  getParentGroupIdForHeaderDragBucketKey,
   getProjectGroupHeaderDragBucketKey,
-  measureProjectGroupHeaderDragRects,
   type ProjectGroupHeaderDragBucketKey
 } from './project-group-header-drop'
 import {
@@ -20,6 +20,7 @@ export function createProjectGroupHeaderDragSession(args: {
     ProjectGroupHeaderDragBucketKey,
     readonly string[]
   >
+  totalProjectGroupHeaderCount: number
   getScrollContainer: () => HTMLElement | null
 }): ProjectGroupHeaderDragSession | null {
   if (args.event.button !== 0) {
@@ -38,23 +39,26 @@ export function createProjectGroupHeaderDragSession(args: {
   const bucketKey = getProjectGroupHeaderDragBucketKey(group, args.projectGroupById)
   const sidebarProjectGroupHeaderIds =
     args.sidebarProjectGroupHeaderIdsByBucket.get(bucketKey) ?? []
-  // Why: a lone group in a parent bucket cannot move without reparenting.
-  if (sidebarProjectGroupHeaderIds.length <= 1) {
+  // Why: cross-bucket drops need a global count; the caller reuses its memoized
+  // value so ordinary pointer-downs do not scan every bucket.
+  if (args.totalProjectGroupHeaderCount <= 1) {
     return null
   }
-  const container = args.getScrollContainer()
-  if (!container) {
+  if (!args.getScrollContainer()) {
     return null
   }
   const handleEl = args.event.currentTarget
-  // Why: defer pointer capture until the threshold so ordinary group header
-  // clicks still toggle collapse through the row handler.
+  // Why: defer catalog indexing, DOM measurement, and pointer capture until
+  // the threshold so ordinary header clicks stay cheap and still toggle.
   return {
     groupId: args.groupId,
     bucketKey,
+    sourceParentGroupId: getParentGroupIdForHeaderDragBucketKey(bucketKey),
     sidebarProjectGroupHeaderIds,
+    sidebarProjectGroupHeaderIdsByBucket: args.sidebarProjectGroupHeaderIdsByBucket,
+    reparentIndex: null,
     pointerId: args.event.pointerId,
-    headerRects: measureProjectGroupHeaderDragRects(container, bucketKey),
+    headerRects: [],
     handleEl,
     startX: args.event.clientX,
     startY: args.event.clientY,

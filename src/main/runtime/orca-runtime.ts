@@ -15474,7 +15474,9 @@ export class OrcaRuntimeService {
 
   async updateProjectGroup(
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+    updates: Partial<
+      Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'parentGroupId'>
+    >
   ): Promise<ProjectGroup | null> {
     if (!this.store?.updateProjectGroup) {
       throw new Error('runtime_unavailable')

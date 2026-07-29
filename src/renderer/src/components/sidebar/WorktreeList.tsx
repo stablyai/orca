@@ -42,6 +42,7 @@ import {
   getRepoHeaderSectionEndByRepoId
 } from './worktree-header-section-boundaries'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { MAX_MANUAL_PROJECT_GROUP_DEPTH } from '../../../../shared/project-groups'
 import { PendingWorktreeRow } from './PendingWorktreeRow'
 import { SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT } from './WorktreeCardAgents'
 import { Button } from '@/components/ui/button'
@@ -314,6 +315,7 @@ export {
 
 type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
+  | { type: 'create-subgroup'; parentGroupId: string; parentName: string }
   | { type: 'rename'; groupId: string; currentName: string }
 
 type ProjectGroupDeleteDialogState = {
@@ -655,6 +657,7 @@ type VirtualizedWorktreeViewportProps = {
   handleMoveProjectToGroup: (repo: Repo, groupId: string) => void
   handleRemoveProjectFromGroup: (repo: Repo) => void
   handleRenameProjectGroup: (groupId: string, currentName: string) => void
+  handleCreateSubgroup: (parentGroupId: string, parentName: string) => void
   handleDeleteProjectGroup: (groupId: string, groupName: string) => void
   handleCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
   activeModal: string
@@ -1343,6 +1346,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   handleMoveProjectToGroup,
   handleRemoveProjectFromGroup,
   handleRenameProjectGroup,
+  handleCreateSubgroup,
   handleDeleteProjectGroup,
   handleCreateFolderWorkspace,
   activeModal,
@@ -1756,6 +1760,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     }
     return map
   }, [sidebarProjectGroupHeaderIdsByBucket])
+  const totalProjectGroupHeaderCount = useMemo(() => {
+    let count = 0
+    for (const groupIds of sidebarProjectGroupHeaderIdsByBucket.values()) {
+      count += groupIds.length
+    }
+    return count
+  }, [sidebarProjectGroupHeaderIdsByBucket])
   const commitProjectGroupOrder = useCallback(
     (repoId: string, projectGroupId: string | null, order: number) => {
       void moveProjectToGroup(repoId, projectGroupId, order)
@@ -1775,7 +1786,46 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     },
     [updateProjectGroup]
   )
-  // Drag applies only in manual order; still construct the controller inert for stable hook order.
+  // Why: the reparent resolves after an async round-trip; reading collapse
+  // state through a ref avoids toggling against a stale snapshot if the user
+  // collapses/expands the target while the update is in flight.
+  const collapsedGroupsRef = useRef(collapsedGroups)
+  // Why: syncing in the commit phase keeps abandoned concurrent renders from
+  // leaking uncommitted collapse state into the async reparent callback.
+  useLayoutEffect(() => {
+    collapsedGroupsRef.current = collapsedGroups
+  }, [collapsedGroups])
+  const commitProjectGroupHeaderReparent = useCallback(
+    (groupId: string, parentGroupId: string | null, tabOrder: number) => {
+      if (!Number.isFinite(tabOrder)) {
+        return
+      }
+      const suppressUntil =
+        window.performance.now() + USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS
+      suppressMeasurementAdjustmentUntilRef.current = suppressUntil
+      directScrollInputUntilRef.current = suppressUntil
+      void updateProjectGroup(groupId, { parentGroupId, tabOrder }).then((updated) => {
+        if (!updated) {
+          // Why: covers validation rejections and remote hosts that predate
+          // nested groups (their update schema strips parentGroupId).
+          toast.error(
+            translate('auto.components.sidebar.WorktreeList.b9a6987eb4', 'Could not move group')
+          )
+          return
+        }
+        // Why: nesting into a collapsed group would otherwise hide the drop result.
+        if (parentGroupId) {
+          const parentGroupKey = getProjectGroupHeaderKey(parentGroupId)
+          if (collapsedGroupsRef.current.has(parentGroupKey)) {
+            toggleGroup(parentGroupKey)
+          }
+        }
+      })
+    },
+    [toggleGroup, updateProjectGroup]
+  )
+  // Drag is only meaningful when repo headers are using manual order. The
+  // controller is still constructed for hook order stability when inert.
   const repoDrag = useRepoHeaderDrag({
     orderedRepoIds: allRepoIds,
     sidebarRepoHeaderIdsByBucket,
@@ -1787,8 +1837,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   })
   const projectGroupDrag = useProjectGroupHeaderDrag({
     sidebarProjectGroupHeaderIdsByBucket,
+    totalProjectGroupHeaderCount,
     projectGroupById: projectGroupByIdForHeaderDrag,
     onCommitProjectGroupTabOrder: commitProjectGroupHeaderOrder,
+    onCommitProjectGroupReparent: commitProjectGroupHeaderReparent,
     getScrollContainer: () => scrollRef.current
   })
   const [primaryActiveWorktreeRow, setPrimaryActiveWorktreeRow] = useState<{
@@ -4157,12 +4209,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 repoHeaderBucketKey &&
                 (sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1
               )
+              // Why: reparent drops make a lone-in-its-bucket group draggable;
+              // only a group with no other group anywhere has nowhere to go.
               const isDraggableProjectGroupHeader = Boolean(
                 canReorderProjectGroupHeaders &&
                 projectGroupIdForHeader &&
                 projectGroupHeaderBucketKey &&
-                (sidebarProjectGroupHeaderIdsByBucket.get(projectGroupHeaderBucketKey)?.length ??
-                  0) > 1
+                totalProjectGroupHeaderCount > 1
               )
               const isDraggingThis =
                 canReorderRepoHeaders &&
@@ -4275,6 +4328,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         ? 'cursor-grab active:cursor-grabbing'
                         : 'cursor-pointer',
                       highlightedRevealRowKey === row.key &&
+                        'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
+                      canReorderProjectGroupHeaders &&
+                        projectGroupIdForHeader !== undefined &&
+                        projectGroupDrag.state.nestTargetGroupId === projectGroupIdForHeader &&
                         'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
                       (isDraggingThis || isDraggingThisProjectGroup) &&
                         'bg-accent/80 ring-1 ring-ring/40 shadow-md rounded-md scale-[1.01]',
@@ -4433,6 +4490,22 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                 'Rename group'
                               )}
                             </DropdownMenuItem>
+                            {/* Why: +2 = this group's 1-based depth plus the
+                                new child's level; hide the item at the cap. */}
+                            {(row.projectGroupDepth ?? 0) + 2 <= MAX_MANUAL_PROJECT_GROUP_DEPTH ? (
+                              <DropdownMenuItem
+                                onSelect={() => {
+                                  if (row.projectGroup?.id) {
+                                    handleCreateSubgroup(row.projectGroup.id, row.label)
+                                  }
+                                }}
+                              >
+                                {translate(
+                                  'auto.components.sidebar.WorktreeList.c817bd77b9',
+                                  'New subgroup'
+                                )}
+                              </DropdownMenuItem>
+                            ) : null}
                             <DropdownMenuItem
                               variant="destructive"
                               onSelect={() => {
@@ -6193,6 +6266,10 @@ const WorktreeList = React.memo(function WorktreeList({
     setProjectGroupNameDialog({ type: 'rename', groupId, currentName })
   }, [])
 
+  const handleCreateSubgroup = useCallback((parentGroupId: string, parentName: string) => {
+    setProjectGroupNameDialog({ type: 'create-subgroup', parentGroupId, parentName })
+  }, [])
+
   const handleSubmitProjectGroupName = useCallback(
     async (name: string) => {
       if (!projectGroupNameDialog) {
@@ -6202,6 +6279,22 @@ const WorktreeList = React.memo(function WorktreeList({
         const group = await createProjectGroup(name)
         if (group) {
           await moveProjectToGroup(projectGroupNameDialog.repo.id, group.id)
+        }
+        return
+      }
+      if (projectGroupNameDialog.type === 'create-subgroup') {
+        const group = await createProjectGroup(name, {
+          parentGroupId: projectGroupNameDialog.parentGroupId
+        })
+        // Why: hosts without nested-group support (or a stale parent id) clamp
+        // the new group to root; the group still exists, so only warn.
+        if (group && group.parentGroupId !== projectGroupNameDialog.parentGroupId) {
+          toast.error(
+            translate(
+              'auto.components.sidebar.WorktreeList.964fdd76a8',
+              'Nested groups are not supported by this host'
+            )
+          )
         }
         return
       }
@@ -6669,7 +6762,9 @@ const WorktreeList = React.memo(function WorktreeList({
         title={
           projectGroupNameDialog?.type === 'rename'
             ? translate('auto.components.sidebar.WorktreeList.f9dc6cc5d3', 'Rename Project Group')
-            : translate('auto.components.sidebar.WorktreeList.13757c053c', 'New Project Group')
+            : projectGroupNameDialog?.type === 'create-subgroup'
+              ? translate('auto.components.sidebar.WorktreeList.4fa704cc2e', 'New Subgroup')
+              : translate('auto.components.sidebar.WorktreeList.13757c053c', 'New Project Group')
         }
         description={
           projectGroupNameDialog?.type === 'rename'
@@ -6677,15 +6772,21 @@ const WorktreeList = React.memo(function WorktreeList({
                 'auto.components.sidebar.WorktreeList.bc1460beb3',
                 'Update the group name shown in the sidebar.'
               )
-            : translate(
-                'auto.components.sidebar.WorktreeList.d880ea0744',
-                'Create a group and move this project into it.'
-              )
+            : projectGroupNameDialog?.type === 'create-subgroup'
+              ? translate(
+                  'auto.components.sidebar.WorktreeList.8de19ba6f9',
+                  'Create a group inside "{{value0}}".',
+                  { value0: projectGroupNameDialog.parentName }
+                )
+              : translate(
+                  'auto.components.sidebar.WorktreeList.d880ea0744',
+                  'Create a group and move this project into it.'
+                )
         }
         initialName={
           projectGroupNameDialog?.type === 'rename'
             ? projectGroupNameDialog.currentName
-            : projectGroupNameDialog
+            : projectGroupNameDialog?.type === 'create-from-repo'
               ? `${projectGroupNameDialog.repo.displayName} group`
               : ''
         }
@@ -6772,6 +6873,7 @@ const WorktreeList = React.memo(function WorktreeList({
         handleMoveProjectToGroup={handleMoveProjectToGroup}
         handleRemoveProjectFromGroup={handleRemoveProjectFromGroup}
         handleRenameProjectGroup={handleRenameProjectGroup}
+        handleCreateSubgroup={handleCreateSubgroup}
         handleDeleteProjectGroup={handleDeleteProjectGroup}
         handleCreateFolderWorkspace={handleCreateFolderWorkspace}
         activeModal={activeModal}

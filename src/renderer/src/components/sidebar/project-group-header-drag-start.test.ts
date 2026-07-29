@@ -34,7 +34,9 @@ describe('createProjectGroupHeaderDragSession', () => {
       ['group-a', group('group-a')],
       ['group-b', group('group-b')]
     ])
+    const valuesSpy = vi.spyOn(projectGroupById, 'values')
     const sidebarProjectGroupHeaderIdsByBucket = new Map([['root', ['group-a', 'group-b']]])
+    const bucketValuesSpy = vi.spyOn(sidebarProjectGroupHeaderIdsByBucket, 'values')
 
     const session = createProjectGroupHeaderDragSession({
       event: {
@@ -48,11 +50,87 @@ describe('createProjectGroupHeaderDragSession', () => {
       groupId: 'group-a',
       projectGroupById,
       sidebarProjectGroupHeaderIdsByBucket,
+      totalProjectGroupHeaderCount: 2,
       getScrollContainer: () => scrollContainer
     })
 
     expect(session?.groupId).toBe('group-a')
+    expect(session?.sourceParentGroupId).toBeNull()
+    expect(session?.reparentIndex).toBeNull()
+    expect(session?.headerRects).toEqual([])
+    expect(valuesSpy).not.toHaveBeenCalled()
+    expect(bucketValuesSpy).not.toHaveBeenCalled()
     expect(header.setPointerCapture).not.toHaveBeenCalled()
+  })
+
+  it('arms a drag session for a group alone in its bucket when other groups exist', () => {
+    const header = document.createElement('div')
+    header.setAttribute('data-project-group-header-drag-handle', '')
+    const label = document.createElement('span')
+    header.append(label)
+    const scrollContainer = document.createElement('div')
+    document.body.append(scrollContainer, header)
+
+    const parent = group('parent')
+    const nested = group('nested', { parentGroupId: parent.id })
+    const projectGroupById = new Map<string, ProjectGroup>([
+      ['parent', parent],
+      ['nested', nested]
+    ])
+    const sidebarProjectGroupHeaderIdsByBucket = new Map([
+      ['root', ['parent']],
+      ['parent:parent', ['nested']]
+    ])
+
+    const session = createProjectGroupHeaderDragSession({
+      event: {
+        button: 0,
+        pointerId: 1,
+        clientX: 10,
+        clientY: 20,
+        target: label,
+        currentTarget: header
+      } as unknown as React.PointerEvent<HTMLElement>,
+      groupId: 'nested',
+      projectGroupById,
+      sidebarProjectGroupHeaderIdsByBucket,
+      totalProjectGroupHeaderCount: 2,
+      getScrollContainer: () => scrollContainer
+    })
+
+    expect(session?.groupId).toBe('nested')
+    expect(session?.bucketKey).toBe('parent:parent')
+    expect(session?.sourceParentGroupId).toBe('parent')
+  })
+
+  it('does not arm when the sidebar has a single group anywhere', () => {
+    const header = document.createElement('div')
+    header.setAttribute('data-project-group-header-drag-handle', '')
+    const label = document.createElement('span')
+    header.append(label)
+    const scrollContainer = document.createElement('div')
+    document.body.append(scrollContainer, header)
+
+    const projectGroupById = new Map<string, ProjectGroup>([['group-a', group('group-a')]])
+    const sidebarProjectGroupHeaderIdsByBucket = new Map([['root', ['group-a']]])
+
+    const session = createProjectGroupHeaderDragSession({
+      event: {
+        button: 0,
+        pointerId: 1,
+        clientX: 10,
+        clientY: 20,
+        target: label,
+        currentTarget: header
+      } as unknown as React.PointerEvent<HTMLElement>,
+      groupId: 'group-a',
+      projectGroupById,
+      sidebarProjectGroupHeaderIdsByBucket,
+      totalProjectGroupHeaderCount: 1,
+      getScrollContainer: () => scrollContainer
+    })
+
+    expect(session).toBeNull()
   })
 
   it('does not arm from nested Project Group header actions', () => {
@@ -82,6 +160,7 @@ describe('createProjectGroupHeaderDragSession', () => {
       groupId: 'group-a',
       projectGroupById,
       sidebarProjectGroupHeaderIdsByBucket,
+      totalProjectGroupHeaderCount: 2,
       getScrollContainer: () => scrollContainer
     })
 

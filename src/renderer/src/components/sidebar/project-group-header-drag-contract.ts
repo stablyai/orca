@@ -4,18 +4,21 @@ import type {
   ProjectGroupHeaderDragBucketKey,
   ProjectGroupHeaderDragRect
 } from './project-group-header-drop'
+import type { ProjectGroupReparentIndex } from '../../../../shared/project-group-reparent'
 import type { ProjectGroup } from '../../../../shared/types'
 
 export type ProjectGroupDragState = {
   draggingGroupId: string | null
   dropIndex: number | null
   dropIndicatorY: number | null
+  nestTargetGroupId: string | null
 }
 
 export const INITIAL_PROJECT_GROUP_DRAG_STATE: ProjectGroupDragState = {
   draggingGroupId: null,
   dropIndex: null,
-  dropIndicatorY: null
+  dropIndicatorY: null,
+  nestTargetGroupId: null
 }
 
 export type UseProjectGroupHeaderDragArgs = {
@@ -23,8 +26,14 @@ export type UseProjectGroupHeaderDragArgs = {
     ProjectGroupHeaderDragBucketKey,
     readonly string[]
   >
+  totalProjectGroupHeaderCount: number
   projectGroupById: ReadonlyMap<string, ProjectGroup>
   onCommitProjectGroupTabOrder: (groupId: string, tabOrder: number) => void
+  onCommitProjectGroupReparent: (
+    groupId: string,
+    parentGroupId: string | null,
+    tabOrder: number
+  ) => void
   getScrollContainer: () => HTMLElement | null
 }
 
@@ -36,7 +45,17 @@ export type ProjectGroupHeaderDragController = {
 export type ProjectGroupHeaderDragSession = {
   groupId: string
   bucketKey: ProjectGroupHeaderDragBucketKey
+  sourceParentGroupId: string | null
   sidebarProjectGroupHeaderIds: readonly string[]
+  // Why: nest/reparent drops can target any bucket, so the session snapshots
+  // the full bucket map and the dragged subtree instead of one sibling list.
+  sidebarProjectGroupHeaderIdsByBucket: ReadonlyMap<
+    ProjectGroupHeaderDragBucketKey,
+    readonly string[]
+  >
+  // Why: ordinary header clicks also arm a session, so the catalog index stays
+  // lazy until drag promotion. The commit path still revalidates live state.
+  reparentIndex: ProjectGroupReparentIndex | null
   pointerId: number
   headerRects: ProjectGroupHeaderDragRect[]
   handleEl: HTMLElement

@@ -199,13 +199,16 @@ import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree-ow
 import { sanitizeRepoIcon } from '../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../shared/repo-badge-color'
 import {
+  MAX_MANUAL_PROJECT_GROUP_DEPTH,
   clearMissingProjectGroupMemberships,
   createProjectGroup,
   getNextProjectGroupOrder,
+  getProjectGroupDepth,
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName,
   normalizeProjectGroups
 } from '../shared/project-groups'
+import { getProjectGroupReparentViolation } from '../shared/project-group-reparent'
 import { createNestedProjectGroupResolver } from './project-groups/nested-repo-import'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
@@ -3975,6 +3978,20 @@ export class Store {
     parentGroupId?: string | null
     createdFrom: ProjectGroup['createdFrom']
   }): ProjectGroup {
+    let parentGroupId = input.parentGroupId ?? null
+    if (parentGroupId) {
+      const groups = this.state.projectGroups ?? []
+      const parentDepth = getProjectGroupDepth(groups, parentGroupId)
+      // Why: clamp to root instead of failing — a stale parent id (deleted
+      // group, unsupported host) should still yield a usable group. The manual
+      // depth cap doesn't apply to folder-scan/migration trees.
+      if (
+        parentDepth === 0 ||
+        (input.createdFrom === 'manual' && parentDepth >= MAX_MANUAL_PROJECT_GROUP_DEPTH)
+      ) {
+        parentGroupId = null
+      }
+    }
     let maxOrder = -1
     // Why: persisted group lists can be large enough to exceed spread limits.
     for (const existingGroup of this.state.projectGroups ?? []) {
@@ -3982,6 +3999,7 @@ export class Store {
     }
     const group = createProjectGroup({
       ...input,
+      parentGroupId,
       tabOrder: maxOrder + 1
     })
     this.state.projectGroups = [...(this.state.projectGroups ?? []), group]
@@ -3991,11 +4009,29 @@ export class Store {
 
   updateProjectGroup(
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+    updates: Partial<
+      Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'parentGroupId'>
+    >
   ): ProjectGroup | null {
     const group = (this.state.projectGroups ?? []).find((entry) => entry.id === groupId)
     if (!group) {
       return null
+    }
+    // Why: reparent validation must reject the whole update atomically —
+    // applying tabOrder while refusing parentGroupId would strand the group
+    // between its old and new sibling buckets.
+    if (
+      updates.parentGroupId !== undefined &&
+      getProjectGroupReparentViolation(
+        this.state.projectGroups ?? [],
+        groupId,
+        updates.parentGroupId
+      ) !== null
+    ) {
+      return null
+    }
+    if (updates.parentGroupId !== undefined) {
+      group.parentGroupId = updates.parentGroupId
     }
     if (updates.name !== undefined) {
       group.name = normalizeProjectGroupName(updates.name, group.name)

@@ -24,7 +24,17 @@ export type ProjectGroupTabOrderUpdate = {
   tabOrder: number
 }
 
-const ROOT_PROJECT_GROUP_HEADER_BUCKET = 'root'
+export const ROOT_PROJECT_GROUP_HEADER_BUCKET = 'root'
+
+const PARENT_BUCKET_KEY_PREFIX = 'parent:'
+
+export function getParentGroupIdForHeaderDragBucketKey(
+  bucketKey: ProjectGroupHeaderDragBucketKey
+): string | null {
+  return bucketKey.startsWith(PARENT_BUCKET_KEY_PREFIX)
+    ? bucketKey.slice(PARENT_BUCKET_KEY_PREFIX.length)
+    : null
+}
 
 type SidebarProjectGroupHeader = ProjectGroup | { id: null } | undefined
 
@@ -45,7 +55,7 @@ export function getProjectGroupHeaderDragBucketKey(
   if (projectGroupById && !projectGroupById.has(parentGroupId)) {
     return ROOT_PROJECT_GROUP_HEADER_BUCKET
   }
-  return `parent:${parentGroupId}`
+  return `${PARENT_BUCKET_KEY_PREFIX}${parentGroupId}`
 }
 
 export function getSidebarOrderedProjectGroupHeaderIdsByBucket(
