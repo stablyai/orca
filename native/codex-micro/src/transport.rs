@@ -4,6 +4,26 @@ use std::fmt;
 /// widened to a guessed range — an unmatched device is simply not opened.
 pub const VENDOR_ID: u16 = 0x303a;
 pub const PRODUCT_ID: u16 = 0x8360;
+pub const PROTOCOL_USAGE_PAGE: u16 = 0xff00;
+pub const PROTOCOL_USAGE: u16 = 0x0001;
+pub const MANUFACTURER: &str = "Work Louder";
+pub const PRODUCT_NAME: &str = "Codex Micro";
+
+fn is_protocol_collection(
+    vendor_id: u16,
+    product_id: u16,
+    usage_page: u16,
+    usage: u16,
+    manufacturer: Option<&str>,
+    product_name: Option<&str>,
+) -> bool {
+    vendor_id == VENDOR_ID
+        && product_id == PRODUCT_ID
+        && usage_page == PROTOCOL_USAGE_PAGE
+        && usage == PROTOCOL_USAGE
+        && manufacturer == Some(MANUFACTURER)
+        && product_name == Some(PRODUCT_NAME)
+}
 
 #[derive(Debug)]
 pub enum TransportError {
@@ -47,11 +67,24 @@ impl HidTransport {
         Ok(Self { device })
     }
 
-    /// Opens the device by the exact captured VID/PID. Fails rather than
-    /// falling back to any other vendor/product pair.
+    /// Opens only the vendor protocol collection; the same VID/PID also
+    /// exposes keyboard, mouse, gamepad, and consumer-control collections.
     pub fn open_by_vid_pid(api: &hidapi::HidApi) -> Result<Self, TransportError> {
-        let device = api
-            .open(VENDOR_ID, PRODUCT_ID)
+        let info = api
+            .device_list()
+            .find(|device| {
+                is_protocol_collection(
+                    device.vendor_id(),
+                    device.product_id(),
+                    device.usage_page(),
+                    device.usage(),
+                    device.manufacturer_string(),
+                    device.product_string(),
+                )
+            })
+            .ok_or(TransportError::NotFound)?;
+        let device = info
+            .open_device(api)
             .map_err(|error| TransportError::Hid(error.to_string()))?;
         Ok(Self { device })
     }
@@ -79,5 +112,33 @@ mod tests {
     fn exposes_the_exact_captured_vid_pid() {
         assert_eq!(VENDOR_ID, 0x303a);
         assert_eq!(PRODUCT_ID, 0x8360);
+    }
+
+    #[test]
+    fn selects_only_the_vendor_protocol_collection() {
+        assert!(is_protocol_collection(
+            0x303a,
+            0x8360,
+            0xff00,
+            0x0001,
+            Some("Work Louder"),
+            Some("Codex Micro")
+        ));
+        assert!(!is_protocol_collection(
+            0x303a,
+            0x8360,
+            0x0001,
+            0x0006,
+            Some("Work Louder"),
+            Some("Codex Micro")
+        ));
+        assert!(!is_protocol_collection(
+            0x303a,
+            0x8360,
+            0xff00,
+            0x0001,
+            Some("Other"),
+            Some("Codex Micro")
+        ));
     }
 }
