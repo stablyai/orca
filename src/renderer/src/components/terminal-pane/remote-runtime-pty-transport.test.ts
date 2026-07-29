@@ -1923,6 +1923,69 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
+  // Why (regression): the fallback send is awaited, so recovery can rebind the pane to a new
+  // handle before it resolves. Recovering on the dead handle's rejection would remount the
+  // healthy replacement — the pane's response to onWriteUnavailable is a remount.
+  it('does not recover the replacement pane when a superseded handle reports a rejected send', async () => {
+    vi.useFakeTimers()
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
+        subscriptionCallbacks = callbacks
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    try {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onWriteUnavailable = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1'
+      })
+
+      resolvedPaneHandle = 'terminal-old'
+      transport.attach({
+        existingPtyId: 'remote:env-1@@terminal-old',
+        cols: 80,
+        rows: 24,
+        callbacks: { onWriteUnavailable }
+      })
+      await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@terminal-old'))
+
+      let rejectSend: (response: unknown) => void = () => {}
+      // Why: only terminal.send is held open; everything else must keep the default
+      // behaviour or the second attach can never resolve to the replacement handle.
+      const defaultRuntimeCall = runtimeCall.getMockImplementation()
+      runtimeCall.mockImplementation((args: { method: string }) => {
+        if (args.method === 'terminal.send') {
+          return new Promise((resolve) => {
+            rejectSend = resolve
+          })
+        }
+        return defaultRuntimeCall?.(args)
+      })
+
+      expect(transport.sendInput('typed-into-old')).toBe(true)
+      await vi.advanceTimersByTimeAsync(10)
+
+      resolvedPaneHandle = 'terminal-new'
+      transport.attach({
+        existingPtyId: 'remote:env-1@@terminal-new',
+        cols: 80,
+        rows: 24,
+        callbacks: { onWriteUnavailable }
+      })
+      await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@terminal-new'))
+
+      rejectSend({ ok: true, result: { send: { accepted: false, bytesWritten: 0 } } })
+      await vi.advanceTimersByTimeAsync(10)
+
+      expect(onWriteUnavailable).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('ignores stale attach subscription rejection after reattaching a newer remote terminal', async () => {
     const oldSubscription = {
       reject: null as ((error: Error) => void) | null

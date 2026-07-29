@@ -989,7 +989,9 @@ export function createRemoteRuntimePtyTransport(
     })
       .then((result) => {
         // Why: a rejected send is silent by protocol — without this the keystrokes just vanish.
-        if (result.send.accepted !== true) {
+        // Why the handle re-check: recovery can rebind `handle` while this RPC is in flight, and
+        // recovering the replacement pane over a dead pane's rejection would remount the wrong terminal.
+        if (connected && handle === targetHandle && result.send.accepted !== true) {
           notifyWriteUnavailable()
         }
       })

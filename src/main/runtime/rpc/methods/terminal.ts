@@ -1574,7 +1574,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         stream: TerminalMultiplexStream,
         outcome: TerminalStreamInputOutcome
       ): void => {
-        if (outcome !== 'rejected' || !stream.supportsWriteUnavailable) {
+        // Why the identity check: the write is awaited, so this streamId may already be detached and re-subscribed to another pane.
+        if (
+          closed ||
+          streams.get(stream.streamId) !== stream ||
+          outcome !== 'rejected' ||
+          !stream.supportsWriteUnavailable
+        ) {
           return
         }
         sendFrame(
