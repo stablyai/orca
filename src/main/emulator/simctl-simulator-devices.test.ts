@@ -22,7 +22,7 @@ vi.mock('./serve-sim-execution', () => ({
   execServeSimCommand: vi.fn()
 }))
 
-import { listSimulatorDevices } from './simctl-simulator-devices'
+import { listSimulatorDevices, shutdownSimulatorDevice } from './simctl-simulator-devices'
 
 describe('listSimulatorDevices', () => {
   beforeEach(() => {
@@ -92,5 +92,66 @@ describe('listSimulatorDevices', () => {
     })
     expect(error).toBeInstanceOf(Error)
     expect((error as Error).message).not.toContain('Command failed')
+  })
+})
+
+describe('shutdownSimulatorDevice', () => {
+  beforeEach(() => {
+    execFileMock.mockReset()
+    platformMock.mockReset()
+    platformMock.mockReturnValue('darwin')
+  })
+
+  it('treats an already-shut-down device as success', async () => {
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      callback(
+        Object.assign(
+          new Error('Command failed: xcrun simctl shutdown AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE'),
+          { code: 164 }
+        ),
+        '',
+        'Unable to shutdown device in current state: Shutdown'
+      )
+    })
+
+    await expect(
+      shutdownSimulatorDevice('AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE')
+    ).resolves.toBeUndefined()
+  })
+
+  it('propagates real shutdown failures instead of swallowing them', async () => {
+    // execFile's message echoes the command line, which always contains
+    // "shutdown"; a hung device (timeout kill) must still reject.
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      callback(
+        Object.assign(
+          new Error('Command failed: xcrun simctl shutdown AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE'),
+          { killed: true, signal: 'SIGTERM' }
+        ),
+        '',
+        ''
+      )
+    })
+
+    await expect(
+      shutdownSimulatorDevice('AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE')
+    ).rejects.toMatchObject({ code: 'emulator_error' })
+  })
+
+  it('rejects current-state failures that are not already shut down', async () => {
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      callback(
+        Object.assign(
+          new Error('Command failed: xcrun simctl shutdown AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE'),
+          { code: 164 }
+        ),
+        '',
+        'Unable to shutdown device in current state: Booting'
+      )
+    })
+
+    await expect(
+      shutdownSimulatorDevice('AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE')
+    ).rejects.toMatchObject({ code: 'emulator_error' })
   })
 })

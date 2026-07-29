@@ -42,6 +42,19 @@ export function setDriverForPty(ptyId: string, driver: DriverState): void {
   notifyChange({ ptyId, driver })
 }
 
+export function replaceDriverPtyId(replacedPtyId: string, ptyId: string): void {
+  const replaced = driverByPtyId.get(replacedPtyId)
+  if (!replaced) {
+    return
+  }
+  // Why: keep the presence lock conservative across handle rotation while
+  // removing the obsolete key that repeated reconnects would otherwise retain.
+  if (!driverByPtyId.has(ptyId)) {
+    setDriverForPty(ptyId, replaced)
+  }
+  setDriverForPty(replacedPtyId, { kind: 'idle' })
+}
+
 export function getDriverForPty(ptyId: string): DriverState {
   return driverByPtyId.get(ptyId) ?? { kind: 'idle' }
 }

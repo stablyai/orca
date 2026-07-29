@@ -19,10 +19,6 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../git/repo', () => ({
-  getGitUsername: vi.fn().mockReturnValue('testuser')
-}))
-
 vi.mock('./precheck-runner', () => ({
   runAutomationPrecheck: runAutomationPrecheckMock
 }))

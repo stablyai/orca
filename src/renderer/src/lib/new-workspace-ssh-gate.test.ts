@@ -49,6 +49,22 @@ describe('new workspace SSH gate', () => {
     }
   })
 
+  it('never gates a runtime-owned (per-workspace-env) SSH target', () => {
+    // A stale ephemeral repo keeps a runtime-ssh-* connectionId after its runtime is gone; it must
+    // not surface a dead connect card or block repo-backed sources.
+    expect(
+      getSelectedRepoSshGate({ connectionId: 'runtime-ssh-orca-1', status: 'disconnected' })
+    ).toEqual({
+      selectedRepoConnectionId: null,
+      selectedRepoSshStatus: null,
+      selectedRepoRequiresConnection: false,
+      selectedRepoConnectInProgress: false
+    })
+    expect(
+      canUseRepoBackedComposerSources({ connectionId: 'runtime-ssh-orca-1', status: null })
+    ).toBe(true)
+  })
+
   it('marks active SSH transitions as blocked and in progress', () => {
     const inProgressStatuses: SshConnectionStatus[] = [
       'connecting',

@@ -22,10 +22,10 @@ function applyFallbackClip(
   }
   const clipRect = clip as Record<string, unknown>
 
-  const x = typeof clipRect.x === 'number' ? clipRect.x : NaN
-  const y = typeof clipRect.y === 'number' ? clipRect.y : NaN
-  const width = typeof clipRect.width === 'number' ? clipRect.width : NaN
-  const height = typeof clipRect.height === 'number' ? clipRect.height : NaN
+  const x = typeof clipRect.x === 'number' ? clipRect.x : Number.NaN
+  const y = typeof clipRect.y === 'number' ? clipRect.y : Number.NaN
+  const width = typeof clipRect.width === 'number' ? clipRect.width : Number.NaN
+  const height = typeof clipRect.height === 'number' ? clipRect.height : Number.NaN
   const scale =
     typeof clipRect.scale === 'number' && Number.isFinite(clipRect.scale) && clipRect.scale > 0
       ? clipRect.scale

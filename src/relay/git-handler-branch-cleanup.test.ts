@@ -1,8 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import * as path from 'node:path'
+import { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { GitExec } from './git-handler-ops'
 import { removeWorktreeOp } from './git-handler-worktree-ops'
 import { forceDeletePreservedRelayBranch } from './git-handler-branch-cleanup'
+
+function removeWorktreeWithCapabilityCache(
+  git: GitExec,
+  params: Parameters<typeof removeWorktreeOp>[1]
+) {
+  return removeWorktreeOp(git, params, new GitCapabilityCache())
+}
 
 function worktreeList(...entries: { path: string; branch?: string }[]): string {
   return entries
@@ -192,7 +200,9 @@ describe('removeWorktreeOp branch cleanup', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({})
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).resolves.toEqual({})
 
     expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
     expect(git).toHaveBeenCalledWith(
@@ -279,7 +289,9 @@ describe('removeWorktreeOp branch cleanup', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({})
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).resolves.toEqual({})
 
     expect(git).toHaveBeenCalledWith(
       ['update-ref', '-d', 'refs/heads/feature/test', '1'],
@@ -341,7 +353,9 @@ describe('removeWorktreeOp branch cleanup', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({})
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).resolves.toEqual({})
 
     const commandIndex = (expectedArgs: string[]) =>
       calls.findIndex(({ args }) => JSON.stringify(args) === JSON.stringify(expectedArgs))
@@ -404,7 +418,9 @@ describe('removeWorktreeOp branch cleanup', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).resolves.toEqual({
       preservedBranch: { branchName: 'feature/test', head: '1' }
     })
 

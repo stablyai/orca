@@ -46,6 +46,7 @@ export const FEATURE_INTERACTION_CATEGORY_BY_ID = {
   'workspace-creation': 'workspace',
   'agent-browser-setup': 'setup',
   'agent-browser-use': 'agent',
+  'ephemeral-vm-setup': 'setup',
   'agent-orchestration-setup': 'setup',
   'agent-orchestration': 'collaboration',
   'mobile-emulator-agent-setup': 'setup',

@@ -49,6 +49,18 @@ export class LocalhostWorktreeLabelProxy {
     }
   }
 
+  // Why: routes are added per (worktreeId, targetUrl) but were never removed, so
+  // labels for deleted worktrees accumulated in both maps for the whole session.
+  // Drop them when the worktree is torn down. The shared http.Server stays up.
+  unregisterWorktree(worktreeId: string): void {
+    for (const [label, route] of this.routes) {
+      if (route.worktreeId === worktreeId) {
+        this.routes.delete(label)
+        this.routeKeys.delete(route.routeKey)
+      }
+    }
+  }
+
   private async ensureServer(): Promise<void> {
     if (this.server && this.listenPort !== null) {
       return

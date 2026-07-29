@@ -28,14 +28,11 @@ export function MobileSourceControlCreatePrEntry({ action }: Props) {
         accessibilityHint={action.hint}
       >
         {action.loading ? (
-          <ActivityIndicator
-            size="small"
-            color={enabled ? colors.onAccentBlue : colors.textSecondary}
-          />
+          <ActivityIndicator size="small" color={enabled ? colors.bgBase : colors.textSecondary} />
         ) : (
           <GitPullRequestArrow
             size={16}
-            color={enabled ? colors.onAccentBlue : colors.textSecondary}
+            color={enabled ? colors.bgBase : colors.textSecondary}
             strokeWidth={2.2}
           />
         )}

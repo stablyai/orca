@@ -2,6 +2,7 @@ export type TerminalJisYenInputEvent = {
   type: string
   key: string
   code?: string
+  keyCode?: number
   metaKey: boolean
   ctrlKey: boolean
   altKey: boolean
@@ -17,8 +18,10 @@ export type TerminalJisYenInputAction = { type: 'input'; data: string } | { type
 
 function isPlainPhysicalJisYenKey(event: TerminalJisYenInputEvent): boolean {
   // Why: event.key='¥' can come from input methods or other layouts; IntlYen
-  // scopes the rewrite to the physical JIS key the setting names.
+  // scopes the rewrite to the physical JIS key the setting names. keyCode 229
+  // means an IME owns the press — translating it would race the IME's commit.
   return (
+    event.keyCode !== 229 &&
     event.code === 'IntlYen' &&
     event.key === '¥' &&
     !event.metaKey &&

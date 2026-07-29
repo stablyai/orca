@@ -19,10 +19,6 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../git/repo', () => ({
-  getGitUsername: vi.fn().mockReturnValue('testuser')
-}))
-
 async function createStore() {
   vi.resetModules()
   const { Store, initDataPath } = await import('../persistence')
@@ -352,6 +348,70 @@ describe('AutomationService', () => {
     )
   })
 
+  it('dispatches due scheduled automations headlessly', async () => {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const beforeRunAt = new Date(2026, 4, 13, 8, 59).getTime()
+    const scheduledRunAt = new Date(2026, 4, 13, 9, 0).getTime()
+    const afterRunAt = new Date(2026, 4, 13, 9, 1).getTime()
+    const nextRunAt = new Date(2026, 4, 14, 9, 0).getTime()
+
+    vi.setSystemTime(beforeRunAt)
+    const store = await createStore()
+    const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
+    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const setup = store.getProjectHostSetups()[0]!
+    const automation = store.createAutomation({
+      name: 'Morning check',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      runContext: {
+        kind: 'workspace-run',
+        projectId: setup.projectId,
+        hostId: runtimeHostId,
+        projectHostSetupId: setup.id,
+        repoId: setup.repoId,
+        path: setup.path
+      },
+      workspaceMode: 'new_per_run',
+      timezone,
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date(2026, 4, 12, 0, 0).getTime()
+    })
+
+    const headlessDispatcher = vi.fn().mockResolvedValue({
+      workspaceId: 'wt1',
+      workspaceDisplayName: 'Morning check',
+      terminalSessionId: 'tab-1',
+      terminalPaneKey: 'pane-1',
+      terminalPtyId: 'pty-1'
+    })
+    const service = new AutomationService(store, {
+      tickMs: 60_000,
+      allowRemoteHostScheduling: true,
+      headlessDispatcher
+    })
+
+    try {
+      vi.setSystemTime(afterRunAt)
+      service.start()
+      await vi.waitFor(() => expect(headlessDispatcher).toHaveBeenCalledTimes(1))
+      const run = store.listAutomationRuns(automation.id)[0]
+      expect(run?.status).toBe('dispatched')
+      expect(run?.scheduledFor).toBe(scheduledRunAt)
+      expect(headlessDispatcher).toHaveBeenCalledWith(
+        expect.objectContaining({ automation: expect.objectContaining({ id: automation.id }) })
+      )
+      await vi.waitFor(() =>
+        expect(store.listAutomations().find((entry) => entry.id === automation.id)?.nextRunAt).toBe(
+          nextRunAt
+        )
+      )
+    } finally {
+      service.stop()
+    }
+  })
+
   it('attaches provider usage when a completed run can be attributed', async () => {
     vi.setSystemTime(new Date('2026-05-13T10:00:00'))
     const store = await createStore()
@@ -476,6 +536,62 @@ describe('AutomationService', () => {
     expect(first.usage).toEqual(usage)
     expect(second.usage).toEqual(usage)
     expect(getAutomationRunUsage).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not throw when retention evicts the run during usage collection', async () => {
+    vi.setSystemTime(new Date('2026-05-13T10:00:00'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Costed check',
+      prompt: 'Check spend',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const base = Date.now()
+    const run = store.createAutomationRun(automation, base, 'manual')
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'dispatched',
+      workspaceId: 'wt1',
+      terminalSessionId: 'tab-1',
+      error: null
+    })
+    // While usage collection is awaited the run is already final, so a
+    // scheduler tick creating newer runs can prune it away mid-flight.
+    const getAutomationRunUsage = vi.fn().mockImplementation(async () => {
+      for (let i = 1; i <= 120; i++) {
+        const later = store.createAutomationRun(automation, base + i * 60_000)
+        store.updateAutomationRun({
+          runId: later.id,
+          status: 'completed',
+          workspaceId: 'wt1',
+          error: null
+        })
+      }
+      return null
+    })
+    const service = new AutomationService(store, {
+      tickMs: 60_000,
+      claudeUsage: { getAutomationRunUsage } as never
+    })
+
+    const updated = await service.markDispatchResult({
+      runId: run.id,
+      status: 'completed',
+      workspaceId: 'wt1',
+      terminalSessionId: 'tab-1',
+      error: null
+    })
+
+    expect(updated.id).toBe(run.id)
+    // The run really was evicted; the usage write was skipped instead of throwing.
+    expect(store.listAutomationRuns(automation.id).some((entry) => entry.id === run.id)).toBe(false)
   })
 
   it('records unsupported usage cleanly for completed agents without local usage stores', async () => {

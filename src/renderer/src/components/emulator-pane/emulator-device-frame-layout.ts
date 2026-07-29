@@ -5,6 +5,8 @@ export type StreamSize = {
   height: number
 }
 
+export type EmulatorDeviceVisualOrientation = 'portrait' | 'landscape'
+
 export type PaneSize = {
   width: number
   height: number
@@ -23,6 +25,12 @@ export type DeviceFrameLayout = {
   sideButtonThickness: number
 }
 
+export type VisualStreamGeometry = {
+  aspectRatio: number
+  size: StreamSize | null
+  streamRotation: -90 | 0 | 90
+}
+
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value))
 const FIT_MARGIN_PX = 0.5
@@ -38,6 +46,38 @@ export function resolveDeviceFrameKind(
     return 'phone'
   }
   return screenAspectRatio > 0.62 && screenAspectRatio < 1.62 ? 'tablet' : 'phone'
+}
+
+export function resolveVisualScreenAspectRatio(
+  streamSize: StreamSize | null,
+  visualOrientation: EmulatorDeviceVisualOrientation
+): number {
+  return resolveVisualStreamGeometry(streamSize, visualOrientation).aspectRatio
+}
+
+export function resolveVisualStreamGeometry(
+  streamSize: StreamSize | null,
+  visualOrientation: EmulatorDeviceVisualOrientation
+): VisualStreamGeometry {
+  // Why: serve-sim can keep the same canvas dimensions after rotate; the pane's
+  // physical frame and input rect still need to follow the successful request.
+  const width = streamSize?.width ?? 9
+  const height = streamSize?.height ?? 19
+  const shortSide = Math.min(width, height)
+  const longSide = Math.max(width, height)
+  const visualSize =
+    visualOrientation === 'landscape'
+      ? { width: longSide, height: shortSide }
+      : { width: shortSide, height: longSide }
+  const streamIsLandscape = streamSize ? streamSize.width > streamSize.height : false
+  const visualIsLandscape = visualOrientation === 'landscape'
+  const streamRotation =
+    streamSize && streamIsLandscape !== visualIsLandscape ? (visualIsLandscape ? 90 : -90) : 0
+  return {
+    aspectRatio: visualSize.width / visualSize.height,
+    size: streamSize ? visualSize : null,
+    streamRotation
+  }
 }
 
 function fitScreenToPane(paneSize: PaneSize | null, aspectRatio: number): PaneSize | null {

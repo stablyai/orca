@@ -1,4 +1,5 @@
 import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
+import { releaseRemoteRuntimePreparedRequest } from './remote-runtime-prepared-request-admission'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
 import type {
@@ -9,6 +10,7 @@ import type {
   SharedControlReadyWaiter
 } from './remote-runtime-shared-control-types'
 import { getSubscriptionId, isEndResult } from './remote-runtime-shared-control-protocol'
+import { tagRuntimeSubscriptionReplayResponse } from './runtime-subscription-replay'
 
 export function buildSharedControlDiagnostics(args: {
   state: SharedControlConnectionState
@@ -42,6 +44,7 @@ export function rejectSharedControlPendingRequest(
   }
   pendingRequests.delete(requestId)
   clearTimeout(pending.timeout)
+  releaseRemoteRuntimePreparedRequest(pending)
   pending.reject(error)
 }
 
@@ -56,6 +59,7 @@ export function resolveSharedControlPendingResponse(
   }
   pendingRequests.delete(requestId)
   clearTimeout(pending.timeout)
+  releaseRemoteRuntimePreparedRequest(pending)
   pending.resolve(response)
 }
 
@@ -63,6 +67,11 @@ export function refreshSharedControlPendingRequestTimeouts(
   pendingRequests: Map<string, SharedControlPendingRequest<unknown>>
 ): void {
   for (const pending of pendingRequests.values()) {
+    // Why: only long-poll requests opted into keepalive refresh; refreshing an
+    // ordinary short RPC would keep a genuinely-stuck server call alive forever.
+    if (!pending.refreshTimeoutOnKeepalive) {
+      continue
+    }
     const timeout = pending.timeout as ReturnType<typeof setTimeout> & { refresh?: () => void }
     timeout.refresh?.()
   }
@@ -92,6 +101,7 @@ export function rejectAllSharedControlPendingRequests(
   for (const [requestId, pending] of pendingRequests) {
     clearTimeout(pending.timeout)
     pendingRequests.delete(requestId)
+    releaseRemoteRuntimePreparedRequest(pending)
     pending.reject(closeError)
   }
 }
@@ -143,13 +153,27 @@ export function handleSharedControlSubscriptionResponse(
   subscription: SharedControlLogicalSubscription<unknown>,
   response: RuntimeRpcResponse<unknown>
 ): void {
+  // The replay window ends on either success or error. An error created no
+  // remote subscription, so a later close must finish locally instead of
+  // waiting forever for an id that will never arrive.
+  subscription.awaitingResubscribe = false
+  if (!response.ok) {
+    subscription.sent = false
+  }
   if (response.ok) {
     const subscriptionId = getSubscriptionId(response.result)
     if (subscriptionId) {
       subscription.remoteSubscriptionId = subscriptionId
     }
   }
-  subscription.callbacks.onResponse(response)
+  let delivered = response
+  if (subscription.pendingReplayTag) {
+    subscription.pendingReplayTag = false
+    if (response.ok) {
+      delivered = tagRuntimeSubscriptionReplayResponse(response)
+    }
+  }
+  subscription.callbacks.onResponse(delivered)
   if (response.ok && isEndResult(response.result)) {
     finishSharedControlSubscription(subscriptions, subscription, false)
   }

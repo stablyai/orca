@@ -23,6 +23,15 @@ import {
 } from '@/components/automations/automation-run-output-snapshot'
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  toSshExecutionHostId
+} from '../../../shared/execution-host'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 
 const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
 const activeReuseDispatchTabIds = new Set<string>()
@@ -62,13 +71,27 @@ export function useAutomationDispatchEvents(): void {
         }
         const runRepoId = getAutomationRunRepoId(automation)
         const repo = state.repos.find((entry) => entry.id === runRepoId)
+        const automationWorkspaceScope = parseWorkspaceKey(automation.workspaceId ?? '')
         const automationWorktree = automation.workspaceId
-          ? state.allWorktrees().find((entry) => entry.id === automation.workspaceId)
+          ? automationWorkspaceScope?.type === 'folder'
+            ? state.getKnownWorktreeById(automation.workspaceId)
+            : state.allWorktrees().find((entry) => entry.id === automation.workspaceId)
           : null
         let dispatchWorkspaceId = automation.workspaceId
         let dispatchWorkspaceDisplayName =
           automationWorktree?.displayName ?? run.workspaceDisplayName ?? null
         let precheckResult: AutomationPrecheckResult | null = null
+        let terminalOwnership: AutomationTerminalOwnership | null = null
+        const releaseTerminalOwnership = (): void => {
+          const ownership = terminalOwnership
+          terminalOwnership = null
+          ownership?.release()
+        }
+        const finalizeTerminalOwnership = (): boolean => {
+          const ownership = terminalOwnership
+          terminalOwnership = null
+          return ownership?.finalize() ?? false
+        }
 
         if (!repo) {
           await markDispatchResult({
@@ -85,9 +108,49 @@ export function useAutomationDispatchEvents(): void {
         }
 
         try {
-          if (repo.connectionId) {
+          const folderWorkspaceConnectionId =
+            automationWorkspaceScope?.type === 'folder'
+              ? getFolderWorkspaceConnectionId(state, automationWorkspaceScope.folderWorkspaceId)
+              : null
+          const folderWorkspaceHostId =
+            automationWorkspaceScope?.type === 'folder' && automationWorktree
+              ? folderWorkspaceConnectionId === undefined
+                ? null
+                : folderWorkspaceConnectionId
+                  ? toSshExecutionHostId(folderWorkspaceConnectionId)
+                  : getResolvedExecutionHostIdForWorktree(state, automationWorktree.id)
+              : null
+          const runHostId =
+            parseExecutionHostId(automation.runContext?.hostId)?.id ?? getRepoExecutionHostId(repo)
+          const workspaceMatchesRunTarget =
+            automationWorkspaceScope?.type === 'folder'
+              ? folderWorkspaceHostId !== null && folderWorkspaceHostId === runHostId
+              : !automation.runContext?.repoId ||
+                automationWorktree?.repoId === automation.runContext.repoId
+          if (
+            automation.workspaceMode === 'existing' &&
+            automationWorktree &&
+            !workspaceMatchesRunTarget
+          ) {
+            await markDispatchResult({
+              runId: run.id,
+              status: 'skipped_unavailable',
+              workspaceId: automation.workspaceId,
+              workspaceDisplayName: dispatchWorkspaceDisplayName,
+              error: translate(
+                'auto.hooks.useAutomationDispatchEvents.3ad7d77f57',
+                'The target workspace is on a different host than this automation run target.'
+              )
+            })
+            return
+          }
+          const sshTargetId =
+            automationWorkspaceScope?.type === 'folder'
+              ? (folderWorkspaceConnectionId ?? null)
+              : (repo.connectionId ?? null)
+          if (sshTargetId) {
             const needsPrompt = await window.api.ssh.needsPassphrasePrompt({
-              targetId: repo.connectionId
+              targetId: sshTargetId
             })
             if (needsPrompt) {
               await markDispatchResult({
@@ -102,10 +165,10 @@ export function useAutomationDispatchEvents(): void {
               })
               return
             }
-            const sshState = await window.api.ssh.getState({ targetId: repo.connectionId })
+            const sshState = await window.api.ssh.getState({ targetId: sshTargetId })
             if (sshState?.status !== 'connected') {
               try {
-                const connected = await window.api.ssh.connect({ targetId: repo.connectionId })
+                const connected = await window.api.ssh.connect({ targetId: sshTargetId })
                 if (connected?.status !== 'connected') {
                   throw new Error('SSH target is unavailable.')
                 }
@@ -120,25 +183,6 @@ export function useAutomationDispatchEvents(): void {
                 return
               }
             }
-          }
-
-          if (
-            automation.workspaceMode === 'existing' &&
-            automationWorktree &&
-            automation.runContext?.repoId &&
-            automationWorktree.repoId !== automation.runContext.repoId
-          ) {
-            await markDispatchResult({
-              runId: run.id,
-              status: 'skipped_unavailable',
-              workspaceId: automation.workspaceId,
-              workspaceDisplayName: dispatchWorkspaceDisplayName,
-              error: translate(
-                'auto.hooks.useAutomationDispatchEvents.3ad7d77f57',
-                'The target workspace is on a different host than this automation run target.'
-              )
-            })
-            return
           }
 
           if (automation.workspaceMode === 'existing' && !automationWorktree) {
@@ -275,26 +319,74 @@ export function useAutomationDispatchEvents(): void {
             }
             completionMarked = true
             cleanupRunObservers()
-            await markDispatchResult({
-              runId: run.id,
-              status: 'completed',
-              workspaceId: worktree.id,
-              workspaceDisplayName: worktree.displayName,
-              outputSnapshot: getOutputSnapshot(),
-              precheckResult,
-              error: null
-            })
+            try {
+              await markDispatchResult({
+                runId: run.id,
+                status: 'completed',
+                workspaceId: worktree.id,
+                workspaceDisplayName: worktree.displayName,
+                outputSnapshot: getOutputSnapshot(),
+                precheckResult,
+                error: null
+              })
+            } catch (error) {
+              releaseTerminalOwnership()
+              throw error
+            }
+            if (finalizeTerminalOwnership()) {
+              await clearRetiredRunTerminalIdentity()
+            }
           }
-          const markExitResult = (code: number): Promise<void> => {
+          const clearRetiredRunTerminalIdentity = async (): Promise<void> => {
+            // Why: the owned terminal was just retired, so the run's pane/pty
+            // pointers now reference a closed tab. Drop them (best-effort) so
+            // "View run" resolves to the workspace/snapshot instead of dead-ending
+            // on an unavailable terminal.
+            try {
+              await markDispatchResult({
+                runId: run.id,
+                status: 'completed',
+                terminalSessionId: null,
+                terminalPaneKey: null,
+                terminalPtyId: null
+              })
+            } catch (error) {
+              console.error('[automations] Failed to clear retired terminal identity:', error)
+            }
+          }
+          const markExitResult = async (code: number): Promise<void> => {
+            if (completionMarked) {
+              return
+            }
+            completionMarked = true
             cleanupRunObservers()
-            return markDispatchResult({
-              runId: run.id,
-              status: code === 0 ? 'completed' : 'dispatch_failed',
-              workspaceId: worktree.id,
-              workspaceDisplayName: worktree.displayName,
-              outputSnapshot: getOutputSnapshot(),
-              precheckResult,
-              error: code === 0 ? null : `Automation process exited with code ${code}.`
+            try {
+              await markDispatchResult({
+                runId: run.id,
+                status: code === 0 ? 'completed' : 'dispatch_failed',
+                workspaceId: worktree.id,
+                workspaceDisplayName: worktree.displayName,
+                outputSnapshot: getOutputSnapshot(),
+                precheckResult,
+                error: code === 0 ? null : `Automation process exited with code ${code}.`
+              })
+            } catch (error) {
+              releaseTerminalOwnership()
+              throw error
+            }
+            if (code === 0) {
+              if (finalizeTerminalOwnership()) {
+                await clearRetiredRunTerminalIdentity()
+              }
+            } else {
+              releaseTerminalOwnership()
+            }
+          }
+          const settleLateResult = (result: Promise<void>): void => {
+            // Why: status/exit callbacks have no awaitable caller; the result
+            // path already releases ownership before propagating persistence errors.
+            void result.catch((error) => {
+              console.error('[automations] Failed to persist late automation result:', error)
             })
           }
           const handleAgentDone = (): void => {
@@ -305,7 +397,7 @@ export function useAutomationDispatchEvents(): void {
               pendingDone = true
               return
             }
-            void markCompletionResult()
+            settleLateResult(markCompletionResult())
           }
           const observeAgentStatus = (
             targetPaneKey: string,
@@ -392,7 +484,7 @@ export function useAutomationDispatchEvents(): void {
                           pendingExitCode = code
                           return
                         }
-                        void markExitResult(code)
+                        settleLateResult(markExitResult(code))
                       }
                     })
                     observeAgentStatus(reusableSession.paneKey, reuseCompletionStartedAt, {
@@ -449,11 +541,17 @@ export function useAutomationDispatchEvents(): void {
                 pendingExitCode = code
                 return
               }
-              void markExitResult(code)
+              settleLateResult(markExitResult(code))
             }
           })
           if (!result) {
             throw new Error('Unable to build an agent launch plan.')
+          }
+          terminalOwnership = result.terminalOwnership
+          if (automation.reuseSession) {
+            // Why: the first fresh launch is the seed for later reuse and must
+            // survive completion under the same policy as an already-reused tab.
+            releaseTerminalOwnership()
           }
           const launchedTabId = result.tabId
           observeAgentStatus(result.paneKey, dispatchStartedAt)
@@ -494,6 +592,7 @@ export function useAutomationDispatchEvents(): void {
             currentState.setActiveTabType(focusBeforeDispatch.activeTabType)
           }
         } catch (error) {
+          releaseTerminalOwnership()
           await markDispatchResult({
             runId: run.id,
             status: 'dispatch_failed',

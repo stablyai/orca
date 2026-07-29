@@ -1,4 +1,4 @@
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readlinkSync, statSync } from 'node:fs'
 import { win32 as pathWin32 } from 'node:path'
 
 /** Dependency seams so the resolver can be unit-tested without a real Windows
@@ -7,6 +7,8 @@ export type WindowsPowerShellResolveOptions = {
   env?: NodeJS.ProcessEnv
   /** Returns true when the candidate path is a real, non-empty executable. */
   isRealExecutable?: (path: string) => boolean
+  /** Resolves a Store App Execution Alias to its package executable. */
+  resolveAppExecutionAlias?: (path: string) => string | null
   platform?: NodeJS.Platform
 }
 
@@ -37,6 +39,15 @@ function defaultIsRealExecutable(candidate: string): boolean {
   }
 }
 
+function defaultResolveAppExecutionAlias(candidate: string): string | null {
+  try {
+    const target = readlinkSync(candidate)
+    return pathWin32.resolve(pathWin32.dirname(candidate), target)
+  } catch {
+    return null
+  }
+}
+
 function readEnv(env: NodeJS.ProcessEnv, names: string[]): string | undefined {
   for (const name of names) {
     const value = env[name]
@@ -45,6 +56,26 @@ function readEnv(env: NodeJS.ProcessEnv, names: string[]): string | undefined {
     }
   }
   return undefined
+}
+
+function getPathExecutableCandidates(env: NodeJS.ProcessEnv, executable: string): string[] {
+  const pathValue = readEnv(env, ['PATH', 'Path', 'path'])
+  if (!pathValue) {
+    return []
+  }
+
+  const candidates: string[] = []
+  const seen = new Set<string>()
+  for (const rawPart of pathValue.split(pathWin32.delimiter)) {
+    const dir = rawPart.trim().replace(/^"|"$/g, '')
+    // Why: Windows' implicit current-directory search can pick up repo-local
+    // shims. Only absolute PATH entries become ConPTY launch candidates.
+    if (!pathWin32.isAbsolute(dir)) {
+      continue
+    }
+    pushUniqueCandidate(candidates, seen, pathWin32.join(dir, executable))
+  }
+  return candidates
 }
 
 function pushUniqueCandidate(
@@ -94,6 +125,9 @@ function getPwshCandidatePaths(env: NodeJS.ProcessEnv): string[] {
       )
     }
   }
+  for (const candidate of getPathExecutableCandidates(env, 'pwsh.exe')) {
+    pushUniqueCandidate(candidates, seen, candidate)
+  }
   return candidates
 }
 
@@ -117,9 +151,8 @@ export function getWindowsCmdPath(env: NodeJS.ProcessEnv = process.env): string 
 /**
  * Resolve a PowerShell family name to a real absolute executable path.
  *
- * Returns null when no real executable can be found for the family (e.g. pwsh.exe
- * is only present as a Store App Execution Alias stub). Callers fall back to the
- * next link in the Windows shell chain when this returns null.
+ * Returns null when no real executable or safely resolvable Store alias target
+ * can be found for the family. Callers then try the next Windows shell fallback.
  */
 export function resolveWindowsPowerShellExecutablePath(
   family: 'pwsh.exe' | 'powershell.exe',
@@ -131,6 +164,8 @@ export function resolveWindowsPowerShellExecutablePath(
   }
   const env = options.env ?? process.env
   const isRealExecutable = options.isRealExecutable ?? defaultIsRealExecutable
+  const resolveAppExecutionAlias =
+    options.resolveAppExecutionAlias ?? defaultResolveAppExecutionAlias
 
   if (family === 'powershell.exe') {
     const windowsPowerShell = getWindowsPowerShellPath(env)
@@ -138,6 +173,21 @@ export function resolveWindowsPowerShellExecutablePath(
   }
 
   for (const candidate of getPwshCandidatePaths(env)) {
+    if (isWindowsAppExecutionAliasPath(candidate)) {
+      const target = resolveAppExecutionAlias(candidate)
+      // Why: ConPTY cannot launch the alias reparse point, but its real Store
+      // package target is a normal executable that preserves the user's pwsh choice.
+      if (
+        target &&
+        pathWin32.isAbsolute(target) &&
+        pathWin32.basename(target).toLowerCase() === 'pwsh.exe' &&
+        !isWindowsAppExecutionAliasPath(target) &&
+        isRealExecutable(target)
+      ) {
+        return pathWin32.normalize(target)
+      }
+      continue
+    }
     if (isRealExecutable(candidate)) {
       return candidate
     }

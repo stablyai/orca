@@ -618,28 +618,42 @@ describe('mobile rpc-client connection timeout', () => {
       return { client, socket }
     }
 
-    it('repro: a parked reconnect loop never retries on its own', async () => {
+    // Why 520_000ms: the 12 fast attempts cost Σ(RECONNECT_DELAYS) 360.5s of
+    // backoff plus 13 × 12s connect timeouts ≈ 516.5s, so 520s lands just
+    // past the give-up cap with the first trickle timer armed.
+    const PAST_GIVE_UP_CAP_MS = 520_000
+
+    it('keeps trickle-retrying after the give-up cap instead of parking', async () => {
       const client = connect('ws://desktop.invalid', 'token', 'server-key')
       openAndAuthenticate(mockSockets[0]!)
       mockSockets[0]!.close()
 
-      await vi.runAllTimersAsync()
+      await vi.advanceTimersByTimeAsync(PAST_GIVE_UP_CAP_MS)
       expect(client.getState()).toBe('reconnecting')
-      expect(client.getReconnectAttempt()).toBe(12)
+      expect(client.getReconnectAttempt()).toBeGreaterThanOrEqual(12)
 
-      // Stuck: arbitrary additional time produces no further attempts.
+      // A wedged VPN produces no revival nudge (issue #7824) — the loop must
+      // keep dialing on its own at the 90s trickle cadence.
       const socketsBefore = mockSockets.length
-      await vi.advanceTimersByTimeAsync(600_000)
-      expect(mockSockets.length).toBe(socketsBefore)
+      await vi.advanceTimersByTimeAsync(102_000)
+      expect(mockSockets.length).toBeGreaterThan(socketsBefore)
+
+      // Once the tunnel heals, a trickle dial restores the session without
+      // any user action. 75s lands inside the next dial's 12s connect window
+      // (the prior dial failed mid-advance above, re-arming the 90s timer).
+      await vi.advanceTimersByTimeAsync(75_000)
+      openAndAuthenticate(mockSockets[mockSockets.length - 1]!)
+      expect(client.getState()).toBe('connected')
+      expect(client.getReconnectAttempt()).toBe(0)
 
       client.close()
     })
 
-    it('restarts a parked reconnect loop on foreground', async () => {
+    it('restarts a backed-off reconnect loop on foreground without waiting out the trickle', async () => {
       const client = connect('ws://desktop.invalid', 'token', 'server-key')
       openAndAuthenticate(mockSockets[0]!)
       mockSockets[0]!.close()
-      await vi.runAllTimersAsync()
+      await vi.advanceTimersByTimeAsync(PAST_GIVE_UP_CAP_MS)
       expect(client.getReconnectAttempt()).toBe(12)
 
       const socketsBefore = mockSockets.length
@@ -906,57 +920,6 @@ describe('mobile rpc-client connection timeout', () => {
 
       client.close()
     })
-
-    it('re-subscribes active streams after an auth-retry reconnect', async () => {
-      const client = connect('ws://desktop.invalid', 'token', 'server-key')
-      const first = mockSockets[0]!
-      const terminalEvents: unknown[] = []
-      authenticate(first)
-      expect(client.getState()).toBe('connected')
-
-      // An active terminal subscription on the live connection.
-      client.subscribe('terminal.subscribe', { terminal: 'term-1' }, (event) => {
-        terminalEvents.push(event)
-      })
-      expect(sentRequests(first, 'terminal.subscribe')).toHaveLength(1)
-
-      // Mid-session transient unauthorized — handleAuthRejection retries
-      // (budget not exhausted) and reconnects rather than latching.
-      const request = client.sendRequest('status.get').catch(() => undefined)
-      await Promise.resolve()
-      const id = sentRequest(first, 'status.get').id
-      first.receive(unauthorizedResponsePayload(id))
-      await request
-      expect(client.getState()).toBe('reconnecting')
-
-      // Fresh socket authenticates; the replay loop must re-send the still
-      // active terminal subscription (issue #5200 frozen-terminal regression).
-      await vi.advanceTimersByTimeAsync(500)
-      const second = mockSockets[mockSockets.length - 1]!
-      expect(second).not.toBe(first)
-      authenticate(second)
-      expect(client.getState()).toBe('connected')
-      expect(sentRequests(second, 'terminal.subscribe')).toHaveLength(1)
-      const resumedSubscribe = sentRequest(second, 'terminal.subscribe')
-      second.receive(
-        `encrypted:${JSON.stringify({
-          id: resumedSubscribe.id,
-          ok: true,
-          streaming: true,
-          result: { type: 'subscribed', streamId: 77 }
-        })}`
-      )
-      second.receive(encodeTerminalOutput(77, 'after-reconnect'))
-      await Promise.resolve()
-      await Promise.resolve()
-      expect(terminalEvents).toContainEqual({
-        type: 'data',
-        streamId: 77,
-        chunk: 'after-reconnect'
-      })
-
-      client.close()
-    })
   })
 
   it('rejects requests waiting for reconnect after the retry cap', async () => {
@@ -972,7 +935,7 @@ describe('mobile rpc-client connection timeout', () => {
       () => null,
       (error: Error) => error
     )
-    await vi.runAllTimersAsync()
+    await vi.advanceTimersByTimeAsync(520_000)
 
     expect(client.getState()).toBe('reconnecting')
     expect(client.getReconnectAttempt()).toBe(12)

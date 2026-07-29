@@ -19,7 +19,10 @@ import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-w
 import type { CodexUsagePersistedState } from './types'
 import { createWorktreeRefs, scanCodexUsageFiles } from './scanner'
 
-const SCHEMA_VERSION = 3
+// Why: v5 keys Codex ownership on raw token_count identity without session id
+// so forks that rewrite session_meta still match. Older caches used session-
+// scoped keys and can double-count after fork/resume (#8006).
+const SCHEMA_VERSION = 5
 const STALE_MS = 5 * 60_000
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
 
@@ -87,6 +90,30 @@ const MODEL_PRICING: Record<string, CodexModelPricing> = {
     inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 10 }],
     cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 1 }],
     outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 45 }]
+  },
+  'gpt-5.6-sol': {
+    input: 5,
+    cachedInput: 0.5,
+    output: 30,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 10 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 1 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 45 }]
+  },
+  'gpt-5.6-terra': {
+    input: 2.5,
+    cachedInput: 0.25,
+    output: 15,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 5 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 0.5 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 22.5 }]
+  },
+  'gpt-5.6-luna': {
+    input: 1,
+    cachedInput: 0.1,
+    output: 6,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 2 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 0.2 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 9 }]
   }
 }
 
@@ -224,6 +251,21 @@ function normalizeModelForPricing(model: string | null): string | null {
   }
   if (normalized === 'gpt-5.5' || normalized.startsWith('gpt-5.5-')) {
     return 'gpt-5.5'
+  }
+  if (normalized === 'gpt-5.6-sol' || normalized.startsWith('gpt-5.6-sol-')) {
+    return 'gpt-5.6-sol'
+  }
+  if (normalized === 'gpt-5.6-terra' || normalized.startsWith('gpt-5.6-terra-')) {
+    return 'gpt-5.6-terra'
+  }
+  if (normalized === 'gpt-5.6-luna' || normalized.startsWith('gpt-5.6-luna-')) {
+    return 'gpt-5.6-luna'
+  }
+  // Why: OpenAI routes the bare `gpt-5.6` alias to Sol. Match it exactly — a
+  // `gpt-5.6-` prefix match would swallow the tier IDs above and any future
+  // cheaper variant.
+  if (normalized === 'gpt-5.6') {
+    return 'gpt-5.6-sol'
   }
   return null
 }

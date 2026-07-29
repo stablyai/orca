@@ -65,6 +65,7 @@ export function SourceControlAgentActionDialog(
   const {
     handleOpenChange,
     shouldRenderDialog,
+    agentScopeNote,
     agentOptions,
     selectedAgent,
     hasEnabledAgents,
@@ -101,6 +102,7 @@ export function SourceControlAgentActionDialog(
           <SourceControlAgentActionDialogForm
             actionId={actionId}
             baseCommandInput={baseCommandInput}
+            agentScopeNote={agentScopeNote}
             agentOptions={agentOptions}
             selectedAgent={selectedAgent}
             hasEnabledAgents={hasEnabledAgents}

@@ -14,13 +14,9 @@ import {
   ChevronLeft,
   ChevronDown,
   ChevronUp,
-  WifiOff,
-  Shield,
-  Monitor,
-  Clock,
-  Globe,
   Activity,
   CheckCircle2,
+  ScrollText,
   XCircle,
   AlertTriangle
 } from 'lucide-react-native'
@@ -30,7 +26,12 @@ import {
   startDiagnosticFetchTimeout,
   type DiagnosticFetchTimeout
 } from '../src/diagnostics/diagnostic-fetch-timeout'
-import { formatEndpoint, testHostReachability } from '../src/diagnostics/host-reachability'
+import {
+  formatEndpoint,
+  testHostReachability,
+  unreachableHostDetail
+} from '../src/diagnostics/host-reachability'
+import { troubleshootCommonIssues } from '../src/diagnostics/troubleshoot-common-issues'
 
 type DiagnosticStatus = 'idle' | 'running' | 'done'
 
@@ -39,66 +40,6 @@ type CheckResult = {
   status: 'pass' | 'fail' | 'warn'
   detail: string
 }
-
-type TroubleshootSection = {
-  id: string
-  icon: React.ReactNode
-  title: string
-  steps: string[]
-}
-
-const sections: TroubleshootSection[] = [
-  {
-    id: 'wifi',
-    icon: <WifiOff size={16} color={colors.textSecondary} />,
-    title: 'Different WiFi Networks',
-    steps: [
-      'Both devices must be on the same local network.',
-      'Ethernet and WiFi must share the same subnet.',
-      'Try reconnecting WiFi on both devices.'
-    ]
-  },
-  {
-    id: 'firewall',
-    icon: <Shield size={16} color={colors.textSecondary} />,
-    title: 'Firewall Blocking Port 6768',
-    steps: [
-      'macOS: System Settings → Network → Firewall — allow Orca.',
-      'Windows: Defender Firewall → Allow app — enable Orca for Private networks.',
-      'Linux: sudo ufw allow 6768',
-      'Corporate/school networks may block P2P — try a personal hotspot.'
-    ]
-  },
-  {
-    id: 'desktop',
-    icon: <Monitor size={16} color={colors.textSecondary} />,
-    title: 'Desktop App Not Running',
-    steps: [
-      'Orca must be open on your desktop to accept connections.',
-      'Try restarting Orca — the companion server starts on launch.',
-      'After an update, you may need to re-pair via QR code.'
-    ]
-  },
-  {
-    id: 'timeout',
-    icon: <Clock size={16} color={colors.textSecondary} />,
-    title: 'Connection Timeout',
-    steps: [
-      'Check WiFi signal strength on your phone.',
-      'Go back to the host list and tap your host to retry.',
-      'Restart both apps if timeouts persist.'
-    ]
-  },
-  {
-    id: 'vpn',
-    icon: <Globe size={16} color={colors.textSecondary} />,
-    title: 'VPN Interference',
-    steps: [
-      'VPNs can route local traffic through a remote server.',
-      'Disable the VPN or enable split tunneling / "Allow LAN".'
-    ]
-  }
-]
 
 function StatusIcon({ status }: { status: CheckResult['status'] }) {
   switch (status) {
@@ -211,7 +152,7 @@ export default function TroubleshootScreen() {
           status: reachable ? 'pass' : 'fail',
           detail: reachable
             ? `Reachable at ${formatEndpoint(host.endpoint)}`
-            : `Cannot reach ${formatEndpoint(host.endpoint)}`
+            : unreachableHostDetail(host.endpoint)
         })
         setChecks([...results])
       }
@@ -273,6 +214,17 @@ export default function TroubleshootScreen() {
           </Text>
         </Pressable>
 
+        <Pressable
+          style={({ pressed }) => [
+            styles.diagnosticButton,
+            pressed && styles.diagnosticButtonPressed
+          ]}
+          onPress={() => router.push('/connection-log')}
+        >
+          <ScrollText size={16} color={colors.textPrimary} />
+          <Text style={styles.diagnosticButtonLabel}>View connection log</Text>
+        </Pressable>
+
         {checks.length > 0 && (
           <View style={styles.section}>
             {checks.map((check, i) => (
@@ -295,7 +247,7 @@ export default function TroubleshootScreen() {
         <Text style={styles.sectionHeading}>Common issues</Text>
 
         <View style={styles.section}>
-          {sections.map((section, i) => (
+          {troubleshootCommonIssues.map((section, i) => (
             <View key={section.id}>
               {i > 0 && <View style={styles.separator} />}
               <Pressable

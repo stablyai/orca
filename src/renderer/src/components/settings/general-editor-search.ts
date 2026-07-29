@@ -30,6 +30,32 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'auto.components.settings.general.search.editorFontFamily',
+      'Editor Font Family'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.editorFontFamilyDesc',
+      'Font used by file editors and diff views. Leave empty to follow the terminal font.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.e1ee631696', 'editor'),
+      ...translateSearchKeyword('auto.components.settings.general.search.editorFontKw', 'font'),
+      ...translateSearchKeyword('auto.components.settings.general.search.3ca5ab78a5', 'code')
+    ]
+  },
+  {
+    title: translate('auto.components.settings.general.search.e61157e926', 'Editor Word Wrap'),
+    description: translate(
+      'auto.components.settings.general.search.005be5c699',
+      'Wrap long lines in file editors instead of requiring horizontal scrolling.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.e1ee631696', 'editor'),
+      ...translateSearchKeyword('auto.components.settings.general.search.3ca5ab78a5', 'code')
+    ]
+  },
+  {
     title: translate('auto.components.settings.general.search.2760c9933f', 'Default Diff View'),
     description: translate(
       'auto.components.settings.general.search.ecb9415c80',
@@ -77,6 +103,29 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.e3919429c0', 'overview'),
       ...translateSearchKeyword('auto.components.settings.general.search.3ca5ab78a5', 'code'),
       ...translateSearchKeyword('auto.components.settings.general.search.a0014961ae', 'scroll')
+    ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.general.search.d2d2d929c0',
+      'Rich Markdown Spellcheck'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.4497e2e2bb',
+      'Show browser spelling underlines and suggestions while editing rich Markdown.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.f96cdaf37d', 'spellcheck'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.a51d23f4a1',
+        'spell check'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.641358460a', 'spelling'),
+      ...translateSearchKeyword('auto.components.settings.general.search.d05f629d2c', 'markdown'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.d755962089',
+        'red underline'
+      )
     ]
   },
   {

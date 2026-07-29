@@ -30,6 +30,8 @@ describe('isGroupAddress', () => {
     expect(isGroupAddress('@idle')).toBe(true)
     expect(isGroupAddress('@claude')).toBe(true)
     expect(isGroupAddress('@droid')).toBe(true)
+    expect(isGroupAddress('@grok')).toBe(true)
+    expect(isGroupAddress('@cursor')).toBe(true)
     expect(isGroupAddress('@worktree:wt_1')).toBe(true)
   })
 
@@ -168,6 +170,136 @@ describe('resolveGroupAddress', () => {
       const terminals = [makeSummary('term_a'), makeSummary('term_b', { title: 'Claude Code' })]
       const result = resolveGroupAddress('@Claude', 'term_a', terminals, noStatus)
       expect(result).toEqual(['term_b'])
+    })
+
+    it('matches @grok as a standalone title token and excludes sender', () => {
+      const terminals = [
+        makeSummary('term_a', { title: 'Grok' }),
+        makeSummary('term_b', { title: 'GROK CLI' }),
+        makeSummary('term_c', { title: '⠋ Grok' }),
+        makeSummary('term_d', { title: 'ngrok' }),
+        makeSummary('term_e', { title: '/tmp/grok' }),
+        makeSummary('term_f', { title: 'my-grok-worker' }),
+        makeSummary('term_g', { title: 'Codex CLI' })
+      ]
+
+      const result = resolveGroupAddress('@GrOk', 'term_a', terminals, noStatus)
+
+      expect(result).toEqual(['term_b', 'term_c'])
+    })
+
+    // Why: the resolver sees the raw OSC title, and Grok CLI's real working/session
+    // titles carry a trailing " - grok" identity or a spinner-collapsed "⠋ grok"
+    // (see terminal-title-agent-type.ts). Prove those production shapes resolve.
+    it('matches real Grok OSC working and session titles', () => {
+      const terminals = [
+        makeSummary('coordinator', { title: 'Coordinator' }),
+        makeSummary('term_rotating', { title: '⠋ - fix the flaky suite - grok' }),
+        makeSummary('term_collapsed', { title: '⠋ grok' }),
+        makeSummary('term_session', { title: 'Fix the auth bug - grok' })
+      ]
+
+      const result = resolveGroupAddress('@grok', 'coordinator', terminals, noStatus)
+
+      expect(result).toEqual(['term_rotating', 'term_collapsed', 'term_session'])
+    })
+
+    // Why: Windows agent titles can surface the launcher process name (`grok.exe`);
+    // the shared matcher accepts .exe/.cmd/.bat/.ps1 suffixes but still rejects
+    // arbitrary dotted fragments like `grok.py`.
+    it('matches Windows launcher-suffix titles but not arbitrary dotted tokens', () => {
+      const terminals = [
+        makeSummary('coordinator', { title: 'Coordinator' }),
+        makeSummary('term_exe', { title: 'grok.exe' }),
+        makeSummary('term_cmd', { title: 'grok.cmd running' }),
+        makeSummary('term_dotted', { title: 'grok.py' })
+      ]
+
+      const result = resolveGroupAddress('@grok', 'coordinator', terminals, noStatus)
+
+      expect(result).toEqual(['term_exe', 'term_cmd'])
+    })
+
+    // Why: these are the titles cursor-agent natively emits and the ones Orca synthesizes
+    // from Cursor hooks, so each must resolve.
+    it('matches native and Orca-synthesized Cursor titles', () => {
+      const terminals = [
+        makeSummary('coordinator', { title: 'Coordinator' }),
+        makeSummary('term_native', { title: 'Cursor Agent' }),
+        makeSummary('term_working', { title: '⠋ Cursor Agent' }),
+        makeSummary('term_idle', { title: 'Cursor ready' }),
+        makeSummary('term_permission', { title: 'Cursor - action required' })
+      ]
+
+      const result = resolveGroupAddress('@cursor', 'coordinator', terminals, noStatus)
+
+      expect(result).toEqual(['term_native', 'term_working', 'term_idle', 'term_permission'])
+    })
+
+    it('is case-insensitive for @cursor', () => {
+      const terminals = [
+        makeSummary('coordinator', { title: 'Coordinator' }),
+        makeSummary('term_b', { title: 'CURSOR READY' })
+      ]
+
+      const result = resolveGroupAddress('@CuRsOr', 'coordinator', terminals, noStatus)
+
+      expect(result).toEqual(['term_b'])
+    })
+
+    // Why: this is the false positive that a whole-token matcher cannot catch. Claude
+    // and Codex put their task summary in the OSC title, and none of Claude's status
+    // prefixes carries its own name, so "cursor" as ordinary editor vocabulary is the
+    // only agent token such a title has. Routing @cursor there would write into a live
+    // non-Cursor agent's prompt.
+    it('does not match another agent whose task title mentions a text cursor', () => {
+      const terminals = [
+        makeSummary('coordinator', { title: 'Coordinator' }),
+        makeSummary('term_claude_working', {
+          title: '⠋ preserve cursor visibility across replays'
+        }),
+        makeSummary('term_claude_idle', { title: '✳ Fix the text cursor blink' }),
+        makeSummary('term_claude_dot', { title: '. fix cursor position' }),
+        makeSummary('term_claude_star', { title: '* cursor rendering done' }),
+        makeSummary('term_codex', { title: '⠋ Codex: fix cursor offsets' }),
+        makeSummary('term_grok', { title: '⠋ - restoring cursor state - grok' }),
+        makeSummary('term_shell', { title: 'Terminal Cursor and Orca slows down' })
+      ]
+
+      const result = resolveGroupAddress('@cursor', 'coordinator', terminals, noStatus)
+
+      expect(result).toEqual([])
+    })
+
+    // Why: pin the deliberate tradeoff. A renamed Cursor pane outranks its OSC title, so it
+    // is group-unaddressable and resolves to nothing instead of resolving loosely. A silent
+    // miss (address it by handle) is preferred over delivering into another agent's prompt.
+    it('does not match a renamed Cursor terminal or the bare process name', () => {
+      const terminals = [
+        makeSummary('coordinator', { title: 'Coordinator' }),
+        makeSummary('term_renamed', { title: 'Cursor - reviewer' }),
+        makeSummary('term_worker', { title: 'cursor worker 2' }),
+        makeSummary('term_process', { title: 'cursor-agent' })
+      ]
+
+      const result = resolveGroupAddress('@cursor', 'coordinator', terminals, noStatus)
+
+      expect(result).toEqual([])
+    })
+
+    it('does not match cursor paths, hyphenated compounds, or dotted tokens', () => {
+      const terminals = [
+        makeSummary('coordinator', { title: 'Coordinator' }),
+        makeSummary('term_rules', { title: '~/cursor-rules' }),
+        makeSummary('term_path', { title: '/tmp/cursor' }),
+        makeSummary('term_worker', { title: 'my-cursor-worker' }),
+        makeSummary('term_file', { title: 'render-cursor-after-bracketed-paste' }),
+        makeSummary('term_dotted', { title: 'cursor.ts' })
+      ]
+
+      const result = resolveGroupAddress('@cursor', 'coordinator', terminals, noStatus)
+
+      expect(result).toEqual([])
     })
   })
 

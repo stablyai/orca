@@ -47,6 +47,7 @@ const mocks = vi.hoisted(() => {
     openBranchDiff: vi.fn(),
     createEmptySplitGroup: vi.fn(),
     discardRuntimeGitPath: vi.fn(),
+    bulkStageRuntimeGitPaths: vi.fn(),
     refreshGitStatusForWorktree: vi.fn(),
     requestEditorSaveQuiesce: vi.fn(),
     notifyEditorExternalFileChange: vi.fn()
@@ -85,7 +86,8 @@ vi.mock('@/runtime/runtime-git-client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
-    discardRuntimeGitPath: mocks.calls.discardRuntimeGitPath
+    discardRuntimeGitPath: mocks.calls.discardRuntimeGitPath,
+    bulkStageRuntimeGitPaths: mocks.calls.bulkStageRuntimeGitPaths
   }
 })
 
@@ -140,6 +142,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
   vi.clearAllMocks()
   mocks.calls.createEmptySplitGroup.mockReturnValue('group-2')
   mocks.calls.discardRuntimeGitPath.mockResolvedValue(undefined)
+  mocks.calls.bulkStageRuntimeGitPaths.mockResolvedValue(undefined)
   mocks.calls.refreshGitStatusForWorktree.mockResolvedValue(undefined)
   mocks.calls.requestEditorSaveQuiesce.mockResolvedValue(undefined)
   mocks.state = {
@@ -437,13 +440,76 @@ describe('SourceControl preview row opens', () => {
     const row = container.querySelector<HTMLDivElement>(
       '[data-source-control-path="packages/nested"]'
     )
-    expect(row?.textContent).toContain('Submodule changes - stage inside submodule')
+    expect(row?.textContent).toContain('Stage inside submodule')
+    expect(
+      row?.querySelector('[title*="cannot stage file changes inside a submodule"]')
+    ).not.toBeNull()
 
-    const stageButton = row?.querySelector<HTMLButtonElement>(
-      'button[aria-label="Stage these changes inside the submodule"]'
+    expect(row?.querySelector<HTMLButtonElement>('button[aria-label="Stage"]')).toBeNull()
+  })
+
+  it('does not render a commit-area Stage All primary for submodule worktree-only rows', () => {
+    resetState({
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [
+          gitEntry({
+            path: 'june-11th-launch',
+            submodule: { commitChanged: false, trackedChanges: true, untrackedChanges: false }
+          })
+        ]
+      }
+    })
+    renderSourceControl()
+
+    const row = container.querySelector<HTMLDivElement>(
+      '[data-source-control-path="june-11th-launch"]'
     )
-    expect(stageButton).not.toBeNull()
-    expect(stageButton?.getAttribute('aria-disabled')).toBe('true')
+    expect(row?.textContent).toContain('Stage inside submodule')
+
+    const stageAllButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Stage All'
+    )
+    expect(stageAllButton).toBeUndefined()
+
+    const commitButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Commit'
+    )
+    expect(commitButton).toBeDefined()
+    expect(commitButton?.disabled).toBe(true)
+
+    act(() => {
+      commitButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(mocks.calls.bulkStageRuntimeGitPaths).not.toHaveBeenCalled()
+  })
+
+  it('keeps the commit-area Stage All primary for changed submodule gitlinks', async () => {
+    resetState({
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [
+          gitEntry({
+            path: 'packages/nested',
+            submodule: { commitChanged: true, trackedChanges: false, untrackedChanges: false }
+          })
+        ]
+      }
+    })
+    renderSourceControl()
+
+    const stageAllButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Stage All'
+    )
+    expect(stageAllButton).toBeDefined()
+    expect(stageAllButton?.disabled).toBe(false)
+
+    await act(async () => {
+      stageAllButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+    expect(mocks.calls.bulkStageRuntimeGitPaths).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: mocks.activeWorktree.id, worktreePath: '/repo/wt' }),
+      ['packages/nested']
+    )
   })
 
   it('passes preview=true when a plain branch row click opens a branch diff tab', () => {

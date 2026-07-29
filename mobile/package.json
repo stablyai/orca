@@ -7,7 +7,9 @@
     "start": "node scripts/start-expo.mjs",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "postinstall": "node scripts/build-terminal-webview-engine.mjs",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "lint": "oxlint",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
@@ -16,10 +18,14 @@
     "start:emulator": "node scripts/start-emulator.mjs"
   },
   "dependencies": {
+    "@noble/hashes": "1.8.0",
     "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",
     "@react-native-async-storage/async-storage": "^2.2.0",
+    "@xterm/addon-unicode11": "0.10.0-beta.285",
+    "@xterm/addon-webgl": "0.20.0-beta.284",
+    "@xterm/xterm": "6.1.0-beta.285",
     "buffer": "^6.0.3",
-    "expo": "^55.0.23",
+    "expo": "^55.0.27",
     "expo-build-properties": "^55.0.13",
     "expo-camera": "^55.0.18",
     "expo-clipboard": "^55.0.13",
@@ -31,6 +37,7 @@
     "expo-haptics": "^55.0.14",
     "expo-image-manipulator": "^55.0.17",
     "expo-image-picker": "^55.0.20",
+    "expo-keep-awake": "~55.0.8",
     "expo-linking": "^55.0.15",
     "expo-modules-core": "~55.0.25",
     "expo-network": "~55.0.14",
@@ -60,13 +67,22 @@
   "devDependencies": {
     "@types/react": "^19.2.14",
     "@types/react-native": "^0.73.0",
+    "@types/react-test-renderer": "19.1.0",
     "@types/ws": "^8.18.1",
+    "acorn": "8.15.0",
+    "esbuild": "0.25.4",
     "expo-module-scripts": "^55.0.2",
     "oxfmt": "^0.52.0",
     "oxlint": "^1.71.0",
+    "react-test-renderer": "19.2.6",
     "tsx": "^4.22.4",
-    "typescript": "^5.9.3",
+    "typescript": "6.0.3",
     "vite": "^8.0.16",
     "vitest": "^4.1.9"
+  },
+  "pnpm": {
+    "overrides": {
+      "xcode>uuid": "11.1.1"
+    }
   }
 }

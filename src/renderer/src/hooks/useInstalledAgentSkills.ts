@@ -7,18 +7,8 @@ import type {
 } from '../../../shared/skills'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import { markOrchestrationSetupComplete } from '@/lib/orchestration-setup-state'
-import {
-  discoverInstalledAgentSkills,
-  getCachedSkillDiscovery,
-  getRuntimeScopedSkillDiscoveryKey,
-  getSkillDiscoveryTargetKey,
-  INSTALLED_AGENT_SKILLS_CHANGED_EVENT,
-  resetSkillDiscoveryCacheForTests
-} from './installed-agent-skill-discovery'
-import { useActiveSkillDiscoveryRuntimeTarget } from './use-active-skill-discovery-runtime-target'
+import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
 import { useMountedRef } from './useMountedRef'
-
-export { notifyInstalledAgentSkillsChanged } from './installed-agent-skill-discovery'
 
 export const GLOBAL_AGENT_SKILL_SOURCE_KINDS = [
   'home'
@@ -42,22 +32,22 @@ export type InstalledAgentSkillState = {
   refresh: () => Promise<boolean>
 }
 
-/** Lower-case and trim a skill name for case-insensitive matching. */
+let cachedDiscoveryByTarget = new Map<string, SkillDiscoveryResult>()
+let pendingDiscoveryByTarget = new Map<string, Promise<SkillDiscoveryResult>>()
+let pendingDiscoverySatisfiesForcedRefreshByTarget = new Map<string, boolean>()
+
 function normalizeSkillName(value: string): string {
   return value.trim().toLowerCase()
 }
 
-/** Whether a name refers to the orchestration skill. */
 function isOrchestrationSkillName(skillName: string): boolean {
   return normalizeSkillName(skillName) === ORCHESTRATION_SKILL_NAME
 }
 
-/** Last path segment, tolerant of both `/` and `\` separators. */
 function basenameFromPath(pathValue: string): string {
-  return pathValue.split(/[\\/]/).filter(Boolean).at(-1) ?? pathValue
+  return pathValue.split(/[\\/]/).findLast(Boolean) ?? pathValue
 }
 
-/** Whether `skills` contains an installed skill named `skillName`. */
 export function hasInstalledAgentSkill(
   skills: readonly DiscoveredSkill[],
   skillName: string,
@@ -66,7 +56,6 @@ export function hasInstalledAgentSkill(
   return hasInstalledAgentSkillNamed(skills, [skillName], options)
 }
 
-/** Whether `skills` has an installed skill matching any of `skillNames` (by name or directory basename), optionally restricted to `sourceKinds`. */
 export function hasInstalledAgentSkillNamed(
   skills: readonly DiscoveredSkill[],
   skillNames: readonly string[],
@@ -87,14 +76,114 @@ export function hasInstalledAgentSkillNamed(
   })
 }
 
+export function notifyInstalledAgentSkillsChanged(): void {
+  cachedDiscoveryByTarget.clear()
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(INSTALLED_AGENT_SKILLS_CHANGED_EVENT))
+  }
+}
+
+function normalizeSkillDiscoveryTarget(
+  target: SkillDiscoveryTarget | undefined
+): SkillDiscoveryTarget | undefined {
+  const projectRuntime = target?.projectRuntime
+  if (projectRuntime) {
+    if (projectRuntime.status === 'repair-required') {
+      return { projectRuntime }
+    }
+    if (projectRuntime.runtime.kind === 'wsl') {
+      return {
+        runtime: 'wsl',
+        wslDistro: projectRuntime.runtime.distro,
+        projectRuntime
+      }
+    }
+    return {
+      runtime: 'host',
+      projectRuntime
+    }
+  }
+
+  if (target?.runtime !== 'wsl') {
+    return undefined
+  }
+  return { runtime: 'wsl', wslDistro: target.wslDistro?.trim() || null }
+}
+
+function getSkillDiscoveryTargetKey(target: SkillDiscoveryTarget | undefined): string {
+  if (target?.projectRuntime) {
+    return target.projectRuntime.status === 'resolved'
+      ? target.projectRuntime.runtime.cacheKey
+      : target.projectRuntime.repair.cacheKey
+  }
+  const normalizedTarget = normalizeSkillDiscoveryTarget(target)
+  return normalizedTarget?.runtime === 'wsl' ? `wsl:${normalizedTarget.wslDistro ?? ''}` : 'host'
+}
+
+function startInstalledAgentSkillDiscovery(
+  force: boolean,
+  target: SkillDiscoveryTarget | undefined
+): Promise<SkillDiscoveryResult> {
+  const key = getSkillDiscoveryTargetKey(target)
+  const normalizedTarget = normalizeSkillDiscoveryTarget(target)
+  const discovery = window.api.skills
+    .discover(normalizedTarget)
+    .then((result) => {
+      cachedDiscoveryByTarget.set(key, result)
+      return result
+    })
+    .finally(() => {
+      if (pendingDiscoveryByTarget.get(key) === discovery) {
+        pendingDiscoveryByTarget.delete(key)
+        pendingDiscoverySatisfiesForcedRefreshByTarget.delete(key)
+      }
+    })
+  pendingDiscoveryByTarget.set(key, discovery)
+  pendingDiscoverySatisfiesForcedRefreshByTarget.set(key, force)
+  return discovery
+}
+
+async function discoverInstalledAgentSkills(
+  force: boolean,
+  target?: SkillDiscoveryTarget
+): Promise<SkillDiscoveryResult> {
+  const key = getSkillDiscoveryTargetKey(target)
+  const cachedDiscovery = cachedDiscoveryByTarget.get(key)
+  if (!force && cachedDiscovery) {
+    return cachedDiscovery
+  }
+
+  const inFlightDiscovery = pendingDiscoveryByTarget.get(key)
+  if (inFlightDiscovery) {
+    if (!force || pendingDiscoverySatisfiesForcedRefreshByTarget.get(key)) {
+      return inFlightDiscovery
+    }
+    try {
+      await inFlightDiscovery
+    } catch {
+      // Why: an explicit re-check should still read current disk state even if
+      // the older background scan failed.
+    }
+    const nextPendingDiscovery = pendingDiscoveryByTarget.get(key)
+    if (nextPendingDiscovery && nextPendingDiscovery !== inFlightDiscovery) {
+      return nextPendingDiscovery
+    }
+  }
+
+  return startInstalledAgentSkillDiscovery(force, target)
+}
+
 export const _installedAgentSkillDiscoveryInternalsForTests = {
   discoverInstalledAgentSkills,
   getSkillDiscoveryTargetKey,
   isOrchestrationSkillName,
-  reset: resetSkillDiscoveryCacheForTests
+  reset(): void {
+    cachedDiscoveryByTarget = new Map()
+    pendingDiscoveryByTarget = new Map()
+    pendingDiscoverySatisfiesForcedRefreshByTarget = new Map()
+  }
 }
 
-/** Track whether a single named skill is installed on the active runtime. */
 export function useInstalledAgentSkill(
   skillName: string,
   options: InstalledAgentSkillOptions = {}
@@ -102,7 +191,6 @@ export function useInstalledAgentSkill(
   return useInstalledAgentSkillNames([skillName], options)
 }
 
-/** Track whether any of `skillNames` is installed on the active runtime, with loading/error state and a manual refresh. */
 export function useInstalledAgentSkillNames(
   skillNames: readonly string[],
   options: InstalledAgentSkillOptions = {}
@@ -110,9 +198,8 @@ export function useInstalledAgentSkillNames(
   const { enabled = true, discoveryTarget, sourceKinds } = options
   const skillNamesKey = skillNames.map(normalizeSkillName).join('\n')
   const candidateSkillNames = useMemo(() => skillNamesKey.split('\n'), [skillNamesKey])
-  const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
-  const discoveryTargetKey = getRuntimeScopedSkillDiscoveryKey(runtimeTarget, discoveryTarget)
-  const cachedDiscovery = getCachedSkillDiscovery(discoveryTargetKey)
+  const discoveryTargetKey = getSkillDiscoveryTargetKey(discoveryTarget)
+  const cachedDiscovery = cachedDiscoveryByTarget.get(discoveryTargetKey) ?? null
   const [result, setResult] = useState<SkillDiscoveryResult | null>(cachedDiscovery)
   const [loading, setLoading] = useState(enabled && !cachedDiscovery)
   const [error, setError] = useState<string | null>(null)
@@ -130,7 +217,7 @@ export function useInstalledAgentSkillNames(
     stateResetInputRef.current.discoveryTargetKey !== discoveryTargetKey ||
     stateResetInputRef.current.enabled !== enabled
   ) {
-    const nextCachedDiscovery = getCachedSkillDiscovery(discoveryTargetKey)
+    const nextCachedDiscovery = cachedDiscoveryByTarget.get(discoveryTargetKey) ?? null
     const nextLoading = enabled && !nextCachedDiscovery
     stateResetInputRef.current = { discoveryTargetKey, enabled }
     resultForRender = nextCachedDiscovery
@@ -166,7 +253,7 @@ export function useInstalledAgentSkillNames(
       })
       let installedAfterRefresh = false
       try {
-        const next = await discoverInstalledAgentSkills(force, discoveryTarget, runtimeTarget)
+        const next = await discoverInstalledAgentSkills(force, discoveryTarget)
         installedAfterRefresh = hasInstalledAgentSkillNamed(next.skills, candidateSkillNames, {
           sourceKinds
         })
@@ -189,15 +276,7 @@ export function useInstalledAgentSkillNames(
       }
       return installedAfterRefresh
     },
-    [
-      candidateSkillNames,
-      discoveryTarget,
-      discoveryTargetKey,
-      enabled,
-      mountedRef,
-      runtimeTarget,
-      sourceKinds
-    ]
+    [candidateSkillNames, discoveryTarget, discoveryTargetKey, enabled, mountedRef, sourceKinds]
   )
 
   useEffect(() => {

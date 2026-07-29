@@ -258,9 +258,9 @@ describe('updater mac install handoff', () => {
 
       expect(reportDownloaded).not.toHaveBeenCalled()
       await vi.waitFor(() => {
+        // Why: recordUpdaterLifecycle packs metadata into one console line.
         expect(warn).toHaveBeenCalledWith(
-          '[updater] Deferred macOS install handoff failed:',
-          'Error'
+          '[updater] Deferred macOS install handoff failed {"errorType":"Error"}'
         )
       })
       expect(JSON.stringify(warn.mock.calls)).not.toContain('handoff-secret')

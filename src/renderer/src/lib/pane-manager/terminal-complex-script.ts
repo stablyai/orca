@@ -281,3 +281,31 @@ export function terminalOutputContainsEastAsianRendererRisk(data: string): boole
   }
   return false
 }
+
+export type WindowsEastAsianRefreshState = {
+  // Why: recent IME commits are a Windows-client renderer issue, while agent
+  // output repainting is only forced for native ConPTY to avoid remote costs.
+  isWindowsClient: boolean
+  isNativeWindowsConpty: boolean
+  hadRecentInput: boolean
+  maxInteractiveRedrawChars: number
+}
+
+/**
+ * Whether a Windows foreground chunk needs a viewport refresh because it carries
+ * East Asian double-width glyphs the local DOM renderer can paint over stale cells.
+ */
+export function windowsEastAsianOutputPrefersRenderRefresh(
+  data: string,
+  state: WindowsEastAsianRefreshState
+): boolean {
+  const recentInputRefresh = state.isWindowsClient && state.hadRecentInput
+  const agentOutputRefresh = state.isNativeWindowsConpty
+  if (!recentInputRefresh && !agentOutputRefresh) {
+    return false
+  }
+  if (data.length > state.maxInteractiveRedrawChars) {
+    return false
+  }
+  return terminalOutputContainsEastAsianRendererRisk(data)
+}

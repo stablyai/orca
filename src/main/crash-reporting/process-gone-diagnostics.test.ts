@@ -71,6 +71,7 @@ describe('process gone diagnostics', () => {
         processType: 'Utility',
         reason: 'killed',
         exitCode: 1,
+        expectedTeardown: 'app-shutdown',
         details: {
           name: 'Network Service',
           serviceName: 'network.mojom.NetworkService',
@@ -82,6 +83,7 @@ describe('process gone diagnostics', () => {
       processType: 'Utility',
       reason: 'killed',
       exitCode: 1,
+      expectedTeardown: 'app-shutdown',
       name: 'Network Service',
       serviceName: 'network.mojom.NetworkService'
     })

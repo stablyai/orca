@@ -1,8 +1,13 @@
 import type { Repo, Worktree } from '../../../../shared/types'
 import {
-  getAiVaultResumeWorkspaceTargetStatus,
-  isSupportedAiVaultResumeTargetStatus
+  canResumeAiVaultSessionOnTarget,
+  getAiVaultResumeWorkspaceExecutionHostId,
+  getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
+import {
+  isAiVaultSessionResumableContent,
+  type AiVaultSession
+} from '../../../../shared/ai-vault-types'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -33,6 +38,8 @@ export type AiVaultSessionResumeActions = {
 }
 
 export function resolveAiVaultSessionResumeState(args: {
+  sessionFilePath: string | null
+  sessionExecutionHostId?: AiVaultSession['executionHostId'] | null
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   activeWorktreeId: string | null
   worktrees: readonly Worktree[]
@@ -54,6 +61,8 @@ export function resolveAiVaultSessionResumeState(args: {
 
   for (const worktreeId of candidateWorktreeIds) {
     const targetId = resolveSupportedResumeWorktreeId({
+      sessionFilePath: args.sessionFilePath,
+      sessionExecutionHostId: args.sessionExecutionHostId,
       worktreeId,
       targetState
     })
@@ -75,6 +84,8 @@ export function resolveAiVaultSessionResumeState(args: {
 }
 
 export function resolveAiVaultSessionResumeActions(args: {
+  sessionFilePath: string | null
+  sessionExecutionHostId?: AiVaultSession['executionHostId'] | null
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   activeWorktreeId: string | null
   worktrees: readonly Worktree[]
@@ -88,10 +99,14 @@ export function resolveAiVaultSessionResumeActions(args: {
   const targetState = resolveAiVaultResumeTargetState(args)
 
   const sessionTargetId = resolveSupportedResumeWorktreeId({
+    sessionFilePath: args.sessionFilePath,
+    sessionExecutionHostId: args.sessionExecutionHostId,
     worktreeId: sessionWorktreeId,
     targetState
   })
   const activeTargetId = resolveSupportedResumeWorktreeId({
+    sessionFilePath: args.sessionFilePath,
+    sessionExecutionHostId: args.sessionExecutionHostId,
     worktreeId:
       args.activeWorktreeId && args.activeWorktreeId !== sessionWorktreeId
         ? args.activeWorktreeId
@@ -136,6 +151,8 @@ export function isKnownAiVaultResumeWorkspaceTarget(
 }
 
 function resolveSupportedResumeWorktreeId(args: {
+  sessionFilePath: string | null
+  sessionExecutionHostId?: AiVaultSession['executionHostId'] | null
   worktreeId: string | null
   targetState: AiVaultSessionResumeTargetState
 }): string | null {
@@ -148,7 +165,18 @@ function resolveSupportedResumeWorktreeId(args: {
   }
 
   const targetStatus = getAiVaultResumeWorkspaceTargetStatus(args.targetState, args.worktreeId)
-  if (!isSupportedAiVaultResumeTargetStatus(targetStatus)) {
+  const targetExecutionHostId = getAiVaultResumeWorkspaceExecutionHostId(
+    args.targetState,
+    args.worktreeId
+  )
+  if (
+    !canResumeAiVaultSessionOnTarget({
+      sessionFilePath: args.sessionFilePath,
+      sessionExecutionHostId: args.sessionExecutionHostId,
+      targetStatus,
+      targetExecutionHostId
+    })
+  ) {
     return null
   }
 
@@ -172,6 +200,21 @@ function resolveAiVaultResumeTargetState(args: {
     projectGroups: [],
     repos: [...args.repos],
     worktreesByRepo
+  }
+}
+
+// Resume needs actual conversation content: a zero-turn transcript would resume
+// into an empty session. Workspace-target blocking only disables in-app resume;
+// copying the command stays available for blocked-but-real sessions, so the copy
+// affordance is gated on content alone.
+export function aiVaultSessionRowResumeGating(
+  session: Pick<AiVaultSession, 'messageCount' | 'previewMessages'>,
+  state: Pick<AiVaultSessionResumeState, 'blocked'> | null
+): { resumeDisabled: boolean; canCopyResumeCommand: boolean } {
+  const hasResumableContent = isAiVaultSessionResumableContent(session)
+  return {
+    resumeDisabled: (state?.blocked ?? true) || !hasResumableContent,
+    canCopyResumeCommand: hasResumableContent
   }
 }
 

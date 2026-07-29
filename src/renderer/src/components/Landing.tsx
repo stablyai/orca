@@ -26,7 +26,8 @@ type ShortcutItem = {
   action: string
 }
 
-const ORCA_STARGAZERS_URL = 'https://github.com/stablyai/orca/stargazers'
+// Do not deep-link to /stargazers: GitHub 404s that page for users without repo write access.
+const ORCA_GITHUB_URL = 'https://github.com/stablyai/orca'
 
 type StarState = 'loading' | 'starred' | 'not-starred' | 'web-fallback' | 'hidden'
 
@@ -72,7 +73,7 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
       return
     }
     if (state === 'web-fallback') {
-      await window.api.shell.openUrl(ORCA_STARGAZERS_URL)
+      await window.api.shell.openUrl(ORCA_GITHUB_URL)
       return
     }
     if (state !== 'not-starred') {
@@ -362,8 +363,8 @@ export default function Landing(): React.JSX.Element {
               onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
             >
               <GitBranchPlus className="size-3.5" />
-              {translate('auto.components.Landing.76a95f7f47', 'Create')}
-              {createTargetLabel}
+              {translate('auto.components.Landing.76a95f7f47', 'Create')}{' '}
+              {createTargetLabel.toLowerCase()}
             </button>
           </div>
 

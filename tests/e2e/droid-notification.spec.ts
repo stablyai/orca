@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: this e2e shares one Electron notification spy and hook endpoint setup across related notification regressions. */
 import { test, expect } from './helpers/orca-app'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { getRendererTitleLog, installRendererTitleLog } from './helpers/terminal-title-log'

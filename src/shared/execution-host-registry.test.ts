@@ -57,6 +57,26 @@ describe('execution host registry', () => {
     ])
   })
 
+  it('hides runtime-owned (ephemeral VM) SSH targets from repo-derived hosts', () => {
+    const hosts = buildExecutionHostRegistry({
+      // A VM-backed repo carries the hidden runtime-owned target on both fields.
+      repos: [
+        {
+          connectionId: 'runtime-ssh-orca-instance-1',
+          executionHostId: 'ssh:runtime-ssh-orca-instance-1'
+        },
+        { connectionId: 'repo-ssh' }
+      ],
+      settings: { activeRuntimeEnvironmentId: null },
+      // Even if a stale label leaked in, it must still be filtered out.
+      sshTargetLabels: new Map([['runtime-ssh-orca-instance-1', 'Hidden VM']])
+    })
+
+    expect(hosts.some((h) => h.id.includes('runtime-ssh-orca-instance-1'))).toBe(false)
+    // The ordinary repo SSH host is still present.
+    expect(hosts.some((h) => h.id === 'ssh:repo-ssh')).toBe(true)
+  })
+
   it('adds saved runtime environments and preserves compatibility state per host', () => {
     const hosts = buildExecutionHostRegistry({
       repos: [],
@@ -163,6 +183,40 @@ describe('execution host registry', () => {
         remoteControlState: { state: 'reconnecting', subscriptionCount: 2 }
       }
     ])
+  })
+
+  it('preserves runtime environment source on runtime hosts', () => {
+    const hosts = buildExecutionHostRegistry({
+      repos: [],
+      settings: { activeRuntimeEnvironmentId: null },
+      runtimeEnvironments: [{ id: 'vm-runtime', name: 'VM Runtime', source: 'ephemeral-vm' }],
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'vm-runtime',
+          {
+            status: {
+              runtimeId: 'runtime-vm',
+              rendererGraphEpoch: 1,
+              graphStatus: 'ready',
+              authoritativeWindowId: 1,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+              minCompatibleRuntimeClientVersion: 1,
+              capabilities: ['project-host-setup.v1']
+            }
+          }
+        ]
+      ])
+    })
+
+    expect(hosts).toContainEqual(
+      expect.objectContaining({
+        id: 'runtime:vm-runtime',
+        kind: 'runtime',
+        source: 'ephemeral-vm'
+      })
+    )
   })
 
   it('applies per-host display-label overrides to derived labels', () => {

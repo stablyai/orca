@@ -22,6 +22,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentGetStatus = vi.fn()
 const settingsSet = vi.fn().mockResolvedValue(undefined)
+const setActiveRuntimeEnvironmentPreference = vi.fn().mockResolvedValue(undefined)
 const worktreesListDetected = vi.fn()
 
 const env2Lineage: WorktreeLineage = {
@@ -132,9 +133,73 @@ beforeEach(() => {
   })
   vi.stubGlobal('window', {
     api: {
-      settings: { set: settingsSet },
+      settings: { set: settingsSet, setActiveRuntimeEnvironmentPreference },
       runtimeEnvironments: { call: runtimeEnvironmentCall, getStatus: runtimeEnvironmentGetStatus },
       worktrees: { listDetected: worktreesListDetected }
+    }
+  })
+})
+
+describe('createSettingsSlice checked persistence', () => {
+  it('stores the authoritative settings after a successful checked update', async () => {
+    const authoritativeSettings = {
+      pluginSystemEnabled: true,
+      notifications: {}
+    } as unknown as NonNullable<AppState['settings']>
+    settingsSet.mockResolvedValueOnce(authoritativeSettings)
+    const store = createTestStore()
+    store.setState({
+      settings: {
+        pluginSystemEnabled: false,
+        notifications: {}
+      } as unknown as AppState['settings']
+    })
+
+    await expect(
+      store.getState().updateSettingsOrThrow({ pluginSystemEnabled: true })
+    ).resolves.toBeUndefined()
+
+    expect(settingsSet).toHaveBeenCalledWith({ pluginSystemEnabled: true })
+    expect(store.getState().settings).toBe(authoritativeSettings)
+  })
+
+  it('rejects a failed checked update without changing local settings', async () => {
+    const persistenceError = new Error('settings IPC failed')
+    const currentSettings = {
+      pluginSystemEnabled: false,
+      notifications: {}
+    } as unknown as NonNullable<AppState['settings']>
+    settingsSet.mockRejectedValueOnce(persistenceError)
+    const store = createTestStore()
+    store.setState({ settings: currentSettings })
+
+    await expect(
+      store.getState().updateSettingsOrThrow({ pluginSystemEnabled: true })
+    ).rejects.toBe(persistenceError)
+
+    expect(store.getState().settings).toBe(currentSettings)
+  })
+
+  it('keeps the existing update action best-effort and logs persistence failures', async () => {
+    const persistenceError = new Error('settings IPC failed')
+    const currentSettings = {
+      pluginSystemEnabled: false,
+      notifications: {}
+    } as unknown as NonNullable<AppState['settings']>
+    settingsSet.mockRejectedValueOnce(persistenceError)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const store = createTestStore()
+    store.setState({ settings: currentSettings })
+
+    try {
+      await expect(
+        store.getState().updateSettings({ pluginSystemEnabled: true })
+      ).resolves.toBeUndefined()
+
+      expect(consoleError).toHaveBeenCalledWith('Failed to update settings:', persistenceError)
+      expect(store.getState().settings).toBe(currentSettings)
+    } finally {
+      consoleError.mockRestore()
     }
   })
 })
@@ -242,7 +307,7 @@ describe('createSettingsSlice runtime switching', () => {
       editorDrafts: { '/env-1/repo/stale.md': 'stale' },
       markdownViewMode: { '/env-1/repo/stale.md': 'rich' },
       editorViewMode: { '/env-1/repo/stale.md': 'changes' },
-      markdownFrontmatterVisible: { '/env-1/repo/stale.md': true },
+      markdownFrontmatterVisible: { '/env-1/repo/stale.md': false },
       editorCursorLine: { '/env-1/repo/stale.md': 4 },
       showDotfilesByWorktree: { 'repo-env-1::/env-1/repo': false },
       gitIgnoredPathsByWorktree: { 'repo-env-1::/env-1/repo': ['dist/'] },
@@ -251,9 +316,11 @@ describe('createSettingsSlice runtime switching', () => {
       jiraIssueCache: { 'JIRA-1': { data: { key: 'JIRA-1' } as never, fetchedAt: Date.now() } }
     })
 
-    await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(true)
+    await expect(store.getState().setActiveRuntimeEnvironmentPreference('env-2')).resolves.toBe(
+      true
+    )
 
-    expect(settingsSet).toHaveBeenCalledWith({ activeRuntimeEnvironmentId: 'env-2' })
+    expect(setActiveRuntimeEnvironmentPreference).toHaveBeenCalledWith({ environmentId: 'env-2' })
     expect(runtimeEnvironmentGetStatus).toHaveBeenCalledWith({
       selector: 'env-2',
       timeoutMs: 15_000
@@ -300,7 +367,7 @@ describe('createSettingsSlice runtime switching', () => {
     expect(store.getState().markdownViewMode).toEqual({ '/env-1/repo/stale.md': 'rich' })
     expect(store.getState().editorViewMode).toEqual({ '/env-1/repo/stale.md': 'changes' })
     expect(store.getState().markdownFrontmatterVisible).toEqual({
-      '/env-1/repo/stale.md': true
+      '/env-1/repo/stale.md': false
     })
     expect(store.getState().editorCursorLine).toEqual({ '/env-1/repo/stale.md': 4 })
     expect(store.getState().showDotfilesByWorktree).toEqual({ 'repo-env-1::/env-1/repo': false })
@@ -372,9 +439,11 @@ describe('createSettingsSlice runtime switching', () => {
       }
     })
 
-    await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(true)
+    await expect(store.getState().setActiveRuntimeEnvironmentPreference('env-2')).resolves.toBe(
+      true
+    )
 
-    expect(settingsSet).toHaveBeenCalledWith({ activeRuntimeEnvironmentId: 'env-2' })
+    expect(setActiveRuntimeEnvironmentPreference).toHaveBeenCalledWith({ environmentId: 'env-2' })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ selector: 'env-1', method: 'terminal.close' })
     )
@@ -437,7 +506,9 @@ describe('createSettingsSlice runtime switching', () => {
       }
     })
 
-    await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(true)
+    await expect(store.getState().setActiveRuntimeEnvironmentPreference('env-2')).resolves.toBe(
+      true
+    )
 
     // No teardown RPC was issued against the previous host's live resources.
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
@@ -496,9 +567,11 @@ describe('createSettingsSlice runtime switching', () => {
       editorDrafts: { '/env-1/repo/dirty.md': 'draft' }
     })
 
-    await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(true)
+    await expect(store.getState().setActiveRuntimeEnvironmentPreference('env-2')).resolves.toBe(
+      true
+    )
 
-    expect(settingsSet).toHaveBeenCalledWith({ activeRuntimeEnvironmentId: 'env-2' })
+    expect(setActiveRuntimeEnvironmentPreference).toHaveBeenCalledWith({ environmentId: 'env-2' })
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
       expect.objectContaining({ selector: 'env-2', method: 'repo.list' })
     )
@@ -520,9 +593,11 @@ describe('createSettingsSlice runtime switching', () => {
       ptyIdsByTabId: { tab1: ['remote:env-1@@terminal-a'] }
     })
 
-    await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(false)
+    await expect(store.getState().setActiveRuntimeEnvironmentPreference('env-2')).resolves.toBe(
+      false
+    )
 
-    expect(settingsSet).not.toHaveBeenCalled()
+    expect(setActiveRuntimeEnvironmentPreference).not.toHaveBeenCalled()
     expect(runtimeEnvironmentGetStatus).toHaveBeenCalledWith({
       selector: 'env-2',
       timeoutMs: 15_000
@@ -558,9 +633,11 @@ describe('createSettingsSlice runtime switching', () => {
       openFiles: []
     })
 
-    await expect(store.getState().switchRuntimeEnvironment('env-old')).resolves.toBe(false)
+    await expect(store.getState().setActiveRuntimeEnvironmentPreference('env-old')).resolves.toBe(
+      false
+    )
 
-    expect(settingsSet).not.toHaveBeenCalled()
+    expect(setActiveRuntimeEnvironmentPreference).not.toHaveBeenCalled()
     expect(runtimeEnvironmentGetStatus).toHaveBeenCalledWith({
       selector: 'env-old',
       timeoutMs: 15_000

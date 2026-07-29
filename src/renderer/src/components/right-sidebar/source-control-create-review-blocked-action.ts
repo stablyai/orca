@@ -66,6 +66,10 @@ export function resolveBlockedCreateReviewNoticeMessage(
     case 'existing_review':
     case 'fork_head_unsupported':
     case 'unsupported_provider':
+    // Why: base_not_on_remote is a create-time hard failure surfaced as an error
+    // result, not an inline-actionable eligibility state, so it is non-clickable.
+    // falls through
+    case 'base_not_on_remote':
     case null:
       return null
   }

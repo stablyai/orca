@@ -2,6 +2,11 @@ import { FIRST_PANE_ID } from '../../../shared/pane-key'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../../../shared/types'
 
+export type RuntimePaneTitleLeafResolution = {
+  title: string | null
+  hasAnyPaneTitle: boolean
+}
+
 function getLeftmostLeafId(node: TerminalPaneLayoutNode): string {
   return node.type === 'leaf' ? node.leafId : getLeftmostLeafId(node.first)
 }
@@ -55,34 +60,48 @@ export function resolveRuntimePaneTitleForLeaf(
   paneTitles: Record<number, string> | undefined,
   leafId: string
 ): string | null {
+  return resolveRuntimePaneTitleLeafResolution(tabLayout, paneTitles, leafId).title
+}
+
+export function resolveRuntimePaneTitleLeafResolution(
+  tabLayout: { root?: TerminalLayoutSnapshot['root'] } | undefined,
+  paneTitles: Record<number, string> | undefined,
+  leafId: string
+): RuntimePaneTitleLeafResolution {
   if (!paneTitles) {
-    return null
+    return { title: null, hasAnyPaneTitle: false }
   }
 
-  const titleEntries = Object.entries(paneTitles)
-  if (titleEntries.length === 0) {
-    return null
-  }
+  const titlesByPaneId = paneTitles as Record<string, string>
+  let firstTitle: string | null = null
+  let hasOnePaneTitle = false
+  let hasMultiplePaneTitles = false
 
-  if (tabLayout?.root) {
-    for (const [runtimePaneId, title] of titleEntries) {
-      if (resolveRuntimePaneTitleLeafId(tabLayout, runtimePaneId) === leafId) {
-        return title
-      }
+  for (const runtimePaneId in titlesByPaneId) {
+    if (!Object.prototype.hasOwnProperty.call(titlesByPaneId, runtimePaneId)) {
+      continue
     }
-    return null
-  }
 
-  if (titleEntries.length === 1) {
-    return titleEntries[0][1]
-  }
+    const title = titlesByPaneId[runtimePaneId]
+    if (hasOnePaneTitle) {
+      hasMultiplePaneTitles = true
+    } else {
+      firstTitle = title
+      hasOnePaneTitle = true
+    }
 
-  for (const [runtimePaneId, title] of titleEntries) {
     if (resolveRuntimePaneTitleLeafId(tabLayout, runtimePaneId) === leafId) {
-      return title
+      return { title, hasAnyPaneTitle: true }
     }
   }
-  return null
+
+  // Why: without a layout root, only a single reported pane title can be
+  // attributed; any pane title still suppresses stale tab-title fallback.
+  if (!tabLayout?.root && hasOnePaneTitle && !hasMultiplePaneTitles) {
+    return { title: firstTitle, hasAnyPaneTitle: true }
+  }
+
+  return { title: null, hasAnyPaneTitle: hasOnePaneTitle }
 }
 
 export function resolveRuntimePaneTitleLeafIdFromRoot(

@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer } from 'ws'
 import { encodePairingOffer, type PairingOffer } from '../../shared/pairing'
 import {
@@ -13,17 +13,24 @@ import {
   publicKeyToBase64
 } from '../../shared/e2ee-crypto'
 import { RuntimeClient } from './client'
+import { launchOrcaApp } from './launch'
 import { addEnvironmentFromPairingCode } from './environments'
 import { RuntimeClientError } from './types'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-  RUNTIME_PROTOCOL_VERSION
+  RUNTIME_PROTOCOL_VERSION,
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
+
+vi.mock('./launch', () => ({
+  launchOrcaApp: vi.fn()
+}))
 
 type TestRuntime = {
   endpoint: string
   publicKeyB64: string
   deviceToken: string
+  authFrames: Record<string, unknown>[]
   close: () => Promise<void>
 }
 
@@ -31,6 +38,7 @@ describe('CLI remote WebSocket transport', () => {
   const servers: TestRuntime[] = []
 
   afterEach(async () => {
+    vi.mocked(launchOrcaApp).mockClear()
     await Promise.all(servers.splice(0).map((server) => server.close()))
   })
 
@@ -49,6 +57,11 @@ describe('CLI remote WebSocket transport', () => {
 
     expect(response.ok).toBe(true)
     expect(response.result.runtimeId).toBe('runtime-ws-1')
+    expect(runtime.authFrames).toContainEqual(
+      expect.objectContaining({
+        clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+      })
+    )
   })
 
   it('rejects malformed remote pairing codes before local runtime lookup', () => {
@@ -58,7 +71,15 @@ describe('CLI remote WebSocket transport', () => {
   })
 
   it('accepts a bare pairing payload as well as the orca URL wrapper', async () => {
-    const runtime = await startTestRuntime('runtime-ws-2')
+    const runtime = await startTestRuntime('runtime-ws-2', {
+      appVersion: '1.5.0',
+      remoteUpdateSupport: {
+        installMode: 'unsupported-headless-serve',
+        automatic: false,
+        reason: 'manual-service-update-required'
+      },
+      capabilities: ['updater.remote-control.v1']
+    })
     servers.push(runtime)
     const offer: PairingOffer = {
       v: 2,
@@ -77,6 +98,33 @@ describe('CLI remote WebSocket transport', () => {
     expect(status.result.app).toEqual({ running: false, pid: null })
     expect(status.result.runtime.reachable).toBe(true)
     expect(status.result.runtime.runtimeId).toBe('runtime-ws-2')
+    expect(status.result.runtime).toMatchObject({
+      appVersion: '1.5.0',
+      remoteUpdateSupport: { automatic: false, reason: 'manual-service-update-required' },
+      capabilities: ['updater.remote-control.v1']
+    })
+  })
+
+  it('does not launch a local desktop app for remote-paired open', async () => {
+    const runtime = await startTestRuntime('runtime-remote-headless', {
+      desktopWindowStatus: 'initializing'
+    })
+    servers.push(runtime)
+    const client = new RuntimeClient(
+      '/tmp/unused',
+      5_000,
+      encodePairingOffer({
+        v: 2,
+        endpoint: runtime.endpoint,
+        deviceToken: runtime.deviceToken,
+        publicKeyB64: runtime.publicKeyB64
+      })
+    )
+
+    const status = await client.openOrca()
+
+    expect(status.result.app.desktopWindowStatus).toBe('initializing')
+    expect(launchOrcaApp).not.toHaveBeenCalled()
   })
 
   it('connects through a saved environment selector', async () => {
@@ -121,6 +169,29 @@ describe('CLI remote WebSocket transport', () => {
       message: expect.stringContaining('server is too old')
     })
   })
+
+  it('blocks orchestration mutations when a remote runtime lacks the contract capability', async () => {
+    const runtime = await startTestRuntime('runtime-old-orchestration', { capabilities: [] })
+    servers.push(runtime)
+    const client = new RuntimeClient(
+      '/tmp/unused',
+      5_000,
+      encodePairingOffer({
+        v: 2,
+        endpoint: runtime.endpoint,
+        deviceToken: runtime.deviceToken,
+        publicKeyB64: runtime.publicKeyB64
+      })
+    )
+
+    await expect(client.call('orchestration.send', { subject: 'hello' })).rejects.toMatchObject({
+      code: 'orchestration_migration_required',
+      data: {
+        reason: 'runtime_capability_missing',
+        effectsApplied: false
+      }
+    })
+  })
 })
 
 async function startTestRuntime(
@@ -128,12 +199,21 @@ async function startTestRuntime(
   statusOverrides: {
     runtimeProtocolVersion?: number
     minCompatibleRuntimeClientVersion?: number
+    desktopWindowStatus?: 'available' | 'openable' | 'initializing' | 'blocked'
+    appVersion?: string
+    remoteUpdateSupport?: {
+      installMode: 'unsupported-headless-serve'
+      automatic: false
+      reason: 'manual-service-update-required'
+    }
+    capabilities?: string[]
   } = {}
 ): Promise<TestRuntime> {
   const serverKeyPair = generateKeyPair()
   const deviceToken = `token-${runtimeId}`
   const httpServer = createServer()
   const wss = new WebSocketServer({ server: httpServer })
+  const authFrames: Record<string, unknown>[] = []
 
   wss.on('connection', (ws) => {
     let sharedKey: Uint8Array | null = null
@@ -142,7 +222,10 @@ async function startTestRuntime(
     ws.on('message', (data) => {
       const frame = data.toString()
       if (!sharedKey) {
-        const hello = JSON.parse(frame) as { type?: string; publicKeyB64?: string }
+        const hello = JSON.parse(frame) as Record<string, unknown> & {
+          type?: string
+          publicKeyB64?: string
+        }
         const clientPublicKey = Buffer.from(hello.publicKeyB64 ?? '', 'base64')
         sharedKey = deriveSharedKey(serverKeyPair.secretKey, clientPublicKey)
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))
@@ -155,7 +238,11 @@ async function startTestRuntime(
         return
       }
       if (!authenticated) {
-        const auth = JSON.parse(plaintext) as { type?: string; deviceToken?: string }
+        const auth = JSON.parse(plaintext) as Record<string, unknown> & {
+          type?: string
+          deviceToken?: string
+        }
+        authFrames.push(auth)
         if (auth.type !== 'e2ee_auth' || auth.deviceToken !== deviceToken) {
           ws.send(encrypt(JSON.stringify({ type: 'e2ee_error' }), sharedKey))
           ws.close(4001, 'auth failed')
@@ -177,13 +264,17 @@ async function startTestRuntime(
                 rendererGraphEpoch: 1,
                 graphStatus: 'ready',
                 authoritativeWindowId: null,
+                desktopWindowStatus: statusOverrides.desktopWindowStatus,
                 liveTabCount: 0,
                 liveLeafCount: 0,
                 runtimeProtocolVersion:
                   statusOverrides.runtimeProtocolVersion ?? RUNTIME_PROTOCOL_VERSION,
                 minCompatibleRuntimeClientVersion:
                   statusOverrides.minCompatibleRuntimeClientVersion ??
-                  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+                  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+                appVersion: statusOverrides.appVersion,
+                remoteUpdateSupport: statusOverrides.remoteUpdateSupport,
+                capabilities: statusOverrides.capabilities
               },
               _meta: { runtimeId }
             }
@@ -207,6 +298,7 @@ async function startTestRuntime(
     endpoint: `ws://127.0.0.1:${address.port}`,
     publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey),
     deviceToken,
+    authFrames,
     close: async () => {
       await new Promise<void>((resolve) => {
         wss.close(() => resolve())

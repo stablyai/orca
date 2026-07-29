@@ -50,10 +50,21 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ArrowDown: () => null,
+  ArrowLeft: () => null,
+  ArrowRight: () => null,
+  ArrowUp: () => null,
+  Columns2: () => null,
+  ListX: () => null,
+  MessageSquare: () => null,
   PanelBottomClose: () => null,
+  PanelLeftClose: () => null,
   PanelRightClose: () => null,
+  Pencil: () => null,
   Pin: () => null,
-  PinOff: () => null
+  PinOff: () => null,
+  SquareTerminal: () => null,
+  X: () => null
 }))
 
 vi.mock('@/i18n/i18n', () => ({
@@ -100,12 +111,14 @@ function renderMenu(overrides: Partial<ComponentProps<typeof SortableTabContextM
         point={{ x: 0, y: 0 }}
         tabCount={2}
         hasTabsToRight
+        hasTabsToLeft
         isPinned={false}
         onOpenChange={vi.fn()}
         onActivate={onActivate}
         onClose={vi.fn()}
         onCloseOthers={vi.fn()}
         onCloseToRight={vi.fn()}
+        onCloseToLeft={vi.fn()}
         onRenameOpen={vi.fn()}
         onSetTabColor={vi.fn()}
         onTogglePin={vi.fn()}
@@ -218,6 +231,7 @@ describe('SortableTabContextMenu', () => {
     const { container } = renderMenu()
 
     expect(container.textContent).toContain('Move Tab to Split')
+    expect(container.textContent).toContain('Split terminal')
 
     act(() => getButton(container, 'Right').click())
     expect(storeMock.dropUnifiedTab).toHaveBeenCalledWith('tab-1', {
@@ -226,7 +240,30 @@ describe('SortableTabContextMenu', () => {
     })
   })
 
-  it('hides split actions for a single-tab group', () => {
+  it('routes the directional close actions to their handlers with the tab id', () => {
+    const onCloseOthers = vi.fn()
+    const onCloseToRight = vi.fn()
+    const onCloseToLeft = vi.fn()
+    const { container } = renderMenu({ onCloseOthers, onCloseToRight, onCloseToLeft })
+
+    act(() => getButton(container, 'Close Others').click())
+    expect(onCloseOthers).toHaveBeenCalledWith('term-1')
+
+    act(() => getButton(container, 'Close Tabs To The Right').click())
+    expect(onCloseToRight).toHaveBeenCalledWith('term-1')
+
+    act(() => getButton(container, 'Close Tabs To The Left').click())
+    expect(onCloseToLeft).toHaveBeenCalledWith('term-1')
+  })
+
+  it('disables directional closes when no tabs exist on that side', () => {
+    const { container } = renderMenu({ hasTabsToLeft: false, hasTabsToRight: false })
+
+    expect(getButton(container, 'Close Tabs To The Left').disabled).toBe(true)
+    expect(getButton(container, 'Close Tabs To The Right').disabled).toBe(true)
+  })
+
+  it('hides move-tab split actions for a single-tab group', () => {
     storeMock.state = {
       ...storeMock.state,
       groupsByWorktree: {
@@ -243,5 +280,6 @@ describe('SortableTabContextMenu', () => {
     const { container } = renderMenu()
 
     expect(container.textContent).not.toContain('Move Tab to Split')
+    expect(container.textContent).toContain('Split terminal right')
   })
 })

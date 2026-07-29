@@ -544,6 +544,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(startup?.env).toEqual({ CODEX_PROFILE: 'captured' })
     expect(startup?.command).not.toContain('changed')
     expect(startup?.launchConfig).toEqual(record.launchConfig)
+    expect(startup?.resumeProviderSession).toEqual(record.providerSession)
   })
 
   it('launches once and clears skipped duplicates for the same provider session', () => {

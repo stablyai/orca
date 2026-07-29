@@ -6,16 +6,22 @@ import {
   buildAddRepoExistingWorkspacesTelemetry,
   shouldTrackAddRepoExistingWorkspacesDetected
 } from './add-repo-existing-workspaces-telemetry'
+import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
 
 type CompleteGitRepoAddOptions = {
   closeModal: () => void
   setHideDefaultBranchWorkspace: (hide: boolean) => void
+  /** Why: the nested Add Project flow (hosted inside the workspace composer)
+   *  keeps the composer open and selects the new project instead of running
+   *  the default-checkout navigation handoff. Telemetry above still applies. */
+  finishProjectAdd?: (repoId: string, source: AddRepoExistingWorkspaceSource) => Promise<void>
 }
 
 export function useCompleteGitRepoAdd({
   closeModal,
-  setHideDefaultBranchWorkspace
+  setHideDefaultBranchWorkspace,
+  finishProjectAdd
 }: CompleteGitRepoAddOptions): (
   repoId: string,
   source: AddRepoExistingWorkspaceSource
@@ -29,7 +35,7 @@ export function useCompleteGitRepoAdd({
         if (a.lastActivityAt !== b.lastActivityAt) {
           return b.lastActivityAt - a.lastActivityAt
         }
-        return a.displayName.localeCompare(b.displayName)
+        return compareWorktreeDisplayName(a, b)
       })
       const existingWorkspaceTelemetry = buildAddRepoExistingWorkspacesTelemetry(
         source,
@@ -43,6 +49,10 @@ export function useCompleteGitRepoAdd({
         detectedTelemetryTrackedRef.current.add(repoId)
         track('add_repo_existing_workspaces_detected', existingWorkspaceTelemetry)
       }
+      if (finishProjectAdd) {
+        await finishProjectAdd(repoId, source)
+        return
+      }
       await finishProjectAddWithDefaultCheckout({
         repoId,
         source,
@@ -50,6 +60,6 @@ export function useCompleteGitRepoAdd({
         setHideDefaultBranchWorkspace
       })
     },
-    [closeModal, setHideDefaultBranchWorkspace]
+    [closeModal, finishProjectAdd, setHideDefaultBranchWorkspace]
   )
 }

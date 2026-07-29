@@ -79,6 +79,22 @@ export type NativeChatMessage = {
   turnId?: string
 }
 
+export const NATIVE_CHAT_TURN_LIFECYCLE_STATES = ['working', 'completed', 'interrupted'] as const
+export type NativeChatTurnLifecycleState = (typeof NATIVE_CHAT_TURN_LIFECYCLE_STATES)[number]
+
+export const NATIVE_CHAT_INTERRUPTED_STATUS_TEXT = 'Conversation interrupted'
+
+/** A provider-authored turn boundary recovered from the transcript itself.
+ *  Unlike assistant prose, this is explicit lifecycle evidence (completion or
+ *  interruption records) and is safe to replay. */
+export type NativeChatTurnLifecycle = {
+  state: NativeChatTurnLifecycleState
+  /** Stable provider id when available, otherwise the JSONL record position. */
+  turnId: string
+  /** Provider timestamp; null only when the transcript omitted one. */
+  timestamp: number | null
+}
+
 export const NATIVE_CHAT_SESSION_STATUSES = [
   'loading',
   'ready',

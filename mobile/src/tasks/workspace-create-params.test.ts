@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { buildTaskWorkspaceCreateParams } from './workspace-create-params'
+import { agentLaunchCreateFields, buildTaskWorkspaceCreateParams } from './workspace-create-params'
+
+describe('agentLaunchCreateFields', () => {
+  it('sends startupAgent + createdWithAgent so the host resolves launch args', () => {
+    expect(agentLaunchCreateFields('claude')).toEqual({
+      startupAgent: 'claude',
+      createdWithAgent: 'claude'
+    })
+  })
+
+  it('launches no agent when none was picked', () => {
+    expect(agentLaunchCreateFields(undefined)).toEqual({})
+  })
+})
 
 describe('task workspace create params', () => {
   it('passes a GitHub PR URL as an agent draft and links the PR', () => {
@@ -144,7 +157,7 @@ describe('task workspace create params', () => {
     ).toMatchObject({
       repo: 'id:repo-linear',
       name: 'eng-42',
-      displayName: 'Ship Linear parity',
+      displayName: 'ENG-42 Ship Linear parity',
       linkedLinearIssue: 'ENG-42',
       startupDraft: 'https://linear.app/acme/issue/ENG-42/ship-linear-parity',
       createdWithAgent: 'grok'

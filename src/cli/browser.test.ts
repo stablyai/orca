@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: this file groups every CLI browser-command test (page targeting, profiles, waits, viewport) so test-fixture imports and the runtime-client mock stay shared in one place. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
@@ -294,7 +293,7 @@ describe('orca cli browser page targeting', () => {
   })
 })
 
-describe('orca cli browser tab profiles', () => {
+describe('orca cli browser profile management', () => {
   beforeEach(() => {
     callMock.mockReset()
   })

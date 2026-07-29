@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { createPaneDOM } from './pane-dom-creation'
 
@@ -48,7 +48,69 @@ vi.mock('@xterm/xterm', () => ({
   })
 }))
 
+function setPlatform(userAgent: string): void {
+  vi.stubGlobal('navigator', { userAgent })
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 describe('createPaneDOM link tooltips', () => {
+  it('anchors WebLinks hover text to the unpadded terminal window corner', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+    const pane = createPaneDOM(
+      1,
+      leafId,
+      {},
+      { active: null } as never,
+      {} as never,
+      vi.fn(),
+      vi.fn()
+    )
+
+    // Why: corner offsets live in .pane-link-tooltip (terminal.css); JS only
+    // toggles visibility so padding/offset cannot drift back into inline styles.
+    expect(pane.linkTooltip.classList.contains('pane-link-tooltip')).toBe(true)
+    expect(pane.linkTooltip.style.left).toBe('')
+    expect(pane.linkTooltip.style.bottom).toBe('')
+    expect(pane.linkTooltip.style.display).toBe('none')
+  })
+
+  it('uses desktop modifier-click text for WebLinks hover hints', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+
+    setPlatform('Macintosh')
+    const macPane = createPaneDOM(
+      1,
+      leafId,
+      {},
+      { active: null } as never,
+      {} as never,
+      vi.fn(),
+      vi.fn()
+    )
+    webLinksAddonMock.options?.hover?.({} as MouseEvent, 'http://localhost:5180/')
+    expect(macPane.linkTooltip.textContent).toBe(
+      'http://localhost:5180/ (⌘+click to open or ⇧⌘+click for system browser)'
+    )
+
+    setPlatform('Windows')
+    const windowsPane = createPaneDOM(
+      2,
+      leafId,
+      {},
+      { active: null } as never,
+      {} as never,
+      vi.fn(),
+      vi.fn()
+    )
+    webLinksAddonMock.options?.hover?.({} as MouseEvent, 'http://localhost:5180/')
+    expect(windowsPane.linkTooltip.textContent).toBe(
+      'http://localhost:5180/ (Ctrl+click to open or Shift+Ctrl+click for system browser)'
+    )
+  })
+
   it('lets callers replace WebLinks hover text for display-only labels', async () => {
     const labeledText = 'http://main.orca.localhost:60016/ (localhost:5180; click to open)'
     const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId

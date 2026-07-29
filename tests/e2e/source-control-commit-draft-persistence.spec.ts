@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
+import { openSourceControlForWorktree } from './helpers/worktree-registration'
 
 type E2eWorktree = {
   branchName: string
@@ -44,67 +45,6 @@ function cleanupWorktree(repoPath: string, worktreePath: string, branchName: str
   } catch {
     // The branch may already be gone when git prunes it with the worktree.
   }
-}
-
-async function openSourceControlForWorktree(
-  page: Parameters<typeof waitForSessionReady>[0],
-  repoPath: string,
-  targetWorktreePath: string
-): Promise<void> {
-  await page.evaluate(
-    async ({ repoPath, targetWorktreePath }) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available')
-      }
-
-      const state = store.getState()
-      await state.fetchRepos()
-      const repo = store.getState().repos.find((entry) => entry.path === repoPath)
-      if (!repo) {
-        throw new Error(`Seeded E2E repo was not registered: ${repoPath}`)
-      }
-
-      const listedWorktrees = await window.api.worktrees.list({ repoId: repo.id })
-      store.setState((current) => ({
-        worktreesByRepo: {
-          ...current.worktreesByRepo,
-          [repo.id]: listedWorktrees
-        }
-      }))
-
-      const normalizeMacTmpPath = (value: string): string =>
-        value.startsWith('/private/var/') ? value.slice('/private'.length) : value
-      const worktree = listedWorktrees.find(
-        (entry) => normalizeMacTmpPath(entry.path) === normalizeMacTmpPath(targetWorktreePath)
-      )
-      if (!worktree) {
-        throw new Error(
-          `E2E worktree was not loaded: ${targetWorktreePath}; listed=${listedWorktrees
-            .map((entry) => entry.path)
-            .join(', ')}`
-        )
-      }
-
-      store.getState().setActiveWorktree(worktree.id)
-      const status = await window.api.git.status({ worktreePath: worktree.path })
-      store.getState().setGitStatus(worktree.id, status)
-      store.getState().setRightSidebarOpen(true)
-      store.getState().setRightSidebarTab('source-control')
-    },
-    { repoPath, targetWorktreePath }
-  )
-
-  await expect
-    .poll(
-      async () =>
-        page.evaluate(() => {
-          const state = window.__store?.getState()
-          return Boolean(state?.rightSidebarOpen && state?.rightSidebarTab === 'source-control')
-        }),
-      { timeout: 5_000 }
-    )
-    .toBe(true)
 }
 
 test.describe('Source Control commit draft persistence', () => {

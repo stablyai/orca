@@ -8,11 +8,13 @@ import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
+import { AgentDashboardDrawer } from '@/components/dashboard/AgentDashboardDrawer'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
 import { useSidebarProjectDrop } from './useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
+import { createSingleFlightCoalescer, type SingleFlightCoalescer } from './single-flight-coalescer'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
@@ -21,12 +23,16 @@ const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'))
 const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
 const WorktreeVisibilityDialog = lazyWithRetry(() => import('./WorktreeVisibilityDialog'))
 const OrcaYamlTrustDialog = lazyWithRetry(() => import('./OrcaYamlTrustDialog'))
+const ForgetSshWorkspaceDialog = lazyWithRetry(() => import('./ForgetSshWorkspaceDialog'))
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
-// Why: match the right sidebar's 4px resize target; a 1px seam is too hard to acquire.
+// Why: straddle the sidebar/terminal seam so the divider sits on the border-l
+// instead of leaving a blank strip between the hover target and the edge.
 export const WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME =
-  'absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize transition-colors hover:bg-ring/20 active:bg-ring/30'
+  'group absolute -right-1.5 top-0 z-10 flex h-full w-3 cursor-col-resize items-stretch justify-center'
+export const WORKTREE_SIDEBAR_RESIZE_HANDLE_LINE_CLASS_NAME =
+  'h-full w-px bg-transparent transition-colors group-hover:bg-ring/50 group-active:bg-ring'
 
 type SidebarProps = {
   worktreeScrollOffsetRef: React.MutableRefObject<number>
@@ -41,6 +47,7 @@ function Sidebar({
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
   const repos = useAppStore((s) => s.repos)
+  const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const settings = useAppStore((s) => s.settings)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
@@ -69,13 +76,16 @@ function Sidebar({
     document.documentElement.style.setProperty('--workspace-sidebar-live-width', `${width}px`)
   }, [])
 
-  // Fetch worktrees when repos are added/removed
   const repoCount = repos.length
+  const previousRepoCountRef = React.useRef(repoCount)
   useEffect(() => {
-    if (repoCount > 0) {
-      fetchAllWorktrees()
+    const repoCountChanged = previousRepoCountRef.current !== repoCount
+    previousRepoCountRef.current = repoCount
+    // Why: App owns the initial all-host scan; partial startup catalogs must not trigger broad scans or stale-state purges.
+    if (startupWorktreeRefreshCompleted && repoCountChanged && repoCount > 0) {
+      void fetchAllWorktrees()
     }
-  }, [repoCount, fetchAllWorktrees])
+  }, [repoCount, startupWorktreeRefreshCompleted, fetchAllWorktrees])
 
   // Why: a runtime host coming online/offline must refresh the sidebar so its
   // worktrees appear/drop, the same way SSH state changes already refetch. Only
@@ -96,19 +106,25 @@ function Sidebar({
     [runtimeStatusByEnvironmentId]
   )
   const previousOnlineRuntimeEnvKeyRef = React.useRef<string | null>(null)
+  // Coalesce staggered wake reconnects so K hosts can't fire K sidebar remounts and freeze (#8539).
+  const reconnectRefreshRef = React.useRef<SingleFlightCoalescer | null>(null)
+  if (reconnectRefreshRef.current === null) {
+    reconnectRefreshRef.current = createSingleFlightCoalescer(() =>
+      fetchAllWorktrees().then(() => fetchWorktreeLineage())
+    )
+  }
   useEffect(() => {
-    // Skip the initial value — startup/repoCount effects already fetch. Only
-    // refetch when the online-host set actually changes.
-    if (previousOnlineRuntimeEnvKeyRef.current === null) {
-      previousOnlineRuntimeEnvKeyRef.current = onlineRuntimeEnvKey
-      return
-    }
-    if (previousOnlineRuntimeEnvKeyRef.current === onlineRuntimeEnvKey) {
-      return
-    }
+    const previousOnlineRuntimeEnvKey = previousOnlineRuntimeEnvKeyRef.current
     previousOnlineRuntimeEnvKeyRef.current = onlineRuntimeEnvKey
-    void fetchAllWorktrees().then(() => fetchWorktreeLineage())
-  }, [onlineRuntimeEnvKey, fetchAllWorktrees, fetchWorktreeLineage])
+    if (
+      previousOnlineRuntimeEnvKey === null ||
+      previousOnlineRuntimeEnvKey === onlineRuntimeEnvKey ||
+      !startupWorktreeRefreshCompleted
+    ) {
+      return
+    }
+    reconnectRefreshRef.current?.request()
+  }, [onlineRuntimeEnvKey, startupWorktreeRefreshCompleted])
 
   useEffect(() => {
     if (!sidebarOpen && workspaceBoardRenderedOpen) {
@@ -116,7 +132,29 @@ function Sidebar({
     }
   }, [closeWorkspaceBoard, sidebarOpen, workspaceBoardRenderedOpen])
 
-  const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
+  const agentDashboardDrawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
+  const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
+  useEffect(() => {
+    if (!sidebarOpen && agentDashboardDrawerOpen) {
+      setAgentDashboardDrawerOpen(false)
+    }
+  }, [agentDashboardDrawerOpen, setAgentDashboardDrawerOpen, sidebarOpen])
+  // Why: both companion boards expand into the same space beside the sidebar,
+  // so the most recently opened one dismisses the other.
+  useEffect(() => {
+    if (agentDashboardDrawerOpen) {
+      closeWorkspaceBoard()
+    }
+  }, [agentDashboardDrawerOpen, closeWorkspaceBoard])
+  // Why: a transient drag preview is not the user opening the board, so it must
+  // not evict the dashboard — key on the opened state, not the rendered state.
+  useEffect(() => {
+    if (workspaceBoardOpen) {
+      setAgentDashboardDrawerOpen(false)
+    }
+  }, [setAgentDashboardDrawerOpen, workspaceBoardOpen])
+
+  const { containerRef, onResizeStart, isResizing } = useSidebarResize<HTMLDivElement>({
     isOpen: sidebarOpen,
     width: sidebarWidth,
     minWidth: MIN_WIDTH,
@@ -184,9 +222,16 @@ function Sidebar({
         {sidebarOpen && (
           <div
             data-sidebar-resize-handle=""
-            className={WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME}
+            className={cn(WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME, isResizing && 'bg-ring/10')}
             onMouseDown={onResizeStart}
-          />
+          >
+            <div
+              className={cn(
+                WORKTREE_SIDEBAR_RESIZE_HANDLE_LINE_CLASS_NAME,
+                isResizing && 'bg-ring'
+              )}
+            />
+          </div>
         )}
       </div>
 
@@ -197,6 +242,7 @@ function Sidebar({
         {activeModal === 'confirm-remove-folder' ? <RemoveFolderDialog /> : null}
         {activeModal === 'worktree-visibility' ? <WorktreeVisibilityDialog /> : null}
         {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
+        {activeModal === 'forget-ssh-workspace' ? <ForgetSshWorkspaceDialog /> : null}
       </React.Suspense>
       {sidebarOpen ? (
         <WorkspaceKanbanDrawer
@@ -207,6 +253,12 @@ function Sidebar({
           preserveOpenForMenu={workspaceBoardMenuOpen}
           onOpenChange={handleWorkspaceBoardOpenChange}
           onMenuOpenChange={setWorkspaceBoardMenuOpen}
+        />
+      ) : null}
+      {sidebarOpen && settings?.experimentalAgentDashboardPopout === true ? (
+        <AgentDashboardDrawer
+          leftSidebarStyle={leftSidebarStyle}
+          statusBarVisible={statusBarVisible}
         />
       ) : null}
     </TooltipProvider>

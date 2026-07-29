@@ -85,6 +85,9 @@ describe('buildExcludePathPrefixes', () => {
     expect(buildExcludePathPrefixes('C:\\repo', ['C:\\repo\\packages\\app'])).toEqual([
       'packages/app'
     ])
+    expect(
+      buildExcludePathPrefixes('//Server/Share/Repo', ['//server/share/repo/packages/app'])
+    ).toEqual(['packages/app'])
   })
 
   it('strips trailing slashes', () => {
@@ -239,14 +242,38 @@ describe('normalizeQuickOpenRgLine', () => {
 describe('buildGitLsFilesArgsForQuickOpen', () => {
   it('primary pass is --cached --others --exclude-standard', () => {
     const { primary } = buildGitLsFilesArgsForQuickOpen()
-    expect(primary).toEqual(['-z', '-s', '--cached', '--others', '--exclude-standard'])
+    expect(primary).toEqual([
+      '-z',
+      '-s',
+      '--cached',
+      '--others',
+      '--exclude-standard',
+      '--directory',
+      '--no-empty-directory'
+    ])
   })
 
   it('ignored pass surfaces ignored files without .env* pathspec whitelist', () => {
     const { ignoredPass } = buildGitLsFilesArgsForQuickOpen()
-    expect(ignoredPass).toEqual(['-z', '-s', '--others', '--ignored', '--exclude-standard'])
+    expect(ignoredPass).toEqual([
+      '-z',
+      '-s',
+      '--others',
+      '--ignored',
+      '--exclude-standard',
+      '--directory',
+      '--no-empty-directory'
+    ])
     expect(ignoredPass).not.toContain('.env*')
     expect(ignoredPass).not.toContain(':(glob)**/.env*')
+  })
+
+  it('collapses untracked directories in both passes without generated pathspec churn', () => {
+    const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen()
+    expect(primary).toContain('--directory')
+    expect(ignoredPass).toContain('--directory')
+    expect(ignoredPass).toContain('--no-empty-directory')
+    expect([...primary, ...ignoredPass]).not.toContain(':(exclude,glob)**/node_modules/**')
   })
 
   it('exclude prefixes prepend positive "." pathspec', () => {

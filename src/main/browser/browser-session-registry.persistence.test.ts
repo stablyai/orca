@@ -109,7 +109,9 @@ function installModuleMocks(
   vi.doMock('./browser-manager', () => ({
     browserManager: {
       notifyPermissionDenied: browserManagerNotifyPermissionDeniedMock,
-      handleGuestWillDownload: browserManagerHandleGuestWillDownloadMock
+      handleGuestWillDownload: browserManagerHandleGuestWillDownloadMock,
+      installCertificateRequestGuard: vi.fn(),
+      removeCertificateRequestGuard: vi.fn()
     }
   }))
   vi.doMock('./browser-media-access', () => ({
@@ -157,6 +159,54 @@ describe('BrowserSessionRegistry persistence', () => {
     expect(fsState.present.has('/user-data/Partitions/orca-browser/Cookies')).toBe(true)
   })
 
+  it('replays pending cookies into an existing Network database', async () => {
+    const stagedPath = '/staged/network-import'
+    const networkPath = '/user-data/Partitions/orca-browser/Network/Cookies'
+    const legacyPath = '/user-data/Partitions/orca-browser/Cookies'
+    const fsState = createFsState()
+    seedMeta(fsState, {
+      defaultSource: null,
+      userAgent: null,
+      pendingCookieDbPath: stagedPath,
+      profiles: []
+    })
+    fsState.files.set(stagedPath, 'imported cookies')
+    fsState.files.set(networkPath, 'old cookies')
+    fsState.present.add(stagedPath)
+    fsState.present.add(networkPath)
+
+    installModuleMocks(fsState)
+    const { browserSessionRegistry } = await import('./browser-session-registry')
+
+    browserSessionRegistry.applyPendingCookieImport()
+
+    expect(fsState.files.get(networkPath)).toBe('imported cookies')
+    expect(fsState.present.has(legacyPath)).toBe(false)
+  })
+
+  it('persists new browser session profiles under the active Orca profile directory', async () => {
+    const fsState = createFsState()
+    const profileMetaPath = '/user-data/profiles/local-work/browser-session-meta.json'
+
+    installModuleMocks(fsState)
+    const { browserSessionRegistry } = await import('./browser-session-registry')
+
+    browserSessionRegistry.configureForOrcaProfile({
+      orcaProfileId: 'local-work',
+      profileDirectory: '/user-data/profiles/local-work'
+    })
+    const profile = browserSessionRegistry.createProfile('isolated', 'Work Browser')
+
+    expect(profile).not.toBeNull()
+    expect(fsState.files.has(profileMetaPath)).toBe(true)
+    expect(fsState.files.has(META_PATH)).toBe(false)
+    expect(JSON.parse(fsState.files.get(profileMetaPath) ?? '{}').profiles[0]).toMatchObject({
+      id: profile!.id,
+      partition: profile!.partition,
+      label: 'Work Browser'
+    })
+  })
+
   it('merges partition-keyed pending entries without clobbering unrelated entries', async () => {
     const fsState = createFsState()
     seedMeta(fsState, {
@@ -183,6 +233,91 @@ describe('BrowserSessionRegistry persistence', () => {
       'persist:orca-browser': '/staged/default',
       'persist:orca-browser-session-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa': '/staged/imported'
     })
+  })
+
+  it('clears only the requested partition and unlinks its staged database files', async () => {
+    const otherPartition = 'persist:orca-browser-session-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    const fsState = createFsState()
+    seedMeta(fsState, {
+      defaultSource: null,
+      userAgent: null,
+      userAgentByPartition: {},
+      pendingCookieDbPath: '/staged/default',
+      pendingCookieImports: {
+        'persist:orca-browser': '/staged/default',
+        [otherPartition]: '/staged/other'
+      },
+      profiles: []
+    })
+    for (const suffix of ['', '-wal', '-shm']) {
+      fsState.files.set(`/staged/other${suffix}`, 'db')
+      fsState.present.add(`/staged/other${suffix}`)
+      fsState.files.set(`/staged/default${suffix}`, 'db')
+      fsState.present.add(`/staged/default${suffix}`)
+    }
+
+    installModuleMocks(fsState)
+    const { browserSessionRegistry } = await import('./browser-session-registry')
+
+    browserSessionRegistry.clearPendingCookieImport(otherPartition)
+
+    const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
+    expect(written.pendingCookieImports).toEqual({ 'persist:orca-browser': '/staged/default' })
+    // Why: the default partition still has a staged replay, so the legacy pointer must survive.
+    expect(written.pendingCookieDbPath).toBe('/staged/default')
+    for (const suffix of ['', '-wal', '-shm']) {
+      expect(fsState.present.has(`/staged/other${suffix}`)).toBe(false)
+      expect(fsState.present.has(`/staged/default${suffix}`)).toBe(true)
+    }
+  })
+
+  it('drops the legacy pointer when the default partition is the one cleared', async () => {
+    const otherPartition = 'persist:orca-browser-session-cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    const fsState = createFsState()
+    seedMeta(fsState, {
+      defaultSource: null,
+      userAgent: null,
+      userAgentByPartition: {},
+      pendingCookieDbPath: '/staged/default',
+      pendingCookieImports: {
+        'persist:orca-browser': '/staged/default',
+        [otherPartition]: '/staged/other'
+      },
+      profiles: []
+    })
+
+    installModuleMocks(fsState)
+    const { browserSessionRegistry } = await import('./browser-session-registry')
+
+    browserSessionRegistry.clearPendingCookieImport('persist:orca-browser')
+
+    const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
+    expect(written.pendingCookieImports).toEqual({ [otherPartition]: '/staged/other' })
+    expect(written.pendingCookieDbPath).toBeNull()
+  })
+
+  it('is a no-op when the partition has no pending import', async () => {
+    const fsState = createFsState()
+    seedMeta(fsState, {
+      defaultSource: null,
+      userAgent: null,
+      userAgentByPartition: {},
+      pendingCookieDbPath: '/staged/default',
+      pendingCookieImports: { 'persist:orca-browser': '/staged/default' },
+      profiles: []
+    })
+    fsState.files.set('/staged/default', 'db')
+    fsState.present.add('/staged/default')
+
+    installModuleMocks(fsState)
+    const { browserSessionRegistry } = await import('./browser-session-registry')
+    const metaBefore = fsState.files.get(META_PATH)
+
+    browserSessionRegistry.clearPendingCookieImport('persist:orca-browser-session-unknown')
+
+    // Why: an absent key must not rewrite meta or touch another partition's staged file.
+    expect(fsState.files.get(META_PATH)).toBe(metaBefore)
+    expect(fsState.present.has('/staged/default')).toBe(true)
   })
 
   it('restores persisted UA for non-default partitions', async () => {

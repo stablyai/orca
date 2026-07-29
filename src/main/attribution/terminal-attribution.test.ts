@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: these tests exercise generated shell wrapper
-scripts end-to-end, and keeping the regression fixtures adjacent makes the
-attribution safety cases easier to audit. */
 import { execFileSync } from 'node:child_process'
 import {
   chmodSync,

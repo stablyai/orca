@@ -1,4 +1,4 @@
-import type { GlobalSettings, Repo } from './types'
+import type { GlobalSettings, Repo, Worktree } from './types'
 
 export const LOCAL_EXECUTION_HOST_ID = 'local'
 export const ALL_EXECUTION_HOSTS_SCOPE = 'all'
@@ -54,6 +54,16 @@ export function toSshExecutionHostId(targetId: string): `ssh:${string}` {
 
 export function toRuntimeExecutionHostId(environmentId: string): `runtime:${string}` {
   return `runtime:${encodeURIComponent(environmentId)}`
+}
+
+// Why: runtime-owned (ephemeral-VM) SSH targets are hidden from user-facing
+// SSH/run-target surfaces. The renderer can't read the target.owner field, so it
+// recognizes them by their deterministic id prefix. getRuntimeOwnedSshTargetId
+// (main) builds on this same prefix to keep the two in sync.
+export const RUNTIME_OWNED_SSH_TARGET_ID_PREFIX = 'runtime-ssh-'
+
+export function isRuntimeOwnedSshTargetId(targetId: string | null | undefined): boolean {
+  return typeof targetId === 'string' && targetId.startsWith(RUNTIME_OWNED_SSH_TARGET_ID_PREFIX)
 }
 
 export function parseExecutionHostId(value: string | null | undefined): ParsedExecutionHost | null {
@@ -138,6 +148,19 @@ export function getRepoExecutionHostId(
   }
   const connectionId = normalizeHostPart(repo.connectionId)
   return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+}
+
+export function getWorktreeExecutionHostId(
+  worktree: Pick<Worktree, 'hostId'>,
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+  defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
+): ExecutionHostId {
+  // Why: runtime and SSH snapshots can identify a more precise owner than
+  // the repo fallback; every sidebar host decision must use the same precedence.
+  return (
+    worktree.hostId ??
+    (repo?.connectionId || repo?.executionHostId ? getRepoExecutionHostId(repo) : defaultHostId)
+  )
 }
 
 export function getSettingsFocusedExecutionHostId(

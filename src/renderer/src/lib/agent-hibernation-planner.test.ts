@@ -115,6 +115,19 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [noSession.paneKey]: noSession } }))
     ).toEqual([])
+    const ephemeralPi = entry({ agentType: 'pi', providerSession: undefined })
+    expect(
+      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [ephemeralPi.paneKey]: ephemeralPi } }))
+    ).toEqual([])
+    const piWithoutTranscript = entry({
+      agentType: 'pi',
+      providerSession: { key: 'session_id', id: 'pi-session-1' }
+    })
+    expect(
+      plannedWorktrees(
+        snapshot({ agentStatusByPaneKey: { [piWithoutTranscript.paneKey]: piWithoutTranscript } })
+      )
+    ).toEqual([])
     const unsupported = entry({ agentType: 'amp' })
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [unsupported.paneKey]: unsupported } }))
@@ -130,8 +143,118 @@ describe('agent sleep planner', () => {
       plannedWorktrees(snapshot({ lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: OLD + 1 } }))
     ).toEqual([])
     expect(
-      plannedWorktrees(snapshot({ lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: OLD } }))
+      plannedWorktrees(snapshot({ lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: OLD - 1 } }))
     ).toEqual(['wt-bg'])
+    // A millisecond tie between the input stamp and the done transition
+    // resolves toward blocking — the keystroke may be a draft character.
+    expect(
+      plannedWorktrees(snapshot({ lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: OLD } }))
+    ).toEqual([])
+  })
+
+  it('blocks hibernation when real input arrived after the turn started', () => {
+    // Regression: a draft typed while the agent was still working lands before
+    // the done timestamp, so the old input-after-done compare was blind to it
+    // and the hibernation kill discarded the TUI composer's contents.
+    const turnStartedAt = OLD - 60_000
+    const withTurn = entry({
+      stateHistory: [{ state: 'working', prompt: 'make it so', startedAt: turnStartedAt }]
+    })
+    expect(
+      plannedWorktrees(
+        snapshot({
+          agentStatusByPaneKey: { [withTurn.paneKey]: withTurn },
+          lastTerminalInputAtByPaneKey: { [withTurn.paneKey]: turnStartedAt + 30_000 }
+        })
+      )
+    ).toEqual([])
+    // The submission that started the turn precedes the working transition
+    // and must not block hibernation.
+    expect(
+      plannedWorktrees(
+        snapshot({
+          agentStatusByPaneKey: { [withTurn.paneKey]: withTurn },
+          lastTerminalInputAtByPaneKey: { [withTurn.paneKey]: turnStartedAt - 1_000 }
+        })
+      )
+    ).toEqual(['wt-bg'])
+    // Input after done still blocks, with or without turn history.
+    expect(
+      plannedWorktrees(
+        snapshot({
+          agentStatusByPaneKey: { [withTurn.paneKey]: withTurn },
+          lastTerminalInputAtByPaneKey: { [withTurn.paneKey]: OLD + 1 }
+        })
+      )
+    ).toEqual([])
+  })
+
+  it('attributes input to its state segment across working/waiting cycles', () => {
+    // A turn can pause for permission (working → waiting → working → done). A
+    // draft typed during the FIRST working segment is older than the last
+    // working start, so a last-working-start guard misses it; and a permission
+    // answer typed during the waiting segment must NOT block, or every session
+    // with a mid-turn permission prompt would never hibernate.
+    const multiSegment = entry({
+      stateHistory: [
+        { state: 'working', prompt: 'make it so', startedAt: OLD - 90_000 },
+        { state: 'waiting', prompt: 'make it so', startedAt: OLD - 60_000 },
+        { state: 'working', prompt: 'make it so', startedAt: OLD - 30_000 }
+      ]
+    })
+    // Draft typed during the first working segment: blocked.
+    expect(
+      plannedWorktrees(
+        snapshot({
+          agentStatusByPaneKey: { [multiSegment.paneKey]: multiSegment },
+          lastTerminalInputAtByPaneKey: { [multiSegment.paneKey]: OLD - 75_000 }
+        })
+      )
+    ).toEqual([])
+    // Permission answer typed during the waiting segment: consumed, eligible.
+    expect(
+      plannedWorktrees(
+        snapshot({
+          agentStatusByPaneKey: { [multiSegment.paneKey]: multiSegment },
+          lastTerminalInputAtByPaneKey: { [multiSegment.paneKey]: OLD - 45_000 }
+        })
+      )
+    ).toEqual(['wt-bg'])
+    // A submission typed in a PREVIOUS done segment that already transitioned
+    // onward was consumed and must not block the next completion.
+    const resubmitted = entry({
+      stateHistory: [
+        { state: 'done', prompt: 'earlier turn', startedAt: OLD - 90_000 },
+        { state: 'working', prompt: 'make it so', startedAt: OLD - 30_000 }
+      ]
+    })
+    expect(
+      plannedWorktrees(
+        snapshot({
+          agentStatusByPaneKey: { [resubmitted.paneKey]: resubmitted },
+          lastTerminalInputAtByPaneKey: { [resubmitted.paneKey]: OLD - 45_000 }
+        })
+      )
+    ).toEqual(['wt-bg'])
+    // Boundary ties resolve toward blocking: input stamped exactly at a
+    // working-segment start blocks, and a tie at a waiting-segment start also
+    // blocks because it could belong to the preceding working segment.
+    expect(
+      plannedWorktrees(
+        snapshot({
+          agentStatusByPaneKey: { [multiSegment.paneKey]: multiSegment },
+          lastTerminalInputAtByPaneKey: { [multiSegment.paneKey]: OLD - 30_000 }
+        })
+      )
+    ).toEqual([])
+    expect(
+      plannedWorktrees(
+        snapshot({
+          agentStatusByPaneKey: { [multiSegment.paneKey]: multiSegment },
+          lastTerminalInputAtByPaneKey: { [multiSegment.paneKey]: OLD - 60_000 }
+        })
+      )
+    ).toEqual([])
   })
 
   it('uses foreground terminal tab last-seen as the idle baseline when it is newer', () => {
@@ -244,6 +367,47 @@ describe('agent sleep planner', () => {
       )
     ).toEqual([])
   })
+
+  it.each([
+    {
+      agent: 'pi' as const,
+      providerSession: {
+        key: 'session_id' as const,
+        id: 'pi-session-1',
+        transcriptPath: '/tmp/pi-session-1.jsonl'
+      }
+    },
+    {
+      agent: 'omp' as const,
+      providerSession: { key: 'session_id' as const, id: 'omp-session-1' }
+    }
+  ])(
+    'still hibernates completed $agent panes that only retain live resume identity',
+    ({ agent, providerSession }) => {
+      const agentEntry = entry({ agentType: agent, providerSession })
+      expect(
+        plannedPaneKeys(
+          snapshot({
+            agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
+            sleepingAgentSessionsByPaneKey: {
+              [agentEntry.paneKey]: {
+                paneKey: agentEntry.paneKey,
+                tabId: 'tab-1',
+                worktreeId: 'wt-bg',
+                agent,
+                providerSession,
+                prompt: '',
+                state: 'working',
+                capturedAt: OLD,
+                updatedAt: OLD,
+                origin: 'live'
+              }
+            }
+          })
+        )
+      ).toEqual([agentEntry.paneKey])
+    }
+  )
 
   it('rejects mobile-driven panes because paired clients can send input outside desktop xterm', () => {
     expect(plannedWorktrees(snapshot({ mobileLockedPtyIds: ['pty-1'] }))).toEqual([])

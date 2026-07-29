@@ -22,6 +22,7 @@ type RichMarkdownSearchBarProps = {
   matchCount: number
   query: string
   replaceQuery: string
+  replaceDisabled: boolean
   searchInputRef: React.RefObject<HTMLInputElement | null>
   wholeWord: boolean
   onClose: () => void
@@ -43,6 +44,7 @@ export function RichMarkdownSearchBar({
   matchCount,
   query,
   replaceQuery,
+  replaceDisabled,
   searchInputRef,
   wholeWord,
   onClose,
@@ -58,6 +60,7 @@ export function RichMarkdownSearchBar({
   // Why: surface the same replace shortcut the source editor uses so the toggle
   // is discoverable; reads the user's effective binding, formatted per platform.
   const replaceShortcut = useOptionalShortcutLabel('editor.replace')
+  const readOnlyExplanationId = React.useId()
 
   if (!isOpen) {
     return null
@@ -71,6 +74,10 @@ export function RichMarkdownSearchBar({
   }
 
   const noMatches = matchCount === 0
+  const readOnlyReplaceExplanation = translate(
+    'auto.components.editor.RichMarkdownSearchBar.preservedRichContentReadOnly',
+    'Preserved rich content is read-only in rich mode.'
+  )
   const toggleReplaceLabel = isReplaceMode
     ? translate('auto.components.editor.RichMarkdownSearchBar.e8c147435f', 'Hide replace')
     : translate('auto.components.editor.RichMarkdownSearchBar.9cdc38be33', 'Toggle replace')
@@ -259,6 +266,7 @@ export function RichMarkdownSearchBar({
                   'auto.components.editor.RichMarkdownSearchBar.44682b4159',
                   'Replace in rich markdown editor'
                 )}
+                aria-describedby={replaceDisabled ? readOnlyExplanationId : undefined}
               />
             </div>
             <Button
@@ -267,11 +275,12 @@ export function RichMarkdownSearchBar({
               size="icon-xs"
               onMouseDown={keepSearchFocus}
               onClick={onReplaceCurrent}
-              disabled={noMatches}
-              title={translate(
-                'auto.components.editor.RichMarkdownSearchBar.fd97c7e585',
-                'Replace'
-              )}
+              disabled={noMatches || replaceDisabled}
+              title={
+                replaceDisabled
+                  ? readOnlyReplaceExplanation
+                  : translate('auto.components.editor.RichMarkdownSearchBar.fd97c7e585', 'Replace')
+              }
               aria-label={translate(
                 'auto.components.editor.RichMarkdownSearchBar.fd97c7e585',
                 'Replace'
@@ -286,11 +295,15 @@ export function RichMarkdownSearchBar({
               size="icon-xs"
               onMouseDown={keepSearchFocus}
               onClick={onReplaceAll}
-              disabled={noMatches}
-              title={translate(
-                'auto.components.editor.RichMarkdownSearchBar.c2884f5e95',
-                'Replace all'
-              )}
+              disabled={noMatches || replaceDisabled}
+              title={
+                replaceDisabled
+                  ? readOnlyReplaceExplanation
+                  : translate(
+                      'auto.components.editor.RichMarkdownSearchBar.c2884f5e95',
+                      'Replace all'
+                    )
+              }
               aria-label={translate(
                 'auto.components.editor.RichMarkdownSearchBar.c2884f5e95',
                 'Replace all'
@@ -299,6 +312,11 @@ export function RichMarkdownSearchBar({
             >
               <ReplaceAll size={14} />
             </Button>
+            {replaceDisabled ? (
+              <span id={readOnlyExplanationId} className="sr-only" role="status">
+                {readOnlyReplaceExplanation}
+              </span>
+            ) : null}
           </div>
         ) : null}
       </div>

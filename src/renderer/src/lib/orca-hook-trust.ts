@@ -1,6 +1,6 @@
 import { sha256 } from './sha256'
 
-export type OrcaHookScriptKind = 'setup' | 'archive' | 'issueCommand'
+export type OrcaHookScriptKind = 'setup' | 'archive' | 'issueCommand' | 'vmRecipe'
 
 export async function hashOrcaHookScript(content: string): Promise<string> {
   const normalized = content.trim()

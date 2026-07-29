@@ -5,6 +5,7 @@ import {
   terminalOutputPrefersRenderRefresh,
   terminalRewriteOutputRenderRefreshDecision,
   terminalRewriteOutputPrefersRenderRefresh,
+  windowsEastAsianOutputPrefersRenderRefresh,
   type TerminalRewriteOutputRenderRefreshState
 } from './terminal-complex-script'
 
@@ -90,6 +91,86 @@ describe('terminalOutputContainsEastAsianRendererRisk', () => {
     expect(terminalOutputContainsEastAsianRendererRisk('Arabic: السلام عليكم')).toBe(false)
     expect(terminalOutputContainsEastAsianRendererRisk('status 🚀')).toBe(false)
     expect(terminalOutputContainsEastAsianRendererRisk('developer 👩‍💻')).toBe(false)
+  })
+})
+
+describe('windowsEastAsianOutputPrefersRenderRefresh', () => {
+  const maxInteractiveRedrawChars = 128 * 1024
+
+  it('refreshes native Windows ConPTY agent output with CJK or Korean glyphs', () => {
+    expect(
+      windowsEastAsianOutputPrefersRenderRefresh('已经安装完成，软件已更新后重启。', {
+        isWindowsClient: true,
+        isNativeWindowsConpty: true,
+        hadRecentInput: false,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(true)
+    expect(
+      windowsEastAsianOutputPrefersRenderRefresh('Korean: 터미널', {
+        isWindowsClient: true,
+        isNativeWindowsConpty: true,
+        hadRecentInput: false,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(true)
+  })
+
+  it('keeps the recent-input Windows renderer path for SSH and other non-native panes', () => {
+    expect(
+      windowsEastAsianOutputPrefersRenderRefresh('已经安装完成，软件已更新后重启。', {
+        isWindowsClient: true,
+        isNativeWindowsConpty: false,
+        hadRecentInput: true,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(true)
+  })
+
+  it('skips remote agent output and non-Windows clients without recent input', () => {
+    expect(
+      windowsEastAsianOutputPrefersRenderRefresh('已经安装完成，软件已更新后重启。', {
+        isWindowsClient: true,
+        isNativeWindowsConpty: false,
+        hadRecentInput: false,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(false)
+    expect(
+      windowsEastAsianOutputPrefersRenderRefresh('已经安装完成，软件已更新后重启。', {
+        isWindowsClient: false,
+        isNativeWindowsConpty: false,
+        hadRecentInput: true,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(false)
+  })
+
+  it('does not refresh ASCII, non-East-Asian Unicode, or bulk chunks', () => {
+    expect(
+      windowsEastAsianOutputPrefersRenderRefresh('plain terminal output', {
+        isWindowsClient: true,
+        isNativeWindowsConpty: true,
+        hadRecentInput: false,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(false)
+    expect(
+      windowsEastAsianOutputPrefersRenderRefresh('Arabic: السلام عليكم', {
+        isWindowsClient: true,
+        isNativeWindowsConpty: true,
+        hadRecentInput: false,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(false)
+    expect(
+      windowsEastAsianOutputPrefersRenderRefresh('已'.repeat(maxInteractiveRedrawChars + 1), {
+        isWindowsClient: true,
+        isNativeWindowsConpty: true,
+        hadRecentInput: false,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(false)
   })
 })
 

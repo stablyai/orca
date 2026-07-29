@@ -72,46 +72,55 @@ export async function openMobileEmulatorTab(
 
   cancelPendingSimulatorPaneShutdown(worktreeId)
   const alreadyLaunching = isManualSimulatorLaunchPending(worktreeId)
-  if (!alreadyLaunching) {
-    beginManualSimulatorLaunch(worktreeId)
+  if (alreadyLaunching) {
+    return ensureSimulatorTab(worktreeId, {
+      placement: options.placement ?? 'rightSplit',
+      targetGroupId,
+      surfacePane: true
+    })
   }
-  const tabId = ensureSimulatorTab(worktreeId, {
-    placement: options.placement ?? 'rightSplit',
-    targetGroupId,
-    surfacePane: true
-  })
-  if (!tabId || alreadyLaunching) {
-    return tabId
-  }
-  dispatchManualSimulatorLaunchStarted(worktreeId)
+  beginManualSimulatorLaunch(worktreeId)
   try {
-    // Why: the pane is visible but inert while serve-sim settles; the actual
-    // stream is handed to it only after attach returns ready info.
-    const result = await callRuntimeRpc<EmulatorAttachResult>(
-      { kind: 'local' },
-      'emulator.attach',
-      {
-        worktree: worktreeId,
-        focus: false
-      }
-    )
-    if (!result.attached || !result.info) {
-      throw new Error('Could not start the emulator.')
+    // Why: this scope owns the guard from before tab creation through attach;
+    // every early return or error must release it so a retry can proceed.
+    const tabId = ensureSimulatorTab(worktreeId, {
+      placement: options.placement ?? 'rightSplit',
+      targetGroupId,
+      surfacePane: true
+    })
+    if (!tabId) {
+      return null
     }
-    // Why: users can close the tab while serve-sim is still starting; after
-    // attach registers the managed session, clean it up if no pane remains.
-    if (await shutdownManagedSimulatorIfNoPane(worktreeId, tabId)) {
+    dispatchManualSimulatorLaunchStarted(worktreeId)
+    try {
+      // Why: the pane is visible but inert while serve-sim settles; the actual
+      // stream is handed to it only after attach returns ready info.
+      const result = await callRuntimeRpc<EmulatorAttachResult>(
+        { kind: 'local' },
+        'emulator.attach',
+        {
+          worktree: worktreeId,
+          focus: false
+        }
+      )
+      if (!result.attached || !result.info) {
+        throw new Error('Could not start the emulator.')
+      }
+      // Why: users can close the tab while serve-sim is still starting; after
+      // attach registers the managed session, clean it up if no pane remains.
+      if (await shutdownManagedSimulatorIfNoPane(worktreeId, tabId)) {
+        return tabId
+      }
+
+      rememberPrelaunchedSimulatorSession(worktreeId, result.info)
+      dispatchPrelaunchedSession(worktreeId, result.info)
+      return tabId
+    } catch (error) {
+      const message = getLaunchErrorMessage(error)
+      toast.error(message)
+      dispatchManualSimulatorLaunchFailed(worktreeId, message)
       return tabId
     }
-
-    rememberPrelaunchedSimulatorSession(worktreeId, result.info)
-    dispatchPrelaunchedSession(worktreeId, result.info)
-    return tabId
-  } catch (error) {
-    const message = getLaunchErrorMessage(error)
-    toast.error(message)
-    dispatchManualSimulatorLaunchFailed(worktreeId, message)
-    return tabId
   } finally {
     finishManualSimulatorLaunch(worktreeId)
   }

@@ -5,6 +5,7 @@ import {
   logSingleInstanceLockBypass,
   logSingleInstanceLockFailure,
   shouldBypassSingleInstanceLock,
+  shouldSkipSingleInstanceLock,
   SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE,
   SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE
 } from './single-instance-lock'
@@ -70,6 +71,24 @@ describe('acquireSingleInstanceLock', () => {
     registered?.()
 
     expect(onSecondInstance).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('shouldSkipSingleInstanceLock', () => {
+  it('keeps ordinary dev multi-instance behavior but never skips for serve', () => {
+    expect(shouldSkipSingleInstanceLock({ isDev: true, isServeMode: false, env: {} })).toBe(true)
+    expect(shouldSkipSingleInstanceLock({ isDev: true, isServeMode: true, env: {} })).toBe(false)
+    expect(shouldSkipSingleInstanceLock({ isDev: false, isServeMode: false, env: {} })).toBe(false)
+  })
+
+  it('lets isolated E2E exercise the production single-instance path', () => {
+    expect(
+      shouldSkipSingleInstanceLock({
+        isDev: true,
+        isServeMode: false,
+        env: { ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1' }
+      })
+    ).toBe(false)
   })
 })
 

@@ -167,8 +167,7 @@ describe('ClaudeAgentTeamsService', () => {
 
     await request(['set-option', '-p', '-t', '%2', 'remain-on-exit', 'failed'])
 
-    const teammateCommand =
-      'cd /repo && env CLAUDECODE=1 claude --agent-id a --teammate-mode auto'
+    const teammateCommand = 'cd /repo && env CLAUDECODE=1 claude --agent-id a --teammate-mode auto'
     await expect(
       request(['respawn-pane', '-k', '-t', '%2', '--', teammateCommand])
     ).resolves.toMatchObject({ stdout: '', exitCode: 0 })
@@ -224,10 +223,19 @@ describe('ClaudeAgentTeamsService', () => {
 
     await expect(
       service.handleTmuxCompat(
-        { teamId, token, envPane: leaderPane, argv: ['respawn-pane', '-k', '-t', leaderPane, '--', 'cat'] },
+        {
+          teamId,
+          token,
+          envPane: leaderPane,
+          argv: ['respawn-pane', '-k', '-t', leaderPane, '--', 'cat']
+        },
         api
       )
-    ).resolves.toMatchObject({ ok: false, exitCode: 1, stderr: 'tmux: refusing to respawn leader pane\n' })
+    ).resolves.toMatchObject({
+      ok: false,
+      exitCode: 1,
+      stderr: 'tmux: refusing to respawn leader pane\n'
+    })
   })
 
   it('rejects stale or unauthorized shim calls', async () => {

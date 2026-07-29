@@ -1,6 +1,13 @@
+import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+
 const BROWSER_SCREENCAST_KIND = 0x62
 const BROWSER_SCREENCAST_VERSION = 1
 const HEADER_BYTES = 16
+export const BROWSER_SCREENCAST_MAX_METADATA_BYTES = 64 * 1024
+export const BROWSER_SCREENCAST_METADATA_JSON_STRUCTURE_LIMITS = {
+  structuralTokens: 512,
+  nestingDepth: 8
+} as const
 const METADATA_KEYS = [
   'offsetTop',
   'pageScaleFactor',
@@ -58,8 +65,13 @@ function encodeJson(value: unknown): Uint8Array {
 }
 
 function decodeJson(bytes: Uint8Array): unknown {
+  if (bytes.byteLength > BROWSER_SCREENCAST_MAX_METADATA_BYTES) {
+    return null
+  }
   try {
-    return JSON.parse(new TextDecoder().decode(bytes)) as unknown
+    const content = new TextDecoder().decode(bytes)
+    assertJsonTextStructureWithinLimits(content, BROWSER_SCREENCAST_METADATA_JSON_STRUCTURE_LIMITS)
+    return JSON.parse(content) as unknown
   } catch {
     return null
   }
@@ -121,6 +133,9 @@ export function decodeBrowserScreencastFrame(bytes: Uint8Array): BrowserScreenca
   }
   const seq = view.getUint32(4, true)
   const metadataLength = view.getUint32(8, true)
+  if (metadataLength > BROWSER_SCREENCAST_MAX_METADATA_BYTES) {
+    return null
+  }
   if (view.getUint32(12, true) !== 0) {
     return null
   }

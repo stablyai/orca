@@ -14,12 +14,14 @@ import {
 import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
 import { withSpan } from '../observability/tracer'
 import type {
+  JiraAuthType,
   JiraConnectArgs,
   JiraConnectionStatus,
   JiraSite,
   JiraSiteSelection,
   JiraViewer
 } from '../../shared/types'
+import { clearAttachmentImagesForSite } from './attachment-image-cache'
 
 // Why: Atlassian's XSRF filter rejects POST/PUT REST calls that carry a browser
 // User-Agent, failing them with "XSRF check failed" even under API-token auth.
@@ -63,6 +65,13 @@ type JiraSiteFile = {
 export type JiraClientForSite = {
   site: JiraSite
   authorization: string
+}
+
+// Self-hosted Jira Server/Data Center only exposes REST v2; Cloud endpoints
+// in this codebase are written against v3. Callers build paths with this
+// prefix so one code path serves both deployments.
+export function apiBasePath(site: JiraSite): string {
+  return site.authType === 'server' ? '/rest/api/2' : '/rest/api/3'
 }
 
 export class JiraApiError extends Error {
@@ -143,7 +152,9 @@ function normalizeSite(input: unknown): JiraSite | null {
     siteUrl: record.siteUrl,
     email: record.email,
     displayName: record.displayName,
-    accountId: record.accountId
+    accountId: record.accountId,
+    // Sites saved before self-hosted support have no authType; they are Cloud.
+    authType: record.authType === 'server' ? 'server' : 'cloud'
   }
 }
 
@@ -284,8 +295,17 @@ function getSiteId(siteUrl: string, email: string): string {
 
 function toViewer(data: Record<string, unknown>, fallbackEmail: string): JiraViewer {
   const avatarUrls = data.avatarUrls as Record<string, unknown> | undefined
+  // Server/DC /myself has no accountId; its stable identifiers are name/key.
+  const accountId =
+    typeof data.accountId === 'string'
+      ? data.accountId
+      : typeof data.name === 'string'
+        ? data.name
+        : typeof data.key === 'string'
+          ? data.key
+          : ''
   return {
-    accountId: typeof data.accountId === 'string' ? data.accountId : '',
+    accountId,
     displayName: typeof data.displayName === 'string' ? data.displayName : fallbackEmail,
     email: typeof data.emailAddress === 'string' ? data.emailAddress : fallbackEmail,
     avatarUrl:
@@ -308,7 +328,14 @@ function siteToViewer(site: JiraSite | null): JiraViewer | null {
   }
 }
 
-function authHeader(email: string, apiToken: string): string {
+function authHeader(email: string, apiToken: string, authType?: JiraAuthType): string {
+  // Self-hosted with no username = a personal access token (Bearer); Basic auth
+  // with a PAT in the password slot is what produces the 401s users report.
+  // Self-hosted WITH a username is classic username+password Basic auth, which
+  // older Server/DC instances (predating PATs) require. Cloud is always Basic.
+  if (authType === 'server' && !email) {
+    return `Bearer ${apiToken}`
+  }
   return `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`
 }
 
@@ -366,13 +393,14 @@ async function requestWithCredentials(
   email: string,
   apiToken: string,
   path: string,
-  init?: RequestInit
+  init?: RequestInit,
+  authType?: JiraAuthType
 ): Promise<unknown> {
   const headers = new Headers(init?.headers)
   headers.set('Accept', 'application/json')
   headers.set('Content-Type', 'application/json')
   headers.set('User-Agent', JIRA_API_USER_AGENT)
-  headers.set('Authorization', authHeader(email, apiToken))
+  headers.set('Authorization', authHeader(email, apiToken, authType))
   const response = await jiraFetch(`${siteUrl}${path}`, {
     ...init,
     headers
@@ -430,6 +458,36 @@ export async function jiraRequest<T>(
   return (await response.json()) as T
 }
 
+export async function jiraRequestBinary(
+  client: JiraClientForSite,
+  pathOrUrl: string
+): Promise<{ data: ArrayBuffer; contentType: string }> {
+  const siteUrl = new URL(client.site.siteUrl)
+  const requestUrl = /^https?:\/\//i.test(pathOrUrl)
+    ? new URL(pathOrUrl)
+    : new URL(`${client.site.siteUrl}${pathOrUrl}`)
+  if (requestUrl.origin !== siteUrl.origin) {
+    // Why: attachment metadata is provider-controlled; never forward Jira
+    // credentials if a malformed response points at another origin.
+    throw new JiraApiError('Jira attachment URL must use the configured site origin.', null)
+  }
+  const headers = new Headers()
+  // Why: attachment content is binary; forcing JSON Accept/Content-Type can
+  // break downloads and confuses some Atlassian edge responses.
+  headers.set('Accept', '*/*')
+  headers.set('User-Agent', JIRA_API_USER_AGENT)
+  headers.set('Authorization', client.authorization)
+  const response = await jiraFetch(requestUrl.toString(), { headers })
+  if (!response.ok) {
+    throw new JiraApiError(await readJiraError(response), response.status)
+  }
+  const contentType = response.headers.get('content-type') || 'application/octet-stream'
+  return {
+    data: await response.arrayBuffer(),
+    contentType
+  }
+}
+
 export function getClients(selection?: JiraSiteSelection | null): JiraClientForSite[] {
   const file = getSiteFile()
   const selected = selection ?? file.selectedSiteId ?? file.activeSiteId
@@ -453,7 +511,7 @@ export function getClients(selection?: JiraSiteSelection | null): JiraClientForS
       }
       throw error
     }
-    return token ? [{ site, authorization: authHeader(site.email, token) }] : []
+    return token ? [{ site, authorization: authHeader(site.email, token, site.authType) }] : []
   })
 }
 
@@ -484,28 +542,48 @@ export async function connect(
     return { ok: false, error: 'Enter a valid Jira site URL.' }
   }
 
+  const authType: JiraAuthType = args.authType === 'server' ? 'server' : 'cloud'
   const email = args.email.trim()
   const apiToken = args.apiToken.trim()
-  if (!email || !apiToken) {
+  if (authType === 'server') {
+    if (!apiToken) {
+      // A username present means classic Basic auth (password); its absence
+      // means the credential is a personal access token sent as Bearer.
+      return {
+        ok: false,
+        error: email ? 'Password is required.' : 'Personal access token is required.'
+      }
+    }
+  } else if (!email || !apiToken) {
     return { ok: false, error: 'Email and API token are required.' }
   }
 
   await acquire()
   try {
+    const myselfPath = authType === 'server' ? '/rest/api/2/myself' : '/rest/api/3/myself'
     const viewer = toViewer(
-      (await requestWithCredentials(siteUrl, email, apiToken, '/rest/api/3/myself')) as Record<
-        string,
-        unknown
-      >,
-      email
+      (await requestWithCredentials(
+        siteUrl,
+        email,
+        apiToken,
+        myselfPath,
+        undefined,
+        authType
+      )) as Record<string, unknown>,
+      email || siteUrl
     )
-    const id = getSiteId(siteUrl, email)
+    // PAT sites have no email, so keying on it alone would collide every PAT
+    // connection to the same host into one id (silently overwriting a prior
+    // account + token). Fall back to the verified viewer identity so distinct
+    // accounts stay distinct. Cloud/Basic keep keying on their non-empty email.
+    const id = getSiteId(siteUrl, email || viewer.accountId)
     const site: JiraSite = {
       id,
       siteUrl,
       email,
       displayName: viewer.displayName,
-      accountId: viewer.accountId
+      accountId: viewer.accountId,
+      authType
     }
     saveToken(id, apiToken)
     const file = getSiteFile()
@@ -529,6 +607,9 @@ export function disconnect(siteId?: string): void {
   for (const id of ids) {
     deleteToken(id)
   }
+  // Why: drop cached attachment data URLs for disconnected sites so main does
+  // not retain multi-MB strings after logout.
+  clearAttachmentImagesForSite(siteId)
   writeSiteFile({
     version: 1,
     activeSiteId: file.activeSiteId,
@@ -565,7 +646,7 @@ export async function testConnection(
   await acquire()
   try {
     const viewer = toViewer(
-      (await jiraRequest(client, '/rest/api/3/myself')) as Record<string, unknown>,
+      (await jiraRequest(client, `${apiBasePath(client.site)}/myself`)) as Record<string, unknown>,
       client.site.email
     )
     return { ok: true, viewer }
@@ -578,6 +659,8 @@ export async function testConnection(
 
 export function clearToken(siteId: string): void {
   deleteToken(siteId)
+  // Why: auth failure removes the site; drop cached attachment data URLs too.
+  clearAttachmentImagesForSite(siteId)
   const file = getSiteFile()
   writeSiteFile({ ...file, sites: file.sites.filter((site) => site.id !== siteId) })
 }

@@ -97,6 +97,13 @@ function makeDeps(store = makeStore()) {
     resolveSetupDecision: vi.fn().mockResolvedValue({ kind: 'decided', decision: 'inherit' }),
     resolvePrStartPoint: vi.fn(),
     confirmHooks: vi.fn().mockResolvedValue('run'),
+    readIssueCommand: vi.fn().mockResolvedValue({
+      effectiveContent: null,
+      localContent: null,
+      sharedContent: null,
+      localFilePath: '',
+      source: 'none'
+    }),
     beginBackgroundCreate: vi.fn(() => 'creation-1'),
     continueBackgroundCreate: vi.fn(() => true),
     activatePendingCreate: vi.fn(),
@@ -154,6 +161,46 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
       }),
       { revealCreationSurface: false }
     )
+  })
+
+  it('does not resolve a PR start point for a stale PR-typed issue URL', async () => {
+    const deps = makeDeps()
+
+    await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue({
+          type: 'pr',
+          number: 6933,
+          title: 'The board columns are displayed backwards',
+          url: 'https://github.com/stablyai/orca/issues/6933',
+          branchName: 'fix-issue-6933',
+          baseRefName: 'main',
+          isCrossRepository: true
+        }),
+        repoId: 'repo-1',
+        telemetrySource: 'sidebar',
+        openModalFallback: vi.fn()
+      },
+      deps
+    )
+
+    expect(deps.resolvePrStartPoint).not.toHaveBeenCalled()
+    const beginCalls = deps.beginBackgroundCreate.mock.calls as unknown as [
+      WorktreeCreationRequest
+    ][]
+    expect(beginCalls[0]?.[0].linkedIssue).toBe(6933)
+    expect(beginCalls[0]?.[0].linkedPR).toBeUndefined()
+    const continueCalls = deps.continueBackgroundCreate.mock.calls as unknown as [
+      string,
+      WorktreeCreationRequest
+    ][]
+    const request = continueCalls[0]?.[1]
+    expect(request?.linkedIssue).toBe(6933)
+    expect(request?.linkedPR).toBeUndefined()
+    expect(request?.baseBranch).toBeUndefined()
+    expect(request?.pushTarget).toBeUndefined()
+    expect(request?.branchNameOverride).toBeUndefined()
+    expect(request?.compareBaseRef).toBeUndefined()
   })
 
   it('shows the pending workspace before async preflight resolves', async () => {
@@ -559,17 +606,36 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
 
     await createGitHubWorkItemWorkspaceInBackground(
       {
-        item: makeIssue({ type: 'pr', number: 7, url: 'https://github.com/stablyai/orca/pull/7' }),
+        item: makeIssue({
+          type: 'pr',
+          number: 6934,
+          url: 'https://github.com/stablyai/orca/pull/6934',
+          branchName: 'fix-issue-6933',
+          baseRefName: 'main',
+          isCrossRepository: true
+        }),
         repoId: 'repo-1',
         openModalFallback: vi.fn()
       },
       deps
     )
 
+    expect(deps.resolvePrStartPoint).toHaveBeenCalledWith(
+      'repo-1',
+      6934,
+      expect.anything(),
+      expect.objectContaining({
+        type: 'pr',
+        number: 6934,
+        branchName: 'fix-issue-6933',
+        baseRefName: 'main',
+        isCrossRepository: true
+      })
+    )
     expect(deps.continueBackgroundCreate).toHaveBeenCalledWith(
       'creation-1',
       expect.objectContaining({
-        linkedPR: 7,
+        linkedPR: 6934,
         baseBranch: 'feature/from-pr',
         pushTarget: { remote: 'origin', branch: 'feature/from-pr' },
         branchNameOverride: 'feature/from-pr',
@@ -606,5 +672,207 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
     expect(request.startupPlan?.launchCommand).toBe('codex --prompt-file')
     expect(request.startup?.command).toBe('codex --prompt-file')
     expect(buildAgentStartupPlan).not.toHaveBeenCalled()
+  })
+
+  it('attaches the rendered issue command when the repo configured one and trust runs', async () => {
+    const deps = makeDeps()
+    deps.readIssueCommand.mockResolvedValueOnce({
+      effectiveContent: 'gh issue view {{issue}} --repo {{artifact_url}}',
+      localContent: null,
+      sharedContent: 'gh issue view {{issue}} --repo {{artifact_url}}',
+      localFilePath: '',
+      source: 'shared'
+    })
+
+    await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue(),
+        repoId: 'repo-1',
+        openModalFallback: vi.fn()
+      },
+      deps
+    )
+
+    expect(deps.confirmHooks).toHaveBeenCalledWith(expect.anything(), 'repo-1', 'setup')
+    expect(deps.confirmHooks).toHaveBeenCalledWith(expect.anything(), 'repo-1', 'issueCommand')
+    const continueCall = deps.continueBackgroundCreate.mock.calls[0] as unknown[] | undefined
+    expect(continueCall).toBeDefined()
+    const request = continueCall?.[1] as WorktreeCreationRequest
+    expect(request.issueCommand?.command).toBe(
+      'gh issue view 42 --repo https://github.com/stablyai/orca/issues/42'
+    )
+  })
+
+  it('omits the issue command when the repo configured none', async () => {
+    const deps = makeDeps()
+
+    await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue(),
+        repoId: 'repo-1',
+        openModalFallback: vi.fn()
+      },
+      deps
+    )
+
+    const continueCall = deps.continueBackgroundCreate.mock.calls[0] as unknown[] | undefined
+    expect(continueCall).toBeDefined()
+    const request = continueCall?.[1] as WorktreeCreationRequest
+    expect(request.issueCommand).toBeUndefined()
+    expect(deps.confirmHooks).not.toHaveBeenCalledWith(expect.anything(), 'repo-1', 'issueCommand')
+  })
+
+  it('skips the issue command when setup trust was declined', async () => {
+    const deps = makeDeps()
+    deps.readIssueCommand.mockResolvedValueOnce({
+      effectiveContent: 'echo {{issue}}',
+      localContent: 'echo {{issue}}',
+      sharedContent: null,
+      localFilePath: '/repo/.orca/issue-command',
+      source: 'local'
+    })
+    // Why: the setup confirmHooks call resolves 'skip', which mirrors the
+    // composer suppressing the issue command when setup trust is declined.
+    deps.confirmHooks.mockResolvedValue('skip')
+
+    await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue(),
+        repoId: 'repo-1',
+        openModalFallback: vi.fn()
+      },
+      deps
+    )
+
+    const continueCall = deps.continueBackgroundCreate.mock.calls[0] as unknown[] | undefined
+    expect(continueCall).toBeDefined()
+    const request = continueCall?.[1] as WorktreeCreationRequest
+    expect(request.issueCommand).toBeUndefined()
+    expect(deps.confirmHooks).not.toHaveBeenCalledWith(expect.anything(), 'repo-1', 'issueCommand')
+    // Why: a declined setup trust short-circuits before the (up-to-15s) read,
+    // so workspace creation is never stalled to fetch a command we will drop.
+    expect(deps.readIssueCommand).not.toHaveBeenCalled()
+  })
+
+  it('does not run the issue command for PR items', async () => {
+    const deps = makeDeps()
+    deps.resolvePrStartPoint.mockResolvedValueOnce({
+      baseBranch: 'feature/from-pr',
+      pushTarget: { remote: 'origin', branch: 'feature/from-pr' },
+      branchNameOverride: 'feature/from-pr',
+      compareBaseRef: 'main'
+    })
+    deps.readIssueCommand.mockResolvedValueOnce({
+      effectiveContent: 'echo {{issue}}',
+      localContent: 'echo {{issue}}',
+      sharedContent: null,
+      localFilePath: '/repo/.orca/issue-command',
+      source: 'local'
+    })
+
+    await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue({ type: 'pr', number: 7, url: 'https://github.com/stablyai/orca/pull/7' }),
+        repoId: 'repo-1',
+        openModalFallback: vi.fn()
+      },
+      deps
+    )
+
+    const continueCall = deps.continueBackgroundCreate.mock.calls[0] as unknown[] | undefined
+    expect(continueCall).toBeDefined()
+    const request = continueCall?.[1] as WorktreeCreationRequest
+    expect(request.issueCommand).toBeUndefined()
+    expect(deps.confirmHooks).not.toHaveBeenCalledWith(expect.anything(), 'repo-1', 'issueCommand')
+  })
+
+  it('fails closed when reading the issue command rejects', async () => {
+    const deps = makeDeps()
+    deps.readIssueCommand.mockRejectedValueOnce(new Error('runtime offline'))
+
+    const result = await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue(),
+        repoId: 'repo-1',
+        openModalFallback: vi.fn()
+      },
+      deps
+    )
+
+    expect(result).toEqual({ kind: 'background-started' })
+    const continueCall = deps.continueBackgroundCreate.mock.calls[0] as unknown[] | undefined
+    expect(continueCall).toBeDefined()
+    const request = continueCall?.[1] as WorktreeCreationRequest
+    expect(request.issueCommand).toBeUndefined()
+  })
+
+  it('re-reads the store for each trust check so mid-flow trust updates are honored', async () => {
+    const snapshots = [makeStore(), makeStore(), makeStore()]
+    let getStoreCall = 0
+    const deps = makeDeps(snapshots[0])
+    deps.getStore = vi.fn(
+      () => snapshots[Math.min(getStoreCall++, snapshots.length - 1)] ?? snapshots[0]
+    )
+    deps.readIssueCommand.mockResolvedValueOnce({
+      effectiveContent: 'echo {{issue}}',
+      localContent: null,
+      sharedContent: 'echo {{issue}}',
+      localFilePath: '',
+      source: 'shared'
+    })
+
+    await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue(),
+        repoId: 'repo-1',
+        openModalFallback: vi.fn()
+      },
+      deps
+    )
+
+    // Why: an "Always trust" stamped by the setup prompt only exists in a fresh
+    // snapshot. Each trust check must read the store at call time instead of
+    // reusing the snapshot captured when the flow began.
+    const setupCall = deps.confirmHooks.mock.calls.find((call) => call[2] === 'setup')
+    const issueCall = deps.confirmHooks.mock.calls.find((call) => call[2] === 'issueCommand')
+    expect(setupCall?.[0]).toBeDefined()
+    expect(issueCall?.[0]).toBeDefined()
+    expect(setupCall?.[0]).not.toBe(snapshots[0])
+    expect(issueCall?.[0]).not.toBe(snapshots[0])
+    expect(issueCall?.[0]).not.toBe(setupCall?.[0])
+  })
+
+  it('keeps the seeded agent prompt as the bare issue URL (not Complete <url>)', async () => {
+    const store = makeStore({
+      ensureDetectedAgents: vi.fn().mockResolvedValue(['codex'])
+    })
+    const deps = makeDeps(store)
+    deps.readIssueCommand.mockResolvedValueOnce({
+      effectiveContent: 'echo {{issue}}',
+      localContent: 'echo {{issue}}',
+      sharedContent: null,
+      localFilePath: '/repo/.orca/issue-command',
+      source: 'local'
+    })
+
+    await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue(),
+        repoId: 'repo-1',
+        openModalFallback: vi.fn()
+      },
+      deps
+    )
+
+    const continueCall = deps.continueBackgroundCreate.mock.calls[0] as unknown[] | undefined
+    expect(continueCall).toBeDefined()
+    const request = continueCall?.[1] as WorktreeCreationRequest
+    // Why: Brennan's confirmed scope keeps the quick-start prompt the bare link;
+    // the issue command runs as a side-pane split, not as the agent prompt.
+    expect(request.startupPlan?.draftPrompt).toBe('https://github.com/stablyai/orca/issues/42')
+    expect(request.startupPlan?.draftPrompt ?? '').not.toContain('Complete')
+    expect(request.quickPrompt).not.toContain('Complete')
+    // The issue command itself still threads through as a side-pane split.
+    expect(request.issueCommand?.command).toBe('echo 42')
   })
 })

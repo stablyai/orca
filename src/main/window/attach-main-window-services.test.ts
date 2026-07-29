@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: attachMainWindowServices centralizes main-window IPC wiring; keeping its integration-style mocks together avoids brittle cross-file setup. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 
@@ -18,7 +17,11 @@ const {
   hydrateLocalPtyRegistryAtBootMock,
   setupAutoUpdaterMock,
   browserManagerUnregisterAllMock,
-  runWorktreeChangeInvalidatorsMock
+  runWorktreeChangeInvalidatorsMock,
+  acknowledgePendingTccPromptNoticeMock,
+  consumePendingTccPromptNoticeMock,
+  dismissTccPromptNoticeMock,
+  releasePendingTccPromptNoticeMock
 } = vi.hoisted(() => ({
   onMock: vi.fn(),
   removeAllListenersMock: vi.fn(),
@@ -35,7 +38,11 @@ const {
   hydrateLocalPtyRegistryAtBootMock: vi.fn(),
   setupAutoUpdaterMock: vi.fn(),
   browserManagerUnregisterAllMock: vi.fn(),
-  runWorktreeChangeInvalidatorsMock: vi.fn()
+  runWorktreeChangeInvalidatorsMock: vi.fn(),
+  acknowledgePendingTccPromptNoticeMock: vi.fn(),
+  consumePendingTccPromptNoticeMock: vi.fn(),
+  dismissTccPromptNoticeMock: vi.fn(),
+  releasePendingTccPromptNoticeMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -93,6 +100,13 @@ vi.mock('../updater', () => ({
   setupAutoUpdater: setupAutoUpdaterMock
 }))
 
+vi.mock('../macos-tcc-prompt-notice', () => ({
+  acknowledgePendingTccPromptNotice: acknowledgePendingTccPromptNoticeMock,
+  consumePendingTccPromptNotice: consumePendingTccPromptNoticeMock,
+  dismissTccPromptNotice: dismissTccPromptNoticeMock,
+  releasePendingTccPromptNotice: releasePendingTccPromptNoticeMock
+}))
+
 import { attachMainWindowServices } from './attach-main-window-services'
 
 type MockFn = ReturnType<typeof vi.fn>
@@ -101,9 +115,11 @@ type MainWindowStub = {
   id?: number
   isDestroyed?: MockFn
   on: MockFn
+  once: MockFn
   webContents: {
     id?: number
     isDestroyed?: MockFn
+    isLoadingMainFrame: MockFn
     on: MockFn
     send?: MockFn
     reload?: MockFn
@@ -121,14 +137,18 @@ type RuntimeStub = {
   markGraphUnavailable: MockFn
 }
 
-function createMainWindow(extraWebContents: { on?: MockFn; send?: MockFn } = {}): MainWindowStub {
+function createMainWindow(
+  extraWebContents: { isLoadingMainFrame?: MockFn; on?: MockFn; send?: MockFn } = {}
+): MainWindowStub {
   return {
     id: 1,
     isDestroyed: vi.fn(() => false),
     on: vi.fn(),
+    once: vi.fn(),
     webContents: {
       id: 1,
       isDestroyed: vi.fn(() => false),
+      isLoadingMainFrame: vi.fn(() => true),
       on: vi.fn(),
       reload: vi.fn(),
       session: {
@@ -167,6 +187,18 @@ function getClosedHandlers(mainWindowOnMock: MockFn): (() => void)[] {
     .map(([, handler]) => handler as () => void)
 }
 
+// Updater setup is deferred to first paint; fire the captured ready-to-show
+// handler and flush its setImmediate hop.
+async function fireReadyToShow(mainWindow: MainWindowStub): Promise<void> {
+  const handler = mainWindow.once.mock.calls.find(([event]) => event === 'ready-to-show')?.[1] as
+    | (() => void)
+    | undefined
+  handler?.()
+  await new Promise((resolve) => {
+    setImmediate(resolve)
+  })
+}
+
 describe('attachMainWindowServices', () => {
   beforeEach(() => {
     onMock.mockReset()
@@ -184,6 +216,10 @@ describe('attachMainWindowServices', () => {
     hydrateLocalPtyRegistryAtBootMock.mockReset()
     setupAutoUpdaterMock.mockReset()
     browserManagerUnregisterAllMock.mockReset()
+    acknowledgePendingTccPromptNoticeMock.mockReset()
+    consumePendingTccPromptNoticeMock.mockReset()
+    dismissTccPromptNoticeMock.mockReset()
+    releasePendingTccPromptNoticeMock.mockReset()
     systemPreferencesAskForMediaAccessMock.mockResolvedValue(true)
     systemPreferencesGetMediaAccessStatusMock.mockReturnValue('granted')
   })
@@ -241,17 +277,25 @@ describe('attachMainWindowServices', () => {
   it('passes injected update quit cleanup to the auto-updater', async () => {
     const onBeforeUpdateQuit = vi.fn()
     const store = createStore()
+    const mainWindow = createMainWindow()
 
     attachMainWindowServices(
-      createMainWindow() as never,
+      mainWindow as never,
       store,
       createRuntime() as never,
       undefined,
       undefined,
-      { onBeforeUpdateQuit }
+      { onBeforeUpdateQuit, updateInstallMode: 'supervised-headless-serve' }
     )
 
+    // Deferred to first paint — must not be configured at attach time.
+    expect(setupAutoUpdaterMock).not.toHaveBeenCalled()
+    await fireReadyToShow(mainWindow)
     expect(setupAutoUpdaterMock).toHaveBeenCalledTimes(1)
+    expect(setupAutoUpdaterMock).toHaveBeenCalledWith(
+      mainWindow,
+      expect.objectContaining({ installMode: 'supervised-headless-serve' })
+    )
     await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
 
     expect(onBeforeUpdateQuit).toHaveBeenCalledTimes(1)
@@ -260,12 +304,146 @@ describe('attachMainWindowServices', () => {
 
   it('flushes the store before update quit when no cleanup is injected', async () => {
     const store = createStore()
+    const mainWindow = createMainWindow()
 
-    attachMainWindowServices(createMainWindow() as never, store, createRuntime() as never)
+    attachMainWindowServices(mainWindow as never, store, createRuntime() as never)
 
+    await fireReadyToShow(mainWindow)
     await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
 
     expect(store.flush).toHaveBeenCalledTimes(1)
+  })
+
+  it('replaces the TCC handlers when the main window is reattached', () => {
+    attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
+    const releaseCount = releasePendingTccPromptNoticeMock.mock.calls.length
+    attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
+
+    for (const channel of [
+      'macosTccPrompts:consumePending',
+      'macosTccPrompts:acknowledgePending',
+      'macosTccPrompts:releasePending',
+      'macosTccPrompts:dismiss'
+    ]) {
+      expect(removeHandlerMock.mock.calls.filter(([value]) => value === channel)).toHaveLength(2)
+      expect(handleMock.mock.calls.filter(([value]) => value === channel)).toHaveLength(2)
+    }
+    expect(releasePendingTccPromptNoticeMock).toHaveBeenCalledTimes(releaseCount + 1)
+  })
+
+  it('lets only the current main renderer consume the pending TCC notice', () => {
+    const mainWindow = createMainWindow()
+    consumePendingTccPromptNoticeMock.mockReturnValue({ claimId: 1, promptCount: 3 })
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
+    const handler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'macosTccPrompts:consumePending'
+    )?.[1]
+    expect(handler?.({ sender: { id: 999 } })).toBeNull()
+    expect(consumePendingTccPromptNoticeMock).not.toHaveBeenCalled()
+    expect(handler?.({ sender: mainWindow.webContents })).toEqual({ claimId: 1, promptCount: 3 })
+    expect(consumePendingTccPromptNoticeMock).toHaveBeenCalledWith(expect.any(Number))
+  })
+
+  it('acknowledges a claim only from the current main renderer', () => {
+    const mainWindow = createMainWindow()
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
+    const handler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'macosTccPrompts:acknowledgePending'
+    )?.[1]
+    handler?.({ sender: { id: 999 } }, 7)
+    handler?.({ sender: mainWindow.webContents }, Number.NaN)
+    expect(acknowledgePendingTccPromptNoticeMock).not.toHaveBeenCalled()
+
+    handler?.({ sender: mainWindow.webContents }, 7)
+    expect(acknowledgePendingTccPromptNoticeMock).toHaveBeenCalledWith(expect.any(Number), 7)
+  })
+
+  it('releases a claim only from the current main renderer', () => {
+    const mainWindow = createMainWindow()
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+    releasePendingTccPromptNoticeMock.mockClear()
+
+    const handler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'macosTccPrompts:releasePending'
+    )?.[1]
+    handler?.({ sender: { id: 999 } }, 7)
+    handler?.({ sender: mainWindow.webContents }, Number.NaN)
+    expect(releasePendingTccPromptNoticeMock).not.toHaveBeenCalled()
+
+    handler?.({ sender: mainWindow.webContents }, 7)
+    expect(releasePendingTccPromptNoticeMock).toHaveBeenCalledWith(expect.any(Number), 7)
+  })
+
+  it('releases the owner claim when the main renderer reloads or crashes', () => {
+    const mainWindow = createMainWindow()
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+    const handlers = (event: string): (() => void)[] =>
+      mainWindow.webContents.on.mock.calls
+        .filter(([name]) => name === event)
+        .map(([, handler]) => handler as () => void)
+
+    releasePendingTccPromptNoticeMock.mockClear()
+    mainWindow.webContents.isLoadingMainFrame.mockReturnValue(false)
+    for (const handler of handlers('did-start-loading')) {
+      handler()
+    }
+    expect(releasePendingTccPromptNoticeMock).not.toHaveBeenCalled()
+
+    mainWindow.webContents.isLoadingMainFrame.mockReturnValue(true)
+    for (const handler of handlers('did-start-loading')) {
+      handler()
+    }
+    expect(releasePendingTccPromptNoticeMock).toHaveBeenCalledOnce()
+
+    releasePendingTccPromptNoticeMock.mockClear()
+    for (const handler of handlers('render-process-gone')) {
+      handler()
+    }
+    expect(releasePendingTccPromptNoticeMock).toHaveBeenCalledOnce()
+  })
+
+  it('removes the TCC handlers when the owning window closes', () => {
+    const mainWindow = createMainWindow()
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
+    removeHandlerMock.mockClear()
+    releasePendingTccPromptNoticeMock.mockClear()
+    for (const handler of getClosedHandlers(mainWindow.on)) {
+      handler()
+    }
+
+    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:consumePending')
+    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:acknowledgePending')
+    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:releasePending')
+    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:dismiss')
+    expect(releasePendingTccPromptNoticeMock).toHaveBeenCalledOnce()
+  })
+
+  it('keeps newer TCC handlers when an older window closes late', () => {
+    const oldWindow = createMainWindow()
+    attachMainWindowServices(oldWindow as never, createStore(), createRuntime() as never)
+    const oldClosedHandlers = getClosedHandlers(oldWindow.on)
+    const newWindow = createMainWindow()
+    attachMainWindowServices(newWindow as never, createStore(), createRuntime() as never)
+
+    removeHandlerMock.mockClear()
+    for (const handler of oldClosedHandlers) {
+      handler()
+    }
+    expect(removeHandlerMock).not.toHaveBeenCalledWith('macosTccPrompts:consumePending')
+    expect(removeHandlerMock).not.toHaveBeenCalledWith('macosTccPrompts:acknowledgePending')
+    expect(removeHandlerMock).not.toHaveBeenCalledWith('macosTccPrompts:releasePending')
+    expect(removeHandlerMock).not.toHaveBeenCalledWith('macosTccPrompts:dismiss')
+
+    for (const handler of getClosedHandlers(newWindow.on)) {
+      handler()
+    }
+    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:consumePending')
+    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:acknowledgePending')
+    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:releasePending')
+    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:dismiss')
   })
 
   it('ignores app reload requests from non-main webContents', async () => {
@@ -602,5 +780,53 @@ describe('attachMainWindowServices', () => {
     expect(runWorktreeChangeInvalidatorsMock.mock.invocationCallOrder[0]).toBeLessThan(
       sendMock.mock.invocationCallOrder[0]
     )
+  })
+
+  it('accepts terminal reveal replies only from the main window renderer', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+    const runtime = createRuntime()
+
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+
+    const notifier = runtime.setNotifier.mock.calls[0][0] as {
+      revealTerminalSession: (
+        worktreeId: string,
+        opts: {
+          ptyId: string
+          title?: string
+          cwd?: string
+          viewMode?: 'terminal' | 'chat'
+          activate?: boolean
+        }
+      ) => Promise<{ tabId: string; title?: string }>
+    }
+    const revealPromise = notifier.revealTerminalSession('wt-1', {
+      ptyId: 'pty-1',
+      title: 'SSH tmux',
+      cwd: '/repo/packages/web',
+      viewMode: 'chat'
+    })
+    const sentPayload = sendMock.mock.calls.find(
+      ([channel]) => channel === 'ui:createTerminal'
+    )?.[1]
+    const handler = onMock.mock.calls.find(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+    expect(sentPayload).toMatchObject({ cwd: '/repo/packages/web', viewMode: 'chat' })
+
+    handler?.(
+      { sender: { send: vi.fn() } },
+      { requestId: sentPayload.requestId, error: 'spoofed renderer reply' }
+    )
+    expect(removeListenerMock).not.toHaveBeenCalledWith('terminal:tabCreateReply', handler)
+
+    handler?.(
+      { sender: mainWindow.webContents },
+      { requestId: sentPayload.requestId, tabId: 'tab-1', title: 'SSH tmux' }
+    )
+
+    await expect(revealPromise).resolves.toEqual({ tabId: 'tab-1', title: 'SSH tmux' })
+    expect(removeListenerMock).toHaveBeenCalledWith('terminal:tabCreateReply', handler)
   })
 })

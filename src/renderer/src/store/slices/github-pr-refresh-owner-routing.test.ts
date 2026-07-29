@@ -155,7 +155,7 @@ describe('GitHub PR refresh owner-host routing', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-runtime', branch, linkedPRNumber: null },
+      params: { repo: 'repo-runtime', branch, linkedPRNumber: null, currentHeadOid: 'head-oid' },
       timeoutMs: 30_000
     })
   })
@@ -228,7 +228,7 @@ describe('GitHub PR refresh owner-host routing', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-runtime', branch, linkedPRNumber: null },
+      params: { repo: 'repo-runtime', branch, linkedPRNumber: null, currentHeadOid: 'head-oid' },
       timeoutMs: 30_000
     })
   })
@@ -272,7 +272,12 @@ describe('GitHub PR refresh owner-host routing', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-runtime', branch: 'feature/runtime', linkedPRNumber: null },
+      params: {
+        repo: 'repo-runtime',
+        branch: 'feature/runtime',
+        linkedPRNumber: null,
+        currentHeadOid: 'head-oid'
+      },
       timeoutMs: 30_000
     })
   })

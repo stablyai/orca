@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  getCmdExePath,
+  getRegExePath,
   getSpawnArgsForWindows,
   isPermissionError,
   isWindowsBatchScript,
@@ -41,6 +43,20 @@ describe('isWindowsBatchScript', () => {
   })
 })
 
+describe('getRegExePath', () => {
+  it('falls back to a local absolute system path for unsafe roots', () => {
+    expect(getRegExePath({ SystemRoot: '' })).toBe('C:\\Windows\\System32\\reg.exe')
+    expect(getRegExePath({ SystemRoot: 'Windows' })).toBe('C:\\Windows\\System32\\reg.exe')
+    expect(getRegExePath({ SystemRoot: '\\\\server\\share' })).toBe(
+      'C:\\Windows\\System32\\reg.exe'
+    )
+  })
+
+  it('uses an absolute custom Windows root', () => {
+    expect(getRegExePath({ SystemRoot: 'D:\\Windows' })).toBe('D:\\Windows\\System32\\reg.exe')
+  })
+})
+
 describe('getSpawnArgsForWindows', () => {
   it('routes .cmd through cmd.exe with /d /c on win32', () => {
     const originalComSpec = process.env.ComSpec
@@ -63,6 +79,26 @@ describe('getSpawnArgsForWindows', () => {
         process.env.ComSpec = originalComSpec
       }
     }
+  })
+
+  it('preserves VS Code WSL remote arguments with spaces through .cmd launchers', () => {
+    withPlatform('win32', () => {
+      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows('C:\\tools\\code.cmd', [
+        '--remote',
+        'wsl+Ubuntu Preview',
+        '/home/Ada Lovelace/project'
+      ])
+
+      expect(spawnCmd).toBe(getCmdExePath())
+      expect(spawnArgs).toEqual([
+        '/d',
+        '/c',
+        'C:\\tools\\code.cmd',
+        '--remote',
+        'wsl+Ubuntu Preview',
+        '/home/Ada Lovelace/project'
+      ])
+    })
   })
 
   it('passes .exe through unchanged on win32', () => {

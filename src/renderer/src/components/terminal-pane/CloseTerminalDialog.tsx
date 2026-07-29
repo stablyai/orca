@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useId, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -27,12 +27,16 @@ export default function CloseTerminalDialog({
 }): React.JSX.Element {
   const checkboxId = useId()
   const [dontAskAgain, setDontAskAgain] = useState(false)
+  const [previousOpen, setPreviousOpen] = useState(open)
 
-  useEffect(() => {
+  // Why: each reopen represents a fresh confirmation, so clear the old choice
+  // during render rather than briefly painting it while the dialog opens.
+  if (open !== previousOpen) {
+    setPreviousOpen(open)
     if (open) {
       setDontAskAgain(false)
     }
-  }, [open])
+  }
 
   const isAgent = copyKind === 'agent'
 

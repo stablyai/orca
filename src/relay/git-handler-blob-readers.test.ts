@@ -44,6 +44,7 @@ describe('git blob readers', () => {
 
     const result = await readBlobAtIndex(gitBuffer, '/repo', 'large.log')
 
-    expect(result).toEqual({ content: '', isBinary: true })
+    // Why: overflow is size-capped content, not a staged deletion (missing: false).
+    expect(result).toEqual({ content: '', isBinary: true, missing: false })
   })
 })

@@ -88,10 +88,12 @@ export const GIT_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'git.status',
     params: GitStatusParams,
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, signal }) => {
       const options =
         params.includeIgnored === undefined &&
-        params.bypassEffectiveUpstreamNegativeCache === undefined
+        params.bypassEffectiveUpstreamNegativeCache === undefined &&
+        params.reuseLineStats === undefined &&
+        signal === undefined
           ? undefined
           : {
               ...(params.includeIgnored === undefined
@@ -99,7 +101,9 @@ export const GIT_METHODS: RpcMethod[] = [
                 : { includeIgnored: params.includeIgnored }),
               ...(params.bypassEffectiveUpstreamNegativeCache === true
                 ? { bypassEffectiveUpstreamNegativeCache: true }
-                : {})
+                : {}),
+              ...(params.reuseLineStats === true ? { reuseLineStats: true } : {}),
+              ...(signal ? { signal } : {})
             }
       return options === undefined
         ? runtime.getRuntimeGitStatus(params.worktree)

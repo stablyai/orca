@@ -1,9 +1,14 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import type { Editor } from '@tiptap/react'
 import { getLinkBubblePosition } from './RichMarkdownLinkBubble'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import { useAppStore } from '@/store'
 import { scrollToAnchorInEditor } from './markdown-anchor-scroll'
+import {
+  classifyHtmlSuperscriptLinkAction,
+  type RichMarkdownHtmlSuperscriptLinkContext
+} from './rich-markdown-html-superscript-link-context'
+import { copyRichMarkdownLink } from './rich-markdown-link-clipboard'
 
 /**
  * Extracts link-editing action handlers from the editor component to reduce
@@ -21,14 +26,30 @@ export function useLinkBubble(
     worktreeId: string
     worktreeRoot: string | null
     runtimeEnvironmentId?: string | null
+    htmlSuperscriptLinkContext: RichMarkdownHtmlSuperscriptLinkContext
   }
 ): {
   handleLinkSave: (href: string) => void
   handleLinkRemove: () => void
   handleLinkEditCancel: () => void
   handleLinkOpen: () => void
+  handleLinkCopy: () => void
   toggleLinkFromToolbar: () => void
 } {
+  const citationContextSnapshot = useSyncExternalStore(
+    linkContext.htmlSuperscriptLinkContext.subscribe,
+    linkContext.htmlSuperscriptLinkContext.getSnapshot,
+    linkContext.htmlSuperscriptLinkContext.getSnapshot
+  )
+  useEffect(() => {
+    if (!linkBubble) {
+      return
+    }
+    const openEnabled = classifyHtmlSuperscriptLinkAction(linkBubble.href, citationContextSnapshot)
+    if (openEnabled !== linkBubble.openEnabled) {
+      setLinkBubble({ ...linkBubble, openEnabled })
+    }
+  }, [citationContextSnapshot, linkBubble, setLinkBubble])
   const startLinkEdit = useCallback(() => {
     if (!editor) {
       return
@@ -38,7 +59,13 @@ export function useLinkBubble(
       const href = editor.isActive('link')
         ? (editor.getAttributes('link').href as string) || ''
         : ''
-      setLinkBubble({ href, ...pos })
+      setLinkBubble({
+        kind: 'markdown',
+        href,
+        openEnabled: Boolean(href),
+        copyEnabled: Boolean(href),
+        ...pos
+      })
       setIsEditingLink(true)
     }
   }, [editor, rootRef, setLinkBubble, setIsEditingLink])
@@ -99,7 +126,11 @@ export function useLinkBubble(
   const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
 
   const handleLinkOpen = useCallback(() => {
-    if (!linkBubble?.href) {
+    if (
+      !linkBubble?.href ||
+      !linkBubble.openEnabled ||
+      !classifyHtmlSuperscriptLinkAction(linkBubble.href, citationContextSnapshot)
+    ) {
       return
     }
     if (linkBubble.href.startsWith('#')) {
@@ -110,17 +141,27 @@ export function useLinkBubble(
       sourceFilePath: linkContext.sourceFilePath,
       worktreeId: linkContext.worktreeId,
       worktreeRoot: linkContext.worktreeRoot,
-      runtimeEnvironmentId: linkContext.runtimeEnvironmentId
+      runtimeEnvironmentId: linkContext.runtimeEnvironmentId,
+      sourceOwner: citationContextSnapshot.sourceOwner
     })
   }, [
     activateMarkdownLink,
+    citationContextSnapshot,
     linkBubble?.href,
+    linkBubble?.openEnabled,
     linkContext.sourceFilePath,
     linkContext.worktreeId,
     linkContext.worktreeRoot,
     linkContext.runtimeEnvironmentId,
     rootRef
   ])
+
+  const handleLinkCopy = useCallback(() => {
+    if (!linkBubble?.href || !linkBubble.copyEnabled) {
+      return
+    }
+    void copyRichMarkdownLink(linkBubble.href)
+  }, [linkBubble?.copyEnabled, linkBubble?.href])
 
   const toggleLinkFromToolbar = useCallback(() => {
     if (!editor) {
@@ -139,6 +180,7 @@ export function useLinkBubble(
     handleLinkRemove,
     handleLinkEditCancel,
     handleLinkOpen,
+    handleLinkCopy,
     toggleLinkFromToolbar
   }
 }

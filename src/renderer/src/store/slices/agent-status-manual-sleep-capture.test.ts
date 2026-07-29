@@ -145,6 +145,25 @@ describe('manual sleep agent session capture', () => {
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:stale']).toBeUndefined()
   })
 
+  it('does not promote Pi identity without an authoritative transcript', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const store = createTestStore()
+    seedTabs(store)
+    store.setState({
+      sleepingAgentSessionsByPaneKey: {
+        'tab-1:leaf-1': makeSleepingRecord({
+          agent: 'pi',
+          providerSession: { key: 'session_id', id: 'pi-session-1' }
+        })
+      }
+    } as Partial<AppState>)
+
+    store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBeUndefined()
+  })
+
   it('uses manual sleep filtering when terminal shutdown captures sleeping records', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)

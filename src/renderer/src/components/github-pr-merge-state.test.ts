@@ -62,6 +62,18 @@ describe('presentGitHubPRMergeState', () => {
     })
   })
 
+  it('does not offer enable auto-merge for GitHub unstable PRs', () => {
+    expect(
+      presentGitHubPRMergeState(
+        pr({
+          mergeable: 'UNKNOWN',
+          mergeStateStatus: 'UNSTABLE',
+          checksSummary: { state: 'failure', total: 1, passed: 0, failed: 1, pending: 0 }
+        })
+      ).autoMergeAction
+    ).toBeNull()
+  })
+
   it('does not offer enable auto-merge on conflicting PRs (GitHub would reject it)', () => {
     expect(
       presentGitHubPRMergeState(pr({ mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' }))

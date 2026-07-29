@@ -1,0 +1,179 @@
+name: Release macOS Build
+
+run-name: Mac release build ${{ inputs.tag }} (${{ inputs.release_run_id }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag whose draft should receive macOS artifacts
+        required: true
+        type: string
+      release_run_id:
+        description: release-cut workflow run that requested this build
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-mac-build-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build-mac:
+    if: github.repository == 'stablyai/orca'
+    # Why: this workflow is outside the SignPath signing run, so Blacksmith
+    # cannot enter Windows artifact provenance while mac notarization gets the
+    # faster runner.
+    runs-on: blacksmith-6vcpu-macos-15
+    timeout-minutes: 60
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      # Cache the Electron binary + electron-builder tool downloads (notarytool,
+      # winCodeSign, nsis, squirrel, AppImage). Saves ~30-90s per job, incl. mac.
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: electron-builder-mac-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-mac-
+
+      # Why: pnpm install triggers electron's postinstall, which downloads the
+      # Electron binary from GitHub release assets. GitHub's download CDN
+      # occasionally returns 504s that fail the whole release. Retry on
+      # failure so transient network errors don't require a manual re-run.
+      - name: Install dependencies
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
+
+      - name: Verify macOS signing environment
+        run: node config/scripts/verify-macos-release-env.mjs
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERTS }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      # Why: `plutil -lint` accepts duplicate plist keys, but `codesign`
+      # rejects duplicate entitlements after the expensive app build.
+      - name: Verify macOS entitlements
+        run: pnpm verify:macos-entitlements
+
+      # Why: telemetry's transport gate (`src/main/telemetry/client.ts:IS_OFFICIAL_BUILD`)
+      # requires the build identity to be the literal string `stable` or `rc`,
+      # substituted by electron-vite's `define` block at build time.
+      - name: Classify release tag for telemetry build identity
+        id: tag-classify
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          # Why the optional trailing identifier: suffixed side-branch RCs
+          # (vX.Y.Z-rc.N.perf) are rc-channel prerelease builds — same telemetry
+          # identity as plain RCs.
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+(\.[0-9A-Za-z]+)?$ ]]; then
+            identity=rc
+          elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            identity=stable
+          else
+            echo "::error::Tag $TAG does not match stable or rc pattern; refusing to build official artifact"
+            exit 1
+          fi
+          echo "identity=$identity" >>"$GITHUB_OUTPUT"
+          echo "Classified $TAG as $identity"
+
+      - name: Build app
+        run: pnpm build:release
+        env:
+          # Why: Vite's web build crossed Node's default old-space ceiling on
+          # the macOS release runner, leaving v1.4.2-rc.8 as an incomplete draft.
+          NODE_OPTIONS: --max-old-space-size=4096
+          ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+
+      - name: Gate runtime file-watcher process isolation
+        run: |
+          # Why: #8212 is a native-process crash contract. Prove both the Node
+          # host and the exact Electron runtime survive SIGSEGV before packaging.
+          node config/scripts/runtime-file-watcher-fault-harness.mjs
+          ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs
+
+      - name: Gate SSH relay watcher process isolation
+        run: |
+          # Why: the remote native watcher shares a daemon with live PTYs.
+          # Kill only its child and require both PTY and watch recovery before packaging.
+          node config/scripts/relay-watcher-fault-harness.mjs
+
+      - name: Publish release artifacts (macOS)
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 45
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.MAC_CERTS }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Verify release remains draft after artifact upload
+        # Why: the macOS build must never be the actor that exposes a partial
+        # release. If an uploader or GitHub transition flips draft early, fail
+        # this job so release-cut never publishes the release.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          releases_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
+          # Why: release upload must validate the draft before it is publicly visible.
+          draft="$(jq -e -r --arg tag "$TAG" '
+            map(select(.tag_name == $tag))
+            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
+          ' <<<"$releases_json")" || {
+            echo "::error::Release $TAG was not found in the draft-aware releases list, or its draft state was missing."
+            exit 1
+          }
+          if [[ "$draft" != "true" ]]; then
+            echo "::error::Release $TAG was published during the mac artifact upload."
+            exit 1
+          fi
+
+      # Why post-publish for macOS: electron-builder packs and uploads in a
+      # single `--publish always` invocation, so there is no cheap insertion
+      # point between pack and upload without splitting those steps.
+      - name: Verify telemetry constants present in app.asar
+        run: node config/scripts/verify-telemetry-constants.mjs

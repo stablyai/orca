@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: SSH config parsing fixtures cover OpenSSH file parsing and ssh -G output together so import and connection resolution stay aligned. */
 import { describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { parseSshConfig, sshConfigHostsToTargets, parseSshGOutput } from './ssh-config-parser'
@@ -162,6 +161,40 @@ Host myserver
 `
     const hosts = parseSshConfig(config)
     expect(hosts[0].identitiesOnly).toBe(true)
+  })
+
+  it('parses GSSAPIAuthentication', () => {
+    const config = `
+Host krb-host
+  HostName krb.example.com
+  GSSAPIAuthentication yes
+
+Host plain-host
+  HostName plain.example.com
+  GSSAPIAuthentication no
+
+Host silent-host
+  HostName silent.example.com
+`
+    const hosts = parseSshConfig(config)
+    expect(hosts[0].gssapiAuthentication).toBe(true)
+    expect(hosts[1].gssapiAuthentication).toBe(false)
+    expect(hosts[2].gssapiAuthentication).toBeUndefined()
+  })
+
+  it('keeps the first GSSAPIAuthentication value like OpenSSH', () => {
+    const hosts = parseSshConfig(`
+Host enabled
+  GSSAPIAuthentication yes
+  GSSAPIAuthentication no
+
+Host disabled
+  GSSAPIAuthentication no
+  GSSAPIAuthentication yes
+`)
+
+    expect(hosts[0].gssapiAuthentication).toBe(true)
+    expect(hosts[1].gssapiAuthentication).toBe(false)
   })
 
   it('parses ProxyCommand, ProxyUseFdpass, and ProxyJump', () => {
@@ -360,6 +393,12 @@ describe('sshConfigHostsToTargets', () => {
     expect(targets[0].jumpHost).toBe('bastion.example.com')
   })
 
+  it('carries through gssapiAuthentication', () => {
+    const hosts = [{ host: 'krb-host', hostname: 'krb.example.com', gssapiAuthentication: true }]
+    const targets = sshConfigHostsToTargets(hosts, new Set())
+    expect(targets[0].gssapiAuthentication).toBe(true)
+  })
+
   it('imports duplicate aliases only once and keeps the first concrete host', () => {
     const hosts = [
       { host: 'dup', hostname: 'first.example.com', user: 'first' },
@@ -507,5 +546,35 @@ describe('parseSshGOutput', () => {
     const output = 'hostname example.com\nidentitiesonly yes\nport 22'
     const result = parseSshGOutput(output)
     expect(result.identitiesOnly).toBe(true)
+  })
+
+  it('parses gssapiauthentication', () => {
+    const output = 'hostname example.com\ngssapiauthentication yes\nport 22'
+    const result = parseSshGOutput(output)
+    expect(result.gssapiAuthentication).toBe(true)
+
+    const offResult = parseSshGOutput('hostname example.com\ngssapiauthentication no\nport 22')
+    expect(offResult.gssapiAuthentication).toBe(false)
+  })
+
+  it('parses controlmaster options and filters controlpath none', () => {
+    const output = [
+      'hostname example.com',
+      'controlmaster auto',
+      'controlpath ~/.ssh/cm/%r@%h:%p',
+      'controlpersist 10m',
+      'port 22'
+    ].join('\n')
+    const result = parseSshGOutput(output)
+    expect(result.controlMaster).toBe('auto')
+    expect(result.controlPath).toBe(testHomePath('.ssh', 'cm', '%r@%h:%p'))
+    expect(result.controlPersist).toBe('10m')
+
+    const noneResult = parseSshGOutput(
+      'hostname example.com\ncontrolmaster no\ncontrolpath none\ncontrolpersist no\nport 22'
+    )
+    expect(noneResult.controlMaster).toBe('no')
+    expect(noneResult.controlPath).toBeUndefined()
+    expect(noneResult.controlPersist).toBe('no')
   })
 })

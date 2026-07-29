@@ -42,6 +42,7 @@ function createSystemSshConn() {
   return {
     getClient: vi.fn().mockReturnValue(null),
     usesSystemSshTransport: vi.fn().mockReturnValue(true),
+    getSystemSshResolvedConfig: vi.fn().mockReturnValue(null),
     getTarget: vi.fn().mockReturnValue({
       id: 'target-1',
       label: 'container',
@@ -164,6 +165,38 @@ describe('SshPortForwardManager', () => {
     expect(manager.listForwards('conn-1')).toHaveLength(1)
   })
 
+  it('passes resolved OpenSSH config to system SSH port forwards', async () => {
+    const forward = createFakeSystemSshForward()
+    startSystemSshPortForwardProcessMock.mockReturnValue(forward)
+    const conn = createSystemSshConn()
+    conn.getSystemSshResolvedConfig.mockReturnValue({
+      hostname: 'resolved.example.com',
+      port: 2222,
+      user: 'vscode',
+      identityFile: ['/home/user/.ssh/work'],
+      forwardAgent: false,
+      identitiesOnly: true,
+      proxyUseFdpass: true,
+      controlMaster: 'no',
+      controlPersist: 'no'
+    })
+
+    await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
+
+    expect(startSystemSshPortForwardProcessMock).toHaveBeenCalledWith(
+      conn.getTarget(),
+      3000,
+      '127.0.0.1',
+      8080,
+      {
+        resolvedConfig: expect.objectContaining({
+          hostname: 'resolved.example.com',
+          proxyUseFdpass: true
+        })
+      }
+    )
+  })
+
   it('does not register a system SSH forward when startup fails', async () => {
     const forward = createFakeSystemSshForward()
     forward.waitForStartup.mockRejectedValue(new Error('bind: Address already in use'))
@@ -232,6 +265,27 @@ describe('SshPortForwardManager', () => {
         detail: expect.stringContaining('channel open failed')
       })
     )
+  })
+
+  it('keeps only a bounded tail of a chatty forward stderr (memory-leak regression)', async () => {
+    const onForwardClosed = vi.fn()
+    manager.setCallbacks({ onForwardClosed })
+    const forward = createFakeSystemSshForward()
+    startSystemSshPortForwardProcessMock.mockReturnValue(forward)
+    const conn = createSystemSshConn()
+
+    await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
+    // A long-lived forward against a chatty remote sshd: emit >64 KB of stderr.
+    forward.process.stderr.emit('data', Buffer.from(`HEAD_MARKER${'x'.repeat(70 * 1024)}`))
+    forward.process.stderr.emit('data', Buffer.from('TAIL_MARKER'))
+    forward.process.emit('exit', 255)
+
+    const detail = onForwardClosed.mock.calls[0]?.[1]?.detail as string
+    // The oldest bytes are trimmed; the most-recent tail is retained.
+    expect(detail).toContain('TAIL_MARKER')
+    expect(detail).not.toContain('HEAD_MARKER')
+    // Bounded well below the ~70 KB produced.
+    expect(detail.length).toBeLessThan(66 * 1024)
   })
 
   it('lists forwards filtered by connectionId', async () => {

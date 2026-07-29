@@ -7,7 +7,8 @@ import {
   FolderOpen,
   ListFilter,
   LoaderCircle,
-  PanelsTopLeft
+  PanelsTopLeft,
+  Server
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -31,8 +32,10 @@ import {
   type AiVaultScope,
   type AiVaultSort
 } from '../../../../shared/ai-vault-types'
+import { getExecutionHostLabel, type ExecutionHostScope } from '../../../../shared/execution-host'
 import { agentLabel, type AiVaultSessionGroup } from './ai-vault-session-filters'
 import { translate } from '@/i18n/i18n'
+import type { AiVaultHostScopeOption } from './ai-vault-host-scope'
 
 const VAULT_HEADER_CONTROL_CLASS = 'size-6 shrink-0'
 
@@ -172,6 +175,55 @@ export function VaultScopeSwitch({
         {allLabel}
       </ToggleGroupItem>
     </ToggleGroup>
+  )
+}
+
+export function VaultHostScopeMenu({
+  executionHostScope,
+  hostOptions,
+  onExecutionHostScopeChange
+}: {
+  executionHostScope: ExecutionHostScope
+  hostOptions: readonly AiVaultHostScopeOption[]
+  onExecutionHostScopeChange: (scope: ExecutionHostScope) => void
+}): React.JSX.Element {
+  const selectedOption = hostOptions.find((option) => option.id === executionHostScope)
+  const label = selectedOption?.label ?? getExecutionHostLabel(executionHostScope)
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-6 max-w-24 shrink-0 gap-1 px-1.5 text-[11px] font-medium text-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground @max-[340px]/ai-vault:w-6 @max-[340px]/ai-vault:px-0"
+          aria-label={translate(
+            'auto.components.right.sidebar.AiVaultPanelControls.hostScopeAriaLabel',
+            'Session History host: {{value0}}',
+            { value0: label }
+          )}
+        >
+          <Server className="size-3 shrink-0" />
+          <span className="min-w-0 truncate @max-[340px]/ai-vault:hidden">{label}</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" sideOffset={6} className="w-44">
+        <DropdownMenuLabel>
+          {translate('auto.components.right.sidebar.AiVaultPanelControls.host', 'Host')}
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={executionHostScope}
+          onValueChange={(value) => onExecutionHostScopeChange(value as ExecutionHostScope)}
+        >
+          {hostOptions.map((option) => (
+            <DropdownMenuRadioItem key={option.id} value={option.id}>
+              {option.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

@@ -1,15 +1,17 @@
-/* eslint-disable max-lines -- Why: the web preload adapter is the browser-side
-   replacement for Electron preload, so the compatibility surface is necessarily
-   centralized at this boundary. */
+/* eslint-disable max-lines -- Why: browser-side Electron-preload replacement; compatibility surface centralizes here. */
 import type {
   PreloadApi,
   PreflightStatus,
   RefreshAgentsResult,
   NativeChatApi,
-  NativeChatReadSessionResult,
   NativeChatAppendedMessages
 } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
+import type {
+  AiVaultPrepareSessionResumeArgs,
+  AiVaultPrepareSessionResumeResult
+} from '../../../shared/ai-vault-resume-preparation'
 import { buildNativeChatUnsubscribe } from '../../../shared/native-chat-stream-unsubscribe'
 import type {
   ComputerUsePermissionSetupResult,
@@ -34,6 +36,8 @@ import type {
   WorkspaceSessionState
 } from '../../../shared/types'
 import type { SkillDiscoveryResult } from '../../../shared/skills'
+import type { SkillFreshnessInventory } from '../../../shared/skill-freshness'
+import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
 import {
   getDefaultOnboardingState,
   getDefaultSettings,
@@ -44,11 +48,28 @@ import {
   normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION
 } from '../../../shared/constants'
+import {
+  createDefaultLocalOrcaProfile,
+  DEFAULT_LOCAL_ORCA_PROFILE_ID
+} from '../../../shared/orca-profiles'
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
+import { EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS } from '../../../shared/pty-delivery-diagnostics'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID, normalizeExecutionHostId } from '../../../shared/execution-host'
+import {
+  applyPRBotAuthorOverride,
+  normalizePRBotAuthorOverrides
+} from '../../../shared/pr-bot-author-overrides'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostScope,
+  normalizeExecutionHostId,
+  parseExecutionHostId,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
+import { callAbortableRuntimeEnvironment } from '../runtime/abortable-runtime-environment-call'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import {
   normalizeTuiAgentArgsRecord,
@@ -56,10 +77,17 @@ import {
 } from '../../../shared/tui-agent-launch-defaults'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
+import {
+  normalizeOsc52ClipboardDefaultOn,
+  osc52ClipboardDefaultOnOverridesPersistedOff
+} from '../../../shared/osc52-clipboard-settings'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
+import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
+import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
+import { assertFileMutationOwnershipCapability } from '../../../shared/file-mutation-ownership'
 import {
   findKeybindingConflicts,
   formatKeybindingList,
@@ -83,6 +111,7 @@ import {
   type StoredWebRuntimeEnvironment
 } from './web-runtime-environment'
 import { parseWebPairingInput } from './web-pairing'
+import { copyClipboardTextViaExecCommand } from './web-clipboard-copy-fallback'
 import { WebRuntimeClient } from './web-runtime-client'
 import { RuntimeRpcCallQueuePool } from '../../../shared/runtime-rpc-call-queue'
 import {
@@ -107,6 +136,11 @@ import {
 import { normalizeContextualTourIds, type ContextualTourId } from '../../../shared/contextual-tours'
 import { translate } from '@/i18n/i18n'
 import { getDefaultCreateProjectParent } from '@/components/sidebar/create-project-defaults'
+import {
+  parseRuntimeNativeChatReadSessionResult,
+  parseRuntimeNativeChatTurnLifecycle
+} from '@/components/native-chat/native-chat-runtime-contract'
+import { createWebFileMutationMethods } from './web-file-mutation-methods'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -114,8 +148,7 @@ const SESSION_STORAGE_KEY = 'orca.web.workspaceSession.v1'
 const ONBOARDING_STORAGE_KEY = 'orca.web.onboarding.v1'
 const GITHUB_CACHE_STORAGE_KEY = 'orca.web.githubCache.v1'
 const KEYBINDINGS_STORAGE_KEY = 'orca.web.keybindings.v1'
-// Why: browser-paired clients need desktop parity for large dev sessions; the
-// runtime's no-limit default remains capped for lower-level RPC callers.
+// Why: paired clients need parity for large dev sessions; the runtime default stays capped for lower-level RPC callers.
 const WEB_RUNTIME_WORKTREE_LIST_LIMIT = 10_000
 const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = CLIPBOARD_IMAGE_MAX_BASE64_CHARS
 export const MAX_CLIPBOARD_IMAGE_SOURCE_BYTES = CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
@@ -211,6 +244,16 @@ type WebSettingsApi = NonNullable<PreloadApi['settings']>
 type WebKeybindingsApi = NonNullable<PreloadApi['keybindings']>
 type WebGitHubApi = NonNullable<PreloadApi['gh']>
 type WebGitHubResult<K extends keyof WebGitHubApi> = Awaited<ReturnType<WebGitHubApi[K]>>
+type WebRuntimeResultCaller = <TResult>(
+  method: string,
+  params?: unknown,
+  timeoutMs?: number
+) => Promise<TResult>
+type WebRuntimeEnvelopeCaller = <TResult>(
+  method: string,
+  params?: unknown,
+  timeoutMs?: number
+) => Promise<RuntimeRpcResponse<TResult>>
 type WebGitHubRouteKey =
   | 'repoSlug'
   | 'repoUpstream'
@@ -447,6 +490,15 @@ export function installWebPreloadApi(): void {
 }
 
 function createWebPreloadApi(): Partial<PreloadApi> {
+  const webOrcaProfileAuthStatus = () =>
+    Promise.resolve({
+      activeProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+      configured: false,
+      state: 'unconfigured' as const,
+      persistence: 'none' as const,
+      setupMessage: 'Orca Cloud sign-in is not available in the browser fallback.'
+    })
+
   return {
     app: {
       getIdentity: () =>
@@ -463,6 +515,14 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       relaunch: () => Promise.resolve(window.location.reload()),
       restart: () => Promise.resolve(window.location.reload()),
       reload: () => Promise.resolve(window.location.reload()),
+      persistBeforeUnloadSync: ({ sessions, ui }) => {
+        // Why: beforeunload cannot await the paired runtime, so the web adapter
+        // guarantees immediate browser-local durability for the final snapshot.
+        for (const { state, hostId } of sessions) {
+          writeJson(sessionStorageKeyForHost(hostId), sanitizeWebRuntimeWorkspaceSession(state))
+        }
+        writeJson(UI_STORAGE_KEY, mergeWebUIState(readLocalWebUIState(), ui))
+      },
       awaitFirstWindowStartupServices: () => Promise.resolve(),
       startupDiagnostic: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),
@@ -470,7 +530,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       getFloatingTerminalCwd: () => Promise.resolve(''),
       getFloatingMarkdownDirectory: () => Promise.resolve(''),
       pickFloatingMarkdownDocument: () => Promise.resolve(null),
-      pickFloatingWorkspaceDirectory: () => Promise.resolve(null)
+      pickFloatingWorkspaceDirectory: () => Promise.resolve(null),
+      // Browser fallback has no app-owned userData dir; reject so the sentinel can't claim sensitive evidence was persisted.
+      writeTerminalRenderDesyncEvidence: () =>
+        Promise.reject(
+          new Error('Terminal render evidence is unavailable in the browser fallback.')
+        )
     },
     starNag: {
       onShow: () => noopUnsubscribe,
@@ -493,25 +558,105 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         displayServer: null
       })
     },
+    workspacePorts: {
+      // Why: browser-local workspaces have no host process to inspect; return capability state instead of the generic undefined fallback.
+      scan: () =>
+        Promise.resolve({
+          platform: getBrowserPlatform(),
+          scannedAt: Date.now(),
+          ports: [],
+          unavailableReason: 'Workspace port scanning is unavailable for browser-local workspaces.'
+        }),
+      kill: () =>
+        Promise.resolve({
+          ok: false,
+          reason: 'Workspace port management is unavailable for browser-local workspaces.'
+        }),
+      onAdvertisedUrlChanged: () => noopUnsubscribe
+    },
+    orcaProfiles: {
+      list: () =>
+        Promise.resolve({
+          activeProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+          profiles: [createDefaultLocalOrcaProfile(0)],
+          multiProfileUi: false
+        }),
+      authStatus: webOrcaProfileAuthStatus,
+      createLocal: () =>
+        Promise.resolve({
+          activeProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+          profiles: [createDefaultLocalOrcaProfile(0)],
+          profile: createDefaultLocalOrcaProfile(0)
+        }),
+      createCloudLinked: async () => ({
+        status: 'unconfigured',
+        auth: await webOrcaProfileAuthStatus()
+      }),
+      switchProfile: () => Promise.resolve({ status: 'already-active' }),
+      transferProject: (args) =>
+        Promise.resolve({
+          status: 'duplicate-target',
+          sourceProfileId: args.sourceProfileId,
+          targetProfileId: args.targetProfileId,
+          sourceRepoId: args.repoId,
+          duplicateRepoId: args.repoId
+        }),
+      findProjectProfiles: async () => ({ projects: [] }),
+      connectCurrent: async () => ({
+        status: 'unconfigured',
+        auth: await webOrcaProfileAuthStatus()
+      }),
+      refreshAuth: async () => ({
+        status: 'unconfigured',
+        auth: await webOrcaProfileAuthStatus()
+      }),
+      signOutCurrent: async () => ({
+        status: 'signed-out',
+        auth: await webOrcaProfileAuthStatus(),
+        activeProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+        profiles: [createDefaultLocalOrcaProfile(0)]
+      }),
+      selectOrg: async () => ({
+        status: 'unconfigured',
+        auth: await webOrcaProfileAuthStatus()
+      }),
+      orgMembersList: async () => ({ status: 'unconfigured' }),
+      orgMemberInvite: async () => ({ status: 'unconfigured' }),
+      orgInviteRevoke: async () => ({ status: 'unconfigured' }),
+      orgMemberChangeRole: async () => ({ status: 'unconfigured' }),
+      orgMemberRemove: async () => ({ status: 'unconfigured' })
+    },
     e2e: {
       getConfig: () => createE2EConfig({})
     },
     settings: {
       get: async () => getRuntimeBackedStoredSettings(),
+      // Why: localStorage-backed settings are synchronous, so the pre-hydration kill-switch read works the same as desktop.
+      getSync: () => getStoredSettings(),
       set: async (updates) => {
-        if (updates.activeRuntimeEnvironmentId === null) {
-          disconnectActiveRuntimeEnvironment()
-        }
         const sanitizedUpdates = { ...updates }
+        delete sanitizedUpdates.activeRuntimeEnvironmentId
         if ('autoRenameBranchFromWorkDefaultedOn' in sanitizedUpdates) {
           sanitizedUpdates.autoRenameBranchFromWorkDefaultedOn = true
         }
         const next = mergeSettings(getStoredSettings(), sanitizedUpdates, {
           preserveAutoRenameBranchFromWorkUpdate: 'autoRenameBranchFromWork' in sanitizedUpdates
         })
-        writeJson(SETTINGS_STORAGE_KEY, next)
+        writeStoredSettings(next)
         return syncRuntimeBackedSettings(sanitizedUpdates, next)
       },
+      setActiveRuntimeEnvironmentPreference: async ({ environmentId }) => {
+        const requestedEnvironmentId = environmentId?.trim() || null
+        const activeRuntimeEnvironmentId = requestedEnvironmentId
+          ? resolveEnvironment(requestedEnvironmentId).id
+          : null
+        const next = mergeSettings(getStoredSettings(), {
+          activeRuntimeEnvironmentId
+        })
+        writeStoredSettings(next, activeRuntimeEnvironmentId)
+        return next
+      },
+      updatePRBotAuthorOverride: (args) => updateRuntimePRBotAuthorOverride(args),
       listFonts: () => Promise.resolve([]),
       onChanged: () => noopUnsubscribe
     } satisfies Partial<WebSettingsApi> as unknown as WebSettingsApi,
@@ -533,7 +678,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         Promise.resolve({
           ok: false,
           error: translate('auto.web.web.preload.api.fb290366b2', 'Unavailable on web.')
-        })
+        }),
+      // Why: no Electron process on web; the caller falls back to performance.memory.
+      readHeapStatistics: () => null
     },
     diagnostics: {
       getStatus: () =>
@@ -550,9 +697,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       deleteBundle: () => Promise.reject(new Error('Sent diagnostics are unavailable on web.'))
     },
     session: {
-      // hostId mirrors the desktop bridge: omitted/'local' targets the existing
-      // storage key; non-local hosts persist under a host-suffixed key so their
-      // sessions stay isolated from the local one.
+      // Mirrors desktop bridge: non-local hosts persist under a host-suffixed key so their sessions stay isolated from local.
       get: (hostId) => Promise.resolve(getStoredWorkspaceSession(hostId)),
       set: async (session, hostId) => {
         writeJson(sessionStorageKeyForHost(hostId), sanitizeWebRuntimeWorkspaceSession(session))
@@ -566,6 +711,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           })
         )
       },
+      // localStorage writes synchronously, so there is no deferred web flush.
+      flush: async () => {},
       readTerminalScrollback: () => null,
       setSync: (session, hostId) => {
         writeJson(sessionStorageKeyForHost(hostId), sanitizeWebRuntimeWorkspaceSession(session))
@@ -626,21 +773,23 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     memory: {
       getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot())
     },
-    aiVault: {
-      listSessions: () =>
-        Promise.resolve({
-          sessions: [],
-          issues: [],
-          scannedAt: new Date().toISOString()
-        })
-    },
+    aiVault: createAiVaultApi(),
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
+    minimaxCredentials: createMiniMaxCredentialsApi(),
+    grokAccounts: createGrokAccountsApi(),
     codexAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),
     cli: createCliApi(),
     agentHooks: createAgentHooksApi(),
+    macosTccPrompts: createMacosTccPromptsApi(),
+    // Why: the desktop derives this from the host filesystem, which the web
+    // client has no view of; reporting synced keeps the warning banner silent.
+    codexConfigSync: {
+      status: () =>
+        Promise.resolve({ state: 'synced', reason: null, systemConfigPath: '' } as const)
+    },
     developerPermissions: createDeveloperPermissionsApi(),
     computerUsePermissions: createComputerUsePermissionsApi(),
     updater: createUpdaterApi(),
@@ -663,21 +812,32 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onClear: () => noopUnsubscribe,
       getSnapshot: () => Promise.resolve([]),
       inferInterrupt: () => Promise.resolve(false),
+      inferQuestionAnswered: () => Promise.resolve(false),
       onMigrationUnsupported: () => noopUnsubscribe,
       onMigrationUnsupportedClear: () => noopUnsubscribe,
       getMigrationUnsupportedSnapshot: () => Promise.resolve([]),
       drop: () => {},
-      dropByTabPrefix: () => {}
+      dropByTabPrefix: () => {},
+      retirePaneAuthority: () => {},
+      transferPaneAuthority: () => {}
     },
     mobile: {
       listNetworkInterfaces: () => Promise.resolve({ interfaces: [] }),
       getPairingQR: () => Promise.resolve({ available: false }),
+      getWindowsFirewallStatus: () => Promise.resolve({ supported: false }),
+      repairWindowsFirewall: () => Promise.resolve({ ok: false, reason: 'unsupported' }),
+      openWindowsNetworkSettings: () => Promise.resolve(false),
       getRuntimePairingUrl: () => Promise.resolve({ available: false }),
       listDevices: () => Promise.resolve({ devices: [] }),
       revokeDevice: () => Promise.resolve({ revoked: false }),
       listRuntimeAccessGrants: () => Promise.resolve({ grants: [] }),
       revokeRuntimeAccess: () => Promise.resolve({ revoked: false }),
-      isWebSocketReady: () => Promise.resolve({ ready: Boolean(activeEnvironment), endpoint: null })
+      isWebSocketReady: () =>
+        Promise.resolve({ ready: Boolean(activeEnvironment), endpoint: null }),
+      getRelayStatus: () => Promise.resolve({ status: 'offline' as const }),
+      onRelayStatusChanged: () => noopUnsubscribe,
+      consumePendingUnpairedDeviceAuthFailure: () => Promise.resolve(false),
+      onUnpairedDeviceAuthFailure: () => noopUnsubscribe
     },
     telemetryTrack: () => Promise.resolve(),
     telemetrySetOptIn: () => Promise.resolve(),
@@ -905,7 +1065,7 @@ function writeWebKeybindingAction(
   bindings: string[] | null
 ): KeybindingFileSnapshot {
   if (!isKeybindingActionId(actionId)) {
-    throw new Error(`Unknown keybinding action "${actionId}".`)
+    throw new Error(`Unknown keybinding action "${String(actionId)}".`)
   }
   const normalizedBindings =
     bindings === null ? null : normalizeKeybindingArrayForAction(actionId, bindings)
@@ -988,54 +1148,126 @@ function createWebKeybindingsApi(): WebKeybindingsApi {
   }
 }
 
-// Why: the desktop reads native-chat transcripts over IPC; the web client has
-// no IPC, so route readSession/subscribe through the runtime RPC (the same
-// methods the mobile app uses). Without this, window.api.nativeChat was
-// undefined on web and the chat view showed no messages.
+// Why: web has no IPC for native-chat transcripts, so route readSession/subscribe through runtime RPC (as mobile does).
 function createNativeChatApi(): NativeChatApi {
   return {
-    readSession: (agent, sessionId, limit, transcriptPath) =>
-      callRuntimeResult<NativeChatReadSessionResult>('nativeChat.readSession', {
-        agent,
-        sessionId,
-        limit,
-        transcriptPath
-      }),
-    subscribe: (args, onAppended) => {
-      // No paired runtime yet: nothing to subscribe to, and
-      // requireActiveEnvironment() would throw. Return a no-op teardown so the
-      // chat view mounts cleanly until a runtime is paired (only the not-paired
-      // case is swallowed — real subscribe errors still surface via .catch).
+    readSession: async (agent, sessionId, limit, transcriptPath) =>
+      parseRuntimeNativeChatReadSessionResult(
+        await callRuntimeResult<unknown>('nativeChat.readSession', {
+          agent,
+          sessionId,
+          limit,
+          transcriptPath
+        })
+      ),
+    subscribe: (args, onFrame) => {
+      // No paired runtime yet: return a no-op teardown so the chat view mounts cleanly; only the not-paired case is swallowed.
       const environment = requireActiveEnvironmentOrNull()
       if (!environment) {
+        onFrame({
+          type: 'snapshot',
+          messages: [],
+          hasMore: false,
+          error: translate(
+            'components.native-chat.state.pairHost',
+            'Pair a host to view agent chat history.'
+          )
+        })
         return () => {}
       }
       let handle: { unsubscribe: () => void } | null = null
       let cancelled = false
+      let receivedInitial = false
       void getClientForEnvironment(environment)
         .subscribe(
           'nativeChat.subscribe',
-          { agent: args.agent, sessionId: args.sessionId, transcriptPath: args.transcriptPath },
+          {
+            agent: args.agent,
+            sessionId: args.sessionId,
+            subscriptionId: args.subscriptionId,
+            transcriptPath: args.transcriptPath,
+            limit: args.limit
+          },
           {
             onResponse: (response) => {
-              if (cancelled || !response.ok) {
+              if (cancelled) {
+                return
+              }
+              if (!response.ok) {
+                if (!receivedInitial) {
+                  receivedInitial = true
+                  onFrame({
+                    type: 'snapshot',
+                    messages: [],
+                    hasMore: false,
+                    error: response.error.message
+                  })
+                }
                 return
               }
               const result = response.result as {
                 type?: string
                 messages?: NativeChatAppendedMessages
+                hasMore?: boolean
+                error?: string
+                lifecycle?: unknown
               }
-              if (result?.type === 'appended' && Array.isArray(result.messages)) {
-                onAppended(result.messages)
+              const lifecycle = parseRuntimeNativeChatTurnLifecycle(result?.lifecycle)
+              if (
+                (result?.type === 'appended' ||
+                  result?.type === 'snapshot' ||
+                  result?.type === 'replacement') &&
+                Array.isArray(result.messages)
+              ) {
+                if (!receivedInitial) {
+                  receivedInitial = true
+                  onFrame({
+                    type: 'snapshot',
+                    messages: result.messages,
+                    hasMore: result.hasMore ?? result.messages.length >= (args.limit ?? 300),
+                    ...(result.error ? { error: result.error } : {}),
+                    ...(lifecycle ? { lifecycle } : {})
+                  })
+                } else if (result.type === 'snapshot') {
+                  onFrame({
+                    type: 'snapshot',
+                    messages: result.messages,
+                    hasMore: result.hasMore ?? false,
+                    ...(result.error ? { error: result.error } : {}),
+                    ...(lifecycle ? { lifecycle } : {})
+                  })
+                } else {
+                  onFrame(
+                    result.type === 'replacement'
+                      ? {
+                          type: 'replacement',
+                          messages: result.messages,
+                          hasMore: result.hasMore ?? false,
+                          ...(lifecycle ? { lifecycle } : {})
+                        }
+                      : {
+                          type: 'appended',
+                          messages: result.messages,
+                          ...(lifecycle ? { lifecycle } : {})
+                        }
+                  )
+                }
+              } else if (!receivedInitial) {
+                // Why: an unrecognized ok payload never flips receivedInitial, stranding the view on 'loading'; settle it empty instead.
+                receivedInitial = true
+                onFrame({
+                  type: 'snapshot',
+                  messages: [],
+                  hasMore: false,
+                  ...(result?.error ? { error: result.error } : {})
+                })
               }
             }
           },
           {
-            // Why: send nativeChat.unsubscribe on teardown so the server reaps
-            // the transcript fs-watcher on view-toggle, not just on socket close
-            // (the watcher-leak fix). Uses the same agent:sessionId cleanup token
-            // mobile sends, via the shared key-builder so it can't drift.
-            buildUnsubscribe: () => buildNativeChatUnsubscribe(args.agent, args.sessionId)
+            // Why: unsubscribe reaps the fs-watcher on view-toggle (leak fix); echo the pane token so two panes don't tear down each other's watcher.
+            buildUnsubscribe: () =>
+              buildNativeChatUnsubscribe(args.agent, args.sessionId, args.subscriptionId)
           }
         )
         .then((h) => {
@@ -1045,7 +1277,17 @@ function createNativeChatApi(): NativeChatApi {
             handle = h
           }
         })
-        .catch(() => {})
+        .catch((err: unknown) => {
+          if (!cancelled && !receivedInitial) {
+            receivedInitial = true
+            onFrame({
+              type: 'snapshot',
+              messages: [],
+              hasMore: false,
+              error: err instanceof Error ? err.message : String(err)
+            })
+          }
+        })
       return () => {
         cancelled = true
         handle?.unsubscribe()
@@ -1081,8 +1323,9 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
       if (!offer) {
         throw new Error('Invalid Orca pairing code.')
       }
+      const previousEnvironment = activeEnvironment
       closeActiveRuntimeClients()
-      activeEnvironment = createStoredWebRuntimeEnvironment({ name, offer })
+      activeEnvironment = createStoredWebRuntimeEnvironment({ name, offer, previousEnvironment })
       saveStoredWebRuntimeEnvironment(activeEnvironment)
       return { environment: redactStoredWebRuntimeEnvironment(activeEnvironment) }
     },
@@ -1114,58 +1357,133 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
   }
 }
 
+function createAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
+  return {
+    listSessions: (args?: AiVaultListArgs) => {
+      const environment = requireActiveEnvironment()
+      const executionHostId = toRuntimeExecutionHostId(environment.id)
+      const requestedScope = normalizeExecutionHostScope(
+        args?.executionHostScope ?? executionHostId
+      )
+      if (requestedScope !== 'all' && requestedScope !== executionHostId) {
+        return Promise.resolve(webAiVaultUnavailableResult(requestedScope))
+      }
+      // Why: no local filesystem in the browser, so every history scan runs on and is stamped as the paired runtime host.
+      return callRuntimeResult<AiVaultListResult>('aiVault.listSessions', {
+        limit: args?.limit,
+        force: args?.force,
+        scopePaths: args?.scopePaths,
+        executionHostId
+      })
+    },
+    prepareSessionResume: (args: AiVaultPrepareSessionResumeArgs) =>
+      callRuntimeResult<AiVaultPrepareSessionResumeResult>('aiVault.prepareSessionResume', args),
+    // Why: no server-side RPC for subagent transcript listing yet, so report an empty (not erroring) result.
+    listSubagentSessions: () => Promise.resolve({ sessions: [], issues: [] }),
+    onWindowFocused: () => noopUnsubscribe
+  }
+}
+
+function webAiVaultUnavailableResult(executionHostId: ExecutionHostId): AiVaultListResult {
+  return {
+    sessions: [],
+    issues: [
+      {
+        executionHostId,
+        agent: 'codex',
+        path: executionHostId,
+        message: translate(
+          'auto.web.webPreloadApi.aiVaultUnavailableForHost',
+          'Agent Session History is not available for this execution host.'
+        )
+      }
+    ],
+    scannedAt: new Date().toISOString()
+  }
+}
+
 function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
   return {
-    list: async () => (await callRuntimeResult<{ repos: Repo[] }>('repo.list')).repos,
+    list: async () => {
+      const owned = await callRuntimeResultWithOwner<{ repos: Repo[] }>('repo.list')
+      return owned.result.repos.map((repo) => withRuntimeRepoOwner(repo, owned.hostId))
+    },
     add: async ({ path, kind }) => {
       invalidateRuntimeWorktreeCaches()
-      return callRuntimeResult('repo.add', { path, kind })
+      const owned = await callRuntimeResultWithOwner<{ repo: Repo } | { error: string }>(
+        'repo.add',
+        { path, kind }
+      )
+      return withRuntimeRepoMutationOwner(owned.result, owned.hostId)
     },
     remove: async ({ repoId }) => {
       await callRuntimeResult('repo.rm', { repo: repoId })
       invalidateRuntimeWorktreeCaches()
     },
+    // Why: host-scoped forget targets a desktop-owned SSH host; a paired web client has one runtime and no ghost-host state.
+    removeForHost: () => {
+      throw new Error('Forgetting a host is unavailable in paired web clients.')
+    },
     reorder: async ({ orderedIds }) => callRuntimeResult('repo.reorder', { orderedIds }),
-    update: async ({ repoId, updates }) =>
-      (await callRuntimeResult<{ repo: Repo }>('repo.update', { repo: repoId, updates })).repo,
+    // Why: this persists desktop-owned local/SSH rows; paired web clients own one runtime and use repo.reorder directly.
+    reorderForHost: async () => {
+      throw new Error('Host-scoped project reordering is unavailable in paired web clients.')
+    },
+    update: async ({ repoId, updates }) => {
+      const owned = await callRuntimeResultWithOwner<{ repo: Repo }>('repo.update', {
+        repo: repoId,
+        updates
+      })
+      return withRuntimeRepoOwner(owned.result.repo, owned.hostId)
+    },
     pickFolder: () => Promise.resolve(null),
     pickFolders: () => Promise.resolve([]),
     pickDirectory: () => Promise.resolve(null),
     clone: async ({ url, destination }) => {
       invalidateRuntimeWorktreeCaches()
-      return (
-        await callRuntimeResult<{ repo: Repo }>('repo.clone', { url, destination }, 10 * 60_000)
-      ).repo
+      const owned = await callRuntimeResultWithOwner<{ repo: Repo }>(
+        'repo.clone',
+        { url, destination },
+        10 * 60_000
+      )
+      return withRuntimeRepoOwner(owned.result.repo, owned.hostId)
     },
     cloneRemote: async () => {
-      // Why: SSH relay cloning is owned by the desktop main process; paired web
-      // clients must not pretend they can run that local IPC path directly.
+      // Why: SSH relay cloning is owned by the desktop main process; paired web clients can't run that local IPC path.
       throw new Error('SSH clone is unavailable in paired web clients.')
     },
     createRemote: async () => {
-      // Why: SSH relay project creation is owned by the desktop main process;
-      // paired web clients cannot create folders through local SSH IPC.
+      // Why: SSH relay project creation is owned by the desktop main process; paired web clients can't use local SSH IPC.
       throw new Error('Creating projects on SSH hosts is unavailable in paired web clients.')
     },
     cloneAbort: () => Promise.resolve(),
     addRemote: async ({ remotePath, displayName, kind }) => {
       invalidateRuntimeWorktreeCaches()
-      const result = await callRuntimeResult<{ repo: Repo }>('repo.add', {
+      const owned = await callRuntimeResultWithOwner<{ repo: Repo }>('repo.add', {
         path: remotePath,
         kind
       })
-      return displayName
-        ? {
-            repo: await createReposApi().update({
-              repoId: result.repo.id,
-              updates: { displayName }
-            })
-          }
-        : result
+      const result = {
+        repo: withRuntimeRepoOwner(owned.result.repo, owned.hostId)
+      }
+      if (!displayName) {
+        return result
+      }
+      assertActiveEnvironment(owned.environmentId)
+      return {
+        repo: await createReposApi().update({
+          repoId: result.repo.id,
+          updates: { displayName }
+        })
+      }
     },
     create: async ({ parentPath, name, kind }) => {
       invalidateRuntimeWorktreeCaches()
-      return callRuntimeResult('repo.create', { parentPath, name, kind })
+      const owned = await callRuntimeResultWithOwner<{ repo: Repo } | { error: string }>(
+        'repo.create',
+        { parentPath, name, kind }
+      )
+      return withRuntimeRepoMutationOwner(owned.result, owned.hostId)
     },
     isGitAvailable: async () =>
       (await callRuntimeResult<{ available: boolean }>('repo.gitAvailable')).available,
@@ -1204,18 +1522,20 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
 
 function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
   return {
-    list: async ({ repoId }) =>
-      (
-        await callRuntimeResult<{ worktrees: Worktree[] }>('worktree.list', {
-          repo: repoId,
-          limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
-        })
-      ).worktrees,
+    list: async ({ repoId }) => {
+      const owned = await callRuntimeResultWithOwner<{ worktrees: Worktree[] }>('worktree.list', {
+        repo: repoId,
+        limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
+      })
+      return owned.result.worktrees.map((worktree) =>
+        withRuntimeWorktreeOwner(worktree, owned.hostId)
+      )
+    },
     listDetected: async ({ repoId }) => callRuntimeDetectedWorktrees(repoId),
     listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
       invalidateRuntimeWorktreeCaches()
-      return callRuntimeResult('worktree.create', {
+      const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.create', {
         repo: args.repoId,
         name: args.name,
         baseBranch: args.baseBranch,
@@ -1255,9 +1575,12 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         manualOrder: args.manualOrder,
         automationProvenanceRequest: args.automationProvenanceRequest
       })
+      return {
+        ...owned.result,
+        worktree: withRuntimeWorktreeOwner(owned.result.worktree, owned.hostId)
+      }
     },
-    // Why: the runtime create path emits no two-phase progress, so the web
-    // client's creation panel simply falls back to an indeterminate spinner.
+    // Why: the runtime create path emits no two-phase progress, so the panel falls back to an indeterminate spinner.
     onCreateProgress: () => noopUnsubscribe,
     prefetchCreateBase: async ({ repoId, baseBranch }) => {
       await callRuntimeResult('worktree.prefetchCreateBase', {
@@ -1281,12 +1604,17 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         targetBranch,
         isCrossRepository
       }),
-    remove: async ({ worktreeId, force }) => {
+    remove: async ({ worktreeId, force, skipArchive }) => {
       invalidateRuntimeWorktreeCaches()
       return callRuntimeResult<RemoveWorktreeResult>('worktree.rm', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
-        force
+        force,
+        runHooks: skipArchive !== true
       })
+    },
+    // Why: forget-locally clears a desktop workspace pinned to a dead SSH host; a paired web client has no such ghost state.
+    forgetLocal: () => {
+      throw new Error('Forgetting a workspace is unavailable in paired web clients.')
     },
     forceDeletePreservedBranch: ({ worktreeId, branchName, expectedHead }) =>
       callRuntimeResult<ForceDeleteWorktreeBranchResult>('worktree.forceDeleteBranch', {
@@ -1300,12 +1628,11 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         updates.pushTarget === undefined
           ? { ...updates, pushTarget: null }
           : updates
-      return (
-        await callRuntimeResult<{ worktree: Worktree }>('worktree.set', {
-          worktree: toRuntimeWorktreeSelector(worktreeId),
-          ...rpcUpdates
-        })
-      ).worktree
+      const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.set', {
+        worktree: toRuntimeWorktreeSelector(worktreeId),
+        ...rpcUpdates
+      })
+      return withRuntimeWorktreeOwner(owned.result.worktree, owned.hostId)
     },
     listLineage: async () =>
       await callRuntimeResult<{
@@ -1326,7 +1653,11 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
     persistSortOrder: async ({ orderedIds }) => {
       await callRuntimeResult('worktree.persistSortOrder', { orderedIds })
     },
+    // Why: the capture lives in desktop main memory, unexposed over pairing; the dialog falls back to the persisted excerpt.
+    getBranchRenameFailureOutput: async () => null,
     onChanged: () => noopUnsubscribe,
+    onGitStatusMetadataChanged: () => noopUnsubscribe,
+    onHeadIdentitiesChanged: () => noopUnsubscribe,
     onBaseStatus: () => noopUnsubscribe,
     onRemoteBranchConflict: () => noopUnsubscribe
   }
@@ -1348,8 +1679,19 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         relativePath: file.relativePath
       })
     },
+    readLocalLogTail: async () => {
+      throw new Error('Local log tailing is unavailable in paired web clients.')
+    },
+    startLocalLogTail: async () => {
+      throw new Error('Local log tailing is unavailable in paired web clients.')
+    },
+    stopLocalLogTail: async () => {},
+    onLocalLogTailChanged: () => noopUnsubscribe,
     downloadFile: async () => {
       throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    downloadFolder: async () => {
+      throw new Error('Remote folder download is unavailable in paired web clients.')
     },
     saveDownloadedFile: async () => {
       throw new Error('Remote file download is unavailable in paired web clients.')
@@ -1372,54 +1714,9 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         worktree: toRuntimeWorktreeSelector(file.worktree.id)
       })
     },
-    writeFile: async ({ filePath, content }) => {
-      const file = await resolveRuntimeFilePath(filePath)
-      await callRuntimeResult('files.write', {
-        worktree: toRuntimeWorktreeSelector(file.worktree.id),
-        relativePath: file.relativePath,
-        content
-      })
-    },
-    createFile: async ({ filePath }) => {
-      const file = await resolveRuntimeFilePath(filePath)
-      await callRuntimeResult('files.createFile', {
-        worktree: toRuntimeWorktreeSelector(file.worktree.id),
-        relativePath: file.relativePath
-      })
-    },
-    createDir: async ({ dirPath }) => {
-      const file = await resolveRuntimeFilePath(dirPath)
-      await callRuntimeResult('files.createDir', {
-        worktree: toRuntimeWorktreeSelector(file.worktree.id),
-        relativePath: file.relativePath
-      })
-    },
-    rename: async ({ oldPath, newPath }) => {
-      const oldFile = await resolveRuntimeFilePath(oldPath)
-      const newFile = await resolveRuntimeFilePath(newPath)
-      await callRuntimeResult('files.rename', {
-        worktree: toRuntimeWorktreeSelector(oldFile.worktree.id),
-        oldRelativePath: oldFile.relativePath,
-        newRelativePath: newFile.relativePath
-      })
-    },
-    copy: async ({ sourcePath, destinationPath }) => {
-      const source = await resolveRuntimeFilePath(sourcePath)
-      const destination = await resolveRuntimeFilePath(destinationPath)
-      await callRuntimeResult('files.copy', {
-        worktree: toRuntimeWorktreeSelector(source.worktree.id),
-        sourceRelativePath: source.relativePath,
-        destinationRelativePath: destination.relativePath
-      })
-    },
-    deletePath: async ({ targetPath, recursive }) => {
-      const file = await resolveRuntimeFilePath(targetPath)
-      await callRuntimeResult('files.delete', {
-        worktree: toRuntimeWorktreeSelector(file.worktree.id),
-        relativePath: file.relativePath,
-        recursive
-      })
-    },
+    ...createWebFileMutationMethods({
+      captureSession: captureWebFileMutationSession
+    }),
     authorizeExternalPath: () => Promise.resolve(),
     stat: async ({ filePath }) => {
       const file = await resolveRuntimeFilePath(filePath)
@@ -1454,6 +1751,9 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       )
       return result.files.map((entry) => entry.relativePath)
     },
+    cancelListFiles: async () => {
+      // Why: paired-web lists files over runtime RPC with its own timeout; there's no host-side scan to abort here.
+    },
     search: async (args) => {
       const file = await resolveRuntimeFilePath(args.rootPath)
       return callRuntimeResult<SearchResult>('files.search', {
@@ -1476,14 +1776,61 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
   }
 }
 
+// Why: track the in-flight abortable status request per token so cancelStatus can abort it and close its remote context.
+const webGitStatusAbortControllers = new Map<string, AbortController>()
+
+async function callAbortableRuntimeStatus<TResult>(
+  requestToken: string,
+  params: unknown
+): Promise<TResult> {
+  const environment = requireActiveEnvironment()
+  webGitStatusAbortControllers.get(requestToken)?.abort()
+  const controller = new AbortController()
+  webGitStatusAbortControllers.set(requestToken, controller)
+  try {
+    const response = await callAbortableRuntimeEnvironment(
+      environment.id,
+      'git.status',
+      params,
+      undefined,
+      controller.signal
+    )
+    updateEnvironmentFromResponse(environment, response)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    return response.result as TResult
+  } finally {
+    if (webGitStatusAbortControllers.get(requestToken) === controller) {
+      webGitStatusAbortControllers.delete(requestToken)
+    }
+  }
+}
+
 function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
   return {
-    status: async ({ worktreePath, includeIgnored }) => {
+    status: async ({
+      worktreePath,
+      includeIgnored,
+      bypassEffectiveUpstreamNegativeCache,
+      reuseLineStats,
+      requestToken
+    }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.status', {
+      const params = {
         worktree: toRuntimeWorktreeSelector(worktree.id),
-        includeIgnored
-      })
+        includeIgnored,
+        bypassEffectiveUpstreamNegativeCache,
+        reuseLineStats
+      }
+      // Why: no token = nothing to cancel (pooled); a token routes via the subscription bridge so cancelStatus can abort.
+      if (!requestToken) {
+        return callRuntimeResult('git.status', params)
+      }
+      return callAbortableRuntimeStatus(requestToken, params)
+    },
+    cancelStatus: async ({ requestToken }) => {
+      webGitStatusAbortControllers.get(requestToken)?.abort()
     },
     submoduleStatus: async ({ worktreePath, submodulePath, area }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -1500,8 +1847,7 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         paths
       })
     },
-    // Why: the "add huge folder to .gitignore" flow is a local-desktop helper;
-    // in the web runtime there's no offer, so return no candidates / no-op.
+    // Why: the "add huge folder to .gitignore" flow is desktop-only; the web runtime makes no offer, so return no candidates.
     findHugeFoldersToIgnore: async () => [],
     appendGitignore: async () => false,
     history: async ({ worktreePath, limit, baseRef }) => {
@@ -1690,12 +2036,14 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
 
 function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
   return {
-    registerGuest: () => Promise.resolve(),
+    registerGuest: () => Promise.resolve(false),
     unregisterGuest: () => Promise.resolve(),
     openDevTools: () => Promise.resolve(false),
     setViewportOverride: () => Promise.resolve(false),
     setAnnotationViewportBridge: () => Promise.resolve(false),
     onGuestLoadFailed: () => noopUnsubscribe,
+    onCertificateFailureChanged: () => noopUnsubscribe,
+    proceedCertificate: () => Promise.resolve({ ok: false, reason: 'missing' }),
     onPermissionDenied: () => noopUnsubscribe,
     onPopup: () => noopUnsubscribe,
     onDownloadRequested: () => noopUnsubscribe,
@@ -1803,6 +2151,7 @@ function createGitHubApi(): WebGitHubApi {
         branch: candidate.branch,
         linkedPRNumber: candidate.linkedPRNumber ?? null,
         fallbackPRNumber: candidate.fallbackPRNumber ?? null,
+        currentHeadOid: candidate.currentHeadOid ?? null,
         ...(acceptMergedFallbackPR ? { acceptMergedFallbackPR: true } : {})
       })
       return pr
@@ -1885,9 +2234,10 @@ function createGitHubApi(): WebGitHubApi {
         ok: false,
         message: translate('auto.web.web.preload.api.31bfe8ae1a', 'Unavailable in the web client.')
       } as never),
-    listAccessibleProjects: () =>
+    listAccessibleProjects: (args) =>
       route<WebGitHubResult<'listAccessibleProjects'>>(
-        GITHUB_WEB_RPC_METHODS.listAccessibleProjects
+        GITHUB_WEB_RPC_METHODS.listAccessibleProjects,
+        args
       ),
     resolveProjectRef: (args) =>
       route<WebGitHubResult<'resolveProjectRef'>>(GITHUB_WEB_RPC_METHODS.resolveProjectRef, args),
@@ -2053,6 +2403,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         const local = readLocalWebUIState()
         const next = {
           ...mergeWebUIState(local, result.ui),
+          osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
             result.ui.featureInteractions
@@ -2102,6 +2453,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         const local = readLocalWebUIState()
         const next = {
           ...mergeWebUIState(local, result.ui),
+          osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
             result.ui.featureInteractions
@@ -2140,7 +2492,23 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     },
     writeClipboardText: async (text) => {
       await assertClipboardTextWriteWithinLimitWithYield(text)
-      await (navigator.clipboard?.writeText?.(text) ?? Promise.resolve())
+      const clipboard = navigator.clipboard
+      if (typeof clipboard?.writeText === 'function') {
+        try {
+          await clipboard.writeText(text)
+          return
+        } catch (error) {
+          // Why: secure-context writes can still be permission-gated; retry via
+          // execCommand while the user gesture's transient activation is live.
+          if (copyClipboardTextViaExecCommand(text)) {
+            return
+          }
+          throw error
+        }
+      }
+      if (!copyClipboardTextViaExecCommand(text)) {
+        throw new Error('Clipboard write is unavailable in this browser context')
+      }
     },
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
@@ -2158,11 +2526,12 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     },
     isMaximized: () => Promise.resolve(false),
     onOpenSettings: () => noopUnsubscribe,
+    // Why: the web client has no native tray/menu bar, so there's never a queued open-settings intent to consume.
+    consumePendingOpenSettings: () => Promise.resolve(false),
     onOpenSetupGuide: () => noopUnsubscribe,
     onOpenFeatureTour: () => noopUnsubscribe,
     onOpenCrashReport: () => noopUnsubscribe,
-    // No desktop main process to push state changes; the web client re-reads
-    // via ui.get on interaction instead.
+    // No desktop main process to push state changes; the web client re-reads via ui.get on interaction.
     onStateChanged: () => noopUnsubscribe,
     onToggleLeftSidebar: () => noopUnsubscribe,
     onToggleRightSidebar: () => noopUnsubscribe,
@@ -2170,6 +2539,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onToggleFloatingTerminal: () => noopUnsubscribe,
     onTerminalShortcutCaptured: () => noopUnsubscribe,
     onOpenQuickOpen: () => noopUnsubscribe,
+    onToggleQuickCommandsMenu: () => noopUnsubscribe,
     onOpenTasks: () => noopUnsubscribe,
     onOpenNewWorkspace: () => noopUnsubscribe,
     onDeleteCurrentWorkspace: () => noopUnsubscribe,
@@ -2194,6 +2564,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onZoomBrowserPage: () => noopUnsubscribe,
     onHardReloadBrowserPage: () => noopUnsubscribe,
     onCloseActiveTab: () => noopUnsubscribe,
+    onCloseFloatingItem: () => noopUnsubscribe,
+    onSelectFloatingIndex: () => noopUnsubscribe,
     onSwitchTab: () => noopUnsubscribe,
     onSwitchTabAcrossAllTypes: () => noopUnsubscribe,
     onSwitchRecentTab: () => noopUnsubscribe,
@@ -2205,6 +2577,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onActivateWorktree: () => noopUnsubscribe,
     onCreateTerminal: () => noopUnsubscribe,
     onRequestTerminalCreate: () => noopUnsubscribe,
+    onRequestTerminalTabMount: () => noopUnsubscribe,
     replyTerminalCreate: () => {},
     onSplitTerminal: () => noopUnsubscribe,
     onRenameTerminal: () => noopUnsubscribe,
@@ -2217,13 +2590,19 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onMobileMarkdownRequest: () => noopUnsubscribe,
     respondMobileMarkdownRequest: () => {},
     onCloseTerminal: () => noopUnsubscribe,
+    onTerminalTabCloseRequest: () => noopUnsubscribe,
+    respondTerminalTabClose: () => {},
     onSleepWorktree: () => noopUnsubscribe,
+    // Why: paired web is a full renderer that wakes on activation; mobile wake is desktop-host-scoped and never reaches web.
+    onResumeSleepingAgents: () => noopUnsubscribe,
     onTerminalZoom: () => noopUnsubscribe,
+    // Why: a paired web client has no OS sleep signal; occlusion-driven visibilitychange already covers wake recovery.
+    onSystemResumed: () => noopUnsubscribe,
     onFileDrop: () => noopUnsubscribe,
     syncTrafficLights: () => {},
     setMarkdownEditorFocused: () => {},
     setTerminalInputFocused: () => {},
-    setFloatingTerminalInputFocused: () => {},
+    setFloatingFocus: () => {},
     setShortcutRecorderFocused: () => {},
     onRichMarkdownContextCommand: () => noopUnsubscribe,
     onFullscreenChanged: () => noopUnsubscribe,
@@ -2233,7 +2612,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     requestClose: () => {},
     popupMenu: () => {},
     onWindowCloseRequested: () => noopUnsubscribe,
-    confirmWindowClose: () => {}
+    confirmWindowClose: () => {},
+    notifyWindowRevealed: () => {}
   }
 }
 
@@ -2378,6 +2758,17 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
   }
 }
 
+function createMacosTccPromptsApi(): NonNullable<Partial<PreloadApi>['macosTccPrompts']> {
+  // Why: TCC is a macOS-desktop concept; the web client has no log stream to watch.
+  return {
+    onThreshold: () => noopUnsubscribe,
+    consumePending: () => Promise.resolve(null),
+    acknowledgePending: () => Promise.resolve(),
+    releasePending: () => Promise.resolve(),
+    dismiss: () => Promise.resolve()
+  }
+}
+
 function createDeveloperPermissionsApi(): NonNullable<Partial<PreloadApi>['developerPermissions']> {
   return {
     getStatus: () => Promise.resolve([]),
@@ -2423,11 +2814,23 @@ function createComputerUsePermissionsApi(): NonNullable<
 function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
   return {
     discover: (target) =>
-      callRuntimeResult<SkillDiscoveryResult>('skills.discover', target, 15_000).catch(() => ({
-        skills: [],
-        sources: [],
+      callRuntimeResult<SkillDiscoveryResult>('skills.discover', target, 15_000),
+    // Why: browser clients have no local skill homes; remote-host freshness stays off until its update rail covers it.
+    freshnessInventory: (): Promise<SkillFreshnessInventory> =>
+      Promise.resolve({
+        schemaVersion: 1,
+        installations: [],
+        eligibleUpdateNames: [],
+        scanIssues: [],
         scannedAt: Date.now()
-      }))
+      }),
+    // Why: with no local skill homes there is nothing to update, so the run rail
+    // reports a permanently idle state rather than spawning anything.
+    startUpdateRun: () => Promise.resolve({ started: false as const, reason: 'invalid-names' }),
+    cancelUpdateRun: () => Promise.resolve(),
+    acknowledgeUpdateRun: () => Promise.resolve(),
+    getUpdateRun: () => Promise.resolve({ state: 'idle' as const }),
+    onUpdateRun: () => () => {}
   }
 }
 
@@ -2438,8 +2841,7 @@ function createNotificationsApi(): NonNullable<Partial<PreloadApi>['notification
     openSystemSettings: () => Promise.resolve(),
     getPermissionStatus: () =>
       Promise.resolve({ supported: false, platform: getBrowserPlatform(), requested: false }),
-    requestPermission: () =>
-      Promise.resolve({ supported: false, platform: getBrowserPlatform(), requested: false }),
+    probeDelivery: () => Promise.resolve({ state: 'unsupported' as const, authoritative: false }),
     playSound: () => Promise.resolve({ played: false, reason: 'missing-path' })
   }
 }
@@ -2451,6 +2853,11 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     gemini: null,
     opencodeGo: null,
     kimi: null,
+    antigravity: null,
+    minimax: null,
+    grok: null,
+    minimaxCookieConfigured: false,
+    grokAuthConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
@@ -2460,14 +2867,38 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     get: () => Promise.resolve(empty),
     refresh: () => Promise.resolve(empty),
     refreshCodexForTarget: () => Promise.resolve(empty),
-    // Why: web clients do not own local Codex auth, so reset-credit
-    // redemption remains desktop-only and reports the safe no-credit outcome.
+    // Why: web clients don't own local Codex auth; report the safe no-credit outcome since redemption is desktop-only.
     consumeCodexResetCredit: () => Promise.resolve({ outcome: 'noCredit', state: empty }),
     refreshClaudeForTarget: () => Promise.resolve(empty),
     setPollingInterval: () => Promise.resolve(),
     fetchInactiveClaudeAccounts: () => Promise.resolve(),
     fetchInactiveCodexAccounts: () => Promise.resolve(),
+    refreshMiniMax: () => Promise.resolve(empty),
+    refreshGrok: () => Promise.resolve(empty),
     onUpdate: () => noopUnsubscribe
+  }
+}
+
+function createMiniMaxCredentialsApi(): NonNullable<Partial<PreloadApi>['minimaxCredentials']> {
+  const notConfigured = { configured: false }
+  const unsupportedError = new Error('MiniMax cookie storage is only available in the desktop app.')
+  return {
+    getStatus: () => Promise.resolve(notConfigured),
+    saveCookie: () => Promise.reject(unsupportedError),
+    clearCookie: () => Promise.resolve(notConfigured)
+  }
+}
+
+function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAccounts']> {
+  const unsigned = {
+    signedIn: false,
+    email: null,
+    teamId: null,
+    tokenFresh: false,
+    error: null
+  }
+  return {
+    getStatus: () => Promise.resolve(unsigned)
   }
 }
 
@@ -2483,7 +2914,14 @@ function createAccountsApi(): never {
     cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: () => Promise.resolve(empty),
     remove: () => Promise.resolve(empty),
-    select: () => Promise.resolve(empty)
+    select: () => Promise.resolve(empty),
+    // Why: launch accounts are recorded on the host that owns the PTY, which the
+    // web client never is — report no stale panes rather than reject the sweep.
+    listStalePanes: () => Promise.resolve([]),
+    // Why empty rather than absent: the same host owns both records, so a web
+    // client has no recorded lane to offer and every pane falls to derivation.
+    listRecordedPaneLanes: () => Promise.resolve({}),
+    forgetStalePanes: () => Promise.resolve()
   } as never
 }
 
@@ -2495,6 +2933,7 @@ function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> {
     download: () => Promise.resolve(),
     quitAndInstall: () => Promise.resolve(),
     dismissNudge: () => Promise.resolve(),
+    dismissAvailableUpdate: () => Promise.resolve(),
     onStatus: () => noopUnsubscribe,
     onClearDismissal: () => noopUnsubscribe
   }
@@ -2534,18 +2973,42 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     write: () => {},
     writeAccepted: () => Promise.resolve(false),
     resize: () => {},
+    claimViewport: () => {},
     reportGeometry: () => {},
     signal: () => {},
+    // Web panes clear the host buffer via the terminal.clearBuffer runtime RPC.
+    clearBuffer: () => {},
     kill: () => Promise.resolve(),
     ackColdRestore: () => {},
     ackData: () => {},
+    onDeliveryResyncRequest: () => noopUnsubscribe,
+    respondDeliveryResync: () => {},
+    // Why: web terminals bypass main's delivery gate; a zero-in-flight reply keeps the watchdog idle.
+    reportRendererDeliveryState: () =>
+      Promise.resolve({ inFlightTotalChars: 0, inFlightPtyCount: 0, msSinceLastAck: null }),
+    getPtyDataListenerCount: () => 0,
+    rendererDispatcherReady: () => {},
     setActiveRendererPty: () => {},
+    setRendererPtyVisible: () => {},
+    setHiddenRendererPty: () => {},
+    setPtyDeliveryInterest: () => {},
+    // Why: remote-runtime PTYs are never hidden-gate markable, so there's no main-side responder to feed.
+    publishTerminalViewAttributes: () => {},
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
+    inspectProcess: () => Promise.reject(new Error('terminal_liveness_unavailable')),
+    // Why: paired web panes cannot provide a local post-boundary process scan.
+    confirmForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
     getSize: () => Promise.resolve(null),
     listSessions: () => Promise.resolve([]),
+    getAuthoritativeBufferSnapshotCapabilities: (ids) =>
+      ids.map((id) => ({ id, authoritative: false })),
+    hasPty: () => Promise.resolve(null),
     getMainBufferSnapshot: () => Promise.resolve(null),
+    // Why: remote-runtime PTYs skip local main (no side-effect source); renderer byte parsing stays authoritative.
+    onSideEffect: () => noopUnsubscribe,
+    getSideEffectSnapshot: () => Promise.resolve(null),
     getRendererDeliveryDebugSnapshot: () =>
       Promise.resolve({
         pendingPtyCount: 0,
@@ -2560,21 +3023,36 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
         peakMaxPendingCharsByPty: 0,
         peakRendererInFlightChars: 0,
         peakMaxRendererInFlightCharsByPty: 0,
-        ackGatedFlushSkipCount: 0
+        ackGatedFlushSkipCount: 0,
+        hiddenDeliveryGatedPtyCount: 0,
+        hiddenDeliveryGatedVisiblePtyCount: 0,
+        hiddenDeliveryGatedActivePtyCount: 0,
+        deliveryInterestPtyCount: 0,
+        hiddenDeliveryDroppedChars: 0,
+        hiddenDeliveryDroppedChunks: 0,
+        pendingDroppedChars: 0,
+        diagnostics: EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS,
+        rendererLifecycleResetCount: 0,
+        lastLifecycleResetClearedChars: 0,
+        rendererPtyDispatcherReady: false,
+        rendererDispatcherReadyForcedCount: 0
       }),
     resetRendererDeliveryDebug: () => Promise.resolve(),
     onData: () => noopUnsubscribe,
     onReplay: () => noopUnsubscribe,
+    onModelRestoreNeeded: () => noopUnsubscribe,
     onExit: () => noopUnsubscribe,
+    onSpawned: () => noopUnsubscribe,
     onSerializeBufferRequest: () => noopUnsubscribe,
     onClearBufferRequest: () => noopUnsubscribe,
     sendSerializedBuffer: () => {},
     declarePendingPaneSerializer: () => Promise.resolve(0),
     settlePaneSerializer: () => Promise.resolve(),
     clearPendingPaneSerializer: () => Promise.resolve(),
+    reportRendererSerializerReady: () => Promise.resolve(),
     management: {
       listSessions: () => Promise.resolve({ sessions: [], degraded: false }),
-      killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0 }),
+      killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0, killedSessionIds: [] }),
       killOne: () => Promise.resolve({ success: false }),
       restart: () => Promise.resolve({ success: false })
     }
@@ -2583,18 +3061,51 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
 
 function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
   return {
-    listTargets: () => Promise.resolve([]),
+    // Why: SSH is owned by the paired host; route read/connect to runtime RPC for state/reconnect (STA-1468). Target mgmt is desktop-only.
+    listTargets: async () => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return []
+      }
+      const { targets } = await callRuntimeResult<{ targets: SshTarget[] }>(
+        'ssh.listTargetSummaries'
+      )
+      return targets
+    },
+    listRemovedTargetLabels: async () => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return {}
+      }
+      const { labels } = await callRuntimeResult<{ labels: Record<string, string> }>(
+        'ssh.listRemovedTargetLabels'
+      )
+      return labels
+    },
     addTarget: () =>
       Promise.reject(new Error('SSH target management is unavailable in the web client.')),
     updateTarget: () =>
       Promise.reject(new Error('SSH target management is unavailable in the web client.')),
     removeTarget: () => Promise.resolve(),
-    importConfig: () => Promise.resolve([]),
-    connect: () => Promise.resolve(null),
+    importConfig: () => Promise.resolve({ targets: [], repoReadoptions: [] }),
+    connect: async (args) => {
+      const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
+        'ssh.connect',
+        { targetId: args.targetId }
+      )
+      return state
+    },
     disconnect: () => Promise.resolve(),
     terminateSessions: () => Promise.resolve(),
     resetRelay: () => Promise.resolve(),
-    getState: () => Promise.resolve(null),
+    getState: async (args) => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return null
+      }
+      const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
+        'ssh.getState',
+        { targetId: args.targetId }
+      )
+      return state
+    },
     needsPassphrasePrompt: () => Promise.resolve(false),
     testConnection: () =>
       Promise.resolve({
@@ -2657,6 +3168,98 @@ async function callRuntimeResult<TResult>(
   return response.result as TResult
 }
 
+async function callRuntimeResultWithOwner<TResult>(
+  method: string,
+  params?: unknown,
+  timeoutMs?: number
+): Promise<{ result: TResult; hostId: ExecutionHostId; environmentId: string }> {
+  const environmentId = requireActiveEnvironment().id
+  const result = await callRuntimeResult<TResult>(method, params, timeoutMs)
+  return { result, hostId: toRuntimeExecutionHostId(environmentId), environmentId }
+}
+
+function withRuntimeRepoOwner(repo: Repo, hostId: ExecutionHostId): Repo {
+  return { ...repo, executionHostId: hostId }
+}
+
+function withRuntimeRepoMutationOwner(
+  result: { repo: Repo } | { error: string },
+  hostId: ExecutionHostId
+): { repo: Repo } | { error: string } {
+  return 'repo' in result ? { ...result, repo: withRuntimeRepoOwner(result.repo, hostId) } : result
+}
+
+function withRuntimeWorktreeOwner<T extends Worktree>(worktree: T, hostId: ExecutionHostId): T {
+  const runtimeOwner = parseExecutionHostId(hostId)
+  if (runtimeOwner?.kind !== 'runtime') {
+    return worktree
+  }
+  return { ...worktree, runtimeOwnerEnvironmentId: runtimeOwner.environmentId }
+}
+
+function captureWebFileMutationSession(): {
+  resolveFilePath: (filePath: string) => Promise<Awaited<ReturnType<typeof resolveRuntimeFilePath>>>
+  assertMutationSupported: () => Promise<void>
+  callRuntimeResult: WebRuntimeResultCaller
+  getSshState: (targetId: string) => Promise<SshConnectionState | null>
+} {
+  const environment = requireActiveEnvironment()
+  const client = getClientForEnvironment(environment)
+  const assertCurrent = (): void => {
+    if (activeClient !== client || requireActiveEnvironmentOrNull()?.id !== environment.id) {
+      throw new Error('Runtime pairing changed; refresh and try again')
+    }
+  }
+  const callBoundRuntimeEnvelope: WebRuntimeEnvelopeCaller = async <TResult>(
+    method: string,
+    params?: unknown,
+    timeoutMs?: number
+  ): Promise<RuntimeRpcResponse<TResult>> => {
+    assertCurrent()
+    const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
+      assertCurrent()
+      return client.call(method, params, { timeoutMs })
+    })
+    assertCurrent()
+    updateEnvironmentFromResponse(environment, response)
+    return response as RuntimeRpcResponse<TResult>
+  }
+  const callBoundRuntimeResult: WebRuntimeResultCaller = async <TResult>(
+    method: string,
+    params?: unknown,
+    timeoutMs?: number
+  ): Promise<TResult> => {
+    const response = await callBoundRuntimeEnvelope<TResult>(method, params, timeoutMs)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    return response.result as TResult
+  }
+  return {
+    resolveFilePath: (filePath) =>
+      resolveRuntimeFilePath(
+        filePath,
+        undefined,
+        callBoundRuntimeResult,
+        callBoundRuntimeEnvelope,
+        false,
+        environment.id
+      ),
+    assertMutationSupported: async () => {
+      assertFileMutationOwnershipCapability(
+        await callBoundRuntimeResult<RuntimeStatus>('status.get', undefined, 15_000)
+      )
+    },
+    callRuntimeResult: callBoundRuntimeResult,
+    getSshState: async (targetId) =>
+      (
+        await callBoundRuntimeResult<{ state: SshConnectionState | null }>('ssh.getState', {
+          targetId
+        })
+      ).state
+  }
+}
+
 async function saveClipboardImageAsTempFileInRuntime(
   contentBase64: string,
   args?: { connectionId?: string | null; runtimeEnvironmentId?: string | null }
@@ -2710,8 +3313,7 @@ async function saveClipboardImageAsTempFileInRuntime(
       CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
     )
   } catch (error) {
-    // Why: once chunked paste has created server-side state, failed append or
-    // commit must not wait for TTL cleanup before releasing the bounded slot.
+    // Why: after chunked paste holds server-side state, release the bounded slot on failure rather than wait for TTL cleanup.
     await callRuntimeResult(
       'clipboard.abortImageUpload',
       { uploadId },
@@ -2752,9 +3354,7 @@ function resolveEnvironment(selector: string): StoredWebRuntimeEnvironment {
   if (selector === environment.id || selector === environment.name || selector === 'active') {
     return environment
   }
-  if (selector.startsWith('web-') && environment.id.startsWith('web-')) {
-    // Why: persisted terminal ids can outlive a web-client re-pair, which creates
-    // a fresh web-* environment id even when it points at the same active server.
+  if (environment.compatibleEnvironmentIds?.includes(selector)) {
     return environment
   }
   throw new Error(`Unknown Orca runtime environment: ${selector}`)
@@ -2773,16 +3373,25 @@ function requireActiveEnvironmentOrNull(): StoredWebRuntimeEnvironment | null {
   return activeEnvironment
 }
 
+function assertActiveEnvironment(environmentId: string): void {
+  if (requireActiveEnvironment().id !== environmentId) {
+    throw new Error('The paired Orca server changed while the request was in progress.')
+  }
+}
+
 function updateEnvironmentFromResponse(
   environment: StoredWebRuntimeEnvironment,
   response: RuntimeRpcResponse<unknown>
 ): void {
+  if (activeEnvironment?.id !== environment.id) {
+    return
+  }
   const runtimeId = response.ok ? response._meta.runtimeId : (response._meta?.runtimeId ?? null)
   activeEnvironment = updateStoredEnvironmentRuntimeId(environment, runtimeId)
 }
 
 function getStoredSettings(): GlobalSettings {
-  const environment = (activeEnvironment = activeEnvironment ?? readStoredWebRuntimeEnvironment())
+  activeEnvironment = activeEnvironment ?? readStoredWebRuntimeEnvironment()
   const defaults = getDefaultSettings('~')
   const rawStoredSettings = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
@@ -2790,6 +3399,7 @@ function getStoredSettings(): GlobalSettings {
     ...stored,
     ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
     ...normalizeTerminalCursorStyleDefault(stored),
+    ...normalizeOsc52ClipboardDefaultOn(stored),
     terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
     uiLanguage: normalizeUiLanguage(stored.uiLanguage)
   }
@@ -2801,6 +3411,11 @@ function getStoredSettings(): GlobalSettings {
       stored.terminalCursorStyle !== migratedStored.terminalCursorStyle ||
       stored.terminalCursorStyleDefaultedToBlock !==
         migratedStored.terminalCursorStyleDefaultedToBlock ||
+      // Kept even though the terminalCustomThemes reference compare below already forces
+      // this branch for every stored blob: no migration should rely on that accident.
+      stored.terminalAllowOsc52Clipboard !== migratedStored.terminalAllowOsc52Clipboard ||
+      stored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers !==
+        migratedStored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers ||
       stored.terminalCustomThemes !== migratedStored.terminalCustomThemes ||
       stored.uiLanguage !== migratedStored.uiLanguage)
   ) {
@@ -2808,6 +3423,14 @@ function getStoredSettings(): GlobalSettings {
       const parsed = JSON.parse(rawStoredSettings) as unknown
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         writeJson(SETTINGS_STORAGE_KEY, migratedStored)
+        if (osc52ClipboardDefaultOnOverridesPersistedOff(stored)) {
+          // Why a raw merge, not readLocalWebUIState(): that path calls back into
+          // getStoredSettings(), and writing through it here would recurse.
+          writeJson(UI_STORAGE_KEY, {
+            ...readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {}),
+            osc52ClipboardDefaultOnNoticePending: true
+          })
+        }
       }
     } catch {
       // Keep readJson's invalid-JSON fallback non-destructive.
@@ -2818,10 +3441,28 @@ function getStoredSettings(): GlobalSettings {
       ...defaults,
       floatingTerminalEnabled: false,
       rightSidebarOpenByDefault: false,
-      activeRuntimeEnvironmentId: environment?.id ?? null
+      activeRuntimeEnvironmentId: null
     },
     migratedStored
   )
+}
+
+function writeStoredSettings(
+  settings: GlobalSettings,
+  explicitActiveRuntimeEnvironmentId?: string | null
+): void {
+  const durable = { ...settings }
+  if (explicitActiveRuntimeEnvironmentId !== undefined) {
+    durable.activeRuntimeEnvironmentId = explicitActiveRuntimeEnvironmentId
+  } else {
+    const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
+    if (Object.hasOwn(stored, 'activeRuntimeEnvironmentId')) {
+      durable.activeRuntimeEnvironmentId = stored.activeRuntimeEnvironmentId ?? null
+    } else {
+      delete durable.activeRuntimeEnvironmentId
+    }
+  }
+  writeJson(SETTINGS_STORAGE_KEY, durable)
 }
 
 async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
@@ -2843,8 +3484,19 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
     if (typeof result.settings.compactWorktreeCards === 'boolean') {
       runtimeSettings.compactWorktreeCards = result.settings.compactWorktreeCards
     }
+    if (typeof result.settings.minimaxGroupId === 'string') {
+      runtimeSettings.minimaxGroupId = result.settings.minimaxGroupId
+    }
+    if (typeof result.settings.minimaxUsageModels === 'string') {
+      runtimeSettings.minimaxUsageModels = result.settings.minimaxUsageModels
+    }
+    if (Array.isArray(result.settings.prBotAuthorOverrides)) {
+      runtimeSettings.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
+        result.settings.prBotAuthorOverrides
+      )
+    }
     const next = mergeSettings(local, runtimeSettings)
-    writeJson(SETTINGS_STORAGE_KEY, next)
+    writeStoredSettings(next)
     return next
   } catch {
     // Why: unpaired/offline web clients keep a local settings fallback.
@@ -2866,6 +3518,17 @@ async function syncRuntimeBackedSettings(
   if (typeof updates.compactWorktreeCards === 'boolean') {
     runtimeUpdates.compactWorktreeCards = updates.compactWorktreeCards
   }
+  if (typeof updates.minimaxGroupId === 'string') {
+    runtimeUpdates.minimaxGroupId = updates.minimaxGroupId
+  }
+  if (typeof updates.minimaxUsageModels === 'string') {
+    runtimeUpdates.minimaxUsageModels = updates.minimaxUsageModels
+  }
+  if (Array.isArray(updates.prBotAuthorOverrides)) {
+    runtimeUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
+      updates.prBotAuthorOverrides
+    )
+  }
   if (Object.keys(runtimeUpdates).length === 0) {
     return localNext
   }
@@ -2875,13 +3538,44 @@ async function syncRuntimeBackedSettings(
       runtimeUpdates,
       15_000
     )
-    const next = mergeSettings(localNext, result.settings)
-    writeJson(SETTINGS_STORAGE_KEY, next)
+    const runtimeSettings = { ...result.settings }
+    delete runtimeSettings.activeRuntimeEnvironmentId
+    const next = mergeSettings(localNext, runtimeSettings)
+    writeStoredSettings(next)
     return next
   } catch {
     // Why: unpaired/offline web clients still need local settings persistence.
     return localNext
   }
+}
+
+async function updateRuntimePRBotAuthorOverride(args: {
+  author: string
+  isBot: boolean
+}): Promise<GlobalSettings> {
+  const local = getStoredSettings()
+  if (requireActiveEnvironmentOrNull()) {
+    // Why: don't report a successful mark the authoritative runtime failed to persist and will later overwrite.
+    const result = await callRuntimeResult<{ settings: Partial<GlobalSettings> }>(
+      'settings.updatePRBotAuthorOverride',
+      args,
+      15_000
+    )
+    const next = mergeSettings(local, {
+      prBotAuthorOverrides: normalizePRBotAuthorOverrides(result.settings.prBotAuthorOverrides)
+    })
+    writeStoredSettings(next)
+    return next
+  }
+  const next = mergeSettings(local, {
+    prBotAuthorOverrides: applyPRBotAuthorOverride(
+      local.prBotAuthorOverrides,
+      args.author,
+      args.isBot
+    )
+  })
+  writeStoredSettings(next)
+  return next
 }
 
 function getStoredOnboarding(): OnboardingState {
@@ -2896,14 +3590,12 @@ function getStoredOnboarding(): OnboardingState {
     return closed
   }
   const closed = closeWebOnboarding(getDefaultOnboardingState())
-  // Why: pairing already means the user has an Orca server. Desktop first-run
-  // onboarding would incorrectly probe browser-local tools and block the client.
+  // Why: paired clients already have an Orca server; skip desktop first-run onboarding that would probe browser-local tools.
   writeJson(ONBOARDING_STORAGE_KEY, closed)
   return closed
 }
 
-/** Resolve the localStorage key for a session partition. Non-'local' hosts get
- *  a host-suffixed key so their sessions never clobber the local one. */
+/** Resolve the localStorage key for a session partition; non-'local' hosts get a host-suffixed key so they never clobber the local one. */
 function sessionStorageKeyForHost(hostId?: string | null): string {
   const resolved = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
   return resolved === LOCAL_EXECUTION_HOST_ID
@@ -2925,8 +3617,7 @@ function getStoredWorkspaceSession(hostId?: string | null): WorkspaceSessionStat
     return localSession
   }
   const ui = readLocalWebUIState()
-  // Why: paired web clients mirror host session-tabs after startup. Replaying
-  // browser-local terminal handles first creates stale remote PTYs and errors.
+  // Why: replaying browser-local terminal handles first creates stale remote PTYs; mirror host session-tabs instead.
   return sanitizeWebRuntimeWorkspaceSession({
     ...getDefaultWorkspaceSession(),
     activeRepoId: ui.lastActiveRepoId,
@@ -2950,12 +3641,14 @@ function closeWebOnboarding(base: OnboardingState): OnboardingState {
 
 function readLocalWebUIState(): PersistedUIState {
   const defaults = getDefaultUIState()
-  const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
+  // Why settings first: getStoredSettings() runs the OSC 52 migration, which writes the
+  // notice arm into UI_STORAGE_KEY. Reading before it would snapshot a pre-arm state that
+  // every caller then writes back, erasing the arm the stamp can never raise again.
   const storedSettings = getStoredSettings()
+  const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
   const base = {
     ...defaults,
-    // Why: when runtime ui.get is unavailable, web fallback must mirror the
-    // main-process missing-property seed from the legacy card layout mode.
+    // Why: mirror the main-process missing-property seed from legacy card layout mode when runtime ui.get is unavailable.
     worktreeCardProperties: getWorktreeCardModeProperties(
       storedSettings.compactWorktreeCards ? 'Compact' : 'Default'
     )
@@ -2965,8 +3658,7 @@ function readLocalWebUIState(): PersistedUIState {
   }
   return mergeWebUIState(base, {
     ...stored,
-    // Why: web fallback lacks main-process normalization, so migrate the
-    // retired setting only when the local UI preference is still absent.
+    // Why: web fallback lacks main-process normalization; migrate the retired setting only when local UI preference is absent.
     rightSidebarOpen: storedSettings.rightSidebarOpenByDefault
   })
 }
@@ -2990,6 +3682,12 @@ function mergeWebUIState(
       safeUpdates._worktreeCardModeDefaulted ?? base._worktreeCardModeDefaulted,
     agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
       safeUpdates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
+    ),
+    usagePercentageDisplay: normalizeUsagePercentageDisplay(
+      safeUpdates.usagePercentageDisplay ?? base.usagePercentageDisplay
+    ),
+    statusBarUsageMode: normalizeStatusBarUsageMode(
+      safeUpdates.statusBarUsageMode ?? base.statusBarUsageMode
     )
   }
 }
@@ -3031,6 +3729,19 @@ function mergeContextualTourSeenIds(
   return [...merged]
 }
 
+/** Why OR rather than let the host win: the web client migrates its own localStorage
+ *  settings, so an arm raised here has no counterpart on the host, and the plain spread
+ *  would drop it — flipping the opt-out in silence, which is what the notice exists to stop. */
+function mergeOsc52ClipboardNoticePending(
+  current: PersistedUIState,
+  incoming: PersistedUIState
+): boolean {
+  return (
+    current.osc52ClipboardDefaultOnNoticePending === true ||
+    incoming.osc52ClipboardDefaultOnNoticePending === true
+  )
+}
+
 function mergeSettings(
   base: GlobalSettings,
   updates: Partial<GlobalSettings>,
@@ -3059,7 +3770,9 @@ function mergeSettings(
       ...(base.voice ?? defaults.voice),
       ...updates.voice
     } as NonNullable<GlobalSettings['voice']>,
-    activeRuntimeEnvironmentId: activeEnvironment?.id ?? updates.activeRuntimeEnvironmentId ?? null,
+    activeRuntimeEnvironmentId: Object.hasOwn(updates, 'activeRuntimeEnvironmentId')
+      ? (updates.activeRuntimeEnvironmentId ?? null)
+      : (base.activeRuntimeEnvironmentId ?? null),
     terminalCustomThemes: normalizeTerminalCustomThemes(
       updates.terminalCustomThemes ?? base.terminalCustomThemes
     ),
@@ -3077,46 +3790,81 @@ async function listAllRuntimeWorktrees(): Promise<Worktree[]> {
   if (cachedWorktrees && Date.now() - cachedWorktrees.loadedAt < 5_000) {
     return cachedWorktrees.worktrees
   }
-  const result = await callRuntimeResult<{ worktrees: Worktree[] }>('worktree.list', {
+  const owned = await callRuntimeResultWithOwner<{ worktrees: Worktree[] }>('worktree.list', {
     limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
   })
-  cachedWorktrees = { loadedAt: Date.now(), worktrees: result.worktrees }
-  return result.worktrees
-}
-
-async function listAllRuntimeDetectedWorktrees(): Promise<Worktree[]> {
-  if (cachedDetectedWorktrees && Date.now() - cachedDetectedWorktrees.loadedAt < 5_000) {
-    return cachedDetectedWorktrees.worktrees
-  }
-
-  const repos = (await callRuntimeResult<{ repos: Repo[] }>('repo.list')).repos
-  const detectedLists = await Promise.all(
-    repos.map((repo) => callRuntimeDetectedWorktrees(repo.id))
+  const worktrees = owned.result.worktrees.map((worktree) =>
+    withRuntimeWorktreeOwner(worktree, owned.hostId)
   )
-  const worktrees = detectedLists.flatMap((result) => result.worktrees)
-  cachedDetectedWorktrees = { loadedAt: Date.now(), worktrees }
+  assertActiveEnvironment(owned.environmentId)
+  cachedWorktrees = { loadedAt: Date.now(), worktrees }
   return worktrees
 }
 
-async function callRuntimeDetectedWorktrees(repoId: string): Promise<DetectedWorktreeListResult> {
-  const response = await callRuntimeEnvelope<DetectedWorktreeListResult>(
+async function listAllRuntimeDetectedWorktrees(
+  callResult: WebRuntimeResultCaller = callRuntimeResult,
+  callEnvelope: WebRuntimeEnvelopeCaller = callRuntimeEnvelope,
+  useCache = true,
+  expectedEnvironmentId = requireActiveEnvironment().id
+): Promise<Worktree[]> {
+  if (
+    useCache &&
+    cachedDetectedWorktrees &&
+    Date.now() - cachedDetectedWorktrees.loadedAt < 5_000
+  ) {
+    return cachedDetectedWorktrees.worktrees
+  }
+
+  assertActiveEnvironment(expectedEnvironmentId)
+  const repos = (await callResult<{ repos: Repo[] }>('repo.list')).repos
+  const detectedLists = await Promise.all(
+    repos.map((repo) =>
+      callRuntimeDetectedWorktrees(repo.id, expectedEnvironmentId, callResult, callEnvelope)
+    )
+  )
+  const worktrees = detectedLists.flatMap((result) => result.worktrees)
+  assertActiveEnvironment(expectedEnvironmentId)
+  if (useCache) {
+    cachedDetectedWorktrees = { loadedAt: Date.now(), worktrees }
+  }
+  return worktrees
+}
+
+async function callRuntimeDetectedWorktrees(
+  repoId: string,
+  expectedEnvironmentId = requireActiveEnvironment().id,
+  callResult: WebRuntimeResultCaller = callRuntimeResult,
+  callEnvelope: WebRuntimeEnvelopeCaller = callRuntimeEnvelope
+): Promise<DetectedWorktreeListResult> {
+  assertActiveEnvironment(expectedEnvironmentId)
+  const hostId = toRuntimeExecutionHostId(expectedEnvironmentId)
+  const response = await callEnvelope<DetectedWorktreeListResult>(
     'worktree.detectedList',
     { repo: repoId },
     15_000
   )
   if (response.ok) {
-    return response.result
+    return {
+      ...response.result,
+      worktrees: response.result.worktrees.map((worktree) =>
+        withRuntimeWorktreeOwner(worktree, hostId)
+      )
+    }
   }
   if (response.error.code !== 'method_not_found') {
     throw new Error(response.error.message)
   }
 
-  const legacy = await callRuntimeResult<{ worktrees: Worktree[] }>(
+  assertActiveEnvironment(expectedEnvironmentId)
+  const legacy = await callResult<{ worktrees: Worktree[] }>(
     'worktree.list',
     { repo: repoId, limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT },
     15_000
   )
-  return toLegacyDetectedWorktreeResult(repoId, legacy.worktrees)
+  return toLegacyDetectedWorktreeResult(
+    repoId,
+    legacy.worktrees.map((worktree) => withRuntimeWorktreeOwner(worktree, hostId))
+  )
 }
 
 function toLegacyDetectedWorktreeResult(
@@ -3143,10 +3891,20 @@ function isMissingPathError(error: unknown): boolean {
   return /\bENOENT\b|not found|no such file/i.test(error.message)
 }
 
-async function resolveRuntimeWorktreeByPath(worktreePath: string): Promise<Worktree> {
-  // Why: hidden-but-open worktrees must still resolve for git/file operations.
-  // `worktree.list` is sidebar-visible only, so path resolution uses detected rows.
-  const worktrees = await listAllRuntimeDetectedWorktrees()
+async function resolveRuntimeWorktreeByPath(
+  worktreePath: string,
+  callResult: WebRuntimeResultCaller = callRuntimeResult,
+  callEnvelope: WebRuntimeEnvelopeCaller = callRuntimeEnvelope,
+  useDetectedWorktreeCache = true,
+  expectedEnvironmentId = requireActiveEnvironment().id
+): Promise<Worktree> {
+  // Why: hidden-but-open worktrees must still resolve, but `worktree.list` is sidebar-visible only — resolve via detected rows.
+  const worktrees = await listAllRuntimeDetectedWorktrees(
+    callResult,
+    callEnvelope,
+    useDetectedWorktreeCache,
+    expectedEnvironmentId
+  )
   const match = worktrees
     .map((worktree) => ({
       worktree,
@@ -3162,11 +3920,27 @@ async function resolveRuntimeWorktreeByPath(worktreePath: string): Promise<Workt
 
 async function resolveRuntimeFilePath(
   filePath: string,
-  preferredWorktreePath?: string
+  preferredWorktreePath?: string,
+  callResult: WebRuntimeResultCaller = callRuntimeResult,
+  callEnvelope: WebRuntimeEnvelopeCaller = callRuntimeEnvelope,
+  useDetectedWorktreeCache = true,
+  expectedEnvironmentId = requireActiveEnvironment().id
 ): Promise<{ worktree: Worktree; relativePath: string }> {
   const worktree = preferredWorktreePath
-    ? await resolveRuntimeWorktreeByPath(preferredWorktreePath)
-    : await resolveRuntimeWorktreeByPath(filePath)
+    ? await resolveRuntimeWorktreeByPath(
+        preferredWorktreePath,
+        callResult,
+        callEnvelope,
+        useDetectedWorktreeCache,
+        expectedEnvironmentId
+      )
+    : await resolveRuntimeWorktreeByPath(
+        filePath,
+        callResult,
+        callEnvelope,
+        useDetectedWorktreeCache,
+        expectedEnvironmentId
+      )
   const relativePath = relativePathInsideRoot(worktree.path, filePath)
   if (relativePath === null) {
     throw new Error(`File is outside runtime worktree: ${filePath}`)
@@ -3203,9 +3977,7 @@ function mapRepoPathArg(args: unknown): unknown {
   const repoId = typeof record.repoId === 'string' && record.repoId.trim() ? record.repoId : null
   return {
     ...record,
-    // Why: runtime repo selectors accept loose path/name forms, but duplicate
-    // checked-out repos can make those ambiguous. The renderer already passes
-    // Orca's repo id on task calls, so prefer the explicit selector.
+    // Why: duplicate checked-out repos make path/name selectors ambiguous; prefer the explicit repo id the renderer passes.
     repo: repoId ? `id:${repoId}` : record.repoPath
   }
 }
@@ -3225,11 +3997,14 @@ function createEmptyMemorySnapshot(): MemorySnapshot {
     host: {
       totalMemory: 0,
       freeMemory: 0,
+      availableMemory: 0,
+      availableMemorySource: 'free-memory',
       usedMemory: 0,
       memoryUsagePercent: 0,
       cpuCoreCount: navigator.hardwareConcurrency || 1,
       loadAverage1m: 0
     },
+    processMemoryMetric: getBrowserPlatform() === 'win32' ? 'working-set' : 'rss',
     totalCpu: 0,
     totalMemory: 0,
     collectedAt: Date.now()

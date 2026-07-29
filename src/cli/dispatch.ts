@@ -1,27 +1,6 @@
 import type { RuntimeClient } from './runtime-client'
-import { RuntimeClientError } from './runtime-client'
-import { CORE_HANDLERS } from './handlers/core'
-import { AUTOMATION_HANDLERS } from './handlers/automations'
-import { PROJECT_HANDLERS } from './handlers/project'
-import { REPO_HANDLERS } from './handlers/repo'
-import { WORKTREE_HANDLERS } from './handlers/worktree'
-import { FILE_HANDLERS } from './handlers/file'
-import { TERMINAL_HANDLERS } from './handlers/terminal'
-import { BROWSER_NAV_HANDLERS } from './handlers/browser-nav'
-import { BROWSER_INTERACT_HANDLERS } from './handlers/browser-interact'
-import { BROWSER_TAB_HANDLERS } from './handlers/browser-tab'
-import { BROWSER_PROFILE_HANDLERS } from './handlers/browser-profile'
-import { BROWSER_COOKIE_HANDLERS } from './handlers/browser-cookie'
-import { BROWSER_CAPTURE_HANDLERS } from './handlers/browser-capture'
-import { BROWSER_ENV_HANDLERS } from './handlers/browser-env'
-import { BROWSER_STORAGE_HANDLERS } from './handlers/browser-storage'
-import { ORCHESTRATION_HANDLERS } from './handlers/orchestration'
-import { COMPUTER_HANDLERS } from './handlers/computer'
-import { ENVIRONMENT_HANDLERS } from './handlers/environment'
-import { AGENT_HOOK_HANDLERS } from './handlers/agent-hooks'
-import { DIAGNOSTICS_HANDLERS } from './handlers/diagnostics'
-import { EMULATOR_HANDLERS } from './handlers/emulator'
-import { LINEAR_HANDLERS } from './handlers/linear'
+import { RuntimeClientError } from './runtime/types'
+import { HANDLER_GROUPS, type HandlerGroup } from './handler-group-manifest'
 
 export type HandlerContext = {
   flags: Map<string, string | boolean>
@@ -33,49 +12,46 @@ export type HandlerContext = {
 
 export type CommandHandler = (ctx: HandlerContext) => Promise<void>
 
-function buildHandlers(): Map<string, CommandHandler> {
-  const table = new Map<string, CommandHandler>()
-  const groups = [
-    CORE_HANDLERS,
-    AUTOMATION_HANDLERS,
-    PROJECT_HANDLERS,
-    REPO_HANDLERS,
-    WORKTREE_HANDLERS,
-    FILE_HANDLERS,
-    TERMINAL_HANDLERS,
-    BROWSER_NAV_HANDLERS,
-    BROWSER_INTERACT_HANDLERS,
-    BROWSER_TAB_HANDLERS,
-    BROWSER_PROFILE_HANDLERS,
-    BROWSER_COOKIE_HANDLERS,
-    BROWSER_CAPTURE_HANDLERS,
-    BROWSER_ENV_HANDLERS,
-    BROWSER_STORAGE_HANDLERS,
-    ORCHESTRATION_HANDLERS,
-    EMULATOR_HANDLERS,
-    COMPUTER_HANDLERS,
-    AGENT_HOOK_HANDLERS,
-    DIAGNOSTICS_HANDLERS,
-    ENVIRONMENT_HANDLERS,
-    LINEAR_HANDLERS
-  ]
+// Why: routing only needs key→group, so every CLI invocation can skip the
+// transitive module graph of the 24 groups it does not dispatch into.
+function buildRoutes(groups: readonly HandlerGroup[]): Map<string, HandlerGroup> {
+  const table = new Map<string, HandlerGroup>()
   for (const group of groups) {
-    for (const [key, handler] of Object.entries(group)) {
-      if (table.has(key)) {
-        throw new Error(`Duplicate CLI handler registration for "${key}"`)
+    for (const key of group.keys) {
+      const owner = table.get(key)
+      if (owner) {
+        throw new Error(
+          `Duplicate CLI handler registration for "${key}" (${owner.name} and ${group.name})`
+        )
       }
-      table.set(key, handler)
+      table.set(key, group)
     }
   }
   return table
 }
 
-const HANDLERS = buildHandlers()
+const ROUTES = buildRoutes(HANDLER_GROUPS)
+
+// Why: exposes only the canonical command keys (not the handler internals) so the
+// registry-parity guard can check specs↔handlers without rebuilding the table.
+export const HANDLER_COMMAND_KEYS: ReadonlySet<string> = new Set(ROUTES.keys())
 
 export async function dispatch(commandPath: string[], ctx: HandlerContext): Promise<void> {
-  const handler = HANDLERS.get(commandPath.join(' '))
+  const key = commandPath.join(' ')
+  const group = ROUTES.get(key)
+  if (!group) {
+    throw new RuntimeClientError('invalid_argument', `Unknown command: ${key}`)
+  }
+  const handler = (await group.load())[key]
+  // Why: the manifest key list is verified against the real exports in CI, so a
+  // miss here means the group changed without the manifest — fail loudly.
   if (!handler) {
-    throw new RuntimeClientError('invalid_argument', `Unknown command: ${commandPath.join(' ')}`)
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `CLI handler group "${group.name}" does not export "${key}"`
+    )
   }
   await handler(ctx)
 }
+
+export { buildRoutes as buildHandlerRoutes }

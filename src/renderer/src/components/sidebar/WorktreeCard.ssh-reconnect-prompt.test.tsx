@@ -14,6 +14,9 @@ let WorktreeCard: typeof WorktreeCardComponent
 let sshConnectionStates = new Map<string, { status: string }>()
 let sshTargetLabels = new Map<string, string>()
 let runtimeStatusByEnvironmentId = new Map<string, { status?: unknown }>()
+let runtimeEnvironments: { id: string; name: string }[] = []
+let sshStateByEnvironment = new Map()
+let worktreesByRepo: Record<string, Worktree[]> = {}
 let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 
 vi.mock('@/store', () => ({
@@ -30,11 +33,16 @@ vi.mock('@/store', () => ({
       openModal,
       projectGroups: [],
       remoteBranchConflictByWorktreeId: {},
+      runtimeEnvironments,
       runtimeStatusByEnvironmentId,
+      removedSshTargetLabels: new Map(),
       settings: null,
       sshConnectionStates,
+      sshStateByEnvironment,
       sshTargetLabels,
+      sshTargetsHydrated: true,
       updateWorktreeMeta,
+      worktreesByRepo,
       worktreeCardProperties
     })
 }))
@@ -130,10 +138,13 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     sshConnectionStates = new Map()
     sshTargetLabels = new Map()
     runtimeStatusByEnvironmentId = new Map()
+    runtimeEnvironments = []
+    sshStateByEnvironment = new Map()
+    worktreesByRepo = {}
     worktreeCardProperties = ['status']
   })
 
-  it('opens the reconnect dialog for an active disconnected SSH worktree during render', () => {
+  it('does not auto-open the blocking reconnect dialog for a restored active disconnected SSH worktree', () => {
     sshConnectionStates.set('ssh-target-1', { status: 'disconnected' })
     sshTargetLabels.set('ssh-target-1', 'Remote target')
 
@@ -141,12 +152,15 @@ describe('WorktreeCard SSH reconnect prompt', () => {
       <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={true} />
     )
 
-    expect(markup).toContain('data-ssh-disconnected-dialog="open"')
-    expect(markup).toContain('data-ssh-status="disconnected"')
-    expect(markup).toContain('data-ssh-target-label="Remote target"')
+    // The dialog is blocking, so being the active/restored card must not steal
+    // focus app-wide; it only opens on deliberate click (see handleClick).
+    expect(markup).toContain('data-ssh-disconnected-dialog="closed"')
+    // The disconnected state is still discoverable via the non-blocking card chip.
+    expect(markup).toContain('SSH disconnected')
   })
 
   it('marks a runtime-host worktree disconnected when its environment has no status', () => {
+    runtimeEnvironments = [{ id: 'env-1', name: 'Remote Mac' }]
     const runtimeRepo: Repo = {
       ...makeRepo(),
       connectionId: undefined,
@@ -156,20 +170,59 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCard worktree={makeWorktree()} repo={runtimeRepo} isActive={false} />
     )
-    expect(markup).toContain('Server disconnected')
+    expect(markup).toContain('Remote Mac disconnected')
   })
 
-  it('shows a runtime-host worktree as connected when its environment has a status', () => {
+  it('distinguishes connected worktrees on different Orca servers', () => {
+    runtimeEnvironments = [
+      { id: 'env-1', name: 'Remote Mac' },
+      { id: 'env-2', name: 'Build Linux' }
+    ]
     runtimeStatusByEnvironmentId.set('env-1', { status: { runtimeId: 'r1' } })
-    const runtimeRepo: Repo = {
-      ...makeRepo(),
-      connectionId: undefined,
-      executionHostId: 'runtime:env-1'
-    }
-    const markup = renderToStaticMarkup(
-      <WorktreeCard worktree={makeWorktree()} repo={runtimeRepo} isActive={false} />
+    runtimeStatusByEnvironmentId.set('env-2', { status: { runtimeId: 'r2' } })
+
+    const remoteMacMarkup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={{ ...makeWorktree(), runtimeOwnerEnvironmentId: 'env-1' }}
+        repo={{ ...makeRepo(), connectionId: undefined, executionHostId: 'runtime:env-2' }}
+        isActive={false}
+      />
     )
-    expect(markup).not.toContain('Server disconnected')
-    expect(markup).toContain('Project on Orca server')
+    const buildLinuxMarkup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree()}
+        repo={{ ...makeRepo(), connectionId: undefined, executionHostId: 'runtime:env-2' }}
+        isActive={false}
+      />
+    )
+
+    expect(remoteMacMarkup).toContain('Project on Remote Mac')
+    expect(buildLinuxMarkup).toContain('Project on Build Linux')
+  })
+
+  it('reads nested SSH readiness from the owning HUB instead of client-local SSH state', () => {
+    runtimeStatusByEnvironmentId.set('hub-1', { status: { runtimeId: 'hub-runtime' } })
+    sshConnectionStates.set('ssh-target-1', { status: 'disconnected' })
+    sshTargetLabels.set('ssh-target-1', 'Misleading client-local target')
+    sshStateByEnvironment.set('hub-1', {
+      connectionStates: new Map([['ssh-target-1', { status: 'connected' }]]),
+      targetLabels: new Map([['ssh-target-1', 'HUB private target']]),
+      removedTargetLabels: new Map(),
+      targetsHydrated: true
+    })
+    const worktree = {
+      ...makeWorktree(),
+      hostId: 'ssh:ssh-target-1' as const,
+      runtimeOwnerEnvironmentId: 'hub-1'
+    }
+    worktreesByRepo = { 'repo-1': [worktree] }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).not.toContain('SSH disconnected')
+    expect(markup).toContain('data-ssh-target-label="HUB private target"')
+    expect(markup).not.toContain('Misleading client-local target')
   })
 })

@@ -128,7 +128,13 @@ export const EMULATOR_HANDLERS: Record<string, CommandHandler> = {
     const target = await getEmulatorCommandTarget(flags, cwd, client)
     const device = getOptionalStringFlag(flags, 'device')
     const focus = flags.get('focus') === true
-    const res = await client.call('emulator.attach', { device, worktree: target.worktree, focus })
+    // Why: attach may cold-boot or recycle a wedged simulator (shutdown + boot +
+    // helper restart), which can legitimately exceed the 60s default budget.
+    const res = await client.call(
+      'emulator.attach',
+      { device, worktree: target.worktree, focus },
+      { timeoutMs: 180_000 }
+    )
     printResult(res, json, (r: unknown) => {
       const result = r as EmulatorAttachResult
       const info = result.info ?? result

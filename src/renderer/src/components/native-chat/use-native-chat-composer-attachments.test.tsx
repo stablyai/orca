@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act } from 'react'
+import { act, createElement, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { createElement, useRef, useState } from 'react'
 import {
   clearNativeChatAttachmentCacheForTests,
   readNativeChatAttachmentCache,
@@ -92,7 +91,7 @@ describe('useNativeChatComposerAttachments', () => {
     const first = await renderProbe('pty-1')
 
     await act(async () => {
-      first.latest().attachLocalPaths(['/tmp/orca-native-chat-attach-test.png'])
+      first.latest().attachResolvedPaths(['/tmp/orca-native-chat-attach-test.png'])
     })
 
     // Images are NOT sent to the TUI on attach — they ride along on submit, so
@@ -116,7 +115,7 @@ describe('useNativeChatComposerAttachments', () => {
   it('removes an attached image chip cleanly', async () => {
     const probe = await renderProbe('pty-1')
     await act(async () => {
-      probe.latest().attachLocalPaths(['/tmp/orca-native-chat-remove-test.png'])
+      probe.latest().attachResolvedPaths(['/tmp/orca-native-chat-remove-test.png'])
     })
     const id = probe.latest().imageAttachments[0]?.id
     expect(id).toBeDefined()
@@ -131,7 +130,7 @@ describe('useNativeChatComposerAttachments', () => {
   it('rescopes attachments when the scope key changes (composer reused for another pane)', async () => {
     const probe = await renderProbe('pty-1')
     await act(async () => {
-      probe.latest().attachLocalPaths(['/tmp/orca-native-chat-pane-1.png'])
+      probe.latest().attachResolvedPaths(['/tmp/orca-native-chat-pane-1.png'])
     })
     expect(probe.latest().imageAttachments).toMatchObject([
       { path: '/tmp/orca-native-chat-pane-1.png' }

@@ -24,6 +24,16 @@ describe('parseGitLabIssueOrMRNumber', () => {
     expect(parseGitLabIssueOrMRNumber('https://gitlab.example.com/team/api/-/issues/7')).toBe(7)
   })
 
+  it('parses modern /-/work_items/<iid> issue URLs', () => {
+    expect(parseGitLabIssueOrMRNumber('https://gitlab.com/stablyai/orca/-/work_items/923')).toBe(
+      923
+    )
+    expect(
+      parseGitLabIssueOrMRNumber('https://gitlab.example.com:8443/team/api/-/work_items/7')
+    ).toBe(7)
+    expect(parseGitLabIssueOrMRNumber('https://gitlab.com/g/p/-/work_items/923/designs')).toBe(923)
+  })
+
   it('parses URLs with nested group paths', () => {
     expect(
       parseGitLabIssueOrMRNumber('https://gitlab.com/group/subgroup/project/-/merge_requests/55')
@@ -86,6 +96,21 @@ describe('parseGitLabIssueOrMRLink', () => {
     expect(parseGitLabIssueOrMRLink('https://gitlab.com/g/sub/proj/-/issues/1')).toEqual({
       slug: { host: 'gitlab.com', path: 'g/sub/proj' },
       number: 1,
+      type: 'issue'
+    })
+  })
+
+  it('treats /-/work_items/<iid> as an issue work item', () => {
+    expect(parseGitLabIssueOrMRLink('https://gitlab.com/stablyai/orca/-/work_items/923')).toEqual({
+      slug: { host: 'gitlab.com', path: 'stablyai/orca' },
+      number: 923,
+      type: 'issue'
+    })
+    expect(
+      parseGitLabIssueOrMRLink('https://gitlab.example.com:8443/team/api/-/work_items/7')
+    ).toEqual({
+      slug: { host: 'gitlab.example.com:8443', path: 'team/api' },
+      number: 7,
       type: 'issue'
     })
   })

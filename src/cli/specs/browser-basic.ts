@@ -195,6 +195,7 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['tab', 'profile', 'delete'],
+    destructive: true,
     summary: 'Delete a browser session profile used by browser tabs',
     usage: 'orca tab profile delete --profile <id> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'profile']

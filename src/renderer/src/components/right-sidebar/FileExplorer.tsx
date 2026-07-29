@@ -47,6 +47,10 @@ import {
   buildAddProjectFromFolderModalData,
   canShowAddAsProjectAction
 } from './file-explorer-add-project-action'
+import {
+  isRenameHotspotTarget,
+  resolveDirToggleTiming
+} from './file-explorer-dir-toggle-timing'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRowProjection'
@@ -54,6 +58,7 @@ import { translate } from '@/i18n/i18n'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
 import type { RightSidebarExplorerView } from '../../../../shared/types'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { createNewTerminalTab } from '@/components/terminal/terminal-tab-create'
 
 function FileExplorerFiles(): React.JSX.Element {
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -79,6 +84,12 @@ function FileExplorerFiles(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const supportsFolderDownload = useAppStore((s) => {
+    const connectionId = activeRepo?.connectionId
+    return connectionId
+      ? s.sshConnectionStates.get(connectionId)?.supportsFolderDownload === true
+      : false
+  })
   const activeRuntimeEnvironmentId = useAppStore((s) =>
     getRuntimeEnvironmentIdForWorktree(s, activeWorktreeId)
   )
@@ -162,6 +173,7 @@ function FileExplorerFiles(): React.JSX.Element {
       hasNameFilter
         ? {
             query: nameFilterQuery,
+            operationOwner: nameFilterFiles.operationOwner,
             relativePaths: nameFilterQueryTooLarge
               ? []
               : nameFilterFiles.loading && nameFilterFiles.files.length === 0
@@ -173,6 +185,7 @@ function FileExplorerFiles(): React.JSX.Element {
       hasNameFilter,
       nameFilterFiles.files,
       nameFilterFiles.loading,
+      nameFilterFiles.operationOwner,
       nameFilterQuery,
       nameFilterQueryTooLarge
     ]
@@ -291,7 +304,8 @@ function FileExplorerFiles(): React.JSX.Element {
     expanded,
     toggleDir,
     refreshDir,
-    scrollRef
+    scrollRef,
+    getOperationOwnerForPath: (path) => rowProjection.getRowByPath(path)?.operationOwner
   })
 
   const lastResetWorktreePathRef = useRef<string | null>(null)
@@ -384,7 +398,8 @@ function FileExplorerFiles(): React.JSX.Element {
     refreshTree,
     inlineInput,
     dragSourcePath,
-    isNativeDragOver
+    isNativeDragOver,
+    operationOwner: rootCache?.operationOwner
   })
 
   useFileExplorerImport({
@@ -392,7 +407,8 @@ function FileExplorerFiles(): React.JSX.Element {
     activeWorktreeId,
     refreshDir,
     clearNativeDragState,
-    setSelectedPath: setSingleSelectedPath
+    setSelectedPath: setSingleSelectedPath,
+    operationOwner: rootCache?.operationOwner
   })
 
   const totalCount = visibleRowCount + (inlineInputIndex >= 0 ? 1 : 0)
@@ -477,18 +493,19 @@ function FileExplorerFiles(): React.JSX.Element {
       getNameFilterCollapsedPathsAfterExpand(current, dirPath)
     )
   }, [])
-  const { handleClick, handleDoubleClick, handleWheelCapture } = useFileExplorerHandlers({
-    activeWorktreeId,
-    runtimeEnvironmentId: activeRuntimeEnvironmentId,
-    openFile,
-    makePreviewFilePermanent,
-    toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
-    loadDir,
-    statPath,
-    markPathAsDirectory,
-    setSelectedPath: setSingleSelectedPath,
-    scrollRef
-  })
+  const { handleClick, handleDoubleClick, handleWheelCapture, cancelPendingDirToggle } =
+    useFileExplorerHandlers({
+      activeWorktreeId,
+      runtimeEnvironmentId: activeRuntimeEnvironmentId,
+      openFile,
+      makePreviewFilePermanent,
+      toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
+      loadDir,
+      statPath,
+      markPathAsDirectory,
+      setSelectedPath: setSingleSelectedPath,
+      scrollRef
+    })
 
   // Why: pass a stable activator so arrow-key navigation can hand the same
   // activate-toggles-folder / open-file-preview behavior the click handler
@@ -498,6 +515,15 @@ function FileExplorerFiles(): React.JSX.Element {
       void handleClick(node)
     },
     [handleClick]
+  )
+  // Why: a rename can start while a name click is still holding back its
+  // directory toggle; drop it so the tree doesn't shift under the input.
+  const handleStartRename = useCallback(
+    (node: TreeNode) => {
+      cancelPendingDirToggle()
+      startRename(node)
+    },
+    [cancelPendingDirToggle, startRename]
   )
   const scrollToIndex = useCallback(
     (index: number) => {
@@ -517,7 +543,7 @@ function FileExplorerFiles(): React.JSX.Element {
     activateNode,
     moveSelection,
     toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
-    startRename,
+    startRename: handleStartRename,
     requestDelete,
     requestDeleteAll,
     scrollToIndex,
@@ -540,8 +566,13 @@ function FileExplorerFiles(): React.JSX.Element {
 
   const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
   const handleRowClick = useCallback(
-    (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) =>
-      selectRowWithModifiers(node, event, handleClick),
+    (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => {
+      const dirToggle = resolveDirToggleTiming({
+        fromRenameHotspot: isRenameHotspotTarget(event.target),
+        clickCount: event.detail
+      })
+      selectRowWithModifiers(node, event, (target) => handleClick(target, dirToggle))
+    },
     [handleClick, selectRowWithModifiers]
   )
   const handleCollapseFolderSubtree = useCallback(
@@ -576,6 +607,15 @@ function FileExplorerFiles(): React.JSX.Element {
       )
     },
     [activeRepo, openModal]
+  )
+  const handleOpenInTerminal = useCallback(
+    (node: TreeNode) => {
+      if (!activeWorktreeId || !node.isDirectory) {
+        return
+      }
+      createNewTerminalTab(activeWorktreeId, undefined, { startupCwd: node.path })
+    },
+    [activeWorktreeId]
   )
 
   if (!worktreePath) {
@@ -734,15 +774,18 @@ function FileExplorerFiles(): React.JSX.Element {
                 deleteShortcutLabel={deleteShortcutLabel}
                 connectionId={activeRepo?.connectionId ?? null}
                 runtimeDownloadContext={runtimeDownloadContext}
+                supportsFolderDownload={supportsFolderDownload}
                 onClick={handleRowClick}
                 onDoubleClick={handleDoubleClick}
+                onViewFile={handleClick}
                 onContextMenuSelect={preserveSelectionForContextMenu}
                 onCopyPaths={copyPathsForNode}
                 onStartNew={startNew}
-                onStartRename={startRename}
+                onStartRename={handleStartRename}
                 onDuplicate={handleDuplicate}
                 onAddFolderAsProject={handleAddFolderAsProject}
                 canAddFolderAsProject={(node) => canShowAddAsProjectAction(node, activeRepo)}
+                onOpenInTerminal={handleOpenInTerminal}
                 onRequestDelete={handleContextMenuDelete}
                 onCollapseFolderSubtree={handleCollapseFolderSubtree}
                 onFindInFolder={handleFindInFolder}

@@ -1081,6 +1081,53 @@ describe('ClaudeRuntimeAuthService', () => {
     }
   })
 
+  it('rematerializes managed credentials over a wiped runtime blob while a Claude terminal is live', async () => {
+    setPlatform('win32')
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const originalCredentials = createClaudeCredentialsJson('user@example.com', 'original', 'org-a')
+    // Why: Claude CLI wipes tokens in place (keeps identity fields) after an
+    // invalid_grant refresh — the exact blob shape this regression guards.
+    const parsedOriginal = JSON.parse(originalCredentials) as {
+      claudeAiOauth: Record<string, unknown>
+    }
+    const wipedCredentials = `${JSON.stringify({
+      claudeAiOauth: {
+        ...parsedOriginal.claudeAiOauth,
+        accessToken: '',
+        refreshToken: '',
+        expiresAt: 0
+      }
+    })}\n`
+    const managedAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      originalCredentials
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath, { organizationUuid: 'org-a' })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const { markClaudePtyExited, markClaudePtySpawned } = await import('./live-pty-gate')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    await service.syncForCurrentSelection()
+
+    markClaudePtySpawned('live-claude-pty')
+    try {
+      writeFileSync(runtimeCredentialsPath, wipedCredentials, 'utf-8')
+      await service.syncForCurrentSelection()
+
+      expect(readManagedCredentialsForTest('account-1', managedAuthPath)).toBe(originalCredentials)
+      expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(originalCredentials)
+    } finally {
+      markClaudePtyExited('live-claude-pty')
+    }
+  })
+
   it('rejects unverifiable refreshed runtime credentials', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const originalCredentials = createClaudeCredentialsWithoutEmail('original')
@@ -3487,6 +3534,72 @@ describe('ClaudeRuntimeAuthService', () => {
       wslLinuxConfigDir: '/home/alice/.local/share/orca/claude-accounts/ubuntu/auth',
       provenance: 'managed:ubuntu-account:wsl:Ubuntu',
       stripAuthEnv: true
+    })
+  })
+
+  it('uses the global WSL runtime for untargeted Claude preparation under auto', async () => {
+    setPlatform('win32')
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => null,
+      toWindowsWslPath: (value: string) => value
+    }))
+    const ubuntuAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'ubuntu-account',
+      createClaudeCredentialsJson('ubuntu@example.com', 'ubuntu-token')
+    )
+    const settings = createSettings({
+      localAccountRuntime: 'auto',
+      localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
+      claudeManagedAccounts: [
+        createClaudeAccount('ubuntu-account', ubuntuAuthPath, {
+          managedAuthRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxAuthPath: '/home/alice/.local/share/orca/claude-accounts/ubuntu/auth'
+        })
+      ],
+      activeClaudeManagedAccountId: null,
+      activeClaudeManagedAccountIdsByRuntime: {
+        host: null,
+        wsl: { Ubuntu: 'ubuntu-account' }
+      }
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    const preparation = await service.prepareForClaudeLaunch()
+
+    expect(preparation).toMatchObject({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      provenance: 'managed:ubuntu-account:wsl:Ubuntu'
+    })
+  })
+
+  it('ignores a persisted WSL account-runtime pin on non-Windows hosts', async () => {
+    setPlatform('darwin')
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => null,
+      toWindowsWslPath: (value: string) => value
+    }))
+    const settings = createSettings({
+      localAccountRuntime: 'wsl',
+      localAccountWslDistro: 'Ubuntu'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    const preparation = await service.prepareForClaudeLaunch()
+
+    expect(preparation).toMatchObject({
+      runtime: 'host',
+      wslDistro: null,
+      provenance: 'system',
+      stripAuthEnv: false
     })
   })
 

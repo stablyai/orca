@@ -1,13 +1,33 @@
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import { combineUnsubscribes } from './combine-unsubscribes'
+import type {
+  IPtyProvider,
+  PtyBackgroundStreamEvent,
+  PtyProviderBufferSnapshot,
+  PtyProcessInfo,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../providers/types'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
   private unsubscribers: (() => void)[] = []
-  private dataListeners: ((payload: { id: string; data: string }) => void)[] = []
-  private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
+  private dataListeners: ((payload: {
+    id: string
+    data: string
+    sequenceChars?: number
+    transformed?: boolean
+    seq?: number
+  }) => void)[] = []
+  private exitListeners: ((payload: {
+    id: string
+    code: number
+    incarnationId?: PtyIncarnationId
+  }) => void)[] = []
 
   constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
     this.current = opts.current
@@ -47,8 +67,33 @@ export class DaemonPtyRouter implements IPtyProvider {
     const adapter = opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined
     const target = adapter ?? this.current
     const result = await target.spawn(opts)
-    this.sessionAdapters.set(result.id, target)
+    // Why: the adapter filters intentional recovery exits and canonical-ID races before publishing proof.
+    if (!result.exitedBeforeSpawnReply) {
+      this.sessionAdapters.set(result.id, target)
+    }
     return result
+  }
+
+  supportsGitCredentialGuardHost(sessionId?: string): boolean {
+    const adapter = sessionId ? this.adapterFor(sessionId) : this.current
+    return adapter.supportsGitCredentialGuardHost()
+  }
+
+  supportsAgentSessionClaims(): boolean {
+    // Why: a legacy daemon may still own a resumable PTY, so authority requires every route.
+    return this.allAdapters().every((adapter) => adapter.supportsAgentSessionClaims())
+  }
+
+  providesAgentSessionOwnerListings(ptyId: string): boolean {
+    const adapter = this.sessionAdapters.get(ptyId)
+    // Why: an unmapped id may belong to any preserved daemon generation;
+    // only an established route can make an omitted owner authoritative.
+    return adapter?.providesAgentSessionOwnerListings(ptyId) === true
+  }
+
+  supportsAgentSessionCreateOperations(): boolean {
+    // Fresh sessions always route to the current daemon; legacy adapters only retain old IDs.
+    return this.current.supportsAgentSessionCreateOperations()
   }
 
   async attach(id: string): Promise<void> {
@@ -71,7 +116,22 @@ export class DaemonPtyRouter implements IPtyProvider {
     this.adapterFor(id).resize(id, cols, rows)
   }
 
-  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  pauseProducer(id: string): void {
+    this.adapterFor(id).pauseProducer(id)
+  }
+
+  resumeProducer(id: string): void {
+    this.adapterFor(id).resumeProducer(id)
+  }
+
+  setPtyBackgrounded(id: string, background: boolean): void {
+    this.adapterFor(id).setPtyBackgrounded(id, background)
+  }
+
+  async shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+  ): Promise<void> {
     await this.adapterFor(id).shutdown(id, opts)
     // Why: sleep passes keepHistory=true and re-spawns against the same
     // sessionId on wake. If we delete the routing entry here, adapterFor()
@@ -100,8 +160,23 @@ export class DaemonPtyRouter implements IPtyProvider {
     return (await this.adapterFor(id).getAppliedSize?.(id)) ?? null
   }
 
+  async getBufferSnapshot(
+    id: string,
+    opts?: { scrollbackRows?: number }
+  ): Promise<PtyProviderBufferSnapshot | null> {
+    return await this.adapterFor(id).getBufferSnapshot(id, opts)
+  }
+
+  canProvideAuthoritativeBufferSnapshot(id: string): boolean {
+    return this.adapterFor(id).canProvideAuthoritativeBufferSnapshot(id)
+  }
+
   async clearBuffer(id: string): Promise<void> {
     await this.adapterFor(id).clearBuffer(id)
+  }
+
+  async closeStartupQueryAuthority(id: string): Promise<number> {
+    return (await this.adapterFor(id).closeStartupQueryAuthority?.(id)) ?? 0
   }
 
   acknowledgeDataEvent(id: string, charCount: number): void {
@@ -116,6 +191,14 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.adapterFor(id).getForegroundProcess(id)
   }
 
+  async inspectProcess(id: string): Promise<PtyProcessInspection> {
+    return this.adapterForInspection(id).inspectProcess(id)
+  }
+
+  async confirmForegroundProcess(id: string): Promise<string | null> {
+    return this.adapterFor(id).confirmForegroundProcess(id)
+  }
+
   async serialize(ids: string[]): Promise<string> {
     return this.current.serialize(ids)
   }
@@ -124,10 +207,12 @@ export class DaemonPtyRouter implements IPtyProvider {
     await this.current.revive(state)
   }
 
-  async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
+  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
     // Why: runtime exact-stop/liveness flows must fail closed if any adapter
     // cannot provide a trustworthy process list.
-    const results = await Promise.all(this.allAdapters().map((adapter) => adapter.listProcesses()))
+    const results = await Promise.all(
+      this.allAdapters().map((adapter) => adapter.listProcesses(opts))
+    )
     return results.flat()
   }
 
@@ -139,7 +224,15 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.current.getProfiles()
   }
 
-  onData(callback: (payload: { id: string; data: string }) => void): () => void {
+  onData(
+    callback: (payload: {
+      id: string
+      data: string
+      sequenceChars?: number
+      transformed?: boolean
+      seq?: number
+    }) => void
+  ): () => void {
     this.dataListeners.push(callback)
     return () => {
       const idx = this.dataListeners.indexOf(callback)
@@ -149,11 +242,27 @@ export class DaemonPtyRouter implements IPtyProvider {
     }
   }
 
+  onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
+    return combineUnsubscribes(
+      this.allAdapters().map((adapter) => adapter.onBackgroundStreamEvent(callback))
+    )
+  }
+
+  // Why: main subscribes on the routed provider, so without this the dead-endpoint
+  // fan-out never reaches the renderer and only the written pane recovers (STA-2373).
+  onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
+    return combineUnsubscribes(
+      this.allAdapters().map((adapter) => adapter.onWriteUnavailable(callback))
+    )
+  }
+
   onReplay(_callback: (payload: { id: string; data: string }) => void): () => void {
     return () => {}
   }
 
-  onExit(callback: (payload: { id: string; code: number }) => void): () => void {
+  onExit(
+    callback: (payload: { id: string; code: number; incarnationId?: PtyIncarnationId }) => void
+  ): () => void {
     this.exitListeners.push(callback)
     return () => {
       const idx = this.exitListeners.indexOf(callback)
@@ -246,6 +355,17 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   private adapterFor(sessionId: string): DaemonPtyAdapter {
     return this.sessionAdapters.get(sessionId) ?? this.current
+  }
+
+  private adapterForInspection(sessionId: string): DaemonPtyAdapter {
+    const adapter =
+      this.sessionAdapters.get(sessionId) ??
+      this.allAdapters().find((candidate) => candidate.hasPty(sessionId))
+    if (!adapter) {
+      throw new Error('terminal_gone')
+    }
+    this.sessionAdapters.set(sessionId, adapter)
+    return adapter
   }
 
   private allAdapters(): DaemonPtyAdapter[] {

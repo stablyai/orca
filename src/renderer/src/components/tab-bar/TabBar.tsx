@@ -1,9 +1,6 @@
-/* oxlint-disable max-lines -- Why: rendering the drop-indicator prop on each
- * of three distinct tab components (terminal, browser, editor) adds 3 lines
- * to a file that was already ~398 code lines on main. The per-type render
- * branches share little beyond drag data, so consolidating them would cost
- * more clarity than the ~5 lines of bloat is worth. */
+/* oxlint-disable max-lines -- Why: per-type tab render branches (terminal/browser/editor) share little beyond drag data; consolidating costs more clarity than the ~5 lines it saves. */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { SortableContext } from '@dnd-kit/sortable'
 import {
   ChevronLeft,
@@ -41,7 +38,8 @@ import TabBarCreateEntry from './TabBarCreateEntry'
 import { ShellIcon } from './shell-icons'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { type AgentDetectionTarget, useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { normalizeRelativePath } from '@/lib/path'
 import {
@@ -51,6 +49,7 @@ import {
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { getConnectionIdFromState } from '@/lib/connection-context'
 import { useOptionalShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   type BuiltInWindowsTerminalShell,
@@ -78,8 +77,9 @@ import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
-import { findTabAgentEntry } from '../native-chat/native-chat-tab-agent-entry'
-import { resolveTabAgentFromTitle } from '@/lib/use-tab-agent'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
+import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
 const isWindows = navigator.userAgent.includes('Windows')
 const isMacOs = navigator.userAgent.includes('Mac')
@@ -89,7 +89,6 @@ type GitStatusEntries = ReturnType<typeof useAppStore.getState>['gitStatusByWork
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
 const EMPTY_AGENT_CMD_OVERRIDES: Partial<Record<TuiAgent, string>> = {}
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
-const AGENT_DETECTION_LOCAL_TARGET_KEY = 'local'
 
 function getProjectRuntimeShellMenuMode(
   projectRuntime: ProjectExecutionRuntimeResolution | undefined
@@ -113,6 +112,7 @@ type TabBarProps = {
   onClose: (tabId: string) => void
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
+  onCloseToLeft: (tabId: string) => void
   onNewTerminalTab: () => void
   /** On Windows, opens a new terminal with a specific shell instead of the default. */
   onNewTerminalWithShell?: (shell: string) => void
@@ -207,7 +207,7 @@ function getTabLayoutSignature(
     return `${item.type}:${item.id}:${item.isPinned}:${isExpanded}:${Boolean(item.data.color)}:${label}`
   }
   if (item.type === 'browser') {
-    return `${item.type}:${item.id}:${item.isPinned}:${item.data.loading}:${item.data.loadError}:${label}`
+    return `${item.type}:${item.id}:${item.isPinned}:${item.data.loading}:${Boolean(item.data.loadError)}:${label}`
   }
   if (item.type === 'editor') {
     return `${item.type}:${item.id}:${item.isPinned}:${item.data.isDirty}:${item.data.isPreview}:${item.data.externalMutation ?? ''}:${status ?? ''}:${label}`
@@ -239,6 +239,7 @@ function TabBarInner({
   onClose,
   onCloseOthers,
   onCloseToRight,
+  onCloseToLeft,
   onNewTerminalTab,
   onNewTerminalWithShell,
   onNewBrowserTab,
@@ -305,18 +306,14 @@ function TabBarInner({
   const repos = useAppStore((s) => s.repos)
   const settings = useAppStore((s) => s.settings)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  // Why: probe Windows shell capabilities on the host that owns this worktree, so
-  // the offered shells match the host that actually runs the terminal.
+  // Why: use the worktree's owning host so offered Windows shells match the host that actually runs the terminal.
   const activeRuntimeEnvironmentId = useAppStore(
     (s) => getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim() || null
   )
-  const worktreeConnectionId = useAppStore((s) => {
-    const worktree = Object.values(s.worktreesByRepo ?? {})
-      .flat()
-      .find((entry) => entry.id === worktreeId)
-    const repo = worktree ? s.repos?.find((entry) => entry.id === worktree.repoId) : null
-    return repo?.connectionId?.trim() || null
-  })
+  // Why: retained tab strips rerun selectors on every store write; reuse canonical indexes, don't flatten both slices here.
+  const worktreeConnectionId = useAppStore(
+    (s) => getConnectionIdFromState(s, worktreeId)?.trim() || null
+  )
   const worktreeRemotePlatform = useAppStore((s) => {
     if (!worktreeConnectionId) {
       return null
@@ -327,38 +324,7 @@ function TabBarInner({
   const agentCmdOverrides = useAppStore(
     (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
   )
-  const agentDetectionTargetKey = useAppStore((s): string | undefined => {
-    const allWorktrees = Object.values(s.worktreesByRepo ?? {}).flat()
-    const worktree = allWorktrees.find((w) => w.id === worktreeId)
-    if (!worktree) {
-      return undefined
-    }
-    const repo = s.repos?.find((r) => r.id === worktree.repoId)
-    const repoConnectionId = repo?.connectionId?.trim()
-    if (repoConnectionId) {
-      return `ssh:${repoConnectionId}`
-    }
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim()
-    if (runtimeEnvironmentId) {
-      return `runtime:${runtimeEnvironmentId}`
-    }
-    return AGENT_DETECTION_LOCAL_TARGET_KEY
-  })
-  const agentDetectionTarget = useMemo<AgentDetectionTarget | undefined>(() => {
-    if (agentDetectionTargetKey === undefined) {
-      return undefined
-    }
-    if (agentDetectionTargetKey === AGENT_DETECTION_LOCAL_TARGET_KEY) {
-      return { kind: 'local' }
-    }
-    if (agentDetectionTargetKey.startsWith('ssh:')) {
-      return { kind: 'ssh', connectionId: agentDetectionTargetKey.slice('ssh:'.length) }
-    }
-    if (agentDetectionTargetKey.startsWith('runtime:')) {
-      return { kind: 'runtime', environmentId: agentDetectionTargetKey.slice('runtime:'.length) }
-    }
-    return { kind: 'local' }
-  }, [agentDetectionTargetKey])
+  const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId)
   const { detectedIds } = useDetectedAgents(agentDetectionTarget)
   const agentLaunchOptions = useMemo(
     () =>
@@ -450,18 +416,16 @@ function TabBarInner({
     [unifiedTabs]
   )
 
-  // Why: gate the tab long-press view-mode toggle to agent terminals. A tab is
-  // eligible when it launched an agent or has a live agent-status entry on any of
-  // its panes (paneKey = `${unifiedTabId}:…`), mirroring the toggle button's gate.
+  // Why: tab-wide launch/title hints are safe only before split; gate the view-mode toggle to the active leaf's agent.
   const toggleTabViewMode = useAppStore((s) => s.toggleTabViewMode)
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
-  const nativeChatEnabled = useAppStore((s) => s.settings?.experimentalNativeChat === true)
+  // Why: every retained TabBar observes the same hot maps; one feature-gated selector shares their projections.
+  const { nativeChatEnabled, tabAgentTypesByTabId, nativeChatTabWideFallbackUnsafeTabsById } =
+    useAppStore(useShallow(selectTabBarAgentProjections))
+  const nativeChatTranscriptIsLocalReadable = useAppStore((s) =>
+    isNativeChatTranscriptLocalReadable(getConnectionIdFromState(s, worktreeId))
+  )
 
-  // Why: Electron <webview> elements run in a separate process, so clicking
-  // inside one never dispatches a pointerdown on the renderer document.
-  // Radix DropdownMenu relies on document pointerdown to detect outside
-  // clicks, so it misses webview clicks entirely. Listening for window blur
-  // catches the moment focus leaves the renderer (including into a webview).
+  // Why: <webview> clicks are out-of-process, so Radix's document-pointerdown outside-click check misses them; use window blur.
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
   const [createMenuQuery, setCreateMenuQuery] = useState('')
   const pendingNewTabMenuFocusRef = useRef<(() => void) | null>(null)
@@ -505,9 +469,7 @@ function TabBarInner({
   const queueNewActiveTerminalFocusAfterNewTabMenuClose = (): void => {
     const previousActiveTabId = useAppStore.getState().activeTabId
     pendingNewTabMenuFocusRef.current = () => {
-      // Why: paired web/SSH runtime tab creation is async; wait for the host
-      // snapshot to publish the newly active terminal instead of focusing the
-      // pre-existing active tab.
+      // Why: paired web/SSH tab creation is async; await the host snapshot's new terminal instead of the pre-existing active tab.
       focusNewActiveTerminalWhenReady(
         previousActiveTabId,
         Date.now() + NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS
@@ -669,9 +631,7 @@ function TabBarInner({
       if (node !== null) {
         return
       }
-      // Why: the delayed focus handoff is scoped to this tab bar instance.
-      // A root ref cleanup cancels it at the DOM owner boundary without an
-      // otherwise cleanup-only React Effect.
+      // Why: cancel the delayed focus handoff via this root ref cleanup, avoiding an otherwise cleanup-only React Effect.
       clearPendingNewTabMenuFocusAnimation()
       clearPendingNewTabMenuFocusRetry()
     }
@@ -686,11 +646,7 @@ function TabBarInner({
           <DropdownMenuItem
             key={entry.shell}
             onSelect={() => {
-              // Why: the top-level Windows shell menu models shell
-              // categories, not concrete executables. When the user
-              // picked PowerShell 7+ in advanced settings, launching the
-              // "PowerShell" menu item must preserve that implementation
-              // instead of forcing inbox powershell.exe.
+              // Why: menu models shell categories not executables; preserve the user's chosen PowerShell 7+ over inbox powershell.exe.
               queueNewActiveTerminalFocusAfterNewTabMenuClose()
               onNewTerminalWithShell(
                 resolveWindowsShellLaunchTarget(
@@ -1015,11 +971,7 @@ function TabBarInner({
     <div
       ref={clearPendingNewTabMenuFocusOnUnmount}
       className="flex items-stretch h-full overflow-hidden flex-1 min-w-0"
-      // Why: only drops aimed at the top tab/session strip should open files in
-      // Orca's editor. Terminal-pane drops need to keep inserting file paths
-      // into the active coding CLI, so preload routes native OS drops based on
-      // this explicit surface marker instead of treating the whole app as an
-      // editor drop zone.
+      // Why: preload routes native OS drops by this marker — only the tab strip opens files in the editor, not terminal panes.
       data-native-file-drop-target="editor"
     >
       {tabStripOverflowState.hasOverflow ? (
@@ -1050,27 +1002,16 @@ function TabBarInner({
           </TooltipContent>
         </Tooltip>
       ) : null}
-      {/* Why: no strategy means dnd-kit does not animate siblings aside for
-          the active tab. Combined with dropping transform/transition on the
-          dragged tab (see SortableTab etc.), this keeps every tab visually
-          anchored during a drag so only the blue insertion bar moves. */}
+      {/* Why: no strategy stops dnd-kit animating siblings, so tabs stay anchored during drag; only the insertion bar moves. */}
       <SortableContext items={sortableIds}>
-        {/* Why: no-drag lets tab interactions work inside the titlebar's drag
-            region. The outer container inherits drag so empty space after the
-            "+" button remains window-draggable. */}
+        {/* Why: no-drag lets tab interactions work inside the titlebar's drag region (outer container stays window-draggable). */}
         <div
           className="relative flex min-h-0 min-w-0 max-w-full flex-[0_1_auto]"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <div
             ref={tabStripRef}
-            // Why: only `border-r` on the strip — the trailing edge must stay
-            // visible even when tabs overflow-scroll past the last tab. The
-            // left edge is instead painted by the FIRST tab's own `border-l`
-            // (see per-tab components) so its rendering is identical to every
-            // between-tab separator. A strip-level `border-l` would render at
-            // a different box than the tab's own `border-t`, producing a
-            // heavier-looking L-corner at the leftmost tab when inactive.
+            // Why: only `border-r` here — a strip-level `border-l` would render a heavier L-corner than the first tab's own `border-l`.
             className={[
               'terminal-tab-strip flex h-full min-w-0 max-w-full flex-1 items-stretch overflow-x-auto overflow-y-hidden border-r border-border/70',
               getTabStripScrollMaskClassName(tabStripOverflowState)
@@ -1100,24 +1041,23 @@ function TabBarInner({
                   )
                 }
                 const unifiedTabForItem = unifiedTabByVisibleId.get(item.id)
-                // Carry the agent *identity* (not just "an agent exists") so the
-                // native-chat gate can reject unsupported agents like Grok.
+                // Carry the agent *identity* (not just "an agent exists") so the native-chat gate can reject agents like Grok.
                 const resolvedAgent =
-                  resolveTabAgentFromTitle(unifiedTabForItem?.label ?? '') ??
-                  resolveTabAgentFromTitle(terminalTab.title)
-                // Key the live-agent lookup by the backing terminal tab id —
-                // agent-status pane keys are `${terminalTab.id}:${leafId}`, and
-                // the unified tab id can differ from it.
-                const detectedAgent =
-                  findTabAgentEntry(agentStatusByPaneKey ?? {}, terminalTab.id)?.agentType ?? null
+                  resolveCommittedTitleAgentType(unifiedTabForItem?.label ?? '') ??
+                  resolveCommittedTitleAgentType(terminalTab.title)
+                // Key the live-agent lookup by the backing terminal tab id: agent-status pane keys use it, not the unified tab id.
+                const detectedAgent = tabAgentTypesByTabId[terminalTab.id] ?? null
+                const tabWideFallbackSafe =
+                  nativeChatTabWideFallbackUnsafeTabsById[terminalTab.id] !== true
                 const canToggleViewMode =
                   unifiedTabForItem !== undefined &&
                   canToggleNativeChat({
                     experimentalNativeChatEnabled: nativeChatEnabled,
                     contentType: 'terminal',
-                    launchAgent: terminalTab.launchAgent,
+                    launchAgent: tabWideFallbackSafe ? terminalTab.launchAgent : null,
                     detectedAgent,
-                    resolvedAgent,
+                    resolvedAgent: tabWideFallbackSafe ? resolvedAgent : null,
+                    nativeChatTranscriptIsLocalReadable,
                     isChatViewMode: unifiedTabForItem.viewMode === 'chat'
                   })
                 return (
@@ -1133,6 +1073,7 @@ function TabBarInner({
                       unifiedTabForItem ? () => toggleTabViewMode(unifiedTabForItem.id) : undefined
                     }
                     hasTabsToRight={index < orderedItems.length - 1}
+                    hasTabsToLeft={index > 0}
                     isActive={
                       (activeTabType === 'terminal' || activeTabType === 'simulator') &&
                       item.id === activeTabId
@@ -1143,6 +1084,7 @@ function TabBarInner({
                     onClose={onClose}
                     onCloseOthers={onCloseOthers}
                     onCloseToRight={onCloseToRight}
+                    onCloseToLeft={onCloseToLeft}
                     onSetCustomTitle={onSetCustomTitle}
                     onSetTabColor={onSetTabColor}
                     onTogglePin={() => togglePinned(item)}
@@ -1161,9 +1103,13 @@ function TabBarInner({
                     isActive={activeTabType === 'browser' && activeBrowserTabId === item.id}
                     isPinned={item.isPinned}
                     hasTabsToRight={index < orderedItems.length - 1}
+                    hasTabsToLeft={index > 0}
+                    tabCount={orderedItems.length}
                     onActivate={() => onActivateBrowserTab?.(item.id)}
                     onClose={() => onCloseBrowserTab?.(item.id)}
+                    onCloseOthers={() => onCloseOthers(item.id)}
                     onCloseToRight={() => onCloseToRight(item.id)}
+                    onCloseToLeft={() => onCloseToLeft(item.id)}
                     onDuplicate={() => onDuplicateBrowserTab?.(item.id)}
                     onTogglePin={() => togglePinned(item)}
                     dragData={dragData}
@@ -1192,10 +1138,14 @@ function TabBarInner({
                     isActive={activeTabType === 'simulator' && item.id === activeSimulatorTabId}
                     isPinned={item.isPinned}
                     hasTabsToRight={index < orderedItems.length - 1}
+                    hasTabsToLeft={index > 0}
+                    tabCount={orderedItems.length}
                     statusByRelativePath={statusByRelativePath}
                     onActivate={() => onActivateFile?.(item.id)}
                     onClose={() => onCloseFile?.(item.id)}
+                    onCloseOthers={() => onCloseOthers(item.id)}
                     onCloseToRight={() => onCloseToRight(item.id)}
+                    onCloseToLeft={() => onCloseToLeft(item.id)}
                     onCloseAll={() => onCloseAllFiles?.()}
                     onMakePermanent={() => {}}
                     onTogglePin={() => togglePinned(item)}
@@ -1215,10 +1165,14 @@ function TabBarInner({
                   }
                   isPinned={item.isPinned}
                   hasTabsToRight={index < orderedItems.length - 1}
+                  hasTabsToLeft={index > 0}
+                  tabCount={orderedItems.length}
                   statusByRelativePath={statusByRelativePath}
                   onActivate={() => onActivateFile?.(item.id)}
                   onClose={() => onCloseFile?.(item.id)}
+                  onCloseOthers={() => onCloseOthers(item.id)}
                   onCloseToRight={() => onCloseToRight(item.id)}
+                  onCloseToLeft={() => onCloseToLeft(item.id)}
                   onCloseAll={() => onCloseAllFiles?.()}
                   onMakePermanent={() =>
                     onMakePreviewFilePermanent?.(item.data.id, item.data.tabId)
@@ -1263,9 +1217,7 @@ function TabBarInner({
       <DropdownMenu
         open={newTabMenuOpen}
         onOpenChange={setNewTabMenuOpen}
-        // Why: this menu can stay open after the Mobile Emulator "Hide" action,
-        // which shows a toast with a re-enable link; modal would disable body
-        // pointer events and make that toast (and other outside UI) unclickable.
+        // Why: modal would disable body pointer events, making the Mobile Emulator "Hide" re-enable toast unclickable.
         modal={false}
       >
         <DropdownMenuTrigger asChild>
@@ -1273,10 +1225,7 @@ function TabBarInner({
             className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             title={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
-            // Why: aria-label matches the tooltip so E2E can locate the "+"
-            // affordance via getByRole('button', { name: 'New tab' }). The
-            // store-only createTab() round-trip that preceded this was a
-            // tautology — it would pass even if the + button had been deleted.
+            // Why: aria-label matches the tooltip so E2E can locate the "+" via getByRole('button', { name: 'New tab' }).
             aria-label={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
           >
             <Plus className="w-3.5 h-3.5" />
@@ -1287,9 +1236,7 @@ function TabBarInner({
           sideOffset={6}
           className="w-72 max-w-[calc(100vw-1rem)] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
           onCloseAutoFocus={(e) => {
-            // Why: terminal-producing menu actions activate a freshly-mounted
-            // xterm. Radix's default focus restore sends focus back to the "+"
-            // trigger after close, stealing it from the new terminal.
+            // Why: Radix restores focus to the "+" trigger on close, stealing it from the freshly-mounted terminal.
             e.preventDefault()
             runPendingNewTabMenuFocusAfterClose()
           }}

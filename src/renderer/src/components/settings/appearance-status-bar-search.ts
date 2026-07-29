@@ -2,6 +2,8 @@ import type { StatusBarItem } from '../../../../shared/types'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
+import { getAntigravityStatusBarToggleSearchEntry } from './appearance-status-bar-antigravity-toggle-search'
+import { getGrokStatusBarToggleSearchEntry } from './appearance-status-bar-grok-toggle-search'
 
 export const getStatusBarToggles = createLocalizedCatalog(
   (): readonly {
@@ -98,6 +100,7 @@ export const getStatusBarToggles = createLocalizedCatalog(
         'Show Gemini token and cost usage for the active workspace.'
       )
     },
+    getAntigravityStatusBarToggleSearchEntry(),
     {
       id: 'opencode-go',
       title: translate(
@@ -161,6 +164,42 @@ export const getStatusBarToggles = createLocalizedCatalog(
         'Show Kimi subscription usage for the active workspace.'
       )
     },
+    {
+      id: 'minimax',
+      title: translate('auto.components.settings.appearance.search.0f08f6b483', 'MiniMax Usage'),
+      description: translate(
+        'auto.components.settings.appearance.search.e46178eb1b',
+        'Show MiniMax subscription usage in the status bar.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.896eb53fd4',
+          'status bar'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.d16378a88f',
+          'minimax'
+        ),
+        ...translateSearchKeyword('auto.components.settings.appearance.search.00a028f25f', 'usage'),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.de586def95',
+          'subscription'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.d9e7cef86f',
+          'cookie'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.25e51b62ee',
+          'rate limit'
+        )
+      ],
+      toggleDescription: translate(
+        'settings.appearance.statusBar.minimaxToggleDescription',
+        'Show MiniMax subscription usage for the active workspace.'
+      )
+    },
+    getGrokStatusBarToggleSearchEntry(),
     {
       id: 'ssh',
       title: translate('auto.components.settings.appearance.search.57fb424c56', 'Remote Hosts'),

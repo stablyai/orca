@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 
 import path from 'node:path'
-import React, { type ReactNode, useState } from 'react'
-import { act } from 'react'
+import React, { type ReactNode, useState, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -245,6 +244,25 @@ describe('SourceControlAgentActionDialog', () => {
     expect(mocks.onLaunched).not.toHaveBeenCalled()
     expect(mocks.onOpenChange).not.toHaveBeenCalledWith(false)
     expect(mocks.toastError).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps prompt editing available when async auto-start delivery fails', async () => {
+    mocks.onStart.mockImplementation(async () => {
+      await Promise.resolve()
+      return false
+    })
+    renderControlledDialog({
+      baseCommandInput: 'Resolve queued comments.',
+      savedCommandInputTemplate: '{basePrompt}'
+    })
+    expect(container.textContent).not.toContain('Launch agent')
+    await vi.waitFor(() => expect(mocks.onStart).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(container.textContent).toContain('Launch agent'))
+
+    expect(container.querySelector('textarea')?.value).toContain('{basePrompt}')
+    expect(container.textContent).toContain('Start agent')
+    expect(mocks.onLaunched).not.toHaveBeenCalled()
+    expect(mocks.onOpenChange).not.toHaveBeenCalledWith(false)
   })
 
   it('does not auto-start when a saved receipt appears after the dialog is already open', async () => {

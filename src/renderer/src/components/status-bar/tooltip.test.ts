@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { renderToStaticMarkup } from 'react-dom/server'
+import type * as ReactModule from 'react'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
-vi.mock('@/lib/agent-catalog', () => ({
-  AgentIcon: () => null
-}))
+vi.mock('@/lib/agent-catalog', async () => {
+  const ReactActual = await vi.importActual<typeof ReactModule>('react')
+  return {
+    AgentIcon: ({ agent }: { agent: string }) =>
+      ReactActual.createElement('span', { 'data-agent-icon': agent })
+  }
+})
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) => {
@@ -16,11 +22,15 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 import {
+  barColor,
+  clampUsedPercent,
   formatResetCreditExpiry,
   formatResetCountdown,
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel,
-  getWindowSections
+  getWindowSections,
+  ProviderIcon,
+  ProviderPanel
 } from './tooltip'
 
 function provider(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimits {
@@ -34,6 +44,17 @@ function provider(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimi
     ...overrides
   }
 }
+
+const PROVIDER_IDS: ProviderRateLimits['provider'][] = [
+  'claude',
+  'codex',
+  'gemini',
+  'antigravity',
+  'opencode-go',
+  'kimi',
+  'minimax',
+  'grok'
+]
 
 afterEach(() => {
   vi.useRealTimers()
@@ -114,6 +135,39 @@ describe('provider usage error copy', () => {
     )
   })
 
+  it('shows the exact Grok CLI recovery flow for an expired refreshable session (#8497)', () => {
+    const grok = provider({
+      provider: 'grok',
+      error:
+        'Grok sign-in expired — run grok on the computer running Orca; sign in if prompted. No chat message is needed.',
+      usageMetadata: {
+        failureKind: 'delegated-refresh-required',
+        source: 'oauth'
+      }
+    })
+
+    expect(getProviderUsageStatusLabel(grok)).toBe('Run Grok to refresh')
+    expect(getProviderUsageErrorMessage(grok)).toBe(
+      'Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.'
+    )
+  })
+
+  it('shows the exact Kimi CLI recovery flow for an expired read-only session', () => {
+    const kimi = provider({
+      provider: 'kimi',
+      error: 'Kimi session expired — run kimi on the computer running Orca, then retry usage.',
+      usageMetadata: {
+        failureKind: 'delegated-refresh-required',
+        source: 'oauth'
+      }
+    })
+
+    expect(getProviderUsageStatusLabel(kimi)).toBe('Run Kimi to refresh')
+    expect(getProviderUsageErrorMessage(kimi)).toBe(
+      'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
+    )
+  })
+
   it('frames known Codex auth refresh failures as auth-shaped usage failures', () => {
     const cases = [
       'Please reauthenticate before checking usage.',
@@ -146,6 +200,20 @@ describe('provider usage error copy', () => {
     expect(getProviderUsageStatusLabel(p)).toBe('Limited')
     expect(getProviderUsageErrorMessage(p)).toBe(
       'Rate limit reached while refreshing OAuth access token.'
+    )
+  })
+
+  it('classifies the Codex chatgpt-auth-required rate-limits read error as auth, not Limited', () => {
+    // Why: the message mentions "rate limits" only as the object it failed to
+    // read; labeling it "Limited" would wrongly imply the user hit a limit.
+    const p = provider({
+      provider: 'codex',
+      error: 'chatgpt authentication required to read rate limits'
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Refresh failed')
+    expect(getProviderUsageErrorMessage(p)).toBe(
+      'Codex usage could not be refreshed. Agent sessions may still be signed in.'
     )
   })
 
@@ -274,6 +342,29 @@ describe('getWindowSections', () => {
     ])
   })
 
+  it('returns a separate Fable section when Claude reports Fable weekly usage', () => {
+    const p: ProviderRateLimits = {
+      provider: 'claude',
+      session: { usedPercent: 40, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: { usedPercent: 20, windowMinutes: 10080, resetsAt: null, resetDescription: null },
+      fableWeekly: {
+        usedPercent: 42,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+    const sections = getWindowSections(p)
+    expect(sections).toEqual([
+      { label: 'Session', window: p.session },
+      { label: 'Weekly', window: p.weekly },
+      { label: 'Fable', window: p.fableWeekly }
+    ])
+  })
+
   it('returns session and weekly for empty buckets array', () => {
     const p: ProviderRateLimits = {
       provider: 'gemini',
@@ -353,5 +444,151 @@ describe('getWindowSections', () => {
     expect(sections[0].label).toBe('Pro')
     expect(sections[0].window!.resetsAt).toBe(18000000)
     expect(sections[0].window!.resetDescription).toBe('5:00 PM')
+  })
+})
+
+describe('ProviderPanel reset rendering', () => {
+  it('renders the Fable reset countdown when Claude reports a reset timestamp', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 3, 20, 0))
+    const p = provider({
+      status: 'ok',
+      session: null,
+      weekly: null,
+      fableWeekly: {
+        usedPercent: 62,
+        windowMinutes: 10080,
+        resetsAt: Date.now() + (6 * 24 + 17) * 60 * 60_000,
+        resetDescription: 'Jul 10 at 1:00 PM'
+      }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    expect(markup).toContain('Fable')
+    expect(markup).toContain('Resets in 6d 17h')
+  })
+
+  it('renders MiniMax session as usedPercent so the value matches the bar', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
+    const p = provider({
+      provider: 'minimax',
+      status: 'ok',
+      session: {
+        usedPercent: 35,
+        windowMinutes: 300,
+        resetsAt: Date.now() + 2 * 60 * 60_000,
+        resetDescription: null
+      }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    // Why: bars show consumption (% used), matching harness meters (#7551).
+    expect(markup).toContain('35%')
+    expect(markup).toContain('% used')
+    expect(markup).not.toContain('% left')
+  })
+
+  it('clamps MiniMax session to 100% used when usedPercent reports 100', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
+    const p = provider({
+      provider: 'minimax',
+      status: 'ok',
+      session: {
+        usedPercent: 100,
+        windowMinutes: 300,
+        resetsAt: Date.now() + 2 * 60 * 60_000,
+        resetDescription: null
+      }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    expect(markup).toContain('100%')
+    expect(markup).toContain('% used')
+  })
+
+  it('clamps over-100 usedPercent to 100% used in the panel', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
+    const p = provider({
+      provider: 'minimax',
+      status: 'ok',
+      session: {
+        usedPercent: 140,
+        windowMinutes: 300,
+        resetsAt: Date.now() + 2 * 60 * 60_000,
+        resetDescription: null
+      }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    expect(markup).toContain('100%')
+    expect(markup).toContain('width:100%')
+    expect(markup).not.toContain('140%')
+  })
+
+  it.each(PROVIDER_IDS)('applies remaining copy and meter fill to %s', (providerId) => {
+    const p = provider({
+      provider: providerId,
+      status: 'ok',
+      session: {
+        usedPercent: 25,
+        windowMinutes: 300,
+        resetsAt: null,
+        resetDescription: null
+      }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p, usagePercentageDisplay: 'remaining' }))
+
+    expect(markup).toContain('75% left')
+    expect(markup).toContain('width:75%')
+    expect(markup).not.toContain('width:25%')
+  })
+})
+
+describe('clampUsedPercent', () => {
+  it('rounds and clamps into 0–100', () => {
+    expect(clampUsedPercent(-3)).toBe(0)
+    expect(clampUsedPercent(32.4)).toBe(32)
+    expect(clampUsedPercent(32.6)).toBe(33)
+    expect(clampUsedPercent(100)).toBe(100)
+    expect(clampUsedPercent(140)).toBe(100)
+  })
+})
+
+describe('barColor', () => {
+  // Why: thresholds are on % used (consumption). The <60 band is neutral (not
+  // green) so the always-visible meter stays quiet until a limit nears; guard
+  // against flipping back to green or to remaining-based colors without noticing.
+  it('maps used percent to neutral / yellow / red bands', () => {
+    expect(barColor(0)).toBe('bg-muted-foreground/40')
+    expect(barColor(59)).toBe('bg-muted-foreground/40')
+    expect(barColor(60)).toBe('bg-yellow-500')
+    expect(barColor(79)).toBe('bg-yellow-500')
+    expect(barColor(80)).toBe('bg-red-500')
+    expect(barColor(100)).toBe('bg-red-500')
+  })
+})
+
+describe('ProviderIcon', () => {
+  it('renders the Antigravity agent icon for the antigravity provider', () => {
+    const markup = renderToStaticMarkup(ProviderIcon({ provider: 'antigravity' }))
+    expect(markup).toContain('data-agent-icon="antigravity"')
+  })
+
+  it('renders the official MiniMax icon asset for the minimax provider', () => {
+    // Why: the icon must travel to the status bar / tooltip unchanged so the
+    // user recognises the brand. We pin it to an <img> with a non-empty
+    // resource URL and aria-hidden so the icon stays purely decorative.
+    const markup = renderToStaticMarkup(ProviderIcon({ provider: 'minimax' }))
+    expect(markup.startsWith('<img')).toBe(true)
+    expect(markup).toContain('aria-hidden="true"')
+    expect(markup).toMatch(/src="[^"]+"/)
   })
 })

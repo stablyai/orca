@@ -57,6 +57,7 @@ describe('feature interactions', () => {
       'workspace-creation',
       'agent-browser-setup',
       'agent-browser-use',
+      'ephemeral-vm-setup',
       'agent-orchestration-setup',
       'agent-orchestration',
       'mobile-emulator-agent-setup',

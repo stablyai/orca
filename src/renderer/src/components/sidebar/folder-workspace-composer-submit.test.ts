@@ -23,6 +23,7 @@ vi.mock('@/lib/new-workspace', async (importOriginal) => {
 })
 
 import {
+  buildFolderWorkspaceLinkedStartupPlan,
   getFolderWorkspaceAgentLaunchPlatform,
   submitFolderWorkspaceCreate
 } from './folder-workspace-composer-submit'
@@ -631,5 +632,29 @@ describe('submitFolderWorkspaceCreate', () => {
 
     expect(onOpenChange).not.toHaveBeenCalled()
     expect(mocks.activateAndRevealFolderWorkspace).not.toHaveBeenCalled()
+  })
+})
+
+describe('buildFolderWorkspaceLinkedStartupPlan', () => {
+  it('uses cmd quoting for configured arguments on local Windows', () => {
+    const plan = buildFolderWorkspaceLinkedStartupPlan({
+      agent: 'hermes',
+      linkedWorkItem: {
+        provider: 'github',
+        type: 'issue',
+        number: 42,
+        title: 'Restore linked quick-create',
+        url: 'https://github.com/stablyai/orca/issues/42',
+        repoId: 'repo-1'
+      },
+      note: '',
+      agentCmdOverrides: {},
+      agentArgs: '--provider "value with space"',
+      platform: 'win32',
+      shell: 'cmd',
+      isRemote: false
+    })
+
+    expect(plan?.launchCommand).toBe('hermes --tui "--provider" "value with space"')
   })
 })

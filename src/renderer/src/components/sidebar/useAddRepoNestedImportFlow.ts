@@ -22,6 +22,7 @@ export function useAddRepoNestedImportFlow({
   nestedGroupName,
   nestedImportScanId,
   activeRuntimeEnvironmentId,
+  closeModal,
   fetchWorktrees,
   importNestedRepos,
   getNestedRepoRuntimeKind,
@@ -36,6 +37,9 @@ export function useAddRepoNestedImportFlow({
   nestedGroupName: string
   nestedImportScanId: string | null
   activeRuntimeEnvironmentId: string | null | undefined
+  /** Why: hosted (composer-nested) mode routes this to closing only the
+   *  nested dialog; store-modal mode routes it to the activeModal slot. */
+  closeModal: () => void
   fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
   importNestedRepos: (args: {
     parentPath: string
@@ -50,6 +54,7 @@ export function useAddRepoNestedImportFlow({
   setIsAdding: (isAdding: boolean) => void
 }): {
   handleImportNestedRepos: (mode: 'group' | 'separate') => Promise<void>
+  handleOpenNestedRootFolder: () => Promise<void>
   resetNestedImportFlow: () => void
   trackNestedBackAction: () => void
 } {
@@ -236,5 +241,73 @@ export function useAddRepoNestedImportFlow({
     ]
   )
 
-  return { handleImportNestedRepos, resetNestedImportFlow, trackNestedBackAction }
+  const handleOpenNestedRootFolder = useCallback(async (): Promise<void> => {
+    if (!nestedScan) {
+      return
+    }
+    const gen = ++nestedImportGenRef.current
+    const path = nestedScan.selectedPath
+    if (nestedAttemptId) {
+      track(
+        'add_repo_nested_import_action',
+        buildNestedRepoImportActionTelemetry({
+          attemptId: nestedAttemptId,
+          surface: 'sidebar',
+          runtimeKind: nestedRuntimeKind ?? getNestedRepoRuntimeKind(nestedConnectionId),
+          action: 'open_as_folder',
+          foundCount: nestedScan.repos.length,
+          selectedCount: nestedSelectedPaths.size
+        })
+      )
+    }
+    setIsAdding(true)
+    try {
+      const state = useAppStore.getState()
+      if (nestedConnectionId) {
+        // Why: the non-git confirm dialog is a store-modal handoff that ends
+        // in folder-workspace activation; close this add flow (nested dialog
+        // or store modal) before handing over.
+        closeModal()
+        state.openModal('confirm-non-git-folder', {
+          folderPath: path,
+          connectionId: nestedConnectionId
+        })
+        return
+      }
+      const repo = await state.addNonGitFolder(path, {
+        runtimeEnvironmentId: activeRuntimeEnvironmentId?.trim() || null
+      })
+      if (gen !== nestedImportGenRef.current) {
+        return
+      }
+      if (repo) {
+        closeModal()
+      }
+    } catch (err) {
+      if (gen === nestedImportGenRef.current) {
+        toast.error(err instanceof Error ? err.message : String(err))
+      }
+    } finally {
+      if (gen === nestedImportGenRef.current) {
+        setIsAdding(false)
+      }
+    }
+  }, [
+    activeRuntimeEnvironmentId,
+    closeModal,
+    getNestedRepoRuntimeKind,
+    nestedAttemptId,
+    nestedConnectionId,
+    nestedRuntimeKind,
+    nestedScan,
+    nestedSelectedPaths.size,
+    setIsAdding
+  ])
+
+  return {
+    handleImportNestedRepos,
+    handleOpenNestedRootFolder,
+    resetNestedImportFlow,
+    trackNestedBackAction
+  }
 }

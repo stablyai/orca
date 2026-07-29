@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import { pickSourceControlLaunchAgent } from '@/lib/source-control-launch-agent-selection'
+import {
+  pickSourceControlLaunchAgent,
+  resolveSourceControlLaunchAgentScope
+} from '@/lib/source-control-launch-agent-selection'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
 import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'
@@ -39,6 +42,15 @@ export function useSourceControlAgentActionDialog({
 }: SourceControlAgentActionDialogProps): UseSourceControlAgentActionDialogResult {
   const settings = useAppStore((state) => state.settings)
   const repo = useRepoById(repoId ?? null)
+  const launchAgentScope = useMemo(
+    () => resolveSourceControlLaunchAgentScope({ settings, repo, actionId }),
+    [actionId, repo, settings]
+  )
+  // Why: when this repo already overrides the global default, default the save
+  // scope to the repo so saving the corrected agent updates that override in
+  // place instead of writing a global default the override would still shadow.
+  const defaultSaveTargetValue =
+    launchAgentScope.overridesGlobalAgent && repoId ? 'repo' : DEFAULT_SAVE_TARGET_VALUE
   const ensureDetectedAgents = useAppStore((state) => state.ensureDetectedAgents)
   const ensureRemoteDetectedAgents = useAppStore((state) => state.ensureRemoteDetectedAgents)
   const [commandTemplate, setCommandTemplate] = useState(
@@ -54,7 +66,7 @@ export function useSourceControlAgentActionDialog({
   const [detectedOpenCycle, setDetectedOpenCycle] = useState<number | null>(null)
   const saveTargets = useMemo(() => buildSourceControlAgentSaveTargets(repoId), [repoId])
   const [saveLaunchRecipe, setSaveLaunchRecipe] = useState(true)
-  const [saveTargetValue, setSaveTargetValue] = useState(DEFAULT_SAVE_TARGET_VALUE)
+  const [saveTargetValue, setSaveTargetValue] = useState(defaultSaveTargetValue)
 
   const disabledAgents = settings?.disabledTuiAgents
   const connectionUnavailable = Boolean(worktreeId && connectionId === undefined)
@@ -94,7 +106,7 @@ export function useSourceControlAgentActionDialog({
     setAgentArgs(savedAgentArgs ?? '')
     setSelectedAgent(savedAgentId ?? null)
     setSaveLaunchRecipe(true)
-    setSaveTargetValue(DEFAULT_SAVE_TARGET_VALUE)
+    setSaveTargetValue(defaultSaveTargetValue)
     let stale = false
     void refreshDetectedAgents().then((nextAgents) => {
       if (stale || openCycleRef.current !== cycle) {
@@ -116,6 +128,7 @@ export function useSourceControlAgentActionDialog({
       stale = true
     }
   }, [
+    defaultSaveTargetValue,
     disabledAgents,
     open,
     refreshDetectedAgents,
@@ -191,11 +204,11 @@ export function useSourceControlAgentActionDialog({
       if (!nextOpen) {
         resetDeliveryPlan()
         setSaveLaunchRecipe(true)
-        setSaveTargetValue(DEFAULT_SAVE_TARGET_VALUE)
+        setSaveTargetValue(defaultSaveTargetValue)
       }
       onOpenChange(nextOpen)
     },
-    [onOpenChange, resetDeliveryPlan]
+    [defaultSaveTargetValue, onOpenChange, resetDeliveryPlan]
   )
 
   const { autoLaunchPending } = useSavedSourceControlAgentActionAutoStart({
@@ -263,9 +276,23 @@ export function useSourceControlAgentActionDialog({
     [resetDeliveryPlan]
   )
 
+  const agentScopeNote = useMemo(() => {
+    if (!launchAgentScope.overridesGlobalAgent) {
+      return null
+    }
+    const catalog = getAgentCatalog()
+    const labelFor = (agentId: TuiAgent | null): string =>
+      catalog.find((entry) => entry.id === agentId)?.label ?? agentId ?? ''
+    return {
+      effectiveAgentLabel: labelFor(launchAgentScope.effectiveAgentId),
+      globalAgentLabel: labelFor(launchAgentScope.globalAgentId)
+    }
+  }, [launchAgentScope])
+
   return {
     handleOpenChange,
     shouldRenderDialog: !autoLaunchPending,
+    agentScopeNote,
     agentOptions,
     selectedAgent,
     hasEnabledAgents,

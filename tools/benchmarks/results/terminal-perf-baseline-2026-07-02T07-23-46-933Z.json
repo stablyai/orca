@@ -1,0 +1,1041 @@
+{
+  "label": "baseline",
+  "startedAt": "2026-07-02T07:23:46.933Z",
+  "platform": "win32 10.0.26200",
+  "shell": "default",
+  "args": {
+    "iterations": 8,
+    "switches": 24,
+    "cycles": 12
+  },
+  "scenarios": {
+    "tab-create": {
+      "samples": [
+        {
+          "index": 0,
+          "storeCreateMs": 2.700000047683716,
+          "ptyBindMs": 5853.5,
+          "firstOutputMs": 5875.900000035763,
+          "paintSettleMs": 5878.100000023842,
+          "timedOut": false
+        },
+        {
+          "index": 1,
+          "storeCreateMs": 1.9000000357627869,
+          "ptyBindMs": 476.9000000357628,
+          "firstOutputMs": 489.10000002384186,
+          "paintSettleMs": 493.10000002384186,
+          "timedOut": false
+        },
+        {
+          "index": 2,
+          "storeCreateMs": 1.9000000357627869,
+          "ptyBindMs": 381.60000002384186,
+          "firstOutputMs": 401,
+          "paintSettleMs": 404.10000002384186,
+          "timedOut": false
+        },
+        {
+          "index": 3,
+          "storeCreateMs": 1.300000011920929,
+          "ptyBindMs": 391.10000002384186,
+          "firstOutputMs": 405.80000001192093,
+          "paintSettleMs": 408.10000002384186,
+          "timedOut": false
+        },
+        {
+          "index": 4,
+          "storeCreateMs": 1.5,
+          "ptyBindMs": 454,
+          "firstOutputMs": 467.80000001192093,
+          "paintSettleMs": 474,
+          "timedOut": false
+        },
+        {
+          "index": 5,
+          "storeCreateMs": 2,
+          "ptyBindMs": 527.6999999880791,
+          "firstOutputMs": 544.5,
+          "paintSettleMs": 551.3999999761581,
+          "timedOut": false
+        },
+        {
+          "index": 6,
+          "storeCreateMs": 1.9000000357627869,
+          "ptyBindMs": 483.60000002384186,
+          "firstOutputMs": 498.5,
+          "paintSettleMs": 501.10000002384186,
+          "timedOut": false
+        },
+        {
+          "index": 7,
+          "storeCreateMs": 1.600000023841858,
+          "ptyBindMs": 492.89999997615814,
+          "firstOutputMs": 509.19999998807907,
+          "paintSettleMs": 517,
+          "timedOut": false
+        }
+      ],
+      "longtasks": [
+        411, 65, 184, 124, 191, 163, 141, 183, 59, 158, 217, 61, 61, 253, 89, 70, 248, 152, 73, 170,
+        184, 160, 178, 176, 151
+      ]
+    },
+    "tab-switch": {
+      "samples": [
+        {
+          "index": 0,
+          "targetTabId": "3db20953-661a-4e65-8e4c-ca6a6f9d0538",
+          "storeMs": 1.100000023841858,
+          "paneVisibleMs": 1.100000023841858,
+          "paintSettleMs": 109,
+          "timedOut": false
+        },
+        {
+          "index": 1,
+          "targetTabId": "f4dca755-e41c-4f03-aa25-ed67526ca90e",
+          "storeMs": 1.699999988079071,
+          "paneVisibleMs": 1.699999988079071,
+          "paintSettleMs": 114.5,
+          "timedOut": false
+        },
+        {
+          "index": 2,
+          "targetTabId": "8f40ca49-476c-4959-ae9f-f976293e0b62",
+          "storeMs": 1.699999988079071,
+          "paneVisibleMs": 1.699999988079071,
+          "paintSettleMs": 138.5,
+          "timedOut": false
+        },
+        {
+          "index": 3,
+          "targetTabId": "d7adfbbb-a7eb-48ed-876b-440835e7174f",
+          "storeMs": 1.100000023841858,
+          "paneVisibleMs": 1.100000023841858,
+          "paintSettleMs": 73,
+          "timedOut": false
+        },
+        {
+          "index": 4,
+          "targetTabId": "3db20953-661a-4e65-8e4c-ca6a6f9d0538",
+          "storeMs": 1.800000011920929,
+          "paneVisibleMs": 1.800000011920929,
+          "paintSettleMs": 79.60000002384186,
+          "timedOut": false
+        },
+        {
+          "index": 5,
+          "targetTabId": "f4dca755-e41c-4f03-aa25-ed67526ca90e",
+          "storeMs": 2,
+          "paneVisibleMs": 2,
+          "paintSettleMs": 43.80000001192093,
+          "timedOut": false
+        },
+        {
+          "index": 6,
+          "targetTabId": "8f40ca49-476c-4959-ae9f-f976293e0b62",
+          "storeMs": 2.5,
+          "paneVisibleMs": 2.5,
+          "paintSettleMs": 125.89999997615814,
+          "timedOut": false
+        },
+        {
+          "index": 7,
+          "targetTabId": "d7adfbbb-a7eb-48ed-876b-440835e7174f",
+          "storeMs": 1.699999988079071,
+          "paneVisibleMs": 1.699999988079071,
+          "paintSettleMs": 116.5,
+          "timedOut": false
+        },
+        {
+          "index": 8,
+          "targetTabId": "3db20953-661a-4e65-8e4c-ca6a6f9d0538",
+          "storeMs": 1.399999976158142,
+          "paneVisibleMs": 1.399999976158142,
+          "paintSettleMs": 51.80000001192093,
+          "timedOut": false
+        },
+        {
+          "index": 9,
+          "targetTabId": "f4dca755-e41c-4f03-aa25-ed67526ca90e",
+          "storeMs": 1,
+          "paneVisibleMs": 1,
+          "paintSettleMs": 45.19999998807907,
+          "timedOut": false
+        },
+        {
+          "index": 10,
+          "targetTabId": "8f40ca49-476c-4959-ae9f-f976293e0b62",
+          "storeMs": 1.600000023841858,
+          "paneVisibleMs": 1.600000023841858,
+          "paintSettleMs": 50.30000001192093,
+          "timedOut": false
+        },
+        {
+          "index": 11,
+          "targetTabId": "d7adfbbb-a7eb-48ed-876b-440835e7174f",
+          "storeMs": 1.399999976158142,
+          "paneVisibleMs": 1.399999976158142,
+          "paintSettleMs": 97.89999997615814,
+          "timedOut": false
+        },
+        {
+          "index": 12,
+          "targetTabId": "3db20953-661a-4e65-8e4c-ca6a6f9d0538",
+          "storeMs": 1.0999999642372131,
+          "paneVisibleMs": 1.0999999642372131,
+          "paintSettleMs": 112.5,
+          "timedOut": false
+        },
+        {
+          "index": 13,
+          "targetTabId": "f4dca755-e41c-4f03-aa25-ed67526ca90e",
+          "storeMs": 2.100000023841858,
+          "paneVisibleMs": 2.100000023841858,
+          "paintSettleMs": 48.69999998807907,
+          "timedOut": false
+        },
+        {
+          "index": 14,
+          "targetTabId": "8f40ca49-476c-4959-ae9f-f976293e0b62",
+          "storeMs": 1.399999976158142,
+          "paneVisibleMs": 1.5,
+          "paintSettleMs": 35.09999996423721,
+          "timedOut": false
+        },
+        {
+          "index": 15,
+          "targetTabId": "d7adfbbb-a7eb-48ed-876b-440835e7174f",
+          "storeMs": 1,
+          "paneVisibleMs": 1,
+          "paintSettleMs": 28.30000001192093,
+          "timedOut": false
+        },
+        {
+          "index": 16,
+          "targetTabId": "3db20953-661a-4e65-8e4c-ca6a6f9d0538",
+          "storeMs": 0.8999999761581421,
+          "paneVisibleMs": 0.8999999761581421,
+          "paintSettleMs": 35.09999996423721,
+          "timedOut": false
+        },
+        {
+          "index": 17,
+          "targetTabId": "f4dca755-e41c-4f03-aa25-ed67526ca90e",
+          "storeMs": 1.300000011920929,
+          "paneVisibleMs": 1.300000011920929,
+          "paintSettleMs": 150.70000004768372,
+          "timedOut": false
+        },
+        {
+          "index": 18,
+          "targetTabId": "8f40ca49-476c-4959-ae9f-f976293e0b62",
+          "storeMs": 1.9000000357627869,
+          "paneVisibleMs": 1.9000000357627869,
+          "paintSettleMs": 95.60000002384186,
+          "timedOut": false
+        },
+        {
+          "index": 19,
+          "targetTabId": "d7adfbbb-a7eb-48ed-876b-440835e7174f",
+          "storeMs": 2.099999964237213,
+          "paneVisibleMs": 2.099999964237213,
+          "paintSettleMs": 75.79999995231628,
+          "timedOut": false
+        },
+        {
+          "index": 20,
+          "targetTabId": "3db20953-661a-4e65-8e4c-ca6a6f9d0538",
+          "storeMs": 1.2000000476837158,
+          "paneVisibleMs": 1.2000000476837158,
+          "paintSettleMs": 40.30000001192093,
+          "timedOut": false
+        },
+        {
+          "index": 21,
+          "targetTabId": "f4dca755-e41c-4f03-aa25-ed67526ca90e",
+          "storeMs": 1.5999999642372131,
+          "paneVisibleMs": 1.5999999642372131,
+          "paintSettleMs": 30.099999964237213,
+          "timedOut": false
+        },
+        {
+          "index": 22,
+          "targetTabId": "8f40ca49-476c-4959-ae9f-f976293e0b62",
+          "storeMs": 1.399999976158142,
+          "paneVisibleMs": 1.399999976158142,
+          "paintSettleMs": 86.89999997615814,
+          "timedOut": false
+        },
+        {
+          "index": 23,
+          "targetTabId": "d7adfbbb-a7eb-48ed-876b-440835e7174f",
+          "storeMs": 1.300000011920929,
+          "paneVisibleMs": 1.300000011920929,
+          "paintSettleMs": 133,
+          "timedOut": false
+        }
+      ],
+      "longtasks": [98, 109, 130, 66, 71, 117, 110, 94, 100, 144, 91, 64, 82, 122]
+    },
+    "workspace-switch": {
+      "samples": [
+        {
+          "index": 0,
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo@@f226ee15",
+          "activationMs": 202,
+          "ptyBindMs": 204,
+          "paintSettleMs": 211
+        },
+        {
+          "index": 1,
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one@@d00bc639",
+          "activationMs": 406,
+          "ptyBindMs": 550,
+          "paintSettleMs": 563
+        },
+        {
+          "index": 2,
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two@@e12f992a",
+          "activationMs": 373,
+          "ptyBindMs": 476,
+          "paintSettleMs": 488
+        },
+        {
+          "index": 3,
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo@@f226ee15",
+          "activationMs": 205,
+          "ptyBindMs": 251,
+          "paintSettleMs": 258
+        },
+        {
+          "index": 4,
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one@@d00bc639",
+          "activationMs": 345,
+          "ptyBindMs": 369,
+          "paintSettleMs": 379
+        },
+        {
+          "index": 5,
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two@@e12f992a",
+          "activationMs": 149,
+          "ptyBindMs": 177,
+          "paintSettleMs": 184
+        },
+        {
+          "index": 6,
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo@@f226ee15",
+          "activationMs": 147,
+          "ptyBindMs": 162,
+          "paintSettleMs": 170
+        },
+        {
+          "index": 7,
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one@@d00bc639",
+          "activationMs": 178,
+          "ptyBindMs": 202,
+          "paintSettleMs": 208
+        },
+        {
+          "index": 8,
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two@@e12f992a",
+          "activationMs": 336,
+          "ptyBindMs": 366,
+          "paintSettleMs": 375
+        },
+        {
+          "index": 9,
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo@@f226ee15",
+          "activationMs": 157,
+          "ptyBindMs": 192,
+          "paintSettleMs": 200
+        },
+        {
+          "index": 10,
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one@@d00bc639",
+          "activationMs": 140,
+          "ptyBindMs": 164,
+          "paintSettleMs": 173
+        },
+        {
+          "index": 11,
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two@@e12f992a",
+          "activationMs": 159,
+          "ptyBindMs": 188,
+          "paintSettleMs": 199
+        }
+      ]
+    }
+  },
+  "summaries": [
+    {
+      "name": "tab-create",
+      "samples": 8,
+      "timedOut": 0,
+      "fields": {
+        "storeCreateMs": {
+          "count": 8,
+          "median": 2,
+          "p95": 3,
+          "max": 3
+        },
+        "ptyBindMs": {
+          "count": 8,
+          "median": 484,
+          "p95": 5854,
+          "max": 5854
+        },
+        "firstOutputMs": {
+          "count": 8,
+          "median": 499,
+          "p95": 5876,
+          "max": 5876
+        },
+        "paintSettleMs": {
+          "count": 8,
+          "median": 501,
+          "p95": 5878,
+          "max": 5878
+        }
+      },
+      "longtaskCount": 25,
+      "longtaskMaxMs": 411
+    },
+    {
+      "name": "tab-switch",
+      "samples": 24,
+      "timedOut": 0,
+      "fields": {
+        "storeMs": {
+          "count": 24,
+          "median": 1,
+          "p95": 2,
+          "max": 3
+        },
+        "paneVisibleMs": {
+          "count": 24,
+          "median": 2,
+          "p95": 2,
+          "max": 3
+        },
+        "paintSettleMs": {
+          "count": 24,
+          "median": 80,
+          "p95": 139,
+          "max": 151
+        }
+      },
+      "longtaskCount": 14,
+      "longtaskMaxMs": 144
+    },
+    {
+      "name": "workspace-switch",
+      "samples": 12,
+      "timedOut": 0,
+      "fields": {
+        "activationMs": {
+          "count": 12,
+          "median": 202,
+          "p95": 373,
+          "max": 406
+        },
+        "ptyBindMs": {
+          "count": 12,
+          "median": 204,
+          "p95": 476,
+          "max": 550
+        },
+        "paintSettleMs": {
+          "count": 12,
+          "median": 211,
+          "p95": 488,
+          "max": 563
+        }
+      },
+      "longtaskCount": 0,
+      "longtaskMaxMs": 0
+    }
+  ],
+  "finalDiagnostics": {
+    "hasStore": true,
+    "workspaceSessionReady": true,
+    "hydrationSucceeded": true,
+    "activeView": "terminal",
+    "activeRepoId": "f93c43c3-57ef-4811-8edc-73d924918ed8",
+    "activeWorktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two",
+    "activeTabType": "terminal",
+    "activeTabId": "2a067075-6acf-4aca-a0a6-bc88c1e6abc7",
+    "terminalGpuAcceleration": "auto",
+    "repoCount": 1,
+    "worktreeCountsByRepo": {
+      "f93c43c3-57ef-4811-8edc-73d924918ed8": 3
+    },
+    "ptyIdsByTabId": [
+      "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two@@e12f992a"
+    ],
+    "paneManagerCount": 3,
+    "activePane": {
+      "id": 1,
+      "leafId": "6a3ca793-864f-4182-bec5-5b044a884b9b",
+      "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two@@e12f992a",
+      "cols": 175,
+      "rows": 73,
+      "buffer": {
+        "baseY": 0,
+        "viewportY": 0,
+        "cursorY": 0,
+        "length": 73
+      }
+    },
+    "renderingDiagnostics": [
+      {
+        "paneId": 1,
+        "terminalGpuAcceleration": "auto",
+        "gpuRenderingEnabled": true,
+        "webglAttachmentDeferred": false,
+        "webglDisabledAfterContextLoss": false,
+        "hasComplexScriptOutput": false,
+        "terminalWebglAutoDecision": {
+          "allowWebgl": true,
+          "reason": "non-linux",
+          "renderer": null,
+          "vendor": null
+        },
+        "hasWebgl": true
+      }
+    ],
+    "allPaneManagersDiagnostics": [
+      {
+        "tabId": "ab3a14da-e087-4677-9fa8-df990c149951",
+        "diagnostics": [
+          {
+            "paneId": 1,
+            "terminalGpuAcceleration": "auto",
+            "gpuRenderingEnabled": true,
+            "webglAttachmentDeferred": true,
+            "webglDisabledAfterContextLoss": false,
+            "hasComplexScriptOutput": false,
+            "terminalWebglAutoDecision": {
+              "allowWebgl": true,
+              "reason": "non-linux",
+              "renderer": null,
+              "vendor": null
+            },
+            "hasWebgl": false
+          }
+        ]
+      },
+      {
+        "tabId": "afdd9731-982a-4255-8c0e-b4360453f433",
+        "diagnostics": [
+          {
+            "paneId": 1,
+            "terminalGpuAcceleration": "auto",
+            "gpuRenderingEnabled": true,
+            "webglAttachmentDeferred": true,
+            "webglDisabledAfterContextLoss": false,
+            "hasComplexScriptOutput": false,
+            "terminalWebglAutoDecision": {
+              "allowWebgl": true,
+              "reason": "non-linux",
+              "renderer": null,
+              "vendor": null
+            },
+            "hasWebgl": false
+          }
+        ]
+      },
+      {
+        "tabId": "2a067075-6acf-4aca-a0a6-bc88c1e6abc7",
+        "diagnostics": [
+          {
+            "paneId": 1,
+            "terminalGpuAcceleration": "auto",
+            "gpuRenderingEnabled": true,
+            "webglAttachmentDeferred": false,
+            "webglDisabledAfterContextLoss": false,
+            "hasComplexScriptOutput": false,
+            "terminalWebglAutoDecision": {
+              "allowWebgl": true,
+              "reason": "non-linux",
+              "renderer": null,
+              "vendor": null
+            },
+            "hasWebgl": true
+          }
+        ]
+      }
+    ],
+    "webglContextCounts": {
+      "attachedWebglCount": 1,
+      "deferredWebglCount": 2,
+      "managerCount": 3,
+      "paneCount": 3
+    },
+    "webglIdentity": {
+      "available": true,
+      "vendor": "Google Inc. (Intel)",
+      "renderer": "ANGLE (Intel, Intel(R) Arc(TM) Graphics (0x00007D55) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+    },
+    "rendererProbe": {
+      "intervalMs": 50,
+      "last": 50268.60000002384,
+      "maxDriftMs": 440.10000002384186,
+      "samples": 335,
+      "startedAt": 25060.600000023842,
+      "lastTickAt": 50268.60000002384
+    },
+    "ptySessions": {
+      "value": [
+        {
+          "id": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo@@f226ee15",
+          "cwd": "",
+          "title": "shell"
+        },
+        {
+          "id": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one@@d00bc639",
+          "cwd": "",
+          "title": "shell"
+        },
+        {
+          "id": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two@@e12f992a",
+          "cwd": "",
+          "title": "shell"
+        }
+      ]
+    },
+    "rendererDeliveryDebug": {
+      "value": {
+        "pendingPtyCount": 0,
+        "pendingChars": 0,
+        "maxPendingCharsByPty": 0,
+        "rendererInFlightPtyCount": 0,
+        "rendererInFlightChars": 0,
+        "maxRendererInFlightCharsByPty": 0,
+        "activeRendererPtyCount": 1,
+        "flushScheduled": false,
+        "peakPendingChars": 82,
+        "peakMaxPendingCharsByPty": 82,
+        "peakRendererInFlightChars": 82,
+        "peakMaxRendererInFlightCharsByPty": 82,
+        "ackGatedFlushSkipCount": 0
+      }
+    }
+  },
+  "cleanupErrors": [],
+  "elapsedMs": 71875,
+  "appLogsTail": [
+    {
+      "source": "stderr",
+      "line": "https://electronjs.org/docs/tutorial/security.",
+      "at": 1782977071571
+    },
+    {
+      "source": "stderr",
+      "line": "This warning will not show up",
+      "at": 1782977071571
+    },
+    {
+      "source": "stderr",
+      "line": "once the app is packaged.\", source: node:electron/js2c/sandbox_bundle (2)",
+      "at": 1782977071571
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-settings-done t=30952 rendererT=23288 durationMs=454",
+      "at": 1782977071792
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-settings-done t=31069 rendererT=23405 durationMs=533",
+      "at": 1782977071909
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032432.013:INFO:CONSOLE:1078] \"%cReact Grab v0.1.34%c",
+      "at": 1782977072013
+    },
+    {
+      "source": "stderr",
+      "line": "https://react-grab.com background: #330039; color: #ffffff; border: 1px solid #d75fcb; padding: 4px 4px 4px 24px; border-radius: 4px; background-image: url(\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyOTQgMjk0Ij48cGF0aCBmaWxsPSIjZmY0MGUwIiBkPSJNMTQ1IDQ3YzI1LTIwIDUwLTI3IDY3LTE3IDE2IDkgMjMgMzAgMjAgNjAgMCAyLTEgNS0xIDdsLTIgMTNoLTFsLTEyLTRjLTgtMy0xNy01LTI1LTZsLTE3LTNjLTEwLTEtMjAtMS0yOS0xLTEwIDAtMjAgMC0yOSAxLTYgOC0xMSAxNi0xNiAyNC01IDktOSAxNy0xMyAyNiA0IDkgOCAxOCAxMyAyNnMxMCAxNiAxNiAyNGwxMSAxNGM1IDcgMTEgMTMgMTggMTlsMTAgOHMtMSAwIDAgMGwtMTEgOWMtMTcgMTQtMzUgMjItNDkgMjItNiAwLTEzLTItMTgtNS0xNi05LTIzLTMwLTIwLTU5IDEtMyAxLTUgMS04LTMwLTEyLTQ4LTI5LTQ4LTUwIDAtMTggMTQtMzUgNDEtNDcgMi0xIDUtMiA3LTMgMC0yIDAtNS0xLTctMy0zMCA0LTUxIDIwLTYwIDE4LTEwIDQyLTMgNjggMTdNNzEgMjAxYy0xIDItMSA0LTEgNS0yIDI0IDMgNDEgMTMgNDdoMWMxMSA3IDMwIDEgNTEtMTUtMTAtOS0xOC0xOC0yNi0yOS0xMy0xLTI2LTQtMzgtOG05LTM4Yy0zIDktNSAxNy03IDI2IDggMiAxNyA0IDI1IDYtMy01LTYtMTAtOS0xNi0zLTUtNi0xMC05LTE2bS0xOS01M2MtMiAxLTMgMS01IDItMjEgMTAtMzQgMjMtMzQgMzUgMCAxMyAxNCAyNyAzOSAzNyAzLTEyIDctMjUgMTItMzctNS0xMi05LTI0LTEyLTM3bTM3LTEwYy04IDEtMTcgMy0yNSA2IDIgOCA0IDE2IDcgMjUgMy01IDYtMTEgOS0xNnptLTMtNjFjLTQtMS04IDAtMTIgMi0xMCA3LTE1IDI0LTEzIDQ3IDAgMiAwIDMgMSA1IDEyLTQgMjUtNiAzOC04IDgtMTAgMTYtMjAgMjYtMjktMTUtMTEtMjktMTctNDAtMTdtMTExIDJjLTQtMi04LTMtMTItMi0xMSAwLTI1IDUtNDAgMTcgMTAgOSAxOSAxOSAyNiAyOSAxMyAyIDI2IDQgMzkgOHYtNWMzLTIzLTItNDAtMTMtNDdtLTYxIDIzYy03IDYtMTMgMTMtMTkgMTloMzdjLTYtNi0xMi0xMy0xOC0xOSIvPjxtYXNrIGlkPSJhIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJtMjM1IDg1LTEzMyAyNyAyOCAxMzMgMTMzLTI3WiIvPjwvbWFzaz48cGF0aCBmaWxsPSIjZmY0MGUwIiBkPSJtMTM3IDEzMCA3NiAxMWM4IDEgOSAxMSAzIDE1bC0yOCAxNi00IDMyYy0xIDgtMTAgMTAtMTQgNGwtNDEtNjZjLTMtNiAxLTEzIDgtMTIiIG1hc2s9InVybCgjYSkiLz48L3N2Zz4=\"); background-size: 16px 16px; background-repeat: no-repeat; background-position: 4px center; display: inline-block; margin-bottom: 4px; \", source: http://localhost:5173/@fs/C:/Users/jinwo/orca/workspaces/orca/windows-performance-improvement/node_modules/.vite/deps/react-grab.js?v=e74fde05 (1078)",
+      "at": 1782977072013
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=31229 maxGapMs=223",
+      "at": 1782977072070
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-repos-done t=31330 rendererT=23666 durationMs=378",
+      "at": 1782977072171
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-repos-done t=31330 rendererT=23667 durationMs=262",
+      "at": 1782977072171
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-project-groups-done t=31425 rendererT=23762 durationMs=95",
+      "at": 1782977072266
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-project-groups-done t=31426 rendererT=23762 durationMs=96",
+      "at": 1782977072266
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032432.274:INFO:CONSOLE:1080] \"[React Grab] v0.1.34 is outdated (latest: v0.1.47). Run `npx grab@latest upgrade` to upgrade.\", source: http://localhost:5173/@fs/C:/Users/jinwo/orca/workspaces/orca/windows-performance-improvement/node_modules/.vite/deps/react-grab.js?v=e74fde05 (1080)",
+      "at": 1782977072274
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-folder-workspaces-done t=31469 rendererT=23805 durationMs=43",
+      "at": 1782977072309
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-worktrees-done t=31469 rendererT=23806 durationMs=1",
+      "at": 1782977072310
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-folder-workspaces-done t=31470 rendererT=23807 durationMs=44",
+      "at": 1782977072311
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-worktrees-done t=31470 rendererT=23807 durationMs=0",
+      "at": 1782977072311
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-worktree-lineage-done t=31486 rendererT=23823 durationMs=16",
+      "at": 1782977072327
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-worktree-lineage-done t=31490 rendererT=23827 durationMs=20",
+      "at": 1782977072331
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-ui-get-done t=31511 rendererT=23848 durationMs=25",
+      "at": 1782977072352
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-hydrate-persisted-ui-done t=31511 rendererT=23848 durationMs=0",
+      "at": 1782977072352
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-ui-get-done t=31512 rendererT=23848 durationMs=22",
+      "at": 1782977072353
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-hydrate-persisted-ui-done t=31515 rendererT=23851 durationMs=3",
+      "at": 1782977072355
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032432.892:INFO:CONSOLE:397] \"Tooltip is changing from uncontrolled to controlled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.\", source: http://localhost:5173/@fs/C:/Users/jinwo/orca/workspaces/orca/windows-performance-improvement/node_modules/.vite/deps/chunk-22L5D3A7.js?v=33341407 (397)",
+      "at": 1782977072892
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-session-get-done t=32052 rendererT=24110 durationMs=262",
+      "at": 1782977072893
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-session-get-done t=32054 rendererT=24149 durationMs=298",
+      "at": 1782977072894
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-keybindings-done t=32142 rendererT=24479 durationMs=368",
+      "at": 1782977072983
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-keybindings-done t=32218 rendererT=24554 durationMs=405",
+      "at": 1782977073059
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-hydrate-session-stores-done t=32222 rendererT=24559 durationMs=5",
+      "at": 1782977073063
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-visit-timestamp-prune-done t=32225 rendererT=24560 durationMs=1",
+      "at": 1782977073066
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-fetch-browser-session-profiles-done t=32574 rendererT=24606 durationMs=46",
+      "at": 1782977073415
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-onboarding-get-done t=32587 rendererT=24924 durationMs=318",
+      "at": 1782977073428
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-ssh-reconnect-skipped t=32588 rendererT=24924 connectionIds=0",
+      "at": 1782977073428
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-first-window-services-await-done t=32628 rendererT=24965 durationMs=41",
+      "at": 1782977073472
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-reconnect-terminals-done t=32675 rendererT=25011 durationMs=46",
+      "at": 1782977073515
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] renderer-startup-hydration-done t=32677 rendererT=25013 durationMs=2142",
+      "at": 1782977073517
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=33422 maxGapMs=401",
+      "at": 1782977074262
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=35433 maxGapMs=309",
+      "at": 1782977076274
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=37456 maxGapMs=10",
+      "at": 1782977078296
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032438.587:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=ab3a14da-e087-4677-9fa8-df990c149951 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=ab3a14da-e087-4677-9fa8-df990c149951:4f90bd45-a941-4d4f-b132-614d700c43c8\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977078587
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032438.587:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977078587
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032438.636:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=0d6b052e-77c8-463f-afc9-d8f151d2cdeb restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=0d6b052e-77c8-463f-afc9-d8f151d2cdeb:69c12565-c05a-493d-8de2-11ff97619d51\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977078637
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032438.636:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977078637
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=39469 maxGapMs=57",
+      "at": 1782977080309
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032441.957:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=c9f77dc6-cd6f-4965-809c-c09127a40a03 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=c9f77dc6-cd6f-4965-809c-c09127a40a03:f1346d6f-965f-41fb-924b-764c7e3fc305\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977081957
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032441.957:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977081957
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=41474 maxGapMs=48",
+      "at": 1782977082314
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032442.858:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=cfb07cef-9bf1-4c78-996b-849186b593a4 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=cfb07cef-9bf1-4c78-996b-849186b593a4:de8f4a47-b5c9-4bf7-a650-1689aba5a8a8\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977082858
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032442.858:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977082858
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032443.702:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=3a994118-6004-4225-9c79-b7f00e7d72f1 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=3a994118-6004-4225-9c79-b7f00e7d72f1:89f847c7-b204-4b3a-b4cf-06f5c8c513bd\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977083702
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032443.702:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977083702
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=43486 maxGapMs=53",
+      "at": 1782977084327
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032444.556:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=8fc5cf91-915a-4244-a4da-1724f3682004 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=8fc5cf91-915a-4244-a4da-1724f3682004:805fa077-9c84-409e-95c0-d6974394f92a\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977084556
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032444.556:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977084556
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032444.635:INFO:CONSOLE:397] \"Tooltip is changing from controlled to uncontrolled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.\", source: http://localhost:5173/@fs/C:/Users/jinwo/orca/workspaces/orca/windows-performance-improvement/node_modules/.vite/deps/chunk-22L5D3A7.js?v=33341407 (397)",
+      "at": 1782977084635
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032445.429:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=9fa0c94f-508a-44a0-b8ba-5c24ac4ee536 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=9fa0c94f-508a-44a0-b8ba-5c24ac4ee536:89760fac-065f-4c31-a88a-3d57536749a6\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977085430
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032445.429:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977085430
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032446.318:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=be158070-c785-4cea-aca9-a94e71675335 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=be158070-c785-4cea-aca9-a94e71675335:8f686ee6-1816-4b55-8368-0cf249d9ca92\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977086318
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032446.318:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977086319
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=45527 maxGapMs=50",
+      "at": 1782977086368
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032447.232:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=257d758c-e00a-45f4-9543-41bb82652d68 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=257d758c-e00a-45f4-9543-41bb82652d68:d3e9824c-9691-4f5d-8bfa-8e7099c095a3\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977087232
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032447.232:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977087233
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032448.177:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=3db20953-661a-4e65-8e4c-ca6a6f9d0538 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=3db20953-661a-4e65-8e4c-ca6a6f9d0538:621eeeff-c3b9-4558-bb55-fe3470e05025\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977088177
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032448.177:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977088178
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=47556 maxGapMs=42",
+      "at": 1782977088397
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032448.612:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=f4dca755-e41c-4f03-aa25-ed67526ca90e restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=f4dca755-e41c-4f03-aa25-ed67526ca90e:edcb7b76-70ec-4c21-b6c1-be29e795657d\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977088612
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032448.612:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977088612
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032449.077:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=8f40ca49-476c-4959-ae9f-f976293e0b62 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=8f40ca49-476c-4959-ae9f-f976293e0b62:f690ab96-e8c7-416a-a8e2-26cc38e11325\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977089078
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032449.078:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977089078
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032449.492:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=d7adfbbb-a7eb-48ed-876b-440835e7174f restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=d7adfbbb-a7eb-48ed-876b-440835e7174f:dee0c9f1-8ff4-4c92-894b-178d9a23b3a0\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977089493
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032449.493:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977089494
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=49559 maxGapMs=57",
+      "at": 1782977090400
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=51588 maxGapMs=12",
+      "at": 1782977092429
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=53613 maxGapMs=12",
+      "at": 1782977094454
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032455.950:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=afdd9731-982a-4255-8c0e-b4360453f433 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=afdd9731-982a-4255-8c0e-b4360453f433:e6721533-a824-4847-98d2-b2c9f073a233\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977095950
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032455.950:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977095951
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=55626 maxGapMs=26",
+      "at": 1782977096467
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032456.469:INFO:CONSOLE:479] \"[pty-connect] pane=1 tab=2a067075-6acf-4aca-a0a6-bc88c1e6abc7 restored=null existing=null detached=null reattach=null hasTransport=false pendingKey=2a067075-6acf-4aca-a0a6-bc88c1e6abc7:6a3ca793-864f-4182-bec5-5b044a884b9b\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977096469
+    },
+    {
+      "source": "stderr",
+      "line": "[50192:0702/032456.469:INFO:CONSOLE:479] \"[pty-connect] pane=1 -> FRESH SPAWN\", source: http://localhost:5173/src/components/terminal-pane/pty-connection.ts (479)",
+      "at": 1782977096469
+    },
+    {
+      "source": "stderr",
+      "line": "[startup] event-loop-stall t=57642 maxGapMs=30",
+      "at": 1782977098483
+    }
+  ]
+}
