@@ -2,7 +2,9 @@ import type { StateCreator } from 'zustand'
 import type {
   AuditedTaskStatusProjection,
   AuditedWorkflowSelectTaskParams,
-  AuditedWorkflowSelectTaskResult
+  AuditedWorkflowSelectTaskResult,
+  AuditedWorkflowStartTriageResult,
+  AuditedWorkflowRetryTriageResult
 } from '../../../../shared/audited-workflow-types'
 import type { AppState } from '../types'
 import { getTaskListErrorMessage } from '../../components/audited-workflow/audited-workflow-error-messages'
@@ -12,11 +14,14 @@ export type AuditedWorkflowSlice = {
   auditedTasksLoading: boolean
   auditedTasksError: string | null
   selectedAuditedTaskId: string | null
+  auditedTriageStartingTaskId: string | null
   refreshAuditedTasks: (repoId?: string) => Promise<void>
   selectAuditedTask: (taskId: string | null) => void
   createAuditedTask: (
     params: AuditedWorkflowSelectTaskParams
   ) => Promise<AuditedWorkflowSelectTaskResult>
+  startAuditedTaskTriage: (taskId: string) => Promise<AuditedWorkflowStartTriageResult>
+  retryAuditedTaskTriage: (taskId: string) => Promise<AuditedWorkflowRetryTriageResult>
   applyAuditedTaskChanged: (projection: AuditedTaskStatusProjection) => void
 }
 
@@ -41,6 +46,7 @@ export const createAuditedWorkflowSlice: StateCreator<AppState, [], [], AuditedW
   auditedTasksLoading: false,
   auditedTasksError: null,
   selectedAuditedTaskId: null,
+  auditedTriageStartingTaskId: null,
 
   refreshAuditedTasks: async (repoId) => {
     set({ auditedTasksLoading: true, auditedTasksError: null })
@@ -64,6 +70,34 @@ export const createAuditedWorkflowSlice: StateCreator<AppState, [], [], AuditedW
       await get().refreshAuditedTasks(params.repoId)
     }
     return result
+  },
+
+  startAuditedTaskTriage: async (taskId) => {
+    set({ auditedTriageStartingTaskId: taskId })
+    try {
+      const result = await window.api.auditedWorkflow.startTriage({ taskId })
+      const projection = await window.api.auditedWorkflow.getTask({ taskId })
+      if (projection) {
+        set((state) => ({ auditedTasks: upsertTask(state.auditedTasks, projection) }))
+      }
+      return result
+    } finally {
+      set({ auditedTriageStartingTaskId: null })
+    }
+  },
+
+  retryAuditedTaskTriage: async (taskId) => {
+    set({ auditedTriageStartingTaskId: taskId })
+    try {
+      const result = await window.api.auditedWorkflow.retryTriage({ taskId })
+      const projection = await window.api.auditedWorkflow.getTask({ taskId })
+      if (projection) {
+        set((state) => ({ auditedTasks: upsertTask(state.auditedTasks, projection) }))
+      }
+      return result
+    } finally {
+      set({ auditedTriageStartingTaskId: null })
+    }
   },
 
   applyAuditedTaskChanged: (projection) =>

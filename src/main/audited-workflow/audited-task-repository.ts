@@ -18,13 +18,38 @@ import {
   type AuditedTaskSpec
 } from './audited-task-creation'
 import { applyTransitionCas, type ApplyTransitionResult } from './audited-task-transitions'
+import {
+  startTriageRun,
+  finalizeTriageRunSucceeded,
+  finalizeTriageRunBlocked,
+  type StartTriageRunResult,
+  type FinalizeTriageRunSuccessArgs,
+  type FinalizeTriageRunBlockedArgs,
+  type FinalizeTriageRunResult
+} from './audited-triage-run-repository'
+import { retryTriageRun, type RetryTriageRunResult } from './audited-triage-run-retry'
+import {
+  recoverInterruptedTriageRuns,
+  type RecoveredInterruptedTriageRun
+} from './audited-triage-run-recovery'
 import type {
   AuditedTaskActor,
   AuditedTaskState,
   AuditedTaskTransitionRecord
 } from '../../shared/audited-workflow-types'
 
-export type { AuditedTaskRow, CreateAuditedTaskInput, AuditedTaskSpec, ApplyTransitionResult }
+export type {
+  AuditedTaskRow,
+  CreateAuditedTaskInput,
+  AuditedTaskSpec,
+  ApplyTransitionResult,
+  StartTriageRunResult,
+  FinalizeTriageRunSuccessArgs,
+  FinalizeTriageRunBlockedArgs,
+  FinalizeTriageRunResult,
+  RetryTriageRunResult,
+  RecoveredInterruptedTriageRun
+}
 
 function nowMs(): number {
   return Date.now()
@@ -97,6 +122,26 @@ export class AuditedTaskRepository {
    */
   applyTransition(args: ApplyTransitionArgs): ApplyTransitionResult {
     return applyTransitionCas(this.db, args, nowMs())
+  }
+
+  startTriageRun(taskId: string): StartTriageRunResult {
+    return startTriageRun(this.db, taskId, nowMs())
+  }
+
+  finalizeTriageRunSucceeded(args: FinalizeTriageRunSuccessArgs): FinalizeTriageRunResult {
+    return finalizeTriageRunSucceeded(this.db, args, nowMs())
+  }
+
+  finalizeTriageRunBlocked(args: FinalizeTriageRunBlockedArgs): FinalizeTriageRunResult {
+    return finalizeTriageRunBlocked(this.db, args, nowMs())
+  }
+
+  retryTriageRun(taskId: string): RetryTriageRunResult {
+    return retryTriageRun(this.db, taskId, nowMs())
+  }
+
+  recoverInterruptedTriageRuns(): RecoveredInterruptedTriageRun[] {
+    return recoverInterruptedTriageRuns(this.db, nowMs())
   }
 
   close(): void {

@@ -9,6 +9,8 @@ const mockApi = {
     listTasks: vi.fn(),
     getTask: vi.fn(),
     selectTask: vi.fn(),
+    startTriage: vi.fn(),
+    retryTriage: vi.fn(),
     onTaskChanged: vi.fn()
   }
 }
@@ -32,7 +34,8 @@ function makeTask(taskId: string): AuditedTaskStatusProjection {
     risk: 'low',
     source: 'custom',
     triageDecision: null,
-    triageReasonCode: null,
+    triageRunStatus: null,
+    triageBlockedReasonCode: null,
     planRound: 0,
     fixRound: 0,
     lastVerdict: null,
@@ -56,6 +59,8 @@ describe('createAuditedWorkflowSlice', () => {
     mockApi.auditedWorkflow.listTasks.mockReset()
     mockApi.auditedWorkflow.getTask.mockReset()
     mockApi.auditedWorkflow.selectTask.mockReset()
+    mockApi.auditedWorkflow.startTriage.mockReset()
+    mockApi.auditedWorkflow.retryTriage.mockReset()
   })
 
   it('refreshAuditedTasks populates the list on success', async () => {
@@ -138,6 +143,68 @@ describe('createAuditedWorkflowSlice', () => {
     expect(result).toEqual({ ok: false, reasonCode: 'unsupported_host' })
     expect(store.getState().selectedAuditedTaskId).toBeNull()
     expect(mockApi.auditedWorkflow.listTasks).not.toHaveBeenCalled()
+  })
+
+  it('startAuditedTaskTriage sets and clears auditedTriageStartingTaskId around the call, and upserts the returned projection', async () => {
+    mockApi.auditedWorkflow.startTriage.mockResolvedValue({ ok: true })
+    mockApi.auditedWorkflow.getTask.mockResolvedValue({ ...makeTask('t1'), state: 'planning' })
+    const store = createTestStore()
+
+    const pending = store.getState().startAuditedTaskTriage('t1')
+    expect(store.getState().auditedTriageStartingTaskId).toBe('t1')
+    const result = await pending
+
+    expect(result).toEqual({ ok: true })
+    expect(store.getState().auditedTriageStartingTaskId).toBeNull()
+    expect(store.getState().auditedTasks.find((t) => t.taskId === 't1')?.state).toBe('planning')
+  })
+
+  it('startAuditedTaskTriage clears auditedTriageStartingTaskId even when the result is a failure', async () => {
+    mockApi.auditedWorkflow.startTriage.mockResolvedValue({
+      ok: false,
+      reasonCode: 'provider_unavailable'
+    })
+    mockApi.auditedWorkflow.getTask.mockResolvedValue(makeTask('t1'))
+    const store = createTestStore()
+
+    const result = await store.getState().startAuditedTaskTriage('t1')
+
+    expect(result).toEqual({ ok: false, reasonCode: 'provider_unavailable' })
+    expect(store.getState().auditedTriageStartingTaskId).toBeNull()
+  })
+
+  it('retryAuditedTaskTriage sets and clears auditedTriageStartingTaskId around the call, and upserts the returned projection', async () => {
+    mockApi.auditedWorkflow.retryTriage.mockResolvedValue({ ok: true })
+    mockApi.auditedWorkflow.getTask.mockResolvedValue({
+      ...makeTask('t1'),
+      state: 'ready_to_implement'
+    })
+    const store = createTestStore()
+
+    const pending = store.getState().retryAuditedTaskTriage('t1')
+    expect(store.getState().auditedTriageStartingTaskId).toBe('t1')
+    const result = await pending
+
+    expect(result).toEqual({ ok: true })
+    expect(store.getState().auditedTriageStartingTaskId).toBeNull()
+    expect(mockApi.auditedWorkflow.retryTriage).toHaveBeenCalledWith({ taskId: 't1' })
+    expect(store.getState().auditedTasks.find((t) => t.taskId === 't1')?.state).toBe(
+      'ready_to_implement'
+    )
+  })
+
+  it('retryAuditedTaskTriage clears auditedTriageStartingTaskId even when the result is a failure', async () => {
+    mockApi.auditedWorkflow.retryTriage.mockResolvedValue({
+      ok: false,
+      reasonCode: 'illegal_transition'
+    })
+    mockApi.auditedWorkflow.getTask.mockResolvedValue(makeTask('t1'))
+    const store = createTestStore()
+
+    const result = await store.getState().retryAuditedTaskTriage('t1')
+
+    expect(result).toEqual({ ok: false, reasonCode: 'illegal_transition' })
+    expect(store.getState().auditedTriageStartingTaskId).toBeNull()
   })
 
   it('applyAuditedTaskChanged upserts by taskId', () => {

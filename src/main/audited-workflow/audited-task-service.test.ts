@@ -14,8 +14,10 @@ describe('audited-task-service', () => {
     setAuditedTaskRepositoryForTests(undefined)
   })
 
-  function useInMemoryRepository(): void {
-    setAuditedTaskRepositoryForTests(new AuditedTaskRepository(':memory:'))
+  function useInMemoryRepository(): AuditedTaskRepository {
+    const repo = new AuditedTaskRepository(':memory:')
+    setAuditedTaskRepositoryForTests(repo)
+    return repo
   }
 
   function baseInput(overrides: Partial<Parameters<typeof selectTask>[0]> = {}) {
@@ -127,6 +129,83 @@ describe('audited-task-service', () => {
     expect(applyDevTransition(taskId, 'cancel')).toEqual({
       applied: false,
       reasonCode: 'terminal_state'
+    })
+  })
+
+  describe('triage reason-code projection truthfulness', () => {
+    it('projects triageRunStatus="running" immediately after a triage run starts', () => {
+      const repo = useInMemoryRepository()
+      const { taskId } = selectTask(baseInput())
+
+      const started = repo.startTriageRun(taskId)
+      expect(started.ok).toBe(true)
+
+      const projection = getTaskProjection(taskId)
+      expect(projection?.state).toBe('triaging')
+      expect(projection?.triageRunStatus).toBe('running')
+    })
+
+    it('projects a genuine TriageReasonCode in blockedReasonCode for a provider failure, and it survives to listTaskProjections too', () => {
+      const repo = useInMemoryRepository()
+      const { taskId } = selectTask(baseInput())
+      const started = repo.startTriageRun(taskId)
+      if (!started.ok) {
+        throw new Error('expected ok')
+      }
+      const finalized = repo.finalizeTriageRunBlocked({
+        runId: started.runId,
+        taskId,
+        reasonCode: 'provider_timeout'
+      })
+      expect(finalized.ok).toBe(true)
+
+      const single = getTaskProjection(taskId)
+      expect(single?.state).toBe('blocked')
+      expect(single?.blockedReasonCode).toBe('provider_timeout')
+      expect(single?.triageBlockedReasonCode).toBe('provider_timeout')
+      expect(single?.triageRunStatus).toBe('blocked')
+
+      const listed = listTaskProjections().find((t) => t.taskId === taskId)
+      expect(listed?.blockedReasonCode).toBe('provider_timeout')
+    })
+
+    it('projects the interrupted reason code truthfully after recovery', () => {
+      const repo = useInMemoryRepository()
+      const { taskId } = selectTask(baseInput())
+      const started = repo.startTriageRun(taskId)
+      expect(started.ok).toBe(true)
+
+      repo.recoverInterruptedTriageRuns()
+
+      const projection = getTaskProjection(taskId)
+      expect(projection?.state).toBe('blocked')
+      expect(projection?.blockedReasonCode).toBe('interrupted')
+      expect(projection?.triageBlockedReasonCode).toBe('interrupted')
+      expect(projection?.triageRunStatus).toBe('blocked')
+    })
+
+    it('projects triageRunStatus="succeeded" and the decision after a successful triage finalize', () => {
+      const repo = useInMemoryRepository()
+      const { taskId } = selectTask(baseInput())
+      const started = repo.startTriageRun(taskId)
+      if (!started.ok) {
+        throw new Error('expected ok')
+      }
+      repo.finalizeTriageRunSucceeded({
+        runId: started.runId,
+        taskId,
+        decision: 'plan',
+        reasonCode: null,
+        rationale: 'x',
+        acceptanceCriteria: [{ id: '1', text: 'x', covered: false }],
+        nextStepPrompt: 'x'
+      })
+
+      const projection = getTaskProjection(taskId)
+      expect(projection?.state).toBe('planning')
+      expect(projection?.triageRunStatus).toBe('succeeded')
+      expect(projection?.triageDecision).toBe('plan')
+      expect(projection?.blockedReasonCode).toBeNull()
     })
   })
 })

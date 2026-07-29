@@ -164,6 +164,28 @@ export const LANDING_REASON_CODES = [
 ] as const
 export type LandingReasonCode = (typeof LANDING_REASON_CODES)[number]
 
+// Closed reason codes for starting/running triage (Phase 2). Every expected
+// failure — illegal/stale state, a concurrent CAS loss, no provider
+// configured, a timeout, an invalid/unparseable model response, or an
+// unexpected provider error — maps to exactly one of these. Never a raw
+// exception message, HTTP body, prompt, or stack trace.
+export const TRIAGE_REASON_CODES = [
+  'illegal_transition',
+  'lock_contended',
+  'provider_unavailable',
+  'provider_timeout',
+  'provider_error',
+  'output_invalid',
+  // Set only by startup/init reconciliation when a process crash or restart
+  // is discovered to have left a triage run 'running' with no writer left to
+  // finish it. Retryable — a fresh Start Triage always begins a new run.
+  'interrupted'
+] as const
+export type TriageReasonCode = (typeof TRIAGE_REASON_CODES)[number]
+
+export const TRIAGE_RUN_STATUSES = ['running', 'succeeded', 'blocked'] as const
+export type TriageRunStatus = (typeof TRIAGE_RUN_STATUSES)[number]
+
 export const RECONCILE_REASON_CODES = [
   'ok',
   'no_active_phase',
@@ -218,11 +240,18 @@ export type AuditedTaskStatusProjection = {
   risk: RiskLevel
   source: AuditedTaskSource
   triageDecision: TriageDecision | null
-  triageReasonCode: BlockReasonCode | null
+  triageRunStatus: TriageRunStatus | null
+  triageBlockedReasonCode: TriageReasonCode | null
   planRound: number
   fixRound: number
   lastVerdict: ReviewVerdict | null
-  blockedReasonCode: BlockReasonCode | null
+  // Why: the generic blocked-reason column is shared by every phase that can
+  // block a task. A task blocked by a triage failure genuinely persists a
+  // TriageReasonCode value here (see finalizeTriageRunInternal / interrupted
+  // recovery) — BlockReasonCode alone would misrepresent that runtime value.
+  // triageBlockedReasonCode above is the field to prefer for triage-specific
+  // UI; this one stays truthful for the generic "Blocked: <code>" fallback.
+  blockedReasonCode: BlockReasonCode | TriageReasonCode | null
   approvalState: AuditedApprovalState
   approvalExpiresAt: number | null
   candidateIdShort: string | null
@@ -252,93 +281,7 @@ export type RoadmapEntry = {
   description: string
 }
 
-// ---------------------------------------------------------------------------
-// Command contracts (Zod-validated at the IPC boundary; see ipc/audited-workflow.ts)
-// ---------------------------------------------------------------------------
-
-export type AuditedWorkflowListTasksParams = { repoId?: string }
-export type AuditedWorkflowGetTaskParams = { taskId: string }
-export type AuditedWorkflowListRoadmapParams = { repoId: string }
-export type AuditedWorkflowSelectTaskParams = {
-  repoId: string
-  source: AuditedTaskSource
-  roadmapId?: string
-  title: string
-  description: string
-  risk: RiskLevel
-}
-
-// Closed reason codes for task-selection failures. Every expected failure
-// mode (repo not found, SSH/folder repo rejection, Git resolution failure,
-// unexpected internal error) maps to exactly one of these — never a raw
-// exception message, path, command string, or Git stderr. See plan §10.2
-// privacy boundaries and the IPC error-redaction requirement.
-export const SELECT_TASK_REASON_CODES = [
-  'repo_not_found',
-  'unsupported_host',
-  'git_resolution_failed',
-  'internal_error'
-] as const
-export type SelectTaskReasonCode = (typeof SELECT_TASK_REASON_CODES)[number]
-
-export type AuditedWorkflowSelectTaskResult =
-  | { ok: true; taskId: string }
-  | { ok: false; reasonCode: SelectTaskReasonCode }
-
-export type AuditedWorkflowRunPhaseParams = { taskId: string; phase: AuditedPhase }
-export type AuditedWorkflowCommandResult = { accepted: boolean; reasonCode?: string }
-
-export type AuditedWorkflowApproveParams = {
-  taskId: string
-  approver: string
-  ttlPreset: ApprovalTtlPreset
-}
-export type AuditedWorkflowApproveResult = { granted: boolean; reasonCode: ApprovalReasonCode }
-
-export type AuditedWorkflowRevokeApprovalParams = { taskId: string }
-export type AuditedWorkflowRevokeApprovalResult = {
-  revoked: boolean
-  reasonCode: ApprovalReasonCode
-}
-
-export type AuditedWorkflowCommitParams = { taskId: string; message: string }
-export type AuditedWorkflowCommitResult = { committed: boolean; reasonCode: string }
-
-export type AuditedWorkflowResumeAttemptParams = { taskId: string }
-export type AuditedWorkflowResumeAttemptResult = { resumed: boolean; reasonCode: string }
-
-export type AuditedWorkflowFinalizeAttemptParams = { taskId: string }
-export type AuditedWorkflowFinalizeAttemptResult = { finalized: boolean; reasonCode: string }
-
-export type AuditedWorkflowLandParams = { taskId: string }
-export type AuditedWorkflowLandResult = { landed: boolean; reasonCode: LandingReasonCode }
-
-export type AuditedWorkflowCancelParams = { taskId: string }
-export type AuditedWorkflowRetryParams = { taskId: string }
-export type AuditedWorkflowGenericResult = { ok: boolean; reasonCode?: string }
-
-export type AuditedWorkflowReconcileParams = { taskId?: string }
-export type AuditedWorkflowReconcileResult = {
-  taskId: string
-  classification: ReconcileClass
-  reasonCode: ReconcileReasonCode
-}
-
-export type AuditedWorkflowOpenArtifactParams = {
-  taskId: string
-  artifactKind: string
-  round?: number
-}
-export type AuditedWorkflowOpenArtifactResult = { opened: boolean }
-
-// Phase-1-only, dev-build-gated manual transition control. Never present in a
-// packaged build — see ipc/audited-workflow-dev-transitions.ts.
-// `command` names one of the AuditedTransitionCommand values from
-// audited-workflow-state-machine.ts. That type isn't re-exported from shared
-// (it's a main-process-only module), so it's typed as a plain string here
-// and validated by the Zod enum in ipc/audited-workflow-dev-transitions.ts.
-export type AuditedWorkflowDevTransitionParams = {
-  taskId: string
-  command: string
-}
-export type AuditedWorkflowDevTransitionResult = { applied: boolean; reasonCode?: string }
+// IPC command contracts (Zod-validated at ipc/audited-workflow.ts) live in
+// audited-workflow-command-types.ts, split out to stay under the max-lines
+// budget — re-exported here so existing imports from this file keep working.
+export * from './audited-workflow-command-types'

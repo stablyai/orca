@@ -1,9 +1,10 @@
 // Wires the SQLite repository, the state machine, and the sanitized projection
-// together behind one entry point IPC handlers call into. Phase 1 only: task
-// creation from a custom spec (roadmap parsing arrives in Phase 9) and the
-// dev-build-gated manual transition control. Real phase commands (triage,
-// plan, implement, ...) are added starting Phase 2+ per the plan's phased
-// sequence — this file is intentionally narrow.
+// together behind one entry point IPC handlers call into. Task creation from a
+// custom spec (roadmap parsing arrives in Phase 9), the dev-build-gated manual
+// transition control, and repository access shared with the Phase 2 triage
+// orchestration in audited-triage-orchestration.ts. Later phase commands
+// (plan, implement, ...) are added starting Phase 3+ per the plan's phased
+// sequence.
 
 import { join } from 'node:path'
 import { app } from 'electron'
@@ -54,13 +55,13 @@ function taskRowToProjectionSource(row: AuditedTaskRow): ProjectionSourceTask {
     activePhase: row.activePhase,
     risk: row.risk,
     source: row.source,
-    // Phase 1: no real triage/review has run yet, so these are always null/empty.
-    triageDecision: null,
-    triageReasonCode: row.blockedReasonCode as ProjectionSourceTask['triageReasonCode'],
+    triageDecision: row.triageDecision,
+    triageRunStatus: row.triageRunStatus,
+    triageBlockedReasonCode: row.triageBlockedReasonCode,
     planRound: row.planRound,
     fixRound: row.fixRound,
     lastVerdict: null,
-    blockedReasonCode: row.blockedReasonCode as ProjectionSourceTask['blockedReasonCode'],
+    blockedReasonCode: row.blockedReasonCode,
     approvalState: 'none',
     approvalExpiresAt: null,
     auditApprovedTreeOid: row.auditApprovedTreeOid,

@@ -14,6 +14,16 @@ import {
   getTaskProjection,
   listTaskProjections
 } from '../audited-workflow/audited-task-service'
+import {
+  startTriage,
+  retryTriage,
+  recoverInterruptedTriageRunsOnStartup
+} from '../audited-workflow/audited-triage-orchestration'
+import {
+  hasAuditedTriageApiKey,
+  saveAuditedTriageApiKey,
+  clearAuditedTriageApiKey
+} from '../audited-workflow/audited-triage-api-key-store'
 import { broadcastAuditedTaskChanged } from '../audited-workflow/audited-workflow-broadcast'
 import { RISK_LEVELS, TASK_SOURCES } from '../../shared/audited-workflow-types'
 import type {
@@ -21,11 +31,20 @@ import type {
   AuditedWorkflowListTasksParams,
   AuditedWorkflowSelectTaskParams,
   AuditedWorkflowSelectTaskResult,
+  AuditedWorkflowStartTriageParams,
+  AuditedWorkflowStartTriageResult,
+  AuditedWorkflowRetryTriageParams,
+  AuditedWorkflowRetryTriageResult,
+  AuditedWorkflowTriageProviderStatus,
+  AuditedWorkflowSaveTriageApiKeyParams,
   AuditedTaskStatusProjection
 } from '../../shared/audited-workflow-types'
 
 const ListTasksParams = z.object({ repoId: z.string().optional() })
 const GetTaskParams = z.object({ taskId: z.string().min(1) })
+const StartTriageParams = z.object({ taskId: z.string().min(1) })
+const RetryTriageParams = z.object({ taskId: z.string().min(1) })
+const SaveTriageApiKeyParams = z.object({ apiKey: z.string().min(1) })
 const SelectTaskParams = z.object({
   repoId: z.string().min(1),
   source: z.enum(TASK_SOURCES),
@@ -60,6 +79,13 @@ function isUnsupportedAuditedWorkflowHost(repo: {
 }
 
 export function registerAuditedWorkflowHandlers(store: Store): void {
+  // Why: runs once per registration (i.e. once per app process lifetime —
+  // registerAuditedWorkflowHandlers is called exactly once from
+  // register-core-handlers.ts). Idempotent and CAS-safe, so calling it again
+  // (e.g. in a test that re-registers handlers) is harmless — a second pass
+  // finds nothing left in 'running' state to recover.
+  recoverInterruptedTriageRunsOnStartup()
+
   ipcMain.handle(
     'auditedWorkflow:listTasks',
     (_event, rawArgs: unknown): AuditedTaskStatusProjection[] => {
@@ -138,4 +164,110 @@ export function registerAuditedWorkflowHandlers(store: Store): void {
       return { ok: true, taskId: created.taskId }
     }
   )
+
+  ipcMain.handle(
+    'auditedWorkflow:startTriage',
+    async (_event, rawArgs: unknown): Promise<AuditedWorkflowStartTriageResult> => {
+      const args: AuditedWorkflowStartTriageParams = StartTriageParams.parse(rawArgs)
+
+      // Why: startTriage's own CAS-guarded write is the source of truth for
+      // legality/contention; nothing thrown by the provider or the
+      // orchestration layer should ever reach here as an uncaught exception
+      // in normal operation, but a catch-all is kept so a genuinely
+      // unexpected failure still returns a closed code instead of an
+      // unhandled rejection or a raw error reaching the renderer.
+      let result: AuditedWorkflowStartTriageResult
+      try {
+        result = await startTriage(args.taskId)
+      } catch (error) {
+        console.error('[auditedWorkflow] startTriage failed unexpectedly:', error)
+        return { ok: false, reasonCode: 'provider_error' }
+      }
+
+      const projection = getTaskProjection(args.taskId)
+      if (projection) {
+        broadcastAuditedTaskChanged(projection)
+      }
+
+      return result
+    }
+  )
+
+  ipcMain.handle(
+    'auditedWorkflow:retryTriage',
+    async (_event, rawArgs: unknown): Promise<AuditedWorkflowRetryTriageResult> => {
+      const args: AuditedWorkflowRetryTriageParams = RetryTriageParams.parse(rawArgs)
+
+      // Why: same rationale as startTriage's catch-all — retryTriage's own
+      // CAS-guarded write is authoritative for legality/contention; this is
+      // defense-in-depth for a genuinely unexpected failure, not the
+      // mechanism relied on to avoid stranding a run (see
+      // audited-triage-orchestration.ts's runProviderAndFinalize).
+      let result: AuditedWorkflowRetryTriageResult
+      try {
+        result = await retryTriage(args.taskId)
+      } catch (error) {
+        console.error('[auditedWorkflow] retryTriage failed unexpectedly:', error)
+        return { ok: false, reasonCode: 'provider_error' }
+      }
+
+      const projection = getTaskProjection(args.taskId)
+      if (projection) {
+        broadcastAuditedTaskChanged(projection)
+      }
+
+      return result
+    }
+  )
+
+  // Why: exposes ONLY whether a key is configured — never the key, a masked
+  // form, encrypted bytes, or a filesystem path. See
+  // audited-triage-api-key-store.ts and plan §10.2/§10.3 privacy boundaries.
+  // This is Electron-IPC-only, like every other audited-workflow channel —
+  // no RPC method is registered for it anywhere. Every handler below is
+  // wrapped so a storage failure (unwritable ~/.orca, safeStorage decryption
+  // failure, permission error, ...) can NEVER reject to the renderer with a
+  // path, encryption detail, or raw exception message — it always resolves
+  // to the same safe { configured } contract the success path returns.
+  ipcMain.handle(
+    'auditedWorkflow:getTriageProviderStatus',
+    (): AuditedWorkflowTriageProviderStatus => {
+      return { configured: safeHasAuditedTriageApiKey() }
+    }
+  )
+
+  ipcMain.handle(
+    'auditedWorkflow:saveTriageApiKey',
+    (_event, rawArgs: unknown): AuditedWorkflowTriageProviderStatus => {
+      const args: AuditedWorkflowSaveTriageApiKeyParams = SaveTriageApiKeyParams.parse(rawArgs)
+      try {
+        saveAuditedTriageApiKey(args.apiKey)
+      } catch (error) {
+        console.error('[auditedWorkflow] Saving the triage API key failed:', error)
+      }
+      return { configured: safeHasAuditedTriageApiKey() }
+    }
+  )
+
+  ipcMain.handle('auditedWorkflow:clearTriageApiKey', (): AuditedWorkflowTriageProviderStatus => {
+    try {
+      clearAuditedTriageApiKey()
+    } catch (error) {
+      console.error('[auditedWorkflow] Clearing the triage API key failed:', error)
+    }
+    return { configured: safeHasAuditedTriageApiKey() }
+  })
+}
+
+// Why: hasAuditedTriageApiKey is a plain existsSync check today but is not
+// contractually guaranteed never to throw (e.g. an EACCES on the .orca
+// directory itself) — every call site above must be able to fall back to a
+// safe, closed status rather than let any exception escape the handler.
+function safeHasAuditedTriageApiKey(): boolean {
+  try {
+    return hasAuditedTriageApiKey()
+  } catch (error) {
+    console.error('[auditedWorkflow] Checking the triage API key status failed:', error)
+    return false
+  }
 }

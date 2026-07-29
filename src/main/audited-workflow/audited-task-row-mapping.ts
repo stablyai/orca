@@ -5,7 +5,11 @@ import type {
   AuditedTaskSource,
   AuditedTaskState,
   AuditedTaskTransitionRecord,
-  RiskLevel
+  BlockReasonCode,
+  RiskLevel,
+  TriageDecision,
+  TriageReasonCode,
+  TriageRunStatus
 } from '../../shared/audited-workflow-types'
 
 export type AuditedTaskRow = {
@@ -25,7 +29,15 @@ export type AuditedTaskRow = {
   risk: RiskLevel
   state: AuditedTaskState
   preBlockState: AuditedTaskState | null
-  blockedReasonCode: string | null
+  // Why: shared across every phase that can block a task — currently written
+  // with either a BlockReasonCode (non-triage blocks) or a TriageReasonCode
+  // (triage-originated blocks; see finalizeTriageRunInternal/recovery). No
+  // DB CHECK constraint narrows it (unlike triage_blocked_reason_code),
+  // because future phases add their own reason-code vocabularies to the
+  // same column — so this type is the union of every vocabulary that is
+  // ACTUALLY written here today, kept honest at every write site's own
+  // typed literals rather than by a runtime check.
+  blockedReasonCode: BlockReasonCode | TriageReasonCode | null
   blockedPhase: string | null
   activePhase: string | null
   activeLockBinding: string | null
@@ -36,6 +48,9 @@ export type AuditedTaskRow = {
   landedSha: string | null
   landedBaseSha: string | null
   landingReasonCode: string | null
+  triageDecision: TriageDecision | null
+  triageRunStatus: TriageRunStatus | null
+  triageBlockedReasonCode: TriageReasonCode | null
   createdAt: number
   updatedAt: number
 }
@@ -58,7 +73,8 @@ export function sqliteRowToTask(row: Record<string, unknown>): AuditedTaskRow {
     risk: row.risk as RiskLevel,
     state: row.state as AuditedTaskState,
     preBlockState: (row.pre_block_state as AuditedTaskState | null) ?? null,
-    blockedReasonCode: (row.blocked_reason_code as string | null) ?? null,
+    blockedReasonCode:
+      (row.blocked_reason_code as BlockReasonCode | TriageReasonCode | null) ?? null,
     blockedPhase: (row.blocked_phase as string | null) ?? null,
     activePhase: (row.active_phase as string | null) ?? null,
     activeLockBinding: (row.active_lock_binding as string | null) ?? null,
@@ -69,6 +85,9 @@ export function sqliteRowToTask(row: Record<string, unknown>): AuditedTaskRow {
     landedSha: (row.landed_sha as string | null) ?? null,
     landedBaseSha: (row.landed_base_sha as string | null) ?? null,
     landingReasonCode: (row.landing_reason_code as string | null) ?? null,
+    triageDecision: (row.triage_decision as TriageDecision | null) ?? null,
+    triageRunStatus: (row.triage_run_status as TriageRunStatus | null) ?? null,
+    triageBlockedReasonCode: (row.triage_blocked_reason_code as TriageReasonCode | null) ?? null,
     createdAt: row.created_at_ms as number,
     updatedAt: row.updated_at_ms as number
   }

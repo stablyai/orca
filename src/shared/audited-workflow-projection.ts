@@ -16,6 +16,8 @@ import type {
   ReviewVerdict,
   RiskLevel,
   TriageDecision,
+  TriageReasonCode,
+  TriageRunStatus,
   AuditedAcceptanceCriterion,
   AuditedPhaseTiming
 } from './audited-workflow-types'
@@ -38,11 +40,12 @@ export type ProjectionSourceTask = {
   risk: RiskLevel
   source: AuditedTaskSource
   triageDecision: TriageDecision | null
-  triageReasonCode: BlockReasonCode | null
+  triageRunStatus: TriageRunStatus | null
+  triageBlockedReasonCode: TriageReasonCode | null
   planRound: number
   fixRound: number
   lastVerdict: ReviewVerdict | null
-  blockedReasonCode: BlockReasonCode | null
+  blockedReasonCode: BlockReasonCode | TriageReasonCode | null
   approvalState: AuditedApprovalState
   approvalExpiresAt: number | null
   auditApprovedTreeOid: string | null
@@ -68,7 +71,8 @@ export function buildAuditedTaskProjection(
     risk: source.risk,
     source: source.source,
     triageDecision: source.triageDecision,
-    triageReasonCode: source.triageReasonCode,
+    triageRunStatus: source.triageRunStatus,
+    triageBlockedReasonCode: source.triageBlockedReasonCode,
     planRound: source.planRound,
     fixRound: source.fixRound,
     lastVerdict: source.lastVerdict,

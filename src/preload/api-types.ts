@@ -16,7 +16,13 @@ import type {
   AuditedWorkflowGetTaskParams,
   AuditedWorkflowListTasksParams,
   AuditedWorkflowSelectTaskParams,
-  AuditedWorkflowSelectTaskResult
+  AuditedWorkflowSelectTaskResult,
+  AuditedWorkflowStartTriageParams,
+  AuditedWorkflowStartTriageResult,
+  AuditedWorkflowRetryTriageParams,
+  AuditedWorkflowRetryTriageResult,
+  AuditedWorkflowTriageProviderStatus,
+  AuditedWorkflowSaveTriageApiKeyParams
 } from '../shared/audited-workflow-types'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
 import type {
@@ -2474,6 +2480,17 @@ export type PreloadApi = {
     selectTask: (
       params: AuditedWorkflowSelectTaskParams
     ) => Promise<AuditedWorkflowSelectTaskResult>
+    startTriage: (
+      params: AuditedWorkflowStartTriageParams
+    ) => Promise<AuditedWorkflowStartTriageResult>
+    retryTriage: (
+      params: AuditedWorkflowRetryTriageParams
+    ) => Promise<AuditedWorkflowRetryTriageResult>
+    getTriageProviderStatus: () => Promise<AuditedWorkflowTriageProviderStatus>
+    saveTriageApiKey: (
+      params: AuditedWorkflowSaveTriageApiKeyParams
+    ) => Promise<AuditedWorkflowTriageProviderStatus>
+    clearTriageApiKey: () => Promise<AuditedWorkflowTriageProviderStatus>
     onTaskChanged: (callback: (projection: AuditedTaskStatusProjection) => void) => () => void
     // Dev-build-only; undefined in a packaged build (see ipc/audited-workflow-dev-transitions.ts).
     devTransition?: (

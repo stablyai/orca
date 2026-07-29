@@ -1,13 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock, getGitRepoRootMock, gitExecFileAsyncMock, consoleErrorSpy } = vi.hoisted(
-  () => ({
-    handleMock: vi.fn(),
-    getGitRepoRootMock: vi.fn(),
-    gitExecFileAsyncMock: vi.fn(),
-    consoleErrorSpy: vi.fn()
-  })
-)
+const {
+  handleMock,
+  getGitRepoRootMock,
+  gitExecFileAsyncMock,
+  consoleErrorSpy,
+  hasKeyMock,
+  saveKeyMock,
+  clearKeyMock
+} = vi.hoisted(() => ({
+  handleMock: vi.fn(),
+  getGitRepoRootMock: vi.fn(),
+  gitExecFileAsyncMock: vi.fn(),
+  consoleErrorSpy: vi.fn(),
+  hasKeyMock: vi.fn(),
+  saveKeyMock: vi.fn(),
+  clearKeyMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   ipcMain: { handle: handleMock },
@@ -24,10 +33,22 @@ vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
+vi.mock('../audited-workflow/audited-triage-api-key-store', () => ({
+  hasAuditedTriageApiKey: hasKeyMock,
+  saveAuditedTriageApiKey: saveKeyMock,
+  clearAuditedTriageApiKey: clearKeyMock
+}))
+
 import { registerAuditedWorkflowHandlers } from './audited-workflow'
 import { AuditedTaskRepository } from '../audited-workflow/audited-task-repository'
 import { setAuditedTaskRepositoryForTests } from '../audited-workflow/audited-task-service'
-import type { AuditedWorkflowSelectTaskResult } from '../../shared/audited-workflow-types'
+import { setTriageProviderForTests } from '../audited-workflow/audited-triage-orchestration'
+import type {
+  AuditedWorkflowSelectTaskResult,
+  AuditedWorkflowStartTriageResult,
+  AuditedWorkflowRetryTriageResult,
+  AuditedWorkflowTriageProviderStatus
+} from '../../shared/audited-workflow-types'
 
 describe('registerAuditedWorkflowHandlers', () => {
   const gitRepo1 = {
@@ -46,6 +67,10 @@ describe('registerAuditedWorkflowHandlers', () => {
     getGitRepoRootMock.mockReset()
     gitExecFileAsyncMock.mockReset()
     consoleErrorSpy.mockReset()
+    hasKeyMock.mockReset()
+    saveKeyMock.mockReset()
+    clearKeyMock.mockReset()
+    hasKeyMock.mockReturnValue(false)
     vi.spyOn(console, 'error').mockImplementation(consoleErrorSpy)
     store.getRepos.mockReturnValue([gitRepo1])
     getGitRepoRootMock.mockReturnValue('C:\\repos\\repo1')
@@ -55,6 +80,7 @@ describe('registerAuditedWorkflowHandlers', () => {
 
   afterEach(() => {
     setAuditedTaskRepositoryForTests(undefined)
+    setTriageProviderForTests(undefined)
     vi.restoreAllMocks()
   })
 
@@ -76,6 +102,15 @@ describe('registerAuditedWorkflowHandlers', () => {
       risk: 'low',
       ...overrides
     }
+  }
+
+  async function createSelectedTask(): Promise<string> {
+    const selectHandler = getHandler('auditedWorkflow:selectTask')
+    const created = (await selectHandler(null, selectTaskArgs())) as AuditedWorkflowSelectTaskResult
+    if (!created.ok) {
+      throw new Error('expected ok result')
+    }
+    return created.taskId
   }
 
   it('selectTask resolves the repo, reads HEAD read-only, and returns a taskId', async () => {
@@ -175,7 +210,8 @@ describe('registerAuditedWorkflowHandlers', () => {
         throw new Error(
           'INSERT INTO audited_tasks failed: UNIQUE constraint at /var/lib/orca/audited-workflow.db'
         )
-      }
+      },
+      recoverInterruptedTriageRuns: () => []
     } as never)
     const handler = getHandler('auditedWorkflow:selectTask')
 
@@ -215,5 +251,337 @@ describe('registerAuditedWorkflowHandlers', () => {
     // rejection for the renderer, but this unit test calls the raw handler.
     const handler = getHandler('auditedWorkflow:getTask')
     expect(() => handler(null, {})).toThrow()
+  })
+
+  describe('startTriage', () => {
+    it('rejects malformed params (missing taskId)', async () => {
+      const handler = getHandler('auditedWorkflow:startTriage')
+      await expect(handler(null, {})).rejects.toThrow()
+    })
+
+    it('drives selected -> planning on a plan decision and broadcasts the sanitized projection', async () => {
+      const taskId = await createSelectedTask()
+      setTriageProviderForTests({
+        runTriage: async () => ({
+          ok: true,
+          output: {
+            decision: 'plan',
+            risk: 'medium',
+            rationale: 'Needs a written plan.',
+            acceptanceCriteria: [{ id: 'ac1', text: 'Does the thing', covered: false }],
+            nextStepPrompt: 'Write a plan for the task.'
+          }
+        })
+      })
+      const handler = getHandler('auditedWorkflow:startTriage')
+
+      const result = (await handler(null, { taskId })) as AuditedWorkflowStartTriageResult
+
+      expect(result).toEqual({ ok: true })
+      const getTaskHandler = getHandler('auditedWorkflow:getTask')
+      const projection = (await getTaskHandler(null, { taskId })) as { state: string } | null
+      expect(projection?.state).toBe('planning')
+    })
+
+    it('returns lock_contended (as a structured result) for a duplicate concurrent-style start', async () => {
+      const taskId = await createSelectedTask()
+      setTriageProviderForTests({
+        runTriage: async () => ({
+          ok: true,
+          output: {
+            decision: 'direct',
+            risk: 'low',
+            rationale: 'Trivial.',
+            acceptanceCriteria: [{ id: 'ac1', text: 'Works', covered: false }],
+            nextStepPrompt: 'Implement it.'
+          }
+        })
+      })
+      const handler = getHandler('auditedWorkflow:startTriage')
+
+      const first = (await handler(null, { taskId })) as AuditedWorkflowStartTriageResult
+      const second = (await handler(null, { taskId })) as AuditedWorkflowStartTriageResult
+
+      expect(first).toEqual({ ok: true })
+      expect(second).toEqual({ ok: false, reasonCode: 'illegal_transition' })
+    })
+
+    it('returns provider_unavailable as a structured result when no provider is configured, never a raw error', async () => {
+      const taskId = await createSelectedTask()
+      setTriageProviderForTests({
+        runTriage: async () => ({ ok: false, reasonCode: 'provider_unavailable' })
+      })
+      const handler = getHandler('auditedWorkflow:startTriage')
+
+      const result = (await handler(null, { taskId })) as AuditedWorkflowStartTriageResult
+
+      expect(result).toEqual({ ok: false, reasonCode: 'provider_unavailable' })
+    })
+
+    it('redacts an unexpected thrown error from the provider to a closed reason code (caught inside orchestration, not the IPC catch-all)', async () => {
+      const taskId = await createSelectedTask()
+      const sensitiveMessage =
+        'ENOENT: no such file /Users/carfun/.orca/audited-workflow-triage-openai-token.enc'
+      setTriageProviderForTests({
+        runTriage: async () => {
+          throw new Error(sensitiveMessage)
+        }
+      })
+      const handler = getHandler('auditedWorkflow:startTriage')
+
+      const result = (await handler(null, { taskId })) as AuditedWorkflowStartTriageResult
+
+      expect(result).toEqual({ ok: false, reasonCode: 'provider_error' })
+      const serialized = JSON.stringify(result)
+      expect(serialized).not.toContain('/Users/carfun')
+      expect(serialized).not.toContain('ENOENT')
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Triage provider threw unexpectedly'),
+        expect.any(Error)
+      )
+    })
+
+    it('returns illegal_transition for a task not in selected state (e.g. already cancelled)', async () => {
+      const taskId = await createSelectedTask()
+      const devTransitionModule = await import('../audited-workflow/audited-task-service')
+      devTransitionModule.applyDevTransition(taskId, 'cancel')
+      const handler = getHandler('auditedWorkflow:startTriage')
+
+      const result = (await handler(null, { taskId })) as AuditedWorkflowStartTriageResult
+
+      expect(result).toEqual({ ok: false, reasonCode: 'illegal_transition' })
+    })
+  })
+
+  describe('retryTriage', () => {
+    async function createBlockedTaskId(
+      reasonCode: 'provider_unavailable' | 'output_invalid' = 'provider_unavailable'
+    ): Promise<string> {
+      const selectHandler = getHandler('auditedWorkflow:selectTask')
+      const created = (await selectHandler(
+        null,
+        selectTaskArgs()
+      )) as AuditedWorkflowSelectTaskResult
+      if (!created.ok) {
+        throw new Error('expected ok result')
+      }
+      setTriageProviderForTests({
+        runTriage: async () => ({ ok: false, reasonCode })
+      })
+      const startHandler = getHandler('auditedWorkflow:startTriage')
+      await startHandler(null, { taskId: created.taskId })
+      return created.taskId
+    }
+
+    it('rejects malformed params (missing taskId)', async () => {
+      const handler = getHandler('auditedWorkflow:retryTriage')
+      await expect(handler(null, {})).rejects.toThrow()
+    })
+
+    it('retries a retryable blocked triage failure and reaches a terminal decision state', async () => {
+      const taskId = await createBlockedTaskId('provider_unavailable')
+      setTriageProviderForTests({
+        runTriage: async () => ({
+          ok: true,
+          output: {
+            decision: 'direct',
+            risk: 'low',
+            rationale: 'Configured now.',
+            acceptanceCriteria: [{ id: 'ac1', text: 'Works', covered: false }],
+            nextStepPrompt: 'Implement it.'
+          }
+        })
+      })
+      const handler = getHandler('auditedWorkflow:retryTriage')
+
+      const result = (await handler(null, { taskId })) as AuditedWorkflowRetryTriageResult
+
+      expect(result).toEqual({ ok: true })
+      const getTaskHandler = getHandler('auditedWorkflow:getTask')
+      const projection = (await getTaskHandler(null, { taskId })) as { state: string } | null
+      expect(projection?.state).toBe('ready_to_implement')
+    })
+
+    it('refuses retry for a task that is not blocked', async () => {
+      const taskId = await createSelectedTask()
+      const handler = getHandler('auditedWorkflow:retryTriage')
+
+      const result = (await handler(null, { taskId })) as AuditedWorkflowRetryTriageResult
+
+      expect(result).toEqual({ ok: false, reasonCode: 'illegal_transition' })
+    })
+
+    it('refuses retry for a non-triage block (unsupported_host) with the same closed code', async () => {
+      const taskId = await createSelectedTask()
+      const taskServiceModule = await import('../audited-workflow/audited-task-service')
+      const repo = taskServiceModule.getAuditedTaskRepository()
+      repo.applyTransition({
+        taskId,
+        fromState: 'selected',
+        toState: 'blocked',
+        actor: 'control',
+        eventType: 'blocked_from_invariant_violation',
+        preBlockState: 'selected',
+        blockedReasonCode: 'unsupported_host',
+        blockedPhase: null
+      })
+      const handler = getHandler('auditedWorkflow:retryTriage')
+
+      const result = (await handler(null, { taskId })) as AuditedWorkflowRetryTriageResult
+
+      expect(result).toEqual({ ok: false, reasonCode: 'illegal_transition' })
+    })
+
+    it('redacts an unexpected thrown error to a closed reason code', async () => {
+      const taskId = await createBlockedTaskId('output_invalid')
+      const sensitiveMessage = 'ENOENT: /Users/carfun/.orca/secret-path'
+      setTriageProviderForTests({
+        runTriage: async () => {
+          throw new Error(sensitiveMessage)
+        }
+      })
+      const handler = getHandler('auditedWorkflow:retryTriage')
+
+      const result = (await handler(null, { taskId })) as AuditedWorkflowRetryTriageResult
+
+      expect(result).toEqual({ ok: false, reasonCode: 'provider_error' })
+      expect(JSON.stringify(result)).not.toContain('/Users/carfun')
+    })
+  })
+
+  describe('triage provider key management', () => {
+    it('getTriageProviderStatus reports configured=false when no key is stored', async () => {
+      hasKeyMock.mockReturnValue(false)
+      const handler = getHandler('auditedWorkflow:getTriageProviderStatus')
+
+      const result = (await handler(null)) as AuditedWorkflowTriageProviderStatus
+
+      expect(result).toEqual({ configured: false })
+    })
+
+    it('getTriageProviderStatus reports configured=true when a key is stored, never the key itself', async () => {
+      hasKeyMock.mockReturnValue(true)
+      const handler = getHandler('auditedWorkflow:getTriageProviderStatus')
+
+      const result = (await handler(null)) as AuditedWorkflowTriageProviderStatus
+
+      expect(result).toEqual({ configured: true })
+      expect(Object.keys(result)).toEqual(['configured'])
+    })
+
+    it('saveTriageApiKey calls the store and returns only the configured flag, never the key/path/bytes', async () => {
+      hasKeyMock.mockReturnValue(true)
+      const handler = getHandler('auditedWorkflow:saveTriageApiKey')
+
+      const result = (await handler(null, {
+        apiKey: 'sk-super-secret-value'
+      })) as AuditedWorkflowTriageProviderStatus
+
+      expect(saveKeyMock).toHaveBeenCalledWith('sk-super-secret-value')
+      expect(result).toEqual({ configured: true })
+      const serialized = JSON.stringify(result)
+      expect(serialized).not.toContain('sk-super-secret-value')
+      expect(serialized).not.toContain('.orca')
+      expect(serialized).not.toContain('.enc')
+    })
+
+    it('saveTriageApiKey rejects malformed params (missing apiKey)', () => {
+      // Why: this handler is synchronous — Zod's .parse() throws directly
+      // rather than rejecting a promise, matching getTask's precedent above.
+      const handler = getHandler('auditedWorkflow:saveTriageApiKey')
+      expect(() => handler(null, {})).toThrow()
+    })
+
+    it('saveTriageApiKey redacts a store-level failure and still returns a safe status', async () => {
+      saveKeyMock.mockImplementation(() => {
+        throw new Error(
+          'EACCES: permission denied, open /home/carfun/.orca/audited-workflow-triage-openai-token.enc'
+        )
+      })
+      hasKeyMock.mockReturnValue(false)
+      const handler = getHandler('auditedWorkflow:saveTriageApiKey')
+
+      const result = (await handler(null, {
+        apiKey: 'sk-test'
+      })) as AuditedWorkflowTriageProviderStatus
+
+      expect(result).toEqual({ configured: false })
+      const serialized = JSON.stringify(result)
+      expect(serialized).not.toContain('/home/carfun')
+      expect(serialized).not.toContain('EACCES')
+    })
+
+    it('clearTriageApiKey calls the store and returns only the configured flag', async () => {
+      hasKeyMock.mockReturnValue(false)
+      const handler = getHandler('auditedWorkflow:clearTriageApiKey')
+
+      const result = (await handler(null)) as AuditedWorkflowTriageProviderStatus
+
+      expect(clearKeyMock).toHaveBeenCalled()
+      expect(result).toEqual({ configured: false })
+    })
+
+    it('getTriageProviderStatus redacts a storage failure (e.g. EACCES on ~/.orca) to a safe configured=false status, never a raw rejection', async () => {
+      hasKeyMock.mockImplementation(() => {
+        throw new Error('EACCES: permission denied, stat /home/carfun/.orca')
+      })
+      const handler = getHandler('auditedWorkflow:getTriageProviderStatus')
+
+      const result = (await handler(null)) as AuditedWorkflowTriageProviderStatus
+
+      expect(result).toEqual({ configured: false })
+      const serialized = JSON.stringify(result)
+      expect(serialized).not.toContain('/home/carfun')
+      expect(serialized).not.toContain('EACCES')
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Checking the triage API key status failed'),
+        expect.any(Error)
+      )
+    })
+
+    it('clearTriageApiKey redacts a storage failure (e.g. unwritable ~/.orca) and still returns a safe status, never a raw rejection', async () => {
+      clearKeyMock.mockImplementation(() => {
+        throw new Error(
+          'EPERM: operation not permitted, unlink /Users/carfun/.orca/audited-workflow-triage-openai-token.enc'
+        )
+      })
+      hasKeyMock.mockReturnValue(true)
+      const handler = getHandler('auditedWorkflow:clearTriageApiKey')
+
+      const result = (await handler(null)) as AuditedWorkflowTriageProviderStatus
+
+      // The handler must not reject — it resolves with the existing safe
+      // { configured } contract even when the underlying clear threw.
+      expect(result).toEqual({ configured: true })
+      const serialized = JSON.stringify(result)
+      expect(serialized).not.toContain('/Users/carfun')
+      expect(serialized).not.toContain('EPERM')
+      expect(serialized).not.toContain('.enc')
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Clearing the triage API key failed'),
+        expect.any(Error)
+      )
+    })
+
+    it('clearTriageApiKey never rejects even when both the clear and the subsequent status check throw', async () => {
+      clearKeyMock.mockImplementation(() => {
+        throw new Error('disk failure during unlink at /var/orca/secret')
+      })
+      hasKeyMock.mockImplementation(() => {
+        throw new Error('disk failure during stat at /var/orca/secret')
+      })
+      const handler = getHandler('auditedWorkflow:clearTriageApiKey')
+
+      let result: AuditedWorkflowTriageProviderStatus | undefined
+      let rejected = false
+      try {
+        result = (await handler(null)) as AuditedWorkflowTriageProviderStatus
+      } catch {
+        rejected = true
+      }
+
+      expect(rejected).toBe(false)
+      expect(result).toEqual({ configured: false })
+    })
   })
 })

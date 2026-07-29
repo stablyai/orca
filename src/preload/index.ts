@@ -11,7 +11,13 @@ import type {
   AuditedWorkflowGetTaskParams,
   AuditedWorkflowListTasksParams,
   AuditedWorkflowSelectTaskParams,
-  AuditedWorkflowSelectTaskResult
+  AuditedWorkflowSelectTaskResult,
+  AuditedWorkflowStartTriageParams,
+  AuditedWorkflowStartTriageResult,
+  AuditedWorkflowRetryTriageParams,
+  AuditedWorkflowRetryTriageResult,
+  AuditedWorkflowTriageProviderStatus,
+  AuditedWorkflowSaveTriageApiKeyParams
 } from '../shared/audited-workflow-types'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
 import type {
@@ -2342,6 +2348,22 @@ const api = {
       params: AuditedWorkflowSelectTaskParams
     ): Promise<AuditedWorkflowSelectTaskResult> =>
       ipcRenderer.invoke('auditedWorkflow:selectTask', params),
+    startTriage: (
+      params: AuditedWorkflowStartTriageParams
+    ): Promise<AuditedWorkflowStartTriageResult> =>
+      ipcRenderer.invoke('auditedWorkflow:startTriage', params),
+    retryTriage: (
+      params: AuditedWorkflowRetryTriageParams
+    ): Promise<AuditedWorkflowRetryTriageResult> =>
+      ipcRenderer.invoke('auditedWorkflow:retryTriage', params),
+    getTriageProviderStatus: (): Promise<AuditedWorkflowTriageProviderStatus> =>
+      ipcRenderer.invoke('auditedWorkflow:getTriageProviderStatus'),
+    saveTriageApiKey: (
+      params: AuditedWorkflowSaveTriageApiKeyParams
+    ): Promise<AuditedWorkflowTriageProviderStatus> =>
+      ipcRenderer.invoke('auditedWorkflow:saveTriageApiKey', params),
+    clearTriageApiKey: (): Promise<AuditedWorkflowTriageProviderStatus> =>
+      ipcRenderer.invoke('auditedWorkflow:clearTriageApiKey'),
     onTaskChanged: (callback: (projection: AuditedTaskStatusProjection) => void): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
