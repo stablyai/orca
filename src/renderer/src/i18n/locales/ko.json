@@ -770,6 +770,12 @@
       },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
+      },
+      "useMacosTccPromptNotice": {
+        "title": "반복되는 macOS 파일 접근 권한 요청 줄이기",
+        "description": "에이전트와 터미널 도구의 파일 접근은 macOS에서 Orca의 접근으로 표시됩니다. 전체 디스크 접근 권한을 허용하면 이러한 요청을 줄일 수 있습니다.",
+        "openSettings": "설정 열기",
+        "dismiss": "다시 표시하지 않기"
       }
     },
     "components": {
@@ -5606,8 +5612,8 @@
           "e7bb06007c": "LAN",
           "4a73f5217a": "다른 로컬 앱을 제어하는 ​​스크립트를 위한 Apple 이벤트.",
           "e119f0d66b": "자동화",
-          "7ca17b62c8": "프로젝트, 워크트리 또는 심볼릭 링크된 파일이 macOS 보호 폴더에 닿을 때 권장됩니다.",
-          "c566bca278": "전체 디스크 액세스",
+          "7ca17b62c8": "Orca가 실행하는 에이전트가 다른 앱의 데이터를 읽으면, macOS는 터미널 명령을 실행하는 프로세스인 Orca를 표시합니다. 이러한 요청을 줄이려면 Orca와 Orca Helper에 이 권한을 허용하세요. 그런 다음 Orca를 종료하고, 남아 있는 Orca Helper 프로세스도 모두 종료한 후 Orca를 다시 여세요.",
+          "c566bca278": "전체 디스크 접근 권한",
           "9f35980756": "키 입력 주입, 창 제어 및 UI 자동화 도구입니다.",
           "5b2f22ca2d": "접근성",
           "0639db5496": "스크린샷, 시각적 자동화, UI 검사 도구.",
@@ -5660,7 +5666,7 @@
           "agentDashboard": {
             "title": "에이전트 대시보드",
             "description": "워크트리 전반에 걸친 에이전트를 모니터링하는 칸반 보드. 윈도우 내 또는 팝업으로 표시됩니다.",
-            "copy": "왼쪽 사이드바에 에이전트 대시보드 항목을 추가합니다. 열면 주의 중, 작업 중, 유휴 상태의 에이전트를 모니터링하고 라이브 터미널로 이동할 수 있습니다.",
+            "copy": "왼쪽 사이드바에 에이전트 대시보드 항목을 추가합니다. 사용자 확인이 필요한 에이전트, 작업 중인 에이전트, 완료된 에이전트를 모니터링하고 필요하면 유휴 에이전트도 표시합니다.",
             "toggleLabel": "에이전트 대시보드 전환",
             "modeLabel": "열기 형식",
             "modeCopy": "대시보드를 사이드바 옆 윈도우 내 보드 또는 별도의 팝업 윈도우로 표시합니다.",
@@ -14254,7 +14260,8 @@
       "attention": "Needs You",
       "working": "Working",
       "idle": "Idle",
-      "empty": "None"
+      "empty": "None",
+      "done": "완료"
     },
     "title": "Agents",
     "total": "{{count}} total",
@@ -14265,7 +14272,15 @@
         "minutes": "{{count}}분",
         "hours": "{{count}}시간",
         "days": "{{count}}일"
-      }
+      },
+      "review": {
+        "open": "열린 리뷰",
+        "draft": "초안 리뷰",
+        "merged": "병합된 리뷰",
+        "closed": "닫힌 리뷰"
+      },
+      "subagents_one": "서브에이전트 {{count}}개",
+      "subagents_other": "서브에이전트 {{count}}개"
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",
@@ -14273,8 +14288,36 @@
       "close": "Close"
     },
     "close": "Close dashboard",
-    "settings": "에이전트 대시보드 설정",
-    "settingsTooltip": "보드 설정"
+    "settingsTooltip": "보드 설정",
+    "filters": {
+      "remove": "{{label}} 필터 제거",
+      "active": "필터",
+      "clear": "지우기",
+      "review": {
+        "open": "열림",
+        "draft": "초안",
+        "merged": "병합됨",
+        "closed": "닫힘",
+        "none": "리뷰 없음"
+      },
+      "reviewChip": "리뷰: {{state}}",
+      "label": "필터",
+      "project": "프로젝트",
+      "workspaceStatus": "워크스페이스 상태",
+      "reviewStatus": "PR / MR 상태",
+      "clearAll": "모든 필터 지우기"
+    },
+    "search": {
+      "placeholder": "워크트리, 프로젝트 또는 에이전트 검색…",
+      "label": "에이전트 검색",
+      "clear": "검색 지우기",
+      "results": "총 {{total}}개 중 {{shown}}개 표시"
+    },
+    "settingsLabel": "에이전트 대시보드 설정",
+    "settings": {
+      "showIdle": "유휴 에이전트 표시",
+      "showIdleCopy": "완료를 보고하지 않은 채 30분 동안 조용한 에이전트를 포함합니다. 기본적으로 숨겨집니다."
+    }
   },
   "dashboard": {
     "sidebar": {
@@ -14302,6 +14345,22 @@
       "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
+    }
+  },
+  "runtimeRpc": {
+    "startupFailure": {
+      "unknownCause": "No additional error details were available.",
+      "continueButton": "Continue without CLI",
+      "title": "Orca CLI unavailable",
+      "message": "Orca couldn't start its local command transport.",
+      "detail": "Orca will continue to work, but commands such as orca status, orca terminal, and orchestration are unavailable for this session.\n\n{{guidance}}\n\nCause: {{cause}}",
+      "guidance": {
+        "permissionDenied": "Orca couldn't write its runtime file. Check permissions on Orca's data folder, then restart.",
+        "storageUnavailable": "Your disk may be full or read-only. Free up space, then restart Orca.",
+        "invalidPath": "Orca's data folder may be missing, moved, or at a path that is too long. Restore it or use a shorter path, then restart Orca.",
+        "addressInUse": "Another process may be holding the port. Restart Orca to try again.",
+        "unknown": "Restart Orca to try again."
+      }
     }
   }
 }

@@ -8,11 +8,14 @@ import {
 } from '../../shared/agent-status-types'
 
 const MAX_DASHBOARD_CARDS = 1_000
+const MAX_DASHBOARD_SUBAGENTS = 100
 const MAX_DASHBOARD_REPO_ICONS = 500
+const MAX_DASHBOARD_FILTER_OPTIONS = 500
 const MAX_ID_LENGTH = 4_096
 const MAX_LABEL_LENGTH = 1_024
-const DASHBOARD_BUCKETS = new Set(['attention', 'working', 'idle'])
+const DASHBOARD_BUCKETS = new Set(['attention', 'working', 'done', 'idle'])
 const DASHBOARD_DOT_STATES = new Set(['working', 'blocked', 'waiting', 'done', 'idle'])
+const DASHBOARD_REVIEW_STATES = new Set(['open', 'closed', 'merged', 'draft'])
 
 function isBoundedString(value: unknown, maxLength: number, allowEmpty = false): value is string {
   return typeof value === 'string' && value.length <= maxLength && (allowEmpty || value.length > 0)
@@ -53,7 +56,41 @@ export function isDashboardSnapshot(value: unknown): value is DashboardSnapshot 
     Array.isArray(snapshot.cards) &&
     snapshot.cards.length <= MAX_DASHBOARD_CARDS &&
     snapshot.cards.every(isDashboardCard) &&
+    (snapshot.showIdle === undefined || typeof snapshot.showIdle === 'boolean') &&
+    isDashboardFilterOptions(snapshot.filterOptions) &&
     isDashboardRepoIcons(snapshot.repoIconsByRepoId)
+  )
+}
+
+function isDashboardFilterOptions(value: unknown): boolean {
+  if (value === undefined) {
+    return true
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  const options = value as Record<string, unknown>
+  return (
+    isDashboardFilterOptionList(options.projects) &&
+    isDashboardFilterOptionList(options.workspaceStatuses)
+  )
+}
+
+function isDashboardFilterOptionList(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length <= MAX_DASHBOARD_FILTER_OPTIONS &&
+    value.every((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        return false
+      }
+      const option = entry as Record<string, unknown>
+      return (
+        isBoundedString(option.id, MAX_ID_LENGTH) &&
+        isBoundedString(option.label, MAX_LABEL_LENGTH, true) &&
+        isOptionalBoundedString(option.color, MAX_ID_LENGTH)
+      )
+    })
   )
 }
 
@@ -74,6 +111,44 @@ function isDashboardRepoIcons(value: unknown): boolean {
         isBoundedString(repoId, MAX_ID_LENGTH) &&
         (icon === null || sanitizeRepoIcon(icon) !== undefined)
     )
+  )
+}
+
+function isDashboardReview(value: unknown): boolean {
+  if (value === undefined) {
+    return true
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  const review = value as Record<string, unknown>
+  return (
+    isFiniteNumber(review.number) &&
+    review.number > 0 &&
+    typeof review.state === 'string' &&
+    DASHBOARD_REVIEW_STATES.has(review.state)
+  )
+}
+
+function isDashboardSubagents(value: unknown): boolean {
+  if (value === undefined) {
+    return true
+  }
+  return (
+    Array.isArray(value) &&
+    value.length <= MAX_DASHBOARD_SUBAGENTS &&
+    value.every((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        return false
+      }
+      const subagent = entry as Record<string, unknown>
+      return (
+        isBoundedString(subagent.id, MAX_ID_LENGTH) &&
+        isBoundedString(subagent.name, MAX_LABEL_LENGTH, true) &&
+        typeof subagent.dotState === 'string' &&
+        DASHBOARD_DOT_STATES.has(subagent.dotState)
+      )
+    })
   )
 }
 
@@ -99,6 +174,12 @@ function isDashboardCard(value: unknown): boolean {
     (card.leafId === null || isBoundedString(card.leafId, MAX_ID_LENGTH)) &&
     isBoundedString(card.repoName, MAX_LABEL_LENGTH, true) &&
     isBoundedString(card.worktreeName, MAX_LABEL_LENGTH, true) &&
+    isOptionalBoundedString(card.workspaceStatusId, MAX_ID_LENGTH) &&
+    isOptionalBoundedString(card.workspaceStatusLabel, MAX_LABEL_LENGTH) &&
+    isOptionalBoundedString(card.workspaceStatusColor, MAX_ID_LENGTH) &&
+    (card.hasReview === undefined || typeof card.hasReview === 'boolean') &&
+    isDashboardReview(card.review) &&
+    isDashboardSubagents(card.subagents) &&
     isFiniteNumber(card.startedAt) &&
     (card.finishedAt === null || isFiniteNumber(card.finishedAt)) &&
     isFiniteNumber(card.stateChangedAt) &&

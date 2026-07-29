@@ -364,7 +364,7 @@ describe('createMainWindow', () => {
     }
   })
 
-  it('keeps main-window background throttling enabled while repainting macOS visibility transitions', () => {
+  it('keeps macOS background throttling enabled while repainting visibility transitions', () => {
     vi.useFakeTimers()
     const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
     let windowSize: [number, number] = [1200, 800]
@@ -405,11 +405,8 @@ describe('createMainWindow', () => {
 
     withPlatform('darwin', () => createMainWindow(null))
 
-    // Why: throttling-off pins visibilityState 'visible' and renders occluded
-    // windows at full rate; this guards against reintroducing it.
-    expect(webContents.setBackgroundThrottling).not.toHaveBeenCalledWith(false)
-
     expect(webContents.setBackgroundThrottling).toHaveBeenCalledWith(true)
+    expect(webContents.setBackgroundThrottling).not.toHaveBeenCalledWith(false)
     expect(windowHandlers.get('restore')).toHaveLength(1)
     expect(windowHandlers.get('show')).toHaveLength(1)
     expect(windowHandlers.get('focus')).toHaveLength(1)
@@ -493,8 +490,7 @@ describe('createMainWindow', () => {
     expect(browserWindowInstance.setSize).not.toHaveBeenCalled()
     expect(webContents.invalidate).not.toHaveBeenCalled()
 
-    // The genuine reveal (matching sender) runs the full repaint: invalidate + the size jiggle
-    // that recomputes the stale dvh layout — the recovery bare focus/invalidate misses.
+    // The genuine reveal runs the pre-Tahoe compositor jiggle that bare focus avoids.
     revealHandler?.({ sender: webContents } as never)
     expect(webContents.invalidate).toHaveBeenCalledTimes(1)
     // Why: the nudge is deferred off the event dispatch turn.
@@ -535,9 +531,7 @@ describe('createMainWindow', () => {
       send: vi.fn(),
       isDevToolsOpened: vi.fn(),
       openDevTools: vi.fn(),
-      closeDevTools: vi.fn(),
-      enableDeviceEmulation: vi.fn(),
-      disableDeviceEmulation: vi.fn()
+      closeDevTools: vi.fn()
     }
     const browserWindowInstance = {
       webContents,
@@ -550,8 +544,6 @@ describe('createMainWindow', () => {
       isMaximized: vi.fn(() => false),
       isFullScreen: vi.fn(() => false),
       getSize: vi.fn(() => [1200, 800]),
-      getContentSize: vi.fn(() => [1200, 800]),
-      getBounds: vi.fn(() => ({ x: 0, y: 0, width: 1200, height: 840 })),
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
@@ -571,21 +563,9 @@ describe('createMainWindow', () => {
     vi.advanceTimersByTime(300)
     expect(webContents.invalidate).toHaveBeenCalledTimes(2)
     expect(browserWindowInstance.setSize).not.toHaveBeenCalled()
-
-    // Why (STA-2383): invalidate repaints but never reflows, so Tahoe still has to recompute the
-    // dvh root — via the emulated viewport, which leaves the deadlock-prone frame untouched.
-    expect(webContents.enableDeviceEmulation).toHaveBeenCalledWith({
-      screenPosition: 'desktop',
-      screenSize: { width: 0, height: 0 },
-      deviceScaleFactor: 2.25,
-      viewSize: { width: 1200, height: 800 },
-      scale: 1
-    })
-    expect(webContents.disableDeviceEmulation).toHaveBeenCalled()
-    expect(browserWindowInstance.setSize).not.toHaveBeenCalled()
   })
 
-  it('still reflows a maximized macOS 26 window, which the size nudge had to skip', () => {
+  it('invalidates a maximized macOS 26 window without changing its frame', () => {
     vi.useFakeTimers()
     macosTahoeMock.value = true
     const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
@@ -599,9 +579,7 @@ describe('createMainWindow', () => {
       send: vi.fn(),
       isDevToolsOpened: vi.fn(),
       openDevTools: vi.fn(),
-      closeDevTools: vi.fn(),
-      enableDeviceEmulation: vi.fn(),
-      disableDeviceEmulation: vi.fn()
+      closeDevTools: vi.fn()
     }
     const browserWindowInstance = {
       webContents,
@@ -611,13 +589,9 @@ describe('createMainWindow', () => {
         windowHandlers.set(event, handlers)
       }),
       isDestroyed: vi.fn(() => false),
-      // Why: the maximized/fullscreen bail-out only ever protected setSize from un-maximizing
-      // the window; emulation leaves the frame alone, so the reflow must still happen here.
       isMaximized: vi.fn(() => true),
       isFullScreen: vi.fn(() => true),
       getSize: vi.fn(() => [1200, 800]),
-      getContentSize: vi.fn(() => [1200, 800]),
-      getBounds: vi.fn(() => ({ x: 0, y: 0, width: 1200, height: 840 })),
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
@@ -633,12 +607,11 @@ describe('createMainWindow', () => {
     windowHandlers.get('show')?.[0]?.()
     vi.advanceTimersByTime(300)
 
-    expect(webContents.enableDeviceEmulation).toHaveBeenCalled()
-    expect(webContents.disableDeviceEmulation).toHaveBeenCalled()
+    expect(webContents.invalidate).toHaveBeenCalledTimes(2)
     expect(browserWindowInstance.setSize).not.toHaveBeenCalled()
   })
 
-  it('reflows without the size nudge when macOS 26 wakes from sleep', () => {
+  it('invalidates without frame or device emulation when macOS 26 wakes from sleep', () => {
     vi.useFakeTimers()
     macosTahoeMock.value = true
     const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
@@ -667,8 +640,6 @@ describe('createMainWindow', () => {
       isMaximized: vi.fn(() => false),
       isFullScreen: vi.fn(() => false),
       getSize: vi.fn(() => [1200, 800]),
-      getContentSize: vi.fn(() => [1200, 800]),
-      getBounds: vi.fn(() => ({ x: 0, y: 0, width: 1200, height: 840 })),
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
@@ -681,8 +652,6 @@ describe('createMainWindow', () => {
 
     withPlatform('darwin', () => createMainWindow(null))
 
-    // Why: 'resume' is the other AppKit dispatch context implicated in the 109-minute freeze,
-    // so it must take the frame-free path too — not just show/restore.
     const resumeHandler = powerMonitorOnMock.mock.calls.find(
       ([event]) => event === 'resume'
     )?.[1] as (() => void) | undefined
@@ -692,14 +661,8 @@ describe('createMainWindow', () => {
     expect(webContents.invalidate).toHaveBeenCalled()
     vi.advanceTimersByTime(300)
     expect(browserWindowInstance.setSize).not.toHaveBeenCalled()
-    expect(webContents.enableDeviceEmulation).toHaveBeenCalledWith({
-      screenPosition: 'desktop',
-      screenSize: { width: 0, height: 0 },
-      deviceScaleFactor: 2.25,
-      viewSize: { width: 1200, height: 800 },
-      scale: 1
-    })
-    expect(webContents.disableDeviceEmulation).toHaveBeenCalled()
+    expect(webContents.enableDeviceEmulation).not.toHaveBeenCalled()
+    expect(webContents.disableDeviceEmulation).not.toHaveBeenCalled()
   })
 
   it('supports all minus key variants for terminal zoom out', () => {

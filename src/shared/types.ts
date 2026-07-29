@@ -2980,6 +2980,8 @@ export type GlobalSettings = {
   experimentalAgentDashboardPopout?: boolean
   /** How the Agent Dashboard opens: an in-window companion board or a separate pop-out window. Defaults to in-window. */
   experimentalAgentDashboardMode?: AgentDashboardMode
+  /** Includes stale quiet agents as a fourth Agent Dashboard column. */
+  experimentalAgentDashboardShowIdle?: boolean
   /** One-shot migration guard for defaulting the Agents view off; later explicit opt-ins persist normally. */
   experimentalActivityDefaultedOffForAllUsers?: boolean
   /** Experimental: persistent terminal-pane attention ring for bell + agent-completion events. Opt-in while tuning signal/noise. */

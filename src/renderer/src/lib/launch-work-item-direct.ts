@@ -251,7 +251,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       )
     }
     if (effectiveAgent) {
-      // Why: persist the late-selected agent so empty-worktree reopen can recreate it.
+      // Why: persist late selection for removal safety and ownership; reopen no longer relaunches it.
       void store.updateWorktreeMeta(worktreeId, { createdWithAgent: effectiveAgent }).catch(() => {
         // Non-critical: activation still has the explicit startup below.
       })

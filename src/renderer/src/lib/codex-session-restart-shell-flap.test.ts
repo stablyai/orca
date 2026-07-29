@@ -203,7 +203,9 @@ describe('spurious shell readings on Codex-launched panes', () => {
 
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
       previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
+      nextAccountLabel: ACCOUNT_B,
+      previousAccountId: 'account-a',
+      nextAccountId: 'account-b'
     })
   })
 })

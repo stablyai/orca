@@ -8,19 +8,30 @@ import type { RepoIcon } from './repo-icon'
  * Every field must be structured-clone-safe (no functions / class instances).
  */
 
-/** The three kanban columns. "Idle" is everything that isn't actively working
- *  and isn't blocking you — this includes explicitly-completed ('done') agents,
- *  which Orca only reports when a completion hook fires, so they're folded in
- *  rather than split into a separate, inconsistently-populated column. */
-export type DashboardBucket = 'attention' | 'working' | 'idle'
+/** Agent lifecycle columns; idle is optional while completed agents remain visible. */
+export type DashboardBucket = 'attention' | 'working' | 'done' | 'idle'
 
 /** Column order shared by producer and pop-out so they never drift. */
-export const DASHBOARD_BUCKET_ORDER: readonly DashboardBucket[] = ['attention', 'working', 'idle']
+export const DASHBOARD_BUCKET_ORDER: readonly DashboardBucket[] = [
+  'attention',
+  'working',
+  'done',
+  'idle'
+]
 
-/** Precise per-card state marker (drives AgentStateDot). Kept distinct from
- *  `bucket` so the "Needs You" column can still show amber (waiting/permission)
- *  vs red (blocked) dots. */
+/** Kept distinct from `bucket` so attention cards retain their precise dot state. */
 export type DashboardCardDotState = 'working' | 'blocked' | 'waiting' | 'done' | 'idle'
+
+export type DashboardCardReview = {
+  number: number
+  state: 'open' | 'closed' | 'merged' | 'draft'
+}
+
+export type DashboardCardSubagent = {
+  id: string
+  name: string
+  dotState: DashboardCardDotState
+}
 
 export type DashboardCard = {
   /** Stable identity for React keys. */
@@ -44,6 +55,13 @@ export type DashboardCard = {
   leafId: string | null
   repoName: string
   worktreeName: string
+  workspaceStatusId?: string
+  workspaceStatusLabel?: string
+  workspaceStatusColor?: string
+  /** True when the workspace links a review whose live state is not cached yet. */
+  hasReview?: boolean
+  review?: DashboardCardReview
+  subagents?: DashboardCardSubagent[]
   /** "Started … ago" display. */
   startedAt: number
   /** When the agent last entered `done`, or null if it never finished. Drives
@@ -64,9 +82,24 @@ export type DashboardCard = {
   conversationName?: string
 }
 
+export type DashboardFilterOption = {
+  id: string
+  label: string
+  color?: string
+}
+
+export type DashboardFilterOptions = {
+  projects: DashboardFilterOption[]
+  workspaceStatuses: DashboardFilterOption[]
+}
+
 export type DashboardSnapshot = {
   generatedAt: number
   cards: DashboardCard[]
+  showIdle?: boolean
+  /** Available filter dimensions are store-derived so zero-card projects and
+   *  statuses remain selectable. Optional for preload-version compatibility. */
+  filterOptions?: DashboardFilterOptions
   /** Icons for the repos the cards belong to. Keyed by repoId rather than
    *  carried per card: image icons are data URLs up to 400KB, and the snapshot
    *  is republished several times a second. Optional so a pop-out running
@@ -77,6 +110,7 @@ export type DashboardSnapshot = {
 export const EMPTY_DASHBOARD_SNAPSHOT: DashboardSnapshot = {
   generatedAt: 0,
   cards: [],
+  filterOptions: { projects: [], workspaceStatuses: [] },
   repoIconsByRepoId: {}
 }
 

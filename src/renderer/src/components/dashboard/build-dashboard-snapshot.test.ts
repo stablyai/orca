@@ -89,6 +89,38 @@ function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapsho
 }
 
 describe('buildDashboardSnapshot', () => {
+  it('publishes project and workspace-status filters without agent cards', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        repos: [
+          { id: 'r1', path: '/r1', displayName: 'Repo One', badgeColor: '#000' },
+          { id: 'r2', path: '/r2', displayName: 'Repo Two', badgeColor: '#000' }
+        ],
+        worktreesByRepo: {
+          r1: [worktree()],
+          r2: [worktree('w2', 'wt-two')]
+        },
+        workspaceStatuses: [
+          { id: 'planned', label: 'Planned', color: 'neutral' },
+          { id: 'active', label: 'Active', color: 'blue' }
+        ]
+      } as unknown as Partial<DashboardSnapshotState>),
+      NOW
+    )
+
+    expect(snapshot.cards).toEqual([])
+    expect(snapshot.filterOptions).toEqual({
+      projects: [
+        { id: 'r1', label: 'Repo One' },
+        { id: 'r2', label: 'Repo Two' }
+      ],
+      workspaceStatuses: [
+        { id: 'planned', label: 'Planned', color: 'neutral' },
+        { id: 'active', label: 'Active', color: 'blue' }
+      ]
+    })
+  })
+
   it('maps a live working agent to the working bucket with a resolved ptyId', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({
@@ -255,7 +287,7 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].dotState).toBe('idle')
   })
 
-  it('folds retained done agents into the idle bucket, keeping a done dot', () => {
+  it('routes retained done agents to the done bucket', () => {
     const donePaneKey = makePaneKey(TAB_ID, GONE_LEAF_ID)
     const snapshot = buildDashboardSnapshot(
       baseState({
@@ -273,7 +305,77 @@ describe('buildDashboardSnapshot', () => {
     )
     const done = snapshot.cards.find((c) => c.dotState === 'done')
     expect(done).toBeDefined()
-    expect(done?.bucket).toBe('idle')
+    expect(done?.bucket).toBe('done')
+  })
+
+  it('includes collapsed subagents and workspace status metadata on the parent card', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        workspaceStatuses: [
+          { id: 'todo', label: 'Todo', color: 'neutral' },
+          { id: 'reviewing', label: 'Reviewing', color: 'emerald' }
+        ],
+        worktreesByRepo: {
+          r1: [{ ...worktree(), workspaceStatus: 'reviewing' }]
+        },
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({
+            subagents: [
+              {
+                id: 'child-1',
+                state: 'working',
+                startedAt: NOW - 1000,
+                description: 'Review loop'
+              }
+            ]
+          })
+        }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards).toHaveLength(1)
+    expect(snapshot.cards[0]).toMatchObject({
+      workspaceStatusId: 'reviewing',
+      workspaceStatusLabel: 'Reviewing',
+      workspaceStatusColor: 'emerald',
+      subagents: [{ name: 'Review loop', dotState: 'working' }]
+    })
+  })
+
+  it('skips card-only context for count snapshots', () => {
+    let linkedReviewReads = 0
+    const countWorktree = worktree()
+    Object.defineProperty(countWorktree, 'linkedPR', {
+      enumerable: true,
+      get: () => {
+        linkedReviewReads += 1
+        return null
+      }
+    })
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        worktreesByRepo: { r1: [countWorktree] },
+        agentStatusByPaneKey: { [PANE_KEY]: entry({}) }
+      }),
+      NOW,
+      { includeCardDetails: false, includeFilterOptions: false }
+    )
+
+    expect(snapshot.cards[0].workspaceStatusId).toBeUndefined()
+    expect(snapshot.cards[0].subagents).toBeUndefined()
+    expect(linkedReviewReads).toBe(0)
+  })
+
+  it('relays the idle-column setting in the serialized snapshot', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        settings: { experimentalAgentDashboardShowIdle: true } as never
+      }),
+      NOW
+    )
+
+    expect(snapshot.showIdle).toBe(true)
   })
 
   it('attaches batched runtime orchestration metadata to dashboard rows', () => {

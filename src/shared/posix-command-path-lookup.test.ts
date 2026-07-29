@@ -19,6 +19,7 @@ import { buildWslLoginShellCommand, escapeWslShCommandForWindows } from './wsl-l
 type ShellCase = {
   name: string
   path: string | null
+  args?: string[]
 }
 
 const isWindows = process.platform === 'win32'
@@ -27,7 +28,8 @@ let wslShAvailable: boolean | null = null
 const shellCases: ShellCase[] = [
   { name: 'sh', path: executablePath(['/bin/sh']) },
   { name: 'bash', path: executablePath(['/bin/bash', '/usr/bin/bash']) },
-  { name: 'zsh', path: executablePath(['/bin/zsh', '/usr/bin/zsh']) },
+  // Why: user zsh startup files can rewrite PATH and make this fixture nondeterministic.
+  { name: 'zsh', path: executablePath(['/bin/zsh', '/usr/bin/zsh']), args: ['-f'] },
   { name: 'dash', path: executablePath(['/bin/dash', '/usr/bin/dash']) }
 ]
 
@@ -47,7 +49,7 @@ describe('buildPosixCommandPathLookupScript', () => {
           `${commandName}`
         ].join('\n')
 
-        const resolved = execFileSync(shell.path!, ['-c', script], {
+        const resolved = execFileSync(shell.path!, [...(shell.args ?? []), '-c', script], {
           encoding: 'utf8',
           env: {
             ...process.env,

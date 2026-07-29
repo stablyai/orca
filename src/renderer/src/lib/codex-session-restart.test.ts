@@ -800,7 +800,9 @@ describe('markRestoredStaleCodexSessionsForRestart', () => {
     expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledWith({ ptyIds: ['pty-1'] })
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
       previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
+      nextAccountLabel: ACCOUNT_B,
+      previousAccountId: 'account-a',
+      nextAccountId: 'account-b'
     })
   })
 

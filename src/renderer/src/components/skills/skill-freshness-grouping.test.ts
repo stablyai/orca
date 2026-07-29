@@ -39,16 +39,64 @@ describe('groupSkillFreshness', () => {
     ])
   })
 
-  it('hides skills with nothing out of date (current, unrecognized-only, unreadable-only)', () => {
+  it('hides skills whose every copy is current', () => {
     const groups = groupSkillFreshness(
       [
         placement('orca-cli', { status: 'current' }),
+        placement('orca-cli', { status: 'current', topology: 'provider-alias' })
+      ],
+      []
+    )
+    expect(groups).toEqual([])
+  })
+
+  it('keeps a plugin-managed copy of a same-named skill out of the list', () => {
+    // Why: the vendor owns that copy, so it is not drift the user can act on —
+    // reporting it put permanent amber on any ordinary plugin install.
+    const groups = groupSkillFreshness(
+      [placement('dataviz', { status: 'unrecognized', topology: 'plugin-cache' })],
+      []
+    )
+    expect(groups).toEqual([])
+  })
+
+  it('lists a skill whose only fault cannot be fixed by the update, so Details explains it', () => {
+    // Why: these turn the setup-rail badge amber and its Details opens this list. Omitting
+    // them left that list headlined "all up to date" over nothing, contradicting the badge.
+    const groups = groupSkillFreshness(
+      [
         placement('dataviz', { status: 'unrecognized', topology: 'independent-copy' }),
         placement('linear-tickets', { status: 'inaccessible' })
       ],
       []
     )
-    expect(groups).toEqual([])
+    expect(groups).toEqual([
+      {
+        name: 'dataviz',
+        status: 'cannot-update',
+        locations: [
+          { id: expect.any(String), path: '/home/.agents/skills/dataviz', chip: 'unrecognized' }
+        ]
+      },
+      {
+        name: 'linear-tickets',
+        status: 'cannot-update',
+        locations: [
+          {
+            id: expect.any(String),
+            path: '/home/.agents/skills/linear-tickets',
+            chip: 'inaccessible'
+          }
+        ]
+      }
+    ])
+  })
+
+  it('lists an edited canonical copy, which is what an update would overwrite', () => {
+    const groups = groupSkillFreshness([placement('orchestration', { status: 'unrecognized' })], [])
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.status).toBe('cannot-update')
+    expect(groups[0]?.locations[0]?.chip).toBe('unrecognized')
   })
 
   it('groups a blocked skill and flags the culprit location, not the main copy', () => {

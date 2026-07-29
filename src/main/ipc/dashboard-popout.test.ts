@@ -144,6 +144,29 @@ describe('registerDashboardPopoutHandlers', () => {
     expect(sendToTrustedMock).toHaveBeenCalledWith('dashboard:snapshotRequested', null)
   })
 
+  it('replays the last repo icons when the cached snapshot omitted them', () => {
+    const popout = makeWindow(popoutSender)
+    getPopoutMock.mockReturnValue(popout)
+    const repoIconsByRepoId = { r1: { type: 'emoji', emoji: '🦑' } }
+    const publish = handlers.get('dashboard:publishSnapshot')!
+
+    publish({ sender: mainSender } as never, { ...SNAPSHOT, repoIconsByRepoId })
+    // A throttled republish drops the unchanged map — the popout on the wire
+    // still holds it, but one mounting now would have nothing to hold.
+    publish({ sender: mainSender } as never, { generatedAt: 2, cards: [] })
+    expect(popoutSender.send).toHaveBeenLastCalledWith('dashboard:snapshot', {
+      generatedAt: 2,
+      cards: []
+    })
+
+    handlers.get('dashboard:requestSnapshot')!({ sender: popoutSender } as never)
+    expect(popoutSender.send).toHaveBeenLastCalledWith('dashboard:snapshot', {
+      generatedAt: 2,
+      cards: [],
+      repoIconsByRepoId
+    })
+  })
+
   it('reports open state only to the trusted main renderer', () => {
     getPopoutMock.mockReturnValue(makeWindow(popoutSender))
     expect(handlers.get('dashboard:getPopoutOpen')!({ sender: untrustedSender } as never)).toBe(

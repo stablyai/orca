@@ -744,6 +744,47 @@ describe('staged background worktree creation', () => {
     expect(store.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 
+  // Why: activation no longer rebuilds a startup from `createdWithAgent`, so this
+  // caller's own `startup` is the only thing that launches the agent it created.
+  it('passes its own startup to activation when the create requested an agent', async () => {
+    store.activeView = 'terminal'
+    store.activePendingCreationId = 'creation-1'
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-1', repoId: 'repo-1' }
+    })
+    vi.mocked(activateAndRevealWorktree).mockReturnValueOnce({ primaryTabId: 'tab-1' })
+
+    const started = continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({
+        agent: 'codex',
+        startupPlan: {
+          agent: 'codex',
+          launchCommand: 'codex',
+          expectedProcess: 'codex',
+          followupPrompt: null,
+          launchConfig: { agent: 'codex', command: 'codex' },
+          draftPrompt: 'ship it'
+        } as never
+      })
+    )
+
+    expect(started).toBe(true)
+    await vi.waitFor(() =>
+      expect(activateAndRevealWorktree).toHaveBeenCalledWith(
+        'wt-1',
+        expect.objectContaining({
+          startup: expect.objectContaining({
+            command: 'codex',
+            launchAgent: 'codex',
+            draftPrompt: 'ship it'
+          })
+        })
+      )
+    )
+    expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
+  })
+
   it('toasts a staged create error after the user leaves the creation surface', async () => {
     store.activeView = 'tasks'
     store.createWorktree.mockRejectedValueOnce(new Error('create failed'))

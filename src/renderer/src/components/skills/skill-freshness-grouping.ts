@@ -1,4 +1,7 @@
-import type { SkillFreshnessInstallation } from '../../../../shared/skill-freshness'
+import {
+  isSkillCopyNeedingAttention,
+  type SkillFreshnessInstallation
+} from '../../../../shared/skill-freshness'
 
 export type SkillGroupStatus = 'update-available' | 'cannot-update'
 
@@ -57,10 +60,15 @@ export function locationChip(installation: SkillFreshnessInstallation): SkillLoc
 }
 
 /**
- * Groups installations by skill for the update modal and derives each skill's
- * update disposition. Only skills with an out-of-date official copy are returned —
- * up-to-date, unrecognized-only, and unreadable-only skills have nothing to change
- * here, so they are omitted entirely.
+ * Groups installations by skill for the review modal and derives each skill's
+ * update disposition. A skill appears when a copy is out of date, or when a copy is
+ * wrong in a way the update cannot fix — an edited copy, one Orca could not read.
+ *
+ * That second half is what the badge already reports: it turns amber and offers
+ * Details, and Details opens this modal. Returning only out-of-date skills left that
+ * modal saying every skill was up to date over an empty list, contradicting the badge
+ * that sent the user there. Skills where every copy is current are still omitted, as
+ * is a plugin's own copy of a same-named skill, which is not the user's to fix.
  *
  * `alwaysIncludeNames` overrides that filter. A successful update makes every
  * targeted skill current, which would otherwise drop its row the instant the
@@ -82,7 +90,10 @@ export function groupSkillFreshness(
   }
   const groups: SkillFreshnessGroupModel[] = []
   for (const [name, entries] of byName) {
-    if (!pinned.has(name) && !entries.some((entry) => entry.status === 'outdated')) {
+    if (
+      !pinned.has(name) &&
+      !entries.some((entry) => entry.status === 'outdated' || isSkillCopyNeedingAttention(entry))
+    ) {
       continue
     }
     const locations = entries

@@ -2585,6 +2585,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         'activeNudgeId' in s.updateStatus ? (s.updateStatus.activeNudgeId ?? null) : null
       // Why: persist dismissal so relaunch doesn't immediately re-show the same card until a newer release.
       void window.api.ui.set({ dismissedUpdateVersion }).catch(console.error)
+      // Why: main can't otherwise tell an offered update was abandoned, which keeps a local-build session pinned and stalls background checks.
+      void window.api.updater.dismissAvailableUpdate().catch(console.error)
       // Why: only consume the nudge campaign for cards from a nudge cycle, not ordinary dismissals.
       if (activeNudgeId) {
         void window.api.updater.dismissNudge().catch(console.error)

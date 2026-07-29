@@ -23,8 +23,11 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
-  // Why: gates generated tab titles in the cards' conversation names.
+  const hostedReviewCache = useAppStore((s) => s.hostedReviewCache)
+  const prCache = useAppStore((s) => s.prCache)
+  // Why: controls idle visibility and gates generated conversation names.
   const settings = useAppStore((s) => s.settings)
+  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   // Why: freshness can flip a bucket without any backing map changing; the epoch
   // ticks on the freshness boundary so the memo re-derives stale-decayed cards.
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
@@ -46,7 +49,10 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           ptyIdsByTabId,
           runtimePaneTitlesByTabId,
           acknowledgedAgentsByPaneKey,
-          settings
+          hostedReviewCache,
+          prCache,
+          settings,
+          workspaceStatuses
         },
         Date.now()
       ),
@@ -63,7 +69,10 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
       ptyIdsByTabId,
       runtimePaneTitlesByTabId,
       acknowledgedAgentsByPaneKey,
+      hostedReviewCache,
+      prCache,
       settings,
+      workspaceStatuses,
       agentStatusEpoch
     ]
   )

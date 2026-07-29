@@ -167,6 +167,14 @@ describe('getSkillFreshnessDisplayStatus', () => {
 })
 
 describe('hasSkillCopyNeedingAttention', () => {
+  it('raises no attention marker over a routine outdated copy the update converges', () => {
+    // Why: an out-of-date convergent copy is ordinary work for the update command.
+    // Amber on the review affordance there would cry wolf on every routine update.
+    expect(
+      hasSkillCopyNeedingAttention(inventory([placement('outdated')], [SKILL_NAME]), SKILL_NAME)
+    ).toBe(false)
+  })
+
   it('ignores a traversal bound but keeps a real scan fault', () => {
     expect(
       hasSkillCopyNeedingAttention(

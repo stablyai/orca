@@ -1,6 +1,6 @@
 import {
+  isSkillCopyNeedingAttention,
   isSkillScanIssueNeedingAttention,
-  SUPPORTED_GLOBAL_SKILL_TOPOLOGIES,
   type SkillFreshnessInventory
 } from '../../../shared/skill-freshness'
 
@@ -63,15 +63,6 @@ export function hasSkillCopyNeedingAttention(
   return (
     (placements.length > 0 &&
       Boolean(inventory?.scanIssues.some(isSkillScanIssueNeedingAttention))) ||
-    placements.some(
-      (installation) =>
-        installation.status !== 'current' &&
-        !(installation.status === 'unrecognized' && installation.topology === 'plugin-cache') &&
-        // Why: an out-of-date copy the command converges is ordinary work, not a problem.
-        !(
-          SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&
-          installation.status === 'outdated'
-        )
-    )
+    placements.some(isSkillCopyNeedingAttention)
   )
 }

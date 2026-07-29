@@ -186,6 +186,11 @@ async function scanCodexPanes(
 export async function markLiveCodexSessionsForRestart(args: {
   previousAccountLabel: string
   nextAccountLabel: string
+  /** Ids behind the labels. Two accounts can share a label, so without these the
+   *  store cannot tell a switch back to the launch account from a switch to a
+   *  different account that merely reads the same. */
+  previousAccountId?: string | null
+  nextAccountId?: string | null
   target?: CodexAccountSelectionTarget | null
   /** Set when the change cleared the selection rather than pointing it somewhere. */
   clearsEveryWslDistro?: boolean
@@ -208,7 +213,11 @@ export async function markLiveCodexSessionsForRestart(args: {
     liveCodexSessionPtyIds.map((ptyId) => ({
       ptyId,
       previousAccountLabel: args.previousAccountLabel,
-      nextAccountLabel: args.nextAccountLabel
+      nextAccountLabel: args.nextAccountLabel,
+      ...(args.previousAccountId === undefined
+        ? {}
+        : { previousAccountId: args.previousAccountId }),
+      ...(args.nextAccountId === undefined ? {} : { nextAccountId: args.nextAccountId })
     }))
   )
 }
@@ -249,28 +258,53 @@ export async function markRestoredStaleCodexSessionsForRestart(args?: {
   }
 
   const resolveAccountLabel = await createCodexAccountLabelResolver()
-  useAppStore.getState().markCodexRestartNotices(
+  const noticedPtyIds = useAppStore.getState().markCodexRestartNotices(
     stalePanes.map((pane) => ({
       ptyId: pane.ptyId,
       previousAccountLabel: resolveAccountLabel(pane.launchAccountId),
-      nextAccountLabel: resolveAccountLabel(pane.activeAccountId)
+      nextAccountLabel: resolveAccountLabel(pane.activeAccountId),
+      // Why the ids: main decided staleness by id, and the labels can collide.
+      // Passing only labels hands the store a question it cannot answer.
+      previousAccountId: pane.launchAccountId,
+      nextAccountId: pane.activeAccountId
     }))
   )
-  const notifiedPtyIds = new Set(stalePanes.map((pane) => pane.ptyId))
+  // Why not every stale pane: the bind sweep suppresses a "notified" pane for the
+  // rest of the session, so a pane whose notice the store dropped must not claim
+  // one — that trades a missing prompt for a permanently missing prompt.
+  const notifiedPtyIds = new Set(noticedPtyIds)
   return scans.map((scan) => (notifiedPtyIds.has(scan.ptyId) ? { ...scan, notified: true } : scan))
+}
+
+/**
+ * Names an account for the restart prompt.
+ *
+ * Why the collision check: one OpenAI login added under two ChatGPT workspaces
+ * gives both accounts the same email, and "switch from x@y to x@y" names
+ * neither. The workspace is appended only when it is what tells them apart.
+ */
+export function resolveCodexRestartPromptAccountLabel(
+  accounts: readonly { id: string; email: string; workspaceLabel?: string | null }[],
+  accountId: string | null | undefined
+): string {
+  if (accountId == null) {
+    return translate('auto.lib.codex.session.restart.4bd4a3a9c7', 'System default')
+  }
+  const account = accounts.find((entry) => entry.id === accountId)
+  if (!account) {
+    return translate('auto.lib.codex.session.restart.9f0b1c2d3e', 'Codex account')
+  }
+  const sharesEmail = accounts.some(
+    (entry) => entry.id !== account.id && entry.email === account.email
+  )
+  return sharesEmail && account.workspaceLabel
+    ? `${account.email} (${account.workspaceLabel})`
+    : account.email
 }
 
 async function createCodexAccountLabelResolver(): Promise<(accountId: string | null) => string> {
   // Why: a failed roster read still yields usable prompts — the account ids are
   // already known, only their friendly emails are missing.
   const accounts = await window.api.codexAccounts.list().catch(() => null)
-  return (accountId) => {
-    if (accountId == null) {
-      return translate('auto.lib.codex.session.restart.4bd4a3a9c7', 'System default')
-    }
-    return (
-      accounts?.accounts.find((account) => account.id === accountId)?.email ??
-      translate('auto.lib.codex.session.restart.9f0b1c2d3e', 'Codex account')
-    )
-  }
+  return (accountId) => resolveCodexRestartPromptAccountLabel(accounts?.accounts ?? [], accountId)
 }

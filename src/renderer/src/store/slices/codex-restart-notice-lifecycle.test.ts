@@ -111,6 +111,22 @@ describe('codex restart notice lifecycle', () => {
     expect(useAppStore.getState().codexRestartNoticeByPtyId).toBe(before)
   })
 
+  it('reports which panes are left holding a notice', () => {
+    expect(
+      useAppStore
+        .getState()
+        .markCodexRestartNotices([{ ptyId: 'pty-1', previousAccountLabel: A, nextAccountLabel: B }])
+    ).toEqual(['pty-1'])
+
+    // Why the caller needs this: the startup sweep suppresses a pane for the
+    // rest of the session once it is told a prompt went up.
+    expect(
+      useAppStore
+        .getState()
+        .markCodexRestartNotices([{ ptyId: 'pty-1', previousAccountLabel: B, nextAccountLabel: A }])
+    ).toEqual([])
+  })
+
   it('still deletes the record when the pane actually restarts', () => {
     switchAccount('pty-1', A, B)
 
@@ -123,6 +139,66 @@ describe('codex restart notice lifecycle', () => {
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
       previousAccountLabel: B,
       nextAccountLabel: A
+    })
+  })
+})
+
+// Why: doAddAccount has no duplicate-email check, so one OpenAI login used in
+// two ChatGPT workspaces gives two accounts the same label — as does a failed
+// roster read, which collapses every account to 'Codex account'.
+describe('codex restart notices with colliding account labels', () => {
+  const SHARED = 'shared@example.com'
+
+  function switchAccountById(ptyId: string, from: string | null, to: string | null): void {
+    useAppStore.getState().markCodexRestartNotices([
+      {
+        ptyId,
+        previousAccountLabel: SHARED,
+        nextAccountLabel: SHARED,
+        previousAccountId: from,
+        nextAccountId: to
+      }
+    ])
+  }
+
+  it('raises the prompt for two different accounts that read the same', () => {
+    switchAccountById('pty-1', 'account-a', 'account-b')
+
+    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
+      previousAccountLabel: SHARED,
+      nextAccountLabel: SHARED,
+      previousAccountId: 'account-a',
+      nextAccountId: 'account-b'
+    })
+  })
+
+  it('still collapses A -> B -> A when the ids match', () => {
+    switchAccountById('pty-1', 'account-a', 'account-b')
+    switchAccountById('pty-1', 'account-b', 'account-a')
+
+    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toBeUndefined()
+  })
+
+  it('collapses back to the system default the pane launched under', () => {
+    switchAccountById('pty-1', null, 'account-b')
+    switchAccountById('pty-1', 'account-b', null)
+
+    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toBeUndefined()
+  })
+
+  it('re-asks a dismissed pane when a same-labelled third account is selected', () => {
+    switchAccountById('pty-1', 'account-a', 'account-b')
+    useAppStore.getState().dismissCodexRestartNotices(['pty-1'])
+
+    switchAccountById('pty-1', 'account-b', 'account-c')
+
+    // Why: carrying the dismissal on the shared label would strand the pane on
+    // account-a with its prompt answered for an account it never moved to.
+    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
+      previousAccountLabel: SHARED,
+      nextAccountLabel: SHARED,
+      previousAccountId: 'account-a',
+      nextAccountId: 'account-c'
     })
   })
 })

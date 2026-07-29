@@ -770,6 +770,12 @@
       },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."
+      },
+      "useMacosTccPromptNotice": {
+        "title": "Reduce los avisos repetidos de acceso a archivos de macOS",
+        "description": "macOS atribuye a Orca el acceso a archivos realizado por tus agentes y herramientas de terminal. Conceder acceso total al disco reduce estos avisos.",
+        "openSettings": "Abrir ajustes",
+        "dismiss": "No volver a mostrar"
       }
     },
     "components": {
@@ -5621,7 +5627,7 @@
           "e7bb06007c": "LAN",
           "4a73f5217a": "Apple Events para scripts que controlan otras apps locales.",
           "e119f0d66b": "Automatización",
-          "7ca17b62c8": "Recomendado cuando proyectos, worktrees o archivos symlinked tocan carpetas protegidas de macOS.",
+          "7ca17b62c8": "Cuando los agentes que ejecuta Orca leen datos de otras apps, macOS muestra el nombre de Orca porque es el proceso responsable de los comandos de terminal. Concede este permiso a Orca y Orca Helper para reducir esos avisos. Después, cierra Orca, finaliza cualquier proceso de Orca Helper que siga en ejecución y vuelve a abrir Orca.",
           "c566bca278": "Acceso total al disco",
           "9f35980756": "Herramientas de inyección de teclas, control de ventanas y automatización de UI.",
           "5b2f22ca2d": "Accesibilidad",
@@ -5675,7 +5681,7 @@
           "agentDashboard": {
             "title": "Panel de agentes",
             "description": "Tablero Kanban para monitorear agentes en diferentes worktrees, en ventana o como ventana emergente.",
-            "copy": "Agrega una entrada del Panel de agentes a la barra lateral izquierda. Ábrelo para monitorear agentes en atención, trabajando y en pausa, y saltar a sus terminales en vivo.",
+            "copy": "Agrega una entrada del Panel de agentes a la barra lateral izquierda. Monitorea agentes que requieren tu atención, están trabajando o han terminado, con agentes inactivos opcionales.",
             "toggleLabel": "Alternar Panel de agentes",
             "modeLabel": "Abrir como",
             "modeCopy": "Muestra el tablero como un panel en ventana junto a la barra lateral o como una ventana emergente separada.",
@@ -14254,7 +14260,8 @@
       "attention": "Needs You",
       "working": "Working",
       "idle": "Idle",
-      "empty": "None"
+      "empty": "None",
+      "done": "Finalizado"
     },
     "title": "Agents",
     "total": "{{count}} total",
@@ -14265,7 +14272,15 @@
         "minutes": "{{count}} min",
         "hours": "{{count}} h",
         "days": "{{count}} d"
-      }
+      },
+      "review": {
+        "open": "Revisión abierta",
+        "draft": "Revisión en borrador",
+        "merged": "Revisión fusionada",
+        "closed": "Revisión cerrada"
+      },
+      "subagents_one": "{{count}} subagente",
+      "subagents_other": "{{count}} subagentes"
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",
@@ -14273,8 +14288,36 @@
       "close": "Close"
     },
     "close": "Close dashboard",
-    "settings": "Configuración del Panel de agentes",
-    "settingsTooltip": "Configuración del tablero"
+    "settingsTooltip": "Configuración del tablero",
+    "filters": {
+      "remove": "Eliminar filtro {{label}}",
+      "active": "Filtros",
+      "clear": "Limpiar",
+      "review": {
+        "open": "Abierta",
+        "draft": "Borrador",
+        "merged": "Fusionada",
+        "closed": "Cerrada",
+        "none": "Sin revisión"
+      },
+      "reviewChip": "Revisión: {{state}}",
+      "label": "Filtrar",
+      "project": "Proyecto",
+      "workspaceStatus": "Estado del espacio de trabajo",
+      "reviewStatus": "Estado de PR / MR",
+      "clearAll": "Limpiar todos los filtros"
+    },
+    "search": {
+      "placeholder": "Buscar worktree, proyecto o agente…",
+      "label": "Buscar agentes",
+      "clear": "Borrar búsqueda",
+      "results": "{{shown}} de {{total}} mostrados"
+    },
+    "settingsLabel": "Configuración del Panel de agentes",
+    "settings": {
+      "showIdle": "Mostrar agentes inactivos",
+      "showIdleCopy": "Incluye agentes que han permanecido inactivos durante 30 minutos sin informar que finalizaron. Ocultos de forma predeterminada."
+    }
   },
   "dashboard": {
     "sidebar": {
@@ -14302,6 +14345,22 @@
       "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
+    }
+  },
+  "runtimeRpc": {
+    "startupFailure": {
+      "unknownCause": "No additional error details were available.",
+      "continueButton": "Continue without CLI",
+      "title": "Orca CLI unavailable",
+      "message": "Orca couldn't start its local command transport.",
+      "detail": "Orca will continue to work, but commands such as orca status, orca terminal, and orchestration are unavailable for this session.\n\n{{guidance}}\n\nCause: {{cause}}",
+      "guidance": {
+        "permissionDenied": "Orca couldn't write its runtime file. Check permissions on Orca's data folder, then restart.",
+        "storageUnavailable": "Your disk may be full or read-only. Free up space, then restart Orca.",
+        "invalidPath": "Orca's data folder may be missing, moved, or at a path that is too long. Restore it or use a shorter path, then restart Orca.",
+        "addressInUse": "Another process may be holding the port. Restart Orca to try again.",
+        "unknown": "Restart Orca to try again."
+      }
     }
   }
 }

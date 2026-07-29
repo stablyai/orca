@@ -20,13 +20,24 @@ const SNAPSHOT = {
       leafId: 'leaf-1',
       repoName: 'Orca',
       worktreeName: 'Dashboard',
+      workspaceStatusId: 'in-review',
+      workspaceStatusLabel: 'In review',
+      workspaceStatusColor: 'emerald',
+      hasReview: true,
+      review: { number: 11012, state: 'open' },
+      subagents: [{ id: 'child-1', name: 'Review loop', dotState: 'working' }],
       startedAt: 1_699_999_000_000,
       finishedAt: null,
       stateChangedAt: 1_699_999_500_000,
       unseen: true,
       askSummary: '{"question":"Proceed?"}'
     }
-  ]
+  ],
+  showIdle: false,
+  filterOptions: {
+    projects: [{ id: 'repo-1', label: 'Orca' }],
+    workspaceStatuses: [{ id: 'in-review', label: 'In review', color: 'emerald' }]
+  }
 } satisfies DashboardSnapshot
 
 describe('dashboard payload validation', () => {
@@ -46,6 +57,18 @@ describe('dashboard payload validation', () => {
       isDashboardSnapshot({
         ...SNAPSHOT,
         cards: [{ ...SNAPSHOT.cards[0], lastAgentMessage: 'x'.repeat(8_001) }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], review: { number: 0, state: 'open' } }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], subagents: [{ id: '', name: 'bad', dotState: 'idle' }] }]
       })
     ).toBe(false)
   })
@@ -83,6 +106,29 @@ describe('dashboard payload validation', () => {
       })
     ).toBe(false)
     expect(isDashboardSnapshot({ ...SNAPSHOT, repoIconsByRepoId: [] })).toBe(false)
+  })
+
+  it('accepts bounded filter options independently of cards', () => {
+    expect(isDashboardSnapshot({ ...SNAPSHOT, cards: [] })).toBe(true)
+    expect(isDashboardSnapshot({ ...SNAPSHOT, filterOptions: undefined })).toBe(true)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        filterOptions: {
+          ...SNAPSHOT.filterOptions,
+          projects: [{ id: '', label: 'Invalid' }]
+        }
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        filterOptions: {
+          ...SNAPSHOT.filterOptions,
+          workspaceStatuses: [{ id: 'todo', label: 'x'.repeat(1_025) }]
+        }
+      })
+    ).toBe(false)
   })
 
   it('bounds the conversation name', () => {

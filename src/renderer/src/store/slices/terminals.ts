@@ -37,6 +37,7 @@ import {
 } from '../../../../shared/stable-pane-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { buildByIdIndex, buildWorktreeByIdIndex } from './worktree-by-id-index'
+import { isSameCodexRestartNoticeAccount } from './codex-restart-notice-account-identity'
 import {
   getRepoIdFromWorktreeId,
   splitWorktreeIdForFilesystem
@@ -512,9 +513,14 @@ export type AutomaticAgentResumeClaim = {
 export type CodexRestartNotice = {
   previousAccountLabel: string
   nextAccountLabel: string
+  /** Ids behind the two labels, when the caller knows them (`null` is the system
+   *  default). Two accounts can share a label, so only these can decide whether
+   *  a re-mark actually points back at the account the pane launched under. */
+  previousAccountId?: string | null
+  nextAccountId?: string | null
   /** Set once the user asks for the restart. The record outlives the prompt
-   *  because `previousAccountLabel` is the only memory of the account this pane
-   *  actually launched under, which drives the A -> B -> A collapse. */
+   *  because the previous-account fields are the only memory of the account this
+   *  pane actually launched under, which drives the A -> B -> A collapse. */
   restartRequested?: true
   /** Set when the user answers "Keep old account". Same reason the record has to
    *  survive: deleting it erased the launch account, so re-selecting it looked
@@ -714,9 +720,14 @@ export type TerminalSlice = {
   isPtyShutdownPending: (ptyId: string) => boolean
   queueCodexPaneRestarts: (ptyIds: string[]) => void
   consumePendingCodexPaneRestart: (ptyId: string) => boolean
+  /** Returns the ptyIds left holding a notice, so callers can tell a raised
+   *  prompt from one the A -> B -> A collapse dropped. */
   markCodexRestartNotices: (
-    notices: { ptyId: string; previousAccountLabel: string; nextAccountLabel: string }[]
-  ) => void
+    notices: (Pick<CodexRestartNotice, 'previousAccountLabel' | 'nextAccountLabel'> &
+      Partial<Pick<CodexRestartNotice, 'previousAccountId' | 'nextAccountId'>> & {
+        ptyId: string
+      })[]
+  ) => string[]
   clearCodexRestartNotice: (ptyId: string) => void
   dismissCodexRestartNotices: (ptyIds: string[]) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
@@ -3359,25 +3370,39 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   markCodexRestartNotices: (notices) => {
     if (notices.length === 0) {
-      return
+      return []
     }
+    const noticedPtyIds: string[] = []
     set((s) => {
       const next = { ...s.codexRestartNoticeByPtyId }
       const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
       for (const notice of notices) {
         const existing = next[notice.ptyId]
-        const previousAccountLabel = existing?.previousAccountLabel ?? notice.previousAccountLabel
+        // Why one record rather than two lookups: the label and the id of the
+        // launch account have to come from the same source, or they can end up
+        // describing two different accounts.
+        const launch = existing ?? notice
+        const target = { id: notice.nextAccountId, label: notice.nextAccountLabel }
 
         // Why: a live Codex pane keeps its original launch account until it actually restarts, so A -> B -> A must not leave a stale restart notice.
-        if (previousAccountLabel === notice.nextAccountLabel) {
+        if (
+          isSameCodexRestartNoticeAccount(
+            { id: launch.previousAccountId, label: launch.previousAccountLabel },
+            target
+          )
+        ) {
           delete next[notice.ptyId]
           delete nextPendingCodexPaneRestartIds[notice.ptyId]
           continue
         }
 
         next[notice.ptyId] = {
-          previousAccountLabel,
+          previousAccountLabel: launch.previousAccountLabel,
           nextAccountLabel: notice.nextAccountLabel,
+          ...(launch.previousAccountId === undefined
+            ? {}
+            : { previousAccountId: launch.previousAccountId }),
+          ...(notice.nextAccountId === undefined ? {} : { nextAccountId: notice.nextAccountId }),
           // Why: a queued restart relaunches under whatever account is selected
           // when it runs, so a later switch does not reopen an answered prompt.
           ...(existing?.restartRequested ? { restartRequested: true as const } : {}),
@@ -3386,16 +3411,22 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           // so a later C reopens the prompt while adding an account or
           // reauthenticating the active one (both re-mark live panes with the
           // selection unchanged) must not resurrect it and re-mute the pane.
-          ...(existing?.dismissed && existing.nextAccountLabel === notice.nextAccountLabel
+          ...(existing?.dismissed &&
+          isSameCodexRestartNoticeAccount(
+            { id: existing.nextAccountId, label: existing.nextAccountLabel },
+            target
+          )
             ? { dismissed: true as const }
             : {})
         }
+        noticedPtyIds.push(notice.ptyId)
       }
       return {
         codexRestartNoticeByPtyId: next,
         pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds
       }
     })
+    return noticedPtyIds
   },
 
   clearCodexRestartNotice: (ptyId) => {

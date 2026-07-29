@@ -154,7 +154,7 @@ export function buildDirectWorkItemStartupOpts(
 export async function markDirectWorkItemAgentTrusted(args: {
   agent: TuiAgent | null
   workspacePath: string
-  connectionId?: string
+  connectionId?: string | null
 }): Promise<void> {
   if (!args.agent || !args.workspacePath || !window.api.agentTrust?.markTrusted) {
     return

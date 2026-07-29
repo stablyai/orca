@@ -104,6 +104,9 @@ export function VaultSessionRow({
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
         codexHome: session.codexHome,
+        // Why: always sent (null when absent) so drop targets can tell "no cwd"
+        // from "payload predates the repin field".
+        sessionCwd: session.cwd ?? null,
         ...(resumeStartup.env ? { env: resumeStartup.env } : {}),
         ...(resumeStartup.envToDelete ? { envToDelete: resumeStartup.envToDelete } : {}),
         ...(resumeStartup.launchConfig ? { launchConfig: resumeStartup.launchConfig } : {}),

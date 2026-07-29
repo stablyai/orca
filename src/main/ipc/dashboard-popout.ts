@@ -70,7 +70,14 @@ export function registerDashboardPopoutHandlers(
     ) {
       return
     }
-    lastSnapshot = snapshot
+    // The renderer omits repoIconsByRepoId once it is unchanged, so carry the
+    // last map into the cache — a popout mounting mid-session is replayed this
+    // and has no icons of its own to retain. The live popout does, so what is
+    // forwarded stays as slim as the renderer sent it.
+    lastSnapshot =
+      snapshot.repoIconsByRepoId === undefined && lastSnapshot?.repoIconsByRepoId
+        ? { ...snapshot, repoIconsByRepoId: lastSnapshot.repoIconsByRepoId }
+        : snapshot
     getDashboardPopoutWindow()?.webContents.send('dashboard:snapshot', snapshot)
   })
 

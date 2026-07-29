@@ -770,6 +770,12 @@
       },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "粘贴内容过大。"
+      },
+      "useMacosTccPromptNotice": {
+        "title": "减少重复出现的 macOS 文件访问权限提示",
+        "description": "macOS 会将代理和终端工具的文件访问归因于 Orca。授予“完全磁盘访问权限”可减少此类提示。",
+        "openSettings": "打开设置",
+        "dismiss": "不再显示"
       }
     },
     "components": {
@@ -5606,8 +5612,8 @@
           "e7bb06007c": "局域网",
           "4a73f5217a": "用于控制其他本地应用程序的脚本的 Apple 事件。",
           "e119f0d66b": "自动化",
-          "7ca17b62c8": "当项目、worktree 或符号链接文件会访问 macOS 受保护文件夹时推荐启用。",
-          "c566bca278": "全磁盘访问",
+          "7ca17b62c8": "当 Orca 运行的代理读取其他应用的数据时，macOS 会显示 Orca，因为 Orca 是执行终端命令的进程。请为 Orca 和 Orca Helper 授予此权限，以减少此类提示。然后退出 Orca，结束所有仍在运行的 Orca Helper 进程，再重新打开 Orca。",
+          "c566bca278": "完全磁盘访问权限",
           "9f35980756": "击键注入、窗口控制和 UI 自动化工具。",
           "5b2f22ca2d": "无障碍",
           "0639db5496": "屏幕截图、视觉自动化和 UI 检查工具。",
@@ -5660,7 +5666,7 @@
           "agentDashboard": {
             "title": "智能体仪表盘",
             "description": "用于监控跨工作树的智能体的看板，支持窗口内或弹出窗口显示。",
-            "copy": "在左侧边栏添加智能体仪表盘入口。打开它可以监控关注中、工作中和空闲的智能体，并跳转到其实时终端。",
+            "copy": "在左侧边栏添加智能体仪表盘入口。监控需要你处理、正在工作或已完成的智能体，并可选择显示空闲智能体。",
             "toggleLabel": "切换智能体仪表盘",
             "modeLabel": "打开方式",
             "modeCopy": "将仪表盘显示为侧边栏旁的窗口内看板，或单独的弹出窗口。",
@@ -14254,7 +14260,8 @@
       "attention": "Needs You",
       "working": "Working",
       "idle": "Idle",
-      "empty": "None"
+      "empty": "None",
+      "done": "已完成"
     },
     "title": "Agents",
     "total": "{{count}} total",
@@ -14265,7 +14272,15 @@
         "minutes": "{{count}} 分钟",
         "hours": "{{count}} 小时",
         "days": "{{count}} 天"
-      }
+      },
+      "review": {
+        "open": "开放的评审",
+        "draft": "草稿评审",
+        "merged": "已合并的评审",
+        "closed": "已关闭的评审"
+      },
+      "subagents_one": "{{count}} 个子代理",
+      "subagents_other": "{{count}} 个子代理"
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",
@@ -14273,8 +14288,36 @@
       "close": "Close"
     },
     "close": "Close dashboard",
-    "settings": "智能体仪表盘设置",
-    "settingsTooltip": "看板设置"
+    "settingsTooltip": "看板设置",
+    "filters": {
+      "remove": "移除 {{label}} 筛选条件",
+      "active": "筛选条件",
+      "clear": "清除",
+      "review": {
+        "open": "开放",
+        "draft": "草稿",
+        "merged": "已合并",
+        "closed": "已关闭",
+        "none": "无评审"
+      },
+      "reviewChip": "评审：{{state}}",
+      "label": "筛选",
+      "project": "项目",
+      "workspaceStatus": "工作区状态",
+      "reviewStatus": "PR / MR 状态",
+      "clearAll": "清除所有筛选条件"
+    },
+    "search": {
+      "placeholder": "搜索工作树、项目或智能体…",
+      "label": "搜索智能体",
+      "clear": "清除搜索",
+      "results": "显示 {{shown}} / {{total}}"
+    },
+    "settingsLabel": "智能体仪表盘设置",
+    "settings": {
+      "showIdle": "显示空闲智能体",
+      "showIdleCopy": "包括已安静 30 分钟且未报告完成的智能体。默认隐藏。"
+    }
   },
   "dashboard": {
     "sidebar": {
@@ -14302,6 +14345,22 @@
       "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
+    }
+  },
+  "runtimeRpc": {
+    "startupFailure": {
+      "unknownCause": "No additional error details were available.",
+      "continueButton": "Continue without CLI",
+      "title": "Orca CLI unavailable",
+      "message": "Orca couldn't start its local command transport.",
+      "detail": "Orca will continue to work, but commands such as orca status, orca terminal, and orchestration are unavailable for this session.\n\n{{guidance}}\n\nCause: {{cause}}",
+      "guidance": {
+        "permissionDenied": "Orca couldn't write its runtime file. Check permissions on Orca's data folder, then restart.",
+        "storageUnavailable": "Your disk may be full or read-only. Free up space, then restart Orca.",
+        "invalidPath": "Orca's data folder may be missing, moved, or at a path that is too long. Restore it or use a shorter path, then restart Orca.",
+        "addressInUse": "Another process may be holding the port. Restart Orca to try again.",
+        "unknown": "Restart Orca to try again."
+      }
     }
   }
 }
