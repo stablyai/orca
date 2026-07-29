@@ -118,6 +118,7 @@ export function registerCoreHandlers(
   claudeAccounts: ClaudeAccountService,
   rateLimits: RateLimitService,
   mainWindowWebContentsId: number | null = null,
+  osFileOpenRequests: OsFileOpenRequestQueue,
   automations?: AutomationService,
   commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers,
   agentAwakeService?: AgentAwakeService,
@@ -125,8 +126,7 @@ export function registerCoreHandlers(
   keybindings?: KeybindingService,
   lifecycleOptions: CoreHandlerLifecycleOptions = {},
   pluginService?: PluginService,
-  marketplaceServices?: PluginMarketplaceHandlerServices,
-  osFileOpenRequests?: OsFileOpenRequestQueue
+  marketplaceServices?: PluginMarketplaceHandlerServices
 ): void {
   // Why: on macOS the app can stay alive after all windows close, then
   // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
@@ -201,9 +201,7 @@ export function registerCoreHandlers(
   })
   registerBrowserHandlers()
   registerShellHandlers(store)
-  if (osFileOpenRequests) {
-    registerOsFileOpenHandlers(osFileOpenRequests)
-  }
+  registerOsFileOpenHandlers(osFileOpenRequests)
   registerPetHandlers()
   registerSessionHandlers(store)
   registerUIHandlers(store)

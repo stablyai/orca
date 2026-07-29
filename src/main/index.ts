@@ -1319,6 +1319,7 @@ function openMainWindow(): BrowserWindow {
     claudeAccounts,
     rateLimits,
     rendererWebContentsId,
+    osFileOpenRequests,
     automations,
     {
       prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
@@ -1349,8 +1350,7 @@ function openMainWindow(): BrowserWindow {
     pluginService ?? undefined,
     pluginMarketplaceService && pluginMarketplaceInstaller
       ? { marketplace: pluginMarketplaceService, installer: pluginMarketplaceInstaller }
-      : undefined,
-    osFileOpenRequests
+      : undefined
   )
   automations.setWebContents(window.webContents)
   automations.start()

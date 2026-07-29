@@ -64,7 +64,8 @@ const {
   registerLocalhostWorktreeLabelHandlersMock,
   registerNativeChatHandlersMock,
   registerEmulatorFrameStreamHandlersMock,
-  registerEmulatorVideoStreamHandlersMock
+  registerEmulatorVideoStreamHandlersMock,
+  registerOsFileOpenHandlersMock
 } = vi.hoisted(() => ({
   getPathMock: vi.fn(() => '/test/user-data'),
   listEnvironmentsMock: vi.fn(() => []),
@@ -129,7 +130,8 @@ const {
   registerLocalhostWorktreeLabelHandlersMock: vi.fn(),
   registerNativeChatHandlersMock: vi.fn(),
   registerEmulatorFrameStreamHandlersMock: vi.fn(),
-  registerEmulatorVideoStreamHandlersMock: vi.fn()
+  registerEmulatorVideoStreamHandlersMock: vi.fn(),
+  registerOsFileOpenHandlersMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -378,6 +380,10 @@ vi.mock('./native-chat', () => ({
   registerNativeChatHandlers: registerNativeChatHandlersMock
 }))
 
+vi.mock('./os-file-open', () => ({
+  registerOsFileOpenHandlers: registerOsFileOpenHandlersMock
+}))
+
 import { registerCoreHandlers } from './register-core-handlers'
 
 describe('registerCoreHandlers', () => {
@@ -445,6 +451,7 @@ describe('registerCoreHandlers', () => {
     registerNativeChatHandlersMock.mockReset()
     registerEmulatorFrameStreamHandlersMock.mockReset()
     registerEmulatorVideoStreamHandlersMock.mockReset()
+    registerOsFileOpenHandlersMock.mockReset()
   })
 
   it('passes the store through to handler registrars that need it', async () => {
@@ -458,6 +465,7 @@ describe('registerCoreHandlers', () => {
     const claudeAccounts = { marker: 'claudeAccounts' }
     const rateLimits = { marker: 'rateLimits' }
     const agentAwakeService = { marker: 'agentAwakeService' }
+    const osFileOpenRequests = { marker: 'osFileOpenRequests' }
     const onBeforeRelaunch = vi.fn()
     const getAdditionalAiVaultCodexHomePaths = vi.fn(() => ['/runtime/codex/home'])
 
@@ -472,6 +480,7 @@ describe('registerCoreHandlers', () => {
       claudeAccounts as never,
       rateLimits as never,
       null,
+      osFileOpenRequests as never,
       undefined,
       undefined,
       agentAwakeService as never,
@@ -549,6 +558,7 @@ describe('registerCoreHandlers', () => {
     expect(registerCliHandlersMock).toHaveBeenCalled()
     expect(registerPreflightHandlersMock).toHaveBeenCalled()
     expect(registerShellHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerOsFileOpenHandlersMock).toHaveBeenCalledWith(osFileOpenRequests)
     expect(registerClipboardHandlersMock).toHaveBeenCalledWith(store)
     expect(registerUpdaterHandlersMock).toHaveBeenCalled()
     expect(setTrustedBrowserRendererWebContentsIdMock).toHaveBeenCalledWith(null)
@@ -625,6 +635,7 @@ describe('registerCoreHandlers', () => {
     const codexAccounts2 = { marker: 'codexAccounts2' }
     const claudeAccounts2 = { marker: 'claudeAccounts2' }
     const rateLimits2 = { marker: 'rateLimits2' }
+    const osFileOpenRequests2 = { marker: 'osFileOpenRequests2' }
 
     registerCoreHandlers(
       store2 as never,
@@ -636,7 +647,8 @@ describe('registerCoreHandlers', () => {
       codexAccounts2 as never,
       claudeAccounts2 as never,
       rateLimits2 as never,
-      42
+      42,
+      osFileOpenRequests2 as never
     )
 
     // Web contents ID should always be updated
@@ -650,5 +662,6 @@ describe('registerCoreHandlers', () => {
     // Why: ipcMain.handle throws on duplicate channel registration, so the
     // memory handler must not be wired up a second time on reactivation.
     expect(registerMemoryHandlersMock).not.toHaveBeenCalled()
+    expect(registerOsFileOpenHandlersMock).not.toHaveBeenCalled()
   })
 })
