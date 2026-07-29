@@ -11,6 +11,7 @@ import type {
   BrowserConsoleResult,
   BrowserCookieDeleteResult,
   BrowserCookieGetResult,
+  BrowserCookieImportFromFileResult,
   BrowserCookieSetResult,
   BrowserDetectProfilesResult,
   BrowserDragResult,
@@ -62,6 +63,7 @@ import { browserSessionRegistry } from '../browser/browser-session-registry'
 import {
   detectInstalledBrowsers,
   importCookiesFromBrowser,
+  importCookiesFromFile,
   selectBrowserProfile
 } from '../browser/browser-cookie-import'
 import { waitForTabRegistration, waitForWorktreeTabRegistration } from '../ipc/browser'
@@ -809,6 +811,35 @@ export class RuntimeBrowserCommands {
       target.worktreeId,
       target.browserPageId
     )
+  }
+
+  // Why: bulk file import writes into a persist partition so cookies survive restart (unlike per-cookie CDP set).
+  async browserCookieImport(params: {
+    file: string
+    profileId?: string
+  }): Promise<BrowserCookieImportFromFileResult> {
+    const profileId =
+      typeof params.profileId === 'string' && params.profileId.length > 0
+        ? params.profileId
+        : 'default'
+    // Why: 'default' is synthetic; same fallback as browserTabSetProfile.
+    const profile =
+      browserSessionRegistry.getProfile(profileId) ??
+      (profileId === 'default' ? browserSessionRegistry.getDefaultProfile() : null)
+    if (!profile) {
+      return { ok: false, reason: `Session profile not found: ${profileId}` }
+    }
+
+    const result = await importCookiesFromFile(params.file, profile.partition)
+    if (!result.ok) {
+      return result
+    }
+
+    browserSessionRegistry.updateProfileSource(profile.id, {
+      browserFamily: 'manual',
+      importedAt: Date.now()
+    })
+    return { ...result, profileId: profile.id }
   }
 
   // ── Viewport ──

@@ -1,6 +1,8 @@
+import { isAbsolute, resolve } from 'node:path'
 import type {
   BrowserCookieDeleteResult,
   BrowserCookieGetResult,
+  BrowserCookieImportFromFileResult,
   BrowserCookieSetResult
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
@@ -85,5 +87,32 @@ export const BROWSER_COOKIE_HANDLERS: Record<string, CommandHandler> = {
     Object.assign(params, await getBrowserCommandTarget(flags, cwd, client))
     const result = await client.call<BrowserCookieDeleteResult>('browser.cookie.delete', params)
     printResult(result, json, () => `Cookie "${name}" deleted`)
+  },
+  // Why: bulk import targets a session profile partition so cookies persist; one-shot CDP set does not.
+  'cookie import': async ({ flags, client, cwd, json }) => {
+    const fileFlag = getRequiredStringFlag(flags, 'file')
+    const file = isAbsolute(fileFlag) ? fileFlag : resolve(cwd, fileFlag)
+    const profileId = getOptionalStringFlag(flags, 'profile')
+    const params: { file: string; profileId?: string } = { file }
+    if (profileId) {
+      params.profileId = profileId
+    }
+    const result = await client.call<BrowserCookieImportFromFileResult>(
+      'browser.cookie.import',
+      params
+    )
+    if (!result.result.ok) {
+      throw new RuntimeClientError('invalid_argument', result.result.reason)
+    }
+    printResult(result, json, (value) => {
+      if (!value.ok) {
+        return value.reason
+      }
+      const summary = value.summary
+      const domainPart =
+        summary.domains.length > 0 ? ` across ${summary.domains.length} domain(s)` : ''
+      const skipPart = summary.skippedCookies > 0 ? ` (${summary.skippedCookies} skipped)` : ''
+      return `Imported ${summary.importedCookies}/${summary.totalCookies} cookies${domainPart} into profile ${value.profileId}${skipPart}`
+    })
   }
 }

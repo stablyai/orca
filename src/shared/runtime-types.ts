@@ -1092,6 +1092,9 @@ export type BrowserCookieDeleteResult = {
   deleted: boolean
 }
 
+/** Bulk cookie file import into a browser session profile partition. */
+export type BrowserCookieImportFromFileResult = BrowserCookieImportResult
+
 // ── Viewport emulation types ──
 
 export type BrowserViewportResult = {

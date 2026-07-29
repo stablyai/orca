@@ -439,6 +439,59 @@ type RawCookieEntry = {
   expirationDate?: unknown
 }
 
+export type CookieImportPayloadParseResult =
+  | { ok: true; entries: unknown[]; total: number }
+  | { ok: false; reason: string }
+
+// Why: EditThisCookie exports a bare array; Playwright storage_state wraps cookies under { cookies }.
+export function parseCookieImportPayload(parsed: unknown): CookieImportPayloadParseResult {
+  if (Array.isArray(parsed)) {
+    if (parsed.length === 0) {
+      return { ok: false, reason: 'Cookie file is empty.' }
+    }
+    return { ok: true, entries: parsed, total: parsed.length }
+  }
+  if (parsed && typeof parsed === 'object') {
+    const cookies = (parsed as { cookies?: unknown }).cookies
+    if (Array.isArray(cookies)) {
+      if (cookies.length === 0) {
+        return { ok: false, reason: 'Cookie file is empty.' }
+      }
+      return { ok: true, entries: cookies, total: cookies.length }
+    }
+  }
+  return {
+    ok: false,
+    reason:
+      'Expected a JSON array of cookies (EditThisCookie) or a Playwright storage_state object with a "cookies" array.'
+  }
+}
+
+// Why: Playwright uses expires (unix seconds, -1 session); EditThisCookie uses expirationDate.
+function coerceCookieEntry(entry: unknown): RawCookieEntry | null {
+  if (typeof entry !== 'object' || entry === null) {
+    return null
+  }
+  const raw = entry as Record<string, unknown>
+  let expirationDate: unknown = raw.expirationDate
+  if (typeof expirationDate !== 'number' || !(expirationDate > 0)) {
+    expirationDate =
+      typeof raw.expires === 'number' && Number.isFinite(raw.expires) && raw.expires > 0
+        ? raw.expires
+        : undefined
+  }
+  return {
+    domain: raw.domain,
+    name: raw.name,
+    value: raw.value,
+    path: raw.path,
+    secure: raw.secure,
+    httpOnly: raw.httpOnly,
+    sameSite: raw.sameSite,
+    expirationDate
+  }
+}
+
 type ValidatedCookie = {
   url: string
   name: string
@@ -658,22 +711,20 @@ export async function importCookiesFromFile(
     return { ok: false, reason: 'File is not valid JSON.' }
   }
 
-  if (!Array.isArray(parsed)) {
-    return { ok: false, reason: 'Expected a JSON array of cookie objects.' }
-  }
-
-  if (parsed.length === 0) {
-    return { ok: false, reason: 'Cookie file is empty.' }
+  const payload = parseCookieImportPayload(parsed)
+  if (!payload.ok) {
+    return { ok: false, reason: payload.reason }
   }
 
   const validated: ValidatedCookie[] = []
   let skipped = 0
-  for (const entry of parsed) {
-    if (typeof entry !== 'object' || entry === null) {
+  for (const entry of payload.entries) {
+    const coerced = coerceCookieEntry(entry)
+    if (!coerced) {
       skipped++
       continue
     }
-    const cookie = validateCookieEntry(entry as RawCookieEntry)
+    const cookie = validateCookieEntry(coerced)
     if (cookie) {
       validated.push(cookie)
     } else {
@@ -688,7 +739,7 @@ export async function importCookiesFromFile(
     }
   }
 
-  return importValidatedCookies(validated, parsed.length, targetPartition)
+  return importValidatedCookies(validated, payload.total, targetPartition)
 }
 
 // ---------------------------------------------------------------------------

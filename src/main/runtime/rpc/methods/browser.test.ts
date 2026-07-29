@@ -24,10 +24,14 @@ describe('browser RPC methods', () => {
       browserGoto: vi.fn().mockResolvedValue({ url: 'https://example.com' }),
       browserProfileDetectBrowsers: vi.fn().mockResolvedValue({ browsers: [] }),
       browserProfileImportFromBrowser: vi.fn().mockResolvedValue({ ok: false, reason: 'empty' }),
+      browserCookieImport: vi.fn().mockResolvedValue({ ok: false, reason: 'empty' }),
       browserTabCreate: vi.fn().mockResolvedValue({ browserPageId: 'page-1' }),
       browserTabSwitch: vi.fn().mockResolvedValue({ browserPageId: 'page-1' })
     } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_CORE_METHODS })
+    const dispatcher = new RpcDispatcher({
+      runtime,
+      methods: [...BROWSER_CORE_METHODS, ...BROWSER_EXTRA_METHODS]
+    })
 
     await dispatcher.dispatch(makeRequest('browser.snapshot', { worktree: 'id:wt-1' }))
     await dispatcher.dispatch(
@@ -59,6 +63,12 @@ describe('browser RPC methods', () => {
         browserProfile: 'Default'
       })
     )
+    await dispatcher.dispatch(
+      makeRequest('browser.cookie.import', {
+        file: '/tmp/cookies.json',
+        profileId: 'profile-1'
+      })
+    )
 
     expect(runtime.browserSnapshot).toHaveBeenCalledWith({ worktree: 'id:wt-1' })
     expect(runtime.browserGoto).toHaveBeenCalledWith({
@@ -81,6 +91,10 @@ describe('browser RPC methods', () => {
       profileId: 'profile-1',
       browserFamily: 'chrome',
       browserProfile: 'Default'
+    })
+    expect(runtime.browserCookieImport).toHaveBeenCalledWith({
+      file: '/tmp/cookies.json',
+      profileId: 'profile-1'
     })
   })
 

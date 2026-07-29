@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { assertRpcClipboardTextWriteWithinLimit } from '../rpc-clipboard-text-validation'
-import { BrowserTarget, OptionalFiniteNumber } from '../schemas'
+import { BrowserTarget, OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import {
   ClipboardWrite,
   CookieDelete,
@@ -22,6 +22,12 @@ import {
   StorageKeyValue,
   Viewport
 } from './browser-schemas'
+
+// Why: bulk import targets a session profile partition (persist across restart), not a live tab CDP path.
+const CookieImport = z.object({
+  file: requiredString('Missing required --file'),
+  profileId: OptionalString
+})
 
 const MouseModifiers = z
   .unknown()
@@ -49,6 +55,11 @@ export const BROWSER_EXTRA_METHODS: RpcMethod[] = [
     name: 'browser.cookie.delete',
     params: CookieDelete,
     handler: async (params, { runtime }) => runtime.browserCookieDelete(params)
+  }),
+  defineMethod({
+    name: 'browser.cookie.import',
+    params: CookieImport,
+    handler: async (params, { runtime }) => runtime.browserCookieImport(params)
   }),
   defineMethod({
     name: 'browser.viewport',
