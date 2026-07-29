@@ -9,6 +9,10 @@ import type {
   SkillDiscoveryTarget
 } from '../../../shared/skills'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import type { GlobalSettings } from '../../../shared/types'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { useAppStore } from '@/store'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   type InstalledAgentSkillState,
@@ -104,9 +108,26 @@ afterEach(async () => {
   container = null
   latestState = null
   _installedAgentSkillDiscoveryInternalsForTests.reset()
+  clearRuntimeCompatibilityCacheForTests()
+  useAppStore.setState({ settings: null })
   vi.restoreAllMocks()
   Reflect.deleteProperty(window, 'api')
 })
+
+/** Drain the compat probe + RPC promise chain a remote scan walks before it lands in state. */
+async function flushMicrotasks(): Promise<void> {
+  await act(async () => {
+    for (let tick = 0; tick < 8; tick += 1) {
+      await Promise.resolve()
+    }
+  })
+}
+
+function setActiveRuntimeEnvironment(environmentId: string | null): void {
+  useAppStore.setState({
+    settings: { activeRuntimeEnvironmentId: environmentId } as GlobalSettings
+  })
+}
 
 describe('useInstalledAgentSkill', () => {
   it('ignores stale discovery results after the discovery target changes', async () => {
@@ -244,5 +265,43 @@ describe('useInstalledAgentSkill', () => {
       wslDistro: 'Ubuntu',
       projectRuntime: projectWslRuntime
     })
+  })
+
+  it('scans the connected remote runtime and keeps that result out of the local cache', async () => {
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockResolvedValue(discoveryResult([]))
+    const call = vi.fn(
+      async (args: { method: string; selector?: string }) =>
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
+          id: 'skills',
+          ok: true,
+          result: discoveryResult([skill({ name: 'linear-tickets' })])
+        }
+    )
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover }, runtimeEnvironments: { call } }
+    })
+    setActiveRuntimeEnvironment('env-1')
+
+    await renderProbe()
+    await flushMicrotasks()
+
+    expect(latestState?.installed).toBe(true)
+    expect(discover).not.toHaveBeenCalled()
+    expect(call).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'env-1', method: 'skills.discover' })
+    )
+
+    // Why: the remote hit is keyed per environment, so switching back to the
+    // local host must re-scan the client instead of replaying the server's list.
+    await act(async () => {
+      setActiveRuntimeEnvironment(null)
+    })
+    await flushMicrotasks()
+
+    expect(discover).toHaveBeenCalledTimes(1)
+    expect(latestState?.installed).toBe(false)
   })
 })
