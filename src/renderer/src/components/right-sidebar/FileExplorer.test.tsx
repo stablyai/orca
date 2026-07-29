@@ -301,6 +301,15 @@ beforeEach(() => {
   delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
 })
 
+function replaceGlobalWindowForTest(windowValue: unknown): () => void {
+  const target = globalThis as { window?: unknown }
+  const original = target.window
+  target.window = windowValue
+  return () => {
+    target.window = original
+  }
+}
+
 describe('getNextNameFilterCollapsedPaths', () => {
   it('collapses expanded filtered folders and expands collapsed filtered folders', () => {
     const collapsed = getNextNameFilterCollapsedPaths(new Set(), '/repo/src', true)
@@ -699,29 +708,29 @@ describe('FileExplorerRow collapse folder action', () => {
 
   it('opens a local file with the default app', async () => {
     const openFilePath = vi.fn().mockResolvedValue(true)
-    ;(
-      globalThis as unknown as {
-        window: { api: { shell: { openFilePath: typeof openFilePath } } }
-      }
-    ).window = { api: { shell: { openFilePath } } }
+    const restoreWindow = replaceGlobalWindowForTest({ api: { shell: { openFilePath } } })
 
-    await openFileInDefaultApp(fileNode)
+    try {
+      await openFileInDefaultApp(fileNode)
 
-    expect(openFilePath).toHaveBeenCalledWith('/repo/src/index.ts')
-    expect(toastErrorMock).not.toHaveBeenCalled()
+      expect(openFilePath).toHaveBeenCalledWith('/repo/src/index.ts')
+      expect(toastErrorMock).not.toHaveBeenCalled()
+    } finally {
+      restoreWindow()
+    }
   })
 
   it('shows a failure toast when the default app launch fails', async () => {
     const openFilePath = vi.fn().mockResolvedValue(false)
-    ;(
-      globalThis as unknown as {
-        window: { api: { shell: { openFilePath: typeof openFilePath } } }
-      }
-    ).window = { api: { shell: { openFilePath } } }
+    const restoreWindow = replaceGlobalWindowForTest({ api: { shell: { openFilePath } } })
 
-    await openFileInDefaultApp(fileNode)
+    try {
+      await openFileInDefaultApp(fileNode)
 
-    expect(toastErrorMock).toHaveBeenCalledWith("Could not open 'index.ts' in the default app.")
+      expect(toastErrorMock).toHaveBeenCalledWith("Could not open 'index.ts' in the default app.")
+    } finally {
+      restoreWindow()
+    }
   })
 
   it('calls the preload download API and shows success only when not canceled', async () => {

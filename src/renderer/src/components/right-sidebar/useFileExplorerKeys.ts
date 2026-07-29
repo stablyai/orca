@@ -47,7 +47,7 @@ export function useFileExplorerKeys(opts: {
   moveSelection: (targetPath: string, mode: SelectionMode) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   startRename: (node: TreeNode) => void
-  openInDefaultApp: (node: TreeNode) => void
+  openInDefaultApp: (node: TreeNode) => boolean
   requestDelete: (node: TreeNode) => void
   requestDeleteAll: (nodes: TreeNode[]) => void
   scrollToIndex: (index: number) => void
@@ -277,8 +277,9 @@ export function useFileExplorerKeys(opts: {
         selectedNodeRef.current
       if (wantsOpenInDefaultApp) {
         if (node && !node.isDirectory) {
-          e.preventDefault()
-          openInDefaultAppRef.current(node)
+          if (openInDefaultAppRef.current(node)) {
+            e.preventDefault()
+          }
         }
         return
       }

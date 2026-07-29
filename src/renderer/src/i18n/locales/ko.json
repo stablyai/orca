@@ -9925,8 +9925,8 @@
             "3161c4e425": "폴더",
             "e887fa4b2e": "터미널에서 열기",
             "1d8e182c32": "파일 보기",
-            "d40c3303f4": "Could not open '{{value0}}' in the default app.",
-            "288a8e8081": "Open in Default App"
+            "d40c3303f4": "기본 앱에서 '{{value0}}'을(를) 열 수 없습니다.",
+            "288a8e8081": "기본 앱에서 열기"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git이 무시한 파일 표시",

@@ -57,6 +57,7 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
 import type { RightSidebarExplorerView } from '../../../../shared/types'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { createNewTerminalTab } from '@/components/terminal/terminal-tab-create'
+import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 
 function FileExplorerFiles(): React.JSX.Element {
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -524,7 +525,7 @@ function FileExplorerFiles(): React.JSX.Element {
     [cancelPendingDirToggle, startRename]
   )
   const handleOpenInDefaultApp = useCallback(
-    (node: TreeNode) => {
+    (node: TreeNode): boolean => {
       if (
         !shouldShowOpenInDefaultAppAction(
           node,
@@ -532,9 +533,18 @@ function FileExplorerFiles(): React.JSX.Element {
           runtimeDownloadContext
         )
       ) {
-        return
+        return false
+      }
+      if (
+        isLocalPathOpenBlocked(useAppStore.getState().settings, {
+          connectionId: activeRepo?.connectionId ?? null
+        })
+      ) {
+        showLocalPathOpenBlockedToast()
+        return false
       }
       void openFileInDefaultApp(node)
+      return true
     },
     [activeRepo?.connectionId, runtimeDownloadContext]
   )
