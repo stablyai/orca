@@ -12,6 +12,7 @@ import { createClaudeSessionResumeState } from './session-scanner-primary-parser
 import { createGeminiJsonlSessionResumeState } from './session-scanner-gemini-parsers'
 import { createCopilotSessionResumeState } from './session-scanner-copilot-parser'
 import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
+import { createQwenSessionResumeState } from './session-scanner-qwen-parser'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import { countOmpSubagentTranscripts } from './session-scanner-omp-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
@@ -71,6 +72,8 @@ function resumableStateFactoryFor(
       return candidate.file.path.endsWith('.jsonl')
         ? () => createGeminiJsonlSessionResumeState(candidate.file)
         : null
+    case 'qwen-code':
+      return () => createQwenSessionResumeState(candidate.file)
     case 'antigravity':
       return () => createAntigravitySessionResumeState(candidate.file)
     case 'devin':
