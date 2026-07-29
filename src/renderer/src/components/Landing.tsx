@@ -238,29 +238,32 @@ export default function Landing(): React.JSX.Element {
   const hasGitHubProject = useMemo(() => hasGitHubBackedProject(repos), [repos])
   const showGitHubSupportFooter = repos.length === 0 || hasGitHubProject
 
-  const [preflightIssues, setPreflightIssues] = useState<PreflightIssue[]>([])
+  // Why: the preflight slice routes to the active runtime environment via
+  // `preflight.check` RPC and only falls back to the local probe when no remote
+  // runtime is active. Calling the local preflight IPC directly here would
+  // always scan the client machine, so a remote runtime's landing banner
+  // reported the wrong host's git/gh state.
+  const preflightStatus = useAppStore((s) => s.preflightStatus)
+  const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+
+  const preflightIssues = useMemo(
+    () =>
+      preflightStatus
+        ? getLandingPreflightIssues(preflightStatus, {
+            hasGitHubBackedProject: hasGitHubProject
+          })
+        : [],
+    [preflightStatus, hasGitHubProject]
+  )
 
   useEffect(() => {
-    let cancelled = false
-    const refreshPreflight = (force = false): void => {
-      void window.api.preflight.check(force ? { force: true } : undefined).then((status) => {
-        if (cancelled) {
-          return
-        }
-        setPreflightIssues(
-          getLandingPreflightIssues(status, { hasGitHubBackedProject: hasGitHubProject })
-        )
-      })
-    }
-
-    // oxlint-disable-next-line react-doctor/no-initialize-state -- Why: preflight status is read from an external IPC probe on mount and focus.
-    refreshPreflight()
+    void refreshPreflightStatus()
 
     // Why: users often install/authenticate gh outside Orca. Re-check when the
     // window becomes active again so the landing warning clears without relaunch.
     const handleWindowActive = (): void => {
       if (document.visibilityState === 'visible') {
-        refreshPreflight(true)
+        void refreshPreflightStatus({ force: true })
       }
     }
 
@@ -268,36 +271,26 @@ export default function Landing(): React.JSX.Element {
     window.addEventListener('focus', handleWindowActive)
 
     return () => {
-      cancelled = true
       document.removeEventListener('visibilitychange', handleWindowActive)
       window.removeEventListener('focus', handleWindowActive)
     }
-  }, [hasGitHubProject])
+  }, [refreshPreflightStatus])
 
   useEffect(() => {
     if (preflightIssues.length === 0) {
       return
     }
 
-    let cancelled = false
     // Why: some users complete `gh auth login` without ever leaving the Orca
     // window. Poll only while a warning is visible so the banner self-clears.
     const intervalId = window.setInterval(() => {
-      void window.api.preflight.check({ force: true }).then((status) => {
-        if (cancelled) {
-          return
-        }
-        setPreflightIssues(
-          getLandingPreflightIssues(status, { hasGitHubBackedProject: hasGitHubProject })
-        )
-      })
+      void refreshPreflightStatus({ force: true })
     }, 30000)
 
     return () => {
-      cancelled = true
       window.clearInterval(intervalId)
     }
-  }, [hasGitHubProject, preflightIssues.length])
+  }, [preflightIssues.length, refreshPreflightStatus])
 
   const createWorktreeShortcut = useShortcutKeyDetails('workspace.create')
   const previousWorktreeShortcut = useShortcutKeyDetails('worktree.navigateUp')
