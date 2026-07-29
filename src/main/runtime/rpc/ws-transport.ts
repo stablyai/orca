@@ -295,7 +295,7 @@ export class WebSocketTransport implements RpcTransport {
       this.connectionCloseHandler?.(clientId, ws, hasOtherConnections)
     }
 
-    // Why: seed before arming so a fresh first socket survives its initial sweep.
+    // Why: seed before arming so a fresh socket is pinged rather than reaped on the first interval tick.
     this.heartbeatConnections.add(ws)
     this.heartbeat.noteAlive(ws)
     if (this.heartbeatConnections.size === 1) {
