@@ -6162,7 +6162,8 @@
           "6436e56546": "モバイルペアリング用のQRコード",
           "1b1b70279a": "まだデバイスがペアリングされていません。",
           "1592afcc7a": "まだデバイスがペアリングされていません。 Orca モバイル アプリで QR コードをスキャンします。",
-          "relayDegradedNotice": "Relay に接続できませんでした — このコードは LAN または Tailscale でのみ動作します。再生成してからお試しください。"
+          "relayDegradedNotice": "Relay に接続できませんでした — このコードは LAN または Tailscale でのみ動作します。再生成してからお試しください。",
+          "pairingQrError": "このペアリングコードを QR コードとして表示できませんでした。代わりに Orca Mobile にコピーしてください。"
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub リリース",
@@ -11463,7 +11464,8 @@
             "preview": "プレビュー",
             "stable": "安定版"
           },
-          "relayDegradedNotice": "Relay に接続できませんでした — このコードは LAN または Tailscale でのみ動作します。"
+          "relayDegradedNotice": "Relay に接続できませんでした — このコードは LAN または Tailscale でのみ動作します。",
+          "pairingQrError": "このペアリングコードを QR コードとして表示できませんでした。代わりに Orca Mobile にコピーしてください。"
         },
         "MobilePage": {
           "e17393c6a3": "スマートフォンプレビュー",
@@ -11580,12 +11582,13 @@
         },
         "CustomNetworkAddressDialog": {
           "title": "カスタムネットワークアドレス",
-          "description": "同じ Wi-Fi に接続していないときにスマートフォンから到達できるアドレスを指定します。たとえば Tailscale のホスト名や静的 IP です。",
+          "description": "スマートフォンから到達できるアドレスを指定します。たとえば、Tailscale ホスト名、IP アドレス、リバースプロキシ URL です。",
           "label": "アドレス",
-          "placeholder": "my-mac.ts.net、home.example.com、または 192.168.1.50",
-          "hint": "IP アドレスまたはホスト名（Tailscale の MagicDNS 名、DDNS ドメイン、LAN のホスト名など）を入力してください。必要に応じて :ポート を付けられます。",
+          "placeholder": "home.example.com:8443 または https://example.com/orca",
+          "hint": "IPv4/IPv6 アドレス、ホスト名、または完全な HTTP(S)/WebSocket URL を入力してください。ポートは省略できます。",
           "cancel": "キャンセル",
-          "use": "アドレスを使用"
+          "use": "アドレスを使用",
+          "confirmationError": "このアドレスではスキャン可能なペアリングコードを生成できませんでした。アドレスを確認して、もう一度お試しください。"
         },
         "NetworkInterfacePicker": {
           "trigger-label": "通知するネットワークアドレス",

@@ -6125,7 +6125,8 @@
           "6436e56546": "모바일 페어링을 위한 QR 코드",
           "1b1b70279a": "아직 페어링된 기기가 없습니다.",
           "1592afcc7a": "아직 페어링된 기기가 없습니다. Orca 모바일 앱으로 QR 코드를 스캔하세요.",
-          "relayDegradedNotice": "Relay에 연결할 수 없습니다 — 이 코드는 LAN 또는 Tailscale에서만 작동합니다. 다시 생성해 보세요."
+          "relayDegradedNotice": "Relay에 연결할 수 없습니다 — 이 코드는 LAN 또는 Tailscale에서만 작동합니다. 다시 생성해 보세요.",
+          "pairingQrError": "이 페어링 코드를 QR 코드로 표시할 수 없습니다. 대신 Orca Mobile에 복사하세요."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub 릴리스",
@@ -11463,7 +11464,8 @@
             "preview": "미리 보기",
             "stable": "안정 버전"
           },
-          "relayDegradedNotice": "Relay에 연결할 수 없습니다 — 이 코드는 LAN 또는 Tailscale에서만 작동합니다."
+          "relayDegradedNotice": "Relay에 연결할 수 없습니다 — 이 코드는 LAN 또는 Tailscale에서만 작동합니다.",
+          "pairingQrError": "이 페어링 코드를 QR 코드로 표시할 수 없습니다. 대신 Orca Mobile에 복사하세요."
         },
         "MobilePage": {
           "e17393c6a3": "휴대폰 미리보기",
@@ -11580,12 +11582,13 @@
         },
         "CustomNetworkAddressDialog": {
           "title": "사용자 지정 네트워크 주소",
-          "description": "같은 Wi-Fi에 있지 않을 때 휴대폰이 연결할 수 있는 주소를 알립니다. 예: Tailscale 호스트 이름 또는 고정 IP.",
+          "description": "휴대폰에서 접근할 수 있는 주소를 지정하세요. 예: Tailscale 호스트 이름, IP 주소 또는 리버스 프록시 URL.",
           "label": "주소",
-          "placeholder": "my-mac.ts.net, home.example.com 또는 192.168.1.50",
-          "hint": "IP 주소 또는 호스트 이름(Tailscale MagicDNS 이름, DDNS 도메인 또는 LAN 호스트 이름)을 입력하세요. 필요하면 :포트를 붙일 수 있습니다.",
+          "placeholder": "home.example.com:8443 또는 https://example.com/orca",
+          "hint": "IPv4/IPv6 주소, 호스트 이름 또는 전체 HTTP(S)/WebSocket URL을 입력하세요. 포트는 선택 사항입니다.",
           "cancel": "취소",
-          "use": "주소 사용"
+          "use": "주소 사용",
+          "confirmationError": "이 주소로 스캔 가능한 페어링 코드를 만들 수 없습니다. 주소를 확인하고 다시 시도하세요."
         },
         "NetworkInterfacePicker": {
           "trigger-label": "알릴 네트워크 주소",

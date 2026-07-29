@@ -6788,6 +6788,7 @@ describe('OrcaRuntimeService', () => {
       const result = await runtime.browseServerDir(tempRoot)
 
       expect(result.resolvedPath).toBe(tempRoot)
+      expect(result.pathFlavor).toBe(process.platform === 'win32' ? 'win32' : 'posix')
       expect(result.entries).toEqual([
         { name: 'alpha', isDirectory: true, isSymlink: false },
         { name: 'zeta', isDirectory: true, isSymlink: false },
@@ -6796,6 +6797,20 @@ describe('OrcaRuntimeService', () => {
     } finally {
       await rm(tempRoot, { recursive: true, force: true })
     }
+  })
+
+  it.runIf(process.platform === 'win32')('lists drive roots for a server-root browse', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    const result = await runtime.browseServerDir('/')
+
+    expect(result.resolvedPath).toBe('/')
+    expect(result.pathFlavor).toBe('win32')
+    expect(result.entries).toContainEqual({
+      name: win32.parse(tmpdir()).root.toUpperCase(),
+      isDirectory: true,
+      isSymlink: false
+    })
   })
 
   it('defaults runtime addRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {

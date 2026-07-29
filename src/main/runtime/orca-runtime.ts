@@ -10,6 +10,7 @@ import {
   normalizeTerminalTitle
 } from '../../shared/agent-detection'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
+import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
 import { parseFileUriPathParts } from '../daemon/osc7-file-uri'
 import type { AgentStatus } from '../../shared/agent-detection'
@@ -185,6 +186,7 @@ import type {
   WorkspaceCreateTelemetrySource,
   WorkspaceSessionState,
   DirEntry,
+  FilesystemPathFlavor,
   GitHubIssueUpdate,
   GitHubPullRequestStateUpdate,
   GitHubPRFile,
@@ -15631,7 +15633,15 @@ export class OrcaRuntimeService {
     return scanNestedRepos({ path, options: { timeoutMs: 15_000 } })
   }
 
-  async browseServerDir(pathValue: string): Promise<{ resolvedPath: string; entries: DirEntry[] }> {
+  async browseServerDir(pathValue: string): Promise<{
+    resolvedPath: string
+    entries: DirEntry[]
+    pathFlavor: FilesystemPathFlavor
+  }> {
+    // Windows resolves `/` to the current drive, so expose drive roots instead.
+    if (isServerDriveListRequest(pathValue)) {
+      return listWindowsDrives()
+    }
     const dirPath = resolveServerBrowsePath(pathValue)
     const dirStat = await stat(dirPath)
     if (!dirStat.isDirectory()) {
@@ -15651,7 +15661,11 @@ export class OrcaRuntimeService {
       }
       return a.name.localeCompare(b.name)
     })
-    return { resolvedPath: dirPath, entries: mapped }
+    return {
+      resolvedPath: dirPath,
+      entries: mapped,
+      pathFlavor: process.platform === 'win32' ? 'win32' : 'posix'
+    }
   }
 
   async isGitAvailable(): Promise<boolean> {

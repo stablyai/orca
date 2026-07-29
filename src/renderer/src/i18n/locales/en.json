@@ -6200,7 +6200,8 @@
           "6436e56546": "QR Code for mobile pairing",
           "1b1b70279a": "No devices paired yet.",
           "1592afcc7a": "No devices paired yet. Scan the QR code with the Orca mobile app.",
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale. Regenerate to try again."
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale. Regenerate to try again.",
+          "pairingQrError": "This pairing code couldn’t be rendered as a QR code. Copy it into Orca Mobile instead."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub Releases",
@@ -11486,7 +11487,8 @@
             "preview": "Preview",
             "stable": "Stable"
           },
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale."
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale.",
+          "pairingQrError": "This pairing code couldn’t be rendered as a QR code. Copy it into Orca Mobile instead."
         },
         "MobilePage": {
           "e17393c6a3": "Phone preview",
@@ -11603,12 +11605,13 @@
         },
         "CustomNetworkAddressDialog": {
           "title": "Custom network address",
-          "description": "Advertise an address your phone can reach when it is not on the same Wi-Fi — for example a Tailscale hostname or a static IP.",
+          "description": "Advertise an address your phone can reach — for example a Tailscale hostname, IP address, or reverse-proxy URL.",
           "label": "Address",
-          "placeholder": "my-mac.ts.net, home.example.com, or 192.168.1.50",
-          "hint": "Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port.",
+          "placeholder": "home.example.com:8443 or https://example.com/orca",
+          "hint": "Enter an IPv4/IPv6 address, hostname, or full HTTP(S)/WebSocket URL. Ports are optional.",
           "cancel": "Cancel",
-          "use": "Use address"
+          "use": "Use address",
+          "confirmationError": "This address could not produce a scannable pairing code. Check the address and try again."
         },
         "NetworkInterfacePicker": {
           "trigger-label": "Network address to advertise",

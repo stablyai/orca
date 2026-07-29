@@ -80,10 +80,11 @@ type MessageSummary = {
   run_id?: string
   from_handle: string
   to_handle?: string
-  subject: string
+  subject?: string
   type?: string
   body?: string
   payload?: string | null
+  priority?: string
   read?: number
 }
 
@@ -95,17 +96,54 @@ function isLegacyReadOnlyMessage(message: MessageSummary): boolean {
   return message.run_id === ORCHESTRATION_LEGACY_RUN_ID
 }
 
-function formatLegacyAwareCheckMessages(messages: MessageSummary[]): string {
+function formatMessagePriorityTag(message: MessageSummary): string {
+  return message.priority === 'urgent' ? ' [URGENT]' : message.priority === 'high' ? ' [HIGH]' : ''
+}
+
+function escapeTerminalControlCharacters(value: string): string {
+  return [...value]
+    .map((character) => {
+      const code = character.charCodeAt(0)
+      if (character === '\n' || (code >= 0x20 && code < 0x7f) || code > 0x9f) {
+        return character
+      }
+      return `\\x${code.toString(16).padStart(2, '0')}`
+    })
+    .join('')
+}
+
+function formatQuotedMessageField(label: string, value?: string): string {
+  return `[${label}]\n${escapeTerminalControlCharacters(value ?? '')
+    .split('\n')
+    .map((line) => `  ${line}`)
+    .join('\n')}`
+}
+
+function formatLegacyAwareCheckMessages(
+  messages: MessageSummary[],
+  checkedTerminal: string
+): string {
   return messages
     .map((message) => {
+      const legacyReadOnly = isLegacyReadOnlyMessage(message)
       const lines = [
-        `${message.id}${formatMessageReadOnlyTag(message)} [${message.type ?? 'status'}] from=${message.from_handle} "${message.subject}"`
+        `${message.id}${formatMessageReadOnlyTag(message)}${formatMessagePriorityTag(message)} [${message.type ?? 'status'}] from=${message.from_handle}`,
+        formatQuotedMessageField('subject', message.subject)
       ]
+      if (legacyReadOnly) {
+        lines.push('[Inspection only: reply and acknowledgment are unavailable.]')
+      }
       if (message.body) {
-        lines.push(message.body)
+        lines.push(formatQuotedMessageField('body', message.body))
       }
       if (message.payload) {
-        lines.push(`[payload] ${message.payload}`)
+        lines.push(formatQuotedMessageField('payload', message.payload))
+      }
+      if (!legacyReadOnly) {
+        const replyFrom = message.to_handle ?? checkedTerminal
+        lines.push(
+          `[Reply: orca orchestration reply --id ${message.id} --from ${replyFrom} --body "..."]`
+        )
       }
       return lines.join('\n')
     })
@@ -644,11 +682,19 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         }
       }
     }
+    if (flags.has('format') && result.result.messages.some(isLegacyReadOnlyMessage)) {
+      // Why: formatted is one opaque batch with untrusted bodies, so selective banner parsing cannot safely remove legacy actions.
+      result = {
+        ...result,
+        result: {
+          ...result.result,
+          formatted: formatLegacyAwareCheckMessages(result.result.messages, terminal)
+        }
+      }
+    }
     printResult(result, json, (r) => {
       if (r.formatted) {
-        return r.messages.some(isLegacyReadOnlyMessage)
-          ? formatLegacyAwareCheckMessages(r.messages)
-          : r.formatted
+        return r.formatted
       }
       if (r.count === 0) {
         if (r.timedOut) {
