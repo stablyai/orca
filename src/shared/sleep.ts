@@ -8,6 +8,7 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     const onAbort = (): void => finish(createAbortError())
     const timer = setTimeout(() => finish(), ms)
 
+    /** Settles the wait and releases its timer and abort listener. */
     function finish(error?: Error): void {
       clearTimeout(timer)
       signal?.removeEventListener('abort', onAbort)
@@ -22,6 +23,7 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   })
 }
 
+/** Creates an AbortError without relying on DOMException availability. */
 function createAbortError(): Error {
   const error = new Error('Sleep aborted')
   error.name = 'AbortError'
