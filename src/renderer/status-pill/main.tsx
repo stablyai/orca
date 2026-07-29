@@ -395,7 +395,7 @@ function StyleBaseline(): React.JSX.Element {
         align-items: center;
         gap: 8px;
         width: max-content;
-        max-width: 460px;
+        max-width: 600px;
       }
     `}</style>
   )

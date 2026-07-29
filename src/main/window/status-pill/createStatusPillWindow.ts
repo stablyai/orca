@@ -39,10 +39,10 @@ export type StatusPillRuntime = {
 }
 
 /** Pill body dimensions in CSS pixels. Wide enough for "claude — fix-auth-bug ·
- *  Writing middleware.ts"; tall enough that hover and click targets stay
- *  comfortable on a 4K display at 100% scaling. */
-const PILL_WIDTH = 320
-const PILL_HEIGHT = 34
+ *  Writing middleware.ts" + usage chips, matching a Dynamic-Island-style notch
+ *  bar (Vibe Island) rather than a tiny capsule. */
+const PILL_WIDTH = 560
+const PILL_HEIGHT = 40
 
 /** Window padding around the capsule so the box-shadow halo has room to render
  *  outside the .pill body. Without this the shadow + the expanded panel get

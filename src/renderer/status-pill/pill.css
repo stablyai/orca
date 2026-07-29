@@ -18,33 +18,33 @@
   --color-border: var(--border);
 }
 
+/* Dynamic-Island palette. The notch bar is ALWAYS dark (like macOS Dynamic
+   Island / Vibe Island), independent of the OS appearance, so both :root and
+   .dark resolve to the same dark tokens. */
 :root {
-  /* Light mode tokens — pill body, frosted-glass tint, label colors. Tuned to
-     stay legible on a bright desktop wallpaper without losing the glass
-     overlay feel. */
-  --background: rgba(255, 255, 255, 0.72);
-  --foreground: #0f172a;
-  --muted-foreground: #475569;
-  --primary: #0f172a;
-  --border: rgba(15, 23, 42, 0.08);
-  --panel-bg: rgba(255, 255, 255, 0.82);
-  --diff-bg: rgba(15, 23, 42, 0.04);
-  --chip-bg: rgba(15, 23, 42, 0.06);
-  --shadow-color: rgba(15, 23, 42, 0.18);
+  --island-bg: rgba(28, 28, 30, 0.92);
+  --island-bg-panel: rgba(22, 22, 24, 0.94);
+  --foreground: #f5f5f7;
+  --muted-foreground: #a1a1a6;
+  --faint: rgba(255, 255, 255, 0.08);
+  --chip-bg: rgba(255, 255, 255, 0.1);
+  --border: rgba(255, 255, 255, 0.08);
+  --diff-bg: rgba(0, 0, 0, 0.35);
+  --shadow-color: rgba(0, 0, 0, 0.5);
+  --primary: #f5f5f7;
+  --background: var(--island-bg);
 }
 
 .dark {
-  /* Dark mode tokens — glass over dark wallpaper, soft muted text, subtle
-     border. Matches the Vibe Island aesthetic at night. */
-  --background: rgba(15, 17, 22, 0.62);
-  --foreground: #f1f5f9;
-  --muted-foreground: #94a3b8;
-  --primary: #fafafa;
-  --border: rgba(255, 255, 255, 0.06);
-  --panel-bg: rgba(13, 16, 22, 0.78);
-  --diff-bg: rgba(0, 0, 0, 0.32);
-  --chip-bg: rgba(255, 255, 255, 0.04);
-  --shadow-color: rgba(0, 0, 0, 0.42);
+  --island-bg: rgba(28, 28, 30, 0.92);
+  --island-bg-panel: rgba(22, 22, 24, 0.94);
+  --foreground: #f5f5f7;
+  --muted-foreground: #a1a1a6;
+  --faint: rgba(255, 255, 255, 0.08);
+  --chip-bg: rgba(255, 255, 255, 0.1);
+  --border: rgba(255, 255, 255, 0.08);
+  --diff-bg: rgba(0, 0, 0, 0.35);
+  --shadow-color: rgba(0, 0, 0, 0.5);
 }
 
 html,
@@ -62,7 +62,7 @@ body {
     'Segoe UI',
     Roboto,
     sans-serif;
-  font-size: 13px;
+  font-size: 13.5px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-variant-numeric: tabular-nums;
@@ -74,10 +74,8 @@ body {
 #root {
   height: 100%;
   /* Why: padding mirrors the main-side PILL_WINDOW_PADDING_* constants so the
-     capsule visually centers inside the BrowserWindow with room for the
-     box-shadow halo. The .pill-stack measures itself via ResizeObserver
-     (content rect), so the renderer adds these paddings back when computing
-     the new window size. */
+     bar visually centers inside the BrowserWindow with room for the shadow
+     halo. */
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -85,30 +83,29 @@ body {
   box-sizing: border-box;
 }
 
-/* ── Resting pill ───────────────────────────────────── */
+/* ── Resting Dynamic Island bar ────────────────────── */
 .pill {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  height: 34px;
-  padding: 0 14px 0 12px;
-  border-radius: 17px;
-  background: var(--background);
+  gap: 12px;
+  width: 560px;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 20px;
+  background: var(--island-bg);
   color: var(--foreground);
   border: 1px solid var(--border);
   box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
-    0 10px 28px var(--shadow-color),
-    0 2px 6px var(--shadow-color);
-  font-size: 12.5px;
+    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 14px 34px var(--shadow-color),
+    0 4px 10px var(--shadow-color);
+  font-size: 13.5px;
   font-weight: 500;
   letter-spacing: -0.005em;
   font-variant-numeric: tabular-nums;
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  /* Why: GPU-friendly properties only so the hover lift + theme swap stay on
-     the compositor thread instead of triggering layout. */
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
   transition:
     transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1),
@@ -121,9 +118,9 @@ body {
 .pill:hover {
   transform: translateY(-1px);
   box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
-    0 14px 36px var(--shadow-color),
-    0 4px 10px var(--shadow-color);
+    0 1px 0 0 rgba(255, 255, 255, 0.08) inset,
+    0 18px 42px var(--shadow-color),
+    0 6px 14px var(--shadow-color);
 }
 
 .pill:active {
@@ -131,8 +128,6 @@ body {
   transition-duration: 80ms;
 }
 
-/* Why: while the user is dragging the pill, drop the hover lift + transitions
-   so the capsule tracks the cursor 1:1 instead of easing behind it. */
 .pill-dragging,
 .pill-dragging:hover {
   transform: none;
@@ -140,39 +135,17 @@ body {
   transition: none;
 }
 
-/* Why: one-shot bounce main triggers (via statusPill:attentionPulse) when an
-   agent newly asks a question, to draw the eye even when the user is in another
-   app. Disabled under prefers-reduced-motion (see the media query below). */
-.pill-attention {
-  animation: pill-attention 600ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes pill-attention {
-  0% {
-    transform: scale(1);
-  }
-  30% {
-    transform: scale(1.08);
-  }
-  55% {
-    transform: scale(0.97);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
 /* ── Indicator dot + halo ring ─────────────────────── */
 .indicator {
   position: relative;
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
   flex-shrink: 0;
 }
 
 .indicator-dot {
   position: absolute;
-  inset: 1.5px;
+  inset: 2px;
   border-radius: 50%;
   background: var(--indicator-color, var(--muted-foreground));
 }
@@ -188,16 +161,16 @@ body {
 }
 
 .pill-working {
-  --indicator-color: #34d399;
+  --indicator-color: #30d158;
 }
 .pill-blocked {
-  --indicator-color: #fbbf24;
+  --indicator-color: #ffb020;
 }
 .pill-waiting {
-  --indicator-color: #60a5fa;
+  --indicator-color: #0a84ff;
 }
 .pill-done {
-  --indicator-color: #94a3b8;
+  --indicator-color: #8e8e93;
 }
 .pill-idle {
   --indicator-color: var(--muted-foreground);
@@ -226,6 +199,25 @@ body {
   }
 }
 
+.pill-attention {
+  animation: pill-attention 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes pill-attention {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.06);
+  }
+  55% {
+    transform: scale(0.98);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 /* ── Counts in sub-chips ───────────────────────────── */
 .counts {
   display: inline-flex;
@@ -236,40 +228,40 @@ body {
 .count-group {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 7px 2px 5px;
-  border-radius: 9px;
+  gap: 6px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 10px;
   background: var(--chip-bg);
 }
 
 .count-dot {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 .count-dot-working {
-  background: #34d399;
+  background: #30d158;
 }
 .count-dot-blocked {
-  background: #fbbf24;
+  background: #ffb020;
 }
 .count-dot-waiting {
-  background: #60a5fa;
+  background: #0a84ff;
 }
 .count-dot-done {
-  background: #94a3b8;
+  background: #8e8e93;
 }
 
 .count-value {
   font-weight: 600;
-  font-size: 11.5px;
+  font-size: 12.5px;
   letter-spacing: -0.01em;
 }
 
 .divider {
   width: 1px;
-  height: 14px;
+  height: 16px;
   background: var(--border);
   flex-shrink: 0;
 }
@@ -280,7 +272,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 240px;
+  max-width: 420px;
 }
 .label-idle {
   color: var(--muted-foreground);
@@ -289,28 +281,26 @@ body {
 
 /* ── Expanded panel ────────────────────────────────── */
 .panel {
-  width: 460px;
-  background: var(--panel-bg);
+  width: 560px;
+  background: var(--island-bg-panel);
   border: 1px solid var(--border);
-  border-radius: 20px;
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border-radius: 22px;
+  backdrop-filter: blur(40px) saturate(160%);
+  -webkit-backdrop-filter: blur(40px) saturate(160%);
   box-shadow:
     0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
-    0 24px 60px var(--shadow-color),
-    0 6px 16px var(--shadow-color);
+    0 28px 70px var(--shadow-color),
+    0 8px 20px var(--shadow-color);
   overflow: hidden;
   transform-origin: top center;
-  /* Why: 18ms stagger so the panel feels like it grows out of the pill rather
-     than popping in next to it. cubic-bezier spring for a natural ease-out. */
-  animation: panel-grow 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: panel-grow 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: transform, opacity;
 }
 
 @keyframes panel-grow {
   from {
     opacity: 0;
-    transform: translateY(-6px) scale(0.985);
+    transform: translateY(-8px) scale(0.98);
   }
   to {
     opacity: 1;
@@ -321,36 +311,36 @@ body {
 .panel-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 16px 12px;
+  gap: 11px;
+  padding: 15px 18px 13px;
   border-bottom: 1px solid var(--border);
 }
 
 .panel-head .indicator {
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
 }
 .panel-head .indicator-dot {
-  inset: 1.5px;
+  inset: 2px;
 }
 
 .panel-title {
   flex: 1;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--foreground);
   letter-spacing: -0.005em;
 }
 
 .panel-meta {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
 
 .agent-list {
   padding: 6px 0 10px;
-  max-height: 320px;
+  max-height: 360px;
   overflow-y: auto;
 }
 
@@ -358,19 +348,17 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
+  padding: 11px 18px;
   position: relative;
   cursor: pointer;
   border-radius: 0;
-  /* Why: stagger fade-in so the panel reveals like a list, not a single
-     chunk. Keeps hover/focus transitions smooth too. */
   animation: row-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
   transition: background 120ms ease;
 }
 
 .agent-row:hover,
 .agent-row:focus-visible {
-  background: var(--chip-bg);
+  background: rgba(255, 255, 255, 0.05);
   outline: none;
 }
 
@@ -378,8 +366,8 @@ body {
   content: '';
   position: absolute;
   top: 0;
-  left: 16px;
-  right: 16px;
+  left: 18px;
+  right: 18px;
   height: 1px;
   background: var(--border);
 }
@@ -396,18 +384,16 @@ body {
 }
 
 .agent-avatar {
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  /* Why: a hairline inner ring keeps brand-color avatars crisp against both
-     light and dark glass backgrounds, matching the rest of the pill edges. */
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
 
@@ -464,8 +450,8 @@ body {
   color: #082f49;
 }
 .av-default {
-  background: var(--muted-foreground);
-  color: var(--background);
+  background: var(--chip-bg);
+  color: var(--foreground);
 }
 
 .agent-body {
@@ -474,8 +460,8 @@ body {
 }
 
 .agent-name {
-  font-size: 12.5px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--foreground);
   letter-spacing: -0.005em;
   white-space: nowrap;
@@ -487,11 +473,11 @@ body {
   color: var(--muted-foreground);
   font-weight: 400;
   margin-left: 6px;
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .agent-prompt {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--muted-foreground);
   white-space: nowrap;
   overflow: hidden;
@@ -500,28 +486,28 @@ body {
 }
 
 .agent-time {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
 
 .agent-state {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
 .agent-state.working {
-  background: #34d399;
-  box-shadow: 0 0 8px rgba(52, 211, 153, 0.45);
+  background: #30d158;
+  box-shadow: 0 0 8px rgba(48, 209, 88, 0.5);
 }
 .agent-state.done {
   background: var(--muted-foreground);
 }
 .agent-state.waiting {
-  background: #60a5fa;
+  background: #0a84ff;
 }
 
 /* ── Entrance for the whole pill on first mount ────── */
@@ -542,7 +528,7 @@ body {
 
 /* ── Permission / question card ────────────────────── */
 .perm-card {
-  padding: 14px 16px 16px;
+  padding: 15px 18px 17px;
   border-bottom: 1px solid var(--border);
   animation: card-in 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: transform, opacity;
@@ -565,7 +551,7 @@ body {
   flex-wrap: wrap;
   gap: 4px 6px;
   margin-bottom: 8px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--muted-foreground);
 }
 
@@ -577,38 +563,38 @@ body {
 
 .perm-tool {
   font-family: Geist, ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 11px;
-  opacity: 0.8;
+  font-size: 11.5px;
+  opacity: 0.85;
 }
 
 .perm-question {
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--foreground);
   font-weight: 500;
   line-height: 1.4;
-  margin: 0 0 10px 0;
+  margin: 0 0 11px 0;
   letter-spacing: -0.005em;
 }
 
 .perm-summary {
-  margin: 0 0 10px 0;
-  padding: 8px 10px;
+  margin: 0 0 11px 0;
+  padding: 10px 12px;
   background: var(--diff-bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   font-family: Geist, ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--foreground);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-height: 120px;
+  max-height: 140px;
   overflow-y: auto;
 }
 
 .perm-options {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
   margin-bottom: 8px;
 }
 
@@ -620,25 +606,25 @@ body {
 
 .perm-error {
   margin-top: 8px;
-  font-size: 11px;
-  color: #fca5a5;
+  font-size: 11.5px;
+  color: #ff6b6b;
 }
 
 .btn {
   flex: 1;
-  height: 32px;
-  padding: 0 12px;
-  border-radius: 8px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 9px;
   border: 1px solid transparent;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 500;
   letter-spacing: -0.005em;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 7px;
   transition:
     background 120ms ease,
     border-color 120ms ease,
@@ -656,24 +642,24 @@ body {
 .btn-option {
   flex: 1;
   justify-content: flex-start;
-  padding: 0 10px;
-  height: 30px;
+  padding: 0 11px;
+  height: 32px;
   background: var(--chip-bg);
   color: var(--foreground);
   border-color: var(--border);
 }
 .btn-option:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .btn-deny {
-  background: rgba(248, 113, 113, 0.08);
-  color: #fca5a5;
-  border-color: rgba(248, 113, 113, 0.2);
+  background: rgba(255, 107, 107, 0.12);
+  color: #ff8585;
+  border-color: rgba(255, 107, 107, 0.24);
 }
 .btn-deny:hover:not(:disabled) {
-  background: rgba(248, 113, 113, 0.16);
+  background: rgba(255, 107, 107, 0.2);
 }
 
 .btn-allow {
@@ -682,16 +668,16 @@ body {
   border-color: var(--border);
 }
 .btn-allow:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .btn-allow-always {
-  background: #34d399;
-  color: #052e1f;
+  background: #30d158;
+  color: #062b12;
   font-weight: 600;
 }
 .btn-allow-always:hover:not(:disabled) {
-  background: #6ee7b7;
+  background: #4ade80;
 }
 
 .btn-label {
@@ -702,18 +688,18 @@ body {
 
 .kbd {
   font-family: Geist, ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.32);
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.4);
   color: inherit;
-  opacity: 0.7;
+  opacity: 0.85;
   font-weight: 500;
   flex-shrink: 0;
 }
 .btn-allow-always .kbd {
-  background: rgba(5, 46, 31, 0.32);
-  color: #052e1f;
+  background: rgba(6, 43, 18, 0.4);
+  color: #062b12;
 }
 
 /* ── Accessibility: respect reduced motion ─────────── */
@@ -722,6 +708,7 @@ body {
   .pill:hover,
   .pill:active,
   .pill-pulse .indicator-ring,
+  .pill-attention,
   .panel,
   .agent-row {
     animation: none !important;
