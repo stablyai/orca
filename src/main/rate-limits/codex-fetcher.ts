@@ -15,8 +15,8 @@ import {
   classifyCodexRateLimitWindows,
   CODEX_SESSION_WINDOW_MINUTES,
   CODEX_WEEKLY_WINDOW_MINUTES,
-  type CodexRpcRateLimits,
-  type CodexRpcRateWindow
+  type CodexRateLimitWindowsSnapshot,
+  type CodexRateWindowSnapshot
 } from './codex-rate-limit-window-classification'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
@@ -83,7 +83,7 @@ type RateLimitResetCredits = {
 
 // Why: the Codex app-server wraps rate limit data as { rateLimits: { primary, secondary, ... } }.
 type RpcRateLimitsResponse = {
-  rateLimits?: CodexRpcRateLimits | null
+  rateLimits?: CodexRateLimitWindowsSnapshot | null
   rateLimitResetCredits?: {
     availableCount?: number
     totalEarnedCount?: number
@@ -454,7 +454,7 @@ export async function consumeCodexRateLimitResetCredit(options: {
 }
 
 function mapRpcWindow(
-  raw: CodexRpcRateWindow | null | undefined,
+  raw: CodexRateWindowSnapshot | null | undefined,
   expectedWindowMinutes: number
 ): RateLimitWindow | null {
   if (!raw || typeof raw.usedPercent !== 'number' || !Number.isFinite(raw.usedPercent)) {
@@ -489,27 +489,32 @@ function mapRpcWindow(
   }
 }
 
-function mapBackendUsageWindow(
-  raw: BackendRateLimitWindow | null | undefined,
-  fallbackWindowMinutes: number
-): RateLimitWindow | null {
-  const limitWindowSeconds = raw?.limit_window_seconds
-  // Why: match Codex backend-client's window_minutes_from_seconds — actual bucket duration, rounding partial minutes up.
-  const windowMinutes =
+function backendWindowToSnapshot(
+  raw: BackendRateLimitWindow | null | undefined
+): CodexRateWindowSnapshot | null {
+  if (!raw) {
+    return null
+  }
+  const limitWindowSeconds = raw.limit_window_seconds
+  // Why: match Codex backend-client's window_minutes_from_seconds so the shared classifier sees the same bucket duration the RPC path reports.
+  const windowDurationMins =
     typeof limitWindowSeconds === 'number' &&
     Number.isFinite(limitWindowSeconds) &&
     limitWindowSeconds > 0
       ? Math.ceil(limitWindowSeconds / 60)
-      : fallbackWindowMinutes
-  return mapRpcWindow(
-    raw
-      ? {
-          usedPercent: raw.used_percent,
-          resetsAt: raw.reset_at
-        }
-      : undefined,
-    windowMinutes
-  )
+      : undefined
+  return { usedPercent: raw.used_percent, windowDurationMins, resetsAt: raw.reset_at }
+}
+
+// Why: the backend reports exact bucket seconds, so keep that real duration for the label; only fall back to canonical when it is missing.
+function snapshotWindowMinutes(
+  snapshot: CodexRateWindowSnapshot | null,
+  fallbackWindowMinutes: number
+): number {
+  const duration = snapshot?.windowDurationMins
+  return typeof duration === 'number' && Number.isFinite(duration) && duration > 0
+    ? duration
+    : fallbackWindowMinutes
 }
 
 async function fetchViaBackend(
@@ -534,10 +539,21 @@ async function fetchViaBackend(
   if (typeof payload.plan_type !== 'string') {
     return null
   }
+  // Why: classify by window duration, not field position, so a weekly-only plan (sole 7-day window) is not mislabeled as a 5h session.
+  const classified = classifyCodexRateLimitWindows({
+    primary: backendWindowToSnapshot(payload.rate_limit?.primary_window),
+    secondary: backendWindowToSnapshot(payload.rate_limit?.secondary_window)
+  })
   return {
     provider: 'codex',
-    session: mapBackendUsageWindow(payload.rate_limit?.primary_window, 300),
-    weekly: mapBackendUsageWindow(payload.rate_limit?.secondary_window, 10080),
+    session: mapRpcWindow(
+      classified.session,
+      snapshotWindowMinutes(classified.session, CODEX_SESSION_WINDOW_MINUTES)
+    ),
+    weekly: mapRpcWindow(
+      classified.weekly,
+      snapshotWindowMinutes(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES)
+    ),
     // Surfaced for the status-bar Usage row (e.g. "Codex · Plus").
     planType: payload.plan_type,
     ...(payload.rate_limit_reset_credits !== undefined
