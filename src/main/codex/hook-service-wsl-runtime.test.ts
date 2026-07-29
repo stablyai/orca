@@ -23,6 +23,7 @@ import {
 import type { CodexHookTrustGrantRequest } from './codex-app-server-client'
 import { codexAppServerCapabilityCache } from './codex-app-server-capability-cache'
 import { _internals as trustGrantInternals } from './codex-hook-trust-grant'
+import { preserveCodexWrittenWslManagedHookTrust } from './wsl-managed-hook-trust'
 
 type HooksConfig = {
   hooks: Record<string, { hooks?: { command?: string; timeout?: number }[] }[]>
@@ -189,6 +190,20 @@ describe('Codex WSL runtime hook install', () => {
       enabled: true,
       trustedHash: codexWrittenHash
     })
+  })
+
+  it('does not carry Codex-written trust across managed WSL trust keys', () => {
+    const plan = createTestPlan()
+    writeFileSync(plan.tomlPath, '', 'utf-8')
+    const previous = getManagedTrustEntry(plan, expectedManagedCommand(plan.commandScriptPath))
+    const next = { ...previous, sourcePath: '/home/bob/.codex/hooks.json' }
+    upsertHookTrustEntries(plan.tomlPath, [
+      { ...previous, trustedHash: 'sha256:codex-wsl-authoritative', enabled: true }
+    ])
+
+    expect(preserveCodexWrittenWslManagedHookTrust(plan.tomlPath, [{ previous, next }])).toEqual([
+      next
+    ])
   })
 
   it.skipIf(process.platform === 'win32')(

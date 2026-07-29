@@ -13,7 +13,11 @@ export function preserveCodexWrittenWslManagedHookTrust(
 ): CodexTrustEntry[] {
   const existingTrust = readHookTrustEntries(tomlPath)
   return candidates.map(({ next, previous }) => {
-    if (!previous || getCodexHookTrustSignature(previous) !== getCodexHookTrustSignature(next)) {
+    if (
+      !previous ||
+      computeTrustKey(previous) !== computeTrustKey(next) ||
+      getCodexHookTrustSignature(previous) !== getCodexHookTrustSignature(next)
+    ) {
       return next
     }
     const state = existingTrust.get(computeTrustKey(previous))
