@@ -77,6 +77,9 @@ function consumeQwenSessionLine(accumulator: SessionAccumulator, line: string): 
     return
   }
   if (record.type === 'assistant') {
+    // Why: capture the model before the text gate — a thought-only or tool-only
+    // turn carries record.model but no visible reply text.
+    accumulator.model = extractString(record.model) ?? accumulator.model
     // Skip `thought` parts — the model's private reasoning is not a real reply.
     const text = qwenMessagePartsText(arrayValue(message?.parts), true)
     if (!text) {
@@ -84,7 +87,6 @@ function consumeQwenSessionLine(accumulator: SessionAccumulator, line: string): 
     }
     accumulator.messageCount++
     addPreviewMessage(accumulator, { role: 'assistant', text, timestamp: record.timestamp })
-    accumulator.model = extractString(record.model) ?? accumulator.model
   }
 }
 

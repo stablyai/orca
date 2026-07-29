@@ -142,4 +142,20 @@ describe('parseQwenSessionFile', () => {
     expect(userPreview.text.length).toBe(220)
     expect(userPreview.text.endsWith('...')).toBe(true)
   })
+
+  it('captures the model from a thought-only assistant turn', async () => {
+    const { file } = await writeQwenSession([
+      record({ type: 'user', message: { role: 'user', parts: [{ text: 'hi' }] } }),
+      record({
+        type: 'assistant',
+        model: 'qwen3.7-plus',
+        message: { role: 'model', parts: [{ text: 'reasoning only', thought: true }] }
+      })
+    ])
+    const session = await parseQwenSessionFile(file, 'darwin')
+    expect(session?.model).toBe('qwen3.7-plus')
+    // A thought-only turn is not a real reply: only the user turn counts.
+    expect(session?.messageCount).toBe(1)
+    expect(session?.previewMessages.map((message) => message.role)).toEqual(['user'])
+  })
 })
