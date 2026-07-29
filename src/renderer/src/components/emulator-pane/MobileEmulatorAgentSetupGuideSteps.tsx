@@ -30,11 +30,9 @@ export function MobileEmulatorAgentSetupGuideSteps({
 }: MobileEmulatorAgentSetupGuideStepsProps): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
-  // Why: a repair-required runtime resolves to a WSL distro that is missing, so
-  // fall back to the plain command rather than emitting an unrunnable wsl.exe one.
-  const skillInstallCommand = activeSkillRuntime.installDisabledReason
-    ? ORCA_CLI_SKILL_INSTALL_COMMAND
-    : buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND, activeSkillRuntime.agentRuntime)
+  // Why: skill detection here scans the local host only, so keep building host
+  // commands; routing them to a WSL runtime would install where we never look.
+  const skillInstallCommand = buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND)
   const terminalWorktreeId = `mobile-emulator-${worktreeId}-orca-cli-skill-terminal`
   const showSkillPreInstallNotice = shouldShowMobileEmulatorSkillPreInstallNotice({
     cliEnabled: setup.cliEnabled,
@@ -170,10 +168,8 @@ export function MobileEmulatorAgentSetupGuideSteps({
             terminalShellOverride={activeSkillRuntime.terminalShellOverride}
             installed={setup.cliSkillInstalled}
             loading={setup.cliSkillLoading || setup.setupRechecking}
-            error={activeSkillRuntime.installDisabledReason ?? setup.cliSkillError}
-            installDisabled={
-              setup.step2Blocked || Boolean(activeSkillRuntime.installDisabledReason)
-            }
+            error={setup.cliSkillError}
+            installDisabled={setup.step2Blocked}
             showInstallWhenInstalled={!setup.cliSkillInstalled}
             terminalHeightPx={112}
             preInstallNotice={

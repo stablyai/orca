@@ -28,14 +28,10 @@ const EMULATOR_CLI_COMMANDS = [
 export function MobileEmulatorAgentControlRow(): React.JSX.Element {
   const setup = useMobileEmulatorAgentSetupState(true)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
-  // Why: a repair-required runtime resolves to a WSL distro that is missing, so
-  // fall back to the plain command rather than emitting an unrunnable wsl.exe one.
-  const cliSkillInstallCommand = activeSkillRuntime.installDisabledReason
-    ? ORCA_CLI_SKILL_INSTALL_COMMAND
-    : buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND, activeSkillRuntime.agentRuntime)
-  const cliSkillUpdateCommand = activeSkillRuntime.installDisabledReason
-    ? ORCA_CLI_SKILL_UPDATE_COMMAND
-    : buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND, activeSkillRuntime.agentRuntime)
+  // Why: skill detection here scans the local host only, so keep building host
+  // commands; routing them to a WSL runtime would install where we never look.
+  const cliSkillInstallCommand = buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND)
+  const cliSkillUpdateCommand = buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND)
 
   const handleEnableCli = async (): Promise<void> => {
     await setup.handleEnableCli()

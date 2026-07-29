@@ -227,16 +227,14 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     })
 
     try {
-      // Setup terminals spawn on the focused runtime, so cmd.exe would not exist there.
+      // Setup terminals can spawn on the focused runtime, so cmd.exe may not exist there.
       expect(buildSkillCommandForRuntime(installCommand, windowsHost, 'win32')).toBe(installCommand)
 
-      // A second saved environment routes the terminal back to the Windows host.
+      // Extra saved environments must not reintroduce the wrapper either.
       useAppStore.setState({
         runtimeEnvironments: [{ id: 'remote-linux' }, { id: 'other' }] as never
       })
-      expect(buildSkillCommandForRuntime(installCommand, windowsHost, 'win32')).toContain(
-        'where.exe npx'
-      )
+      expect(buildSkillCommandForRuntime(installCommand, windowsHost, 'win32')).toBe(installCommand)
     } finally {
       useAppStore.setState({
         settings: previous.settings,
