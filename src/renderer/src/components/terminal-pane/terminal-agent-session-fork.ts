@@ -65,7 +65,7 @@ function getUsableForkBase(
 
 async function copyForkContext(prompt: string, pane: ManagedPane): Promise<boolean> {
   try {
-    await window.api.ui.writeClipboardText(prompt)
+    await window.api.ui.writeTerminalClipboardText(prompt)
     toast.message(
       translate(
         'auto.components.terminal.pane.terminal.agent.session.fork.c00421d320',
@@ -189,7 +189,7 @@ export async function copyAgentSessionContextFromPane(pane: ManagedPane): Promis
     return false
   }
   try {
-    await window.api.ui.writeClipboardText(transcript)
+    await window.api.ui.writeTerminalClipboardText(transcript)
     toast.message(
       translate(
         'auto.components.terminal.pane.terminal.agent.session.fork.373a3103e7',

@@ -23,6 +23,7 @@ type MobilePageContentProps = {
   generatePairing: (rotate: boolean) => void
   canGeneratePairing: boolean
   handleAddressChange: (address: string) => void
+  beforeCustomAddressChange: (address: string) => Promise<boolean>
   handleBack: () => void
   handleContinue: () => void
   installQrUrl: string | null
@@ -37,6 +38,7 @@ type MobilePageContentProps = {
   handleConnectionModeChange: (mode: MobilePairingConnectionMode) => void
   pairQrDataUrl: string | null
   pairingUrl: string | null
+  pairingQrError: boolean
   relayDegraded: boolean
   platform: Platform
   refreshingNetworkInterfaces: boolean
@@ -60,6 +62,7 @@ export function MobilePageContent({
   generatePairing,
   canGeneratePairing,
   handleAddressChange,
+  beforeCustomAddressChange,
   handleBack,
   handleContinue,
   installQrUrl,
@@ -74,6 +77,7 @@ export function MobilePageContent({
   handleConnectionModeChange,
   pairQrDataUrl,
   pairingUrl,
+  pairingQrError,
   relayDegraded,
   platform,
   refreshingNetworkInterfaces,
@@ -118,6 +122,7 @@ export function MobilePageContent({
               onCopyInstallUrl={copyInstallUrl}
               pairQrDataUrl={pairQrDataUrl}
               pairingUrl={pairingUrl}
+              pairingQrError={pairingQrError}
               relayDegraded={relayDegraded}
               pairLoading={pairLoading}
               connectionMode={connectionMode}
@@ -128,6 +133,7 @@ export function MobilePageContent({
               networkInterfaces={networkInterfaces}
               selectedAddress={selectedAddress}
               onSelectedAddressChange={handleAddressChange}
+              beforeCustomAddressChange={beforeCustomAddressChange}
               onRefreshNetworkInterfaces={loadNetworkInterfaces}
               refreshingNetworkInterfaces={refreshingNetworkInterfaces}
               onBack={handleBack}

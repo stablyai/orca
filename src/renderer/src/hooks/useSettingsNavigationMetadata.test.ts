@@ -204,6 +204,54 @@ describe('settings navigation metadata', () => {
     )
   })
 
+  it('does not expose local runtime settings from a remote Windows host', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isLocalWindowsHost: false,
+      isWindowsTerminalHost: true,
+      isWebClient: false,
+      repos: [repo]
+    })
+
+    const agents = sections.find((section) => section.id === 'agents')
+    const general = sections.find((section) => section.id === 'general')
+    const terminal = sections.find((section) => section.id === 'terminal')
+    const repoSection = sections.find((section) => section.id === 'repo-repo-1')
+
+    expect(agents?.searchEntries.some((entry) => entry.title === 'Agent Runtime')).toBe(false)
+    expect(general?.searchEntries.some((entry) => entry.title === 'Default Project Runtime')).toBe(
+      false
+    )
+    expect(terminal?.searchEntries.some((entry) => entry.title === 'Default Shell')).toBe(true)
+    expect(repoSection?.searchEntries.some((entry) => entry.title === 'Project Runtime')).toBe(true)
+  })
+
+  it('keeps local runtime settings but hides remote Linux entries on a Windows desktop', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: true,
+      isLocalWindowsHost: true,
+      isWindowsTerminalHost: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+
+    const agents = sections.find((section) => section.id === 'agents')
+    const general = sections.find((section) => section.id === 'general')
+    const terminal = sections.find((section) => section.id === 'terminal')
+    const repoSection = sections.find((section) => section.id === 'repo-repo-1')
+
+    expect(agents?.searchEntries.some((entry) => entry.title === 'Agent Runtime')).toBe(true)
+    expect(general?.searchEntries.some((entry) => entry.title === 'Default Project Runtime')).toBe(
+      true
+    )
+    expect(terminal?.searchEntries.some((entry) => entry.title === 'Default Shell')).toBe(false)
+    expect(repoSection?.searchEntries.some((entry) => entry.title === 'Project Runtime')).toBe(
+      false
+    )
+  })
+
   it('places Advanced near the bottom on desktop without putting it under Experimental', () => {
     const desktopIds = ids()
 

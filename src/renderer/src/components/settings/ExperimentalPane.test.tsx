@@ -142,7 +142,7 @@ describe('ExperimentalPane', () => {
 
     expect(settings.experimentalAgentDashboardPopout).toBe(false)
     expect(markup).toContain('Agent Dashboard')
-    expect(markup).toContain('monitor attention, working, and idle agents')
+    expect(markup).toContain('Monitor agents that need you, are working, or are done')
     expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(
       'Agent Dashboard'
     )
@@ -163,6 +163,31 @@ describe('ExperimentalPane', () => {
     })
 
     expect(updateSettings).toHaveBeenCalledWith({ experimentalAgentDashboardPopout: true })
+    root.unmount()
+  })
+
+  it('exposes idle-agent visibility for pop-out dashboards', async () => {
+    const updateSettings = vi.fn()
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      experimentalAgentDashboardPopout: true
+    }
+    const { root, container } = await renderExperimentalPane({
+      settings,
+      updateSettings
+    })
+    const idleSwitch = container.querySelector<HTMLButtonElement>(
+      '#experimental-agent-dashboard button[role="switch"][aria-label="Show idle agents"]'
+    )
+    if (!idleSwitch) {
+      throw new Error('Idle-agent visibility switch was not rendered')
+    }
+
+    await act(async () => {
+      idleSwitch.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ experimentalAgentDashboardShowIdle: true })
     root.unmount()
   })
 

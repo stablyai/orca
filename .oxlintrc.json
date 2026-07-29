@@ -5,12 +5,29 @@
     {
       "name": "mobile-pairing",
       "specifier": "./config/oxlint-plugins/mobile-pairing-qrcode-import.mjs"
+    },
+    {
+      "name": "app-store-performance",
+      "specifier": "./config/oxlint-plugins/app-store-performance.mjs"
+    },
+    {
+      "name": "quadratic-buffer-concat",
+      "specifier": "./config/oxlint-plugins/quadratic-buffer-concat.mjs"
+    },
+    {
+      "name": "renderer-scrollbar-style",
+      "specifier": "./config/oxlint-plugins/renderer-scrollbar-style.mjs"
     }
   ],
   "categories": {
     "correctness": "error"
   },
   "rules": {
+    "app-store-performance/require-selector": "error",
+    "app-store-performance/no-identity-selector": "error",
+    "app-store-performance/no-fresh-selector-result": "error",
+    "no-fallthrough": "error",
+    "quadratic-buffer-concat/no-loop-carried-concat": "error",
     "react/jsx-no-duplicate-props": "error",
     "react/jsx-no-undef": "error",
     "react/no-children-prop": "error",
@@ -93,6 +110,19 @@
     "unicorn/throw-new-error": "error"
   },
   "overrides": [
+    {
+      "files": ["src/renderer/src/**/*.{ts,tsx}"],
+      "rules": {
+        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "error"
+      }
+    },
+    {
+      "files": ["**/*.test.*", "**/*.spec.*", "**/*-benchmark.*"],
+      "rules": {
+        "quadratic-buffer-concat/no-loop-carried-concat": "off",
+        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "off"
+      }
+    },
     {
       "files": ["**/*.ts"],
       "rules": {

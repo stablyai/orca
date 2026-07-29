@@ -17,7 +17,10 @@ import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
 import { subscribeToPtyExit } from './pty-dispatcher'
 import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
 import { startParkedTerminalByteWatcher } from './parked-terminal-byte-watcher'
-import { isSnapshotBackedTerminalPty } from './terminal-hidden-view-parking'
+import {
+  isParkRestorableTerminalPty,
+  type TerminalParkRestorePolicy
+} from './terminal-hidden-view-parking'
 import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
@@ -81,7 +84,7 @@ export function fallbackParkedPaneCandidates(
 }
 
 // Why: start path and eligibility check must resolve identical candidates, or a tab passes the check then starts uncoverable.
-function resolveParkedTerminalPaneCandidates(
+export function resolveParkedTerminalPaneCandidates(
   tab: ParkableTerminalTabModel,
   state: ParkedPaneFallbackState
 ): ParkedTerminalPaneCapture[] {
@@ -94,9 +97,18 @@ function resolveParkedTerminalPaneCandidates(
   return capturedIsCurrent ? captured.panes : fallbackParkedPaneCandidates(tab, state)
 }
 
+// Why: fact-mode watchers work for any pty whose bytes transit local main —
+// SSH included — so watcher coverage follows the park-restore policy, not the
+// stricter daemon-snapshot predicate.
+function parkRestorePolicyFromState(state: {
+  settings: { terminalSshViewParking?: boolean } | null
+}): TerminalParkRestorePolicy {
+  return { sshParkingEnabled: state.settings?.terminalSshViewParking !== false }
+}
+
 /**
  * Whether parked byte watchers can fully cover this tab's PTYs (every candidate
- * has a snapshot-backed PTY on a valid leaf). Hosts must refuse to park a tab
+ * has a park-restorable PTY on a valid leaf). Hosts must refuse to park a tab
  * that fails this check, or bell/title/completion side effects silently drop.
  */
 export function canWatcherCoverParkedTerminalTab(
@@ -105,14 +117,16 @@ export function canWatcherCoverParkedTerminalTab(
   // Why: cold activation needs stronger snapshot support (view never mounted); ordinary parking can reattach a mounted view.
   isPtyEligible: ParkedTerminalPtyEligibility = allowSnapshotBackedPty
 ): boolean {
-  const panes = resolveParkedTerminalPaneCandidates(tab, useAppStore.getState())
+  const state = useAppStore.getState()
+  const panes = resolveParkedTerminalPaneCandidates(tab, state)
+  const restorePolicy = parkRestorePolicyFromState(state)
   return (
     panes.length > 0 &&
     panes.every(
       (pane) =>
         pane.ptyId !== null &&
         isTerminalLeafId(pane.leafId) &&
-        isSnapshotBackedTerminalPty(pane.ptyId, worktreeId) &&
+        isParkRestorableTerminalPty(pane.ptyId, worktreeId, restorePolicy) &&
         isPtyEligible(pane.ptyId)
     )
   )
@@ -125,6 +139,7 @@ function startParkedTabWatchers(
 ): void {
   const state = useAppStore.getState()
   const panes = resolveParkedTerminalPaneCandidates(tab, state)
+  const restorePolicy = parkRestorePolicyFromState(state)
   const disposersByPtyId = new Map<string, () => void>()
   const paneIdByPtyId = new Map<string, number>()
   for (const pane of panes) {
@@ -134,7 +149,7 @@ function startParkedTabWatchers(
       !ptyId ||
       disposersByPtyId.has(ptyId) ||
       !isTerminalLeafId(pane.leafId) ||
-      !isSnapshotBackedTerminalPty(ptyId, worktreeId)
+      !isParkRestorableTerminalPty(ptyId, worktreeId, restorePolicy)
     ) {
       continue
     }

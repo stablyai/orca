@@ -81,7 +81,33 @@ export type SkillFreshnessInstallation = {
   currentPackageDigest: string
   currentAppVersion: string
   observedPackageDigest: string | null
+  /** Git tree sha of the observed bytes; lets the post-run verdict match disk against the updater's lock. */
+  observedGitTreeSha?: string | null
   errorCategory: string | null
+}
+
+/**
+ * Whether a copy is wrong in a way running the update would not resolve.
+ *
+ * Shared so the badge and the review dialog cannot disagree about what counts: the
+ * badge points at the dialog for the explanation, so a copy that turns the badge
+ * amber must also produce a row there. An out-of-date copy the command converges is
+ * ordinary work, not a problem, and a plugin's own copy of a same-named skill is the
+ * vendor's business rather than the user's drift.
+ */
+export function isSkillCopyNeedingAttention(installation: SkillFreshnessInstallation): boolean {
+  return (
+    installation.status !== 'current' &&
+    // Why: 'newer-known' is recognized official content ahead of this build — the
+    // updater's own install or a newer release's bytes. There is nothing to fix and
+    // nothing to update to, so amber would send the user chasing a phantom edit.
+    installation.status !== 'newer-known' &&
+    !(installation.status === 'unrecognized' && installation.topology === 'plugin-cache') &&
+    !(
+      SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&
+      installation.status === 'outdated'
+    )
+  )
 }
 
 export type SkillFreshnessScanIssueReason =
@@ -112,8 +138,12 @@ export type SkillFreshnessScanIssue = {
 // every installed skill. It is still listed in Details, like the other bounds.
 const SKILL_SCAN_ATTENTION_REASONS = new Set<SkillFreshnessScanIssueReason>(['io-error'])
 
+export function isSkillScanAttentionReason(reason: SkillFreshnessScanIssueReason): boolean {
+  return SKILL_SCAN_ATTENTION_REASONS.has(reason)
+}
+
 export function isSkillScanIssueNeedingAttention(issue: SkillFreshnessScanIssue): boolean {
-  return SKILL_SCAN_ATTENTION_REASONS.has(issue.reason)
+  return isSkillScanAttentionReason(issue.reason)
 }
 
 // Why: these are the bounds that end the walk rather than skip one folder. They are

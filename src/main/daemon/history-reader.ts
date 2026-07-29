@@ -284,11 +284,15 @@ export class HistoryReader {
           if (
             !(await replay.write(checkpoint.scrollbackAnsi ?? '')) ||
             !(await replay.write(checkpoint.rehydrateSequences)) ||
-            !(await replay.write(checkpoint.snapshotAnsi))
+            !(await replay.write(checkpoint.snapshotAnsi)) ||
+            !(await replay.write(checkpoint.pendingEscapeTailAnsi ?? ''))
           ) {
             return { restoreInfo: null, readFailed: true }
           }
           emulator.setRestoredOscLinks(checkpoint.oscLinks)
+          if (checkpoint.lastTitle) {
+            emulator.setLastTitle(checkpoint.lastTitle)
+          }
         }
         for (const batch of log.batches) {
           for (const record of batch.records) {

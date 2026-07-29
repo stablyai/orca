@@ -9,7 +9,10 @@ import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
 import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
-import { orchestrationSkillRecoveryData } from '../../../../shared/orchestration-rpc-contract'
+import {
+  ORCHESTRATION_LEGACY_RUN_ID,
+  orchestrationSkillRecoveryData
+} from '../../../../shared/orchestration-rpc-contract'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
@@ -94,6 +97,7 @@ const SendParams = z
 const CheckParams = z
   .object({
     terminal: OptionalString,
+    terminalPaneKey: OptionalString,
     unread: OptionalBoolean,
     peek: OptionalBoolean,
     // Why: `all` surfaces every message and skips mark-read; legacy encoding was the `{unread: false}` trick (design doc §3.2/§3.3).
@@ -235,6 +239,7 @@ function resolveRunScope(
   params: {
     runId?: string
     callerTerminalHandle?: string
+    callerPaneKey?: string
     requireCurrentConsumer: boolean
   }
 ): RunRow {
@@ -254,7 +259,7 @@ function resolveRunScope(
       orchestrationSkillRecoveryData()
     )
   }
-  const paneKey = runtime.getTerminalPaneKey(params.callerTerminalHandle)
+  const paneKey = params.callerPaneKey ?? runtime.getTerminalPaneKey(params.callerTerminalHandle)
   if (!paneKey) {
     throw new OrchestrationError(
       'stable_pane_required',
@@ -633,12 +638,14 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const handle = params.terminal ?? 'unknown'
       const typeFilter = parseMessageTypes(params.types)
 
-      const paneKey = runtime.getTerminalPaneKey(handle)
+      // Why: a live runtime handle is authoritative; pane metadata is only the restart fallback.
+      const paneKey = runtime.getTerminalPaneKey(handle) ?? params.terminalPaneKey
       const boundRun = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
       if (params.run || boundRun) {
         const run = resolveRunScope(runtime, {
           runId: params.run,
           callerTerminalHandle: handle,
+          callerPaneKey: paneKey ?? undefined,
           requireCurrentConsumer: true
         })
         const generation = run.consumer_generation
@@ -777,7 +784,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         remoteAttachment &&
         !db.isRemoteAttachmentProcessCurrent({
           dispatchId: remoteAttachment.dispatch_id,
-          paneKey,
+          paneKey: paneKey ?? null,
           processIncarnation: runtime.getTerminalProcessIncarnation(handle)
         })
       ) {
@@ -849,6 +856,17 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           ? db.getAllMessagesForHandle(handle, undefined, typeFilter)
           : db.getUnreadMessages(handle, typeFilter)
 
+        if (
+          consumeUnread &&
+          messages.some((message) => message.run_id === ORCHESTRATION_LEGACY_RUN_ID)
+        ) {
+          throw new OrchestrationError(
+            'legacy_read_only',
+            'Legacy orchestration messages are inspect-only; use --peek or --all. No acknowledgment was applied.',
+            { effectsApplied: false }
+          )
+        }
+
         let visibleMessages = messages
         if (consumeUnread && messages.length > 0) {
           // Why: unread check is an authoritative read path for worker_done/heartbeat, so reconcile lifecycle messages here too.
@@ -899,6 +917,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       if (!original) {
         throw new Error(`Message not found: ${params.id}`)
       }
+      if (original.run_id === ORCHESTRATION_LEGACY_RUN_ID) {
+        throw new OrchestrationError(
+          'legacy_read_only',
+          'Legacy orchestration messages are inspect-only; no reply was applied.',
+          { effectsApplied: false }
+        )
+      }
 
       const question = db.getQuestion(params.id)
       if (question) {
@@ -943,7 +968,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         to: original.from_handle,
         subject: `Re: ${original.subject}`,
         body: params.body,
-        threadId: original.thread_id ?? original.id
+        threadId: original.thread_id ?? original.id,
+        runId: original.run_id
       })
 
       runtime.notifyMessageArrived(original.from_handle, reply.type)

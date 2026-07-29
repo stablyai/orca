@@ -195,6 +195,7 @@ async function dispatchRemoteCli(
     case 'orchestration check':
       return await call(dispatcher, 'orchestration.check', {
         terminal: resolveRemoteCliHandle(parsed.flags, env, 'terminal'),
+        terminalPaneKey: parsed.flags.has('terminal') ? undefined : env.ORCA_PANE_KEY || undefined,
         unread: parsed.flags.has('unread') ? true : undefined,
         all: parsed.flags.has('all') ? true : undefined,
         types: optionalRemoteCliString(parsed.flags, 'types'),

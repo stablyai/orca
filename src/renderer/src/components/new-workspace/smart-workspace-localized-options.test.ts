@@ -26,7 +26,7 @@ describe('smart-workspace-localized-options', () => {
       'Linear',
       'GitLab',
       '分支',
-      '姓名'
+      '名称'
     ])
 
     await i18n.changeLanguage('en')

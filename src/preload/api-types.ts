@@ -27,6 +27,20 @@ import type {
 import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
 import type {
+  HostQualifiedDetectedWorktreeResult,
+  LegacyDetectedWorktreeRequest,
+  ListDetectedWorktreesArgs,
+  ProviderRequestId
+} from '../shared/detected-worktree-provider-contract'
+import type {
+  HostRepoCatalogSnapshot,
+  ListReposForExecutionHostArgs
+} from '../shared/host-repo-catalog-contract'
+import type {
+  HostLineageSnapshot,
+  ListDesktopLineageForHostArgs
+} from '../shared/host-lineage-contract'
+import type {
   WriteTerminalRenderDesyncEvidenceArgs,
   WriteTerminalRenderDesyncEvidenceResult
 } from '../shared/terminal-render-desync-evidence'
@@ -112,6 +126,7 @@ import type {
   CustomPet,
   DetectedWorktreeListResult,
   DirEntry,
+  FilesystemPathFlavor,
   ForceDeleteWorktreeBranchResult,
   FsChangedPayload,
   GhosttyImportPreview,
@@ -1157,6 +1172,7 @@ export type PreloadApi = {
   }
   repos: {
     list: () => Promise<Repo[]>
+    listForExecutionHost?: (args: ListReposForExecutionHostArgs) => Promise<HostRepoCatalogSnapshot>
     // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
     add: (args: {
       path: string
@@ -1342,7 +1358,13 @@ export type PreloadApi = {
   }
   worktrees: {
     list: (args: { repoId: string }) => Promise<Worktree[]>
-    listDetected: (args: { repoId: string }) => Promise<DetectedWorktreeListResult>
+    listDetected: {
+      (
+        args: ListDetectedWorktreesArgs
+      ): Promise<HostQualifiedDetectedWorktreeResult | DetectedWorktreeListResult>
+      (args: LegacyDetectedWorktreeRequest): Promise<DetectedWorktreeListResult>
+    }
+    cancelListDetected?: (args: { providerRequestId: ProviderRequestId }) => Promise<void>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
     /** Two-phase progress for a background `create`, correlated by `creationId`. The remote/runtime
@@ -1392,6 +1414,7 @@ export type PreloadApi = {
       lineage: Record<string, WorktreeLineage>
       workspaceLineage?: Record<string, WorkspaceLineage>
     }>
+    listLineageForHost?: (args: ListDesktopLineageForHostArgs) => Promise<HostLineageSnapshot>
     updateLineage: (args: {
       worktreeId: string
       parentWorktreeId?: string
@@ -2440,6 +2463,14 @@ export type PreloadApi = {
     unsubscribe: (ptyId: string) => Promise<void>
     onData: (callback: (payload: TerminalPreviewDataPayload) => void) => () => void
   }
+  macosTccPrompts: {
+    /** Fires once macOS has raised its Nth consent dialog naming Orca (#9756). */
+    onThreshold: (callback: (payload: { promptCount: number }) => void) => () => void
+    consumePending: () => Promise<{ claimId: number; promptCount: number } | null>
+    acknowledgePending: (claimId: number) => Promise<void>
+    releasePending: (claimId: number) => Promise<void>
+    dismiss: () => Promise<void>
+  }
   developerPermissions: {
     getStatus: () => Promise<DeveloperPermissionState[]>
     request: (args: { id: DeveloperPermissionId }) => Promise<DeveloperPermissionRequestResult>
@@ -2618,6 +2649,7 @@ export type PreloadApi = {
     download: () => Promise<void>
     quitAndInstall: () => Promise<void>
     dismissNudge: () => Promise<void>
+    dismissAvailableUpdate: () => Promise<void>
     onStatus: (callback: (status: UpdateStatus) => void) => () => void
     onClearDismissal: (callback: () => void) => () => void
   }
@@ -3066,6 +3098,8 @@ export type PreloadApi = {
     onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     onHardReloadBrowserPage: (callback: () => void) => () => void
     onCloseActiveTab: (callback: () => void) => () => void
+    onCloseFloatingItem: (callback: (payload: { sourceId: string }) => void) => () => void
+    onSelectFloatingIndex: (callback: (payload: { index: number }) => void) => () => void
     onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
     onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void) => () => void
     onSwitchRecentTab: (callback: () => void) => () => void
@@ -3189,6 +3223,7 @@ export type PreloadApi = {
       runtimeEnvironmentId?: string | null
     }) => Promise<string | null>
     writeClipboardText: (text: string) => Promise<void>
+    writeTerminalClipboardText: (text: string) => Promise<void>
     writeSelectionClipboardText: (text: string) => Promise<void>
     writeClipboardImage: (dataUrl: string) => Promise<void>
     performNativePaste: (options?: { mode?: 'paste' | 'paste-and-match-style' }) => void
@@ -3206,7 +3241,7 @@ export type PreloadApi = {
     syncTrafficLights: (zoomFactor: number) => void
     setMarkdownEditorFocused: (focused: boolean) => void
     setTerminalInputFocused: (focused: boolean) => void
-    setFloatingTerminalInputFocused: (focused: boolean) => void
+    setFloatingFocus: (state: { panelFocused: boolean; terminalFocused: boolean }) => void
     setShortcutRecorderFocused: (focused: boolean) => void
     onRichMarkdownContextCommand: (
       callback: (payload: RichMarkdownContextMenuCommandPayload) => void
@@ -3369,6 +3404,7 @@ export type PreloadApi = {
     browseDir: (args: { targetId: string; dirPath: string }) => Promise<{
       entries: { name: string; isDirectory: boolean }[]
       resolvedPath: string
+      pathFlavor: FilesystemPathFlavor
     }>
     onCredentialRequest: (
       callback: (data: {
@@ -3507,7 +3543,8 @@ export type PreloadApi = {
       | { available: false }
       | {
           available: true
-          qrDataUrl: string
+          qrDataUrl: string | null
+          qrError?: 'encoding_failed'
           pairingUrl: string
           endpoint: string
           deviceId: string

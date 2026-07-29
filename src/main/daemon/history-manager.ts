@@ -17,23 +17,32 @@ import {
   type SessionMeta
 } from './terminal-history-metadata'
 import type { PendingOutputRecord, TerminalSnapshot } from './types'
-import type { HistoryManagerOptions, OpenSessionOptions } from './terminal-history-manager-options'
+import { TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES } from './terminal-history-file-limits'
+import { TerminalHistoryMutationTracker } from './terminal-history-mutation-tracker'
+import type {
+  HistoryCheckpointResult,
+  HistoryManagerOptions,
+  OpenSessionOptions
+} from './terminal-history-manager-options'
 
 export type { SessionMeta } from './terminal-history-metadata'
 export type { HistoryRecoveryFreeze } from './terminal-history-recovery-quarantine'
-export type { HistoryManagerOptions, OpenSessionOptions } from './terminal-history-manager-options'
+export type * from './terminal-history-manager-options'
 
 export class HistoryManager {
-  private basePath: string
   private writers = new Map<string, TerminalHistorySessionWriter>()
   private disabledSessions = new Set<string>()
-  private pendingSessionMutations = new Map<string, Set<Promise<unknown>>>()
+  private mutations = new TerminalHistoryMutationTracker()
   private recoveryFreezes = new Map<string, ActiveHistoryRecoveryFreeze>()
   private onWriteError?: (sessionId: string, error: Error) => void
+  private checkpointMaxBytes: number
 
-  constructor(basePath: string, opts?: HistoryManagerOptions) {
-    this.basePath = basePath
+  constructor(
+    private readonly basePath: string,
+    opts?: HistoryManagerOptions
+  ) {
     this.onWriteError = opts?.onWriteError
+    this.checkpointMaxBytes = opts?.checkpointMaxBytes ?? TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
   }
 
   async openSession(sessionId: string, opts: OpenSessionOptions): Promise<void> {
@@ -81,7 +90,10 @@ export class HistoryManager {
         }
       }
 
-      this.writers.set(sessionId, new TerminalHistorySessionWriter(dir, true))
+      this.writers.set(
+        sessionId,
+        new TerminalHistorySessionWriter(dir, true, this.checkpointMaxBytes)
+      )
     } catch (err) {
       if (recoveryFreeze) {
         this.abandonRecoveryFreeze(recoveryFreeze)
@@ -103,7 +115,7 @@ export class HistoryManager {
     const activeFreeze: ActiveHistoryRecoveryFreeze = { handle }
     this.recoveryFreezes.set(sessionId, activeFreeze)
     try {
-      await this.waitForSessionMutations(sessionId)
+      await this.mutations.wait(sessionId)
       activeFreeze.fingerprint = fingerprintTerminalHistorySession(this.basePath, sessionId)
       return handle
     } catch (err) {
@@ -148,7 +160,10 @@ export class HistoryManager {
       return
     }
     const dir = join(this.basePath, getHistorySessionDirName(sessionId))
-    this.writers.set(sessionId, new TerminalHistorySessionWriter(dir, false))
+    this.writers.set(
+      sessionId,
+      new TerminalHistorySessionWriter(dir, false, this.checkpointMaxBytes)
+    )
   }
 
   // Why: wake re-spawns a sleep-killed session; re-register without deleting checkpoint.json, clear endedAt so it can cold-restore again.
@@ -181,10 +196,7 @@ export class HistoryManager {
     seq: number,
     records: PendingOutputRecord[]
   ): Promise<'ok' | 'needs-checkpoint'> {
-    return this.trackSessionMutation(
-      sessionId,
-      this.appendIncrementsUntracked(sessionId, seq, records)
-    )
+    return this.mutations.track(sessionId, this.appendIncrementsUntracked(sessionId, seq, records))
   }
 
   private async appendIncrementsUntracked(
@@ -208,25 +220,33 @@ export class HistoryManager {
   }
 
   // Full checkpoints are rare (clean disconnect, pending-buffer overflow, log cap); the 5s tick appends increments instead.
-  checkpoint(sessionId: string, snapshot: TerminalSnapshot): Promise<void> {
-    return this.trackSessionMutation(sessionId, this.checkpointUntracked(sessionId, snapshot))
+  checkpoint(sessionId: string, snapshot: TerminalSnapshot): Promise<HistoryCheckpointResult> {
+    return this.mutations.track(sessionId, this.checkpointUntracked(sessionId, snapshot))
   }
 
-  private async checkpointUntracked(sessionId: string, snapshot: TerminalSnapshot): Promise<void> {
+  private async checkpointUntracked(
+    sessionId: string,
+    snapshot: TerminalSnapshot
+  ): Promise<HistoryCheckpointResult> {
     if (this.disabledSessions.has(sessionId)) {
-      return
+      return 'unavailable'
     }
     const writer = this.writers.get(sessionId)
     if (!writer) {
-      return
+      return 'unavailable'
     }
 
     try {
       // Why: tmp+rename is atomic (corrupt checkpoint > stale); async so a sync ~MB write can't stall IPC (worse under Windows AV).
       // The adapter's checkpointInFlight guard serializes checkpoints, so concurrent async writes can't collide on the fixed .tmp path.
-      await writer.checkpoint(snapshot)
+      const checkpoint = await writer.checkpoint(snapshot)
+      if (checkpoint.result === 'retryable') {
+        this.onWriteError?.(sessionId, checkpoint.error)
+      }
+      return checkpoint.result
     } catch (err) {
       this.handleWriteError(sessionId, err)
+      return 'unavailable'
     }
   }
 
@@ -254,7 +274,7 @@ export class HistoryManager {
     if (activeFreeze) {
       this.recoveryFreezes.delete(sessionId)
     }
-    await this.waitForSessionMutations(sessionId)
+    await this.mutations.wait(sessionId)
     rmSync(join(this.basePath, getHistorySessionDirName(sessionId)), {
       recursive: true,
       force: true
@@ -317,30 +337,5 @@ export class HistoryManager {
       throw new Error('terminal_history_recovery_freeze_invalid')
     }
     return activeFreeze
-  }
-
-  private trackSessionMutation<T>(sessionId: string, operation: Promise<T>): Promise<T> {
-    const mutations = this.pendingSessionMutations.get(sessionId) ?? new Set<Promise<unknown>>()
-    mutations.add(operation)
-    this.pendingSessionMutations.set(sessionId, mutations)
-    void operation.then(
-      () => this.finishSessionMutation(sessionId, operation),
-      () => this.finishSessionMutation(sessionId, operation)
-    )
-    return operation
-  }
-
-  private finishSessionMutation(sessionId: string, operation: Promise<unknown>): void {
-    const mutations = this.pendingSessionMutations.get(sessionId)
-    mutations?.delete(operation)
-    if (mutations?.size === 0) {
-      this.pendingSessionMutations.delete(sessionId)
-    }
-  }
-
-  private async waitForSessionMutations(sessionId: string): Promise<void> {
-    while (this.pendingSessionMutations.has(sessionId)) {
-      await Promise.allSettled(this.pendingSessionMutations.get(sessionId)!)
-    }
   }
 }

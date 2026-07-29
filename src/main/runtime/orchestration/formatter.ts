@@ -1,21 +1,23 @@
 import type { MessageRow } from './types'
+import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
 
 const BANNER_WIDTH = 60
 const SEPARATOR = '─'.repeat(BANNER_WIDTH)
 
-// Why: rich message banners help agents (and humans reading terminal output)
-// quickly parse message metadata. Priority indicators surface urgent messages
-// visually. The reply hint reduces friction for agent-to-agent responses
-// (Section 4.8).
 export function formatMessageBanner(msg: MessageRow): string {
   const priorityTag =
     msg.priority === 'urgent' ? ' [URGENT]' : msg.priority === 'high' ? ' [HIGH]' : ''
+  const legacyReadOnly = msg.run_id === ORCHESTRATION_LEGACY_RUN_ID
+  const authorityTag = legacyReadOnly ? ' [LEGACY READ-ONLY]' : ''
   const senderName = msg.from_handle.toUpperCase()
 
-  const header = `──── From: ${senderName} (${msg.from_handle})${priorityTag} (${msg.type}) ────`
+  const header = `──── From: ${senderName} (${msg.from_handle})${priorityTag}${authorityTag} (${msg.type}) ────`
 
   const lines: string[] = [header]
   lines.push(`Subject: ${msg.subject}`)
+  if (legacyReadOnly) {
+    lines.push('[Inspection only: reply and acknowledgment are unavailable.]')
+  }
 
   if (msg.body) {
     lines.push(msg.body)
@@ -25,11 +27,12 @@ export function formatMessageBanner(msg: MessageRow): string {
     lines.push(`[Payload: ${msg.payload}]`)
   }
 
-  // Why: injected reply commands must retain the receiving pane's identity
-  // even when an older shell lacks Orca's terminal environment variables.
-  lines.push(
-    `[Reply: orca orchestration reply --id ${msg.id} --from ${msg.to_handle} --body "..."]`
-  )
+  if (!legacyReadOnly) {
+    // Why: older shells can lack Orca's terminal identity environment.
+    lines.push(
+      `[Reply: orca orchestration reply --id ${msg.id} --from ${msg.to_handle} --body "..."]`
+    )
+  }
   lines.push(SEPARATOR)
 
   return lines.join('\n')

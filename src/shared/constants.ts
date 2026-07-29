@@ -300,6 +300,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     activeClaudeManagedAccountId: null,
     terminalScopeHistoryByWorktree: true,
     terminalHiddenViewParking: true,
+    // C1 kill switches — runtime reads stay `!== false` so older persisted
+    // settings objects (which omit them) keep the default-on behavior.
+    terminalSshViewParking: true,
+    terminalHiddenWorktreeRetentionBudget: true,
     terminalMainSideEffectAuthority: true,
     terminalHiddenDeliveryGate: true,
     terminalModelQueryAuthority: true,
@@ -351,6 +355,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     experimentalAgentDashboardPopout: false,
     // Why: in-window screen popover is the default surface; users opt into a separate pop-out window.
     experimentalAgentDashboardMode: 'in-window',
+    experimentalAgentDashboardShowIdle: false,
     experimentalActivityDefaultedOffForAllUsers: true,
     experimentalTerminalAttention: false,
     experimentalAgentHibernation: false,
@@ -451,6 +456,7 @@ export function getDefaultUIState(): PersistedUIState {
     rightSidebarExplorerView: 'files',
     rightSidebarWidth: 350,
     markdownTocPanelWidth: 240,
+    combinedDiffFileTreeWidth: 256,
     groupBy: 'repo',
     sortBy: 'recent',
     projectOrderBy: 'manual',

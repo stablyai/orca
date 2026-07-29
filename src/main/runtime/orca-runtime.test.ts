@@ -119,6 +119,7 @@ import {
   _resetTerminalViewAttributesForTest,
   setTerminalViewAttributes
 } from './terminal-view-attribute-store'
+import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktree-shared-directories'
 
 const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -129,6 +130,7 @@ const resolveLocalGitUsernameMock = vi.hoisted(() => vi.fn(async () => ''))
 vi.mock('../ipc/worktree-symlinks', () => ({
   createWorktreeCopiedPaths: vi.fn(),
   createWorktreeLinkedPaths: vi.fn(),
+  createWorktreeSharedPaths: vi.fn(),
   findExistingWorktreeSymlinkPaths: findExistingWorktreeSymlinkPathsMock,
   removeWorktreeLinkedPaths: removeWorktreeLinkedPathsMock
 }))
@@ -613,6 +615,7 @@ vi.mock('../git/git-username', async () => {
 
 function resetRuntimeTestMocks(): void {
   resetPlatform()
+  clearConfiguredWorktreeSharedDirectoriesCacheForTests()
   _resetTerminalViewAttributesForTest()
   advertisedUrlWatcher.clear()
   electronMocks.BrowserWindow.fromId.mockReset()
@@ -6785,6 +6788,7 @@ describe('OrcaRuntimeService', () => {
       const result = await runtime.browseServerDir(tempRoot)
 
       expect(result.resolvedPath).toBe(tempRoot)
+      expect(result.pathFlavor).toBe(process.platform === 'win32' ? 'win32' : 'posix')
       expect(result.entries).toEqual([
         { name: 'alpha', isDirectory: true, isSymlink: false },
         { name: 'zeta', isDirectory: true, isSymlink: false },
@@ -6793,6 +6797,20 @@ describe('OrcaRuntimeService', () => {
     } finally {
       await rm(tempRoot, { recursive: true, force: true })
     }
+  })
+
+  it.runIf(process.platform === 'win32')('lists drive roots for a server-root browse', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    const result = await runtime.browseServerDir('/')
+
+    expect(result.resolvedPath).toBe('/')
+    expect(result.pathFlavor).toBe('win32')
+    expect(result.entries).toContainEqual({
+      name: win32.parse(tmpdir()).root.toUpperCase(),
+      isDirectory: true,
+      isSymlink: false
+    })
   })
 
   it('defaults runtime addRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
@@ -36448,6 +36466,26 @@ describe('OrcaRuntimeService', () => {
     expect(result.warning).toBe(
       `orca.yaml archive hook skipped for ${TEST_WORKTREE_PATH}; pass --run-hooks to run it.`
     )
+  })
+
+  it('passes project shared links through the runtime removal preflight and cleanup', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    vi.mocked(loadHooks).mockReturnValue({
+      scripts: {},
+      worktree: { sharedDirectories: ['node_modules'] }
+    })
+    findExistingWorktreeSymlinkPathsMock.mockResolvedValue(['node_modules'])
+    vi.mocked(removeWorktree).mockResolvedValue({})
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    expect(findExistingWorktreeSymlinkPathsMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH, [
+      'node_modules'
+    ])
+    expect(assertWorktreeCleanForRemoval).toHaveBeenCalledWith(TEST_WORKTREE_PATH, false, {
+      ignoredUntrackedPaths: ['node_modules']
+    })
+    expect(removeWorktreeLinkedPathsMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH, ['node_modules'])
   })
 
   it('does not remove a runtime worktree when watcher teardown cannot release it', async () => {

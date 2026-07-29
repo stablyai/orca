@@ -29,6 +29,7 @@ import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { useAppStore } from '@/store'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { copyTerminalSelection } from './terminal-selection-copy'
 import { isLocalWindowsConptyPaneForCtrlArrow } from './terminal-ctrl-arrow-conpty'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
@@ -50,7 +51,8 @@ export function resolveTerminalKeyboardShortcutAction(
   isKittyKeyboardActivePane: Parameters<typeof resolveTerminalShortcutAction>[7],
   layoutBaseCharacterForCode: Parameters<typeof resolveTerminalShortcutAction>[8],
   getWindowsShiftEnterEncoding: Parameters<typeof resolveTerminalShortcutAction>[9],
-  isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>
+  isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>,
+  terminalShortcutPolicy: Parameters<typeof resolveTerminalShortcutAction>[11] = 'orca-first'
 ): ReturnType<typeof resolveTerminalShortcutAction> {
   // Why: keep the host callback required at the production boundary so a
   // caller cannot silently fall back to client-OS byte routing.
@@ -65,7 +67,8 @@ export function resolveTerminalKeyboardShortcutAction(
     isKittyKeyboardActivePane,
     layoutBaseCharacterForCode,
     getWindowsShiftEnterEncoding,
-    isWindowsTerminalHost
+    isWindowsTerminalHost,
+    terminalShortcutPolicy
   )
 }
 
@@ -397,7 +400,8 @@ export function useTerminalKeyboardShortcuts({
         isKittyKeyboardActivePane,
         getLayoutBaseCharacterForCode,
         getActivePaneWindowsShiftEnterEncoding,
-        isActivePaneWindowsTerminalHost
+        isActivePaneWindowsTerminalHost,
+        terminalShortcutPolicy
       )
       if (!action) {
         return
@@ -444,13 +448,15 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        const selection = pane.terminal.getSelection()
-        if (!selection) {
+        if (!pane.terminal.getSelection()) {
           return
         }
         e.preventDefault()
         e.stopImmediatePropagation()
-        void window.api.ui.writeClipboardText(selection).catch(() => {
+        void copyTerminalSelection({
+          terminal: pane.terminal,
+          writeClipboardText: window.api.ui.writeTerminalClipboardText
+        }).catch(() => {
           /* ignore clipboard write failures */
         })
         return

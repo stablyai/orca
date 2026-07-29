@@ -22,6 +22,7 @@ import type {
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import type { RuntimeTerminalRead } from '../../shared/runtime-types'
 import {
+  ORCHESTRATION_LEGACY_RUN_ID,
   orchestrationMigrationData,
   orchestrationSkillRecoveryData
 } from '../../shared/orchestration-rpc-contract'
@@ -76,13 +77,77 @@ const TASK_STATUS_VALUES = [
 
 type MessageSummary = {
   id: string
+  run_id?: string
   from_handle: string
   to_handle?: string
-  subject: string
+  subject?: string
   type?: string
   body?: string
   payload?: string | null
+  priority?: string
   read?: number
+}
+
+function formatMessageReadOnlyTag(message: MessageSummary): string {
+  return message.run_id === ORCHESTRATION_LEGACY_RUN_ID ? ' [legacy, read-only]' : ''
+}
+
+function isLegacyReadOnlyMessage(message: MessageSummary): boolean {
+  return message.run_id === ORCHESTRATION_LEGACY_RUN_ID
+}
+
+function formatMessagePriorityTag(message: MessageSummary): string {
+  return message.priority === 'urgent' ? ' [URGENT]' : message.priority === 'high' ? ' [HIGH]' : ''
+}
+
+function escapeTerminalControlCharacters(value: string): string {
+  return [...value]
+    .map((character) => {
+      const code = character.charCodeAt(0)
+      if (character === '\n' || (code >= 0x20 && code < 0x7f) || code > 0x9f) {
+        return character
+      }
+      return `\\x${code.toString(16).padStart(2, '0')}`
+    })
+    .join('')
+}
+
+function formatQuotedMessageField(label: string, value?: string): string {
+  return `[${label}]\n${escapeTerminalControlCharacters(value ?? '')
+    .split('\n')
+    .map((line) => `  ${line}`)
+    .join('\n')}`
+}
+
+function formatLegacyAwareCheckMessages(
+  messages: MessageSummary[],
+  checkedTerminal: string
+): string {
+  return messages
+    .map((message) => {
+      const legacyReadOnly = isLegacyReadOnlyMessage(message)
+      const lines = [
+        `${message.id}${formatMessageReadOnlyTag(message)}${formatMessagePriorityTag(message)} [${message.type ?? 'status'}] from=${message.from_handle}`,
+        formatQuotedMessageField('subject', message.subject)
+      ]
+      if (legacyReadOnly) {
+        lines.push('[Inspection only: reply and acknowledgment are unavailable.]')
+      }
+      if (message.body) {
+        lines.push(formatQuotedMessageField('body', message.body))
+      }
+      if (message.payload) {
+        lines.push(formatQuotedMessageField('payload', message.payload))
+      }
+      if (!legacyReadOnly) {
+        const replyFrom = message.to_handle ?? checkedTerminal
+        lines.push(
+          `[Reply: orca orchestration reply --id ${message.id} --from ${replyFrom} --body "..."]`
+        )
+      }
+      return lines.join('\n')
+    })
+    .join('\n\n')
 }
 
 type LifecycleSendRejection = {
@@ -555,6 +620,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       )
     }
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
+    const explicitTerminal = getOptionalStringFlag(flags, 'terminal')
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
 
     // Why: Claude Code auto-backgrounds subprocesses silent ~2 min; emit JSON keepalives to stderr (stdout stays one payload). See §3.4.
@@ -573,6 +639,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     try {
       result = await callMutation<CheckResult>(client, flags, 'orchestration.check', {
         terminal,
+        terminalPaneKey: explicitTerminal ? undefined : process.env.ORCA_PANE_KEY || undefined,
         // Why: peek also sends unread:false so pre-peek runtimes degrade to non-consuming all mode instead of destructive mark-read.
         unread: flags.has('unread') ? true : peek ? false : undefined,
         peek: peek ? true : undefined,
@@ -615,6 +682,16 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         }
       }
     }
+    if (flags.has('format') && result.result.messages.some(isLegacyReadOnlyMessage)) {
+      // Why: formatted is one opaque batch with untrusted bodies, so selective banner parsing cannot safely remove legacy actions.
+      result = {
+        ...result,
+        result: {
+          ...result.result,
+          formatted: formatLegacyAwareCheckMessages(result.result.messages, terminal)
+        }
+      }
+    }
     printResult(result, json, (r) => {
       if (r.formatted) {
         return r.formatted
@@ -631,7 +708,10 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         return 'No messages.'
       }
       const rendered = r.messages
-        .map((m) => `${m.id} [${m.type ?? 'status'}] from=${m.from_handle} "${m.subject}"`)
+        .map(
+          (m) =>
+            `${m.id}${formatMessageReadOnlyTag(m)} [${m.type ?? 'status'}] from=${m.from_handle} "${m.subject}"`
+        )
         .join('\n')
       return r.deliveryId ? `Delivery ${r.deliveryId}\n${rendered}` : rendered
     })
@@ -669,7 +749,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       // Why: default output omits body/payload for at-a-glance sweeps; --full prints them for auditing.
       return r.messages
         .map((m) => {
-          const head = `${m.id} ${m.from_handle} -> ${m.to_handle ?? '?'}: "${m.subject}"`
+          const head = `${m.id}${formatMessageReadOnlyTag(m)} ${m.from_handle} -> ${m.to_handle ?? '?'}: "${m.subject}"`
           if (!full) {
             return head
           }
@@ -790,6 +870,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       state: string
       failedStage?: string
       lastError?: string
+      warning?: string
       effects: unknown[]
       residualResources: unknown[]
     }>(client, flags, 'orchestration.workerStart', {
@@ -815,9 +896,10 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     }
     printResult(result, json, (worker) => {
       const base = `Worker ${worker.dispatchId} [${worker.state}] for ${worker.taskId}`
-      return worker.lastError
-        ? `${base}\n${worker.failedStage ?? 'start'}: ${worker.lastError}`
-        : base
+      if (worker.lastError) {
+        return `${base}\n${worker.failedStage ?? 'start'}: ${worker.lastError}`
+      }
+      return worker.warning ? `${base}\nWarning: ${worker.warning}` : base
     })
   },
 

@@ -38,6 +38,7 @@ import {
   gitStreamStdout
 } from './runner'
 import { StatusPorcelainParser } from '../../shared/git-status-porcelain-parser'
+import { findExistingWorktreeSymlinkPaths } from './worktree-symlink-detection'
 import { capGitStatusEntries, resolveGitStatusLimit } from '../../shared/git-status-limit'
 import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from './max-buffer-overflow'
 import {
@@ -199,6 +200,12 @@ export type GetStatusOptions = GitRuntimeOptions & {
    */
   limit?: number
   bypassEffectiveUpstreamNegativeCache?: boolean
+  /** Paths Orca may have symlinked into this worktree (per-user shared paths
+   *  plus `orca.yaml` shared directories). Untracked entries that are one of
+   *  these *and* really symlinks are dropped: Git cannot ignore them when the
+   *  repo's rule is directory-only (`node_modules/`), but they are Orca's own
+   *  artifacts, not user work. */
+  sharedLinkPaths?: readonly string[]
 }
 
 /**
@@ -239,8 +246,42 @@ function getStatusReadKey(worktreePath: string, options: GetStatusOptions): stri
     options.includeIgnored === true,
     options.reuseLineStats === true,
     options.bypassEffectiveUpstreamNegativeCache === true,
-    limit
+    limit,
+    // Why: this changes which entries survive, so it must not share a cache slot.
+    (options.sharedLinkPaths ?? []).join('\u0001')
   ].join('\0')
+}
+
+/** Remove untracked entries that are shared symlinks Orca created.
+ *
+ *  Why this can't be left to Git: a directory-only ignore rule (`node_modules/`)
+ *  matches the primary checkout's real directory but never the worktree's
+ *  symlink, so Git reports it untracked forever — a phantom row in the diff and
+ *  a permanently "dirty" worktree.
+ *
+ *  Tight on both axes: an entry must be configured as shared *and* actually be a
+ *  symlink. A regular file the user created at a configured name still shows up,
+ *  and so does a symlink at a path nobody declared shared. Mutates `entries`. */
+async function dropSharedSymlinkUntrackedEntries(
+  worktreePath: string,
+  entries: GitStatusEntry[],
+  sharedLinkPaths: readonly string[]
+): Promise<void> {
+  // Why: a clean tree has no untracked entries, so this costs nothing on the
+  // common status-poll path — no syscall, no config read, no subprocess.
+  if (sharedLinkPaths.length === 0 || !entries.some((entry) => entry.area === 'untracked')) {
+    return
+  }
+  const sharedLinks = new Set(await findExistingWorktreeSymlinkPaths(worktreePath, sharedLinkPaths))
+  if (sharedLinks.size === 0) {
+    return
+  }
+  for (let index = entries.length - 1; index >= 0; index--) {
+    const entry = entries[index]
+    if (entry.area === 'untracked' && sharedLinks.has(entry.path)) {
+      entries.splice(index, 1)
+    }
+  }
 }
 
 async function runGetStatus(
@@ -314,6 +355,8 @@ async function runGetStatus(
       }
     }
   }
+
+  await dropSharedSymlinkUntrackedEntries(worktreePath, entries, options.sharedLinkPaths ?? [])
 
   if (statusSucceeded && !didHitLimit && shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
     const branchName = getShortBranchName(branch)

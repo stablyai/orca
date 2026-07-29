@@ -2,6 +2,7 @@ import type { Dirent } from 'node:fs'
 import { opendir, realpath, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import {
+  isSkillScanAttentionReason,
   isTruncatingSkillScanReason,
   type SkillFreshnessScanIssueReason
 } from '../../shared/skill-freshness'
@@ -19,6 +20,11 @@ const MAXIMUM_NESTED_SKILL_DEPTH = 2
 const MAXIMUM_PLUGIN_SCAN_ENTRIES = 16_384
 export const MAXIMUM_PLUGIN_SKILL_CANDIDATES = 64
 export const MAXIMUM_PLUGIN_SCAN_ISSUES = 16
+// Why: an attention issue outranks the display budget, so nothing else bounds how many a
+// pathological tree can pin in memory. One is all the badge needs to be truthful; a few
+// more give the dialog enough distinct paths to read as a pattern, and 'issue-limit' still
+// says there are others.
+export const MAXIMUM_PLUGIN_SCAN_ATTENTION_ISSUES = 4
 const SKILL_FILE_NAME = 'SKILL.md'
 
 export type KnownPluginSkillCandidate = {
@@ -52,6 +58,7 @@ export async function scanKnownPluginSkillCandidates(
   const issues: KnownPluginSkillScanIssue[] = []
   const issueKeys = new Set<string>()
   const visited = new Set<string>()
+  let attentionIssueCount = 0
   let resolvedRoot: string | null = null
   let entryCount = 0
   let limitReached = false
@@ -70,9 +77,15 @@ export async function scanKnownPluginSkillCandidates(
     if (issueKeys.has(key)) {
       return
     }
+    // Why: an attention issue is the only thing that can turn the headline off "all up to
+    // date", so evicting one for display budget makes Orca report all-clear over a read
+    // failure. Reserving a few keeps that unbounded on a tree full of unreadable folders.
+    const attention =
+      isSkillScanAttentionReason(reason) &&
+      attentionIssueCount < MAXIMUM_PLUGIN_SCAN_ATTENTION_ISSUES
     // Why: the bound that ended the walk is the one issue the dialog cannot do without
     // — dropping it for display budget is what lets a truncated scan report all-clear.
-    const required = explainsCandidate || isTruncatingSkillScanReason(reason)
+    const required = explainsCandidate || attention || isTruncatingSkillScanReason(reason)
     // Why: this budget bounds what the dialog lists, not how far the scan reaches.
     // Ending the walk here would truncate coverage over a display limit — and since
     // Orca's own bounds no longer raise attention, it would do so silently.
@@ -87,6 +100,9 @@ export async function scanKnownPluginSkillCandidates(
       return
     }
     issueKeys.add(key)
+    if (isSkillScanAttentionReason(reason)) {
+      attentionIssueCount += 1
+    }
     issues.push({ path, reason, errorCode: code })
   }
 

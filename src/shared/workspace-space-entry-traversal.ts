@@ -120,7 +120,7 @@ export async function scanWorkspaceSpaceEntryTree<TEntry>(
       return
     }
     frame.retired = true
-    releaseWorkspaceSpaceScanEntries(budget, frame.entries.length, frame.retainedBytes)
+    releaseWorkspaceSpaceScanEntries(budget, frame.retainedBytes)
     frame.entries = []
     frame.retainedBytes = 0
   }

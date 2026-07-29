@@ -77,6 +77,17 @@ describe('formatMessageBanner', () => {
     )
   })
 
+  it('marks legacy messages read-only without reply or acknowledgment affordances', () => {
+    const banner = formatMessageBanner(
+      makeMessage({ id: 'msg_legacy', run_id: 'run_legacy_local' })
+    )
+
+    expect(banner).toContain('[LEGACY READ-ONLY]')
+    expect(banner).toContain('[Inspection only: reply and acknowledgment are unavailable.]')
+    expect(banner).not.toContain('[Reply:')
+    expect(banner).not.toContain('orchestration reply')
+  })
+
   it('ends with a separator line', () => {
     const banner = formatMessageBanner(makeMessage())
     const lines = banner.split('\n')

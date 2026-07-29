@@ -77,6 +77,7 @@ function createUIStore(): StoreApi<AppState> {
     rightSidebarOpen: false,
     rightSidebarWidth: 280,
     markdownTocPanelWidth: 240,
+    combinedDiffFileTreeWidth: 256,
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
     ...createSettingsSearchState(args[0]),
@@ -1226,6 +1227,16 @@ describe('createUISlice hydratePersistedUI', () => {
     )
 
     expect(store.getState().markdownTocPanelWidth).toBe(200)
+  })
+
+  it('clamps persisted combined diff file tree widths into the supported range', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ combinedDiffFileTreeWidth: 100 }))
+    expect(store.getState().combinedDiffFileTreeWidth).toBe(200)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ combinedDiffFileTreeWidth: 5_000 }))
+    expect(store.getState().combinedDiffFileTreeWidth).toBe(640)
   })
 
   it('preserves right sidebar widths above the former 500px cap', () => {

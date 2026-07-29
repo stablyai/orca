@@ -1309,6 +1309,11 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           paneKey: to,
           tabId: targetTabId
         })),
+        // Why: retention/sidebar consumers gate on the epoch; a moved live row is a
+        // pane-key change they must observe, not a silent remap.
+        ...(from in s.agentStatusByPaneKey
+          ? { agentStatusEpoch: s.agentStatusEpoch + 1, sortEpoch: s.sortEpoch + 1 }
+          : {}),
         runtimeAgentOrchestrationByPaneKey: movePaneKeyedRecord(
           s.runtimeAgentOrchestrationByPaneKey,
           from,

@@ -686,6 +686,7 @@ describe('orchestration timeout flag validation', () => {
     // the non-consuming all mode instead of the destructive mark-read default.
     expect(callMock).toHaveBeenCalledWith('orchestration.check', {
       terminal: 'term_worker',
+      terminalPaneKey: undefined,
       unread: false,
       peek: true,
       all: undefined,

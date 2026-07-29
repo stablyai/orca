@@ -123,7 +123,9 @@ export function sectionProjectOptions(
     {
       key: 'folders',
       heading: 'Folders',
-      items: matches.filter((m) => m.option.kind === 'project-group')
+      // Same recent exclusion as Projects: a row must appear in exactly one
+      // section, or arming and rendering see two rows for one option.
+      items: matches.filter((m) => m.option.kind === 'project-group' && !recentSet.has(m.option.id))
     }
   ]
   return sections.filter((section) => section.items.length > 0)

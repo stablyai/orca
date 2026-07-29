@@ -10,6 +10,7 @@ import {
   normalizeTerminalTitle
 } from '../../shared/agent-detection'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
+import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
 import { parseFileUriPathParts } from '../daemon/osc7-file-uri'
 import type { AgentStatus } from '../../shared/agent-detection'
@@ -185,6 +186,7 @@ import type {
   WorkspaceCreateTelemetrySource,
   WorkspaceSessionState,
   DirEntry,
+  FilesystemPathFlavor,
   GitHubIssueUpdate,
   GitHubPullRequestStateUpdate,
   GitHubPRFile,
@@ -814,11 +816,16 @@ import { listRepoWorktrees } from '../repo-worktrees'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
+  createWorktreeSharedPaths,
   findExistingWorktreeSymlinkPaths,
   removeWorktreeLinkedPaths
 } from '../ipc/worktree-symlinks'
 import { formatWorktreeIncludeCopyWarning } from '../ipc/worktree-include-copy-budget'
 import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
+import {
+  getWorktreeSharedLinkPaths,
+  resolveWorktreeSharedDirectories
+} from '../git/worktree-shared-directories'
 import { deleteWorktreeHistoryDir } from '../terminal-history'
 import {
   cleanupUnusedWorktreePushTargetRemote,
@@ -15626,7 +15633,15 @@ export class OrcaRuntimeService {
     return scanNestedRepos({ path, options: { timeoutMs: 15_000 } })
   }
 
-  async browseServerDir(pathValue: string): Promise<{ resolvedPath: string; entries: DirEntry[] }> {
+  async browseServerDir(pathValue: string): Promise<{
+    resolvedPath: string
+    entries: DirEntry[]
+    pathFlavor: FilesystemPathFlavor
+  }> {
+    // Windows resolves `/` to the current drive, so expose drive roots instead.
+    if (isServerDriveListRequest(pathValue)) {
+      return listWindowsDrives()
+    }
     const dirPath = resolveServerBrowsePath(pathValue)
     const dirStat = await stat(dirPath)
     if (!dirStat.isDirectory()) {
@@ -15646,7 +15661,11 @@ export class OrcaRuntimeService {
       }
       return a.name.localeCompare(b.name)
     })
-    return { resolvedPath: dirPath, entries: mapped }
+    return {
+      resolvedPath: dirPath,
+      entries: mapped,
+      pathFlavor: process.platform === 'win32' ? 'win32' : 'posix'
+    }
   }
 
   async isGitAvailable(): Promise<boolean> {
@@ -19405,6 +19424,16 @@ export class OrcaRuntimeService {
       await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths)
     }
 
+    // Why: project-level `orca.yaml` shared directories add to (never replace) the
+    // per-user setting, so a repo's shared dirs reach every teammate (issue #10451).
+    const sharedDirectories = await resolveWorktreeSharedDirectories(
+      repo.path,
+      localWorktreeGitOptions
+    )
+    if (sharedDirectories.length > 0) {
+      await createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
+    }
+
     // Why: project-level `.worktreeinclude` travels with the repo (issue #7549); copy semantics
     // (never symlink) so each worktree owns its files. Paths already linked above are skipped.
     const worktreeIncludePaths = await resolveWorktreeIncludePaths(
@@ -21530,7 +21559,10 @@ export class OrcaRuntimeService {
         throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
       }
 
-      const linkedPaths = repo.symlinkPaths ?? []
+      // Why: `orca.yaml` shared directories are symlinked in too, and a
+      // directory-only ignore rule leaves those links untracked, so removal must
+      // tolerate and unlink them exactly like the per-user shared paths.
+      const linkedPaths = getWorktreeSharedLinkPaths(repo)
       const ignoredLinkedPaths = force
         ? []
         : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)
@@ -26786,6 +26818,7 @@ export class OrcaRuntimeService {
         ...(tab.color != null ? { color: tab.color } : {}),
         ...(tab.isPinned ? { isPinned: true } : {}),
         ...(tab.viewMode ? { viewMode: tab.viewMode } : {}),
+        ...(tab.launchDraft ? { launchDraft: tab.launchDraft } : {}),
         isActive: tab.isActive,
         ...(terminalHandle
           ? { status: 'ready' as const, terminal: terminalHandle }

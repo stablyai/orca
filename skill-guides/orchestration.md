@@ -60,22 +60,29 @@ If a command returns `orchestration_migration_required`, `run_required`, or a li
 1. Confirm `effectsApplied` is `false`.
 2. Using the same CLI executable that returned the error, run the returned arguments: `skills get orchestration --full`.
 3. Read the guide completely. Do not retry the rejected command unchanged.
-4. Create or bind a lightweight Run, then restart the work using Run -> Task -> `worker-start`.
-5. Inspect any pre-upgrade terminal before creating replacement work.
+4. Inspect the pre-upgrade Run, terminal, and assigned worktree before deciding whether any work needs replacement.
+5. If the legacy worker is still making valid progress, leave it as the only editor in that worktree and observe it manually, read-only, until it reaches a stable handoff point.
+6. Only then, if remaining work needs new lifecycle supervision, create or bind a lightweight Run, create a Task for the remaining work, and use `worker-start` in a conflict-free placement.
 
 The arguments intentionally omit an executable name so this works with `orca`, `orca-ide`, `orca-dev`, or another configured Orca CLI command.
 
-Pre-upgrade terminals and agents are not killed during upgrade, but they are no longer supervised: old heartbeat, question, completion, scheduler, and mutation calls are rejected before effects. Legacy database rows remain available only for explicit inspection:
+The cutover removes lifecycle authority; it does not cancel the prior assignment, invalidate its worktree, discard filesystem changes, or stop the worker process. Pre-upgrade terminals and agents can continue their valid assigned work, but they are no longer supervised by Orca: old heartbeat, question, completion, scheduler, reply, acknowledgment, and mutation calls are rejected before effects.
+
+Legacy database rows and terminal output remain available for explicit read-only inspection:
 
 ```bash
 orca orchestration run-list --json
 orca orchestration run-show --id run_legacy_local --json
 orca orchestration task-list --run run_legacy_local --json
 orca orchestration inbox --full --json
-orca orchestration check --terminal <legacy_handle> --peek --json
+orca orchestration check --terminal <legacy_handle> --peek --format --json
+orca terminal read --terminal <legacy_handle> --json
+orca terminal wait --terminal <legacy_handle> --for tui-idle --timeout-ms 60000 --json
 ```
 
-Read-only inspection never consumes legacy mail. Do not use actionable `check`, acknowledgment, send, retry, or task updates against the legacy Run.
+Read-only inspection never consumes legacy mail. A stable handoff point means the worker has become idle, stopped, or completed a coherent edit/test/commit checkpoint; visible activity is a reason to keep observing, not to replace it. Do not prompt the worker to use old lifecycle commands.
+
+Never launch a replacement editor in the same worktree while the legacy worker may still write there. Wait for a stable handoff and preserve its filesystem work; if overlap is truly required, use a separate conflict-free worktree with an explicit plan for transferring existing dirty changes. Do not use actionable `check`, acknowledgment, reply, send, retry, or task updates against the legacy Run.
 
 ## Ownership
 

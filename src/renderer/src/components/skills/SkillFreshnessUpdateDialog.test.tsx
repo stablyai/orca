@@ -423,6 +423,25 @@ describe('SkillFreshnessUpdateDialog', () => {
     )
   })
 
+  it('names the skill in the stale-record remedy so the command is runnable as-is', async () => {
+    // Why: the reinstall advice only fires when the row hands its group name through
+    // to skippedReason — dropping that argument silently degrades every stale-record
+    // row to the generic sentence with no command to run.
+    mocks.inventory = {
+      schemaVersion: 1,
+      installations: [placement('orchestration')],
+      eligibleUpdateNames: [],
+      scanIssues: [],
+      scannedAt: 3
+    }
+    await renderDialog()
+    await openViaRequest()
+
+    expect(container?.textContent).toContain(
+      'npx skills add https://github.com/stablyai/orca --skill orchestration --global'
+    )
+  })
+
   it('stays coherent while an idle re-scan is in flight', async () => {
     await renderDialog()
     await openViaRequest()
