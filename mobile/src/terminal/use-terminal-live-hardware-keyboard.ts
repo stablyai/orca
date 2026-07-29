@@ -42,7 +42,11 @@ export function useTerminalLiveHardwareKeyboard({
   const [pendingSoftFocusSeq, setPendingSoftFocusSeq] = useState(0)
   const pendingSoftFocusNeedsBlurRef = useRef(false)
   const modalOpenRef = useRef(modalOpen)
-  modalOpenRef.current = modalOpen
+  // Declared first so it lands before the silent-focus effect reads it in the
+  // same commit; render must stay pure, so the write cannot happen inline.
+  useEffect(() => {
+    modalOpenRef.current = modalOpen
+  }, [modalOpen])
   // Why: dropping the latch during render (not in an effect) keeps a modal from
   // painting one frame with the soft keyboard still latched on.
   const [modalOpenOnLastRender, setModalOpenOnLastRender] = useState(modalOpen)
@@ -81,7 +85,8 @@ export function useTerminalLiveHardwareKeyboard({
     }
     pendingSoftFocusNeedsBlurRef.current = plan.kind === 'blur-refocus-after-latch'
     setPendingSoftFocusSeq((seq) => seq + 1)
-  }, [canSend, liveInputFocusTimerRef, liveInputRef, wantSoftKeyboard])
+    // Ref containers are stable, so they are deliberately not dependencies.
+  }, [canSend, wantSoftKeyboard])
 
   // After wantSoftKeyboard commits, focus with showSoftInputOnFocus already true.
   useEffect(() => {
@@ -102,7 +107,7 @@ export function useTerminalLiveHardwareKeyboard({
       }
       input.focus()
     })
-  }, [liveInputFocusTimerRef, liveInputRef, pendingSoftFocusSeq, showSoftInputOnFocus])
+  }, [pendingSoftFocusSeq, showSoftInputOnFocus])
 
   // Focus scope changes include terminal switches; modal close is intentionally
   // absent from these dependencies so it cannot steal focus back.
@@ -122,14 +127,7 @@ export function useTerminalLiveHardwareKeyboard({
       return
     }
     scheduleTerminalLiveInputFocus(liveInputFocusTimerRef, () => liveInputRef.current?.focus())
-  }, [
-    canSend,
-    focusScopeKey,
-    liveInputEnabled,
-    liveInputFocusTimerRef,
-    liveInputRef,
-    wantSoftKeyboard
-  ])
+  }, [canSend, focusScopeKey, liveInputEnabled, wantSoftKeyboard])
 
   // Modal/action-sheet open: cancel pending focus and release the input; the soft
   // latch itself is dropped during render above. Closing must not re-focus.
@@ -139,7 +137,7 @@ export function useTerminalLiveHardwareKeyboard({
     }
     clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
     liveInputRef.current?.blur()
-  }, [liveInputFocusTimerRef, liveInputRef, modalOpen])
+  }, [modalOpen])
 
   const onHardwareKey = useCallback(
     (event: { nativeEvent: TerminalLiveHardwareKeyEvent }) => {
