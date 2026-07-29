@@ -38,7 +38,9 @@ const {
   getWorkItemByProjectRefMock,
   getMergeRequestMock,
   getMergeRequestForBranchMock,
-  getProjectSlugMock
+  getProjectSlugMock,
+  getRateLimitMock,
+  recordGitLabProjectRecentMock
 } = vi.hoisted(() => ({
   ipcHandlers: new Map<string, (...args: unknown[]) => unknown>(),
   listMergeRequestsMock: vi.fn(),
@@ -65,7 +67,9 @@ const {
   getWorkItemByProjectRefMock: vi.fn(),
   getMergeRequestMock: vi.fn(),
   getMergeRequestForBranchMock: vi.fn(),
-  getProjectSlugMock: vi.fn()
+  getProjectSlugMock: vi.fn(),
+  getRateLimitMock: vi.fn(),
+  recordGitLabProjectRecentMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -89,7 +93,7 @@ vi.mock('../gitlab/client', () => ({
   getMergeRequest: getMergeRequestMock,
   getMergeRequestForBranch: getMergeRequestForBranchMock,
   getProjectSlug: getProjectSlugMock,
-  getRateLimit: vi.fn(),
+  getRateLimit: getRateLimitMock,
   getWorkItemByProjectRef: getWorkItemByProjectRefMock,
   listAssignableUsers: listAssignableUsersMock,
   listIssues: listIssuesMock,
@@ -111,7 +115,7 @@ vi.mock('../gitlab/work-item-details', () => ({
 }))
 
 vi.mock('../gitlab/gitlab-project-recents', () => ({
-  recordGitLabProjectRecent: vi.fn()
+  recordGitLabProjectRecent: recordGitLabProjectRecentMock
 }))
 
 import { registerGitLabHandlers } from './gitlab'
@@ -173,10 +177,147 @@ describe('GitLab IPC handlers', () => {
       getWorkItemByProjectRefMock,
       getMergeRequestMock,
       getMergeRequestForBranchMock,
-      getProjectSlugMock
+      getProjectSlugMock,
+      getRateLimitMock,
+      recordGitLabProjectRecentMock
     ]) {
       mock.mockReset()
     }
+  })
+
+  describe('configured-instance host guard', () => {
+    // Why: an explicit projectRef/host bypasses remote resolution entirely, so
+    // a crafted payload could otherwise point `glab --hostname` at any GitLab.
+    const OTHER_HOST = 'gitlab.evil.test'
+
+    function registerWithGitLabUrl(gitlabUrl: string): void {
+      registerGitLabHandlers({
+        ...storeWithRepos([repo()]),
+        getSettings: () => ({ gitlabUrl }) as ReturnType<Store['getSettings']>
+      } as Store)
+    }
+
+    it.each([
+      ['gitlab:updateMRReviewers', { iid: 8, reviewerIds: [1] }, updateMRReviewersMock],
+      [
+        'gitlab:addMRInlineComment',
+        { iid: 8, input: { body: 'Inline', path: 'a.ts', line: 1 } },
+        addMRInlineCommentMock
+      ],
+      ['gitlab:jobTrace', { jobId: 99 }, getJobTraceMock],
+      ['gitlab:retryJob', { jobId: 99 }, retryJobMock]
+    ])('rejects %s for a projectRef on another host', async (channel, args, clientMock) => {
+      registerWithGitLabUrl('https://gitlab.com')
+
+      await expect(
+        ipcHandlers.get(channel as string)?.(null, {
+          repoPath: '/local/orca',
+          ...(args as object),
+          projectRef: { host: OTHER_HOST, path: 'attacker/exfil' }
+        })
+      ).rejects.toThrow('does not match the configured instance')
+      expect(clientMock).not.toHaveBeenCalled()
+    })
+
+    it('rejects a pasted work item on another host without recording a recent', async () => {
+      registerWithGitLabUrl('https://gitlab.com')
+
+      await expect(
+        ipcHandlers.get('gitlab:workItemByPath')?.(null, {
+          repoPath: '/local/orca',
+          host: OTHER_HOST,
+          path: 'attacker/exfil',
+          iid: 1,
+          type: 'issue'
+        })
+      ).rejects.toThrow('does not match the configured instance')
+      expect(getWorkItemByProjectRefMock).not.toHaveBeenCalled()
+      expect(recordGitLabProjectRecentMock).not.toHaveBeenCalled()
+    })
+
+    it('canonicalizes a matching pasted host before calling glab and recording a recent', async () => {
+      getWorkItemByProjectRefMock.mockResolvedValueOnce({ type: 'issue', number: 5 })
+      registerWithGitLabUrl('https://GitLab.Example.com')
+
+      await ipcHandlers.get('gitlab:workItemByPath')?.(null, {
+        repoPath: '/local/orca',
+        host: 'GITLAB.example.COM',
+        path: 'g/p',
+        iid: 5,
+        type: 'issue'
+      })
+
+      expect(getWorkItemByProjectRefMock).toHaveBeenCalledWith(
+        '/local/orca',
+        { host: 'gitlab.example.com', path: 'g/p' },
+        5,
+        'issue',
+        null
+      )
+      expect(recordGitLabProjectRecentMock).toHaveBeenCalledWith(
+        expect.anything(),
+        'gitlab.example.com',
+        'g/p'
+      )
+    })
+
+    it('rejects host-bearing calls when no GitLab instance is configured', async () => {
+      registerWithGitLabUrl('')
+
+      await expect(
+        ipcHandlers.get('gitlab:workItemByPath')?.(null, {
+          repoPath: '/local/orca',
+          host: 'gitlab.com',
+          path: 'g/p',
+          iid: 1,
+          type: 'issue'
+        })
+      ).rejects.toThrow('no GitLab instance is configured')
+      await expect(
+        ipcHandlers.get('gitlab:jobTrace')?.(null, {
+          repoPath: '/local/orca',
+          jobId: 99,
+          projectRef: { host: 'gitlab.com', path: 'g/p' }
+        })
+      ).rejects.toThrow('no GitLab instance is configured')
+      expect(getWorkItemByProjectRefMock).not.toHaveBeenCalled()
+      expect(getJobTraceMock).not.toHaveBeenCalled()
+    })
+
+    it('rejects a rate-limit probe against another host', async () => {
+      registerWithGitLabUrl('https://gitlab.com')
+
+      await expect(
+        ipcHandlers.get('gitlab:rateLimit')?.(null, { host: OTHER_HOST })
+      ).rejects.toThrow('does not match the configured instance')
+      expect(getRateLimitMock).not.toHaveBeenCalled()
+    })
+
+    it('re-pins the guard when the configured instance changes at runtime', async () => {
+      const settingsListeners: ((updates: { gitlabUrl?: string }) => void)[] = []
+      registerGitLabHandlers({
+        ...storeWithRepos([repo()]),
+        getSettings: () =>
+          ({ gitlabUrl: 'https://gitlab.com' }) as ReturnType<Store['getSettings']>,
+        onSettingsChanged: (listener: (updates: { gitlabUrl?: string }) => void) => {
+          settingsListeners.push(listener)
+          return () => {}
+        }
+      } as unknown as Store)
+
+      for (const listener of settingsListeners) {
+        listener({ gitlabUrl: 'https://gitlab.example.com' })
+      }
+
+      await expect(
+        ipcHandlers.get('gitlab:retryJob')?.(null, {
+          repoPath: '/local/orca',
+          jobId: 99,
+          projectRef: { host: 'gitlab.com', path: 'g/p' }
+        })
+      ).rejects.toThrow('does not match the configured instance')
+      expect(retryJobMock).not.toHaveBeenCalled()
+    })
   })
 
   it('resolves repoId and source host context before listing work items', async () => {

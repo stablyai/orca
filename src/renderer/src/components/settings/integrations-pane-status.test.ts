@@ -96,4 +96,16 @@ describe('getPreflightIntegrationStatuses', () => {
       giteaStatus: 'checking'
     })
   })
+
+  it('reports GitLab as not configured before it reports the glab CLI missing', () => {
+    expect(
+      getPreflightIntegrationStatuses(
+        {
+          ...connectedPreflight,
+          glab: { installed: false, authenticated: false, configured: false }
+        },
+        new Set()
+      ).glabStatus
+    ).toBe('not-configured')
+  })
 })

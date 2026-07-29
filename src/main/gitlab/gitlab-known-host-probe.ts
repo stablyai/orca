@@ -10,6 +10,11 @@ export function setConfiguredGitLabUrl(value: unknown): void {
   configuredGitLabHost = gitLabHostFromUrl(value)
 }
 
+/** The configured instance host (`host[:port]`), or '' when GitLab is off. */
+export function getConfiguredGitLabHost(): string {
+  return configuredGitLabHost
+}
+
 /**
  * The configured GitLab instance, as a single-entry host list, or empty when
  * GitLab is unconfigured. Async and per-host parameters are retained because

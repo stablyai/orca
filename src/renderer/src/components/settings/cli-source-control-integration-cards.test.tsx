@@ -126,4 +126,19 @@ describe('CLI source-control integration card account scope', () => {
     )
     expect(rendered.textContent).toContain('glab auth login')
   })
+
+  it('points at the GitLab URL setting instead of glab auth when GitLab is unconfigured', async () => {
+    mocks.store.current = {
+      settings: { activeRuntimeEnvironmentId: null },
+      openSettingsPage: vi.fn(),
+      openSettingsTarget: vi.fn()
+    }
+    mocks.preflight.statuses.glabStatus = 'not-configured'
+
+    const rendered = await renderCard(<GitLabIntegrationCard />)
+
+    expect(rendered.textContent).toContain('Not configured')
+    expect(rendered.textContent).toContain('GitLab is off until you set a GitLab URL')
+    expect(rendered.textContent).not.toContain('glab auth login')
+  })
 })

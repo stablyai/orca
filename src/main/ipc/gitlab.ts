@@ -21,7 +21,11 @@ import {
   normalizeGitLabSearchQuery
 } from '../gitlab/gitlab-preload-args'
 import { recordGitLabProjectRecent } from '../gitlab/gitlab-project-recents'
-import { setConfiguredGitLabUrl } from '../gitlab/gitlab-known-host-probe'
+import {
+  getConfiguredGitLabHost,
+  setConfiguredGitLabUrl
+} from '../gitlab/gitlab-known-host-probe'
+import { normalizeGitLabHost } from '../gitlab/project-ref-parser'
 import {
   addIssueComment,
   addMRInlineComment,
@@ -99,6 +103,30 @@ function repoConnectionId(repo: Repo): string | null {
   return repo.connectionId ?? null
 }
 
+// Why: a renderer-supplied host is a `glab --hostname` override that bypasses
+// remote resolution entirely, so it must be pinned to the one configured
+// instance — otherwise a crafted payload routes credentialed calls at an
+// arbitrary GitLab. Callers that supply no host keep the resolved-remote path.
+function assertConfiguredGitLabHost(host: string | null | undefined): string {
+  const configured = getConfiguredGitLabHost()
+  if (!configured) {
+    throw new Error('Access denied: no GitLab instance is configured')
+  }
+  if (normalizeGitLabHost(host ?? '') !== configured) {
+    throw new Error('Access denied: GitLab host does not match the configured instance')
+  }
+  return configured
+}
+
+function assertConfiguredProjectRef<T extends { host: string }>(
+  projectRef: T | null | undefined
+): T | null | undefined {
+  if (projectRef) {
+    assertConfiguredGitLabHost(projectRef.host)
+  }
+  return projectRef
+}
+
 function localGitOptions(store: Store, repo: Repo): LocalGitExecOptions {
   const options = getLocalProjectWorktreeGitOptions(store, repo)
   return options.wslDistro ? { wslDistro: options.wslDistro } : {}
@@ -131,8 +159,12 @@ export function registerGitLabHandlers(store: Store): void {
 
   ipcMain.handle(
     'gitlab:rateLimit',
-    async (_event, args?: { force?: boolean; host?: string | null }) =>
-      getRateLimit({ force: Boolean(args?.force), host: args?.host ?? null })
+    async (_event, args?: { force?: boolean; host?: string | null }) => {
+      if (args?.host) {
+        assertConfiguredGitLabHost(args.host)
+      }
+      return getRateLimit({ force: Boolean(args?.force), host: args?.host ?? null })
+    }
   )
 
   ipcMain.handle('gitlab:projectSlug', async (_event, args: GitLabRepoSelectorArgs) => {
@@ -460,7 +492,7 @@ export function registerGitLabHandlers(store: Store): void {
         args.reviewerIds,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        args.projectRef,
+        assertConfiguredProjectRef(args.projectRef),
         ...localGitOptionArgs(store, repo)
       )
     }
@@ -502,7 +534,7 @@ export function registerGitLabHandlers(store: Store): void {
         args.input,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        args.projectRef,
+        assertConfiguredProjectRef(args.projectRef),
         ...localGitOptionArgs(store, repo)
       )
     }
@@ -540,7 +572,7 @@ export function registerGitLabHandlers(store: Store): void {
         args.jobId,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        args.projectRef,
+        assertConfiguredProjectRef(args.projectRef),
         ...localGitOptionArgs(store, repo)
       )
     }
@@ -558,7 +590,7 @@ export function registerGitLabHandlers(store: Store): void {
         args.jobId,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        args.projectRef,
+        assertConfiguredProjectRef(args.projectRef),
         ...localGitOptionArgs(store, repo)
       )
     }
@@ -588,7 +620,8 @@ export function registerGitLabHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
-      const projectRef: ProjectRef = { host: args.host, path: args.path }
+      const host = assertConfiguredGitLabHost(args.host)
+      const projectRef: ProjectRef = { host, path: args.path }
       const result = await getWorkItemByProjectRef(
         repo.path,
         projectRef,
@@ -601,7 +634,7 @@ export function registerGitLabHandlers(store: Store): void {
       // produced an item. A 404 / auth failure shouldn't pollute the
       // user's recents list with project paths they can't read.
       if (result) {
-        recordGitLabProjectRecent(store, args.host, args.path)
+        recordGitLabProjectRecent(store, host, args.path)
       }
       return result
     }
