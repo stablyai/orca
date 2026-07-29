@@ -658,6 +658,7 @@ export class RuntimeGitCommands {
       return generateCommitMessageFromContext(context, resolvedSettings.params, {
         kind: 'remote',
         cwd: target.worktree.path,
+        commandPathFlavor: provider.getHostPlatform?.()?.pathFlavor ?? 'posix',
         execute: (plan, cwd, timeoutMs, operation) =>
           provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
         missingBinaryLocation: 'remote PATH'
@@ -798,6 +799,7 @@ export class RuntimeGitCommands {
       return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
         kind: 'remote',
         cwd: target.worktree.path,
+        commandPathFlavor: provider!.getHostPlatform?.()?.pathFlavor ?? 'posix',
         execute: (plan, cwd, timeoutMs, operation) =>
           provider!.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
         missingBinaryLocation: 'remote PATH'
@@ -852,7 +854,8 @@ export class RuntimeGitCommands {
         typedAgentId,
         target.worktree.path,
         (plan, cwd, timeoutMs) => provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
-        agentCommandOverride
+        agentCommandOverride,
+        provider.getHostPlatform?.()?.pathFlavor ?? 'posix'
       )
     }
     const localEnv = await prepareLocalCommitMessageAgentEnv(

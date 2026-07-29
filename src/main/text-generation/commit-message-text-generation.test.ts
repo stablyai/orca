@@ -473,6 +473,27 @@ describe('discoverCommitMessageModelsLocal', () => {
     }
   })
 
+  it('preserves native Windows paths during local model discovery', async () => {
+    await withPlatform('win32', async () => {
+      const child = createMockDiscoveryChild()
+      spawnMock.mockReturnValue(child as never)
+
+      const pending = discoverCommitMessageModelsLocal(
+        'cursor',
+        undefined,
+        '"C:\\Program Files\\Agent\\agent.exe" --profile C:\\Users\\Ada\\agent.json'
+      )
+
+      child.stdout.emit('data', Buffer.from('auto - Auto\n'))
+      child.emit('close', 0)
+
+      await expect(pending).resolves.toMatchObject({ success: true, defaultModelId: 'auto' })
+      const [spawnCommand, spawnArgs] = spawnMock.mock.calls[0] ?? []
+      expect(spawnCommand).toBe('C:\\Program Files\\Agent\\agent.exe')
+      expect(spawnArgs).toEqual(['--profile', 'C:\\Users\\Ada\\agent.json', '--list-models'])
+    })
+  })
+
   it('discovers dynamic models through the selected WSL distro login shell', async () => {
     await withPlatform('win32', async () => {
       const listeners = new Map<string, (value: unknown) => void>()
@@ -486,10 +507,15 @@ describe('discoverCommitMessageModelsLocal', () => {
       }
       spawnMock.mockReturnValue(child as never)
 
-      const pending = discoverCommitMessageModelsLocal('cursor', undefined, undefined, {
-        cwd: 'C:\\repo',
-        wslDistro: 'Ubuntu'
-      })
+      const pending = discoverCommitMessageModelsLocal(
+        'cursor',
+        undefined,
+        '/opt/My\\ Agent/cursor-agent',
+        {
+          cwd: 'C:\\repo',
+          wslDistro: 'Ubuntu'
+        }
+      )
 
       listeners.get('stdout:data')?.(Buffer.from('auto - Auto\n'))
       listeners.get('close')?.(0)
@@ -509,7 +535,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       const shellCommand = spawnMock.mock.calls[0]?.[1]?.[5] as string
       expect(shellCommand).toContain('getent passwd')
       expect(shellCommand).toContain('/mnt/c/repo')
-      expect(shellCommand).toContain("'cursor-agent'")
+      expect(shellCommand).toContain("'/opt/My Agent/cursor-agent'")
       expect(shellCommand).toContain('--list-models')
     })
   })
@@ -770,6 +796,42 @@ describe('generateCommitMessageFromContext', () => {
       message: 'Add README note',
       agentLabel: 'agent'
     })
+  })
+
+  it('plans command overrides with the remote Windows path flavor', async () => {
+    const execute = vi.fn(async (plan) => {
+      expect(plan.binary).toBe('C:\\Tools\\agent.exe')
+      expect(plan.args[0]).toBe('C:\\Program Files\\Agent\\config.json')
+      return {
+        stdout: 'Add README note.\n',
+        stderr: '',
+        exitCode: 0,
+        timedOut: false
+      }
+    })
+
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'C:\\Tools\\agent.exe "C:\\Program Files\\Agent\\config.json"'
+      },
+      {
+        kind: 'remote',
+        cwd: 'C:\\repo',
+        commandPathFlavor: 'windows',
+        missingBinaryLocation: 'remote PATH',
+        execute
+      }
+    )
+
+    expect(result).toMatchObject({ success: true, message: 'Add README note' })
+    expect(execute).toHaveBeenCalledOnce()
   })
 
   it('exposes raw CLI failure output only after path sanitization', async () => {
@@ -1987,6 +2049,53 @@ describe('generateCommitMessageFromContext', () => {
         process.env.ComSpec = originalComSpec
       }
     }
+  })
+
+  it('spawns native Windows agent command override paths without corrupting backslashes', async () => {
+    await withPlatform('win32', async () => {
+      const listeners = new Map<string, (value: unknown) => void>()
+      const child = {
+        pid: 123,
+        kill: vi.fn(),
+        stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+        stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+        stdin: { end: vi.fn() },
+        on: vi.fn((event, callback) => listeners.set(event, callback))
+      }
+      spawnMock.mockReturnValue(child as never)
+
+      const pending = generateCommitMessageFromContext(
+        {
+          branch: 'main',
+          stagedSummary: 'M\tREADME.md',
+          stagedPatch: '+hello'
+        },
+        {
+          agentId: 'cursor',
+          model: 'auto',
+          agentCommandOverride:
+            '"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -File "C:\\Program Files\\cursor-agent.ps1"'
+        },
+        {
+          kind: 'local',
+          cwd: 'C:\\repo'
+        }
+      )
+
+      listeners.get('stdout:data')?.(Buffer.from('Update README\n'))
+      listeners.get('close')?.(0)
+
+      await expect(pending).resolves.toMatchObject({
+        success: true,
+        message: 'Update README'
+      })
+      const [spawnCommand, spawnArgs, spawnOptions] = spawnMock.mock.calls[0] ?? []
+      expect(spawnCommand).toBe('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
+      expect(spawnArgs).toEqual(
+        expect.arrayContaining(['-File', 'C:\\Program Files\\cursor-agent.ps1'])
+      )
+      expect(spawnOptions).toMatchObject({ cwd: 'C:\\repo', windowsHide: true })
+    })
   })
 
   it('rejects unsafe argv prompts for Windows batch-script agent commands', async () => {

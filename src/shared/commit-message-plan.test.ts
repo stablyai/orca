@@ -215,6 +215,27 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('preserves native Windows paths in preset agent command overrides', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'cursor',
+        model: 'auto',
+        agentCommandOverride:
+          '"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -File "C:\\Program Files\\cursor-agent.ps1"'
+      },
+      'PROMPT',
+      { commandPathFlavor: 'windows' }
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      plan: {
+        binary: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        args: expect.arrayContaining(['-File', 'C:\\Program Files\\cursor-agent.ps1'])
+      }
+    })
+  })
+
   it.each([
     ['long option', '--model gpt-5.6-luna', ['--model', 'gpt-5.6-luna'], []],
     ['short option', '-m gpt-5.6-luna', ['-m', 'gpt-5.6-luna'], []],

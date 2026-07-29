@@ -17,7 +17,8 @@ import {
 } from '../../shared/pull-request-generation'
 import {
   cleanGeneratedCommitMessage,
-  excerptAgentFailureOutput
+  excerptAgentFailureOutput,
+  type CommandTemplatePathFlavor
 } from '../../shared/commit-message-prompt'
 import {
   captureAgentGenerationFailureOutput,
@@ -104,6 +105,7 @@ export type CommitMessageGenerationTarget =
   | {
       kind: 'remote'
       cwd: string
+      commandPathFlavor?: CommandTemplatePathFlavor
       execute: (
         plan: CommitMessagePlan,
         cwd: string,
@@ -289,13 +291,14 @@ function finalizeModelDiscoveryOutput(
 
 function planModelDiscovery(
   spec: NonNullable<ReturnType<typeof getCommitMessageAgentSpec>>,
-  agentCommandOverride?: string
+  agentCommandOverride?: string,
+  pathFlavor: CommandTemplatePathFlavor = 'posix'
 ): { ok: true; plan: CommitMessagePlan } | { ok: false; error: string } {
   const modelDiscovery = spec.modelDiscovery
   if (!modelDiscovery) {
     return { ok: false, error: `${spec.label} does not support dynamic model discovery.` }
   }
-  const command = planAgentBinary(modelDiscovery.binary, agentCommandOverride)
+  const command = planAgentBinary(modelDiscovery.binary, agentCommandOverride, pathFlavor)
   if (!command.ok) {
     return command
   }
@@ -335,7 +338,9 @@ export async function discoverCommitMessageModelsLocal(
       const spawnEnv = env ?? process.env
       let discoveryStdin: string | null = null
       try {
-        const planned = planModelDiscovery(spec, agentCommandOverride)
+        const pathFlavor =
+          process.platform === 'win32' && !options.wslDistro ? 'windows' : 'posix'
+        const planned = planModelDiscovery(spec, agentCommandOverride, pathFlavor)
         if (!planned.ok) {
           markProcessClosed()
           resolve({ success: false, error: planned.error })
@@ -501,7 +506,8 @@ export async function discoverCommitMessageModelsRemote(
     cwd: string,
     timeoutMs: number
   ) => Promise<RemoteCommitMessageExecResult>,
-  agentCommandOverride?: string
+  agentCommandOverride?: string,
+  pathFlavor: CommandTemplatePathFlavor = 'posix'
 ): Promise<DiscoverCommitMessageModelsResult> {
   const spec = getCommitMessageAgentSpec(agentId)
   if (!spec) {
@@ -510,7 +516,7 @@ export async function discoverCommitMessageModelsRemote(
   if (spec.modelSource === 'static' || !spec.modelDiscovery) {
     return toModelDiscoveryCapability(spec)
   }
-  const planned = planModelDiscovery(spec, agentCommandOverride)
+  const planned = planModelDiscovery(spec, agentCommandOverride, pathFlavor)
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }
@@ -1066,6 +1072,13 @@ function formatCommitMessageGenerationResult(
   }
 }
 
+function getCommandPathFlavor(target: CommitMessageGenerationTarget): CommandTemplatePathFlavor {
+  if (target.kind === 'remote') {
+    return target.commandPathFlavor ?? 'posix'
+  }
+  return process.platform === 'win32' && !target.wslDistro ? 'windows' : 'posix'
+}
+
 export async function generateCommitMessageFromContext(
   context: CommitMessageDraftContext,
   params: GenerateCommitMessageParams,
@@ -1083,7 +1096,9 @@ export async function generateCommitMessageFromContext(
           linkedIssue: formatLinkedIssueTemplateValue(context.linkedIssue)
         })
       : buildCommitMessagePrompt(context, params.customPrompt ?? '')
-  const planned = planCommitMessageGeneration(params, prompt)
+  const planned = planCommitMessageGeneration(params, prompt, {
+    commandPathFlavor: getCommandPathFlavor(target)
+  })
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }
@@ -1155,7 +1170,9 @@ export async function generatePullRequestFieldsFromContext(
           linkedIssue: formatLinkedIssueTemplateValue(context.linkedIssue)
         })
       : buildPullRequestFieldsPrompt(context, params.customPrompt ?? '')
-  const planned = planCommitMessageGeneration(params, prompt)
+  const planned = planCommitMessageGeneration(params, prompt, {
+    commandPathFlavor: getCommandPathFlavor(target)
+  })
   if (!planned.ok) {
     return {
       success: false,
@@ -1205,7 +1222,9 @@ export async function generateBranchNameFromContext(
           assistantMessage: context.assistantMessage ?? ''
         })
       : buildBranchNamePrompt(context, params.customPrompt ?? '')
-  const planned = planCommitMessageGeneration(params, prompt)
+  const planned = planCommitMessageGeneration(params, prompt, {
+    commandPathFlavor: getCommandPathFlavor(target)
+  })
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }

@@ -268,6 +268,28 @@ describe('tokenizeCustomCommandTemplate', () => {
     expect(r).toEqual({ ok: true, tokens: ['claude', '--msg', 'she said "hi"'] })
   })
 
+  it('keeps native path separators literal for Windows targets', () => {
+    const r = tokenizeCustomCommandTemplate(
+      '"C:\\Program Files\\Agent\\agent.exe" --config C:\\Users\\Ada\\agent.json',
+      'windows'
+    )
+    expect(r).toEqual({
+      ok: true,
+      tokens: ['C:\\Program Files\\Agent\\agent.exe', '--config', 'C:\\Users\\Ada\\agent.json']
+    })
+  })
+
+  it('retains POSIX backslash escape semantics for WSL and SSH targets', () => {
+    const r = tokenizeCustomCommandTemplate(
+      '/opt/My\\ Agent/bin/agent --label hello\\ world',
+      'posix'
+    )
+    expect(r).toEqual({
+      ok: true,
+      tokens: ['/opt/My Agent/bin/agent', '--label', 'hello world']
+    })
+  })
+
   it('keeps adjacent quoted/unquoted regions in one token (a"b"c → abc)', () => {
     const r = tokenizeCustomCommandTemplate('foo a"b"c')
     expect(r).toEqual({ ok: true, tokens: ['foo', 'abc'] })

@@ -135,13 +135,15 @@ export type TokenizeCustomCommandResult =
   | { ok: true; tokens: string[] }
   | { ok: false; error: string }
 
-// Why: deliberately POSIX-shell-style only for *grouping* (single + double
-// quotes, backslash escapes inside double quotes). We do NOT expand `$VAR`,
-// command substitution, backticks, globs, or `~`. The user's intent is
-// "spawn this exact CLI" — adding shell semantics on top would create
-// surprising behavior across platforms (especially Windows) and a security
-// surface we don't need.
-export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomCommandResult {
+export type CommandTemplatePathFlavor = 'posix' | 'windows'
+
+// Why: this parser only groups argv; Windows keeps path separators literal,
+// while POSIX targets retain the existing backslash escapes. We do not expand
+// variables, substitutions, globs, or `~`.
+export function tokenizeCustomCommandTemplate(
+  template: string,
+  pathFlavor: CommandTemplatePathFlavor = 'posix'
+): TokenizeCustomCommandResult {
   const tokens: string[] = []
   let current = ''
   let inToken = false
@@ -151,7 +153,7 @@ export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomC
   while (i < template.length) {
     const ch = template[i]
     if (quote) {
-      if (ch === '\\' && quote === '"' && i + 1 < template.length) {
+      if (ch === '\\' && quote === '"' && pathFlavor === 'posix' && i + 1 < template.length) {
         current += template[i + 1]
         i += 2
         continue
@@ -176,7 +178,7 @@ export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomC
       continue
     }
 
-    if (ch === '\\' && i + 1 < template.length) {
+    if (ch === '\\' && pathFlavor === 'posix' && i + 1 < template.length) {
       current += template[i + 1]
       inToken = true
       i += 2
@@ -220,8 +222,12 @@ export type CustomCommandPlan =
  * substituted prompt is always passed as a single argument regardless of
  * whether the template wrote `{prompt}` or `"{prompt}"`.
  */
-export function planCustomCommand(template: string, prompt: string): CustomCommandPlan {
-  const tokenized = tokenizeCustomCommandTemplate(template)
+export function planCustomCommand(
+  template: string,
+  prompt: string,
+  pathFlavor: CommandTemplatePathFlavor = 'posix'
+): CustomCommandPlan {
+  const tokenized = tokenizeCustomCommandTemplate(template, pathFlavor)
   if (!tokenized.ok) {
     return { ok: false, error: tokenized.error }
   }

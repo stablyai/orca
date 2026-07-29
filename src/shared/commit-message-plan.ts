@@ -3,7 +3,11 @@ import {
   getCommitMessageModel,
   isCustomAgentId
 } from './commit-message-agent-spec'
-import { planCustomCommand, tokenizeCustomCommandTemplate } from './commit-message-prompt'
+import {
+  planCustomCommand,
+  tokenizeCustomCommandTemplate,
+  type CommandTemplatePathFlavor
+} from './commit-message-prompt'
 import type { TuiAgent } from './types'
 
 // Why: planning is a pure transformation from "user request + prompt text"
@@ -34,16 +38,21 @@ export type CommitMessagePlanResult =
   | { ok: true; plan: CommitMessagePlan }
   | { ok: false; error: string }
 
+export type CommitMessagePlanOptions = {
+  commandPathFlavor?: CommandTemplatePathFlavor
+}
+
 export function planAgentBinary(
   defaultBinary: string,
-  commandOverride: string | undefined
+  commandOverride: string | undefined,
+  pathFlavor: CommandTemplatePathFlavor = 'posix'
 ): { ok: true; binary: string; prefixArgs: string[] } | { ok: false; error: string } {
   const command = commandOverride?.trim()
   if (!command) {
     return { ok: true, binary: defaultBinary, prefixArgs: [] }
   }
 
-  const tokenized = tokenizeCustomCommandTemplate(command)
+  const tokenized = tokenizeCustomCommandTemplate(command, pathFlavor)
   if (!tokenized.ok) {
     return { ok: false, error: `Agent command override is invalid: ${tokenized.error}` }
   }
@@ -55,13 +64,14 @@ export function planAgentBinary(
 }
 
 function planAdditionalAgentArgs(
-  agentArgs: string | null | undefined
+  agentArgs: string | null | undefined,
+  pathFlavor: CommandTemplatePathFlavor
 ): { ok: true; args: string[] } | { ok: false; error: string } {
   const trimmed = agentArgs?.trim()
   if (!trimmed) {
     return { ok: true, args: [] }
   }
-  const tokenized = tokenizeCustomCommandTemplate(trimmed)
+  const tokenized = tokenizeCustomCommandTemplate(trimmed, pathFlavor)
   if (!tokenized.ok) {
     return { ok: false, error: `CLI arguments are invalid: ${tokenized.error}` }
   }
@@ -158,8 +168,10 @@ function insertAdditionalAgentArgs(args: {
 
 export function planCommitMessageGeneration(
   input: CommitMessagePlanInput,
-  prompt: string
+  prompt: string,
+  options: CommitMessagePlanOptions = {}
 ): CommitMessagePlanResult {
+  const pathFlavor = options.commandPathFlavor ?? 'posix'
   if (isCustomAgentId(input.agentId)) {
     const command = input.customAgentCommand?.trim() ?? ''
     if (!command) {
@@ -168,11 +180,11 @@ export function planCommitMessageGeneration(
         error: 'Custom command is empty. Add one in Settings → Git → AI Commit Messages.'
       }
     }
-    const planned = planCustomCommand(command, prompt)
+    const planned = planCustomCommand(command, prompt, pathFlavor)
     if (!planned.ok) {
       return { ok: false, error: planned.error }
     }
-    const agentArgs = planAdditionalAgentArgs(input.agentArgs)
+    const agentArgs = planAdditionalAgentArgs(input.agentArgs, pathFlavor)
     if (!agentArgs.ok) {
       return agentArgs
     }
@@ -223,7 +235,7 @@ export function planCommitMessageGeneration(
     model: input.model,
     thinkingLevel: input.thinkingLevel
   })
-  const agentArgs = planAdditionalAgentArgs(input.agentArgs)
+  const agentArgs = planAdditionalAgentArgs(input.agentArgs, pathFlavor)
   if (!agentArgs.ok) {
     return agentArgs
   }
@@ -243,7 +255,7 @@ export function planCommitMessageGeneration(
     promptDelivery: spec.promptDelivery,
     prompt: argvPrompt
   })
-  const command = planAgentBinary(spec.binary, input.agentCommandOverride)
+  const command = planAgentBinary(spec.binary, input.agentCommandOverride, pathFlavor)
   if (!command.ok) {
     return { ok: false, error: command.error }
   }

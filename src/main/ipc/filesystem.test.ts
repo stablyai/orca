@@ -2619,7 +2619,10 @@ describe('registerFilesystemHandlers', () => {
       defaultModelId: 'auto'
     })
     const executeCommitMessagePlan = vi.fn()
-    getSshGitProviderMock.mockReturnValue({ executeCommitMessagePlan })
+    getSshGitProviderMock.mockReturnValue({
+      executeCommitMessagePlan,
+      getHostPlatform: () => ({ pathFlavor: 'windows' })
+    })
     const storeWithOverride = {
       ...store,
       getSettings: () => ({
@@ -2640,7 +2643,8 @@ describe('registerFilesystemHandlers', () => {
       'cursor',
       '/remote/repo',
       expect.any(Function),
-      'npx cursor-agent'
+      'npx cursor-agent',
+      'windows'
     )
     const execute = discoverCommitMessageModelsRemoteMock.mock.calls[0]?.[2] as (
       plan: unknown,
@@ -2669,7 +2673,8 @@ describe('registerFilesystemHandlers', () => {
     resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
     getSshGitProviderMock.mockReturnValue({
       getStagedCommitContext: vi.fn().mockResolvedValue(context),
-      executeCommitMessagePlan
+      executeCommitMessagePlan,
+      getHostPlatform: () => ({ pathFlavor: 'windows' })
     })
     generateCommitMessageFromContextMock.mockResolvedValue({
       success: true,
@@ -2694,6 +2699,7 @@ describe('registerFilesystemHandlers', () => {
       expect.objectContaining({
         kind: 'remote',
         cwd: '/remote/repo',
+        commandPathFlavor: 'windows',
         missingBinaryLocation: 'remote PATH'
       })
     )
