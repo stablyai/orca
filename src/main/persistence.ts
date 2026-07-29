@@ -6906,7 +6906,7 @@ export class Store {
         }
       }
       const currentTopologyRevision = next.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-      if (terminalMembershipChanged && currentTopologyRevision > 0) {
+      if (terminalMembershipChanged) {
         // Why: a committed grid append must fence stale orphan-adoption writes
         // against the topology that existed before this new leaf.
         next.terminalTopologyRevisionByRepoId = {

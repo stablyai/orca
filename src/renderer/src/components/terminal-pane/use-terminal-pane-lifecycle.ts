@@ -628,6 +628,29 @@ type TerminalPaneSplitManager = Pick<
   | 'splitPaneAroundLeafIds'
 >
 
+const terminalPaneSplitListenerOwnerByTabId = new Map<string, object>()
+
+export function registerTerminalPaneSplitEventListener(
+  target: EventTarget,
+  tabId: string,
+  listener: (event: Event) => void
+): () => void {
+  const owner = {}
+  terminalPaneSplitListenerOwnerByTabId.set(tabId, owner)
+  const onSplit = (event: Event): void => {
+    if (terminalPaneSplitListenerOwnerByTabId.get(tabId) === owner) {
+      listener(event)
+    }
+  }
+  target.addEventListener(SPLIT_TERMINAL_PANE_EVENT, onSplit)
+  return () => {
+    target.removeEventListener(SPLIT_TERMINAL_PANE_EVENT, onSplit)
+    if (terminalPaneSplitListenerOwnerByTabId.get(tabId) === owner) {
+      terminalPaneSplitListenerOwnerByTabId.delete(tabId)
+    }
+  }
+}
+
 export function createTerminalPaneSplitEventHandler(args: {
   tabId: string
   getManager: () => TerminalPaneSplitManager | null
@@ -2133,7 +2156,13 @@ export function useTerminalPaneLifecycle({
         }
       }
     })
-    window.addEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)
+    // Why: replacement mounts can overlap cleanup; only the newest manager may
+    // acknowledge a transactional split for this tab.
+    const unregisterTerminalPaneSplitEventListener = registerTerminalPaneSplitEventListener(
+      window,
+      tabId,
+      onCliSplitPane
+    )
     // Why: queued runtime splits may drain only after this tab-specific listener
     // exists; registering earlier can acknowledge an event nobody consumed.
     const unregisterTerminalSurfaceActionConsumer = registerTerminalSurfaceActionConsumer(tabId)
@@ -2179,7 +2208,8 @@ export function useTerminalPaneLifecycle({
     window.addEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
 
     return () => {
-      window.removeEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)
+      cancelInitialRenderSettle?.()
+      unregisterTerminalPaneSplitEventListener()
       unregisterTerminalSurfaceActionConsumer()
       window.removeEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
       const currentWorktreeTabs = useAppStore.getState().tabsByWorktree[worktreeId]

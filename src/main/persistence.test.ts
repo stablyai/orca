@@ -10021,7 +10021,7 @@ describe('Store', () => {
     expect(store.getSshRemotePtyLeases()).toEqual([])
   })
 
-  it('persists grid incarnation identity and advances an established topology revision', async () => {
+  it('persists grid incarnation identity and advances the initial topology revision', async () => {
     const store = await createStore()
     const paneKey = `grid-tab:${TEST_LEAF_2}`
     store.setWorkspaceSession({
@@ -10038,7 +10038,7 @@ describe('Store', () => {
           ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
         }
       },
-      terminalTopologyRevisionByRepoId: { wt1: 1 },
+      terminalTopologyRevisionByRepoId: { wt1: 0 },
       terminalSurfaceTombstonesByPaneKey: {
         [paneKey]: {
           worktreeId: 'wt1',
@@ -10080,9 +10080,7 @@ describe('Store', () => {
     const session = store.getWorkspaceSession()
     expect(session.terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe('incarnation-grid-2')
     expect(session.terminalSurfaceTombstonesByPaneKey?.[paneKey]).toBeUndefined()
-    expect(session.terminalTopologyRevisionByRepoId?.wt1).toBe(
-      topologyRevisionBeforeAppend + 1
-    )
+    expect(session.terminalTopologyRevisionByRepoId?.wt1).toBe(topologyRevisionBeforeAppend + 1)
   })
 
   it('re-arms persistence after a failed grid binding flush rolls back memory', async () => {
