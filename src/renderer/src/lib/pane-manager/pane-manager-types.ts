@@ -63,6 +63,8 @@ export type PaneManagerOptions = {
     url: string,
     openLinkHint: string
   ) => string | null | undefined | Promise<string | null | undefined>
+  /** Resolves the full URL under the pointer for links wrapped across rows. */
+  resolveHoveredLinkUrl?: (paneId: number, event: MouseEvent, uri: string) => string | null
   initialRenderingSuspended?: boolean
   terminalGpuAcceleration?: GlobalSettings['terminalGpuAcceleration']
   // Why: diagnostic label for log correlation. safeFit and other internal

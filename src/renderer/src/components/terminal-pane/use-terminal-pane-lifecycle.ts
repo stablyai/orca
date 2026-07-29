@@ -36,7 +36,9 @@ import { createTerminalHandleLinkProvider } from './terminal-handle-links'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { handleOscLink } from './terminal-osc-link-routing'
 import { handleTerminalWebLinkClick } from './terminal-web-link-click'
+import { createBlockWrappedHttpLinkProvider } from './block-wrapped-http-link-provider'
 import {
+  findHttpLinkAtTerminalMouseEvent,
   installHttpLinkClickFallback,
   type TerminalLinkRoutingPreferenceRequester
 } from './terminal-url-link-hit-testing'
@@ -580,6 +582,7 @@ export function useTerminalPaneLifecycle({
   const terminalHandleLinkDisposablesRef = useRef(new Map<number, IDisposable>())
   const fileLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
   const httpLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
+  const blockWrappedHttpLinkDisposablesRef = useRef(new Map<number, IDisposable>())
   // Why: read settingsRef at fire time so toggling "copy on select" applies without recreating panes.
   const selectionDisposablesRef = useRef(new Map<number, IDisposable>())
   const selectionCaptureTimersRef = useRef(new Map<number, number>())
@@ -621,6 +624,7 @@ export function useTerminalPaneLifecycle({
     const terminalHandleLinkDisposables = terminalHandleLinkDisposablesRef.current
     const fileLinkClickFallbackDisposables = fileLinkClickFallbackDisposablesRef.current
     const httpLinkClickFallbackDisposables = httpLinkClickFallbackDisposablesRef.current
+    const blockWrappedHttpLinkDisposables = blockWrappedHttpLinkDisposablesRef.current
     const selectionDisposables = selectionDisposablesRef.current
     const selectionCaptureTimers = selectionCaptureTimersRef.current
     const mouseHideDisposables = mouseHideDisposablesRef.current
@@ -962,6 +966,21 @@ export function useTerminalPaneLifecycle({
           createFilePathLinkProvider(pane.id, linkDeps, pane.linkTooltip, fileOpenLinkHint)
         )
         linkProviderDisposablesRef.current.set(pane.id, linkProviderDisposable)
+        // Why: WebLinksAddon reports nothing on rows a TUI wrapped itself, so
+        // the tail of such a URL had no hover tooltip even though it opened.
+        const blockWrappedHttpLinkDisposable = pane.terminal.registerLinkProvider(
+          createBlockWrappedHttpLinkProvider({
+            getTerminal: () =>
+              managerRef.current?.getPanes().find((candidate) => candidate.id === pane.id)
+                ?.terminal ?? null,
+            worktreeId,
+            linkTooltip: pane.linkTooltip,
+            openLinkHint: urlOpenLinkHint,
+            formatTooltip: (url, hint) => formatTerminalUrlTooltip(url, hint),
+            requestOpenLinksInAppPreference
+          })
+        )
+        blockWrappedHttpLinkDisposables.set(pane.id, blockWrappedHttpLinkDisposable)
         const terminalHandleLinkDisposable = pane.terminal.registerLinkProvider(
           createTerminalHandleLinkProvider({
             getTerminal: () =>
@@ -1120,6 +1139,11 @@ export function useTerminalPaneLifecycle({
         if (fileLinkClickFallbackDisposable) {
           fileLinkClickFallbackDisposable.dispose()
           fileLinkClickFallbackDisposablesRef.current.delete(paneId)
+        }
+        const blockWrappedHttpLinkDisposable = blockWrappedHttpLinkDisposables.get(paneId)
+        if (blockWrappedHttpLinkDisposable) {
+          blockWrappedHttpLinkDisposable.dispose()
+          blockWrappedHttpLinkDisposables.delete(paneId)
         }
         const httpLinkClickFallbackDisposable = httpLinkClickFallbackDisposables.get(paneId)
         if (httpLinkClickFallbackDisposable) {
@@ -1360,6 +1384,10 @@ export function useTerminalPaneLifecycle({
         })
       },
       formatLinkTooltip: (url, openLinkHint) => formatTerminalUrlTooltip(url, openLinkHint),
+      resolveHoveredLinkUrl: (paneId, event, uri) => {
+        const pane = managerRef.current?.getPanes().find((candidate) => candidate.id === paneId)
+        return pane ? findHttpLinkAtTerminalMouseEvent(pane.terminal, event) : uri
+      },
       // Why: hidden panes stay mounted so PTYs survive navigation, but their WebGL contexts drain Chromium's budget and can blank visible panes.
       initialRenderingSuspended: !isVisibleRef.current,
       // Why: remote-runtime panes honor the GPU setting too; late snapshots are handled by post-replay rebuildPaneWebgl in pty-connection.
@@ -1579,6 +1607,10 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       fileLinkClickFallbackDisposables.clear()
+      for (const disposable of blockWrappedHttpLinkDisposables.values()) {
+        disposable.dispose()
+      }
+      blockWrappedHttpLinkDisposables.clear()
       for (const disposable of httpLinkClickFallbackDisposables.values()) {
         disposable.dispose()
       }

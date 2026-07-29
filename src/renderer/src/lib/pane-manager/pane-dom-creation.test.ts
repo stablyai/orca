@@ -131,4 +131,54 @@ describe('createPaneDOM link tooltips', () => {
 
     expect(pane.linkTooltip.textContent).toBe(labeledText)
   })
+
+  it('previews the whole wrapped URL rather than the hovered row fragment', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+    const wrappedUrl = 'https://github.com/stablyai/orca/pull/10349#issuecomment-5068238223'
+    const resolveHoveredLinkUrl = vi.fn(() => wrappedUrl)
+
+    setPlatform('Macintosh')
+    const pane = createPaneDOM(
+      7,
+      leafId,
+      { resolveHoveredLinkUrl },
+      { active: null } as never,
+      {} as never,
+      vi.fn(),
+      vi.fn()
+    )
+
+    const event = {} as MouseEvent
+    webLinksAddonMock.options?.hover?.(event, 'https://github.com/stablyai/orca/')
+
+    expect(resolveHoveredLinkUrl).toHaveBeenCalledWith(
+      7,
+      event,
+      'https://github.com/stablyai/orca/'
+    )
+    expect(pane.linkTooltip.textContent).toBe(
+      `${wrappedUrl} (⌘+click to open or ⇧⌘+click for system browser)`
+    )
+  })
+
+  it('falls back to the addon URL when no wrapped link resolves', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+
+    setPlatform('Macintosh')
+    const pane = createPaneDOM(
+      8,
+      leafId,
+      { resolveHoveredLinkUrl: () => null },
+      { active: null } as never,
+      {} as never,
+      vi.fn(),
+      vi.fn()
+    )
+
+    webLinksAddonMock.options?.hover?.({} as MouseEvent, 'http://localhost:5180/')
+
+    expect(pane.linkTooltip.textContent).toBe(
+      'http://localhost:5180/ (⌘+click to open or ⇧⌘+click for system browser)'
+    )
+  })
 })

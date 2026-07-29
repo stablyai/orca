@@ -79,13 +79,16 @@ export function createPaneDOM(
   const webLinksAddon = new WebLinksAddon(
     options.onLinkClick ? (event, uri) => options.onLinkClick!(event, uri) : undefined,
     {
-      hover: (_event, uri) => {
+      hover: (event, uri) => {
         if (uri) {
           linkTooltipHoverToken += 1
           const hoverToken = linkTooltipHoverToken
-          linkTooltip.textContent = defaultLinkTooltipText(uri, openLinkHint)
+          // Why: WebLinksAddon reports only the hovered row's fragment, so a URL
+          // wrapped across rows would preview a different target than it opens.
+          const hoveredUrl = options.resolveHoveredLinkUrl?.(id, event, uri) ?? uri
+          linkTooltip.textContent = defaultLinkTooltipText(hoveredUrl, openLinkHint)
           linkTooltip.style.display = ''
-          const formatted = options.formatLinkTooltip?.(uri, openLinkHint)
+          const formatted = options.formatLinkTooltip?.(hoveredUrl, openLinkHint)
           if (formatted && typeof formatted === 'object' && 'then' in formatted) {
             void formatted.then(
               (nextText) => {
