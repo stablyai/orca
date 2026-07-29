@@ -39,6 +39,7 @@ const DEV_SERVER_SIGNATURES: readonly DevServerSignature[] = [
   { id: 'webpack', label: 'webpack', clauses: [['webpack-dev-server'], ['webpack', 'serve']] },
   { id: 'parcel', label: 'Parcel', clauses: [['parcel']] },
   // Vite is checked after the frameworks that wrap it so the wrapper wins.
+  { id: 'electron-vite', label: 'electron-vite', clauses: [['electron-vite']] },
   { id: 'vite', label: 'Vite', clauses: [['vite']] },
 
   { id: 'rails', label: 'Rails', clauses: [['puma'], ['rails', 'server'], ['rails', 's']] },

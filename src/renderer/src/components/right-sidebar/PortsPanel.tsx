@@ -762,9 +762,7 @@ function LocalPortDetailsDialog({
               : translate('auto.components.right.sidebar.PortsPanel.d41a8241ec', 'Port')}
           </DialogTitle>
           <DialogDescription>
-            {port
-              ? `${getWorkspacePortProcessLabel(port).label} · ${addressForPort(port)}`
-              : ''}
+            {port ? `${getWorkspacePortProcessLabel(port).label} · ${addressForPort(port)}` : ''}
           </DialogDescription>
         </DialogHeader>
         {port && (

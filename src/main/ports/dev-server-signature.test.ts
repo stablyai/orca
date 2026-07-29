@@ -26,7 +26,11 @@ describe('identifyDevServer', () => {
     ['nuxt', 'node /home/dev/app/node_modules/.bin/nuxt dev', 'Nuxt'],
     ['astro', 'node /home/dev/app/node_modules/.bin/astro dev', 'Astro'],
     ['angular', 'node /home/dev/app/node_modules/@angular/cli/bin/ng.js serve', 'Angular'],
-    ['create react app', 'node /home/dev/app/node_modules/.bin/react-scripts start', 'Create React App'],
+    [
+      'create react app',
+      'node /home/dev/app/node_modules/.bin/react-scripts start',
+      'Create React App'
+    ],
     ['webpack dev server', 'node /home/dev/app/node_modules/.bin/webpack serve', 'webpack'],
     ['storybook', 'node /home/dev/app/node_modules/.bin/storybook dev -p 6006', 'Storybook'],
     ['django', 'python3 manage.py runserver 0.0.0.0:8000', 'Django'],
@@ -37,6 +41,23 @@ describe('identifyDevServer', () => {
     ['laravel', 'php artisan serve --port=8000', 'Laravel'],
     ['phoenix', '/usr/bin/elixir -S mix phx.server', 'Phoenix'],
     ['hugo', '/usr/local/bin/hugo server -D', 'Hugo']
+  ])('identifies %s', (_case, commandLine, label) => {
+    expect(identifyDevServer({ commandLine })?.label).toBe(label)
+  })
+
+  // Captured verbatim from `ps -o command=` against live processes, which is
+  // how these reach the classifier in production.
+  it.each([
+    [
+      'vite through the bin shim, as macOS reports it',
+      'node node_modules/.bin/../vite/bin/vite.js --config vite.web.config.ts --port 5173 --host 127.0.0.1',
+      'Vite'
+    ],
+    [
+      'electron-vite from a pnpm virtual store path',
+      '/Users/dev/.nvm/versions/node/v24.18.0/bin/node /repo/node_modules/.pnpm/electron-vite@5.0.0_rolldown-vite@7.3.1/node_modules/electron-vite/bin/electron-vite.js dev --remote-debugging-port=9453',
+      'electron-vite'
+    ]
   ])('identifies %s', (_case, commandLine, label) => {
     expect(identifyDevServer({ commandLine })?.label).toBe(label)
   })
@@ -85,7 +106,8 @@ describe('identifyDevServer', () => {
   it('keeps quoted paths containing spaces intact', () => {
     expect(
       identifyDevServer({
-        commandLine: '"C:\\Program Files\\nodejs\\node.exe" "C:\\My Apps\\web\\node_modules\\.bin\\next" dev'
+        commandLine:
+          '"C:\\Program Files\\nodejs\\node.exe" "C:\\My Apps\\web\\node_modules\\.bin\\next" dev'
       })?.label
     ).toBe('Next.js')
   })

@@ -519,9 +519,7 @@ describe('worktree-palette-search', () => {
       repoMap,
       null,
       null,
-      new Map([
-        ['wt-port', [{ port: 5173, processName: 'node', devServer: { label: 'Vite' } }]]
-      ])
+      new Map([['wt-port', [{ port: 5173, processName: 'node', devServer: { label: 'Vite' } }]]])
     )
 
     expect(results[0].supportingText).toEqual({
