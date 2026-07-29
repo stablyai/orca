@@ -91,7 +91,8 @@ export function registerJiraHandlers(): void {
     const result = await connect({
       siteUrl: args.siteUrl,
       email: args.email,
-      apiToken: args.apiToken
+      apiToken: args.apiToken,
+      authType: args.authType === 'server' ? 'server' : 'cloud'
     })
     if (result.ok) {
       _resetPreflightCache()

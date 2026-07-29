@@ -1,12 +1,24 @@
 import { Fragment, memo, useMemo, type ReactNode } from 'react'
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
+import { styles } from './mobile-markdown-styles'
+import {
+  detectFilePathSegments,
+  isFilePathCodeSpan,
+  normalizeFilePath
+} from './markdown-file-path-detection'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
 
 type Props = {
   content?: string
   fallback?: string
+  /** Multiplier for prose font size (paragraphs, lists, quotes). Defaults to 1;
+   *  the chat view passes >1 so agent prose reads larger than the compact base. */
+  textScale?: number
+  /** When provided, detected file-path tokens render as tappable and invoke this
+   *  with the worktree-relative path. Omitted on screens with no file viewer, where
+   *  paths render as plain text (no behavior change). */
+  onOpenFile?: (relativePath: string) => void
 }
 
 const MAX_TABLE_ROWS = 40
@@ -19,7 +31,37 @@ function openMarkdownUrl(url: string): void {
   }
 }
 
-function renderInline(text: string): ReactNode[] {
+// Render a plain (non-token) text run, splitting out tappable file paths when
+// onOpenFile is provided. Without it, paths stay plain text.
+function renderTextRun(
+  text: string,
+  keyPrefix: string,
+  onOpenFile?: (relativePath: string) => void
+): ReactNode {
+  if (!onOpenFile) {
+    return text
+  }
+  const segments = detectFilePathSegments(text)
+  if (segments.length === 1 && segments[0]!.type === 'text') {
+    return text
+  }
+  return segments.map((segment, segmentIndex) => {
+    if (segment.type === 'file') {
+      return (
+        <Text
+          key={`${keyPrefix}:${segmentIndex}`}
+          style={styles.link}
+          onPress={() => onOpenFile(segment.path)}
+        >
+          {segment.value}
+        </Text>
+      )
+    }
+    return <Fragment key={`${keyPrefix}:${segmentIndex}`}>{segment.value}</Fragment>
+  })
+}
+
+function renderInline(text: string, onOpenFile?: (relativePath: string) => void): ReactNode[] {
   const parts: ReactNode[] = []
   const pattern =
     /(!\[[^\]]*\]\([^)]+\)|`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+)/g
@@ -28,7 +70,7 @@ function renderInline(text: string): ReactNode[] {
 
   while ((match = pattern.exec(text))) {
     if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index))
+      parts.push(renderTextRun(text.slice(lastIndex, match.index), `t${lastIndex}`, onOpenFile))
     }
     const token = match[0]
     const key = `${match.index}:${token}`
@@ -53,11 +95,24 @@ function renderInline(text: string): ReactNode[] {
         </Text>
       )
     } else if (token.startsWith('`')) {
-      parts.push(
-        <Text key={key} style={styles.inlineCode}>
-          {token.slice(1, -1)}
-        </Text>
-      )
+      const code = token.slice(1, -1)
+      if (onOpenFile && isFilePathCodeSpan(code)) {
+        parts.push(
+          <Text
+            key={key}
+            style={[styles.inlineCode, styles.inlineCodeLink]}
+            onPress={() => onOpenFile(normalizeFilePath(code.trim()))}
+          >
+            {code}
+          </Text>
+        )
+      } else {
+        parts.push(
+          <Text key={key} style={styles.inlineCode}>
+            {code}
+          </Text>
+        )
+      }
     } else if (token.startsWith('~~')) {
       parts.push(
         <Text key={key} style={styles.strike}>
@@ -81,15 +136,20 @@ function renderInline(text: string): ReactNode[] {
   }
 
   if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex))
+    parts.push(renderTextRun(text.slice(lastIndex), `t${lastIndex}`, onOpenFile))
   }
   return parts
 }
 
-function MobileMarkdownInner({ content, fallback = '' }: Props) {
+function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile }: Props) {
   const text = content?.trim() ?? ''
   const previewText = useMemo(() => normalizeMobileMarkdownPreviewHtml(text), [text])
   const blocks = useMemo(() => parseMobileMarkdown(previewText), [previewText])
+  // Scale prose sizes; inline spans inherit fontSize from the wrapping Text.
+  const scaled = (size: number): { fontSize: number; lineHeight: number } | null =>
+    textScale !== 1 ? { fontSize: size * textScale, lineHeight: (size + 6) * textScale } : null
+  const proseScale = scaled(13)
+  const listScale = scaled(14)
   if (!text) {
     return fallback ? <Text style={styles.paragraph}>{fallback}</Text> : null
   }
@@ -103,14 +163,14 @@ function MobileMarkdownInner({ content, fallback = '' }: Props) {
               key={index}
               style={[styles.heading, block.level <= 2 ? styles.headingLarge : null]}
             >
-              {renderInline(block.text)}
+              {renderInline(block.text, onOpenFile)}
             </Text>
           )
         }
         if (block.type === 'quote') {
           return (
             <View key={index} style={styles.quote}>
-              <Text style={styles.quoteText}>{renderInline(block.text)}</Text>
+              <Text style={styles.quoteText}>{renderInline(block.text, onOpenFile)}</Text>
             </View>
           )
         }
@@ -147,7 +207,7 @@ function MobileMarkdownInner({ content, fallback = '' }: Props) {
                 <View style={styles.tableRow}>
                   {visibleHeaders.map((header, cellIndex) => (
                     <Text key={cellIndex} style={[styles.tableCell, styles.tableHeader]}>
-                      {renderInline(header)}
+                      {renderInline(header, onOpenFile)}
                     </Text>
                   ))}
                 </View>
@@ -155,7 +215,7 @@ function MobileMarkdownInner({ content, fallback = '' }: Props) {
                   <View key={rowIndex} style={styles.tableRow}>
                     {visibleHeaders.map((_, cellIndex) => (
                       <Text key={cellIndex} style={styles.tableCell}>
-                        {renderInline(row[cellIndex] ?? '')}
+                        {renderInline(row[cellIndex] ?? '', onOpenFile)}
                       </Text>
                     ))}
                   </View>
@@ -185,7 +245,9 @@ function MobileMarkdownInner({ content, fallback = '' }: Props) {
                         ? '[x]'
                         : '[ ]'}
                   </Text>
-                  <Text style={styles.listText}>{renderInline(item.text)}</Text>
+                  <Text style={[styles.listText, listScale]}>
+                    {renderInline(item.text, onOpenFile)}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -195,11 +257,11 @@ function MobileMarkdownInner({ content, fallback = '' }: Props) {
           return <View key={index} style={styles.rule} />
         }
         return (
-          <Text key={index} style={styles.paragraph}>
+          <Text key={index} style={[styles.paragraph, proseScale]}>
             {block.text.split('\n').map((line, lineIndex) => (
               <Fragment key={lineIndex}>
                 {lineIndex > 0 ? '\n' : null}
-                {renderInline(line)}
+                {renderInline(line, onOpenFile)}
               </Fragment>
             ))}
           </Text>
@@ -210,147 +272,3 @@ function MobileMarkdownInner({ content, fallback = '' }: Props) {
 }
 
 export const MobileMarkdown = memo(MobileMarkdownInner)
-
-const styles = StyleSheet.create({
-  root: {
-    gap: spacing.sm
-  },
-  paragraph: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textPrimary
-  },
-  heading: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  headingLarge: {
-    fontSize: 15,
-    lineHeight: 21
-  },
-  bold: {
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  italic: {
-    fontStyle: 'italic'
-  },
-  strike: {
-    textDecorationLine: 'line-through'
-  },
-  link: {
-    color: colors.accentBlue,
-    textDecorationLine: 'underline'
-  },
-  inlineCode: {
-    fontFamily: typography.monoFamily,
-    fontSize: 12,
-    color: colors.textPrimary,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.row,
-    paddingHorizontal: 4
-  },
-  quote: {
-    borderLeftWidth: 2,
-    borderLeftColor: colors.borderSubtle,
-    paddingLeft: spacing.sm
-  },
-  quoteText: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textSecondary
-  },
-  codeBlock: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    padding: spacing.sm
-  },
-  codeLanguage: {
-    fontSize: 10,
-    color: colors.textMuted,
-    marginBottom: spacing.xs,
-    textTransform: 'uppercase'
-  },
-  codeText: {
-    fontFamily: typography.monoFamily,
-    fontSize: 12,
-    lineHeight: 17,
-    color: colors.textPrimary
-  },
-  imageFrame: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgRaised,
-    overflow: 'hidden',
-    padding: spacing.sm
-  },
-  imageCaption: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    fontSize: 11,
-    color: colors.textSecondary
-  },
-  table: {
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    overflow: 'hidden',
-    backgroundColor: colors.bgPanel
-  },
-  tableRow: {
-    flexDirection: 'row'
-  },
-  tableCell: {
-    minWidth: 112,
-    maxWidth: 220,
-    borderRightWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    fontSize: 12,
-    lineHeight: 17,
-    color: colors.textPrimary
-  },
-  tableHeader: {
-    fontWeight: '700',
-    backgroundColor: colors.bgRaised
-  },
-  tableTruncated: {
-    padding: spacing.sm,
-    fontSize: 12,
-    color: colors.textMuted
-  },
-  list: {
-    gap: spacing.xs
-  },
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm
-  },
-  listMarker: {
-    width: 22,
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textSecondary,
-    fontFamily: typography.monoFamily
-  },
-  listText: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textPrimary
-  },
-  rule: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle
-  }
-})

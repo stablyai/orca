@@ -422,7 +422,12 @@ function summarize(values) {
     return null
   }
   const at = (f) => sorted[Math.min(sorted.length - 1, Math.round(f * (sorted.length - 1)))]
-  return { count: sorted.length, median: Math.round(at(0.5)), p95: Math.round(at(0.95)), max: sorted.at(-1) }
+  return {
+    count: sorted.length,
+    median: Math.round(at(0.5)),
+    p95: Math.round(at(0.95)),
+    max: sorted.at(-1)
+  }
 }
 
 function summarizeArm(name, samples) {
@@ -514,8 +519,7 @@ async function main() {
     // registers on first pane mount, so poll rather than read once.
     const debugReady = await pollUntil(
       'parking debug handle',
-      () =>
-        page.evaluate(() => typeof window.__terminalParkingDebug?.parkedTabIds === 'function'),
+      () => page.evaluate(() => typeof window.__terminalParkingDebug?.parkedTabIds === 'function'),
       Boolean,
       10_000,
       100
@@ -576,7 +580,13 @@ async function main() {
     const stamp = new Date(startedAt).toISOString().replace(/[:.]/g, '-')
     const reportPath = path.resolve(
       args.reportPath ??
-        path.join(rootDir, 'tools', 'benchmarks', 'results', `cold-park-${args.label}-${stamp}.json`)
+        path.join(
+          rootDir,
+          'tools',
+          'benchmarks',
+          'results',
+          `cold-park-${args.label}-${stamp}.json`
+        )
     )
     mkdirSync(path.dirname(reportPath), { recursive: true })
     writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`)

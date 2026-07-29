@@ -2,7 +2,7 @@ import type { CliStatusResult } from '../shared/runtime-types'
 import { computerUseErrorRecoveryData } from '../shared/computer-use-error-recovery'
 import { prepareComputerCliJsonResult } from './computer-format'
 import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
-import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
+import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
 
 export {
   formatBrowserProfileList,
@@ -168,6 +168,7 @@ export function formatCliStatus(status: CliStatusResult): string {
   return [
     `appRunning: ${status.app.running}`,
     `pid: ${status.app.pid ?? 'none'}`,
+    `desktopWindowStatus: ${status.app.desktopWindowStatus ?? 'unknown'}`,
     `runtimeState: ${status.runtime.state}`,
     `runtimeReachable: ${status.runtime.reachable}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,

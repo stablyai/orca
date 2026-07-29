@@ -35,16 +35,21 @@ describe('rich markdown slash commands', () => {
     expect(getCommand('inline-math').aliases).toContain('latex')
     expect(getCommand('math-block').aliases).toContain('equation block')
     expect(getCommand('emoji').aliases).toContain('reaction')
+    expect(getCommand('toggle-h5').aliases).toContain('toggle-h5')
   })
 
   it('orders commands under section headers', () => {
     expect(slashCommands.map((command) => `${command.group}:${command.id}`)).toEqual([
       'Headings:heading-1',
-      'Headings:toggle-h1',
       'Headings:heading-2',
       'Headings:heading-3',
       'Headings:heading-4',
       'Headings:heading-5',
+      'Toggle headings:toggle-h1',
+      'Toggle headings:toggle-h2',
+      'Toggle headings:toggle-h3',
+      'Toggle headings:toggle-h4',
+      'Toggle headings:toggle-h5',
       'Basic blocks:blockquote',
       'Basic blocks:ordered-list',
       'Basic blocks:bullet-list',

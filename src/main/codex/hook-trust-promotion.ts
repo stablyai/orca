@@ -7,7 +7,9 @@ import {
 } from '../agent-hooks/installer-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import {
-  getCodexCanonicalTrustPath,
+  codexHookSourcePathsEqual,
+  getCodexExplicitHomeHookSourcePath,
+  normalizeCodexHookSourcePath,
   normalizeHookTrustKeyForLookup,
   parseTrustKey,
   readHookTrustEntries,
@@ -77,15 +79,16 @@ function readHookTrustProvenance(
  * install/refresh, so the next launch can tell "entry Orca wrote" apart from
  * "entry Codex wrote after a user approval". Call after all trust writes.
  */
-export function snapshotCodexRuntimeHookTrustProvenance(): void {
+export function snapshotCodexRuntimeHookTrustProvenance(
+  runtimeHomePath: string = getOrcaManagedCodexHomePath()
+): void {
   try {
-    const runtimeHomePath = getOrcaManagedCodexHomePath()
     const runtimeHooksPath = join(runtimeHomePath, 'hooks.json')
-    const canonicalRuntimeHooksPath = getCodexCanonicalTrustPath(runtimeHooksPath)
+    const canonicalRuntimeHooksPath = getCodexExplicitHomeHookSourcePath(runtimeHooksPath)
     const entries: Record<string, HookTrustProvenanceEntry> = {}
     for (const [key, state] of readHookTrustEntries(join(runtimeHomePath, 'config.toml'))) {
       const parsed = parseTrustKey(key)
-      if (!parsed || getCodexCanonicalTrustPath(parsed.sourcePath) !== canonicalRuntimeHooksPath) {
+      if (!parsed || !codexHookSourcePathsEqual(parsed.sourcePath, canonicalRuntimeHooksPath)) {
         continue
       }
       entries[normalizeHookTrustKeyForLookup(key)] = {
@@ -111,9 +114,11 @@ export function snapshotCodexRuntimeHookTrustProvenance(): void {
  * the user's own hooks.json. Runs before the config mirror so the promoted
  * trust is mirrored back on the same launch.
  */
-export function promoteCodexRuntimeHookApprovalsToSystem(): void {
+export function promoteCodexRuntimeHookApprovalsToSystem(
+  runtimeHomePath: string = getOrcaManagedCodexHomePath()
+): void {
   try {
-    promoteCodexRuntimeHookApprovalsToSystemUnsafe()
+    promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath)
   } catch (error) {
     // Why: promotion is best-effort launch prep; a malformed runtime file
     // must not block hook install or the Codex launch itself.
@@ -121,13 +126,12 @@ export function promoteCodexRuntimeHookApprovalsToSystem(): void {
   }
 }
 
-function promoteCodexRuntimeHookApprovalsToSystemUnsafe(): void {
-  const runtimeHomePath = getOrcaManagedCodexHomePath()
+function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string): void {
   const systemHomePath = getSystemCodexHomePath()
   const runtimeHooksPath = join(runtimeHomePath, 'hooks.json')
   const systemHooksPath = join(systemHomePath, 'hooks.json')
-  const canonicalRuntimeHooksPath = getCodexCanonicalTrustPath(runtimeHooksPath)
-  if (canonicalRuntimeHooksPath === getCodexCanonicalTrustPath(systemHooksPath)) {
+  const canonicalRuntimeHooksPath = getCodexExplicitHomeHookSourcePath(runtimeHooksPath)
+  if (canonicalRuntimeHooksPath === normalizeCodexHookSourcePath(systemHooksPath)) {
     return
   }
   const runtimeTomlPath = join(runtimeHomePath, 'config.toml')
@@ -164,7 +168,7 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(): void {
       continue
     }
     const parsed = parseTrustKey(key)
-    if (!parsed || getCodexCanonicalTrustPath(parsed.sourcePath) !== canonicalRuntimeHooksPath) {
+    if (!parsed || !codexHookSourcePathsEqual(parsed.sourcePath, canonicalRuntimeHooksPath)) {
       continue
     }
     const previous = provenance.get(normalizeHookTrustKeyForLookup(key))
@@ -191,7 +195,7 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(): void {
       continue
     }
     const runtimeEntry = createCodexHookTrustEntry(
-      runtimeHooksPath,
+      canonicalRuntimeHooksPath,
       eventName,
       parsed.groupIndex,
       parsed.handlerIndex,

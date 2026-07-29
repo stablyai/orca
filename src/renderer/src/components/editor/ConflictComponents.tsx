@@ -101,7 +101,7 @@ export function ConflictBanner({
           )}
           <span className="min-w-0 truncate font-medium text-foreground">
             {label}{' '}
-            {translate('auto.components.editor.ConflictComponents.55d61a0ccd', 'conflict ·')}
+            {translate('auto.components.editor.ConflictComponents.55d61a0ccd', 'conflict ·')}{' '}
             {CONFLICT_KIND_LABELS[conflict.conflictKind]}
           </span>
           {conflictNavigation && conflictNavigation.total > 0 && (
@@ -171,7 +171,7 @@ export function ConflictBanner({
       )}
       {entry?.oldPath && (
         <div className="mt-1 text-muted-foreground">
-          {translate('auto.components.editor.ConflictComponents.d5edd81755', 'Renamed from')}
+          {translate('auto.components.editor.ConflictComponents.d5edd81755', 'Renamed from')}{' '}
           {entry.oldPath}
         </div>
       )}
@@ -334,7 +334,7 @@ export function ConflictReviewPanel({
                 {translate(
                   'auto.components.editor.ConflictComponents.a1ce36f77d',
                   'Snapshot captured at'
-                )}
+                )}{' '}
                 {snapshotTime}.
               </span>
             </div>

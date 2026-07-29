@@ -1,27 +1,14 @@
-import { RuntimeClientError } from './runtime-client'
+import { RuntimeClientError } from './runtime/types'
 import { unknownCommandData, unknownFlagData } from './command-suggestion'
+import { specPaths, type CommandSpec } from './command-spec'
+
+export { specPaths }
+export type { CommandSpec }
 
 export type ParsedArgs = {
   commandPath: string[]
   flags: Map<string, string | boolean>
   positionalFlagConflicts?: string[]
-}
-
-export type CommandSpec = {
-  path: string[]
-  // Why: conventional alternate verbs should resolve without duplicating specs
-  // or handler registrations.
-  aliases?: string[][]
-  argumentMode?: 'parsed' | 'passthrough'
-  // Why: irreversibly destroys persistent state — typo recovery must not steer a
-  // benign mistake into one of these via the agent nextSteps channel. #6303
-  destructive?: boolean
-  summary: string
-  usage: string
-  allowedFlags: string[]
-  positionalArgs?: string[]
-  examples?: string[]
-  notes?: string[]
 }
 
 export const GLOBAL_FLAGS = ['help', 'json', 'pairing-code', 'environment']
@@ -40,6 +27,7 @@ export const BOOLEAN_FLAGS = new Set([
   'full',
   'help',
   'inject',
+  'include-archived',
   'interrupt',
   'json',
   'messages',
@@ -58,6 +46,7 @@ export const BOOLEAN_FLAGS = new Set([
   'run-hooks',
   'show-profile',
   'staged',
+  'tab',
   'tasks',
   'text-stdin',
   'unread',
@@ -155,12 +144,6 @@ export function matches(actual: string[], expected: string[]): boolean {
   )
 }
 
-// Why: a spec is reachable by its canonical path plus any declared aliases — one
-// definition so resolution, validation, help, and agent-context never disagree.
-export function specPaths(spec: CommandSpec): string[][] {
-  return spec.aliases ? [spec.path, ...spec.aliases] : [spec.path]
-}
-
 export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   const joined = commandPath.join(' ')
   if (['open', 'status'].includes(commandPath[0])) {
@@ -180,6 +163,7 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
       'note',
       'diagnostics',
       'linear',
+      'skills',
       'agent-context'
     ].includes(commandPath[0])
   ) {
@@ -235,6 +219,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'environment',
         'diagnostics',
         'linear',
+        'skills',
         'vm'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||

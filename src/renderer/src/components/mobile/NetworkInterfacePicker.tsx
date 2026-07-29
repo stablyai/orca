@@ -4,18 +4,13 @@ import { AddressPicker, type AddressOption } from '../network/AddressPicker'
 import { parseManualNetworkAddress } from '../../../../shared/network/manual-address'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 
-// Why: MobileHero (mobile pairing screen) and MobileNetworkInterfaceSection
-// (Settings → Mobile) both need the same network selector. This wraps the
-// generic AddressPicker with the mobile grammar (IPv4, any RFC 1123
-// hostname — including Tailscale *.ts.net and DDNS domains — optionally
-// with :port) and copy. Discovered interfaces come from the OS; "Add custom
-// address…" opens a dialog for an address the OS didn't surface — the only
-// way to pair across networks.
+// Why: both pairing entry points must expose every endpoint form supported by the main process.
 
 export type NetworkInterfacePickerProps = {
   networkInterfaces: readonly MobileNetworkInterface[]
   selectedAddress: string | undefined
   onSelectedAddressChange: (address: string) => void
+  beforeCustomAddressChange?: (address: string) => boolean | Promise<boolean>
   disabled?: boolean
   className?: string
   id?: string
@@ -25,6 +20,7 @@ export function NetworkInterfacePicker({
   networkInterfaces,
   selectedAddress,
   onSelectedAddressChange,
+  beforeCustomAddressChange,
   disabled = false,
   className,
   id
@@ -43,6 +39,7 @@ export function NetworkInterfacePicker({
       options={options}
       value={selectedAddress}
       onValueChange={onSelectedAddressChange}
+      beforeCustomConfirm={beforeCustomAddressChange}
       disabled={disabled}
       className={className}
       id={id}
@@ -77,19 +74,23 @@ export function NetworkInterfacePicker({
         ),
         description: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.description',
-          'Advertise an address your phone can reach when it is not on the same Wi-Fi — for example a Tailscale hostname or a static IP.'
+          'Advertise an address your phone can reach — for example a Tailscale hostname, IP address, or reverse-proxy URL.'
         ),
         inputLabel: translate('auto.components.mobile.CustomNetworkAddressDialog.label', 'Address'),
         placeholder: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.placeholder',
-          'my-mac.ts.net, home.example.com, or 192.168.1.50'
+          'home.example.com:8443 or https://example.com/orca'
         ),
         hint: translate(
           'auto.components.mobile.CustomNetworkAddressDialog.hint',
-          'Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port.'
+          'Enter an IPv4/IPv6 address, hostname, or full HTTP(S)/WebSocket URL. Ports are optional.'
         ),
         cancel: translate('auto.components.mobile.CustomNetworkAddressDialog.cancel', 'Cancel'),
-        confirm: translate('auto.components.mobile.CustomNetworkAddressDialog.use', 'Use address')
+        confirm: translate('auto.components.mobile.CustomNetworkAddressDialog.use', 'Use address'),
+        confirmationError: translate(
+          'auto.components.mobile.CustomNetworkAddressDialog.confirmationError',
+          'This address could not produce a scannable pairing code. Check the address and try again.'
+        )
       }}
     />
   )

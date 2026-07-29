@@ -1,3 +1,4 @@
+import { isCursorAgentTitle } from '../../../shared/agent-title-core'
 import { buildAgentNameRe } from '../../../shared/agent-name-token-match'
 import type { RuntimeTerminalSummary } from '../../../shared/runtime-types'
 
@@ -13,20 +14,31 @@ const AGENT_NAME_GROUPS = [
   'mimo',
   'gemini',
   'droid',
-  'grok'
+  'grok',
+  'cursor'
 ] as const
 
-export type GroupAddress =
-  | '@all'
-  | '@idle'
-  | `@${(typeof AGENT_NAME_GROUPS)[number]}`
-  | `@worktree:${string}`
+type AgentNameGroup = (typeof AGENT_NAME_GROUPS)[number]
+
+export type GroupAddress = '@all' | '@idle' | `@${AgentNameGroup}` | `@worktree:${string}`
 
 export function isGroupAddress(to: string): boolean {
   return to.startsWith('@')
 }
 
+// Why: a name token identifies an agent only when the name is a coined word. `cursor` is
+// also ordinary vocabulary in another agent's task-summary title ("fix the text cursor
+// blink"), so token-matching it would route @cursor into a live Claude/Codex prompt. Names
+// with that ambiguity register the identity predicate delivery already applies to them.
+const GROUP_TITLE_MATCHERS: Partial<Record<AgentNameGroup, (title: string) => boolean>> = {
+  cursor: isCursorAgentTitle
+}
+
 function titleMatchesAgentNameGroup(title: string, agentName: string): boolean {
+  const identityMatcher = GROUP_TITLE_MATCHERS[agentName as AgentNameGroup]
+  if (identityMatcher) {
+    return identityMatcher(title)
+  }
   // Why: reuse the shared whole-token matcher so orchestration groups honor the
   // same Windows launcher-suffix rule (e.g. `grok.exe`) as the rest of Orca's
   // agent-title detection, instead of maintaining a divergent regex here.

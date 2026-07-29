@@ -5,6 +5,7 @@ const {
   appExitMock,
   appQuitMock,
   appRelaunchMock,
+  relaunchAppMock,
   destroySystemTrayMock,
   createLocalOrcaProfileMock,
   getOrcaProfileListStateMock,
@@ -16,6 +17,7 @@ const {
   appExitMock: vi.fn(),
   appQuitMock: vi.fn(),
   appRelaunchMock: vi.fn(),
+  relaunchAppMock: vi.fn(),
   destroySystemTrayMock: vi.fn(),
   createLocalOrcaProfileMock: vi.fn(),
   getOrcaProfileListStateMock: vi.fn(),
@@ -40,6 +42,10 @@ vi.mock('electron', () => ({
 
 vi.mock('../tray/system-tray', () => ({
   destroySystemTray: destroySystemTrayMock
+}))
+
+vi.mock('../app-relaunch', () => ({
+  relaunchApp: relaunchAppMock
 }))
 
 vi.mock('../orca-profiles/profile-index-store', () => ({
@@ -70,6 +76,8 @@ describe('registerOrcaProfileHandlers', () => {
     appExitMock.mockReset()
     appQuitMock.mockReset()
     appRelaunchMock.mockReset()
+    relaunchAppMock.mockReset()
+    relaunchAppMock.mockImplementation(() => appRelaunchMock())
     destroySystemTrayMock.mockReset()
     createLocalOrcaProfileMock.mockReset()
     getOrcaProfileListStateMock.mockReset()
@@ -159,6 +167,7 @@ describe('registerOrcaProfileHandlers', () => {
     await vi.advanceTimersByTimeAsync(150)
 
     expect(appRelaunchMock).toHaveBeenCalledOnce()
+    expect(relaunchAppMock).toHaveBeenCalledWith('profile-switch')
     // Why quit, not exit: before-quit/will-quit teardown (scrollback capture,
     // PTY kill, daemon checkpoints) must run on a profile switch.
     expect(appQuitMock).toHaveBeenCalledOnce()
@@ -294,6 +303,7 @@ describe('registerOrcaProfileHandlers', () => {
     await vi.advanceTimersByTimeAsync(150)
 
     expect(appRelaunchMock).toHaveBeenCalledOnce()
+    expect(relaunchAppMock).toHaveBeenCalledWith('profile-transfer')
     expect(appQuitMock).toHaveBeenCalledOnce()
     expect(appExitMock).not.toHaveBeenCalled()
   })

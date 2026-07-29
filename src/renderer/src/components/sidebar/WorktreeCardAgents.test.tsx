@@ -357,6 +357,28 @@ describe('WorktreeCardAgents', () => {
     expect(markup).not.toContain('Prompt cache expires')
   })
 
+  it('does not repeat a subagent role used as its compact primary label', async () => {
+    const { CompactAgentRow } = await import('./worktree-card-compact-agents')
+
+    const markup = renderToStaticMarkup(
+      <CompactAgentRow
+        agent={
+          mockAgent({
+            agentType: 'reviewer',
+            rowSource: 'subagent',
+            startedAt: 1000,
+            prompt: 'reviewer'
+          }) as DashboardAgentRowData
+        }
+        now={2000}
+        onActivate={vi.fn()}
+      />
+    )
+
+    expect(markup).toContain('reviewer')
+    expect(markup).not.toContain(' - Reviewer')
+  })
+
   it('marks only the focused agent row', async () => {
     mockAgentActivityDisplayMode = 'full'
     mockFocusedAgentPaneKey = 'tab-1:2'

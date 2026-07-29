@@ -5,6 +5,7 @@ import { Copy, ExternalLink, Pencil, Unlink } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { addViewportSizeChangeListener } from '@/hooks/viewport-size-change-listener'
 
 export type LinkBubbleState = {
   kind: 'markdown' | 'html-superscript'
@@ -139,6 +140,9 @@ function LinkEditInput({
         }
         if (e.key === 'Escape') {
           e.preventDefault()
+          // Stop the bubble container's Escape handler (which calls onDismiss)
+          // from also firing; editing Escape must only cancel the edit.
+          e.stopPropagation()
           onCancel()
         }
         // Cmd/Ctrl+K while editing cancels the edit.
@@ -255,7 +259,9 @@ export function RichMarkdownLinkBubble({
     window.addEventListener('pointerdown', dismissOutside, true)
     window.addEventListener('focusin', dismissOutside, true)
     window.addEventListener('scroll', dismissOnScroll, true)
-    window.addEventListener('resize', dismiss)
+    // Why: a bare resize listener also fires on the main process's reveal reflow, which changes
+    // no dimensions — the bubble would dismiss on every window restore.
+    const removeViewportListener = addViewportSizeChangeListener(dismiss)
     return () => {
       resizeObserver.disconnect()
       intersectionObserver.disconnect()
@@ -263,7 +269,7 @@ export function RichMarkdownLinkBubble({
       window.removeEventListener('pointerdown', dismissOutside, true)
       window.removeEventListener('focusin', dismissOutside, true)
       window.removeEventListener('scroll', dismissOnScroll, true)
-      window.removeEventListener('resize', dismiss)
+      removeViewportListener()
     }
   }, [anchorElement])
 

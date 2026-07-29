@@ -1,20 +1,29 @@
 import { translate } from '@/i18n/i18n'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
-import { HeroFlow, HeroIntro, HeroPaired, type PairedDevice, type Platform } from './MobileHero'
-import type { StepIndex } from './MobileHero'
+import {
+  HeroFlow,
+  HeroIntro,
+  HeroPaired,
+  type PairedDevice,
+  type Platform,
+  type StepIndex
+} from './MobileHero'
 import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
 import type { MobilePageStage } from './mobile-page-stage'
 import { MobilePageToolbar } from './MobilePageToolbar'
 import { PhoneCarousel } from './PhoneCarousel'
+import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 
 type MobilePageContentProps = {
   closeMobilePage: () => void
   copyInstallUrl: () => void
   copyPairingCode: () => void
-  devices: PairedDevice[]
+  devices: readonly PairedDevice[]
   enterFlow: () => void
   generatePairing: (rotate: boolean) => void
+  canGeneratePairing: boolean
   handleAddressChange: (address: string) => void
+  beforeCustomAddressChange: (address: string) => Promise<boolean>
   handleBack: () => void
   handleContinue: () => void
   installQrUrl: string | null
@@ -25,12 +34,16 @@ type MobilePageContentProps = {
   openInstallUrl: () => void
   pairAnotherDevice: () => void
   pairLoading: boolean
+  connectionMode: MobilePairingConnectionMode
+  handleConnectionModeChange: (mode: MobilePairingConnectionMode) => void
   pairQrDataUrl: string | null
   pairingUrl: string | null
+  pairingQrError: boolean
+  relayDegraded: boolean
   platform: Platform
   refreshingNetworkInterfaces: boolean
   revokeDevice: (id: string) => void
-  revokingDeviceIds: string[]
+  revokingDeviceIds: readonly string[]
   selectedAddress: string | undefined
   setPlatform: (platform: Platform) => void
   showMobileButton: boolean
@@ -47,7 +60,9 @@ export function MobilePageContent({
   devices,
   enterFlow,
   generatePairing,
+  canGeneratePairing,
   handleAddressChange,
+  beforeCustomAddressChange,
   handleBack,
   handleContinue,
   installQrUrl,
@@ -58,8 +73,12 @@ export function MobilePageContent({
   openInstallUrl,
   pairAnotherDevice,
   pairLoading,
+  connectionMode,
+  handleConnectionModeChange,
   pairQrDataUrl,
   pairingUrl,
+  pairingQrError,
+  relayDegraded,
   platform,
   refreshingNetworkInterfaces,
   revokeDevice,
@@ -103,12 +122,18 @@ export function MobilePageContent({
               onCopyInstallUrl={copyInstallUrl}
               pairQrDataUrl={pairQrDataUrl}
               pairingUrl={pairingUrl}
+              pairingQrError={pairingQrError}
+              relayDegraded={relayDegraded}
               pairLoading={pairLoading}
+              connectionMode={connectionMode}
+              onConnectionModeChange={handleConnectionModeChange}
               onRegeneratePairing={() => generatePairing(true)}
+              canGeneratePairing={canGeneratePairing}
               onCopyPairingCode={copyPairingCode}
               networkInterfaces={networkInterfaces}
               selectedAddress={selectedAddress}
               onSelectedAddressChange={handleAddressChange}
+              beforeCustomAddressChange={beforeCustomAddressChange}
               onRefreshNetworkInterfaces={loadNetworkInterfaces}
               refreshingNetworkInterfaces={refreshingNetworkInterfaces}
               onBack={handleBack}

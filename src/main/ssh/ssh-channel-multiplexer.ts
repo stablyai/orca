@@ -54,8 +54,7 @@ export class SshChannelMultiplexer {
   // generic notification listener that already serves fs.changed.
   private methodNotificationHandlers = new Map<string, Set<MethodNotificationHandler>>()
   private disposeHandlers: ((reason: 'shutdown' | 'connection_lost') => void)[] = []
-  private keepaliveTimer: ReturnType<typeof setInterval> | null = null
-  private timeoutTimer: ReturnType<typeof setInterval> | null = null
+  private connectionHealthTimer: ReturnType<typeof setInterval> | null = null
   private disposed = false
 
   // Track the oldest unacked outgoing message timestamp
@@ -88,8 +87,7 @@ export class SshChannelMultiplexer {
     if (this.disposed) {
       return
     }
-    this.startKeepalive()
-    this.startTimeoutCheck()
+    this.startConnectionHealthTimer()
   }
 
   onNotification(handler: NotificationHandler): () => void {
@@ -276,13 +274,9 @@ export class SshChannelMultiplexer {
     }
     this.disposed = true
 
-    if (this.keepaliveTimer) {
-      clearInterval(this.keepaliveTimer)
-      this.keepaliveTimer = null
-    }
-    if (this.timeoutTimer) {
-      clearInterval(this.timeoutTimer)
-      this.timeoutTimer = null
+    if (this.connectionHealthTimer) {
+      clearInterval(this.connectionHealthTimer)
+      this.connectionHealthTimer = null
     }
 
     // Why: the renderer uses the error code to distinguish temporary disconnects
@@ -488,32 +482,28 @@ export class SshChannelMultiplexer {
     }
   }
 
-  private startKeepalive(): void {
-    this.keepaliveTimer = setInterval(() => {
-      this.sendKeepAlive()
-    }, KEEPALIVE_SEND_MS)
-  }
-
-  private startTimeoutCheck(): void {
+  // Why: one 5s interval owns both the periodic keepalive and dead-link check,
+  // halving per-connection timers while preserving their send-then-check order.
+  private startConnectionHealthTimer(): void {
     let lastTickAt = Date.now()
-    this.timeoutTimer = setInterval(() => {
-      if (this.disposed) {
-        return
-      }
-
+    this.connectionHealthTimer = setInterval(() => {
       const now = Date.now()
       const sinceLastTick = now - lastTickAt
       lastTickAt = now
       // Why: after sleep/App Nap the pre-pause keepalive looks stale on the
       // first post-wake tick, killing a healthy link (#7773). Reset staleness
-      // tracking, probe with a fresh keepalive, and let the NEXT full window
-      // make an honest liveness determination.
-      if (sinceLastTick > WAKE_GAP_MS) {
+      // before this tick's fresh probe, then allow the next full window.
+      const resumedAfterWake = sinceLastTick > WAKE_GAP_MS
+      if (resumedAfterWake) {
         this.lastReceivedAt = now
         for (const seq of this.unackedTimestamps.keys()) {
           this.unackedTimestamps.set(seq, now)
         }
-        this.sendKeepAlive()
+      }
+
+      this.sendKeepAlive()
+
+      if (this.disposed || resumedAfterWake) {
         return
       }
 

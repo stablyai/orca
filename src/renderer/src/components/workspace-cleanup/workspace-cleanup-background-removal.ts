@@ -11,11 +11,13 @@ import {
   isStrictWorkspaceCleanupDescendant,
   type SkippedWorkspaceCleanupAncestor
 } from './workspace-cleanup-ancestor-skips'
-import { reconcilePostBatchLateSettlement } from './workspace-cleanup-post-batch-late-settlement'
+import { createPostBatchLateSettlementReporter } from './workspace-cleanup-post-batch-late-settlement'
 import {
   getWorkspaceCleanupTimeoutFailure,
   trackWorkspaceCleanupLateSettlement,
-  waitForWorkspaceCleanupRemovalWithTimeout
+  waitForWorkspaceCleanupRemovalWithTimeout,
+  type WorkspaceCleanupLateSettlementReporter,
+  type WorkspaceCleanupLateSettlementTracker
 } from './workspace-cleanup-removal-settlement'
 import { showWorkspaceCleanupRemovalResultToasts } from './workspace-cleanup-removal-toasts'
 import { reclassifySkippedWorkspaceCleanupAncestors } from './workspace-cleanup-skipped-ancestor-reclassification'
@@ -74,15 +76,12 @@ export function startWorkspaceCleanupBackgroundRemoval({
   const removedIds: string[] = []
   const failures: WorkspaceCleanupFailure[] = []
   const failedCandidates: WorkspaceCleanupCandidate[] = []
-  const detachLateResultReconcilers: (() => void)[] = []
+  const lateSettlementTrackers: WorkspaceCleanupLateSettlementTracker[] = []
   // Why: rows past the removal deadline are still removing; their skip fallout
   // and batch toasts must not present them as definitive failures.
   const provisionallyBlocked = new Set<WorkspaceCleanupCandidate>()
   const pendingSettlementFailures = new Set<WorkspaceCleanupFailure>()
   const skippedAncestors: SkippedWorkspaceCleanupAncestor[] = []
-  // Why: serialize post-batch late reconciles so concurrent child settlements
-  // do not interleave ancestor reclassification and retries.
-  let postBatchLateReconcileChain: Promise<void> = Promise.resolve()
   let processedCount = 0
 
   const emitProgress = (): void => {
@@ -105,9 +104,13 @@ export function startWorkspaceCleanupBackgroundRemoval({
     }
   }
 
-  const detachAllLateResultReconcilers = (): void => {
-    for (const detach of detachLateResultReconcilers) {
-      detach()
+  const detachAllLateResultReconcilers = (
+    getReportAfterBatchResult?: (
+      candidate: WorkspaceCleanupLateSettlementTracker['candidate']
+    ) => WorkspaceCleanupLateSettlementReporter
+  ): void => {
+    for (const tracker of lateSettlementTrackers) {
+      tracker.detach(getReportAfterBatchResult?.(tracker.candidate))
     }
   }
 
@@ -161,31 +164,6 @@ export function startWorkspaceCleanupBackgroundRemoval({
     }
   }
 
-  const enqueuePostBatchLateSettlement = (
-    settledCandidate: WorkspaceCleanupCandidate,
-    timeoutFailure: WorkspaceCleanupFailure,
-    lateResult: WorkspaceCleanupRemoveResult
-  ): void => {
-    postBatchLateReconcileChain = postBatchLateReconcileChain
-      .then(async () => {
-        const reconciled = await reconcilePostBatchLateSettlement({
-          lateResult,
-          settledCandidate,
-          timeoutFailure,
-          skippedAncestors,
-          failedCandidates,
-          failures,
-          provisionallyBlocked,
-          pendingSettlementFailures,
-          removeCandidates
-        })
-        reportLateWorkspaceCleanupResult(reconciled, onLateResult)
-      })
-      .catch((error: unknown) => {
-        console.error('Workspace cleanup post-batch late settlement failed', error)
-      })
-  }
-
   void (async () => {
     while (queue.length > 0) {
       const candidate = queue.shift()
@@ -216,26 +194,19 @@ export function startWorkspaceCleanupBackgroundRemoval({
           // its authoritative settlement without unblocking ancestors early.
           // After the batch ends, detach switches to the post-batch path which
           // still holds skip state so ancestors can reclassify.
-          detachLateResultReconcilers.push(
-            trackWorkspaceCleanupLateSettlement(
-              outcome.settlement,
-              candidate,
-              (lateResult) => {
-                removeArrayEntry(failures, timeoutFailure)
-                pendingSettlementFailures.delete(timeoutFailure)
-                provisionallyBlocked.delete(candidate)
-                removedIds.push(...lateResult.removedIds)
-                reportFailures(lateResult.failures)
-                if (lateResult.failures.length === 0) {
-                  removeArrayEntry(failedCandidates, candidate)
-                }
-                resettleSkippedAncestors()
-                emitProgress()
-              },
-              (lateResult) => {
-                enqueuePostBatchLateSettlement(candidate, timeoutFailure, lateResult)
+          lateSettlementTrackers.push(
+            trackWorkspaceCleanupLateSettlement(outcome.settlement, candidate, (lateResult) => {
+              removeArrayEntry(failures, timeoutFailure)
+              pendingSettlementFailures.delete(timeoutFailure)
+              provisionallyBlocked.delete(candidate)
+              removedIds.push(...lateResult.removedIds)
+              reportFailures(lateResult.failures)
+              if (lateResult.failures.length === 0) {
+                removeArrayEntry(failedCandidates, candidate)
               }
-            )
+              resettleSkippedAncestors()
+              emitProgress()
+            })
           )
           continue
         }
@@ -260,7 +231,19 @@ export function startWorkspaceCleanupBackgroundRemoval({
       }
     }
 
-    detachAllLateResultReconcilers()
+    detachAllLateResultReconcilers(
+      createPostBatchLateSettlementReporter({
+        skippedAncestors,
+        failedCandidates,
+        provisionallyBlocked,
+        removeCandidates,
+        removalTimeoutMs,
+        removalSettlementGraceMs,
+        reportResult: (lateResult, latePendingFailures) => {
+          reportLateWorkspaceCleanupResult(lateResult, onLateResult, latePendingFailures)
+        }
+      })
+    )
     const result = { removedIds, failures }
     try {
       onResult?.(result)
@@ -286,14 +269,15 @@ export function startWorkspaceCleanupBackgroundRemoval({
 
 function reportLateWorkspaceCleanupResult(
   result: WorkspaceCleanupRemoveResult,
-  onLateResult: WorkspaceCleanupBackgroundRemovalArgs['onLateResult']
+  onLateResult: WorkspaceCleanupBackgroundRemovalArgs['onLateResult'],
+  pendingSettlementFailures?: ReadonlySet<WorkspaceCleanupFailure>
 ): void {
   try {
     onLateResult?.(result)
   } catch (callbackError) {
     console.error('Workspace cleanup late result callback failed', callbackError)
   }
-  showWorkspaceCleanupRemovalResultToasts(result)
+  showWorkspaceCleanupRemovalResultToasts(result, pendingSettlementFailures)
 }
 
 function removeArrayEntry<T>(entries: T[], entry: T): void {

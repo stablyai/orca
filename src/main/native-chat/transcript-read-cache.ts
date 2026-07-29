@@ -91,7 +91,9 @@ export async function readNativeChatTranscriptCached(
 ): Promise<ReadTranscriptResult> {
   const filePath = await resolveSessionFilePath(agent, sessionId, { transcriptPath })
   if (!filePath) {
-    return { error: `No transcript found for ${agent} session ${sessionId}` }
+    // Not cached (see below): a not-yet-flushed transcript should be re-checked
+    // on the next call, not pinned as a settled miss (#8401).
+    return { error: `No transcript found for ${agent} session ${sessionId}`, notFound: true }
   }
 
   const key = cacheKey(agent, filePath)

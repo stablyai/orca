@@ -8,9 +8,9 @@ function ok(id: string, result: unknown): RpcSuccess {
 }
 
 function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendRequest'> & {
-  calls: Array<{ method: string; params: unknown }>
+  calls: { method: string; params: unknown }[]
 } {
-  const calls: Array<{ method: string; params: unknown }> = []
+  const calls: { method: string; params: unknown }[] = []
   return {
     calls,
     sendRequest: vi.fn(async (method: string, params?: unknown) => {
@@ -35,7 +35,7 @@ describe('attachMobileImageToTerminal', () => {
         _meta: { runtimeId: 'r' }
       },
       ok('save', '/tmp/orca-attach.png'),
-      ok('send', { ok: true })
+      ok('send', { send: { accepted: true } })
     ])
 
     const sent = await attachMobileImageToTerminal('library', {
@@ -65,7 +65,7 @@ describe('attachMobileImageToTerminal', () => {
         _meta: { runtimeId: 'r' }
       },
       ok('save', '/tmp/x.png'),
-      ok('send', { ok: true })
+      ok('send', { send: { accepted: true } })
     ])
 
     await attachMobileImageToTerminal('files', {
@@ -104,7 +104,7 @@ describe('attachMobileImageToTerminal', () => {
         _meta: { runtimeId: 'r' }
       },
       ok('save', '/tmp/y.png'),
-      ok('send', { ok: true })
+      ok('send', { send: { accepted: true } })
     ])
 
     await attachMobileImageToTerminal('library', {
@@ -119,7 +119,7 @@ describe('attachMobileImageToTerminal', () => {
     expect(sendCall?.params).not.toHaveProperty('client')
   })
 
-  it('waits for pending live input before sending the image payload', async () => {
+  it('drops the image payload when the final pre-send check observes an input lease gap', async () => {
     const client = clientWithResponses([
       {
         id: 'start',
@@ -129,6 +129,8 @@ describe('attachMobileImageToTerminal', () => {
       },
       ok('save', '/tmp/pending.png')
     ])
+    // Why: upload can outlive the stream subscription whose acknowledgement
+    // originally enabled the composer.
     const beforeTerminalSend = vi.fn(async () => false)
 
     const sent = await attachMobileImageToTerminal('library', {
@@ -143,5 +145,28 @@ describe('attachMobileImageToTerminal', () => {
     expect(sent).toBe(false)
     expect(beforeTerminalSend).toHaveBeenCalledWith('term-pending')
     expect(client.calls.some((call) => call.method === 'terminal.send')).toBe(false)
+  })
+
+  it('reports failure when the terminal rejects the uploaded image path', async () => {
+    const client = clientWithResponses([
+      {
+        id: 'start',
+        ok: false,
+        error: { code: 'method_not_found', message: 'no' },
+        _meta: { runtimeId: 'r' }
+      },
+      ok('save', '/tmp/rejected.png'),
+      ok('send', { send: { accepted: false } })
+    ])
+
+    const sent = await attachMobileImageToTerminal('library', {
+      client,
+      terminal: 'term-rejected',
+      deviceToken: null,
+      getConnectionId: async () => null,
+      pickImage: vi.fn().mockResolvedValue({ base64: 'EEEE' })
+    })
+
+    expect(sent).toBe(false)
   })
 })

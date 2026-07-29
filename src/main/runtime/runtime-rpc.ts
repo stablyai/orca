@@ -1,15 +1,16 @@
 /* eslint-disable max-lines -- Why: this file is the single security boundary for the bundled CLI — transport setup, auth-token enforcement, admission control, keepalive framing, and orphan-socket sweeping all co-locate deliberately so a reviewer can audit the boundary in one sitting. Splitting this across files would scatter the invariants without reducing complexity. */
-// Why: this is the single security boundary for the bundled CLI. It owns
-// auth-token enforcement, bootstrap-metadata publication, and transport
-// orchestration so a running runtime is always discoverable via exactly
-// one on-disk file. Method handling lives in `rpc/` and transport specifics
-// live in `rpc/unix-socket-transport.ts` and `rpc/ws-transport.ts`.
+// Why: the single security boundary for the bundled CLI — auth-token enforcement, metadata publication, transport orchestration.
 import { randomBytes } from 'node:crypto'
 import { readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RuntimeMetadata, RuntimeTransportMetadata } from '../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { writeRuntimeMetadata } from './runtime-metadata'
+import {
+  RUNTIME_METADATA_OWNERSHIP_POLL_MS,
+  watchRuntimeMetadataOwnership,
+  type RuntimeMetadataOwnershipWatch
+} from './runtime-metadata-ownership-watch'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { errorResponse } from './rpc/errors'
@@ -18,10 +19,29 @@ import { UnixSocketTransport } from './rpc/unix-socket-transport'
 import { WebSocketTransport } from './rpc/ws-transport'
 import { readWsFallbackPort, writeWsFallbackPort } from './rpc/ws-fallback-port-store'
 import type { WebSocket } from 'ws'
-import { DeviceRegistry, type DeviceScope } from './device-registry'
+import { DeviceRegistry, type DeviceEntry, type DeviceScope } from './device-registry'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
-import { E2EEChannel } from './rpc/e2ee-channel'
+import { UnpairedDeviceAuthThrottle } from './rpc/unpaired-device-auth-throttle'
+import {
+  MobileSocketWiring,
+  type AuthenticatedMobileSocket,
+  type MobileSocketTransportMetadata
+} from './rpc/mobile-socket-wiring'
+import type { PairingRelay } from '../../shared/mobile-relay-pairing-offer'
+import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import {
+  RelayRevokeOutbox,
+  type RelayDeviceBinding,
+  type RelayRevokeOutboxItem
+} from './relay/relay-revoke-outbox'
+import type {
+  DeviceCredentialInstalled,
+  PairingGetEndpointsParams,
+  PairingGetEndpointsResult,
+  PairingProvisionRelayParams
+} from '../../shared/mobile-relay-credential-contract'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import { resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
 import {
   decodeTerminalStreamFrame,
   type TerminalStreamFrame
@@ -36,77 +56,84 @@ type OrcaRuntimeRpcServerOptions = {
   platform?: NodeJS.Platform
   enableWebSocket?: boolean
   wsPort?: number
+  // Why: true when the caller pinned a port (`orca serve --port`) so bind order prefers it over a stale STA-1511 fallback (#8535).
+  preferPinnedWsPort?: boolean
   webClientRoot?: string
-  // Why: test-only overrides for the two time-bound constants below.
-  // Production callers must not pass these — defaults are set by the design
-  // doc (§3.1) and changing them in production would weaken the admission
-  // fence or flood the socket with keepalive frames.
+  // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
   keepaliveIntervalMs?: number
   longPollCap?: number
+  // Why: test-only override for the ownership reclaim cadence.
+  metadataOwnershipPollMs?: number
 }
 
-// Why: after 10 s of a pending dispatch we emit a tiny `{"_keepalive":true}`
-// frame every 10 s until the handler resolves. Each write resets both the
-// server's own socket idle timer (30 s) and — once §3.1 ships on the client —
-// the client's idle timer, because any byte counts as socket activity. This
-// is the transport-layer fix for feedback #1: long-poll RPCs (i.e.
-// orchestration.check --wait) can now run past the 30 s/60 s idle caps
-// without either end tearing the socket down. See design doc §3.1.
+export type PairingOfferUnavailableReason =
+  | 'websocket_unavailable'
+  | 'device_registry_unavailable'
+  | 'e2ee_key_unavailable'
+  | 'invalid_advertised_endpoint'
+
+export type PairingOfferUnavailable = {
+  available: false
+  reason: PairingOfferUnavailableReason
+  guidance: string
+}
+
+type PairingIdentityInitialization =
+  | { ok: true; deviceRegistry: DeviceRegistry; e2eeKeypair: E2EEKeypair }
+  | { ok: false; failure: PairingOfferUnavailable }
+
+function pairingUnavailable(
+  reason: PairingOfferUnavailableReason,
+  guidance: string
+): PairingOfferUnavailable {
+  return { available: false, reason, guidance }
+}
+
+const DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE =
+  'The pairing registry is unavailable. Verify that the Orca data directory is writable.'
+const E2EE_KEY_UNAVAILABLE_GUIDANCE =
+  'The E2EE identity is unavailable. Verify that the Orca data directory is writable.'
+
+type MobileRelayPairingProvider = {
+  createPairingRelay(
+    relayDeviceId: string
+  ): Promise<{ relay: PairingRelay; binding: RelayDeviceBinding }>
+  onDeviceRevokeQueued(item: RelayRevokeOutboxItem): void
+  onDemandStateChanged?(): void
+  getEndpoints(
+    context: MobilePairingConnectionContext,
+    params: PairingGetEndpointsParams
+  ): Promise<PairingGetEndpointsResult>
+  provisionRelay(
+    context: MobilePairingConnectionContext,
+    params: PairingProvisionRelayParams
+  ): Promise<DeviceCredentialInstalled>
+}
+
+export type MobilePairingConnectionContext = Readonly<{
+  deviceId: string
+  connectionId: string
+  transport: MobileSocketTransportMetadata
+}>
+
+// Why: keepalive frames count as socket activity, resetting both idle timers so long-polls outlive the 30s/60s idle caps. See §3.1.
 const KEEPALIVE_INTERVAL_MS = 10_000
 
-// Why: long-poll slot cap. With keepalives a `check --wait --timeout-ms
-// 600000` can hold a connection for up to 10 minutes; unbounded that would
-// saturate MAX_RUNTIME_RPC_CONNECTIONS (32) with 32 waiting coordinators
-// and lock out normal short RPCs. Capping at half the connection budget
-// leaves the other half for short traffic. On overflow the server responds
-// immediately with `runtime_busy` (CLI exit 75) — fail fast, not silent
-// queuing. See design doc §3.1 + §7 risk #2.
+// Why: cap long-polls at half the 32-slot connection budget so they can't starve short RPCs; overflow → runtime_busy. See §7 risk #2.
 const LONG_POLL_CAP = 16
 
-function resolvePairingEndpoint(rawEndpoint: string, address: string | null | undefined): string {
-  const endpoint = new URL(rawEndpoint)
-  const override = address?.trim()
-  if (!override) {
-    endpoint.hostname = '127.0.0.1'
-    return formatWebSocketUrl(endpoint)
-  }
-  if (/^wss?:\/\//i.test(override)) {
-    return formatWebSocketUrl(new URL(override))
-  }
-  const parsed = parsePairingAddressOverride(override)
-  endpoint.hostname = parsed.host.includes(':')
-    ? `[${parsed.host.replace(/^\[|\]$/g, '')}]`
-    : parsed.host
-  if (parsed.port) {
-    endpoint.port = parsed.port
-  }
-  return formatWebSocketUrl(endpoint)
-}
-
-function parsePairingAddressOverride(address: string): { host: string; port: string | null } {
-  if (address.startsWith('[') || address.split(':').length === 2) {
-    try {
-      const parsed = new URL(`ws://${address}`)
-      return { host: parsed.hostname.replace(/^\[|\]$/g, ''), port: parsed.port || null }
-    } catch {
-      return { host: address, port: null }
-    }
-  }
-  return { host: address, port: null }
-}
-
-function formatWebSocketUrl(url: URL): string {
-  const formatted = url.toString()
-  return url.pathname === '/' && !url.search && !url.hash ? formatted.replace(/\/$/, '') : formatted
-}
+// Why: orchestration.ask blocks on a human/agent reply for minutes, an order of
+// magnitude longer than terminal.wait or check --wait, so a fleet of asking
+// workers would otherwise hold every slot and starve the mobile/web/CLI/relay
+// clients sharing this runtime. Reserve half the budget for the other classes.
+const ASK_LONG_POLL_SHARE = 0.5
 
 function createWebClientUrl(endpoint: string, pairingUrl: string): string {
   const url = new URL(endpoint)
   url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:'
   url.pathname = webClientPathForEndpoint(url.pathname)
   url.search = ''
-  // Why: pairing URLs include full runtime credentials. Keeping them in the
-  // fragment avoids proxy logs and Referer headers while the web app loads.
+  // Why: pairing URLs carry full credentials; the fragment keeps them out of proxy logs and Referer headers.
   url.hash = `pairing=${encodeURIComponent(pairingUrl)}`
   return url.toString()
 }
@@ -120,11 +147,14 @@ function webClientPathForEndpoint(pathname: string): string {
 
 const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'accounts.list',
+  'accounts.consumeCodexResetCredit',
   'accounts.selectClaude',
   'accounts.selectCodex',
+  'accounts.selectCodexForTarget',
   'accounts.subscribe',
   'accounts.unsubscribe',
   'aiVault.listSessions',
+  'aiVault.prepareSessionResume',
   'browser.back',
   'browser.dialogAccept',
   'browser.dialogDismiss',
@@ -160,6 +190,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'files.readTerminalArtifact',
   'files.readTerminalArtifactPreview',
   'files.resolveTerminalPath',
+  'files.searchPaths',
   'files.writeTerminalArtifact',
   'folderWorkspace.list',
   'git.abortMerge',
@@ -232,11 +263,15 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'github.updatePRState',
   'github.repoSlug',
   'github.workItem',
+  // Cross-repo lookup: lets the mobile Smart picker resolve a pasted github.com URL for a different repo.
+  'github.workItemByOwnerRepo',
   'github.workItemDetails',
   'gitlab.createIssue',
   'gitlab.addIssueComment',
   'gitlab.addMRComment',
   'gitlab.listWorkItems',
+  // Mobile Smart picker: resolve a pasted GitLab URL to an exact issue/MR (MR listing reuses gitlab.listWorkItems).
+  'gitlab.workItemByPath',
   'gitlab.mergeMR',
   'gitlab.resolveMRDiscussion',
   'gitlab.todos',
@@ -267,6 +302,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'linear.listCustomViewProjects',
   'linear.listCustomViews',
   'linear.listIssues',
+  'linear.mcpListIssues',
   'linear.listProjectIssues',
   'linear.listProjects',
   'linear.teamLabels',
@@ -279,8 +315,11 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'linear.updateIssue',
   'markdown.readTab',
   'markdown.saveTab',
+  'notifications.getMissedSince',
   'notifications.subscribe',
   'notifications.unsubscribe',
+  'pairing.getEndpoints',
+  'pairing.provisionRelay',
   'preflight.check',
   'preflight.detectAgents',
   'preflight.detectRemoteAgents',
@@ -297,6 +336,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'runtime.clientEvents.unsubscribe',
   'session.tabs.activate',
   'session.tabs.close',
+  'session.tabs.closeLifecycle',
   'session.tabs.createTerminal',
   'session.tabs.list',
   'session.tabs.listAll',
@@ -309,11 +349,14 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'nativeChat.subscribe',
   'nativeChat.unsubscribe',
   'settings.get',
+  'settings.getTerminalQuickCommands',
   'settings.update',
+  'settings.updateTerminalQuickCommands',
   'ssh.connect',
   'ssh.getState',
   'ssh.listRemovedTargetLabels',
   'ssh.listTargets',
+  'ssh.listTargetSummaries',
   'speech.dictation.cancel',
   'speech.dictation.chunk',
   'speech.dictation.finish',
@@ -328,9 +371,13 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'agentTeams.tmuxCompat',
   'terminal.clearBuffer',
   'terminal.close',
+  'terminal.closeTab',
   'terminal.create',
+  'terminal.createAgentSession',
+  'terminal.ensureAgentSession',
   'terminal.focus',
   'terminal.agentStatus',
+  'terminal.adoptOrphans',
   'terminal.getAutoRestoreFit',
   'terminal.isRunningAgent',
   'terminal.list',
@@ -360,25 +407,30 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'worktree.sleep'
 ])
 
-// Why: a long-poll request is one whose handler blocks waiting for an external
-// event. This function is the single place that classifies it — the long-poll
-// counter, abort wiring, keepalives, and runtime_busy admission check all
-// share this decision. See §3.1.
-function isLongPollRequest(request: RpcRequest): boolean {
+// Why: 'ask' is metered separately from 'wait' — same keepalive/abort wiring, its own sub-cap.
+type LongPollClass = 'ask' | 'wait'
+
+// Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.
+function longPollClassOf(request: RpcRequest): LongPollClass | null {
   if (request.method === 'terminal.wait') {
-    return true
+    return 'wait'
+  }
+  // Why: orchestration.ask blocks unconditionally (default 600 s) holding the
+  // RPC open until a reply lands or the deadline passes, so it needs the same
+  // keepalive as check --wait or the 30 s socket idle timer tears it down. It
+  // also relies on the abort signal (only wired for long-polls) to release the
+  // waiter when the asking client disconnects.
+  if (request.method === 'orchestration.ask') {
+    return 'ask'
   }
   if (request.method === 'orchestration.check') {
     const params = request.params as { wait?: unknown } | undefined
-    return params?.wait === true
+    return params?.wait === true ? 'wait' : null
   }
-  return false
+  return null
 }
 
-// Why: stamp the authenticated connection's scope onto the status.get success
-// envelope. status.get has no per-connection context inside the dispatcher, so
-// the scope is added here at the transport boundary where the device is known.
-// Failures fall back to the untouched reply rather than dropping the response.
+// Why: status.get has no per-connection context in the dispatcher, so stamp the scope here at the transport boundary.
 function injectDeviceScope(response: string, scope: DeviceScope): string {
   try {
     const parsed = JSON.parse(response) as RpcResponse
@@ -400,23 +452,25 @@ export class OrcaRuntimeRpcServer {
   private readonly platform: NodeJS.Platform
   private readonly enableWebSocket: boolean
   private readonly wsPort: number
+  private readonly preferPinnedWsPort: boolean
   private readonly webClientRoot: string | undefined
   private readonly authToken = randomBytes(24).toString('hex')
   private readonly keepaliveIntervalMs: number
   private readonly longPollCap: number
+  private readonly metadataOwnershipPollMs: number
+  private readonly askLongPollCap: number
+  private readonly relayRevokeOutbox: RelayRevokeOutbox
   private deviceRegistry: DeviceRegistry | null = null
   private e2eeKeypair: E2EEKeypair | null = null
+  private pairingInitializationFailure: PairingOfferUnavailable | null = null
   private tlsFingerprint: string | null = null
-  private wsTransport: WebSocketTransport | null = null
   private activeTransports: RpcTransport[] = []
   private transports: RuntimeTransportMetadata[] = []
-  // Why: each WebSocket connection has its own E2EE channel that manages the
-  // handshake and encrypt/decrypt lifecycle. Keyed by WebSocket instance.
-  private e2eeChannels = new Map<WebSocket, E2EEChannel>()
-  // Why: stable per-WebSocket id used as the cleanup key for streaming
-  // subscriptions, so the server can reap a closing socket's subscriptions
-  // without affecting other live sockets that share the same deviceToken.
-  private wsConnectionIds = new Map<WebSocket, string>()
+  private metadataOwnershipWatch: RuntimeMetadataOwnershipWatch | null = null
+  private mobileSocketWiring: MobileSocketWiring | null = null
+  private mobileRelayPairingProvider: MobileRelayPairingProvider | null = null
+  private onUnpairedDeviceAuthFailure: (() => void) | null = null
+  private unpairedDeviceAuthThrottle: UnpairedDeviceAuthThrottle | null = null
   private readonly binaryStreamHandlers = new Map<
     string,
     Map<number, (frame: TerminalStreamFrame) => void>
@@ -425,10 +479,10 @@ export class OrcaRuntimeRpcServer {
     WebSocket,
     { controllers: Set<AbortController>; abortOnClose: () => void }
   >()
-  // Why: separate from Node's server.maxConnections because we need to count
-  // only long-running dispatches, not every in-flight short RPC. See §3.1 +
-  // §7 risk #2.
+  // Why: separate from server.maxConnections — count only long-running dispatches, not short RPCs. See §3.1 + §7 risk #2.
   private activeLongPolls = 0
+  // Why: subset of activeLongPolls held by orchestration.ask, fenced by askLongPollCap.
+  private activeAskLongPolls = 0
 
   constructor({
     runtime,
@@ -437,9 +491,11 @@ export class OrcaRuntimeRpcServer {
     platform = process.platform,
     enableWebSocket = false,
     wsPort = DEFAULT_WS_PORT,
+    preferPinnedWsPort = false,
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
-    longPollCap = LONG_POLL_CAP
+    longPollCap = LONG_POLL_CAP,
+    metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS
   }: OrcaRuntimeRpcServerOptions) {
     this.runtime = runtime
     this.dispatcher = new RpcDispatcher({ runtime })
@@ -448,9 +504,14 @@ export class OrcaRuntimeRpcServer {
     this.platform = platform
     this.enableWebSocket = enableWebSocket
     this.wsPort = wsPort
+    this.preferPinnedWsPort = preferPinnedWsPort
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
+    this.metadataOwnershipPollMs = metadataOwnershipPollMs
+    // Why: derived, not configurable — the reservation must hold for whatever cap a caller picks.
+    this.askLongPollCap = Math.max(1, Math.floor(longPollCap * ASK_LONG_POLL_SHARE))
+    this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
   }
 
   getDeviceRegistry(): DeviceRegistry | null {
@@ -469,12 +530,60 @@ export class OrcaRuntimeRpcServer {
     return this.e2eeKeypair
   }
 
-  revokeMobileDevice(deviceId: string): boolean {
-    const device = this.deviceRegistry?.getDevice(deviceId)
-    if (device?.scope !== 'mobile' || !this.deviceRegistry?.removeDevice(deviceId)) {
+  getMobileSocketWiring(): MobileSocketWiring | null {
+    return this.mobileSocketWiring
+  }
+
+  getRelayRevokeOutbox(): RelayRevokeOutbox {
+    return this.relayRevokeOutbox
+  }
+
+  setMobileRelayBinding(deviceId: string, binding: RelayDeviceBinding): boolean {
+    const current = this.deviceRegistry?.getDevice(deviceId)
+    if (
+      current?.scope !== 'mobile' ||
+      this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) === 'local-only'
+    ) {
       return false
     }
-    this.wsTransport?.terminateClientConnections(device.token)
+    if (
+      current.relayBinding &&
+      (current.relayBinding.relayHostId !== binding.relayHostId ||
+        current.relayBinding.ownerIdentityKey !== binding.ownerIdentityKey)
+    ) {
+      // Why: switching the owning account/host must not strand the old cloud credential family, even if that account is offline.
+      this.queueRelayDeviceRevoke(current.relayBinding)
+    }
+    const updated = this.deviceRegistry?.setRelayBinding(deviceId, binding) ?? false
+    if (updated) {
+      this.mobileRelayPairingProvider?.onDemandStateChanged?.()
+    }
+    return updated
+  }
+
+  // Why: only the desktop shell can surface UI; headless serve leaves this unset.
+  setOnUnpairedDeviceAuthFailure(callback: (() => void) | null): void {
+    this.onUnpairedDeviceAuthFailure = callback
+  }
+
+  setMobileRelayPairingProvider(provider: MobileRelayPairingProvider | null): void {
+    this.mobileRelayPairingProvider = provider
+  }
+
+  async revokeMobileDevice(deviceId: string): Promise<boolean> {
+    const device = this.deviceRegistry?.getDevice(deviceId)
+    if (device?.scope !== 'mobile') {
+      return false
+    }
+    if (device.relayBinding) {
+      this.queueRelayDeviceRevoke(device.relayBinding)
+    }
+    if (!this.deviceRegistry?.removeDevice(deviceId)) {
+      return false
+    }
+    this.mobileRelayPairingProvider?.onDemandStateChanged?.()
+    this.runtime.forgetClientNavigationState(deviceId)
+    this.mobileSocketWiring?.terminateDeviceConnections(device.token)
     return true
   }
 
@@ -483,7 +592,8 @@ export class OrcaRuntimeRpcServer {
     if (device?.scope !== 'runtime' || !this.deviceRegistry?.removeDevice(deviceId)) {
       return false
     }
-    this.wsTransport?.terminateClientConnections(device.token)
+    this.runtime.forgetClientNavigationState(deviceId)
+    this.mobileSocketWiring?.terminateDeviceConnections(device.token)
     return true
   }
 
@@ -498,7 +608,7 @@ export class OrcaRuntimeRpcServer {
     rotate?: boolean
     scope?: DeviceScope
   }):
-    | { available: false }
+    | PairingOfferUnavailable
     | {
         available: true
         pairingUrl: string
@@ -506,18 +616,40 @@ export class OrcaRuntimeRpcServer {
         deviceId: string
         webClientUrl: string | null
       } {
+    if (this.pairingInitializationFailure) {
+      return this.pairingInitializationFailure
+    }
     const rawEndpoint = this.getWebSocketEndpoint()
+    if (!rawEndpoint) {
+      return pairingUnavailable(
+        'websocket_unavailable',
+        'WebSocket pairing is unavailable. Inspect preceding runtime errors and choose an unused --port if the listener failed.'
+      )
+    }
+    if (!this.deviceRegistry) {
+      return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
+    }
     const publicKeyB64 = this.getE2EEPublicKey()
-    if (!rawEndpoint || !this.deviceRegistry || !publicKeyB64) {
-      return { available: false }
+    if (!publicKeyB64) {
+      return pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
     }
 
-    const endpoint = resolvePairingEndpoint(rawEndpoint, args.address)
+    const advertised = resolveAdvertisedPairingEndpoint(rawEndpoint, args.address)
+    if (!advertised.ok) {
+      return pairingUnavailable(advertised.reason, advertised.guidance)
+    }
+    const endpoint = advertised.endpoint
     const deviceName = args.name ?? `CLI ${new Date().toLocaleDateString()}`
     const scope = args.scope ?? 'runtime'
-    const device = args.rotate
-      ? this.deviceRegistry.rotatePendingDevice(deviceName, scope)
-      : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope)
+    let device: DeviceEntry
+    try {
+      device = args.rotate
+        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope)
+        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope)
+    } catch (error) {
+      console.error('[runtime] Failed to persist pairing credential:', error)
+      return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
+    }
     const pairingUrl = encodePairingOffer({
       v: PAIRING_OFFER_VERSION,
       endpoint,
@@ -533,6 +665,82 @@ export class OrcaRuntimeRpcServer {
       webClientUrl:
         this.webClientRoot && scope === 'runtime' ? createWebClientUrl(endpoint, pairingUrl) : null
     }
+  }
+
+  async createMobilePairingOffer(args: {
+    address?: string | null
+    connectionMode?: MobilePairingConnectionMode
+    name?: string
+    rotate?: boolean
+  }): Promise<
+    | PairingOfferUnavailable
+    | {
+        available: true
+        pairingUrl: string
+        endpoint: string
+        deviceId: string
+        webClientUrl: string | null
+        /** Mode the offer actually encodes — 'local-only' when an automatic request degraded (Relay couldn't attach). */
+        connectionMode: MobilePairingConnectionMode
+      }
+  > {
+    // Why: the renderer is outside the trust boundary, so only an explicit local-only value may suppress Relay provisioning.
+    const connectionMode = args.connectionMode === 'local-only' ? 'local-only' : 'automatic'
+    const pending = this.deviceRegistry?.getPendingDevice('mobile')
+    // Why: connection policy is part of the credential, so rotate on any policy switch — an old-policy QR must not pair under the new one.
+    const switchingPendingMode =
+      pending != null &&
+      this.deviceRegistry?.getMobilePairingConnectionMode(pending.deviceId) !== connectionMode
+    if (args.rotate || switchingPendingMode) {
+      if (pending?.relayBinding) {
+        // Why: record the durable cloud revoke before rotating the local token so an old relay invite can't outlive the QR.
+        this.queueRelayDeviceRevoke(pending.relayBinding)
+      }
+    }
+    const direct = this.createPairingOffer({
+      ...args,
+      rotate: args.rotate || switchingPendingMode,
+      scope: 'mobile'
+    })
+    if (!direct.available) {
+      return direct
+    }
+    this.deviceRegistry?.setMobilePairingConnectionMode(direct.deviceId, connectionMode)
+    if (connectionMode === 'local-only' || !this.mobileRelayPairingProvider) {
+      return { ...direct, connectionMode: 'local-only' }
+    }
+    const device = this.deviceRegistry?.getDevice(direct.deviceId)
+    const publicKeyB64 = this.getE2EEPublicKey()
+    if (!device || !publicKeyB64) {
+      return { ...direct, connectionMode: 'local-only' }
+    }
+    try {
+      const relayPairing = await this.mobileRelayPairingProvider.createPairingRelay(device.deviceId)
+      if (!this.deviceRegistry?.setRelayBinding(device.deviceId, relayPairing.binding)) {
+        return { ...direct, connectionMode: 'local-only' }
+      }
+      this.mobileRelayPairingProvider.onDemandStateChanged?.()
+      return {
+        ...direct,
+        connectionMode: 'automatic',
+        pairingUrl: encodePairingOffer({
+          v: PAIRING_OFFER_VERSION,
+          endpoint: direct.endpoint,
+          deviceToken: device.token,
+          publicKeyB64,
+          scope: 'mobile',
+          relay: relayPairing.relay
+        })
+      }
+    } catch {
+      // Why: relay is additive — a transient outage must still yield the valid LAN/Tailscale pairing offer.
+      return { ...direct, connectionMode: 'local-only' }
+    }
+  }
+
+  private queueRelayDeviceRevoke(binding: RelayDeviceBinding): void {
+    const item = this.relayRevokeOutbox.enqueue(binding)
+    this.mobileRelayPairingProvider?.onDeviceRevokeQueued(item)
   }
 
   private registerBinaryStreamHandler(
@@ -562,7 +770,7 @@ export class OrcaRuntimeRpcServer {
   }
 
   private handleWebSocketBinaryMessage(bytes: Uint8Array<ArrayBufferLike>, ws: WebSocket): void {
-    const connectionId = this.wsConnectionIds.get(ws)
+    const connectionId = this.mobileSocketWiring?.getConnectionId(ws)
     if (!connectionId) {
       return
     }
@@ -590,8 +798,7 @@ export class OrcaRuntimeRpcServer {
         abortOnClose: () => this.abortWebSocketDispatches(ws)
       }
       this.wsDispatchAbortStates.set(ws, state)
-      // Why: many streaming RPCs can share one WebSocket. A single socket-level
-      // abort fan-out avoids MaxListenersExceededWarning while preserving cleanup.
+      // Why: many streaming RPCs share one WebSocket; one socket-level abort fan-out avoids MaxListenersExceededWarning.
       ws.on('close', state.abortOnClose)
       ws.on('error', state.abortOnClose)
     }
@@ -629,17 +836,39 @@ export class OrcaRuntimeRpcServer {
     state.controllers.clear()
   }
 
+  private initializePairingIdentity(): PairingIdentityInitialization {
+    let deviceRegistry: DeviceRegistry
+    try {
+      deviceRegistry = new DeviceRegistry(this.userDataPath)
+    } catch (error) {
+      console.error('[runtime] Failed to initialize pairing registry:', error)
+      return {
+        ok: false,
+        failure: pairingUnavailable(
+          'device_registry_unavailable',
+          DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE
+        )
+      }
+    }
+    let e2eeKeypair: E2EEKeypair
+    try {
+      e2eeKeypair = loadOrCreateE2EEKeypair(this.userDataPath)
+    } catch (error) {
+      console.error('[runtime] Failed to initialize E2EE identity:', error)
+      return {
+        ok: false,
+        failure: pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
+      }
+    }
+    return { ok: true, deviceRegistry, e2eeKeypair }
+  }
+
   async start(): Promise<void> {
     if (this.activeTransports.length > 0) {
       return
     }
 
-    // Why: processes killed by SIGKILL / OOM-kill / forced-shutdown skip
-    // stop() and leave behind `o-<pid>-*.sock` files in userData. Sweeping
-    // dead-pid sockets at startup keeps the directory from accumulating
-    // orphans over the app's lifetime. Named-pipe transports on Windows do
-    // not leave filesystem entries in userData, so the sweep is a no-op
-    // there.
+    // Why: SIGKILL/OOM skip stop(), orphaning `o-<pid>-*.sock` files; sweep them. Skipped on Windows: named pipes leave no filesystem entries.
     if (this.platform !== 'win32') {
       sweepOrphanedRuntimeSockets(this.userDataPath, this.pid)
     }
@@ -657,15 +886,7 @@ export class OrcaRuntimeRpcServer {
       keepaliveIntervalMs: this.keepaliveIntervalMs
     })
 
-    // Why: Unix socket transport uses the shared runtime auth token. This is
-    // the existing security model for CLI connections — the token lives in a
-    // 0o600-permissioned file on disk.
-    // Why: the `.catch` guarantees `reply()` always fires even if
-    // `handleMessage` (or `JSON.stringify` on a pathological response) throws.
-    // Without it, a throw would leave the client waiting for a terminal frame
-    // that never arrives AND leak the dispatch's AbortController in the
-    // transport's in-flight set until the 30 s socket idle timer closes the
-    // connection.
+    // Why: the `.catch` guarantees reply() always fires so a throw can't strand the client or leak the AbortController.
     socketTransport.onMessage((msg, reply, context) => {
       void this.handleMessage(msg, context)
         .then((response) => {
@@ -673,10 +894,7 @@ export class OrcaRuntimeRpcServer {
         })
         .catch((error) => {
           const message = error instanceof Error ? error.message : String(error)
-          // Why: best-effort id recovery so the client can correlate the
-          // error frame to its pending request. A malformed message would
-          // have been caught by handleMessage and returned an envelope
-          // instead of throwing, so in practice the id is always present.
+          // Why: best-effort id recovery so the client can correlate the error frame to its pending request.
           let id = 'unknown'
           try {
             const parsed = JSON.parse(msg) as { id?: unknown }
@@ -695,170 +913,153 @@ export class OrcaRuntimeRpcServer {
     const activeTransports: RpcTransport[] = [socketTransport]
     const transportsMeta: RuntimeTransportMetadata[] = [transportMeta]
 
-    // Why: WebSocket transport is opt-in and starts alongside the Unix socket.
-    // It uses per-device tokens and E2EE (application-layer encryption via
-    // tweetnacl) rather than TLS, since React Native can't pin self-signed certs.
+    // Why: WebSocket uses per-device tokens + E2EE (tweetnacl) instead of TLS since React Native can't pin self-signed certs.
     if (this.enableWebSocket) {
-      try {
-        this.deviceRegistry = new DeviceRegistry(this.userDataPath)
-        this.e2eeKeypair = loadOrCreateE2EEKeypair(this.userDataPath)
-
-        const wsTransport = new WebSocketTransport({
-          host: '0.0.0.0',
-          port: this.wsPort,
-          staticRoot: this.webClientRoot,
-          // Why: keep the fallback port stable across restarts so paired
-          // devices' stored endpoints stay valid (STA-1511) — the transport
-          // binds a persisted fallback before the preferred port. wsPort 0
-          // means the caller explicitly wants a random port (E2E) — don't
-          // pin it.
-          ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
-        })
-        this.wsTransport = wsTransport
-
-        // Why: each WebSocket connection gets an E2EE channel that handles the
-        // handshake before any RPC messages are processed. The channel decrypts
-        // inbound messages and encrypts outbound replies transparently.
-        wsTransport.onMessage((msg, _reply, ws) => {
-          let channel = this.e2eeChannels.get(ws)
-          if (!channel) {
-            // Why: stable per-ws id used as the cleanup-index key for
-            // streaming subscriptions, so the server can reap them exactly
-            // when this socket closes (without affecting other live sockets
-            // that share the same deviceToken).
-            this.wsConnectionIds.set(ws, randomBytes(8).toString('hex'))
-            channel = new E2EEChannel(ws, {
-              serverSecretKey: this.e2eeKeypair!.secretKey,
-              validateToken: (token) => this.deviceRegistry?.validateToken(token) != null,
-              onReady: (ch) => {
-                if (ch.deviceToken) {
-                  wsTransport.setClientId(ws, ch.deviceToken)
-                  // Why: mark the device as actually connected so it appears
-                  // in the "Paired Devices" list. Devices that were only
-                  // generated as QR codes but never scanned stay hidden.
-                  const device = this.deviceRegistry?.validateToken(ch.deviceToken)
-                  if (device) {
-                    this.deviceRegistry?.updateLastSeen(device.deviceId)
-                  }
-                }
-              },
-              onError: (code, reason) => {
-                this.e2eeChannels.get(ws)?.destroy()
-                this.e2eeChannels.delete(ws)
-                ws.close(code, reason)
-              }
-            })
-            channel.onMessage((plaintext, encryptedReply, encryptedBinaryReply) => {
-              const authenticatedDeviceToken = this.e2eeChannels.get(ws)?.deviceToken ?? null
+      const pairingIdentity = this.initializePairingIdentity()
+      if (!pairingIdentity.ok) {
+        this.deviceRegistry = null
+        this.e2eeKeypair = null
+        this.pairingInitializationFailure = pairingIdentity.failure
+      } else {
+        this.deviceRegistry = pairingIdentity.deviceRegistry
+        this.e2eeKeypair = pairingIdentity.e2eeKeypair
+        this.pairingInitializationFailure = null
+        try {
+          const wsTransport = new WebSocketTransport({
+            host: '0.0.0.0',
+            port: this.wsPort,
+            staticRoot: this.webClientRoot,
+            // Why: stable fallback port across restarts keeps paired devices' endpoints valid (STA-1511); wsPort 0 = random (E2E).
+            ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {}),
+            ...(this.preferPinnedWsPort ? { preferPinnedPort: true } : {})
+          })
+          // Why: session-scoped (recreated per start) so each desktop launch may notify once.
+          this.unpairedDeviceAuthThrottle = new UnpairedDeviceAuthThrottle({
+            onTrigger: () => this.onUnpairedDeviceAuthFailure?.()
+          })
+          const mobileSocketWiring = new MobileSocketWiring({
+            deviceRegistry: pairingIdentity.deviceRegistry,
+            e2eeKeypair: pairingIdentity.e2eeKeypair,
+            onText: (socket, plaintext, reply, sendBinary) => {
               void this.handleWebSocketMessage(
                 plaintext,
-                encryptedReply,
-                encryptedBinaryReply,
-                wsTransport,
-                ws,
-                authenticatedDeviceToken
+                reply,
+                sendBinary,
+                undefined,
+                socket.ws,
+                socket.device.deviceToken,
+                socket
               )
-            })
-            channel.onBinaryMessage((bytes) => this.handleWebSocketBinaryMessage(bytes, ws))
-            this.e2eeChannels.set(ws, channel)
-          }
-          channel.handleRawMessage(msg)
-        })
+            },
+            onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket.ws),
+            onReady: () => {
+              // Why: first authenticated mobile/remote client (direct WS and
+              // cloud relay both attach here) starts path-candidate tracking.
+              // Activation is a local-host concern: candidate buffers live on the
+              // buffer-owning host's runtime, so a remote runtime proxy may
+              // legitimately lack this method (its own server activates it).
+              this.runtime.activateRecentPtyPathCandidateTracking?.()
+              this.mobileRelayPairingProvider?.onDemandStateChanged?.()
+            },
+            onClose: (socket, hasOtherConnections) => {
+              if (!socket) {
+                return
+              }
+              this.abortWebSocketDispatches(socket.ws)
+              // Why: subscriptions and binary streams are socket-scoped, but disconnect state is device-scoped across transports.
+              this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
+              this.runtime.cancelMobileDictationForConnection(socket.connectionId)
+              this.binaryStreamHandlers.delete(socket.connectionId)
+              if (!hasOtherConnections) {
+                this.runtime.onClientDisconnected(socket.device.deviceToken)
+              }
+            },
+            // Why: relay attempts are authorized upstream; only direct failures should prompt local re-pairing.
+            onUnpairedDeviceAuthFailure: (metadata) => {
+              if (metadata.transport === 'direct') {
+                this.unpairedDeviceAuthThrottle?.recordFailure()
+              }
+            }
+          })
+          mobileSocketWiring.attachTransport(wsTransport)
+          this.mobileSocketWiring = mobileSocketWiring
 
-        // Why: when a mobile client disconnects, the runtime must clean up
-        // connection-scoped state like mobile-fit overrides and the E2EE
-        // channel to prevent orphaned state. A single paired device can hold
-        // multiple concurrent sockets (host screen + accounts screen, etc.),
-        // so destroy the channel for THIS exact ws and skip the per-client
-        // teardown when other sockets for the same token are still alive.
-        wsTransport.onConnectionClose((clientId, ws, hasOtherConnections) => {
-          this.abortWebSocketDispatches(ws)
-          // Why: sweep streaming subscriptions for THIS ws regardless of
-          // hasOtherConnections, so per-ws listeners (notifications,
-          // accounts, terminal) don't leak across reconnects. This is
-          // independent of the deviceToken-scoped onClientDisconnected.
-          const connectionId = this.wsConnectionIds.get(ws)
-          if (connectionId) {
-            this.runtime.cleanupSubscriptionsForConnection(connectionId)
-            this.runtime.cancelMobileDictationForConnection(connectionId)
-            this.binaryStreamHandlers.delete(connectionId)
-            this.wsConnectionIds.delete(ws)
+          await wsTransport.start()
+          if (this.wsPort !== 0 && wsTransport.resolvedPort !== this.wsPort) {
+            writeWsFallbackPort(this.userDataPath, wsTransport.resolvedPort)
           }
-          const channel = this.e2eeChannels.get(ws)
-          if (channel) {
-            channel.destroy()
-            this.e2eeChannels.delete(ws)
-          }
-          if (clientId && !hasOtherConnections) {
-            this.runtime.onClientDisconnected(clientId)
-          }
-        })
-
-        await wsTransport.start()
-        if (this.wsPort !== 0 && wsTransport.resolvedPort !== this.wsPort) {
-          writeWsFallbackPort(this.userDataPath, wsTransport.resolvedPort)
+          activeTransports.push(wsTransport)
+          transportsMeta.push({
+            kind: 'websocket',
+            endpoint: `ws://0.0.0.0:${wsTransport.resolvedPort}`
+          })
+        } catch (error) {
+          // Why: WebSocket transport is supplementary; on failure (e.g. port in use) continue with Unix socket only.
+          console.error('[runtime] Failed to start WebSocket transport:', error)
+          this.mobileSocketWiring = null
         }
-        activeTransports.push(wsTransport)
-        transportsMeta.push({
-          kind: 'websocket',
-          endpoint: `ws://0.0.0.0:${wsTransport.resolvedPort}`
-        })
-      } catch (error) {
-        // Why: WebSocket transport is supplementary — the runtime must still
-        // function if it fails to start (e.g., port in use). Log and continue
-        // with Unix socket only.
-        console.error('[runtime] Failed to start WebSocket transport:', error)
-        this.wsTransport = null
       }
     }
 
-    // Why: publish the transport into in-memory state before writing metadata
-    // so the bootstrap file always contains the real endpoint/token pair. The
-    // CLI only discovers the runtime through that file.
+    // Why: set in-memory transport state before writing metadata so the bootstrap file has the real endpoint/token pair.
     this.activeTransports = activeTransports
     this.transports = transportsMeta
 
     try {
       this.writeMetadata()
     } catch (error) {
-      // Why: a runtime that cannot publish bootstrap metadata is invisible to
-      // the `orca` CLI. Close all transports immediately instead of leaving
-      // behind a live but undiscoverable control plane.
+      // Why: a runtime that can't publish metadata is invisible to the CLI — close transports rather than run undiscoverable.
       this.activeTransports = []
       this.transports = []
       await Promise.all(activeTransports.map((t) => t.stop().catch(() => {}))).catch(() => {})
       throw error
     }
+
+    this.metadataOwnershipWatch = watchRuntimeMetadataOwnership({
+      userDataPath: this.userDataPath,
+      ownedPid: this.pid,
+      ownedRuntimeId: this.runtime.getRuntimeId(),
+      pollIntervalMs: this.metadataOwnershipPollMs,
+      republish: () => {
+        // Why: never advertise endpoints we already tore down.
+        if (this.activeTransports.length === 0) {
+          return
+        }
+        this.writeMetadata()
+      },
+      onReclaim: (previous) => {
+        console.warn(
+          `[runtime] Reclaimed orca-runtime.json from a dead runtime (pid ${previous?.pid ?? 'none'}); republished pid ${this.pid}.`
+        )
+      }
+    })
+  }
+
+  /** Why: test-only seam — runs one ownership check instead of waiting out the poll interval. */
+  checkRuntimeMetadataOwnership(): void {
+    this.metadataOwnershipWatch?.check()
   }
 
   async stop(): Promise<void> {
     const transports = this.activeTransports
     this.activeTransports = []
     this.transports = []
-    this.wsTransport = null
+    this.metadataOwnershipWatch?.stop()
+    this.metadataOwnershipWatch = null
+    this.mobileSocketWiring = null
     if (transports.length === 0) {
       return
     }
     await Promise.all(transports.map((t) => t.stop()))
-    // Why: we intentionally leave the last metadata file behind instead of
-    // deleting it on shutdown. Shared userData paths can briefly host multiple
-    // Orca processes during restarts, updates, or development, and stale
-    // metadata is safer than letting one process erase another live runtime's
-    // bootstrap file.
+    // Why: leave the metadata file on shutdown — shared userData may host another live runtime whose bootstrap file we'd erase.
   }
 
-  // Why: Unix socket messages use one-shot dispatch (single response per
-  // request) and the shared runtime auth token from the 0o600 metadata file.
-  // The transport layer owns socket lifecycle, keepalive writes, and the
-  // per-connection abort signal — this method just parses, auths, and
-  // dispatches. See design doc §3.1.
+  // Why: Unix socket dispatch is one-shot and auths via the shared token from the 0o600 metadata file. See §3.1.
   private async handleMessage(
     rawMessage: string,
     context?: RpcMessageContext
   ): Promise<RpcResponse> {
-    // Why: empty messages are sent by the Unix socket transport layer when a
-    // client exceeds the max message size. The transport closes the connection
-    // after this response.
+    // Why: the transport sends an empty message when a client exceeds max size, then closes the connection.
     if (!rawMessage) {
       return this.buildError('unknown', 'request_too_large', 'RPC request exceeds the maximum size')
     }
@@ -869,20 +1070,14 @@ export class OrcaRuntimeRpcServer {
     }
     const request = parsed.request
 
-    // Why: long-poll admission fence. Short RPCs bypass the counter entirely
-    // — it only guards handlers that can block for minutes. See §7 risk #2.
-    const longPoll = isLongPollRequest(request)
-    if (longPoll && this.activeLongPolls >= this.longPollCap) {
-      return this.buildError(
-        request.id,
-        'runtime_busy',
-        'long-poll capacity reached; retry with backoff'
-      )
+    // Why: long-poll admission fence; short RPCs bypass the counter. See §7 risk #2.
+    const longPoll = longPollClassOf(request)
+    const rejection = this.admitLongPoll(longPoll)
+    if (rejection) {
+      return this.buildError(request.id, 'runtime_busy', rejection)
     }
     if (longPoll) {
-      this.activeLongPolls += 1
-      // Why: arm the keepalive timer only for long-polls. Short RPCs never
-      // touch it so the `setInterval` is never created. See §3.1.
+      // Why: arm keepalive only for long-polls; short RPCs never create the setInterval. See §3.1.
       context?.startKeepalive()
     }
 
@@ -891,9 +1086,37 @@ export class OrcaRuntimeRpcServer {
         signal: longPoll ? context?.signal : undefined
       })
     } finally {
-      if (longPoll) {
-        this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
-      }
+      this.releaseLongPoll(longPoll)
+    }
+  }
+
+  // Why: one fence for both transports — the total cap protects short RPCs, the ask
+  // sub-cap protects terminal.wait / check --wait from slow reply-blocked asks.
+  // Returns the rejection message, or null once the slot is reserved.
+  private admitLongPoll(longPoll: LongPollClass | null): string | null {
+    if (!longPoll) {
+      return null
+    }
+    if (this.activeLongPolls >= this.longPollCap) {
+      return 'long-poll capacity reached; retry with backoff'
+    }
+    if (longPoll === 'ask' && this.activeAskLongPolls >= this.askLongPollCap) {
+      return 'orchestration.ask capacity reached; retry with backoff'
+    }
+    this.activeLongPolls += 1
+    if (longPoll === 'ask') {
+      this.activeAskLongPolls += 1
+    }
+    return null
+  }
+
+  private releaseLongPoll(longPoll: LongPollClass | null): void {
+    if (!longPoll) {
+      return
+    }
+    this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
+    if (longPoll === 'ask') {
+      this.activeAskLongPolls = Math.max(0, this.activeAskLongPolls - 1)
     }
   }
 
@@ -921,15 +1144,15 @@ export class OrcaRuntimeRpcServer {
     return { request }
   }
 
-  // Why: WebSocket messages go through streaming dispatch which can emit
-  // multiple responses. Auth uses per-device tokens from the device registry.
+  // Why: WebSocket dispatch is streaming (multiple responses) and auths via per-device tokens, not the shared token.
   private async handleWebSocketMessage(
     rawMessage: string,
     reply: (response: string) => void,
     sendBinary: (response: Uint8Array<ArrayBufferLike>) => boolean | void,
     wsTransport?: WebSocketTransport,
     ws?: WebSocket,
-    authenticatedDeviceToken?: string | null
+    authenticatedDeviceToken?: string | null,
+    authenticatedSocket?: AuthenticatedMobileSocket
   ): Promise<void> {
     let request: RpcRequest
     try {
@@ -956,8 +1179,7 @@ export class OrcaRuntimeRpcServer {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Device token mismatch')))
       return
     }
-    // Why: E2EE already authenticated the WebSocket channel. Use that bound
-    // identity for authorization instead of trusting a repeated request field.
+    // Why: E2EE already authenticated the channel; authorize by that bound identity, not a repeated request field.
     const token = authenticatedDeviceToken ?? requestToken
     if (!token) {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Missing device token')))
@@ -981,46 +1203,60 @@ export class OrcaRuntimeRpcServer {
       return
     }
 
-    // Why: associate the deviceToken with this WebSocket so ws.on('close')
-    // can notify the runtime which mobile client disconnected.
+    // Why: bind deviceToken to this socket so ws.on('close') knows which mobile client disconnected.
     if (wsTransport && ws) {
       wsTransport.setClientId(ws, token)
     }
 
-    const longPoll = isLongPollRequest(request)
-    if (longPoll && this.activeLongPolls >= this.longPollCap) {
-      reply(
-        JSON.stringify(
-          this.buildError(
-            request.id,
-            'runtime_busy',
-            'long-poll capacity reached; retry with backoff'
-          )
-        )
-      )
+    const longPoll = longPollClassOf(request)
+    const rejection = this.admitLongPoll(longPoll)
+    if (rejection) {
+      reply(JSON.stringify(this.buildError(request.id, 'runtime_busy', rejection)))
       return
     }
 
     const abortRegistration = ws ? this.registerWebSocketDispatchAbort(ws) : null
-    if (longPoll) {
-      this.activeLongPolls += 1
-    }
 
-    // Why: older/saved WebSocket pairings may not carry scope metadata, so
-    // stamp the authenticated scope onto the one method that probes the runtime.
+    // Why: older pairings may lack scope metadata, so stamp the authenticated scope onto status.get.
     const replyForRequest =
       request.method === 'status.get'
         ? (response: string): void => reply(injectDeviceScope(response, device.scope))
         : reply
 
-    const connectionId = ws ? this.wsConnectionIds.get(ws) : undefined
+    const connectionId = ws ? this.mobileSocketWiring?.getConnectionId(ws) : undefined
+    const pairingProvider = this.mobileRelayPairingProvider
+    const pairingContext =
+      pairingProvider && authenticatedSocket
+        ? {
+            getEndpoints: (params: PairingGetEndpointsParams) =>
+              pairingProvider.getEndpoints(
+                {
+                  deviceId: authenticatedSocket.device.deviceId,
+                  connectionId: authenticatedSocket.connectionId,
+                  transport: authenticatedSocket.transport
+                },
+                params
+              ),
+            provisionRelay: (params: PairingProvisionRelayParams) =>
+              pairingProvider.provisionRelay(
+                {
+                  deviceId: authenticatedSocket.device.deviceId,
+                  connectionId: authenticatedSocket.connectionId,
+                  transport: authenticatedSocket.transport
+                },
+                params
+              )
+          }
+        : undefined
     try {
       await this.dispatcher.dispatchStreaming(request, replyForRequest, {
         connectionId,
         clientId: token,
-        // Why: gates the mobile-only payload diet (native-chat char clipping) so
-        // full-screen web/desktop runtime clients aren't truncated.
+        pairedDeviceId: device.deviceId,
+        // Why: gates the mobile-only payload diet so full-screen web/desktop clients aren't truncated.
         clientKind: device.scope,
+        clientCapabilities: authenticatedSocket?.clientCapabilities,
+        pairing: pairingContext,
         signal: abortRegistration?.signal,
         sendBinary,
         registerBinaryStreamHandler: (streamId, handler) =>
@@ -1028,9 +1264,7 @@ export class OrcaRuntimeRpcServer {
       })
     } finally {
       abortRegistration?.dispose()
-      if (longPoll) {
-        this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
-      }
+      this.releaseLongPoll(longPoll)
     }
   }
 
@@ -1050,13 +1284,7 @@ export class OrcaRuntimeRpcServer {
   }
 }
 
-/**
- * Why: the regex MUST stay in lockstep with createRuntimeTransportMetadata()
- * below, which emits `o-${pid}-${endpointSuffix}.sock` where endpointSuffix
- * is `[A-Za-z0-9_-]{1,4}` (derived from a sanitised runtimeId prefix, or
- * `'rt'` as the fallback). The invariant is covered by a unit test so any
- * future change to the transport-name shape trips CI.
- */
+/** Why: MUST stay in lockstep with createRuntimeTransportMetadata()'s `o-${pid}-${suffix}.sock` shape (unit-test enforced). */
 export const RUNTIME_SOCKET_NAME_REGEX = /^o-(\d+)-[A-Za-z0-9_-]+\.sock$/
 
 export function sweepOrphanedRuntimeSockets(userDataPath: string, ownPid: number): void {
@@ -1064,8 +1292,7 @@ export function sweepOrphanedRuntimeSockets(userDataPath: string, ownPid: number
   try {
     entries = readdirSync(userDataPath)
   } catch {
-    // Why: first-launch userData may not exist yet; the cold-start path
-    // below will create it. Nothing to sweep in that case.
+    // Why: first-launch userData may not exist yet; nothing to sweep.
     return
   }
   for (const entry of entries) {
@@ -1077,28 +1304,19 @@ export function sweepOrphanedRuntimeSockets(userDataPath: string, ownPid: number
     if (!Number.isFinite(pid)) {
       continue
     }
-    // Why: never touch the current process's socket. start() already
-    // rmSync's it if it exists, but belt-and-braces — a bug in the own-pid
-    // path here would rmSync a socket we're about to bind to.
+    // Why: never delete our own socket — a bug here would rmSync one we're about to bind.
     if (pid === ownPid) {
       continue
     }
     try {
-      // Why: signal 0 is the POSIX liveness probe — it delivers no signal
-      // but returns success iff the pid resolves AND the caller has
-      // permission to signal it. ESRCH = no such process; EPERM = pid
-      // exists but owned by another user, which is extremely unusual on a
-      // desktop app's userData dir but we conservatively leave those
-      // sockets alone.
+      // Why: signal 0 is the POSIX liveness probe (sends nothing); ESRCH = dead pid, EPERM = foreign owner (left alone).
       process.kill(pid, 0)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
         try {
           rmSync(join(userDataPath, entry), { force: true })
         } catch {
-          // Why: best-effort sweep — a permission error on unlink is fine
-          // to ignore; the socket will be cleaned by a later start() or
-          // by the OS on reboot.
+          // Why: best-effort sweep; a later start() or OS reboot cleans any socket we can't unlink.
         }
       }
     }
@@ -1115,9 +1333,7 @@ export function createRuntimeTransportMetadata(
   if (platform === 'win32') {
     return {
       kind: 'named-pipe',
-      // Why: Windows named pipes do not get the same chmod hardening path as
-      // Unix sockets, so include a per-runtime suffix to avoid exposing a
-      // stable, guessable control endpoint name across launches.
+      // Why: named pipes lack the chmod hardening of Unix sockets; a per-runtime suffix avoids a stable, guessable endpoint name.
       endpoint: `\\\\.\\pipe\\orca-${pid}-${endpointSuffix}`
     }
   }

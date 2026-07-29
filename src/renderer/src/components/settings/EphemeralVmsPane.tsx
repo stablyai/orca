@@ -1,6 +1,6 @@
 import { ArrowRight, Check, Copy, Loader2, RefreshCw, Server } from 'lucide-react'
 import type React from 'react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
@@ -44,6 +44,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
   const [isLoading, setIsLoading] = useState(true)
   const [promptCopied, setPromptCopied] = useState(false)
   const mountedRef = useMountedRef()
+  const refreshGenerationRef = useRef(0)
 
   const installCommand =
     activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
@@ -71,16 +72,17 @@ export function EphemeralVmsPane(): React.JSX.Element {
   })
 
   const refresh = useCallback(async (): Promise<void> => {
+    const generation = ++refreshGenerationRef.current
     if (mountedRef.current) {
       setIsLoading(true)
     }
     try {
       const nextCatalog = await window.api.ephemeralVm.listRecipeCatalog()
-      if (mountedRef.current) {
+      if (mountedRef.current && generation === refreshGenerationRef.current) {
         setCatalog(nextCatalog)
       }
     } catch (error) {
-      if (mountedRef.current) {
+      if (mountedRef.current && generation === refreshGenerationRef.current) {
         toast.error(
           error instanceof Error
             ? error.message
@@ -91,7 +93,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
         )
       }
     } finally {
-      if (mountedRef.current) {
+      if (mountedRef.current && generation === refreshGenerationRef.current) {
         setIsLoading(false)
       }
     }
@@ -99,6 +101,17 @@ export function EphemeralVmsPane(): React.JSX.Element {
 
   useEffect(() => {
     void refresh()
+  }, [refresh])
+
+  useEffect(() => {
+    if (!window.api.plugins?.onChanged) {
+      return
+    }
+    return window.api.plugins.onChanged((event) => {
+      if (event?.contentPacksChanged ?? true) {
+        void refresh()
+      }
+    })
   }, [refresh])
 
   const openWorkspaceComposerForRecipe = (repoId: string, recipeId: string): void => {
@@ -163,6 +176,9 @@ export function EphemeralVmsPane(): React.JSX.Element {
             : ensureOrcaCliAvailableForAgentSkillTerminal())
         }}
         onRecheck={refreshSkill}
+        freshnessSkillName={
+          activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : EPHEMERAL_VMS_SKILL_NAME
+        }
       />
 
       <div className="space-y-3 rounded-lg border border-border/60 bg-card/30 p-4">
@@ -233,7 +249,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
             <p className="text-xs text-muted-foreground">
               {translate(
                 'auto.components.settings.EphemeralVmsPane.recipesHelp',
-                'Recipes your agent adds to orca.yaml show up here, ready to launch a workspace on.'
+                'Recipes from orca.yaml and enabled plugins show up here, ready to launch a workspace on.'
               )}
             </p>
           </div>

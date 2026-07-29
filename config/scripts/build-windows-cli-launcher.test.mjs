@@ -4,10 +4,33 @@ import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 
-const itWindows = process.platform === 'win32' ? it : it.skip
+const itCrossHost = process.platform === 'win32' ? it.skip : it
 const projectRoot = resolve(import.meta.dirname, '../..')
+// Why: cold csc.exe startup exceeds Vitest's 5s unit budget on hosted Windows;
+// keep the larger allowance scoped to the real compiler integration test.
+function itWindows(name, test) {
+  const runner = process.platform === 'win32' ? it : it.skip
+  runner(name, { timeout: 15_000 }, test)
+}
 
 describe('Windows CLI launcher', () => {
+  itCrossHost('fails closed when the Windows launcher cannot be compiled on this host', () => {
+    const outputRoot = mkdtempSync(join(tmpdir(), 'orca cross-host launcher '))
+    try {
+      const result = spawnSync(
+        process.execPath,
+        ['config/scripts/build-windows-cli-launcher.mjs', '--output', join(outputRoot, 'orca.exe')],
+        { cwd: projectRoot, encoding: 'utf8' }
+      )
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain('Windows CLI launcher')
+      expect(result.stderr).toContain('Windows host')
+    } finally {
+      rmSync(outputRoot, { recursive: true, force: true })
+    }
+  })
+
   itWindows('preserves a multiline argument from PowerShell through the native launcher', () => {
     const appRoot = mkdtempSync(join(tmpdir(), 'orca cli launcher '))
     try {

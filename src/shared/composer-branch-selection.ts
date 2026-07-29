@@ -50,6 +50,15 @@ export function isBranchCheckedOutInWorktrees(
   return worktreeBranches.some((ref) => ref.replace(/^refs\/heads\//, '') === branchName)
 }
 
+export function getComposerRepoWorktreeBranches(
+  worktrees: readonly { repoId: string; branch: string }[],
+  repoId: string | null
+): string[] {
+  return repoId
+    ? worktrees.filter((worktree) => worktree.repoId === repoId).map((worktree) => worktree.branch)
+    : []
+}
+
 /**
  * Issue #5181: decide whether a picked branch row is an existing LOCAL branch
  * that can be reused (checked out) instead of branched off, and whether reuse
@@ -97,6 +106,41 @@ export function resolveComposerReuseOverride(args: {
     return undefined
   }
   return args.branchNameOverride
+}
+
+export type ComposerBranchPick = ComposerBranchSelection & {
+  reuseEligibleBranch: string | null
+  defaultReuse: boolean
+}
+
+export function resolveComposerBranchPick(args: {
+  refName: string
+  localBranchName: string
+  currentName: string
+  lastAutoName: string
+  worktreeBranches: readonly string[]
+}): ComposerBranchPick {
+  const selection = resolveComposerBranchSelection(args)
+  const branchCheckedOutElsewhere = isBranchCheckedOutInWorktrees(
+    args.localBranchName,
+    args.worktreeBranches
+  )
+  const reuse = resolveComposerBranchReuse({
+    refName: args.refName,
+    localBranchName: args.localBranchName,
+    selectionProducedOverride: selection.branchNameOverride !== undefined,
+    branchCheckedOutElsewhere
+  })
+  return {
+    ...selection,
+    branchNameOverride: resolveComposerReuseOverride({
+      refName: args.refName,
+      localBranchName: args.localBranchName,
+      branchNameOverride: selection.branchNameOverride,
+      branchCheckedOutElsewhere
+    }),
+    ...reuse
+  }
 }
 
 /**

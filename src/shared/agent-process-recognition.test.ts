@@ -130,6 +130,42 @@ describe('agent process recognition', () => {
     })
   })
 
+  it('recognizes Trae by its traecli binary, not the ambiguous trae-cli name', () => {
+    expect(recognizeAgentProcess('traecli')).toEqual({
+      agent: 'trae',
+      processName: 'traecli'
+    })
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/traecli')).toEqual({
+      agent: 'trae',
+      processName: 'traecli'
+    })
+    expect(isExpectedAgentProcess('/Users/dev/.local/bin/traecli', 'traecli')).toBe(true)
+    expect(isRecognizedAgentType('traecli')).toBe(true)
+    // Why: `trae-cli` and `trae-agent` both name the unrelated open-source bytedance/trae-agent.
+    expect(recognizeAgentProcess('trae-cli')).toBeNull()
+    expect(recognizeAgentProcess('trae-agent')).toBeNull()
+  })
+
+  it('does not recognize Trae headless one-shot commands as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('traecli -p "summarize this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('traecli --print "review this"')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine('traecli --output-format json "review this"')
+    ).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine('traecli --output-format=stream-json review')
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('traecli --resume AUTO')).toEqual({
+      agent: 'trae',
+      processName: 'traecli'
+    })
+    // Why: past `--` nothing is a flag, so this is the interactive pane Orca itself launches.
+    expect(recognizeAgentProcessFromCommandLine('traecli -- "--print the release notes"')).toEqual({
+      agent: 'trae',
+      processName: 'traecli'
+    })
+  })
+
   it('recognizes Mistral Vibe by its installed executable and legacy alias', () => {
     expect(recognizeAgentProcess('/home/dev/.local/bin/vibe')).toEqual({
       agent: 'mistral-vibe',
@@ -196,6 +232,38 @@ describe('agent process recognition', () => {
         String.raw`node C:\Users\dev\AppData\Roaming\npm\node_modules\@google\gemini-cli\bundle\gemini.mjs`
       )
     ).toEqual({ agent: 'gemini', processName: 'gemini' })
+  })
+
+  it('recognizes only the agent subcommand of the generic Orca CLI', () => {
+    expect(recognizeAgentProcessFromCommandLine('orca claude-teams')).toEqual({
+      agent: 'claude-agent-teams',
+      processName: 'orca'
+    })
+    expect(recognizeAgentProcessFromCommandLine('orca status')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('orca-dev terminal list')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('node /usr/local/bin/orca claude-teams')).toEqual({
+      agent: 'claude-agent-teams',
+      processName: 'orca'
+    })
+    expect(recognizeAgentProcessFromCommandLine('node /usr/local/bin/orca status')).toBeNull()
+  })
+
+  it('recognizes the versioned Cursor Node wrapper without accepting generic agent processes', () => {
+    const cursorEntrypoint = String.raw`C:\Users\dev\AppData\Local\cursor-agent\versions\2026.07.09-a3815c0\index.js`
+
+    expect(recognizeAgentProcessFromCommandLine(`node.exe ${cursorEntrypoint}`)).toEqual({
+      agent: 'cursor',
+      processName: 'cursor-agent'
+    })
+    expect(
+      recognizeAgentProcessFromCommandLine(`node.exe ${cursorEntrypoint} worker-server`)
+    ).toEqual({ agent: 'cursor', processName: 'cursor-agent' })
+    expect(
+      recognizeAgentProcessFromCommandLine(String.raw`node.exe C:\repo\cursor-agent\index.js`)
+    ).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(String.raw`C:\Users\dev\.grok\bin\agent.exe`)
+    ).toBeNull()
   })
 
   it('does not classify prompt text as a wrapped agent command', () => {

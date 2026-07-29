@@ -615,7 +615,7 @@ describe('generateCommitMessageFromContext', () => {
     })
   })
 
-  it('does not expose unstructured raw CLI failure output', async () => {
+  it('exposes raw CLI failure output only after path sanitization', async () => {
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',
@@ -642,7 +642,7 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent CLI command failed with code 1.'
+      error: 'agent CLI command failed with code 1: raw failure output with [path]'
     })
   })
 
@@ -673,7 +673,7 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent CLI command failed: fatal: [path] failed'
+      error: 'agent CLI command failed with code 1: ERROR: fatal: [path] failed'
     })
   })
 
@@ -704,11 +704,11 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent CLI command failed: failed at [path]'
+      error: 'agent CLI command failed with code 1: ERROR: failed at [path]'
     })
   })
 
-  it('treats empty stdout plus stderr on exit 0 as an agent CLI failure', async () => {
+  it('reports an empty result with the stderr excerpt when exit 0 produces no stdout', async () => {
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',
@@ -735,8 +735,273 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent CLI command failed: No payment method'
+      error: 'agent returned an empty message. CLI output: Error: No payment method'
     })
+  })
+
+  it('surfaces pi auth failure detail end-to-end through the adjusted path sanitizer', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: [
+            'No API key found for github-copilot.',
+            '',
+            'Use /login to log into a provider via OAuth or API key. See:',
+            '  /private/tmp/pi-exit1-repro/node_modules/@earendil-works/pi-coding-agent/docs/providers.md',
+            '  /private/tmp/pi-exit1-repro/node_modules/@earendil-works/pi-coding-agent/docs/models.md'
+          ].join('\n'),
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error:
+        'Pi CLI command failed with code 1: No API key found for github-copilot. Use /login to log into a provider via OAuth or API key. See: … [path]'
+    })
+  })
+
+  it('preserves slash-commands while redacting multi-segment paths in failure detail', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: 'ERROR: run /login then check /Users/name/repo',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'agent CLI command failed with code 1: ERROR: run /login then check [path]'
+    })
+  })
+
+  it('redacts a filesystem path embedded in a pi HTTP 401 payload', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: '401: {"message":"Invalid key loaded from /Users/name/.config/pi/auth.json"}',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Pi CLI command failed with code 1: 401: {"message":"Invalid key loaded from [path]"}'
+    })
+  })
+
+  it('redacts a Windows drive path with JSON-escaped backslashes in a payload', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: '401: {"message":"Invalid key loaded from C:\\\\Users\\\\name\\\\auth.json"}',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Pi CLI command failed with code 1: 401: {"message":"Invalid key loaded from [path]"}'
+    })
+  })
+
+  it('keeps a scheme:// remedy URL intact while still redacting paths', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr:
+            '401: Visit https://console.anthropic.com/settings/keys then check /Users/name/.config/pi/auth.json',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error:
+        'Pi CLI command failed with code 1: 401: Visit https://console.anthropic.com/settings/keys then check [path]'
+    })
+  })
+
+  it('redacts key=/path shapes in provider bodies', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: '401: {"message":"rejected credential_path=/Users/name/.config/pi/auth.json"}',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Pi CLI command failed with code 1: 401: {"message":"rejected credential_path=[path]"}'
+    })
+  })
+
+  it.each([
+    [
+      'comma-prefixed list path',
+      '401: {"message":"candidate list a,/Users/name/creds rejected"}',
+      'Pi CLI command failed with code 1: 401: {"message":"candidate list a,[path] rejected"}'
+    ],
+    [
+      'non-drive colon-prefixed path',
+      '401: {"message":"slot 1:/Users/name/alt failed"}',
+      'Pi CLI command failed with code 1: 401: {"message":"slot 1:[path] failed"}'
+    ]
+  ])('redacts a %s in provider bodies', async (_shape, stderr, expected) => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr,
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({ success: false, error: expected })
+  })
+
+  it('passes the live colonless 400 gateway payload through the sanitizer unmangled', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr:
+            '400 {"type":"error","error":{"type":"invalid_request_error","message":"Third-party apps now draw from your extra usage, not your plan limits. Add more at claude.ai/settings/usage and keep going."},"request_id":"req_011CcsZLJ5ZiLLNvpxcxDuU4"}',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result.success).toBe(false)
+    if (result.success) {
+      throw new Error('expected a failure result')
+    }
+    expect(result.error.startsWith('Pi CLI command failed with code 1: 400 {"type":"error"')).toBe(
+      true
+    )
+    // The bare domain link survives path redaction so the remedy stays usable.
+    expect(result.error).toContain('claude.ai/settings/usage')
+    expect(result.error.length).toBeLessThanOrEqual(300)
   })
 
   it('preserves the structured subject and body when formatting the final response', async () => {
@@ -1492,11 +1757,103 @@ describe('generateBranchNameFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'Generated branch name was empty after sanitization.'
+      error: 'Generated branch name was empty after sanitization.',
+      failureOutput: { label: 'agent', exitCode: 0, stdout: '!!! ___', stderr: '' }
     })
   })
 
-  it('includes the branch-name custom prompt in the generated prompt', async () => {
+  it('carries the full CLI output on failures for the local on-demand view', async () => {
+    const result = await generateBranchNameFromContext(
+      { firstPrompt: 'Fix login flow' },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: 'partial',
+          stderr: 'No API key found for github-copilot.',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result.success).toBe(false)
+    if (result.success) {
+      throw new Error('expected a failure result')
+    }
+    expect(result.failureOutput).toEqual({
+      label: 'Pi',
+      exitCode: 1,
+      stdout: 'partial',
+      stderr: 'No API key found for github-copilot.'
+    })
+  })
+
+  it('does not persist stdout-only branch failure detail that may echo the prompt', async () => {
+    const result = await generateBranchNameFromContext(
+      { firstPrompt: 'Customer secret in the first prompt' },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: 'Customer secret in the first prompt',
+          stderr: '',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'agent CLI command failed with code 1.',
+      failureOutput: {
+        label: 'agent',
+        exitCode: 1,
+        stdout: 'Customer secret in the first prompt',
+        stderr: ''
+      }
+    })
+  })
+
+  it('describes a signal-terminated generator without a null exit code', async () => {
+    const result = await generateBranchNameFromContext(
+      { firstPrompt: 'Fix login flow' },
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.5'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: 'Process killed by host',
+          exitCode: null,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toMatchObject({
+      success: false,
+      error: 'Pi CLI command was terminated before exiting: Process killed by host'
+    })
+  })
+
+  it('keeps branch-name guidance first without dropping the output contract', async () => {
     let prompt = ''
     await generateBranchNameFromContext(
       { firstPrompt: 'Fix login flow' },
@@ -1504,7 +1861,8 @@ describe('generateBranchNameFromContext', () => {
         agentId: 'custom',
         model: '',
         customAgentCommand: 'agent',
-        customPrompt: 'Prefer auth terminology.'
+        customPrompt: 'Prefer auth terminology.',
+        commandInputTemplate: 'Prefer auth terminology.\n\n{basePrompt}'
       },
       {
         kind: 'remote',
@@ -1522,8 +1880,173 @@ describe('generateBranchNameFromContext', () => {
       }
     )
 
-    expect(prompt).toContain('Additional user prompt:')
+    expect(prompt.startsWith('Prefer auth terminology.')).toBe(true)
     expect(prompt).toContain('Prefer auth terminology.')
+    expect(prompt).not.toContain('Additional user prompt:')
+    expect(prompt).toContain('Generate a short git branch name')
+    expect(prompt).toContain('Output ONLY the branch name on a single line')
+  })
+})
+
+describe('linkedIssue template substitution', () => {
+  const COMMIT_CONTEXT = {
+    branch: 'feature/login',
+    stagedSummary: 'M src/login.ts',
+    stagedPatch: 'diff --git a/src/login.ts b/src/login.ts'
+  }
+  const PULL_REQUEST_CONTEXT = {
+    branch: 'feature/login',
+    base: 'main',
+    branchChangedByPreparation: false,
+    currentTitle: 'Fix login',
+    currentBody: '',
+    currentDraft: false,
+    commitSummary: 'a1b2c3d Fix login',
+    changeSummary: 'src/login.ts | 4 ++--',
+    patch: 'diff --git a/src/login.ts b/src/login.ts'
+  }
+
+  function capturingTarget(capture: (prompt: string) => void): {
+    kind: 'remote'
+    cwd: string
+    missingBinaryLocation: string
+    execute: (plan: { stdinPayload: string | null }) => Promise<{
+      stdout: string
+      stderr: string
+      exitCode: number
+      timedOut: boolean
+    }>
+  } {
+    return {
+      kind: 'remote',
+      cwd: '/repo',
+      missingBinaryLocation: 'remote PATH',
+      execute: async (plan) => {
+        capture(plan.stdinPayload ?? '')
+        return {
+          stdout: '{"base":"main","title":"Fix login","body":"body","draft":false}',
+          stderr: '',
+          exitCode: 0,
+          timedOut: false
+        }
+      }
+    }
+  }
+
+  const templateParams = {
+    agentId: 'custom' as const,
+    model: '',
+    customAgentCommand: 'agent',
+    commandInputTemplate: '{basePrompt}\n\nFixes #{linkedIssue}'
+  }
+
+  it('substitutes the linked issue into the commit-message prompt', async () => {
+    let prompt = ''
+    await generateCommitMessageFromContext(
+      { ...COMMIT_CONTEXT, linkedIssue: 42 },
+      templateParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).toContain('Fixes #42')
+    expect(prompt).not.toContain('{linkedIssue}')
+  })
+
+  it('renders an empty commit-message issue for null and omitted fields', async () => {
+    for (const context of [{ ...COMMIT_CONTEXT, linkedIssue: null }, COMMIT_CONTEXT]) {
+      let prompt = ''
+      await generateCommitMessageFromContext(
+        context,
+        templateParams,
+        capturingTarget((value) => {
+          prompt = value
+        })
+      )
+
+      expect(prompt).toContain('Fixes #')
+      expect(prompt).not.toContain('{linkedIssue}')
+    }
+  })
+
+  // Why: a fixture-unique sentinel — a short number like 42 also appears in the
+  // character counts that truncateDiffForPrompt/limitSection emit, so growing any
+  // fixture past its limit would fail these guards for reasons unrelated to leakage.
+  const BUILT_IN_PROMPT_SENTINEL_ISSUE = 987654
+  const builtInPromptParams = {
+    agentId: 'custom' as const,
+    model: '',
+    customAgentCommand: 'agent'
+  }
+
+  it('leaves the built-in commit prompt free of issue guidance', async () => {
+    let prompt = ''
+    await generateCommitMessageFromContext(
+      { ...COMMIT_CONTEXT, linkedIssue: BUILT_IN_PROMPT_SENTINEL_ISSUE },
+      builtInPromptParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).not.toContain(String(BUILT_IN_PROMPT_SENTINEL_ISSUE))
+    expect(prompt).not.toContain('linkedIssue')
+  })
+
+  it('leaves the built-in pull-request prompt free of issue guidance', async () => {
+    let prompt = ''
+    await generatePullRequestFieldsFromContext(
+      { ...PULL_REQUEST_CONTEXT, linkedIssue: BUILT_IN_PROMPT_SENTINEL_ISSUE },
+      builtInPromptParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).not.toContain(String(BUILT_IN_PROMPT_SENTINEL_ISSUE))
+    expect(prompt).not.toContain('linkedIssue')
+  })
+
+  it('substitutes the linked issue into the pull-request prompt', async () => {
+    let prompt = ''
+    await generatePullRequestFieldsFromContext(
+      { ...PULL_REQUEST_CONTEXT, linkedIssue: 7 },
+      templateParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).toContain('Fixes #7')
+    expect(prompt).not.toContain('{linkedIssue}')
+  })
+
+  it('renders an empty pull-request issue when none resolves', async () => {
+    let prompt = ''
+    await generatePullRequestFieldsFromContext(
+      PULL_REQUEST_CONTEXT,
+      templateParams,
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).toContain('Fixes #')
+    expect(prompt).not.toContain('{linkedIssue}')
+  })
+
+  it('leaves a hand-typed linkedIssue literal in branch-name templates', async () => {
+    let prompt = ''
+    await generateBranchNameFromContext(
+      { firstPrompt: 'Fix login flow' },
+      { ...templateParams, commandInputTemplate: '{basePrompt}\n\nIssue {linkedIssue}' },
+      capturingTarget((value) => {
+        prompt = value
+      })
+    )
+
+    expect(prompt).toContain('Issue {linkedIssue}')
   })
 })
 

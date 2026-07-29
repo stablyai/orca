@@ -33,9 +33,11 @@ import {
   isPathInsideOrEqual,
   isRuntimePathAbsolute,
   isWindowsAbsolutePathLike,
+  normalizeRuntimePathForComparison,
   relativePathInsideRoot,
   resolveRuntimePath
 } from '../../shared/cross-platform-path'
+import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import type {
   RuntimeFileListResult,
   RuntimeFileOpenResult,
@@ -44,7 +46,10 @@ import type {
   RuntimeFileReadResult,
   RuntimeTerminalPathResolution
 } from '../../shared/runtime-types'
-import { watchFileExplorerInWorker } from './file-watcher-host'
+import {
+  closeFileExplorerWatcherInWatcherProcess,
+  watchFileExplorerInWatcherProcess
+} from './file-watcher-host'
 import { wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { isENOENT, resolveAuthorizedPath } from '../ipc/filesystem-auth'
@@ -67,21 +72,65 @@ import {
 import type { Store } from '../persistence'
 import {
   getSshFilesystemProvider,
+  onSshFilesystemProviderRegistered,
   SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-filesystem-dispatch'
 import type { FileStat, IFilesystemProvider } from '../providers/types'
+import {
+  isWatcherProcessFailure,
+  WatcherProcessFailure
+} from '../ipc/parcel-watcher-process-failure'
 import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
+import {
+  rankRuntimeMobileFilePaths,
+  RuntimeMobileFilePathSearchCache
+} from './runtime-mobile-file-path-search'
+import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
+import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
+import { toSshExecutionHostId } from '../../shared/execution-host'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
+const MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT = 20_000
+const MOBILE_FILE_PATH_SEARCH_CACHE_ENTRIES = 8
+const MOBILE_FILE_PATH_SEARCH_CACHE_TTL_MS = 30_000
 const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
 const RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES = 10 * 1024 * 1024
 const WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS = 150
+export const WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS = 10_000
 const TERMINAL_FILE_GRANT_TTL_MS = 10 * 60 * 1000
 const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0
-// Why: runtime files.watch subscriptions are cleaned up through synchronous RPC
-// callbacks. Track native Parcel unsubscribe work so app shutdown can drain it.
+const RUNTIME_FILE_MUTATION_UPDATE_REQUIRED =
+  'Remote file changes require a newer Orca client. Update the paired client and try again.'
+
+function assertRuntimeFileMutationExpectation(
+  connectionId: string | undefined,
+  expectedExecutionHostId: string | undefined,
+  expectedSshTargetId: string | undefined,
+  expectedSshConnectionGeneration: number | undefined
+): void {
+  if (!expectedExecutionHostId) {
+    throw new Error(RUNTIME_FILE_MUTATION_UPDATE_REQUIRED)
+  }
+  const actualExecutionHostId = connectionId ? toSshExecutionHostId(connectionId) : 'local'
+  if (expectedExecutionHostId !== actualExecutionHostId) {
+    throw new Error('Workspace host changed; refresh and try again')
+  }
+  assertSshMutationExpectation(connectionId, expectedSshTargetId, expectedSshConnectionGeneration)
+}
+// Why: files.watch cleanup is synchronous RPC; track native Parcel unsubscribes so shutdown can drain them.
 const pendingRuntimeFileWatcherUnsubscribes = new Set<Promise<void>>()
+
+type RuntimeFileWatcherLease = {
+  suspend(): Promise<void>
+  resume(): Promise<void>
+  forget(): void
+}
+const runtimeFileWatcherLeasesByOwnerAndRoot = new Map<string, Set<RuntimeFileWatcherLease>>()
+// Why: the provider's dispose() stops each watch registration without firing its terminal callback,
+// so a dropped SSH transport leaves this watch silently dead — a reconnect's fresh provider is the
+// only signal it can be rebuilt from. Keyed like the leases so worktree removal can drop it.
+const sshFileExplorerWatchRearms = new Map<string, Set<() => void>>()
 const MOBILE_BINARY_EXTENSIONS = new Set([
   '.avif',
   '.bmp',
@@ -98,9 +147,7 @@ const MOBILE_BINARY_EXTENSIONS = new Set([
   '.webp',
   '.zip'
 ])
-// Raster image extensions the mobile client can render from a base64 data URI
-// via files.readPreview. Mirrors mobile's classifyMobileArtifact image set;
-// SVG/PDF are intentionally excluded (RN <Image> can't decode those data URIs).
+// Mirror of mobile classifyMobileArtifact's image set; SVG/PDF excluded because RN <Image> can't decode those data URIs.
 const MOBILE_PREVIEWABLE_IMAGE_EXTENSIONS = new Set([
   '.png',
   '.jpg',
@@ -157,20 +204,284 @@ const RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
 function trackRuntimeFileWatcherUnsubscribe(
   rootPath: string,
   unsubscribe: () => Promise<void>
-): void {
+): Promise<void> {
   const promise = Promise.resolve()
     .then(unsubscribe)
-    .catch((err: unknown) => {
-      console.error('[runtime-files.watch] unsubscribe error', { rootPath, err })
-    })
     .finally(() => {
       pendingRuntimeFileWatcherUnsubscribes.delete(promise)
     })
   pendingRuntimeFileWatcherUnsubscribes.add(promise)
+  void promise.catch((err: unknown) => {
+    console.error('[runtime-files.watch] unsubscribe error', { rootPath, err })
+  })
+  return promise
+}
+
+function normalizeRuntimeWatcherRoot(rootPath: string): string {
+  return normalizeRuntimePathForComparison(rootPath)
+}
+
+function runtimeWatcherReleaseKey(
+  runtimeId: string,
+  connectionId: string | undefined,
+  rootPath: string
+): string {
+  // Why: identical absolute paths exist on local and multiple SSH hosts; scope teardown to the host that owns it.
+  return JSON.stringify([runtimeId, connectionId ?? null, normalizeRuntimeWatcherRoot(rootPath)])
+}
+
+/**
+ * Keep an SSH file-explorer watch alive across reconnects.
+ *
+ * Why: the previous provider's unwatch handle belongs to the dead transport, so reinstalling on the
+ * fresh provider is the only way the subscription comes back. Callers get an overflow because the
+ * events lost while the watch was down can't be replayed.
+ */
+function armSshFileExplorerWatchRearm(args: {
+  runtimeId: string
+  connectionId: string
+  rootPath: string
+  callback: (events: FsChangeEvent[]) => void
+  onTerminalError: (error: Error) => void
+  signal?: AbortSignal
+  initialUnwatch: () => void
+}): { unsubscribe: () => Promise<void> } {
+  const key = runtimeWatcherReleaseKey(args.runtimeId, args.connectionId, args.rootPath)
+  let currentUnwatch = args.initialUnwatch
+  let stopped = false
+  let reinstalling: Promise<void> | null = null
+
+  const reinstall = async (): Promise<void> => {
+    const provider = getSshFilesystemProvider(args.connectionId)
+    if (stopped || !provider) {
+      return
+    }
+    // Why: the old handle is scoped to the dead transport; closing it here would only risk
+    // unwatching the root we just re-registered on the new one.
+    const nextUnwatch = await provider.watch(args.rootPath, args.callback, {
+      signal: args.signal,
+      onTerminalError: args.onTerminalError
+    })
+    if (stopped) {
+      nextUnwatch()
+      return
+    }
+    currentUnwatch = nextUnwatch
+    args.callback([{ kind: 'overflow', absolutePath: args.rootPath }])
+  }
+
+  const unsubscribeRearm = onSshFilesystemProviderRegistered((registeredId) => {
+    if (registeredId !== args.connectionId || stopped) {
+      return
+    }
+    // Why: reconnect storms can register repeatedly; chain so a second one can't double-install.
+    const attempt = (reinstalling ?? Promise.resolve())
+      .then(reinstall)
+      .catch((error: unknown) => {
+        args.onTerminalError(error instanceof Error ? error : new Error(String(error)))
+      })
+      .finally(() => {
+        if (reinstalling === attempt) {
+          reinstalling = null
+        }
+      })
+    reinstalling = attempt
+  })
+
+  const stop = (): void => {
+    stopped = true
+    unsubscribeRearm()
+    const rearms = sshFileExplorerWatchRearms.get(key)
+    rearms?.delete(stop)
+    if (rearms?.size === 0) {
+      sshFileExplorerWatchRearms.delete(key)
+    }
+  }
+  const rearms = sshFileExplorerWatchRearms.get(key) ?? new Set<() => void>()
+  rearms.add(stop)
+  sshFileExplorerWatchRearms.set(key, rearms)
+
+  return {
+    unsubscribe: () => {
+      stop()
+      const close = async (): Promise<void> => currentUnwatch()
+      // Why: awaiting an absent reinstall costs a microtask, and removal gating relies on the
+      // unwatch being issued on the same turn the lease releases it.
+      return reinstalling ? reinstalling.catch(() => undefined).then(close) : close()
+    }
+  }
+}
+
+function stopSshFileExplorerWatchRearms(key: string): void {
+  for (const stop of Array.from(sshFileExplorerWatchRearms.get(key) ?? [])) {
+    stop()
+  }
+}
+
+function registerRuntimeFileWatcherRelease(
+  runtimeId: string,
+  connectionId: string | undefined,
+  rootPaths: string[],
+  unsubscribe: () => Promise<void>,
+  restart: () => Promise<() => Promise<void>>,
+  onRestoreError: (error: Error) => void
+): () => Promise<void> {
+  const keys = Array.from(
+    new Set(
+      rootPaths.map((rootPath) => runtimeWatcherReleaseKey(runtimeId, connectionId, rootPath))
+    )
+  )
+  let currentUnsubscribe: (() => Promise<void>) | null = unsubscribe
+  let releasePromise: Promise<void> | null = null
+  let physicalExitPromise: Promise<void> | null = null
+  let resumePromise: Promise<void> | null = null
+  let stopPromise: Promise<void> | null = null
+  let logicallyStopped = false
+  const removeLease = (): void => {
+    for (const key of keys) {
+      const leases = runtimeFileWatcherLeasesByOwnerAndRoot.get(key)
+      leases?.delete(lease)
+      if (leases?.size === 0) {
+        runtimeFileWatcherLeasesByOwnerAndRoot.delete(key)
+      }
+    }
+  }
+  const suspend = (): Promise<void> => {
+    if (releasePromise) {
+      return releasePromise
+    }
+    const release = currentUnsubscribe
+    if (!release) {
+      return Promise.resolve()
+    }
+    const attempt = trackRuntimeFileWatcherUnsubscribe(rootPaths[0], release)
+    releasePromise = attempt
+    void attempt.then(
+      () => {
+        if (currentUnsubscribe === release) {
+          currentUnsubscribe = null
+        }
+        releasePromise = null
+      },
+      (error: unknown) => {
+        if (isWatcherProcessFailure(error) && error.physicalExit) {
+          const physicalExit = error.physicalExit.then(() => {
+            if (currentUnsubscribe === release) {
+              currentUnsubscribe = null
+            }
+            releasePromise = null
+            if (physicalExitPromise === physicalExit) {
+              physicalExitPromise = null
+            }
+            if (logicallyStopped) {
+              removeLease()
+            }
+          })
+          physicalExitPromise = physicalExit
+        } else {
+          // Why: a synchronous close failure retains the native owner so a later removal or unsubscribe can retry the same handle.
+          releasePromise = null
+        }
+      }
+    )
+    return attempt
+  }
+  const lease: RuntimeFileWatcherLease = {
+    suspend,
+    resume: () => {
+      if (logicallyStopped || (currentUnsubscribe && !physicalExitPromise)) {
+        return Promise.resolve()
+      }
+      if (resumePromise) {
+        return physicalExitPromise ? Promise.resolve() : resumePromise
+      }
+      // Why: a timed-out child still owns native handles until physical exit; join that owner before starting a replacement.
+      const resumesAfterPhysicalExit = physicalExitPromise !== null
+      const attempt = Promise.resolve(physicalExitPromise ?? releasePromise)
+        .then(async () => {
+          if (logicallyStopped) {
+            return
+          }
+          const nextUnsubscribe = await restart()
+          if (logicallyStopped) {
+            await nextUnsubscribe()
+            return
+          }
+          currentUnsubscribe = nextUnsubscribe
+        })
+        .catch((error: unknown) => {
+          const restoreError = error instanceof Error ? error : new Error(String(error))
+          queueMicrotask(() => onRestoreError(restoreError))
+          throw restoreError
+        })
+        .finally(() => {
+          resumePromise = null
+        })
+      resumePromise = attempt
+      if (resumesAfterPhysicalExit) {
+        void attempt.catch(() => {})
+        return Promise.resolve()
+      }
+      return attempt
+    },
+    forget: () => {
+      logicallyStopped = true
+      removeLease()
+    }
+  }
+  for (const key of keys) {
+    const leases = runtimeFileWatcherLeasesByOwnerAndRoot.get(key) ?? new Set()
+    leases.add(lease)
+    runtimeFileWatcherLeasesByOwnerAndRoot.set(key, leases)
+  }
+  return () => {
+    if (stopPromise) {
+      return stopPromise
+    }
+    logicallyStopped = true
+    const release =
+      resumePromise && !physicalExitPromise
+        ? Promise.resolve(resumePromise)
+            .catch(() => undefined)
+            .then(suspend)
+        : suspend()
+    const attempt = release.then(removeLease).catch((error: unknown) => {
+      stopPromise = null
+      throw error
+    })
+    stopPromise = attempt
+    return attempt
+  }
 }
 
 export async function awaitRuntimeFileWatcherUnsubscribes(): Promise<void> {
   await Promise.allSettled(Array.from(pendingRuntimeFileWatcherUnsubscribes))
+}
+
+export function _getRuntimeFileWatcherReleaseCountForTests(): number {
+  const leases = new Set<RuntimeFileWatcherLease>()
+  for (const rootLeases of runtimeFileWatcherLeasesByOwnerAndRoot.values()) {
+    for (const lease of rootLeases) {
+      leases.add(lease)
+    }
+  }
+  return leases.size
+}
+
+export function _resetRuntimeFileWatcherLeasesForTests(): void {
+  const leases = new Set<RuntimeFileWatcherLease>()
+  for (const rootLeases of runtimeFileWatcherLeasesByOwnerAndRoot.values()) {
+    for (const lease of rootLeases) {
+      leases.add(lease)
+    }
+  }
+  for (const lease of leases) {
+    lease.forget()
+  }
+  for (const key of Array.from(sshFileExplorerWatchRearms.keys())) {
+    stopSshFileExplorerWatchRearms(key)
+  }
+  runtimeFileWatcherLeasesByOwnerAndRoot.clear()
 }
 
 export type ResolvedRuntimeFileWorktree = Worktree & { git: GitWorktreeInfo }
@@ -215,6 +526,10 @@ export type RuntimeFileCommandHost = {
 export class RuntimeFileCommands {
   private activeRuntimeTextSearches = new Map<string, ChildProcess>()
   private terminalFileGrants = new Map<string, TerminalFileGrant>()
+  private mobileFilePathSearchCache = new RuntimeMobileFilePathSearchCache(
+    MOBILE_FILE_PATH_SEARCH_CACHE_ENTRIES,
+    MOBILE_FILE_PATH_SEARCH_CACHE_TTL_MS
+  )
 
   constructor(private readonly host: RuntimeFileCommandHost) {}
 
@@ -244,16 +559,61 @@ export class RuntimeFileCommands {
     }
   }
 
+  async searchMobileFilePaths(
+    worktreeSelector: string,
+    query: string,
+    limit: number
+  ): Promise<RuntimeFileListResult> {
+    const store = this.host.requireStore()
+    const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const { worktree, connectionId } = target
+    const cacheKey = `${connectionId ?? 'local'}:${worktree.id}:${worktree.path}`
+    const inventory = await this.mobileFilePathSearchCache.get(cacheKey, async () => {
+      const listed = connectionId
+        ? await this.listRemoteMobileFiles(
+            worktree.path,
+            connectionId,
+            MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT + 1
+          )
+        : await listQuickOpenFiles(
+            worktree.path,
+            store,
+            undefined,
+            undefined,
+            MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT + 1
+          )
+      const safePaths = listed
+        .filter((relativePath) => isSafeMobileRelativePath(relativePath))
+        .sort((a, b) => a.localeCompare(b))
+      return {
+        paths: safePaths.slice(0, MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT),
+        totalCount: safePaths.length,
+        truncated: safePaths.length > MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT
+      }
+    })
+    const matches = rankRuntimeMobileFilePaths(inventory.paths, query, limit)
+    return {
+      worktree: worktree.id,
+      rootPath: worktree.path,
+      files: matches.paths.map((relativePath) => ({
+        relativePath,
+        basename: basenameFromRelativePath(relativePath),
+        kind: isMobileBinaryPath(relativePath) ? ('binary' as const) : ('text' as const)
+      })),
+      totalCount: matches.totalCount,
+      truncated: inventory.truncated || matches.totalCount > limit
+    }
+  }
+
   async openMobileFile(
     worktreeSelector: string,
     relativePath: string
   ): Promise<RuntimeFileOpenResult> {
-    const { worktree } = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const { worktree, connectionId } = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
-    // Previewable images open like text (the mobile viewer renders them via
-    // files.readPreview); other binaries stay unavailable on mobile.
+    // Previewable images open like text (mobile renders via files.readPreview); other binaries stay unavailable on mobile.
     const kind = isMobilePreviewableImagePath(relativePath)
       ? 'image'
       : isMobileBinaryPath(relativePath)
@@ -265,14 +625,30 @@ export class RuntimeFileCommands {
       return { worktree: worktree.id, relativePath, kind, opened: false }
     }
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    // Why: the service's internal runtimeId is not a registered runtime env selector
-    // (those live in orca-environments.json). Passing it caused Unknown environment
-    // errors on content load for CLI-initiated opens (via files.open from orca cli
-    // used by agents). Instead pass undefined so the renderer openFile falls back to
-    // the current activeRuntimeEnvironmentId (or null), matching sidebar opens and
-    // allowing correct routing for local vs remote envs.
+    // Why: CLI/agents treat opened:true as success; stat first so missing paths fail the RPC instead of opening a ghost tab.
+    await this.assertMobileOpenTargetExists(filePath, connectionId)
+    // Why: the internal runtimeId isn't a valid env selector; pass undefined so openFile falls back to activeRuntimeEnvironmentId.
     this.host.openFile(worktree.id, filePath, relativePath, undefined)
     return { worktree: worktree.id, relativePath, kind, opened: true }
+  }
+
+  private async assertMobileOpenTargetExists(
+    filePath: string,
+    connectionId?: string
+  ): Promise<void> {
+    try {
+      await (connectionId
+        ? this.statRemoteTerminalPath(filePath, connectionId)
+        : stat(await resolveAuthorizedPath(filePath, this.host.requireStore())))
+    } catch (error) {
+      if (
+        isENOENT(error) ||
+        (connectionId && RuntimeFileCommands.isRemoteNotFoundErrorMessage(error))
+      ) {
+        throw new Error(`ENOENT: no such file or directory, open '${filePath}'`)
+      }
+      throw error
+    }
   }
 
   async openMobileDiff(
@@ -324,10 +700,7 @@ export class RuntimeFileCommands {
     }
   }
 
-  // Resolves a path tapped in the mobile terminal (absolute, relative, or ~/…)
-  // to a worktree-relative path the file RPCs can open, plus existence.
-  // Relative paths resolve against `cwd` when the caller supplies it, else
-  // against the worktree root.
+  // Resolves a mobile terminal tap to a worktree-relative path; relatives resolve against cwd, else the worktree root.
   async resolveTerminalPath(
     worktreeSelector: string,
     pathText: string,
@@ -338,8 +711,7 @@ export class RuntimeFileCommands {
     const store = this.host.requireStore()
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree, connectionId } = target
-    // Why: mobile may attach after OSC7 cwd metadata was emitted; the runtime
-    // still owns the terminal's latest cwd and can resolve the tap correctly.
+    // Why: mobile may attach after OSC7 cwd was emitted; the runtime still owns the terminal's latest cwd to resolve the tap.
     const normalizedTerminalHandle =
       terminalHandle && terminalHandle.trim().length > 0 ? terminalHandle.trim() : null
     const terminalCwd = normalizedTerminalHandle
@@ -358,9 +730,7 @@ export class RuntimeFileCommands {
       isDirectory: false
     }
 
-    // `~/…` is home-relative. The local home is known (os.homedir); the remote
-    // home is not, so don't guess — a tapped `~/…` on a remote worktree would
-    // mis-resolve under cwd/worktree-root, so treat it as not-openable instead.
+    // Why: remote home is unknown (only local os.homedir), so a tapped ~/… on a remote worktree is not-openable, not guessed.
     const isTilde = pathText.startsWith('~/') || pathText.startsWith('~\\')
     if (isTilde && connectionId) {
       return empty
@@ -397,9 +767,7 @@ export class RuntimeFileCommands {
         }
       }
 
-      // Why: mobile taps can point at agent-created artifacts outside the
-      // worktree. Authorize and grant the exact existing path instead of
-      // widening worktree-relative file RPCs to arbitrary absolute paths.
+      // Why: mobile taps may hit agent artifacts outside the worktree; grant the exact path, not arbitrary absolute paths.
       if (!normalizedTerminalHandle || !terminalCwd) {
         return { ...empty, relativePath, absolutePath }
       }
@@ -461,9 +829,7 @@ export class RuntimeFileCommands {
           : undefined
       }
     } catch (error) {
-      // A genuine "not found" → the path simply doesn't exist (report it, not an
-      // error). Transport/permission/provider failures must surface so a remote
-      // session doesn't silently report every tapped path as missing.
+      // Report genuine not-found as missing; let transport/permission errors surface so remote taps aren't all reported missing.
       if (
         isENOENT(error) ||
         (connectionId && RuntimeFileCommands.isRemoteNotFoundErrorMessage(error))
@@ -474,9 +840,7 @@ export class RuntimeFileCommands {
     }
   }
 
-  // A remote stat failure that means "the file isn't there" vs a transport /
-  // permission / provider error. The mux drops the ErrnoException `code`, so the
-  // message is the only signal — match the not-found shapes the relay surfaces.
+  // The mux drops ErrnoException.code, so match not-found by message shape (vs transport/permission/provider errors).
   private static isRemoteNotFoundErrorMessage(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error)
     return /\bENOENT\b|no such file|not found|does not exist/i.test(message)
@@ -525,8 +889,7 @@ export class RuntimeFileCommands {
       provider.realpath(absolutePath),
       ...roots.map((root) => provider.realpath(root).catch(() => root))
     ])
-    // Why: SSH reads and writes follow symlinks on the relay. Grant the
-    // canonical target so a /tmp link cannot escape the temp-artifact boundary.
+    // Why: SSH I/O follows symlinks on the relay; grant the canonical target so a /tmp link can't escape the temp boundary.
     return realRoots.some((root) => isPathInsideOrEqual(root, realArtifactPath))
       ? realArtifactPath
       : null
@@ -881,8 +1244,7 @@ export class RuntimeFileCommands {
       grant.absolutePath,
       grant.connectionId
     )
-    // Why: relay stat/read/write follow symlinks, so a remote temp artifact
-    // grant must be re-canonicalized after the terminal process can mutate it.
+    // Why: relay I/O follows symlinks, so re-canonicalize a remote temp-artifact grant after the process can mutate it.
     if (allowedPath !== grant.absolutePath) {
       throw new Error('terminal_file_grant_stale')
     }
@@ -921,30 +1283,102 @@ export class RuntimeFileCommands {
 
   async watchFileExplorer(
     worktreeSelector: string,
-    callback: (events: FsChangeEvent[]) => void
-  ): Promise<() => void> {
+    callback: (events: FsChangeEvent[]) => void,
+    onTerminalError: (error: Error) => void = () => undefined,
+    signal?: AbortSignal
+  ): Promise<() => Promise<void>> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, '')
-    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
-      return provider.watch(target.path, callback)
-    }
+    const open = async (): Promise<{
+      unsubscribe: () => Promise<void>
+      rootPaths: string[]
+    }> => {
+      const finishInstall = beginWatcherInstall(target.path, target.connectionId)
+      try {
+        const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
+        if (target.connectionId) {
+          if (!provider) {
+            throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
+          }
+          // Why: the RPC layer already threads AbortSignal for local watches; SSH must cancel the remote fs.watch, not wait it out.
+          const close = await provider.watch(target.path, callback, { signal, onTerminalError })
+          const rearm = armSshFileExplorerWatchRearm({
+            runtimeId: this.host.getRuntimeId(),
+            connectionId: target.connectionId,
+            rootPath: target.path,
+            callback,
+            onTerminalError,
+            signal,
+            initialUnwatch: close
+          })
+          return { unsubscribe: rearm.unsubscribe, rootPaths: [target.path] }
+        }
 
-    const rootPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
-    const rootStats = await stat(rootPath)
-    if (!rootStats.isDirectory()) {
-      throw new Error('not_a_directory')
+        const rootPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
+        const rootStats = await stat(rootPath)
+        if (!rootStats.isDirectory()) {
+          throw new Error('not_a_directory')
+        }
+        if (process.platform === 'win32') {
+          const close = watchWindowsRuntimeFileExplorer(rootPath, callback, onTerminalError)
+          return { unsubscribe: close, rootPaths: [target.path, rootPath] }
+        }
+        // Why: the forked watcher keeps the blocking crawl and native faults out of the main/`serve` process (issues #5308, #8212).
+        const dispose = await watchFileExplorerInWatcherProcess(
+          rootPath,
+          callback,
+          onTerminalError,
+          signal
+        )
+        return { unsubscribe: dispose, rootPaths: [target.path, rootPath] }
+      } finally {
+        finishInstall()
+      }
     }
-    if (process.platform === 'win32') {
-      return watchWindowsRuntimeFileExplorer(rootPath, callback)
+    const initial = await open()
+    return registerRuntimeFileWatcherRelease(
+      this.host.getRuntimeId(),
+      target.connectionId,
+      initial.rootPaths,
+      initial.unsubscribe,
+      async () => (await open()).unsubscribe,
+      onTerminalError
+    )
+  }
+
+  async closeFileExplorerWatchersForPath(rootPath: string, connectionId?: string): Promise<void> {
+    const key = runtimeWatcherReleaseKey(this.host.getRuntimeId(), connectionId, rootPath)
+    const leases = runtimeFileWatcherLeasesByOwnerAndRoot.get(key)
+    if (leases) {
+      await Promise.all(Array.from(leases, (lease) => lease.suspend()))
     }
-    // Why: the watcher runs in a worker thread so @parcel/watcher's blocking
-    // recursive crawl can't starve the main/`serve` process (issue #5308).
-    const dispose = await watchFileExplorerInWorker(rootPath, callback)
-    return () => {
-      trackRuntimeFileWatcherUnsubscribe(rootPath, dispose)
+    if (!connectionId) {
+      // Why: setup can fail before registerRuntimeFileWatcherRelease publishes its callback while the child owner still lives.
+      const resolvedRootPath = await resolveAuthorizedPath(rootPath, this.host.requireStore())
+      await closeFileExplorerWatcherInWatcherProcess(resolvedRootPath)
+    }
+  }
+
+  async restoreFileExplorerWatchersAfterFailedRemoval(
+    rootPath: string,
+    connectionId?: string
+  ): Promise<void> {
+    const key = runtimeWatcherReleaseKey(this.host.getRuntimeId(), connectionId, rootPath)
+    const leases = runtimeFileWatcherLeasesByOwnerAndRoot.get(key)
+    if (leases) {
+      await Promise.all(Array.from(leases, (lease) => lease.resume()))
+    }
+  }
+
+  forgetFileExplorerWatchersAfterRemoval(rootPath: string, connectionId?: string): void {
+    const key = runtimeWatcherReleaseKey(this.host.getRuntimeId(), connectionId, rootPath)
+    // Why: forget() never runs the lease's unsubscribe, so the re-arm would outlive a deleted
+    // worktree and re-watch it on the next reconnect.
+    stopSshFileExplorerWatchRearms(key)
+    const leases = runtimeFileWatcherLeasesByOwnerAndRoot.get(key)
+    if (leases) {
+      for (const lease of Array.from(leases)) {
+        lease.forget()
+      }
     }
   }
 
@@ -1034,9 +1468,18 @@ export class RuntimeFileCommands {
   async writeFileExplorerFile(
     worktreeSelector: string,
     relativePath: string,
-    content: string
+    content: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -1064,9 +1507,18 @@ export class RuntimeFileCommands {
   async writeFileExplorerFileBase64(
     worktreeSelector: string,
     relativePath: string,
-    contentBase64: string
+    contentBase64: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     const content = Buffer.from(contentBase64, 'base64')
     if (target.connectionId) {
@@ -1087,9 +1539,18 @@ export class RuntimeFileCommands {
     worktreeSelector: string,
     relativePath: string,
     contentBase64: string,
-    append: boolean
+    append: boolean,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     const content = Buffer.from(contentBase64, 'base64')
     if (target.connectionId) {
@@ -1108,9 +1569,18 @@ export class RuntimeFileCommands {
 
   async createFileExplorerFile(
     worktreeSelector: string,
-    relativePath: string
+    relativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -1132,9 +1602,18 @@ export class RuntimeFileCommands {
 
   async createFileExplorerDir(
     worktreeSelector: string,
-    relativePath: string
+    relativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -1152,9 +1631,18 @@ export class RuntimeFileCommands {
 
   async createFileExplorerDirNoClobber(
     worktreeSelector: string,
-    relativePath: string
+    relativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -1172,10 +1660,21 @@ export class RuntimeFileCommands {
   async commitFileExplorerUpload(
     worktreeSelector: string,
     tempRelativePath: string,
-    finalRelativePath: string
+    finalRelativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const tempTarget = await this.resolveFileExplorerPath(worktreeSelector, tempRelativePath)
-    const finalTarget = await this.resolveFileExplorerPath(worktreeSelector, finalRelativePath)
+    const [tempTarget, finalTarget] = await this.resolveFileExplorerPaths(worktreeSelector, [
+      tempRelativePath,
+      finalRelativePath
+    ])
+    assertRuntimeFileMutationExpectation(
+      tempTarget.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = tempTarget.connectionId
       ? getSshFilesystemProvider(tempTarget.connectionId)
       : null
@@ -1200,10 +1699,21 @@ export class RuntimeFileCommands {
   async renameFileExplorerPath(
     worktreeSelector: string,
     oldRelativePath: string,
-    newRelativePath: string
+    newRelativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const oldTarget = await this.resolveFileExplorerPath(worktreeSelector, oldRelativePath)
-    const newTarget = await this.resolveFileExplorerPath(worktreeSelector, newRelativePath)
+    const [oldTarget, newTarget] = await this.resolveFileExplorerPaths(worktreeSelector, [
+      oldRelativePath,
+      newRelativePath
+    ])
+    assertRuntimeFileMutationExpectation(
+      oldTarget.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = oldTarget.connectionId
       ? getSshFilesystemProvider(oldTarget.connectionId)
       : null
@@ -1226,12 +1736,20 @@ export class RuntimeFileCommands {
   async copyFileExplorerPath(
     worktreeSelector: string,
     sourceRelativePath: string,
-    destinationRelativePath: string
+    destinationRelativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
-    const sourceTarget = await this.resolveFileExplorerPath(worktreeSelector, sourceRelativePath)
-    const destinationTarget = await this.resolveFileExplorerPath(
+    const [sourceTarget, destinationTarget] = await this.resolveFileExplorerPaths(
       worktreeSelector,
-      destinationRelativePath
+      [sourceRelativePath, destinationRelativePath]
+    )
+    assertRuntimeFileMutationExpectation(
+      sourceTarget.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
     )
     const provider = sourceTarget.connectionId
       ? getSshFilesystemProvider(sourceTarget.connectionId)
@@ -1252,8 +1770,7 @@ export class RuntimeFileCommands {
       preserveSymlink: true
     })
     await mkdir(dirname(destinationPath), { recursive: true })
-    // Why: duplicate/copy operations are deconflicted by the caller. COPYFILE_EXCL
-    // preserves the same no-clobber invariant as the local shell copy IPC.
+    // Why: COPYFILE_EXCL preserves the no-clobber invariant of the local shell copy IPC (caller already deconflicts names).
     await copyFile(sourcePath, destinationPath, constants.COPYFILE_EXCL)
     return { ok: true }
   }
@@ -1261,9 +1778,18 @@ export class RuntimeFileCommands {
   async deleteFileExplorerPath(
     worktreeSelector: string,
     relativePath: string,
-    recursive?: boolean
+    recursive?: boolean,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.connectionId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -1276,8 +1802,7 @@ export class RuntimeFileCommands {
     const targetPath = await resolveAuthorizedPath(target.path, this.host.requireStore(), {
       preserveSymlink: true
     })
-    // Why: a non-local runtime has no client OS Trash/Recycling Bin; server-side
-    // file mutations are permanent and the renderer confirms before calling this.
+    // Why: a non-local runtime has no client Trash; this delete is permanent, so the renderer confirms before calling.
     await rm(targetPath, { recursive: recursive === true, force: true })
     return { ok: true }
   }
@@ -1465,21 +1990,35 @@ export class RuntimeFileCommands {
     worktreeSelector: string,
     relativePath: string
   ): Promise<{ worktree: ResolvedRuntimeFileWorktree; path: string; connectionId?: string }> {
-    const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
-    const normalizedRelativePath = normalizeRuntimeRelativePath(relativePath)
-    return {
-      worktree: target.worktree,
-      path: joinWorktreeRelativePath(target.worktree.path, normalizedRelativePath),
-      connectionId: target.connectionId
-    }
+    const [target] = await this.resolveFileExplorerPaths(worktreeSelector, [relativePath])
+    return target
   }
 
-  private async listRemoteMobileFiles(rootPath: string, connectionId: string): Promise<string[]> {
+  private async resolveFileExplorerPaths(
+    worktreeSelector: string,
+    relativePaths: readonly string[]
+  ): Promise<{ worktree: ResolvedRuntimeFileWorktree; path: string; connectionId?: string }[]> {
+    const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    return relativePaths.map((relativePath) => ({
+      worktree: target.worktree,
+      path: joinWorktreeRelativePath(
+        target.worktree.path,
+        normalizeRuntimeRelativePath(relativePath)
+      ),
+      connectionId: target.connectionId
+    }))
+  }
+
+  private async listRemoteMobileFiles(
+    rootPath: string,
+    connectionId: string,
+    maxResults?: number
+  ): Promise<string[]> {
     const provider = getSshFilesystemProvider(connectionId)
     if (!provider) {
       return []
     }
-    return provider.listFiles(rootPath)
+    return provider.listFiles(rootPath, { maxResults })
   }
 
   private async readRemoteMobileFile(filePath: string, connectionId: string): Promise<string> {
@@ -1488,8 +2027,7 @@ export class RuntimeFileCommands {
       throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
     }
     const fileStat = await provider.stat(filePath)
-    // Why: the SSH filesystem API does not expose ranged reads here, so reject
-    // oversized remote previews instead of streaming a large file just to trim it.
+    // Why: no ranged reads over SSH here, so reject oversized previews instead of streaming a whole file just to trim it.
     if (fileStat.size > MOBILE_FILE_READ_MAX_BYTES) {
       throw new Error('file_too_large')
     }
@@ -1503,10 +2041,13 @@ export class RuntimeFileCommands {
 
 function watchWindowsRuntimeFileExplorer(
   rootPath: string,
-  callback: (events: FsChangeEvent[]) => void
-): () => void {
+  callback: (events: FsChangeEvent[]) => void,
+  onTerminalError: (error: Error) => void
+): () => Promise<void> {
   let disposed = false
   let timer: ReturnType<typeof setTimeout> | null = null
+  let closeStarted = false
+  const physicalClose = new PhysicalExitTracker()
 
   const emitOverflow = (): void => {
     timer = null
@@ -1526,25 +2067,61 @@ function watchWindowsRuntimeFileExplorer(
     timer = setTimeout(emitOverflow, WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS)
   }
 
-  // Why: Parcel probes Watchman before the Windows backend and its native
-  // watcher can abort the headless server process. For remote Windows runtimes,
-  // a conservative overflow refresh is safer than a process-wide native crash.
+  // Why: Parcel's Watchman probe can crash the headless server on Windows; use a conservative overflow refresh instead.
   const watcher = watchFs(rootPath, { recursive: true }, scheduleOverflow)
-  watcher.on('error', (err) => {
+  const onClose = (): void => {
+    watcher.removeListener('error', onError)
+    physicalClose.markExited()
+  }
+  const onError = (err: Error): void => {
     console.error('[runtime-files.watch] Windows watcher error', { rootPath, err })
-    scheduleOverflow()
-  })
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+    watcher.removeListener('close', onClose)
+    watcher.removeListener('error', onError)
+    // Why: Node nulls FSWatcher's native handle on error without a close event; treat the error as physical-exit proof.
+    physicalClose.markExited()
+    if (!disposed) {
+      try {
+        callback([{ kind: 'overflow', absolutePath: rootPath }])
+      } finally {
+        onTerminalError(err)
+      }
+    }
+  }
+  watcher.once('close', onClose)
+  watcher.on('error', onError)
 
-  return () => {
+  return async () => {
     disposed = true
     if (timer) {
       clearTimeout(timer)
       timer = null
     }
+    if (!closeStarted) {
+      try {
+        watcher.close()
+      } catch (err) {
+        console.error('[runtime-files.watch] Windows watcher close error', { rootPath, err })
+        throw err
+      }
+      closeStarted = true
+    }
     try {
-      watcher.close()
-    } catch (err) {
-      console.error('[runtime-files.watch] Windows watcher close error', { rootPath, err })
+      await physicalClose.waitForExit(
+        WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS,
+        () => new Error('Windows watcher did not close before deletion deadline')
+      )
+    } catch (error) {
+      // Why: late Windows close still owns native dir handles; expose its completion so cleanup retains then clears the root.
+      throw new WatcherProcessFailure(
+        error instanceof Error ? error.message : String(error),
+        'supervisor',
+        'process_unavailable',
+        physicalClose.exitedPromise
+      )
     }
   }
 }
@@ -1579,8 +2156,7 @@ async function isRuntimeDirectoryEntry(
   entry: { isDirectory(): boolean; isSymbolicLink(): boolean },
   _entryPath: string
 ): Promise<boolean> {
-  // Why: runtime-backed file explorer listings are still passive UI reads.
-  // Do not stat symlink targets here; explicit open/expand can resolve them.
+  // Why: listings are passive UI reads; don't stat symlink targets here (explicit open/expand resolves them).
   if (entry.isSymbolicLink()) {
     void _entryPath
     return false
@@ -1631,8 +2207,7 @@ function rethrowRuntimeFileCreateError(error: unknown, targetPath: string): neve
 async function readLocalMobileFile(filePath: string, store: Store): Promise<string> {
   const authorizedPath = await resolveAuthorizedPath(filePath, store)
   const fileStat = await stat(authorizedPath)
-  // Why: mobile file previews are read-only convenience views; cap the read so
-  // opening a generated log or bundle cannot block the WebSocket like oversized scrollback.
+  // Why: cap the read so opening a large file can't block the WebSocket (previews are read-only convenience views).
   const readLimit = Math.min(fileStat.size, MOBILE_FILE_READ_MAX_BYTES + 1)
   const handle = await open(authorizedPath, 'r')
   try {
@@ -1761,8 +2336,7 @@ function normalizeTerminalFileUriAuthorityPath(
   if (isLoopbackFileUriHostname(host) && (connectionId || process.platform !== 'win32')) {
     return normalizeLeadingSlashDrivePath(match[2]!, worktreePath)
   }
-  // Why: a file URI authority names a host. Without a verified host match,
-  // stripping it could open a same-path local or SSH artifact on the wrong machine.
+  // Why: without a verified host match, stripping the file-URI authority could open a same-path artifact on the wrong machine.
   return pathText
 }
 

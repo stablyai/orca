@@ -10,6 +10,10 @@ import {
 } from './useComposerState'
 
 const HOOK_SOURCE = readFileSync(join(__dirname, 'useComposerState.ts'), 'utf8')
+const RECIPE_OPTIONS_SOURCE = readFileSync(
+  join(__dirname, 'useEphemeralVmRecipeOptions.ts'),
+  'utf8'
+)
 
 function sourceBetween(source: string, startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -70,6 +74,18 @@ describe('useComposerState host-context boundaries', () => {
     ).toEqual({ workspaceName: 'title-derived-name', displayName: 'Title derived name' })
   })
 
+  it('requires pasted PR recovery to match the selected GitHub host', () => {
+    const recoverySection = sourceBetween(
+      HOOK_SOURCE,
+      'const effectiveLinkedPR = useMemo',
+      'const setupConfig = useMemo'
+    )
+
+    expect(recoverySection).toContain('githubRepoIdentityKey(fromName.slug)')
+    expect(recoverySection).toContain('githubRepoIdentityKey(selectedRepoSlug)')
+    expect(recoverySection).not.toContain('fromName.slug.owner.toLowerCase()')
+  })
+
   it('auto-owns linked-item generated prefilled names', () => {
     expect(
       getInitialAutoManagedWorkspaceName({
@@ -122,6 +138,32 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('toast.error(result.error)')
     expect(section).toContain("'Failed to resolve MR base.'")
     expect(section).toMatch(/\.catch\(\(error: unknown\) =>/)
+  })
+
+  it('clears only repo-scoped linked work items when the repo or project changes', () => {
+    // Why: Linear and Jira issues are workspace-scoped context — a repo or
+    // project switch must keep them attached. Jira used to be dropped because
+    // this path special-cased Linear only.
+    const repoChangeSection = sourceBetween(
+      HOOK_SOURCE,
+      'const handleRepoChange',
+      'const handleFolderSourceRepoChange'
+    )
+    expect(repoChangeSection).toContain(
+      '!shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)'
+    )
+
+    const folderSourceSection = sourceBetween(
+      HOOK_SOURCE,
+      'const handleFolderSourceRepoChange',
+      'const handleProjectHostSetupChange'
+    )
+    expect(folderSourceSection).toContain('!shouldPreserveWorkspaceSourceOnRepoChange(current)')
+
+    // No switch path may gate the linked-item clear on a Linear-only predicate
+    // again. (isLinearLinkedWorkItem itself may still appear — it drives the
+    // separate Linear branch-name feature — but never the preservation decision.)
+    expect(HOOK_SOURCE).not.toContain('if (!preserveLinearLinkedWorkItem)')
   })
 
   it('does not use local SSH gates for runtime-owned folder targets', () => {
@@ -411,6 +453,36 @@ describe('useComposerState host-context boundaries', () => {
     )
   })
 
+  it('keeps a Linear branch override when its workspace-scoped issue survives a repo change', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const handleRepoChange = useCallback',
+      'const handleFolderSourceRepoChange = useCallback'
+    )
+
+    expect(section).toContain('const preservedLinearBranchName = preserveLinearLinkedWorkItem')
+    expect(section).toContain('getLinearLinkedWorkItemBranchName(linkedWorkItem)')
+    expect(section).toContain('setBranchNameOverride(preservedLinearBranchName)')
+    expect(section).toContain(
+      'setBranchNameOverridePreservesNameEdits(Boolean(preservedLinearBranchName))'
+    )
+    expect(section).toContain("branchAutoNameRef.current = preservedLinearBranchName ?? ''")
+  })
+
+  it('clears a Linear branch override when its linked issue is removed', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const handleRemoveLinkedWorkItem = useCallback',
+      'const handleNameValueChange = useCallback'
+    )
+
+    expect(section).toContain('const removedLinearItem = isLinearLinkedWorkItem(linkedWorkItem)')
+    expect(section).toContain('if (removedLinearItem)')
+    expect(section).toContain('setBranchNameOverride(undefined)')
+    expect(section).toContain('setBranchNameOverridePreservesNameEdits(false)')
+    expect(section).toContain("branchAutoNameRef.current = ''")
+  })
+
   it('selects a project by its own host instead of pinning the current host', () => {
     // Regression: passing the current host as a hard `hostId` made picking a
     // project set up only on a different host a silent no-op. The current host
@@ -445,6 +517,8 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(githubApply).toContain('setLinkedGitLabIssue(null)')
     expect(githubApply).toContain('setLinkedGitLabMR(null)')
+    expect(githubApply).toContain('setBranchNameOverridePreservesNameEdits(false)')
+    expect(githubApply).toContain("branchAutoNameRef.current = ''")
 
     const gitlabApply = sourceBetween(
       HOOK_SOURCE,
@@ -453,6 +527,8 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(gitlabApply).toContain("setLinkedIssue('')")
     expect(gitlabApply).toContain('setLinkedPR(null)')
+    expect(gitlabApply).toContain('setBranchNameOverridePreservesNameEdits(false)')
+    expect(gitlabApply).toContain("branchAutoNameRef.current = ''")
 
     const projectGroupSmartHandlers = sourceBetween(
       HOOK_SOURCE,
@@ -534,7 +610,7 @@ describe('useComposerState host-context boundaries', () => {
       'const handleProjectChange = useCallback',
       'const handleSmartGitHubItemSelect'
     )
-    expect(section).toContain("linkedProvider !== 'linear' && linkedProvider !== 'jira'")
+    expect(section).toContain('!shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)')
   })
 
   it('resolves quick-create base refs through the worktree-create precedence helper', () => {
@@ -570,6 +646,22 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(quickSubmit).toContain('platform: selectedRepoAgentLaunchPlatform')
     expect(quickSubmit).not.toContain('platform: CLIENT_PLATFORM')
+  })
+
+  // Why: activation no longer rebuilds a startup from `createdWithAgent`, so this
+  // caller's own `startup` is the only thing that launches the agent it planned.
+  it('passes its own startup to activation when submit planned an agent', () => {
+    const activation = sourceBetween(
+      HOOK_SOURCE,
+      'const activation = activateAndRevealWorktree(worktree.id, {',
+      'if (startupPlan) {'
+    )
+
+    expect(activation).toContain('...(startupPlan && !backendSpawnedStartup')
+    expect(activation).toContain('command: startupPlan.launchCommand')
+    expect(activation).toContain('launchAgent: tuiAgent')
+    // The removed activation-time fallback must not come back through this caller.
+    expect(HOOK_SOURCE).not.toContain('buildCreatedAgentReopenStartup')
   })
 
   it('prepares linked quick-create drafts for the selected default agent', () => {
@@ -632,8 +724,12 @@ describe('useComposerState host-context boundaries', () => {
       'const selectedRepoConnectionId'
     )
     expect(recipeLoadSection).toContain('settings?.experimentalEphemeralVms === true')
-    expect(recipeLoadSection).toContain('!ephemeralVmsEnabled')
-    expect(recipeLoadSection).toContain('window.api.ephemeralVm')
+    expect(recipeLoadSection).toContain('useEphemeralVmRecipeOptions')
+    expect(recipeLoadSection).toContain('enabled: ephemeralVmsEnabled')
+    expect(RECIPE_OPTIONS_SOURCE).toContain('args.enabled &&')
+    expect(RECIPE_OPTIONS_SOURCE).toContain('window.api.ephemeralVm')
+    expect(RECIPE_OPTIONS_SOURCE).toContain('window.api.plugins.onChanged')
+    expect(RECIPE_OPTIONS_SOURCE).toContain('requestGeneration')
 
     const submitSection = sourceBetween(
       HOOK_SOURCE,

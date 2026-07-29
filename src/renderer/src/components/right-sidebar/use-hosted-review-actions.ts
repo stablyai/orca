@@ -3,8 +3,7 @@ import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import type { GitHubPRAutoMergeAction } from '@/components/github-pr-merge-state'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo, Repo } from '../../../../shared/types'
-import type { GitHubPRMergeMethod } from '../../../../shared/types'
+import type { PRInfo, Repo, GitHubPRMergeMethod } from '../../../../shared/types'
 import {
   mergeGitHubHostedReview,
   setGitHubHostedReviewAutoMerge,
@@ -172,6 +171,7 @@ export function useHostedReviewActions({
           : await updateGitHubHostedReviewState({
               repo,
               prNumber: review.number,
+              prRepo: githubPR?.prRepo ?? null,
               nextState
             })
         if (!result.ok) {
@@ -204,6 +204,7 @@ export function useHostedReviewActions({
     },
     [
       confirm,
+      githubPR?.prRepo,
       isGitLab,
       onRefreshReview,
       repo,

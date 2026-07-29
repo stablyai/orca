@@ -15,6 +15,11 @@ import { TerminalHost } from './terminal-host'
 import type { SubprocessHandle } from './session'
 import { HeadlessEmulator } from './headless-emulator'
 
+const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+vi.mock('../pty-descendant-termination', () => ({
+  killWithDescendantSweep: killWithDescendantSweepMock
+}))
+
 function createMockSubprocess(): SubprocessHandle & {
   _onExitCb: ((code: number) => void) | null
 } {
@@ -28,7 +33,7 @@ function createMockSubprocess(): SubprocessHandle & {
     kill: vi.fn(() => {
       setTimeout(() => onExitCb?.(0), 5)
     }),
-    forceKill: vi.fn(),
+    forceKill: vi.fn(() => onExitCb?.(137)),
     signal: vi.fn(),
     onData(cb) {
       onDataCb = cb
@@ -50,8 +55,14 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
   let host: TerminalHost
   let lastSubprocess: ReturnType<typeof createMockSubprocess>
   let emulatorDispose: ReturnType<typeof vi.spyOn>
+  let platformDescriptor: PropertyDescriptor | undefined
 
   beforeEach(() => {
+    // Pin POSIX so immediate force-kill teardown is deterministic across host OSes; the
+    // Windows taskkill tree-kill path is covered in terminal-session-teardown.test.ts.
+    platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    killWithDescendantSweepMock.mockReset()
     emulatorDispose = vi.spyOn(HeadlessEmulator.prototype, 'dispose')
     const spawnFn = vi.fn(() => {
       lastSubprocess = createMockSubprocess()
@@ -60,9 +71,12 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     host = new TerminalHost({ spawnSubprocess: spawnFn })
   })
 
-  afterEach(() => {
-    host.dispose()
+  afterEach(async () => {
+    await host.dispose()
     emulatorDispose.mockRestore()
+    if (platformDescriptor) {
+      Object.defineProperty(process, 'platform', platformDescriptor)
+    }
   })
 
   function streamClient() {
@@ -113,23 +127,38 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
       rows: 24,
       streamClient: streamClient()
     })
+    lastSubprocess.forceKill = vi.fn()
 
-    host.kill('session-1', { immediate: true })
+    const killed = host.kill('session-1', { immediate: true })
+
+    // Immediate teardown skips the graceful kill and force-kills the child directly. On POSIX
+    // that reaches the child pgroup, so no Windows taskkill /T /F descendant sweep is needed.
+    expect(lastSubprocess.kill).not.toHaveBeenCalled()
+    expect(lastSubprocess.forceKill).toHaveBeenCalled()
+    expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+    expect(emulatorDispose).not.toHaveBeenCalled()
+    expect(host.listSessions()).toHaveLength(1)
+    lastSubprocess._onExitCb?.(137)
+    await killed
 
     // Emulator freed and session dropped from the map (no lingering dead entry).
     expect(emulatorDispose).toHaveBeenCalledTimes(1)
     expect(host.listSessions()).toHaveLength(0)
+    expect(host.isKilled('session-1')).toBe(true)
   })
 
-  it('reaps a session whose graceful kill times out (forceDispose path)', async () => {
+  it('retains a graceful-timeout session until the forced child physically exits', async () => {
     vi.useFakeTimers()
     try {
+      let stubbornSubprocess: ReturnType<typeof createMockSubprocess> | undefined
       const stubbornHost = new TerminalHost({
         spawnSubprocess: () => {
           const sub = createMockSubprocess()
           // Stubborn child: ignores graceful kill, so the KILL_TIMEOUT_MS timer
           // must force-dispose it.
           sub.kill = vi.fn()
+          sub.forceKill = vi.fn()
+          stubbornSubprocess = sub
           return sub
         }
       })
@@ -144,13 +173,16 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
       stubbornHost.kill('stubborn')
       expect(emulatorDispose).not.toHaveBeenCalled()
 
-      // The 5s KILL_TIMEOUT_MS fallback fires forceDispose, which disposes the
-      // emulator and reaps the session via the onExit hook.
+      // The 5s fallback sends SIGKILL but cannot claim physical cleanup yet.
       vi.advanceTimersByTime(5000)
 
+      expect(emulatorDispose).not.toHaveBeenCalled()
+      expect(stubbornHost.listSessions()).toHaveLength(1)
+
+      stubbornSubprocess?._onExitCb?.(137)
       expect(emulatorDispose).toHaveBeenCalledTimes(1)
       expect(stubbornHost.listSessions()).toHaveLength(0)
-      stubbornHost.dispose()
+      await stubbornHost.dispose()
     } finally {
       vi.useRealTimers()
     }

@@ -899,7 +899,7 @@ describe('registerNotificationHandlers', () => {
     expect(dispatchMobileNotification).not.toHaveBeenCalled()
   })
 
-  it('does not dispatch mobile notifications for focused active-worktree notifications', async () => {
+  it('dispatches one mobile notification when the active worktree is focused on desktop', async () => {
     getAllWindowsMock.mockReturnValue([
       {
         isDestroyed: () => false,
@@ -922,17 +922,25 @@ describe('registerNotificationHandlers', () => {
     )
 
     const handler = getDispatchHandler()
-    expect(
-      await handler(
-        {},
-        { source: 'agent-task-complete', worktreeId: 'repo::wt1', isActiveWorktree: true }
-      )
-    ).toEqual({
+    const focusedNotification = {
+      source: 'agent-task-complete' as const,
+      worktreeId: 'repo::wt1',
+      isActiveWorktree: true
+    }
+    expect(await handler({}, focusedNotification)).toEqual({
+      delivered: false,
+      reason: 'suppressed-focus'
+    })
+    expect(await handler({}, focusedNotification)).toEqual({
       delivered: false,
       reason: 'suppressed-focus'
     })
 
-    expect(dispatchMobileNotification).not.toHaveBeenCalled()
+    expect(dispatchMobileNotification).toHaveBeenCalledTimes(1)
+    expect(dispatchMobileNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'agent-task-complete', worktreeId: 'repo::wt1' })
+    )
+    expect(notificationCtorMock).not.toHaveBeenCalled()
   })
 
   it('does not dispatch mobile notifications for cooldown-suppressed bursts', async () => {

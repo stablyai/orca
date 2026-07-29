@@ -48,11 +48,27 @@ import {
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/pty-session-id-format'
 
+const REQUIRE_WINDOWS_TERMINAL_RESTART_E2E =
+  process.env.ORCA_REQUIRE_WINDOWS_TERMINAL_RESTART_E2E === '1'
+const MISSING_SEEDED_REPO_MESSAGE = 'Global setup did not produce a seeded test repo'
+
 // Why: each test in this file does a full quit→relaunch cycle, which spawns
 // two Electron instances back-to-back. Running in serial keeps the isolated
 // userDataDirs from competing for the same Electron cache lock on cold start
 // and keeps the failure mode interpretable when something goes wrong.
 test.describe.configure({ mode: 'serial' })
+
+function seededRepoPathOrSkip(): string {
+  const repoPath = existsSync(TEST_REPO_PATH_FILE)
+    ? readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+    : ''
+  const unavailable = !repoPath || !existsSync(repoPath)
+  if (unavailable && REQUIRE_WINDOWS_TERMINAL_RESTART_E2E) {
+    throw new Error('Required Windows restart E2E seeded repo is unavailable')
+  }
+  test.skip(unavailable, MISSING_SEEDED_REPO_MESSAGE)
+  return repoPath
+}
 
 /**
  * Shared bootstrap for a *first* launch: attach the seeded test repo,
@@ -75,6 +91,9 @@ async function bootstrapFirstLaunch(
   const hasPaneManager = await waitForActiveTerminalManager(page, 30_000)
     .then(() => true)
     .catch(() => false)
+  if (!hasPaneManager && REQUIRE_WINDOWS_TERMINAL_RESTART_E2E) {
+    throw new Error('Required Windows restart E2E TerminalPane manager did not mount')
+  }
   test.skip(
     !hasPaneManager,
     'Electron automation in this environment never mounts the TerminalPane manager, so restart-persistence assertions would only fail on harness setup.'
@@ -189,11 +208,7 @@ async function expectSavedLayoutToContainTitle(
 test.describe('Terminal restart persistence', () => {
   test('scrollback survives clean quit and relaunch', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
   {}, testInfo) => {
-    const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
-    if (!repoPath || !existsSync(repoPath)) {
-      test.skip(true, 'Global setup did not produce a seeded test repo')
-      return
-    }
+    const repoPath = seededRepoPathOrSkip()
 
     const session = createRestartSession(testInfo)
     let firstApp: ElectronApplication | null = null
@@ -249,11 +264,7 @@ test.describe('Terminal restart persistence', () => {
 
   test('daemon snapshot relaunch preserves the cursor on the shell prompt', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
   {}, testInfo) => {
-    const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
-    if (!repoPath || !existsSync(repoPath)) {
-      test.skip(true, 'Global setup did not produce a seeded test repo')
-      return
-    }
+    const repoPath = seededRepoPathOrSkip()
 
     const session = createRestartSession(testInfo)
     let firstApp: ElectronApplication | null = null
@@ -267,7 +278,13 @@ test.describe('Terminal restart persistence', () => {
 
       const prompt = `ORCA_RESTART_PROMPT_${Date.now()}_GT `
       const marker = `ORCA_CURSOR_RESTART_${Date.now()}`
-      await execInTerminal(firstLaunch.page, ptyId, `export PS1='${prompt}'; PROMPT='${prompt}'`)
+      const promptCommand =
+        process.platform === 'win32'
+          ? `function global:prompt { '${prompt}' }`
+          : `export PS1='${prompt}'; PROMPT='${prompt}'`
+      // Why: the Windows default shell is PowerShell, whose prompt is a
+      // function; PS1/PROMPT assignments remain the Bash/Zsh path.
+      await execInTerminal(firstLaunch.page, ptyId, promptCommand)
       await waitForTerminalActiveLine(firstLaunch.page, prompt.trim())
       await execInTerminal(firstLaunch.page, ptyId, `echo ${marker}`)
       await waitForTerminalOutput(firstLaunch.page, marker)
@@ -313,11 +330,7 @@ test.describe('Terminal restart persistence', () => {
 
   test('active worktree and terminal tab count survive restart', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
   {}, testInfo) => {
-    const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
-    if (!repoPath || !existsSync(repoPath)) {
-      test.skip(true, 'Global setup did not produce a seeded test repo')
-      return
-    }
+    const repoPath = seededRepoPathOrSkip()
 
     const session = createRestartSession(testInfo)
     let firstApp: ElectronApplication | null = null
@@ -378,11 +391,7 @@ test.describe('Terminal restart persistence', () => {
 
   test('restored Set Title pane label survives agent title churn', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
   {}, testInfo) => {
-    const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
-    if (!repoPath || !existsSync(repoPath)) {
-      test.skip(true, 'Global setup did not produce a seeded test repo')
-      return
-    }
+    const repoPath = seededRepoPathOrSkip()
 
     const session = createRestartSession(testInfo)
     let firstApp: ElectronApplication | null = null
@@ -451,11 +460,7 @@ test.describe('Terminal restart persistence', () => {
 
   test('idle session does not spam session.set writes', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
   {}, testInfo) => {
-    const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
-    if (!repoPath || !existsSync(repoPath)) {
-      test.skip(true, 'Global setup did not produce a seeded test repo')
-      return
-    }
+    const repoPath = seededRepoPathOrSkip()
 
     const session = createRestartSession(testInfo)
     let app: ElectronApplication | null = null

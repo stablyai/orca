@@ -47,6 +47,18 @@ describe('getWorktreeStatus', () => {
     expect(status).toBe('active')
   })
 
+  it('preserves a working agent status without a renderer PTY', () => {
+    const status = getWorktreeStatus([], [], {}, {}, { liveAgentStatus: 'working' })
+
+    expect(status).toBe('working')
+  })
+
+  it('preserves a permission agent status without a renderer PTY', () => {
+    const status = getWorktreeStatus([], [], {}, {}, { liveAgentStatus: 'permission' })
+
+    expect(status).toBe('permission')
+  })
+
   it('returns inactive when neither tabs nor browser state are live', () => {
     expect(getWorktreeStatus([], [], {})).toBe('inactive')
   })

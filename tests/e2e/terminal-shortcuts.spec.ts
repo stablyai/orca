@@ -19,6 +19,7 @@ import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../src/shared/constants'
 import {
   execInTerminal,
+  sendToTerminal,
   countVisibleTerminalPanes,
   waitForActiveTerminalManager,
   waitForTerminalOutput,
@@ -28,60 +29,11 @@ import {
   focusActiveTerminalInput
 } from './helpers/terminal'
 import { waitForSessionReady, waitForActiveWorktree, ensureTerminalVisible } from './helpers/store'
-
-// Why: contextBridge freezes window.api so the renderer cannot spy on
-// pty.write directly. Intercept in the main process instead — pty:write is an
-// ipcMain.on listener, so prepending a listener lets us capture every call
-// without disturbing the real handler.
-async function installMainProcessPtyWriteSpy(app: ElectronApplication): Promise<void> {
-  await app.evaluate(({ ipcMain }) => {
-    const g = globalThis as unknown as {
-      __ptyWriteLog?: { id: string; data: string }[]
-      __ptyWriteSpyInstalled?: boolean
-      __ptyWriteAcceptedSpyInstalled?: boolean
-    }
-    if (g.__ptyWriteSpyInstalled) {
-      return
-    }
-    g.__ptyWriteLog = []
-    g.__ptyWriteSpyInstalled = true
-    ipcMain.prependListener('pty:write', (_event: unknown, args: { id: string; data: string }) => {
-      g.__ptyWriteLog!.push({ id: args.id, data: args.data })
-    })
-    const invokeHandlers = (
-      ipcMain as unknown as {
-        _invokeHandlers?: Map<
-          string,
-          (event: unknown, args: { id: string; data: string }) => unknown
-        >
-      }
-    )._invokeHandlers
-    const writeAcceptedHandler = invokeHandlers?.get('pty:writeAccepted')
-    if (writeAcceptedHandler && !g.__ptyWriteAcceptedSpyInstalled) {
-      g.__ptyWriteAcceptedSpyInstalled = true
-      invokeHandlers?.set('pty:writeAccepted', (event, args) => {
-        g.__ptyWriteLog!.push({ id: args.id, data: args.data })
-        return writeAcceptedHandler(event, args)
-      })
-    }
-  })
-}
-
-async function clearPtyWriteLog(app: ElectronApplication): Promise<void> {
-  await app.evaluate(() => {
-    const g = globalThis as unknown as { __ptyWriteLog?: { id: string; data: string }[] }
-    if (g.__ptyWriteLog) {
-      g.__ptyWriteLog.length = 0
-    }
-  })
-}
-
-async function getPtyWrites(app: ElectronApplication): Promise<string[]> {
-  return app.evaluate(() => {
-    const g = globalThis as unknown as { __ptyWriteLog?: { id: string; data: string }[] }
-    return (g.__ptyWriteLog ?? []).map((e) => e.data)
-  })
-}
+import {
+  clearTerminalPtyWriteLog as clearPtyWriteLog,
+  installTerminalPtyWriteSpy as installMainProcessPtyWriteSpy,
+  readTerminalPtyWrites as getPtyWrites
+} from './helpers/terminal-pty-write-spy'
 
 async function setActivePaneForegroundAgent(
   page: Page,
@@ -518,19 +470,27 @@ test.describe('Terminal Shortcuts', () => {
     await waitForPaneCount(orcaPage, 1, 30_000)
   })
 
-  test('Shift+Enter writes the platform newline chord for terminal TUIs', async ({
-    orcaPage,
-    electronApp
-  }) => {
+  test('Shift+Enter follows the pane Kitty keyboard state', async ({ orcaPage, electronApp }) => {
     await installMainProcessPtyWriteSpy(electronApp)
-    await waitForActivePanePtyId(orcaPage)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
 
-    await pressAndExpectWrite(
-      orcaPage,
-      electronApp,
-      'Shift+Enter',
-      process.platform === 'win32' ? '\x1b\r' : '\x1b[13;2u'
-    )
+    await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b\r')
+    if (process.platform === 'win32') {
+      return
+    }
+
+    // Why: exercise the production PTY-output tracker, not xterm's renderer-
+    // local flag state, so the test covers the bytes the shortcut policy sees.
+    await execInTerminal(orcaPage, ptyId, "printf '\\033[>1u'")
+    await expect.poll(() => getKittyKeyboardFlags(orcaPage)).toBe(1)
+    await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b[13;2u')
+
+    // Clear the shell's unconsumed CSI-u line before resetting flags in a settled
+    // command; otherwise its line editor can swallow the reset bytes.
+    await sendToTerminal(orcaPage, ptyId, '\x15\x03')
+    await execInTerminal(orcaPage, ptyId, "printf '\\033[=0u'")
+    await expect.poll(() => getKittyKeyboardFlags(orcaPage)).toBe(0)
+    await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b\r')
   })
 
   test('Droid gets CSI-u Shift+Enter on Windows without changing Antigravity', async ({
@@ -551,6 +511,19 @@ test.describe('Terminal Shortcuts', () => {
         paneKey
       )
     }
+  })
+
+  test('Windows forwards genuine Ctrl+Alt text chords to the PTY', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    test.skip(process.platform !== 'win32', 'Windows xterm AltGr classification regression')
+    await installMainProcessPtyWriteSpy(electronApp)
+    await waitForActivePanePtyId(orcaPage)
+
+    await pressAndExpectWrite(orcaPage, electronApp, 'Control+Alt+u', '\x1b\x15')
+    await pressAndExpectWrite(orcaPage, electronApp, 'Control+Alt+2', '\x1b2')
+    await pressAndExpectWrite(orcaPage, electronApp, 'Control+Alt+;', '\x1b;')
   })
 
   test('Ctrl+Enter writes the kitty modified-enter chord for terminal TUIs', async ({
@@ -769,14 +742,8 @@ test.describe('Terminal Shortcuts', () => {
     // Ctrl+Backspace → \x17 (unix-word-rubout).
     await pressAndExpectWrite(orcaPage, electronApp, 'Control+Backspace', '\x17')
 
-    // Shift+Enter stays distinct; Windows keeps Esc+CR unless the active agent
-    // explicitly requires CSI-u (currently Droid, #7620).
-    await pressAndExpectWrite(
-      orcaPage,
-      electronApp,
-      'Shift+Enter',
-      process.platform === 'win32' ? '\x1b\r' : '\x1b[13;2u'
-    )
+    // The shell has not enabled KKP, so Shift+Enter must not leak CSI-u text.
+    await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b\r')
 
     // --- send-input chords (macOS-only) ---
 

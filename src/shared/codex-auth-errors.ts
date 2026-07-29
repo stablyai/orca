@@ -7,7 +7,11 @@ const CODEX_AUTH_ERROR_PATTERNS = [
   /please reauthenticate/i,
   /not logged in/i,
   /token data is not available/i,
-  /auth (?:is missing|tokens are missing|does not expose)/i
+  /auth (?:is missing|tokens are missing|does not expose)/i,
+  // Why: app-server rejects account/rateLimits/read with this when auth.json
+  // holds only an API key; without classification the fetcher falls through to
+  // a hidden PTY probe that can only time out (15s) on every refresh.
+  /chatgpt authentication required/i
 ]
 const ANSI_ESCAPE_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[a-zA-Z]`, 'g')
 

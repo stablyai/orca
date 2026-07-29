@@ -4,7 +4,7 @@
  * Why: owns the cold-park policy bookkeeping (hiddenSince tracking, recheck
  * timers, parked-set selection) and the parked byte-watcher reconciliation so
  * the overlay layer only consumes the final parked tab set when deciding to
- * render a slot as null. See docs/reference/terminal-hidden-view-parking.md.
+ * render a slot as null.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TerminalTab } from '../../../../shared/types'
@@ -18,6 +18,10 @@ import {
   selectColdParkedTerminalTabs,
   type TerminalTabColdParkCandidate
 } from './terminal-hidden-view-parking'
+import {
+  recordParkVerdictFlips,
+  type ParkVerdictFlipRecord
+} from './terminal-park-verdict-flip-telemetry'
 import { getTerminalParkingPolicyOverrides } from './terminal-parking-e2e-overrides'
 import {
   canWatcherCoverParkedTerminalTab,
@@ -53,7 +57,13 @@ export function useTerminalTabColdParking(args: {
    *  mounted for their first xterm fit, mirroring the worktree-level guard. */
   shouldMeasureHiddenWorktree: boolean
   activityTerminalPortals: ActivityTerminalPortalTarget[]
-}): ReadonlySet<string> {
+  /** Tabs cold activation keeps unmounted — parked-equivalent for watcher
+   *  purposes. Targeted background restrictions intentionally stay bounded. */
+  activationDeferredMountTabIds?: ReadonlySet<string> | null
+}): {
+  parkedTerminalTabIds: ReadonlySet<string>
+  coldParkedTerminalTabIds: ReadonlySet<string>
+} {
   const {
     worktreeId,
     terminalTabs,
@@ -61,7 +71,8 @@ export function useTerminalTabColdParking(args: {
     isWorktreeActive,
     coldParkTerminalPanes,
     shouldMeasureHiddenWorktree,
-    activityTerminalPortals
+    activityTerminalPortals,
+    activationDeferredMountTabIds
   } = args
   const pendingStartupByTabId = useAppStore((state) => state.pendingStartupByTabId)
   const terminalParkingEnabled = useAppStore(
@@ -69,6 +80,7 @@ export function useTerminalTabColdParking(args: {
   )
   const terminalTabHiddenSinceRef = useRef(new Map<string, number>())
   const terminalTabParkingTimersRef = useRef(new Map<string, number>())
+  const parkVerdictRecordsRef = useRef(new Map<string, ParkVerdictFlipRecord>())
   const [terminalTabParkingRevision, setTerminalTabParkingRevision] = useState(0)
   const [coldParkedTerminalTabIds, setColdParkedTerminalTabIds] = useState<ReadonlySet<string>>(
     () => new Set()
@@ -212,6 +224,16 @@ export function useTerminalTabColdParking(args: {
       ) {
         parked.add(terminalTab.id)
       }
+      // Why: activation-deferred tabs render no pane regardless of the park
+      // policy, so watchers must own their side effects immediately. Targeted
+      // restrictions do not enter this set or add a new eager watcher burst.
+      if (
+        activationDeferredMountTabIds?.has(terminalTab.id) &&
+        !hasActivityTerminalPortal &&
+        canWatcherCoverParkedTerminalTab(worktreeId, terminalTab)
+      ) {
+        parked.add(terminalTab.id)
+      }
     }
     return parked
   }, [
@@ -219,11 +241,26 @@ export function useTerminalTabColdParking(args: {
     assignments,
     coldParkTerminalPanes,
     coldParkedTerminalTabIds,
+    activationDeferredMountTabIds,
     isWorktreeActive,
     shouldMeasureHiddenWorktree,
     terminalTabs,
     worktreeId
   ])
+
+  // Why: observation only — records whether the *rendered* park verdict churns,
+  // so a crash bundle can confirm or refute a park-flip update loop. Watching
+  // the pre-gate cold set instead would miss loops driven by coldParkTerminalPanes
+  // or the portal/measuring gates. Changes no verdict; see
+  // terminal-park-verdict-flip-telemetry.ts.
+  useEffect(() => {
+    recordParkVerdictFlips({
+      records: parkVerdictRecordsRef.current,
+      liveTabIds: new Set(terminalTabs.map((terminalTab) => terminalTab.id)),
+      nextParkedTabIds: parkedTerminalTabIds,
+      nowMs: Date.now()
+    })
+  }, [parkedTerminalTabIds, terminalTabs])
 
   // Why: runs in the same effect flush as the commit that parked/revealed the
   // panes — watcher disposal therefore lands before any PTY data IPC can
@@ -233,11 +270,14 @@ export function useTerminalTabColdParking(args: {
     syncParkedTerminalTabWatchers({
       worktreeId,
       tabs: terminalTabs,
-      parkedTabIds: parkedTerminalTabIds
+      parkedTabIds: parkedTerminalTabIds,
+      // Why: activation-deferred tabs have no prior pane-owned title slot;
+      // pull main's title-only snapshot when their watcher starts.
+      restoreTitleOnStartTabIds: activationDeferredMountTabIds ?? undefined
     })
-  }, [parkedTerminalTabIds, terminalTabs, worktreeId])
+  }, [activationDeferredMountTabIds, parkedTerminalTabIds, terminalTabs, worktreeId])
 
   useEffect(() => () => disposeParkedTerminalWatchersForWorktree(worktreeId), [worktreeId])
 
-  return parkedTerminalTabIds
+  return { parkedTerminalTabIds, coldParkedTerminalTabIds }
 }

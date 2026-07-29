@@ -1,8 +1,8 @@
 /**
  * Renderer consumer registry for the `pty:sideEffect` channel.
  *
- * Why: with main as the side-effect parser for local-daemon/SSH PTYs
- * (docs/reference/terminal-side-effect-authority.md), the renderer no longer
+ * Why: with main as the side-effect parser for local-daemon/SSH PTYs, the
+ * renderer no longer
  * derives title/bell/agent facts from bytes for those PTYs. This module is
  * the single channel subscriber; mounted panes and parked-tab watchers
  * register exactly one fact consumer per PTY (their existing policy
@@ -86,6 +86,9 @@ export type TerminalSideEffectFactConsumerCallbacks = {
    *  hidden-delivery-gated consumers (their bytes never arrive); the theme
    *  reply is sent renderer-side — query authority stays with the view. */
   onMode2031Subscribe?: () => void
+  /** DECSET 2031 withdrawal observed by main's tracker. Clears the pane's
+   *  subscription registry so later theme flips stop pushing CSI 997. */
+  onMode2031Unsubscribe?: () => void
 }
 
 type ConsumerEntry = {
@@ -137,6 +140,9 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
       return
     case '2031-subscribe':
       entry.callbacks.onMode2031Subscribe?.()
+      return
+    case '2031-unsubscribe':
+      entry.callbacks.onMode2031Unsubscribe?.()
   }
 }
 
@@ -185,9 +191,9 @@ export type TerminalSideEffectFactConsumerOptions = {
   ptyId: string
   callbacks: TerminalSideEffectFactConsumerCallbacks
   /** Pull main's title-only replay snapshot on registration. Pane transports
-   *  use this in place of deriving titles from eager-buffer byte replay;
-   *  parked watchers skip it because the pane's runtime title slot is already
-   *  current at park time. */
+   *  use this in place of deriving titles from eager-buffer byte replay.
+   *  Ordinary parked watchers already have a current pane title; cold-started
+   *  watchers request it because no pane populated their slot. */
   restoreTitleOnRegister?: boolean
 }
 

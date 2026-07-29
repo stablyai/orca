@@ -110,6 +110,19 @@ describe('readNativeChatTranscriptCached', () => {
     expect('error' in result && result.error).toBeTruthy()
   })
 
+  // Why: a just-created session's transcript can take up to minutes to exist on
+  // disk (#8401) — the miss must be marked notFound so watch/renderer callers
+  // retry instead of settling into a permanent error, and it must never be
+  // cached (a real error already isn't cached; this locks in the same for a miss).
+  it('marks a resolve miss as notFound and does not cache it', async () => {
+    await seedSession('present-2', 1)
+    const first = await readNativeChatTranscriptCached('claude', 'absent-2')
+    expect('error' in first && first.notFound).toBe(true)
+    expect(readSpy).not.toHaveBeenCalled()
+    const second = await readNativeChatTranscriptCached('claude', 'absent-2')
+    expect(second).not.toBe(first)
+  })
+
   // Why: two worktrees can present the SAME (agent, sessionId) via different
   // transcript files — e.g. the same session resumed into a second worktree,
   // which writes a new transcript file. Keying the cache by sessionId let one

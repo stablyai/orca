@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
 import type { OpenFile } from '@/store/slices/editor'
@@ -14,6 +14,9 @@ import { DiffNotesSendMenu } from './DiffNotesSendMenu'
 import { EditorPanelMarkdownActionsMenu } from './EditorPanelMarkdownActionsMenu'
 import { translate } from '@/i18n/i18n'
 import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
+import { useDiffNavigation } from './diff-navigation-context'
+import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 
 type EditorPanelHeaderProps = {
   activeFile: OpenFile
@@ -87,11 +90,16 @@ export function EditorPanelHeader({
   )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
+  // Why: undefined/true mean wrap on; only explicit false turns wrap off (#9974).
+  const editorWordWrap = useAppStore((s) => s.settings?.editorWordWrap !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fileDiffComments = useMemo(
     () => diffComments.filter((comment) => comment.filePath === activeFile.relativePath),
     [activeFile.relativePath, diffComments]
   )
+  const { changeCount, goToPreviousDiff, goToNextDiff } = useDiffNavigation()
+  const previousChangeShortcut = useShortcutKeyDetails('editor.previousChange')
+  const nextChangeShortcut = useShortcutKeyDetails('editor.nextChange')
 
   return (
     <div className="editor-header">
@@ -178,6 +186,8 @@ export function EditorPanelHeader({
         />
       )}
       {isDiffSurface && (
+        // Why: the adjacent diff controls use the same tooltip timing, so they
+        // share one provider instead of creating redundant Radix contexts.
         <TooltipProvider delayDuration={300}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -199,6 +209,58 @@ export function EditorPanelHeader({
                     'auto.components.editor.EditorPanelHeader.e836faacfa',
                     'Switch to side-by-side diff'
                   )}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                onClick={goToPreviousDiff}
+                aria-label={translate(
+                  'auto.components.editor.EditorPanelHeader.2076ecfc9c',
+                  'Previous change'
+                )}
+                disabled={changeCount === 0}
+              >
+                <ArrowUp size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>
+              {translate('auto.components.editor.EditorPanelHeader.2076ecfc9c', 'Previous change')}
+              {previousChangeShortcut.keys.length > 0 && (
+                <ShortcutKeyCombo
+                  keys={previousChangeShortcut.keys}
+                  doubleTap={previousChangeShortcut.doubleTap}
+                  className="ml-1.5"
+                />
+              )}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                onClick={goToNextDiff}
+                aria-label={translate(
+                  'auto.components.editor.EditorPanelHeader.631dab0df3',
+                  'Next change'
+                )}
+                disabled={changeCount === 0}
+              >
+                <ArrowDown size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>
+              {translate('auto.components.editor.EditorPanelHeader.631dab0df3', 'Next change')}
+              {nextChangeShortcut.keys.length > 0 && (
+                <ShortcutKeyCombo
+                  keys={nextChangeShortcut.keys}
+                  doubleTap={nextChangeShortcut.doubleTap}
+                  className="ml-1.5"
+                />
+              )}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -253,11 +315,13 @@ export function EditorPanelHeader({
         isMarkdown={isMarkdown}
         isDiffSurface={isDiffSurface}
         diffWordWrap={diffWordWrap}
+        editorWordWrap={editorWordWrap}
         shouldShowMarkdownExportAction={shouldShowMarkdownExportAction}
         canExportMarkdownToPdf={canExportMarkdownToPdf}
         canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
         markdownFrontmatterVisible={markdownFrontmatterVisible}
         onToggleDiffWordWrap={() => void updateSettings({ diffWordWrap: !diffWordWrap })}
+        onToggleEditorWordWrap={() => void updateSettings({ editorWordWrap: !editorWordWrap })}
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
       />

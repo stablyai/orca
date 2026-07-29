@@ -30,10 +30,19 @@ export class TerminalKittyKeyboardModeTracker {
   private mainStack: number[] = []
   private altStack: number[] = []
   private alternateScreenActive = false
+  private alternateScreenSwitchObserved = false
 
   /** Current effective kitty keyboard flags (0 = protocol inactive). */
   get flags(): number {
     return this.currentFlags
+  }
+
+  get isAlternateScreen(): boolean {
+    return this.alternateScreenActive
+  }
+
+  get hasObservedAlternateScreenSwitch(): boolean {
+    return this.alternateScreenSwitchObserved
   }
 
   reset(): void {
@@ -44,6 +53,7 @@ export class TerminalKittyKeyboardModeTracker {
     this.mainStack = []
     this.altStack = []
     this.alternateScreenActive = false
+    this.alternateScreenSwitchObserved = false
   }
 
   scan(data: string): void {
@@ -77,6 +87,7 @@ export class TerminalKittyKeyboardModeTracker {
         const tail = this.scanTail
         this.reset()
         this.scanTail = tail
+        this.alternateScreenSwitchObserved = true
         continue
       }
       if (match[0].endsWith('!p')) {
@@ -108,6 +119,7 @@ export class TerminalKittyKeyboardModeTracker {
       if (param !== 47 && param !== 1047 && param !== 1049) {
         continue
       }
+      this.alternateScreenSwitchObserved = true
       // Why: xterm swaps the current flags with the inactive screen's slot on
       // every 47/1047/1049 transition, without an already-active guard —
       // mirror it exactly so this state matches what the renderer encodes.

@@ -10,6 +10,7 @@ import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
+import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 
 export type SourceControlLaunchPlanDelivery =
   | 'argv'
@@ -36,6 +37,7 @@ export function planSourceControlAgentActionLaunch(args: {
   disabledAgents?: TuiAgent[]
   cmdOverrides?: Partial<Record<TuiAgent, string>>
   agentArgs?: string | null
+  sessionOptions?: Record<string, SessionOptionValue>
   platform?: NodeJS.Platform
   terminalWindowsShell?: string | null
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
@@ -107,6 +109,7 @@ export function planSourceControlAgentActionLaunch(args: {
       shell,
       isRemote,
       agentArgs: args.agentArgs,
+      sessionOptions: args.sessionOptions,
       allowEmptyPromptLaunch: true
     })
     delivery = 'paste-submit'
@@ -118,7 +121,8 @@ export function planSourceControlAgentActionLaunch(args: {
       platform,
       shell,
       isRemote,
-      agentArgs: args.agentArgs
+      agentArgs: args.agentArgs,
+      sessionOptions: args.sessionOptions
     })
     if (draftLaunchPlan) {
       startupPlan = {
@@ -127,6 +131,9 @@ export function planSourceControlAgentActionLaunch(args: {
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
         launchConfig: draftLaunchPlan.launchConfig,
+        ...(draftLaunchPlan.sessionOptions
+          ? { sessionOptions: draftLaunchPlan.sessionOptions }
+          : {}),
         ...(draftLaunchPlan.startupCommandDelivery
           ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
           : {}),
@@ -142,6 +149,7 @@ export function planSourceControlAgentActionLaunch(args: {
         shell,
         isRemote,
         agentArgs: args.agentArgs,
+        sessionOptions: args.sessionOptions,
         allowEmptyPromptLaunch: true
       })
       delivery = 'draft-paste'
@@ -155,6 +163,7 @@ export function planSourceControlAgentActionLaunch(args: {
       shell,
       isRemote,
       agentArgs: args.agentArgs,
+      sessionOptions: args.sessionOptions,
       allowEmptyPromptLaunch: true
     })
     delivery = 'draft-paste'
@@ -167,6 +176,7 @@ export function planSourceControlAgentActionLaunch(args: {
       shell,
       isRemote,
       agentArgs: args.agentArgs,
+      sessionOptions: args.sessionOptions,
       allowEmptyPromptLaunch: false
     })
     delivery = 'argv'

@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import { PNG } from 'pngjs'
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
+import { stageNodeScriptForTerminal } from './helpers/run-node-script-in-terminal'
 import {
   ensureTerminalVisible,
   getActiveWorktreeId,
@@ -13,12 +14,6 @@ import {
 import { getTerminalContent, waitForActiveTerminalManager } from './helpers/terminal'
 import { BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT } from '../../src/renderer/src/constants/terminal'
 
-type HiddenOutputDebugSnapshot = {
-  hiddenRendererSkipCount: number
-  hiddenRendererSkippedChars: number
-  hiddenRendererMode2031ReplyCount: number
-}
-
 type CodexStartupBackgroundTarget = {
   clip: { x: number; y: number; width: number; height: number }
   cellWidth: number
@@ -28,18 +23,12 @@ type CodexStartupBackgroundTarget = {
   modelBackgroundCells: number
 }
 
-type CodexStartupBackgroundWindow = Window & {
-  __terminalPtyOutputDebug?: {
-    reset: () => void
-    snapshot: () => HiddenOutputDebugSnapshot
-  }
-}
-
 const COMPOSER_BG = { red: 72, green: 72, blue: 72 }
 
 function codexLikeStartupCommand(marker: string): string {
   const script = [
-    'const marker = process.argv[1];',
+    // Why: embedded as a literal — an argv marker would need per-shell quoting.
+    `const marker = ${JSON.stringify(marker)};`,
     'const width = Math.max(60, process.stdout.columns || 100);',
     'const pad = (text) => (text + " ".repeat(width)).slice(0, width);',
     'const bg = "\\x1b[48;2;72;72;72m\\x1b[38;2;235;235;235m";',
@@ -67,7 +56,8 @@ function codexLikeStartupCommand(marker: string): string {
     'setTimeout(render, 100);',
     'setInterval(() => {}, 1000);'
   ].join('')
-  return `node -e ${JSON.stringify(script)} ${JSON.stringify(marker)}`
+  // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
+  return stageNodeScriptForTerminal(script, { prefix: 'orca-codex-startup-bg' }).command
 }
 
 async function waitForHiddenTabPtyId(page: Page, tabId: string): Promise<string> {
@@ -95,18 +85,6 @@ async function waitForHiddenTabPtyId(page: Page, tabId: string): Promise<string>
     throw new Error(`waitForHiddenTabPtyId: tab ${tabId} has no PTY id`)
   }
   return ptyId
-}
-
-async function readHiddenOutputDebug(page: Page): Promise<HiddenOutputDebugSnapshot | null> {
-  return page.evaluate(() => {
-    return (window as CodexStartupBackgroundWindow).__terminalPtyOutputDebug?.snapshot() ?? null
-  })
-}
-
-async function resetHiddenOutputDebug(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    ;(window as CodexStartupBackgroundWindow).__terminalPtyOutputDebug?.reset()
-  })
 }
 
 async function mainSnapshotContains(page: Page, ptyId: string, text: string): Promise<boolean> {
@@ -266,7 +244,6 @@ test.describe('Codex hidden startup composer background', () => {
 
     const marker = `CODEX_STARTUP_BG_${Date.now()}`
     const command = codexLikeStartupCommand(marker)
-    await resetHiddenOutputDebug(orcaPage)
     const hiddenTabId = await orcaPage.evaluate(
       ({ worktreeId, command, eventName }) => {
         const store = window.__store
@@ -312,12 +289,10 @@ test.describe('Codex hidden startup composer background', () => {
         message: 'Hidden Codex startup background never reached the main buffer snapshot'
       })
       .toBe(true)
-    await expect
-      .poll(async () => (await readHiddenOutputDebug(orcaPage))?.hiddenRendererSkipCount ?? 0, {
-        timeout: 10_000,
-        message: 'Codex-marked hidden startup did not take the skipped renderer path'
-      })
-      .toBeGreaterThan(0)
+    // Why: the renderer skip counter is dead under the Phase-4 main-side delivery
+    // gate (#7214) — hidden bytes are dropped in main before reaching the renderer.
+    // The main-buffer snapshot above proves the hidden output was handled; the
+    // reveal restore below proves it repaints when the worktree first shows.
 
     await switchToWorktree(orcaPage, secondWorktreeId)
     await expect

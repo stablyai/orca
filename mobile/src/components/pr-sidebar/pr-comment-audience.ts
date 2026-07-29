@@ -1,4 +1,10 @@
 import type { PRComment } from '../../../../src/shared/types'
+import {
+  createBotAuthorOverrideSet,
+  normalizePRCommentAuthorLogin
+} from '../../../../src/shared/pr-bot-author-overrides'
+
+export { createBotAuthorOverrideSet }
 
 // Audience filtering for the PR comment timeline, ported from the desktop helper
 // (src/renderer/src/lib/pr-comment-audience.ts) minus its i18n wrapper so it stays
@@ -43,12 +49,18 @@ const KNOWN_AUTOMATION_LOGIN_SUBSTRINGS = [
   '-reviewer'
 ]
 
-export function isBotPRComment(comment: PRComment): boolean {
+export function isBotPRComment(
+  comment: PRComment,
+  botAuthorOverrides?: ReadonlySet<string>
+): boolean {
+  const author = comment.author.trim()
+  const normalized = normalizePRCommentAuthorLogin(author)
+  if (botAuthorOverrides?.has(normalized)) {
+    return true
+  }
   if (comment.isBot === true) {
     return true
   }
-  const author = comment.author.trim()
-  const normalized = author.toLowerCase()
   if (normalized.endsWith(BOT_LOGIN_SUFFIX)) {
     return true
   }
@@ -59,9 +71,10 @@ export function isBotPRComment(comment: PRComment): boolean {
 }
 
 export function getPRCommentAudienceCounts(
-  comments: PRComment[]
+  comments: PRComment[],
+  botAuthorOverrides?: ReadonlySet<string>
 ): Record<PRCommentAudienceFilter, number> {
-  const bot = comments.filter(isBotPRComment).length
+  const bot = comments.filter((comment) => isBotPRComment(comment, botAuthorOverrides)).length
   return {
     all: comments.length,
     human: comments.length - bot,
@@ -71,13 +84,14 @@ export function getPRCommentAudienceCounts(
 
 export function filterPRCommentsByAudience(
   comments: PRComment[],
-  filter: PRCommentAudienceFilter
+  filter: PRCommentAudienceFilter,
+  botAuthorOverrides?: ReadonlySet<string>
 ): PRComment[] {
   if (filter === 'bot') {
-    return comments.filter(isBotPRComment)
+    return comments.filter((comment) => isBotPRComment(comment, botAuthorOverrides))
   }
   if (filter === 'human') {
-    return comments.filter((comment) => !isBotPRComment(comment))
+    return comments.filter((comment) => !isBotPRComment(comment, botAuthorOverrides))
   }
   return comments
 }

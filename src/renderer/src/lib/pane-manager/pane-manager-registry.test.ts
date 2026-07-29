@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import {
+  forEachLivePaneForDesyncSentinel,
+  getLivePaneCensus,
   refitAndRefreshAllTerminalPanes,
   registerLivePaneManager,
   resetAndRefreshAllTerminalWebglAtlases,
@@ -152,5 +154,86 @@ describe('pane manager registry', () => {
     expect(broken.refreshAllPanes).not.toHaveBeenCalled()
     expect(healthy.fitAllPanes).toHaveBeenCalledTimes(1)
     expect(healthy.refreshAllPanes).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps pane keys stable when an earlier manager unregisters', () => {
+    const first = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      getPanes: () => [{ id: 1, terminal: {} }]
+    }
+    const second = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      getPanes: () => [{ id: 1, terminal: {} }]
+    }
+    registerLivePaneManager(first)
+    registeredManagers.push(first)
+    registerLivePaneManager(second)
+    registeredManagers.push(second)
+    const before: string[] = []
+    forEachLivePaneForDesyncSentinel((paneKey) => before.push(paneKey))
+
+    unregisterLivePaneManager(first)
+    const after: string[] = []
+    forEachLivePaneForDesyncSentinel((paneKey) => after.push(paneKey))
+
+    expect(before).toHaveLength(2)
+    expect(after).toEqual([before[1]])
+  })
+
+  // Why: this is the number crash reports could never recover from breadcrumb
+  // multiplicity, since every manager's first pane is id 1.
+  it('counts panes across managers and drops them on unregister', () => {
+    const twoPanes = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      getPanes: () => [
+        { id: 1, terminal: {} },
+        { id: 2, terminal: {} }
+      ]
+    }
+    const onePane = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      getPanes: () => [{ id: 1, terminal: {} }]
+    }
+    registerLivePaneManager(twoPanes)
+    registeredManagers.push(twoPanes)
+    registerLivePaneManager(onePane)
+    registeredManagers.push(onePane)
+
+    expect(getLivePaneCensus()).toEqual({ managers: 2, panes: 3 })
+
+    unregisterLivePaneManager(twoPanes)
+    expect(getLivePaneCensus()).toEqual({ managers: 1, panes: 1 })
+  })
+
+  it('prefers the allocation-free pane count when a manager exposes one', () => {
+    const counted = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      getPaneCount: () => 4,
+      getPanes: vi.fn(() => [{ id: 1, terminal: {} }])
+    }
+    registerLivePaneManager(counted)
+    registeredManagers.push(counted)
+
+    expect(getLivePaneCensus()).toEqual({ managers: 1, panes: 4 })
+    expect(counted.getPanes).not.toHaveBeenCalled()
+  })
+
+  it('counts surviving managers when one throws mid-teardown', () => {
+    const broken = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      getPanes: () => {
+        throw new Error('disposed')
+      }
+    }
+    const healthy = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      getPanes: () => [{ id: 1, terminal: {} }]
+    }
+    registerLivePaneManager(broken)
+    registeredManagers.push(broken)
+    registerLivePaneManager(healthy)
+    registeredManagers.push(healthy)
+
+    expect(getLivePaneCensus()).toEqual({ managers: 2, panes: 1 })
   })
 })

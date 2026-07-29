@@ -133,6 +133,7 @@ import { createAgentStatusSlice } from './agent-status'
 import { createPaneForegroundAgentSlice } from './pane-foreground-agent'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
+import { createRuntimeDetectedAgentsSlice } from './runtime-detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createDictationSlice } from './dictation'
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
@@ -140,8 +141,10 @@ import { createRuntimeStatusSlice } from './runtime-status'
 import { createPullRequestGenerationSlice } from './pull-request-generation'
 import { createCommitMessageGenerationSlice } from './commit-message-generation'
 import { createPinnedTabCloseConfirmSlice } from './pinned-tab-close-confirm'
+import { createRecentlyClosedTabsSlice } from './recently-closed-tabs'
 import { createOrcaProfilesSlice } from './orca-profiles'
 import { createNewIssueDraftSlice } from './new-issue-draft'
+import { createRemoteServerUpdatesSlice } from './remote-server-updates'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -173,6 +176,7 @@ function createTestStore() {
     ...createPaneForegroundAgentSlice(...a),
     ...createDiffCommentsSlice(...a),
     ...createDetectedAgentsSlice(...a),
+    ...createRuntimeDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a),
     ...createDictationSlice(...a),
     ...createWorkspaceCleanupSlice(...a),
@@ -180,8 +184,10 @@ function createTestStore() {
     ...createPullRequestGenerationSlice(...a),
     ...createCommitMessageGenerationSlice(...a),
     ...createPinnedTabCloseConfirmSlice(...a),
+    ...createRecentlyClosedTabsSlice(...a),
     ...createOrcaProfilesSlice(...a),
-    ...createNewIssueDraftSlice(...a)
+    ...createNewIssueDraftSlice(...a),
+    ...createRemoteServerUpdatesSlice(...a)
   }))
 }
 
@@ -223,9 +229,13 @@ function makeWorktree(diffComments: DiffComment[]): Worktree {
   }
 }
 
-function seed(store: ReturnType<typeof createTestStore>, comments: DiffComment[]): void {
+function seed(
+  store: ReturnType<typeof createTestStore>,
+  comments: DiffComment[],
+  worktreeOverrides: Partial<Worktree> = {}
+): void {
   store.setState({
-    worktreesByRepo: { [REPO]: [makeWorktree(comments)] }
+    worktreesByRepo: { [REPO]: [{ ...makeWorktree(comments), ...worktreeOverrides }] }
   })
 }
 
@@ -331,19 +341,28 @@ describe('updateDiffComment', () => {
   it('persists through the selected runtime environment', async () => {
     const store = createTestStore()
     store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never
-    })
-    seed(store, [
-      {
-        id: 'c1',
-        worktreeId: WT,
-        filePath: 'src/foo.ts',
-        lineNumber: 10,
-        body: 'old body',
-        createdAt: 1000,
-        side: 'modified'
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: {
+        [REPO]: [
+          { id: WT, repoId: REPO, hostId: 'local', runtimeOwnerEnvironmentId: 'env-1' } as never
+        ]
       }
-    ])
+    })
+    seed(
+      store,
+      [
+        {
+          id: 'c1',
+          worktreeId: WT,
+          filePath: 'src/foo.ts',
+          lineNumber: 10,
+          body: 'old body',
+          createdAt: 1000,
+          side: 'modified'
+        }
+      ],
+      { hostId: 'local', runtimeOwnerEnvironmentId: 'env-1' }
+    )
 
     const ok = await store.getState().updateDiffComment(WT, 'c1', 'remote body')
 
@@ -661,9 +680,17 @@ describe('bulk clear diff comments', () => {
   it('persists clear through the selected runtime environment', async () => {
     const store = createTestStore()
     store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: {
+        [REPO]: [
+          { id: WT, repoId: REPO, hostId: 'local', runtimeOwnerEnvironmentId: 'env-1' } as never
+        ]
+      }
     })
-    seed(store, [makeComment({ id: 'c1' })])
+    seed(store, [makeComment({ id: 'c1' })], {
+      hostId: 'local',
+      runtimeOwnerEnvironmentId: 'env-1'
+    })
 
     const ok = await store.getState().clearDiffComments(WT)
 

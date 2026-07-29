@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Pressable,
@@ -9,7 +9,7 @@ import {
   View
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
 import { loadHosts } from '../src/transport/host-store'
@@ -18,6 +18,7 @@ import { useAllHostClients } from '../src/transport/client-context'
 import type { RpcClient } from '../src/transport/rpc-client'
 import { BottomDrawer } from '../src/components/BottomDrawer'
 import { VoiceModelList } from '../src/components/VoiceModelList'
+import { useDictationSetupPoller } from '../src/dictation/use-dictation-setup-poller'
 import {
   deleteDictationModel,
   downloadDictationModel,
@@ -58,44 +59,45 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<ModelBusyAction | null>(null)
   const [modelDrawerOpen, setModelDrawerOpen] = useState(false)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [routeFocused, setRouteFocused] = useState(false)
 
-  const refresh = useCallback(async () => {
+  useFocusEffect(
+    useCallback(() => {
+      setRouteFocused(true)
+      return () => setRouteFocused(false)
+    }, [])
+  )
+
+  const refresh = useCallback(async (): Promise<boolean | undefined> => {
     if (!client) {
-      return
+      return false
     }
     try {
-      setSetup(await fetchDictationSetup(client))
+      const next = await fetchDictationSetup(client)
+      setSetup(next)
       setError(null)
+      return next.models.some(isModelInFlight)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load voice settings')
+      return undefined
+    } finally {
+      setLoading(false)
     }
   }, [client])
 
-  // Initial load once a connected client is available.
-  useEffect(() => {
-    if (!client) {
-      return
-    }
-    setLoading(true)
-    setError(null)
-    void refresh().finally(() => setLoading(false))
-  }, [client, refresh])
+  const polling = setup?.models.some(isModelInFlight) ?? false
+  const refreshSetup = useDictationSetupPoller({
+    visible: routeFocused && client !== null,
+    polling,
+    refresh,
+    intervalMs: POLL_INTERVAL_MS
+  })
 
-  // Poll only while a model is downloading/extracting; stop otherwise.
   useEffect(() => {
-    const inFlight = setup?.models.some(isModelInFlight) ?? false
-    if (inFlight && client) {
-      pollRef.current = setInterval(() => void refresh(), POLL_INTERVAL_MS)
-      return () => {
-        if (pollRef.current) {
-          clearInterval(pollRef.current)
-          pollRef.current = null
-        }
-      }
+    if (routeFocused && client && setup === null) {
+      setLoading(true)
     }
-    return undefined
-  }, [setup, client, refresh])
+  }, [routeFocused, client, setup])
 
   const handleToggleEnabled = useCallback(
     async (enabled: boolean) => {
@@ -109,10 +111,10 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
         setSetup(await setDictationConfig(client, { enabled }))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not update')
-        void refresh()
+        void refreshSetup()
       }
     },
-    [client, refresh]
+    [client, refreshSetup]
   )
 
   const handleSelectMode = useCallback(
@@ -126,10 +128,10 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
         setSetup(await setDictationConfig(client, { dictationMode }))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not update')
-        void refresh()
+        void refreshSetup()
       }
     },
-    [client, refresh]
+    [client, refreshSetup]
   )
 
   const handleUseModel = useCallback(
@@ -160,14 +162,14 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
       setError(null)
       try {
         await downloadDictationModel(client, model.id)
-        await refresh()
+        await refreshSetup()
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Download failed')
       } finally {
         setBusyAction(null)
       }
     },
-    [client, refresh]
+    [client, refreshSetup]
   )
 
   const handleDelete = useCallback(

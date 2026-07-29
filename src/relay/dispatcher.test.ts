@@ -201,6 +201,23 @@ describe('RelayDispatcher', () => {
     expect(socketWritten).toHaveLength(1)
   })
 
+  it('targets terminal ownership notifications to one attached client', () => {
+    const firstWritten: Buffer[] = []
+    const secondWritten: Buffer[] = []
+    const firstId = dispatcher.attachClient((data) => {
+      firstWritten.push(Buffer.from(data))
+    })
+    dispatcher.attachClient((data) => {
+      secondWritten.push(Buffer.from(data))
+    })
+
+    dispatcher.notifyClient(firstId, 'fs.watchFailed', { watchId: 7 })
+
+    expect(written).toHaveLength(0)
+    expect(firstWritten).toHaveLength(1)
+    expect(secondWritten).toHaveLength(0)
+  })
+
   it('forwards relay-originated requests to an owning socket client instead of the caller', async () => {
     dispatcher.invalidateClient()
     const ownerWritten: Buffer[] = []

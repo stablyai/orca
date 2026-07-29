@@ -72,10 +72,21 @@ export function buildWorkspaceSessionPatch(
       'worktreesByRepo'
     ] as const)
   ) {
-    Object.assign(patch, buildTerminalSessionData(snapshot))
-  }
-  if (changed.has('sshConnectionStates')) {
-    patch.activeConnectionIdsAtShutdown = buildActiveConnectionIdsAtShutdown(snapshot)
+    const terminalSessionData = buildTerminalSessionData(snapshot)
+    Object.assign(patch, terminalSessionData)
+    // Why: the reconnect list is derived from persisted remote session ids as
+    // well as live SSH state. Recompute it alongside remoteSessionIdsByTabId
+    // so a crash between patches cannot leave a target on disk whose sessions
+    // were all closed (or vice versa).
+    patch.activeConnectionIdsAtShutdown = buildActiveConnectionIdsAtShutdown(
+      snapshot,
+      terminalSessionData.remoteSessionIdsByTabId ?? null
+    )
+  } else if (changed.has('sshConnectionStates')) {
+    patch.activeConnectionIdsAtShutdown = buildActiveConnectionIdsAtShutdown(
+      snapshot,
+      buildTerminalSessionData(snapshot).remoteSessionIdsByTabId ?? null
+    )
   }
   if (
     hasAnyChangedField(changed, [

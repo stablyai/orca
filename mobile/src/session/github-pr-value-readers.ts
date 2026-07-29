@@ -153,7 +153,10 @@ export function readRepoIdentity(value: unknown): GitHubRepositoryIdentity | und
   if (!owner || !repo) {
     return undefined
   }
-  return { owner, repo }
+  // Why: dropping `host` here would strip the GHES identity before every
+  // subsequent PR RPC, forcing the host to re-derive it per call.
+  const host = readString(value.host)
+  return { owner, repo, ...(host ? { host } : {}) }
 }
 
 function readMergeMethod(value: unknown): GitHubPRMergeMethod | undefined {

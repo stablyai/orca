@@ -145,6 +145,12 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
       shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), noSel)
     ).toBe(false)
   })
+
+  it('leaves ordinary Shift+Space available to the terminal', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: ' ', code: 'Space', shiftKey: true }), noSel)
+    ).toBe(false)
+  })
 })
 
 describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
@@ -166,6 +172,10 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
   // Post-compositionend guard: the tracker is already inactive but the
   // committing key's trailing press/release must still be absorbed.
   const linuxPostCompositionGuard = { ...linuxIdle, candidateKeyGuardActive: true }
+  const linuxOrphanCandidateDigitGuard = {
+    ...linuxIdle,
+    linuxOrphanCandidateDigitGuardActive: true
+  }
   const windowsComposing = {
     ...windowsIdle,
     compositionActive: true,
@@ -314,6 +324,21 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
       }
     })
 
+    it('guards only digits for the orphaned-keyup fallback', () => {
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({ key: '2', code: 'Digit2' }),
+          linuxOrphanCandidateDigitGuard
+        )
+      ).toBe(true)
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({ key: ' ', code: 'Space' }),
+          linuxOrphanCandidateDigitGuard
+        )
+      ).toBe(false)
+    })
+
     it('does not treat modified chords such as Ctrl+Space (IME toggle) as candidate keys', () => {
       expect(
         shouldSuppressTerminalImeKeyboardEvent(
@@ -403,6 +428,21 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
         shouldPreventDefaultTerminalImeCandidateKey(
           event({ key: ' ', code: 'Space' }),
           windowsComposing
+        )
+      ).toBe(false)
+    })
+
+    it('prevents the default only for fallback digit keydowns', () => {
+      expect(
+        shouldPreventDefaultTerminalImeCandidateKey(
+          event({ key: '2', code: 'Digit2' }),
+          linuxOrphanCandidateDigitGuard
+        )
+      ).toBe(true)
+      expect(
+        shouldPreventDefaultTerminalImeCandidateKey(
+          event({ key: ' ', code: 'Space' }),
+          linuxOrphanCandidateDigitGuard
         )
       ).toBe(false)
     })

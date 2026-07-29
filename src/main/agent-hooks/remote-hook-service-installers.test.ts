@@ -7,33 +7,20 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { CodexHookService } from '../codex/hook-service'
-import { DroidHookService } from '../droid/hook-service'
-import { CursorHookService } from '../cursor/hook-service'
-import { CommandCodeHookService } from '../command-code/hook-service'
-import { GeminiHookService } from '../gemini/hook-service'
-import { AntigravityHookService } from '../antigravity/hook-service'
-import { AmpHookService } from '../amp/hook-service'
-import { ClaudeHookService } from '../claude/hook-service'
-import { GrokHookService } from '../grok/hook-service'
-import { CopilotHookService } from '../copilot/hook-service'
-import { HermesHookService } from '../hermes/hook-service'
-import { DevinHookService } from '../devin/hook-service'
-import { KimiHookService } from '../kimi/hook-service'
+import { CodexHookService, codexHookService } from '../codex/hook-service'
+import { DroidHookService, droidHookService } from '../droid/hook-service'
+import { CursorHookService, cursorHookService } from '../cursor/hook-service'
+import { CommandCodeHookService, commandCodeHookService } from '../command-code/hook-service'
+import { GeminiHookService, geminiHookService } from '../gemini/hook-service'
+import { AntigravityHookService, antigravityHookService } from '../antigravity/hook-service'
+import { AmpHookService, ampHookService } from '../amp/hook-service'
+import { ClaudeHookService, claudeHookService } from '../claude/hook-service'
+import { GrokHookService, grokHookService } from '../grok/hook-service'
+import { CopilotHookService, copilotHookService } from '../copilot/hook-service'
+import { HermesHookService, hermesHookService } from '../hermes/hook-service'
+import { DevinHookService, devinHookService } from '../devin/hook-service'
+import { KimiHookService, kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
-import { ampHookService } from '../amp/hook-service'
-import { antigravityHookService } from '../antigravity/hook-service'
-import { claudeHookService } from '../claude/hook-service'
-import { codexHookService } from '../codex/hook-service'
-import { copilotHookService } from '../copilot/hook-service'
-import { cursorHookService } from '../cursor/hook-service'
-import { droidHookService } from '../droid/hook-service'
-import { commandCodeHookService } from '../command-code/hook-service'
-import { geminiHookService } from '../gemini/hook-service'
-import { devinHookService } from '../devin/hook-service'
-import { grokHookService } from '../grok/hook-service'
-import { hermesHookService } from '../hermes/hook-service'
-import { kimiHookService } from '../kimi/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
 import {
   installRemoteManagedAgentHooks,
@@ -244,7 +231,7 @@ describe('remote hook service installers', () => {
     ]) {
       const command = hooks.hooks[eventName]?.[0]?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/codex-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     expect(fs.files.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toContain('#!/bin/sh')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toBe(0o755)
@@ -338,7 +325,7 @@ describe('remote hook service installers', () => {
     for (const eventName of ['BeforeAgent', 'AfterAgent', 'AfterTool', 'BeforeTool']) {
       const command = geminiConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/gemini-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     expect(geminiConfig.hooks.PreToolUse).toBeUndefined()
 
@@ -398,7 +385,7 @@ describe('remote hook service installers', () => {
       const definition = commandCodeConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/command-code-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     expect(commandCodeConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
     expect(commandCodeConfig.hooks.PostToolUse?.[0]?.matcher).toBe('.*')
@@ -421,7 +408,7 @@ describe('remote hook service installers', () => {
       const definition = grokConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/grok-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     // Why: Grok tool matchers are real regexes; bare `*` is invalid match-all.
     expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
@@ -443,14 +430,14 @@ describe('remote hook service installers', () => {
       const definition = devinConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/devin-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     for (const eventName of ['PreToolUse', 'PostToolUse', 'PermissionRequest']) {
       const definition = devinConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(definition?.matcher).toBeUndefined()
       expect(command).toContain('/home/dev/.orca/agent-hooks/devin-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     expect(devin.fs.files.get('/home/dev/.orca/agent-hooks/devin-hook.sh')).toContain('/hook/devin')
   })
@@ -506,9 +493,9 @@ describe('remote hook service installers', () => {
     ]) {
       expect(config).toContain(`event = "${eventName}"`)
     }
-    // The command points at the POSIX managed script via the `[ -x ]` guard.
+    // The command points at the POSIX managed script via the regular-file guard.
     expect(config).toContain('/home/dev/.orca/agent-hooks/kimi-hook.sh')
-    expect(config).toMatch(/command = "if \[ -x /)
+    expect(config).toMatch(/command = "if \[ -f /)
     expect(fs.files.get('/home/dev/.orca/agent-hooks/kimi-hook.sh')).toContain('/hook/kimi')
   })
 
@@ -726,6 +713,35 @@ describe('remote hook service installers', () => {
     expect(byAgent.get('copilot')).toBe('installed')
   })
 
+  it('stops before the next installer when its relay request is cancelled', async () => {
+    const controller = new AbortController()
+    const claudeInstall = vi
+      .spyOn(claudeHookService, 'installRemote')
+      .mockImplementation(async () => {
+        controller.abort()
+        return {
+          agent: 'claude',
+          state: 'installed',
+          configPath: '/home/dev/.claude/settings.json',
+          managedHooksPresent: true,
+          detail: null
+        }
+      })
+    const openClaudeInstall = vi.spyOn(openClaudeHookService, 'installRemote')
+    try {
+      const { sftp } = createFakeSftp()
+
+      await expect(
+        installRemoteManagedAgentHooks(sftp, '/home/dev', { signal: controller.signal })
+      ).rejects.toMatchObject({ name: 'AbortError' })
+      expect(claudeInstall).toHaveBeenCalledTimes(1)
+      expect(openClaudeInstall).not.toHaveBeenCalled()
+    } finally {
+      claudeInstall.mockRestore()
+      openClaudeInstall.mockRestore()
+    }
+  })
+
   it('installs remote Droid hooks into Factory settings.json (issue #7253)', async () => {
     const { sftp, fs } = createFakeSftp()
 
@@ -749,7 +765,7 @@ describe('remote hook service installers', () => {
       const definition = config.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/droid-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     // Tool/permission events carry a `*` matcher; lifecycle events do not.
     expect(config.hooks.PreToolUse?.[0]?.matcher).toBe('*')

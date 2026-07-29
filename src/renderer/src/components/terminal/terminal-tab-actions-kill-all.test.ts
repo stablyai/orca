@@ -29,8 +29,8 @@ import { closeTerminalTab } from './terminal-tab-actions'
 function baseState(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: true },
-    repos: [],
-    worktreesByRepo: {},
+    repos: [{ id: 'repo', executionHostId: 'local', connectionId: null }],
+    worktreesByRepo: { repo: [{ id: 'wt', repoId: 'repo' }] },
     tabsByWorktree: { wt: [{ id: 'terminal-1' }] },
     unifiedTabsByWorktree: {},
     activeWorktreeId: 'wt',
@@ -59,6 +59,7 @@ describe('closeTerminalTab kill-all routing', () => {
   })
 
   it('force-closes a pinned terminal without opening a second confirmation', () => {
+    const closeTab = vi.fn()
     const closeUnifiedTab = vi.fn()
     const requestPinnedTabCloseConfirm = vi.fn()
     getStateMock.mockReturnValue(
@@ -74,6 +75,7 @@ describe('closeTerminalTab kill-all routing', () => {
             }
           ]
         },
+        closeTab,
         closeUnifiedTab,
         requestPinnedTabCloseConfirm
       })
@@ -82,7 +84,8 @@ describe('closeTerminalTab kill-all routing', () => {
     closeTerminalTab('terminal-1', { force: true })
 
     expect(requestPinnedTabCloseConfirm).not.toHaveBeenCalled()
-    expect(closeUnifiedTab).toHaveBeenCalledWith('visible-pinned')
+    expect(closeTab).toHaveBeenCalledWith('terminal-1', { reason: undefined })
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
   })
 
   it('routes the last active terminal to an existing editor without closing it', () => {

@@ -1,5 +1,4 @@
-import type { TabDragItemData } from './useTabDragSplit'
-import { isPaneDropData, isTabDragData } from './useTabDragSplit'
+import { isPaneDropData, isTabDragData, type TabDragItemData } from './tab-drag-data'
 
 export type DragPreviewTabTarget = {
   groupId: string

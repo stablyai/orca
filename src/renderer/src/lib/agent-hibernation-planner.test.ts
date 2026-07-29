@@ -115,6 +115,19 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [noSession.paneKey]: noSession } }))
     ).toEqual([])
+    const ephemeralPi = entry({ agentType: 'pi', providerSession: undefined })
+    expect(
+      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [ephemeralPi.paneKey]: ephemeralPi } }))
+    ).toEqual([])
+    const piWithoutTranscript = entry({
+      agentType: 'pi',
+      providerSession: { key: 'session_id', id: 'pi-session-1' }
+    })
+    expect(
+      plannedWorktrees(
+        snapshot({ agentStatusByPaneKey: { [piWithoutTranscript.paneKey]: piWithoutTranscript } })
+      )
+    ).toEqual([])
     const unsupported = entry({ agentType: 'amp' })
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [unsupported.paneKey]: unsupported } }))
@@ -354,6 +367,47 @@ describe('agent sleep planner', () => {
       )
     ).toEqual([])
   })
+
+  it.each([
+    {
+      agent: 'pi' as const,
+      providerSession: {
+        key: 'session_id' as const,
+        id: 'pi-session-1',
+        transcriptPath: '/tmp/pi-session-1.jsonl'
+      }
+    },
+    {
+      agent: 'omp' as const,
+      providerSession: { key: 'session_id' as const, id: 'omp-session-1' }
+    }
+  ])(
+    'still hibernates completed $agent panes that only retain live resume identity',
+    ({ agent, providerSession }) => {
+      const agentEntry = entry({ agentType: agent, providerSession })
+      expect(
+        plannedPaneKeys(
+          snapshot({
+            agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
+            sleepingAgentSessionsByPaneKey: {
+              [agentEntry.paneKey]: {
+                paneKey: agentEntry.paneKey,
+                tabId: 'tab-1',
+                worktreeId: 'wt-bg',
+                agent,
+                providerSession,
+                prompt: '',
+                state: 'working',
+                capturedAt: OLD,
+                updatedAt: OLD,
+                origin: 'live'
+              }
+            }
+          })
+        )
+      ).toEqual([agentEntry.paneKey])
+    }
+  )
 
   it('rejects mobile-driven panes because paired clients can send input outside desktop xterm', () => {
     expect(plannedWorktrees(snapshot({ mobileLockedPtyIds: ['pty-1'] }))).toEqual([])

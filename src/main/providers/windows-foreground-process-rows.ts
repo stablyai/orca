@@ -47,6 +47,16 @@ const windowsProcessRowsReader = createProcessTableSnapshotReader<WindowsProcess
   now: () => Date.now()
 })
 
+/**
+ * Rows from a scan that starts after this call. PID-identity checks in teardown
+ * must not reuse a cached row — it can predate the very recycle it detects — but
+ * they must still dedupe: a worktree delete tears down PTYs 32-wide, so a bypass
+ * would fork that many powershell cold-starts. Rejects when both probes fail.
+ */
+export function queryWindowsProcessRowsFresh(): Promise<WindowsProcessRow[]> {
+  return windowsProcessRowsReader.getFreshSnapshot()
+}
+
 export async function queryWindowsProcessDescendants(
   rootPid: number,
   options: { fresh?: boolean } = {}
@@ -209,6 +219,7 @@ function collectDescendants<Row extends { pid: number; ppid: number }>(
   return descendants
 }
 
+/** Runs the PowerShell/CIM whole-process-table scan; returns null when unavailable. */
 async function queryWindowsProcessesWithPowerShell(): Promise<WindowsProcessRow[] | null> {
   try {
     const { stdout } = await execFileAsync(
@@ -217,7 +228,12 @@ async function queryWindowsProcessesWithPowerShell(): Promise<WindowsProcessRow[
       {
         encoding: 'utf8',
         timeout: WINDOWS_PROCESS_QUERY_TIMEOUT_MS,
-        maxBuffer: 8 * 1024 * 1024
+        maxBuffer: 8 * 1024 * 1024,
+        // Why: this scan re-forks on a ~1s/pane cadence. Electron's main has no
+        // console, so without windowsHide each fork pops a fresh conhost window
+        // that flashes and steals keyboard focus from the foreground app
+        // (including Orca's own terminal).
+        windowsHide: true
       }
     )
     const rows = parseWindowsProcessJsonRows(stdout)
@@ -227,6 +243,7 @@ async function queryWindowsProcessesWithPowerShell(): Promise<WindowsProcessRow[
   }
 }
 
+/** Fallback whole-process-table scan via wmic when PowerShell is unavailable. */
 async function queryWindowsProcessesWithWmic(): Promise<WindowsProcessRow[] | null> {
   try {
     const { stdout } = await execFileAsync(
@@ -240,7 +257,10 @@ async function queryWindowsProcessesWithWmic(): Promise<WindowsProcessRow[] | nu
       {
         encoding: 'utf8',
         timeout: WINDOWS_PROCESS_QUERY_TIMEOUT_MS,
-        maxBuffer: 8 * 1024 * 1024
+        maxBuffer: 8 * 1024 * 1024,
+        // Why: same focus-stealing hazard as the powershell probe — hide the
+        // wmic fallback's console window too.
+        windowsHide: true
       }
     )
     const rows = parseWindowsProcessValueRows(stdout)

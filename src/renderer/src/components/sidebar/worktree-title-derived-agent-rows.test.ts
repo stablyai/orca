@@ -201,6 +201,60 @@ describe('buildTitleDerivedAgentRows', () => {
     }
   })
 
+  it('attributes a spinner-only title to the launched agent when the title has no identity', () => {
+    const launchAgent: TuiAgent = 'codex'
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        // Codex over SSH emits spinner + cwd titles with no agent name (#8711).
+        'tab-1': { 1: '⠼ demo-repo' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-codex-remote'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(
+      rows.map((row) => [row.agentType, row.state, row.entry.prompt, row.entry.terminalTitle])
+    ).toEqual([['codex', 'working', 'Codex', '⠼ demo-repo']])
+  })
+
+  it('keeps explicit title identity over the launched agent', () => {
+    const launchAgent: TuiAgent = 'claude'
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠋ Codex' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-explicit'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state])).toEqual([['codex', 'working']])
+  })
+
+  it('produces no row for a spinner-only title when the tab has no launch identity', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        // Spinner activity but no identity and no launchAgent to attribute it to.
+        'tab-1': { 1: '⠼ demo-repo' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-anon'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
   it('does not turn generic Codex-launched task titles into Claude Code rows', () => {
     const launchAgent: TuiAgent = 'codex'
     const rows = buildWorktreeAgentRows({

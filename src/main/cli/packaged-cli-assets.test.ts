@@ -11,6 +11,8 @@ const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
 const itRunsUnixShell = process.platform === 'win32' ? it.skip : it
 const builderConfig = require('../../../config/electron-builder.config.cjs') as {
+  files?: string[]
+  asarUnpack?: string[]
   mac?: { extraResources?: { from?: string; to?: string }[] }
   linux?: { extraResources?: { from?: string; to?: string }[] }
   win?: { extraResources?: { from?: string; to?: string }[] }
@@ -18,6 +20,13 @@ const builderConfig = require('../../../config/electron-builder.config.cjs') as 
 const linuxLauncherAsset = new URL('../../../resources/linux/bin/orca-ide', import.meta.url)
 
 describe('packaged CLI assets', () => {
+  it('ships embedded skill guides with the CLI instead of source Markdown', () => {
+    // Why: `skills get` must work from the packaged CLI without falling back to
+    // authoring-only files that do not exist in installed applications.
+    expect(builderConfig.asarUnpack).toContain('out/cli/**')
+    expect(builderConfig.files).toContain('!skill-guides{,/**/*}')
+  })
+
   it('copies runtime dependencies used before Electron asar integration is available', () => {
     const runtimeResourceTargets = new Set(
       [

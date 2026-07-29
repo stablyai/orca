@@ -119,7 +119,7 @@ export function useCloseWith({
         const total = Math.max(0, Date.now() - startTimeRef.current)
         // Why: no `is_git_repo` — project selection now happens in the Add
         // Project modal after this fires, so the signal moved to
-        // `repo_added.is_git_repo`. See docs/reference/telemetry-availability.md.
+        // `repo_added.is_git_repo`.
         track('onboarding_completed', {
           path: completedPath,
           total_duration_ms: total

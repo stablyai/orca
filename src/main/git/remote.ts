@@ -1,4 +1,7 @@
-import { normalizeGitErrorMessage } from '../../shared/git-remote-error'
+import {
+  normalizeGitErrorMessage,
+  runPullWithDivergenceFallback
+} from '../../shared/git-remote-error'
 import { resolveEffectiveGitUpstream } from '../../shared/git-effective-upstream'
 import { gitRefTargetsBranchOnRemote } from '../../shared/git-remote-branch-name'
 import { resolveGitRemoteRebaseSource } from '../../shared/git-rebase-source'
@@ -214,11 +217,11 @@ async function gitPullWithArgs(
   pushTarget?: GitPushTarget,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  try {
+  const runPull = async (effectiveArgs: string[]): Promise<void> => {
     if (pushTarget) {
       const target = await validateGitPushTarget(worktreePath, pushTarget, options)
       await gitExecFileAsync(
-        ['pull', ...pullArgs, target.remoteName, target.branchName],
+        ['pull', ...effectiveArgs, target.remoteName, target.branchName],
         gitOptionsForWorktree(worktreePath, options)
       )
       return
@@ -230,13 +233,17 @@ async function gitPullWithArgs(
       // Why: legacy Orca branches may still track origin/main while pushes
       // target origin/<branch>. Pull the same effective branch the UI reports.
       await gitExecFileAsync(
-        ['pull', ...pullArgs, upstream.remoteName, upstream.branchName],
+        ['pull', ...effectiveArgs, upstream.remoteName, upstream.branchName],
         gitOptionsForWorktree(worktreePath, options)
       )
       return
     }
 
-    await gitExecFileAsync(['pull', ...pullArgs], gitOptionsForWorktree(worktreePath, options))
+    await gitExecFileAsync(['pull', ...effectiveArgs], gitOptionsForWorktree(worktreePath, options))
+  }
+
+  try {
+    await runPullWithDivergenceFallback(pullArgs, runPull)
   } catch (error) {
     throw new Error(normalizeGitErrorMessage(error, 'pull'))
   }

@@ -7,6 +7,7 @@
 // collapses to a shared dir passes every other unit test and re-introduces
 // the original "stale daemon serves new client" bug.
 
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -33,6 +34,9 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
     onData: vi.fn(),
     onClose: vi.fn()
   }),
+  isUnconfirmedSshCommandTermination: (error: unknown) =>
+    error instanceof Error &&
+    (error as Error & { sshChannelCloseConfirmed?: boolean }).sshChannelCloseConfirmed === false,
   execCommand: vi.fn()
 }))
 
@@ -58,24 +62,28 @@ function makeMockConnection(): SshConnection {
       stdout: { on: vi.fn() },
       close: vi.fn()
     }),
-    sftp: vi.fn().mockResolvedValue({
-      mkdir: vi.fn((_p: string, cb: (err: Error | null) => void) => cb(null)),
-      on: vi.fn(),
-      once: vi.fn(),
-      createWriteStream: vi.fn().mockReturnValue({
-        on: vi.fn((_event: string, cb: () => void) => {
-          if (_event === 'close') {
-            setTimeout(cb, 0)
-          }
-        }),
-        once: vi.fn((_event: string, cb: () => void) => {
-          if (_event === 'close') {
-            setTimeout(cb, 0)
-          }
-        }),
-        end: vi.fn()
-      }),
-      end: vi.fn()
+    // Why: production attaches and removes real SFTP/write-stream listeners, so the fake must be an emitter.
+    sftp: vi.fn().mockImplementation(() => {
+      const sftp = new EventEmitter()
+      return Promise.resolve(
+        Object.assign(sftp, {
+          mkdir: vi.fn((_p: string, cb: (err: Error | null) => void) => cb(null)),
+          // Shell home and SFTP start directory agree here, so no namespace redirect applies.
+          realpath: vi.fn((_p: string, cb: (err: Error | null, resolved: string) => void) =>
+            cb(null, '/home/u')
+          ),
+          lstat: vi.fn((_p: string, cb: (err: Error | null) => void) =>
+            cb(Object.assign(new Error('No such file'), { code: 2 }))
+          ),
+          createWriteStream: vi.fn().mockImplementation(() => {
+            const ws = new EventEmitter()
+            return Object.assign(ws, {
+              end: vi.fn(() => setTimeout(() => ws.emit('close'), 0))
+            })
+          }),
+          end: vi.fn(() => setTimeout(() => sftp.emit('close'), 0))
+        })
+      )
     })
   } as unknown as SshConnection
 }
@@ -101,8 +109,10 @@ describe('cross-version isolation', () => {
       '__ORCA_REMOTE_PLATFORM__ Linux x86_64', // tagged POSIX platform probe
       '/home/u', // echo $HOME
       'MISSING', // isRelayAlreadyInstalled (v2 dir doesn't exist)
+      'OPEN', // no sibling GC claim
       '', // mkdir -p remoteRelayDir (v2)
       'OK', // mkdir lock OK
+      'OPEN', // GC did not claim while the install lock was acquired
       'MISSING', // re-probe after lock → still missing → proceed with install
       '', // mkdir remoteDir (uploadRelay)
       '', // chmod +x node
@@ -111,9 +121,9 @@ describe('cross-version isolation', () => {
       'ORCA-NPTY-PROBE-OK\n', // node -e require() load-test (post-install verify)
       '', // rm -f probe-stderr (best-effort cleanup after probe resolved)
       '', // touch .install-complete (finalizeInstall)
-      '', // rm -rf .install-lock
       'DEAD', // launch socket probe
       'READY', // socket poll
+      '', // release .install-lock after relay liveness is observable
       // GC scan begins here
       'relay-0.1.0+v1hash\nrelay-0.1.0+v2hash\n', // ls listing
       'OPEN', // v1 lock probe (siblings only — current dir is v2)

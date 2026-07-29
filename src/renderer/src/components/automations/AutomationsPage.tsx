@@ -18,6 +18,7 @@ import { toast } from 'sonner'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -367,6 +368,7 @@ export default function AutomationsPage(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
+  const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -1050,14 +1052,29 @@ export default function AutomationsPage(): React.JSX.Element {
     useAppStore.getState().hydratePersistedUI(await window.api.ui.get(), 'sync')
   }, [])
 
+  const mountedBeforeStartupWorktreeRefreshRef = useRef(!startupWorktreeRefreshCompleted)
   useEffect(() => {
+    if (!startupWorktreeRefreshCompleted) {
+      return
+    }
+    if (mountedBeforeStartupWorktreeRefreshRef.current) {
+      // Why: App just supplied this mount's initial worktrees; a second full scan would duplicate every repo probe.
+      mountedBeforeStartupWorktreeRefreshRef.current = false
+      return
+    }
     void fetchAllWorktrees()
-    void refresh()
-  }, [fetchAllWorktrees, refresh])
+  }, [fetchAllWorktrees, startupWorktreeRefreshCompleted])
 
   useEffect(() => {
-    const timer = window.setInterval(() => setRelativeNow(Date.now()), 60 * 1000)
-    return () => window.clearInterval(timer)
+    void refresh()
+  }, [refresh])
+
+  useEffect(() => {
+    // Pause the relative-time clock while the window is hidden.
+    return installWindowVisibilityInterval({
+      run: () => setRelativeNow(Date.now()),
+      intervalMs: 60 * 1000
+    })
   }, [])
 
   useEffect(() => {
@@ -2873,7 +2890,7 @@ export default function AutomationsPage(): React.JSX.Element {
                     )}
                   </TabsTrigger>
                   <TabsTrigger value="runs" disabled={!selected}>
-                    {translate('auto.components.automations.AutomationsPage.0e110a3469', 'Runs')}
+                    {translate('auto.components.automations.AutomationsPage.0e110a3469', 'Runs')}{' '}
                     <span className="text-xs text-muted-foreground">{selectedRuns.length}</span>
                   </TabsTrigger>
                 </TabsList>

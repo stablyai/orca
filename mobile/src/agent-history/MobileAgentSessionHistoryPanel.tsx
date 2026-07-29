@@ -15,9 +15,12 @@ import {
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
   resumeAiVaultSessionInTerminal,
-  RESUME_RPC_TIMEOUT_MS,
   type MobileAiVaultResumeSettings
 } from '../session/ai-vault-resume-launch'
+import {
+  prepareMobileAiVaultSessionResume,
+  RESUME_RPC_TIMEOUT_MS
+} from '../session/ai-vault-resume-preparation'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { AiVaultScope, AiVaultSession } from '../../../src/shared/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
@@ -197,8 +200,9 @@ export function MobileAgentSessionHistoryPanel({
           return
         }
 
+        const preparedSession = await prepareMobileAiVaultSessionResume(client, session)
         const launch = buildMobileAiVaultResumeLaunch({
-          session,
+          session: preparedSession,
           hostPlatform: platform,
           hostTerminalWindowsShell,
           settings

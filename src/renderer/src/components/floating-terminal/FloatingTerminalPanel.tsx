@@ -11,7 +11,9 @@ import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import TabBar from '@/components/tab-bar/TabBar'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
-import TerminalPane from '@/components/terminal-pane/TerminalPane'
+import TerminalPane, { type TerminalPaneHandle } from '@/components/terminal-pane/TerminalPane'
+import { isTerminalPaneCloseChord } from '@/components/terminal-pane/terminal-shortcut-policy'
+import { isTerminalImeInputContextRefreshing } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
@@ -32,10 +34,30 @@ import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-op
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import {
-  isFloatingWorkspacePanelShortcut,
+  countVisibleFloatingWorkspaceItems,
+  isEventTargetInsideFloatingWorkspacePanel,
+  isFloatingWorkspacePanelFocused,
   isFloatingWorkspaceTerminalInputTarget,
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
+import {
+  matchFloatingWorkspacePanelOwnedAction,
+  matchFloatingWorkspacePanelShortcut,
+  type FloatingWorkspacePanelOwnedAction
+} from '@/lib/floating-workspace-shortcut-policy'
+import {
+  armFloatingPanelReclaimIntent,
+  clearFloatingPanelReclaimIntent,
+  consumeFloatingPanelReclaimIntent
+} from '@/lib/floating-workspace-focus-reclaim'
+import {
+  FLOATING_WORKSPACE_GUEST_CLOSE_EVENT,
+  FLOATING_WORKSPACE_GUEST_SELECT_INDEX_EVENT,
+  type FloatingWorkspaceGuestCloseDetail,
+  type FloatingWorkspaceGuestSelectIndexDetail
+} from '@/lib/floating-workspace-guest-bridge'
+import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
+import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import {
@@ -48,10 +70,12 @@ import {
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
+import {
+  createTerminalPaneHandleRegistry
+} from './terminal-pane-handle-registry'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   keybindingMatchesAction,
-  matchKeybindingDigitIndex,
   type KeybindingActionId,
   type KeybindingContext,
   type KeybindingMatchOptions,
@@ -107,6 +131,18 @@ type FloatingPanelShortcutInput = Partial<
 > &
   Pick<KeyboardEvent, 'target'> & { doubleTapModifier?: PhysicalModifierToken }
 
+// Tri-state dispatch outcome: 'deferred' means "matched, but leave DOM propagation intact so the
+// terminal pane's L3 handler closes the focused split pane" — callers must NOT consume it. Both
+// 'handled' and 'deferred' stop L2's own directional dispatch; only 'unmatched' falls through.
+type FloatingShortcutOutcome = 'handled' | 'deferred' | 'unmatched'
+
+// What the panel claimed for one keydown, resolved once and then applied — see resolveFloatingPanelShortcut.
+type FloatingPanelShortcutResolution =
+  | { kind: 'create'; action: Exclude<FloatingWorkspacePanelOwnedAction, 'tab.close'> }
+  | { kind: 'close'; focusedFloatingTerminal: boolean }
+  | { kind: 'index'; index: number }
+  | { kind: 'chrome'; action: KeybindingActionId }
+
 const FLOATING_TERMINAL_NO_DRAG_SELECTOR =
   'button,input,textarea,select,[role="menuitem"],[data-testid="sortable-tab"],[data-floating-terminal-no-drag]'
 const FLOATING_TERMINAL_SHORTCUT_SURFACE_SELECTOR = '[data-floating-terminal-shortcut-surface]'
@@ -147,14 +183,44 @@ function areFloatingTerminalPanelCommittedBoundsEqual(
   return left !== null && JSON.stringify(left) === JSON.stringify(right)
 }
 
-function setFloatingTerminalInputFocusedInMain(focused: boolean): void {
-  const setInputFocused = window.api.ui.setFloatingTerminalInputFocused
+// Last atomic focus payload sent to main; module-scoped so send-on-change dedupe survives re-renders.
+let lastReportedFloatingFocus: { panelFocused: boolean; terminalFocused: boolean } | null = null
+// The IPC fn the dedupe above is keyed to; if the preload surface swaps (HMR/version skew), re-emit.
+let lastReportedFloatingFocusFn: unknown = null
+
+// Single guarded reporter for both focus bits. `release === true` means the panel is
+// explicitly losing keyboard ownership (outside pointer-down, close, unmount, window blur); otherwise both
+// bits derive from the next focus/blur target. Enforces panel ⊇ terminal and emits one atomic payload on change.
+function reportFloatingFocus(next: EventTarget | null, release = false): void {
+  const setFloatingFocus = window.api.ui.setFloatingFocus
   // Why: dev reloads can pair a new renderer with an older preload; losing this
   // shortcut mirror should not take down the whole React tree.
-  if (typeof setInputFocused !== 'function') {
+  if (typeof setFloatingFocus !== 'function') {
     return
   }
-  setInputFocused(focused)
+  if (setFloatingFocus !== lastReportedFloatingFocusFn) {
+    lastReportedFloatingFocus = null
+    lastReportedFloatingFocusFn = setFloatingFocus
+  }
+  const terminalFocused = !release && isFloatingWorkspaceTerminalInputTarget(next)
+  const panelFocused =
+    !release && (terminalFocused || isEventTargetInsideFloatingWorkspacePanel(next))
+  if (
+    lastReportedFloatingFocus !== null &&
+    lastReportedFloatingFocus.panelFocused === panelFocused &&
+    lastReportedFloatingFocus.terminalFocused === terminalFocused
+  ) {
+    return
+  }
+  lastReportedFloatingFocus = { panelFocused, terminalFocused }
+  setFloatingFocus({ panelFocused, terminalFocused })
+}
+
+// Reset the send-on-change dedupe (test-only): the mock setFloatingFocus keeps one identity across
+// tests, so without this a prior test's last-reported payload would suppress the next test's first emit.
+export function clearReportedFloatingFocusCache(): void {
+  lastReportedFloatingFocus = null
+  lastReportedFloatingFocusFn = null
 }
 
 export function FloatingTerminalPanel({
@@ -214,14 +280,30 @@ export function FloatingTerminalPanel({
       : null
   )
   const pendingEditorCloseQueueRef = useRef<string[]>([])
+  // A dirty editor's close defers to the save dialog and completes asynchronously (Save closes from
+  // inside the editor), so park its emptying reclaim-arm check here and run it when the file
+  // actually leaves the panel — otherwise this content type silently skips the reclaim.
+  const pendingReclaimArmByFileIdRef = useRef<Map<string, () => void>>(new Map())
   const saveDialogFileIdRef = useRef<string | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
+  // Live imperative handles per floating terminal tab, so a double-tap-bound close (which L3's window
+  // listener never resolves) can reach the same split-aware pane-close authority directly (F2/F-feas).
+  // Its ref callbacks are cached per tab id so a parent render doesn't hand TerminalPane a new
+  // function identity, which would make React detach (dropping the handle) and re-attach every render.
+  // useState lazy init (not null-guarded ref write) keeps render pure for react-doctor.
+  const [terminalPaneRegistry] = useState(() =>
+    createTerminalPaneHandleRegistry<TerminalPaneHandle>()
+  )
   const doubleTapDetectorRef = useRef<ModifierDoubleTapDetector | null>(null)
   if (!doubleTapDetectorRef.current) {
     doubleTapDetectorRef.current = new ModifierDoubleTapDetector()
   }
   const shortcutFocusFrameRef = useRef<number | null>(null)
   const shortcutFocusTimeoutRef = useRef<number | null>(null)
+  const reclaimTerminalInputOnWindowFocusRef = useRef<{
+    helper: HTMLElement
+    leafId: string | null
+  } | null>(null)
   const mountedRef = useMountedRef()
   const dragRef = useRef<{
     pointerId: number
@@ -478,6 +560,8 @@ export function FloatingTerminalPanel({
 
   const handleFloatingSaveDialogCancel = useCallback(() => {
     pendingEditorCloseQueueRef.current = []
+    // Cancel drops the whole queue, so no queued file will close — discard their deferred arms too.
+    pendingReclaimArmByFileIdRef.current.clear()
     handleSaveDialogCancel()
   }, [handleSaveDialogCancel])
 
@@ -578,7 +662,10 @@ export function FloatingTerminalPanel({
     if (!open || !activeTerminalId) {
       return
     }
-    focusTerminalTabSurface(activeTerminalId)
+    focusTerminalTabSurface(activeTerminalId, null, {
+      onImeRefocusSkipped: (active) => reportFloatingFocus(active),
+      refreshImeContext: true
+    })
   }, [activeTerminalId, open])
 
   useEffect(() => {
@@ -748,7 +835,7 @@ export function FloatingTerminalPanel({
       const dirtyEditorFileIds: string[] = []
       for (const item of items) {
         if (item.contentType === 'terminal') {
-          closeTab(item.entityId)
+          closeTab(item.entityId, { reason: 'cleanup' })
         } else if (item.contentType === 'browser') {
           destroyWorkspaceWebviews(state.browserPagesByWorkspace, item.entityId)
           closeBrowserTab(item.entityId)
@@ -770,11 +857,60 @@ export function FloatingTerminalPanel({
     [activeGroup, closeBrowserTab, closeFile, closeTab, closeUnifiedTab, queueEditorCloseRequests]
   )
 
-  const closeFloatingItem = useCallback(
-    (visibleId: string) => {
-      closeFloatingItems([visibleId])
+  // Single confirmed-close authority for one floating item; every content type routes through a pin
+  // guard (terminals via closeTerminalTab's own), and a panel-owned emptying close arms the reclaim intent.
+  const closeFloatingItemConfirmed = useCallback(
+    (visibleId: string, options?: { guestOwned?: boolean }) => {
+      const item = resolveGroupTabFromVisibleId(groupTabs, visibleId)
+      if (!item) {
+        return
+      }
+      // Capture focus ownership now — before any close/blur or pin dialog steals it (the destructive
+      // DOM removal blurs the pane and would flip a live focus read to false).
+      const panelOwnedNow = options?.guestOwned === true || isFloatingWorkspacePanelFocused()
+      // Re-derive emptiness from live store at arm time, not from the pre-close render snapshot: a
+      // concurrent create keeps the panel non-empty, and a no-op close (closeTerminalTab's !target
+      // path fires onClosed without removing anything) leaves the count unchanged — arm on neither.
+      const itemCountBeforeClose = countVisibleFloatingWorkspaceItems(useAppStore.getState())
+      const armIfEmptying = (): void => {
+        if (!panelOwnedNow) {
+          return
+        }
+        const itemCountAfterClose = countVisibleFloatingWorkspaceItems(useAppStore.getState())
+        if (itemCountAfterClose === 0 && itemCountAfterClose < itemCountBeforeClose) {
+          armFloatingPanelReclaimIntent()
+        }
+      }
+      if (item.contentType === 'terminal') {
+        // closeTerminalTab runs its own pin guard + post-confirm force-reenter; arm on actual close.
+        closeTerminalTab(item.entityId, { onClosed: armIfEmptying })
+        return
+      }
+      const state = useAppStore.getState()
+      guardPinnedTabClose({
+        isPinned: item.isPinned === true,
+        tabLabel: resolvePinnedTabLabel(state, FLOATING_TERMINAL_WORKTREE_ID, visibleId),
+        onClose: () => {
+          const latest = useAppStore.getState()
+          if (item.contentType === 'browser') {
+            destroyWorkspaceWebviews(latest.browserPagesByWorkspace, item.entityId)
+            closeBrowserTab(item.entityId)
+          } else if (item.contentType === 'simulator') {
+            closeUnifiedTab(item.id)
+          } else {
+            const file = latest.openFiles.find((candidate) => candidate.id === item.entityId)
+            if (file?.isDirty) {
+              pendingReclaimArmByFileIdRef.current.set(item.entityId, armIfEmptying)
+              queueEditorCloseRequests([item.entityId])
+              return
+            }
+            closeFile(item.entityId)
+          }
+          armIfEmptying()
+        }
+      })
     },
-    [closeFloatingItems]
+    [closeBrowserTab, closeFile, closeUnifiedTab, groupTabs, queueEditorCloseRequests]
   )
 
   const closeOthers = useCallback(
@@ -796,8 +932,8 @@ export function FloatingTerminalPanel({
     [activeGroup, closeFloatingItems]
   )
 
-  const closeToRight = useCallback(
-    (visibleId: string) => {
+  const closeToSide = useCallback(
+    (visibleId: string, side: 'left' | 'right') => {
       const state = useAppStore.getState()
       const currentGroup = activeGroup
         ? state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.find(
@@ -817,15 +953,29 @@ export function FloatingTerminalPanel({
       if (index === -1) {
         return
       }
+      const sideIds =
+        side === 'right'
+          ? currentGroup.tabOrder.slice(index + 1)
+          : currentGroup.tabOrder.slice(0, index)
       const tabById = new Map(currentGroupTabs.map((tab) => [tab.id, tab]))
       closeFloatingItems(
-        currentGroup.tabOrder.slice(index + 1).filter((tabId) => {
+        sideIds.filter((tabId) => {
           const tab = tabById.get(tabId)
           return tab ? !tab.isPinned : false
         })
       )
     },
     [activeGroup, closeFloatingItems]
+  )
+
+  const closeToRight = useCallback(
+    (visibleId: string) => closeToSide(visibleId, 'right'),
+    [closeToSide]
+  )
+
+  const closeToLeft = useCallback(
+    (visibleId: string) => closeToSide(visibleId, 'left'),
+    [closeToSide]
   )
 
   const closeAllFiles = useCallback(() => {
@@ -904,9 +1054,41 @@ export function FloatingTerminalPanel({
     shortcutFocusTimeoutRef.current = window.setTimeout(focusPanel, 0)
   }, [cancelShortcutFocusFrame, focusPanelForShortcuts])
 
-  const setFloatingTerminalInputFocused = useCallback((target: EventTarget | null): void => {
-    setFloatingTerminalInputFocusedInMain(isFloatingWorkspaceTerminalInputTarget(target))
+  const reportFloatingFocusFromTarget = useCallback((target: EventTarget | null): void => {
+    reportFloatingFocus(target)
   }, [])
+
+  // Run a deferred dirty-editor arm check once the save dialog resolved and the file left the panel.
+  // Declared before the reclaim-consume effect below so the intent is armed in the same commit the
+  // count reaches 0; a cancelled dialog drops the entry instead (see the cancel handler).
+  useEffect(() => {
+    const pending = pendingReclaimArmByFileIdRef.current
+    if (pending.size === 0) {
+      return
+    }
+    for (const [fileId, armIfEmptying] of pending) {
+      if (!floatingFiles.some((file) => file.id === fileId)) {
+        pending.delete(fileId)
+        armIfEmptying()
+      }
+    }
+  }, [floatingFiles])
+
+  // Reclaim keyboard ownership when the panel empties — but only if a panel-owned emptying close armed
+  // the one-shot intent. Decoupling reclaim from *which* layer closed (L2/L3 keyboard, close button, or
+  // guest IPC) keeps the next Cmd/Ctrl+T targeting the floating panel, while a background or unfocused
+  // close leaves the intent unset so it never steals focus from the main workspace.
+  useEffect(() => {
+    if (visibleFloatingItemCount > 0) {
+      // A create that repopulated the panel makes any armed intent stale — drop it so a later,
+      // unrelated emptying can't consume it and steal focus.
+      clearFloatingPanelReclaimIntent()
+      return
+    }
+    if (consumeFloatingPanelReclaimIntent()) {
+      focusPanelForShortcutsAfterClose()
+    }
+  }, [focusPanelForShortcutsAfterClose, visibleFloatingItemCount])
 
   const toggleMaximized = useCallback(() => {
     if (maximized) {
@@ -962,8 +1144,31 @@ export function FloatingTerminalPanel({
     }
   }, [open, maximizePanel])
 
-  const handleFloatingPanelShortcutAction = useCallback(
-    (input: FloatingPanelShortcutInput, consume: () => void): boolean => {
+  // Detach can't prune the registry (it would drop the entry the current render just wrote), so the
+  // live tab list does it here instead.
+  useEffect(() => {
+    terminalPaneRegistry.retainOnly(tabs.map((tab) => tab.id))
+  }, [tabs, terminalPaneRegistry])
+
+  // Double-tap-bound close: invoke the active terminal pane's own split-aware close authority directly
+  // (the same executeClosePane L3 runs). L3's window listener can't resolve a synthetic double-tap, so
+  // deferring would strand it — this is the direct path. Falls back to a whole-item confirmed close
+  // when no terminal handle is mounted (e.g. active tab is not a terminal).
+  const closeActiveFloatingTerminalPane = useCallback(() => {
+    const handle = activeTerminalId ? terminalPaneRegistry.getHandle(activeTerminalId) : null
+    if (handle) {
+      handle.closeActivePane()
+      return
+    }
+    if (activeClosableTab) {
+      closeFloatingItemConfirmed(activeClosableTab.id)
+    }
+  }, [activeClosableTab, activeTerminalId, closeFloatingItemConfirmed, terminalPaneRegistry])
+
+  // One pass over every chord the panel claims. Its keydown preflight and its dispatch consume the
+  // same resolution, so a single event is never re-scanned against the shortcut table.
+  const resolveFloatingPanelShortcut = useCallback(
+    (input: FloatingPanelShortcutInput): FloatingPanelShortcutResolution | null => {
       const state = useAppStore.getState()
       const platform = getShortcutPlatform()
       const terminalShortcutPolicy = state.settings?.terminalShortcutPolicy
@@ -983,100 +1188,155 @@ export function FloatingTerminalPanel({
         isFloatingTerminalInput && terminalShortcutPolicy === 'terminal-first'
           ? { context: 'app', terminalShortcutPolicy }
           : matchOptions
-      const matches = (actionId: KeybindingActionId): boolean =>
-        keybindingMatchesAction(actionId, input, platform, state.keybindings, matchOptions)
-      const matchesFloatingChrome = (actionId: KeybindingActionId): boolean =>
-        keybindingMatchesAction(
-          actionId,
-          input,
-          platform,
-          state.keybindings,
-          floatingChromeMatchOptions
-        )
 
-      if (matches('tab.newTerminal')) {
-        consume()
-        createFloatingTerminalTab()
-        return true
-      }
-      if (matches('tab.newBrowser')) {
-        consume()
-        createFloatingBrowserTab()
-        return true
-      }
-      if (matches('tab.newMarkdown')) {
-        consume()
-        createFloatingMarkdownTab()
-        return true
-      }
-      if (matches('tab.openMarkdown')) {
-        consume()
-        openFloatingMarkdownTab()
-        return true
-      }
-      if (matches('tab.close')) {
-        consume()
-        if (activeClosableTab) {
-          closeFloatingItem(activeClosableTab.id)
-          if (visibleFloatingItemCount <= 1) {
-            // Why: closing the final xterm removes the focused textarea; keep
-            // the empty floating workspace as the owner for the next Cmd/Ctrl+T.
-            focusPanelForShortcutsAfterClose()
-          }
-        } else {
-          onOpenChange(false)
-        }
-        return true
-      }
-      if (matchesFloatingChrome('tab.rename') && activeTab) {
-        consume()
-        state.setRenamingTabId(activeTab.id)
-        return true
-      }
-      const selectedTabIndex = matchKeybindingDigitIndex(
-        'tab.selectByIndex',
+      const ownedAction = matchFloatingWorkspacePanelOwnedAction(
         input,
         platform,
         state.keybindings,
         matchOptions
       )
-      if (selectedTabIndex !== null) {
-        const visibleId = visibleFloatingTabOrder[selectedTabIndex]
-        if (!visibleId) {
-          return false
+      if (ownedAction !== null && ownedAction !== 'tab.close') {
+        return { kind: 'create', action: ownedAction }
+      }
+      // A focused floating terminal defers its close chord to L3 (the split-pane/confirm authority);
+      // a double-tap L3 can't observe closes the active pane here. Non-terminal closes the tab.
+      const focusedFloatingTerminal =
+        isFloatingTerminalInput && activeTab?.contentType === 'terminal'
+      if (
+        ownedAction === 'tab.close' ||
+        (focusedFloatingTerminal &&
+          isTerminalPaneCloseChord(input, platform, state.keybindings, matchOptions, matchOptions))
+      ) {
+        return { kind: 'close', focusedFloatingTerminal }
+      }
+      // Rename / indexed-switch / window max-min via the shared policy so dispatch, its preflight, and
+      // App.tsx's gate stay single-sourced.
+      const panelShortcut = matchFloatingWorkspacePanelShortcut(
+        input,
+        platform,
+        state.keybindings,
+        matchOptions,
+        floatingChromeMatchOptions
+      )
+      if (panelShortcut === null) {
+        return null
+      }
+      return panelShortcut.kind === 'index'
+        ? { kind: 'index', index: panelShortcut.index }
+        : { kind: 'chrome', action: panelShortcut.action }
+    },
+    [activeTab]
+  )
+
+  const applyFloatingPanelShortcut = useCallback(
+    (
+      resolution: FloatingPanelShortcutResolution,
+      input: FloatingPanelShortcutInput,
+      consume: () => void
+    ): FloatingShortcutOutcome => {
+      if (resolution.kind === 'create') {
+        consume()
+        if (resolution.action === 'tab.newTerminal') {
+          createFloatingTerminalTab()
+        } else if (resolution.action === 'tab.newBrowser') {
+          createFloatingBrowserTab()
+        } else if (resolution.action === 'tab.newMarkdown') {
+          createFloatingMarkdownTab()
+        } else {
+          openFloatingMarkdownTab()
+        }
+        return 'handled'
+      }
+      if (resolution.kind === 'close') {
+        if (resolution.focusedFloatingTerminal) {
+          if (input.doubleTapModifier) {
+            consume()
+            closeActiveFloatingTerminalPane()
+            return 'handled'
+          }
+          return 'deferred'
         }
         consume()
-        activateFloatingItem(visibleId)
-        return true
+        if (activeClosableTab) {
+          closeFloatingItemConfirmed(activeClosableTab.id)
+        } else {
+          onOpenChange(false)
+        }
+        return 'handled'
       }
-      if (matchesFloatingChrome('floatingWorkspace.maximize')) {
+      // Consume a matched index even out-of-range so it never leaks.
+      if (resolution.kind === 'index') {
         consume()
+        const visibleId = visibleFloatingTabOrder[resolution.index]
+        if (visibleId) {
+          activateFloatingItem(visibleId)
+        }
+        return 'handled'
+      }
+      if (resolution.action === 'tab.rename') {
+        if (!activeTab) {
+          return 'unmatched'
+        }
+        consume()
+        useAppStore.getState().setRenamingTabId(activeTab.id)
+        return 'handled'
+      }
+      consume()
+      if (resolution.action === 'floatingWorkspace.maximize') {
         toggleMaximized()
-        return true
-      }
-      if (matchesFloatingChrome('floatingWorkspace.minimize')) {
-        consume()
+      } else {
         onOpenChange(false)
-        return true
       }
-      return false
+      return 'handled'
     },
     [
       activeClosableTab,
       activeTab,
       activateFloatingItem,
-      closeFloatingItem,
+      closeActiveFloatingTerminalPane,
+      closeFloatingItemConfirmed,
       createFloatingBrowserTab,
       createFloatingMarkdownTab,
       createFloatingTerminalTab,
-      focusPanelForShortcutsAfterClose,
       onOpenChange,
       openFloatingMarkdownTab,
       toggleMaximized,
-      visibleFloatingItemCount,
       visibleFloatingTabOrder
     ]
   )
+
+  const handleFloatingPanelShortcutAction = useCallback(
+    (input: FloatingPanelShortcutInput, consume: () => void): FloatingShortcutOutcome => {
+      const resolution = resolveFloatingPanelShortcut(input)
+      return resolution === null
+        ? 'unmatched'
+        : applyFloatingPanelShortcut(resolution, input, consume)
+    },
+    [applyFloatingPanelShortcut, resolveFloatingPanelShortcut]
+  )
+
+  // Live closures for the window-capture and guest-bridge listeners. Reading them through a ref pins
+  // those subscriptions to [open] instead of tearing down and re-adding on every tab reorder,
+  // active-tab change, or close-helper identity change.
+  const floatingShortcutListenersRef = useRef({
+    activateFloatingItem,
+    closeFloatingItemConfirmed,
+    handleFloatingPanelShortcutAction,
+    visibleFloatingTabOrder
+  })
+  useEffect(() => {
+    floatingShortcutListenersRef.current = {
+      activateFloatingItem,
+      closeFloatingItemConfirmed,
+      handleFloatingPanelShortcutAction,
+      visibleFloatingTabOrder
+    }
+  }, [
+    activateFloatingItem,
+    closeFloatingItemConfirmed,
+    handleFloatingPanelShortcutAction,
+    visibleFloatingTabOrder
+  ])
 
   const handleShortcutSurfaceKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -1092,66 +1352,17 @@ export function FloatingTerminalPanel({
         return
       }
 
-      const state = useAppStore.getState()
-      const platform = getShortcutPlatform()
-      const terminalShortcutPolicy = state.settings?.terminalShortcutPolicy
-      const isFloatingTerminalInput = isFloatingWorkspaceTerminalInputTarget(event.target)
-      const context: KeybindingContext = isFloatingTerminalInput ? 'terminal' : 'app'
-      const matchOptions: KeybindingMatchOptions = {
-        context,
-        terminalShortcutPolicy
-      }
-      const floatingChromeMatchOptions: KeybindingMatchOptions =
-        isFloatingTerminalInput && terminalShortcutPolicy === 'terminal-first'
-          ? { context: 'app', terminalShortcutPolicy }
-          : matchOptions
+      // The target check above already enforces the panel's shortcut-surface gate, so the shared
+      // resolution is the whole preflight — no second scan of the match table.
       const nativeEvent = event.nativeEvent
-      const isFloatingChromeShortcut =
-        keybindingMatchesAction(
-          'tab.rename',
-          nativeEvent,
-          platform,
-          state.keybindings,
-          floatingChromeMatchOptions
-        ) ||
-        matchKeybindingDigitIndex(
-          'tab.selectByIndex',
-          nativeEvent,
-          platform,
-          state.keybindings,
-          matchOptions
-        ) !== null ||
-        keybindingMatchesAction(
-          'floatingWorkspace.maximize',
-          nativeEvent,
-          platform,
-          state.keybindings,
-          floatingChromeMatchOptions
-        ) ||
-        keybindingMatchesAction(
-          'floatingWorkspace.minimize',
-          nativeEvent,
-          platform,
-          state.keybindings,
-          floatingChromeMatchOptions
-        )
-
-      if (
-        !isFloatingWorkspacePanelShortcut(
-          nativeEvent,
-          platform,
-          panelRef.current,
-          state.keybindings,
-          matchOptions
-        ) &&
-        !isFloatingChromeShortcut
-      ) {
+      const resolution = resolveFloatingPanelShortcut(nativeEvent)
+      if (resolution === null) {
         return
       }
 
-      handleFloatingPanelShortcutAction(nativeEvent, () => event.preventDefault())
+      applyFloatingPanelShortcut(resolution, nativeEvent, () => event.preventDefault())
     },
-    [handleFloatingPanelShortcutAction, open]
+    [applyFloatingPanelShortcut, open, resolveFloatingPanelShortcut]
   )
 
   useEffect(() => {
@@ -1169,7 +1380,9 @@ export function FloatingTerminalPanel({
       if (event.defaultPrevented) {
         return
       }
-      if (!isPanelFocused()) {
+      // Match L1's yield and Terminal.tsx's guard: own the chord if the event target is inside the
+      // panel even while activeElement is mid-transition, so an L1-yielded chord is never dropped.
+      if (!isEventTargetInsideFloatingWorkspacePanel(event.target) && !isPanelFocused()) {
         doubleTapDetectorRef.current?.reset()
         return
       }
@@ -1206,17 +1419,21 @@ export function FloatingTerminalPanel({
         event.stopImmediatePropagation()
       }
 
+      const dispatchShortcut =
+        floatingShortcutListenersRef.current.handleFloatingPanelShortcutAction
+      // Both 'handled' and 'deferred' stop L2's own directional dispatch; only 'deferred' leaves the
+      // event un-consumed so the terminal pane's L3 handler runs.
       if (
         detected &&
-        handleFloatingPanelShortcutAction(
+        dispatchShortcut(
           { doubleTapModifier: detected.modifier, target: event.target },
           consume
-        )
+        ) !== 'unmatched'
       ) {
         return
       }
 
-      if (handleFloatingPanelShortcutAction(event, consume)) {
+      if (dispatchShortcut(event, consume) !== 'unmatched') {
         return
       }
 
@@ -1283,13 +1500,58 @@ export function FloatingTerminalPanel({
       window.removeEventListener('blur', handleFloatingPanelBlur)
       doubleTapDetectorRef.current?.reset()
     }
-  }, [handleFloatingPanelShortcutAction, open])
+  }, [open])
+
+  // A focused floating *browser* guest's close/index chords arrive over IPC (useIpcEvents)
+  // as these window events; handle them through the exact same closures the keyboard path uses so
+  // pin guard, reclaim intent, and index selection stay single-sourced.
+  useEffect(() => {
+    if (!open || typeof window === 'undefined') {
+      return
+    }
+    const handleGuestClose = (event: Event): void => {
+      const detail = (event as CustomEvent<FloatingWorkspaceGuestCloseDetail>).detail
+      if (detail) {
+        floatingShortcutListenersRef.current.closeFloatingItemConfirmed(detail.sourceId, {
+          guestOwned: true
+        })
+      }
+    }
+    const handleGuestSelectIndex = (event: Event): void => {
+      const detail = (event as CustomEvent<FloatingWorkspaceGuestSelectIndexDetail>).detail
+      const listeners = floatingShortcutListenersRef.current
+      const visibleId = detail ? listeners.visibleFloatingTabOrder[detail.index] : undefined
+      if (visibleId) {
+        listeners.activateFloatingItem(visibleId)
+      }
+    }
+    window.addEventListener(FLOATING_WORKSPACE_GUEST_CLOSE_EVENT, handleGuestClose)
+    window.addEventListener(FLOATING_WORKSPACE_GUEST_SELECT_INDEX_EVENT, handleGuestSelectIndex)
+    return () => {
+      window.removeEventListener(FLOATING_WORKSPACE_GUEST_CLOSE_EVENT, handleGuestClose)
+      window.removeEventListener(
+        FLOATING_WORKSPACE_GUEST_SELECT_INDEX_EVENT,
+        handleGuestSelectIndex
+      )
+    }
+  }, [open])
 
   useEffect(() => {
+    const pendingReclaimArms = pendingReclaimArmByFileIdRef.current
     if (!open) {
-      setFloatingTerminalInputFocusedInMain(false)
+      reportFloatingFocus(null, true)
+      // Drop a stale emptying-close reclaim intent on panel close: if a concurrent tab-create kept
+      // the panel from reaching 0, the count→0 consume never fired and the sticky intent must not
+      // survive to a later empty-panel mount and steal focus (F3 leak, defense-in-depth). Deferred
+      // dirty-editor arms are dropped for the same reason.
+      clearFloatingPanelReclaimIntent()
+      pendingReclaimArms.clear()
     }
-    return () => setFloatingTerminalInputFocusedInMain(false)
+    return () => {
+      reportFloatingFocus(null, true)
+      clearFloatingPanelReclaimIntent()
+      pendingReclaimArms.clear()
+    }
   }, [open])
 
   useEffect(() => {
@@ -1302,7 +1564,9 @@ export function FloatingTerminalPanel({
       if (!panel || !(event.target instanceof Node) || panel.contains(event.target)) {
         return
       }
-      setFloatingTerminalInputFocusedInMain(false)
+      reportFloatingFocus(null, true)
+      // Cancel any pending emptying-close reclaim: an outside pointer-down is a genuine ownership release.
+      clearFloatingPanelReclaimIntent()
       const active = document.activeElement
       if (active instanceof HTMLElement && panel.contains(active)) {
         // Why: regular tab strip items are non-focusable, so clicking them can
@@ -1313,22 +1577,70 @@ export function FloatingTerminalPanel({
     const handleWindowBlur = (): void => {
       const panel = panelRef.current
       const active = document.activeElement
+      reclaimTerminalInputOnWindowFocusRef.current = null
       if (!panel || !(active instanceof HTMLElement) || !panel.contains(active)) {
         return
       }
       // Why: browser webviews focus out-of-process and do not emit renderer
       // pointerdown events, so release floating ownership on renderer blur too.
-      setFloatingTerminalInputFocusedInMain(false)
+      reportFloatingFocus(null, true)
+      // Window blur to another app is a genuine ownership release; drop any pending emptying-close reclaim.
+      clearFloatingPanelReclaimIntent()
+      if (isFloatingWorkspaceTerminalInputTarget(active)) {
+        // Why: the terminal focus lifecycle preserves this exact helper across
+        // app blur so macOS can rebuild its native input context on return.
+        reclaimTerminalInputOnWindowFocusRef.current = {
+          helper: active,
+          leafId: active.closest('[data-leaf-id]')?.getAttribute('data-leaf-id') ?? null
+        }
+        return
+      }
       active.blur()
+    }
+
+    const handleWindowFocus = (): void => {
+      const reclaim = reclaimTerminalInputOnWindowFocusRef.current
+      if (!reclaim) {
+        return
+      }
+      reclaimTerminalInputOnWindowFocusRef.current = null
+      const panel = panelRef.current
+      const active = document.activeElement
+      if (
+        panel &&
+        active instanceof HTMLElement &&
+        panel.contains(active) &&
+        isFloatingWorkspaceTerminalInputTarget(active)
+      ) {
+        reportFloatingFocus(active)
+        return
+      }
+      if ((active === null || active === document.body) && activeTerminalId) {
+        if (reclaim.helper.isConnected && panel?.contains(reclaim.helper)) {
+          // Why: TerminalPane owns exact-helper reclaim and IME refresh. Avoid
+          // racing it with a second floating-layer blur/refocus cycle.
+          return
+        }
+        // Why: only a helper that genuinely remounted while backgrounded needs
+        // tab/leaf recovery; the shared TerminalPane owner cannot reclaim it.
+        focusTerminalTabSurface(activeTerminalId, reclaim.leafId, {
+          onlyIfFocusUnclaimed: true,
+          onImeRefocusSkipped: (active) => reportFloatingFocus(active),
+          refreshImeContext: true
+        })
+      }
     }
 
     document.addEventListener('pointerdown', handleOutsidePointerDown, true)
     window.addEventListener('blur', handleWindowBlur)
+    window.addEventListener('focus', handleWindowFocus)
     return () => {
+      reclaimTerminalInputOnWindowFocusRef.current = null
       document.removeEventListener('pointerdown', handleOutsidePointerDown, true)
       window.removeEventListener('blur', handleWindowBlur)
+      window.removeEventListener('focus', handleWindowFocus)
     }
-  }, [open])
+  }, [activeTerminalId, open])
   const handleDragStart = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (maximized) {
       return
@@ -1397,8 +1709,9 @@ export function FloatingTerminalPanel({
   }, [])
 
   return (
-    // Why: root notification cards use z-40; keep the floating workspace below
-    // them so alerts are never hidden behind an open terminal panel.
+    // Why: sit above the z-40 notification cards so the floating workspace is
+    // never buried behind them, but stay under the z-50 modal layer so its own
+    // orchestration/save dialogs (and every app modal) still open above it.
     // Drop shadow on the outer shell, border on an inner shell — mixing both on
     // one rounded node made corners look stubby. Floating tabs skip their top
     // border so the titlebar curve stays clean.
@@ -1407,7 +1720,7 @@ export function FloatingTerminalPanel({
       data-floating-terminal-panel
       aria-hidden={!open}
       tabIndex={-1}
-      className={`fixed z-30 flex min-h-[280px] min-w-[420px] rounded-lg bg-transparent text-card-foreground shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] outline-none dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)] ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
+      className={`fixed z-[45] flex min-h-[280px] min-w-[420px] rounded-lg bg-transparent text-card-foreground shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] outline-none dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)] ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
       style={{
         visibility: open ? 'visible' : 'hidden',
         left: bounds.left,
@@ -1422,8 +1735,14 @@ export function FloatingTerminalPanel({
         const rect = event.currentTarget.getBoundingClientRect()
         commitUserBounds({ ...stagedBoundsRef.current, width: rect.width, height: rect.height })
       }}
-      onFocusCapture={(event) => setFloatingTerminalInputFocused(event.target)}
-      onBlurCapture={(event) => setFloatingTerminalInputFocused(event.relatedTarget)}
+      onFocusCapture={(event) => reportFloatingFocusFromTarget(event.target)}
+      onBlurCapture={(event) => {
+        // Why: keep terminal-first shortcut ownership latched during the
+        // synchronous macOS IME refresh blur; refocus or its skip callback settles it.
+        if (!isTerminalImeInputContextRefreshing(event.target)) {
+          reportFloatingFocusFromTarget(event.relatedTarget)
+        }
+      }}
       onKeyDownCapture={handleShortcutSurfaceKeyDown}
     >
       <div className="relative flex h-full w-full min-h-0 flex-col overflow-hidden rounded-lg border border-black/14 bg-card dark:border-white/14">
@@ -1443,9 +1762,10 @@ export function FloatingTerminalPanel({
               worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
               expandedPaneByTabId={expandedPaneByTabId}
               onActivate={activateFloatingItem}
-              onClose={closeFloatingItem}
+              onClose={closeFloatingItemConfirmed}
               onCloseOthers={closeOthers}
               onCloseToRight={closeToRight}
+              onCloseToLeft={closeToLeft}
               onNewTerminalTab={() => createFloatingTerminalTab()}
               onNewTerminalWithShell={createFloatingTerminalTab}
               onNewBrowserTab={createFloatingBrowserTab}
@@ -1464,9 +1784,9 @@ export function FloatingTerminalPanel({
               activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
               activeTabType={activeTabType}
               onActivateFile={activateFloatingItem}
-              onCloseFile={closeFloatingItem}
+              onCloseFile={closeFloatingItemConfirmed}
               onActivateBrowserTab={activateFloatingItem}
-              onCloseBrowserTab={closeFloatingItem}
+              onCloseBrowserTab={closeFloatingItemConfirmed}
               onDuplicateBrowserTab={(browserTabId) => {
                 const source = browserTabs.find((tab) => tab.id === browserTabId)
                 if (!source) {
@@ -1508,6 +1828,7 @@ export function FloatingTerminalPanel({
                     aria-hidden={!isActive}
                   >
                     <TerminalPane
+                      ref={terminalPaneRegistry.getRefCallback(tab.id)}
                       tabId={tab.id}
                       worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
                       cwd={cwd}
@@ -1519,8 +1840,8 @@ export function FloatingTerminalPanel({
                       // atlas to corrupt) while hidden, and the resume on
                       // reopen rebuilds the renderer from scratch.
                       isVisible={isActive && open}
-                      onPtyExit={() => closeTab(tab.id)}
-                      onCloseTab={() => closeFloatingItem(tab.id)}
+                      onPtyExit={() => closeTab(tab.id, { reason: 'pty-exit' })}
+                      onCloseTab={() => closeFloatingItemConfirmed(tab.id)}
                     />
                   </div>
                 )

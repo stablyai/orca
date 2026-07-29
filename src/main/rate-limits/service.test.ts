@@ -7,7 +7,7 @@ import { EventEmitter } from 'node:events'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
-import { fetchCodexRateLimits } from './codex-fetcher'
+import { consumeCodexRateLimitResetCredit, fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
@@ -22,6 +22,7 @@ vi.mock('./claude-fetcher', () => ({
 }))
 
 vi.mock('./codex-fetcher', () => ({
+  consumeCodexRateLimitResetCredit: vi.fn(),
   fetchCodexRateLimits: vi.fn()
 }))
 
@@ -118,6 +119,19 @@ function unavailableProvider(
     error: message,
     status: 'unavailable'
   }
+}
+
+// Why: beforeEach caches snapshot objects whose updatedAt is pinned at suite
+// start, so after 5 fake minutes every healthy provider looks stale and every
+// activation degrades to a full fetch. Backoff tests that reason about the
+// individual retry lane need healthy providers minted fresh at fetch time.
+function mockFreshBackgroundProviderFetches(): void {
+  vi.mocked(fetchCodexRateLimits).mockImplementation(async () => okProvider('codex', 24))
+  vi.mocked(fetchGeminiRateLimits).mockImplementation(async () => okProvider('gemini', 0))
+  vi.mocked(fetchOpenCodeGoRateLimits).mockImplementation(async () => okProvider('opencode-go', 0))
+  vi.mocked(fetchKimiRateLimits).mockImplementation(async () => okProvider('kimi', 0))
+  vi.mocked(fetchMiniMaxRateLimits).mockImplementation(async () => okProvider('minimax', 0))
+  vi.mocked(fetchGrokRateLimits).mockImplementation(async () => unavailableProvider('grok'))
 }
 
 function serviceInternals(service: RateLimitService): { fetchAll: () => Promise<void> } {
@@ -393,7 +407,7 @@ describe('RateLimitService', () => {
     }
   })
 
-  it('throttles repeated active-window retries while Claude is still failing', async () => {
+  it('backs off repeated active-window retries while Claude is still failing', async () => {
     vi.useFakeTimers()
     try {
       vi.mocked(fetchClaudeRateLimits).mockResolvedValue(errorProvider('claude', 'still failing'))
@@ -407,6 +421,7 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(1000)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
 
+      // First activation recovers immediately (retry timestamps start at 0).
       window.emit('focus')
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
@@ -415,10 +430,558 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
 
+      // Two consecutive failures: the retry window doubled to 60s, so an
+      // activation at +30s must not hammer the endpoint again.
       await vi.advanceTimersByTimeAsync(30 * 1000)
       window.emit('restore')
       await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+
+      await vi.advanceTimersByTimeAsync(30 * 1000)
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
+
+      // Three consecutive failures: 120s window.
+      await vi.advanceTimersByTimeAsync(60 * 1000)
+      window.emit('show')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
+
+      await vi.advanceTimersByTimeAsync(60 * 1000)
+      window.emit('restore')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(4)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resets the retry backoff once Claude recovers', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits)
+        .mockResolvedValueOnce(errorProvider('claude', 'still failing'))
+        .mockResolvedValueOnce(errorProvider('claude', 'still failing'))
+        .mockResolvedValueOnce(okProvider('claude', 12))
+        .mockResolvedValue(errorProvider('claude', 'failing again'))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+
+      // Recovery fetch succeeds and must clear the failure streak.
+      await vi.advanceTimersByTimeAsync(60 * 1000)
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
+      expect(service.getState().claude?.status).toBe('ok')
+
+      // The stale-ok snapshot forces a full refresh, which fails again.
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(4)
+      expect(service.getState().claude?.status).toBe('error')
+
+      // Consume the stale active-retry timestamp so the next windows measure
+      // the post-recovery streak rather than time elapsed before recovery.
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(5)
+
+      // Post-recovery streak is 2 (not the pre-recovery 4): the window must be
+      // 60s, so +30s stays throttled and +60s retries.
+      await vi.advanceTimersByTimeAsync(30 * 1000)
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(5)
+
+      await vi.advanceTimersByTimeAsync(30 * 1000)
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(6)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('counts a stale-driven full fetch as the failing provider retry attempt', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockImplementation(async () =>
+        errorProvider('claude', 'still failing')
+      )
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+
+      // Healthy providers go stale after 5 minutes, so this activation runs a
+      // full fetch that also retries failing Claude (streak now 3 → 120s).
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
+
+      // Why: the full fetch was itself a retry. An activation moments later
+      // must not fire the individual failure lane ahead of the backoff window.
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
+
+      // Once the 120s window elapses, the individual retry lane fires again.
+      await vi.advanceTimersByTimeAsync(120 * 1000)
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(4)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('waits out Retry-After before automated Claude refetches, then recovers', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => ({
+          ...errorProvider('claude', 'Claude usage is rate limited right now.'),
+          usageMetadata: { failureKind: 'rate-limited', retryAtMs: Date.now() + 40 * 60 * 1000 }
+        }))
+        .mockImplementation(async () => okProvider('claude', 18))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      // Activations that would normally retry immediately must respect the server's Retry-After.
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      // The 15- and 30-minute poll cycles land inside the 40-minute window: other providers refresh, Claude is skipped.
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+      expect(vi.mocked(fetchCodexRateLimits).mock.calls.length).toBeGreaterThan(1)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      // The 45-minute poll cycle is past the window and refetches Claude.
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+      expect(service.getState().claude?.status).toBe('ok')
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lets a user-directed refresh bypass the Claude Retry-After gate', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => ({
+          ...errorProvider('claude', 'Claude usage is rate limited right now.'),
+          usageMetadata: { failureKind: 'rate-limited', retryAtMs: Date.now() + 40 * 60 * 1000 }
+        }))
+        .mockImplementation(async () => okProvider('claude', 18))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+
+      await service.refresh()
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      expect(service.getState().claude?.status).toBe('error')
+
+      await service.refresh()
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+      expect(service.getState().claude?.status).toBe('ok')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps last-known usage through a rate-limited window past the generic stale threshold', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => okProvider('claude', 18))
+        .mockImplementation(async () => ({
+          ...errorProvider('claude', 'Claude usage is rate limited right now.'),
+          usageMetadata: { failureKind: 'rate-limited' }
+        }))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+
+      await service.refresh()
+      expect(service.getState().claude?.status).toBe('ok')
+
+      // 31 minutes later the generic 30-minute stale policy would drop the snapshot; rate-limited failures keep it.
+      await vi.advanceTimersByTimeAsync(31 * 60 * 1000)
+      await service.refresh()
+
+      const claude = service.getState().claude
+      expect(claude?.status).toBe('error')
+      expect(claude?.error).toBe('Claude usage is rate limited right now.')
+      expect(claude?.session?.usedPercent).toBe(18)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ingests statusline usage, clears errors, and skips OAuth polls while the live feed is fresh', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockImplementation(async () => ({
+        ...errorProvider('claude', 'Claude usage is rate limited right now.'),
+        usageMetadata: { failureKind: 'rate-limited' }
+      }))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      expect(service.getState().claude?.status).toBe('error')
+
+      // A live session reports usage 12 minutes in; the error state clears without any OAuth call.
+      await vi.advanceTimersByTimeAsync(12 * 60 * 1000 - 1000)
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 23.5, resets_at: Math.floor(Date.now() / 1000) + 3600 },
+        sevenDay: { used_percentage: 41.2 }
+      })
+
+      const claude = service.getState().claude
+      expect(claude?.status).toBe('ok')
+      expect(claude?.error).toBeNull()
+      expect(claude?.session?.usedPercent).toBe(23.5)
+      expect(claude?.weekly?.usedPercent).toBe(41.2)
+      expect(claude?.usageMetadata?.source).toBe('live-session')
+
+      // The 15-minute poll cycle lands inside the live-feed freshness window: other providers refresh, Claude's OAuth fetch is skipped.
+      const codexCallsBeforePoll = vi.mocked(fetchCodexRateLimits).mock.calls.length
+      await vi.advanceTimersByTimeAsync(3 * 60 * 1000)
+      expect(vi.mocked(fetchCodexRateLimits).mock.calls.length).toBeGreaterThan(
+        codexCallsBeforePoll
+      )
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      // Once the live feed goes stale, automated refetches resume.
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+      expect(vi.mocked(fetchClaudeRateLimits).mock.calls.length).toBeGreaterThan(1)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops statusline posts before attribution is known or from a mismatched config dir', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+
+      // No fetch cycle has captured the selected account's config dir yet.
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 50 },
+        sevenDay: null
+      })
+      expect(service.getState().claude).toBeNull()
+
+      await service.refresh()
+      expect(service.getState().claude?.session?.usedPercent).toBe(18)
+
+      // A managed-account session must not overwrite the system-default bar.
+      service.ingestLiveClaudeRateLimits({
+        configDir: '/some/managed/dir',
+        fiveHour: { used_percentage: 99 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(18)
+
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 33 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(33)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the other window when a statusline post carries only one', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      await service.refresh()
+
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 20 },
+        sevenDay: { used_percentage: 41 }
+      })
+      expect(service.getState().claude?.weekly?.usedPercent).toBe(41)
+
+      // A later post reporting only the 5h window must not wipe the weekly bar.
+      await vi.advanceTimersByTimeAsync(1000)
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 25 },
+        sevenDay: null
+      })
+      const claude = service.getState().claude
+      expect(claude?.session?.usedPercent).toBe(25)
+      expect(claude?.weekly?.usedPercent).toBe(41)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('dedupes identical statusline posts within the throttle window', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      await service.refresh()
+
+      const event = {
+        configDir: null,
+        fiveHour: { used_percentage: 20, resets_at: 1738425600 },
+        sevenDay: null
+      }
+      service.ingestLiveClaudeRateLimits(event)
+      const firstUpdatedAt = service.getState().claude?.updatedAt
+
+      await vi.advanceTimersByTimeAsync(1000)
+      service.ingestLiveClaudeRateLimits(event)
+      expect(service.getState().claude?.updatedAt).toBe(firstUpdatedAt)
+
+      // A changed window updates immediately despite the throttle.
+      service.ingestLiveClaudeRateLimits({
+        ...event,
+        fiveHour: { used_percentage: 21, resets_at: 1738425600 }
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(21)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not roll back a live-session snapshot that arrived while a claude fetch was in flight', async () => {
+    vi.useFakeTimers()
+    try {
+      const parkedClaudeFetch = deferred<ProviderRateLimits>()
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => okProvider('claude', 18))
+        .mockImplementationOnce(() => parkedClaudeFetch.promise)
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      await service.refresh()
+
+      const secondRefresh = service.refresh()
+      await flushMicrotasks()
+
+      // A live statusline post lands while the second fetch is parked in flight.
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 41 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(41)
+
+      parkedClaudeFetch.resolve({
+        provider: 'claude',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: 'boom',
+        status: 'error'
+      })
+      await secondRefresh
+
+      // The failed fetch must not roll the bar back to the pre-cycle snapshot or flip it to error.
+      const claude = service.getState().claude
+      expect(claude?.status).toBe('ok')
+      expect(claude?.session?.usedPercent).toBe(41)
+      expect(claude?.usageMetadata?.source).toBe('live-session')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a populated weekly bar when a live post carries only the five-hour window', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue({
+        ...okProvider('claude', 18),
+        weekly: { usedPercent: 62, windowMinutes: 10080, resetsAt: null, resetDescription: null }
+      })
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      await service.refresh()
+      expect(service.getState().claude?.weekly?.usedPercent).toBe(62)
+
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 23.5 },
+        sevenDay: null
+      })
+
+      const claude = service.getState().claude
+      expect(claude?.session?.usedPercent).toBe(23.5)
+      expect(claude?.weekly?.usedPercent).toBe(62)
+      expect(claude?.usageMetadata?.source).toBe('live-session')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not restore the outgoing account auth snapshot when the account switches mid-resolve', async () => {
+    vi.useFakeTimers()
+    try {
+      const staleClaudeFetch = deferred<ProviderRateLimits>()
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(() => staleClaudeFetch.promise)
+        .mockImplementation(async () => okProvider('claude', 18))
+      mockFreshBackgroundProviderFetches()
+
+      const authGate = deferred<void>()
+      let resolverCalls = 0
+      const service = new RateLimitService()
+      service.setClaudeAuthPreparationResolver(async () => {
+        resolverCalls += 1
+        const outgoing = resolverCalls === 1
+        if (outgoing) {
+          await authGate.promise
+        }
+        return {
+          configDir: outgoing ? '/outgoing/.claude' : '/incoming/.claude',
+          runtime: 'host',
+          wslDistro: null,
+          wslLinuxConfigDir: null,
+          envPatch: {
+            CLAUDE_CONFIG_DIR: outgoing ? '/outgoing/.claude' : '/incoming/.claude'
+          },
+          stripAuthEnv: false,
+          provenance: outgoing ? 'managed:outgoing' : 'managed:incoming'
+        }
+      })
+
+      // The first cycle is parked inside the outgoing account's resolver await when the switch lands.
+      const firstRefresh = service.refresh()
+      await flushMicrotasks()
+      const switchPromise = service.refreshForClaudeAccountChange('outgoing-account')
+      await flushMicrotasks()
+      authGate.resolve()
+      await flushMicrotasks(8)
+
+      // The stale cycle resumed after the switch; while its Claude fetch is still in flight,
+      // a live post from the outgoing session must not land on the incoming account's bar.
+      const beforeOutgoingPost = service.getState().claude?.session?.usedPercent
+      service.ingestLiveClaudeRateLimits({
+        configDir: '/outgoing/.claude',
+        fiveHour: { used_percentage: 99 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(beforeOutgoingPost)
+
+      staleClaudeFetch.resolve(okProvider('claude', 18))
+      await Promise.all([firstRefresh, switchPromise])
+
+      // The incoming account's own sessions still attribute correctly.
+      service.ingestLiveClaudeRateLimits({
+        configDir: '/incoming/.claude',
+        fiveHour: { used_percentage: 55 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(55)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a settled error chip settled during background refetches instead of flashing fetching', async () => {
+    vi.useFakeTimers()
+    try {
+      const secondClaude = deferred<ProviderRateLimits>()
+      vi.mocked(fetchClaudeRateLimits)
+        .mockResolvedValueOnce(errorProvider('claude', 'still failing'))
+        .mockImplementationOnce(() => secondClaude.promise)
+      vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      const claudeStatuses: string[] = []
+      service.onStateChange((state) => {
+        if (state.claude) {
+          claudeStatuses.push(state.claude.status)
+        }
+      })
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(service.getState().claude?.status).toBe('error')
+
+      // Why: the retry must not repaint the settled error chip as a loading
+      // "…" chip while the refetch is in flight — that is the flash users see
+      // every cycle when a provider is stuck failing.
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(service.getState().claude?.status).toBe('error')
+
+      secondClaude.resolve(okProvider('claude', 12))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(service.getState().claude?.status).toBe('ok')
+
+      const statusesAfterFirstSettle = claudeStatuses.slice(claudeStatuses.indexOf('error'))
+      expect(statusesAfterFirstSettle).not.toContain('fetching')
 
       service.stop()
     } finally {
@@ -584,6 +1147,39 @@ describe('RateLimitService', () => {
 
     expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not refetch fresh provider data for replayed mobile subscriptions', async () => {
+    const service = new RateLimitService()
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 10))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
+
+    await service.refreshIfStale()
+    await service.refreshIfStale()
+    await service.refreshIfStale()
+
+    expect(fetchClaudeRateLimits).toHaveBeenCalledOnce()
+    expect(fetchCodexRateLimits).toHaveBeenCalledOnce()
+  })
+
+  it('does not queue a follow-up fetch when a mobile subscription replays mid-fetch', async () => {
+    const service = new RateLimitService()
+    const claude = deferred<ProviderRateLimits>()
+    const codex = deferred<ProviderRateLimits>()
+    vi.mocked(fetchClaudeRateLimits).mockReturnValue(claude.promise)
+    vi.mocked(fetchCodexRateLimits).mockReturnValue(codex.promise)
+
+    const firstRefresh = service.refreshIfStale()
+    await Promise.resolve()
+    const replayedRefresh = service.refreshIfStale()
+
+    claude.resolve(okProvider('claude', 10))
+    codex.resolve(okProvider('codex', 20))
+    await firstRefresh
+    await replayedRefresh
+
+    expect(fetchClaudeRateLimits).toHaveBeenCalledOnce()
+    expect(fetchCodexRateLimits).toHaveBeenCalledOnce()
   })
 
   it('waits for a queued explicit refresh when another fetch is already in flight', async () => {
@@ -786,6 +1382,11 @@ describe('RateLimitService', () => {
       sessionCookie: 'session=abc123',
       workspaceIdOverride: ''
     }))
+    const networkProxySettings = {
+      httpProxyUrl: 'http://proxy.example:8080',
+      httpProxyBypassRules: 'localhost'
+    }
+    service.setNetworkProxySettingsResolver(() => networkProxySettings)
     service.setGeminiCliOAuthEnabledResolver(() => true)
 
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
@@ -810,7 +1411,11 @@ describe('RateLimitService', () => {
     expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledWith(true)
     expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
-    expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledWith('session=abc123', undefined)
+    expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledWith(
+      'session=abc123',
+      undefined,
+      networkProxySettings
+    )
     expect(fetchGrokRateLimits).toHaveBeenCalledWith({
       signal: expect.any(AbortSignal),
       authReadResult: { status: 'missing' }
@@ -843,6 +1448,131 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).toHaveBeenCalledWith(
       expect.objectContaining({ codexHomePath: wslCodexHome })
     )
+  })
+
+  it('reuses a caller-provided idempotency key when consuming a Codex reset credit', async () => {
+    const service = new RateLimitService()
+    const idempotencyKey = '11111111-1111-4111-8111-111111111111'
+    service.setCodexHomePathResolver(() => '/tmp/codex-home')
+    vi.mocked(consumeCodexRateLimitResetCredit).mockResolvedValueOnce('reset')
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 0, Date.now()))
+
+    await expect(
+      service.consumeCodexRateLimitResetCredit({
+        idempotencyKey,
+        target: { runtime: 'host', wslDistro: null },
+        codexHomePath: '/tmp/codex-home'
+      })
+    ).resolves.toMatchObject({ outcome: 'reset' })
+    expect(consumeCodexRateLimitResetCredit).toHaveBeenCalledWith({
+      codexHomePath: '/tmp/codex-home',
+      idempotencyKey
+    })
+  })
+
+  it('returns a refreshed scoped state without overwriting a target selected during reset', async () => {
+    const service = new RateLimitService()
+    const idempotencyKey = '22222222-2222-4222-8222-222222222222'
+    const consume = vi.mocked(consumeCodexRateLimitResetCredit)
+    let resolveConsume: ((outcome: 'reset') => void) | undefined
+    consume.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveConsume = resolve
+        })
+    )
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 0, Date.now()))
+
+    service.setCodexHomePathResolver(() => '/tmp/new-selection')
+    const pending = service.consumeCodexRateLimitResetCredit({
+      idempotencyKey,
+      target: { runtime: 'host', wslDistro: null },
+      codexHomePath: '/tmp/approved-selection'
+    })
+    await vi.waitFor(() => expect(consume).toHaveBeenCalledOnce())
+    service.setCodexFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    resolveConsume?.('reset')
+
+    await expect(pending).resolves.toMatchObject({
+      outcome: 'reset',
+      state: {
+        codexTarget: { runtime: 'host', wslDistro: null },
+        codex: { session: { usedPercent: 0 } }
+      }
+    })
+    expect(consume).toHaveBeenCalledWith({
+      codexHomePath: '/tmp/approved-selection',
+      idempotencyKey
+    })
+    expect(fetchCodexRateLimits).toHaveBeenCalledWith(
+      expect.objectContaining({
+        codexHomePath: '/tmp/approved-selection',
+        signal: expect.any(AbortSignal)
+      })
+    )
+    expect(service.getState().codexTarget).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(service.getState().codex).toBeNull()
+  })
+
+  it('keeps the reset result scoped when the active target changes during its refresh', async () => {
+    const service = new RateLimitService()
+    const idempotencyKey = '33333333-3333-4333-8333-333333333333'
+    const hostRefresh = deferred<ProviderRateLimits>()
+    service.setCodexHomePathResolver((target) =>
+      target?.runtime === 'wsl' ? '/tmp/wsl-selection' : '/tmp/approved-selection'
+    )
+    vi.mocked(consumeCodexRateLimitResetCredit).mockResolvedValueOnce('reset')
+    vi.mocked(fetchCodexRateLimits)
+      .mockReturnValueOnce(hostRefresh.promise)
+      .mockResolvedValueOnce(okProvider('codex', 73, Date.now()))
+
+    const pendingReset = service.consumeCodexRateLimitResetCredit({
+      idempotencyKey,
+      target: { runtime: 'host', wslDistro: null },
+      codexHomePath: '/tmp/approved-selection'
+    })
+    await vi.waitFor(() => expect(fetchCodexRateLimits).toHaveBeenCalledOnce())
+
+    await service.refreshCodexForTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    hostRefresh.resolve(okProvider('codex', 0, Date.now()))
+
+    await expect(pendingReset).resolves.toMatchObject({
+      outcome: 'reset',
+      state: {
+        codexTarget: { runtime: 'host', wslDistro: null },
+        codex: { session: { usedPercent: 0 } }
+      }
+    })
+    expect(service.getState()).toMatchObject({
+      codexTarget: { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      codex: { session: { usedPercent: 73 } }
+    })
+  })
+
+  it('does not let an older full refresh overwrite the post-reset Codex state', async () => {
+    const service = new RateLimitService()
+    const slowClaude = deferred<ProviderRateLimits>()
+    service.setCodexHomePathResolver(() => '/tmp/approved-selection')
+    vi.mocked(fetchClaudeRateLimits).mockReturnValueOnce(slowClaude.promise)
+    vi.mocked(fetchCodexRateLimits)
+      .mockResolvedValueOnce(okProvider('codex', 100, Date.now()))
+      .mockResolvedValueOnce(okProvider('codex', 0, Date.now()))
+    vi.mocked(consumeCodexRateLimitResetCredit).mockResolvedValueOnce('reset')
+
+    const olderRefresh = service.refresh()
+    await vi.waitFor(() => expect(fetchCodexRateLimits).toHaveBeenCalledOnce())
+
+    await service.consumeCodexRateLimitResetCredit({
+      idempotencyKey: '44444444-4444-4444-8444-444444444444',
+      target: { runtime: 'host', wslDistro: null },
+      codexHomePath: '/tmp/approved-selection'
+    })
+    expect(service.getState().codex?.session?.usedPercent).toBe(0)
+
+    slowClaude.resolve(okProvider('claude', 20, Date.now()))
+    await olderRefresh
+
+    expect(service.getState().codex?.session?.usedPercent).toBe(0)
   })
 
   it('uses the initialized WSL target for active Codex rate-limit fetches', async () => {
@@ -1021,6 +1751,60 @@ describe('RateLimitService', () => {
     )
   })
 
+  it('caches an outgoing weekly-only Codex account so the switcher keeps its inline bars', async () => {
+    const service = new RateLimitService()
+    service.setInactiveCodexAccountsResolver(() => [
+      { id: 'account-weekly', managedHomePath: '/tmp/account-weekly/home' }
+    ])
+
+    const weeklyOnly: ProviderRateLimits = {
+      provider: 'codex',
+      session: null,
+      weekly: { usedPercent: 76, windowMinutes: 10080, resetsAt: null, resetDescription: null },
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits)
+      .mockResolvedValueOnce(weeklyOnly)
+      .mockResolvedValueOnce(okProvider('codex', 40, Date.now()))
+
+    await service.refresh()
+    await service.refreshForCodexAccountChange('account-weekly')
+
+    expect(service.getState().inactiveCodexAccounts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          accountId: 'account-weekly',
+          rateLimits: expect.objectContaining({
+            session: null,
+            weekly: expect.objectContaining({ usedPercent: 76 })
+          })
+        })
+      ])
+    )
+  })
+
+  it('does not cache an outgoing Codex account that has no usage windows', async () => {
+    const service = new RateLimitService()
+    service.setInactiveCodexAccountsResolver(() => [
+      { id: 'account-empty', managedHomePath: '/tmp/account-empty/home' }
+    ])
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits)
+      .mockResolvedValueOnce(errorProvider('codex', 'codex not signed in'))
+      .mockResolvedValueOnce(okProvider('codex', 40, Date.now()))
+
+    await service.refresh()
+    await service.refreshForCodexAccountChange('account-empty')
+
+    expect(service.getState().inactiveCodexAccounts).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ accountId: 'account-empty' })])
+    )
+  })
+
   it('does not cache host Claude usage under an outgoing WSL account', async () => {
     const service = new RateLimitService()
     service.setInactiveClaudeAccountsResolver(() => [
@@ -1105,6 +1889,24 @@ describe('RateLimitService', () => {
         signal: expect.any(AbortSignal)
       })
     )
+  })
+
+  it('does not start overlapping inactive Claude preview fetches', async () => {
+    const service = new RateLimitService()
+    const accountFetch = deferred<ProviderRateLimits>()
+    service.setInactiveClaudeAccountsResolver(() => [
+      { id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }
+    ])
+    vi.mocked(fetchManagedAccountUsage).mockReturnValueOnce(accountFetch.promise)
+
+    const firstFetch = service.fetchInactiveClaudeAccountsOnOpen()
+    await Promise.resolve()
+    await service.fetchInactiveClaudeAccountsOnOpen()
+
+    expect(fetchManagedAccountUsage).toHaveBeenCalledTimes(1)
+
+    accountFetch.resolve(okProvider('claude', 50, Date.now()))
+    await firstFetch
   })
 
   it('does not start overlapping inactive Codex preview fetches', async () => {
@@ -1527,5 +2329,52 @@ describe('RateLimitService', () => {
     expect(state.minimax?.status).toBe('error')
     expect(state.minimax?.error).toBe('MiniMax session cookie could not be decrypted')
     expect(state.claude?.status).toBe('ok')
+  })
+
+  describe('refreshAfterClaudeLivePtysDrained', () => {
+    function deferredClaudeResult(): ProviderRateLimits {
+      return {
+        ...errorProvider('claude', 'Waiting for Claude session'),
+        usageMetadata: {
+          failureKind: 'deferred-by-live-session',
+          deferredByLiveClaudeSession: true
+        }
+      }
+    }
+
+    it('refetches Claude usage when the current result was deferred by a live session', async () => {
+      const service = new RateLimitService()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(deferredClaudeResult())
+      await service.refresh()
+      expect(service.getState().claude?.usageMetadata?.deferredByLiveClaudeSession).toBe(true)
+      vi.mocked(fetchClaudeRateLimits).mockClear()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+
+      await service.refreshAfterClaudeLivePtysDrained()
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      expect(service.getState().claude?.status).toBe('ok')
+    })
+
+    it('does not refetch when the current Claude result was not deferred', async () => {
+      const service = new RateLimitService()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(
+        errorProvider('claude', 'Token expired')
+      )
+      await service.refresh()
+      vi.mocked(fetchClaudeRateLimits).mockClear()
+
+      await service.refreshAfterClaudeLivePtysDrained()
+
+      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+    })
+
+    it('does not refetch when there is no Claude state yet', async () => {
+      const service = new RateLimitService()
+
+      await service.refreshAfterClaudeLivePtysDrained()
+
+      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+    })
   })
 })

@@ -9,16 +9,12 @@ import {
   parseMarkdownDocLink,
   resolveMarkdownDocLink
 } from './markdown-doc-links'
-import { isDocLinkLiteralCodeTextNode } from './rich-markdown-doc-link-code-context'
 import {
   isReservedRichMarkdownTransportBody,
   type RichMarkdownSourceTransport
 } from './rich-markdown-source-transport'
 import { renderRichMarkdownDocLinkHtml } from './rich-markdown-doc-link-dom'
-
-// Why: `.matchAll()` at each call site creates a fresh iterator so the shared
-// `/g` regex never leaks `lastIndex` state across nested or concurrent scans.
-const DOC_LINK_PATTERN = /\[\[([^[\]\r\n]+)\]\]/g
+import { canHoldDocLink, DOC_LINK_PATTERN } from './rich-markdown-doc-link-scan'
 
 const docLinkDissolveKey = new PluginKey('docLinkDissolve')
 const docLinkAutoConvertKey = new PluginKey('docLinkAutoConvert')
@@ -50,10 +46,7 @@ function buildPreviewDecorations(state: EditorState, storage: DocLinkStorage): D
   const index = getDocIndex(storage)
   const cursor = state.selection.from
   state.doc.descendants((node, pos, parent) => {
-    if (node.type.name !== 'text' || !node.text) {
-      return
-    }
-    if (isDocLinkLiteralCodeTextNode(node, parent)) {
+    if (!canHoldDocLink(node, parent)) {
       return
     }
     for (const match of node.text.matchAll(DOC_LINK_PATTERN)) {
@@ -279,10 +272,7 @@ export function createMarkdownDocLink(transport: RichMarkdownSourceTransport) {
             let modified = false
 
             newState.doc.descendants((node, pos, parent) => {
-              if (node.type.name !== 'text' || !node.text) {
-                return
-              }
-              if (isDocLinkLiteralCodeTextNode(node, parent)) {
+              if (!canHoldDocLink(node, parent)) {
                 return
               }
 

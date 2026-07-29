@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import type { VoiceSettings } from '../../../../shared/speech-types'
-import type { SpeechModelManifest, SpeechModelState } from '../../../../shared/speech-types'
+import type {
+  VoiceSettings,
+  SpeechModelManifest,
+  SpeechModelState
+} from '../../../../shared/speech-types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import {
@@ -12,6 +15,13 @@ import {
 } from '../ui/dropdown-menu'
 import { Cloud, Download, Trash2, Loader2, ChevronDown, Check } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+
+function describeSpeechModelDownloadError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  // Why: ipcRenderer.invoke wraps main-process rejections; strip the transport
+  // prefix so the toast shows only the underlying download failure.
+  return message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
+}
 
 type VoiceSpeechModelSectionProps = {
   voiceSettings: VoiceSettings
@@ -90,16 +100,17 @@ export function VoiceSpeechModelSection({
                   } else if (!isDownloading) {
                     // Why: download progress appears in this menu, so starting one should not dismiss it.
                     event.preventDefault()
-                    void window.api.speech
-                      .downloadModel(manifest.id)
-                      .catch(() =>
-                        toast.error(
-                          translate(
-                            'auto.components.settings.VoicePane.cfde55c7b0',
-                            'Failed to download model.'
-                          )
-                        )
+                    void window.api.speech.downloadModel(manifest.id).catch((error: unknown) =>
+                      toast.error(
+                        translate(
+                          'auto.components.settings.VoicePane.cfde55c7b0',
+                          'Failed to download model.'
+                        ),
+                        // Why: the raw cause (e.g. net::ERR_CONTENT_LENGTH_MISMATCH)
+                        // is the only diagnosable signal users can report back.
+                        { description: describeSpeechModelDownloadError(error) }
                       )
+                    )
                   }
                 }}
                 className={`group flex items-center gap-2.5 py-2.5 ${

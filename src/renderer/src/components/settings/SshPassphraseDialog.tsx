@@ -110,7 +110,14 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && void handleCancel()}>
-      <DialogContent showCloseButton={false} className="max-w-[360px]">
+      {/* Why: a credential prompt is a preemptive modal that must sit above any
+          open popover/menu (popover z-60, menus z-70) — the default dialog z-50
+          would let a still-open picker cover the focused input. */}
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName="!z-[140]"
+        className="!z-[150] max-w-[360px]"
+      >
         <DialogHeader>
           <DialogTitle className="text-sm">
             {isPassword
@@ -126,7 +133,7 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
                 {translate(
                   'auto.components.settings.SshPassphraseDialog.dbf9b6f2d0',
                   'Enter the password for'
-                )}
+                )}{' '}
                 <span className="font-medium">{label}</span>
               </>
             ) : (
@@ -134,7 +141,7 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
                 {translate(
                   'auto.components.settings.SshPassphraseDialog.ce4fdf7914',
                   'Enter the passphrase for'
-                )}
+                )}{' '}
                 <span className="font-medium">{label}</span>
               </>
             )}

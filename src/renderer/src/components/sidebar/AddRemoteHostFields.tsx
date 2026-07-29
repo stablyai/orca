@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { translate } from '@/i18n/i18n'
 import { applyParsedSshHostInput, type EditingTarget } from '../settings/ssh-target-draft'
+import { SshHostAdvancedFields } from '../settings/SshHostAdvancedFields'
 
 export function SshHostFields({
   form,
@@ -14,6 +16,7 @@ export function SshHostFields({
   onFormChange: (updater: (prev: EditingTarget) => EditingTarget) => void
   onSubmit: () => void
 }) {
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   return (
     <form
       className="grid gap-3 sm:grid-cols-2"
@@ -103,12 +106,13 @@ export function SshHostFields({
           )}
         />
       </div>
-      <p className="text-xs text-muted-foreground sm:col-span-2">
-        {translate(
-          'auto.components.sidebar.AddRemoteHostDialog.sshPersistenceDefault',
-          'Remote terminals on this host stay alive until you end them or reset the relay.'
-        )}
-      </p>
+      <SshHostAdvancedFields
+        open={advancedOpen}
+        onOpenChange={setAdvancedOpen}
+        form={form}
+        disabled={disabled}
+        onFormChange={onFormChange}
+      />
     </form>
   )
 }

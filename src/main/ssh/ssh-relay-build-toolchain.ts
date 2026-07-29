@@ -97,10 +97,7 @@ export function shouldProbeBuildToolchainAfterNativeDepsFailure(message: string)
   )
 }
 
-export function formatMissingToolchainError(
-  status: BuildToolchainStatus,
-  underlyingError: string
-): string {
+function missingToolNames(status: BuildToolchainStatus): string[] {
   const present = new Set(status.present)
   const missing: string[] = []
   if (!present.has('make')) {
@@ -112,27 +109,54 @@ export function formatMissingToolchainError(
   if (!hasPython(present)) {
     missing.push('python3')
   }
+  return missing
+}
 
+/** Install hint for the host's package manager, or the cross-distro list when it is unknown. */
+export function toolchainInstallHintLines(status: BuildToolchainStatus): string[] {
   const tailored = status.packageManager
     ? PACKAGE_MANAGER_HINTS.find((hint) => hint.bin === status.packageManager)?.install
     : null
+  if (tailored) {
+    return [`  ${tailored}`]
+  }
+  return [
+    '  Debian/Ubuntu:  sudo apt-get install -y build-essential python3',
+    '  Fedora/RHEL:    sudo dnf install -y make gcc gcc-c++ python3',
+    '  Arch:           sudo pacman -S --needed base-devel python',
+    '  Alpine:         sudo apk add build-base python3'
+  ]
+}
 
+/** One-line summary for the deploy log when node-pty is skipped rather than compiled. */
+export function formatSkippedNodePtyWarning(status: BuildToolchainStatus): string {
+  // Why: with no package manager detected the hint list is the cross-distro menu, whose first line
+  // is Debian's — quoting it alone would name the wrong distro, so stay neutral instead.
+  const hintLines = toolchainInstallHintLines(status)
+  const hint =
+    hintLines.length === 1
+      ? hintLines[0].trim()
+      : 'install a C/C++ toolchain (make, a C++ compiler, python3)'
+  return (
+    `missing build tools (${missingToolNames(status).join(', ')}); skipping node-pty so the ` +
+    `connection still serves files and git. Remote terminals need: ${hint}`
+  )
+}
+
+export function formatMissingToolchainError(
+  status: BuildToolchainStatus,
+  underlyingError: string
+): string {
   const lines = [
-    `The remote host is missing the C/C++ build tools (${missing.join(', ')}) needed to ` +
-      `compile Orca's relay native modules (node-pty, @parcel/watcher). node-pty has no ` +
+    `The remote host is missing the C/C++ build tools (${missingToolNames(status).join(', ')}) ` +
+      `needed to compile Orca's relay native modules (node-pty, @parcel/watcher). node-pty has no ` +
       `prebuilt binary for Linux, so they must be compiled on the remote host.`,
     '',
-    'Install the build tools on the remote host, then reconnect:'
+    'Install the build tools on the remote host, then reconnect:',
+    ...toolchainInstallHintLines(status),
+    '',
+    `Underlying install error: ${underlyingError}`
   ]
-  if (tailored) {
-    lines.push(`  ${tailored}`)
-  } else {
-    lines.push('  Debian/Ubuntu:  sudo apt-get install -y build-essential python3')
-    lines.push('  Fedora/RHEL:    sudo dnf install -y make gcc gcc-c++ python3')
-    lines.push('  Arch:           sudo pacman -S --needed base-devel python')
-    lines.push('  Alpine:         sudo apk add build-base python3')
-  }
-  lines.push('', `Underlying install error: ${underlyingError}`)
   return lines.join('\n')
 }
 
@@ -141,15 +165,20 @@ export function formatMissingToolchainError(
 // callers fall back to the original install error in those cases.
 export async function probeBuildToolchain(
   conn: SshConnection,
-  hostPlatform: RemoteHostPlatform
+  hostPlatform: RemoteHostPlatform,
+  signal?: AbortSignal
 ): Promise<BuildToolchainStatus | null> {
   if (isWindowsRemoteHost(hostPlatform)) {
     return null
   }
   try {
-    const output = await execCommand(conn, buildToolchainProbeCommand(), { wrapCommand: true })
+    const output = await execCommand(conn, buildToolchainProbeCommand(), {
+      wrapCommand: true,
+      signal
+    })
     return parseBuildToolchainProbe(output)
   } catch {
+    signal?.throwIfAborted()
     return null
   }
 }

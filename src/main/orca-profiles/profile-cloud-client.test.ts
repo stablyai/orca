@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
 import {
@@ -20,6 +21,8 @@ const config: OrcaCloudAuthConfig = {
   profileEndpoint: 'https://orca-cloud.example/v1/desktop/auth/profile',
   orgEndpoint: 'https://orca-cloud.example/v1/desktop/auth/org',
   logoutEndpoint: 'https://orca-cloud.example/v1/desktop/auth/logout',
+  relayTokenEndpoint: 'https://orca-cloud.example/v1/desktop/auth/relay-token',
+  relayDirectorUrl: 'https://relay.example',
   clientId: 'desktop-client',
   scope: 'openid profile email offline_access'
 }
@@ -245,5 +248,17 @@ describe('Orca cloud client', () => {
         activeOrgName: undefined
       }
     })
+  })
+
+  it('cancels the unread error-response body so bundled undici cannot crash on socket close', async () => {
+    let cancelledBodies = 0
+    fetchMock.mockResolvedValue(
+      cancelTrackingResponse(502, () => {
+        cancelledBodies += 1
+      })
+    )
+
+    await expect(refreshOrcaCloudCapabilities(config, session)).rejects.toThrow()
+    expect(cancelledBodies).toBe(1)
   })
 })

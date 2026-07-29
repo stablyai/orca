@@ -139,7 +139,28 @@ test.describe('Renderer crash recovery keeps terminal input alive', () => {
       // should reattach to the same session rather than spawn a fresh shell.
       const postPtyIds = await mainGetStorePtyIds(electronApp)
 
-      const transportAlive = await mainProbeTransportPaste(electronApp, `PASTE_POST_${cycle}_OK`)
+      // Why: the post-crash transport reattach is async — a single fire-and-forget
+      // probe can race the reconnect window. Poll over the recovery budget so a
+      // transient unbound-transport window does not fail the test; a transport
+      // still dead after the full budget is the real frozen-pane bug reported below.
+      let transportAlive = false
+      try {
+        await expect
+          .poll(
+            async () => {
+              transportAlive = await mainProbeTransportPaste(
+                electronApp,
+                `PASTE_POST_${cycle}_OK`,
+                5_000
+              )
+              return transportAlive
+            },
+            { timeout: RECOVERY_TIMEOUT_MS }
+          )
+          .toBe(true)
+      } catch {
+        transportAlive = false
+      }
       const directAlive =
         postPtyIds.length > 0 &&
         (await mainProbeDirectWrite(electronApp, postPtyIds[0], `DIRECT_POST_${cycle}_OK`))

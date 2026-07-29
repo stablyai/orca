@@ -17,6 +17,8 @@ export type MobileTerminalSessionTab = {
   status?: 'pending-handle' | 'ready'
   terminal: string | null
   agentStatus?: AgentStatusEntry | null
+  /** Host-provided launch context still parked as an unsent TUI-input draft. */
+  launchDraft?: string
   terminalTheme?: MobileTerminalTheme
   isActive: boolean
 }
@@ -84,6 +86,9 @@ function mobileSessionTabEqual(
         a.leafId === b.leafId &&
         a.status === b.status &&
         a.terminal === b.terminal &&
+        // A frame whose only delta is the launch draft appearing or retracting
+        // still has to reach the chat composer.
+        a.launchDraft === b.launchDraft &&
         JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
         JSON.stringify(a.terminalTheme ?? null) === JSON.stringify(b.terminalTheme ?? null)
       )

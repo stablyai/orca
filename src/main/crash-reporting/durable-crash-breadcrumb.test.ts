@@ -31,6 +31,22 @@ afterEach(() => {
 })
 
 describe('recordDurableCrashBreadcrumb', () => {
+  it('attaches main-process identity when the event has no other data', () => {
+    recordDurableCrashBreadcrumb('renderer_recovery_reload')
+
+    expect(getCrashBreadcrumbSnapshot()).toEqual([
+      expect.objectContaining({
+        name: 'renderer_recovery_reload',
+        data: {
+          mainProcessPid: process.pid,
+          mainProcessLaunchId: expect.any(String),
+          mainProcessStartedAt: expect.any(String)
+        }
+      })
+    ])
+    expect(sink.flushMock).toHaveBeenCalledOnce()
+  })
+
   it('records, traces, and flushes a sanitized crash breadcrumb', () => {
     recordDurableCrashBreadcrumb('process_gone_suppressed', {
       source: 'renderer',
@@ -40,7 +56,13 @@ describe('recordDurableCrashBreadcrumb', () => {
     expect(getCrashBreadcrumbSnapshot()).toEqual([
       expect.objectContaining({
         name: 'process_gone_suppressed',
-        data: { source: 'renderer', path: '[redacted-path]' }
+        data: expect.objectContaining({
+          source: 'renderer',
+          path: '[redacted-path]',
+          mainProcessPid: process.pid,
+          mainProcessLaunchId: expect.any(String),
+          mainProcessStartedAt: expect.any(String)
+        })
       })
     ])
     expect(sink.records).toEqual([
@@ -48,7 +70,8 @@ describe('recordDurableCrashBreadcrumb', () => {
         name: 'crash.breadcrumb',
         attributes: expect.objectContaining({
           kind: 'crash-breadcrumb',
-          'breadcrumb.name': 'process_gone_suppressed'
+          'breadcrumb.name': 'process_gone_suppressed',
+          'breadcrumb.data': expect.objectContaining({ mainProcessPid: process.pid })
         }),
         exit: { _tag: 'Success' }
       })

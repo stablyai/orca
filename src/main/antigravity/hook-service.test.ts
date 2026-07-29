@@ -16,6 +16,8 @@ vi.mock('os', async () => {
 })
 
 import { AntigravityHookService } from './hook-service'
+import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
+import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
 
 const ANTIGRAVITY_SCRIPT_FILE_NAME =
   process.platform === 'win32' ? 'antigravity-hook.cmd' : 'antigravity-hook.sh'
@@ -93,7 +95,7 @@ describe('AntigravityHookService', () => {
       expect(script).not.toContain('[string]::IsNullOrWhiteSpace($inputData)) { exit 0 }')
     } else {
       expect(script).toContain('hook_event_name=${ORCA_ANTIGRAVITY_EVENT}')
-      expect(script).toContain('payload=$(cat)')
+      expect(script).toContain(`payload=$(${POSIX_HOOK_STDIN_READER})`)
       expect(script).toContain("payload='{}'")
       expect(script).not.toContain('if [ -z "$payload" ]; then\n  exit 0\nfi')
       // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
@@ -165,10 +167,9 @@ describe('AntigravityHookService', () => {
         const definition = config['orca-status'][eventName][0]
         const command =
           eventName === 'PostToolUse' ? definition.hooks?.[0]?.command : definition.command
-        expect(command).toContain(wrapperFileName)
+        expect(createManagedCommandMatcher(wrapperFileName)(command)).toBe(true)
         expect(command).not.toContain('cmd /d /s /c')
         expect(command).not.toContain('ORCA_ANTIGRAVITY_EVENT')
-        expect(command).not.toContain('"')
 
         const wrapper = readFileSync(join(homeDir, '.orca', 'agent-hooks', wrapperFileName), 'utf8')
         expect(wrapper).toContain(`set "ORCA_ANTIGRAVITY_EVENT=${eventName}"`)

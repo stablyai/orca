@@ -102,7 +102,9 @@ test.describe('Rich markdown link bubble stacking', () => {
       expect(overlap.overlapWidth).toBeGreaterThan(8)
       expect(overlap.topElementIsBubble).toBe(true)
 
-      const editButton = bubble.getByTitle('Edit link')
+      // The Edit action exposes its label via aria-label (a shadcn Button +
+      // Radix tooltip), not a title attribute, so match by accessible name.
+      const editButton = bubble.getByRole('button', { name: 'Edit link' })
       const editButtonBounds = await editButton.boundingBox()
       const explorerBounds = await explorer.boundingBox()
       expect(editButtonBounds).not.toBeNull()

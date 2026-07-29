@@ -4,7 +4,12 @@ import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
-import { RuntimeClientError, type RuntimeClient, type RuntimeRpcSuccess } from '../runtime-client'
+import {
+  RuntimeClientError,
+  type RuntimeClient,
+  type RuntimeRpcSuccess,
+  getDefaultUserDataPath
+} from '../runtime-client'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { getDefaultPersistedState } from '../../shared/constants'
 import type { PersistedState } from '../../shared/types'
@@ -12,7 +17,6 @@ import {
   applyAgentStatusHooksEnabled,
   getManagedAgentHookStatuses
 } from '../../main/agent-hooks/managed-agent-hook-controls'
-import { getDefaultUserDataPath } from '../runtime-client'
 
 type AgentHookCommandResult = {
   enabled: boolean

@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PRODUCER_PAUSE_FAILSAFE_MS, Session } from './session'
+import { PRODUCER_PAUSE_FAILSAFE_MS, SESSION_FORCE_KILL_RETRY_MS, Session } from './session'
 import type { SessionState, ShellReadyState } from './types'
+import type { TuiAgent } from '../../shared/types'
+
+const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+vi.mock('../pty-descendant-termination', () => ({
+  killWithDescendantSweep: killWithDescendantSweepMock
+}))
 
 // Stub the subprocess — Session talks to it via an interface, not child_process directly.
 function createMockSubprocess() {
@@ -86,6 +92,7 @@ describe('Session', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     subprocess = createMockSubprocess()
+    killWithDescendantSweepMock.mockReset()
   })
 
   afterEach(() => {
@@ -98,13 +105,24 @@ describe('Session', () => {
     shellReadyTimeoutMs?: number
     cols?: number
     rows?: number
+    launchAgent?: TuiAgent
+    startupIngress?: {
+      colors: { foreground: string; background: string }
+      deadlineMs: number
+    }
+    ownerBackend?: 'posix-pty' | 'windows-conpty' | 'windows-wsl'
+    wslDistro?: string
   }): Session {
     session = new Session({
       sessionId: 'test-session',
       cols: opts?.cols ?? 80,
       rows: opts?.rows ?? 24,
+      ...(opts?.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+      wslDistro: opts?.wslDistro,
       subprocess,
+      ...(opts?.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       shellReadySupported: opts?.shellReadySupported ?? false,
+      ...(opts?.startupIngress ? { startupIngress: opts.startupIngress } : {}),
       ...(opts?.shellReadyTimeoutMs !== undefined
         ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
         : {})
@@ -175,6 +193,103 @@ describe('Session', () => {
       subprocess.simulateData('broadcast')
       expect(received1).toEqual(['broadcast'])
       expect(received2).toEqual(['broadcast'])
+    })
+
+    it('classifies startup queries and cooked echoes before model, persistence, and fanout', () => {
+      createSession({
+        ownerBackend: 'windows-conpty',
+        startupIngress: {
+          colors: { foreground: '#2e3434', background: '#ffffff' },
+          deadlineMs: 5_000
+        }
+      })
+      const onData = vi.fn()
+      session.attachClient({ onData, onExit: () => {} })
+      const query = '\x1b]10;?\x07'
+      const echo = ']10;rgb:2e2e/3434/3434\\'
+
+      subprocess.simulateData(query)
+      subprocess.simulateData(echo)
+      subprocess.simulateData('prompt')
+
+      expect(subprocess.written).toEqual(['\x1b]10;rgb:2e2e/3434/3434\x1b\\'])
+      expect(onData.mock.calls).toEqual([
+        ['', query.length, true, query.length],
+        ['', echo.length, true, query.length + echo.length],
+        ['prompt']
+      ])
+      expect(session.takePendingOutput(false)?.records).toEqual([
+        { kind: 'output', data: 'prompt' }
+      ])
+      expect(session.getSnapshot()).toMatchObject({
+        outputSequence: query.length + echo.length + 'prompt'.length
+      })
+      expect(session.getSnapshot()?.snapshotAnsi).toContain('prompt')
+      expect(session.getSnapshot()?.snapshotAnsi).not.toContain(']10;rgb')
+    })
+
+    it('releases a held cooked-echo prefix before taking a snapshot', () => {
+      createSession({
+        ownerBackend: 'windows-conpty',
+        startupIngress: {
+          colors: { foreground: '#2e3434', background: '#ffffff' },
+          deadlineMs: 5_000
+        }
+      })
+      subprocess.simulateData('\x1b]10;?\x07')
+      subprocess.simulateData(']10;rgb:2e2e/')
+
+      const snapshot = session.getSnapshot()
+
+      expect(snapshot?.snapshotAnsi).toContain(']10;rgb:2e2e/')
+      expect(snapshot?.outputSequence).toBe('\x1b]10;?\x07]10;rgb:2e2e/'.length)
+    })
+
+    it('reproduces the legacy paired-runtime leak and removes its downstream producer', () => {
+      const query = '\x1b]10;?\x07'
+      const reply = '\x1b]10;rgb:2e2e/3434/3434\x1b\\'
+      const projectedEcho = ']10;rgb:2e2e/3434/3434\\'
+      createSession({ ownerBackend: 'posix-pty' })
+      session.closeStartupQueryAuthority()
+      const legacyReplyProducers: string[] = []
+      const legacyOnData = vi.fn((data: string) => {
+        if (data === query) {
+          legacyReplyProducers.push('remote-visible-renderer')
+          session.write(reply)
+          if (subprocess.written.at(-1) === reply) {
+            subprocess.simulateData(projectedEcho)
+          }
+        }
+      })
+      session.attachClient({ onData: legacyOnData, onExit: () => {} })
+
+      subprocess.simulateData(query)
+
+      expect(legacyReplyProducers).toEqual(['remote-visible-renderer'])
+      expect(subprocess.written).toEqual([reply])
+      expect(legacyOnData.mock.calls).toEqual([[query], [projectedEcho]])
+      expect(session.getSnapshot()?.snapshotAnsi).toContain(projectedEcho)
+      session.dispose()
+
+      subprocess = createMockSubprocess()
+      createSession({ ownerBackend: 'windows-conpty' })
+      session.closeStartupQueryAuthority()
+      const fixedReplyProducers: string[] = []
+      const fixedOnData = vi.fn((data: string) => {
+        if (data === query) {
+          fixedReplyProducers.push('remote-visible-renderer')
+          session.write(reply)
+        }
+      })
+      session.attachClient({ onData: fixedOnData, onExit: () => {} })
+
+      subprocess.simulateData(query)
+      subprocess.simulateData('prompt')
+
+      expect(fixedReplyProducers).toEqual([])
+      expect(subprocess.written).toEqual([])
+      expect(fixedOnData.mock.calls).toEqual([['', query.length, true, query.length], ['prompt']])
+      expect(session.getSnapshot()?.snapshotAnsi).not.toContain(']10;rgb')
     })
   })
 
@@ -353,13 +468,15 @@ describe('Session', () => {
       expect(taken?.snapshot).toBeTruthy()
     })
 
-    it('cancels the post-ready flush gate when force-disposing the subprocess', () => {
+    it('cancels the post-ready flush gate when force-disposing the subprocess', async () => {
       createSession({ shellReadySupported: true })
       session.write('codex\n')
 
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
-      session.forceKillAndDisposeSubprocess()
+      const dispose = session.forceKillAndDisposeSubprocess()
+      subprocess.simulateExit(137)
+      await dispose
       vi.advanceTimersByTime(500)
 
       expect(subprocess.written).toEqual([])
@@ -406,6 +523,55 @@ describe('Session', () => {
       expect(session.isTerminating).toBe(true)
     })
 
+    it('allows a graceful retry when the first kill is rejected', () => {
+      let attempts = 0
+      subprocess.kill = () => {
+        attempts++
+        if (attempts === 1) {
+          throw new Error('graceful kill rejected')
+        }
+      }
+      createSession()
+
+      expect(() => session.kill()).toThrow('graceful kill rejected')
+      expect(session.isTerminating).toBe(false)
+      expect(() => session.kill()).not.toThrow()
+
+      expect(attempts).toBe(2)
+      expect(session.isTerminating).toBe(true)
+    })
+
+    it('non-agent kill stays synchronous and never routes through the descendant sweep', () => {
+      createSession()
+      session.kill()
+      expect(subprocess.killed).toBe(true)
+      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+    })
+
+    it('agent kill routes through the descendant sweep with the subprocess as root', () => {
+      createSession({ launchAgent: 'claude' })
+      session.kill()
+      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+        subprocess.pid,
+        expect.any(Function),
+        expect.objectContaining({ ownsRoot: expect.any(Function) })
+      )
+      // The root kill is deferred to the sweep's snapshot-first sequencing.
+      expect(subprocess.killed).toBe(false)
+      const killRoot = killWithDescendantSweepMock.mock.calls[0][1] as () => void
+      killRoot()
+      expect(subprocess.killed).toBe(true)
+    })
+
+    it('agent kill root callback is a no-op after the session already exited', () => {
+      createSession({ launchAgent: 'claude' })
+      session.kill()
+      const killRoot = killWithDescendantSweepMock.mock.calls[0][1] as () => void
+      subprocess.simulateExit(0)
+      killRoot()
+      expect(subprocess.killed).toBe(false)
+    })
+
     it('notifies attached clients on exit after kill', async () => {
       vi.useRealTimers()
       createSession()
@@ -422,7 +588,7 @@ describe('Session', () => {
       expect(exitCodes).toEqual([0])
     })
 
-    it('force-disposes after 5s if subprocess does not exit', () => {
+    it('force-kills after 5s but retains ownership until subprocess exit', () => {
       createSession()
       // Override kill to NOT trigger exit
       subprocess.kill = () => {}
@@ -432,11 +598,58 @@ describe('Session', () => {
       expect(session.state).not.toBe('exited')
 
       vi.advanceTimersByTime(5_000)
-      expect(session.state).toBe('exited')
       expect(forceKillSpy).toHaveBeenCalled()
+      expect(session.state).toBe('running')
+      expect(session.isTerminating).toBe(true)
+
+      subprocess.simulateExit(137)
+      expect(session.state).toBe('exited')
     })
 
-    it('ignores late data and exit after force-dispose', () => {
+    it('retries a rejected destructive force kill while retaining ownership', async () => {
+      let forceKillAttempts = 0
+      subprocess.forceKill = () => {
+        forceKillAttempts++
+        if (forceKillAttempts === 1) {
+          throw new Error('force kill rejected')
+        }
+      }
+      createSession()
+
+      const shutdown = session.forceKillAndWaitForExit()
+      expect(forceKillAttempts).toBe(1)
+      await vi.advanceTimersByTimeAsync(SESSION_FORCE_KILL_RETRY_MS)
+      expect(forceKillAttempts).toBe(2)
+      subprocess.simulateExit(137)
+      await shutdown
+
+      expect(session.state).toBe('exited')
+    })
+
+    it('retries a rejected graceful-deadline force kill', async () => {
+      subprocess.kill = () => {}
+      let forceKillAttempts = 0
+      subprocess.forceKill = () => {
+        forceKillAttempts++
+        if (forceKillAttempts === 1) {
+          throw new Error('transient graceful fallback failure')
+        }
+      }
+      createSession()
+
+      session.kill()
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(forceKillAttempts).toBe(1)
+      expect(session.isTerminating).toBe(true)
+
+      await vi.advanceTimersByTimeAsync(SESSION_FORCE_KILL_RETRY_MS)
+      expect(forceKillAttempts).toBe(2)
+      subprocess.simulateExit(137)
+      expect(session.state).toBe('exited')
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('keeps late data and the real exit code until physical exit', () => {
       createSession()
       subprocess.kill = () => {}
       const onData = vi.fn()
@@ -449,10 +662,10 @@ describe('Session', () => {
       subprocess.simulateData('late output')
       subprocess.simulateExit(23)
 
-      expect(onData).not.toHaveBeenCalled()
+      expect(onData).toHaveBeenCalledWith('late output')
       expect(onExit).toHaveBeenCalledTimes(1)
-      expect(onExit).toHaveBeenCalledWith(-1)
-      expect(session.exitCode).toBe(-1)
+      expect(onExit).toHaveBeenCalledWith(23, session.incarnationId)
+      expect(session.exitCode).toBe(23)
     })
   })
 
@@ -558,6 +771,13 @@ describe('Session', () => {
   })
 
   describe('snapshot', () => {
+    it('parses live OSC-7 output in the session WSL distro', () => {
+      createSession({ wslDistro: 'Ubuntu' })
+
+      subprocess.simulateData('\x1b]7;file://DESKTOP-ORCA/home/jin/repo\x07')
+
+      expect(session.getCwd()).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
+    })
     it('returns a terminal snapshot', async () => {
       createSession()
       subprocess.simulateData('$ hello\r\n')

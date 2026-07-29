@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: hook parsing, shell selection, and execution-path regressions are tightly coupled, so these cases stay in one file to preserve the behavior matrix across platforms. */
 import type { Repo } from '../shared/types'
+import type * as GitRunner from './git/runner'
 
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -29,7 +30,8 @@ vi.mock('child_process', () => ({
   spawn: vi.fn()
 }))
 
-vi.mock('./git/runner', () => ({
+vi.mock('./git/runner', async () => ({
+  ...(await vi.importActual<typeof GitRunner>('./git/runner')),
   gitExecFileSync: gitExecFileSyncMock
 }))
 
@@ -290,6 +292,82 @@ describe('parseOrcaYaml', () => {
       ]
     })
   })
+
+  it('parses worktree.sharedDirectories from orca.yaml', () => {
+    const result = parseOrcaYaml(
+      ['worktree:', '  sharedDirectories:', '    - node_modules', '    - .cache'].join('\n')
+    )
+
+    expect(result?.worktree?.sharedDirectories).toEqual(['node_modules', '.cache'])
+  })
+
+  it('normalizes and dedupes sharedDirectories entries', () => {
+    const result = parseOrcaYaml(
+      [
+        'worktree:',
+        '  sharedDirectories:',
+        '    - node_modules/',
+        '    - ./node_modules',
+        '    - "  .cache  "'
+      ].join('\n')
+    )
+
+    expect(result?.worktree?.sharedDirectories).toEqual(['node_modules', '.cache'])
+  })
+
+  it('drops unsafe sharedDirectories entries', () => {
+    const result = parseOrcaYaml(
+      [
+        'worktree:',
+        '  sharedDirectories:',
+        '    - ../escape',
+        '    - /etc',
+        '    - .git',
+        '    - .git/hooks',
+        '    - cache/.git/hooks',
+        '    - node_modules'
+      ].join('\n')
+    )
+
+    expect(result?.worktree?.sharedDirectories).toEqual(['node_modules'])
+  })
+
+  // Why: `resolve()` collapses `.` when the link is created, but Git reports the
+  // collapsed path — keeping the raw entry would leave a link that every later
+  // comparison misses, which is the permanently-dirty worktree this feature fixes.
+  it('drops sharedDirectories entries that still need path collapsing', () => {
+    const result = parseOrcaYaml(
+      [
+        'worktree:',
+        '  sharedDirectories:',
+        '    - apps/./web/node_modules',
+        '    - apps//web/.cache',
+        '    - node_modules'
+      ].join('\n')
+    )
+
+    expect(result?.worktree?.sharedDirectories).toEqual(['node_modules'])
+  })
+
+  it('returns null when sharedDirectories is the only key and holds nothing usable', () => {
+    expect(parseOrcaYaml('worktree:\n  sharedDirectories: []\n')).toBeNull()
+    expect(parseOrcaYaml('worktree:\n  sharedDirectories: node_modules\n')).toBeNull()
+  })
+
+  it('keeps sharedDirectories alongside other orca.yaml keys', () => {
+    const result = parseOrcaYaml(
+      [
+        'scripts:',
+        '  setup: pnpm install',
+        'worktree:',
+        '  sharedDirectories:',
+        '    - .cache'
+      ].join('\n')
+    )
+
+    expect(result?.scripts.setup).toBe('pnpm install')
+    expect(result?.worktree?.sharedDirectories).toEqual(['.cache'])
+  })
 })
 
 describe('hasUnrecognizedOrcaYamlKeys', () => {
@@ -333,7 +411,10 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
         'environmentRecipes:',
         '  - id: cloud-sandbox',
         '    name: Cloud Sandbox',
-        '    create: ./scripts/orca-vm/start-cloud-sandbox.sh'
+        '    create: ./scripts/orca-vm/start-cloud-sandbox.sh',
+        'worktree:',
+        '  sharedDirectories:',
+        '    - node_modules'
       ].join('\n')
     )
 
@@ -892,7 +973,13 @@ describe('runHook', () => {
         'echo hello',
         expect.objectContaining({
           cwd: '/repo/worktree',
-          shell: '/bin/bash'
+          shell: '/bin/bash',
+          // Setup hooks run unattended: git in them must not pop the OS
+          // credential helper's OAuth window and loop it (issue #7652).
+          env: expect.objectContaining({
+            GIT_TERMINAL_PROMPT: '0',
+            GCM_INTERACTIVE: 'never'
+          })
         }),
         expect.any(Function)
       )
@@ -948,7 +1035,15 @@ describe('runHook', () => {
       expect(execFileMock).toHaveBeenCalledWith(
         'wsl.exe',
         ['-d', 'Ubuntu', '--', 'bash', '-c', "cd '/home/jin/feature' && echo hello"],
-        expect.any(Object),
+        // #7652 regression: the unattended WSL hook branch must carry the
+        // credential guard, and WSLENV is what carries it into the distro.
+        expect.objectContaining({
+          env: expect.objectContaining({
+            GIT_TERMINAL_PROMPT: '0',
+            GCM_INTERACTIVE: 'never',
+            WSLENV: expect.stringContaining('GIT_TERMINAL_PROMPT')
+          })
+        }),
         expect.any(Function)
       )
       expect(execMock).not.toHaveBeenCalled()
@@ -963,18 +1058,12 @@ describe('runHook', () => {
   it('runs Windows-path hooks through WSL when the project runtime targets WSL', async () => {
     execMock.mockReset()
     execFileMock.mockReset()
+    // Why: assert on the captured options after runHook resolves — an expect()
+    // thrown inside the mock is swallowed by runHook's own error handling.
+    let capturedOptions: unknown
     execFileMock.mockImplementation((_file, _args, options, callback) => {
+      capturedOptions = options
       callback?.(null, '', '')
-      expect(options).toEqual(
-        expect.objectContaining({
-          env: expect.objectContaining({
-            ORCA_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
-            ORCA_WORKTREE_PATH: '/mnt/c/Users/jinwo/git/orca-feature',
-            CONDUCTOR_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
-            GHOSTX_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca'
-          })
-        })
-      )
       return {} as never
     })
 
@@ -987,6 +1076,9 @@ describe('runHook', () => {
       configurable: true,
       value: 'win32'
     })
+    // Why: keep the WSLENV assertion hermetic on hosts that export WSLENV.
+    const originalWslenv = process.env.WSLENV
+    delete process.env.WSLENV
 
     try {
       const { runHook } = await import('./hooks')
@@ -1015,12 +1107,36 @@ describe('runHook', () => {
         expect.any(Object),
         expect.any(Function)
       )
+      expect(capturedOptions).toEqual(
+        expect.objectContaining({
+          env: expect.objectContaining({
+            ORCA_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
+            ORCA_WORKTREE_PATH: '/mnt/c/Users/jinwo/git/orca-feature',
+            CONDUCTOR_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
+            GHOSTX_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
+            // Why: wsl.exe only imports Windows env vars named in WSLENV, so
+            // setting the vars on the execFile env alone is not enough (#9206).
+            // /u because runHook pre-translated the values to Linux paths.
+            // stringContaining, not exact: promptGuardShellEnv (#7652) appends
+            // its own guard keys (GIT_TERMINAL_PROMPT, …) after these — the
+            // setup vars must remain registered alongside them.
+            WSLENV: expect.stringContaining(
+              'ORCA_ROOT_PATH/u:ORCA_WORKTREE_PATH/u:CONDUCTOR_ROOT_PATH/u:GHOSTX_ROOT_PATH/u:ORCA_WORKSPACE_NAME/u'
+            )
+          })
+        })
+      )
       expect(execMock).not.toHaveBeenCalled()
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,
         value: originalPlatform
       })
+      if (originalWslenv === undefined) {
+        delete process.env.WSLENV
+      } else {
+        process.env.WSLENV = originalWslenv
+      }
     }
   })
 
@@ -1152,6 +1268,20 @@ describe('createSetupRunnerScript', () => {
       createSetupRunnerScript(makeRepo('wait-for-setup'), '/test/worktree', 'echo setup')
         .waitForAgentStartup
     ).toBe(true)
+  })
+
+  it('marks setup-runner terminals for the always-on credential guard', async () => {
+    gitExecFileSyncMock.mockReset()
+    gitExecFileSyncMock.mockReturnValue('/test/repo/.git/orca/setup-runner.sh\n')
+    const { createSetupRunnerScript } = await import('./hooks')
+
+    const setup = createSetupRunnerScript(makeRepo(), '/test/worktree', 'git fetch')
+
+    expect(setup.envVars).toMatchObject({
+      ORCA_ROOT_PATH: '/test/repo',
+      ORCA_WORKTREE_PATH: '/test/worktree',
+      ORCA_INTERNAL_TERMINAL_GIT_CREDENTIAL_GUARD_POLICY: 'guard'
+    })
   })
 })
 

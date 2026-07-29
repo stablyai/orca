@@ -193,6 +193,7 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
 }
 `
   )
+  writeFakeWindowsRegistry(projectDir)
 }
 
 function writeLoadableNativeModules(projectDir, { nativeDir = null } = {}) {
@@ -213,6 +214,19 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
   return { dir, module: {} }
 }
 `
+  )
+  writeFakeWindowsRegistry(projectDir)
+}
+
+function writeFakeWindowsRegistry(projectDir) {
+  if (process.platform !== 'win32') {
+    return
+  }
+  const registryDir = join(projectDir, 'node_modules', 'windows-native-registry')
+  mkdirSync(registryDir, { recursive: true })
+  writeFileSync(
+    join(registryDir, 'index.js'),
+    'exports.HK = { CU: 0x80000001 }; exports.getRegistryKey = () => ({})\n'
   )
 }
 

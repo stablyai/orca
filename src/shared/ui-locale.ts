@@ -6,6 +6,7 @@ import {
   UI_LANGUAGE_SPANISH,
   UI_LANGUAGE_SPANISH_LATAM,
   UI_LANGUAGE_SYSTEM,
+  isPluginUiLanguage,
   type UiLanguage
 } from './ui-language'
 
@@ -40,7 +41,10 @@ export function normalizeSupportedUiLocale(locale: string | undefined): Supporte
 export function resolveUiLocale(
   language: UiLanguage,
   systemLocale: string | undefined = DEFAULT_UI_LOCALE
-): SupportedUiLocale {
+): string {
+  if (isPluginUiLanguage(language)) {
+    return language
+  }
   if (language === UI_LANGUAGE_ENGLISH) {
     return DEFAULT_UI_LOCALE
   }
@@ -69,7 +73,7 @@ export function getRendererSystemLocale(): string {
   return DEFAULT_UI_LOCALE
 }
 
-export function resolveRendererUiLocale(language: UiLanguage): SupportedUiLocale {
+export function resolveRendererUiLocale(language: UiLanguage): string {
   return resolveUiLocale(
     language,
     language === UI_LANGUAGE_SYSTEM ? getRendererSystemLocale() : DEFAULT_UI_LOCALE

@@ -8,7 +8,7 @@ export const UI_LANGUAGE_SPANISH = 'es'
 // America) — so the region can't be dropped the way it is for the other locales.
 export const UI_LANGUAGE_SPANISH_LATAM = 'es-419'
 
-export type UiLanguage =
+export type BuiltInUiLanguage =
   | typeof UI_LANGUAGE_SYSTEM
   | typeof UI_LANGUAGE_ENGLISH
   | typeof UI_LANGUAGE_CHINESE
@@ -17,7 +17,10 @@ export type UiLanguage =
   | typeof UI_LANGUAGE_SPANISH
   | typeof UI_LANGUAGE_SPANISH_LATAM
 
-const UI_LANGUAGE_VALUES = new Set<UiLanguage>([
+export type PluginUiLanguage = `plugin:${string}`
+export type UiLanguage = BuiltInUiLanguage | PluginUiLanguage
+
+const UI_LANGUAGE_VALUES = new Set<BuiltInUiLanguage>([
   UI_LANGUAGE_SYSTEM,
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_CHINESE,
@@ -27,6 +30,18 @@ const UI_LANGUAGE_VALUES = new Set<UiLanguage>([
   UI_LANGUAGE_SPANISH_LATAM
 ])
 
+const PLUGIN_UI_LANGUAGE_RE =
+  /^plugin:[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i
+
+export function isPluginUiLanguage(value: unknown): value is PluginUiLanguage {
+  return typeof value === 'string' && PLUGIN_UI_LANGUAGE_RE.test(value)
+}
+
 export function normalizeUiLanguage(value: unknown): UiLanguage {
-  return UI_LANGUAGE_VALUES.has(value as UiLanguage) ? (value as UiLanguage) : UI_LANGUAGE_SYSTEM
+  if (isPluginUiLanguage(value)) {
+    return value
+  }
+  return UI_LANGUAGE_VALUES.has(value as BuiltInUiLanguage)
+    ? (value as BuiltInUiLanguage)
+    : UI_LANGUAGE_SYSTEM
 }

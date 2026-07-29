@@ -85,6 +85,16 @@ const cloudProfile: OrcaProfileSummary = {
   }
 }
 
+const localProfile: OrcaProfileSummary = {
+  id: 'local-default',
+  name: 'Personal',
+  avatar: { kind: 'initials', initials: 'P', color: 'neutral' },
+  kind: 'local',
+  createdAt: 1,
+  updatedAt: 1,
+  lastOpenedAt: 1
+}
+
 const connectedAuthStatus: OrcaProfileAuthStatus = {
   activeProfileId: 'local-default',
   configured: true,
@@ -101,6 +111,13 @@ const unconfiguredAuthStatus: OrcaProfileAuthStatus = {
   activeProfileId: 'local-default',
   configured: false,
   state: 'unconfigured',
+  persistence: 'none'
+}
+
+const signedOutAuthStatus: OrcaProfileAuthStatus = {
+  activeProfileId: 'local-default',
+  configured: true,
+  state: 'local',
   persistence: 'none'
 }
 
@@ -134,8 +151,11 @@ describe('OrcaProfileSwitcher', () => {
     const html = renderToStaticMarkup(<OrcaProfileSwitcher />)
 
     expect(html).toContain('aria-label="Account"')
+    expect(html).toContain('nina@example.com')
+    expect(html).toContain('Acme')
     // Cloud actions stay reachable in the downscoped account menu.
     expect(html).toContain('Sign out')
+    expect(html).not.toContain('Reconnect profile')
     // Profile management surfaces are gone.
     expect(html).not.toContain('Manage profiles')
     expect(html).not.toContain('New local profile')
@@ -145,6 +165,48 @@ describe('OrcaProfileSwitcher', () => {
     expect(html).not.toContain('data-testid="switch-confirm-dialog"')
     // Sign-out remains mounted.
     expect(html).toContain('data-testid="signout-confirm-dialog"')
+  })
+
+  it('presents only the sign-in action before an account identity exists', () => {
+    mocks.state = baseState({
+      orcaProfiles: [localProfile],
+      orcaProfileAuthStatus: signedOutAuthStatus,
+      orcaProfilesMultiProfileUi: false
+    })
+    const html = renderToStaticMarkup(<OrcaProfileSwitcher />)
+
+    expect(html).toContain('Sign in to Orca')
+    expect(html).not.toContain('Orca account')
+    expect(html).not.toContain('Signed out')
+    expect(html).not.toContain('Personal')
+    expect(html).not.toContain('>Local<')
+  })
+
+  it('gives a reconnect-required account an explicit recovery action', () => {
+    mocks.state = baseState({
+      orcaProfileAuthStatus: {
+        ...connectedAuthStatus,
+        state: 'reconnect-required'
+      },
+      orcaProfilesMultiProfileUi: false
+    })
+    const html = renderToStaticMarkup(<OrcaProfileSwitcher />)
+
+    expect(html).toContain('nina@example.com')
+    expect(html).toContain('Sign-in required')
+    expect(html).toContain('Sign in again')
+  })
+
+  it('names the pending browser authentication step', () => {
+    mocks.state = baseState({
+      orcaProfiles: [localProfile],
+      orcaProfileAuthStatus: signedOutAuthStatus,
+      orcaProfileConnecting: true,
+      orcaProfilesMultiProfileUi: false
+    })
+    const html = renderToStaticMarkup(<OrcaProfileSwitcher />)
+
+    expect(html).toContain('Waiting for sign-in…')
   })
 
   it('renders nothing when the flag is off and cloud is unconfigured', () => {
