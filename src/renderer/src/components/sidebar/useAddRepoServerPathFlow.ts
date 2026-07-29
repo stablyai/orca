@@ -23,6 +23,7 @@ type ShowNestedRepoReview = (args: {
 
 export function useAddRepoServerPathFlow({
   addRepoPath,
+  activeRuntimeEnvironmentId,
   closeModal,
   fetchWorktrees,
   getNestedRepoRuntimeKind,
@@ -33,7 +34,12 @@ export function useAddRepoServerPathFlow({
   onGitRepoReady,
   setAddProjectBusyLabel
 }: {
-  addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
+  addRepoPath: (
+    path: string,
+    kind?: 'git' | 'folder',
+    options?: { runtimeEnvironmentId?: string | null }
+  ) => Promise<Repo | null>
+  activeRuntimeEnvironmentId: string | null
   closeModal: () => void
   fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
   getNestedRepoRuntimeKind: (connectionId: string | null) => NestedRepoTelemetryRuntimeKind
@@ -138,7 +144,9 @@ export function useAddRepoServerPathFlow({
           }
         }
         setAddProjectBusyLabel(kind === 'git' ? 'Opening project...' : 'Opening folder...')
-        const repo = await addRepoPath(path, kind)
+        const repo = await addRepoPath(path, kind, {
+          runtimeEnvironmentId: activeRuntimeEnvironmentId
+        })
         if (gen !== serverAddGenRef.current) {
           return
         }
@@ -167,6 +175,7 @@ export function useAddRepoServerPathFlow({
     },
     [
       addRepoPath,
+      activeRuntimeEnvironmentId,
       closeModal,
       fetchWorktrees,
       getNestedRepoRuntimeKind,

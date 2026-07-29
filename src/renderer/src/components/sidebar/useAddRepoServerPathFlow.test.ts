@@ -76,6 +76,7 @@ describe('useAddRepoServerPathFlow', () => {
 
     const result = useAddRepoServerPathFlow({
       addRepoPath: mocks.addRepoPath,
+      activeRuntimeEnvironmentId: 'box1-environment-id',
       closeModal: mocks.closeModal,
       fetchWorktrees: mocks.fetchWorktrees,
       getNestedRepoRuntimeKind: mocks.getNestedRepoRuntimeKind,
@@ -88,7 +89,9 @@ describe('useAddRepoServerPathFlow', () => {
     })
     await result.handleAddServerPath('folder')
 
-    expect(mocks.addRepoPath).toHaveBeenCalledWith('/server/docs', 'folder')
+    expect(mocks.addRepoPath).toHaveBeenCalledWith('/server/docs', 'folder', {
+      runtimeEnvironmentId: 'box1-environment-id'
+    })
     expect(mocks.scanNestedRepos).not.toHaveBeenCalled()
     expect(mocks.fetchWorktrees).not.toHaveBeenCalled()
     expect(mocks.onGitRepoReady).not.toHaveBeenCalled()
