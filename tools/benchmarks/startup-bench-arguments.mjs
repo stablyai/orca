@@ -7,9 +7,14 @@
  */
 import { STATE_PROFILES } from './startup-profile-fixture.mjs'
 
-/** Flags describing the profile under test and how long a launch may take. */
-export const FIXTURE_FLAG_SPEC = {
-  '--iterations': { key: 'iterations', type: 'number' },
+/**
+ * Flags describing the profile under test and how long a launch may take.
+ *
+ * `--iterations` is deliberately absent: the A/B bench counts launches in
+ * `--pairs`, and a shared spec would make `--iterations 12` parse there and do
+ * nothing.
+ */
+export const PROFILE_FLAG_SPEC = {
   '--files': { key: 'files', type: 'number' },
   '--fixture-dir': { key: 'fixtureDir', type: 'string' },
   '--timeout-ms': { key: 'timeoutMs', type: 'number' },
@@ -21,8 +26,7 @@ export const FIXTURE_FLAG_SPEC = {
   '--linger-ms': { key: 'lingerMs', type: 'number' }
 }
 
-export const FIXTURE_ARG_DEFAULTS = {
-  iterations: 5,
+export const PROFILE_ARG_DEFAULTS = {
   files: 28000,
   fixtureDir: null,
   timeoutMs: 240000,
@@ -37,6 +41,14 @@ export const FIXTURE_ARG_DEFAULTS = {
   lingerMs: 500
 }
 
+/** Only the single-arm bench repeats a launch itself; the A/B bench uses --pairs. */
+export const SINGLE_ARM_FLAG_SPEC = {
+  ...PROFILE_FLAG_SPEC,
+  '--iterations': { key: 'iterations', type: 'number' }
+}
+
+export const SINGLE_ARM_ARG_DEFAULTS = { ...PROFILE_ARG_DEFAULTS, iterations: 5 }
+
 export function parseFlags(argv, spec, defaults) {
   const args = { ...defaults }
   for (let i = 2; i < argv.length; i++) {
@@ -44,14 +56,20 @@ export function parseFlags(argv, spec, defaults) {
     if (!flag) {
       throw new Error(`Unknown argument: ${argv[i]}`)
     }
+    if (flag.type === 'boolean') {
+      args[flag.key] = true
+      continue
+    }
     const raw = argv[++i]
     if (raw === undefined) {
       throw new Error(`Missing value for ${argv[i - 1]}`)
     }
     if (flag.type === 'number') {
       const value = Number(raw)
-      if (!Number.isFinite(value)) {
-        throw new Error(`${argv[i - 1]} expects a number, got: ${raw}`)
+      // Number('') is 0 and a negative parses fine, so an empty or negative
+      // value would silently become an empty run or an instant timeout.
+      if (raw.trim() === '' || !Number.isFinite(value) || value < 0) {
+        throw new Error(`${argv[i - 1]} expects a non-negative number, got: ${raw}`)
       }
       args[flag.key] = value
     } else {

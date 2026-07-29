@@ -40,9 +40,9 @@ import {
 import { median } from './paired-shift-statistics.mjs'
 import {
   assertStateProfile,
-  FIXTURE_ARG_DEFAULTS,
-  FIXTURE_FLAG_SPEC,
-  parseFlags
+  parseFlags,
+  SINGLE_ARM_ARG_DEFAULTS,
+  SINGLE_ARM_FLAG_SPEC
 } from './startup-bench-arguments.mjs'
 import { derivePhases, runIteration } from './startup-launch-probe.mjs'
 import { prepareStartupFixture } from './startup-profile-fixture.mjs'
@@ -51,23 +51,25 @@ const scriptDir = import.meta.dirname
 const repoRoot = resolve(scriptDir, '..', '..')
 
 const FLAG_SPEC = {
-  ...FIXTURE_FLAG_SPEC,
+  ...SINGLE_ARM_FLAG_SPEC,
   '--label': { key: 'label', type: 'string' },
   '--exe': { key: 'exe', type: 'string' }
 }
 
 async function main() {
   const args = parseFlags(process.argv, FLAG_SPEC, {
-    ...FIXTURE_ARG_DEFAULTS,
+    ...SINGLE_ARM_ARG_DEFAULTS,
     label: 'run',
     exe: null
   })
   assertStateProfile(args.stateProfile)
-
-  const { fixtureDir, launchEnv } = prepareStartupFixture(args)
+  // Before the fixture: at the default --files 28000 that is tens of seconds of
+  // disk I/O to throw away on a missing build.
   if (!args.exe && !existsSync(join(repoRoot, 'out', 'main', 'index.js'))) {
     throw new Error('out/main/index.js missing — run `pnpm build:electron-vite` first')
   }
+
+  const { fixtureDir, launchEnv } = prepareStartupFixture(args)
 
   const iterations = []
   for (let i = 0; i < args.iterations; i++) {
