@@ -78,10 +78,6 @@ function typeQuery(input: HTMLInputElement, value: string): void {
   })
 }
 
-function counterText(): string {
-  return container.querySelector('span')?.textContent?.trim() ?? ''
-}
-
 describe('PdfFind match counter', () => {
   it('advances the counter when pdf.js reports a new selection', () => {
     const { bus, emit } = createEventBusStub()
@@ -90,15 +86,16 @@ describe('PdfFind match counter', () => {
 
     // The initial scan reports the totals through updatefindmatchescount.
     emit('updatefindmatchescount', { current: 1, total: 5 })
-    expect(counterText()).toBe('1 of 5')
+    expect(container.textContent).toContain('1 of 5')
 
     // Why: stepping to the next match does not rescan any page, so pdf.js
     // reports the new position through updatefindcontrolstate only.
     emit('updatefindcontrolstate', { current: 2, total: 5 })
-    expect(counterText()).toBe('2 of 5')
+    expect(container.textContent).toContain('2 of 5')
+    expect(container.textContent).not.toContain('1 of 5')
 
     emit('updatefindcontrolstate', { current: 3, total: 5 })
-    expect(counterText()).toBe('3 of 5')
+    expect(container.textContent).toContain('3 of 5')
   })
 
   it('keeps following the totals reported while pages are still being scanned', () => {
@@ -107,10 +104,11 @@ describe('PdfFind match counter', () => {
     typeQuery(input, 'orca')
 
     emit('updatefindmatchescount', { current: 1, total: 2 })
-    expect(counterText()).toBe('1 of 2')
+    expect(container.textContent).toContain('1 of 2')
 
     emit('updatefindmatchescount', { current: 1, total: 7 })
-    expect(counterText()).toBe('1 of 7')
+    expect(container.textContent).toContain('1 of 7')
+    expect(container.textContent).not.toContain('1 of 2')
   })
 
   it('clears a stale count when the next query finds nothing', () => {
@@ -125,7 +123,8 @@ describe('PdfFind match counter', () => {
     typeQuery(input, 'zzzz')
     emit('updatefindcontrolstate', { current: 0, total: 0 })
 
-    expect(counterText()).toBe('No matches')
+    expect(container.textContent).toContain('No matches')
+    expect(container.textContent).not.toContain('1 of 5')
   })
 
   it('unregisters both listeners on unmount', () => {
