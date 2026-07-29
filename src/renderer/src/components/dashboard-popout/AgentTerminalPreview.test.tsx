@@ -902,11 +902,17 @@ describe('AgentTerminalPreview', () => {
     Object.defineProperty(screen, 'offsetWidth', { configurable: true, value: 800 })
     Object.defineProperty(screen, 'offsetHeight', { configurable: true, value: 384 })
     host.appendChild(screen)
+    const focusTarget = document.createElement('input')
+    host.appendChild(focusTarget)
+    focusTarget.focus()
+    act(() => emitAppMenuPaste!())
     await vi.advanceTimersByTimeAsync(400)
 
     expect(fit).not.toHaveBeenCalled()
     expect(terminal.focus).not.toHaveBeenCalled()
     expect(terminal.onDataListener).toBeNull()
+    expect(readClipboardText).not.toHaveBeenCalled()
+    expect(terminal.paste).not.toHaveBeenCalled()
     expect(input).not.toHaveBeenCalled()
   })
 

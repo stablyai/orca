@@ -1,11 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { History } from 'lucide-react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { subscribeToTerminalUserInput } from '@/components/terminal-pane/terminal-user-input-signal'
-import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import { replayPreviewConnectionSnapshot } from './preview-terminal-snapshot-replay'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
@@ -18,13 +15,12 @@ import { installPreviewTerminalCompatibility } from './preview-terminal-compatib
 import { createPreviewClipboardPaster } from './preview-terminal-paste'
 import { installPreviewImeBridge, type PreviewImeBridge } from './preview-terminal-ime-bridge'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
-import { translate } from '@/i18n/i18n'
-import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
-import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { installPreviewTerminalKeyHandler } from './preview-terminal-key-handler'
 import { createPreviewGridClaim } from './preview-grid-claim'
 import { installPreviewTerminalAppMenuClipboard } from './preview-terminal-app-menu-clipboard'
+import { PreviewTerminalShell } from './preview-terminal-shell'
+import { usePreviewTerminalTheme } from './use-preview-terminal-theme'
 import type { TerminalPreviewDataPayload } from '../../../../shared/terminal-preview'
 
 const PREVIEW_SCROLLBACK_ROWS = 24
@@ -68,24 +64,13 @@ export function AgentTerminalPreview({
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const settings = useAppStore((state) => state.settings)
-  const systemPrefersDark = useSystemPrefersDark()
   const macOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
   // Why: keys and appearance must read live values without remounting the
   // terminal (a remount reconnects the pty and repaints from a new snapshot).
   const settingsRef = useRef(settings)
   const macOptionAsAltRef = useRef(macOptionAsAlt)
   const terminalInputRef = useRef(terminalInput)
-  const { terminalTheme, terminalMode } = useMemo(() => {
-    if (!settings) {
-      return { terminalTheme: null, terminalMode: 'dark' as const }
-    }
-    const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
-    const theme = composeActiveTerminalTheme(
-      appearance.theme ?? getBuiltinTheme(appearance.themeName),
-      settings
-    )
-    return { terminalTheme: theme, terminalMode: appearance.mode }
-  }, [settings, systemPrefersDark])
+  const { terminalTheme, terminalMode } = usePreviewTerminalTheme(settings)
   // A null snapshot means no serializer knows this pty AND no history survives
   // it — say so instead of painting a silent blank terminal.
   const [ptyGone, setPtyGone] = useState(false)
@@ -313,23 +298,21 @@ export function AgentTerminalPreview({
         terminalRef.current = null
       }
       if (!terminal) {
-        terminal = new Terminal(
-          {
-            ...buildPreviewTerminalOptions({
-              settings: settingsRef.current,
-              terminalInput: terminalInputRef.current,
-              macOptionIsMeta: macOptionAsAltRef.current === 'true',
-              theme: terminalTheme,
-              themeMode: terminalMode,
-              cols: clamp(snap.cols ?? FALLBACK_COLS, 2, 500),
-              rows: clamp(snap.rows ?? FALLBACK_ROWS, 2, 200),
-              scrollback: PREVIEW_SCROLLBACK_BUFFER_ROWS
-            }),
-            // Why: a history frame has no input target; this also prevents
-            // xterm from encoding ordinary keystrokes.
-            ...(readOnly ? { disableStdin: true } : {})
-          }
-        )
+        terminal = new Terminal({
+          ...buildPreviewTerminalOptions({
+            settings: settingsRef.current,
+            terminalInput: terminalInputRef.current,
+            macOptionIsMeta: macOptionAsAltRef.current === 'true',
+            theme: terminalTheme,
+            themeMode: terminalMode,
+            cols: clamp(snap.cols ?? FALLBACK_COLS, 2, 500),
+            rows: clamp(snap.rows ?? FALLBACK_ROWS, 2, 200),
+            scrollback: PREVIEW_SCROLLBACK_BUFFER_ROWS
+          }),
+          // Why: a history frame has no input target; this also prevents
+          // xterm from encoding ordinary keystrokes.
+          ...(readOnly ? { disableStdin: true } : {})
+        })
         try {
           terminal.open(container)
         } catch {
@@ -485,48 +468,12 @@ export function AgentTerminalPreview({
   }, [settings, macOptionAsAlt])
 
   return (
-    // Why: a size FIXED by the viewport (not shrink-to-fit) + overflow-hidden
-    // keeps the dialog stable no matter how wide/tall the pane's serialized
-    // buffer is. The terminal keeps the pane's true dimensions and is scaled/
-    // clipped to fit; fitToBox anchors whichever end keeps the cursor in view.
-    <div
-      className={cn(
-        'relative flex h-[calc(100vh-140px)] w-full flex-col gap-1.5 overflow-hidden bg-background p-1.5',
-        className
-      )}
-      style={terminalTheme?.background ? { backgroundColor: terminalTheme.background } : undefined}
-    >
-      {ptyGone ? (
-        <div className="absolute inset-0 flex items-center justify-center px-2.5 py-8 text-center text-[11px] text-muted-foreground">
-          {translate(
-            'dashboardPopout.terminal.closed',
-            "No live terminal — this agent's pane has closed."
-          )}
-        </div>
-      ) : null}
-      {historical ? (
-        <div
-          role="status"
-          className="flex shrink-0 items-start gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-1 text-[11px] text-amber-700 dark:text-amber-300"
-        >
-          <History className="mt-px size-3 shrink-0" aria-hidden />
-          <span>
-            {translate(
-              'dashboardPopout.terminal.historical',
-              "Showing this pane's last saved frame — it isn't attached right now. Open the worktree to resume it."
-            )}
-          </span>
-        </div>
-      ) : null}
-      <div
-        aria-hidden={ptyGone || undefined}
-        className={cn(
-          'flex min-h-0 w-full flex-1 items-end overflow-hidden',
-          ptyGone && 'invisible'
-        )}
-      >
-        <div ref={containerRef} className="origin-bottom-left" />
-      </div>
-    </div>
+    <PreviewTerminalShell
+      containerRef={containerRef}
+      ptyGone={ptyGone}
+      historical={historical}
+      backgroundColor={terminalTheme?.background}
+      className={className}
+    />
   )
 }
