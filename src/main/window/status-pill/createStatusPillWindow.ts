@@ -11,7 +11,8 @@ import { attachStatusPillIpcListeners } from './status-pill-ipc'
 import {
   attachDisplayListeners,
   defaultStatusPillWarn,
-  loadPillEntry
+  loadPillEntry,
+  startClickThroughPoll
 } from './status-pill-window-helpers'
 import type {
   StatusPillAgentRow,
@@ -251,6 +252,10 @@ export function createStatusPillWindow(
   // setIgnoreMouseEvents so the tall transparent overlay only captures the
   // cursor over the actual pill/panel.
   let contentRect: { left: number; top: number; width: number; height: number } | null = null
+  // Why: while a pointer is pressed (a drag in progress) the window must stay
+  // capturing even if the cursor briefly leaves the content rect — otherwise
+  // the poll would flip back to click-through mid-drag and sever the drag.
+  let capturing = false
   const detachIpc = attachStatusPillIpcListeners({
     window,
     onFocusMainWindow: options.onFocusMainWindow,
@@ -261,6 +266,9 @@ export function createStatusPillWindow(
     onHidePill: options.onHidePill,
     onContentRect: (rect) => {
       contentRect = rect
+    },
+    onSetCapturing: (value) => {
+      capturing = value
     },
     warn,
     // Why: the renderer drives manual dragging (mousedown → mousemove). It
@@ -289,35 +297,12 @@ export function createStatusPillWindow(
 
   // Why: drive click-through from the MAIN process via screen.getCursorScreenPoint.
   // The setIgnoreMouseEvents({forward:true}) + renderer mousemove pattern dropped
-  // clicks on macOS, so we poll the cursor here and toggle capture when it is
-  // over the interactive content rect. Reliable across platforms, no forwarding.
-  window.setIgnoreMouseEvents(true)
-  const clickThroughTimer: NodeJS.Timeout = setInterval(() => {
-    if (window.isDestroyed()) {
-      return
-    }
-    let overContent = false
-    if (contentRect) {
-      try {
-        const cursor = screen.getCursorScreenPoint()
-        const wb = window.getBounds()
-        const x = wb.x + contentRect.left
-        const y = wb.y + contentRect.top
-        overContent =
-          cursor.x >= x &&
-          cursor.x <= x + contentRect.width &&
-          cursor.y >= y &&
-          cursor.y <= y + contentRect.height
-      } catch {
-        // Best-effort; screen API unavailable in tests.
-      }
-    }
-    try {
-      window.setIgnoreMouseEvents(!overContent)
-    } catch {
-      // Best-effort.
-    }
-  }, 80)
+  // clicks on macOS, so we poll the cursor and toggle capture over the content
+  // rect (or while a pointer is pressed). Reliable across platforms, no forwarding.
+  const stopClickThroughPoll = startClickThroughPoll(window, {
+    getContentRect: () => contentRect,
+    isCapturing: () => capturing
+  })
 
   // Why: push the initial snapshot as soon as the renderer signals it is
   // ready, so the pill never paints an empty state for 250 ms on first mount.
@@ -361,7 +346,7 @@ export function createStatusPillWindow(
       clearTimeout(persistTimer)
       persistTimer = null
     }
-    clearInterval(clickThroughTimer)
+    stopClickThroughPoll()
     detachDisplayListeners()
     detachIpc()
     broadcaster.destroy()

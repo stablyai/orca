@@ -179,6 +179,10 @@ export type StatusPillPreloadApi = {
    *  the global cursor against it and toggle click-through. Sent whenever the
    *  pill-stack resizes (dot -> bar -> panel). */
   setContentRect: (rect: { left: number; top: number; width: number; height: number }) => void
+  /** Lock the window into "capturing" mode (setIgnoreMouseEvents(false)) for
+   *  the duration of a pointer press, so a drag never gets cut by the
+   *  click-through poll when the cursor briefly leaves the content rect. */
+  setCapturing: (capturing: boolean) => void
   /** Send raw bytes (option number, label text, Escape, …) to the agent PTY
    *  that asked the currently-pending question. Returns whether the write
    *  reached a live terminal. Main resolves the paneKey → terminal handle →

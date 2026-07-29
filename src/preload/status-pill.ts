@@ -57,6 +57,9 @@ const api: StatusPillPreloadApi = {
   setContentRect: (rect: { left: number; top: number; width: number; height: number }): void => {
     ipcRenderer.send('statusPill:contentRect', rect)
   },
+  setCapturing: (capturing: boolean): void => {
+    ipcRenderer.send('statusPill:setCapturing', capturing)
+  },
   answerQuestion: (paneKey: string, raw: string): Promise<StatusPillAnswerResult> =>
     ipcRenderer.invoke('statusPill:answerAgent', { paneKey, raw })
 }
