@@ -49,9 +49,10 @@
         "https://github.com/stablyai/orca/issues/8791"
       ],
       "invariant": "Once a bottom drawer begins closing, unrelated parent rerenders must not replace its completion callback or restart the native hide animation. The drawer must unmount once and deliver the latest after-close action exactly once.",
-      "oracle": "Render one drawer, begin closing it, rerender with new parent callbacks before completion, and require every MountedBottomDrawer frame to retain one onHidden identity. Trigger that completion barrier once, then require only the latest after-close callback to run and the drawer to unmount.",
+      "oracle": "Render one drawer, begin closing it, rerender with new parent callbacks before completion, and require every MountedBottomDrawer frame to retain one onHidden identity. Trigger that completion barrier repeatedly, then require the drawer's null render to commit before only the latest after-close callback runs exactly once.",
       "commands": [
-        "pnpm --dir mobile exec vitest run --root .. mobile/src/components/bottom-drawer-close-lifecycle.test.ts"
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/components/bottom-drawer-close-lifecycle.test.ts",
+        "Manual iOS 26.5 simulator: long-press paired host; open Edit host; return; long-press host; Remove; confirm Remove; assert host disappears"
       ],
       "testFiles": [
         "mobile/src/components/bottom-drawer-close-lifecycle.test.ts"
@@ -60,7 +61,7 @@
         {
           "file": "mobile/src/components/bottom-drawer-close-lifecycle.test.ts",
           "assertions": [
-            "does not restart an in-flight close when parent callbacks change"
+            "keeps close stable and delivers the latest action once after unmount"
           ]
         }
       ],
@@ -73,6 +74,15 @@
           "result": "passed",
           "durationSeconds": 0.18,
           "summary": "The focused lifecycle harness passed with stable completion identity, latest-callback delivery, and drawer unmount assertions."
+        },
+        {
+          "date": "2026-07-28",
+          "runner": "manual",
+          "platform": "ios",
+          "command": "Manual iOS 26.5 simulator: long-press paired host; open Edit host; return; long-press host; Remove; confirm Remove; assert host disappears",
+          "result": "passed",
+          "durationSeconds": 37,
+          "summary": "Edit host opened responsively after the drawer closed; returning and confirming Remove deleted the host without freezing."
         }
       ],
       "runtimeBudget": {

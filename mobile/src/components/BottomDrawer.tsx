@@ -32,12 +32,35 @@ export function BottomDrawer({
 }: Props) {
   const [mounted, setMounted] = useState(visible)
   const onAfterCloseRef = useRef(onAfterClose)
+  const hiddenHandledRef = useRef(false)
+  const afterClosePendingRef = useRef(false)
+
   useEffect(() => {
     onAfterCloseRef.current = onAfterClose
   }, [onAfterClose])
-  const handleHidden = useCallback(() => {
-    setMounted(false)
+
+  useEffect(() => {
+    if (visible) {
+      hiddenHandledRef.current = false
+      afterClosePendingRef.current = false
+    }
+  }, [visible])
+
+  useEffect(() => {
+    if (mounted || !afterClosePendingRef.current) {
+      return
+    }
+    afterClosePendingRef.current = false
     onAfterCloseRef.current?.()
+  }, [mounted])
+
+  const handleHidden = useCallback(() => {
+    if (hiddenHandledRef.current) {
+      return
+    }
+    hiddenHandledRef.current = true
+    afterClosePendingRef.current = true
+    setMounted(false)
   }, [])
   const resolvedMounted = resolveBottomDrawerMounted(visible, mounted)
 

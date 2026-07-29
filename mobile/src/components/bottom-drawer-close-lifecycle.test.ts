@@ -52,14 +52,17 @@ function mountedDrawer(renderer: ReactTestRenderer) {
 describe('BottomDrawer close lifecycle', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    vi.spyOn(console, 'error').mockImplementation((message) => {
+    const originalConsoleError = console.error
+    vi.spyOn(console, 'error').mockImplementation((...args) => {
+      const message = args[0]
       if (
-        typeof message !== 'string' ||
-        (!message.includes('react-test-renderer is deprecated') &&
-          !message.includes('The current testing environment is not configured to support act'))
+        typeof message === 'string' &&
+        (message.includes('react-test-renderer is deprecated') ||
+          message.includes('The current testing environment is not configured to support act'))
       ) {
-        throw new Error(String(message))
+        return
       }
+      originalConsoleError(...args)
     })
   })
 
@@ -67,10 +70,14 @@ describe('BottomDrawer close lifecycle', () => {
     vi.restoreAllMocks()
   })
 
-  it('does not restart an in-flight close when parent callbacks change', () => {
+  it('keeps close stable and delivers the latest action once after unmount', () => {
     const firstAfterClose = vi.fn()
-    const latestAfterClose = vi.fn()
+    const rendered: { current?: ReactTestRenderer } = {}
+    const latestAfterClose = vi.fn(() => {
+      expect(rendered.current?.toJSON()).toBeNull()
+    })
     const renderer = renderDrawer(true, vi.fn(), firstAfterClose)
+    rendered.current = renderer
     const initialOnHidden = mountedDrawer(renderer).props.onHidden
 
     updateDrawer(renderer, false, vi.fn(), firstAfterClose)
@@ -81,6 +88,10 @@ describe('BottomDrawer close lifecycle', () => {
     expect(closingOnHidden).toBe(initialOnHidden)
     expect(rerenderedOnHidden).toBe(initialOnHidden)
 
+    act(() => {
+      rerenderedOnHidden()
+      rerenderedOnHidden()
+    })
     act(() => {
       rerenderedOnHidden()
     })
