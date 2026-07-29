@@ -15,7 +15,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { escapeRegex } from '../../shared/string-utils'
+import { escapeRegex } from '../../shared/regex-escaping'
 import {
   computeTrustKey,
   computeTrustedHash,
