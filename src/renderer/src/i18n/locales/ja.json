@@ -133,7 +133,7 @@
       "064bd07810": "戻る",
       "ce37cf5279": "サイドバーの切り替え ({{value0}})",
       "e4b9e7dff7": "サイドバーの切り替え",
-      "pluginCommandFailed": "Could not run the plugin command."
+      "pluginCommandFailed": "プラグインのコマンドを実行できませんでした。"
     },
     "web": {
       "WebConnect": {
@@ -762,8 +762,8 @@
         "projectHostsSummary": "{{value0}} 台のホスト",
         "linearTitle": "Linear",
         "linearDescription": "Give agents the skill to read and update your linked Linear tickets.",
-        "pluginsTitle": "Plugins",
-        "pluginsDescription": "Install and manage experimental Orca plugins."
+        "pluginsTitle": "プラグイン",
+        "pluginsDescription": "試験的な Orca プラグインをインストールして管理します。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
@@ -1952,7 +1952,7 @@
         "projectsGroupsHeader": "プロジェクトとグループ",
         "projectBadge": "プロジェクト",
         "repoGroupBadge": "リポジトリグループ",
-        "pluginCommandFailed": "Could not run the plugin command."
+        "pluginCommandFailed": "プラグインのコマンドを実行できませんでした。"
       },
       "github": {
         "pr": {
@@ -4175,7 +4175,7 @@
           "ee240a39eb": "フィルターの編集",
           "automationCreated": "自動化で作成されたワークスペースを非表示",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "Hide detached HEAD"
+          "detachedHead": "分離HEADを非表示"
         },
         "SidebarHeader": {
           "92154beb7e": "新規ワークスペース",
@@ -4240,7 +4240,7 @@
           "82594419ba": "フィルター",
           "automationCreated": "自動化で作成されたワークスペースを非表示",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "Hide detached HEAD"
+          "detachedHead": "分離HEADを非表示"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent アクティビティのレイアウト",
@@ -6833,7 +6833,7 @@
           "781cb74d22": "terminal ペインから実行します。",
           "cb02e00202": "ターミナル",
           "d8c988dab4": "~/.orca/keybindings.json",
-          "shortcutUnavailable": "Shortcut is no longer available."
+          "shortcutUnavailable": "ショートカットは利用できなくなりました。"
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "引数",
@@ -9346,7 +9346,7 @@
           "copy": "コピー",
           "copied": "コピーされました",
           "recipes": "レシピ",
-          "recipesHelp": "agent が orca.yaml に追加したレシピがここに表示され、ワー​​クスペースを起動できるようになります。",
+          "recipesHelp": "orca.yaml と有効なプラグインのレシピがここに表示され、ワークスペースを起動できます。",
           "refresh": "一時的な VM レシピを更新する",
           "checking": "レシピを確認中...",
           "none": "レシピはまだ見つかりません。"
@@ -9575,7 +9575,7 @@
             "eventsSubscribe": "ワークツリーが作成または削除され、エージェントステータスが変更されたときに通知を受ける",
             "settingsOwn": "プラグインの独自設定を読み取りおよび変更"
           },
-          "decisionFailed": "Could not save the permission decision. Try again."
+          "decisionFailed": "権限の選択を保存できませんでした。再試行してください。"
         },
         "PluginConsentProvenance": {
           "official": "Official",
@@ -9589,23 +9589,23 @@
           "indexCommit": "Index commit"
         },
         "PluginDevelopmentSection": {
-          "saveFailed": "Could not save development plugin paths.",
-          "pathRequired": "Enter a plugin folder path.",
-          "title": "Development",
-          "help": "Load plugins directly from folders on this computer while you develop them. Dev plugins still require permission review. Workers run on this desktop host; SSH workspace actions route through Orca, so paths here are desktop paths.",
-          "remove": "Remove",
-          "pathLabel": "Development plugin folder path",
+          "saveFailed": "開発用プラグインのパスを保存できませんでした。",
+          "pathRequired": "プラグインフォルダーのパスを入力してください。",
+          "title": "開発",
+          "help": "開発中のプラグインを、このコンピューター上のフォルダーから直接読み込みます。開発用プラグインにも権限の確認が必要です。ワーカーはこのデスクトップホストで実行され、SSH ワークスペースの操作は Orca 経由で処理されるため、ここにはデスクトップ側のパスを指定します。",
+          "remove": "削除",
+          "pathLabel": "開発用プラグインのフォルダーパス",
           "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
-          "add": "Add path"
+          "add": "パスを追加"
         },
         "PluginInstallDialog": {
-          "localRequired": "Enter the plugin folder path.",
-          "gitUrlRequired": "Enter a repository URL.",
-          "gitUrlInvalid": "Use an HTTPS or SSH Git URL. Executable Git helper protocols are not allowed.",
-          "gitRefRequired": "Add an explicit #ref (tag or commit) so the install is pinned — for example #v0.1.0.",
-          "title": "Install plugin",
-          "description": "Installing copies the plugin into Orca and shows its permissions for review. No plugin code runs until you enable it.",
-          "source": "Install source",
+          "localRequired": "プラグインフォルダーのパスを入力してください。",
+          "gitUrlRequired": "リポジトリ URL を入力してください。",
+          "gitUrlInvalid": "HTTPS または SSH の Git URL を使用してください。実行可能な Git ヘルパープロトコルは使用できません。",
+          "gitRefRequired": "インストールを固定するため、明示的な #ref（タグまたはコミット）を追加してください。例: #v0.1.0。",
+          "title": "プラグインをインストール",
+          "description": "インストールするとプラグインが Orca にコピーされ、確認する権限が表示されます。有効にするまでプラグインのコードは実行されません。",
+          "source": "インストール元",
           "localTab": "ローカルフォルダー",
           "gitTab": "Git URL",
           "localLabel": "プラグインフォルダーパス",
@@ -11069,13 +11069,13 @@
             }
           },
           "PluginPanel": {
-            "unavailable": "This plugin panel is no longer available.",
-            "loading": "Loading plugin panel...",
-            "unresponsive": "This plugin panel stopped responding and was suspended.",
-            "loadFailed": "The plugin panel could not be loaded."
+            "unavailable": "このプラグインパネルは利用できなくなりました。",
+            "loading": "プラグインパネルを読み込み中...",
+            "unresponsive": "プラグインパネルが応答しなくなったため停止しました。",
+            "loadFailed": "プラグインパネルを読み込めませんでした。"
           },
           "activityBar": {
-            "error": "Error"
+            "error": "エラー"
           }
         }
       },
@@ -13073,8 +13073,8 @@
             }
           },
           "pluginQuickActions": {
-            "description": "{{value0}} plugin command",
-            "keyword": "plugin command"
+            "description": "{{value0}} プラグインのコマンド",
+            "keyword": "プラグインのコマンド"
           }
         }
       },
@@ -13702,9 +13702,9 @@
           }
         },
         "pluginPanelBridgeHost": {
-          "actionsUnavailable": "Plugin actions are not available in this client.",
-          "messageTooLarge": "Message exceeds the size limit.",
-          "tooManyRequests": "Too many requests."
+          "actionsUnavailable": "このクライアントではプラグイン操作を利用できません。",
+          "messageTooLarge": "メッセージがサイズ制限を超えています。",
+          "tooManyRequests": "リクエストが多すぎます。"
         }
       },
       "link": {

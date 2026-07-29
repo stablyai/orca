@@ -40,9 +40,12 @@ describe('orchestration RPC methods', () => {
         coordinatorHandle: 'term_coord',
         coordinatorPaneKey
       }).id
+      // Why: default direct fixtures to current-contract state; legacy behavior has dedicated tests.
       const createTask = db.createTask.bind(db)
-      // Why: legacy tests exercise the RPC behavior under test; default their direct fixture rows to the bound Run.
       db.createTask = (task) => createTask({ ...task, runId: task.runId ?? activeRunId })
+      const insertMessage = db.insertMessage.bind(db)
+      db.insertMessage = (message) =>
+        insertMessage({ ...message, runId: message.runId ?? activeRunId })
     } else {
       activeRunId = undefined
     }
@@ -1548,22 +1551,23 @@ describe('orchestration RPC methods', () => {
       expect(db.getUnreadMessages('b')).toHaveLength(1)
     })
 
-    it('keeps waiting for requested types when an unrelated heartbeat arrives', async () => {
+    it('keeps waiting for requested types when an unrelated status arrives', async () => {
       setup()
 
       const waitPromise = call('orchestration.check', {
         terminal: 'coord',
         wait: true,
         timeoutMs: 5000,
-        types: 'worker_done,escalation'
+        types: 'escalation,question'
       }) as Promise<{ count: number; messages: { type: string }[] }>
       await Promise.resolve()
 
       await call('orchestration.send', {
         from: 'worker',
         to: 'coord',
-        subject: 'alive',
-        type: 'heartbeat'
+        subject: 'still working',
+        type: 'status',
+        run: activeRunId
       })
 
       const early = await Promise.race([
@@ -1575,13 +1579,14 @@ describe('orchestration RPC methods', () => {
       await call('orchestration.send', {
         from: 'worker',
         to: 'coord',
-        subject: 'done',
-        type: 'worker_done'
+        subject: 'needs attention',
+        type: 'escalation',
+        run: activeRunId
       })
 
       const result = await waitPromise
       expect(result.count).toBe(1)
-      expect(result.messages[0].type).toBe('worker_done')
+      expect(result.messages[0].type).toBe('escalation')
     })
 
     it('does not mark existing messages read when the check starts aborted', async () => {

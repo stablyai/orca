@@ -223,26 +223,52 @@ describe('createPanelBridgeMessageHandler', () => {
     expect(panelWindow.postMessage).not.toHaveBeenCalled()
   })
 
-  it('charges pong and invalid guest traffic before parsing either message', () => {
+  it('charges every guest frame, pongs included, to the data budget', () => {
     const panelWindow = createFakePanelWindow()
     const admit = vi.fn<PanelMessageBudget['admit']>().mockReturnValue(null)
+    const controlAdmit = vi.fn<PanelMessageBudget['admit']>().mockReturnValue(null)
     const onPong = vi.fn()
     const handler = createPanelBridgeMessageHandler({
       sessionToken: SESSION_TOKEN,
       getPanelWindow: () => panelWindow,
       callPanelAction: vi.fn(),
       onPong,
-      budget: { maxBytes: 1024, admit }
+      budget: { maxBytes: 1024, admit },
+      controlBudget: { maxBytes: 1024, admit: controlAdmit }
     })
 
     handler(messageEvent({ type: 'invalid-hostile-message' }, panelWindow))
     handler(messageEvent({ type: 'orca-panel-pong', pingId: 7 }, panelWindow))
 
+    // The pong spends data budget too, so the reserved lane grants liveness
+    // without also granting a free channel for unmetered host work.
     expect(admit).toHaveBeenCalledTimes(2)
+    expect(controlAdmit).toHaveBeenCalledTimes(1)
     expect(onPong).toHaveBeenCalledWith(7)
   })
 
-  it('does not accept a pong refused by the rate budget', () => {
+  it('charges a near-miss pong to the data budget only, sparing the reserved lane', () => {
+    const panelWindow = createFakePanelWindow()
+    const admit = vi.fn<PanelMessageBudget['admit']>().mockReturnValue(null)
+    const controlAdmit = vi.fn<PanelMessageBudget['admit']>().mockReturnValue(null)
+    const handler = createPanelBridgeMessageHandler({
+      sessionToken: SESSION_TOKEN,
+      getPanelWindow: () => panelWindow,
+      callPanelAction: vi.fn(),
+      onPong: vi.fn(),
+      budget: { maxBytes: 1024, admit },
+      controlBudget: { maxBytes: 1024, admit: controlAdmit }
+    })
+
+    handler(messageEvent({ type: 'orca-panel-pong', pingId: -1 }, panelWindow))
+    handler(messageEvent({ type: 'orca-panel-pong', pingId: 'seven' }, panelWindow))
+    handler(messageEvent({ type: 'orca-panel-pong' }, panelWindow))
+
+    expect(admit).toHaveBeenCalledTimes(3)
+    expect(controlAdmit).not.toHaveBeenCalled()
+  })
+
+  it('keeps answering the watchdog while the data budget is saturated', () => {
     const panelWindow = createFakePanelWindow()
     const onPong = vi.fn()
     const handler = createPanelBridgeMessageHandler({
@@ -254,6 +280,50 @@ describe('createPanelBridgeMessageHandler', () => {
     })
 
     handler(messageEvent({ type: 'orca-panel-pong', pingId: 7 }, panelWindow))
+
+    expect(onPong).toHaveBeenCalledWith(7)
+  })
+
+  it('never lets a panel starve its own watchdog with self-sent pong traffic', () => {
+    const panelWindow = createFakePanelWindow()
+    const onPong = vi.fn()
+    let clock = 0
+    const handler = createPanelBridgeMessageHandler({
+      sessionToken: SESSION_TOKEN,
+      getPanelWindow: () => panelWindow,
+      callPanelAction: vi.fn(),
+      onPong,
+      now: () => clock
+    })
+
+    // A hostile panel floods unsolicited pongs, then the real watchdog reply
+    // for this window arrives. Any per-window count on the reserved lane would
+    // have been spent by the flood and would drop pingId 99.
+    for (let i = 0; i < 500; i += 1) {
+      handler(messageEvent({ type: 'orca-panel-pong', pingId: i }, panelWindow))
+      clock += 1
+    }
+    handler(messageEvent({ type: 'orca-panel-pong', pingId: 99 }, panelWindow))
+
+    expect(onPong).toHaveBeenLastCalledWith(99)
+  })
+
+  it('refuses an oversized frame on the reserved lane', () => {
+    const panelWindow = createFakePanelWindow()
+    const onPong = vi.fn()
+    const handler = createPanelBridgeMessageHandler({
+      sessionToken: SESSION_TOKEN,
+      getPanelWindow: () => panelWindow,
+      callPanelAction: vi.fn(),
+      onPong
+    })
+
+    handler(
+      messageEvent(
+        { type: 'orca-panel-pong', pingId: 7, padding: 'x'.repeat(4 * 1024) },
+        panelWindow
+      )
+    )
 
     expect(onPong).not.toHaveBeenCalled()
   })

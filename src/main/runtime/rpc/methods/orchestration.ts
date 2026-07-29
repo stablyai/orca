@@ -856,6 +856,17 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           ? db.getAllMessagesForHandle(handle, undefined, typeFilter)
           : db.getUnreadMessages(handle, typeFilter)
 
+        if (
+          consumeUnread &&
+          messages.some((message) => message.run_id === ORCHESTRATION_LEGACY_RUN_ID)
+        ) {
+          throw new OrchestrationError(
+            'legacy_read_only',
+            'Legacy orchestration messages are inspect-only; use --peek or --all. No acknowledgment was applied.',
+            { effectsApplied: false }
+          )
+        }
+
         let visibleMessages = messages
         if (consumeUnread && messages.length > 0) {
           // Why: unread check is an authoritative read path for worker_done/heartbeat, so reconcile lifecycle messages here too.

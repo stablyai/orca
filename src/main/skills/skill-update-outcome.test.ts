@@ -223,12 +223,15 @@ describe('skillUpdateFailedNames over a real inventory', () => {
     })
     const locks = await readGloballyUpdatableSkillLocks({ homeDir })
 
-    // Guard the premise: this is the unrecognized path, not an accidental match.
+    // Guard the premise: no snapshot knows these bytes, so recognition can only
+    // come from the lock — the scan now reclassifies that match to 'newer-known'
+    // (the #11220 scan half), and the verdict accepts it either way.
     const canonical = inventory.installations.filter(
       (entry) => entry.name === 'orca-cli' && entry.topology === 'canonical-copy'
     )
     expect(canonical).toHaveLength(1)
-    expect(canonical[0].status).toBe('unrecognized')
+    expect(canonical[0].status).toBe('newer-known')
+    expect(canonical[0].installedReleaseRevision).toBeNull()
 
     expect(skillUpdateFailedNames(['orca-cli'], inventory.installations, locks)).toEqual([])
   })

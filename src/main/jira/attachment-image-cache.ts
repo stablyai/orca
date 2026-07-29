@@ -15,15 +15,23 @@ type CacheEntry = {
 const cache = new Map<string, CacheEntry>()
 const inFlight = new Map<string, Promise<string | null>>()
 // Why: mid-flight downloads must not repopulate cache after disconnect/clearToken.
-let cacheEpoch = 0
+// Why ONE ticker across both scopes: summing separate counters lets distinct clear
+// states collide, passing the guard and re-inserting credentialed bytes.
+let epochTicker = 0
+let globalEpoch = 0
 const siteEpoch = new Map<string, number>()
 
 function cacheKey(siteId: string, attachmentId: string): string {
   return `${siteId}::${attachmentId}`
 }
 
+function nextEpoch(): number {
+  epochTicker += 1
+  return epochTicker
+}
+
 function currentEpoch(siteId: string): number {
-  return (siteEpoch.get(siteId) ?? 0) + cacheEpoch
+  return Math.max(globalEpoch, siteEpoch.get(siteId) ?? 0)
 }
 
 function pruneExpired(now = Date.now()): void {
@@ -137,11 +145,11 @@ export function clearAttachmentImagesForSite(siteId?: string): void {
   if (siteId == null || siteId === '') {
     cache.clear()
     inFlight.clear()
-    cacheEpoch += 1
+    globalEpoch = nextEpoch()
     siteEpoch.clear()
     return
   }
-  siteEpoch.set(siteId, (siteEpoch.get(siteId) ?? 0) + 1)
+  siteEpoch.set(siteId, nextEpoch())
   const prefix = `${siteId}::`
   for (const key of cache.keys()) {
     if (key.startsWith(prefix)) {
@@ -159,7 +167,8 @@ export function clearAttachmentImagesForSite(siteId?: string): void {
 export function _resetAttachmentImageCache(): void {
   cache.clear()
   inFlight.clear()
-  cacheEpoch = 0
+  epochTicker = 0
+  globalEpoch = 0
   siteEpoch.clear()
 }
 

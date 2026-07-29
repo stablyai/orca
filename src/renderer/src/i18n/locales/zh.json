@@ -133,7 +133,7 @@
       "064bd07810": "返回",
       "ce37cf5279": "切换侧边栏 ({{value0}})",
       "e4b9e7dff7": "切换侧边栏",
-      "pluginCommandFailed": "Could not run the plugin command."
+      "pluginCommandFailed": "无法运行插件命令。"
     },
     "web": {
       "WebConnect": {
@@ -762,8 +762,8 @@
         "projectHostsSummary": "{{value0}} 个主机",
         "linearTitle": "Linear",
         "linearDescription": "Give agents the skill to read and update your linked Linear tickets.",
-        "pluginsTitle": "Plugins",
-        "pluginsDescription": "Install and manage experimental Orca plugins."
+        "pluginsTitle": "插件",
+        "pluginsDescription": "安装和管理实验性 Orca 插件。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "粘贴内容过大。"
@@ -1952,7 +1952,7 @@
         "projectsGroupsHeader": "项目和分组",
         "projectBadge": "项目",
         "repoGroupBadge": "仓库组",
-        "pluginCommandFailed": "Could not run the plugin command."
+        "pluginCommandFailed": "无法运行插件命令。"
       },
       "github": {
         "pr": {
@@ -3386,8 +3386,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "Summed working set (WS). Shared pages can appear in more than one process.",
-                "rssDescription": "Summed resident set size (RSS). Shared or aliased pages can appear in more than one process."
+                "workingSetDescription": "工作集 (WS) 的总和。共享页可能会出现在多个进程中。",
+                "rssDescription": "驻留集大小 (RSS) 的总和。共享页或别名映射页可能会出现在多个进程中。"
               }
             }
           },
@@ -4175,7 +4175,7 @@
           "ee240a39eb": "编辑筛选条件",
           "automationCreated": "隐藏自动化创建的工作区",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "Hide detached HEAD"
+          "detachedHead": "隐藏分离 HEAD"
         },
         "SidebarHeader": {
           "92154beb7e": "新工作区",
@@ -4240,7 +4240,7 @@
           "82594419ba": "筛选条件",
           "automationCreated": "隐藏自动化创建的工作区",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "Hide detached HEAD"
+          "detachedHead": "隐藏分离 HEAD"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "智能体活动布局",
@@ -6796,7 +6796,7 @@
           "781cb74d22": "从终端窗格运行。",
           "cb02e00202": "终端",
           "d8c988dab4": "~/.orca/keybindings.json",
-          "shortcutUnavailable": "Shortcut is no longer available."
+          "shortcutUnavailable": "此快捷键已不再可用。"
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "参数",
@@ -9346,7 +9346,7 @@
           "copy": "复制",
           "copied": "已复制",
           "recipes": "环境模板",
-          "recipesHelp": "智能体添加到 orca.yaml 的环境模板会显示在这里，可用于启动工作区。",
+          "recipesHelp": "orca.yaml 和已启用插件中的配方会显示在这里，可用于启动工作区。",
           "refresh": "刷新临时 VM 环境模板",
           "checking": "正在检查环境模板...",
           "none": "还没有找到环境模板。"
@@ -9589,50 +9589,50 @@
           "indexCommit": "Index commit"
         },
         "PluginDevelopmentSection": {
-          "saveFailed": "Could not save development plugin paths.",
-          "pathRequired": "Enter a plugin folder path.",
-          "title": "Development",
-          "help": "Load plugins directly from folders on this computer while you develop them. Dev plugins still require permission review. Workers run on this desktop host; SSH workspace actions route through Orca, so paths here are desktop paths.",
-          "remove": "Remove",
-          "pathLabel": "Development plugin folder path",
+          "saveFailed": "无法保存开发插件路径。",
+          "pathRequired": "请输入插件文件夹路径。",
+          "title": "开发",
+          "help": "开发插件时，可直接从此计算机上的文件夹加载。开发插件仍需检查权限。工作进程在此桌面主机上运行；SSH 工作区操作通过 Orca 路由，因此这里填写桌面端路径。",
+          "remove": "移除",
+          "pathLabel": "开发插件文件夹路径",
           "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
-          "add": "Add path"
+          "add": "添加路径"
         },
         "PluginInstallDialog": {
-          "localRequired": "Enter the plugin folder path.",
-          "gitUrlRequired": "Enter a repository URL.",
-          "gitUrlInvalid": "Use an HTTPS or SSH Git URL. Executable Git helper protocols are not allowed.",
-          "gitRefRequired": "Add an explicit #ref (tag or commit) so the install is pinned — for example #v0.1.0.",
-          "title": "Install plugin",
-          "description": "Installing copies the plugin into Orca and shows its permissions for review. No plugin code runs until you enable it.",
-          "source": "Install source",
+          "localRequired": "请输入插件文件夹路径。",
+          "gitUrlRequired": "请输入仓库 URL。",
+          "gitUrlInvalid": "请使用 HTTPS 或 SSH Git URL。不允许使用可执行的 Git 辅助协议。",
+          "gitRefRequired": "请添加明确的 #ref（标签或提交）以固定安装版本，例如 #v0.1.0。",
+          "title": "安装插件",
+          "description": "安装会将插件复制到 Orca，并显示其权限供你检查。启用插件之前，不会运行任何插件代码。",
+          "source": "安装来源",
           "localTab": "本地文件夹",
           "gitTab": "Git URL",
           "localLabel": "插件文件夹路径",
           "localPlaceholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
-          "localHelp": "Full path to a folder containing orca-plugin.json on this computer. The path is used exactly as entered.",
-          "gitLabel": "Repository URL with #ref",
+          "localHelp": "此计算机上包含 orca-plugin.json 的文件夹完整路径。系统会完全按输入内容使用该路径。",
+          "gitLabel": "带 #ref 的仓库 URL",
           "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
-          "gitHelp": "Append an explicit #ref — a tag or commit — so the install is pinned. Works with GitHub, GitLab, and any git host.",
-          "cancel": "Cancel",
-          "installing": "Installing…",
-          "install": "Install",
-          "installFailed": "Plugin installation failed. Check the source and try again."
+          "gitHelp": "附加明确的 #ref（标签或提交）以固定安装版本。适用于 GitHub、GitLab 和任何 Git 主机。",
+          "cancel": "取消",
+          "installing": "正在安装…",
+          "install": "安装",
+          "installFailed": "插件安装失败。请检查来源后重试。"
         },
         "PluginKeybindingConsentPreview": {
-          "heading": "Keyboard shortcuts",
-          "worktree": "Runs only while a workspace is active.",
-          "global": "Runs in the app without requiring an active workspace.",
-          "shadows": "Replaces: {{value0}}"
+          "heading": "键盘快捷键",
+          "worktree": "仅在有活动工作区时运行。",
+          "global": "无需活动工作区即可在应用中运行。",
+          "shadows": "替代：{{value0}}"
         },
         "PluginMarketplaceBrowser": {
-          "loadFailed": "Could not load marketplace plugins.",
-          "refreshFailed": "Could not refresh marketplaces. Cached listings remain available.",
-          "previewFailed": "Could not prepare this plugin for review. Refresh the marketplace and try again.",
-          "installFailed": "Could not install this plugin. The reviewed source may have changed.",
-          "manageSources": "Manage sources",
-          "refreshing": "Refreshing…",
-          "refresh": "Refresh",
+          "loadFailed": "无法加载插件市场中的插件。",
+          "refreshFailed": "无法刷新插件市场。仍可使用缓存的列表。",
+          "previewFailed": "无法准备此插件以供审核。请刷新插件市场后重试。",
+          "installFailed": "无法安装此插件。审核过的源可能已更改。",
+          "manageSources": "管理源",
+          "refreshing": "正在刷新…",
+          "refresh": "刷新",
           "noInstalledTitle": "没有已安装的插件",
           "noInstalled": "您安装的插件将显示在此处。",
           "loading": "正在加载市场插件…",
@@ -9647,11 +9647,11 @@
           "empty": "已配置的市场中没有任何插件。"
         },
         "PluginMarketplaceListingRow": {
-          "official": "Official",
-          "installed": "Installed",
+          "official": "官方",
+          "installed": "已安装",
           "noDescription": "No description provided.",
-          "blocked": "Blocked by Orca's safety list: {{value0}}",
-          "blockedAction": "Blocked",
+          "blocked": "已被 Orca 安全列表阻止：{{value0}}",
+          "blockedAction": "已阻止",
           "checkUpdate": "检查更新",
           "install": "Install"
         },
@@ -11069,13 +11069,13 @@
             }
           },
           "PluginPanel": {
-            "unavailable": "This plugin panel is no longer available.",
-            "loading": "Loading plugin panel...",
-            "unresponsive": "This plugin panel stopped responding and was suspended.",
-            "loadFailed": "The plugin panel could not be loaded."
+            "unavailable": "此插件面板已不可用。",
+            "loading": "正在加载插件面板...",
+            "unresponsive": "插件面板停止响应，已被暂停。",
+            "loadFailed": "无法加载插件面板。"
           },
           "activityBar": {
-            "error": "Error"
+            "error": "错误"
           }
         }
       },
@@ -13073,8 +13073,8 @@
             }
           },
           "pluginQuickActions": {
-            "description": "{{value0}} plugin command",
-            "keyword": "plugin command"
+            "description": "{{value0}} 插件命令",
+            "keyword": "插件命令"
           }
         }
       },
@@ -13702,9 +13702,9 @@
           }
         },
         "pluginPanelBridgeHost": {
-          "actionsUnavailable": "Plugin actions are not available in this client.",
-          "messageTooLarge": "Message exceeds the size limit.",
-          "tooManyRequests": "Too many requests."
+          "actionsUnavailable": "此客户端不支持插件操作。",
+          "messageTooLarge": "消息超过大小限制。",
+          "tooManyRequests": "请求过多。"
         }
       },
       "link": {

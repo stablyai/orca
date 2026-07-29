@@ -133,7 +133,7 @@
       "064bd07810": "돌아가기",
       "ce37cf5279": "사이드바 표시/숨기기({{value0}})",
       "e4b9e7dff7": "사이드바 표시/숨기기",
-      "pluginCommandFailed": "Could not run the plugin command."
+      "pluginCommandFailed": "플러그인 명령을 실행할 수 없습니다."
     },
     "web": {
       "WebConnect": {
@@ -762,8 +762,8 @@
         "projectHostsSummary": "호스트 {{value0}}개",
         "linearTitle": "Linear",
         "linearDescription": "Give agents the skill to read and update your linked Linear tickets.",
-        "pluginsTitle": "Plugins",
-        "pluginsDescription": "Install and manage experimental Orca plugins."
+        "pluginsTitle": "플러그인",
+        "pluginsDescription": "실험적인 Orca 플러그인을 설치하고 관리합니다."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
@@ -1952,7 +1952,7 @@
         "projectsGroupsHeader": "프로젝트 및 그룹",
         "projectBadge": "프로젝트",
         "repoGroupBadge": "리포지토리 그룹",
-        "pluginCommandFailed": "Could not run the plugin command."
+        "pluginCommandFailed": "플러그인 명령을 실행할 수 없습니다."
       },
       "github": {
         "pr": {
@@ -4175,7 +4175,7 @@
           "ee240a39eb": "필터 편집",
           "automationCreated": "자동화로 생성된 워크스페이스 숨기기",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "Hide detached HEAD"
+          "detachedHead": "분리된 HEAD 숨기기"
         },
         "SidebarHeader": {
           "92154beb7e": "새로운 워크스페이스",
@@ -4240,7 +4240,7 @@
           "82594419ba": "필터",
           "automationCreated": "자동화로 생성된 워크스페이스 숨기기",
           "cliCreated": "Hide CLI-created",
-          "detachedHead": "Hide detached HEAD"
+          "detachedHead": "분리된 HEAD 숨기기"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent 활동 레이아웃",
@@ -6796,7 +6796,7 @@
           "781cb74d22": "terminal 패널에서 실행됩니다.",
           "cb02e00202": "터미널",
           "d8c988dab4": "~/.orca/keybindings.json",
-          "shortcutUnavailable": "Shortcut is no longer available."
+          "shortcutUnavailable": "단축키를 더 이상 사용할 수 없습니다."
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "인수",
@@ -9346,7 +9346,7 @@
           "copy": "복사",
           "copied": "복사됨",
           "recipes": "조리법",
-          "recipesHelp": "agent가 orca.yaml에 추가하는 레시피가 여기에 표시되어 워크스페이스를 시작할 준비가 됩니다.",
+          "recipesHelp": "orca.yaml과 활성화된 플러그인의 레시피가 여기에 표시되어 워크스페이스를 시작할 수 있습니다.",
           "refresh": "임시 VM 레시피 새로 고침",
           "checking": "레시피 확인 중...",
           "none": "아직 레시피를 찾을 수 없습니다."
@@ -11069,13 +11069,13 @@
             }
           },
           "PluginPanel": {
-            "unavailable": "This plugin panel is no longer available.",
-            "loading": "Loading plugin panel...",
-            "unresponsive": "This plugin panel stopped responding and was suspended.",
-            "loadFailed": "The plugin panel could not be loaded."
+            "unavailable": "이 플러그인 패널은 더 이상 사용할 수 없습니다.",
+            "loading": "플러그인 패널 불러오는 중...",
+            "unresponsive": "플러그인 패널이 응답하지 않아 일시 중단되었습니다.",
+            "loadFailed": "플러그인 패널을 불러올 수 없습니다."
           },
           "activityBar": {
-            "error": "Error"
+            "error": "오류"
           }
         }
       },
@@ -13073,8 +13073,8 @@
             }
           },
           "pluginQuickActions": {
-            "description": "{{value0}} plugin command",
-            "keyword": "plugin command"
+            "description": "{{value0}} 플러그인 명령",
+            "keyword": "플러그인 명령"
           }
         }
       },
@@ -13702,9 +13702,9 @@
           }
         },
         "pluginPanelBridgeHost": {
-          "actionsUnavailable": "Plugin actions are not available in this client.",
-          "messageTooLarge": "Message exceeds the size limit.",
-          "tooManyRequests": "Too many requests."
+          "actionsUnavailable": "이 클라이언트에서는 플러그인 작업을 사용할 수 없습니다.",
+          "messageTooLarge": "메시지가 크기 제한을 초과합니다.",
+          "tooManyRequests": "요청이 너무 많습니다."
         }
       },
       "link": {

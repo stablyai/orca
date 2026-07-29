@@ -33,10 +33,15 @@ export function MatchedText({
   if (marks.size === 0) {
     return <span className={cn('min-w-0 truncate', className)}>{text}</span>
   }
+  // Hits are UTF-16 offsets but rendering splits by code point, so an astral
+  // glyph (an emoji-named folder) shifted every mark one position late.
+  let codeUnit = 0
   return (
     <span className={cn('min-w-0 truncate', className)}>
-      {[...text].map((char, index) =>
-        marks.has(index) ? (
+      {[...text].map((char) => {
+        const index = codeUnit
+        codeUnit += char.length
+        return marks.has(index) ? (
           <mark
             key={`${index}-${char}`}
             className="bg-transparent p-0 font-semibold text-foreground underline decoration-ring underline-offset-2"
@@ -46,7 +51,7 @@ export function MatchedText({
         ) : (
           char
         )
-      )}
+      })}
     </span>
   )
 }

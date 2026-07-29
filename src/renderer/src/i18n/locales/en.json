@@ -9369,7 +9369,7 @@
           "copy": "Copy",
           "copied": "Copied",
           "recipes": "Recipes",
-          "recipesHelp": "Recipes your agent adds to orca.yaml show up here, ready to launch a workspace on.",
+          "recipesHelp": "Recipes from orca.yaml and enabled plugins show up here, ready to launch a workspace on.",
           "refresh": "Refresh ephemeral VM recipes",
           "checking": "Checking recipes...",
           "none": "No recipes found yet."

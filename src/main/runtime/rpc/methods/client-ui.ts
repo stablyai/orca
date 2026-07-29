@@ -6,6 +6,9 @@ import {
   SettingsUpdate,
   UiUpdate
 } from './client-ui-schemas'
+// Type-only side effect: keeps the schema/PersistedUIState parity assertions in
+// the typecheck graph so drift fails the build instead of a paired client.
+import type {} from './ui-state-schema-parity-checks'
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-rpc-schema'
 
 export const CLIENT_UI_METHODS: RpcMethod[] = [

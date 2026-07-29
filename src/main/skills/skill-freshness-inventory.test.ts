@@ -1,6 +1,8 @@
+import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Repo } from '../../shared/types'
 import type {
@@ -13,8 +15,30 @@ import {
   MAXIMUM_REPOSITORY_SKILL_ROOTS
 } from './skill-freshness-inventory'
 import { describeObservedSkillFile, skillPackageDigest } from './skill-package-identity'
+import { getSkillFreshnessDisplayStatus } from '../../renderer/src/lib/skill-freshness-display-status'
 
 const temporaryDirectories: string[] = []
+
+const execFileAsync = promisify(execFile)
+
+// Why: hashed with real git, not Orca's tree-sha port — the port validating
+// itself here would prove nothing about matching the updater lock's hash.
+async function gitTreeShaOf(directory: string): Promise<string> {
+  const gitDir = await mkdtemp(join(tmpdir(), 'orca-skill-hash-'))
+  temporaryDirectories.push(gitDir)
+  const env = {
+    ...process.env,
+    GIT_DIR: gitDir,
+    GIT_WORK_TREE: directory,
+    GIT_INDEX_FILE: join(gitDir, 'scratch-index'),
+    GIT_CONFIG_GLOBAL: join(gitDir, 'no-config'),
+    GIT_CONFIG_SYSTEM: join(gitDir, 'no-config')
+  }
+  await execFileAsync('git', ['init', '--quiet'], { env, cwd: directory })
+  await execFileAsync('git', ['add', '-A'], { env, cwd: directory })
+  const { stdout } = await execFileAsync('git', ['write-tree'], { env, cwd: directory })
+  return stdout.trim()
+}
 
 function snapshot(releaseRevision: number, markdown: string): SkillKnownSnapshot {
   const observed = describeObservedSkillFile('SKILL.md', Buffer.from(markdown), false)
@@ -115,6 +139,22 @@ async function fixture() {
   }
 }
 
+async function writeSkillLockHash(homeDir: string, skillFolderHash: string): Promise<void> {
+  await writeFile(
+    join(homeDir, '.agents', '.skill-lock.json'),
+    `${JSON.stringify({
+      version: 3,
+      skills: {
+        'orca-cli': {
+          skillFolderHash,
+          skillPath: 'skills/orca-cli/SKILL.md',
+          source: 'stablyai/orca'
+        }
+      }
+    })}\n`
+  )
+}
+
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((root) => rm(root, { recursive: true })))
 })
@@ -176,6 +216,80 @@ describe('read-only skill freshness inventory', () => {
       'unrecognized'
     ])
     expect(inventory.eligibleUpdateNames).toEqual([])
+  })
+
+  it('trusts the updater lock for canonical bytes the bundle has never seen (#11220 scan half)', async () => {
+    // The steady state days after a release: `skills update` installed source-repo
+    // HEAD, wrote its lock, and no shipped bundle knows that revision yet.
+    const test = await fixture()
+    const upstreamMarkdown = `${test.newerMarkdown}\nUpstream edit no bundle has shipped.\n`
+    const canonical = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      upstreamMarkdown
+    )
+    await writeSkillLockHash(test.homeDir, await gitTreeShaOf(canonical))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'newer-known'
+    })
+    // Why: ahead of the bundle means there is nothing this build can update to.
+    expect(inventory.eligibleUpdateNames).toEqual([])
+    // The user-visible verdict, across both halves of the fix: the row must read
+    // up to date, not amber "may be modified… remove it" over the CLI's own install.
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+  })
+
+  it('still flags canonical bytes that do not match what the lock says was installed', async () => {
+    const test = await fixture()
+    const editedMarkdown = `${test.currentMarkdown}\nLocal edit the updater never wrote.\n`
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), editedMarkdown)
+    const elsewhere = await test.writeSkill(join(test.root, 'elsewhere'), test.newerMarkdown)
+    await writeSkillLockHash(test.homeDir, await gitTreeShaOf(elsewhere))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'unrecognized'
+    })
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('needs-attention')
+  })
+
+  it('does not let the lock vouch for a same-name copy outside the placements it wrote', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+    const independent = await test.writeSkill(
+      join(test.homeDir, '.claude', 'skills'),
+      '---\nname: orca-cli\n---\n\nAnother tool.\n'
+    )
+    await writeSkillLockHash(test.homeDir, await gitTreeShaOf(independent))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ topology: 'independent-copy', status: 'unrecognized' })
+      ])
+    )
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('needs-attention')
   })
 
   it('retains full-file identity without projecting unused metadata', async () => {

@@ -50,9 +50,16 @@ export default function ProjectCombobox({
   const recentIds = useRecentProjectIds()
   // Ranking depends on the query the hook owns, so rows are derived from it and
   // handed back; `matches`/`sections` are recomputed from the same query below.
+  // Why sections, not raw rank: sectioning reorders the list (folders sink to
+  // the bottom), so arming raw rank order armed a row the user never sees first
+  // and Enter created the workspace in the wrong project.
   const deriveRowKeys = useCallback(
     (query: string): string[] => [
-      ...rankProjectOptions(options, query, recentIds).map((match) => match.option.id),
+      ...sectionProjectOptions(
+        rankProjectOptions(options, query, recentIds),
+        query,
+        recentIds
+      ).flatMap((section) => section.items.map((match) => match.option.id)),
       ...(onAddProject ? [ADD_PROJECT_KEY] : [])
     ],
     [onAddProject, options, recentIds]

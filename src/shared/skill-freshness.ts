@@ -98,6 +98,10 @@ export type SkillFreshnessInstallation = {
 export function isSkillCopyNeedingAttention(installation: SkillFreshnessInstallation): boolean {
   return (
     installation.status !== 'current' &&
+    // Why: 'newer-known' is recognized official content ahead of this build — the
+    // updater's own install or a newer release's bytes. There is nothing to fix and
+    // nothing to update to, so amber would send the user chasing a phantom edit.
+    installation.status !== 'newer-known' &&
     !(installation.status === 'unrecognized' && installation.topology === 'plugin-cache') &&
     !(
       SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&

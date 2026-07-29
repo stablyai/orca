@@ -12,10 +12,14 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isTaskProvider } from '../../../../shared/task-providers'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { normalizePRBotAuthorOverrides } from '../../../../shared/pr-bot-author-overrides'
-import { normalizeWorktreeCardProperties } from '../../../../shared/worktree-card-properties'
-import type { PersistedUIState, TaskProvider } from '../../../../shared/types'
+import {
+  normalizeWorktreeCardProperties,
+  WORKTREE_CARD_PROPERTIES
+} from '../../../../shared/worktree-card-properties'
+import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
+import type { TaskProvider } from '../../../../shared/types'
 import { TaskResumeState } from './task-resume-state-schema'
-import type { AssertNoMissingKeys } from './ui-state-schema-parity'
+import { omitUndefinedValues, tolerateUnknownValues } from './ui-update-value-tolerance'
 
 const NullableString = z.string().nullable()
 const StringArray = z.array(z.string())
@@ -25,22 +29,32 @@ const TaskProviderParam = z.custom<TaskProvider>(isTaskProvider, {
 const FeatureTipIds = z.array(z.custom(isFeatureTipId, { message: 'Unknown feature tip id' }))
 const UnknownRecord = z.record(z.string(), z.unknown())
 const UnknownRecordArray = z.array(UnknownRecord)
-const LegacyWorktreeCardProperty = z.enum([
-  'status',
-  'unread',
-  'ci',
-  'branch',
-  'issue',
-  'linear-issue',
-  'pr',
-  'automation',
-  'comment',
-  'ports',
-  'inline-agents'
-])
+type StaticRightSidebarTab = (typeof STATIC_RIGHT_SIDEBAR_TABS)[number]
+// Derived from the shared union so a new card property cannot drift out of the
+// client schema — it previously omitted 'cli' and rejected the whole payload.
+const WorktreeCardPropertyParam = z.enum(WORKTREE_CARD_PROPERTIES)
 const WorktreeCardProperties = z
-  .array(LegacyWorktreeCardProperty)
+  .array(WorktreeCardPropertyParam)
   .transform((value) => normalizeWorktreeCardProperties(value))
+const STATIC_RIGHT_SIDEBAR_TABS = [
+  'explorer',
+  'search',
+  'vault',
+  'workspaces',
+  'pr-checks',
+  'source-control',
+  'checks',
+  'ports'
+] as const
+// Plugin panels are open-ended `plugin:<publisher>.<id>/<panel>` keys, so the
+// schema validates their shape rather than enumerating them.
+const RightSidebarTabParam = z.custom<StaticRightSidebarTab | `plugin:${string}`>(
+  (value) =>
+    typeof value === 'string' &&
+    (STATIC_RIGHT_SIDEBAR_TABS.includes(value as StaticRightSidebarTab) ||
+      isPluginPanelTabKey(value)),
+  { message: 'Unknown right sidebar tab' }
+)
 const AgentActivityDisplayMode = z.enum(['compact', 'full'])
 const StatusBarItem = z.enum([
   'claude',
@@ -161,7 +175,7 @@ export const SettingsUpdate = z
   .strict()
   .default({})
 
-export const UiUpdate = z
+const UiUpdateFields = z
   .object({
     lastActiveRepoId: NullableString.optional(),
     lastActiveWorktreeId: NullableString.optional(),
@@ -182,9 +196,7 @@ export const UiUpdate = z
       .optional(),
     sidebarWidth: z.number().finite().optional(),
     rightSidebarOpen: z.boolean().optional(),
-    rightSidebarTab: z
-      .enum(['explorer', 'search', 'vault', 'source-control', 'checks', 'ports'])
-      .optional(),
+    rightSidebarTab: RightSidebarTabParam.optional(),
     rightSidebarExplorerView: z.enum(['files', 'search']).optional(),
     rightSidebarWidth: z.number().finite().optional(),
     markdownTocPanelWidth: z.number().finite().optional(),
@@ -291,24 +303,12 @@ export const UiUpdate = z
     contextualToursAutoEligible: z.boolean().optional()
   })
   .strict()
-  .default({})
 
-// Why: state only the main process ever writes (store.updateUI, star-nag's own
-// IPC, window lifecycle). Clients never send these, so keeping them out of the
-// strict schema is deliberate — but it must stay deliberate rather than
-// forgotten, which is what the parity assertion below enforces.
-type MainOwnedUIState =
-  | 'trayMinimizeNoticeShown'
-  | 'dashboardPopoutBounds'
-  | '_expandedWorktreeCardPropertiesDefaulted'
-  | 'starNagBaselineAgents'
-  | 'starNagAppVersion'
-  | 'starNagNextThreshold'
-  | 'starNagCompleted'
-  | 'starNagDeferredUntil'
-  | 'starNagAgentValueMomentAppVersion'
-const _uiUpdateParity: AssertNoMissingKeys<
-  Omit<PersistedUIState, MainOwnedUIState>,
-  z.infer<typeof UiUpdate>
-> = true
-void _uiUpdateParity
+export const UiUpdate = z
+  .object(tolerateUnknownValues(UiUpdateFields.shape))
+  .strict()
+  .default({})
+  .transform(omitUndefinedValues)
+
+// The key/value parity assertions over this live in ui-state-schema-parity-checks.ts.
+export type UiUpdateFieldsSchema = typeof UiUpdateFields
