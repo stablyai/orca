@@ -3,7 +3,7 @@ import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-work
 import { defaultProjectGroupNameForPath } from '@/components/sidebar/add-repo-dialog-types'
 import { useAppStore } from '@/store'
 import { detectLanguage } from './language-detect'
-import { findLocalProjectGroupForFilePath } from './os-requested-file-project-group'
+import { findLocalProjectGroupForOsRequestedFile } from './os-requested-file-project-group'
 import { findWorkspaceForFilePath, type WorkspaceCandidate } from './os-requested-file-workspace'
 import { basename, dirname } from './path'
 import { activateAndRevealWorktree } from './worktree-activation'
@@ -28,15 +28,15 @@ function collectWorkspaceCandidates(): WorkspaceCandidate[] {
 
 async function resolveProjectGroupId(filePath: string, folderPath: string): Promise<string | null> {
   const state = useAppStore.getState()
-  // Why: a folder-backed group the user already made is a better home than a new one.
-  const existing = findLocalProjectGroupForFilePath(filePath, state.projectGroups)
+  const groupName = defaultProjectGroupNameForPath(folderPath)
+  // Why: a folder-backed group the user already made is a better home than a new one; failing that, reuse a
+  // group this flow already created rather than pile up duplicates when the workspace lookup misses.
+  const existing = findLocalProjectGroupForOsRequestedFile(filePath, groupName, state.projectGroups)
   if (existing) {
     return existing.id
   }
   // Why: the OS always hands over a local path, so the new group must not follow the active runtime.
-  const created = await state.createProjectGroup(defaultProjectGroupNameForPath(folderPath), {
-    runtimeEnvironmentId: null
-  })
+  const created = await state.createProjectGroup(groupName, { runtimeEnvironmentId: null })
   return created?.id ?? null
 }
 
