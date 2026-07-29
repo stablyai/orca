@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: this integration-style wrapper suite shares
-   process cleanup and fake Electron CLI fixtures across related regressions. */
 import { existsSync, mkdtempSync, readFileSync, readlinkSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'

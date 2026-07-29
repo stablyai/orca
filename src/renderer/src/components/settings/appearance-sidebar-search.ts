@@ -43,7 +43,7 @@ export const getWorkspaceCardLayoutEntry = createLocalizedCatalog(
     ),
     description: translate(
       'auto.components.settings.appearance.search.workspaceCardLayout.description',
-      'Switch between compact and detailed workspace cards from the workspace sidebar options menu.'
+      'Workspace cards can use compact or detailed layouts.'
     ),
     keywords: [
       ...translateSearchKeyword(
@@ -74,6 +74,54 @@ export const getWorkspaceCardLayoutEntry = createLocalizedCatalog(
       ...translateSearchKeyword(
         'auto.components.settings.appearance.search.workspaceCardLayout.detailed',
         'detailed'
+      )
+    ]
+  })
+)
+
+export const getShowPinnedWorktreesInGroupsEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.appearance.search.showPinnedWorktreesInGroups.title',
+      'Also show pinned worktrees in their original lists'
+    ),
+    description: translate(
+      'auto.components.settings.appearance.search.showPinnedWorktreesInGroups.description',
+      'Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.showPinnedWorktreesInGroups.pinned',
+        'pinned'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.showPinnedWorktreesInGroups.worktree',
+        'worktree'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.showPinnedWorktreesInGroups.workspace',
+        'workspace'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.showPinnedWorktreesInGroups.all',
+        'all'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.showPinnedWorktreesInGroups.project',
+        'project'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.showPinnedWorktreesInGroups.status',
+        'status'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.showPinnedWorktreesInGroups.pr',
+        'pr'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.showPinnedWorktreesInGroups.duplicate',
+        'duplicate'
       )
     ]
   })
@@ -144,5 +192,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
     ]
   },
   getWorkspaceCardLayoutEntry(),
-  getLeftSidebarAppearanceEntry()
+  getLeftSidebarAppearanceEntry(),
+  getShowPinnedWorktreesInGroupsEntry()
 ])

@@ -30,9 +30,11 @@ import {
   writeManagedClaudeKeychainCredentials
 } from './keychain'
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
+import { findDuplicateClaudeAccount } from './claude-duplicate-account'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
+import { buildWindowsCommandInvocation } from './windows-command-invocation'
 import {
   getClaudeSelectionTargetForAccount,
   getSelectedClaudeAccountIdForTarget,
@@ -47,6 +49,10 @@ import {
 const LOGIN_TIMEOUT_MS = 180_000
 const STATUS_TIMEOUT_MS = 20_000
 const MAX_COMMAND_OUTPUT_CHARS = 4_000
+const WINDOWS_TASKKILL_TIMEOUT_MS = 5_000
+// Claude leaves the login process running after an OAuth denial; fail fast so Settings can clear loading state.
+const CLAUDE_AUTH_DENIED_PATTERN =
+  /\baccess_denied\b|authorization (?:request )?(?:was )?denied|sign-?in (?:was )?denied|login (?:was )?denied/i
 
 type ClaudeIdentity = {
   email: string | null
@@ -83,6 +89,7 @@ function shellQuote(value: string): string {
 
 export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
+  private cancelPendingClaudeLogin: (() => boolean) | null = null
 
   constructor(
     private readonly store: Store,
@@ -118,6 +125,10 @@ export class ClaudeAccountService {
     return this.serializeMutation(() => this.doSelectAccount(accountId, target))
   }
 
+  cancelPendingLogin(): boolean {
+    return this.cancelPendingClaudeLogin?.() ?? false
+  }
+
   private serializeMutation<T>(fn: () => Promise<T>): Promise<T> {
     const next = this.mutationQueue.then(fn, fn)
     this.mutationQueue = next.catch(() => {})
@@ -131,11 +142,25 @@ export class ClaudeAccountService {
     const managedAuth = this.createManagedAuthDir(accountId, target)
     const { managedAuthPath } = managedAuth
     const previousSettings = this.store.getSettings()
+    let duplicateIdentityFound = false
 
     try {
       const captured = await this.runClaudeLoginAndCapture(managedAuth)
       if (!captured.identity.email) {
         throw new Error('Claude login completed, but Orca could not resolve the account email.')
+      }
+      // Why: duplicate rows confuse account selection and rate-limit tracking;
+      // the per-row Re-authenticate action already refreshes credentials.
+      if (
+        findDuplicateClaudeAccount(previousSettings.claudeManagedAccounts, {
+          email: captured.identity.email,
+          organizationUuid: captured.identity.organizationUuid,
+          managedAuthRuntime: managedAuth.managedAuthRuntime,
+          wslDistro: managedAuth.wslDistro
+        })
+      ) {
+        duplicateIdentityFound = true
+        throw new Error('This Claude account is already added.')
       }
       await this.writeManagedAuth(accountId, managedAuthPath, captured)
 
@@ -165,8 +190,12 @@ export class ClaudeAccountService {
       this.rateLimits.evictInactiveClaudeCache(accountId)
       return this.getSnapshot()
     } catch (error) {
-      this.restoreClaudeSettings(previousSettings)
-      await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
+      // Duplicate detection precedes every credential/settings write, so only
+      // its throwaway auth directory needs cleanup.
+      if (!duplicateIdentityFound) {
+        this.restoreClaudeSettings(previousSettings)
+        await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
+      }
       await this.safeRemoveManagedAuth(accountId, managedAuthPath)
       throw error
     }
@@ -424,12 +453,27 @@ export class ClaudeAccountService {
     }
   ): Promise<CapturedClaudeAuth> {
     const tempConfig = this.createTemporaryClaudeConfigDir(location)
+    const loginAbortController = new AbortController()
+    this.cancelPendingClaudeLogin = () => {
+      if (loginAbortController.signal.aborted) {
+        return false
+      }
+      loginAbortController.abort()
+      return true
+    }
     const previousLegacyKeychain = await readActiveClaudeKeychainCredentials()
     let captured: CapturedClaudeAuth | null = null
     let captureError: unknown = null
     let cleanupError: unknown = null
     try {
-      await this.runClaudeCommand(['auth', 'login', '--claudeai'], tempConfig, LOGIN_TIMEOUT_MS)
+      if (loginAbortController.signal.aborted) {
+        throw new Error('Claude sign-in was cancelled.')
+      }
+      await this.runClaudeCommand(['auth', 'login', '--claudeai'], tempConfig, LOGIN_TIMEOUT_MS, {
+        signal: loginAbortController.signal,
+        keepStdinOpen: true
+      })
+      this.cancelPendingClaudeLogin = null
       const status = await this.runClaudeCommand(
         ['auth', 'status', '--json'],
         tempConfig,
@@ -463,6 +507,7 @@ export class ClaudeAccountService {
         }
       }
       this.removeTemporaryClaudeConfigDir(tempConfig)
+      this.cancelPendingClaudeLogin = null
     }
     if (captureError) {
       throw captureError
@@ -862,7 +907,7 @@ export class ClaudeAccountService {
     args: string[],
     configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
     timeoutMs: number,
-    options?: { allowFailure?: boolean }
+    options?: { allowFailure?: boolean; signal?: AbortSignal; keepStdinOpen?: boolean }
   ): Promise<string> {
     return new Promise((resolvePromise, rejectPromise) => {
       const spawnConfig =
@@ -878,22 +923,50 @@ export class ClaudeAccountService {
                 `export CLAUDE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; exec claude ${args.map(shellQuote).join(' ')}`
               ],
               env: process.env,
-              shell: false
+              shell: false,
+              windowsVerbatimArguments: false
             }
-          : {
-              command: resolveClaudeCommand(),
-              args,
-              env: {
-                ...process.env,
-                CLAUDE_CONFIG_DIR: configDir.windowsPath
-              },
-              shell: process.platform === 'win32'
-            }
+          : process.platform === 'win32'
+            ? {
+                ...buildWindowsCommandInvocation(resolveClaudeCommand(), args),
+                env: {
+                  ...process.env,
+                  CLAUDE_CONFIG_DIR: configDir.windowsPath
+                },
+                shell: false
+              }
+            : {
+                command: resolveClaudeCommand(),
+                args,
+                env: {
+                  ...process.env,
+                  CLAUDE_CONFIG_DIR: configDir.windowsPath
+                },
+                shell: false,
+                windowsVerbatimArguments: false
+              }
       const child = spawn(spawnConfig.command, spawnConfig.args, {
-        stdio: ['ignore', 'pipe', 'pipe'],
+        // Why: Claude's browser auth can bind its callback lifetime to stdin.
+        // Keeping stdin open prevents hidden managed-login runs from tearing down
+        // the local callback server before the browser returns.
+        stdio: [options?.keepStdinOpen ? 'pipe' : 'ignore', 'pipe', 'pipe'],
         shell: spawnConfig.shell,
-        env: spawnConfig.env
+        windowsVerbatimArguments: spawnConfig.windowsVerbatimArguments,
+        env: spawnConfig.env,
+        // Why: Claude auth can leave browser/login descendants alive after denial.
+        // A process group lets cancellation terminate the whole POSIX login tree.
+        detached: process.platform !== 'win32'
       })
+      const stdout = child.stdout
+      const stderr = child.stderr
+      if (!stdout || !stderr) {
+        if (options?.keepStdinOpen) {
+          child.stdin?.destroy()
+        }
+        child.kill()
+        rejectPromise(new Error('Claude command failed to open output streams.'))
+        return
+      }
 
       let settled = false
       let output = ''
@@ -902,6 +975,11 @@ export class ClaudeAccountService {
         if (output.length > MAX_COMMAND_OUTPUT_CHARS) {
           output = output.slice(-MAX_COMMAND_OUTPUT_CHARS)
         }
+        if (CLAUDE_AUTH_DENIED_PATTERN.test(output)) {
+          killChild(() =>
+            settle(() => rejectPromise(new Error('Claude sign-in was denied. Please try again.')))
+          )
+        }
       }
       let timeout: ReturnType<typeof setTimeout> | null = null
       const cleanupListeners = (): void => {
@@ -909,10 +987,14 @@ export class ClaudeAccountService {
           clearTimeout(timeout)
           timeout = null
         }
-        child.stdout.off('data', appendOutput)
-        child.stderr.off('data', appendOutput)
+        stdout.off('data', appendOutput)
+        stderr.off('data', appendOutput)
         child.off('error', onError)
         child.off('close', onClose)
+        options?.signal?.removeEventListener('abort', onAbort)
+        if (options?.keepStdinOpen) {
+          child.stdin?.destroy()
+        }
       }
       const settle = (callback: () => void): void => {
         if (settled) {
@@ -923,15 +1005,67 @@ export class ClaudeAccountService {
         callback()
       }
       const timeoutError = new Error('Claude sign-in took too long to finish.')
-      timeout = setTimeout(() => {
+      const cancelError = new Error('Claude sign-in was cancelled.')
+      let terminationPending = false
+      const killChild = (afterKill: () => void): void => {
+        if (terminationPending || settled) {
+          return
+        }
+        terminationPending = true
+        if (process.platform === 'win32' && child.pid) {
+          const taskkill = spawn('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], {
+            stdio: 'ignore',
+            windowsHide: true
+          })
+          let taskkillFinished = false
+          const finishTaskkill = (succeeded: boolean): void => {
+            if (taskkillFinished) {
+              return
+            }
+            taskkillFinished = true
+            clearTimeout(taskkillTimeout)
+            if (!succeeded) {
+              child.kill()
+            }
+            afterKill()
+          }
+          const taskkillTimeout = setTimeout(() => {
+            taskkill.kill()
+            finishTaskkill(false)
+          }, WINDOWS_TASKKILL_TIMEOUT_MS)
+          taskkill.once('error', () => finishTaskkill(false))
+          taskkill.once('close', (code) => finishTaskkill(code === 0))
+          return
+        }
+        if (process.platform !== 'win32' && child.pid) {
+          try {
+            process.kill(-child.pid)
+            afterKill()
+            return
+          } catch {
+            // Fall back to the direct child if the process group is unavailable.
+          }
+        }
         child.kill()
-        settle(() => rejectPromise(timeoutError))
+        afterKill()
+      }
+      timeout = setTimeout(() => {
+        killChild(() => settle(() => rejectPromise(timeoutError)))
       }, timeoutMs)
 
+      const onAbort = (): void => {
+        killChild(() => settle(() => rejectPromise(cancelError)))
+      }
       const onError = (error: Error): void => {
+        if (terminationPending) {
+          return
+        }
         settle(() => rejectPromise(error))
       }
       const onClose = (code: number | null): void => {
+        if (terminationPending) {
+          return
+        }
         settle(() => {
           if (code === 0 || options?.allowFailure) {
             resolvePromise(output)
@@ -948,10 +1082,15 @@ export class ClaudeAccountService {
         })
       }
 
-      child.stdout.on('data', appendOutput)
-      child.stderr.on('data', appendOutput)
+      stdout.on('data', appendOutput)
+      stderr.on('data', appendOutput)
       child.on('error', onError)
       child.on('close', onClose)
+      if (options?.signal?.aborted) {
+        onAbort()
+      } else {
+        options?.signal?.addEventListener('abort', onAbort, { once: true })
+      }
     })
   }
 

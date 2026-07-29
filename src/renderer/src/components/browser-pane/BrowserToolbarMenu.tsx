@@ -1,5 +1,6 @@
 import { useLayoutEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
@@ -102,12 +103,14 @@ export function BrowserToolbarMenu({
       return
     }
     const targetId = pendingSwitchProfileId ?? 'default'
+    const profile = browserSessionProfiles.find((p) => p.id === targetId)
     // Why: Must destroy before store update. The webviewRegistry is keyed by
     // workspace ID (stable across switches). Without explicit destroy, the mount
     // effect would reclaim the old webview with the stale partition.
     onDestroyWebview()
-    switchBrowserTabProfile(workspaceId, pendingSwitchProfileId)
-    const profile = browserSessionProfiles.find((p) => p.id === targetId)
+    // Why: persist the resolved partition alongside the profile so the tab stays
+    // isolated even if the renderer profile mirror is later stale (issue #6923).
+    switchBrowserTabProfile(workspaceId, pendingSwitchProfileId, profile?.partition ?? null)
     toast.success(
       translate(
         'auto.components.browser.pane.BrowserToolbarMenu.3ccd29d771',
@@ -147,7 +150,7 @@ export function BrowserToolbarMenu({
       setNewProfileName('')
 
       onDestroyWebview()
-      switchBrowserTabProfile(workspaceId, profile.id)
+      switchBrowserTabProfile(workspaceId, profile.id, profile.partition)
       toast.success(
         translate(
           'auto.components.browser.pane.BrowserToolbarMenu.a7a86702b3',
@@ -169,7 +172,8 @@ export function BrowserToolbarMenu({
     const result = await importCookiesFromBrowser(effectiveProfileId, browserFamily, browserProfile)
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
-      toast.success(
+      emitBrowserCookieImportToast(
+        result.summary,
         browserProfile
           ? translate(
               'auto.components.browser.pane.BrowserToolbarMenu.c5f0e4d3b2a1',
@@ -197,7 +201,8 @@ export function BrowserToolbarMenu({
   const handleImportFromFile = async (): Promise<void> => {
     const result = await importCookiesToProfile(effectiveProfileId)
     if (result.ok) {
-      toast.success(
+      emitBrowserCookieImportToast(
+        result.summary,
         translate(
           'auto.components.browser.pane.BrowserToolbarMenu.53bbe3dab4',
           'Imported {{value0}} cookies from file.',

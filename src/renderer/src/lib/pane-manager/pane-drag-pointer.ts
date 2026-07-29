@@ -1,4 +1,4 @@
-import type { DropZone, ManagedPaneInternal } from './pane-manager-types'
+import type { DropZone, ManagedPaneInternal, PaneExternalDropTarget } from './pane-manager-types'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import {
   handlePaneDrop,
@@ -45,8 +45,15 @@ export function beginPaneDragFromPointerDown(
     if (state.cleanupActiveDrag === cleanupDrag) {
       state.cleanupActiveDrag = null
     }
-    if (pointerId !== null && handle.hasPointerCapture(pointerId)) {
-      handle.releasePointerCapture(pointerId)
+    if (pointerId !== null) {
+      try {
+        if (handle.hasPointerCapture(pointerId)) {
+          handle.releasePointerCapture(pointerId)
+        }
+      } catch {
+        // Best effort: Electron/Chromium can drop capture before our cleanup
+        // runs, but the terminal must never stay pointer-inert.
+      }
     }
     if (!dragging) {
       return
@@ -55,14 +62,18 @@ export function beginPaneDragFromPointerDown(
     callbacks.getRoot().classList.remove('is-pane-dragging')
     callbacks.getPanes().get(paneId)?.container.classList.remove('is-drag-source')
     try {
-      if (commitDrop && state.currentDropTarget && state.dragSourcePaneId !== null) {
-        handlePaneDrop(
-          state.dragSourcePaneId,
-          state.currentDropTarget.paneId,
-          state.currentDropTarget.zone,
-          state,
-          callbacks
-        )
+      if (commitDrop && state.dragSourcePaneId !== null) {
+        if (state.currentDropTarget) {
+          handlePaneDrop(
+            state.dragSourcePaneId,
+            state.currentDropTarget.paneId,
+            state.currentDropTarget.zone,
+            state,
+            callbacks
+          )
+        } else if (state.currentExternalDropTarget) {
+          callbacks.onExternalPaneDrop?.(state.dragSourcePaneId, state.currentExternalDropTarget)
+        }
       }
     } finally {
       // Why: pointer capture can be lost crossing Electron webviews; always
@@ -71,6 +82,7 @@ export function beginPaneDragFromPointerDown(
       hideDropOverlay(state)
       state.dragSourcePaneId = null
       state.currentDropTarget = null
+      state.currentExternalDropTarget = null
     }
   }
 
@@ -159,8 +171,20 @@ function updateDropTarget(
   }
   const targetPane = findDropTargetPane(clientX, clientY, state, callbacks)
   if (!targetPane) {
-    overlay.style.display = 'none'
+    const sourcePaneId = state.dragSourcePaneId
+    const externalTarget =
+      sourcePaneId === null
+        ? null
+        : (callbacks.resolveExternalDropTarget?.({ sourcePaneId, clientX, clientY }) ?? null)
+    if (!externalTarget) {
+      overlay.style.display = 'none'
+      state.currentDropTarget = null
+      state.currentExternalDropTarget = null
+      return
+    }
     state.currentDropTarget = null
+    state.currentExternalDropTarget = externalTarget
+    positionExternalDropOverlay(overlay, externalTarget)
     return
   }
 
@@ -173,9 +197,11 @@ function updateDropTarget(
   ) {
     overlay.style.display = 'none'
     state.currentDropTarget = null
+    state.currentExternalDropTarget = null
     return
   }
   state.currentDropTarget = { paneId: targetPane.id, zone }
+  state.currentExternalDropTarget = null
   positionDropOverlay(overlay, rect, zone)
 }
 
@@ -216,6 +242,7 @@ function resolveDropZone(clientX: number, clientY: number, rect: DOMRect): DropZ
 
 function positionDropOverlay(overlay: HTMLElement, rect: DOMRect, zone: DropZone): void {
   overlay.style.display = ''
+  overlay.dataset.paneDropOverlayKind = 'area'
   const scrollX = window.scrollX
   const scrollY = window.scrollY
   const halfWidth = rect.width / 2
@@ -225,4 +252,14 @@ function positionDropOverlay(overlay: HTMLElement, rect: DOMRect, zone: DropZone
   overlay.style.top = `${rect.top + scrollY + (zone === 'bottom' ? halfHeight : 0)}px`
   overlay.style.width = `${zone === 'left' || zone === 'right' ? halfWidth : rect.width}px`
   overlay.style.height = `${zone === 'top' || zone === 'bottom' ? halfHeight : rect.height}px`
+}
+
+function positionExternalDropOverlay(overlay: HTMLElement, target: PaneExternalDropTarget): void {
+  const rect = target.rect
+  overlay.style.display = ''
+  overlay.dataset.paneDropOverlayKind = target.overlayKind ?? 'area'
+  overlay.style.left = `${rect.left + window.scrollX}px`
+  overlay.style.top = `${rect.top + window.scrollY}px`
+  overlay.style.width = `${rect.width}px`
+  overlay.style.height = `${rect.height}px`
 }

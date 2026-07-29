@@ -8,8 +8,11 @@ import type * as RepoWorktrees from '../repo-worktrees'
 import { listRepoWorktrees } from '../repo-worktrees'
 import type { FolderWorkspace, GitWorktreeInfo, ProjectGroup, Repo } from '../../shared/types'
 import {
+  AUTHORIZED_EXTERNAL_PATHS_MAX,
+  authorizeExternalPath,
   invalidateAuthorizedRootsCache,
   isDescendantOrEqual,
+  isPathAllowed,
   rebuildAuthorizedRootsCache,
   resolveAuthorizedPath,
   resolveRegisteredWorktreePath,
@@ -334,5 +337,44 @@ describe('filesystem-auth path containment', () => {
       vi.doUnmock('../repo-worktrees')
       vi.resetModules()
     }
+  })
+})
+
+describe('filesystem-auth authorized external path bound', () => {
+  // Empty allow-list store, so a path is allowed only if it (or an ancestor) is
+  // in the session-authorized external-path set.
+  const emptyStore = makeStore([])
+  const flood = (n: number): string =>
+    resolve(`/leak-audit-ext/flood-${String(n).padStart(6, '0')}`)
+
+  it('bounds the authorized external path set with LRU eviction', () => {
+    const keep = resolve('/leak-audit-ext/keep')
+    authorizeExternalPath(keep)
+
+    // Flood past the cap with distinct external paths, re-authorizing `keep`
+    // periodically so LRU keeps it hot.
+    const total = AUTHORIZED_EXTERNAL_PATHS_MAX + 200
+    for (let i = 0; i < total; i += 1) {
+      authorizeExternalPath(flood(i))
+      if (i % 250 === 0) {
+        authorizeExternalPath(keep)
+      }
+    }
+
+    // The oldest never-re-touched entries fell out of the bounded set...
+    expect(isPathAllowed(flood(0), emptyStore)).toBe(false)
+    // ...while the periodically re-authorized path and the most recent survive.
+    expect(isPathAllowed(keep, emptyStore)).toBe(true)
+    expect(isPathAllowed(flood(total - 1), emptyStore)).toBe(true)
+  })
+
+  it('re-authorizes an evicted path on next use (self-healing)', () => {
+    const path = resolve('/leak-audit-ext/evicted-then-reused')
+    for (let i = 0; i < AUTHORIZED_EXTERNAL_PATHS_MAX + 50; i += 1) {
+      authorizeExternalPath(flood(100_000 + i))
+    }
+    expect(isPathAllowed(path, emptyStore)).toBe(false)
+    authorizeExternalPath(path)
+    expect(isPathAllowed(path, emptyStore)).toBe(true)
   })
 })

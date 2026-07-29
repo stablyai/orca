@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, rmSync } from 'fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { getRuntimeMetadataPath, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { writeSecureJsonFile } from '../../shared/secure-file'
 

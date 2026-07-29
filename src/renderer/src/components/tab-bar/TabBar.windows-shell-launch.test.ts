@@ -20,9 +20,17 @@ const appStoreSnapshot: {
     sourceRepoIds?: string[]
   }[]
   repos: { id: string; connectionId?: string | null }[]
+  sshConnectionStates: Map<string, { remotePlatform?: NodeJS.Platform }>
   worktreesByRepo: Record<
     string,
-    { id: string; repoId: string; path?: string; projectId?: string }[]
+    {
+      id: string
+      repoId: string
+      path?: string
+      projectId?: string
+      hostId?: 'local' | `runtime:${string}` | `ssh:${string}`
+      runtimeOwnerEnvironmentId?: string
+    }[]
   >
   unifiedTabsByWorktree: Record<string, unknown[]>
   activeGroupIdByWorktree: Record<string, string>
@@ -38,6 +46,7 @@ const appStoreSnapshot: {
   activeWorktreeId: null,
   projects: [],
   repos: [],
+  sshConnectionStates: new Map(),
   worktreesByRepo: {},
   unifiedTabsByWorktree: {},
   activeGroupIdByWorktree: {},
@@ -59,6 +68,7 @@ const useAppStoreMock = vi.fn(
       gitStatusByWorktree: Record<string, never[]>
       projects: typeof appStoreSnapshot.projects
       repos: { id: string; connectionId?: string | null }[]
+      sshConnectionStates: Map<string, { remotePlatform?: NodeJS.Platform }>
       worktreesByRepo: typeof appStoreSnapshot.worktreesByRepo
       unifiedTabsByWorktree: Record<string, unknown[]>
       activeGroupIdByWorktree: Record<string, string>
@@ -84,6 +94,7 @@ const useAppStoreMock = vi.fn(
       gitStatusByWorktree: {},
       projects: appStoreSnapshot.projects,
       repos: appStoreSnapshot.repos,
+      sshConnectionStates: appStoreSnapshot.sshConnectionStates,
       worktreesByRepo: appStoreSnapshot.worktreesByRepo,
       unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
       activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
@@ -118,6 +129,12 @@ vi.mock('react', async () => {
     }
   }
 })
+
+// The headless React mock above stubs hooks, so zustand's useShallow (which
+// calls useRef) has no dispatcher; make it a pass-through like the store mock.
+vi.mock('zustand/react/shallow', () => ({
+  useShallow: (selector: unknown) => selector
+}))
 
 vi.mock('lucide-react', () => ({
   FilePlus: function FilePlus() {
@@ -159,6 +176,7 @@ useAppStoreExport.getState = vi.fn(() => ({
   gitStatusByWorktree: {},
   projects: appStoreSnapshot.projects,
   repos: appStoreSnapshot.repos,
+  sshConnectionStates: appStoreSnapshot.sshConnectionStates,
   worktreesByRepo: appStoreSnapshot.worktreesByRepo,
   unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
   activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
@@ -339,6 +357,7 @@ describe('TabBar PowerShell launch wiring', () => {
     appStoreSnapshot.activeWorktreeId = null
     appStoreSnapshot.projects = []
     appStoreSnapshot.repos = []
+    appStoreSnapshot.sshConnectionStates = new Map()
     appStoreSnapshot.worktreesByRepo = {}
     appStoreSnapshot.unifiedTabsByWorktree = {}
     appStoreSnapshot.activeGroupIdByWorktree = {}
@@ -384,6 +403,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell,
       onNewBrowserTab: () => {},
@@ -455,6 +475,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell: () => {},
       onNewBrowserTab: () => {},
@@ -522,6 +543,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell: () => {},
       onNewBrowserTab: () => {},
@@ -550,6 +572,16 @@ describe('TabBar PowerShell launch wiring', () => {
       }
     })
     appStoreSnapshot.activeRuntimeEnvironmentId = 'web-env-1'
+    appStoreSnapshot.worktreesByRepo = {
+      fixture: [
+        {
+          id: 'wt-1',
+          repoId: 'fixture',
+          hostId: 'local',
+          runtimeOwnerEnvironmentId: 'web-env-1'
+        }
+      ]
+    }
     const capabilities = await import('@/lib/windows-terminal-capabilities')
     await capabilities.loadWindowsTerminalCapabilities({
       force: true,
@@ -575,6 +607,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell: () => {},
       onNewBrowserTab: () => {},
@@ -607,6 +640,16 @@ describe('TabBar PowerShell launch wiring', () => {
       }
     })
     appStoreSnapshot.activeRuntimeEnvironmentId = 'desktop-env-1'
+    appStoreSnapshot.worktreesByRepo = {
+      fixture: [
+        {
+          id: 'wt-1',
+          repoId: 'fixture',
+          hostId: 'local',
+          runtimeOwnerEnvironmentId: 'desktop-env-1'
+        }
+      ]
+    }
     const capabilities = await import('@/lib/windows-terminal-capabilities')
     await capabilities.loadWindowsTerminalCapabilities({
       force: true,
@@ -632,6 +675,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell: () => {},
       onNewBrowserTab: () => {},
@@ -684,6 +728,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell,
       onNewBrowserTab: () => {},
@@ -701,24 +746,102 @@ describe('TabBar PowerShell launch wiring', () => {
     expect(onNewTerminalWithShell).toHaveBeenCalledWith('git-bash')
   })
 
-  it('hides local Windows shell rows for SSH worktrees', async () => {
+  it('shows the Windows shell rows for an SSH Windows host', async () => {
     appStoreSnapshot.repos = [{ id: 'repo-1', connectionId: 'ssh-1' }]
+    appStoreSnapshot.sshConnectionStates = new Map([['ssh-1', { remotePlatform: 'win32' }]])
     appStoreSnapshot.worktreesByRepo = {
       'repo-1': [{ id: 'wt-ssh', repoId: 'repo-1' }]
     }
+    const detectRemoteWindowsTerminalCapabilities = vi.fn().mockResolvedValue({
+      wslAvailable: true,
+      wslDistros: ['Ubuntu'],
+      pwshAvailable: true,
+      gitBashAvailable: true,
+      hostPlatform: 'win32'
+    })
     vi.stubGlobal('window', {
       api: {
-        wsl: {
-          isAvailable: vi.fn().mockResolvedValue(true),
-          listDistros: vi.fn().mockResolvedValue(['Ubuntu'])
-        },
-        pwsh: { isAvailable: vi.fn().mockResolvedValue(true) },
-        gitBash: { isAvailable: vi.fn().mockResolvedValue(true) },
-        runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
+        preflight: {
+          detectRemoteWindowsTerminalCapabilities
+        }
       }
     })
     const capabilities = await import('@/lib/windows-terminal-capabilities')
-    await capabilities.loadWindowsTerminalCapabilities()
+    await capabilities.loadWindowsTerminalCapabilities({
+      ownerKey: 'ssh:ssh-1',
+      sshConnectionId: 'ssh-1'
+    })
+
+    const tabBarModule = await import('./TabBar')
+    const candidate = tabBarModule.default ?? tabBarModule
+    const TabBar =
+      typeof candidate === 'function'
+        ? candidate
+        : typeof (candidate as { type?: unknown }).type === 'function'
+          ? (candidate as { type: (props: Record<string, unknown>) => unknown }).type
+          : null
+    expect(TabBar).not.toBeNull()
+
+    const onNewTerminalWithShell = vi.fn()
+    const element = TabBar!({
+      tabs: [],
+      activeTabId: null,
+      worktreeId: 'wt-ssh',
+      expandedPaneByTabId: {},
+      onActivate: () => {},
+      onClose: () => {},
+      onCloseOthers: () => {},
+      onCloseToRight: () => {},
+      onCloseToLeft: () => {},
+      onNewTerminalTab: () => {},
+      onNewTerminalWithShell,
+      onNewBrowserTab: () => {},
+      onSetCustomTitle: () => {},
+      onSetTabColor: () => {},
+      onTogglePaneExpand: () => {}
+    })
+
+    const powerShellItem = findDropdownMenuItemByText(
+      expandNode(element),
+      'New Terminal: PowerShell'
+    )
+    expect(powerShellItem).not.toBeNull()
+    expect(
+      findDropdownMenuItemByText(expandNode(element), 'New Terminal: CMD Prompt')
+    ).not.toBeNull()
+    expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: Git Bash')).not.toBeNull()
+    expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: WSL')).not.toBeNull()
+
+    const onSelect = powerShellItem?.props.onSelect as (() => void) | undefined
+    onSelect?.()
+    expect(onNewTerminalWithShell).toHaveBeenCalledWith('pwsh.exe')
+  })
+
+  it('keeps SSH Linux hosts on the generic new-terminal entry', async () => {
+    appStoreSnapshot.repos = [{ id: 'repo-1', connectionId: 'ssh-1' }]
+    appStoreSnapshot.sshConnectionStates = new Map([['ssh-1', { remotePlatform: 'linux' }]])
+    appStoreSnapshot.worktreesByRepo = {
+      'repo-1': [{ id: 'wt-ssh', repoId: 'repo-1' }]
+    }
+    const detectRemoteWindowsTerminalCapabilities = vi.fn().mockResolvedValue({
+      wslAvailable: false,
+      wslDistros: [],
+      pwshAvailable: false,
+      gitBashAvailable: false,
+      hostPlatform: 'linux'
+    })
+    vi.stubGlobal('window', {
+      api: {
+        preflight: {
+          detectRemoteWindowsTerminalCapabilities
+        }
+      }
+    })
+    const capabilities = await import('@/lib/windows-terminal-capabilities')
+    await capabilities.loadWindowsTerminalCapabilities({
+      ownerKey: 'ssh:ssh-1',
+      sshConnectionId: 'ssh-1'
+    })
 
     const tabBarModule = await import('./TabBar')
     const candidate = tabBarModule.default ?? tabBarModule
@@ -739,6 +862,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell: vi.fn(),
       onNewBrowserTab: () => {},
@@ -747,8 +871,10 @@ describe('TabBar PowerShell launch wiring', () => {
       onTogglePaneExpand: () => {}
     })
 
-    expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: Git Bash')).toBeNull()
     expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: PowerShell')).toBeNull()
+    expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: CMD Prompt')).toBeNull()
+    expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: Git Bash')).toBeNull()
+    expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: WSL')).toBeNull()
     expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal')).not.toBeNull()
   })
 
@@ -773,6 +899,16 @@ describe('TabBar PowerShell launch wiring', () => {
       }
     })
     appStoreSnapshot.activeRuntimeEnvironmentId = 'serve-env-1'
+    appStoreSnapshot.worktreesByRepo = {
+      fixture: [
+        {
+          id: 'wt-1',
+          repoId: 'fixture',
+          hostId: 'local',
+          runtimeOwnerEnvironmentId: 'serve-env-1'
+        }
+      ]
+    }
     const capabilities = await import('@/lib/windows-terminal-capabilities')
     await capabilities.loadWindowsTerminalCapabilities({
       force: true,
@@ -798,6 +934,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell: vi.fn(),
       onNewBrowserTab: () => {},

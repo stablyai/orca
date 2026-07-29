@@ -57,7 +57,7 @@ export function PendingWorktreeRow({
           {isError ? (
             <AlertTriangle className="size-3.5 text-destructive" />
           ) : (
-            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
           )}
         </span>
         <span className="min-w-0 flex-1">

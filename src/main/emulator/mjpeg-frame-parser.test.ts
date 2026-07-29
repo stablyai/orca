@@ -27,4 +27,19 @@ describe('extractJpegFrames', () => {
 
     expect(second.frames).toEqual([JPEG_A])
   })
+
+  // Regression: frames are returned as views into the chunk (no per-frame copy),
+  // so the retained `pending` must still be an independent copy — otherwise a
+  // later mutation of the source chunk could corrupt buffered partial frames.
+  it('does not retain a view aliased to the input chunk', () => {
+    const chunk = Buffer.concat([JPEG_A, Buffer.from([0xff, 0xd8, 0x09])]) // A + partial B
+    const result = extractJpegFrames(Buffer.alloc(0), chunk)
+
+    expect(result.frames).toEqual([JPEG_A])
+    expect(result.pending).toEqual(Buffer.from([0xff, 0xd8, 0x09]))
+
+    // Mutating the original chunk after parsing must not change pending.
+    chunk.fill(0)
+    expect(result.pending).toEqual(Buffer.from([0xff, 0xd8, 0x09]))
+  })
 })

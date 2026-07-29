@@ -68,9 +68,15 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     zIndex: 20
   },
   accessoryBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
+  },
+  accessoryScroll: {
+    flex: 1,
+    minWidth: 0
   },
   accessoryContent: {
     paddingHorizontal: spacing.sm,
@@ -110,6 +116,29 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
   accessoryKeyTextDisabled: {
     color: colors.textMuted
   },
+  keyboardDismissKey: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
+    marginVertical: spacing.xs,
+    backgroundColor: colors.bgRaised,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 0,
+    borderRadius: radii.button,
+    minWidth: 36,
+    height: 28
+  },
+  keyboardDismissGlyph: {
+    alignItems: 'center',
+    height: 18,
+    justifyContent: 'flex-start',
+    position: 'relative',
+    width: 18
+  },
+  keyboardDismissChevron: {
+    bottom: -2,
+    position: 'absolute'
+  },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -136,12 +165,27 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     gap: spacing.sm
   },
 
-  liveInputHint: {
+  liveInputFocusTarget: {
     flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.bgRaised,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.input,
+    paddingHorizontal: spacing.sm + 2
   },
+
+  liveInputFocusTargetPressed: {
+    backgroundColor: colors.borderSubtle
+  },
+
+  liveInputFocusTargetDisabled: {
+    opacity: 0.45
+  },
+
   liveInputCapture: {
     position: 'absolute',
     opacity: 0,

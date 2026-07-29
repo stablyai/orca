@@ -32,19 +32,30 @@ import {
   FolderTree
 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type {
+  Repo,
+  Worktree,
+  WorkspaceStatus,
+  WorkspaceStatusDefinition
+} from '../../../../shared/types'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
-import { getLineageRenderInfo } from './worktree-list-groups'
+import {
+  getCyclicProjectedWorktreeLineageIds,
+  getLineageRenderInfo,
+  getProjectedWorktreeLineage
+} from './worktree-lineage-projection'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { WorktreeParentPickerPopover } from './WorktreeParentPickerPopover'
+import { WorktreeDeveloperMenu } from './WorktreeDeveloperMenu'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
@@ -58,9 +69,9 @@ type Props = {
   worktree: Worktree
   children: React.ReactNode
   contentClassName?: string
-  newCardStyle?: boolean
   selectedWorktrees?: readonly Worktree[]
   onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
+  onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onOpenChange?: (open: boolean) => void
 }
 
@@ -70,6 +81,49 @@ const WORKTREE_NATIVE_CONTEXT_MENU_ATTR = 'data-worktree-native-context-menu'
 const CONTEXT_MENU_CLICK_SUPPRESSION_MS = 500
 const DELETE_POSITION_RESTORE_MAX_FRAMES = 180
 const DELETE_POSITION_RESTORE_STABLE_FRAMES = 6
+
+// Why: stable empty sentinels let closed menu wrappers subscribe to a referentially
+// stable value instead of the high-churn maps that delete teardown replaces. The
+// selector returns these when the menu is closed, so the wrapper stays inert to
+// teardown set() churn. Module-level (one allocation, never recreated per render) so
+// the reference is constant and Zustand's Object.is equality short-circuits.
+const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
+const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
+const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
+const EMPTY_DELETE_STATE_BY_WORKTREE_ID: AppState['deleteStateByWorktreeId'] = {}
+const EMPTY_WORKTREE_LINEAGE_BY_ID: AppState['worktreeLineageById'] = {}
+const EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY: AppState['workspaceLineageByChildKey'] = {}
+const EMPTY_CYCLIC_LINEAGE_IDS: ReadonlySet<string> = new Set()
+
+// Why: the gating decision for the menu-only store subscriptions. When the menu is
+// closed we MUST return the same `empty` reference every render so Zustand's Object.is
+// equality short-circuits the subscription and the closed wrapper stays inert to delete
+// teardown's high-churn set()s. When open we return the live map so menu items see real
+// data. Extracted as a pure function so the stable-reference contract is unit-testable.
+export function selectMenuScopedMap<T>(menuOpen: boolean, live: T, empty: T): T {
+  return menuOpen ? live : empty
+}
+
+// Why: the Developer submenu is hidden by default and revealed only by holding
+// Option/Alt at right-click. altKey is the same physical key on every platform
+// (Option on macOS, Alt on Windows/Linux), so no platform branch is needed.
+export function shouldRevealWorktreeDeveloperMenu(args: {
+  developerMenuRevealed: boolean
+  isMultiContext: boolean
+}): boolean {
+  return args.developerMenuRevealed && !args.isMultiContext
+}
+
+export function hasWorktreeParentLink(
+  worktree: Worktree,
+  lineageById: AppState['worktreeLineageById'],
+  workspaceLineageByChildKey: AppState['workspaceLineageByChildKey']
+): boolean {
+  return Boolean(
+    getProjectedWorktreeLineage(worktree, lineageById) ||
+    workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)]
+  )
+}
 
 function shouldUseNativeContextMenu(target: EventTarget | null): boolean {
   const maybeElement = target as {
@@ -123,10 +177,6 @@ function isWorktreeParentPickerDisabled(args: {
   eligibleParentCount: number
 }): boolean {
   return args.isDeleting || args.eligibleParentCount === 0
-}
-
-function shouldShowReadToggleContextMenuItem(args: { newCardStyle: boolean }): boolean {
-  return !args.newCardStyle
 }
 
 function getWorktreeParentPickerAnchor(
@@ -245,13 +295,36 @@ function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => void {
   }
 }
 
+export type WorkspaceStatusAssignmentPlan =
+  | { readonly kind: 'board-sync'; readonly worktreeIds: readonly string[] }
+  | { readonly kind: 'local-only'; readonly localWriteIds: readonly string[] }
+
+// Why: the context-menu "Move to Status" routes to the board's local-first +
+// Linear-sync path when the board wired a callback, else a local-only write of
+// only the status-changed worktrees. Extracted pure so the routing and the
+// no-op filter stay unit-testable without opening the Radix menu.
+export function planWorkspaceStatusAssignment(
+  worktrees: readonly Worktree[],
+  status: WorkspaceStatus,
+  workspaceStatuses: readonly WorkspaceStatusDefinition[],
+  boardSyncEnabled: boolean
+): WorkspaceStatusAssignmentPlan {
+  if (boardSyncEnabled) {
+    return { kind: 'board-sync', worktreeIds: worktrees.map((item) => item.id) }
+  }
+  const localWriteIds = worktrees
+    .filter((item) => getWorkspaceStatus(item, workspaceStatuses) !== status)
+    .map((item) => item.id)
+  return { kind: 'local-only', localWriteIds }
+}
+
 const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   worktree,
   children,
   contentClassName,
-  newCardStyle = false,
   selectedWorktrees,
   onContextMenuSelect,
+  onAssignWorkspaceStatus,
   onOpenChange
 }: Props) {
   const defaultSelectedWorktrees = useMemo(() => [worktree], [worktree])
@@ -268,6 +341,11 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const repo = useRepoById(worktree.repoId)
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const [menuOpen, setMenuOpen] = useState(false)
+  // Why: the Developer submenu is a power-user affordance, so it is revealed by
+  // holding Option/Alt at right-click — captured at open time (like the Help
+  // menu's admin options) so the submenu can't appear or vanish mid-menu and
+  // shift the rows under the pointer.
+  const [developerMenuRevealed, setDeveloperMenuRevealed] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [contextWorktrees, setContextWorktrees] = useState<readonly Worktree[]>(
     effectiveSelectedWorktrees
@@ -286,13 +364,35 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
   const allWorktrees = useAllWorktrees()
-  const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
-  const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
+  // Why: these maps feed only items rendered inside the OPEN dropdown, yet delete
+  // teardown replaces them on every set(). Gate them behind menuOpen via stable
+  // empty sentinels so the (common) closed wrapper stays inert to that churn. The
+  // conditional lives INSIDE the selector so useAppStore is always called; the
+  // inline arrow (not a useCallback) re-reads the live map synchronously on the
+  // render where menuOpen flips true, so dependent useMemos recompute with real data.
+  const worktreeLineageById = useAppStore((s) =>
+    selectMenuScopedMap(menuOpen, s.worktreeLineageById, EMPTY_WORKTREE_LINEAGE_BY_ID)
+  )
+  const workspaceLineageByChildKey = useAppStore((s) =>
+    selectMenuScopedMap(
+      menuOpen,
+      s.workspaceLineageByChildKey,
+      EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY
+    )
+  )
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
-  const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
+  const tabsByWorktree = useAppStore((s) =>
+    selectMenuScopedMap(menuOpen, s.tabsByWorktree, EMPTY_TABS_BY_WORKTREE)
+  )
+  const ptyIdsByTabId = useAppStore((s) =>
+    selectMenuScopedMap(menuOpen, s.ptyIdsByTabId, EMPTY_PTY_IDS_BY_TAB_ID)
+  )
+  const browserTabsByWorktree = useAppStore((s) =>
+    selectMenuScopedMap(menuOpen, s.browserTabsByWorktree, EMPTY_BROWSER_TABS_BY_WORKTREE)
+  )
+  const deleteStateByWorktreeId = useAppStore((s) =>
+    selectMenuScopedMap(menuOpen, s.deleteStateByWorktreeId, EMPTY_DELETE_STATE_BY_WORKTREE_ID)
+  )
   const scopeRef = useRef<HTMLDivElement>(null)
   const contextMenuOpenedAtRef = useRef<number | null>(null)
   const activeContextWorktrees = menuOpen ? contextWorktrees : effectiveSelectedWorktrees
@@ -338,35 +438,50 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     isMultiContext && batchDeleteWorktrees.length > 0
       ? `Delete ${batchDeleteWorktrees.length} Workspace${batchDeleteWorktrees.length === 1 ? '' : 's'}`
       : 'Delete Selected'
-  const lineage = worktreeLineageById[worktree.id]
-  const workspaceLineage = workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)]
+  const hasParentLink = hasWorktreeParentLink(
+    worktree,
+    worktreeLineageById,
+    workspaceLineageByChildKey
+  )
+  const cyclicLineageIds = useMemo(
+    () =>
+      menuOpen
+        ? getCyclicProjectedWorktreeLineageIds(worktreeLineageById, worktreeMap)
+        : EMPTY_CYCLIC_LINEAGE_IDS,
+    [menuOpen, worktreeLineageById, worktreeMap]
+  )
   // Why: path-derived worktree IDs can be reused. The menu must honor the same
   // instance check as grouped rows before offering navigation to a parent.
   const lineageInfo = useMemo(
-    () => getLineageRenderInfo(worktree, worktreeLineageById, worktreeMap),
-    [worktree, worktreeLineageById, worktreeMap]
+    () => getLineageRenderInfo(worktree, worktreeLineageById, worktreeMap, cyclicLineageIds),
+    [cyclicLineageIds, worktree, worktreeLineageById, worktreeMap]
   )
   const validParentWorktreeId = lineageInfo.state === 'valid' ? lineageInfo.parent.id : null
-  const hasAnyContextLineage = activeContextWorktrees.some(
-    (item) =>
-      worktreeLineageById[item.id] || workspaceLineageByChildKey[worktreeWorkspaceKey(item.id)]
+  const hasAnyContextLineage = activeContextWorktrees.some((item) =>
+    hasWorktreeParentLink(item, worktreeLineageById, workspaceLineageByChildKey)
   )
-  const showReadToggle = shouldShowReadToggleContextMenuItem({ newCardStyle })
   const eligibleParentCount = useMemo(
     () =>
-      getEligibleWorktreeParents({
-        child: worktree,
-        worktrees: allWorktrees,
-        lineageById: worktreeLineageById,
-        worktreeMap,
-        repoMap
-      }).length,
-    [allWorktrees, repoMap, worktree, worktreeLineageById, worktreeMap]
+      menuOpen
+        ? getEligibleWorktreeParents({
+            child: worktree,
+            worktrees: allWorktrees,
+            lineageById: worktreeLineageById,
+            worktreeMap,
+            repoMap,
+            cyclicLineageIds
+          }).length
+        : 0,
+    [allWorktrees, cyclicLineageIds, menuOpen, repoMap, worktree, worktreeLineageById, worktreeMap]
   )
 
   const setMenuOpenState = useCallback(
     (open: boolean) => {
       setMenuOpen(open)
+      if (!open) {
+        // Why: the reveal is per-open, so a later plain right-click can't inherit it.
+        setDeveloperMenuRevealed(false)
+      }
       onOpenChange?.(open)
     },
     [onOpenChange]
@@ -439,15 +554,29 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const handleAssignWorkspaceStatus = useCallback(
     (status: string) => {
       setMenuOpenState(false)
+      const plan = planWorkspaceStatusAssignment(
+        activeContextWorktrees,
+        status,
+        workspaceStatuses,
+        Boolean(onAssignWorkspaceStatus)
+      )
+      if (plan.kind === 'board-sync') {
+        onAssignWorkspaceStatus?.(plan.worktreeIds, status)
+        return
+      }
+      // Why: outside the workspace board (e.g. the sidebar list) status changes
+      // are local-only; Linear sync is scoped to board moves like drag-and-drop.
       void Promise.all(
-        activeContextWorktrees.map((item) =>
-          getWorkspaceStatus(item, workspaceStatuses) === status
-            ? Promise.resolve()
-            : updateWorktreeMeta(item.id, { workspaceStatus: status })
-        )
+        plan.localWriteIds.map((id) => updateWorktreeMeta(id, { workspaceStatus: status }))
       )
     },
-    [activeContextWorktrees, setMenuOpenState, updateWorktreeMeta, workspaceStatuses]
+    [
+      activeContextWorktrees,
+      onAssignWorkspaceStatus,
+      setMenuOpenState,
+      updateWorktreeMeta,
+      workspaceStatuses
+    ]
   )
 
   const handleRename = useCallback(() => {
@@ -621,6 +750,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         event.preventDefault()
         contextMenuOpenedAtRef.current = Date.now()
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+        setDeveloperMenuRevealed(event.altKey)
         setContextWorktrees(onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
         const bounds = event.currentTarget.getBoundingClientRect()
         setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
@@ -713,24 +843,19 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                   ? translate('auto.components.sidebar.WorktreeContextMenu.697d0f6e1b', 'Unpin')
                   : translate('auto.components.sidebar.WorktreeContextMenu.3baa7d6507', 'Pin')}
               </DropdownMenuItem>
-              {showReadToggle && (
-                <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
-                  {worktree.isUnread ? (
-                    <BellOff className="size-3.5" />
-                  ) : (
-                    <Bell className="size-3.5" />
-                  )}
-                  {worktree.isUnread
-                    ? translate(
-                        'auto.components.sidebar.WorktreeContextMenu.8dacff1fe0',
-                        'Mark Read'
-                      )
-                    : translate(
-                        'auto.components.sidebar.WorktreeContextMenu.f50603c6b2',
-                        'Mark Unread'
-                      )}
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
+                {worktree.isUnread ? (
+                  <BellOff className="size-3.5" />
+                ) : (
+                  <Bell className="size-3.5" />
+                )}
+                {worktree.isUnread
+                  ? translate('auto.components.sidebar.WorktreeContextMenu.8dacff1fe0', 'Mark Read')
+                  : translate(
+                      'auto.components.sidebar.WorktreeContextMenu.f50603c6b2',
+                      'Mark Unread'
+                    )}
+              </DropdownMenuItem>
               {repo ? (
                 <>
                   <DropdownMenuSeparator />
@@ -782,7 +907,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 <FolderTree className="size-3.5" />
                 {getWorktreeParentPickerLabel(validParentWorktreeId)}
               </DropdownMenuItem>
-              {(validParentWorktreeId || lineage || workspaceLineage) && (
+              {(validParentWorktreeId || hasParentLink) && (
                 <>
                   {validParentWorktreeId && (
                     <DropdownMenuItem onSelect={handleOpenParent} disabled={isDeleting}>
@@ -793,7 +918,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                       )}
                     </DropdownMenuItem>
                   )}
-                  {(lineage || workspaceLineage) && (
+                  {hasParentLink && (
                     <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={isDeleting}>
                       <Unlink className="size-3.5" />
                       {translate(
@@ -820,6 +945,12 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             </>
           ) : null}
 
+          {shouldRevealWorktreeDeveloperMenu({ developerMenuRevealed, isMultiContext }) ? (
+            <>
+              <WorktreeDeveloperMenu worktreeId={worktree.id} disabled={isDeleting} />
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuItem
@@ -842,6 +973,30 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                   )}
             </TooltipContent>
           </Tooltip>
+          {/* Why: primary checkout rows can't be git-worktree-removed, so keep a
+             disabled Delete Worktree for parity with non-primary cards and pair
+             it with the enabled Remove Project action below. */}
+          {!isMultiContext && removesProject ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <DropdownMenuItem variant="destructive" disabled>
+                    <Trash2 className="size-3.5" />
+                    {translate(
+                      'auto.components.sidebar.WorktreeContextMenu.deleteWorktree',
+                      'Delete Worktree'
+                    )}
+                  </DropdownMenuItem>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8} className="max-w-[200px] text-pretty">
+                {translate(
+                  'auto.components.sidebar.WorktreeContextMenu.primaryDeleteDisabled',
+                  "Primary worktree — can't be deleted. Remove the project instead."
+                )}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
           {/* Why: primary checkout rows remove the project from Orca instead of
              invoking git worktree deletion. Radix forwards unknown props to the
              DOM element, so `title` works directly without a wrapper span —
@@ -922,7 +1077,6 @@ export {
   getWorktreeParentPickerLabel,
   isWorktreeParentPickerDisabled,
   shouldRemoveProjectFromContextMenu,
-  shouldShowReadToggleContextMenuItem,
   shouldUseNativeContextMenu,
   shouldSuppressContextMenuFollowUpClick,
   shouldIgnoreNestedWorktreeContextMenuScope

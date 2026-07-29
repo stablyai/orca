@@ -1,18 +1,20 @@
 /* oxlint-disable max-lines -- Why: exercises full PTY subprocess surface (spawn setup, signal routing, data events, platform-specific shell configs, and Windows PowerShell implementations) with co-located test scenarios to prevent fixture drift. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, realpathSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { delimiter, join } from 'node:path'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
 const {
   spawnMock,
   isPwshAvailableMock,
   validateWorkingDirectoryMock,
+  resolveUnixShellPathMock,
   resolveAgentForegroundProcessMock
 } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
+  resolveUnixShellPathMock: vi.fn((shellPath: string) => shellPath),
   resolveAgentForegroundProcessMock: vi.fn(),
   validateWorkingDirectoryMock: vi.fn((cwd: string) => {
     if (cwd.includes('definitely-missing')) {
@@ -31,19 +33,51 @@ vi.mock('../pwsh', () => ({
   isPwshAvailable: isPwshAvailableMock
 }))
 
+// Resolve PowerShell family names to deterministic absolute paths so these
+// tests run on non-Windows CI. The real resolver (which skips the Store App
+// Execution Alias stub) is exercised in windows-powershell-executable.test.ts.
+const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+vi.mock('../providers/windows-powershell-executable', () => ({
+  resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
+    family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
+  resolveWindowsPowerShellSpawnChain: (family: 'pwsh.exe' | 'powershell.exe') =>
+    family === 'pwsh.exe'
+      ? [PWSH7_ABS, WINDOWS_POWERSHELL_ABS, CMD_ABS]
+      : [WINDOWS_POWERSHELL_ABS, CMD_ABS],
+  getWindowsCmdPath: () => CMD_ABS
+}))
+
 vi.mock('../providers/local-pty-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
   return {
     ...actual,
+    resolveUnixShellPath: resolveUnixShellPathMock,
     validateWorkingDirectory: validateWorkingDirectoryMock
   }
 })
 
 vi.mock('../providers/agent-foreground-process', () => ({
-  resolveAgentForegroundProcess: resolveAgentForegroundProcessMock
+  resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => {
+    const value = await resolveAgentForegroundProcessMock(...args)
+    return value && typeof value === 'object' && 'available' in value
+      ? value
+      : { available: true, processName: value }
+  }
 }))
 
-import { createPtySubprocess } from './pty-subprocess'
+// Console-membership reads run a real node-pty fork that never settles under
+// fake timers; default to "shell-only" so the degraded-scan guard falls through
+// to its existing retirement logic (the degraded-scan behavior itself is
+// covered in pty-subprocess-foreground-degraded-scan.test.ts).
+vi.mock('../providers/windows-conpty-process-membership', () => ({
+  readWindowsConptyProcessIds: () => Promise.resolve(new Set([12345]))
+}))
+
+import { createPtySubprocess, checkPtySpawnHealth } from './pty-subprocess'
+import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS, PROTOCOL_VERSION } from './types'
+import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/terminal-git-credential-guard'
 
 const ORCA_SHELL_WRAPPER_ENV = [
   'ORCA_ATTRIBUTION_SHIM_DIR',
@@ -55,7 +89,9 @@ const ORCA_SHELL_WRAPPER_ENV = [
 ] as const
 const POWERSHELL_OSC133_COMMAND_ARGS = ['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)]
 const ZSH_SHELL_READY_DIR = /shell-ready[\\/]zsh/
+const POWERLEVEL10K_WIZARD_DISABLE_ENV = 'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
 const itOnMacHost = process.platform === 'darwin' ? it : it.skip
+const itOnPosixHost = process.platform === 'win32' ? it.skip : it
 
 function mockPtyProcess(pid = 12345) {
   const onDataListeners: ((data: string) => void)[] = []
@@ -82,6 +118,7 @@ function mockPtyProcess(pid = 12345) {
 describe('createPtySubprocess', () => {
   const savedWrapperEnv: Partial<Record<(typeof ORCA_SHELL_WRAPPER_ENV)[number], string>> = {}
   let previousUserDataPath: string | undefined
+  let previousPowerlevelWizardDisable: string | undefined
   let userDataPath: string
 
   beforeEach(() => {
@@ -92,10 +129,14 @@ describe('createPtySubprocess', () => {
       async (_pid: number, fallbackProcess: string | null) => fallbackProcess
     )
     validateWorkingDirectoryMock.mockClear()
+    resolveUnixShellPathMock.mockReset()
+    resolveUnixShellPathMock.mockImplementation((shellPath: string) => shellPath)
     isPwshAvailableMock.mockReturnValue(false)
     previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+    previousPowerlevelWizardDisable = process.env[POWERLEVEL10K_WIZARD_DISABLE_ENV]
     userDataPath = mkdtempSync(join(tmpdir(), 'daemon-pty-subprocess-test-'))
     process.env.ORCA_USER_DATA_PATH = userDataPath
+    delete process.env[POWERLEVEL10K_WIZARD_DISABLE_ENV]
     for (const key of ORCA_SHELL_WRAPPER_ENV) {
       savedWrapperEnv[key] = process.env[key]
       delete process.env[key]
@@ -107,6 +148,11 @@ describe('createPtySubprocess', () => {
       delete process.env.ORCA_USER_DATA_PATH
     } else {
       process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    }
+    if (previousPowerlevelWizardDisable === undefined) {
+      delete process.env[POWERLEVEL10K_WIZARD_DISABLE_ENV]
+    } else {
+      process.env[POWERLEVEL10K_WIZARD_DISABLE_ENV] = previousPowerlevelWizardDisable
     }
     rmSync(userDataPath, { recursive: true, force: true })
     for (const key of ORCA_SHELL_WRAPPER_ENV) {
@@ -150,6 +196,313 @@ describe('createPtySubprocess', () => {
     )
   })
 
+  it('appends Git prompt guards after the detached daemon inherited config', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const previousWslEnv = process.env.WSLENV
+    const savedGitConfigEnv = Object.fromEntries(
+      Object.entries(process.env).filter(([key]) =>
+        /^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/.test(key)
+      )
+    )
+    for (const key of Object.keys(process.env)) {
+      if (/^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/.test(key)) {
+        delete process.env[key]
+      }
+    }
+    process.env.GIT_CONFIG_COUNT = '1'
+    process.env.GIT_CONFIG_KEY_0 = 'core.quotePath'
+    process.env.GIT_CONFIG_VALUE_0 = 'false'
+    process.env.WSLENV = 'DAEMON_ONLY/p'
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'guarded-git-config',
+        cols: 80,
+        rows: 24,
+        env: {
+          COMSPEC: CMD_ABS,
+          [TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]: 'guard'
+        }
+      })
+
+      const spawnEnv = spawnMock.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv.GIT_TERMINAL_PROMPT).toBe('0')
+      expect(spawnEnv.GCM_INTERACTIVE).toBe('never')
+      expect(spawnEnv.GIT_CONFIG_COUNT).toBe('3')
+      expect(spawnEnv.GIT_CONFIG_KEY_0).toBe('core.quotePath')
+      expect(spawnEnv.GIT_CONFIG_VALUE_0).toBe('false')
+      expect(spawnEnv.GIT_CONFIG_KEY_1).toBe('credential.interactive')
+      expect(spawnEnv.GIT_CONFIG_KEY_2).toBe('credential.guiPrompt')
+      expect((spawnEnv.WSLENV ?? '').split(':')).toContain('DAEMON_ONLY/p')
+      expect((spawnEnv.WSLENV ?? '').split(':')).toContain('GIT_CONFIG_KEY_2')
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+      for (const key of Object.keys(process.env)) {
+        if (/^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/.test(key)) {
+          delete process.env[key]
+        }
+      }
+      Object.assign(process.env, savedGitConfigEnv)
+      if (previousWslEnv === undefined) {
+        delete process.env.WSLENV
+      } else {
+        process.env.WSLENV = previousWslEnv
+      }
+    }
+  })
+
+  it('does not infer a guard from caller-set prompt scalars', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const savedGitConfigEnv = Object.fromEntries(
+      Object.entries(process.env).filter(([key]) =>
+        /^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/.test(key)
+      )
+    )
+    for (const key of Object.keys(process.env)) {
+      if (/^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/.test(key)) {
+        delete process.env[key]
+      }
+    }
+    process.env.GIT_CONFIG_COUNT = '3'
+    process.env.GIT_CONFIG_KEY_0 = 'core.quotePath'
+    process.env.GIT_CONFIG_VALUE_0 = 'false'
+    process.env.GIT_CONFIG_KEY_1 = 'base.one'
+    process.env.GIT_CONFIG_VALUE_1 = 'one'
+    process.env.GIT_CONFIG_KEY_2 = 'base.two'
+    process.env.GIT_CONFIG_VALUE_2 = 'two'
+
+    try {
+      createPtySubprocess({
+        sessionId: 'explicit-guarded-git-config',
+        cols: 80,
+        rows: 24,
+        env: {
+          SHELL: '/bin/bash',
+          GIT_TERMINAL_PROMPT: '0',
+          GCM_INTERACTIVE: 'never',
+          GIT_CONFIG_COUNT: '1',
+          GIT_CONFIG_KEY_0: 'http.proxy',
+          GIT_CONFIG_VALUE_0: 'http://proxy.invalid'
+        }
+      })
+
+      const spawnEnv = spawnMock.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv.GIT_TERMINAL_PROMPT).toBe('0')
+      expect(spawnEnv.GCM_INTERACTIVE).toBe('never')
+      expect(spawnEnv.GIT_CONFIG_COUNT).toBe('1')
+      expect(spawnEnv.GIT_CONFIG_KEY_0).toBe('http.proxy')
+      expect(spawnEnv.GIT_CONFIG_VALUE_0).toBe('http://proxy.invalid')
+      expect(Object.values(spawnEnv)).not.toContain('core.quotePath')
+      expect(Object.values(spawnEnv)).not.toContain('base.one')
+      expect(Object.values(spawnEnv)).not.toContain('base.two')
+      expect(spawnEnv.GIT_CONFIG_KEY_1).toBeUndefined()
+    } finally {
+      for (const key of Object.keys(process.env)) {
+        if (/^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/.test(key)) {
+          delete process.env[key]
+        }
+      }
+      Object.assign(process.env, savedGitConfigEnv)
+    }
+  })
+
+  it('guards a trusted daemon agent whose launch command is wrapped', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+
+    createPtySubprocess({
+      sessionId: 'trusted-wrapped-agent',
+      cols: 80,
+      rows: 24,
+      command: 'cd /repo && custom-agent-wrapper',
+      launchAgent: 'claude',
+      env: { SHELL: '/bin/bash' }
+    })
+
+    const spawnEnv = spawnMock.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+    expect(spawnEnv.GIT_TERMINAL_PROMPT).toBe('0')
+    expect(spawnEnv.GCM_INTERACTIVE).toBe('never')
+    expect(Object.values(spawnEnv)).toContain('credential.interactive')
+    expect(Object.values(spawnEnv)).toContain('credential.guiPrompt')
+  })
+
+  it('uses a new daemon protocol for the macOS login preflight host behavior', () => {
+    expect(PROTOCOL_VERSION).toBeGreaterThan(22)
+    expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(22)
+  })
+
+  it('uses a new daemon protocol for daemon-local Codex env ownership', () => {
+    expect(PROTOCOL_VERSION).toBeGreaterThan(22)
+    expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(22)
+  })
+
+  it('resolves a missing Unix default before spawning node-pty', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    resolveUnixShellPathMock.mockReturnValue('/bin/sh')
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const previousShell = process.env.SHELL
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    delete process.env.SHELL
+
+    try {
+      createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24, env: {} })
+
+      expect(resolveUnixShellPathMock).toHaveBeenCalledWith('/bin/zsh')
+      expect(spawnMock).toHaveBeenCalledWith(
+        '/bin/sh',
+        ['-l'],
+        expect.objectContaining({ env: expect.objectContaining({ SHELL: '/bin/sh' }) })
+      )
+      expect(warn).toHaveBeenCalledWith(
+        '[daemon/pty] Preferred shell "/bin/zsh" is unavailable, fell back to "/bin/sh"'
+      )
+    } finally {
+      warn.mockRestore()
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+      if (previousShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = previousShell
+      }
+    }
+  })
+
+  it('derives shell-ready launch config from the resolved fallback shell', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    resolveUnixShellPathMock.mockReturnValue('/bin/sh')
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const previousShell = process.env.SHELL
+    const previousMarker = process.env.ORCA_SHELL_READY_MARKER
+    const previousZdotdir = process.env.ZDOTDIR
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    delete process.env.SHELL
+    // Why: the test runner itself can execute inside an Orca-wrapped shell
+    // whose exported wrapper vars would leak through the process.env spread.
+    delete process.env.ORCA_SHELL_READY_MARKER
+    delete process.env.ZDOTDIR
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: {},
+        command: 'echo hi'
+      })
+
+      expect(handle.shellPath).toBe('/bin/sh')
+      const [shellPath, shellArgs, spawnOptions] = spawnMock.mock.calls[0]
+      expect(shellPath).toBe('/bin/sh')
+      expect(shellArgs).toEqual(['-l'])
+      // A launch config derived from the missing preferred zsh would inject
+      // ZDOTDIR and ORCA_SHELL_READY_MARKER; /bin/sh must spawn without them.
+      expect(spawnOptions.env.ZDOTDIR).toBeUndefined()
+      expect(spawnOptions.env.ORCA_SHELL_READY_MARKER).toBeUndefined()
+      expect(spawnOptions.env.SHELL).toBe('/bin/sh')
+    } finally {
+      warn.mockRestore()
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+      if (previousShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = previousShell
+      }
+      if (previousMarker === undefined) {
+        delete process.env.ORCA_SHELL_READY_MARKER
+      } else {
+        process.env.ORCA_SHELL_READY_MARKER = previousMarker
+      }
+      if (previousZdotdir === undefined) {
+        delete process.env.ZDOTDIR
+      } else {
+        process.env.ZDOTDIR = previousZdotdir
+      }
+    }
+  })
+
+  it('surfaces the no-executable-shell error before node-pty forks', () => {
+    resolveUnixShellPathMock.mockImplementation(() => {
+      throw new Error('No executable Unix shell found (tried: /bin/zsh, /bin/bash, /bin/sh)')
+    })
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+
+    try {
+      expect(() => createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24, env: {} })).toThrow(
+        'No executable Unix shell found'
+      )
+      expect(spawnMock).not.toHaveBeenCalled()
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('uses bundled ConPTY for native Windows daemon terminals', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        env: { COMSPEC: 'C:\\Windows\\System32\\cmd.exe' }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ useConptyDll: true })
+    )
+  })
+
+  it('suppresses the first-run Powerlevel10k wizard for daemon terminals', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: { SHELL: '/bin/bash' }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const spawnCall = spawnMock.mock.calls.at(-1)!
+    expect(spawnCall[2].env[POWERLEVEL10K_WIZARD_DISABLE_ENV]).toBe('true')
+  })
+
   itOnMacHost('repairs a deleted macOS daemon cwd before spawning node-pty', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -157,6 +510,43 @@ describe('createPtySubprocess', () => {
     const originalCwd = process.cwd()
     const deletedDaemonCwd = mkdtempSync(join(tmpdir(), 'orca-deleted-daemon-cwd-'))
     Object.defineProperty(process, 'platform', { value: 'darwin' })
+
+    try {
+      process.chdir(deletedDaemonCwd)
+      rmSync(deletedDaemonCwd, { recursive: true, force: true })
+
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: originalCwd,
+        env: { SHELL: '/bin/bash' }
+      })
+
+      expect(process.cwd()).toBe(realpathSync(userDataPath))
+    } finally {
+      process.chdir(originalCwd)
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    // The sync subprocess layer consumes the capability prepared by its async
+    // daemon boundary; this cwd-repair test deliberately exercises it unprepared.
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/bin/bash',
+      expect.any(Array),
+      expect.objectContaining({ cwd: originalCwd })
+    )
+  })
+
+  itOnPosixHost('repairs a deleted POSIX daemon cwd before Linux node-pty spawn', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const originalCwd = process.cwd()
+    const deletedDaemonCwd = mkdtempSync(join(tmpdir(), 'orca-deleted-daemon-cwd-'))
+    Object.defineProperty(process, 'platform', { value: 'linux' })
 
     try {
       process.chdir(deletedDaemonCwd)
@@ -248,6 +638,81 @@ describe('createPtySubprocess', () => {
     }
   })
 
+  it('serves the resolved agent identity past the cache TTL while a wrapper holds the foreground', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-16T12:00:00.000Z'))
+    const proc = mockPtyProcess()
+    proc.process = 'node'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    resolveAgentForegroundProcessMock.mockResolvedValue('grok')
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
+
+      expect(handle.getForegroundProcess()).toBe('node')
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(handle.getForegroundProcess()).toBe('grok')
+
+      // Why: renderer reads poll slower than the 1s cache TTL — an expired
+      // cache must keep answering with the resolved identity, not the wrapper.
+      vi.advanceTimersByTime(1_500)
+      expect(handle.getForegroundProcess()).toBe('grok')
+    } finally {
+      vi.useRealTimers()
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('clears an expired identity when the wrapper tree no longer resolves to an agent', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-16T12:00:00.000Z'))
+    const proc = mockPtyProcess()
+    proc.process = 'node'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    resolveAgentForegroundProcessMock.mockResolvedValueOnce('grok').mockResolvedValue('node')
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
+
+      expect(handle.getForegroundProcess()).toBe('node')
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(handle.getForegroundProcess()).toBe('grok')
+      // Flush the first refresh's finally so the next read can revalidate.
+      await Promise.resolve()
+      await Promise.resolve()
+
+      // An unrelated wrapper (e.g. npm) now owns the pane: the stale-served
+      // identity is revalidated and dropped once the refresh finds no agent.
+      vi.advanceTimersByTime(1_500)
+      expect(handle.getForegroundProcess()).toBe('grok')
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(handle.getForegroundProcess()).toBe('node')
+    } finally {
+      vi.useRealTimers()
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
   it('serves daemon Windows wrapper agent foreground from an async cache', async () => {
     const proc = mockPtyProcess()
     proc.process = 'node.exe'
@@ -320,6 +785,147 @@ describe('createPtySubprocess', () => {
     }
   })
 
+  it('preserves the ordinary fallback when Windows process enumeration is unavailable', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'powershell.exe'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    resolveAgentForegroundProcessMock.mockResolvedValue({
+      available: false,
+      processName: 'powershell.exe'
+    })
+
+    try {
+      const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+
+      expect(handle.getForegroundProcess()).toBe('powershell.exe')
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(handle.getForegroundProcess()).toBe('powershell.exe')
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('awaits a fresh delayed Windows scan instead of serving the shell fallback', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'powershell.exe'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    let resolveFresh!: (processName: string) => void
+    resolveAgentForegroundProcessMock.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveFresh = resolve
+      })
+    )
+
+    try {
+      const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+      const confirmation = handle.confirmForegroundProcess!()
+      let settled = false
+      void confirmation.then(() => {
+        settled = true
+      })
+      await Promise.resolve()
+      expect(settled).toBe(false)
+
+      resolveFresh('droid')
+      await expect(confirmation).resolves.toBe('droid')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledExactlyOnceWith(
+        proc.pid,
+        'powershell.exe',
+        expect.objectContaining({ fresh: true, forceProcessScan: true })
+      )
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('returns null when a fresh Windows confirmation scan is unavailable', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'powershell.exe'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    resolveAgentForegroundProcessMock.mockResolvedValue({
+      available: false,
+      processName: 'powershell.exe'
+    })
+
+    try {
+      const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+      await expect(handle.confirmForegroundProcess!()).resolves.toBeNull()
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('returns null when a recognized Windows fallback disappears during confirmation', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'droid'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    resolveAgentForegroundProcessMock.mockResolvedValue({
+      available: true,
+      processName: null
+    })
+
+    try {
+      const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+      await expect(handle.confirmForegroundProcess!()).resolves.toBeNull()
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('serves Unix agent foreground when node-pty reports an agent child process', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'uv'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    let resolveForeground!: (processName: string) => void
+    resolveAgentForegroundProcessMock.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveForeground = resolve
+      })
+    )
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
+
+      expect(handle.getForegroundProcess()).toBe('uv')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(
+        proc.pid,
+        'uv',
+        expect.any(Object)
+      )
+
+      resolveForeground('claude')
+      await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('claude'))
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
   it('does not let stale shell enrichment clear a newer direct agent foreground cache', async () => {
     const proc = mockPtyProcess()
     proc.process = 'powershell.exe'
@@ -372,6 +978,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: 'C:\\repo\\orca',
         command: 'codex'
       })
 
@@ -611,6 +1218,104 @@ describe('createPtySubprocess', () => {
     expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined()
   })
 
+  it('does not inherit NODE_ENV from the daemon process env', () => {
+    // Why: a dev-mode Orca forks the daemon with NODE_ENV=development; leaking
+    // Orca's build mode into user shells breaks `next build` and Vitest.
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const previous = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+
+    try {
+      createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    } finally {
+      if (previous === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previous
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.NODE_ENV).toBeUndefined()
+    expect(env.PATH).toBe(process.env.PATH)
+  })
+
+  it('keeps an explicitly requested NODE_ENV for daemon PTY shells', () => {
+    // Why: only the ambient value is stripped; a caller-supplied NODE_ENV still wins.
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const previous = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: { NODE_ENV: 'production' }
+      })
+    } finally {
+      if (previous === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previous
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.NODE_ENV).toBe('production')
+  })
+
+  it('does not inherit AppImage runtime env into daemon PTY shells', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const saved = {
+      APPIMAGE: process.env.APPIMAGE,
+      APPDIR: process.env.APPDIR,
+      ARGV0: process.env.ARGV0,
+      OWD: process.env.OWD,
+      APPIMAGE_LIBRARY_PATH: process.env.APPIMAGE_LIBRARY_PATH,
+      PATH: process.env.PATH,
+      LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH
+    }
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    process.env.APPIMAGE = '/data/apps/orca.appimage'
+    process.env.APPDIR = '/tmp/.mount_orca123'
+    process.env.ARGV0 = '/data/apps/orca.appimage'
+    process.env.OWD = '/home/user/project'
+    process.env.APPIMAGE_LIBRARY_PATH = '/tmp/.mount_orca123/usr/lib'
+    process.env.PATH = ['/tmp/.mount_orca123', '/tmp/.mount_orca123/usr/sbin', '/usr/bin'].join(
+      delimiter
+    )
+    process.env.LD_LIBRARY_PATH = ['/tmp/.mount_orca123/usr/lib', '/opt/audio/lib'].join(delimiter)
+
+    try {
+      createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.APPIMAGE).toBeUndefined()
+    expect(env.APPDIR).toBeUndefined()
+    expect(env.ARGV0).toBeUndefined()
+    expect(env.OWD).toBeUndefined()
+    expect(env.APPIMAGE_LIBRARY_PATH).toBeUndefined()
+    expect(env.PATH).toBe('/usr/bin')
+    expect(env.LD_LIBRARY_PATH).toBe('/opt/audio/lib')
+  })
+
   it('does not inherit parent agent hook endpoint for development hook env', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -733,6 +1438,46 @@ describe('createPtySubprocess', () => {
     expect(proc.kill).toHaveBeenCalled()
   })
 
+  it('propagates rejected graceful kills without marking the wrapper dead', () => {
+    const proc = mockPtyProcess()
+    proc.kill.mockImplementationOnce(() => {
+      throw new Error('native kill rejected')
+    })
+    spawnMock.mockReturnValue(proc)
+
+    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    expect(() => handle.kill()).toThrow('native kill rejected')
+    handle.write('still owned')
+    expect(() => handle.kill()).not.toThrow()
+
+    expect(proc.write).toHaveBeenCalledWith('still owned')
+    expect(proc.kill).toHaveBeenCalledTimes(2)
+  })
+
+  it('propagates rejected force kills so the owner can retry', () => {
+    const proc = mockPtyProcess(77)
+    proc.kill.mockImplementation(() => {
+      throw new Error('native fallback rejected')
+    })
+    spawnMock.mockReturnValue(proc)
+    const killSpy = vi
+      .spyOn(process, 'kill')
+      .mockImplementationOnce(() => {
+        throw new Error('SIGKILL rejected')
+      })
+      .mockImplementationOnce(() => true)
+
+    try {
+      const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+      expect(() => handle.forceKill()).toThrow('SIGKILL rejected')
+      expect(() => handle.forceKill()).not.toThrow()
+      expect(killSpy).toHaveBeenCalledTimes(2)
+      expect(proc.kill).toHaveBeenCalledOnce()
+    } finally {
+      killSpy.mockRestore()
+    }
+  })
+
   it('forceKill sends SIGKILL to the child pid', () => {
     const proc = mockPtyProcess(77)
     spawnMock.mockReturnValue(proc)
@@ -832,6 +1577,113 @@ describe('createPtySubprocess', () => {
     const shellArg = spawnMock.mock.calls[0][0]
     expect(typeof shellArg).toBe('string')
     expect(shellArg.length).toBeGreaterThan(0)
+  })
+
+  it('allows an explicitly requested plain daemon shell at POSIX root', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+
+    try {
+      createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24, cwd: '/' })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ cwd: '/' })
+    )
+  })
+
+  it('falls back to the safe default cwd for daemon agent startup without an explicit cwd', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    spawnMock.mockClear()
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    const origHome = process.env.HOME
+    // Pin HOME so we assert the exact resolved candidate, not just non-root-ness —
+    // catches regressions where resolveSafePtyDefaultCwd picks an unintended home.
+    process.env.HOME = '/home/testuser'
+
+    try {
+      // Why: omitted cwd resolves to a safe default home; guard must not reject before fallback (#9578).
+      expect(() =>
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          command: 'opencode'
+        })
+      ).not.toThrow()
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Array),
+        expect.objectContaining({ cwd: '/home/testuser' })
+      )
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+      if (origHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = origHome
+      }
+    }
+  })
+
+  it('rejects daemon automatic agent startup at POSIX root', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    spawnMock.mockClear()
+
+    try {
+      expect(() =>
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          cwd: '/',
+          command: 'claude'
+        })
+      ).toThrow(/requires a non-root workspace/)
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a missing explicit POSIX cwd before node-pty spawn', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    spawnMock.mockClear()
+
+    try {
+      expect(() =>
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          cwd: '/definitely-missing-orca-cwd'
+        })
+      ).toThrow(/definitely-missing-orca-cwd/)
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).not.toHaveBeenCalled()
   })
 
   it('passes custom env to spawned process', () => {
@@ -1034,6 +1886,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: '/repo',
         command: 'codex',
         env: { SHELL: '/bin/zsh' }
       })
@@ -1060,6 +1913,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: '/repo',
         command: "codex 'linked issue context'",
         startupCommandDelivery: 'shell-ready',
         env: { SHELL: '/bin/zsh' }
@@ -1087,6 +1941,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: '/repo',
         command: "codex --prefill 'linked issue context'",
         env: { SHELL: '/bin/zsh' }
       })
@@ -1126,6 +1981,111 @@ describe('createPtySubprocess', () => {
 
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[2].env.CODEX_HOME).toBeUndefined()
+  })
+
+  it('deletes daemon-owned Codex overlay pairs when the private marker is requested', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const previousCodexHome = process.env.CODEX_HOME
+    const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
+    process.env.CODEX_HOME = '/daemon/managed/codex-home'
+    process.env.ORCA_CODEX_HOME = '/daemon/managed/codex-home'
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: { SHELL: '/bin/bash' },
+        envToDelete: ['ORCA_CODEX_HOME']
+      })
+    } finally {
+      if (previousCodexHome === undefined) {
+        delete process.env.CODEX_HOME
+      } else {
+        process.env.CODEX_HOME = previousCodexHome
+      }
+      if (previousOrcaCodexHome === undefined) {
+        delete process.env.ORCA_CODEX_HOME
+      } else {
+        process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)![2].env
+    expect(env.CODEX_HOME).toBeUndefined()
+    expect(env.ORCA_CODEX_HOME).toBeUndefined()
+  })
+
+  it('strips an inherited per-account self-contained CODEX_HOME overlay in a nested Orca (#5370)', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const previousCodexHome = process.env.CODEX_HOME
+    const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
+    // A per-account home is injected as CODEX_HOME === ORCA_CODEX_HOME, so the
+    // nested-Orca strip must clear it exactly as it does the shared mirror.
+    const perAccountHome = '/daemon/managed/codex-accounts/019f0000-aaaa/home'
+    process.env.CODEX_HOME = perAccountHome
+    process.env.ORCA_CODEX_HOME = perAccountHome
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: { SHELL: '/bin/bash' },
+        envToDelete: ['ORCA_CODEX_HOME']
+      })
+    } finally {
+      if (previousCodexHome === undefined) {
+        delete process.env.CODEX_HOME
+      } else {
+        process.env.CODEX_HOME = previousCodexHome
+      }
+      if (previousOrcaCodexHome === undefined) {
+        delete process.env.ORCA_CODEX_HOME
+      } else {
+        process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)![2].env
+    expect(env.CODEX_HOME).toBeUndefined()
+    expect(env.ORCA_CODEX_HOME).toBeUndefined()
+  })
+
+  it('preserves a daemon-owned custom Codex home while deleting a stale private marker', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const previousCodexHome = process.env.CODEX_HOME
+    const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
+    process.env.CODEX_HOME = '/daemon/user/codex-home'
+    process.env.ORCA_CODEX_HOME = '/daemon/stale/managed-home'
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: { SHELL: '/bin/bash' },
+        envToDelete: ['ORCA_CODEX_HOME']
+      })
+    } finally {
+      if (previousCodexHome === undefined) {
+        delete process.env.CODEX_HOME
+      } else {
+        process.env.CODEX_HOME = previousCodexHome
+      }
+      if (previousOrcaCodexHome === undefined) {
+        delete process.env.ORCA_CODEX_HOME
+      } else {
+        process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)![2].env
+    expect(env.CODEX_HOME).toBe('/daemon/user/codex-home')
+    expect(env.ORCA_CODEX_HOME).toBeUndefined()
   })
 
   it('honors explicit terminal env overrides after deleting requested defaults', () => {
@@ -1219,7 +2179,7 @@ describe('createPtySubprocess', () => {
     }
 
     expect(spawnMock).toHaveBeenCalledWith(
-      'powershell.exe',
+      WINDOWS_POWERSHELL_ABS,
       POWERSHELL_OSC133_COMMAND_ARGS,
       expect.any(Object)
     )
@@ -1248,13 +2208,13 @@ describe('createPtySubprocess', () => {
     }
 
     expect(spawnMock).toHaveBeenCalledWith(
-      'pwsh.exe',
+      PWSH7_ABS,
       POWERSHELL_OSC133_COMMAND_ARGS,
       expect.any(Object)
     )
   })
 
-  it('falls back to powershell.exe when PowerShell 7 is selected but unavailable on Windows', () => {
+  it('keeps PowerShell 7 selected when the pwsh availability probe is cold-false on Windows', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -1277,13 +2237,14 @@ describe('createPtySubprocess', () => {
     }
 
     expect(spawnMock).toHaveBeenCalledWith(
-      'powershell.exe',
+      PWSH7_ABS,
       POWERSHELL_OSC133_COMMAND_ARGS,
       expect.any(Object)
     )
+    expect(isPwshAvailableMock).not.toHaveBeenCalled()
   })
 
-  it('falls back to powershell.exe when shellOverride requests pwsh.exe but pwsh is unavailable on Windows', () => {
+  it('keeps a pwsh.exe shellOverride when the pwsh availability probe is cold-false on Windows', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -1306,10 +2267,11 @@ describe('createPtySubprocess', () => {
     }
 
     expect(spawnMock).toHaveBeenCalledWith(
-      'powershell.exe',
+      PWSH7_ABS,
       POWERSHELL_OSC133_COMMAND_ARGS,
       expect.any(Object)
     )
+    expect(isPwshAvailableMock).not.toHaveBeenCalled()
   })
 
   it('ignores the PowerShell implementation setting for cmd.exe on Windows', () => {
@@ -1354,6 +2316,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: 'C:\\repo\\orca',
         shellOverride: 'powershell.exe',
         command: "& 'codex' '--no-alt-screen'"
       })
@@ -1383,6 +2346,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
+        cwd: 'C:\\repo\\orca',
         shellOverride: 'cmd.exe',
         command: `codex ${'x'.repeat(7000)}`
       })
@@ -1423,7 +2387,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'C:\\PortableGit\\bin\\bash.exe',
-      ['--login', '-i'],
+      ['-c', 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'],
       expect.objectContaining({
         cwd: 'C:\\Users\\jin\\repo',
         env: expect.objectContaining({ CHERE_INVOKING: '1' })
@@ -1480,7 +2444,7 @@ describe('createPtySubprocess', () => {
     }
 
     expect(spawnMock).toHaveBeenCalledWith(
-      'powershell.exe',
+      WINDOWS_POWERSHELL_ABS,
       POWERSHELL_OSC133_COMMAND_ARGS,
       expect.objectContaining({ cwd: 'C:\\Users\\alice\\project' })
     )
@@ -1574,7 +2538,8 @@ describe('createPtySubprocess', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-    const cwd = mkdtempSync(join(tmpdir(), 'daemon-pty-wsl-distro-test-'))
+    // Keep the fixture Windows-shaped even when this test runs on a Linux CI host.
+    const cwd = 'C:\\repo'
 
     Object.defineProperty(process, 'platform', { value: 'win32' })
 
@@ -1591,18 +2556,11 @@ describe('createPtySubprocess', () => {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
-      rmSync(cwd, { recursive: true, force: true })
     }
-
-    const normalizedCwd = cwd.replace(/\\/g, '/')
-    const driveMatch = normalizedCwd.match(/^([A-Za-z]):\/?(.*)$/)
-    const expectedLinuxCwd = driveMatch
-      ? `/mnt/${driveMatch[1].toLowerCase()}${driveMatch[2] ? `/${driveMatch[2]}` : ''}`
-      : '/mnt/c'
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Debian', '--', 'sh', '-c', expect.stringContaining(`cd '${expectedLinuxCwd}'`)],
+      ['-d', 'Debian', '--', 'sh', '-c', expect.stringContaining("cd '/mnt/c/repo'")],
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })
@@ -1803,6 +2761,7 @@ describe('createPtySubprocess', () => {
         cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
         env: {
           ORCA_TERMINAL_HANDLE: 'term_wsl',
+          ORCA_HERMES_STARTUP_QUERY: 'line one\nline two',
           WSLENV: 'FOO/u'
         }
       })
@@ -1822,16 +2781,47 @@ describe('createPtySubprocess', () => {
       }
     }
 
-    expect(spawnMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      expect.any(Array),
-      expect.objectContaining({
-        env: expect.objectContaining({
-          ORCA_TERMINAL_HANDLE: 'term_wsl',
-          WSLENV: 'FOO/u:ORCA_TERMINAL_HANDLE/u'
-        })
-      })
+    const spawnCall = spawnMock.mock.calls.at(-1)!
+    expect(spawnCall[0]).toBe('wsl.exe')
+    expect(spawnCall[1]).toEqual(expect.any(Array))
+    expect(spawnCall[2].env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
+    // Why: the daemon inherits optional agent-hook env in development. This
+    // test owns only the terminal handle and Powerlevel10k WSLENV contract.
+    expect(spawnCall[2].env.WSLENV?.split(':')).toEqual(
+      expect.arrayContaining([
+        'FOO/u',
+        'ORCA_TERMINAL_HANDLE/u',
+        'ORCA_HERMES_STARTUP_QUERY',
+        POWERLEVEL10K_WIZARD_DISABLE_ENV
+      ])
     )
+  })
+
+  it('does not mark deleted Powerlevel10k wizard env for daemon WSL import', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+        envToDelete: [POWERLEVEL10K_WIZARD_DISABLE_ENV]
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const spawnCall = spawnMock.mock.calls.at(-1)!
+    expect(spawnCall[0]).toBe('wsl.exe')
+    expect(spawnCall[2].env[POWERLEVEL10K_WIZARD_DISABLE_ENV]).toBeUndefined()
+    expect(spawnCall[2].env.WSLENV ?? '').not.toContain(POWERLEVEL10K_WIZARD_DISABLE_ENV)
   })
 
   it('keeps daemon WSL split panes in their distro when cwd is already POSIX', () => {
@@ -1968,6 +2958,32 @@ describe('createPtySubprocess', () => {
       }
     })
 
+    it('does not issue a second Windows ConPTY kill when force follows graceful kill', () => {
+      const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & {
+        destroy: ReturnType<typeof vi.fn>
+      }
+      proc.destroy = vi.fn(() => proc.kill())
+      spawnMock.mockReturnValue(proc)
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+        throw new Error('already gone')
+      })
+      const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      try {
+        const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+        handle.kill()
+        handle.forceKill()
+        handle.dispose()
+
+        expect(proc.kill).toHaveBeenCalledOnce()
+        expect(killSpy).not.toHaveBeenCalled()
+        expect(proc.destroy).not.toHaveBeenCalled()
+      } finally {
+        killSpy.mockRestore()
+        restorePlatform(origPlatform)
+      }
+    })
+
     it('dispose() on Windows skips destroy after forceKill falls back to node-pty kill()', () => {
       const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & {
         destroy: ReturnType<typeof vi.fn>
@@ -2042,5 +3058,65 @@ describe('createPtySubprocess', () => {
       expect(killSpy).toHaveBeenCalledWith(77, 'SIGKILL')
       killSpy.mockRestore()
     })
+  })
+})
+
+describe('checkPtySpawnHealth (retry on transient failure)', () => {
+  let previousUserDataPath: string | undefined
+  let userDataPath: string
+
+  beforeEach(() => {
+    spawnMock.mockReset()
+    previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+    userDataPath = mkdtempSync(join(tmpdir(), 'daemon-pty-health-test-'))
+    process.env.ORCA_USER_DATA_PATH = userDataPath
+  })
+
+  afterEach(() => {
+    if (previousUserDataPath === undefined) {
+      delete process.env.ORCA_USER_DATA_PATH
+    } else {
+      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    }
+    rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  // Why: a busy machine right after an upgrade can make one probe fail; the
+  // retry must keep a genuinely healthy daemon out of degraded mode. Windows
+  // short-circuits checkPtySpawnHealth, so this is a POSIX-only behavior.
+  itOnPosixHost(
+    'retries once and resolves when the first probe fails but the second succeeds',
+    async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      spawnMock
+        .mockImplementationOnce(() => {
+          const proc = mockPtyProcess()
+          queueMicrotask(() => proc._simulateExit(1))
+          return proc
+        })
+        .mockImplementationOnce(() => {
+          const proc = mockPtyProcess()
+          queueMicrotask(() => proc._simulateExit(0))
+          return proc
+        })
+
+      await expect(checkPtySpawnHealth()).resolves.toBeUndefined()
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+      expect(warn).toHaveBeenCalled()
+      warn.mockRestore()
+    }
+  )
+
+  itOnPosixHost('rejects after exhausting retries when every probe fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    spawnMock.mockImplementation(() => {
+      const proc = mockPtyProcess()
+      queueMicrotask(() => proc._simulateExit(1))
+      return proc
+    })
+
+    await expect(checkPtySpawnHealth()).rejects.toThrow(/exited with code 1/)
+    expect(spawnMock).toHaveBeenCalledTimes(2)
+    warn.mockRestore()
   })
 })

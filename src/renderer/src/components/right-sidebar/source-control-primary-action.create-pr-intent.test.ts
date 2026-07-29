@@ -39,7 +39,8 @@ describe('resolvePrimaryAction Create PR intent', () => {
           review: null,
           canCreate: false,
           blockedReason: 'no_upstream',
-          nextAction: 'publish'
+          nextAction: 'publish',
+          reviewLookupOutcome: 'not_found'
         }
       })
     )
@@ -63,12 +64,41 @@ describe('resolvePrimaryAction Create PR intent', () => {
           review: null,
           canCreate: false,
           blockedReason: 'needs_sync',
-          nextAction: 'sync'
+          nextAction: 'sync',
+          reviewLookupOutcome: 'not_found'
         }
       })
     )
     expect(result.kind).toBe('create_pr_intent')
     expect(result.disabled).toBe(false)
+  })
+
+  it('returns Create PR intent for a behind-only branch (fast-forward prepare)', () => {
+    const input = inputs({
+      upstreamStatus: {
+        hasUpstream: true,
+        upstreamName: 'origin/feature',
+        ahead: 0,
+        behind: 3
+      },
+      hostedReviewCreation: {
+        provider: 'github',
+        review: null,
+        canCreate: false,
+        blockedReason: 'needs_sync',
+        nextAction: 'sync',
+        reviewLookupOutcome: 'not_found'
+      }
+    })
+    const result = resolvePrimaryAction(input)
+    expect(result.kind).toBe('create_pr_intent')
+    expect(result.disabled).toBe(false)
+    expect(resolveCreatePrHeaderAction(input)).toEqual({
+      kind: 'create_pr_intent',
+      label: 'Create PR',
+      title: 'Prepare this branch and create a pull request',
+      disabled: false
+    })
   })
 
   it('returns Create PR intent for a branch that needs a safe push before review', () => {
@@ -79,7 +109,8 @@ describe('resolvePrimaryAction Create PR intent', () => {
         review: null,
         canCreate: false,
         blockedReason: 'needs_push',
-        nextAction: 'push'
+        nextAction: 'push',
+        reviewLookupOutcome: 'not_found'
       }
     })
     const result = resolvePrimaryAction(input)
@@ -110,7 +141,8 @@ describe('resolvePrimaryAction Create PR intent', () => {
           review: null,
           canCreate: false,
           blockedReason: 'dirty',
-          nextAction: 'commit'
+          nextAction: 'commit',
+          reviewLookupOutcome: 'not_found'
         }
       })
     )
@@ -132,7 +164,8 @@ describe('resolvePrimaryAction Create PR intent', () => {
             review: null,
             canCreate: false,
             blockedReason: 'dirty',
-            nextAction: 'commit'
+            nextAction: 'commit',
+            reviewLookupOutcome: 'not_found'
           }
         })
       )
@@ -154,7 +187,8 @@ describe('resolvePrimaryAction Create PR intent', () => {
         review: null,
         canCreate: false,
         blockedReason: 'dirty',
-        nextAction: 'commit'
+        nextAction: 'commit',
+        reviewLookupOutcome: 'not_found'
       }
     })
     const result = resolvePrimaryAction(input)
@@ -179,7 +213,8 @@ describe('resolvePrimaryAction Create PR intent', () => {
             review: null,
             canCreate: false,
             blockedReason: 'default_branch',
-            nextAction: null
+            nextAction: null,
+            reviewLookupOutcome: 'not_found'
           }
         })
       )
@@ -202,7 +237,8 @@ describe('resolvePrimaryAction Create PR intent', () => {
           review: null,
           canCreate: false,
           blockedReason: 'dirty',
-          nextAction: 'commit'
+          nextAction: 'commit',
+          reviewLookupOutcome: 'not_found'
         }
       })
     )
@@ -223,7 +259,8 @@ describe('resolvePrimaryAction Create PR intent', () => {
             review: null,
             canCreate: false,
             blockedReason: 'dirty',
-            nextAction: 'commit'
+            nextAction: 'commit',
+            reviewLookupOutcome: 'not_found'
           }
         })
       )
@@ -243,7 +280,8 @@ describe('resolvePrimaryAction Create PR intent', () => {
         review: null,
         canCreate: false,
         blockedReason: 'dirty',
-        nextAction: 'commit'
+        nextAction: 'commit',
+        reviewLookupOutcome: 'not_found'
       }
     })
 
@@ -272,7 +310,8 @@ describe('resolvePrimaryAction Create PR intent', () => {
             review: null,
             canCreate: false,
             blockedReason: 'needs_push',
-            nextAction: 'push'
+            nextAction: 'push',
+            reviewLookupOutcome: 'not_found'
           }
         })
       )
@@ -294,7 +333,8 @@ describe('resolvePrimaryAction Create PR intent', () => {
         review: null,
         canCreate: false,
         blockedReason: 'no_upstream',
-        nextAction: 'publish'
+        nextAction: 'publish',
+        reviewLookupOutcome: 'not_found'
       }
     })
 
@@ -327,7 +367,8 @@ describe('resolvePrimaryAction Create PR intent', () => {
         review: null,
         canCreate: false,
         blockedReason: 'needs_sync',
-        nextAction: 'sync'
+        nextAction: 'sync',
+        reviewLookupOutcome: 'not_found'
       }
     })
 
@@ -360,7 +401,8 @@ describe('resolvePrimaryAction Create PR intent', () => {
         review: null,
         canCreate: false,
         blockedReason: 'needs_sync',
-        nextAction: 'sync'
+        nextAction: 'sync',
+        reviewLookupOutcome: 'not_found'
       }
     })
 
@@ -382,7 +424,8 @@ describe('resolvePrimaryAction Create PR intent', () => {
             review: null,
             canCreate: true,
             blockedReason: null,
-            nextAction: null
+            nextAction: null,
+            reviewLookupOutcome: 'not_found'
           }
         })
       )
@@ -403,7 +446,8 @@ describe('resolvePrimaryAction Create PR intent', () => {
             review: null,
             canCreate: false,
             blockedReason: null,
-            nextAction: null
+            nextAction: null,
+            reviewLookupOutcome: 'not_found'
           },
           isHostedReviewCreationLoading: true
         })
@@ -412,6 +456,52 @@ describe('resolvePrimaryAction Create PR intent', () => {
       kind: 'create_pr',
       label: 'Create PR',
       title: 'Checking whether this branch can create a pull request…',
+      disabled: true
+    })
+  })
+
+  it('keeps stale Create PR eligibility disabled while a newer preflight is loading', () => {
+    expect(
+      resolveCreatePrHeaderAction(
+        inputs({
+          hostedReviewCreation: {
+            provider: 'github',
+            review: null,
+            canCreate: true,
+            blockedReason: null,
+            nextAction: null,
+            reviewLookupOutcome: 'not_found'
+          },
+          isHostedReviewCreationLoading: true
+        })
+      )
+    ).toEqual({
+      kind: 'create_pr',
+      label: 'Create PR',
+      title: 'Checking whether this branch can create a pull request…',
+      disabled: true
+    })
+  })
+
+  it('keeps stale Create MR eligibility disabled with provider-aware loading copy', () => {
+    expect(
+      resolveCreatePrHeaderAction(
+        inputs({
+          hostedReviewCreation: {
+            provider: 'gitlab',
+            review: null,
+            canCreate: true,
+            blockedReason: null,
+            nextAction: null,
+            reviewLookupOutcome: 'not_found'
+          },
+          isHostedReviewCreationLoading: true
+        })
+      )
+    ).toEqual({
+      kind: 'create_pr',
+      label: 'Create MR',
+      title: 'Checking whether this branch can create a merge request…',
       disabled: true
     })
   })
@@ -427,7 +517,8 @@ describe('resolvePrimaryAction Create PR intent', () => {
             review: null,
             canCreate: false,
             blockedReason: 'no_upstream',
-            nextAction: 'publish'
+            nextAction: 'publish',
+            reviewLookupOutcome: 'not_found'
           }
         })
       )

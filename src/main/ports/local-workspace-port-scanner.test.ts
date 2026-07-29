@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import path from 'path'
+import path from 'node:path'
 import {
   attributePortToWorkspace,
   isContainerProcess,

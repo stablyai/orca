@@ -99,6 +99,25 @@ describe('GhosttyImportModal', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
+  it('labels Ghostty line-height imports with the settings display name', () => {
+    const element = GhosttyImportModal({
+      open: true,
+      onOpenChange: () => {},
+      preview: {
+        found: true,
+        configPath: '/Users/alice/.config/ghostty/config',
+        diff: { terminalLineHeight: 1.35 },
+        unsupportedKeys: []
+      },
+      loading: false,
+      onApply: () => {},
+      applied: false
+    })
+
+    expect(containsText(element, 'Line Height')).toBe(true)
+    expect(containsText(element, 'terminalLineHeight')).toBe(false)
+  })
+
   it('renders success summary with done button when applied', () => {
     const onOpenChange = vi.fn()
     const onApply = vi.fn()

@@ -11,8 +11,8 @@ import {
   getWorktreeSymlinkPathFilterState,
   type WorktreeSymlinkPathSuggestion
 } from './worktree-symlink-path-filter'
-import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 type WorktreeSymlinksSectionProps = {
   repo: Repo
@@ -32,10 +32,11 @@ export function WorktreeSymlinksSection({
 }: WorktreeSymlinksSectionProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const activeRuntimeEnvironmentId = useAppStore((s) => s.settings?.activeRuntimeEnvironmentId)
 
   const paths = repo.symlinkPaths ?? EMPTY_WORKTREE_SYMLINK_PATHS
-  const useLocalDirectorySuggestions = !activeRuntimeEnvironmentId?.trim()
+  // Why: the pane may show a non-focused runtime host; only inspect the local
+  // filesystem when the switcher-selected repo is actually local.
+  const useLocalDirectorySuggestions = getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
   const directorySuggestionKey = `${repo.path}\n${repo.connectionId ?? ''}`
   const [directorySuggestions, setDirectorySuggestions] = useState<DirectorySuggestionState>(
     () => ({

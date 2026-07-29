@@ -18,8 +18,6 @@ export type WorkspaceViewSettings = {
   hideDefaultBranchWorkspace?: boolean
   filterRepoIds?: string[]
   collapsedGroups?: string[]
-  workspaceHostScope?: string
-  visibleWorkspaceHostIds?: string[] | null
   workspaceStatuses?: WorkspaceStatusDefinition[]
 }
 
@@ -64,8 +62,6 @@ export type MobileViewState = {
   hideDefaultBranch: boolean
   filterRepoIds: string[]
   collapsedGroups: string[]
-  workspaceHostScope?: string
-  visibleWorkspaceHostIds?: string[] | null
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
 }
 
@@ -90,16 +86,6 @@ export function applyDesktopViewSettings(
     filterRepoIds: settings.filterRepoIds ?? current.filterRepoIds,
     collapsedGroups: settings.collapsedGroups ?? current.collapsedGroups,
     workspaceStatuses
-  }
-  if (settings.workspaceHostScope !== undefined) {
-    next.workspaceHostScope = settings.workspaceHostScope
-  } else if (current.workspaceHostScope !== undefined) {
-    next.workspaceHostScope = current.workspaceHostScope
-  }
-  if (settings.visibleWorkspaceHostIds !== undefined) {
-    next.visibleWorkspaceHostIds = settings.visibleWorkspaceHostIds
-  } else if (current.visibleWorkspaceHostIds !== undefined) {
-    next.visibleWorkspaceHostIds = current.visibleWorkspaceHostIds
   }
   return next
 }

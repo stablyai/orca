@@ -1,10 +1,20 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
+import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
+import { showBlockedNotificationFallbackToast } from '@/lib/blocked-notification-fallback'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
+import {
+  isFreshNonDoneAgentStatus,
+  type AgentStatusEntry
+} from '../../../../shared/agent-status-types'
 import { isSupersededAgentCompletionSnapshot } from './agent-completion-snapshot-staleness'
-import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
+import type {
+  AgentCompletionDispatchMeta,
+  AgentCompletionStatusSnapshot
+} from './agent-completion-coordinator-types'
 import {
   countReposNeedingNotificationDisambiguation,
   getPaneKeyTabId,
@@ -19,11 +29,35 @@ import {
 
 const AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS = 10_000
 
+function agentSnapshotMatchesExplicitTitle(
+  snapshot: { agentType?: string | null } | undefined,
+  explicitTitleAgentType: string | null
+): boolean {
+  return !snapshot || !explicitTitleAgentType || snapshot.agentType === explicitTitleAgentType
+}
+
+function hasFreshActiveHookStatus(
+  snapshot: Pick<AgentStatusEntry, 'state' | 'updatedAt' | 'agentType'> | undefined,
+  explicitTitleAgentType: string | null
+): boolean {
+  const activeHookAgentForTitle = resolveCompatibleAgentTypeForOwner(
+    snapshot?.agentType,
+    explicitTitleAgentType
+  )
+  const titleNamesDifferentKnownAgent =
+    explicitTitleAgentType &&
+    snapshot?.agentType &&
+    snapshot.agentType !== 'unknown' &&
+    activeHookAgentForTitle !== explicitTitleAgentType
+  return Boolean(isFreshNonDoneAgentStatus(snapshot) && !titleNamesDifferentKnownAgent)
+}
+
 export type TerminalNotificationEvent = {
   source: 'terminal-bell' | 'agent-task-complete'
   terminalTitle?: string
   paneKey?: string
   agentStatusSnapshot?: AgentCompletionStatusSnapshot
+  agentCompletionSource?: AgentCompletionDispatchMeta['source']
   suppressOsNotification?: boolean
 }
 
@@ -39,27 +73,55 @@ export function dispatchTerminalNotification(
   event: TerminalNotificationEvent
 ): void {
   const state = useAppStore.getState()
+  // Why: the completion title is the live identity. If it explicitly names an
+  // agent, any snapshot from another agent is stale pane-reuse residue and must
+  // not lend its prompt/agentType or timing id to this notification.
+  const explicitTitleAgentType =
+    event.source === 'agent-task-complete' && event.terminalTitle
+      ? resolveCommittedTitleAgentType(event.terminalTitle)
+      : null
   const storedAgentStatus =
     event.source === 'agent-task-complete' && event.paneKey
       ? state.agentStatusByPaneKey[event.paneKey]
       : undefined
+  const eventAgentStatusSnapshot =
+    event.source === 'agent-task-complete' &&
+    agentSnapshotMatchesExplicitTitle(event.agentStatusSnapshot, explicitTitleAgentType)
+      ? event.agentStatusSnapshot
+      : undefined
   const freshStoredAgentStatus =
     storedAgentStatus &&
-    Date.now() - storedAgentStatus.updatedAt <= AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS
+    Date.now() - storedAgentStatus.updatedAt <= AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS &&
+    agentSnapshotMatchesExplicitTitle(storedAgentStatus, explicitTitleAgentType)
       ? storedAgentStatus
-      : undefined
-  const agentStatus =
-    event.source === 'agent-task-complete'
-      ? (event.agentStatusSnapshot ?? freshStoredAgentStatus)
       : undefined
   if (
     event.source === 'agent-task-complete' &&
-    isSupersededAgentCompletionSnapshot(storedAgentStatus, event.agentStatusSnapshot)
+    event.agentCompletionSource !== 'process-exit' &&
+    !eventAgentStatusSnapshot &&
+    hasFreshActiveHookStatus(storedAgentStatus, explicitTitleAgentType)
+  ) {
+    // Why: a title-only idle signal can race behind active hook state; a
+    // confirmed process exit is independent authority that the turn ended.
+    return
+  }
+  // Why: a process can die before its hook emits done; do not label the
+  // resulting completion notification with that stale active state or prompt.
+  const agentStatus =
+    event.source === 'agent-task-complete'
+      ? (eventAgentStatusSnapshot ??
+        (event.agentCompletionSource === 'process-exit' && freshStoredAgentStatus?.state !== 'done'
+          ? undefined
+          : freshStoredAgentStatus))
+      : undefined
+  if (
+    event.source === 'agent-task-complete' &&
+    isSupersededAgentCompletionSnapshot(storedAgentStatus, eventAgentStatusSnapshot)
   ) {
     return
   }
   const agentNotificationStateStartedAt =
-    freshStoredAgentStatus?.stateStartedAt ?? event.agentStatusSnapshot?.stateStartedAt
+    freshStoredAgentStatus?.stateStartedAt ?? eventAgentStatusSnapshot?.stateStartedAt
   // Why: main-process hook IPC can update inactive/unmounted worktrees before
   // the renderer's live-PTY map catches up. A fresh accepted hook snapshot is
   // authoritative for agent completion; title/BEL-only paths still need PTY liveness.
@@ -168,6 +230,13 @@ export function dispatchTerminalNotification(
     .then((result) => {
       if (result.delivered) {
         void playDesktopNotificationSound(customSoundId, customSoundVolume)
+        return
+      }
+      // Why: macOS is silently swallowing notifications (permission off or
+      // prompt unanswered) — surface an in-app pointer at the fix instead of
+      // letting the alert vanish without a trace.
+      if (result.reason === 'blocked-by-system') {
+        showBlockedNotificationFallbackToast()
       }
     })
     .catch((err) => {

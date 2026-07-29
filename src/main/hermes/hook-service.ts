@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: install/status/remove must share the exact Hermes plugin source, YAML enablement logic, and status classification. Splitting would make the managed plugin bytes drift from the installer tests that verify them against the real Hermes CLI. */
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import {
   copyFileSync,
   existsSync,
@@ -9,9 +9,9 @@ import {
   rmSync,
   unlinkSync,
   writeFileSync
-} from 'fs'
-import { homedir } from 'os'
-import { dirname, join } from 'path'
+} from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import { parse, stringify } from 'yaml'
 

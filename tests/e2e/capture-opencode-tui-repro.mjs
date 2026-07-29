@@ -4,15 +4,14 @@
 //   node tests/e2e/capture-opencode-tui-repro.mjs
 // Then run the captured replay test documented in terminal-foreground-redraw-freeze.spec.ts.
 
-import { createRequire } from 'module'
-import { createWriteStream, existsSync, mkdirSync, writeFileSync } from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
+import { createRequire } from 'node:module'
+import { createWriteStream, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
 
 const require = createRequire(import.meta.url)
 const pty = require('node-pty')
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url))
+const scriptDir = import.meta.dirname
 const repoRoot = path.resolve(scriptDir, '..', '..')
 
 function readOption(name, fallback) {

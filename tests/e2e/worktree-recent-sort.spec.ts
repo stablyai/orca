@@ -14,9 +14,9 @@
  *   behavior in end-to-end.
  */
 
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs'
-import os from 'os'
-import path from 'path'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady, waitForActiveWorktree } from './helpers/store'

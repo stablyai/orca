@@ -1,12 +1,12 @@
 import type { MobileBrowserTab } from '../../../../src/browser/MobileBrowserPane'
-import type { MobileTerminalTheme } from '../../../../src/terminal/TerminalWebView'
+import type { MobileTerminalTheme } from '../../../../src/terminal/terminal-webview-contract'
 import type { MobileDiffLine } from '../../../../src/session/mobile-diff-lines'
 import type {
   MobileHighlightedDiffLine,
   MobileSyntaxSegment
 } from '../../../../src/session/mobile-file-syntax'
 import type { TerminalRecord } from '../../../../src/session/mobile-terminal-records'
-import type { DiffComment } from '../../../../../src/shared/types'
+import type { DiffComment, TuiAgent } from '../../../../../src/shared/types'
 import type { AgentStatusEntry } from '../../../../../src/shared/agent-status-types'
 
 export type Terminal = TerminalRecord
@@ -23,6 +23,11 @@ export type MobileSessionTab =
       status?: 'pending-handle' | 'ready'
       terminal: string | null
       agentStatus?: AgentStatusEntry | null
+      /** Agent Orca launched in this terminal, if any. This makes chat eligible
+       *  before the first live agent-status update reaches the mobile client. */
+      launchAgent?: TuiAgent
+      /** Host-provided launch context still parked as an unsent TUI-input draft. */
+      launchDraft?: string
       terminalTheme?: MobileTerminalTheme
       isActive: boolean
     }

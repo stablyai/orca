@@ -8,7 +8,7 @@ import {
   requestHostedReviewJson
 } from '../source-control/hosted-review-api-request'
 import { readHostedPullRequestTemplate } from '../source-control/pull-request-template'
-import { getGiteaPullRequestForBranch } from './client'
+import { getGiteaPullRequestForBranch, invalidateGiteaPullRequestScanForRepo } from './client'
 import { mapGiteaPullRequest, type RawGiteaPullRequest } from './pull-request-mappers'
 import { getGiteaRepoRef, type GiteaRepoRef } from './repository-ref'
 
@@ -105,6 +105,12 @@ async function findExistingPullRequest(
   head: string,
   connectionId?: string | null
 ): Promise<{ number: number; url: string } | null> {
+  // Why: only called after a create attempt, which may have just mutated the
+  // remote — a cached /pulls scan from before the POST would miss the new PR.
+  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  if (repo) {
+    invalidateGiteaPullRequestScanForRepo(repo)
+  }
   const existing = await getGiteaPullRequestForBranch(repoPath, head, null, connectionId)
   return existing ? { number: existing.number, url: existing.url } : null
 }
@@ -177,6 +183,7 @@ export async function createGiteaPullRequest(
     )
     const created = mapGiteaPullRequest(raw, 'neutral')
     if (created) {
+      invalidateGiteaPullRequestScanForRepo(repo)
       return { ok: true, number: created.number, url: created.url }
     }
     const found = await findExistingPullRequest(repoPath, head, connectionId).catch(() => null)

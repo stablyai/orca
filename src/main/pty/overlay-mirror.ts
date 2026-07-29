@@ -7,8 +7,16 @@
 // delete the user's real Pi state). Shared in one module so a new overlay
 // consumer cannot accidentally diverge from the audited cleanup behavior.
 
-import { cpSync, linkSync, lstatSync, readdirSync, rmdirSync, symlinkSync, unlinkSync } from 'fs'
-import { isAbsolute, join, relative, resolve, sep } from 'path'
+import {
+  cpSync,
+  linkSync,
+  lstatSync,
+  readdirSync,
+  rmdirSync,
+  symlinkSync,
+  unlinkSync
+} from 'node:fs'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 export function mirrorEntry(sourcePath: string, targetPath: string): void {
   // Why: lstatSync (not statSync) so that if the user's source dir contains

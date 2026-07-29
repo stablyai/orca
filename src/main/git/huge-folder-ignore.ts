@@ -1,6 +1,6 @@
-import { existsSync } from 'fs'
-import { appendFile, readFile, stat } from 'fs/promises'
-import * as path from 'path'
+import { existsSync } from 'node:fs'
+import { appendFile, readFile, stat } from 'node:fs/promises'
+import * as path from 'node:path'
 import { checkIgnoredPaths } from './check-ignored-paths'
 import type { GitRuntimeOptions } from './git-runtime-options'
 

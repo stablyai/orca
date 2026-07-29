@@ -1,6 +1,6 @@
-import { readFile, stat } from 'fs/promises'
-import { homedir } from 'os'
-import { dirname, isAbsolute, join, resolve } from 'path'
+import { readFile, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import type { GitHubRepoContext } from './github-repository-identity'
 
 type LocalGitConfigPaths = {

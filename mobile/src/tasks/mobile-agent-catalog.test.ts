@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 
 import { MOBILE_AGENT_CATALOG } from './mobile-agent-catalog'
 import { MOBILE_TUI_AGENT_AUTO_PICK_ORDER } from './mobile-tui-agents'
 
-const currentDir = dirname(fileURLToPath(import.meta.url))
+const currentDir = import.meta.dirname
 
 function readDesktopSharedFile(relativePath: string): string {
   return readFileSync(resolve(currentDir, '../../../src/shared', relativePath), 'utf8')

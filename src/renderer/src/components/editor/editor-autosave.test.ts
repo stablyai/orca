@@ -91,6 +91,10 @@ describe('canAutoSaveOpenFile', () => {
       )
     ).toBe(false)
   })
+
+  it('rejects read-only edit tabs (AI Vault View Log)', () => {
+    expect(canAutoSaveOpenFile(makeOpenFile({ readOnly: true }))).toBe(false)
+  })
 })
 
 describe('normalizeAutoSaveDelayMs', () => {

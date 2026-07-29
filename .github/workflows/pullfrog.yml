@@ -42,14 +42,14 @@ jobs:
           MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          
+
           # for Amazon Bedrock (https://docs.pullfrog.com/bedrock)
           # AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
           # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           # AWS_REGION: us-east-1
           # BEDROCK_MODEL_ID: <bedrock-model-id>
-          
+
           # for Google Vertex AI (https://docs.pullfrog.com/vertex)
           # VERTEX_SERVICE_ACCOUNT_JSON: ${{ secrets.VERTEX_SERVICE_ACCOUNT_JSON }}
           # GOOGLE_CLOUD_PROJECT: my-project

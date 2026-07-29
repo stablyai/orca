@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { Copy, RefreshCw, Terminal } from 'lucide-react'
+import { useCallback, useEffect, useState, type ComponentProps, type ReactNode } from 'react'
+import { Copy, Loader2, RefreshCw, Terminal } from 'lucide-react'
 import { toast } from 'sonner'
 import { IntegrationStatusPill } from '../integration-status-pill'
+import { SkillFreshnessStatusPill } from '../skills/SkillFreshnessStatusPill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
@@ -43,9 +44,17 @@ type AgentSkillSetupPanelProps = {
   showRecheckWhenInstalled?: boolean
   installLabel?: string
   installedInstallLabel?: string
+  // Why: defaults to 'outline' so settings panels stay unchanged; modals that make
+  // Install the sole footer CTA pass 'default' for a filled primary hierarchy.
+  installVariant?: ComponentProps<typeof Button>['variant']
   actionHint?: ReactNode
+  openingHint?: ReactNode
   footer?: ReactNode
   onRecheck: () => void | Promise<unknown>
+  // Why: when set, the installed pill reflects skill freshness and Re-check also
+  // refreshes the freshness inventory. Callers omit it for non-local runtimes,
+  // which the local-host-only freshness scan cannot vouch for.
+  freshnessSkillName?: string
 }
 
 export function AgentSkillSetupPanel({
@@ -75,12 +84,16 @@ export function AgentSkillSetupPanel({
   showRecheckWhenInstalled = true,
   installLabel = 'Install',
   installedInstallLabel = 'Update',
+  installVariant = 'outline',
   actionHint,
+  openingHint,
   footer,
-  onRecheck
+  onRecheck,
+  freshnessSkillName
 }: AgentSkillSetupPanelProps): React.JSX.Element {
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [terminalCommand, setTerminalCommand] = useState<string | null>(null)
+  const [terminalOpening, setTerminalOpening] = useState(false)
   const [preInstallNoticeVisible, setPreInstallNoticeVisible] = useState(
     Boolean(preInstallNotice && !installed)
   )
@@ -161,26 +174,45 @@ export function AgentSkillSetupPanel({
       {!installed || showInstallWhenInstalled ? (
         <Button
           type="button"
-          variant="outline"
+          variant={installVariant}
           size="sm"
           onClick={() => {
+            if (terminalOpening) {
+              return
+            }
             const nextCommand = activeCommand
+            setTerminalOpening(true)
             void (async () => {
+              let shouldOpenTerminal = false
               try {
                 await onBeforeOpenTerminal?.()
                 await refreshPreInstallNotice()
+                shouldOpenTerminal = true
+              } catch {
+                shouldOpenTerminal = false
               } finally {
                 if (mountedRef.current) {
-                  setTerminalCommand(nextCommand)
-                  setTerminalOpen(true)
+                  setTerminalOpening(false)
+                  if (shouldOpenTerminal) {
+                    setTerminalCommand(nextCommand)
+                    setTerminalOpen(true)
+                  }
                 }
               }
             })()
           }}
-          disabled={terminalOpen || installDisabled}
+          disabled={terminalOpen || installDisabled || terminalOpening}
         >
-          <Terminal className="size-3.5" />
-          {installed ? installedInstallLabel : installLabel}
+          {terminalOpening ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <Terminal className="size-3.5" />
+          )}
+          {terminalOpening
+            ? translate('auto.components.settings.AgentSkillSetupPanel.5f818f12ab', 'Preparing...')
+            : installed
+              ? installedInstallLabel
+              : installLabel}
         </Button>
       ) : null}
       {!installed || showRecheckWhenInstalled ? (
@@ -189,12 +221,26 @@ export function AgentSkillSetupPanel({
           variant="ghost"
           size="sm"
           className="gap-1.5"
-          onClick={() => void onRecheck()}
+          onClick={() => {
+            void onRecheck()
+            if (freshnessSkillName) {
+              notifyInstalledAgentSkillsChanged()
+            }
+          }}
           disabled={loading}
         >
           <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
           {translate('auto.components.settings.AgentSkillSetupPanel.c689392435', 'Re-check')}
         </Button>
+      ) : null}
+      {terminalOpening ? (
+        <p className="basis-full text-[12px] leading-snug text-muted-foreground">
+          {openingHint ??
+            translate(
+              'auto.components.settings.AgentSkillSetupPanel.4c05b9d7cb',
+              'Preparing setup terminal.'
+            )}
+        </p>
       ) : null}
     </div>
   )
@@ -233,12 +279,16 @@ export function AgentSkillSetupPanel({
                     )}
                   </IntegrationStatusPill>
                 ) : installed ? (
-                  <IntegrationStatusPill tone="connected">
-                    {translate(
-                      'auto.components.settings.AgentSkillSetupPanel.9fcebceb2a',
-                      'Installed'
-                    )}
-                  </IntegrationStatusPill>
+                  freshnessSkillName ? (
+                    <SkillFreshnessStatusPill skillName={freshnessSkillName} />
+                  ) : (
+                    <IntegrationStatusPill tone="connected">
+                      {translate(
+                        'auto.components.settings.AgentSkillSetupPanel.9fcebceb2a',
+                        'Installed'
+                      )}
+                    </IntegrationStatusPill>
+                  )
                 ) : (
                   <IntegrationStatusPill tone="attention">
                     {translate(

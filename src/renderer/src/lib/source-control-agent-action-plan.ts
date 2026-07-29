@@ -9,6 +9,8 @@ import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
+import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 
 export type SourceControlLaunchPlanDelivery =
   | 'argv'
@@ -35,7 +37,12 @@ export function planSourceControlAgentActionLaunch(args: {
   disabledAgents?: TuiAgent[]
   cmdOverrides?: Partial<Record<TuiAgent, string>>
   agentArgs?: string | null
+  sessionOptions?: Record<string, SessionOptionValue>
   platform?: NodeJS.Platform
+  terminalWindowsShell?: string | null
+  /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
+   * `orca-ide` rename must not be applied for remote launches. */
+  isRemote?: boolean
 }): SourceControlLaunchPlanResult {
   const agent = args.agent
   if (!agent) {
@@ -79,7 +86,13 @@ export function planSourceControlAgentActionLaunch(args: {
 
   const cmdOverrides = args.cmdOverrides ?? {}
   const platform = args.platform ?? CLIENT_PLATFORM
-  const shell = platform === 'win32' ? 'powershell' : 'posix'
+  const isRemote = args.isRemote ?? false
+  const shell =
+    resolveLocalWindowsAgentStartupShell({
+      platform,
+      isRemote,
+      terminalWindowsShell: args.terminalWindowsShell
+    }) ?? (platform === 'win32' ? 'powershell' : 'posix')
   const plannedArgs = planAgentCliArgsSuffix(args.agentArgs, shell)
   if (!plannedArgs.ok) {
     return { ok: false, error: plannedArgs.error }
@@ -93,7 +106,10 @@ export function planSourceControlAgentActionLaunch(args: {
       prompt: '',
       cmdOverrides,
       platform,
+      shell,
+      isRemote,
       agentArgs: args.agentArgs,
+      sessionOptions: args.sessionOptions,
       allowEmptyPromptLaunch: true
     })
     delivery = 'paste-submit'
@@ -103,7 +119,10 @@ export function planSourceControlAgentActionLaunch(args: {
       draft: trimmedInput,
       cmdOverrides,
       platform,
-      agentArgs: args.agentArgs
+      shell,
+      isRemote,
+      agentArgs: args.agentArgs,
+      sessionOptions: args.sessionOptions
     })
     if (draftLaunchPlan) {
       startupPlan = {
@@ -112,6 +131,9 @@ export function planSourceControlAgentActionLaunch(args: {
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
         launchConfig: draftLaunchPlan.launchConfig,
+        ...(draftLaunchPlan.sessionOptions
+          ? { sessionOptions: draftLaunchPlan.sessionOptions }
+          : {}),
         ...(draftLaunchPlan.startupCommandDelivery
           ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
           : {}),
@@ -124,7 +146,10 @@ export function planSourceControlAgentActionLaunch(args: {
         prompt: '',
         cmdOverrides,
         platform,
+        shell,
+        isRemote,
         agentArgs: args.agentArgs,
+        sessionOptions: args.sessionOptions,
         allowEmptyPromptLaunch: true
       })
       delivery = 'draft-paste'
@@ -135,7 +160,10 @@ export function planSourceControlAgentActionLaunch(args: {
       prompt: '',
       cmdOverrides,
       platform,
+      shell,
+      isRemote,
       agentArgs: args.agentArgs,
+      sessionOptions: args.sessionOptions,
       allowEmptyPromptLaunch: true
     })
     delivery = 'draft-paste'
@@ -145,7 +173,10 @@ export function planSourceControlAgentActionLaunch(args: {
       prompt: trimmedInput,
       cmdOverrides,
       platform,
+      shell,
+      isRemote,
       agentArgs: args.agentArgs,
+      sessionOptions: args.sessionOptions,
       allowEmptyPromptLaunch: false
     })
     delivery = 'argv'

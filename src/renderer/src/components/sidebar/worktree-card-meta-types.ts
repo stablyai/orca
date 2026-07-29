@@ -1,5 +1,9 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { AutomationWorkspaceProvenance, IssueInfo } from '../../../../shared/types'
+import type {
+  AutomationWorkspaceProvenance,
+  CliWorkspaceProvenance,
+  IssueInfo
+} from '../../../../shared/types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import type { WorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 
@@ -27,6 +31,7 @@ export type WorktreeCardMetaBadgesProps = {
   review: WorktreeCardPrDisplay | null
   comment: string | null
   automationProvenance?: AutomationWorkspaceProvenance | null
+  cliProvenance?: CliWorkspaceProvenance | null
 }
 
 export type WorktreeCardMetaBadgesRootProps = WorktreeCardMetaBadgesProps &
@@ -37,10 +42,13 @@ export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   branchName?: string
   workspaceTitle?: string
   identityOrder?: 'workspace-first' | 'branch-first'
+  workspaceTitleRenameDisabled?: boolean
   automationHostId?: ExecutionHostId
   detailsAfter?: React.ReactNode
   openDelay?: number
   closeDelay?: number
+  onRenameWorkspaceTitle?: (displayName: string) => Promise<void> | void
+  onWorkspaceTitleEditingChange?: (editing: boolean) => void
   onEditIssue?: (event: React.MouseEvent) => void
   onEditComment?: (event: React.MouseEvent) => void
   onOpenGitHubIssueInOrca?: (event: React.MouseEvent) => void

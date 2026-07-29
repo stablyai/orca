@@ -78,6 +78,7 @@ const terminalTabSchema = z.object({
   sortOrder: z.number(),
   createdAt: z.number(),
   generation: z.number().optional(),
+  startupCwd: z.string().min(1).optional(),
   // Why: persist the launched agent so a restored idle agent tab keeps its
   // provider icon before any hook fires. `.catch(undefined)` keeps a stale or
   // unknown agent id from failing the whole-session parse (which would reset
@@ -116,7 +117,13 @@ const tabSchema = z.object({
   sortOrder: z.number(),
   createdAt: z.number(),
   isPreview: z.boolean().optional(),
-  isPinned: z.boolean().optional()
+  isPinned: z.boolean().optional(),
+  // Why: persist the per-tab native-chat view mode so 'chat' survives reload /
+  // session restore. `.catch('terminal')` tolerates unknown future values (a
+  // newer build that wrote an unrecognized mode) by degrading to the safe
+  // default instead of failing the whole-session parse. Legacy/missing stays
+  // undefined → 'terminal' in the renderer.
+  viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional()
 })
 
 const tabGroupSchema = z.object({
@@ -154,7 +161,11 @@ const persistedOpenFileSchema = z.object({
   language: z.string(),
   isPreview: z.boolean().optional(),
   runtimeEnvironmentId: z.string().nullable().optional(),
-  dirtyDraftContent: z.string().optional()
+  externalSshTargetId: z.string().trim().min(1).optional(),
+  dirtyDraftContent: z.string().optional(),
+  lastKnownDiskSignature: z.string().optional(),
+  readOnly: z.boolean().optional(),
+  liveTail: z.boolean().optional()
 })
 
 // ─── Browser ────────────────────────────────────────────────────────
@@ -175,13 +186,20 @@ const browserViewportPresetIdSchema = z.enum([
   'desktop'
 ])
 
-// Why: cast to WorkspaceSessionState's embedded BrowserWorkspace so future
-// additive fields in the type flow through without requiring a schema edit.
+// Why: the z.ZodType<BrowserWorkspace> cast only aligns the static type — it
+// does NOT let new fields survive parsing. z.object strips unknown keys, so
+// every additive field must be listed below (optional+nullable) or it is
+// dropped on restore.
 const browserWorkspaceSchema: z.ZodType<BrowserWorkspace> = z.object({
   id: z.string(),
   worktreeId: z.string(),
   label: z.string().optional(),
   sessionProfileId: z.string().nullable().optional(),
+  // Why: optional+nullable so pre-field sessions still validate; without this
+  // zod strips the persisted partition on restore, and an isolated tab whose
+  // profile mirror is stale at startup would silently fall back to the shared
+  // default partition — reopening the storage leak (#6923) across restarts.
+  sessionPartition: z.string().nullable().optional(),
   activePageId: z.string().nullable().optional(),
   pageIds: z.array(z.string()).optional(),
   url: z.string(),
@@ -278,7 +296,22 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     )
     .optional(),
   defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional(),
-  sleepingAgentSessionsByPaneKey: sleepingAgentSessionsByPaneKeySchema
+  sleepingAgentSessionsByPaneKey: sleepingAgentSessionsByPaneKeySchema,
+  terminalPtyIncarnationsByPaneKey: z.record(z.string(), z.string().min(1).max(128)).optional(),
+  terminalTopologyRevisionByRepoId: z.record(z.string(), z.number().int().nonnegative()).optional(),
+  terminalSurfaceTombstonesByPaneKey: z
+    .record(
+      z.string(),
+      z.object({
+        worktreeId: z.string(),
+        parentTabId: terminalTabIdSchema,
+        leafId: z.string(),
+        ptyId: z.string(),
+        incarnationId: z.string().min(1).max(128),
+        retiredAt: z.number().finite().nonnegative()
+      })
+    )
+    .optional()
 })
 
 export type ParsedWorkspaceSession =

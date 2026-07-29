@@ -1,4 +1,4 @@
-import path from 'path'
+import path from 'node:path'
 import { describe, expect, it, vi, afterEach } from 'vitest'
 
 const { platformMock, homedirMock, statMock } = vi.hoisted(() => ({

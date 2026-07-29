@@ -12,6 +12,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   codex: 'Codex',
   devin: 'Devin',
   ante: 'Ante',
+  trae: 'Trae',
   autohand: 'Autohand Code',
   opencode: 'OpenCode',
   'mimo-code': 'MiMo Code',

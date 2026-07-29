@@ -103,7 +103,9 @@ export async function loadPrSidebarData(
     const pr = prOutcome.result
     const checksOutcome = await deps.fetchPRChecks(args.worktreeId, {
       prNumber: pr.number,
-      headSha: args.headSha ?? pr.headSha ?? null,
+      // Why: mobile create can commit before opening the review; the fetched PR
+      // head is fresher than the route's cached git.status head.
+      headSha: pr.headSha ?? args.headSha ?? null,
       // Prefer the fetched PR's own repo identity so fork PRs key their cached
       // checks correctly; fall back to an explicit override then null.
       prRepo: pr.prRepo ?? args.prRepo ?? null
@@ -136,6 +138,62 @@ export async function loadPrSidebarDetails(
     // rather than escaping as an unhandled rejection.
     return null
   }
+}
+
+// UI treats details===null as "still loading". After phase 2 finishes (success or
+// non-fatal failure), never leave null — use prior comments if any, else empty body.
+export function resolvePrSidebarDetailsAfterPhase2(args: {
+  fetched: GitHubWorkItemDetails | null
+  prior: GitHubWorkItemDetails | null
+  pr: PRInfo
+}): GitHubWorkItemDetails {
+  if (args.fetched != null) {
+    return args.fetched
+  }
+  if (args.prior != null) {
+    return args.prior
+  }
+  return emptyPrSidebarDetails(args.pr)
+}
+
+// Placeholder details so Description/Comments leave the spinner after a failed phase 2.
+// The synthetic id is the only id shape we mint — real GitHub node ids never match.
+export function emptyPrSidebarDetails(pr: PRInfo): GitHubWorkItemDetails {
+  return {
+    item: {
+      id: `pr-${pr.number}`,
+      type: 'pr',
+      number: pr.number,
+      title: pr.title,
+      state: pr.state,
+      url: pr.url,
+      labels: [],
+      updatedAt: pr.updatedAt,
+      author: null
+    },
+    body: '',
+    comments: []
+  }
+}
+
+// True when phase 2 failed and we synthesized a stand-in (no body/comments/reviews).
+export function isPrSidebarDetailsPlaceholder(details: GitHubWorkItemDetails): boolean {
+  return details.item.id === `pr-${details.item.number}`
+}
+
+// Phase-2 still needs a real payload: null (in flight / not started) or a
+// synthetic placeholder from a failed fetch. Real details (including empty body)
+// do not qualify — ensure/retry must not re-pull those.
+export function prSidebarDetailsNeedFetch(
+  details: GitHubWorkItemDetails | null | undefined
+): boolean {
+  return details == null || isPrSidebarDetailsPlaceholder(details)
+}
+
+// Soft head refresh may restart an in-flight phase-1 load; only skip when there is
+// no visible/in-flight sidebar work (hidden or terminal error states).
+export function shouldSoftRefreshPrSidebarOnHeadChange(kind: PrSidebarState['kind']): boolean {
+  return kind === 'ready' || kind === 'none' || kind === 'loading'
 }
 
 // Stale-response guard (KTD6): a load tagged with an older sequence must not

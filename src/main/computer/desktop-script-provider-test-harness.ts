@@ -142,13 +142,6 @@ export function sampleCapabilities(actions: Partial<Record<string, boolean>> = {
   }
 }
 
-export function sampleListWindowsCapabilities() {
-  return sampleCapabilities({
-    hotkey: false,
-    pasteText: false
-  })
-}
-
 export function publicSnapshotKeys(snapshot: unknown): string[] {
   return Object.keys(snapshot as Record<string, unknown>).sort()
 }

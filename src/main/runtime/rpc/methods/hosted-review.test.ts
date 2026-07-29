@@ -36,6 +36,7 @@ describe('hosted review RPC methods', () => {
     expect(runtime.getHostedReviewForBranch).toHaveBeenCalledWith({
       repoSelector: 'C:\\repo',
       branch: 'feature/windows',
+      currentHeadOid: null,
       linkedGitHubPR: 12,
       linkedGitLabMR: null,
       linkedBitbucketPR: null,
@@ -57,6 +58,7 @@ describe('hosted review RPC methods', () => {
         canCreate: true,
         blockedReason: null,
         nextAction: null,
+        reviewLookupOutcome: 'not_found',
         defaultBaseRef: 'main',
         head: 'feature/create-pr',
         title: 'Create PR'

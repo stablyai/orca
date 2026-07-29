@@ -22,7 +22,6 @@ vi.mock('../git/runner', () => ({
 
 vi.mock('../git/repo', () => ({
   isGitRepo: vi.fn(),
-  getGitUsername: vi.fn(),
   getRepoName: vi.fn(),
   getBaseRefDefault: vi.fn(),
   searchBaseRefs: vi.fn()

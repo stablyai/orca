@@ -38,6 +38,7 @@ const automation: Automation = {
   workspaceMode: 'new_per_run',
   workspaceId: null,
   baseBranch: 'origin/main',
+  setupDecision: 'skip',
   reuseSession: false,
   timezone: 'UTC',
   rrule: 'FREQ=DAILY',
@@ -67,7 +68,7 @@ describe('headless automation workspace create args', () => {
       repoSelector: 'repo-1',
       name: 'auto-nightly-review-run-20260102T0304',
       baseBranch: 'origin/main',
-      setupDecision: 'inherit',
+      setupDecision: 'skip',
       activate: false,
       createdWithAgent: 'codex',
       startupAgent: 'codex',
@@ -87,5 +88,19 @@ describe('headless automation workspace create args', () => {
         hostId: 'ssh:ssh-target-1'
       }
     })
+  })
+
+  it('falls back to skip for legacy automations without a saved setup decision', () => {
+    const args = buildHeadlessAutomationWorktreeCreateArgs({
+      automation: { ...automation, setupDecision: undefined },
+      run: {
+        id: 'run-1',
+        title: 'Nightly review run',
+        scheduledFor: Date.UTC(2026, 0, 2, 3, 4, 5)
+      },
+      repo
+    })
+
+    expect(args.setupDecision).toBe('skip')
   })
 })

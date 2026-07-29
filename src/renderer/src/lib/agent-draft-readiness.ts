@@ -3,9 +3,8 @@ import type { GlobalSettings } from '../../../shared/types'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
+import { createDraftPasteReadyScanner } from '../../../shared/draft-paste-ready-scanner'
 
-const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
-const CODEX_COMPOSER_PROMPT = '›'
 const BRACKETED_PASTE_QUIET_MS = 1500
 
 /**
@@ -26,9 +25,7 @@ export function waitForAgentDraftInputReady(
 ): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     let settled = false
-    let recent = ''
-    let postHandshakeRecent = ''
-    let saw2004 = false
+    const scanner = createDraftPasteReadyScanner(readySignal)
     let quietTimer: number | null = null
     let hardTimer: number | null = null
     let unsubscribe: (() => void) | null = null
@@ -56,41 +53,12 @@ export function waitForAgentDraftInputReady(
     }
 
     const observeData = (data: string): void => {
-      // Why: 512 bytes covers split escape sequences and Codex's styled prompt
-      // without retaining a large terminal scrollback copy.
-      const combined = recent + data
-      recent = combined.slice(-512)
-      if (!saw2004) {
-        const markerIndex = combined.indexOf(DECSET_BRACKETED_PASTE)
-        if (markerIndex === -1) {
-          return
-        }
-        saw2004 = true
-        const postHandshakeChunk = combined.slice(markerIndex + DECSET_BRACKETED_PASTE.length)
-        if (readySignal === 'codex-composer-prompt') {
-          if (postHandshakeChunk.includes(CODEX_COMPOSER_PROMPT)) {
-            finish(true)
-            return
-          }
-          postHandshakeRecent = postHandshakeChunk.slice(-512)
-          return
-        }
-        postHandshakeRecent = postHandshakeChunk.slice(-512)
-      } else {
-        if (
-          readySignal === 'codex-composer-prompt' &&
-          (data.includes(CODEX_COMPOSER_PROMPT) ||
-            (postHandshakeRecent + data).includes(CODEX_COMPOSER_PROMPT))
-        ) {
-          finish(true)
-          return
-        }
-        postHandshakeRecent = (postHandshakeRecent + data).slice(-512)
-      }
-      if (readySignal === 'codex-composer-prompt') {
+      const { ready, armQuietTimer: shouldArm } = scanner.observe(data)
+      if (ready) {
+        finish(true)
         return
       }
-      if (saw2004) {
+      if (shouldArm) {
         armQuietTimer()
       }
     }

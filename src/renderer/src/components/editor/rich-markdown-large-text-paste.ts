@@ -1,5 +1,6 @@
 import type { Editor } from '@tiptap/react'
 import { toast } from 'sonner'
+import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
 import {
   measureTextControlPasteByteLength,
   measureTextControlPasteByteLengthWithYield
@@ -17,6 +18,8 @@ type RichMarkdownLargeTextPasteOptions = {
   measureYieldAfterCodeUnits?: number
   yieldToEventLoop?: () => Promise<void>
   canContinue?: (editor: Editor) => boolean
+  plainTextOverride?: string
+  htmlTextOverride?: string
 }
 
 export type RichMarkdownLargeTextPasteResult =
@@ -83,10 +86,6 @@ function getNextChunkBoundary(text: string, startIndex: number, maxBytes: number
   }
 
   return index
-}
-
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => globalThis.setTimeout(resolve, 0))
 }
 
 function isEditorAvailable(
@@ -188,8 +187,8 @@ export function handleRichMarkdownLargeTextPaste(
     return false
   }
 
-  const text = readPlainText(event)
-  const html = readHtmlText(event)
+  const text = options.plainTextOverride ?? readPlainText(event)
+  const html = options.htmlTextOverride ?? readHtmlText(event)
   const directMaxBytes = options.directMaxBytes ?? RICH_MARKDOWN_PASTE_DIRECT_MAX_BYTES
   const maxBytes = options.maxBytes ?? RICH_MARKDOWN_PASTE_MAX_BYTES
   const ownershipMeasurement = measureTextControlPasteByteLength(text, {

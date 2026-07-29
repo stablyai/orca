@@ -1,4 +1,5 @@
 node_modules/
+src/terminal/terminal-webview-engine.generated.ts
 .expo/
 dist/
 /android/

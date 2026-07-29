@@ -113,7 +113,7 @@ export function sanitizeRecentTabIds(recent: string[] | undefined, tabOrder: str
     seen.add(id)
     reversed.push(id)
   }
-  return reversed.reverse()
+  return reversed.toReversed()
 }
 
 /** Push `tabId` to the tail of the MRU stack (most-recently-active) after

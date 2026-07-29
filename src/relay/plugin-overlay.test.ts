@@ -8,9 +8,9 @@ import {
   rmSync,
   symlinkSync,
   writeFileSync
-} from 'fs'
-import { tmpdir } from 'os'
-import { basename, join } from 'path'
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { basename, join } from 'node:path'
 import { PluginOverlayManager } from './plugin-overlay'
 import { resolvePiSourceAgentDir } from './plugin-overlay-env'
 

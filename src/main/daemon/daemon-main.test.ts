@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { mkdtempSync, rmSync, existsSync, readFileSync } from 'fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { DaemonClient } from './client'
 import { getDaemonSocketPath } from './daemon-spawner'
@@ -98,7 +98,7 @@ function createMockSubprocess() {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
-    forceKill: vi.fn(),
+    forceKill: vi.fn(() => setTimeout(() => onExitCb?.(137), 5)),
     signal: vi.fn(),
     onData(_cb: (data: string) => void) {},
     onExit(cb: (code: number) => void) {

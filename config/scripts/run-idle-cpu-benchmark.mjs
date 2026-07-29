@@ -4,7 +4,6 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { installSyntheticVisibleSpinners } from './idle-cpu-synthetic-spinners.mjs'
 
 const DEFAULT_WARMUP_MS = 15_000
@@ -454,7 +453,7 @@ function terminateProcesses(processes) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2))
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+  const root = path.resolve(import.meta.dirname, '..', '..')
   const mainPath = buildAppIfNeeded(root, options.skipBuild)
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-idle-cpu-userdata-'))
   const { repoDir, cleanupDirs } = createIdleRepo(options.worktrees)
@@ -462,14 +461,29 @@ async function main() {
     path.join(userDataDir, 'orca-data.json'),
     `${JSON.stringify(makeCompletedOnboardingProfile(), null, 2)}\n`
   )
-  const { ELECTRON_RUN_AS_NODE, ...cleanEnv } = process.env
+  const {
+    ELECTRON_RUN_AS_NODE,
+    CODEX_HOME: _codexHome,
+    ORCA_CODEX_HOME: _orcaCodexHome,
+    ...cleanEnv
+  } = process.env
   void ELECTRON_RUN_AS_NODE
+  void _codexHome
+  void _orcaCodexHome
+  // Why: real-home rollout work would both contaminate idle measurements and
+  // expose the developer Codex profile to this disposable Electron launch.
+  const isolatedHome = path.join(userDataDir, 'home')
+  mkdirSync(isolatedHome, { recursive: true })
   const app = await electron.launch({
     args: launchArgs(mainPath, options.headful),
     env: {
       ...cleanEnv,
       NODE_ENV: 'development',
       ORCA_E2E_USER_DATA_DIR: userDataDir,
+      HOME: isolatedHome,
+      USERPROFILE: isolatedHome,
+      ORCA_E2E_HOME_DIR: isolatedHome,
+      ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0',
       ...(options.headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
     }
   })
@@ -558,7 +572,7 @@ async function main() {
     if (options.output) {
       mkdirSync(path.dirname(path.resolve(options.output)), { recursive: true })
       writeFileSync(options.output, `${JSON.stringify(report, null, 2)}\n`)
-      console.log(`[idle-cpu] wrote ${options.output}`)
+      console.log(`[idle-cpu] wrote ${String(options.output)}`)
     }
     console.log(
       JSON.stringify(

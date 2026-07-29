@@ -21,6 +21,7 @@ const cacheTimerMocks = vi.hoisted(() => ({
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'ports']
 let hostedReviewCache: Record<string, unknown> = {}
+let issueCache: Record<string, unknown> = {}
 let projectGroups: unknown[] = []
 let workspacePortScan: { key: string; result: WorkspacePortScanResult } | null = null
 let settings: Partial<GlobalSettings> | null = { compactWorktreeCards: true }
@@ -39,7 +40,7 @@ vi.mock('@/store', () => ({
       fetchLinearIssue,
       gitConflictOperationByWorktree: {},
       hostedReviewCache,
-      issueCache: {},
+      issueCache,
       linearIssueCache: {},
       openModal,
       openTaskPage,
@@ -185,6 +186,7 @@ describe('WorktreeCard compact hover details', () => {
     vi.clearAllMocks()
     worktreeCardProperties = ['status', 'ports']
     hostedReviewCache = {}
+    issueCache = {}
     projectGroups = []
     workspacePortScan = null
     settings = { compactWorktreeCards: true }
@@ -294,6 +296,38 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('Live Ports')
     expect(markup).toContain('58941')
     expect(markup).not.toContain('data-worktree-card-meta-row=""')
+  }, 30_000)
+
+  it('reads linked issue details from the local repo-owner cache while a runtime is focused', async () => {
+    settings = {
+      activeRuntimeEnvironmentId: 'env-1',
+      compactWorktreeCards: true,
+      experimentalNewWorktreeCardStyle: true
+    }
+    worktreeCardProperties = ['status']
+    issueCache = {
+      'repo-1::123': {
+        data: { number: 123, title: 'Local owner issue', state: 'open', url: null },
+        fetchedAt: Date.now()
+      },
+      'runtime:env-1::repo-1::123': {
+        data: { number: 123, title: 'Runtime fallback issue', state: 'open', url: null },
+        fetchedAt: Date.now()
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ linkedIssue: 123 })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Local owner issue')
+    expect(markup).not.toContain('Runtime fallback issue')
+    expect(markup).not.toContain('Loading issue')
   }, 30_000)
 
   it('shows selected task and note metadata on the compact card title row', async () => {

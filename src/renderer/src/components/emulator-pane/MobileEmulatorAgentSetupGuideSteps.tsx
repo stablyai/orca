@@ -73,6 +73,23 @@ export function MobileEmulatorAgentSetupGuideSteps({
               {setup.cliInstallStatus.detail}
             </p>
           ) : null}
+          {setup.cliBusy ? (
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              {translate(
+                'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.3d34423e88',
+                'Registering the Orca CLI'
+              )}{' '}
+              {setup.cliInstallStatus?.commandPath ? (
+                <code className="rounded bg-muted px-1 py-0.5">
+                  {setup.cliInstallStatus.commandPath}
+                </code>
+              ) : null}{' '}
+              {translate(
+                'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.3be27641c9',
+                'so emulator commands can run from agent shells.'
+              )}
+            </p>
+          ) : null}
           {!setup.cliEnabled && !setup.cliPathNeedsAttention && setup.cliInstallStatus?.detail ? (
             <p className="text-[11px] text-muted-foreground">{setup.cliInstallStatus.detail}</p>
           ) : null}
@@ -93,7 +110,9 @@ export function MobileEmulatorAgentSetupGuideSteps({
                     void setup.handleEnableCli()
                   }}
                 >
-                  {setup.cliLoading ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                  {setup.cliLoading || setup.cliBusy ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : null}
                   {setup.cliActionLabel}
                 </Button>
               </span>
@@ -149,6 +168,10 @@ export function MobileEmulatorAgentSetupGuideSteps({
             preInstallNotice={
               showSkillPreInstallNotice ? AGENT_SKILL_CLI_PREREQUISITE_NOTICE : undefined
             }
+            openingHint={translate(
+              'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.3941719a56',
+              'Checking Orca CLI before opening skill setup.'
+            )}
             onBeforeOpenTerminal={async () => {
               recordFeatureInteraction('mobile-emulator-agent-setup')
               await ensureOrcaCliAvailableForAgentSkillTerminal()

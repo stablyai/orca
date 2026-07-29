@@ -8,7 +8,7 @@ import {
   isMobileGitTransientRefreshError,
   type MobileGitStatusResult
 } from './mobile-git-status'
-import { type MobileGitBranchCompareResult } from './mobile-branch-compare'
+import type { MobileGitBranchCompareResult } from './mobile-branch-compare'
 import {
   SELECTOR_RETRY_COUNT,
   SELECTOR_RETRY_DELAY_MS,
@@ -25,6 +25,7 @@ type Params = {
   statusIdentityKey: string
   worktreeId: string
   setActionError: (message: string | null) => void
+  onStatusLoadSuccess?: () => void
 }
 
 export type MobileSourceControlLoaders = {
@@ -42,7 +43,8 @@ export type MobileSourceControlLoaders = {
 // Owns git.status / git.branchCompare loading, the load-generation guards, and
 // the mount ref so the giant state hook stays under the line limit.
 export function useMobileSourceControlLoaders(params: Params): MobileSourceControlLoaders {
-  const { client, connState, statusIdentityKey, worktreeId, setActionError } = params
+  const { client, connState, statusIdentityKey, worktreeId, setActionError, onStatusLoadSuccess } =
+    params
   const [screenState, setScreenState] = useState<ScreenState>({ kind: 'loading' })
   const [branchCompareState, setBranchCompareState] = useState<MobileBranchCompareState>({
     kind: 'idle'
@@ -102,8 +104,18 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
           return false
         }
         if (!baseRef) {
-          setBranchCompareState({ kind: 'idle' })
-          return true
+          // Why: wiping a prior ready compare to idle makes Changes say "No
+          // Changes" even when commits still exist (e.g. after abort-merge refresh).
+          setBranchCompareState((prev) => {
+            if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
+              return prev
+            }
+            return {
+              kind: 'error',
+              message: 'Unable to resolve the base branch for comparison.'
+            }
+          })
+          return false
         }
         const response = await client.sendRequest('git.branchCompare', {
           worktree: `id:${worktreeId}`,
@@ -114,7 +126,12 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         }
         if (!response.ok) {
           if (isMobileGitUnavailable(response.error?.code, response.error?.message)) {
-            setBranchCompareState({ kind: 'idle' })
+            setBranchCompareState((prev) => {
+              if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
+                return prev
+              }
+              return { kind: 'idle' }
+            })
             return false
           }
           throw new Error(response.error?.message || 'Unable to load committed changes')
@@ -191,6 +208,9 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
               if (options?.clearActionErrorOnSuccess !== false) {
                 setActionError(null)
               }
+              // Why: recovery prompts are based on a specific failed commit
+              // snapshot; a fresh status means that snapshot may be stale.
+              onStatusLoadSuccess?.()
               return true
             }
             if (isMobileGitUnavailable(response.error?.code, response.error?.message)) {
@@ -240,7 +260,15 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         }
       }
     },
-    [client, connState, loadBranchCompare, statusIdentityKey, worktreeId, setActionError]
+    [
+      client,
+      connState,
+      loadBranchCompare,
+      onStatusLoadSuccess,
+      statusIdentityKey,
+      worktreeId,
+      setActionError
+    ]
   )
 
   useEffect(() => {

@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { app } from 'electron'
-import { createHash } from 'crypto'
+import { createHash } from 'node:crypto'
 import {
   ORCA_PI_AGENT_STATUS_EXTENSION_FILE,
   getPiAgentStatusExtensionSource
@@ -17,6 +17,7 @@ import {
   isSafeDescendCandidate as sharedIsSafeDescendCandidate,
   safeRemoveOverlay
 } from '../pty/overlay-mirror'
+import { migrateLegacyOmpOverlayState } from './legacy-omp-overlay-migration'
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
 // Why: the Pi test suite imports `isSafeDescendCandidate` from this module's
@@ -27,6 +28,7 @@ export const isSafeDescendCandidate = sharedIsSafeDescendCandidate
 
 const PI_AGENT_SUBDIR = 'agent'
 const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
+const OMP_MANAGED_STATUS_EXTENSION_DIR = 'omp-managed-status-extension'
 
 type ManagedExtensionWriteResult = 'written' | 'skipped-user-owned' | 'failed'
 
@@ -73,6 +75,12 @@ export class PiTitlebarExtensionService {
     return join(app.getPath('userData'), OVERLAY_ROOT_DIR_NAME[kind])
   }
 
+  private getSourceOverlayDir(sourceAgentDir: string, kind: PiAgentKind): string {
+    // Why: builds before managed extensions stored Pi/OMP state in source-scoped
+    // overlays. Resolve the old path so OMP upgrades can rescue stranded state.
+    return join(this.getOverlayRoot(kind), toSafeOverlayDirName(`source:${sourceAgentDir}`))
+  }
+
   private getPtyOverlayDir(ptyId: string, kind: PiAgentKind): string {
     // Why: old Orca versions used PTY-scoped hashed overlays. Keep resolving
     // that path so new spawns/teardowns can clean stale pre-migration dirs.
@@ -111,6 +119,18 @@ export class PiTitlebarExtensionService {
     }
   }
 
+  private writeOmpFallbackStatusExtension(source: string): string | undefined {
+    const fallbackDir = join(app.getPath('userData'), OMP_MANAGED_STATUS_EXTENSION_DIR)
+    try {
+      mkdirSync(fallbackDir, { recursive: true })
+    } catch {
+      return undefined
+    }
+
+    const fallbackPath = join(fallbackDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE)
+    return this.writeManagedExtension(fallbackPath, source) === 'written' ? fallbackPath : undefined
+  }
+
   private installManagedExtensions(
     sourceAgentDir: string,
     kind: PiAgentKind
@@ -131,15 +151,18 @@ export class PiTitlebarExtensionService {
       withOrcaManagedExtensionMarker(getPiPrefillExtensionSource(kind))
     )
     const statusExtensionPath = join(extensionsDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE)
-    const statusResult = this.writeManagedExtension(
-      statusExtensionPath,
-      withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
-    )
+    const statusSource = withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
+    const statusResult = this.writeManagedExtension(statusExtensionPath, statusSource)
 
     return {
       extensionDir: extensionsDir,
       sourceAgentDir,
-      statusExtensionPath: statusResult === 'written' ? statusExtensionPath : undefined
+      statusExtensionPath:
+        statusResult === 'written'
+          ? statusExtensionPath
+          : kind === 'omp'
+            ? this.writeOmpFallbackStatusExtension(statusSource)
+            : undefined
     }
   }
 
@@ -155,6 +178,10 @@ export class PiTitlebarExtensionService {
     } catch {
       // Why: old per-PTY overlay cleanup is best-effort; a locked stale
       // directory should not prevent the terminal from starting.
+    }
+
+    if (kind === 'omp') {
+      migrateLegacyOmpOverlayState(sourceAgentDir, this.getSourceOverlayDir(sourceAgentDir, 'omp'))
     }
 
     const installed = this.installManagedExtensions(sourceAgentDir, kind)

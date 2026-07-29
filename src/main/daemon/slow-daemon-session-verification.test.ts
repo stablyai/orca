@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { connect, createServer, type Server, type Socket } from 'net'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { mkdirSync, mkdtempSync, rmSync } from 'fs'
+import { connect, createServer, type Server, type Socket } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { DaemonServer } from './daemon-server'
 import { DaemonClient } from './client'
 import { healthCheckDaemon } from './daemon-health'
@@ -21,16 +21,19 @@ import type { SubprocessHandle } from './session'
 const RESPONSE_DELAY_MS = 3_500
 
 function createMockSubprocess(): SubprocessHandle {
+  let onExitCb: ((code: number) => void) | null = null
   return {
     pid: 55555,
     getForegroundProcess: vi.fn(() => null),
     write: vi.fn(),
     resize: vi.fn(),
-    kill: vi.fn(),
-    forceKill: vi.fn(),
+    kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
+    forceKill: vi.fn(() => setTimeout(() => onExitCb?.(137), 5)),
     signal: vi.fn(),
     onData: vi.fn(),
-    onExit: vi.fn(),
+    onExit: vi.fn((callback: (code: number) => void) => {
+      onExitCb = callback
+    }),
     dispose: vi.fn()
   }
 }

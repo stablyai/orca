@@ -11,7 +11,7 @@ vi.mock('child_process', () => ({
 
 describe('resolveWithSshG', () => {
   beforeEach(async () => {
-    const { execFile } = await import('child_process')
+    const { execFile } = await import('node:child_process')
     vi.mocked(execFile).mockReset()
   })
 
@@ -20,7 +20,7 @@ describe('resolveWithSshG', () => {
   })
 
   it('returns parsed config on success', async () => {
-    const { execFile } = await import('child_process')
+    const { execFile } = await import('node:child_process')
     const mockExecFile = vi.mocked(execFile)
     mockExecFile.mockImplementation(
       (_cmd: unknown, _args: unknown, _opts: unknown, cb: unknown) => {
@@ -37,7 +37,7 @@ describe('resolveWithSshG', () => {
   })
 
   it('calls ssh -G with the given host', async () => {
-    const { execFile } = await import('child_process')
+    const { execFile } = await import('node:child_process')
     const mockExecFile = vi.mocked(execFile)
     mockExecFile.mockImplementation(
       (_cmd: unknown, _args: unknown, _opts: unknown, cb: unknown) => {
@@ -57,7 +57,7 @@ describe('resolveWithSshG', () => {
   })
 
   it('returns null when ssh -G fails', async () => {
-    const { execFile } = await import('child_process')
+    const { execFile } = await import('node:child_process')
     const mockExecFile = vi.mocked(execFile)
     mockExecFile.mockImplementation(
       (_cmd: unknown, _args: unknown, _opts: unknown, cb: unknown) => {
@@ -73,7 +73,7 @@ describe('resolveWithSshG', () => {
 
   it('returns null when ssh -G never reports completion', async () => {
     vi.useFakeTimers()
-    const { execFile } = await import('child_process')
+    const { execFile } = await import('node:child_process')
     const mockExecFile = vi.mocked(execFile)
     const killMock = vi.fn()
     mockExecFile.mockImplementation(() => ({ kill: killMock }) as never)

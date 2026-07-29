@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolvePrActionAvailability } from './pr-actions-state'
+import { resolveMobilePrMergeMethod, resolvePrActionAvailability } from './pr-actions-state'
 
 describe('resolvePrActionAvailability', () => {
   it('merged: only unlink', () => {
@@ -28,5 +28,29 @@ describe('resolvePrActionAvailability', () => {
       expect(a.canClose).toBe(true)
       expect(a.canReopen).toBe(false)
     }
+  })
+})
+
+describe('resolveMobilePrMergeMethod', () => {
+  it('uses squash when repository settings are unavailable', () => {
+    expect(resolveMobilePrMergeMethod(undefined)).toBe('squash')
+  })
+
+  it('uses the repository default when it is allowed', () => {
+    expect(
+      resolveMobilePrMergeMethod({
+        defaultMethod: 'rebase',
+        allowedMethods: { merge: false, squash: true, rebase: true }
+      })
+    ).toBe('rebase')
+  })
+
+  it('falls back to an allowed method when the default is disabled', () => {
+    expect(
+      resolveMobilePrMergeMethod({
+        defaultMethod: 'rebase',
+        allowedMethods: { merge: false, squash: true, rebase: false }
+      })
+    ).toBe('squash')
   })
 })

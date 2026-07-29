@@ -1,5 +1,5 @@
-import { realpath, stat } from 'fs/promises'
-import path from 'path'
+import { realpath, stat } from 'node:fs/promises'
+import path from 'node:path'
 import type { WarpThemeImportSkippedFile } from '../../shared/terminal-custom-themes'
 import { getWarpThemeDirectories, warpThemeSourceLabelForDirectory } from './discovery'
 import type { PreviewOperationBudget } from './preview-operation-budget'

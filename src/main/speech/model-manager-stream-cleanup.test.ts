@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { PassThrough } from 'stream'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { PassThrough } from 'node:stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ModelManager } from './model-manager'
 
@@ -64,8 +64,8 @@ describe('ModelManager stream cleanup', () => {
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
 
       const download = manager.downloadFile(
-        'https://example.com/model.tar.bz2',
-        join(dir, 'model.tar.bz2'),
+        'https://example.com/model.bin',
+        join(dir, 'model.bin'),
         4,
         'm',
         () => false

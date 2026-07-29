@@ -1,6 +1,6 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { dirname, join } from 'path'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RelayDispatcher } from './dispatcher'
 

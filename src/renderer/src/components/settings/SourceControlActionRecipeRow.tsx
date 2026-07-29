@@ -32,6 +32,7 @@ type SourceControlActionRecipeRowProps = {
   baseValue: ActionRecipeDraftValue
   defaultTuiAgent: GlobalSettings['defaultTuiAgent']
   isSavingTemplate: boolean
+  repoOverrideNote?: React.ReactNode
   onAgentChange: (actionId: SourceControlActionId, value: string) => void
   onTemplateChange: (actionId: SourceControlActionId, value: string) => void
   onAgentArgsChange: (actionId: SourceControlActionId, value: string) => void
@@ -57,6 +58,7 @@ export function SourceControlActionRecipeRow({
   baseValue,
   defaultTuiAgent,
   isSavingTemplate,
+  repoOverrideNote,
   onAgentChange,
   onTemplateChange,
   onAgentArgsChange,
@@ -163,50 +165,53 @@ export function SourceControlActionRecipeRow({
           />
         </div>
       </div>
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[11px] text-muted-foreground">
-          {templateDirty
-            ? translate(
-                'auto.components.settings.SourceControlAiActionRecipeDefaults.817128d94e',
-                'Unsaved changes'
-              )
-            : translate(
-                'auto.components.settings.SourceControlAiActionRecipeDefaults.9d3cc627f8',
-                'Saved'
-              )}
-        </p>
-        <div className="flex items-center gap-2">
-          {templateDirty ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              onClick={() => onDiscard(actionId)}
-              disabled={isSavingTemplate}
-            >
-              {translate(
-                'auto.components.settings.SourceControlAiActionRecipeDefaults.b3914ecbbc',
-                'Discard'
-              )}
-            </Button>
-          ) : null}
-          <Button
-            type="button"
-            variant="secondary"
-            size="xs"
-            onClick={() => onSave(actionId)}
-            disabled={!templateDirty || isSavingTemplate}
-          >
-            {isSavingTemplate
+      <div className="mt-3 space-y-2">
+        {repoOverrideNote}
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] text-muted-foreground">
+            {templateDirty
               ? translate(
-                  'auto.components.settings.SourceControlAiActionRecipeDefaults.4f549a5fa8',
-                  'Saving...'
+                  'auto.components.settings.SourceControlAiActionRecipeDefaults.817128d94e',
+                  'Unsaved changes'
                 )
               : translate(
-                  'auto.components.settings.SourceControlAiActionRecipeDefaults.d18d665e12',
-                  'Save'
+                  'auto.components.settings.SourceControlAiActionRecipeDefaults.9d3cc627f8',
+                  'Saved'
                 )}
-          </Button>
+          </p>
+          <div className="flex items-center gap-2">
+            {templateDirty ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={() => onDiscard(actionId)}
+                disabled={isSavingTemplate}
+              >
+                {translate(
+                  'auto.components.settings.SourceControlAiActionRecipeDefaults.b3914ecbbc',
+                  'Discard'
+                )}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              onClick={() => onSave(actionId)}
+              disabled={!templateDirty || isSavingTemplate}
+            >
+              {isSavingTemplate
+                ? translate(
+                    'auto.components.settings.SourceControlAiActionRecipeDefaults.4f549a5fa8',
+                    'Saving...'
+                  )
+                : translate(
+                    'auto.components.settings.SourceControlAiActionRecipeDefaults.d18d665e12',
+                    'Save'
+                  )}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

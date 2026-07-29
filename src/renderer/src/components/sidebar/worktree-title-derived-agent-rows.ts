@@ -1,15 +1,13 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import {
-  detectAgentStatusFromTitle,
-  getAgentLabel,
-  isClaudeManagementTitle
-} from '@/lib/agent-status'
+import { formatAgentTypeLabel, isClaudeManagementTitle } from '@/lib/agent-status'
+import { containsBrailleSpinner } from '../../../../shared/agent-title-core'
+import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import {
-  type AgentStatusEntry,
-  type AgentStatusOrchestrationContext,
-  type AgentStatusState,
-  type AgentType
+import type {
+  AgentStatusEntry,
+  AgentStatusOrchestrationContext,
+  AgentStatusState,
+  AgentType
 } from '../../../../shared/agent-status-types'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import type {
@@ -17,6 +15,10 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../../shared/types'
+import {
+  normalizeCompatibleAgentTitleForOwner,
+  resolveCompatibleAgentTypeForOwner
+} from '../../../../shared/agent-title-owner'
 
 const EMPTY_RUNTIME_TITLES: Record<string, Record<number, string>> = {}
 const EMPTY_LIVE_PTY_IDS: Record<string, string[]> = {}
@@ -36,7 +38,8 @@ const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
   Cursor: 'cursor',
   Droid: 'droid',
   Hermes: 'hermes',
-  Pi: 'pi'
+  Pi: 'pi',
+  OMP: 'omp'
 }
 
 const CLAUDE_AGENT_TOKEN_RE = /(?<![\w./\\-])claude(?![\w./\\-])/i
@@ -114,6 +117,10 @@ export function buildTitleDerivedAgentRows(args: {
   return rows
 }
 
+/**
+ * Constructs a dashboard agent row from a terminal tab's title fallback,
+ * normalising Pi-compatible agent names to their owner.
+ */
 function buildTitleDerivedAgentRow(args: {
   tab: TerminalTab
   leafId: string
@@ -121,12 +128,13 @@ function buildTitleDerivedAgentRow(args: {
   now: number
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
 }): DashboardAgentRow | null {
-  const isClaudeAgentsTitle = isClaudeManagementTitle(args.title)
+  const title = normalizeCompatibleAgentTitleForOwner(args.title, args.tab.launchAgent)
+  const isClaudeAgentsTitle = isClaudeManagementTitle(title)
   // Why: `claude agents` is a live Claude Code Agent Teams surface, but the
   // shared detector keeps it neutral so runtime liveness probes do not treat
   // the management/list screen as active work.
-  const status = isClaudeAgentsTitle ? 'idle' : detectAgentStatusFromTitle(args.title)
-  const label = isClaudeAgentsTitle ? 'Claude Code' : getAgentLabel(args.title)
+  const status = isClaudeAgentsTitle ? 'idle' : classifyTitleActivity(title)
+  const label = isClaudeAgentsTitle ? 'Claude Code' : resolveTitleActivityLabel(title)
   if (!status || !label) {
     return null
   }
@@ -135,10 +143,20 @@ function buildTitleDerivedAgentRow(args: {
   }
   const paneKey = makePaneKey(args.tab.id, args.leafId)
   const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
-  const agentType = isClaudeAgentsTitle ? 'claude' : resolveTitleDerivedAgentType(args.title, label)
+  const titleAgentType = isClaudeAgentsTitle ? 'claude' : resolveTitleDerivedAgentType(title, label)
+  // Why: a braille spinner proves activity, not identity, so the resolver drops
+  // it. Hook-less agents over SSH (Codex, #8711) surface only spinner+cwd titles;
+  // fall back to the tab's launch identity instead of hiding the pane. Gated on
+  // the spinner on purpose — unlike the hook path's unconditional launchAgent
+  // fallback (resolveRowAgentType), this path manufactures agent-ness from a
+  // title alone, so a non-agent title must never become a row. Residual: a split
+  // pane whose own title carries a braille glyph is still attributed to launchAgent.
+  const agentType =
+    titleAgentType ?? (containsBrailleSpinner(title) ? (args.tab.launchAgent ?? null) : null)
   if (!agentType) {
     return null
   }
+  const rowLabel = titleAgentType ? label : formatAgentTypeLabel(agentType)
   const rowState = titleStatusToRowState(status)
   const secondary =
     status === 'permission' ? 'Needs input' : status === 'working' ? 'Running' : 'Idle'
@@ -146,12 +164,12 @@ function buildTitleDerivedAgentRow(args: {
   const entry: AgentStatusEntry = {
     paneKey,
     state: entryState,
-    prompt: label,
+    prompt: rowLabel,
     updatedAt: args.now,
     stateStartedAt: args.now,
     stateHistory: [],
     agentType,
-    terminalTitle: args.title,
+    terminalTitle: title,
     lastAssistantMessage: secondary,
     ...(orchestration ? { orchestration } : {})
   }
@@ -177,14 +195,25 @@ export function resolveTitleDerivedAgentType(title: string, label: string): Agen
   return CLAUDE_AGENT_TOKEN_RE.test(title) ? agentType : null
 }
 
+/**
+ * Determines the agent type from a terminal title, normalising Pi-compatible
+ * agents to their authoritative owner if specified.
+ */
 export function resolveAgentTypeFromTerminalTitle(
-  title: string | null | undefined
+  title: string | null | undefined,
+  ownerAgentType?: AgentType | null
 ): AgentType | null {
   if (!title) {
     return null
   }
-  const label = getAgentLabel(title)
-  return label ? resolveTitleDerivedAgentType(title, label) : null
+  const normalizedTitle = normalizeCompatibleAgentTitleForOwner(title, ownerAgentType)
+  const label = resolveTitleActivityLabel(normalizedTitle)
+  return label
+    ? (resolveCompatibleAgentTypeForOwner(
+        resolveTitleDerivedAgentType(normalizedTitle, label),
+        ownerAgentType
+      ) ?? null)
+    : null
 }
 
 function titleStatusToRowState(

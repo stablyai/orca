@@ -46,11 +46,22 @@ describe('shouldShowWindowsShellMenu', () => {
     ).toBe(false)
   })
 
-  it('hides local Windows shells for SSH worktrees', () => {
+  it('shows Windows shells for SSH worktrees when the remote host is Windows', () => {
     expect(
       shouldShowWindowsShellMenu({
         activeRuntimeEnvironmentId: null,
         hostPlatform: 'win32',
+        isWindowsClient: true,
+        worktreeHasRemoteConnection: true
+      })
+    ).toBe(true)
+  })
+
+  it('hides Windows shells for SSH worktrees when the remote host is Linux', () => {
+    expect(
+      shouldShowWindowsShellMenu({
+        activeRuntimeEnvironmentId: null,
+        hostPlatform: 'linux',
         isWindowsClient: true,
         worktreeHasRemoteConnection: true
       })

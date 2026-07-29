@@ -9,7 +9,7 @@ export const FILE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'path', 'worktree'],
     positionalArgs: ['path'],
     notes: [
-      'The path is relative to the selected worktree. When --worktree is omitted, local CLI calls infer the current Orca worktree from cwd.'
+      'The path may be relative to the selected worktree or an absolute path inside that worktree. When --worktree is omitted, local CLI calls infer the current Orca worktree from cwd.'
     ],
     examples: [
       'orca file open src/App.tsx',
@@ -23,7 +23,8 @@ export const FILE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'path', 'staged', 'worktree'],
     positionalArgs: ['path'],
     notes: [
-      'Diffs default to unstaged changes. Pass --staged to open the staged source-control diff.'
+      'Diffs default to unstaged changes. Pass --staged to open the staged source-control diff.',
+      'The path may be relative to the selected worktree or an absolute path inside that worktree.'
     ],
     examples: [
       'orca file diff src/App.tsx',

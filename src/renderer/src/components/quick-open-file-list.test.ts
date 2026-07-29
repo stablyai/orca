@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../shared/types'
 import { buildExcludePathPrefixes } from '../../../shared/quick-open-filter'
 import {
+  getRuntimeFileListTarget,
   getNestedWorktreeExcludePaths,
   getNestedWorktreeExcludeRequest,
   isNestedWorktreePath
@@ -56,5 +57,16 @@ describe('quick-open nested worktree excludes', () => {
     expect(request.paths).toEqual(['/tmp/repo/linked\nworktree'])
     expect(request.key).toBe('["/tmp/repo/linked\\nworktree"]')
     expect(buildExcludePathPrefixes('/tmp/repo', request.paths)).toEqual(['linked\nworktree'])
+  })
+
+  it('can list files for folder workspaces resolved outside registered repo worktrees', () => {
+    const folderWorkspace = makeWorktree('folder:workspace-1', '/Users/jenkei/test')
+    const target = getRuntimeFileListTarget(folderWorkspace.id, folderWorkspace.path, [])
+
+    expect(target).toEqual({
+      canList: true,
+      excludeRequest: { paths: [], key: '[]' },
+      worktreePath: '/Users/jenkei/test'
+    })
   })
 })

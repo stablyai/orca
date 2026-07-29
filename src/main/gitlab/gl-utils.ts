@@ -1,5 +1,5 @@
-import { execFile } from 'child_process'
-import { promisify } from 'util'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { gitExecFileAsync, glabExecFileAsync } from '../git/runner'
 import { parseGlabApiResponse, type GlabApiResponse } from './glab-api-response'
 

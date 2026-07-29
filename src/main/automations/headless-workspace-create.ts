@@ -36,7 +36,7 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     repoSelector: repo.id,
     name: buildHeadlessAutomationWorkspaceName(run.title, run.scheduledFor),
     baseBranch: automation.baseBranch ?? undefined,
-    setupDecision: 'inherit',
+    setupDecision: automation.setupDecision ?? 'skip',
     activate: false,
     createdWithAgent: automation.agentId,
     startupAgent: automation.agentId,

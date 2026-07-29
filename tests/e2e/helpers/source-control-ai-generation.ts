@@ -1,8 +1,8 @@
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
-import { execFileSync } from 'child_process'
-import { writeFileSync } from 'fs'
-import path from 'path'
+import { execFileSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
+import path from 'node:path'
 export async function openSourceControl(page: Page, worktreeId: string): Promise<void> {
   await page.evaluate((targetWorktreeId) => {
     const state = window.__store?.getState()

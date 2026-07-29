@@ -155,6 +155,19 @@ describe('status entry stageability', () => {
     expect(isSubmoduleWorktreeOnlyChange(changedGitlink)).toBe(false)
     expect(isStageableStatusEntry(changedGitlink)).toBe(true)
   })
+
+  it('marks lazily-expanded submodule-internal entries as not stageable', () => {
+    const innerEntry = entry({
+      path: 'flutter_mine/lib/main.dart',
+      area: 'unstaged',
+      submoduleRoot: 'flutter_mine'
+    })
+
+    // Why: changes inside a submodule are read-only from the parent — staging
+    // them via `git add` from the parent worktree is a no-op/footgun.
+    expect(isStageableStatusEntry(innerEntry)).toBe(false)
+    expect(getStageAllPaths([innerEntry], 'unstaged')).toEqual([])
+  })
 })
 
 describe('getUnstageAllPaths', () => {

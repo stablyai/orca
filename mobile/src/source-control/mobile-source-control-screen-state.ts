@@ -19,10 +19,13 @@ import type {
   MobileGitBranchCompareResult,
   MobileGitBranchCompareSummary
 } from './mobile-branch-compare'
-import type {
-  MobileGitFileStatus,
-  MobileGitStatusEntry,
-  MobileGitStatusResult
+import {
+  canOpenMobileGitStatusEntry,
+  isMobileGitDiscardableEntry,
+  isMobileGitStageableEntry,
+  type MobileGitFileStatus,
+  type MobileGitStatusEntry,
+  type MobileGitStatusResult
 } from './mobile-git-status'
 
 export type ScreenState =
@@ -53,6 +56,22 @@ export type MobileGitStatusEntryView = MobileGitStatusEntry & {
   discardActionId: string
   stageActionId: string
   unstageActionId: string
+}
+
+// Decorate raw status entries with the row-level capability/action-id fields the
+// file list needs. Opener guards must use the same canOpen rule.
+export function buildMobileGitStatusEntryViews(
+  entries: readonly MobileGitStatusEntry[]
+): MobileGitStatusEntryView[] {
+  return entries.map((entry) => ({
+    ...entry,
+    canDiscard: isMobileGitDiscardableEntry(entry),
+    canOpen: canOpenMobileGitStatusEntry(entry),
+    canStage: isMobileGitStageableEntry(entry),
+    discardActionId: `discard:${entry.path}`,
+    stageActionId: `stage:${entry.path}`,
+    unstageActionId: `unstage:${entry.path}`
+  }))
 }
 
 export type MobileBranchCompareState =

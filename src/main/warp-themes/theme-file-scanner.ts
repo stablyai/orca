@@ -1,6 +1,6 @@
-import { opendir } from 'fs/promises'
-import type { Dirent } from 'fs'
-import path from 'path'
+import { opendir } from 'node:fs/promises'
+import type { Dirent } from 'node:fs'
+import path from 'node:path'
 import type { WarpThemeImportSkippedFile } from '../../shared/terminal-custom-themes'
 
 export const MAX_THEME_FILES = 200

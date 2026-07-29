@@ -1,16 +1,14 @@
-/* eslint-disable max-lines -- Why: this file covers ~14 distinct relay git
-   handlers plus the addWorktree state machine (--no-track + push.autoSetupRemote
-   probe/write across four flow branches). Splitting per-handler would scatter
-   related coverage without a meaningful boundary. */
+/* eslint-disable max-lines -- Why: one file covers ~14 relay git handlers + the addWorktree state machine; splitting would scatter related coverage. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { GitHandler } from './git-handler'
 import { RelayContext } from './context'
-import * as fs from 'fs/promises'
-import * as path from 'path'
-import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { execFileSync } from 'child_process'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { execFileSync } from 'node:child_process'
 import { MAX_RENDERED_DIFF_COMBINED_CHARACTERS } from '../shared/large-diff-render-limit'
+import { reviewHeadRemoteRefComponent } from '../shared/review-head-tracking-ref'
 import {
   createMockDispatcher,
   gitInit,
@@ -24,7 +22,11 @@ type GitBufferSpyTarget = {
 }
 
 type GitSpyTarget = {
-  git(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }>
+  git(
+    args: string[],
+    cwd: string,
+    opts?: { signal?: AbortSignal }
+  ): Promise<{ stdout: string; stderr: string }>
 }
 
 function deferredRelayBuffer(content: string): {
@@ -117,7 +119,9 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.fetch')
     expect(methods).toContain('git.forkSync')
     expect(methods).toContain('git.fetchRemoteTrackingRef')
+    expect(methods).toContain('git.fetchGitHubPullRequestHead')
     expect(methods).toContain('git.fetchGitLabMergeRequestHead')
+    expect(methods).toContain('git.fetchGitLabMergeRequestHeadRef')
     expect(methods).toContain('git.push')
     expect(methods).toContain('git.pull')
     expect(methods).toContain('git.fastForward')
@@ -129,9 +133,26 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.worktreeIsClean')
     expect(methods).toContain('git.refreshLocalBaseRefForWorktreeCreate')
     expect(methods).toContain('git.renameCurrentBranch')
+    expect(methods).toContain('git.forceDeletePreservedBranch')
     expect(methods).toContain('git.exec')
     expect(methods).toContain('git.clone')
     expect(methods).toContain('git.isGitRepo')
+  })
+
+  it('runs remote worktree deletion inside the relay watcher fence', async () => {
+    const removalError = new Error('fenced before Git')
+    const runWithRemovalFence = vi.fn(async () => {
+      throw removalError
+    })
+    handler.dispose()
+    handler = new GitHandler(dispatcher as unknown as RelayDispatcher, new RelayContext(), {
+      runWithRemovalFence
+    })
+
+    await expect(
+      dispatcher.callRequest('git.removeWorktree', { worktreePath: '/repo-feature' })
+    ).rejects.toBe(removalError)
+    expect(runWithRemovalFence).toHaveBeenCalledWith('/repo-feature', expect.any(Function))
   })
 
   describe('abortMerge', () => {
@@ -262,6 +283,66 @@ describe('GitHandler', () => {
           newBranch: '-bad'
         })
       ).rejects.toThrow('Branch name must not start with "-"')
+    })
+  })
+
+  describe('forceDeletePreservedBranch', () => {
+    function headOf(cwd: string, ref: string): string {
+      return execFileSync('git', ['rev-parse', ref], { cwd, encoding: 'utf-8' }).trim()
+    }
+
+    it('deletes a preserved branch at its expected head through the narrow RPC', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'hello')
+      gitCommit(tmpDir, 'initial')
+      execFileSync('git', ['branch', 'feature/preserved'], { cwd: tmpDir, stdio: 'pipe' })
+      const head = headOf(tmpDir, 'refs/heads/feature/preserved')
+
+      await dispatcher.callRequest('git.forceDeletePreservedBranch', {
+        repoPath: tmpDir,
+        branchName: 'feature/preserved',
+        expectedHead: head
+      })
+
+      const refs = execFileSync('git', ['branch', '--list', 'feature/preserved'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      expect(refs).toBe('')
+    })
+
+    it('refuses to delete when the branch moved past the expected head', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'hello')
+      gitCommit(tmpDir, 'initial')
+      const staleHead = headOf(tmpDir, 'HEAD')
+      execFileSync('git', ['checkout', '-b', 'feature/preserved'], { cwd: tmpDir, stdio: 'pipe' })
+      // Advance the branch so the saved (stale) head no longer matches its tip.
+      gitCommit(tmpDir, 'second')
+      execFileSync('git', ['checkout', '-'], { cwd: tmpDir, stdio: 'pipe' })
+
+      await expect(
+        dispatcher.callRequest('git.forceDeletePreservedBranch', {
+          repoPath: tmpDir,
+          branchName: 'feature/preserved',
+          expectedHead: staleHead
+        })
+      ).rejects.toThrow('changed after the workspace was deleted')
+      const refs = execFileSync('git', ['branch', '--list', 'feature/preserved'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      expect(refs).toContain('feature/preserved')
+    })
+
+    it('rejects an empty repoPath at the RPC boundary', async () => {
+      await expect(
+        dispatcher.callRequest('git.forceDeletePreservedBranch', {
+          repoPath: '',
+          branchName: 'feature/preserved',
+          expectedHead: 'abc123'
+        })
+      ).rejects.toThrow('Invalid preserved branch force-delete request.')
     })
   })
 
@@ -420,10 +501,7 @@ describe('GitHandler', () => {
       expect(staged!.removed).toBe(1)
     })
 
-    // Why: regression for issue #1503 — git's default core.quotePath=true
-    // emits non-ASCII paths as octal-escaped, double-quoted strings (e.g.
-    // "docs/\346\227\245\346\234\254\350\252\236/sample.md"), which made the
-    // sidebar show gibberish and broke downstream blob reads.
+    // Why: regression for #1503 — default core.quotePath=true octal-escapes non-ASCII paths (breaks sidebar + blob reads).
     it('preserves UTF-8 paths in status output', async () => {
       gitInit(tmpDir)
       const utf8Dir = path.join(tmpDir, 'docs', '日本語')
@@ -440,10 +518,7 @@ describe('GitHandler', () => {
       expect(entry!.path).toBe('docs/日本語/sample.md')
     })
 
-    // Why: regression for issue #1503 on the porcelain v2 type-1 entry parser
-    // branch (tracked + modified). The existing UTF-8 test exercises only the
-    // untracked '?' branch; this one exercises the path-reconstruction code in
-    // parseStatusOutput that joins parts.slice(8).
+    // Why: regression for #1503 on the porcelain v2 type-1 (tracked+modified) parser branch, which the untracked '?' test misses.
     it('preserves UTF-8 paths for tracked-modified entries', async () => {
       gitInit(tmpDir)
       const utf8Dir = path.join(tmpDir, 'docs', '日本語')
@@ -589,6 +664,164 @@ describe('GitHandler', () => {
           staged: false
         })
       ).rejects.toThrow('outside the worktree')
+    })
+  })
+
+  describe('submodule', () => {
+    const extraDirs: string[] = []
+
+    afterEach(async () => {
+      await Promise.all(
+        extraDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true }))
+      )
+    })
+
+    // Why: `git submodule add` against a local path is blocked since git 2.38 unless protocol.file.allow=always is set.
+    function addSubmodule(parent: string, name: string): string {
+      const src = mkdtempSync(path.join(tmpdir(), 'relay-subsrc-'))
+      extraDirs.push(src)
+      gitInit(src)
+      writeFileSync(path.join(src, 'lib.txt'), 'v1\n')
+      gitCommit(src, 'sub initial')
+      execFileSync('git', ['-c', 'protocol.file.allow=always', 'submodule', 'add', src, name], {
+        cwd: parent,
+        stdio: 'pipe'
+      })
+      execFileSync('git', ['commit', '-m', 'add submodule'], { cwd: parent, stdio: 'pipe' })
+      return path.join(parent, name)
+    }
+
+    it('returns inner per-file changes via git.submoduleStatus', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'root.txt'), 'root')
+      gitCommit(tmpDir, 'initial')
+      const sub = addSubmodule(tmpDir, 'flutter_mine')
+      writeFileSync(path.join(sub, 'lib.txt'), 'v2\n')
+
+      const result = (await dispatcher.callRequest('git.submoduleStatus', {
+        worktreePath: tmpDir,
+        submodulePath: 'flutter_mine'
+      })) as { entries: { path?: unknown; status?: unknown; area?: unknown }[] }
+
+      const inner = result.entries.find((e) => e.path === 'lib.txt')
+      expect(inner).toBeDefined()
+      expect(inner!.status).toBe('modified')
+      expect(inner!.area).toBe('unstaged')
+    })
+
+    it('rejects submoduleStatus paths that escape the worktree', async () => {
+      gitInit(tmpDir)
+      await expect(
+        dispatcher.callRequest('git.submoduleStatus', {
+          worktreePath: tmpDir,
+          submodulePath: '../outside'
+        })
+      ).rejects.toThrow('outside the worktree')
+    })
+
+    it('routes inner submodule files into the submodule worktree diff', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'root.txt'), 'root')
+      gitCommit(tmpDir, 'initial')
+      const sub = addSubmodule(tmpDir, 'flutter_mine')
+      writeFileSync(path.join(sub, 'lib.txt'), 'v2\n')
+
+      const result = (await dispatcher.callRequest('git.diff', {
+        worktreePath: tmpDir,
+        filePath: 'flutter_mine/lib.txt',
+        staged: false
+      })) as { kind: string; originalContent: string; modifiedContent: string }
+
+      expect(result.kind).toBe('text')
+      expect(normalizeGitFileText(result.originalContent)).toBe('v1\n')
+      expect(normalizeGitFileText(result.modifiedContent)).toBe('v2\n')
+    })
+
+    it('synthesizes a Subproject commit pointer diff for the gitlink root', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'root.txt'), 'root')
+      gitCommit(tmpDir, 'initial')
+      const sub = addSubmodule(tmpDir, 'flutter_mine')
+      const oldOid = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: sub,
+        encoding: 'utf-8'
+      }).trim()
+      writeFileSync(path.join(sub, 'lib.txt'), 'v2\n')
+      execFileSync('git', ['add', 'lib.txt'], { cwd: sub, stdio: 'pipe' })
+      gitCommit(sub, 'sub second')
+      const newOid = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: sub,
+        encoding: 'utf-8'
+      }).trim()
+
+      const result = (await dispatcher.callRequest('git.diff', {
+        worktreePath: tmpDir,
+        filePath: 'flutter_mine',
+        staged: false
+      })) as { kind: string; originalContent: string; modifiedContent: string }
+
+      expect(result.kind).toBe('text')
+      expect(result.originalContent).toBe(`Subproject commit ${oldOid}\n`)
+      expect(result.modifiedContent).toBe(`Subproject commit ${newOid}\n`)
+    })
+
+    // Why: a moved gitlink with a clean submodule has no uncommitted rows, so status/diff must surface the committed commit-range changes.
+    it('lists commit-range files and diffs them when the pointer moved', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'root.txt'), 'root')
+      gitCommit(tmpDir, 'initial')
+      const sub = addSubmodule(tmpDir, 'flutter_mine')
+      writeFileSync(path.join(sub, 'lib.txt'), 'v2\n')
+      execFileSync('git', ['add', 'lib.txt'], { cwd: sub, stdio: 'pipe' })
+      gitCommit(sub, 'sub second')
+
+      const status = (await dispatcher.callRequest('git.submoduleStatus', {
+        worktreePath: tmpDir,
+        submodulePath: 'flutter_mine'
+      })) as { entries: { path?: unknown; status?: unknown; area?: unknown }[] }
+      const ranged = status.entries.find((e) => e.path === 'lib.txt')
+      expect(ranged).toBeDefined()
+      expect(ranged!.status).toBe('modified')
+      expect(ranged!.area).toBe('unstaged')
+
+      const diff = (await dispatcher.callRequest('git.diff', {
+        worktreePath: tmpDir,
+        filePath: 'flutter_mine/lib.txt',
+        staged: false
+      })) as { kind: string; originalContent: string; modifiedContent: string }
+      expect(diff.kind).toBe('text')
+      expect(normalizeGitFileText(diff.originalContent)).toBe('v1\n')
+      expect(normalizeGitFileText(diff.modifiedContent)).toBe('v2\n')
+    })
+
+    it('lists and diffs staged submodule pointer changes from parent HEAD to index', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'root.txt'), 'root')
+      gitCommit(tmpDir, 'initial')
+      const sub = addSubmodule(tmpDir, 'flutter_mine')
+      writeFileSync(path.join(sub, 'lib.txt'), 'v2\n')
+      execFileSync('git', ['add', 'lib.txt'], { cwd: sub, stdio: 'pipe' })
+      gitCommit(sub, 'sub second')
+      execFileSync('git', ['add', 'flutter_mine'], { cwd: tmpDir, stdio: 'pipe' })
+
+      const status = (await dispatcher.callRequest('git.submoduleStatus', {
+        worktreePath: tmpDir,
+        submodulePath: 'flutter_mine',
+        area: 'staged'
+      })) as { entries: { path?: unknown; status?: unknown; area?: unknown }[] }
+      const ranged = status.entries.find((e) => e.path === 'lib.txt')
+      expect(ranged).toBeDefined()
+      expect(ranged!.status).toBe('modified')
+      expect(ranged!.area).toBe('unstaged')
+
+      const diff = (await dispatcher.callRequest('git.diff', {
+        worktreePath: tmpDir,
+        filePath: 'flutter_mine/lib.txt',
+        staged: true
+      })) as { kind: string; originalContent: string; modifiedContent: string }
+      expect(diff.kind).toBe('text')
+      expect(normalizeGitFileText(diff.originalContent)).toBe('v1\n')
+      expect(normalizeGitFileText(diff.modifiedContent)).toBe('v2\n')
     })
   })
 
@@ -796,16 +1029,13 @@ describe('GitHandler', () => {
       }
     })
 
-    // Why: regression for issue #1503 on the branch-diff path. Without
-    // -c core.quotePath=false the diff --name-status output is octal-escaped,
-    // which broke the "Committed on branch" file list.
+    // Why: regression for #1503 on the branch-diff path; without -c core.quotePath=false diff paths are octal-escaped.
     it('preserves UTF-8 paths in branch-compare entries', async () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
       gitCommit(tmpDir, 'initial')
 
-      // Capture the default branch name before switching, so the test works
-      // regardless of whether git's init.defaultBranch is master or main.
+      // Capture the default branch name so the test works regardless of init.defaultBranch (master vs main).
       const baseRef = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
         cwd: tmpDir,
         encoding: 'utf-8'
@@ -966,7 +1196,11 @@ describe('GitHandler', () => {
       await Promise.all([first, second])
 
       expect(gitBufferSpy).toHaveBeenCalledTimes(2)
-      expect(gitSpy).toHaveBeenCalledWith(['add', '--', 'src/file.ts'], tmpDir)
+      expect(gitSpy).toHaveBeenCalledWith(['add', '--', ':(literal)src/file.ts'], tmpDir)
+      const submodulePathReads = gitSpy.mock.calls.filter(
+        ([args]) => args[0] === 'config' && args.includes('.gitmodules')
+      )
+      expect(submodulePathReads).toHaveLength(2)
     })
 
     it('clears pending git.diff reads when a narrow ref fetch runs', async () => {
@@ -996,7 +1230,8 @@ describe('GitHandler', () => {
         worktreePath: tmpDir,
         remote: 'origin',
         branch: 'main',
-        ref: 'refs/remotes/origin/main'
+        ref: 'refs/remotes/origin/main',
+        skipAutoMaintenance: true
       })
 
       const second = dispatcher.callRequest('git.diff', {
@@ -1012,7 +1247,18 @@ describe('GitHandler', () => {
 
       expect(gitBufferSpy).toHaveBeenCalledTimes(2)
       expect(gitSpy).toHaveBeenCalledWith(
-        ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
+        [
+          '-c',
+          'maintenance.auto=false',
+          '-c',
+          'maintenance.commit-graph.auto=0',
+          '-c',
+          'gc.auto=0',
+          'fetch',
+          '--no-tags',
+          'origin',
+          '+refs/heads/main:refs/remotes/origin/main'
+        ],
         tmpDir
       )
     })
@@ -1237,10 +1483,7 @@ describe('GitHandler', () => {
       await expect(retry).rejects.toThrow('commitOid must be a full git object id')
     })
 
-    // Why: regression for issue #1503 on git.branchDiff. The branchCompare test
-    // covers loadBranchChanges in git-handler.ts, but branchDiffEntries in
-    // git-handler-ops.ts is a separate code path that also passes
-    // -c core.quotePath=false and must round-trip UTF-8.
+    // Why: regression for #1503 on git.branchDiff — branchDiffEntries is a separate quotePath=false path that must round-trip UTF-8.
     it('preserves UTF-8 paths in branch-diff entries', async () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
@@ -1263,11 +1506,7 @@ describe('GitHandler', () => {
         filePath: 'docs/日本語/sample.md'
       })) as Record<string, unknown>[]
 
-      // Without includePatch, branchDiffEntries returns one stub entry per
-      // changed file. Asserting length===1 confirms the filter matched the
-      // raw UTF-8 path emitted by `git diff --name-status` — if quotePath
-      // were left at default, the entry's path would be the octal-quoted
-      // form and the filter at git-handler-ops.ts:230-237 would not match.
+      // length===1 confirms the path filter matched the raw UTF-8 path; octal-quoted (default quotePath) wouldn't match.
       expect(result).toHaveLength(1)
     })
   })
@@ -1288,10 +1527,7 @@ describe('GitHandler', () => {
     })
 
     it('reports ahead/behind counts against a real upstream remote', async () => {
-      // Why: the upstream branch exists but isn't configured — exercise the
-      // full path through `git rev-parse HEAD@{u}` + `rev-list --left-right`
-      // so a future refactor can't silently break the happy-path roundtrip
-      // the no-upstream test doesn't cover.
+      // Why: exercise the configured-upstream happy path (rev-parse HEAD@{u} + rev-list --left-right) the no-upstream test misses.
       const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-bare-'))
       try {
         execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
@@ -1317,9 +1553,7 @@ describe('GitHandler', () => {
           stdio: 'pipe'
         })
 
-        // Add two local commits (ahead=2), then reset behind the remote tip
-        // and add one different commit so we end up ahead=1, behind=0 vs.
-        // upstream; then reset to first commit to produce behind=1 ahead=0.
+        // Juggle local commits/resets to produce specific ahead/behind counts vs. upstream.
         writeFileSync(path.join(tmpDir, 'ahead1.txt'), 'a1')
         gitCommit(tmpDir, 'ahead1')
         writeFileSync(path.join(tmpDir, 'ahead2.txt'), 'a2')
@@ -1394,8 +1628,7 @@ describe('GitHandler', () => {
           dispatcher.callRequest('git.fetch', { worktreePath: tmpDir })
         ).resolves.not.toThrow()
 
-        // FETCH_HEAD is created by any successful fetch, confirming the
-        // remote was actually contacted (not just silently no-op'd).
+        // FETCH_HEAD exists only after a successful fetch, confirming the remote was actually contacted.
         await expect(fs.access(path.join(tmpDir, '.git', 'FETCH_HEAD'))).resolves.toBeUndefined()
       } finally {
         await fs.rm(bareDir, { recursive: true, force: true })
@@ -1583,6 +1816,60 @@ describe('GitHandler', () => {
       ).rejects.toThrow('Remote-tracking ref does not match the requested remote and branch.')
     })
 
+    it('fetches GitHub pull request heads through the narrow fetch RPC', async () => {
+      const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-github-pr-bare-'))
+      try {
+        execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'pr.txt'), 'head')
+        gitCommit(tmpDir, 'pr head')
+        const expected = execFileSync('git', ['rev-parse', 'HEAD'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        execFileSync('git', ['remote', 'add', 'origin', bareDir], { cwd: tmpDir, stdio: 'pipe' })
+        execFileSync('git', ['push', 'origin', 'HEAD:refs/pull/42/head'], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+
+        const result = (await dispatcher.callRequest('git.fetchGitHubPullRequestHead', {
+          worktreePath: tmpDir,
+          remote: 'origin',
+          prNumber: 42
+        })) as { localRef: string }
+
+        // The ref is scoped by remote identity so soft-keep can never serve
+        // another project's PR #42 out of the same object database.
+        const component = reviewHeadRemoteRefComponent('origin', bareDir)
+        expect(result.localRef).toBe(`refs/orca/pull/${component}/42`)
+        const actual = execFileSync('git', ['rev-parse', '--verify', result.localRef], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        expect(actual).toBe(expected)
+      } finally {
+        await fs.rm(bareDir, { recursive: true, force: true })
+      }
+    })
+
+    it('rejects invalid GitHub pull request head fetch requests', async () => {
+      await expect(
+        dispatcher.callRequest('git.fetchGitHubPullRequestHead', {
+          worktreePath: tmpDir,
+          remote: '-origin',
+          prNumber: 42
+        })
+      ).rejects.toThrow('GitHub pull request fetch remote must not start with "-".')
+      await expect(
+        dispatcher.callRequest('git.fetchGitHubPullRequestHead', {
+          worktreePath: tmpDir,
+          remote: 'origin',
+          prNumber: 0
+        })
+      ).rejects.toThrow('Invalid GitHub pull request fetch request.')
+    })
+
     it('fetches GitLab merge request heads through the narrow fetch RPC', async () => {
       const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-gitlab-mr-bare-'))
       try {
@@ -1600,13 +1887,60 @@ describe('GitHandler', () => {
           stdio: 'pipe'
         })
 
-        await dispatcher.callRequest('git.fetchGitLabMergeRequestHead', {
+        const result = (await dispatcher.callRequest('git.fetchGitLabMergeRequestHead', {
           worktreePath: tmpDir,
           remote: 'origin',
           mrIid: 42
+        })) as { localRef: string }
+
+        // The head is fetched into a dedicated ref (not shared FETCH_HEAD) so a
+        // concurrent fetch can't retarget the caller's rev-parse of the checkout.
+        const component = reviewHeadRemoteRefComponent('origin', bareDir)
+        expect(result.localRef).toBe(`refs/orca/merge-requests/${component}/42`)
+        const actual = execFileSync('git', ['rev-parse', '--verify', result.localRef], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        expect(actual).toBe(expected)
+        // Legacy contract: pre-durable-ref desktop clients call this method name
+        // and then resolve FETCH_HEAD, which a refspec fetch still writes.
+        const fetchHead = execFileSync('git', ['rev-parse', '--verify', 'FETCH_HEAD'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        expect(fetchHead).toBe(expected)
+      } finally {
+        await fs.rm(bareDir, { recursive: true, force: true })
+      }
+    })
+
+    it('fetches GitLab merge request heads through the versioned durable-ref RPC', async () => {
+      const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-gitlab-mr-ref-bare-'))
+      try {
+        execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'mr.txt'), 'head')
+        gitCommit(tmpDir, 'mr head')
+        const expected = execFileSync('git', ['rev-parse', 'HEAD'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        execFileSync('git', ['remote', 'add', 'origin', bareDir], { cwd: tmpDir, stdio: 'pipe' })
+        execFileSync('git', ['push', 'origin', 'HEAD:refs/merge-requests/77/head'], {
+          cwd: tmpDir,
+          stdio: 'pipe'
         })
 
-        const actual = execFileSync('git', ['rev-parse', 'FETCH_HEAD'], {
+        // Why: new clients call the versioned name; old relays 404 it and prompt reconnect.
+        const result = (await dispatcher.callRequest('git.fetchGitLabMergeRequestHeadRef', {
+          worktreePath: tmpDir,
+          remote: 'origin',
+          mrIid: 77
+        })) as { localRef: string }
+
+        const component = reviewHeadRemoteRefComponent('origin', bareDir)
+        expect(result.localRef).toBe(`refs/orca/merge-requests/${component}/77`)
+        const actual = execFileSync('git', ['rev-parse', '--verify', result.localRef], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
@@ -1634,10 +1968,7 @@ describe('GitHandler', () => {
     })
 
     it('rethrows upstreamStatus failures that are not "no upstream configured"', async () => {
-      // Why: the handler's catch is narrowed to only swallow the expected
-      // "no upstream" signal. A non-repo path should surface its error rather
-      // than silently returning hasUpstream=false, which would mask auth or
-      // corruption failures in production.
+      // Why: the catch only swallows "no upstream"; other errors must surface so auth/corruption failures aren't masked.
       const nonRepoDir = path.join(tmpDir, 'not-a-repo')
       await fs.mkdir(nonRepoDir, { recursive: true })
 
@@ -1659,6 +1990,110 @@ describe('GitHandler', () => {
       expect(result.length).toBeGreaterThanOrEqual(1)
       expect(result[0].isMainWorktree).toBe(true)
     })
+
+    it('passes request cancellation to the git worktree list subprocess', async () => {
+      const controller = new AbortController()
+      const gitSpy = vi
+        .spyOn(handler as unknown as GitSpyTarget, 'git')
+        .mockRejectedValue(new Error('aborted'))
+
+      const result = await dispatcher.callRequest(
+        'git.listWorktrees',
+        { repoPath: tmpDir },
+        { isStale: () => false, signal: controller.signal }
+      )
+
+      expect(result).toEqual([])
+      expect(gitSpy).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], tmpDir, {
+        signal: controller.signal
+      })
+    })
+
+    it.skipIf(process.platform === 'win32')(
+      'normalizes the main worktree path for a separate-git-dir repo',
+      async () => {
+        const sourcePath = path.join(tmpDir, 'source')
+        const worktreePath = path.join(tmpDir, 'worktree')
+        const gitDirPath = path.join(tmpDir, 'git-store', 'project.git')
+        mkdirSync(sourcePath)
+        mkdirSync(path.dirname(gitDirPath), { recursive: true })
+        gitInit(sourcePath)
+        writeFileSync(path.join(sourcePath, 'file.txt'), 'hello')
+        gitCommit(sourcePath, 'initial')
+
+        execFileSync('git', [
+          'clone',
+          '--quiet',
+          `--separate-git-dir=${gitDirPath}`,
+          sourcePath,
+          worktreePath
+        ])
+
+        const result = (await dispatcher.callRequest('git.listWorktrees', {
+          repoPath: await fs.realpath(worktreePath)
+        })) as Record<string, unknown>[]
+        const mainWorktree = result.find((worktree) => worktree.isMainWorktree === true)
+
+        expect(mainWorktree).toMatchObject({
+          path: await fs.realpath(worktreePath),
+          isMainWorktree: true
+        })
+        expect(mainWorktree?.path).not.toBe(await fs.realpath(gitDirPath))
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'leaves an ordinary repo reached via a symlinked path unchanged',
+      async () => {
+        // A symlink alias defeats the path-string gate; the git-common-dir gate must still skip rewrite for an ordinary repo.
+        const repoPath = path.join(tmpDir, 'plain-repo')
+        mkdirSync(repoPath)
+        gitInit(repoPath)
+        writeFileSync(path.join(repoPath, 'file.txt'), 'hello')
+        gitCommit(repoPath, 'initial')
+        const linkedRepoPath = path.join(tmpDir, 'linked-repo')
+        symlinkSync(repoPath, linkedRepoPath)
+
+        const result = (await dispatcher.callRequest('git.listWorktrees', {
+          repoPath: linkedRepoPath
+        })) as Record<string, unknown>[]
+        const mainWorktree = result.find((worktree) => worktree.isMainWorktree === true)
+
+        expect(mainWorktree).toMatchObject({
+          path: await fs.realpath(repoPath),
+          isMainWorktree: true
+        })
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'leaves the main entry unchanged when scanned via a linked worktree',
+      async () => {
+        // The git-common-dir gate must skip rewrite so a linked worktree's main entry isn't overwritten with its own toplevel.
+        const repoPath = path.join(tmpDir, 'main-repo')
+        mkdirSync(repoPath)
+        gitInit(repoPath)
+        writeFileSync(path.join(repoPath, 'file.txt'), 'hello')
+        gitCommit(repoPath, 'initial')
+        const linkedWorktreePath = path.join(tmpDir, 'linked-wt')
+        execFileSync('git', ['worktree', 'add', '--quiet', linkedWorktreePath, '-b', 'feature'], {
+          cwd: repoPath,
+          stdio: 'pipe'
+        })
+        const resolvedLinked = await fs.realpath(linkedWorktreePath)
+
+        const result = (await dispatcher.callRequest('git.listWorktrees', {
+          repoPath: resolvedLinked
+        })) as Record<string, unknown>[]
+        const mainWorktree = result.find((worktree) => worktree.isMainWorktree === true)
+
+        expect(mainWorktree).toMatchObject({
+          path: await fs.realpath(repoPath),
+          isMainWorktree: true
+        })
+        expect(mainWorktree?.path).not.toBe(resolvedLinked)
+      }
+    )
 
     it.skipIf(process.platform === 'win32')(
       'lists worktrees whose paths contain newlines',
@@ -2046,10 +2481,7 @@ describe('GitHandler', () => {
   })
 
   describe('addWorktree', () => {
-    // Why: relay handler tests for addWorktree use a mock-injection approach
-    // to deterministically control git exit codes (in particular `--get` exit
-    // 1 vs other non-zero codes) without relying on the test host's global
-    // git config. Mirrors the pattern in src/main/git/worktree.test.ts.
+    // Why: mock git to control exit codes (e.g. --get exit 1 vs other) deterministically, independent of host git config.
     function setupMockedHandler(roots: string[]) {
       const ctx = new RelayContext()
       for (const r of roots) {
@@ -2131,10 +2563,7 @@ describe('GitHandler', () => {
     })
 
     it('qualifies bare branch name as refs/heads/ when a same-named tag exists', async () => {
-      // Why: repos that fetch with --tags can end up with a local tag named
-      // 'main', making `git worktree add ... main` fail with "fatal: Ambiguous
-      // object name". Qualifying as refs/heads/main tells git exactly which
-      // object to use.
+      // Why: a local tag named 'main' makes bare-name `worktree add ... main` ambiguous; refs/heads/ disambiguates.
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
       gitMock.mockResolvedValueOnce({ stdout: 'abc123\n', stderr: '' }) // rev-parse refs/heads/main^{commit}
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
@@ -2250,10 +2679,7 @@ describe('GitHandler', () => {
     })
 
     it('treats --get success with empty stdout as "already set" (key present but blank)', async () => {
-      // Why: `git config --get key` exits 0 if the key has any value at any
-      // scope, including an explicitly empty string. We must not fall through
-      // to `--local set true` and overwrite that. Mirrors the local addWorktree
-      // parity case in src/main/git/worktree.test.ts.
+      // Why: --get exits 0 for any value including empty string, so an empty value must not fall through to set-true.
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
       gitMock.mockRejectedValueOnce(new Error('not a branch')) // rev-parse refs/heads/main^{commit}
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
@@ -2276,10 +2702,7 @@ describe('GitHandler', () => {
     })
 
     it('does not write --local when --get fails with non-unset code (corrupt config)', async () => {
-      // Why: exit 1 from `git config --get` means "key unset" — anything else
-      // is a real read failure (parse error, locked file). We must NOT fall
-      // through to `--local set true`, which would silently overwrite
-      // whatever value the user actually has.
+      // Why: only --get exit 1 means "unset"; any other code is a real read failure, so don't fall through to set-true.
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
       gitMock.mockRejectedValueOnce(new Error('not a branch')) // rev-parse refs/heads/main^{commit}
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
@@ -2337,9 +2760,7 @@ describe('GitHandler', () => {
     })
 
     it('does not write config when worktree add itself fails', async () => {
-      // Why: a refactor that moves the config block earlier could try to
-      // probe config against a worktree directory that was never created. Pin
-      // the ordering invariant: config calls happen only after worktree add succeeds.
+      // Why: config probes must run only after worktree add succeeds (never against an uncreated dir).
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
       gitMock.mockRejectedValueOnce(new Error('not a branch')) // rev-parse refs/heads/main^{commit}
       gitMock.mockRejectedValueOnce(new Error('worktree add failed'))

@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 import { readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const __dirname = import.meta.dirname
 const ROOT = path.join(__dirname, '..', '..')
 const FEATURE_WALL_ASSET_DIR = path.join(ROOT, 'resources', 'onboarding', 'feature-wall')
 const MAX_BYTES = 11 * 1024 * 1024

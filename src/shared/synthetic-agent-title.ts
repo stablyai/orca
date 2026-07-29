@@ -4,6 +4,8 @@ export type SyntheticAgentTitleProfile = {
   workingLabel: string
   permissionLabel: string
   idleLabel: string
+  titleIdentityGroup?: string
+  synthesizeTerminalTitle?: boolean
   synthesizeWorkingTitle?: boolean
 }
 
@@ -24,7 +26,21 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
   opencode: {
     workingLabel: 'OpenCode',
     permissionLabel: 'OpenCode - action required',
-    idleLabel: 'OpenCode ready'
+    idleLabel: 'OpenCode ready',
+    // Why: OpenCode owns semantic OSC session titles; hook status must not replace them.
+    synthesizeTerminalTitle: false
+  },
+  pi: {
+    workingLabel: 'Pi',
+    permissionLabel: 'Pi - action required',
+    idleLabel: 'Pi ready',
+    titleIdentityGroup: 'pi-compatible'
+  },
+  omp: {
+    workingLabel: 'OMP',
+    permissionLabel: 'OMP - action required',
+    idleLabel: 'OMP ready',
+    titleIdentityGroup: 'pi-compatible'
   },
   droid: {
     workingLabel: 'Droid',
@@ -57,7 +73,7 @@ export function getSyntheticAgentTerminalTitle(
   state: AgentStatusState
 ): string | null {
   const profile = getSyntheticAgentTitleProfile(agentType)
-  if (!profile || state === 'working') {
+  if (!profile || profile.synthesizeTerminalTitle === false || state === 'working') {
     return null
   }
   return state === 'blocked' || state === 'waiting' ? profile.permissionLabel : profile.idleLabel
@@ -68,7 +84,7 @@ export function shouldDriveSyntheticAgentTitleFromHook(
   state: AgentStatusState
 ): boolean {
   const profile = getSyntheticAgentTitleProfile(agentType)
-  if (!profile) {
+  if (!profile || profile.synthesizeTerminalTitle === false) {
     return false
   }
   return state !== 'working' || profile.synthesizeWorkingTitle !== false

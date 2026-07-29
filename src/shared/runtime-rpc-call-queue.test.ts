@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { isBackgroundRuntimeMethod, RuntimeRpcCallQueuePool } from './runtime-rpc-call-queue'
+import {
+  isBackgroundRuntimeMethod,
+  RuntimeRpcCallQueueOverloadError,
+  RuntimeRpcCallQueuePool
+} from './runtime-rpc-call-queue'
 
 describe('runtime RPC call queue', () => {
   it('classifies per-worktree decoration lookups as background work', () => {
@@ -78,5 +82,87 @@ describe('runtime RPC call queue', () => {
       Array.from({ length: 71 }, (_, index) => index)
     )
     expect(started).toEqual(Array.from({ length: 71 }, (_, index) => index))
+  })
+
+  it('rejects per-selector overload and accepts work after the queue drains', async () => {
+    const queue = new RuntimeRpcCallQueuePool(1, 1, 2, 10)
+    let releaseFirst: () => void = () => {}
+    const first = queue.enqueue('runtime-a', 'status.get', async () => {
+      await new Promise<void>((resolve) => {
+        releaseFirst = resolve
+      })
+      return 'first'
+    })
+    const second = queue.enqueue('runtime-a', 'status.get', async () => 'second')
+    const third = queue.enqueue('runtime-a', 'status.get', async () => 'third')
+
+    await expect(queue.enqueue('runtime-a', 'status.get', async () => 'overflow')).rejects.toEqual(
+      expect.objectContaining({
+        code: 'runtime_rpc_queue_overloaded',
+        scope: 'selector'
+      })
+    )
+
+    releaseFirst()
+    await expect(Promise.all([first, second, third])).resolves.toEqual(['first', 'second', 'third'])
+    await expect(queue.enqueue('runtime-a', 'status.get', async () => 'recovered')).resolves.toBe(
+      'recovered'
+    )
+  })
+
+  it('caps queued calls across selectors and recovers after draining', async () => {
+    const queue = new RuntimeRpcCallQueuePool(1, 1, 10, 2)
+    const releases: (() => void)[] = []
+    const blockers = ['runtime-a', 'runtime-b'].map((selector) =>
+      queue.enqueue(selector, 'status.get', async () => {
+        await new Promise<void>((resolve) => releases.push(resolve))
+      })
+    )
+    const queuedA = queue.enqueue('runtime-a', 'status.get', async () => 'queued-a')
+    const queuedB = queue.enqueue('runtime-b', 'status.get', async () => 'queued-b')
+
+    const overload = queue.enqueue('runtime-c', 'status.get', async () => 'overflow')
+    await expect(overload).rejects.toBeInstanceOf(RuntimeRpcCallQueueOverloadError)
+    await expect(overload).rejects.toMatchObject({ scope: 'global' })
+
+    releases.splice(0).forEach((release) => release())
+    await expect(Promise.all([...blockers, queuedA, queuedB])).resolves.toEqual([
+      undefined,
+      undefined,
+      'queued-a',
+      'queued-b'
+    ])
+    await expect(queue.enqueue('runtime-c', 'status.get', async () => 'recovered')).resolves.toBe(
+      'recovered'
+    )
+  })
+
+  it('caps retained call bytes across active and queued work, then recovers', async () => {
+    const queue = new RuntimeRpcCallQueuePool(1, 1, 10, 10, 10)
+    let releaseFirst: () => void = () => {}
+    let firstStarted = false
+    const first = queue.enqueue(
+      'runtime-a',
+      'status.get',
+      async () => {
+        firstStarted = true
+        await new Promise<void>((resolve) => {
+          releaseFirst = resolve
+        })
+        return 'first'
+      },
+      10
+    )
+
+    await vi.waitFor(() => expect(firstStarted).toBe(true))
+    await expect(
+      queue.enqueue('runtime-b', 'status.get', async () => 'overflow', 1)
+    ).rejects.toMatchObject({ scope: 'memory' })
+
+    releaseFirst()
+    await expect(first).resolves.toBe('first')
+    await expect(
+      queue.enqueue('runtime-b', 'status.get', async () => 'recovered', 10)
+    ).resolves.toBe('recovered')
   })
 })

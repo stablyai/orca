@@ -1,7 +1,7 @@
-import { execFileSync } from 'child_process'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs'
-import os from 'os'
-import path from 'path'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
@@ -241,6 +241,33 @@ async function waitForStableViewportAnchor(page: Page): Promise<ViewportAnchor> 
   throw new Error(`combined diff viewport anchor did not settle: ${JSON.stringify(lastAnchor)}`)
 }
 
+// Why: remounting the diff on tab switch restores scroll in several Monaco
+// layout passes, so the first settled anchor can be a mid-restore frame. Poll
+// until the anchor converges near the pre-switch offset before asserting; a
+// genuine restore miss still surfaces because the last anchor is returned on
+// timeout for the caller's assertion to fail on.
+async function waitForRestoredViewportAnchor(
+  page: Page,
+  target: ViewportAnchor,
+  tolerancePx = 80
+): Promise<ViewportAnchor> {
+  // Why: waitForStableViewportAnchor can take up to 15s; start the restoration
+  // poll after it settles so a slow first settle does not skip the 10s window.
+  let lastAnchor = await waitForStableViewportAnchor(page)
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < 10_000) {
+    if (lastAnchor.key === target.key && Math.abs(lastAnchor.top - target.top) < tolerancePx) {
+      return lastAnchor
+    }
+    await page.waitForTimeout(100)
+    const anchor = await readViewportAnchor(page)
+    if (anchor) {
+      lastAnchor = anchor
+    }
+  }
+  return lastAnchor
+}
+
 async function startCombinedDiffScrollProbe(page: Page): Promise<void> {
   await page.evaluate(() => {
     type CombinedDiffScrollProbe = {
@@ -312,6 +339,14 @@ async function wheelCombinedDiffDown(page: Page): Promise<ScrollProbeSample[]> {
 function getLargestBackwardScrollJump(samples: readonly ScrollProbeSample[]): number {
   let largestBackwardJump = 0
   for (let index = 1; index < samples.length; index += 1) {
+    // Why: a backward scrollTop delta that coincides with a scrollHeight change
+    // is the virtualizer correcting for lazily-measured diff editors above the
+    // viewport (expected under CI-timed Monaco measurement), not a scroll-restore
+    // anchoring regression. A real regression moves scrollTop at a stable content
+    // height, so only those backward jumps count.
+    if (samples[index].scrollHeight !== samples[index - 1].scrollHeight) {
+      continue
+    }
     largestBackwardJump = Math.max(
       largestBackwardJump,
       samples[index - 1].scrollTop - samples[index].scrollTop
@@ -321,34 +356,50 @@ function getLargestBackwardScrollJump(samples: readonly ScrollProbeSample[]): nu
 }
 
 async function clickVisibleDiffLine(page: Page): Promise<void> {
-  const linePoint = await page.evaluate(() => {
-    const container = document.querySelector<HTMLElement>('.combined-diff-scroll-container')
-    if (!container) {
-      throw new Error('combined diff scroll container not found')
-    }
-    const containerRect = container.getBoundingClientRect()
-    const visibleLine = Array.from(
-      container.querySelectorAll<HTMLElement>('.monaco-diff-editor .view-line')
-    ).find((line) => {
-      const rect = line.getBoundingClientRect()
-      return (
-        rect.height > 0 &&
-        rect.bottom > containerRect.top &&
-        rect.top < containerRect.bottom &&
-        rect.right > containerRect.left &&
-        rect.left < containerRect.right
-      )
-    })
-    if (!visibleLine) {
-      throw new Error('visible combined diff line not found')
-    }
-    const rect = visibleLine.getBoundingClientRect()
-    return {
-      x: rect.left + Math.min(12, Math.max(1, rect.width / 2)),
-      y: rect.top + rect.height / 2
-    }
-  })
+  // Why: after a tab switch Monaco re-lays-out its virtualized diff lines
+  // asynchronously, so the visible .view-line set is briefly empty on a loaded
+  // CI runner. Poll until a line is painted in the viewport instead of reading
+  // it once and throwing on the first miss.
+  let linePoint: { x: number; y: number } | null = null
+  await expect
+    .poll(
+      async () => {
+        linePoint = await page.evaluate(() => {
+          const container = document.querySelector<HTMLElement>('.combined-diff-scroll-container')
+          if (!container) {
+            return null
+          }
+          const containerRect = container.getBoundingClientRect()
+          const visibleLine = Array.from(
+            container.querySelectorAll<HTMLElement>('.monaco-diff-editor .view-line')
+          ).find((line) => {
+            const rect = line.getBoundingClientRect()
+            return (
+              rect.height > 0 &&
+              rect.bottom > containerRect.top &&
+              rect.top < containerRect.bottom &&
+              rect.right > containerRect.left &&
+              rect.left < containerRect.right
+            )
+          })
+          if (!visibleLine) {
+            return null
+          }
+          const rect = visibleLine.getBoundingClientRect()
+          return {
+            x: rect.left + Math.min(12, Math.max(1, rect.width / 2)),
+            y: rect.top + rect.height / 2
+          }
+        })
+        return linePoint !== null
+      },
+      { timeout: 10_000, message: 'visible combined diff line not found' }
+    )
+    .toBe(true)
 
+  if (!linePoint) {
+    throw new Error('visible combined diff line not found')
+  }
   await page.mouse.click(linePoint.x, linePoint.y)
 }
 
@@ -370,7 +421,12 @@ test.describe('Combined diff scroll restore', () => {
       await waitForStableViewportAnchor(orcaPage)
       const activeScrollSamples = await wheelCombinedDiffDown(orcaPage)
       expect(activeScrollSamples.length).toBeGreaterThan(2)
-      expect(getLargestBackwardScrollJump(activeScrollSamples)).toBeLessThan(120)
+      expect(
+        getLargestBackwardScrollJump(activeScrollSamples),
+        `backward scroll jump at a stable content height; samples=${JSON.stringify(
+          activeScrollSamples
+        )}`
+      ).toBeLessThan(120)
 
       const beforeSwitch = await waitForStableViewportAnchor(orcaPage)
       expect(beforeSwitch.index).toBeGreaterThan(0)
@@ -386,7 +442,7 @@ test.describe('Combined diff scroll restore', () => {
 
       await orcaPage.locator(`[data-tab-id="${diffTabId}"]`).click({ force: true })
       await expect(orcaPage.locator('.combined-diff-scroll-container')).toBeVisible()
-      const afterSwitch = await waitForStableViewportAnchor(orcaPage)
+      const afterSwitch = await waitForRestoredViewportAnchor(orcaPage, beforeSwitch)
 
       expect(afterSwitch.key).toBe(beforeSwitch.key)
       expect(Math.abs(afterSwitch.top - beforeSwitch.top)).toBeLessThan(80)
@@ -394,8 +450,19 @@ test.describe('Combined diff scroll restore', () => {
       await clickVisibleDiffLine(orcaPage)
       const afterLineClick = await waitForStableViewportAnchor(orcaPage)
 
-      expect(afterLineClick.key).toBe(afterSwitch.key)
+      // Assert the viewport barely moved rather than an exact anchor key: sections
+      // are ~viewport-sized, so a sub-pixel focus scroll from the click can flip the
+      // topmost-visible key by one without meaningfully moving the scroll position.
       expect(Math.abs(afterLineClick.top - afterSwitch.top)).toBeLessThan(80)
+      // Why: when a section above the viewport swaps its estimated height for
+      // Monaco's measured one, scrollHeight changes and Chromium's default
+      // scroll anchoring (no `overflow-anchor: none` here) legitimately moves
+      // raw scrollTop to keep the row above asserted `top` pinned — that is
+      // not an anchoring regression, so only cap scrollTop drift when content
+      // height held steady (same rule as getLargestBackwardScrollJump above).
+      if (afterLineClick.scrollHeight === afterSwitch.scrollHeight) {
+        expect(Math.abs(afterLineClick.scrollTop - afterSwitch.scrollTop)).toBeLessThan(40)
+      }
     } finally {
       rmSync(fixture.repoPath, { recursive: true, force: true })
     }

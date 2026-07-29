@@ -1,6 +1,6 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { KimiHookService } from './hook-service'
 import { KIMI_HOOK_EVENTS } from './kimi-hook-config-toml'
@@ -55,6 +55,11 @@ describe('KimiHookService', () => {
     // The managed script must exist and POST to the Kimi hook endpoint.
     const script = readFileSync(scriptPath(), 'utf-8')
     expect(script).toContain('/hook/kimi')
+    // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
+    // on the curl command line (EDR oversized-command-line false positive).
+    expect(script).toContain('printf \'%s\' "$payload" | curl')
+    expect(script).toContain('--data-urlencode "payload@-"')
+    expect(script).not.toContain('--data-urlencode "payload=${payload}"')
     // The command Kimi runs points at the managed script via sh.
     expect(config).toContain('agent-hooks/kimi-hook.sh')
   })

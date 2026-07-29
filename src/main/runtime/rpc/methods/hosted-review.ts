@@ -5,6 +5,7 @@ import { requiredString } from '../schemas'
 const HostedReviewForBranch = z.object({
   repo: requiredString('Missing repo selector'),
   branch: requiredString('Missing branch'),
+  currentHeadOid: z.string().nullable().optional(),
   linkedGitHubPR: z.number().int().positive().nullable().optional(),
   fallbackGitHubPR: z.number().int().positive().nullable().optional(),
   linkedGitLabMR: z.number().int().positive().nullable().optional(),
@@ -52,6 +53,7 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
       return runtime.getHostedReviewForBranch({
         repoSelector: params.repo,
         branch: params.branch,
+        currentHeadOid: params.currentHeadOid ?? null,
         linkedGitHubPR: params.linkedGitHubPR ?? null,
         ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
         linkedGitLabMR: params.linkedGitLabMR ?? null,

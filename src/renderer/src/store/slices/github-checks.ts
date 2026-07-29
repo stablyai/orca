@@ -1,6 +1,7 @@
 import type { AppState } from '../types'
 import type { PRCheckDetail, CheckStatus, GitHubOwnerRepo } from '../../../../shared/types'
 import { getGitHubPRCacheKey } from './github-cache-key'
+import { githubRepoIdentityKey } from '../../../../shared/github-repository-identity-key'
 
 export function normalizeBranchName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
@@ -17,7 +18,10 @@ export function deriveCheckStatusFromChecks(checks: PRCheckDetail[]): CheckStatu
     if (
       check.conclusion === 'failure' ||
       check.conclusion === 'timed_out' ||
-      check.conclusion === 'cancelled'
+      check.conclusion === 'cancelled' ||
+      // Why: action_required (e.g. an unapproved workflow run) blocks merge until
+      // someone acts; treat it as needs-attention rather than a silent pass.
+      check.conclusion === 'action_required'
     ) {
       return 'failure'
     }
@@ -44,7 +48,8 @@ export function syncPRChecksStatus(
   prRepo?: GitHubOwnerRepo | null,
   settings?: AppState['settings'],
   connectionId?: string | null,
-  executionHostId?: string | null
+  executionHostId?: string | null,
+  hasRepoOwner = false
 ): Partial<AppState> | null {
   const normalized = branch ? normalizeBranchName(branch) : ''
   if (!normalized) {
@@ -57,7 +62,8 @@ export function syncPRChecksStatus(
     normalized,
     settings,
     connectionId,
-    executionHostId
+    executionHostId,
+    hasRepoOwner
   )
   const prEntry = state.prCache[prCacheKey]
   if (!prEntry?.data) {
@@ -92,10 +98,7 @@ export function syncPRChecksStatus(
 }
 
 function normalizedPRRepo(repo?: GitHubOwnerRepo | null): string | null {
-  if (!repo) {
-    return null
-  }
-  return `${repo.owner.toLowerCase()}/${repo.repo.toLowerCase()}`
+  return repo ? githubRepoIdentityKey(repo) : null
 }
 
 function samePRRepo(left?: GitHubOwnerRepo | null, right?: GitHubOwnerRepo | null): boolean {

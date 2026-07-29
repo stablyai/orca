@@ -1,4 +1,4 @@
-import { execFile } from 'child_process'
+import { execFile } from 'node:child_process'
 import {
   accessSync,
   chmodSync,
@@ -7,11 +7,12 @@ import {
   mkdirSync,
   readFileSync,
   writeFileSync
-} from 'fs'
+} from 'node:fs'
 import { app } from 'electron'
-import { platform, tmpdir } from 'os'
-import { delimiter, dirname, join } from 'path'
+import { platform, tmpdir } from 'node:os'
+import { delimiter, dirname, join } from 'node:path'
 import { EmulatorError } from './emulator-errors'
+import { materializeServeSimRuntime } from './serve-sim-runtime-materializer'
 
 const EXEC_TIMEOUT_MS = 90_000
 const MAC_OPEN_SHIM_DIR = join(tmpdir(), 'orca-serve-sim-open-shim')
@@ -67,6 +68,27 @@ function getServeSimEnv(executable: ServeSimExecutable): NodeJS.ProcessEnv {
   return env
 }
 
+// Cached per process: materialization is a one-time copy; later calls only stat.
+let materializedServeSimPackageDir: string | null | undefined
+
+function resolveMaterializedServeSimPackageDir(bundledPackageDir: string): string | null {
+  if (materializedServeSimPackageDir !== undefined) {
+    return materializedServeSimPackageDir
+  }
+  materializedServeSimPackageDir = materializeServeSimRuntime({
+    bundledPackageDir,
+    targetRootDir: join(app.getPath('userData'), 'serve-sim-runtime'),
+    version: app.getVersion()
+  })
+  if (materializedServeSimPackageDir === null) {
+    console.warn(
+      '[serve-sim] runtime materialization failed; running from the app bundle ' +
+        '(camera injection may hit Gatekeeper on quarantined installs)'
+    )
+  }
+  return materializedServeSimPackageDir
+}
+
 export function resolveServeSimExecutable(): ServeSimExecutable {
   const bundledResourcesPath =
     process.resourcesPath ??
@@ -75,6 +97,21 @@ export function resolveServeSimExecutable(): ServeSimExecutable {
       : join(app.getPath('exe'), '..', 'resources'))
   const bundled = join(bundledResourcesPath, 'serve-sim', 'dist', 'serve-sim.js')
   if (existsSync(bundled)) {
+    if (process.platform === 'darwin') {
+      // Why: the bundled camera dylib is signed but has no Gatekeeper ticket
+      // (iOS-simulator arch), so injecting it from the quarantined app bundle
+      // can trip syspolicyd; run serve-sim from an unquarantined copy instead.
+      const materializedDir = resolveMaterializedServeSimPackageDir(
+        join(bundledResourcesPath, 'serve-sim')
+      )
+      if (materializedDir) {
+        return {
+          command: process.execPath,
+          baseArgs: [join(materializedDir, 'dist', 'serve-sim.js')],
+          usesElectronAsNode: true
+        }
+      }
+    }
     return { command: process.execPath, baseArgs: [bundled], usesElectronAsNode: true }
   }
 

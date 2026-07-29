@@ -1,4 +1,6 @@
 import type { ITerminalOptions } from '@xterm/xterm'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal-scrollback-policy'
+import { LIGHT_BG_MIN_CONTRAST } from '@/lib/terminal-contrast-correction'
 
 type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
 type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
@@ -40,15 +42,14 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
       '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace',
     fontWeight: '300',
     fontWeightBold: '500',
-    scrollback: 10000,
+    scrollback: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
     // Why: Orca's default terminal cells are taller than many users' baseline
     // terminal, so a small multiplier keeps row-per-wheel movement familiar.
     scrollSensitivity: DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
     fastScrollSensitivity: DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
     allowTransparency: false,
-    // Why: agent CLIs sometimes render body text with ANSI white/bright-white
-    // on light themes; xterm can keep those cells readable across renderers.
-    minimumContrastRatio: 4.5,
+    // Initial value only; applyTerminalAppearance re-gates by background luminance (#7934) before any content paints.
+    minimumContrastRatio: LIGHT_BG_MIN_CONTRAST,
     // Why: on macOS, non-US layouts rely on Option to compose characters like @ and €.
     macOptionIsMeta: false,
     macOptionClickForcesSelection: true,
@@ -58,7 +59,7 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
       // this as a gutter, costing ~1 column per pane — accepted tradeoff so the
       // scrollbar never covers content (evidence in PR #5051). The v1.4.51
       // table corruption #4877 fixed by zeroing this was actually the ZWJ
-      // width bug; it stays fixed by pane-terminal-unicode-provider.ts. Width
+      // width bug; it stays fixed by shared/terminal-unicode-provider.ts. Width
       // also enables the overview ruler, whose border is hidden in
       // composeActiveTerminalTheme.
       width: 7

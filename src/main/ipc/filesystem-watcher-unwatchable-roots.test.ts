@@ -23,11 +23,12 @@ vi.mock('./filesystem-watcher-wsl', () => ({
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: vi.fn()
+  getSshFilesystemProvider: vi.fn(),
+  onSshFilesystemProviderRegistered: () => () => {}
 }))
 
 import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
-import { stat } from 'fs/promises'
+import { stat } from 'node:fs/promises'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
 

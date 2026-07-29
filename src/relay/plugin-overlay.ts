@@ -16,7 +16,7 @@
 // implementation rooted at $HOME/.orca-relay/ for OpenCode and at the remote
 // Pi/OMP homes for those agents.
 
-import { createHash } from 'crypto'
+import { createHash } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -26,9 +26,9 @@ import {
   statSync,
   unlinkSync,
   writeFileSync
-} from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
+} from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { mirrorEntry, safeRemoveOverlay } from '../main/pty/overlay-mirror'
 import type { PiAgentKind } from '../shared/pi-agent-kind'
 
@@ -81,6 +81,12 @@ export type PluginSources = {
 
 export function getRelayPiStatusExtensionPath(agentDir: string): string {
   return join(agentDir, 'extensions', PI_EXTENSION_FILE)
+}
+
+/** Presence of this file is what makes an overlay usable — a rebuild that failed
+ *  after the wipe leaves the dir itself present but the plugin missing. */
+export function getRelayOpenCodePluginPath(overlayDir: string): string {
+  return join(overlayDir, 'plugins', OPENCODE_PLUGIN_FILE)
 }
 
 export class PluginOverlayManager {

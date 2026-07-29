@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 // Exercises the in-WebView touch dispatcher end-to-end: a surface tap on a
 // printed http(s) URL must post an `open-url` message (which RN routes to the
 // in-app/phone browser). Regression guard for taps that jitter a few pixels —
@@ -14,7 +14,7 @@ function iifeSource(): string {
 
 function bodyMarkup(): string {
   const start = XTERM_HTML.indexOf('<body>') + '<body>'.length
-  const end = XTERM_HTML.indexOf('<script src=')
+  const end = XTERM_HTML.indexOf('<script>', start)
   return XTERM_HTML.slice(start, end)
 }
 
@@ -174,6 +174,39 @@ describe('terminal WebView tap routing', () => {
     expect(posted.find((m) => m.type === 'open-url')?.url).toBe('https://example.com/issue/1234')
   })
 
+  it('opens first-load file OSC links through terminal file taps', async () => {
+    const oscLinks = [{ row: 0, startCol: 5, endCol: 15, uri: 'file:///tmp/result.json#L12C3' }]
+    const { posted } = boot('open artifact here', oscLinks)
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(7), y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'open-url')).toBeUndefined()
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toMatchObject({
+      type: 'terminal-file-tap',
+      pathText: '/tmp/result.json',
+      line: 12,
+      column: 3
+    })
+  })
+
+  it('opens plain file URLs through terminal file taps', async () => {
+    const line = 'open file:///tmp/result.json#L12C3 now'
+    const { posted } = boot(line)
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(line.indexOf('result')), y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toMatchObject({
+      type: 'terminal-file-tap',
+      pathText: '/tmp/result.json',
+      line: 12,
+      column: 3
+    })
+  })
+
   it('does not open snapshot OSC links from adjacent terminal cells', async () => {
     const oscLinks = [{ row: 0, startCol: 6, endCol: 11, uri: 'https://example.com/issue/1234' }]
     const { posted } = boot('issue #1234 done', oscLinks)
@@ -183,6 +216,36 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchend', [])
 
     expect(posted.find((m) => m.type === 'open-url')).toBeUndefined()
+  })
+
+  it('does not parse off-cell snapshot file OSC links while routing a tap', async () => {
+    const oscLinks = Array.from({ length: 50 }, (_, index) => ({
+      row: index + 1,
+      startCol: 0,
+      endCol: 10,
+      uri: `file:///tmp/result-${index}.json#L1`
+    }))
+    const { posted } = boot('plain text', oscLinks)
+    await settle()
+
+    const OriginalURL = window.URL
+    let parseCount = 0
+    const CountingURL = class extends OriginalURL {
+      constructor(url: string | URL, base?: string | URL) {
+        parseCount += 1
+        super(url, base)
+      }
+    }
+    Object.defineProperty(window, 'URL', { value: CountingURL, configurable: true })
+    try {
+      fireTouch('touchstart', [{ x: screenXForCol(5), y: tapY }])
+      fireTouch('touchend', [])
+    } finally {
+      Object.defineProperty(window, 'URL', { value: OriginalURL, configurable: true })
+    }
+
+    expect(parseCount).toBe(0)
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toBeUndefined()
   })
 
   it('does not open stale snapshot OSC links after the row text changes', async () => {

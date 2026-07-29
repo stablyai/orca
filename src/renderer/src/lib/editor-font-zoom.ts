@@ -30,3 +30,23 @@ export function computeDiffEditorFontSize(baseFontSize: number, zoomLevel: numbe
   // terminal font size makes review views feel oversized relative to app chrome.
   return computeEditorFontSize(baseFontSize - 0.5, zoomLevel)
 }
+
+export type EditorFontFamilySettings = {
+  editorFontFamily?: string
+  terminalFontFamily?: string
+}
+
+/**
+ * Why: the editor font is opt-in and defaults to empty, so an unset value must
+ * keep falling back to the terminal font exactly as before the setting existed.
+ */
+export function resolveEditorFontFamily(settings?: EditorFontFamilySettings | null): string {
+  return settings?.editorFontFamily?.trim() || settings?.terminalFontFamily || 'monospace'
+}
+
+/** Same resolution, but keeps the notebook shell's "no font set → inherit UI font" fallback. */
+export function resolveEditorFontFamilyOrInherit(
+  settings?: EditorFontFamilySettings | null
+): string | undefined {
+  return settings?.editorFontFamily?.trim() || settings?.terminalFontFamily || undefined
+}

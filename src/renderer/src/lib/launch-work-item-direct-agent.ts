@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import { deliverLaunchPromptToAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import {
   buildAgentDraftLaunchPlan,
@@ -16,6 +16,8 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
+import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
+import type { PersistedNativeChatSessionOptions } from '../../../shared/native-chat-session-options'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
   agent: TuiAgent | null
@@ -27,10 +29,14 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
         agentCmdOverrides?: Partial<Record<TuiAgent, string>>
         agentDefaultArgs?: Partial<Record<TuiAgent, string>>
         agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
+        nativeChatSessionOptions?: PersistedNativeChatSessionOptions
       }
     | null
     | undefined
   launchPlatform: NodeJS.Platform
+  /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
+   * `orca-ide` rename must not be applied for remote launches. */
+  isRemote?: boolean
 }): {
   startupPlan: AgentStartupPlan | null
   draftLaunchedNatively: boolean
@@ -45,6 +51,10 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
       ? resolveTuiAgentLaunchArgs(args.agent, args.settings?.agentDefaultArgs)
       : args.agentArgs
   const effectiveAgentEnv = resolveTuiAgentLaunchEnv(args.agent, args.settings?.agentDefaultEnv)
+  const sessionOptions = resolveNativeChatSessionOptionDefaults(
+    args.settings?.nativeChatSessionOptions,
+    args.agent
+  )
   const draftLaunchPlan =
     args.promptDelivery === 'submit-after-ready'
       ? null
@@ -53,8 +63,10 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
           draft: args.draftContent,
           cmdOverrides: args.settings?.agentCmdOverrides ?? {},
           platform: args.launchPlatform,
+          isRemote: args.isRemote,
           agentArgs: effectiveAgentArgs,
-          agentEnv: effectiveAgentEnv
+          agentEnv: effectiveAgentEnv,
+          sessionOptions
         })
 
   if (draftLaunchPlan) {
@@ -65,6 +77,9 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
         launchConfig: draftLaunchPlan.launchConfig,
+        ...(draftLaunchPlan.sessionOptions
+          ? { sessionOptions: draftLaunchPlan.sessionOptions }
+          : {}),
         ...(draftLaunchPlan.startupCommandDelivery
           ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
           : {}),
@@ -80,10 +95,15 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     prompt: '',
     cmdOverrides: args.settings?.agentCmdOverrides ?? {},
     platform: args.launchPlatform,
+    isRemote: args.isRemote,
     agentArgs: effectiveAgentArgs,
     agentEnv: effectiveAgentEnv,
+    sessionOptions,
     allowEmptyPromptLaunch: true
   })
+  if (startupPlan && args.promptDelivery === 'draft') {
+    startupPlan.draftPrompt = args.draftContent
+  }
   return {
     startupPlan,
     draftLaunchedNatively: false,
@@ -101,6 +121,8 @@ export function buildDirectWorkItemStartupOpts(
     env?: Record<string, string>
     launchConfig?: SleepingAgentLaunchConfig
     launchAgent?: TuiAgent
+    draftPrompt?: string
+    sessionOptions?: AgentStartupPlan['sessionOptions']
     startupCommandDelivery?: StartupCommandDelivery
     telemetry?: AgentStartedTelemetry
   }
@@ -117,7 +139,9 @@ export function buildDirectWorkItemStartupOpts(
       command: plan.launchCommand,
       ...(plan.env ? { env: plan.env } : {}),
       launchConfig: plan.launchConfig,
+      ...(plan.sessionOptions ? { sessionOptions: plan.sessionOptions } : {}),
       ...(agent ? { launchAgent: agent } : {}),
+      ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
       ...(plan.startupCommandDelivery
         ? { startupCommandDelivery: plan.startupCommandDelivery }
         : {}),
@@ -134,7 +158,7 @@ export async function pasteDirectWorkItemDraftWhenAgentReady(args: {
   forcePaste?: boolean
 }): Promise<void> {
   const { primaryTabId, startupPlan, content, submit = false, forcePaste = false } = args
-  await pasteDraftWhenAgentReady({
+  await deliverLaunchPromptToAgentTab({
     tabId: primaryTabId,
     content,
     agent: startupPlan.agent,

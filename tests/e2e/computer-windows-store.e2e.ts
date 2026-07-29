@@ -97,7 +97,7 @@ async function killCalculator(): Promise<void> {
 }
 
 async function runPowerShell(script: string): Promise<void> {
-  const { execFile } = await import('child_process')
+  const { execFile } = await import('node:child_process')
   await new Promise<void>((resolve, reject) => {
     execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], (error) => {
       if (error) {

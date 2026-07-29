@@ -1,3 +1,4 @@
+import { createGitConfigSnapshotRunner } from '../shared/git-config-snapshot-runner'
 import { getEffectiveGitUpstreamStatus } from '../shared/git-effective-upstream'
 import type { GitCommandRunner } from '../shared/git-effective-upstream'
 import type { GitUpstreamStatus } from '../shared/types'
@@ -115,12 +116,13 @@ export async function readOrProbeNoEffectiveUpstreamStatus(
   }
 
   let probedSameNameOriginRef = false
+  const snapshotRunner = createGitConfigSnapshotRunner(runGit)
   const writeGeneration = noEffectiveUpstreamWriteGeneration.get(cacheKey) ?? 0
   const probe = getEffectiveGitUpstreamStatus((args) => {
     if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${identity.branchName}`)) {
       probedSameNameOriginRef = true
     }
-    return runGit(args)
+    return snapshotRunner(args)
   }).then((status) => {
     cacheNoEffectiveUpstreamStatus(cacheKey, status, probedSameNameOriginRef, writeGeneration)
     return status

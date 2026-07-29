@@ -1,6 +1,10 @@
 import { useCallback, type MutableRefObject } from 'react'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { LoadStatusOptions } from './mobile-source-control-screen-state'
+import type {
+  MobileCommitFailureRecovery,
+  RecordMobileCommitFailure
+} from './mobile-commit-failure-recovery'
 
 type GitStep = { method: string; params?: Record<string, unknown> }
 type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
@@ -12,6 +16,7 @@ type RunGitWorkflow = (
 
 type Params = {
   commitMessage: string
+  stagedEntries: MobileCommitFailureRecovery['stagedEntries']
   sendGitRequest: SendGitRequest
   sendCommitRequest: (message: string) => Promise<unknown>
   runGitSyncSteps: () => Promise<void>
@@ -22,6 +27,7 @@ type Params = {
   setBusyAction: (next: string | null) => void
   setActionError: (next: string | null) => void
   setCommitMessage: (next: string) => void
+  recordCommitFailure: RecordMobileCommitFailure
 }
 
 // Commit + commit-then-action runners. Split from the main runners hook to keep
@@ -29,6 +35,7 @@ type Params = {
 export function useMobileSourceControlCommitRunners(params: Params) {
   const {
     commitMessage,
+    stagedEntries,
     sendGitRequest,
     sendCommitRequest,
     runGitSyncSteps,
@@ -38,7 +45,8 @@ export function useMobileSourceControlCommitRunners(params: Params) {
     busyActionRef,
     setBusyAction,
     setActionError,
-    setCommitMessage
+    setCommitMessage,
+    recordCommitFailure
   } = params
 
   const commit = useCallback(async () => {
@@ -49,11 +57,20 @@ export function useMobileSourceControlCommitRunners(params: Params) {
     return await runGitWorkflow(
       'commit',
       async () => {
-        await sendCommitRequest(message)
+        try {
+          await sendCommitRequest(message)
+        } catch (err) {
+          recordCommitFailure({
+            error: err instanceof Error ? err.message : 'Commit failed',
+            commitMessage: message,
+            stagedEntries
+          })
+          throw err
+        }
       },
       { clearCommitMessage: true }
     )
-  }, [commitMessage, runGitWorkflow, sendCommitRequest])
+  }, [commitMessage, recordCommitFailure, runGitWorkflow, sendCommitRequest, stagedEntries])
 
   const runCommitFollowUps = useCallback(
     async (actionId: string, afterCommit: () => Promise<void>) => {
@@ -67,6 +84,7 @@ export function useMobileSourceControlCommitRunners(params: Params) {
       busyActionRef.current = actionId
       setBusyAction(actionId)
       setActionError(null)
+      recordCommitFailure(null)
       let didCommit = false
       try {
         await sendCommitRequest(message)
@@ -85,6 +103,9 @@ export function useMobileSourceControlCommitRunners(params: Params) {
         }
         triggerError()
         const errorMessage = err instanceof Error ? err.message : 'Source control action failed'
+        if (!didCommit) {
+          recordCommitFailure({ error: errorMessage, commitMessage: message, stagedEntries })
+        }
         if (didCommit) {
           setCommitMessage('')
           await loadStatus({
@@ -109,10 +130,12 @@ export function useMobileSourceControlCommitRunners(params: Params) {
       commitMessage,
       loadStatus,
       mountedRef,
+      recordCommitFailure,
       sendCommitRequest,
       setActionError,
       setBusyAction,
-      setCommitMessage
+      setCommitMessage,
+      stagedEntries
     ]
   )
 

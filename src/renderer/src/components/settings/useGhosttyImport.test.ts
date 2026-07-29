@@ -13,7 +13,7 @@ const baseSettings: GlobalSettings = {
   terminalGpuAcceleration: 'auto',
   terminalCursorStyle: 'bar',
   terminalCursorBlink: true,
-  terminalScrollbackBytes: 10_000_000,
+  terminalScrollbackRows: 5_000,
   terminalBackgroundOpacity: 1,
   terminalInactivePaneOpacity: 1,
   terminalPaddingX: 0,

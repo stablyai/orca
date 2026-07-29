@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'fs'
-import path from 'path'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
@@ -14,8 +14,41 @@ import {
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 
 const PROVIDER_SESSION_ID = 'e2e-quit-resume-session'
+
+function stubPersistedResumeCommand(userDataDir: string): void {
+  const dataPath = path.join(
+    userDataDir,
+    'profiles',
+    DEFAULT_LOCAL_ORCA_PROFILE_ID,
+    'orca-data.json'
+  )
+  const data = JSON.parse(readFileSync(dataPath, 'utf8')) as {
+    workspaceSession?: {
+      sleepingAgentSessionsByPaneKey?: Record<
+        string,
+        {
+          providerSession?: { id?: unknown }
+          launchConfig?: {
+            agentCommand?: string
+            agentArgs?: string
+            agentEnv?: Record<string, string>
+          }
+        }
+      >
+    }
+  }
+  const record = Object.values(data.workspaceSession?.sleepingAgentSessionsByPaneKey ?? {}).find(
+    (candidate) => candidate.providerSession?.id === PROVIDER_SESSION_ID
+  )
+  if (!record) {
+    throw new Error('Expected a persisted resumable agent session')
+  }
+  record.launchConfig = { agentCommand: 'echo', agentArgs: '', agentEnv: {} }
+  writeFileSync(dataPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
+}
 
 function readDaemonPid(userDataDir: string): number {
   const raw = readFileSync(
@@ -58,6 +91,7 @@ test('resumes an agent session after quit when its daemon PTY died while the app
     const marker = `AGENT_QUIT_RESUME_${Date.now()}`
     const descriptor = await waitForActivePaneHookDescriptor(page)
     const firstPtyId = await waitForActivePanePtyId(page)
+    const transcriptPath = session.seedCodexResumeRollout(PROVIDER_SESSION_ID, repoPath)
     await execInTerminal(page, firstPtyId, `echo ${marker}`)
     await waitForTerminalOutput(page, marker)
 
@@ -65,22 +99,27 @@ test('resumes an agent session after quit when its daemon PTY died while the app
     // server; seeding the same store entry keeps this test hermetic (no agent
     // CLI install or auth) while exercising the identical persistence path.
     await page.evaluate(
-      ({ paneKey, worktreeId: wtId, providerSessionId }) => {
-        window.__store
-          ?.getState()
-          .setAgentStatus(
-            paneKey,
-            { state: 'working', prompt: 'finish the task', agentType: 'codex' },
-            'Codex',
-            undefined,
-            { worktreeId: wtId },
-            { providerSession: { key: 'session_id', id: providerSessionId } }
-          )
+      ({ paneKey, worktreeId: wtId, providerSessionId, transcriptPath }) => {
+        window.__store?.getState().setAgentStatus(
+          paneKey,
+          { state: 'working', prompt: 'finish the task', agentType: 'codex' },
+          'Codex',
+          undefined,
+          { worktreeId: wtId },
+          {
+            providerSession: {
+              key: 'session_id',
+              id: providerSessionId,
+              transcriptPath
+            }
+          }
+        )
       },
       {
         paneKey: descriptor.paneKey,
         worktreeId: descriptor.worktreeId,
-        providerSessionId: PROVIDER_SESSION_ID
+        providerSessionId: PROVIDER_SESSION_ID,
+        transcriptPath
       }
     )
 
@@ -88,6 +127,7 @@ test('resumes an agent session after quit when its daemon PTY died while the app
 
     await session.close(firstApp)
     firstApp = null
+    stubPersistedResumeCommand(session.userDataDir)
 
     // Why: simulates the daemon (and the agent CLI inside it) dying while the
     // app is closed — reboot, crash, or update kill. SIGKILL leaves history

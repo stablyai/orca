@@ -1,8 +1,8 @@
-import { execFileSync } from 'child_process'
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'fs'
-import os from 'os'
-import path from 'path'
-import { randomUUID } from 'crypto'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 export type IsolatedLargeDiffRepo = {
   repoPath: string

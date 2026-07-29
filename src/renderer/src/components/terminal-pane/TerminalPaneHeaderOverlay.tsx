@@ -1,10 +1,17 @@
 import type { CSSProperties, RefObject } from 'react'
-import { SquareSplitVertical, X } from 'lucide-react'
+import {
+  MessageSquare,
+  MessageSquarePlus,
+  SquareSplitVertical,
+  SquareTerminal,
+  X
+} from 'lucide-react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import type { PtyTransport } from './pty-transport'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 
@@ -19,6 +26,8 @@ type TerminalPaneHeaderOverlayProps = {
   worktreeId: string
   cwd: string
   showAlwaysOnHeaders: boolean
+  /** Used by ephemeral one-off command terminals that omit the header affordance. */
+  showSplitButton?: boolean
   paneCount: number
   activePaneId: number | null | undefined
   panes: readonly ManagedPane[]
@@ -33,6 +42,16 @@ type TerminalPaneHeaderOverlayProps = {
   hiddenStartupStyle: CSSProperties
   managerRef: RefObject<PaneManager | null>
   paneTransportsRef: RefObject<Map<number, PtyTransport>>
+  /** When true, this pane can toggle the native chat view; renders a chat/terminal
+   *  toggle as the first button in the pane header actions row (beside split/close).
+   *  The caller gates it to the active pane to avoid duplicating it across splits. */
+  canToggleNativeChat?: boolean
+  /** True when the active pane is currently showing the native chat view. */
+  isChatViewMode?: boolean
+  /** Flip the active pane between the terminal and the native chat view. */
+  onToggleNativeChat?: () => void
+  canContinueAgentSessionInNewSession?: boolean
+  onContinueAgentSessionInNewSession?: (pane: ManagedPane) => void
   onSplitPane: (pane: ManagedPane, direction: 'vertical' | 'horizontal') => void
   onBeginPaneDrag: (paneId: number, handle: HTMLElement, event: PointerEvent) => void
   onActivatePaneTitleInteraction: (paneId: number) => void
@@ -51,6 +70,7 @@ export default function TerminalPaneHeaderOverlay({
   worktreeId,
   cwd,
   showAlwaysOnHeaders,
+  showSplitButton = true,
   paneCount,
   activePaneId,
   panes,
@@ -65,6 +85,11 @@ export default function TerminalPaneHeaderOverlay({
   hiddenStartupStyle,
   managerRef,
   paneTransportsRef,
+  canToggleNativeChat,
+  isChatViewMode,
+  onToggleNativeChat,
+  canContinueAgentSessionInNewSession,
+  onContinueAgentSessionInNewSession,
   onSplitPane,
   onBeginPaneDrag,
   onActivatePaneTitleInteraction,
@@ -172,7 +197,20 @@ export default function TerminalPaneHeaderOverlay({
                 value={renameValue}
                 onChange={(event) => onRenameValueChange(event.target.value)}
                 onKeyDown={(event) => {
+                  // Why: an Enter that only confirms a CJK IME candidate must
+                  // not commit the rename; wait for a non-composition Enter.
+                  if (isImeCompositionKeyDown(event)) {
+                    return
+                  }
                   if (event.key === 'Enter') {
+                    onRenameSubmit()
+                  } else if (event.key === 'Tab') {
+                    // Why: commit on Tab directly instead of relying on the
+                    // browser advancing focus (which fires blur). Headless / no
+                    // window-focus environments (xvfb, some SSH sessions) don't
+                    // always move focus off the input, so the blur-driven commit
+                    // never runs. Submitting closes the editor, so the default
+                    // Tab focus move is moot and any follow-on blur is a no-op.
                     onRenameSubmit()
                   } else if (event.key === 'Escape') {
                     onRenameCancel()
@@ -206,7 +244,76 @@ export default function TerminalPaneHeaderOverlay({
                   </button>
                 ) : null}
                 <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
-                  {showAlwaysOnHeaders ? (
+                  {canContinueAgentSessionInNewSession && isActivePane ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="pane-title-split-trigger"
+                          aria-label={translate(
+                            'components.agentSessionContinuation.continueInNewSession',
+                            'Continue in New Session…'
+                          )}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onContinueAgentSessionInNewSession?.(pane)
+                          }}
+                        >
+                          <MessageSquarePlus className="size-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={4}>
+                        {translate(
+                          'components.agentSessionContinuation.continueInNewSession',
+                          'Continue in New Session…'
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : null}
+                  {canToggleNativeChat && isActivePane ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          // Same class as split so it shares the hover/active reveal
+                          // and sits as a peer in the [chat][split][×] cluster.
+                          className="pane-title-split-trigger"
+                          aria-label={
+                            isChatViewMode
+                              ? translate(
+                                  'components.native-chat.toggle.showTerminal',
+                                  'Show terminal'
+                                )
+                              : translate(
+                                  'components.native-chat.toggle.showChat',
+                                  'Show chat view'
+                                )
+                          }
+                          aria-pressed={isChatViewMode}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onToggleNativeChat?.()
+                          }}
+                        >
+                          {isChatViewMode ? (
+                            <SquareTerminal className="size-3" />
+                          ) : (
+                            <MessageSquare className="size-3" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={4}>
+                        {isChatViewMode
+                          ? translate('components.native-chat.toggle.showTerminal', 'Show terminal')
+                          : translate('components.native-chat.toggle.showChat', 'Show chat view')}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : null}
+                  {showAlwaysOnHeaders && showSplitButton ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button

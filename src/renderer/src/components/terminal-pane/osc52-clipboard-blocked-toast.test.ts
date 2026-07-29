@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import en from '@/i18n/locales/en.json'
+import es from '@/i18n/locales/es.json'
+import ja from '@/i18n/locales/ja.json'
+import ko from '@/i18n/locales/ko.json'
+import zh from '@/i18n/locales/zh.json'
 import { OSC52_CLIPBOARD_SETTING_ID } from './osc52-clipboard-setting-anchor'
 import type * as Osc52ClipboardBlockedToastModule from './osc52-clipboard-blocked-toast'
 
@@ -41,6 +46,7 @@ describe('showOsc52ClipboardBlockedToast', () => {
 
     showOsc52ClipboardBlockedToast()
 
+    expect(toastInfoMock.mock.calls[0]?.[1]?.description).toContain('Grok')
     const options = toastInfoMock.mock.calls[0]?.[1]
     expect(options).toMatchObject({
       action: {
@@ -66,5 +72,33 @@ describe('showOsc52ClipboardBlockedToast', () => {
     showOsc52ClipboardBlockedToast()
 
     expect(toastInfoMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the session notice unspent when the toast throws', async () => {
+    // Why: with the latch above toast.info, a throw burns the opted-out user's one
+    // hint and every later blocked write fails silently. Only a throwing first call
+    // separates the two orderings — the passing case satisfies both.
+    const { showOsc52ClipboardBlockedToast } = await importToastModule()
+    toastInfoMock.mockImplementationOnce(() => {
+      throw new Error('toast unavailable')
+    })
+
+    expect(() => showOsc52ClipboardBlockedToast()).toThrow('toast unavailable')
+    showOsc52ClipboardBlockedToast()
+
+    expect(toastInfoMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('mentions Grok and Zellij in every supported locale', () => {
+    // Why assert the catalog, not the code fallback: en.json is bundled as the
+    // `en` resource, so a catalog value silently wins over translate()'s fallback.
+    const locales = [en, es, ja, ko, zh]
+
+    for (const locale of locales) {
+      const description =
+        locale.auto.components.terminal.pane.osc52.clipboard.blocked.toast['7cf51f74fd']
+      expect(description).toContain('Grok')
+      expect(description).toContain('Zellij')
+    }
   })
 })

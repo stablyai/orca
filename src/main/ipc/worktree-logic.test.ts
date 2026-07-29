@@ -1,7 +1,4 @@
-/* eslint-disable max-lines -- Why: these worktree path/name tests share a
-single setup-free pure-logic module, and splitting them would make the related
-edge cases harder to audit together. */
-import { posix, resolve } from 'path'
+import { posix, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   sanitizeWorktreeName,
@@ -9,6 +6,7 @@ import {
   ensurePathWithinWorkspace,
   computeBranchName,
   getConfiguredBranchPrefix,
+  computeValidatedBranchName,
   computeWorktreePath,
   computeRemoteWorktreePath,
   computeWorkspaceRoot,
@@ -18,6 +16,7 @@ import {
   mergeWorktree,
   parseWorktreeId,
   formatWorktreeRemovalError,
+  isWindowsLongPathWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError,
   areWorktreePathsEqual
@@ -75,6 +74,25 @@ describe('sanitizeWorktreeName', () => {
     expect(sanitizeWorktreeName('feat: 中文 (v2)')).toBe('feat-中文-v2')
   })
 
+  it('uses readable git-safe shortcodes for known emoji', () => {
+    expect(sanitizeWorktreeName('🚀')).toBe('rocket')
+    expect(sanitizeWorktreeName('👩‍💻✨')).toBe('woman-technologist-sparkles')
+    expect(sanitizeWorktreeName('🇯🇵')).toBe('jp')
+    expect(sanitizeWorktreeName('1️⃣')).toBe('one')
+  })
+
+  it('keeps readable text and emoji shortcodes in branch and path names', () => {
+    expect(sanitizeWorktreeName('Ship it 🚀')).toBe('Ship-it-rocket')
+  })
+
+  it('uses a git-safe fallback for emoji newer than the shortcode catalog', () => {
+    expect(sanitizeWorktreeName('\u{1fae9}')).toBe('workspace')
+  })
+
+  it('does not treat arbitrary punctuation as a workspace name', () => {
+    expect(() => sanitizeWorktreeName('!!!')).toThrow('Invalid worktree name')
+  })
+
   it('throws for empty name', () => {
     expect(() => sanitizeWorktreeName('')).toThrow('Invalid worktree name')
   })
@@ -85,6 +103,11 @@ describe('sanitizeWorktreeName', () => {
 })
 
 describe('sanitizeWorktreeDisplayName', () => {
+  it('preserves emoji in display names', () => {
+    expect(sanitizeWorktreeDisplayName('  Ship it 🚀  ')).toBe('Ship it 🚀')
+    expect(sanitizeWorktreeDisplayName('👩‍💻')).toBe('👩‍💻')
+  })
+
   it('keeps readable punctuation while collapsing unsafe controls and whitespace', () => {
     expect(sanitizeWorktreeDisplayName('  Fix: login / callback\n\tregression\u0000  ')).toBe(
       'Fix: login / callback regression'
@@ -150,6 +173,18 @@ describe('computeBranchName', () => {
   it('returns bare name when branchPrefix is none', () => {
     expect(computeBranchName('feature', { branchPrefix: 'none' }, 'jdoe')).toBe('feature')
   })
+
+  it('does not double the slash when a custom prefix ends in one', () => {
+    expect(
+      computeBranchName('feature', { branchPrefix: 'custom', branchPrefixCustom: 'team/' }, null)
+    ).toBe('team/feature')
+  })
+
+  it('normalizes a trailing slash on a git username prefix', () => {
+    expect(computeBranchName('feature', { branchPrefix: 'git-username' }, 'jdoe/')).toBe(
+      'jdoe/feature'
+    )
+  })
 })
 
 describe('getConfiguredBranchPrefix', () => {
@@ -175,6 +210,40 @@ describe('getConfiguredBranchPrefix', () => {
 
   it('returns null when no prefix strategy applies', () => {
     expect(getConfiguredBranchPrefix({ branchPrefix: 'none' }, 'jdoe')).toBeNull()
+  })
+
+  it('normalizes a trailing slash out of the custom prefix', () => {
+    expect(
+      getConfiguredBranchPrefix({ branchPrefix: 'custom', branchPrefixCustom: 'team/' }, null)
+    ).toBe('team')
+  })
+
+  it('returns null when the custom prefix normalizes away to empty', () => {
+    expect(
+      getConfiguredBranchPrefix({ branchPrefix: 'custom', branchPrefixCustom: '/' }, null)
+    ).toBeNull()
+  })
+})
+
+describe('computeValidatedBranchName', () => {
+  it('returns the computed branch name when the prefix is valid', () => {
+    expect(
+      computeValidatedBranchName(
+        'feature',
+        { branchPrefix: 'custom', branchPrefixCustom: 'team' },
+        null
+      )
+    ).toBe('team/feature')
+  })
+
+  it('throws when the configured prefix is invalid', () => {
+    expect(() =>
+      computeValidatedBranchName(
+        'feature',
+        { branchPrefix: 'custom', branchPrefixCustom: 'team x' },
+        null
+      )
+    ).toThrow('contains characters git rejects')
   })
 })
 
@@ -244,13 +313,38 @@ describe('computeWorktreePath', () => {
     ).toBe('C:\\Projects\\app\\worktrees\\feature')
   })
 
-  it('keeps legacy SSH sibling paths for global absolute workspace directories', () => {
+  it('qualifies SSH sibling paths with the repo name for global absolute workspace directories', () => {
     expect(
-      computeRemoteWorktreePath('feature', '/remote/repo', {
+      computeRemoteWorktreePath('main', '/remote/bioinformatist.github.io', {
         nestWorkspaces: false,
         workspaceDir: '/local/workspaces'
       })
-    ).toBe('/remote/feature')
+    ).toBe('/remote/bioinformatist.github.io-main')
+
+    expect(
+      computeRemoteWorktreePath('main-2', '/remote/dotfiles', {
+        nestWorkspaces: false,
+        workspaceDir: '/local/workspaces'
+      })
+    ).toBe('/remote/dotfiles-main-2')
+  })
+
+  it('qualifies SSH sibling paths with the repo name on Windows remote paths', () => {
+    expect(
+      computeRemoteWorktreePath('main', 'C:\\Remote\\dotfiles', {
+        nestWorkspaces: false,
+        workspaceDir: 'C:\\Local\\workspaces'
+      })
+    ).toBe('C:\\Remote\\dotfiles-main')
+  })
+
+  it('strips .git suffix from qualified SSH sibling paths', () => {
+    expect(
+      computeRemoteWorktreePath('main', '/remote/project.git', {
+        nestWorkspaces: false,
+        workspaceDir: '/local/workspaces'
+      })
+    ).toBe('/remote/project-main')
   })
 
   it('applies repo-specific SSH workspace directories on the remote path', () => {
@@ -276,6 +370,20 @@ describe('computeWorktreePath', () => {
         { useConfiguredAbsolutePath: true }
       )
     ).toBe('C:\\Remote\\worktrees\\feature')
+  })
+
+  it('keeps repo-specific absolute SSH workspace directories unqualified', () => {
+    expect(
+      computeRemoteWorktreePath(
+        'feature',
+        '/remote/project/repo',
+        {
+          nestWorkspaces: false,
+          workspaceDir: '/remote/worktrees'
+        },
+        { useConfiguredAbsolutePath: true }
+      )
+    ).toBe('/remote/worktrees/feature')
   })
 })
 
@@ -532,6 +640,32 @@ describe('isOrphanedWorktreeError', () => {
   it('returns false for non-Error input', () => {
     expect(isOrphanedWorktreeError('string error')).toBe(false)
     expect(isOrphanedWorktreeError(null)).toBe(false)
+  })
+})
+
+describe('isWindowsLongPathWorktreeRemovalError', () => {
+  it('matches Git for Windows long-path deletion failures on Windows', () => {
+    const error = Object.assign(new Error('git worktree remove failed'), {
+      stderr: 'error: failed to delete some/deep/file: Filename too long'
+    })
+
+    expect(isWindowsLongPathWorktreeRemovalError(error, 'win32')).toBe(true)
+  })
+
+  it('does not match long-path text off Windows', () => {
+    const error = Object.assign(new Error('file name too long'), {
+      stderr: 'Filename too long'
+    })
+
+    expect(isWindowsLongPathWorktreeRemovalError(error, 'linux')).toBe(false)
+  })
+
+  it('does not match unrelated Git removal failures on Windows', () => {
+    const error = Object.assign(new Error('git worktree remove failed'), {
+      stderr: 'fatal: contains modified or untracked files'
+    })
+
+    expect(isWindowsLongPathWorktreeRemovalError(error, 'win32')).toBe(false)
   })
 })
 

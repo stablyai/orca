@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import {
-  hasCompletedTabAgent,
-  resolveCompletedTabAgent,
   resolveFocusedCompletedTabAgent,
   resolveFocusedTabAgent,
   resolveSiblingCompletedTabAgent,
-  resolveSiblingTabAgent,
-  resolveTabAgent
+  resolveSiblingTabAgent
 } from './tab-agent'
 import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot } from '../../../shared/types'
+import type { TerminalLayoutSnapshot, TuiAgent } from '../../../shared/types'
+
+// Composed exactly the way useTabAgent layers the resolvers: focused pane
+// first, then any sibling agent pane in the tab.
+function resolveTabAgent(
+  map: Record<string, AgentStatusEntry>,
+  layout: TerminalLayoutSnapshot | undefined,
+  tabId: string
+): TuiAgent | null {
+  return resolveFocusedTabAgent(map, layout, tabId) ?? resolveSiblingTabAgent(map, layout, tabId)
+}
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
@@ -97,8 +104,8 @@ describe('resolveTabAgent', () => {
         state: 'done' as const
       }
     }
-    expect(hasCompletedTabAgent(map, 'tab-1')).toBe(true)
-    expect(resolveCompletedTabAgent(map, 'tab-1')).toBe('openclaude')
+    expect(resolveFocusedCompletedTabAgent(map, undefined, 'tab-1')).toBe('openclaude')
+    expect(resolveSiblingCompletedTabAgent(map, undefined, 'tab-1')).toBeNull()
   })
 
   it('exposes focused and sibling completed hook identity separately', () => {

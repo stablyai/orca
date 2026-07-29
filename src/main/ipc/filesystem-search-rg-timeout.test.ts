@@ -1,5 +1,5 @@
-import { EventEmitter } from 'events'
-import type { ChildProcess } from 'child_process'
+import { EventEmitter } from 'node:events'
+import type { ChildProcess } from 'node:child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {

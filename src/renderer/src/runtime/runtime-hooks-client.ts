@@ -1,4 +1,5 @@
 import type { GlobalSettings, OrcaHooks } from '../../../shared/types'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 
@@ -20,11 +21,12 @@ export type IssueCommandReadResult = {
 
 export async function checkRuntimeHooks(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  repoId: string
+  repoId: string,
+  hostId?: ExecutionHostId
 ): Promise<HookCheckResult> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind !== 'environment') {
-    return window.api.hooks.check({ repoId })
+    return window.api.hooks.check({ repoId, ...(hostId ? { hostId } : {}) })
   }
   return callRuntimeRpc<HookCheckResult>(
     target,
@@ -52,11 +54,12 @@ export async function inspectRuntimeSetupScriptImports(
 
 export async function readRuntimeIssueCommand(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  repoId: string
+  repoId: string,
+  hostId?: ExecutionHostId
 ): Promise<IssueCommandReadResult> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind !== 'environment') {
-    return window.api.hooks.readIssueCommand({ repoId })
+    return window.api.hooks.readIssueCommand({ repoId, ...(hostId ? { hostId } : {}) })
   }
   return callRuntimeRpc<IssueCommandReadResult>(
     target,
@@ -69,11 +72,12 @@ export async function readRuntimeIssueCommand(
 export async function writeRuntimeIssueCommand(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   repoId: string,
-  content: string
+  content: string,
+  hostId?: ExecutionHostId
 ): Promise<void> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind !== 'environment') {
-    await window.api.hooks.writeIssueCommand({ repoId, content })
+    await window.api.hooks.writeIssueCommand({ repoId, content, ...(hostId ? { hostId } : {}) })
     return
   }
   await callRuntimeRpc(

@@ -8,7 +8,8 @@ import {
   getProjectHostSetupProjectionFromState,
   getWorktreeMapFromState,
   resetFloatingVisibleTabCountSelectorCacheForTest,
-  selectFloatingVisibleTabCount
+  selectFloatingVisibleTabCount,
+  selectFloatingWorkspaceHasUnread
 } from './selectors'
 import { selectActiveTerminalChromeState } from './active-terminal-chrome-selector'
 
@@ -299,6 +300,82 @@ describe('store selectors', () => {
     })
   })
 
+  it('groups hydrated VM project setups under the repo-derived project identity', () => {
+    const repos = [
+      makeRepo({
+        id: 'local-orca',
+        path: '/Users/alice/stably/orca',
+        displayName: 'orca',
+        upstream: { owner: 'stablyai', repo: 'orca' }
+      }),
+      makeRepo({
+        id: 'vm-orca',
+        path: '/vercel/sandbox/orca',
+        displayName: 'orca',
+        upstream: { owner: 'stablyai', repo: 'orca' },
+        executionHostId: toRuntimeExecutionHostId('vm-env')
+      })
+    ]
+    const projects = [
+      {
+        id: 'github:stablyai/orca',
+        displayName: 'orca',
+        badgeColor: '#737373',
+        sourceRepoIds: ['local-orca'],
+        createdAt: 1,
+        updatedAt: 1
+      },
+      {
+        id: 'repo:vm-orca',
+        displayName: 'vercel/sandbox/orca',
+        badgeColor: '#737373',
+        sourceRepoIds: ['vm-orca'],
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+    const projectHostSetups = [
+      {
+        id: 'local-setup',
+        projectId: 'github:stablyai/orca',
+        hostId: 'local' as const,
+        repoId: 'local-orca',
+        path: '/Users/alice/stably/orca',
+        displayName: 'orca',
+        setupState: 'ready' as const,
+        setupMethod: 'legacy-repo' as const,
+        createdAt: 1,
+        updatedAt: 1
+      },
+      {
+        id: 'vm-setup',
+        projectId: 'repo:vm-orca',
+        hostId: toRuntimeExecutionHostId('vm-env'),
+        repoId: 'vm-orca',
+        path: '/vercel/sandbox/orca',
+        displayName: 'orca',
+        setupState: 'ready' as const,
+        setupMethod: 'provisioned' as const,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+
+    const projection = getProjectHostSetupProjectionFromState({
+      repos,
+      projects,
+      projectHostSetups
+    })
+
+    expect(projection.projects.map((project) => project.id)).toEqual(['github:stablyai/orca'])
+    expect(projection.setups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'local-setup', projectId: 'github:stablyai/orca' }),
+        expect.objectContaining({ id: 'vm-setup', projectId: 'github:stablyai/orca' })
+      ])
+    )
+  })
+
   it('falls back to repo compatibility projection when hydrated setup state is empty', () => {
     const repos = [
       makeRepo({
@@ -379,5 +456,72 @@ describe('store selectors', () => {
     expect(getProjectHostSetupProjectionFromState({ repos, projects, projectHostSetups })).toBe(
       projection
     )
+  })
+})
+
+describe('selectFloatingWorkspaceHasUnread', () => {
+  const FLOATING = FLOATING_TERMINAL_WORKTREE_ID
+
+  type UnreadState = Parameters<typeof selectFloatingWorkspaceHasUnread>[0]
+
+  function makeState(overrides: Partial<UnreadState>): UnreadState {
+    return {
+      tabsByWorktree: {},
+      unreadTerminalTabs: {},
+      unreadAgentCompletionPanes: {},
+      ...overrides
+    } as UnreadState
+  }
+
+  function floatingTab(id: string): TerminalTab {
+    return { id, title: id, ptyId: null } as unknown as TerminalTab
+  }
+
+  it('is false when the floating workspace has no tabs', () => {
+    expect(selectFloatingWorkspaceHasUnread(makeState({}))).toBe(false)
+  })
+
+  it('is true for a bell — an unread floating tab', () => {
+    const state = makeState({
+      tabsByWorktree: { [FLOATING]: [floatingTab('ft1')] },
+      unreadTerminalTabs: { ft1: true }
+    })
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(true)
+  })
+
+  it('is true for an agent completion — an unread floating pane', () => {
+    const state = makeState({
+      tabsByWorktree: { [FLOATING]: [floatingTab('ft1')] },
+      unreadAgentCompletionPanes: { 'ft1:leaf-a': true }
+    })
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(true)
+  })
+
+  it('stays true while any of several floating tabs is still unacknowledged', () => {
+    const state = makeState({
+      tabsByWorktree: { [FLOATING]: [floatingTab('ft1'), floatingTab('ft2'), floatingTab('ft3')] },
+      unreadTerminalTabs: { ft3: true }
+    })
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(true)
+  })
+
+  it('ignores unread that belongs to non-floating (main workspace) tabs', () => {
+    const state = makeState({
+      tabsByWorktree: { [FLOATING]: [floatingTab('ft1')] },
+      unreadTerminalTabs: { 'main-tab': true },
+      unreadAgentCompletionPanes: { 'main-tab:leaf-x': true }
+    })
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
+  })
+
+  it('does not light for a stale unread entry whose floating tab no longer exists', () => {
+    // Mirrors closing a floating tab: the tab is gone from tabsByWorktree, so even
+    // a lingering map entry (there should be none — closeTab purges) cannot show.
+    const state = makeState({
+      tabsByWorktree: { [FLOATING]: [floatingTab('ft-live')] },
+      unreadTerminalTabs: { 'ft-closed': true },
+      unreadAgentCompletionPanes: { 'ft-closed:leaf-a': true }
+    })
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
   })
 })

@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'fs'
-import path from 'path'
+import { existsSync, readFileSync } from 'node:fs'
+import path from 'node:path'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
@@ -13,13 +13,13 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV } from '../../src/main/daemon/daemon-health'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/pty-session-id-format'
 
-// Why: must land after the relaunched app's 3s daemon health check has timed
-// out (so the unhealthy guard runs) but before the guard's 5s client hello
-// budget expires. Daemon init starts within the first ~2s of main startup.
-const RESUME_DAEMON_AFTER_MS = 6_500
+// Why: holds the daemon guard's decision until well past the ~600ms it takes
+// electron.launch to resolve, which is the earliest the stderr listener can attach.
+const GUARD_DECISION_DELAY_MS = 3_000
 
 function readDaemonPid(userDataDir: string): number {
   const raw = readFileSync(
@@ -42,12 +42,10 @@ test('preserves a live daemon PTY when the daemon is too slow for the startup he
     test.skip(true, 'Global setup did not produce a seeded test repo')
     return
   }
-  test.skip(process.platform === 'win32', 'SIGSTOP/SIGCONT are POSIX-only')
 
   const session = createRestartSession(testInfo)
   let firstApp: ElectronApplication | null = null
   let secondApp: ElectronApplication | null = null
-  let daemonPid: number | null = null
 
   try {
     const firstLaunch = await session.launch()
@@ -66,64 +64,58 @@ test('preserves a live daemon PTY when the daemon is too slow for the startup he
     await execInTerminal(firstLaunch.page, ptyId, `echo ${marker}`)
     await waitForTerminalOutput(firstLaunch.page, marker)
 
-    daemonPid = readDaemonPid(session.userDataDir)
+    const daemonPid = readDaemonPid(session.userDataDir)
 
     await session.close(firstApp)
     firstApp = null
 
-    // Why: a stopped daemon still accepts socket connections at the kernel
-    // level but answers nothing — the same observable behavior as a daemon
-    // that is too busy to respond within the health-check budget.
-    process.kill(daemonPid, 'SIGSTOP')
-
     const stderrLines: string[] = []
-    const resumeTimer = setTimeout(() => {
-      if (daemonPid !== null) {
-        process.kill(daemonPid, 'SIGCONT')
-      }
-    }, RESUME_DAEMON_AFTER_MS)
-    try {
-      const secondLaunch = await session.launch()
-      secondApp = secondLaunch.app
-      secondApp.process().stderr?.on('data', (chunk: Buffer) => {
-        stderrLines.push(chunk.toString())
-      })
+    // Why: force the failed-health branch without SIGSTOP. Stopping the daemon
+    // also blocks listSessions, so the preserve guard races a fixed SIGCONT
+    // timer under CI load and often takes the healthy path (or misses logs).
+    // With health forced unreachable, listSessions still succeeds and the only
+    // way to keep the same daemon PID is the failed-health preserve path.
+    //
+    // The init delay is what makes the guard's log observable: Playwright owns
+    // the child's stderr from spawn and this listener can only attach once
+    // electron.launch resolves (~600ms in CI). Forced-unreachable health returns
+    // with no timeout, so an undelayed guard decides at ~500ms and its line is
+    // lost before the test is listening.
+    const secondLaunch = await session.launch({
+      extraEnv: {
+        [E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV]: '1',
+        ORCA_E2E_DAEMON_INIT_DELAY_MS: String(GUARD_DECISION_DELAY_MS)
+      },
+      onStderr: (chunk) => stderrLines.push(chunk)
+    })
+    secondApp = secondLaunch.app
 
-      await waitForSessionReady(secondLaunch.page)
-      await expect
-        .poll(
-          async () => secondLaunch.page.evaluate(() => window.__store?.getState().activeWorktreeId),
-          { timeout: 15_000 }
-        )
-        .toBe(worktreeId)
-      await ensureTerminalVisible(secondLaunch.page)
-      await waitForActiveTerminalManager(secondLaunch.page, 30_000)
-      await waitForPaneCount(secondLaunch.page, 1, 30_000)
-      await waitForTerminalOutput(secondLaunch.page, marker, 20_000)
+    await waitForSessionReady(secondLaunch.page)
+    await expect
+      .poll(
+        async () => secondLaunch.page.evaluate(() => window.__store?.getState().activeWorktreeId),
+        { timeout: 15_000 }
+      )
+      .toBe(worktreeId)
+    await ensureTerminalVisible(secondLaunch.page)
+    await waitForActiveTerminalManager(secondLaunch.page, 30_000)
+    await waitForPaneCount(secondLaunch.page, 1, 30_000)
+    await waitForTerminalOutput(secondLaunch.page, marker, 20_000)
 
-      // The guard path must actually have run: the daemon failed the health
-      // check and was preserved because its live session was verified.
-      await expect
-        .poll(() => stderrLines.join(''), { timeout: 10_000 })
-        .toContain('Preserving daemon that failed the health check')
-      expect(readDaemonPid(session.userDataDir)).toBe(daemonPid)
-      // Why: a killed daemon cold-restores scrollback from history, so the
-      // marker text alone cannot distinguish a live session from a dead one.
-      // The restore banner only appears for cold-restored (dead) sessions.
-      expect(await getTerminalContent(secondLaunch.page)).not.toContain('--- session restored ---')
-    } finally {
-      clearTimeout(resumeTimer)
-    }
+    // Why: the same PID alone also holds on the healthy-adoption path, so assert
+    // the guard's own decision line — otherwise a seam that silently stopped
+    // working would leave this test passing for the wrong reason. Match the
+    // stable "preserve…daemon…health check" concepts so a reword doesn't flake.
+    await expect
+      .poll(() => stderrLines.join(''), { timeout: 10_000 })
+      .toMatch(/preserv\w*\s+daemon[^\n]*health check/i)
+    expect(readDaemonPid(session.userDataDir)).toBe(daemonPid)
+    expect(stderrLines.join('')).not.toMatch(/\breplacing daemon\b/i)
+    // Why: a killed daemon cold-restores scrollback from history, so the
+    // marker text alone cannot distinguish a live session from a dead one.
+    // The restore banner only appears for cold-restored (dead) sessions.
+    expect(await getTerminalContent(secondLaunch.page)).not.toContain('--- session restored ---')
   } finally {
-    if (daemonPid !== null) {
-      try {
-        // Idempotent: ensures the daemon is resumable for harness cleanup even
-        // if the test failed before the resume timer fired.
-        process.kill(daemonPid, 'SIGCONT')
-      } catch {
-        // Daemon already gone
-      }
-    }
     if (secondApp) {
       await session.close(secondApp)
     }

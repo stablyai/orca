@@ -1,4 +1,4 @@
-import type net from 'net'
+import type net from 'node:net'
 import type { ComputerProviderCapabilities } from '../../shared/runtime-types'
 
 export type NativeMethod =

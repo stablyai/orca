@@ -1,13 +1,13 @@
-/* eslint-disable max-lines -- Why: this suite covers relay filesystem RPCs,
-   Space scans, file watcher lifecycle edges, and cross-platform path behavior together. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { FsHandler } from './fs-handler'
+import { MAX_TEXT_FILE_SIZE } from './fs-handler-utils'
 import { RelayContext } from './context'
 import type { RelayDispatcher } from './dispatcher'
-import * as fs from 'fs/promises'
-import * as path from 'path'
-import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'fs'
-import { tmpdir } from 'os'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
+import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { subscribeWithInProcessWatcher } from '../main/ipc/parcel-watcher-in-process-fallback'
 
 const { mockSubscribe } = vi.hoisted(() => ({
   mockSubscribe: vi.fn()
@@ -61,6 +61,7 @@ function createMockDispatcher() {
     notify: vi.fn((method: string, params?: Record<string, unknown>) => {
       notifications.push({ method, params })
     }),
+    notifyClient: vi.fn(),
     onClientDetached: vi.fn((listener: (clientId: number) => void) => {
       detachListeners.add(listener)
       return () => detachListeners.delete(listener)
@@ -101,6 +102,16 @@ function createMockDispatcher() {
   }
 }
 
+function statIdentity(stats: {
+  dev?: number
+  ino?: number
+  nlink?: number
+  size?: number
+  mtimeMs?: number
+}) {
+  return `${stats.dev}:${stats.ino}:${stats.nlink ?? 'unknown'}:${stats.size}:${stats.mtimeMs}`
+}
+
 describe('FsHandler', () => {
   let dispatcher: ReturnType<typeof createMockDispatcher>
   let handler: FsHandler
@@ -112,7 +123,11 @@ describe('FsHandler', () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-fs-'))
     dispatcher = createMockDispatcher()
     const ctx = new RelayContext()
-    handler = new FsHandler(dispatcher as unknown as RelayDispatcher, ctx)
+    handler = new FsHandler(dispatcher as unknown as RelayDispatcher, ctx, {
+      dispose: vi.fn(),
+      forgetRoot: vi.fn(),
+      subscribe: subscribeWithInProcessWatcher
+    })
   })
 
   afterEach(async () => {
@@ -139,6 +154,7 @@ describe('FsHandler', () => {
     expect(methods).toContain('fs.listFiles')
     expect(methods).toContain('fs.workspaceSpaceScan')
     expect(methods).toContain('fs.watch')
+    expect(methods).toContain('fs.unwatchAndWait')
 
     const notifMethods = Array.from(dispatcher._notificationHandlers.keys())
     expect(notifMethods).toContain('fs.unwatch')
@@ -254,6 +270,157 @@ describe('FsHandler', () => {
     expect(content).toBe('new content')
   })
 
+  it('readTerminalArtifact reads through a verified artifact handle', async () => {
+    const filePath = path.join(tmpDir, 'artifact-read.json')
+    writeFileSync(filePath, '{"ok":true}')
+    const stats = await fs.stat(filePath)
+
+    const result = (await dispatcher.callRequest('fs.readTerminalArtifact', {
+      filePath,
+      expectedRealPath: await fs.realpath(filePath),
+      expectedStatIdentity: statIdentity(stats),
+      maxBytes: 512 * 1024
+    })) as { content: string; isBinary: boolean }
+
+    expect(result).toEqual({ content: '{"ok":true}', isBinary: false })
+  })
+
+  it('readTerminalArtifact treats SVG artifacts as editable text', async () => {
+    const filePath = path.join(tmpDir, 'artifact.svg')
+    writeFileSync(filePath, '<svg><text>ok</text></svg>')
+    const stats = await fs.stat(filePath)
+
+    const result = (await dispatcher.callRequest('fs.readTerminalArtifact', {
+      filePath,
+      expectedRealPath: await fs.realpath(filePath),
+      expectedStatIdentity: statIdentity(stats),
+      maxBytes: 512 * 1024
+    })) as { content: string; isBinary: boolean; isImage?: boolean }
+
+    expect(result).toEqual({ content: '<svg><text>ok</text></svg>', isBinary: false })
+  })
+
+  it('readTerminalArtifact rejects content beyond the requested byte limit', async () => {
+    const filePath = path.join(tmpDir, 'artifact-read-too-large.txt')
+    writeFileSync(filePath, 'abcdef')
+
+    await expect(
+      dispatcher.callRequest('fs.readTerminalArtifact', {
+        filePath,
+        expectedRealPath: await fs.realpath(filePath),
+        maxBytes: 5
+      })
+    ).rejects.toThrow('file_too_large')
+  })
+
+  it('writeTerminalArtifact writes through a verified artifact handle', async () => {
+    const filePath = path.join(tmpDir, 'artifact-write.json')
+    writeFileSync(filePath, '{"ok":true}')
+    const stats = await fs.stat(filePath)
+
+    const result = (await dispatcher.callRequest('fs.writeTerminalArtifact', {
+      filePath,
+      content: '{"ok":false}',
+      expectedRealPath: await fs.realpath(filePath),
+      expectedStatIdentity: statIdentity(stats),
+      maxBytes: 512 * 1024
+    })) as { stat: { type: string; size: number } }
+
+    await expect(fs.readFile(filePath, 'utf-8')).resolves.toBe('{"ok":false}')
+    expect(result.stat).toMatchObject({ type: 'file', size: 12 })
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'writeTerminalArtifact preserves executable mode across the atomic rename',
+    async () => {
+      const filePath = path.join(tmpDir, 'artifact-executable.sh')
+      writeFileSync(filePath, '#!/bin/sh\necho ok\n')
+      await fs.chmod(filePath, 0o755)
+      const stats = await fs.stat(filePath)
+
+      await dispatcher.callRequest('fs.writeTerminalArtifact', {
+        filePath,
+        content: '#!/bin/sh\necho changed\n',
+        expectedRealPath: await fs.realpath(filePath),
+        expectedStatIdentity: statIdentity(stats),
+        maxBytes: 512 * 1024
+      })
+
+      expect((await fs.stat(filePath)).mode & 0o777).toBe(0o755)
+    }
+  )
+
+  it('writeTerminalArtifact rejects oversized existing content before writing', async () => {
+    const filePath = path.join(tmpDir, 'artifact-write-too-large.txt')
+    writeFileSync(filePath, 'abcdef')
+
+    await expect(
+      dispatcher.callRequest('fs.writeTerminalArtifact', {
+        filePath,
+        content: 'ok',
+        expectedRealPath: await fs.realpath(filePath),
+        maxBytes: 5
+      })
+    ).rejects.toThrow('file_too_large')
+    await expect(fs.readFile(filePath, 'utf-8')).resolves.toBe('abcdef')
+  })
+
+  it('writeTerminalArtifact clamps client-supplied maxBytes to the text-file cap', async () => {
+    const filePath = path.join(tmpDir, 'artifact-write-clamp.txt')
+    writeFileSync(filePath, 'abcdef')
+
+    await expect(
+      dispatcher.callRequest('fs.writeTerminalArtifact', {
+        filePath,
+        content: 'a'.repeat(MAX_TEXT_FILE_SIZE + 1),
+        expectedRealPath: await fs.realpath(filePath),
+        maxBytes: Number.MAX_SAFE_INTEGER
+      })
+    ).rejects.toThrow('file_too_large')
+    await expect(fs.readFile(filePath, 'utf-8')).resolves.toBe('abcdef')
+  })
+
+  it('writeTerminalArtifact rejects a retargeted symlink before writing outside temp', async () => {
+    const filePath = path.join(tmpDir, 'artifact-link.json')
+    const outsidePath = path.join(tmpDir, 'outside.json')
+    writeFileSync(filePath, '{"ok":true}')
+    writeFileSync(outsidePath, '{"secret":true}')
+    const stats = await fs.stat(filePath)
+    const expectedRealPath = await fs.realpath(filePath)
+    await fs.rm(filePath)
+    symlinkSync(outsidePath, filePath)
+
+    await expect(
+      dispatcher.callRequest('fs.writeTerminalArtifact', {
+        filePath,
+        content: '{"ok":false}',
+        expectedRealPath,
+        expectedStatIdentity: statIdentity(stats),
+        maxBytes: 512 * 1024
+      })
+    ).rejects.toThrow('terminal_file_grant_stale')
+    await expect(fs.readFile(outsidePath, 'utf-8')).resolves.toBe('{"secret":true}')
+  })
+
+  it('writeTerminalArtifact rejects hard-linked files before writing', async () => {
+    const outsidePath = path.join(tmpDir, 'outside-hardlink.json')
+    const filePath = path.join(tmpDir, 'artifact-hardlink.json')
+    writeFileSync(outsidePath, '{"secret":true}')
+    await fs.link(outsidePath, filePath)
+    const stats = await fs.stat(filePath)
+
+    await expect(
+      dispatcher.callRequest('fs.writeTerminalArtifact', {
+        filePath,
+        content: '{"ok":false}',
+        expectedRealPath: await fs.realpath(filePath),
+        expectedStatIdentity: statIdentity(stats),
+        maxBytes: 512 * 1024
+      })
+    ).rejects.toThrow('terminal_file_grant_stale')
+    await expect(fs.readFile(outsidePath, 'utf-8')).resolves.toBe('{"secret":true}')
+  })
+
   it('stat returns file metadata', async () => {
     const filePath = path.join(tmpDir, 'stat-test.txt')
     writeFileSync(filePath, 'test')
@@ -326,6 +493,28 @@ describe('FsHandler', () => {
 
     await dispatcher.callRequest('fs.deletePath', { targetPath: filePath })
     await expect(fs.access(filePath)).rejects.toThrow()
+  })
+
+  it('holds the relay watcher fence through recursive directory deletion', async () => {
+    const directoryPath = path.join(tmpDir, 'watched-orphan')
+    mkdirSync(directoryPath)
+    const unsubscribe = vi.fn()
+    mockSubscribe.mockResolvedValue({ unsubscribe })
+    await dispatcher.callRequest(
+      'fs.watch',
+      { rootPath: directoryPath, watchId: 77 },
+      { clientId: 3, isStale: () => false }
+    )
+
+    await dispatcher.callRequest('fs.deletePath', { targetPath: directoryPath, recursive: true })
+
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect(dispatcher.notifyClient).toHaveBeenCalledWith(3, 'fs.watchFailed', {
+      rootPath: directoryPath,
+      watchId: 77,
+      message: 'Remote worktree is being removed'
+    })
+    await expect(fs.access(directoryPath)).rejects.toThrow()
   })
 
   it('createFile creates an empty file with parent dirs', async () => {
@@ -567,6 +756,129 @@ describe('FsHandler', () => {
       }
     )
     expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('settles acknowledged unwatch only after native unsubscribe completes', async () => {
+    let resolveUnsubscribe: () => void = () => {}
+    const unsubscribe = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveUnsubscribe = resolve
+        })
+    )
+    mockSubscribe.mockResolvedValue({ unsubscribe })
+    await dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
+
+    let settled = false
+    const unwatch = dispatcher.callRequest('fs.unwatchAndWait', { rootPath: tmpDir }).then(() => {
+      settled = true
+    })
+    await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(1))
+    expect(settled).toBe(false)
+
+    resolveUnsubscribe()
+    await unwatch
+    expect(settled).toBe(true)
+  })
+
+  it('waits for in-flight native setup before acknowledging teardown', async () => {
+    handler.dispose()
+    let resolveSubscribe: (value: { unsubscribe: () => Promise<void> }) => void = () => {}
+    const unsubscribe = vi.fn(async () => undefined)
+    const subscribe = vi.fn(
+      () =>
+        new Promise<{ unsubscribe: () => Promise<void> }>((resolve) => {
+          resolveSubscribe = resolve
+        })
+    )
+    handler = new FsHandler(dispatcher as unknown as RelayDispatcher, new RelayContext(), {
+      dispose: vi.fn(),
+      forgetRoot: vi.fn(),
+      subscribe
+    })
+
+    const watch = dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
+    let unwatchSettled = false
+    const unwatch = dispatcher.callRequest('fs.unwatchAndWait', { rootPath: tmpDir }).then(() => {
+      unwatchSettled = true
+    })
+    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(1))
+    expect(unwatchSettled).toBe(false)
+
+    resolveSubscribe({ unsubscribe })
+    await Promise.all([watch, unwatch])
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('joins a physical unsubscribe already started by the notification path', async () => {
+    let resolveUnsubscribe: () => void = () => {}
+    const unsubscribe = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveUnsubscribe = resolve
+        })
+    )
+    mockSubscribe.mockResolvedValue({ unsubscribe })
+    await dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
+    dispatcher.callNotification('fs.unwatch', { rootPath: tmpDir })
+
+    let settled = false
+    const joined = dispatcher.callRequest('fs.unwatchAndWait', { rootPath: tmpDir }).then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    resolveUnsubscribe()
+    await joined
+  })
+
+  it('blocks replacement watches behind physical unsubscribe and counts the pending slot', async () => {
+    let resolveUnsubscribe: () => void = () => {}
+    const unsubscribe = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveUnsubscribe = resolve
+        })
+    )
+    mockSubscribe.mockResolvedValue({ unsubscribe })
+    await dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
+    dispatcher.callNotification('fs.unwatch', { rootPath: tmpDir })
+
+    const replacement = dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
+    for (let index = 0; index < 19; index += 1) {
+      await dispatcher.callRequest('fs.watch', {
+        rootPath: path.join(tmpDir, `pending-cap-${index}`)
+      })
+    }
+    await expect(
+      dispatcher.callRequest('fs.watch', { rootPath: path.join(tmpDir, 'over-pending-cap') })
+    ).rejects.toThrow('Maximum number of file watchers reached')
+    expect(mockSubscribe).toHaveBeenCalledTimes(20)
+
+    resolveUnsubscribe()
+    await replacement
+    expect(mockSubscribe).toHaveBeenCalledTimes(21)
+  })
+
+  it('retains a failed native unsubscribe slot until acknowledged retry succeeds', async () => {
+    const unsubscribe = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('native handle still active'))
+      .mockResolvedValueOnce(undefined)
+    mockSubscribe.mockResolvedValue({ unsubscribe })
+    await dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
+
+    await expect(dispatcher.callRequest('fs.unwatchAndWait', { rootPath: tmpDir })).rejects.toThrow(
+      'native handle still active'
+    )
+    await expect(
+      dispatcher.callRequest('fs.unwatchAndWait', { rootPath: tmpDir })
+    ).resolves.toBeUndefined()
+    expect(unsubscribe).toHaveBeenCalledTimes(2)
+
+    await expect(dispatcher.callRequest('fs.watch', { rootPath: tmpDir })).resolves.toBeUndefined()
+    expect(mockSubscribe).toHaveBeenCalledTimes(2)
   })
 
   it('allows a shared watch attach even when the root watch cap is full', async () => {

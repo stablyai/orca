@@ -1,37 +1,22 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 
-// Styles for PRActionsSection (merge-method picker, action buttons, auto-merge
-// toggle, transient-error line). Split out of mobile-pr-sidebar-styles to keep
-// that file under the 300-line cap.
+// Styles for PRActionsSection (action buttons, auto-merge toggle, transient-error
+// line). Split out of mobile-pr-sidebar-styles to keep that file under the
+// 300-line cap.
 export const prActionsStyles = StyleSheet.create({
-  // Merge-method selector: three segmented buttons; the chosen one highlights.
-  methodRow: {
+  // Bare block when identity + actions share one section card.
+  actionsBlock: {
+    gap: spacing.sm
+  },
+  // Close/Reopen + Unlink share a row so secondary actions don't stack full-width.
+  secondaryRow: {
     flexDirection: 'row',
-    gap: spacing.xs
+    alignItems: 'stretch',
+    gap: spacing.sm
   },
-  methodButton: {
-    flex: 1,
-    minHeight: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xs,
-    borderRadius: radii.button,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  methodButtonSelected: {
-    borderColor: colors.textSecondary,
-    backgroundColor: colors.bgRaised
-  },
-  methodButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '700'
-  },
-  methodButtonTextSelected: {
-    color: colors.textPrimary
+  secondaryButton: {
+    flex: 1
   },
   // Primary CTA (merge) and secondary action buttons (close/reopen/rerun/add).
   actionButton: {
@@ -54,7 +39,7 @@ export const prActionsStyles = StyleSheet.create({
     borderColor: colors.textPrimary
   },
   // Merge CTA: green fill + white text, matching the desktop ChecksPanel's
-  // bg-green-600 "Squash and merge". The merge still confirms before firing.
+  // affirmative merge action. The merge still confirms before firing.
   actionButtonMerge: {
     backgroundColor: colors.mergeGreen,
     borderColor: colors.mergeGreen

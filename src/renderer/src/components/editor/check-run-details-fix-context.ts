@@ -58,7 +58,8 @@ export function resolveHostedReviewForCheckRunDetailsFix(
     branch,
     settings,
     repo.connectionId,
-    repo.executionHostId
+    repo.executionHostId,
+    true
   )
   const hostedReviewCacheKey = getHostedReviewCacheKey(
     repo.path,
@@ -66,7 +67,8 @@ export function resolveHostedReviewForCheckRunDetailsFix(
     settings,
     repo.id,
     repo.connectionId,
-    repo.executionHostId
+    repo.executionHostId,
+    true
   )
   const pr = prCacheKey ? (store.prCache[prCacheKey]?.data ?? null) : null
   const hostedReview = hostedReviewCacheKey

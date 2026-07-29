@@ -1,7 +1,7 @@
-import { mkdtemp, rm, writeFile } from 'fs/promises'
-import { randomUUID } from 'crypto'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   getFolderWorkspacePathStatus,

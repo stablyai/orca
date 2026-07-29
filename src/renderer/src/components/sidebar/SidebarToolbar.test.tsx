@@ -36,6 +36,14 @@ vi.mock('./SidebarSettingsHelpMenu', () => ({
   SidebarSettingsHelpMenu: () => <button type="button">Settings</button>
 }))
 
+vi.mock('../orca-profiles/OrcaProfileSwitcher', () => ({
+  OrcaProfileSwitcher: ({ placement }: { placement?: string }) => (
+    <button type="button" data-placement={placement}>
+      Profile
+    </button>
+  )
+}))
+
 const roots: Root[] = []
 
 async function renderToolbar(onWorkspaceBoardToggle = vi.fn()): Promise<{
@@ -121,5 +129,13 @@ describe('SidebarToolbar moved workspace board hint', () => {
 
     expect(container.textContent).toContain('Workspace board moved to the bottom bar')
     expect(window.localStorage.getItem('orca.workspaceBoardMovedHintSeen.v1')).toBe('true')
+  })
+
+  it('renders the profile switcher before settings in the footer controls', async () => {
+    const { container } = await renderToolbar()
+    const html = container.innerHTML
+
+    expect(html).toContain('data-placement="sidebar"')
+    expect(html.indexOf('Profile')).toBeLessThan(html.indexOf('Settings'))
   })
 })

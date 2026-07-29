@@ -1,11 +1,12 @@
 /* eslint-disable max-lines -- Why: the script editor, advanced/Command Source disclosure, issue-command override, and YAML state surfaces share tightly coupled state and persistence; splitting them across files would scatter prop drilling. */
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: repository hook saves and issue-command overrides synchronize debounced persistence state with external repo settings. */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   HookCommandSourcePolicy,
   OrcaHooks,
   Repo,
   RepoHookSettings,
+  SetupAgentStartupPolicy,
   SetupRunPolicy
 } from '../../../../shared/types'
 import { AlertTriangle, ChevronRight, Plus } from 'lucide-react'
@@ -14,6 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
+import { SettingsSwitch } from './SettingsFormControls'
 import { useAppStore } from '@/store'
 import { readRuntimeIssueCommand, writeRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
 import { DEFAULT_REPO_HOOK_SETTINGS } from './SettingsConstants'
@@ -22,6 +24,7 @@ import { getRepositoryLocalCommandsSectionId } from './repository-settings-targe
 import { matchesSettingsSearch } from './settings-search'
 import { translate } from '@/i18n/i18n'
 import { getRepositoryHookScriptTextareaRows } from '@/lib/script-textarea-rows'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 
 type RepositoryHooksSectionProps = {
   repo: Repo
@@ -39,7 +42,7 @@ type PolicyOption<P> = { policy: P; label: string; description: string }
 const LOCAL_HOOK_NAMES = ['setup', 'archive'] as const
 type LocalHookName = (typeof LOCAL_HOOK_NAMES)[number]
 type HookSettingsPolicyDraft = Partial<
-  Pick<RepoHookSettings, 'setupRunPolicy' | 'commandSourcePolicy'>
+  Pick<RepoHookSettings, 'setupRunPolicy' | 'setupAgentStartupPolicy' | 'commandSourcePolicy'>
 >
 
 // Why: this is a literal issue-command template token, not app data for i18next to fill.
@@ -75,6 +78,7 @@ function areHookSettingsDraftsEqual(a: RepoHookSettings, b: RepoHookSettings): b
   return (
     a.mode === b.mode &&
     a.setupRunPolicy === b.setupRunPolicy &&
+    a.setupAgentStartupPolicy === b.setupAgentStartupPolicy &&
     a.commandSourcePolicy === b.commandSourcePolicy &&
     a.scripts.setup === b.scripts.setup &&
     a.scripts.archive === b.scripts.archive
@@ -437,7 +441,7 @@ function ExampleTemplateCard({
   return (
     <div className="space-y-2">
       <p className="text-[10px] tracking-[0.18em] text-muted-foreground">
-        {translate('auto.components.settings.RepositoryHooksSection.175daba180', 'Example')}
+        {translate('auto.components.settings.RepositoryHooksSection.175daba180', 'Example')}{' '}
         <code className="rounded bg-muted px-1 py-0.5">
           {translate('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'orca.yaml')}
         </code>{' '}
@@ -661,7 +665,7 @@ function ScriptEditor({
               </span>
             </span>
             <span className="text-[11px] text-muted-foreground">
-              {translate('auto.components.settings.RepositoryHooksSection.b113344b6a', 'Edit')}
+              {translate('auto.components.settings.RepositoryHooksSection.b113344b6a', 'Edit')}{' '}
               <code className="rounded bg-muted px-1 py-0.5">
                 {translate(
                   'auto.components.settings.RepositoryHooksSection.39da2ae12f',
@@ -746,8 +750,15 @@ export function RepositoryHooksSection({
   // Why: this component uses the lightweight translate() helper; subscribe here
   // so render-time option/copy builders refresh when the UI language changes.
   useTranslation()
-  const settings = useAppStore((s) => s.settings)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const selectedHostId = getRepoExecutionHostId(repo)
+  const repoHostIdentity = `${selectedHostId}\0${repo.id}`
+  const hookRuntimeSettings = useMemo(() => {
+    const parsedHost = parseExecutionHostId(selectedHostId)
+    return {
+      activeRuntimeEnvironmentId: parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
+    }
+  }, [selectedHostId])
   const yamlState = yamlHooks
     ? 'loaded'
     : hasHooksFile
@@ -761,7 +772,7 @@ export function RepositoryHooksSection({
   )
   const hookSettingsDraftRef = useRef(hookSettingsDraft)
   hookSettingsDraftRef.current = hookSettingsDraft
-  const localCommandsRepoIdRef = useRef(repo.id)
+  const localCommandsRepoIdentityRef = useRef(repoHostIdentity)
   const localCommandsDraftDirtyRef = useRef(false)
   const localCommandsAutosaveTimerRef = useRef<number | null>(null)
   const persistRef = useRef(onUpdateHookSettings)
@@ -770,6 +781,8 @@ export function RepositoryHooksSection({
 
   const selectedSetupRunPolicy: SetupRunPolicy =
     hookSettingsDraft.setupRunPolicy ?? 'run-by-default'
+  const selectedSetupAgentStartupPolicy: SetupAgentStartupPolicy =
+    hookSettingsDraft.setupAgentStartupPolicy ?? 'start-immediately'
   const setupRunPolicyOptions = getSetupRunPolicyOptions()
   const commandSourcePolicyOptions = getCommandSourcePolicyOptions()
   const localHookFields = getLocalHookFields()
@@ -873,7 +886,7 @@ export function RepositoryHooksSection({
   // dirty draft through the previous repo's captured updater.
   useEffect(() => {
     const next = getHookSettingsDraft(repo.hookSettings)
-    const isSameRepo = localCommandsRepoIdRef.current === repo.id
+    const isSameRepo = localCommandsRepoIdentityRef.current === repoHostIdentity
 
     if (isSameRepo) {
       localCommandsPersistForRepoRef.current = onUpdateHookSettings
@@ -884,11 +897,17 @@ export function RepositoryHooksSection({
     }
 
     flushScriptDraft(localCommandsPersistForRepoRef.current)
-    localCommandsRepoIdRef.current = repo.id
+    localCommandsRepoIdentityRef.current = repoHostIdentity
     localCommandsPersistForRepoRef.current = onUpdateHookSettings
     hookSettingsDraftRef.current = next
     setHookSettingsDraft(next)
-  }, [flushScriptDraft, onUpdateHookSettings, repo.id, repo.hookSettings, syncHookSettingsDraft])
+  }, [
+    flushScriptDraft,
+    onUpdateHookSettings,
+    repo.hookSettings,
+    repoHostIdentity,
+    syncHookSettingsDraft
+  ])
 
   useEffect(() => {
     let cancelled = false
@@ -898,7 +917,9 @@ export function RepositoryHooksSection({
     setHasSharedIssueCommand(false)
     setIssueCommandSaveError(null)
 
-    void readRuntimeIssueCommand(settings, repoId)
+    // Why: the pane can show a host other than the globally focused runtime;
+    // route both runtime RPC and local/SSH IPC by the selected repo owner.
+    void readRuntimeIssueCommand(hookRuntimeSettings, repoId, selectedHostId)
       .then((result) => {
         if (cancelled) {
           return
@@ -920,18 +941,20 @@ export function RepositoryHooksSection({
       cancelled = true
       const draft = issueCommandDraftRef.current.trim()
       if (draft !== lastCommittedIssueCommandRef.current) {
-        void writeRuntimeIssueCommand(settings, repoId, draft).catch((err) => {
-          console.error('[RepositoryHooksSection] Failed to save issue command on unmount:', err)
-        })
+        void writeRuntimeIssueCommand(hookRuntimeSettings, repoId, draft, selectedHostId).catch(
+          (err) => {
+            console.error('[RepositoryHooksSection] Failed to save issue command on unmount:', err)
+          }
+        )
       }
     }
-  }, [repo.id, settings])
+  }, [hookRuntimeSettings, repo.id, repoHostIdentity, selectedHostId])
 
   const commitIssueCommand = useCallback(async (): Promise<void> => {
     const trimmed = issueCommandDraft.trim()
     setIssueCommandDraft(trimmed)
     try {
-      await writeRuntimeIssueCommand(settings, repo.id, trimmed)
+      await writeRuntimeIssueCommand(hookRuntimeSettings, repo.id, trimmed, selectedHostId)
       lastCommittedIssueCommandRef.current = trimmed
       setIssueCommandSaveError(null)
     } catch (err) {
@@ -940,7 +963,7 @@ export function RepositoryHooksSection({
       setIssueCommandSaveError(message)
       toast.error(message)
     }
-  }, [issueCommandDraft, repo.id, settings])
+  }, [hookRuntimeSettings, issueCommandDraft, repo.id, selectedHostId])
 
   const sharedSetupScript = yamlHooks?.scripts.setup
   const sharedArchiveScript = yamlHooks?.scripts.archive
@@ -1043,26 +1066,59 @@ export function RepositoryHooksSection({
         forceVisible={forceVisible}
         keywords={['setup run policy', 'ask', 'run by default', 'skip by default']}
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
-          <div className="min-w-0">
-            <h5 className="text-sm font-semibold">
-              {translate(
-                'auto.components.settings.RepositoryHooksSection.793dcee97d',
-                'When to run'
-              )}
-            </h5>
-            <p className="text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.RepositoryHooksSection.21fb607a87',
-                'Default behavior when a new worktree is created.'
-              )}
-            </p>
+        <div className="space-y-4 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h5 className="text-sm font-semibold">
+                {translate(
+                  'auto.components.settings.RepositoryHooksSection.793dcee97d',
+                  'When to run'
+                )}
+              </h5>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.RepositoryHooksSection.21fb607a87',
+                  'Default behavior when a new worktree is created.'
+                )}
+              </p>
+            </div>
+            <SegmentedPolicyToggle
+              options={setupRunPolicyOptions}
+              selected={selectedSetupRunPolicy}
+              onSelect={(policy) => updateHookSettingsPolicyDraft({ setupRunPolicy: policy })}
+            />
           </div>
-          <SegmentedPolicyToggle
-            options={setupRunPolicyOptions}
-            selected={selectedSetupRunPolicy}
-            onSelect={(policy) => updateHookSettingsPolicyDraft({ setupRunPolicy: policy })}
-          />
+          <div className="flex items-start justify-between gap-4 border-t border-border/60 pt-4">
+            <div className="min-w-0 space-y-1">
+              <h5 className="text-sm font-semibold">
+                {translate(
+                  'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent',
+                  'Wait for setup to complete before starting agent'
+                )}
+              </h5>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgentHelp',
+                  'Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={selectedSetupAgentStartupPolicy === 'wait-for-setup'}
+              onChange={() =>
+                updateHookSettingsPolicyDraft({
+                  setupAgentStartupPolicy:
+                    selectedSetupAgentStartupPolicy === 'wait-for-setup'
+                      ? 'start-immediately'
+                      : 'wait-for-setup'
+                })
+              }
+              ariaLabel={translate(
+                'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent',
+                'Wait for setup to complete before starting agent'
+              )}
+            />
+          </div>
         </div>
       </SearchableSetting>
 
@@ -1252,7 +1308,7 @@ export function RepositoryHooksSection({
                   {translate(
                     'auto.components.settings.RepositoryHooksSection.ac9038d2cc',
                     'When both'
-                  )}
+                  )}{' '}
                   <code className="rounded bg-muted px-1 py-0.5">
                     {translate(
                       'auto.components.settings.RepositoryHooksSection.39da2ae12f',

@@ -14,6 +14,7 @@ export type SerializedBuffer = {
   data: string
   cols: number
   rows: number
+  seq?: number
   lastTitle?: string
 }
 
@@ -131,6 +132,12 @@ function ensureSerializerListener(): void {
     const entry = serializersByPtyId.get(request.ptyId)
     void Promise.resolve(entry?.fn(request.opts) ?? null)
       .then((result) => {
+        // Why: cold parking and remounts can replace the serializer while its
+        // parse wait is in flight; never publish a fossil from the old xterm.
+        if (serializersByPtyId.get(request.ptyId) !== entry) {
+          window.api.pty.sendSerializedBuffer(request.requestId, null)
+          return
+        }
         if (!result) {
           window.api.pty.sendSerializedBuffer(request.requestId, null)
           return
@@ -141,6 +148,9 @@ function ensureSerializerListener(): void {
           data: result.data,
           cols: result.cols,
           rows: result.rows
+        }
+        if (result.seq !== undefined) {
+          payload.seq = result.seq
         }
         if (lastTitle !== undefined) {
           payload.lastTitle = lastTitle

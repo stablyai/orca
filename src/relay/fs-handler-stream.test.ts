@@ -3,10 +3,10 @@ import { FsHandler } from './fs-handler'
 import { RelayContext } from './context'
 import type { RelayDispatcher } from './dispatcher'
 import { STREAM_CHUNK_SIZE } from './protocol'
-import * as fs from 'fs/promises'
-import * as path from 'path'
-import { mkdtempSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 
 vi.mock('@parcel/watcher', () => ({ subscribe: vi.fn() }))
 
@@ -32,6 +32,9 @@ function createMockDispatcher() {
       notificationHandlers.set(method, handler)
     }),
     notify: vi.fn((method: string, params?: Record<string, unknown>) => {
+      notifications.push({ method, params })
+    }),
+    notifyBulk: vi.fn(async (method: string, params?: Record<string, unknown>): Promise<void> => {
       notifications.push({ method, params })
     }),
     _notifications: notifications,
@@ -272,6 +275,61 @@ describe('FsHandler readFileStream', () => {
     await new Promise((r) => setImmediate(r))
     dispatcher.callNotification('fs.cancelStream', { streamId: meta.streamId })
     await flush(10)
+
+    const { end, err } = collectStream(dispatcher)
+    expect(end).toBeNull()
+    expect(err).toBeNull()
+  })
+
+  it('parks the pump at the ack credit window and resumes on fs.streamAck', async () => {
+    const filePath = path.join(tmpDir, 'paced.png')
+    const content = Buffer.alloc(1536 * 1024, 0x42) // 6 chunks
+    writeFileSync(filePath, content)
+
+    const meta = (await dispatcher.callRequest(
+      'fs.readFileStream',
+      { filePath, flowControl: 'ack' },
+      { isStale: () => false }
+    )) as { streamId: number }
+
+    // Window of 4 admits seqs 0..3; seq 4 must wait for an ack.
+    await waitFor(() => collectStream(dispatcher).chunks.length === 4)
+    await flush(10)
+    expect(collectStream(dispatcher).chunks.length).toBe(4)
+    expect(collectStream(dispatcher).end).toBeNull()
+
+    // Ack one chunk → exactly one more is admitted.
+    dispatcher.callNotification('fs.streamAck', { streamId: meta.streamId, seq: 0 })
+    await waitFor(() => collectStream(dispatcher).chunks.length === 5)
+    await flush(10)
+    expect(collectStream(dispatcher).chunks.length).toBe(5)
+
+    for (let seq = 1; seq < 6; seq += 1) {
+      dispatcher.callNotification('fs.streamAck', { streamId: meta.streamId, seq })
+    }
+    await waitFor(() => collectStream(dispatcher).end !== null)
+
+    const { chunks, err } = collectStream(dispatcher)
+    expect(err).toBeNull()
+    const reassembled = Buffer.concat(chunks.map((c) => Buffer.from(c.data, 'base64')))
+    expect(reassembled.equals(content)).toBe(true)
+  })
+
+  it('releases a pump parked on the ack window when the stream is cancelled', async () => {
+    const filePath = path.join(tmpDir, 'parked-cancel.png')
+    writeFileSync(filePath, Buffer.alloc(4 * 1024 * 1024, 0x42)) // 16 chunks
+
+    const meta = (await dispatcher.callRequest(
+      'fs.readFileStream',
+      { filePath, flowControl: 'ack' },
+      { isStale: () => false }
+    )) as { streamId: number }
+
+    await waitFor(() => collectStream(dispatcher).chunks.length === 4)
+    dispatcher.callNotification('fs.cancelStream', { streamId: meta.streamId })
+
+    const registry = (handler as unknown as { streamRegistry: { size(): number } }).streamRegistry
+    await waitFor(() => registry.size() === 0)
 
     const { end, err } = collectStream(dispatcher)
     expect(end).toBeNull()

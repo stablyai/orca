@@ -1,4 +1,4 @@
-import { execFile } from 'child_process'
+import { execFile } from 'node:child_process'
 import { RuntimeClientError } from './runtime-client-error'
 import type { DesktopScriptPlatform } from './desktop-script-provider-paths'
 

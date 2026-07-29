@@ -3,7 +3,20 @@ import {
   DESKTOP_PROTOCOL_VERSION,
   MIN_COMPATIBLE_MOBILE_VERSION
 } from '../../src/shared/protocol-version'
+import {
+  applyTerminalQuickCommandMutation,
+  type TerminalQuickCommandMutation
+} from '../../src/shared/terminal-quick-commands'
+import type { TerminalQuickCommand } from '../../src/shared/types'
+import { handleMockFilePreviewRequest } from './mock-server-file-preview-data'
 import { handleMockGitRequest } from './mock-server-git-state'
+import { handleMockAccountRequest } from './mock-server-account-rpc'
+import { handleMockNativeChatRequest } from './mock-server-native-chat-scenario'
+import {
+  createMockTerminals,
+  FAKE_SCROLLBACK,
+  STREAMING_CHUNKS
+} from './mock-server-terminal-fixtures'
 import { createMockRepos, createMockWorktrees, readScenarioNumber } from './mobile-lag-scenario'
 
 const MOCK_REPO_COUNT = readScenarioNumber('MOCK_REPO_COUNT', 2)
@@ -13,43 +26,25 @@ const MOCK_RPC_DELAY_MS = readScenarioNumber('MOCK_RPC_DELAY_MS', 0)
 const FAKE_REPOS = createMockRepos(MOCK_REPO_COUNT)
 let fakeWorktrees = createMockWorktrees(FAKE_REPOS, MOCK_WORKTREE_COUNT)
 
-const FAKE_TERMINALS = [
+// Mutable quick-command list so the mobile Quick Commands sheet can add/edit/
+// delete against the mock the same way it does a paired desktop.
+let fakeQuickCommands: TerminalQuickCommand[] = [
   {
-    handle: 'term-1',
-    worktreeId: fakeWorktrees[0]?.worktreeId ?? 'repo-1::/tmp/orca-mobile-repro/orca',
-    title: 'Claude — auth refactor',
-    isActive: true,
-    hasRunningProcess: true
+    id: 'qc-codex-review',
+    label: 'codex review',
+    action: 'agent-prompt',
+    agent: 'codex',
+    prompt: 'please review this diff for correctness and edge cases.',
+    scope: { type: 'global' }
   },
   {
-    handle: 'term-2',
-    worktreeId: fakeWorktrees[0]?.worktreeId ?? 'repo-1::/tmp/orca-mobile-repro/orca',
-    title: 'zsh',
-    isActive: false,
-    hasRunningProcess: false
+    id: 'qc-dev-server',
+    label: 'dev server',
+    action: 'terminal-command',
+    command: 'pnpm dev',
+    appendEnter: true,
+    scope: { type: 'global' }
   }
-]
-
-const FAKE_SCROLLBACK = [
-  '$ claude "refactor the auth module to use JWT tokens"',
-  '',
-  '⏳ Working on it...',
-  '',
-  "I'll refactor the auth module. Here's my plan:",
-  '1. Replace session-based auth with JWT',
-  '2. Add token refresh endpoint',
-  '3. Update middleware',
-  '',
-  'Let me start by reading the current auth module...',
-  ''
-].join('\n')
-
-const STREAMING_CHUNKS = [
-  'Reading src/auth/middleware.ts...\n',
-  'Reading src/auth/session.ts...\n',
-  '\nI see the current implementation uses express-session.\n',
-  "I'll replace it with jsonwebtoken.\n",
-  '\nUpdating src/auth/middleware.ts...\n'
 ]
 
 export type RpcRequest = {
@@ -103,6 +98,13 @@ function repoSelectorToId(repoSelector: unknown): string | null {
   return repoSelector.startsWith('id:') ? repoSelector.slice(3) : repoSelector
 }
 
+function terminalListWorktreeId(worktreeSelector: unknown): string | undefined {
+  if (typeof worktreeSelector === 'string' && worktreeSelector.length > 0) {
+    return worktreeSelector.startsWith('id:') ? worktreeSelector.slice(3) : worktreeSelector
+  }
+  return fakeWorktrees.find((worktree) => worktree.isActive)?.worktreeId
+}
+
 export function handleRequest(
   request: RpcRequest,
   send: (response: RpcResponse) => void,
@@ -117,7 +119,13 @@ export function handleRequest(
     send(response)
   }
 
-  if (handleMockGitRequest(request, respond, success)) {
+  // Each returns false for methods it does not own; first owner wins.
+  if (
+    handleMockGitRequest(request, respond, success) ||
+    handleMockFilePreviewRequest(request, respond, success, error) ||
+    handleMockAccountRequest(request, respond, success, error) ||
+    handleMockNativeChatRequest(request, respond, success, error, ws)
+  ) {
     return
   }
 
@@ -128,6 +136,7 @@ export function handleRequest(
           runtimeId: 'mock-runtime',
           protocolVersion: DESKTOP_PROTOCOL_VERSION,
           minCompatibleMobileVersion: MIN_COMPATIBLE_MOBILE_VERSION,
+          capabilities: ['accounts.codex-reset-credit.v1'],
           graphStatus: 'ready',
           windowCount: 1,
           tabCount: 2,
@@ -161,6 +170,19 @@ export function handleRequest(
         })
       )
       break
+
+    case 'settings.getTerminalQuickCommands':
+      respond(success(request.id, { terminalQuickCommands: fakeQuickCommands }))
+      break
+
+    case 'settings.updateTerminalQuickCommands': {
+      const updates = (request.params ?? {}) as { mutation?: TerminalQuickCommandMutation }
+      if (updates.mutation) {
+        fakeQuickCommands = applyTerminalQuickCommandMutation(fakeQuickCommands, updates.mutation)
+      }
+      respond(success(request.id, { terminalQuickCommands: fakeQuickCommands }))
+      break
+    }
 
     case 'ui.get':
       respond(
@@ -255,15 +277,17 @@ export function handleRequest(
       break
     }
 
-    case 'terminal.list':
+    case 'terminal.list': {
+      const terminals = createMockTerminals(terminalListWorktreeId(request.params?.worktree))
       respond(
         success(request.id, {
-          terminals: FAKE_TERMINALS,
-          totalCount: FAKE_TERMINALS.length,
+          terminals,
+          totalCount: terminals.length,
           truncated: false
         })
       )
       break
+    }
 
     case 'terminal.subscribe': {
       respond(success(request.id, { type: 'scrollback', lines: FAKE_SCROLLBACK, truncated: false }))

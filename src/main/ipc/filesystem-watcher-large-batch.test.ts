@@ -1,4 +1,4 @@
-import { join, resolve } from 'path'
+import { join, resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock } = vi.hoisted(() => ({
@@ -24,11 +24,12 @@ vi.mock('./filesystem-watcher-wsl', () => ({
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: vi.fn()
+  getSshFilesystemProvider: vi.fn(),
+  onSshFilesystemProviderRegistered: () => () => {}
 }))
 
 import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
-import { stat } from 'fs/promises'
+import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 import type { Event as WatcherEvent } from '@parcel/watcher'
 

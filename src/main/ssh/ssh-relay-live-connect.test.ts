@@ -30,7 +30,7 @@ describe.skipIf(!LIVE_HOST)('live ssh:connect pipeline', () => {
   const cleanups: (() => Promise<void> | void)[] = []
 
   afterAll(async () => {
-    for (const cleanup of cleanups.reverse()) {
+    for (const cleanup of cleanups.toReversed()) {
       try {
         await cleanup()
       } catch (err) {

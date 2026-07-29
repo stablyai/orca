@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, truncateSync } from 'fs'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, truncateSync } from 'node:fs'
 import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
 import { HeadlessEmulator } from './headless-emulator'
@@ -53,7 +53,7 @@ describe('incremental terminal history restore', () => {
       { kind: 'output', data: 'second line\r\n' }
     ])
 
-    const restore = reader.detectColdRestore(SESSION_ID)
+    const restore = await reader.detectColdRestore(SESSION_ID)
     expect(restore).not.toBeNull()
     expect(restore!.scrollbackAnsi).toContain('first line')
     expect(restore!.scrollbackAnsi).toContain('second line')
@@ -66,7 +66,7 @@ describe('incremental terminal history restore', () => {
       { kind: 'output', data: 'from tail after checkpoint\r\n' }
     ])
 
-    const restore = reader.detectColdRestore(SESSION_ID)
+    const restore = await reader.detectColdRestore(SESSION_ID)
     expect(restore).not.toBeNull()
     expect(restore!.scrollbackAnsi).toContain('from base')
     expect(restore!.scrollbackAnsi).toContain('from tail after checkpoint')
@@ -79,7 +79,7 @@ describe('incremental terminal history restore', () => {
     )
     await manager.appendIncrements(SESSION_ID, 1, [{ kind: 'output', data: 'tail\r\n' }])
 
-    const restore = reader.detectColdRestore(SESSION_ID)
+    const restore = await reader.detectColdRestore(SESSION_ID)
     expect(restore).not.toBeNull()
     expect(restore!.oscLinks).toContainEqual({
       row: 0,
@@ -96,10 +96,15 @@ describe('incremental terminal history restore', () => {
     const checkpoint = JSON.parse(JSON.stringify(snapshotOf(['base content\r\n'])))
     writeFileSync(
       sessionFile('checkpoint.json'),
-      JSON.stringify({ ...checkpoint, cwd: '/home/user', generation: 1 })
+      JSON.stringify({
+        ...checkpoint,
+        cwd: '/home/user',
+        generation: 1,
+        checkpointedAt: new Date().toISOString()
+      })
     )
 
-    const restore = reader.detectColdRestore(SESSION_ID)
+    const restore = await reader.detectColdRestore(SESSION_ID)
     expect(restore).not.toBeNull()
     expect(restore!.scrollbackAnsi).toContain('base content')
     expect(restore!.scrollbackAnsi).not.toContain('stale tail')
@@ -109,7 +114,7 @@ describe('incremental terminal history restore', () => {
     const checkpoint = JSON.parse(JSON.stringify(snapshotOf(['old format base\r\n'])))
     writeFileSync(
       sessionFile('checkpoint.json'),
-      JSON.stringify({ ...checkpoint, cwd: '/home/user' })
+      JSON.stringify({ ...checkpoint, cwd: '/home/user', checkpointedAt: new Date().toISOString() })
     )
     writeFileSync(
       sessionFile('output.log'),
@@ -119,7 +124,7 @@ describe('incremental terminal history restore', () => {
       ])
     )
 
-    const restore = reader.detectColdRestore(SESSION_ID)
+    const restore = await reader.detectColdRestore(SESSION_ID)
     expect(restore).not.toBeNull()
     expect(restore!.scrollbackAnsi).toContain('old format base')
     expect(restore!.scrollbackAnsi).not.toContain('orphan tail')
@@ -137,7 +142,7 @@ describe('incremental terminal history restore', () => {
       ])
     )
 
-    const restore = reader.detectColdRestore(SESSION_ID)
+    const restore = await reader.detectColdRestore(SESSION_ID)
     expect(restore).not.toBeNull()
     expect(restore!.scrollbackAnsi).toContain('safe base')
     expect(restore!.scrollbackAnsi).not.toContain('kept')
@@ -150,7 +155,7 @@ describe('incremental terminal history restore', () => {
     const logPath = sessionFile('output.log')
     truncateSync(logPath, readFileSync(logPath).length - 5)
 
-    const restore = reader.detectColdRestore(SESSION_ID)
+    const restore = await reader.detectColdRestore(SESSION_ID)
     expect(restore).not.toBeNull()
     expect(restore!.scrollbackAnsi).toContain('complete batch')
     expect(restore!.scrollbackAnsi).not.toContain('torn batch')
@@ -163,7 +168,7 @@ describe('incremental terminal history restore', () => {
       { kind: 'output', data: 'after resize\r\n' }
     ])
 
-    const restore = reader.detectColdRestore(SESSION_ID)
+    const restore = await reader.detectColdRestore(SESSION_ID)
     expect(restore).not.toBeNull()
     expect(restore!.cols).toBe(132)
     expect(restore!.rows).toBe(40)
@@ -177,23 +182,22 @@ describe('incremental terminal history restore', () => {
       { kind: 'output', data: 'survives clear\r\n' }
     ])
 
-    const restore = reader.detectColdRestore(SESSION_ID)
+    const restore = await reader.detectColdRestore(SESSION_ID)
     expect(restore).not.toBeNull()
     expect(restore!.scrollbackAnsi).toContain('survives clear')
     expect(restore!.scrollbackAnsi).not.toContain('cleared away')
   })
 
-  it('skips restorable content for sessions crashed inside the alt screen', async () => {
+  it('preserves normal history without treating active alt content as scrollback', async () => {
     await manager.appendIncrements(SESSION_ID, 1, [
       { kind: 'output', data: 'normal output\r\n\x1b[?1049halt screen content' }
     ])
 
-    const restore = reader.detectColdRestore(SESSION_ID)
+    const restore = await reader.detectColdRestore(SESSION_ID)
     expect(restore).not.toBeNull()
     expect(restore!.modes.alternateScreen).toBe(true)
-    // Why: the adapter skips cold restore when scrollbackAnsi is empty — alt
-    // buffer contents must not replay into a fresh shell.
-    expect(restore!.scrollbackAnsi).toBe('')
+    expect(restore!.scrollbackAnsi).toContain('normal output')
+    expect(restore!.scrollbackAnsi).not.toContain('alt screen content')
   })
 
   it('resets the log on checkpoint so old records are not replayed twice', async () => {
@@ -201,7 +205,7 @@ describe('incremental terminal history restore', () => {
     await manager.checkpoint(SESSION_ID, snapshotOf(['pre-checkpoint\r\n']))
     await manager.appendIncrements(SESSION_ID, 2, [{ kind: 'output', data: 'post-checkpoint\r\n' }])
 
-    const restore = reader.detectColdRestore(SESSION_ID)
+    const restore = await reader.detectColdRestore(SESSION_ID)
     expect(restore).not.toBeNull()
     const occurrences = restore!.scrollbackAnsi.split('pre-checkpoint').length - 1
     expect(occurrences).toBe(1)
@@ -223,7 +227,7 @@ describe('incremental terminal history restore', () => {
       await manager.appendIncrements(SESSION_ID, 4, [{ kind: 'output', data: 'fresh\r\n' }])
     ).toBe('ok')
 
-    const restore = reader.detectColdRestore(SESSION_ID)
+    const restore = await reader.detectColdRestore(SESSION_ID)
     expect(restore).not.toBeNull()
     expect(restore!.scrollbackAnsi).toContain('compacted')
     expect(restore!.scrollbackAnsi).toContain('fresh')
@@ -247,9 +251,81 @@ describe('incremental terminal history restore', () => {
       { kind: 'output', data: 'after relaunch\r\n' }
     ])
 
-    const restore = reader.detectColdRestore(SESSION_ID)
+    const restore = await reader.detectColdRestore(SESSION_ID)
     expect(restore).not.toBeNull()
     expect(restore!.scrollbackAnsi).toContain('before relaunch')
     expect(restore!.scrollbackAnsi).toContain('after relaunch')
+  })
+
+  it('bounds large single-batch replay slices and admits only one replay at a time', async () => {
+    const secondSessionId = `${SESSION_ID}-second`
+    await manager.openSession(secondSessionId, { cwd: '/home/user', cols: 80, rows: 24 })
+    for (const sessionId of [SESSION_ID, secondSessionId]) {
+      await manager.appendIncrements(sessionId, 1, [
+        { kind: 'output', data: `${'x'.repeat(64 * 1024 - 1)}😀second\r\n` }
+      ])
+    }
+
+    const pendingYields: (() => void)[] = []
+    const immediateSpy = vi.spyOn(globalThis, 'setImmediate').mockImplementation(((
+      callback: (...args: unknown[]) => void,
+      ...args: unknown[]
+    ) => {
+      pendingYields.push(() => callback(...args))
+      return {} as NodeJS.Immediate
+    }) as typeof setImmediate)
+
+    const firstReplay = reader.detectColdRestore(SESSION_ID)
+    const secondReplay = reader.detectColdRestore(secondSessionId)
+    try {
+      // Drain by yield because awaiting the session that loses the replay-slot race deadlocks.
+      await vi.waitFor(() => expect(pendingYields).toHaveLength(1))
+      pendingYields.shift()!()
+
+      await vi.waitFor(() => expect(pendingYields).toHaveLength(1))
+      pendingYields.shift()!()
+
+      for (const restore of await Promise.all([firstReplay, secondReplay])) {
+        expect(restore?.scrollbackAnsi).toContain('😀second')
+      }
+      expect(pendingYields).toHaveLength(0)
+    } finally {
+      for (const resume of pendingYields.splice(0)) {
+        resume()
+      }
+      immediateSpy.mockRestore()
+      await Promise.allSettled([firstReplay, secondReplay])
+    }
+  })
+
+  it('does not queue header-only checkpoint restores behind replay work', async () => {
+    const checkpointOnlySessionId = `${SESSION_ID}-checkpoint-only`
+    await manager.openSession(checkpointOnlySessionId, { cwd: '/home/user', cols: 80, rows: 24 })
+    await manager.checkpoint(checkpointOnlySessionId, snapshotOf(['checkpoint only\r\n']))
+    await manager.appendIncrements(SESSION_ID, 1, [
+      { kind: 'output', data: `${'x'.repeat(64 * 1024)}slow replay\r\n` }
+    ])
+
+    const pendingYields: (() => void)[] = []
+    const immediateSpy = vi.spyOn(globalThis, 'setImmediate').mockImplementation(((
+      callback: (...args: unknown[]) => void,
+      ...args: unknown[]
+    ) => {
+      pendingYields.push(() => callback(...args))
+      return {} as NodeJS.Immediate
+    }) as typeof setImmediate)
+
+    const replay = reader.detectColdRestore(SESSION_ID)
+    try {
+      await vi.waitFor(() => expect(pendingYields).toHaveLength(1))
+      const checkpointOnlyRestore = await reader.detectColdRestore(checkpointOnlySessionId)
+
+      expect(checkpointOnlyRestore?.scrollbackAnsi).toContain('checkpoint only')
+      expect(pendingYields).toHaveLength(1)
+    } finally {
+      pendingYields.shift()?.()
+      immediateSpy.mockRestore()
+      await replay
+    }
   })
 })

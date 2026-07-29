@@ -60,7 +60,7 @@ export function estimateRenderRowSize(
   if (row?.type === 'lineage-group') {
     return 100 + Math.max(0, row.rows.length - 1) * 96
   }
-  if (row?.type === 'imported-worktrees-card') {
+  if (row?.type === 'imported-worktrees-card' || row?.type === 'new-external-worktrees-inbox') {
     return IMPORTED_WORKTREES_LINE_ROW_HEIGHT
   }
   if (row?.type === 'pending-creation') {
@@ -155,7 +155,18 @@ export function getActiveStickyIndexesForScroll(args: {
     }
     const candidate = args.virtualItems.find((item) => item.index === candidateIndex)
     if (!candidate) {
-      return candidateIndex
+      // Why: scrollToIndex/reveal can advance rangeStartIndex before TanStack
+      // mounts the candidate row. Pinning without geometry lets a Project
+      // sticky paint over the Host card (#10088). Prefer a previous mounted
+      // sticky; group tier waits for geometry, host tier may keep the id.
+      const previous = getPreviousStickyHeaderIndex(candidates, candidateIndex)
+      if (previous !== null) {
+        const previousItem = args.virtualItems.find((item) => item.index === previous)
+        if (previousItem) {
+          return previous
+        }
+      }
+      return fallbackToCandidate ? candidateIndex : null
     }
     // Why: hand off the moment the incoming header reaches its pinned slot
     // (top of the viewport, or the bottom edge of the pinned host card).

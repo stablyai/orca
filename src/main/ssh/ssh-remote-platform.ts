@@ -84,6 +84,44 @@ export function normalizeWindowsRemotePath(path: string): string {
   return path.replace(/\\/g, '/')
 }
 
+export function assertSafeRemotePathSegment(segment: string, pathFlavor: RemotePathFlavor): void {
+  if (
+    !segment ||
+    segment === '.' ||
+    segment === '..' ||
+    segment.includes('/') ||
+    segment.includes('\0')
+  ) {
+    throw new Error(`Unsafe remote path segment: ${JSON.stringify(segment)}`)
+  }
+  if (pathFlavor === 'posix') {
+    return
+  }
+
+  // Why: Win32 canonicalizes names and exposes devices/NTFS streams through
+  // otherwise ordinary-looking path segments, bypassing no-clobber checks.
+  const normalized = normalizeWindowsRemotePath(segment)
+  const deviceStem = normalized.split('.')[0]?.toUpperCase()
+  if (
+    normalized.includes('/') ||
+    hasUnsafeWindowsPathChar(normalized) ||
+    /[ .]$/u.test(normalized) ||
+    /^(?:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|CLOCK\$|COM[1-9¹²³]|LPT[1-9¹²³])$/u.test(deviceStem ?? '')
+  ) {
+    throw new Error(`Unsafe remote path segment: ${JSON.stringify(segment)}`)
+  }
+}
+
+function hasUnsafeWindowsPathChar(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    const char = value[i]
+    if (value.charCodeAt(i) <= 31 || (char !== undefined && '<>:"|?*'.includes(char))) {
+      return true
+    }
+  }
+  return false
+}
+
 export function normalizeRemoteHome(rawHome: string, host: RemoteHostPlatform): string {
   const home = rawHome.trim()
   return isWindowsRemoteHost(host) ? normalizeWindowsRemotePath(home).replace(/\/+$/, '') : home
@@ -132,7 +170,7 @@ export function joinRemotePath(host: RemoteHostPlatform, ...segments: string[]):
 
 export function remoteBasename(path: string, host: RemoteHostPlatform): string {
   const normalized = host.pathFlavor === 'windows' ? normalizeWindowsRemotePath(path) : path
-  return normalized.split('/').filter(Boolean).pop() ?? ''
+  return normalized.split('/').findLast(Boolean) ?? ''
 }
 
 export function remoteDirname(path: string, host: RemoteHostPlatform): string {

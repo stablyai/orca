@@ -1,7 +1,7 @@
-import { spawnSync } from 'child_process'
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { spawnSync } from 'node:child_process'
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import * as pty from 'node-pty'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getPosixOmpShellWrapper } from './omp-shell-wrapper'
@@ -208,6 +208,61 @@ exit 0
     expect(capture).toContain(`EFFECTIVE=${sourceDir}`)
     expect(capture).toContain('ARG1=config')
     expect(readFileSync(join(sourceDir, 'config.yml'), 'utf8')).toBe('updated-by-omp-config\n')
+  })
+
+  itWithBash.each([
+    '__complete',
+    'bench',
+    'completions',
+    'dry-balance',
+    'gallery',
+    'install',
+    'join',
+    'models',
+    'say',
+    'tiny-models',
+    'token',
+    'ttsr',
+    'usage'
+  ])('runs OMP %s subcommands without injecting the status extension', async (subcommand) => {
+    const tempDir = makeTempDir()
+    const binDir = join(tempDir, 'bin')
+    const sourceDir = join(tempDir, 'source-omp-agent')
+    const extensionDir = join(sourceDir, 'extensions')
+    mkdirSync(binDir)
+    mkdirSync(sourceDir, { recursive: true })
+    mkdirSync(extensionDir, { recursive: true })
+    const statusExtension = join(extensionDir, 'orca-agent-status.ts')
+    writeFileSync(statusExtension, 'export default {}')
+    writeFakeOmp(binDir)
+
+    const captureFile = join(tempDir, `${subcommand}-capture`)
+    await runInteractiveBashPty({
+      cwd: tempDir,
+      rcfileContent: getPosixOmpShellWrapper(),
+      env: {
+        ...process.env,
+        HOME: tempDir,
+        PATH: `${binDir}:${process.env.PATH ?? ''}`,
+        PI_CODING_AGENT_DIR: '',
+        ORCA_PI_CODING_AGENT_DIR: '',
+        ORCA_OMP_CODING_AGENT_DIR: '',
+        ORCA_OMP_SOURCE_AGENT_DIR: sourceDir,
+        ORCA_OMP_STATUS_EXTENSION: statusExtension,
+        ORCA_FAKE_OMP_DEFAULT_DIR: sourceDir,
+        ORCA_CAPTURE_FILE: captureFile,
+        TERM: process.env.TERM || 'xterm-256color'
+      },
+      input: `omp ${subcommand}
+exit 0
+`
+    })
+
+    const capture = readFileSync(captureFile, 'utf8')
+    expect(capture).toContain('PI=\n')
+    expect(capture).toContain(`EFFECTIVE=${sourceDir}`)
+    expect(capture).toContain(`ARG1=${subcommand}`)
+    expect(capture).not.toContain('ARG1=--extension')
   })
 
   itWithBash(

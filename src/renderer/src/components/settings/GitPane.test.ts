@@ -15,6 +15,7 @@ import {
 import { TooltipProvider } from '../ui/tooltip'
 import { matchesSettingsSearch } from './settings-search'
 import { SettingsSegmentedControl } from './SettingsFormControls'
+import { CompareAgainstUpstreamSetting } from './CompareAgainstUpstreamSetting'
 
 type ReactElementLike = {
   type: unknown
@@ -52,6 +53,23 @@ function findSegmentedControl(node: unknown): ReactElementLike {
   })
   if (!found) {
     throw new Error('segmented control not found')
+  }
+  return found
+}
+
+function findCompareBaseSegmentedControl(node: unknown): ReactElementLike {
+  let found: ReactElementLike | null = null
+  const label = translate(
+    'auto.components.settings.GitPane.compareAgainstUpstreamTitle',
+    'Default Compare Base'
+  )
+  visit(node, (entry) => {
+    if (entry.type === SettingsSegmentedControl && entry.props.ariaLabel === label) {
+      found = entry
+    }
+  })
+  if (!found) {
+    throw new Error('compare-base segmented control not found')
   }
   return found
 }
@@ -162,5 +180,89 @@ describe('GitPane', () => {
   it('includes Source Control group order search metadata', () => {
     expect(matchesSettingsSearch('staged', getGitPaneSearchEntries())).toBe(true)
     expect(matchesSettingsSearch('group order', getGitPaneSearchEntries())).toBe(true)
+  })
+
+  it('renders the default compare base setting in Git settings', () => {
+    const markup = renderGitPane('compare base')
+
+    expect(markup).toContain(
+      translate(
+        'auto.components.settings.GitPane.compareAgainstUpstreamTitle',
+        'Default Compare Base'
+      )
+    )
+    expect(markup).toContain(
+      translate(
+        'auto.components.settings.GitPane.compareBaseRepositoryDefault',
+        'Repository default'
+      )
+    )
+    expect(markup).toContain(
+      translate('auto.components.settings.GitPane.compareBaseBranchUpstream', 'Branch upstream')
+    )
+    expect(markup).toContain('worktree&#x27;s Git panel')
+  })
+
+  it('includes default compare base search metadata', () => {
+    expect(matchesSettingsSearch('compare base', getGitPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('worktree', getGitPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('Git panel', getGitPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('default branch', getGitPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('branch upstream', getGitPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('upstream', getGitPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('diff base', getGitPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('source control', getGitPaneSearchEntries())).toBe(true)
+  })
+
+  it('reflects the default compare base policy in its own segmented control', () => {
+    const repositoryDefaultControl = findCompareBaseSegmentedControl(
+      CompareAgainstUpstreamSetting({
+        settings: {
+          ...getDefaultSettings(os.homedir()),
+          sourceControlCompareAgainstUpstream: false
+        },
+        updateSettings: () => {}
+      })
+    )
+    expect(repositoryDefaultControl.props.value).toBe('repository-default')
+
+    const branchUpstreamControl = findCompareBaseSegmentedControl(
+      CompareAgainstUpstreamSetting({
+        settings: {
+          ...getDefaultSettings(os.homedir()),
+          sourceControlCompareAgainstUpstream: true
+        },
+        updateSettings: () => {}
+      })
+    )
+    expect(branchUpstreamControl.props.value).toBe('branch-upstream')
+  })
+
+  it('updates the default compare base policy from its segmented control', () => {
+    const updateSettings = vi.fn()
+    const repositoryDefaultControl = findCompareBaseSegmentedControl(
+      CompareAgainstUpstreamSetting({
+        settings: {
+          ...getDefaultSettings(os.homedir()),
+          sourceControlCompareAgainstUpstream: false
+        },
+        updateSettings
+      })
+    )
+    ;(repositoryDefaultControl.props.onChange as (value: string) => void)('branch-upstream')
+    expect(updateSettings).toHaveBeenCalledWith({ sourceControlCompareAgainstUpstream: true })
+
+    updateSettings.mockClear()
+    const branchUpstreamControl = findCompareBaseSegmentedControl(
+      CompareAgainstUpstreamSetting({
+        settings: {
+          ...getDefaultSettings(os.homedir()),
+          sourceControlCompareAgainstUpstream: true
+        },
+        updateSettings
+      })
+    )
+    ;(branchUpstreamControl.props.onChange as (value: string) => void)('repository-default')
+    expect(updateSettings).toHaveBeenCalledWith({ sourceControlCompareAgainstUpstream: false })
   })
 })

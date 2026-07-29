@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/types'
 import { AutomationService } from './service'
 
@@ -17,10 +17,6 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => ciphertext.toString('utf-8').slice('encrypted:'.length)
   }
-}))
-
-vi.mock('../git/repo', () => ({
-  getGitUsername: vi.fn().mockReturnValue('testuser')
 }))
 
 vi.mock('./precheck-runner', () => ({

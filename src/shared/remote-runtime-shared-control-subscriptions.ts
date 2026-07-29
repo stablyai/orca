@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
 import { getCleanupRequest, getSubscriptionId } from './remote-runtime-shared-control-protocol'
 import {
@@ -14,12 +14,14 @@ export function createSharedControlSubscription<TResult>(args: {
   requestId: string
   method: string
   params: unknown
+  retainedParamsBytes: number
   callbacks: SharedControlSubscriptionCallbacks<TResult>
 }): SharedControlLogicalSubscription<TResult> {
   return {
     requestId: args.requestId,
     method: args.method,
     params: args.params,
+    retainedParamsBytes: args.retainedParamsBytes,
     callbacks: args.callbacks,
     sent: false,
     closed: false,
@@ -53,18 +55,26 @@ export function handleSharedControlLogicalResponse(args: {
 
 export function closeSharedControlLogicalSubscription(args: {
   subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
-  subscription: SharedControlLogicalSubscription<unknown>
+  subscription?: SharedControlLogicalSubscription<unknown>
   request: (method: string, params: unknown) => void
 }): void {
+  if (!args.subscription) {
+    return
+  }
   const cleanup = getCleanupRequest(args.subscription)
   if (cleanup) {
     finishSharedControlSubscription(args.subscriptions, args.subscription, false)
     args.request(cleanup.method, cleanup.params)
     return
   }
-  if (args.subscription.sent && cleanupNeedsRemoteSubscriptionId(args.subscription.method)) {
+  if (
+    (args.subscription.sent || args.subscription.awaitingResubscribe) &&
+    cleanupNeedsRemoteSubscriptionId(args.subscription.method)
+  ) {
     // Why: id-scoped server subscriptions can only be cleaned up after the
-    // server returns its concrete subscription id in the ready response.
+    // server returns its concrete subscription id in the ready response. This
+    // also covers the reconnect replay window (sent===false, id cleared) where
+    // a resubscribe is in flight — finishing locally there would leak it.
     args.subscription.closeAfterReady = true
     return
   }
@@ -90,6 +100,9 @@ export function sendSharedControlCleanupRequest(args: {
 export function replaySharedControlSubscriptions(args: {
   subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
   send: (subscription: SharedControlLogicalSubscription<unknown>) => void
+  // Why: true only for a reconnect of a previously-ready connection; first
+  // connects deliver their initial snapshot through the normal gated path.
+  tagReplayedResponses?: boolean
 }): void {
   for (const subscription of args.subscriptions.values()) {
     if (subscription.closeAfterReady) {
@@ -97,6 +110,13 @@ export function replaySharedControlSubscriptions(args: {
     }
     subscription.sent = false
     subscription.remoteSubscriptionId = null
+    // Why: mark the id-less window so a close() racing this resubscribe defers
+    // to closeAfterReady instead of finishing locally and leaking the server
+    // subscription the resubscribe is about to create.
+    subscription.awaitingResubscribe = true
+    if (args.tagReplayedResponses) {
+      subscription.pendingReplayTag = true
+    }
     args.send(subscription)
   }
 }

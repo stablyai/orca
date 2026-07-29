@@ -136,7 +136,7 @@ export function TabBarQuickCommandsButton({
     return null
   }
 
-  // Empty state: single "+ Command" button that opens the dialog directly.
+  // Empty state: single button that opens the dialog directly.
   if (!hasAnyCommands) {
     return (
       <>

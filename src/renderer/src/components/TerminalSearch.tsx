@@ -5,12 +5,22 @@ import { Button } from '@/components/ui/button'
 import type { SearchState } from '@/components/terminal-pane/keyboard-handlers'
 import { translate } from '@/i18n/i18n'
 import { getFindRequestQuery } from '@/lib/find-query-bounds'
+import { safeFind } from './terminal-search-safe-find'
 
 type TerminalSearchProps = {
   isOpen: boolean
   onClose: () => void
   searchAddon: SearchAddon | null
   searchStateRef: React.RefObject<SearchState>
+}
+
+function clearTerminalSearch(searchAddon: SearchAddon | null): void {
+  if (!searchAddon) {
+    return
+  }
+  searchAddon.clearDecorations()
+  // Why: xterm keeps the active match selected after decorations are cleared.
+  searchAddon.findNext('')
 }
 
 export default function TerminalSearch({
@@ -49,13 +59,21 @@ export default function TerminalSearch({
 
   const findNext = useCallback(() => {
     if (searchAddon && requestQuery) {
-      searchAddon.findNext(requestQuery, searchOptions())
+      safeFind(
+        (term, options) => searchAddon.findNext(term, options),
+        requestQuery,
+        searchOptions()
+      )
     }
   }, [searchAddon, requestQuery, searchOptions])
 
   const findPrevious = useCallback(() => {
     if (searchAddon && requestQuery) {
-      searchAddon.findPrevious(requestQuery, searchOptions())
+      safeFind(
+        (term, options) => searchAddon.findPrevious(term, options),
+        requestQuery,
+        searchOptions()
+      )
     }
   }, [searchAddon, requestQuery, searchOptions])
 
@@ -63,21 +81,32 @@ export default function TerminalSearch({
     input?.focus()
   }, [])
 
+  useEffect(
+    () => () => {
+      clearTerminalSearch(searchAddon)
+    },
+    [searchAddon]
+  )
+
   useEffect(() => {
     // Keep the ref in sync so the keyboard handler (Cmd+G / Cmd+Shift+G)
     // can read the current search state without lifting it to parent state.
     searchStateRef.current = { query: requestQuery ?? '', caseSensitive, regex }
 
     if (!isOpen) {
-      searchAddon?.clearDecorations()
+      clearTerminalSearch(searchAddon)
       return
     }
     if (!requestQuery) {
-      searchAddon?.clearDecorations()
+      clearTerminalSearch(searchAddon)
       return
     }
     if (searchAddon) {
-      searchAddon.findNext(requestQuery, searchOptions(true))
+      safeFind(
+        (term, options) => searchAddon.findNext(term, options),
+        requestQuery,
+        searchOptions(true)
+      )
     }
   }, [requestQuery, searchAddon, isOpen, caseSensitive, regex, searchStateRef, searchOptions])
 

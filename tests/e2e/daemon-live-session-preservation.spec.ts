@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs'
-import path from 'path'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'

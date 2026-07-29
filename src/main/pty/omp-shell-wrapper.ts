@@ -5,25 +5,38 @@
 // normal source of truth.
 
 const OMP_SUBCOMMANDS = [
+  '__complete',
   'acp',
   'agents',
   'auth-broker',
   'auth-gateway',
+  'bench',
   'commit',
+  'completions',
   'config',
+  'dry-balance',
+  'gallery',
   'grep',
   'grievances',
+  'install',
+  'join',
+  'models',
   'plugin',
+  'read',
+  'say',
+  'search',
   'setup',
   'shell',
-  'read',
   'ssh',
   'stats',
+  'tiny-models',
+  'token',
+  'ttsr',
   'update',
+  'usage',
   'worktree',
-  'wt',
-  'search',
-  'q'
+  'q',
+  'wt'
 ] as const
 
 export function getPosixOmpShellWrapper(): string {
@@ -31,17 +44,12 @@ export function getPosixOmpShellWrapper(): string {
   return `# Why: OMP does not auto-load Orca's managed status extension; wrap only
 # interactive launch invocations so subcommands such as \`omp config\` keep
 # their normal argv shape.
-__orca_omp_is_subcommand() {
-  case "\${1:-}" in
-    ${subcommands}) return 0 ;;
-  esac
-  return 1
-}
 __orca_omp_should_skip_extension() {
   case "\${1:-}" in
     help|--help|-h|--version|-v) return 0 ;;
+    ${subcommands}) return 0 ;;
   esac
-  __orca_omp_is_subcommand "\${1:-}"
+  return 1
 }
 __orca_omp() {
   local __orca_use_extension=1
@@ -68,15 +76,10 @@ export function getPowerShellOmpShellWrapper(): string {
   return `# Why: OMP does not auto-load Orca's managed status extension; wrap only
 # interactive launch invocations so subcommands such as \`omp config\` keep
 # their normal argv shape.
-function Global:__OrcaOmpIsSubcommand {
-    param([string]$Name)
-    $subcommands = @(${subcommands})
-    return $subcommands -contains $Name
-}
 function Global:__OrcaOmpShouldSkipExtension {
     param([string]$Name)
-    if (@("help", "--help", "-h", "--version", "-v") -contains $Name) { return $true }
-    return __OrcaOmpIsSubcommand -Name $Name
+    $skip = @("help", "--help", "-h", "--version", "-v") + @(${subcommands})
+    return $skip -contains $Name
 }
 if ($env:ORCA_OMP_STATUS_EXTENSION) {
     function Global:omp {

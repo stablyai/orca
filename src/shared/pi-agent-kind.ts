@@ -13,6 +13,17 @@ import { getCommandTokenPathBasename, getFirstCommandToken } from './command-tok
  */
 export type PiAgentKind = 'pi' | 'omp'
 
+/**
+ * True when `agentType` names a Pi-compatible (goal/mission) kind. These agents
+ * emit milestone `agent_end` events between steps while still working, so they
+ * are treated differently from agents that only signal completion at turn end.
+ */
+export function isPiCompatibleAgentType(
+  agentType: string | null | undefined
+): agentType is PiAgentKind {
+  return agentType === 'pi' || agentType === 'omp'
+}
+
 const OMP_LAUNCH_CMD = TUI_AGENT_CONFIG.omp.launchCmd
 
 // Why: regex carved to avoid matching `pi` inside `pip`, `mpi`, `api`,

@@ -23,7 +23,7 @@ export function useMobileSourceControlActionSheet(
     runActionSheetGitSequence,
     runActionSheetGitSync,
     runActionSheetRebase,
-    openPrSheet,
+    createPr,
     openBranchPicker,
     openHistory
   } = state
@@ -38,7 +38,8 @@ export function useMobileSourceControlActionSheet(
         busyAction,
         openingPath,
         openingBranchPath,
-        prAvailable: upstreamKnown && upstream?.hasUpstream === true,
+        // Why: the create intent can publish/push before creating, matching desktop.
+        prAvailable: upstreamKnown,
         handlers: {
           commit: () => void runActionSheetCommit(),
           commitPush: () =>
@@ -55,8 +56,8 @@ export function useMobileSourceControlActionSheet(
           fastForward: () =>
             void runActionSheetGitSequence('fast-forward', [{ method: 'git.fastForward' }]),
           rebase: () => void runActionSheetRebase(),
-          createPr: () => void openPrSheet(false),
-          pushAndCreatePr: () => void openPrSheet(true),
+          createPr: () => void createPr(false),
+          pushAndCreatePr: () => void createPr(true),
           checkout: () => void openBranchPicker(),
           history: () => void openHistory()
         }
@@ -64,11 +65,11 @@ export function useMobileSourceControlActionSheet(
     [
       busyAction,
       commitMessage,
+      createPr,
       openBranchPicker,
       openHistory,
       openingBranchPath,
       openingPath,
-      openPrSheet,
       runActionSheetCommit,
       runActionSheetCommitSequence,
       runActionSheetCommitSync,

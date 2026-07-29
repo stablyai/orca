@@ -27,6 +27,7 @@ export type FeatureInteractionId =
   | 'agent-browser-use'
   | 'agent-orchestration-setup'
   | 'agent-orchestration'
+  | 'ephemeral-vm-setup'
   | 'mobile-emulator-agent-setup'
   | 'ai-commit-generation'
   | 'ai-pr-generation'
@@ -58,8 +59,8 @@ export type FeatureInteractionDefinition = {
   interaction: string
 }
 
-// Why: these ids become persisted product state; see
-// docs/reference/feature-discovery-interaction-tracking.md before changing them.
+// Why: these ids become persisted product state; changing them breaks
+// feature-discovery interaction tracking.
 export const FEATURE_INTERACTIONS = [
   { id: 'workspace-board', interaction: 'workspace board opened' },
   {
@@ -96,6 +97,7 @@ export const FEATURE_INTERACTIONS = [
   { id: 'workspace-creation', interaction: 'workspace creation flow opened' },
   { id: 'agent-browser-setup', interaction: 'Agent Browser Use setup enabled or opened' },
   { id: 'agent-browser-use', interaction: 'agent browser runtime method used' },
+  { id: 'ephemeral-vm-setup', interaction: 'Ephemeral VMs setup opened or scaffold prompt copied' },
   {
     id: 'agent-orchestration-setup',
     interaction: 'Agent Orchestration setup enabled or opened'

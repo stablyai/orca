@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,

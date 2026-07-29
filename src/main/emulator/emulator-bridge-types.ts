@@ -1,3 +1,5 @@
+import type { EmulatorBackendKind, EmulatorStreamCodec } from './emulator-types'
+
 export type EmulatorSessionState = {
   deviceUdid: string
   wsUrl: string
@@ -6,6 +8,8 @@ export type EmulatorSessionState = {
   pid?: number
   managed: boolean
   initialized: boolean
+  backend: EmulatorBackendKind
+  streamCodec: EmulatorStreamCodec
 }
 
 export type EmulatorBridgeOptions = {

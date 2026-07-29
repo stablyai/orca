@@ -14,20 +14,51 @@ vi.mock('@/components/ui/command', () => ({
   CommandItem: ({
     children,
     disabled,
-    className
+    className,
+    'aria-disabled': ariaDisabled
   }: {
     children: React.ReactNode
     disabled?: boolean
     className?: string
+    'aria-disabled'?: React.AriaAttributes['aria-disabled']
   }) => (
-    <div aria-disabled={disabled} className={className}>
+    <div aria-disabled={ariaDisabled ?? disabled} className={className}>
       {children}
     </div>
   )
 }))
 
 describe('AddRepoHostSelector', () => {
-  it('shows disconnected SSH hosts as disabled choices in Add Project', () => {
+  it('shows a remote host setup menu when Local Mac is the only host', () => {
+    const html = renderToStaticMarkup(
+      <AddRepoHostSelector
+        hosts={[
+          {
+            id: 'local',
+            label: 'Local Mac',
+            detail: 'This computer',
+            kind: 'local',
+            health: 'local',
+            presence: 'local'
+          }
+        ]}
+        selectedHostId="local"
+        open
+        onOpenChange={vi.fn()}
+        onSelectHost={vi.fn()}
+        onAddSshHost={vi.fn()}
+        onAddRemoteServer={vi.fn()}
+      />
+    )
+
+    expect(html).toContain('Add remote host')
+    expect(html).toContain('Add SSH host')
+    expect(html).toContain('Use an existing machine over SSH.')
+    expect(html).toContain('Add remote server')
+    expect(html).toContain('Pair with Orca running on another computer.')
+  })
+
+  it('shows disconnected SSH hosts with a connect action in Add Project', () => {
     const html = renderToStaticMarkup(
       <AddRepoHostSelector
         hosts={[
@@ -57,9 +88,10 @@ describe('AddRepoHostSelector', () => {
 
     expect(html).toContain('Builder')
     expect(html).toContain('Disconnected')
+    expect(html).toContain('Connect')
     expect(html).toContain('aria-disabled="true"')
-    expect(html).toContain('cursor-not-allowed')
-    expect(html).toContain('opacity-55')
+    expect(html).not.toContain('cursor-not-allowed')
+    expect(html).not.toContain('opacity-55')
   })
 
   it('shows exact update guidance for incompatible runtime hosts', () => {

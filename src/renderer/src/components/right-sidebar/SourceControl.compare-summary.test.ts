@@ -5,11 +5,14 @@ import {
   CompareSummaryToolbarButton,
   refreshSourceControlAfterRemoteAction,
   resolveSourceControlBaseRef,
+  resolveSourceControlCompareBaseRef,
   resolveSourceControlPickerBaseRef,
+  shouldClearBranchCompareForMissingBase,
+  shouldRefreshBranchCompareForRemoteStatus,
   shouldRefreshBranchCompareForStatusHead,
   shouldShowCompareSummary
 } from './SourceControl'
-import type { GitBranchCompareSummary } from '../../../../shared/types'
+import type { GitBranchCompareSummary, GitUpstreamStatus } from '../../../../shared/types'
 
 type ReactElementLike = {
   type: unknown
@@ -208,6 +211,137 @@ describe('SourceControl compare summary', () => {
     ).toBe('origin/main')
   })
 
+  it('keeps the compare base equal to the merge target when the setting is off', () => {
+    expect(
+      resolveSourceControlCompareBaseRef({
+        enabled: false,
+        worktreeBaseRef: null,
+        repoBaseRef: null,
+        upstreamName: 'origin/feature',
+        fallbackBaseRef: 'origin/master'
+      })
+    ).toBe('origin/master')
+
+    expect(
+      resolveSourceControlCompareBaseRef({
+        enabled: false,
+        upstreamName: 'origin/feature',
+        fallbackBaseRef: null
+      })
+    ).toBeNull()
+  })
+
+  it('prefers a pinned base over the upstream when the setting is on', () => {
+    expect(
+      resolveSourceControlCompareBaseRef({
+        enabled: true,
+        worktreeBaseRef: 'refs/remotes/origin/release',
+        repoBaseRef: 'origin/main',
+        upstreamName: 'origin/feature',
+        fallbackBaseRef: 'origin/master'
+      })
+    ).toBe('refs/remotes/origin/release')
+
+    expect(
+      resolveSourceControlCompareBaseRef({
+        enabled: true,
+        worktreeBaseRef: null,
+        repoBaseRef: ' origin/main ',
+        upstreamName: 'origin/feature',
+        fallbackBaseRef: 'origin/master'
+      })
+    ).toBe('origin/main')
+  })
+
+  it('uses the current branch upstream when on and no base is pinned', () => {
+    expect(
+      resolveSourceControlCompareBaseRef({
+        enabled: true,
+        worktreeBaseRef: null,
+        repoBaseRef: null,
+        upstreamName: 'origin/feature',
+        fallbackBaseRef: 'origin/master'
+      })
+    ).toBe('origin/feature')
+  })
+
+  it('falls back to the merge target when on and the branch has no upstream', () => {
+    expect(
+      resolveSourceControlCompareBaseRef({
+        enabled: true,
+        worktreeBaseRef: null,
+        repoBaseRef: null,
+        upstreamName: null,
+        fallbackBaseRef: 'origin/master'
+      })
+    ).toBe('origin/master')
+  })
+
+  it('returns null only when no upstream or fallback base exists', () => {
+    expect(
+      resolveSourceControlCompareBaseRef({
+        enabled: true,
+        worktreeBaseRef: null,
+        repoBaseRef: null,
+        upstreamName: null,
+        fallbackBaseRef: null
+      })
+    ).toBeNull()
+  })
+
+  it('keeps the branch compare while upstream status is still loading', () => {
+    // remoteStatus undefined means upstream status has not loaded yet; the
+    // upstream policy can still make compareBaseRef momentarily null when no
+    // fallback base is available.
+    expect(
+      shouldClearBranchCompareForMissingBase({
+        isFolder: false,
+        compareBaseRef: null,
+        remoteStatus: undefined
+      })
+    ).toBe(false)
+  })
+
+  it('clears the branch compare once upstream loads with no upstream and no base', () => {
+    const loadedNoUpstream: GitUpstreamStatus = {
+      hasUpstream: false,
+      ahead: 0,
+      behind: 0
+    }
+    expect(
+      shouldClearBranchCompareForMissingBase({
+        isFolder: false,
+        compareBaseRef: null,
+        remoteStatus: loadedNoUpstream
+      })
+    ).toBe(true)
+  })
+
+  it('keeps the branch compare when a compare base is resolved', () => {
+    expect(
+      shouldClearBranchCompareForMissingBase({
+        isFolder: false,
+        compareBaseRef: 'origin/main',
+        remoteStatus: undefined
+      })
+    ).toBe(false)
+  })
+
+  it('never clears the branch compare in folder mode', () => {
+    const loadedNoUpstream: GitUpstreamStatus = {
+      hasUpstream: false,
+      ahead: 0,
+      behind: 0
+    }
+    expect(
+      shouldClearBranchCompareForMissingBase({
+        isFolder: true,
+        compareBaseRef: null,
+        remoteStatus: loadedNoUpstream
+      })
+    ).toBe(false)
+  })
+
   it('wires toolbar actions without rendering the dead view-mode toggle', () => {
     const onChangeBaseRef = vi.fn()
     const onRetry = vi.fn()
@@ -314,6 +448,56 @@ describe('SourceControl compare summary', () => {
         { baseRef: 'origin/main', statusHead: 'old-head', worktreeId: 'wt-1' },
         { baseRef: 'origin/release', statusHead: 'new-head', worktreeId: 'wt-1' }
       )
+    ).toBe(false)
+  })
+
+  it('refreshes branch compare when upstream status changes for the same base', () => {
+    expect(
+      shouldRefreshBranchCompareForRemoteStatus(
+        {
+          ahead: 1,
+          baseRef: 'origin/main',
+          behind: 0,
+          hasUpstream: true,
+          upstreamName: 'origin/main',
+          worktreeId: 'wt-1'
+        },
+        {
+          ahead: 0,
+          baseRef: 'origin/main',
+          behind: 0,
+          hasUpstream: true,
+          upstreamName: 'origin/main',
+          worktreeId: 'wt-1'
+        }
+      )
+    ).toBe(true)
+  })
+
+  it('does not refresh branch compare for initial or unrelated upstream status snapshots', () => {
+    const current = {
+      ahead: 0,
+      baseRef: 'origin/main',
+      behind: 0,
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      worktreeId: 'wt-1'
+    }
+
+    expect(shouldRefreshBranchCompareForRemoteStatus(null, current)).toBe(false)
+    expect(
+      shouldRefreshBranchCompareForRemoteStatus(current, {
+        ...current,
+        baseRef: 'origin/release',
+        ahead: 1
+      })
+    ).toBe(false)
+    expect(
+      shouldRefreshBranchCompareForRemoteStatus(current, {
+        ...current,
+        worktreeId: 'wt-2',
+        ahead: 1
+      })
     ).toBe(false)
   })
 

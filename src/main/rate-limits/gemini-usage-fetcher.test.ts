@@ -167,7 +167,7 @@ describe('fetchGeminiRateLimits', () => {
         return Promise.resolve(
           makeResponse([
             {
-              remainingFraction: NaN,
+              remainingFraction: Number.NaN,
               resetTime: '2026-04-24T13:00:00.000Z',
               modelId: 'gemini-1.5-pro'
             },

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as CryptoModule from 'crypto'
+import type * as CryptoModule from 'node:crypto'
 import type { SparsePreset } from '../../shared/types'
 
 const { handleMock, randomUUIDMock, mockStore } = vi.hoisted(() => ({
@@ -35,7 +35,6 @@ vi.mock('electron', () => ({
 
 vi.mock('../git/repo', () => ({
   isGitRepo: vi.fn().mockReturnValue(true),
-  getGitUsername: vi.fn().mockReturnValue(''),
   getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
   getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
   searchBaseRefs: vi.fn().mockResolvedValue([]),

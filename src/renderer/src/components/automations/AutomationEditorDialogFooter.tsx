@@ -7,11 +7,18 @@ import AgentCombobox from '@/components/agent/AgentCombobox'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { AutomationWorkspaceMode } from '../../../../shared/automations-types'
-import type { GlobalSettings, Repo, Worktree } from '../../../../shared/types'
+import type {
+  GlobalSettings,
+  OrcaHooks,
+  ProjectHostSetup,
+  Repo,
+  Worktree
+} from '../../../../shared/types'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { Field } from './automation-page-parts'
 import { AutomationMissedRunGraceField } from './AutomationMissedRunGraceField'
 import { AutomationSessionField } from './AutomationSessionField'
+import { AutomationSetupDecisionField } from './AutomationSetupDecisionField'
 import { CreateFromPicker } from './CreateFromPicker'
 import { WorkspaceCombobox } from './WorkspaceCombobox'
 import AutomationProjectCombobox from './AutomationProjectCombobox'
@@ -25,6 +32,9 @@ type AutomationEditorDialogFooterProps = {
   isSaving: boolean
   canSave: boolean
   repos: Repo[]
+  projectHostSetups: ProjectHostSetup[]
+  automationYamlHooksByRepoKey: Record<string, OrcaHooks | null>
+  getAutomationHooksCacheKey: (repoId: string) => string
   repoMap: Map<string, Repo>
   worktrees: Worktree[]
   settings: GlobalSettings | null
@@ -36,6 +46,7 @@ type AutomationEditorDialogFooterProps = {
   onProjectChange: (projectId: string) => void
   getRepoHostLabel?: (repo: Repo) => string | null | undefined
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
+  onSetupDecisionTouched: () => void
   onOpenChange: (open: boolean) => void
   onSave: () => void
 }
@@ -48,6 +59,9 @@ export function AutomationEditorDialogFooter({
   isSaving,
   canSave,
   repos,
+  projectHostSetups,
+  automationYamlHooksByRepoKey,
+  getAutomationHooksCacheKey,
   repoMap,
   worktrees,
   settings,
@@ -59,6 +73,7 @@ export function AutomationEditorDialogFooter({
   onProjectChange,
   getRepoHostLabel,
   onDraftChange,
+  onSetupDecisionTouched,
   onOpenChange,
   onSave
 }: AutomationEditorDialogFooterProps): React.JSX.Element {
@@ -233,6 +248,18 @@ export function AutomationEditorDialogFooter({
               onDraftChange={onDraftChange}
             />
           </div>
+          {/* Why: a full-width row below the columned controls — the setup
+              switch is a per-automation preference, not a peer of the compact
+              column pickers, so it reads cleaner spanning the dialog. */}
+          <AutomationSetupDecisionField
+            createTarget={isHermesTarget ? 'hermes' : 'orca'}
+            draft={draft}
+            repos={repos}
+            projectHostSetups={projectHostSetups}
+            yamlHooks={automationYamlHooksByRepoKey[getAutomationHooksCacheKey(draft.projectId)]}
+            onDraftChange={onDraftChange}
+            onSetupDecisionTouched={onSetupDecisionTouched}
+          />
         </div>
       </div>
       <div className="mt-4 flex justify-end gap-2">

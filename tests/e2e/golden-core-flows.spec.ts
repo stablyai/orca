@@ -1,8 +1,8 @@
-import { execFileSync } from 'child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'fs'
-import { mkdtemp } from 'fs/promises'
-import os from 'os'
-import path from 'path'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtemp } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -31,7 +31,10 @@ function escapeRegExp(value: string): string {
 }
 
 async function createGitRepo(prefix: string, name: string): Promise<string> {
-  const rootPath = await mkdtemp(path.join(os.tmpdir(), prefix))
+  // Why: macOS os.tmpdir() (/var/...) symlinks to /private/var/..., and the app
+  // canonicalizes repo.path via `git rev-parse --show-toplevel` on add. Resolve
+  // the symlink here so the path the test asserts on matches what the store holds.
+  const rootPath = realpathSync(await mkdtemp(path.join(os.tmpdir(), prefix)))
   tempRoots.push(rootPath)
   const repoPath = path.join(rootPath, name)
 

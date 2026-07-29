@@ -1,6 +1,3 @@
-/* oxlint-disable max-lines -- Why: TerminalPane tests share a large mocked
-   settings harness; splitting the new Windows-shell cases would duplicate
-   brittle React/store mocks without improving coverage. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockStateValues: unknown[] = []
@@ -280,7 +277,7 @@ describe('TerminalPane PowerShell version setting', () => {
   it('shows the PowerShell 7+ download link when pwsh is unavailable', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'powershell.exe',
         terminalWordSeparator: ''
@@ -302,7 +299,7 @@ describe('TerminalPane PowerShell version setting', () => {
   it('does not show WSL as a Windows default shell option when available', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'auto',
         terminalWordSeparator: ''
@@ -325,7 +322,7 @@ describe('TerminalPane PowerShell version setting', () => {
   it('shows Windows shell controls for a remote Windows host on a non-Windows client', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'auto',
         terminalWordSeparator: ''
@@ -349,7 +346,7 @@ describe('TerminalPane PowerShell version setting', () => {
   it('hides WSL as a Windows default shell option when unavailable', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'auto',
         terminalWordSeparator: ''
@@ -365,10 +362,10 @@ describe('TerminalPane PowerShell version setting', () => {
     expect(collectText(element)).not.toContain('WSL')
   })
 
-  it('does not show WSL distro choices for a persisted legacy WSL shell', () => {
+  it('shows a persisted WSL default without PowerShell or distro sub-settings', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'wsl.exe',
         terminalWindowsWslDistro: 'Debian',
         terminalWindowsPowerShellImplementation: 'auto',
@@ -386,6 +383,9 @@ describe('TerminalPane PowerShell version setting', () => {
     const text = collectText(element)
     expect(text).toContain('PowerShell')
     expect(text).toContain('Command Prompt')
+    expect(text).toContain('WSL')
+    expect(hasShellIconFor(element, 'wsl.exe')).toBe(true)
+    expect(text).not.toContain('PowerShell Version')
     expect(text).not.toContain('Choose which WSL distribution')
     expect(text).not.toContain('Windows default')
     expect(text).not.toContain('Ubuntu')
@@ -395,7 +395,7 @@ describe('TerminalPane PowerShell version setting', () => {
   it('shows Git Bash as a Windows default shell option when bash.exe is detected', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'auto',
         terminalWordSeparator: ''
@@ -415,7 +415,7 @@ describe('TerminalPane PowerShell version setting', () => {
   it('hides Git Bash as a Windows default shell option when not detected', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'auto',
         terminalWordSeparator: ''

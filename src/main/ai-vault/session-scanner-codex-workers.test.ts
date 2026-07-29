@@ -1,6 +1,6 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
 
@@ -106,6 +106,7 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
       claudeProjectsDir: join(root, 'claude-projects'),
       codexSessionsDir,
       geminiSessionsDir: join(root, 'gemini-sessions'),
+      antigravityBrainDir: join(root, 'antigravity-brain'),
       copilotSessionsDir: join(root, 'copilot-sessions'),
       cursorProjectsDir: join(root, 'cursor-projects'),
       opencodeStorageDir: join(root, 'opencode-storage'),
@@ -117,6 +118,7 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
       openclawStateDir: join(root, 'openclaw-state'),
       openclawLegacyStateDir: join(root, 'openclaw-legacy-state'),
       piSessionsDir: join(root, 'pi-sessions'),
+      ompSessionsDir: join(root, 'omp-sessions'),
       droidSessionsDir: join(root, 'droid-sessions'),
       droidProjectsDir: join(root, 'droid-projects'),
       kimiSessionsDir: join(root, 'kimi-sessions'),

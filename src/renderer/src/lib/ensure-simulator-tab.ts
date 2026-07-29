@@ -32,9 +32,6 @@ export function ensureSimulatorTab(
   worktreeId: string,
   options?: EnsureSimulatorTabOptions
 ): string | null {
-  if (!isMacOsHost) {
-    return null
-  }
   const store = useAppStore.getState()
   if (store.settings?.mobileEmulatorEnabled === false) {
     return null

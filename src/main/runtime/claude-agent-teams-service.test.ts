@@ -141,6 +141,103 @@ describe('ClaudeAgentTeamsService', () => {
     ])
   })
 
+  it('relaunches a teammate via respawn-pane after a cat holding split', async () => {
+    const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
+    const request = (argv: string[], envPane = leaderPane) =>
+      service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
+
+    // Claude splits a holding pane running `cat`, then respawns it with the
+    // real teammate command (the failure mode before respawn-pane was supported).
+    await expect(
+      request([
+        'split-window',
+        '-d',
+        '-t',
+        leaderPane,
+        '-h',
+        '-l',
+        '70%',
+        '-P',
+        '-F',
+        '#{pane_id}',
+        '--',
+        'cat'
+      ])
+    ).resolves.toMatchObject({ stdout: '%2\n', exitCode: 0 })
+
+    await request(['set-option', '-p', '-t', '%2', 'remain-on-exit', 'failed'])
+
+    const teammateCommand = 'cd /repo && env CLAUDECODE=1 claude --agent-id a --teammate-mode auto'
+    await expect(
+      request(['respawn-pane', '-k', '-t', '%2', '--', teammateCommand])
+    ).resolves.toMatchObject({ stdout: '', exitCode: 0 })
+
+    // the placeholder terminal is closed and the pane is recreated, from the same
+    // origin/direction, with the real teammate command.
+    expect(api.closeTerminal).toHaveBeenCalledWith('teammate-1')
+    expect(splitCalls).toEqual([
+      { handle: 'leader-handle', direction: 'vertical', command: 'cat', envPane: '%2' },
+      { handle: 'leader-handle', direction: 'vertical', command: teammateCommand, envPane: '%2' }
+    ])
+
+    // the fake pane id is preserved and now backed by the relaunched terminal.
+    await expect(
+      request(['list-panes', '-t', 'orca:0', '-F', '#{pane_id}'])
+    ).resolves.toMatchObject({ stdout: '%1\n%2\n' })
+
+    await request(['kill-pane', '-t', '%2'])
+    expect(api.closeTerminal).toHaveBeenLastCalledWith('teammate-2')
+  })
+
+  it('keeps the placeholder handle when the respawn split fails', async () => {
+    const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
+    const request = (argv: string[], envPane = leaderPane) =>
+      service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
+
+    await request([
+      'split-window',
+      '-d',
+      '-t',
+      leaderPane,
+      '-h',
+      '-P',
+      '-F',
+      '#{pane_id}',
+      '--',
+      'cat'
+    ])
+
+    vi.mocked(api.splitTerminal).mockRejectedValueOnce(new Error('no space for new pane'))
+    await expect(
+      request(['respawn-pane', '-k', '-t', '%2', '--', 'claude --agent-id a'])
+    ).resolves.toMatchObject({ ok: false, exitCode: 1 })
+
+    // the placeholder terminal is left intact and the fake pane id still resolves.
+    expect(api.closeTerminal).not.toHaveBeenCalled()
+    await request(['kill-pane', '-t', '%2'])
+    expect(api.closeTerminal).toHaveBeenCalledWith('teammate-1')
+  })
+
+  it('refuses to respawn the leader pane', async () => {
+    const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
+
+    await expect(
+      service.handleTmuxCompat(
+        {
+          teamId,
+          token,
+          envPane: leaderPane,
+          argv: ['respawn-pane', '-k', '-t', leaderPane, '--', 'cat']
+        },
+        api
+      )
+    ).resolves.toMatchObject({
+      ok: false,
+      exitCode: 1,
+      stderr: 'tmux: refusing to respawn leader pane\n'
+    })
+  })
+
   it('rejects stale or unauthorized shim calls', async () => {
     const { service, teamId, leaderPane, api } = createServiceWithLeader()
 

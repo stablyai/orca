@@ -1,8 +1,8 @@
 import { X } from 'lucide-react'
-import { type CSSProperties, type JSX } from 'react'
+import type { CSSProperties, JSX } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { type ImageViewerImageDimensions } from './image-viewer-zoom'
+import type { ImageViewerImageDimensions } from './image-viewer-zoom'
 import { translate } from '@/i18n/i18n'
 
 type ImageViewerPopupProps = {

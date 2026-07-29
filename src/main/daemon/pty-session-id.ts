@@ -1,5 +1,5 @@
-import { randomUUID } from 'crypto'
-import { isAbsolute, join, relative, resolve, sep } from 'path'
+import { randomUUID } from 'node:crypto'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { PTY_SESSION_ID_SEPARATOR } from '../../shared/pty-session-id-format'
 
 // Why: re-exported here so main-side callers can keep importing
@@ -22,6 +22,15 @@ export function mintPtySessionId(worktreeId?: string): string {
   return worktreeId
     ? `${worktreeId}${PTY_SESSION_ID_SEPARATOR}${randomUUID().slice(0, 8)}`
     : randomUUID()
+}
+
+export function ptySessionIdForAgentCreateOperation(
+  worktreeId: string | undefined,
+  operationId: string
+): string {
+  // Why: keep the legacy eight-character suffix budget so max-length worktree IDs still launch.
+  const suffix = operationId.slice(0, 8)
+  return worktreeId ? `${worktreeId}${PTY_SESSION_ID_SEPARATOR}${suffix}` : suffix
 }
 
 /**

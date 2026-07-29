@@ -1,4 +1,5 @@
 import type { SpeechModelManifest } from '../../shared/speech-types'
+import { getSpeechModelDownloadMetadata } from './model-download-catalog'
 
 export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
   {
@@ -9,12 +10,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     type: 'transducer',
     provider: 'local',
     language: 'multilingual',
-    sizeBytes: 180_000_000,
-    downloadUrl:
-      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2',
-    archiveSha256: '5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf',
-    archiveFormat: 'tar.bz2',
-    files: ['encoder.int8.onnx', 'decoder.int8.onnx', 'joiner.int8.onnx', 'tokens.txt'],
+    ...getSpeechModelDownloadMetadata('parakeet-tdt-0.6b-v3-int8'),
     sampleRate: 16000,
     streaming: false,
     modelingUnit: 'bpe',
@@ -28,12 +24,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     type: 'transducer',
     provider: 'local',
     language: 'en',
-    sizeBytes: 170_000_000,
-    downloadUrl:
-      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2',
-    archiveSha256: '157c157bc51155e03e37d2466522a3a737dd9c72bb25f36eb18912964161e1ad',
-    archiveFormat: 'tar.bz2',
-    files: ['encoder.int8.onnx', 'decoder.int8.onnx', 'joiner.int8.onnx', 'tokens.txt'],
+    ...getSpeechModelDownloadMetadata('parakeet-tdt-0.6b-v2-int8'),
     sampleRate: 16000,
     streaming: false,
     modelingUnit: 'bpe'
@@ -45,17 +36,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     type: 'transducer',
     provider: 'local',
     language: 'zh-en',
-    sizeBytes: 130_000_000,
-    downloadUrl:
-      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2',
-    archiveSha256: '27ffbd9ee24ad186d99acc2f6354d7992b27bcab490812510665fa8f9389c5f8',
-    archiveFormat: 'tar.bz2',
-    files: [
-      'encoder-epoch-99-avg-1.onnx',
-      'decoder-epoch-99-avg-1.onnx',
-      'joiner-epoch-99-avg-1.onnx',
-      'tokens.txt'
-    ],
+    ...getSpeechModelDownloadMetadata('zipformer-bilingual-zh-en'),
     sampleRate: 16000,
     streaming: true,
     modelingUnit: 'cjkchar+bpe'
@@ -68,12 +49,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     type: 'paraformer',
     provider: 'local',
     language: 'zh-en',
-    sizeBytes: 115_000_000,
-    downloadUrl:
-      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-bilingual-zh-en.tar.bz2',
-    archiveSha256: '5462a1fce42693deae572af1e8c4687124b12aa85fe61ff4d3168bb5280e205f',
-    archiveFormat: 'tar.bz2',
-    files: ['encoder.int8.onnx', 'decoder.int8.onnx', 'tokens.txt'],
+    ...getSpeechModelDownloadMetadata('paraformer-bilingual-zh-en'),
     sampleRate: 16000,
     streaming: true
   },
@@ -84,17 +60,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     type: 'transducer',
     provider: 'local',
     language: 'en',
-    sizeBytes: 128_000_000,
-    downloadUrl:
-      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-20M-2023-02-17.tar.bz2',
-    archiveSha256: '9c559283e8498d3fe95913c79ca1cb454bb26281ac2b102b41306c7d752765d9',
-    archiveFormat: 'tar.bz2',
-    files: [
-      'encoder-epoch-99-avg-1.onnx',
-      'decoder-epoch-99-avg-1.onnx',
-      'joiner-epoch-99-avg-1.onnx',
-      'tokens.txt'
-    ],
+    ...getSpeechModelDownloadMetadata('zipformer-streaming-en-20m'),
     sampleRate: 16000,
     streaming: true,
     modelingUnit: 'bpe'
@@ -106,20 +72,33 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     type: 'transducer',
     provider: 'local',
     language: 'zh',
-    sizeBytes: 74_000_000,
-    downloadUrl:
-      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23.tar.bz2',
-    archiveSha256: '2cbd71b640d9c37d3784f29367333a4577b0398b62e9deeed418170b081cba8b',
-    archiveFormat: 'tar.bz2',
-    files: [
-      'encoder-epoch-99-avg-1.onnx',
-      'decoder-epoch-99-avg-1.onnx',
-      'joiner-epoch-99-avg-1.onnx',
-      'tokens.txt'
-    ],
+    ...getSpeechModelDownloadMetadata('zipformer-streaming-zh-14m'),
     sampleRate: 16000,
     streaming: true,
     modelingUnit: 'cjkchar'
+  },
+  {
+    id: 'zipformer-streaming-korean',
+    label: 'Zipformer Streaming KO',
+    description: 'Korean only. Low-latency real-time streaming.',
+    type: 'transducer',
+    provider: 'local',
+    language: 'ko',
+    ...getSpeechModelDownloadMetadata('zipformer-streaming-korean'),
+    sampleRate: 16000,
+    streaming: true,
+    modelingUnit: 'bpe'
+  },
+  {
+    id: 'parakeet-tdt-ctc-0.6b-ja-int8',
+    label: 'Parakeet TDT-CTC JA',
+    description: 'Japanese only. Trained on 35k+ hours of natural speech. Punctuation included.',
+    type: 'nemo-ctc',
+    provider: 'local',
+    language: 'ja',
+    ...getSpeechModelDownloadMetadata('parakeet-tdt-ctc-0.6b-ja-int8'),
+    sampleRate: 16000,
+    streaming: false
   },
   {
     id: 'whisper-tiny',
@@ -128,12 +107,19 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     type: 'whisper',
     provider: 'local',
     language: 'multilingual',
-    sizeBytes: 116_000_000,
-    downloadUrl:
-      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.tar.bz2',
-    archiveSha256: 'c46116994e539aa165266d96b325252728429c12535eb9d8b6a2b10f129e66b1',
-    archiveFormat: 'tar.bz2',
-    files: ['tiny-encoder.onnx', 'tiny-decoder.onnx', 'tiny-tokens.txt'],
+    ...getSpeechModelDownloadMetadata('whisper-tiny'),
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
+    id: 'sense-voice-zh-en-ja-ko-yue',
+    label: 'SenseVoice',
+    description:
+      'Chinese, English, Japanese, Korean, and Cantonese with automatic language detection.',
+    type: 'senseVoice',
+    provider: 'local',
+    language: 'multilingual',
+    ...getSpeechModelDownloadMetadata('sense-voice-zh-en-ja-ko-yue'),
     sampleRate: 16000,
     streaming: false
   },

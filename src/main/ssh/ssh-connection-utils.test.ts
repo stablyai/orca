@@ -1,7 +1,6 @@
-/* eslint-disable max-lines -- Why: SSH connection utility tests share mocked filesystem and environment setup across auth, proxy, and retry helpers. */
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
-import { join } from 'path'
+import { join } from 'node:path'
 import { BaseAgent, utils, type ParsedKey } from 'ssh2'
 
 const { spawnMock } = vi.hoisted(() => ({
@@ -32,6 +31,7 @@ vi.mock('fs', () => ({
 import {
   isTransientError,
   isSystemSshFallbackError,
+  isGssapiSystemSshFallbackCandidate,
   isAuthError,
   isAgentFallbackError,
   sleep,
@@ -164,6 +164,49 @@ describe('isSystemSshFallbackError', () => {
 
     expect(isSystemSshFallbackError(refused)).toBe(false)
     expect(isSystemSshFallbackError(new Error('connect ETIMEDOUT 1.2.3.4:22'))).toBe(false)
+  })
+})
+
+// ── isGssapiSystemSshFallbackCandidate ───────────────────────────────
+
+describe('isGssapiSystemSshFallbackCandidate', () => {
+  const authErr = new Error('All configured authentication methods failed')
+
+  it('returns true for auth failures when resolved config enables GSSAPI', () => {
+    expect(isGssapiSystemSshFallbackCandidate(authErr, {}, { gssapiAuthentication: true })).toBe(
+      true
+    )
+  })
+
+  it('returns true for passphrase failures so Kerberos SSO runs before prompting', () => {
+    const passphraseErr = new Error('Encrypted private OpenSSH key detected, but no passphrase')
+    expect(
+      isGssapiSystemSshFallbackCandidate(passphraseErr, {}, { gssapiAuthentication: true })
+    ).toBe(true)
+  })
+
+  it('returns false when the target already tried system ssh proactively', () => {
+    expect(
+      isGssapiSystemSshFallbackCandidate(
+        authErr,
+        { gssapiAuthentication: true },
+        { gssapiAuthentication: true }
+      )
+    ).toBe(false)
+  })
+
+  it('returns false without GSSAPI in the resolved config', () => {
+    expect(isGssapiSystemSshFallbackCandidate(authErr, {}, { gssapiAuthentication: false })).toBe(
+      false
+    )
+    expect(isGssapiSystemSshFallbackCandidate(authErr, {}, null)).toBe(false)
+  })
+
+  it('returns false for network errors so retry semantics stay unchanged', () => {
+    const netErr = new Error('connect ETIMEDOUT 1.2.3.4:22')
+    expect(isGssapiSystemSshFallbackCandidate(netErr, {}, { gssapiAuthentication: true })).toBe(
+      false
+    )
   })
 })
 
@@ -326,6 +369,8 @@ function makeResolved(overrides?: Partial<SshResolvedConfig>): SshResolvedConfig
     forwardAgent: false,
     identitiesOnly: false,
     proxyUseFdpass: false,
+    controlMaster: 'no',
+    controlPersist: 'no',
     ...overrides
   }
 }

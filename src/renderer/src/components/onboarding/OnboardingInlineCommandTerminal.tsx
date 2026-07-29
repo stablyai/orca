@@ -5,6 +5,7 @@ import { PASTE_TERMINAL_TEXT_EVENT, type PasteTerminalTextDetail } from '@/const
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { brandEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 
 const ONBOARDING_INLINE_TERMINAL_WORKTREE_ID = 'onboarding-inline-terminal'
 const AUTO_INSERT_DELAY_MS = 250
@@ -30,6 +31,10 @@ type OnboardingInlineCommandTerminalProps = {
   onTerminalExit?: () => void
 }
 
+/**
+ * Inline pane that runs a one-off setup command (skill install, feature tip) in an
+ * ephemeral floating-scoped terminal, auto-inserting the command once the PTY is ready.
+ */
 export function OnboardingInlineCommandTerminal({
   command,
   title,
@@ -39,12 +44,18 @@ export function OnboardingInlineCommandTerminal({
   terminalTopMarginPx = 20,
   descriptionPaddingClassName = 'px-4 py-3',
   autoScrollIntoView = true,
-  worktreeId = ONBOARDING_INLINE_TERMINAL_WORKTREE_ID,
+  worktreeId: worktreeIdProp = ONBOARDING_INLINE_TERMINAL_WORKTREE_ID,
   shellOverride,
   onOpened,
   onInteracted,
   onTerminalExit
 }: OnboardingInlineCommandTerminalProps): React.JSX.Element {
+  // Why: brand the id so a remote runtime scopes this ephemeral terminal to the
+  // floating terminal instead of rejecting the synthetic id.
+  const worktreeId = useMemo(
+    () => brandEphemeralSetupTerminalWorktreeId(worktreeIdProp),
+    [worktreeIdProp]
+  )
   const createTab = useAppStore((s) => s.createTab)
   const closeTab = useAppStore((s) => s.closeTab)
   const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
@@ -92,7 +103,7 @@ export function OnboardingInlineCommandTerminal({
     return () => {
       // Why: inline setup panels can disappear after detection succeeds; close
       // the backing tab so installer shells do not keep running invisibly.
-      closeTab(tab.id, { recordInteraction: false })
+      closeTab(tab.id, { recordInteraction: false, reason: 'cleanup' })
     }
   }, [
     closeTab,
@@ -283,11 +294,12 @@ export function OnboardingInlineCommandTerminal({
               cwd={cwd}
               isActive
               isVisible
+              showSplitButton={false}
               onPtyExit={() => {
                 onTerminalExit?.()
-                closeTab(tabId, { recordInteraction: false })
+                closeTab(tabId, { recordInteraction: false, reason: 'pty-exit' })
               }}
-              onCloseTab={() => closeTab(tabId, { recordInteraction: false })}
+              onCloseTab={() => closeTab(tabId, { recordInteraction: false, reason: 'cleanup' })}
             />
           ) : (
             <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">

@@ -1,9 +1,9 @@
 import { Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '../ui/button'
-import { Input } from '../ui/input'
 import { Label } from '../ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { AddressPicker, type AddressOption } from '../network/AddressPicker'
+import { parseServerShareAddress } from '../../../../shared/network/server-share-address'
 import { GeneratedUrlRow, UnavailableUrlRow } from './RuntimePairingGeneratedUrlRows'
 import { translate } from '@/i18n/i18n'
 
@@ -11,14 +11,12 @@ type RuntimePairingGeneratorFormProps = {
   loopbackAddress: string
   networkInterfaces: { name: string; address: string }[]
   selectedAddress: string
-  customAddress: string
   refreshingNetworkInterfaces: boolean
   isGeneratingPairing: boolean
   webClientUrl: string | null
   runtimePairingUrl: string | null
   copiedTarget: 'web' | 'pairing' | null
   onSelectedAddressChange: (address: string) => void
-  onCustomAddressChange: (address: string) => void
   onRefreshNetworkInterfaces: () => void
   onGenerate: () => void
   onCopy: (target: 'web' | 'pairing', value: string) => void
@@ -28,102 +26,125 @@ export function RuntimePairingGeneratorForm({
   loopbackAddress,
   networkInterfaces,
   selectedAddress,
-  customAddress,
   refreshingNetworkInterfaces,
   isGeneratingPairing,
   webClientUrl,
   runtimePairingUrl,
   copiedTarget,
   onSelectedAddressChange,
-  onCustomAddressChange,
   onRefreshNetworkInterfaces,
   onGenerate,
   onCopy
 }: RuntimePairingGeneratorFormProps): React.JSX.Element {
+  const options: AddressOption[] = [
+    {
+      value: loopbackAddress,
+      label: `${translate(
+        'auto.components.settings.RuntimePairingUrlGenerator.de6d5cff95',
+        'This computer ('
+      )}${loopbackAddress})`
+    },
+    ...networkInterfaces.map((networkInterface) => ({
+      value: networkInterface.address,
+      label: `${networkInterface.name} (${networkInterface.address})`
+    }))
+  ]
+
   return (
     <>
       <div className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
-          <div className="space-y-1">
-            <Label id="runtime-pairing-address-label" htmlFor="runtime-pairing-address">
-              {translate(
+        <div className="space-y-1">
+          <Label id="runtime-pairing-address-label" htmlFor="runtime-pairing-address">
+            {translate(
+              'auto.components.settings.RuntimePairingUrlGenerator.de77eb1b65',
+              'Connection address'
+            )}
+          </Label>
+          <div className="flex flex-wrap items-center gap-2">
+            <AddressPicker
+              id="runtime-pairing-address"
+              // Why: bounded width so a short value like "This computer
+              // (127.0.0.1)" doesn't stretch the trigger across the whole card;
+              // the value can grow up to the card edge before truncating.
+              className="min-w-[240px] max-w-full"
+              triggerAriaLabel={translate(
                 'auto.components.settings.RuntimePairingUrlGenerator.de77eb1b65',
                 'Connection address'
               )}
-            </Label>
-            <div className="flex min-w-0 items-center gap-2">
-              <Select value={selectedAddress} onValueChange={onSelectedAddressChange}>
-                <SelectTrigger
-                  id="runtime-pairing-address"
-                  size="sm"
-                  className="min-w-0 flex-1"
-                  aria-labelledby="runtime-pairing-address-label"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={loopbackAddress}>
-                    {translate(
-                      'auto.components.settings.RuntimePairingUrlGenerator.de6d5cff95',
-                      'This computer ('
-                    )}
-                    {loopbackAddress})
-                  </SelectItem>
-                  {networkInterfaces.map((networkInterface, index) => (
-                    <SelectItem
-                      key={`${networkInterface.name}:${networkInterface.address}:${index}`}
-                      value={networkInterface.address}
-                    >
-                      {networkInterface.name} ({networkInterface.address})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {/* Why: server sharing uses the same interface list as Mobile,
-                  and VPN/tailnet addresses can appear after Settings opens. */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={onRefreshNetworkInterfaces}
-                    disabled={refreshingNetworkInterfaces}
-                    aria-label={translate(
-                      'auto.components.settings.RuntimePairingUrlGenerator.360c548cf3',
-                      'Refresh connection addresses'
-                    )}
-                    className="text-muted-foreground"
-                  >
-                    <RefreshCw className={refreshingNetworkInterfaces ? 'animate-spin' : ''} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  {translate(
+              options={options}
+              value={selectedAddress}
+              onValueChange={onSelectedAddressChange}
+              placeholder=""
+              customInputId="runtime-pairing-custom-address"
+              formatCustomLabel={(address) =>
+                translate(
+                  'auto.components.settings.RuntimePairingUrlGenerator.custom-option',
+                  '{{address}} (custom)',
+                  { address }
+                )
+              }
+              addCustomLabel={translate(
+                'auto.components.settings.RuntimePairingUrlGenerator.add-custom',
+                'Add custom address…'
+              )}
+              validateCustom={parseServerShareAddress}
+              customDialogCopy={{
+                title: translate(
+                  'auto.components.settings.RuntimePairingUrlGenerator.custom-title',
+                  'Custom connection address'
+                ),
+                description: translate(
+                  'auto.components.settings.RuntimePairingUrlGenerator.custom-description',
+                  'Advertise an address another device can reach — a LAN or Tailscale host, or a full ws(s):// URL.'
+                ),
+                inputLabel: translate(
+                  'auto.components.settings.RuntimePairingUrlGenerator.4531ea3158',
+                  'Custom address'
+                ),
+                placeholder: translate(
+                  'auto.components.settings.RuntimePairingUrlGenerator.45cf476df3',
+                  'host, host:port, or wss://host/path'
+                ),
+                hint: translate(
+                  'auto.components.settings.RuntimePairingUrlGenerator.custom-hint',
+                  'Enter a host, host:port, or a ws(s):// URL.'
+                ),
+                cancel: translate(
+                  'auto.components.settings.RuntimePairingUrlGenerator.custom-cancel',
+                  'Cancel'
+                ),
+                confirm: translate(
+                  'auto.components.settings.RuntimePairingUrlGenerator.custom-use',
+                  'Use address'
+                )
+              }}
+            />
+            {/* Why: server sharing uses the same interface list as Mobile,
+                and VPN/tailnet addresses can appear after Settings opens. */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={onRefreshNetworkInterfaces}
+                  disabled={refreshingNetworkInterfaces}
+                  aria-label={translate(
                     'auto.components.settings.RuntimePairingUrlGenerator.360c548cf3',
                     'Refresh connection addresses'
                   )}
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
-          <div className="min-w-0 space-y-1">
-            <Label htmlFor="runtime-pairing-custom-address">
-              {translate(
-                'auto.components.settings.RuntimePairingUrlGenerator.4531ea3158',
-                'Custom address'
-              )}
-            </Label>
-            <Input
-              id="runtime-pairing-custom-address"
-              value={customAddress}
-              onChange={(event) => onCustomAddressChange(event.target.value)}
-              placeholder={translate(
-                'auto.components.settings.RuntimePairingUrlGenerator.45cf476df3',
-                'host, host:port, or wss://host/path'
-              )}
-              className="h-8 font-mono text-xs"
-            />
+                  className="text-muted-foreground"
+                >
+                  <RefreshCw className={refreshingNetworkInterfaces ? 'animate-spin' : ''} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {translate(
+                  'auto.components.settings.RuntimePairingUrlGenerator.360c548cf3',
+                  'Refresh connection addresses'
+                )}
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
         <p className="text-xs text-muted-foreground">

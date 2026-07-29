@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { mkdtemp, rm } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { deriveValidatedClonePath, getClonePathComparisonKey } from './repo-clone-path'
 
 describe('repo clone path helpers', () => {

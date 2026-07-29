@@ -26,13 +26,9 @@ export function TerminalCursorAppearanceSection({
           'auto.components.settings.TerminalAppearanceSection.abcb4dd019',
           'Terminal Cursor'
         )}
-        description={translate(
-          'auto.components.settings.TerminalAppearanceSection.d455f2ef4f',
-          'Default cursor appearance for Orca terminal panes.'
-        )}
       />
 
-      <div className="divide-y divide-border/40">
+      <div className="ml-4 divide-y divide-border/40">
         <SearchableSetting
           title={translate(
             'auto.components.settings.TerminalAppearanceSection.db270cc9a9',
@@ -44,14 +40,11 @@ export function TerminalCursorAppearanceSection({
           )}
           keywords={['terminal', 'cursor', 'bar', 'block', 'underline']}
         >
+          {/* Why: Bar/Block/Underline options convey the meaning; helper text pruned. */}
           <SettingsRow
             label={translate(
               'auto.components.settings.TerminalAppearanceSection.db270cc9a9',
               'Cursor Shape'
-            )}
-            description={translate(
-              'auto.components.settings.TerminalAppearanceSection.d455f2ef4f',
-              'Default cursor appearance for Orca terminal panes.'
             )}
             control={
               <SettingsSegmentedControl
@@ -105,10 +98,6 @@ export function TerminalCursorAppearanceSection({
               'auto.components.settings.TerminalAppearanceSection.74736cc9b1',
               'Blinking Cursor'
             )}
-            description={translate(
-              'auto.components.settings.TerminalAppearanceSection.2de6b5a699',
-              'Uses the blinking variant of the selected cursor shape.'
-            )}
             checked={settings.terminalCursorBlink}
             onChange={() => updateSettings({ terminalCursorBlink: !settings.terminalCursorBlink })}
           />
@@ -130,10 +119,7 @@ export function TerminalCursorAppearanceSection({
               'auto.components.settings.TerminalAppearanceSection.b9f1804422',
               'Cursor Opacity'
             )}
-            description={translate(
-              'auto.components.settings.TerminalAppearanceSection.04cdf85dec',
-              'Opacity of the terminal cursor.'
-            )}
+            description=""
             value={settings.terminalCursorOpacity ?? 1}
             defaultValue={1}
             min={0}

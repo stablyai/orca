@@ -1,3 +1,5 @@
+import type { OrchestrationCliCommand } from './cli-command'
+
 export type PreambleParams = {
   taskId: string
   // Why: completion and heartbeat payloads attribute activity to a specific
@@ -6,9 +8,14 @@ export type PreambleParams = {
   // prevents stale messages from a previously-failed dispatch from completing
   // or refreshing the retry.
   dispatchId: string
+  dispatchCapability?: string
   taskSpec: string
   coordinatorHandle: string
+  workerHandle: string
   devMode?: boolean
+  // Why: packaged WSL panes install the scoped launcher as `orca-ide`;
+  // other execution hosts keep their existing bare `orca` bridge.
+  cliCommand?: OrchestrationCliCommand
   // Why: populated by the coordinator's dispatch pre-flight (§3.1) only
   // when the target worktree is behind its tracking remote. When absent
   // or when `behind === 0`, the preamble emits no drift section. Callers
@@ -21,6 +28,9 @@ export type PreambleParams = {
     behind: number
     recentSubjects: string[]
   }
+  // Why: prompt-returning agents should idle after worker_done, while bare
+  // shells have no agent prompt for Orca to reuse.
+  workerKind?: 'prompt-returning-agent' | 'bare-shell'
 }
 
 // Why: 5 minutes is frequent enough that the coordinator's stale-heartbeat
@@ -38,7 +48,14 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   // Why: in dev mode, agents must use orca-dev to connect to the dev runtime's
   // socket. Without this, agents inside the dev Electron app would call the
   // production CLI and talk to the wrong Orca instance (Section 6.4).
-  const cli = params.devMode ? 'orca-dev' : 'orca'
+  const cli = params.devMode ? 'orca-dev' : (params.cliCommand ?? 'orca')
+  const postDoneInstructions = buildPostWorkerDoneInstructions({
+    cli,
+    workerKind: params.workerKind ?? 'prompt-returning-agent'
+  })
+  const capabilityFlag = params.dispatchCapability
+    ? ` --dispatch-capability ${params.dispatchCapability}`
+    : ''
 
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 Your coordinator's terminal handle is: ${params.coordinatorHandle}
@@ -49,7 +66,7 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
 
 === CLI COMMANDS ===
 
-  # Report task completion (REQUIRED when done — even on failure).
+  # Report the terminal task outcome (REQUIRED exactly once).
   #
   # RULE: --body must be a 3-sentence executive summary (what you did,
   # what you found, what's left). Never send an empty body; the coordinator
@@ -57,14 +74,15 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # If you produced a long-form artifact, include its path as
   # payload.reportPath so the coordinator can find it without a file search.
   #
-  # RULE: send worker_done exactly once. Failure is still a worker_done
-  # with subject like "Failed: <reason>" — never silently exit.
+  # RULE: send worker_done exactly once. Use --outcome succeeded when the
+  # requested work is done, or replace it with --outcome failed when it is not.
+  # Never encode failure only in prose and never silently exit.
   # Include BOTH taskId and dispatchId in the payload so a late completion
   # from a failed retry cannot complete the current dispatch.
-  ${cli} orchestration send --to ${params.coordinatorHandle} \\
+  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} \\
     --type worker_done --subject "<short status>" \\
     --body "<3-sentence summary: what you did, what you found, what's left>" \\
-    --task-id ${params.taskId} --dispatch-id ${params.dispatchId} \\
+    --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded \\
     --files-modified "path/a,path/b" \\
     --report-path "<optional: path to the full artifact>"
 
@@ -78,7 +96,7 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # attributes the heartbeat to the specific dispatch context, not just
   # the task, so a straggler heartbeat from a previously-failed dispatch
   # cannot mask a hung retry.
-  ${cli} orchestration send --to ${params.coordinatorHandle} \\
+  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} \\
     --type heartbeat --subject "alive" \\
     --task-id ${params.taskId} --dispatch-id ${params.dispatchId} \\
     --phase "<short: investigating|implementing|reviewing|waiting>"
@@ -91,36 +109,26 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # coordinator cannot see and cannot answer — your session will hang forever
   # waiting on a human. Every interactive question goes through \`ask\` below.
   #
-  # The \`ask\` verb is a thin wrapper: it sends a decision_gate message and
-  # blocks on \`check --wait\` until the coordinator replies, then prints the
-  # reply body. Use it anywhere you would otherwise have reached for
-  # AskUserQuestion.
-  ${cli} orchestration ask --to ${params.coordinatorHandle} \\
+  # The \`ask\` verb durably records a question in this Dispatch's Run and
+  # blocks until the coordinator replies, then prints the reply body. If the
+  # call times out or disconnects, resume with the returned message ID instead
+  # of creating a duplicate question.
+  ${cli} orchestration ask --from ${params.workerHandle}${capabilityFlag} \\
     --question "<your question>" \\
     --options "<optional,comma,separated>" \\
     --timeout-ms 600000
 
   # Escalate a blocker or failure (pre-completion, when you need the
   # coordinator to do something before you can continue):
-  ${cli} orchestration send --to ${params.coordinatorHandle} \\
+  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} \\
     --type escalation --subject "Blocked: <reason>" \\
     --body "<details>" \\
     --task-id ${params.taskId}
 
   # Check for messages from the coordinator:
-  ${cli} orchestration check
+  ${cli} orchestration check --terminal ${params.workerHandle}
 
-=== AFTER YOU SEND worker_done ===
-
-Keep the shell session open for a grace period (10 minutes) in case the
-coordinator sends a follow-up or re-dispatches you. Poll with
-\`${cli} orchestration check\` every 2 minutes during that window. If no
-follow-up arrives, you may exit after the grace period — the coordinator
-will not expect further output from you.
-
-If the coordinator re-dispatches you (you will receive a fresh preamble +
-TASK block), reset your polling and start the new task. Do not respond
-to the previous task's follow-ups after a re-dispatch.`
+${postDoneInstructions}`
 
   // Why: the drift section fires only when the coordinator allowed dispatch
   // against a stale worktree (via `allow-stale-base: true` in the task spec,
@@ -134,6 +142,43 @@ to the previous task's follow-ups after a re-dispatch.`
 
 === TASK ===
 ${params.taskSpec}`
+}
+
+function buildPostWorkerDoneInstructions({
+  cli,
+  workerKind
+}: {
+  cli: string
+  workerKind: NonNullable<PreambleParams['workerKind']>
+}): string {
+  // Why: re-dispatch reaches idle agents as terminal input; inbox polling
+  // after completion cannot receive that new TASK block and looks hung.
+  if (workerKind === 'bare-shell') {
+    return `=== AFTER YOU SEND worker_done ===
+
+worker_done ends your turn for this task. Your dispatched work is complete:
+stop and take no further actions — do NOT start new or unrelated work,
+do NOT run a sleep/poll loop, and do NOT keep calling
+\`${cli} orchestration check\`. The coordinator has already recorded your
+completion and expects no further output.
+
+Exit the shell after completion. Bare-shell workers have no idle agent
+prompt for Orca to reuse; if the coordinator has more for you it will
+dispatch or prompt another worker with a fresh TASK block.`
+  }
+
+  return `=== AFTER YOU SEND worker_done ===
+
+worker_done ends your turn for this task. Your dispatched work is complete:
+stop, return to an idle prompt, and take no further actions — do NOT start
+new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling
+\`${cli} orchestration check\`. The coordinator has already recorded your
+completion and expects no further output.
+
+Do not exit the shell. Your terminal stays available, and if the
+coordinator has more for you it will re-engage this terminal with a fresh
+preamble + TASK block, which arrives as new input. When that happens,
+reset and start the new task; ignore the previous task's follow-ups.`
 }
 
 function buildDriftSection(drift: NonNullable<PreambleParams['baseDrift']>): string {

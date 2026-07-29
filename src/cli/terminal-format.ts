@@ -155,7 +155,8 @@ export function formatTerminalRename(result: { rename: RuntimeTerminalRename }):
 export function formatTerminalCreate(result: { terminal: RuntimeTerminalCreate }): string {
   const titleNote = result.terminal.title ? ` (title: "${result.terminal.title}")` : ''
   const surfaceNote = result.terminal.surface ? ` [${result.terminal.surface}]` : ''
-  return `Created terminal ${result.terminal.handle}${titleNote}${surfaceNote}`
+  const warningNote = result.terminal.warning ? `\nwarning: ${result.terminal.warning}` : ''
+  return `Created terminal ${result.terminal.handle}${titleNote}${surfaceNote}${warningNote}`
 }
 
 export function formatTerminalSplit(result: { split: RuntimeTerminalSplit }): string {
@@ -167,6 +168,9 @@ export function formatTerminalFocus(result: { focus: RuntimeTerminalFocus }): st
 }
 
 export function formatTerminalClose(result: { close: RuntimeTerminalClose }): string {
+  if (result.close.closeMode === 'tab') {
+    return `Closed terminal tab ${result.close.tabId} (${result.close.handle}).`
+  }
   const ptyNote = result.close.ptyKilled ? ' PTY killed.' : ''
   return `Closed terminal ${result.close.handle}.${ptyNote}`
 }

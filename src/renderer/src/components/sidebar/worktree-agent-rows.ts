@@ -22,32 +22,27 @@ import {
   buildTitleDerivedAgentRows,
   resolveAgentTypeFromTerminalTitle
 } from './worktree-title-derived-agent-rows'
+import { buildSubagentChildRows } from './worktree-subagent-child-rows'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
+import { compareWorktreeAgentRows } from './worktree-agent-row-order'
+import {
+  effectiveWorktreeAgentRowStartedAt,
+  tabFromWorktreeAttributedStatusEntry
+} from './worktree-agent-row-fallback-tab'
 
-function tabFromAttributedStatusEntry(entry: AgentStatusEntry): TerminalTab | null {
-  const parsed = parsePaneKey(entry.paneKey)
-  if (!parsed || !entry.worktreeId) {
-    return null
-  }
-  return {
-    id: parsed.tabId,
-    ptyId: null,
-    worktreeId: entry.worktreeId,
-    title: entry.terminalTitle ?? 'Agent',
-    customTitle: null,
-    color: null,
-    sortOrder: Number.MAX_SAFE_INTEGER,
-    createdAt: entry.stateStartedAt
-  }
-}
-
+/**
+ * Resolves the sidebar row agent type, prioritizing launch agent configuration
+ * and normalizing compatible agent kinds.
+ */
 function resolveRowAgentType(entry: AgentStatusEntry, tab?: TerminalTab | null): AgentType {
-  if (entry.agentType && entry.agentType !== 'unknown') {
-    return entry.agentType
+  const entryAgentType = resolveCompatibleAgentTypeForOwner(entry.agentType, tab?.launchAgent)
+  if (entryAgentType && entryAgentType !== 'unknown') {
+    return entryAgentType
   }
   return (
+    resolveAgentTypeFromTerminalTitle(entry.terminalTitle ?? tab?.title, tab?.launchAgent) ??
     tab?.launchAgent ??
-    resolveAgentTypeFromTerminalTitle(entry.terminalTitle ?? tab?.title) ??
-    entry.agentType ??
+    entryAgentType ??
     'unknown'
   )
 }
@@ -244,6 +239,7 @@ export function buildWorktreeAgentRows(args: {
         (rowEntry.state === 'working' ||
           rowEntry.state === 'blocked' ||
           rowEntry.state === 'waiting')
+      const startedAt = effectiveWorktreeAgentRowStartedAt(rowEntry)
       rows.push({
         paneKey: rowEntry.paneKey,
         entry: rowEntry,
@@ -251,8 +247,9 @@ export function buildWorktreeAgentRows(args: {
         agentType: resolveRowAgentType(rowEntry, tab),
         rowSource: 'live',
         state: shouldDecay ? 'idle' : rowEntry.state,
-        startedAt: rowEntry.stateHistory[0]?.startedAt ?? rowEntry.stateStartedAt
+        startedAt
       })
+      rows.push(...buildSubagentChildRows({ parentEntry: rowEntry, tab, parentIsFresh: isFresh }))
       seenPaneKeys.add(rowEntry.paneKey)
     }
   }
@@ -276,7 +273,8 @@ export function buildWorktreeAgentRows(args: {
       continue
     }
     const rowEntry = entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)
-    const tab = tabFromAttributedStatusEntry(rowEntry)
+    const startedAt = effectiveWorktreeAgentRowStartedAt(rowEntry)
+    const tab = tabFromWorktreeAttributedStatusEntry(rowEntry, startedAt)
     if (!tab) {
       continue
     }
@@ -291,8 +289,9 @@ export function buildWorktreeAgentRows(args: {
       agentType: resolveRowAgentType(rowEntry, tab),
       rowSource: 'live',
       state: shouldDecay ? 'idle' : rowEntry.state,
-      startedAt: rowEntry.stateHistory[0]?.startedAt ?? rowEntry.stateStartedAt
+      startedAt
     })
+    rows.push(...buildSubagentChildRows({ parentEntry: rowEntry, tab, parentIsFresh: isFresh }))
     seenPaneKeys.add(rowEntry.paneKey)
   }
 
@@ -324,6 +323,8 @@ export function buildWorktreeAgentRows(args: {
     })
   }
 
-  rows.sort((a, b) => a.startedAt - b.startedAt)
+  // Why: hook pings can rebuild the live entry list in a different iteration
+  // order. Equal-start agents still need a deterministic sidebar order.
+  rows.sort(compareWorktreeAgentRows)
   return rows
 }

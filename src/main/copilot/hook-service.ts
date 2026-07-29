@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: local status/install/remove and SSH remote
    install must share the same Copilot event list, script body, and
    managed-command matching so local and remote hook behavior cannot drift. */
-import { existsSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
+import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
@@ -12,6 +12,7 @@ import {
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
+  wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -21,6 +22,7 @@ import {
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
+import { buildPosixHookPayloadCapture } from '../agent-hooks/hook-stdin-contract'
 
 // Why: Copilot's user-level hook files can use VS Code-compatible PascalCase
 // names, which match the event vocabulary already normalized by Orca's hook
@@ -61,14 +63,11 @@ function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
-function quotePowerShellPath(path: string): string {
-  return `'${path.replaceAll("'", "''")}'`
-}
-
 function getManagedCommand(scriptPath: string, eventName: string): string {
-  return process.platform === 'win32'
-    ? `$env:ORCA_COPILOT_HOOK_EVENT = '${eventName}'; powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${quotePowerShellPath(scriptPath)}`
-    : wrapPosixHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
+  if (process.platform !== 'win32') {
+    return wrapPosixHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
+  }
+  return wrapWindowsHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
 }
 
 function getManagedHookDefinition(command: string): HookDefinition {
@@ -118,6 +117,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
       "Write-Output '{}'",
+      '$inputData = [Console]::In.ReadToEnd()',
       // Why: endpoint.cmd is cmd syntax, not PowerShell. Parse its `set KEY=...`
       // lines so surviving PTYs can refresh to the current Orca server.
       'if ($env:ORCA_AGENT_HOOK_ENDPOINT -and (Test-Path -LiteralPath $env:ORCA_AGENT_HOOK_ENDPOINT)) {',
@@ -130,7 +130,6 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       '  } catch {}',
       '}',
       'if (-not $env:ORCA_AGENT_HOOK_PORT -or -not $env:ORCA_AGENT_HOOK_TOKEN -or -not $env:ORCA_PANE_KEY) { exit 0 }',
-      '$inputData = [Console]::In.ReadToEnd()',
       'if ([string]::IsNullOrWhiteSpace($inputData)) { exit 0 }',
       'try {',
       '  $payload = $inputData | ConvertFrom-Json',
@@ -154,6 +153,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   return [
     '#!/bin/sh',
     "printf '{}\\n'",
+    ...buildPosixHookPayloadCapture(),
     // Why: Copilot consumes stdout for some hooks, so stdout is emitted before
     // endpoint refresh, stdin parsing, or the network POST can fail.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
@@ -162,11 +162,10 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  exit 0',
     'fi',
-    'payload=$(cat)',
-    'if [ -z "$payload" ]; then',
-    '  exit 0',
-    'fi',
-    'curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/copilot" \\',
+    // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
+    // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
+    // command line (EDR command-line false positives). Wire body is identical.
+    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/copilot" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
@@ -177,7 +176,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  --data-urlencode "hookEventName=${ORCA_COPILOT_HOOK_EVENT}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '  --data-urlencode "payload=${payload}" >/dev/null 2>&1 || true',
+    '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
     'exit 0',
     ''
   ].join('\n')

@@ -1,6 +1,6 @@
-import { mkdtemp, mkdir, rm, utimes, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtemp, mkdir, rm, utimes, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
 import type { AiVaultScanOptions } from './session-scanner-types'
@@ -19,6 +19,7 @@ function scopedScanOptions(claudeProjectsDir: string, extra: Partial<AiVaultScan
     claudeProjectsDir,
     codexSessionsDir: '/nonexistent/codex',
     geminiSessionsDir: '/nonexistent/gemini',
+    antigravityBrainDir: '/nonexistent/antigravity',
     copilotSessionsDir: '/nonexistent/copilot',
     cursorProjectsDir: '/nonexistent/cursor',
     opencodeStorageDir: '/nonexistent/opencode',

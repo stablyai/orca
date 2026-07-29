@@ -1,15 +1,21 @@
 import { useAppStore } from '@/store'
 import {
-  confirmAgentHibernationCandidates,
   planAgentHibernationCandidates,
   type AgentHibernationCandidate,
-  type AgentHibernationConfirmationState,
   type AgentHibernationPlannerSnapshot
 } from './agent-hibernation-planner'
+import {
+  confirmAgentHibernationCandidates,
+  type AgentHibernationConfirmationState
+} from './agent-hibernation-confirmation'
 import type { AppState } from '@/store/types'
 import { getAllDrivers } from './pane-manager/mobile-driver-state'
-import { getForegroundTerminalWorktreeIds } from './foreground-terminal-worktrees'
+import {
+  getForegroundTerminalTabIds,
+  getForegroundTerminalTabLastSeenAtById
+} from './foreground-terminal-tabs'
 import { getAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
+import { mergePendingTerminalInputActivity } from './terminal-input-activity-coalescing'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
@@ -56,7 +62,7 @@ function snapshotFromState(
   return {
     settings: state.settings,
     activeWorktreeId: state.activeWorktreeId,
-    foregroundWorktreeIds: getForegroundTerminalWorktreeIds(),
+    foregroundTerminalTabIds: getForegroundTerminalTabIds(),
     tabsByWorktree: state.tabsByWorktree,
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     ptyIdsByTabId: state.ptyIdsByTabId,
@@ -67,7 +73,11 @@ function snapshotFromState(
       .map(([ptyId]) => ptyId),
     agentStatusByPaneKey: state.agentStatusByPaneKey,
     sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
-    lastTerminalInputAtByPaneKey: state.lastTerminalInputAtByPaneKey,
+    // Why: input stamps are coalesced, so planning must see the not-yet-flushed keystroke.
+    lastTerminalInputAtByPaneKey: mergePendingTerminalInputActivity(
+      state.lastTerminalInputAtByPaneKey
+    ),
+    foregroundTerminalLastSeenAtByTabId: getForegroundTerminalTabLastSeenAtById(),
     now
   }
 }

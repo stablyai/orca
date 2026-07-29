@@ -12,7 +12,11 @@ import { useAppStore } from '../../store'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import {
+  isRuntimeOwnedSshTargetId,
+  toRuntimeExecutionHostId
+} from '../../../../shared/execution-host'
+import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { RuntimeHostStatusRow, type RuntimeHostConnectionState } from './RuntimeHostStatusRow'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
@@ -143,6 +147,22 @@ export function isConnectedRuntimeHostState(state: RuntimeHostConnectionState): 
   return state === 'connected'
 }
 
+export async function connectRuntimeHostForNavigation(args: {
+  environmentId: string
+  refreshStatus: (environmentId: string, timeoutMs: number) => Promise<boolean>
+  fetchRepos: (environmentId: string) => Promise<{ id: string }[]>
+  fetchWorktrees: (repoId: string) => Promise<unknown>
+  fetchLineage: () => Promise<unknown>
+}): Promise<boolean> {
+  if (!(await args.refreshStatus(args.environmentId, 5_000))) {
+    return false
+  }
+  const repos = await args.fetchRepos(args.environmentId)
+  await Promise.all(repos.map((repo) => args.fetchWorktrees(repo.id)))
+  await args.fetchLineage()
+  return true
+}
+
 export function SshStatusSegment({
   compact,
   iconOnly
@@ -155,7 +175,6 @@ export function SshStatusSegment({
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
-  const switchRuntimeEnvironment = useAppStore((s) => s.switchRuntimeEnvironment)
   const setRuntimeEnvironmentStatus = useAppStore((s) => s.setRuntimeEnvironmentStatus)
   const hydrateRuntimeEnvironmentStatuses = useAppStore((s) => s.hydrateRuntimeEnvironmentStatuses)
   const refreshRuntimeEnvironmentStatus = useAppStore((s) => s.refreshRuntimeEnvironmentStatus)
@@ -167,27 +186,33 @@ export function SshStatusSegment({
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
-  const targets = Array.from(sshTargetLabels.entries()).map(([id, label]) => {
-    const state = sshConnectionStates.get(id)
-    return {
-      id,
-      label,
-      status: (state?.status ?? 'disconnected') as SshConnectionStatus,
-      syncStatus: remoteWorkspaceSyncStatusByTargetId[id]
-    }
-  })
-  const runtimeHosts = runtimeEnvironments.map((environment) => {
-    const statusEntry = runtimeStatusByEnvironmentId.get(environment.id)
-    const override = hostLabelOverrides.get(toRuntimeExecutionHostId(environment.id))
-    return {
-      id: environment.id,
-      label: override || environment.name || environment.id,
-      hasStatus: Boolean(statusEntry),
-      online: Boolean(statusEntry?.status),
-      active: settings?.activeRuntimeEnvironmentId === environment.id,
-      remoteControl: statusEntry?.status?.remoteControl ?? null
-    }
-  })
+  const targets = Array.from(sshTargetLabels.entries())
+    // Why: runtime-owned (per-workspace-env) SSH targets are hidden — never list them
+    // as a user-facing SSH host in the status bar.
+    .filter(([id]) => !isRuntimeOwnedSshTargetId(id))
+    .map(([id, label]) => {
+      const state = sshConnectionStates.get(id)
+      return {
+        id,
+        label,
+        status: (state?.status ?? 'disconnected') as SshConnectionStatus,
+        syncStatus: remoteWorkspaceSyncStatusByTargetId[id]
+      }
+    })
+  const runtimeHosts = runtimeEnvironments
+    .filter(isUserManagedRuntimeEnvironment)
+    .map((environment) => {
+      const statusEntry = runtimeStatusByEnvironmentId.get(environment.id)
+      const override = hostLabelOverrides.get(toRuntimeExecutionHostId(environment.id))
+      return {
+        id: environment.id,
+        label: override || environment.name || environment.id,
+        hasStatus: Boolean(statusEntry),
+        online: Boolean(statusEntry?.status),
+        active: settings?.activeRuntimeEnvironmentId === environment.id,
+        remoteControl: statusEntry?.status?.remoteControl ?? null
+      }
+    })
   const runtimeHostRows = runtimeHosts.map((host) => ({
     ...host,
     state: runtimeHostConnectionState(host)
@@ -204,7 +229,14 @@ export function SshStatusSegment({
   const disconnectedTargets = targets.filter((target) => target.status !== 'connected')
   const connectRuntimeHost = useCallback(
     async (environmentId: string): Promise<void> => {
-      const reachable = await refreshRuntimeEnvironmentStatus(environmentId, 5_000)
+      const store = useAppStore.getState()
+      const reachable = await connectRuntimeHostForNavigation({
+        environmentId,
+        refreshStatus: refreshRuntimeEnvironmentStatus,
+        fetchRepos: store.fetchRuntimeEnvironmentRepos,
+        fetchWorktrees: store.fetchWorktrees,
+        fetchLineage: store.fetchWorktreeLineage
+      })
       if (!reachable) {
         toast.error(
           translate(
@@ -214,22 +246,13 @@ export function SshStatusSegment({
         )
         return
       }
-      const switched = await switchRuntimeEnvironment(environmentId)
-      if (switched) {
-        recordFeatureInteraction('ssh')
-      }
+      recordFeatureInteraction('ssh')
     },
-    [recordFeatureInteraction, refreshRuntimeEnvironmentStatus, switchRuntimeEnvironment]
+    [recordFeatureInteraction, refreshRuntimeEnvironmentStatus]
   )
   const disconnectRuntimeHost = useCallback(
-    async (environmentId: string, isActive: boolean): Promise<void> => {
+    async (environmentId: string): Promise<void> => {
       try {
-        if (isActive) {
-          const switched = await switchRuntimeEnvironment(null)
-          if (!switched) {
-            return
-          }
-        }
         await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
         setRuntimeEnvironmentStatus(environmentId, { status: null, checkedAt: Date.now() })
         recordFeatureInteraction('ssh')
@@ -244,7 +267,7 @@ export function SshStatusSegment({
         )
       }
     },
-    [recordFeatureInteraction, setRuntimeEnvironmentStatus, switchRuntimeEnvironment]
+    [recordFeatureInteraction, setRuntimeEnvironmentStatus]
   )
 
   if (targets.length === 0 && runtimeHosts.length === 0) {
@@ -345,7 +368,7 @@ export function SshStatusSegment({
             state={host.state}
             detail={runtimeHostConnectionDetail(host.remoteControl)}
             onConnect={() => connectRuntimeHost(host.id)}
-            onDisconnect={() => disconnectRuntimeHost(host.id, host.active)}
+            onDisconnect={() => disconnectRuntimeHost(host.id)}
           />
         ))}
         {connectedTargets.map((t) => (
@@ -364,7 +387,7 @@ export function SshStatusSegment({
             state={host.state}
             detail={runtimeHostConnectionDetail(host.remoteControl)}
             onConnect={() => connectRuntimeHost(host.id)}
-            onDisconnect={() => disconnectRuntimeHost(host.id, host.active)}
+            onDisconnect={() => disconnectRuntimeHost(host.id)}
           />
         ))}
         {disconnectedTargets.map((t) => (

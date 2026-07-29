@@ -1,4 +1,4 @@
-import path from 'path'
+import path from 'node:path'
 import { resolveCliCommands } from '../codex-cli/command'
 
 // Why: local agent detection may run before shell-PATH hydration, but the

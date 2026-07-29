@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: external automation mapping and lifecycle IPC share fixtures. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createExternalAutomation,
@@ -10,7 +9,7 @@ import {
 import { mapHermesJobs, mapOpenClawJobs } from './external-job-mappers'
 import { getActiveMultiplexer } from '../ipc/ssh'
 import type { Store } from '../persistence'
-import type * as Fs from 'fs'
+import type * as Fs from 'node:fs'
 
 const execFileMock = vi.hoisted(() =>
   vi.fn((...args: unknown[]) => {

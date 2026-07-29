@@ -5,8 +5,8 @@
  * These functions depend only on their arguments (plus `rg` being on PATH),
  * so they are straightforward to test independently.
  */
-import { spawn, execFile } from 'child_process'
-import { open } from 'fs/promises'
+import { spawn, execFile } from 'node:child_process'
+import { open } from 'node:fs/promises'
 import {
   buildRgArgs,
   createAccumulator,

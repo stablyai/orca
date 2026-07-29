@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshConnectionStore } from './ssh-connection-store'
-import type { SshTarget } from '../../shared/ssh-types'
+import type { RemovedSshTargetTombstone, SshTarget } from '../../shared/ssh-types'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -14,6 +14,9 @@ vi.mock('./ssh-config-parser', () => ({
 
 function createMockStore() {
   const targets: SshTarget[] = []
+  let deletedAliases: string[] = []
+  const removedTombstones: RemovedSshTargetTombstone[] = []
+  const reassignments: { oldTargetId: string; newTargetId: string }[] = []
 
   return {
     getSshTargets: vi.fn(() => [...targets]),
@@ -32,6 +35,36 @@ function createMockStore() {
       if (idx !== -1) {
         targets.splice(idx, 1)
       }
+    }),
+    getDeletedSshConfigAliases: vi.fn(() => [...deletedAliases]),
+    addDeletedSshConfigAlias: vi.fn((alias: string) => {
+      if (!deletedAliases.includes(alias)) {
+        deletedAliases.push(alias)
+      }
+    }),
+    removeDeletedSshConfigAlias: vi.fn((alias: string) => {
+      deletedAliases = deletedAliases.filter((entry) => entry !== alias)
+    }),
+    clearDeletedSshConfigAliases: vi.fn(() => {
+      deletedAliases = []
+    }),
+    removedTombstones,
+    reassignments,
+    getRemovedSshTargetTombstones: vi.fn(() => [...removedTombstones]),
+    addRemovedSshTargetTombstone: vi.fn((tombstone: RemovedSshTargetTombstone) => {
+      const filtered = removedTombstones.filter((t) => t.oldTargetId !== tombstone.oldTargetId)
+      removedTombstones.length = 0
+      removedTombstones.push(...filtered, tombstone)
+    }),
+    removeRemovedSshTargetTombstone: vi.fn((oldTargetId: string) => {
+      const kept = removedTombstones.filter((t) => t.oldTargetId !== oldTargetId)
+      removedTombstones.length = 0
+      removedTombstones.push(...kept)
+    }),
+    reassignSshTargetId: vi.fn((oldTargetId: string, newTargetId: string) => {
+      reassignments.push({ oldTargetId, newTargetId })
+      // Pretend one repo referenced the old id.
+      return ['repo-1']
     })
   }
 }
@@ -89,6 +122,23 @@ describe('SshConnectionStore', () => {
       source: 'ssh-config'
     })
     expect(target.source).toBe('ssh-config')
+  })
+
+  it('hides runtime-owned targets from normal target lists', () => {
+    const userTarget = sshStore.addTarget({
+      label: 'My Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    })
+    sshStore.upsertRuntimeOwnedTarget('runtime-1', {
+      label: 'Sandbox',
+      host: 'sandbox.example.com',
+      port: 22,
+      username: 'root'
+    })
+
+    expect(sshStore.listTargets()).toEqual([userTarget])
   })
 
   it('updateTarget delegates to store', () => {
@@ -210,6 +260,34 @@ describe('SshConnectionStore', () => {
       )
     })
 
+    it('refreshes gssapiAuthentication on sync', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-1',
+        label: 'krb-box',
+        configHost: 'krb-box',
+        host: 'krb.example.com',
+        port: 22,
+        username: 'dev',
+        source: 'ssh-config'
+      })
+      loadUserSshConfigMock.mockReturnValue([{ host: 'krb-box' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([
+        candidate({
+          configHost: 'krb-box',
+          host: 'krb.example.com',
+          username: 'dev',
+          gssapiAuthentication: true
+        })
+      ])
+
+      sshStore.importFromSshConfig()
+
+      expect(mockStore.updateSshTarget).toHaveBeenCalledWith(
+        'ssh-1',
+        expect.objectContaining({ gssapiAuthentication: true })
+      )
+    })
+
     it('never overwrites a manual target that owns the alias', () => {
       mockStore.addSshTarget({
         id: 'ssh-m',
@@ -305,6 +383,280 @@ describe('SshConnectionStore', () => {
 
       const result = sshStore.importFromSshConfig()
       expect(result).toEqual([])
+    })
+  })
+
+  describe('deleted config host tombstones', () => {
+    function candidate(overrides: Partial<SshTarget> & { configHost: string }): SshTarget {
+      return {
+        id: `tmp-${overrides.configHost}`,
+        label: overrides.configHost,
+        host: `${overrides.configHost}.example.com`,
+        port: 22,
+        username: '',
+        ...overrides
+      }
+    }
+
+    // PRIMARY regression: deleting a config-sourced host must not let the next
+    // ~/.ssh/config sync resurrect it.
+    it('tombstones a deleted config-sourced host so re-import skips it', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-1',
+        label: 'mini',
+        configHost: 'mini',
+        host: 'mini.example.com',
+        port: 22,
+        username: 'ping',
+        source: 'ssh-config'
+      })
+
+      sshStore.removeTarget('ssh-1')
+      expect(mockStore.addDeletedSshConfigAlias).toHaveBeenCalledWith('mini')
+
+      loadUserSshConfigMock.mockReturnValue([{ host: 'mini' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([candidate({ configHost: 'mini' })])
+
+      const result = sshStore.importFromSshConfig()
+
+      expect(mockStore.addSshTarget).toHaveBeenCalledTimes(1) // only the seed insert
+      expect(result).toEqual([])
+    })
+
+    it('does not tombstone a manual target on delete', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-1',
+        label: 'mini',
+        configHost: 'mini',
+        host: 'mini.example.com',
+        port: 22,
+        username: 'ping',
+        source: 'manual'
+      })
+
+      sshStore.removeTarget('ssh-1')
+      expect(mockStore.addDeletedSshConfigAlias).not.toHaveBeenCalled()
+    })
+
+    it('re-adding a deleted host reclaims its alias so sync stops suppressing it', () => {
+      mockStore.addDeletedSshConfigAlias('mini')
+
+      sshStore.addTarget({
+        label: 'mini',
+        configHost: 'mini',
+        host: '10.0.0.2',
+        port: 22,
+        username: 'ping'
+      })
+      expect(mockStore.removeDeletedSshConfigAlias).toHaveBeenCalledWith('mini')
+
+      loadUserSshConfigMock.mockReturnValue([{ host: 'mini' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([candidate({ configHost: 'mini' })])
+      // Alias reclaimed, but it is now a manual target — still not re-inserted.
+      const result = sshStore.importFromSshConfig()
+      expect(result).toEqual([])
+    })
+
+    it('editing a target reclaims its alias from the deleted set', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-1',
+        label: 'mini',
+        configHost: 'mini',
+        host: 'mini.example.com',
+        port: 22,
+        username: 'ping',
+        source: 'ssh-config'
+      })
+      mockStore.addDeletedSshConfigAlias('mini')
+
+      sshStore.updateTarget('ssh-1', { port: 2222, source: 'manual' })
+      expect(mockStore.removeDeletedSshConfigAlias).toHaveBeenCalledWith('mini')
+    })
+
+    it('reAdopt clears all tombstones and re-imports the deleted host', () => {
+      mockStore.addDeletedSshConfigAlias('mini')
+      loadUserSshConfigMock.mockReturnValue([{ host: 'mini' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([candidate({ configHost: 'mini' })])
+
+      const result = sshStore.importFromSshConfig({ reAdopt: true })
+
+      expect(mockStore.clearDeletedSshConfigAliases).toHaveBeenCalled()
+      expect(mockStore.addSshTarget).toHaveBeenCalledWith(
+        expect.objectContaining({ configHost: 'mini', source: 'ssh-config' })
+      )
+      expect(result).toHaveLength(1)
+    })
+
+    it('reports every exact repo migration from a multi-host re-import', () => {
+      mockStore.addRemovedSshTargetTombstone({
+        oldTargetId: 'ssh-old-a',
+        configHost: 'host-a',
+        host: 'host-a.example.com',
+        port: 22,
+        username: '',
+        label: 'host-a',
+        removedAt: 1
+      })
+      mockStore.addRemovedSshTargetTombstone({
+        oldTargetId: 'ssh-old-b',
+        configHost: 'host-b',
+        host: 'host-b.example.com',
+        port: 22,
+        username: '',
+        label: 'host-b',
+        removedAt: 1
+      })
+      loadUserSshConfigMock.mockReturnValue([{ host: 'host-a' }, { host: 'host-b' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([
+        candidate({ configHost: 'host-a' }),
+        candidate({ configHost: 'host-b' })
+      ])
+
+      sshStore.importFromSshConfig({ reAdopt: true })
+
+      expect(sshStore.lastRepoReadoptions).toEqual([
+        { oldTargetId: 'ssh-old-a', newTargetId: 'tmp-host-a', repoIds: ['repo-1'] },
+        { oldTargetId: 'ssh-old-b', newTargetId: 'tmp-host-b', repoIds: ['repo-1'] }
+      ])
+    })
+  })
+
+  describe('re-adoption of orphaned workspaces', () => {
+    it('records a tombstone when removing any user-facing target', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-1',
+        label: 'Dev',
+        host: 'dev.example.com',
+        port: 22,
+        username: 'tim',
+        source: 'manual'
+      })
+
+      sshStore.removeTarget('ssh-1')
+
+      expect(mockStore.addRemovedSshTargetTombstone).toHaveBeenCalledWith(
+        expect.objectContaining({
+          oldTargetId: 'ssh-1',
+          host: 'dev.example.com',
+          port: 22,
+          username: 'tim'
+        })
+      )
+    })
+
+    it('does not tombstone runtime-owned targets', () => {
+      mockStore.addSshTarget({
+        id: 'runtime-ssh-abc',
+        label: 'VM',
+        host: 'vm.example.com',
+        port: 22,
+        username: 'tim',
+        owner: { type: 'on-demand-runtime', runtimeId: 'abc' }
+      })
+
+      sshStore.removeTarget('runtime-ssh-abc')
+
+      expect(mockStore.addRemovedSshTargetTombstone).not.toHaveBeenCalled()
+    })
+
+    it('re-adopts orphaned repos when the same host is re-added', () => {
+      // Simulate a prior removal by seeding a matching tombstone.
+      mockStore.addRemovedSshTargetTombstone({
+        oldTargetId: 'ssh-old',
+        host: 'dev.example.com',
+        port: 22,
+        username: 'tim',
+        label: 'Dev',
+        removedAt: 1
+      })
+
+      sshStore.addTarget({
+        label: 'Dev',
+        host: 'dev.example.com',
+        port: 22,
+        username: 'tim'
+      })
+
+      expect(mockStore.reassignSshTargetId).toHaveBeenCalledTimes(1)
+      const [oldId, newId] = mockStore.reassignSshTargetId.mock.calls[0]
+      expect(oldId).toBe('ssh-old')
+      expect(newId).toMatch(/^ssh-/)
+      expect(sshStore.lastRepoReadoptions).toEqual([
+        { oldTargetId: 'ssh-old', newTargetId: newId, repoIds: ['repo-1'] }
+      ])
+    })
+
+    // Why: drive the real remove→re-add path so the tombstone carries the
+    // defaulted configHost (host) that buildRemovedSshTargetTombstone produces,
+    // rather than a hand-seeded tombstone without one.
+    it('re-adopts through an actual removeTarget then re-add of the same host', () => {
+      const added = sshStore.addTarget({
+        label: 'Dev',
+        host: 'dev.example.com',
+        port: 22,
+        username: 'tim'
+      })
+      sshStore.removeTarget(added.id)
+      // The tombstone was built from the real target (configHost defaulted to host).
+      const tombstones = mockStore.getRemovedSshTargetTombstones()
+      expect(tombstones).toHaveLength(1)
+      expect(tombstones[0]).toMatchObject({ oldTargetId: added.id, configHost: 'dev.example.com' })
+
+      mockStore.reassignSshTargetId.mockClear()
+      const readded = sshStore.addTarget({
+        label: 'Dev',
+        host: 'dev.example.com',
+        port: 22,
+        username: 'tim'
+      })
+
+      expect(mockStore.reassignSshTargetId).toHaveBeenCalledWith(added.id, readded.id)
+      expect(sshStore.lastRepoReadoptions).toEqual([
+        { oldTargetId: added.id, newTargetId: readded.id, repoIds: ['repo-1'] }
+      ])
+    })
+
+    // A different account on the SAME host must NOT re-adopt, even though both
+    // manual adds default configHost to the shared hostname.
+    it('does not re-adopt a different account on the same host', () => {
+      const alice = sshStore.addTarget({
+        label: 'alice',
+        host: 'dev.example.com',
+        port: 22,
+        username: 'alice'
+      })
+      sshStore.removeTarget(alice.id)
+      mockStore.reassignSshTargetId.mockClear()
+
+      sshStore.addTarget({
+        label: 'bob',
+        host: 'dev.example.com',
+        port: 2222,
+        username: 'bob'
+      })
+
+      expect(mockStore.reassignSshTargetId).not.toHaveBeenCalled()
+    })
+
+    it('does not re-adopt when the re-added host identity differs', () => {
+      mockStore.addRemovedSshTargetTombstone({
+        oldTargetId: 'ssh-old',
+        host: 'other.example.com',
+        port: 22,
+        username: 'root',
+        label: 'Other',
+        removedAt: 1
+      })
+
+      sshStore.addTarget({
+        label: 'Dev',
+        host: 'dev.example.com',
+        port: 22,
+        username: 'tim'
+      })
+
+      expect(mockStore.reassignSshTargetId).not.toHaveBeenCalled()
+      expect(sshStore.lastRepoReadoptions).toEqual([])
     })
   })
 })

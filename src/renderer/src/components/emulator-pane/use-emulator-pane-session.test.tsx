@@ -39,7 +39,17 @@ const devices: SimulatorDeviceRow[] = [
   { name: 'iPhone B', udid: 'device-b', state: 'Shutdown', isAvailable: true }
 ]
 
+// emulator.listDevices returns the unified EmulatorDevice shape.
+const deviceList = devices.map((device) => ({
+  backend: 'ios' as const,
+  id: device.udid,
+  name: device.name,
+  state: device.state === 'Booted' ? ('booted' as const) : ('shutdown' as const),
+  isAvailable: device.isAvailable
+}))
+
 let attachDeferred: Deferred<AttachResult>
+let rotateDeferred: Deferred<void>
 let container: HTMLDivElement
 let root: Root
 let latest: ReturnType<typeof useEmulatorPaneSession> | null = null
@@ -104,6 +114,7 @@ describe('useEmulatorPaneSession', () => {
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true
     attachDeferred = createDeferred<AttachResult>()
+    rotateDeferred = createDeferred<void>()
     latest = null
     consumePrelaunchedSimulatorSession(WORKTREE_ID)
     rememberPrelaunchedSimulatorSession(WORKTREE_ID, {
@@ -118,11 +129,14 @@ describe('useEmulatorPaneSession', () => {
       value: {
         runtime: {
           call: vi.fn(async ({ method }: RuntimeCallRequest) => {
-            if (method === 'emulator.listSimulators') {
-              return runtimeSuccess(devices)
+            if (method === 'emulator.listDevices') {
+              return runtimeSuccess(deviceList)
             }
             if (method === 'emulator.attach') {
               return runtimeSuccess(await attachDeferred.promise)
+            }
+            if (method === 'emulator.rotate') {
+              return runtimeSuccess(await rotateDeferred.promise)
             }
             if (method === 'emulator.shutdown') {
               return runtimeSuccess({ deviceUdid: 'device-b' })
@@ -187,12 +201,54 @@ describe('useEmulatorPaneSession', () => {
     expect(latest?.previewUrl).toBe('http://127.0.0.1:3200/stream.mjpeg')
   })
 
+  it('ignores a rotate response from the previous session after switching devices', async () => {
+    await act(async () => {
+      root.render(<Probe />)
+    })
+    await flushEffects()
+
+    let rotatePromise: Promise<unknown> = Promise.resolve()
+    await act(async () => {
+      rotatePromise = latest?.sendRotate() ?? Promise.resolve()
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      container.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      rotateDeferred.resolve()
+      await rotatePromise
+      await Promise.resolve()
+    })
+
+    expect(latest?.visualOrientation).toBe('portrait')
+
+    await act(async () => {
+      attachDeferred.resolve({
+        attached: true,
+        info: {
+          deviceUdid: 'device-b',
+          displayName: 'iPhone B',
+          streamUrl: 'http://127.0.0.1:3200/stream.mjpeg',
+          wsUrl: 'ws://127.0.0.1:3200/ws'
+        }
+      })
+      await attachDeferred.promise
+      await Promise.resolve()
+    })
+
+    expect(latest?.visualOrientation).toBe('portrait')
+  })
+
   it('keeps simulator discovery setup errors during auto attach', async () => {
     const message =
       'Xcode Simulator tools are unavailable. Install full Xcode, open it once, then select it with `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`.'
     consumePrelaunchedSimulatorSession(WORKTREE_ID)
     const runtimeCall = vi.fn(async ({ method }: RuntimeCallRequest) => {
-      if (method === 'emulator.listSimulators') {
+      if (method === 'emulator.listDevices') {
         return runtimeFailure('emulator_simctl_unavailable', message)
       }
       if (method === 'emulator.attach') {

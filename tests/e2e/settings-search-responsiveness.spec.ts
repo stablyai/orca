@@ -1,4 +1,4 @@
-import path from 'path'
+import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import type { Repo } from '../../src/shared/types'

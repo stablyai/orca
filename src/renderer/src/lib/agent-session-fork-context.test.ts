@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildAgentSessionForkPrompt,
+  buildBoundedSessionTranscript,
   cleanAgentSessionForkTranscript
 } from './agent-session-fork-context'
 
@@ -64,6 +65,22 @@ describe('agent session fork context', () => {
     expect(prompt).not.toContain('\x1b[31m')
     expect(replaceCalls).toHaveLength(0)
     expect(matchAllCalls).toHaveLength(0)
+  })
+
+  it('builds a bounded transcript without the fork prompt framing', () => {
+    const transcript = buildBoundedSessionTranscript(
+      '\x1b]0;Codex working\x07\x1b[31mUser: ship it\x1b[0m\r\nAssistant: done'
+    )
+
+    // Why: the standalone Copy Context action must yield raw transcript only —
+    // no fork header/footer that a paste target would treat as instructions.
+    expect(transcript).toBe('User: ship it\nAssistant: done')
+    expect(transcript).not.toContain('fork of an existing Orca agent session')
+    expect(transcript).not.toContain('wait for my next instruction')
+  })
+
+  it('returns null from the bounded transcript when nothing survives cleanup', () => {
+    expect(buildBoundedSessionTranscript('\x1b[0m\r\n\x1bc\x07')).toBeNull()
   })
 
   it('uses a longer fence when captured output contains markdown fences', () => {

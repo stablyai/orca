@@ -1,8 +1,10 @@
 import { branchName } from '@/lib/git-utils'
 import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
+import type { HostedReviewInfo } from '../../../shared/hosted-review'
 import type { Repo, Worktree } from '../../../shared/types'
 import { extractWorktreePaletteCommentSnippet } from './worktree-palette-comment-snippet'
 import { isWorktreePaletteQueryTooLarge } from './worktree-palette-query-bounds'
+import { matchWorktreePaletteReview } from './worktree-palette-review-match'
 
 export type MatchRange = { start: number; end: number }
 
@@ -16,7 +18,7 @@ export type PaletteMatchedField =
   | 'port'
 
 export type PaletteSupportingText = {
-  labelKind: 'comment' | 'pr' | 'issue' | 'port'
+  labelKind: 'comment' | 'pr' | 'mr' | 'issue' | 'port'
   text: string
   matchRange: MatchRange | null
 }
@@ -69,7 +71,8 @@ export function searchWorktrees(
   repoMap: Map<string, Repo>,
   prCache: Record<string, PRCacheEntry> | null,
   issueCache: Record<string, IssueCacheEntry> | null,
-  workspacePortsByWorktreeId?: Map<string, { port: number; processName?: string }[]>
+  workspacePortsByWorktreeId?: Map<string, { port: number; processName?: string }[]>,
+  checksReviewByWorktree?: ReadonlyMap<Worktree, HostedReviewInfo | null>
 ): PaletteSearchResult[] {
   if (isWorktreePaletteQueryTooLarge(query)) {
     return []
@@ -199,42 +202,30 @@ export function searchWorktrees(
     }
 
     const repo = repoMap.get(worktree.repoId)
+    const checksReview = checksReviewByWorktree?.get(worktree)
+    const hasChecksReviewEntry = checksReview !== undefined
+    if (checksReview) {
+      const supportingText = matchWorktreePaletteReview(checksReview, q, numericQuery)
+      if (supportingText) {
+        results.push(makeResult(worktree.id, 'pr', { supportingText }))
+        continue
+      }
+    }
+
     const prKey = repo ? `${repo.path}::${branch}` : ''
-    const pr = prKey && prCache ? prCache[prKey]?.data : undefined
+    const pr = !hasChecksReviewEntry && prKey && prCache ? prCache[prKey]?.data : undefined
 
     if (pr) {
-      const prText = `PR #${pr.number}`
-      const prNumberIndex = String(pr.number).indexOf(numericQuery)
-      if (prNumberIndex !== -1) {
-        results.push(
-          makeResult(worktree.id, 'pr', {
-            supportingText: {
-              labelKind: 'pr',
-              text: prText,
-              matchRange: {
-                start: 'PR #'.length + prNumberIndex,
-                end: 'PR #'.length + prNumberIndex + numericQuery.length
-              }
-            }
-          })
-        )
+      const supportingText = matchWorktreePaletteReview(
+        { ...pr, provider: 'github' },
+        q,
+        numericQuery
+      )
+      if (supportingText) {
+        results.push(makeResult(worktree.id, 'pr', { supportingText }))
         continue
       }
-
-      const prTitleIndex = pr.title.toLowerCase().indexOf(q)
-      if (prTitleIndex !== -1) {
-        results.push(
-          makeResult(worktree.id, 'pr', {
-            supportingText: {
-              labelKind: 'pr',
-              text: pr.title,
-              matchRange: { start: prTitleIndex, end: prTitleIndex + q.length }
-            }
-          })
-        )
-        continue
-      }
-    } else if (worktree.linkedPR != null) {
+    } else if (!hasChecksReviewEntry && worktree.linkedPR != null) {
       const prText = `PR #${worktree.linkedPR}`
       const prNumberIndex = String(worktree.linkedPR).indexOf(numericQuery)
       if (prNumberIndex !== -1) {

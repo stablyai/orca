@@ -62,6 +62,7 @@ export async function runSourceControlAgentActionStart({
   onClose
 }: RunSourceControlAgentActionStartArgs): Promise<boolean> {
   let launched = false
+  let launchFailureNotified = false
   if (onStart) {
     launched = await onStart({
       agent: selectedAgent,
@@ -83,14 +84,26 @@ export async function runSourceControlAgentActionStart({
     if (result?.tabId) {
       focusTerminalTabSurface(result.tabId)
     }
+    if (result?.promptDeliveryResult) {
+      try {
+        const deliveryResult = await result.promptDeliveryResult
+        launched = deliveryResult.delivered
+        launchFailureNotified = deliveryResult.failureNotified
+      } catch (error) {
+        console.error('promptDeliveryResult rejected', error)
+        launched = false
+      }
+    }
   }
   if (!launched) {
-    toast.error(
-      translate(
-        'auto.components.right.sidebar.SourceControlAgentActionDialog.8e856842d1',
-        'Could not start the selected agent.'
+    if (!launchFailureNotified) {
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.SourceControlAgentActionDialog.8e856842d1',
+          'Could not start the selected agent.'
+        )
       )
-    )
+    }
     return false
   }
 

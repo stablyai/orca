@@ -22,6 +22,7 @@ import { clampLinearIssueListLimit } from '../../../../shared/linear-issue-read-
 import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import { clearLinearMetadataCache } from '../../hooks/useIssueMetadata'
 import {
+  isLinearIssueAttributeFilterUnsupportedError,
   linearConnect,
   linearDisconnect,
   linearDisconnectWorkspace,
@@ -47,6 +48,12 @@ import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
+import {
+  canonicalizeLinearIssueAttributeFilter,
+  isEmptyLinearIssueAttributeFilter,
+  linearIssueAttributeFilterSignature,
+  type LinearIssueAttributeFilter
+} from '../../../../shared/linear-issue-attribute-filter'
 
 const CACHE_TTL = 60_000 // 60s — same as GitHub work-items revalidation TTL
 const TEAM_CACHE_TTL = 10 * 60_000 // Teams change rarely and block visible Linear rows.
@@ -194,9 +201,19 @@ function linearSearchCacheKey(
 function linearListCacheKey(
   workspaceId: LinearWorkspaceSelection | null | undefined,
   filter: 'assigned' | 'created' | 'all' | 'completed',
-  limit: number
+  limit: number,
+  attributeFilter?: LinearIssueAttributeFilter | null
 ): string {
-  return `${workspaceId ?? 'default'}::list::${filter}::${limit}`
+  const attributeSignature = linearIssueAttributeFilterSignature(attributeFilter)
+  return `${workspaceId ?? 'default'}::list::${filter}::${limit}::${attributeSignature}`
+}
+
+// Why: facet mutations need one source-scoped token TaskPage can observe without
+// scattering membership guesses through board/detail components.
+const LINEAR_LIST_INVALIDATION_VERSION_CAP = 10_000
+let linearListInvalidationToken: { scope: string; version: number } = {
+  scope: '',
+  version: 0
 }
 
 function linearTeamsCacheKey(workspaceId: LinearWorkspaceSelection | null | undefined): string {
@@ -355,12 +372,28 @@ function patchLinearIssueCollectionCache(
   return { cache: nextCache, changed }
 }
 
-type LinearIssueReadArgs =
+export type LinearIssueListReadArgs = {
+  kind: 'list'
+  filter?: 'assigned' | 'created' | 'all' | 'completed'
+  limit?: number
+  attributeFilter?: LinearIssueAttributeFilter | null
+}
+
+export type LinearIssueReadArgs =
   | { kind: 'search'; query: string; limit?: number }
-  | { kind: 'list'; filter?: 'assigned' | 'created' | 'all' | 'completed'; limit?: number }
+  | LinearIssueListReadArgs
 
 type LinearFetchOptions = { force?: boolean; sourceContext?: TaskSourceContext | null }
 type LinearPatchOptions = { sourceContext?: TaskSourceContext | null }
+
+function normalizeListAttributeFilter(
+  attributeFilter?: LinearIssueAttributeFilter | null
+): LinearIssueAttributeFilter | undefined {
+  if (!attributeFilter || isEmptyLinearIssueAttributeFilter(attributeFilter)) {
+    return undefined
+  }
+  return canonicalizeLinearIssueAttributeFilter(attributeFilter)
+}
 
 type LinearReadScope = {
   settings: AppState['settings'] | TaskSourceContext | null
@@ -475,10 +508,11 @@ export type LinearSlice = {
     options?: LinearFetchOptions
   ) => Promise<LinearIssue[]>
   listLinearIssues: (
-    filter?: 'assigned' | 'created' | 'all' | 'completed',
-    limit?: number,
+    args: LinearIssueListReadArgs,
     options?: LinearFetchOptions
   ) => Promise<LinearCollectionResult<LinearIssue>>
+  linearListInvalidationToken: { scope: string; version: number }
+  invalidateLinearIssueLists: (options?: Pick<LinearFetchOptions, 'sourceContext'>) => void
   getCachedLinearTeams: (
     workspaceId?: LinearWorkspaceSelection | null,
     options?: Pick<LinearFetchOptions, 'sourceContext'>
@@ -562,6 +596,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   linearCustomViewDetailCache: {},
   linearCustomViewIssueCache: {},
   linearCustomViewProjectCache: {},
+  linearListInvalidationToken: linearListInvalidationToken,
 
   checkLinearConnection: async (force = false) => {
     const contextKey = getProviderRuntimeContextKey(get().settings)
@@ -994,9 +1029,10 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       return get().linearSearchCache[cacheKey]?.data ?? null
     }
     const limit = clampLinearIssueListLimit(args.limit)
+    const attributeFilter = normalizeListAttributeFilter(args.attributeFilter)
     const cacheKey = scopedLinearCacheKey(
       scope,
-      linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit)
+      linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit, attributeFilter)
     )
     return get().linearListCache[cacheKey]?.data ?? null
   },
@@ -1026,9 +1062,16 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       return
     }
     const limit = clampLinearIssueListLimit(args.limit)
+    const attributeFilter = normalizeListAttributeFilter(args.attributeFilter)
+    const listArgs: LinearIssueListReadArgs = {
+      kind: 'list',
+      filter: args.filter,
+      limit,
+      attributeFilter
+    }
     const cacheKey = scopedLinearCacheKey(
       scope,
-      linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit)
+      linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit, attributeFilter)
     )
     const inflight = inflightListRequests.get(cacheKey)
     if (
@@ -1040,7 +1083,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       return
     }
     void get()
-      .listLinearIssues(args.filter, limit, options)
+      .listLinearIssues(listArgs, options)
       .catch(() => {})
   },
 
@@ -1137,14 +1180,16 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     return promise
   },
 
-  listLinearIssues: async (filter = 'assigned', limit = 20, options) => {
+  listLinearIssues: async (args, options) => {
     const scope = getLinearReadScope(get().settings, options?.sourceContext)
     const { contextKey } = scope
     const workspaceId = getSelectedWorkspaceId(get().linearStatus)
-    const effectiveLimit = clampLinearIssueListLimit(limit)
+    const filter = args.filter ?? 'assigned'
+    const effectiveLimit = clampLinearIssueListLimit(args.limit)
+    const attributeFilter = normalizeListAttributeFilter(args.attributeFilter)
     const cacheKey = scopedLinearCacheKey(
       scope,
-      linearListCacheKey(workspaceId, filter, effectiveLimit)
+      linearListCacheKey(workspaceId, filter, effectiveLimit, attributeFilter)
     )
     const cached = get().linearListCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
@@ -1168,7 +1213,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       scope.settings,
       filter,
       effectiveLimit,
-      workspaceId
+      workspaceId,
+      attributeFilter
     )
       .then((result) => {
         const data = result as LinearCollectionResult<LinearIssue>
@@ -1193,6 +1239,11 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       })
       .catch((error) => {
         console.warn('[linear] listLinearIssues failed:', error)
+        // Why: capability mismatch is actionable (update remote runtime). Swallowing
+        // it as [] would look like "no issues match filters" and hide the fix.
+        if (isLinearIssueAttributeFilterUnsupportedError(error)) {
+          throw error
+        }
         if (
           (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
           canWriteLinearReadResult(
@@ -2058,6 +2109,50 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
     inflightCustomViewProjectRequests.set(cacheKey, entry)
     return promise
+  },
+
+  invalidateLinearIssueLists: (options) => {
+    const scope = getLinearReadScope(get().settings, options?.sourceContext)
+    const tokenScope = scope.cachePrefix ?? 'local'
+    const nextVersion =
+      linearListInvalidationToken.scope === tokenScope
+        ? (linearListInvalidationToken.version + 1) % LINEAR_LIST_INVALIDATION_VERSION_CAP || 1
+        : 1
+    linearListInvalidationToken = { scope: tokenScope, version: nextVersion }
+
+    // Why: drop only attribute-filtered plain list entries in this source scope
+    // so the next TaskPage read is forced current without wiping search/unrelated
+    // collections.
+    set((s) => {
+      const nextListCache = { ...s.linearListCache }
+      let changed = false
+      for (const key of Object.keys(nextListCache)) {
+        const parts = key.split('::')
+        // Cache keys end with the attribute signature; unfiltered entries end empty.
+        const attributeSignature = parts.at(-1) ?? ''
+        if (!attributeSignature) {
+          continue
+        }
+        if (scope.cachePrefix) {
+          if (!key.startsWith(`${scope.cachePrefix}::`)) {
+            continue
+          }
+        } else if (parts[1] !== 'list') {
+          // Why: unscoped invalidation must not touch other runtimes' scoped list keys.
+          continue
+        }
+        delete nextListCache[key]
+        inflightListRequests.delete(key)
+        changed = true
+      }
+      if (!changed) {
+        return { linearListInvalidationToken: linearListInvalidationToken }
+      }
+      return {
+        linearListCache: nextListCache,
+        linearListInvalidationToken: linearListInvalidationToken
+      }
+    })
   },
 
   patchLinearIssue: (issueId, patch, options) => {

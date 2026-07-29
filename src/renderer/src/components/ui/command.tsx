@@ -99,7 +99,10 @@ function CommandInput({
 }) {
   return (
     <div
-      className={cn('flex items-center border-b border-border px-3', wrapperClassName)}
+      className={cn(
+        'flex items-center border-b border-border bg-muted/30 px-3 py-1',
+        wrapperClassName
+      )}
       data-cmdk-input-wrapper=""
     >
       <SearchIcon className={cn('mr-2 h-4 w-4 shrink-0 opacity-50', iconClassName)} />

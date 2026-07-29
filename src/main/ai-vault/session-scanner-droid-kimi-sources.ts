@@ -1,5 +1,5 @@
-import { homedir } from 'os'
-import { basename, dirname, join } from 'path'
+import { homedir } from 'node:os'
+import { basename, dirname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { discoverFiles } from './session-scanner-discovery'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'

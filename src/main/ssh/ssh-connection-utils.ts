@@ -1,6 +1,6 @@
-import { spawn, type ChildProcess } from 'child_process'
-import { Duplex } from 'stream'
-import type { Socket as NetSocket } from 'net'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { Duplex } from 'node:stream'
+import type { Socket as NetSocket } from 'node:net'
 import type { ConnectConfig } from 'ssh2'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
@@ -84,6 +84,24 @@ export function isSystemSshFallbackError(err: Error): boolean {
   return err.message.includes('EHOSTUNREACH') || err.message.includes('ENETUNREACH')
 }
 
+// Why: ssh2 has no gssapi-with-mic support. When the effective OpenSSH config
+// enables GSSAPIAuthentication (often a distro-wide /etc/ssh default), a
+// Kerberos ticket can still authenticate through the system ssh binary after
+// key/agent auth fails — but only auth-shaped failures qualify, so network
+// errors keep their existing retry semantics.
+export function isGssapiSystemSshFallbackCandidate(
+  err: Error,
+  target: Pick<SshTarget, 'gssapiAuthentication'>,
+  resolved: Pick<SshResolvedConfig, 'gssapiAuthentication'> | null
+): boolean {
+  // Why: targets with an explicit per-host flag already tried system ssh
+  // proactively during this attempt; probing again cannot succeed.
+  if (target.gssapiAuthentication === true) {
+    return false
+  }
+  return (isAuthError(err) || isPassphraseError(err)) && resolved?.gssapiAuthentication === true
+}
+
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -92,14 +110,55 @@ export function shellEscape(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}'`
 }
 
+const REMOTE_COMMAND_CHUNK_MAX_BYTES = 1_024
+const REMOTE_COMMAND_PRINTF_ESCAPED_BYTES = new Set([0x21, 0x27, 0x5c])
+
+function encodeRemoteCommandForPrintf(command: string): string[] {
+  const chunks: string[] = []
+  let chunk = ''
+  let chunkBytes = 0
+  for (const character of command) {
+    const codePoint = character.codePointAt(0)!
+    const isSafePrintableAscii =
+      codePoint >= 0x20 && codePoint <= 0x7e && !REMOTE_COMMAND_PRINTF_ESCAPED_BYTES.has(codePoint)
+    const encodedCharacter =
+      codePoint > 0x7f || isSafePrintableAscii
+        ? character
+        : `\\0${codePoint.toString(8).padStart(3, '0')}`
+    const encodedBytes = codePoint > 0x7f ? Buffer.byteLength(character) : encodedCharacter.length
+    if (chunkBytes + encodedBytes > REMOTE_COMMAND_CHUNK_MAX_BYTES) {
+      chunks.push(chunk)
+      chunk = ''
+      chunkBytes = 0
+    }
+    chunk += encodedCharacter
+    chunkBytes += encodedBytes
+  }
+  chunks.push(chunk)
+  return chunks
+}
+
+/** Wrap a POSIX snippet into one line that non-POSIX SSH login shells can forward. */
 export function wrapRemoteCommandForPosixShell(command: string): string {
-  // Why: sshd asks the user's login shell to parse exec commands. Orca emits
-  // POSIX sh snippets; `exec` avoids leaving that shell around for relay bridges.
-  return `exec /bin/sh -c ${shellEscape(command)}`
+  // Why: csh/tcsh split multiline SSH exec strings before /bin/sh sees them.
+  // POSIX printf rebuilds bounded argument chunks without consuming relay stdin.
+  const encodedChunks = encodeRemoteCommandForPrintf(command)
+  const decodeAndRun =
+    'decoded=$(printf %b "$@" && printf _) || exit $?; ' +
+    'decoded=${decoded%_}; exec /bin/sh -c "$decoded"'
+  const chunkArguments = encodedChunks.map(shellEscape).join(' ')
+  return `exec /bin/sh -c ${shellEscape(decodeAndRun)} orca-command ${chunkArguments}`
 }
 
 export type SshExecOptions = {
   wrapCommand?: boolean
+  signal?: AbortSignal
+}
+
+export function createSshOperationAbortError(): Error & { name: string } {
+  const error = new Error('SSH operation was cancelled') as Error & { name: string }
+  error.name = 'AbortError'
+  return error
 }
 
 function cmdEscape(s: string): string {

@@ -1,9 +1,15 @@
-/* eslint-disable max-lines -- Why: terminal link parsing depends on ordered passes sharing range state. */
+import { normalizeAbsolutePath } from './terminal-path-normalization'
+import { resolveExplicitFileLinkTarget } from './explicit-file-link-target'
+import { detectBareFilenameLinks } from './terminal-bare-file-link-detection'
 import {
-  joinAbsolutePath,
-  normalizeAbsolutePath,
-  resolveTildePath
-} from './terminal-path-normalization'
+  detectTerminalFileLinkRanges,
+  insertTerminalFileLinkClaimedRange,
+  mergeTerminalFileLinkRanges,
+  terminalFileLinkRangesOverlap,
+  toParsedTerminalFileLink,
+  type DetectedTerminalFileLinkRange
+} from './terminal-file-link-detection-ranges'
+import { detectTerminalFileUriLinks } from './terminal-file-uri-link'
 
 export type ParsedTerminalFileLink = {
   pathText: string
@@ -52,100 +58,7 @@ const SPACED_LOCAL_PATH_REGEXES = [
   LINE_ENDING_SPACED_PATH_REGEX
 ]
 
-// Word separators used by the bare-filename pass. Mirrors the default set in
-// VSCode's `terminal.integrated.wordSeparators` with the exception that we
-// include `:` indirectly via the line:col suffix parser rather than as a
-// raw separator. A word is any maximal run of non-separator characters.
-// \s matches NBSP in modern JS; xterm powerline glyphs are in the PUA and
-// never appear in filenames, so we don't list them explicitly.
-const WORD_TOKEN_REGEX = /[^\s()[\]{}'",;<>|`]+/g
-
-const LEADING_TRIM_CHARS = new Set(['(', '[', '{', '"', "'"])
-const TRAILING_TRIM_CHARS = new Set([')', ']', '}', '"', "'", ',', ';', '.'])
-
-function trimBoundaryPunctuation(
-  value: string,
-  startIndex: number
-): { text: string; startIndex: number; endIndex: number } | null {
-  let start = 0
-  let end = value.length
-
-  while (start < end && LEADING_TRIM_CHARS.has(value[start])) {
-    start += 1
-  }
-  while (end > start && TRAILING_TRIM_CHARS.has(value[end - 1])) {
-    end -= 1
-  }
-
-  if (start >= end) {
-    return null
-  }
-
-  return {
-    text: value.slice(start, end),
-    startIndex: startIndex + start,
-    endIndex: startIndex + end
-  }
-}
-
-function parsePathWithOptionalLineColumn(value: string): {
-  pathText: string
-  line: number | null
-  column: number | null
-} | null {
-  const match = /^(.*?)(?::(\d+))?(?::(\d+))?$/.exec(value)
-  if (!match) {
-    return null
-  }
-  const pathText = match[1]
-  const hasLineOrColumn = Boolean(match[2] || match[3])
-  if (!pathText) {
-    return null
-  }
-  if (/^[\\/]\s/.test(pathText)) {
-    return null
-  }
-  if (/[\\/]$/.test(pathText) && (hasLineOrColumn || !canKeepTrailingSeparator(pathText))) {
-    return null
-  }
-
-  const line = match[2] ? Number.parseInt(match[2], 10) : null
-  const column = match[3] ? Number.parseInt(match[3], 10) : null
-  if ((line !== null && line < 1) || (column !== null && column < 1)) {
-    return null
-  }
-
-  return { pathText, line, column }
-}
-
-function canKeepTrailingSeparator(pathText: string): boolean {
-  if (/^[\\/]+$/.test(pathText) || /^~[\\/]$/.test(pathText) || /^[A-Za-z]:[\\/]$/.test(pathText)) {
-    return false
-  }
-  return /^(?:~[\\/]|[\\/]|[A-Za-z]:[\\/])/.test(pathText)
-}
-
-// Project files that look like filenames despite having no extension. The
-// word detector otherwise requires a `.` in the token to keep noise down —
-// without this list, `ls` output containing `Makefile` or `LICENSE` would
-// not be clickable.
-const EXTENSIONLESS_FILENAMES = new Set([
-  'Makefile',
-  'Dockerfile',
-  'Rakefile',
-  'Gemfile',
-  'Procfile',
-  'LICENSE',
-  'README',
-  'CHANGELOG',
-  'AUTHORS',
-  'NOTICE',
-  'CONTRIBUTING'
-])
-
-const BARE_FILENAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._+-]*$/
 const URI_PREFIX_CHAR_PATTERN = /^[A-Za-z0-9+./:-]$/
-const MAX_BARE_FILENAME_TOKEN_LENGTH = 120
 
 function hasPathSeparator(text: string): boolean {
   return text.includes('/') || text.includes('\\')
@@ -184,41 +97,6 @@ function hasSpacedPathExtension(text: string): boolean {
   return /\s/.test(trimmedText) && /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?$/.test(trimmedText)
 }
 
-// Bare words are validated against the filesystem by the provider, so this
-// filter's job is to reject tokens that are obviously not filenames before
-// we pay for a stat. Plain words like `src` or `my-cli` are usually
-// directories or binaries and produce more noise than value — users who
-// really want to open them can prefix with `./`.
-function looksLikeFilename(token: string): boolean {
-  if (token.length < 2 || token.length > 100) {
-    return false
-  }
-  if (!BARE_FILENAME_PATTERN.test(token)) {
-    return false
-  }
-  if (/^\d+$/.test(token)) {
-    return false
-  }
-  if (token.includes('.')) {
-    return !/^\.+$/.test(token)
-  }
-  return EXTENSIONLESS_FILENAMES.has(token)
-}
-
-type DetectedRange = { startIndex: number; endIndex: number; text: string }
-// Shared tokenization: run a regex over the line, trim boundary punctuation,
-// hand each surviving range to the caller. Collapses the three near-copies
-// of this loop the module had grown.
-function* detectRanges(lineText: string, regex: RegExp): Generator<DetectedRange> {
-  for (const match of lineText.matchAll(regex)) {
-    const rawStart = match.index ?? 0
-    const trimmed = trimBoundaryPunctuation(match[0], rawStart)
-    if (trimmed) {
-      yield trimmed
-    }
-  }
-}
-
 function getImmediateUriPrefix(lineText: string, endIndex: number): string {
   let start = endIndex
   while (start > 0 && URI_PREFIX_CHAR_PATTERN.test(lineText[start - 1])) {
@@ -227,7 +105,7 @@ function getImmediateUriPrefix(lineText: string, endIndex: number): string {
   return lineText.slice(start, endIndex)
 }
 
-function isInsideUriScheme(lineText: string, range: DetectedRange): boolean {
+function isInsideUriScheme(lineText: string, range: DetectedTerminalFileLinkRange): boolean {
   const prefix = getImmediateUriPrefix(lineText, range.startIndex)
   // Why: local-path matching can start at the `//host/path` portion of a URL.
   return (
@@ -237,77 +115,53 @@ function isInsideUriScheme(lineText: string, range: DetectedRange): boolean {
   )
 }
 
-function mergeRanges(ranges: [number, number][]): [number, number][] {
-  if (ranges.length <= 1) {
-    return ranges
-  }
-  const sorted = ranges.slice().sort((left, right) => left[0] - right[0] || left[1] - right[1])
-  const merged: [number, number][] = []
-  for (const range of sorted) {
-    const last = merged.at(-1)
-    if (!last || range[0] > last[1]) {
-      merged.push([range[0], range[1]])
+function trimSpacedPathTrailingProse(
+  range: DetectedTerminalFileLinkRange
+): DetectedTerminalFileLinkRange {
+  // Why: keep one extension-terminated path, but drop trailing prose or a
+  // second unrelated path that the broad spaced-path scan also captured. A
+  // line-end extension token only extends the span when the added segment is
+  // path-like (contains a separator) — "v1.2 reports/result.json" extends,
+  // prose like "failed to start app.py" must not be swallowed.
+  let selected: string | null = null
+  const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g
+  let match: RegExpExecArray | null
+  while ((match = extensionPrefixPattern.exec(range.text)) !== null) {
+    const end = match.index + match[0].length
+    const text = range.text.slice(0, end)
+    if (countPathStarts(text) > 1) {
       continue
     }
-    last[1] = Math.max(last[1], range[1])
-  }
-  return merged
-}
-
-function rangesOverlap(range: DetectedRange, claimedRanges: readonly [number, number][]): boolean {
-  // Why: generated terminal lines can contain thousands of file-looking tokens;
-  // overlap checks must stay logarithmic instead of scanning every prior range.
-  let low = 0
-  let high = claimedRanges.length
-  while (low < high) {
-    const mid = Math.floor((low + high) / 2)
-    if (claimedRanges[mid][0] < range.endIndex) {
-      low = mid + 1
-    } else {
-      high = mid
+    if (
+      end < range.text.length ||
+      selected === null ||
+      /[\\/]/.test(range.text.slice(selected.length, end))
+    ) {
+      selected = text
     }
   }
-  const previous = claimedRanges[low - 1]
-  return previous !== undefined && previous[1] > range.startIndex
-}
-
-function insertClaimedRange(claimedRanges: [number, number][], range: [number, number]): void {
-  const last = claimedRanges.at(-1)
-  if (!last || last[0] <= range[0]) {
-    claimedRanges.push(range)
-    return
-  }
-
-  let low = 0
-  let high = claimedRanges.length
-  while (low < high) {
-    const mid = Math.floor((low + high) / 2)
-    if (claimedRanges[mid][0] <= range[0]) {
-      low = mid + 1
-    } else {
-      high = mid
-    }
-  }
-  claimedRanges.splice(low, 0, range)
-}
-
-function trimSpacedPathTrailingProse(range: DetectedRange): DetectedRange {
-  const filenameBeforeProseMatch = /^(.+\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?)(?:\s+.+)$/.exec(
-    range.text
-  )
-  if (!filenameBeforeProseMatch) {
+  if (!selected) {
     return range
   }
-
-  const text = filenameBeforeProseMatch[1]
   return {
-    text,
+    text: selected,
     startIndex: range.startIndex,
-    endIndex: range.startIndex + text.length
+    endIndex: range.startIndex + selected.length
   }
 }
 
-function trimTrailingWhitespace(range: DetectedRange): DetectedRange {
+function countPathStarts(text: string): number {
+  let count = 0
+  for (const match of text.matchAll(/(?:^|\s)(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/])/g)) {
+    void match
+    count += 1
+  }
+  return count
+}
+
+function trimTrailingWhitespace(
+  range: DetectedTerminalFileLinkRange
+): DetectedTerminalFileLinkRange {
   const text = range.text.trimEnd()
   return {
     text,
@@ -316,8 +170,10 @@ function trimTrailingWhitespace(range: DetectedRange): DetectedRange {
   }
 }
 
-function buildLineEndingSpacedPathPrefixRanges(range: DetectedRange): DetectedRange[] {
-  const ranges: DetectedRange[] = []
+function buildLineEndingSpacedPathPrefixRanges(
+  range: DetectedTerminalFileLinkRange
+): DetectedTerminalFileLinkRange[] {
+  const ranges: DetectedTerminalFileLinkRange[] = []
   for (const match of range.text.matchAll(/\s+/g)) {
     const endIndex = match.index ?? 0
     const text = range.text.slice(0, endIndex).trimEnd()
@@ -329,26 +185,7 @@ function buildLineEndingSpacedPathPrefixRanges(range: DetectedRange): DetectedRa
       })
     }
   }
-  return ranges.reverse()
-}
-
-function toParsedLink(range: DetectedRange): ParsedTerminalFileLink | null {
-  const parsed = parsePathWithOptionalLineColumn(range.text)
-  if (!parsed) {
-    return null
-  }
-  return {
-    pathText: parsed.pathText,
-    line: parsed.line,
-    column: parsed.column,
-    startIndex: range.startIndex,
-    endIndex: range.endIndex,
-    displayText: range.text
-  }
-}
-
-function sortLinksByPosition(links: ParsedTerminalFileLink[]): ParsedTerminalFileLink[] {
-  return links.sort((a, b) => a.startIndex - b.startIndex || b.endIndex - a.endIndex)
+  return ranges.toReversed()
 }
 
 // Ported from VSCode's TerminalLocalLinkDetector. Extracts anything that
@@ -364,14 +201,14 @@ function detectLocalPathLinks(
 
   const links: ParsedTerminalFileLink[] = []
   const spacedLinks = detectSpacedLocalPathLinks(lineText, includeLineEndingPrefixCandidates)
-  const spacedRanges = mergeRanges(
+  const spacedRanges = mergeTerminalFileLinkRanges(
     spacedLinks.map(({ startIndex, endIndex }): [number, number] => [startIndex, endIndex])
   )
   for (const link of spacedLinks) {
     links.push(link)
   }
-  for (const range of detectRanges(lineText, LOCAL_PATH_REGEX)) {
-    if (rangesOverlap(range, spacedRanges)) {
+  for (const range of detectTerminalFileLinkRanges(lineText, LOCAL_PATH_REGEX)) {
+    if (terminalFileLinkRangesOverlap(range, spacedRanges)) {
       continue
     }
     if (isInsideUriScheme(lineText, range)) {
@@ -380,12 +217,12 @@ function detectLocalPathLinks(
     if (!/[\\/]/.test(range.text)) {
       continue
     }
-    const link = toParsedLink(range)
+    const link = toParsedTerminalFileLink(range)
     if (link) {
       links.push(link)
     }
   }
-  return sortLinksByPosition(links)
+  return links.sort((a, b) => a.startIndex - b.startIndex || b.endIndex - a.endIndex)
 }
 
 function detectSpacedLocalPathLinks(
@@ -395,7 +232,7 @@ function detectSpacedLocalPathLinks(
   const links: ParsedTerminalFileLink[] = []
   const claimedRanges: [number, number][] = []
   for (const regex of SPACED_LOCAL_PATH_REGEXES) {
-    for (const range of detectRanges(lineText, regex)) {
+    for (const range of detectTerminalFileLinkRanges(lineText, regex)) {
       if (regex === SPACED_PATH_WITH_SEPARATOR_REGEX && !hasSeparatorAfterWhitespace(range.text)) {
         continue
       }
@@ -409,7 +246,10 @@ function detectSpacedLocalPathLinks(
       ) {
         continue
       }
-      if (rangesOverlap(range, claimedRanges) || isInsideUriScheme(lineText, range)) {
+      if (
+        terminalFileLinkRangesOverlap(range, claimedRanges) ||
+        isInsideUriScheme(lineText, range)
+      ) {
         continue
       }
       const candidateRanges =
@@ -418,7 +258,9 @@ function detectSpacedLocalPathLinks(
           : [range]
       const candidateLinks = candidateRanges
         .map((candidateRange) =>
-          toParsedLink(trimSpacedPathTrailingProse(trimTrailingWhitespace(candidateRange)))
+          toParsedTerminalFileLink(
+            trimSpacedPathTrailingProse(trimTrailingWhitespace(candidateRange))
+          )
         )
         .filter((link): link is ParsedTerminalFileLink => link !== null)
       const link = candidateLinks[0]
@@ -426,65 +268,39 @@ function detectSpacedLocalPathLinks(
         for (const candidateLink of candidateLinks) {
           links.push(candidateLink)
         }
-        insertClaimedRange(claimedRanges, [link.startIndex, link.endIndex])
+        insertTerminalFileLinkClaimedRange(claimedRanges, [link.startIndex, link.endIndex])
       }
     }
   }
   return links
 }
 
-// Ported from VSCode's TerminalWordLinkDetector. Tokenizes the line on
-// separators and emits filename-ish words so `ls` output becomes clickable.
-// Skips ranges already claimed by the local-path pass to avoid double links
-// when a bare filename happens to be a substring of a longer path.
-function detectBareFilenameLinks(
+// Runs the file-uri, local-path, and bare-filename passes in that precedence.
+// `file://` and separator paths claim their ranges first so the bare-filename
+// pass never re-links a token already covered by a longer explicit link.
+function assembleFileLinks(
   lineText: string,
-  claimedRanges: readonly [number, number][]
+  includeLineEndingPrefixCandidates: boolean
 ): ParsedTerminalFileLink[] {
-  const links: ParsedTerminalFileLink[] = []
-  for (const range of detectRanges(lineText, WORD_TOKEN_REGEX)) {
-    if (rangesOverlap(range, claimedRanges)) {
-      continue
-    }
-    // Why: huge terminal blobs can be one unbroken token; parse only bounded
-    // bare-filename candidates so hover link detection stays interactive.
-    if (range.text.length > MAX_BARE_FILENAME_TOKEN_LENGTH) {
-      continue
-    }
-    const link = toParsedLink(range)
-    if (!link) {
-      continue
-    }
-    if (!looksLikeFilename(link.pathText)) {
-      continue
-    }
-    links.push(link)
+  const uriLinks = detectTerminalFileUriLinks(lineText)
+  const pathLinks = detectLocalPathLinks(lineText, includeLineEndingPrefixCandidates)
+  const explicitLinks = uriLinks.length > 0 ? [...uriLinks, ...pathLinks] : pathLinks
+  const claimed = mergeTerminalFileLinkRanges(
+    explicitLinks.map(({ startIndex, endIndex }): [number, number] => [startIndex, endIndex])
+  )
+  const wordLinks = detectBareFilenameLinks(lineText, claimed)
+  for (const link of wordLinks) {
+    explicitLinks.push(link)
   }
-  return links
+  return explicitLinks
 }
 
 export function extractTerminalFileLinks(lineText: string): ParsedTerminalFileLink[] {
-  const pathLinks = detectLocalPathLinks(lineText)
-  const claimed = mergeRanges(
-    pathLinks.map(({ startIndex, endIndex }): [number, number] => [startIndex, endIndex])
-  )
-  const wordLinks = detectBareFilenameLinks(lineText, claimed)
-  for (const link of wordLinks) {
-    pathLinks.push(link)
-  }
-  return pathLinks
+  return assembleFileLinks(lineText, false)
 }
 
 export function extractTerminalFileLinkCandidates(lineText: string): ParsedTerminalFileLink[] {
-  const pathLinks = detectLocalPathLinks(lineText, true)
-  const claimed = mergeRanges(
-    pathLinks.map(({ startIndex, endIndex }): [number, number] => [startIndex, endIndex])
-  )
-  const wordLinks = detectBareFilenameLinks(lineText, claimed)
-  for (const link of wordLinks) {
-    pathLinks.push(link)
-  }
-  return pathLinks
+  return assembleFileLinks(lineText, true)
 }
 
 export function resolveTerminalFileLink(
@@ -492,18 +308,7 @@ export function resolveTerminalFileLink(
   cwd: string,
   homePath?: string | null
 ): ResolvedTerminalFileLink | null {
-  const absolutePath = /^~[\\/]/.test(parsed.pathText)
-    ? resolveTildePath(parsed.pathText, cwd, homePath)
-    : (normalizeAbsolutePath(parsed.pathText)?.normalized ?? joinAbsolutePath(cwd, parsed.pathText))
-  if (!absolutePath) {
-    return null
-  }
-
-  return {
-    absolutePath,
-    line: parsed.line,
-    column: parsed.column
-  }
+  return resolveExplicitFileLinkTarget(parsed, cwd, homePath)
 }
 
 export function resolveTerminalFileLinkText(

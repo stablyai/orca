@@ -20,6 +20,10 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.cjs': 'javascript',
   '.json': 'json',
   '.jsonc': 'json',
+  // Why: JSONL is one JSON value per line; a dedicated 'jsonl' language gives
+  // JSON-style color without attaching JSON whole-document diagnostics that
+  // would flag every record after line one as trailing content.
+  '.jsonl': 'jsonl',
   '.ipynb': 'notebook',
   '.md': 'markdown',
   '.mdx': 'markdown',
@@ -65,7 +69,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.graphql': 'graphql',
   '.gql': 'graphql',
   '.dockerfile': 'dockerfile',
-  '.proto': 'protobuf',
+  '.proto': 'proto',
   '.lua': 'lua',
   '.r': 'r',
   '.R': 'r',

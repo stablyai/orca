@@ -154,12 +154,12 @@ function GitHubRateLimitRows({
               )}
             >
               {v.remaining}{' '}
-              {translate('auto.components.github.github.rate.limit.display.f42790d150', 'of')}
+              {translate('auto.components.github.github.rate.limit.display.f42790d150', 'of')}{' '}
               {v.limit}{' '}
               {translate(
                 'auto.components.github.github.rate.limit.display.6da1858354',
                 'left · resets in'
-              )}
+              )}{' '}
               {formatGitHubRateLimitReset(v.resetAt)}
             </span>
           </div>

@@ -1,5 +1,5 @@
-import { readdir } from 'fs/promises'
-import { basename as pathBasename, extname, isAbsolute, join, relative, resolve } from 'path'
+import { readdir } from 'node:fs/promises'
+import { basename as pathBasename, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import type { MarkdownDocument } from '../../shared/types'
 
 function normalizeRelativePath(path: string): string {

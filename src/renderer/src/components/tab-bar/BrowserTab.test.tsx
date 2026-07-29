@@ -11,6 +11,11 @@ vi.mock('react', async () => {
   return {
     ...actual,
     useEffect: () => {},
+    // Why: this shallow harness calls the component as a plain function (no React
+    // render), so ref/callback hooks must be stubbed like useState/useEffect. The
+    // favicon tests never fire pointer events, so non-persistent refs are fine.
+    useRef: <T,>(initial: T) => ({ current: initial }),
+    useCallback: <T,>(fn: T) => fn,
     useState<T>(initial: T | (() => T)) {
       const stateIndex = reactHookRuntime.index++
       if (!(stateIndex in reactHookRuntime.states)) {
@@ -37,11 +42,26 @@ vi.mock('@dnd-kit/sortable', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ArrowDown: function ArrowDown(props: Record<string, unknown>) {
+    return { type: 'ArrowDown', props }
+  },
+  ArrowLeft: function ArrowLeft(props: Record<string, unknown>) {
+    return { type: 'ArrowLeft', props }
+  },
+  ArrowRight: function ArrowRight(props: Record<string, unknown>) {
+    return { type: 'ArrowRight', props }
+  },
+  ArrowUp: function ArrowUp(props: Record<string, unknown>) {
+    return { type: 'ArrowUp', props }
+  },
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
   },
   Copy: function Copy(props: Record<string, unknown>) {
     return { type: 'Copy', props }
+  },
+  CopyX: function CopyX(props: Record<string, unknown>) {
+    return { type: 'CopyX', props }
   },
   ExternalLink: function ExternalLink(props: Record<string, unknown>) {
     return { type: 'ExternalLink', props }
@@ -54,6 +74,12 @@ vi.mock('lucide-react', () => ({
   },
   PinOff: function PinOff(props: Record<string, unknown>) {
     return { type: 'PinOff', props }
+  },
+  PanelLeftClose: function PanelLeftClose(props: Record<string, unknown>) {
+    return { type: 'PanelLeftClose', props }
+  },
+  PanelRightClose: function PanelRightClose(props: Record<string, unknown>) {
+    return { type: 'PanelRightClose', props }
   },
   Rows2: function Rows2(props: Record<string, unknown>) {
     return { type: 'Rows2', props }
@@ -145,9 +171,13 @@ async function renderBrowserTab(tab: BrowserTabState): Promise<unknown> {
     isActive: true,
     isPinned: false,
     hasTabsToRight: false,
+    hasTabsToLeft: false,
+    tabCount: 1,
     onActivate: () => {},
     onClose: () => {},
+    onCloseOthers: () => {},
     onCloseToRight: () => {},
+    onCloseToLeft: () => {},
     onDuplicate: () => {},
     onTogglePin: () => {},
     dragData: {

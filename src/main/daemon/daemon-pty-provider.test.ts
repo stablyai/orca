@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { mkdtempSync, rmSync } from 'fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { DaemonPtyProvider } from './daemon-pty-provider'
 import { DaemonServer } from './daemon-server'
 import type { SubprocessHandle } from './session'
@@ -23,7 +23,7 @@ function createMockSubprocess(): SubprocessHandle & {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
-    forceKill: vi.fn(),
+    forceKill: vi.fn(() => setTimeout(() => onExitCb?.(137), 5)),
     signal: vi.fn(),
     onData(cb) {
       onDataCb = cb
@@ -164,7 +164,7 @@ describe('DaemonPtyProvider', () => {
       lastSubprocess._simulateExit(42)
 
       await waitFor(() => exits.length > 0)
-      expect(exits[0]).toEqual({ id: 's1', code: 42 })
+      expect(exits[0]).toEqual({ id: 's1', code: 42, incarnationId: expect.any(String) })
     })
   })
 

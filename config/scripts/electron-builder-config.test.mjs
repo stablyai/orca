@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
 const electronBuilderConfig = require('../electron-builder.config.cjs')
+const { FileMatcher } = require('app-builder-lib/out/fileMatcher')
 const electronBuilderNativeRebuild = require('./electron-builder-native-rebuild.cjs')
 const {
   createPackagedRuntimeNodeModuleResources,
@@ -19,6 +20,12 @@ const {
 } = require('../packaged-runtime-node-modules.cjs')
 
 describe('electron-builder config', () => {
+  it('keeps the packaged app identity aligned with local-build validation', () => {
+    expect(electronBuilderConfig.appId).toBe(
+      require('../../src/shared/local-build-compatibility-contract.json').appId
+    )
+  })
+
   it('excludes repo-only source trees from app.asar', () => {
     expect(electronBuilderConfig.files).toEqual(
       expect.arrayContaining([
@@ -28,15 +35,57 @@ describe('electron-builder config', () => {
         '!mobile{,/**/*}',
         '!native{,/**/*}',
         '!skills{,/**/*}',
+        '!skill-guides{,/**/*}',
+        '!skill-stubs{,/**/*}',
+        '!resources/skills/**',
         '!tests{,/**/*}',
+        '!examples{,/**/*}',
+        '!pr-evidence{,/**/*}',
         '!Casks{,/**/*}',
-        '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md}',
-        '!out/**/*.test.js'
+        '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md,ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md,ORCHESTRATION_STRUCTURED_OUTPUT_DESIGN.md}',
+        '!out/**/*.test.js',
+        '!resources/plugins/launch/**'
       ])
     )
   })
 
+  // Why: `files` is an all-negation list, so electron-builder's default `**/*` packs
+  // anything without an explicit `!` entry — examples/ landed without one and shipped
+  // hostile-panel, the adversarial containment fixture, into 1.4.160-rc.3's app.asar.
+  // Drive the real matcher: pinning the pattern string cannot prove it excludes the tree.
+  it('keeps plugin authoring examples out of app.asar', () => {
+    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
+    // copyFiles() prepends this itself once the pattern list is all-negation.
+    matcher.prependPattern('**/*')
+    const isPacked = matcher.createFilter()
+    const packs = (repoPath) => isPacked(join('/app', repoPath), { isDirectory: () => false })
+
+    for (const authoringOnly of [
+      'examples/plugins/hostile-panel/panel.html',
+      'examples/plugins/hostile-panel/orca-plugin.json',
+      'examples/plugins/hello-orca/main.mjs',
+      'examples/plugins/hello-orca/orca-plugin.json'
+    ]) {
+      expect(packs(authoringOnly)).toBe(false)
+    }
+    // The negation stays anchored at the app root, so nested `examples` segments still ship.
+    expect(packs('out/main/examples/index.js')).toBe(true)
+  })
+
   it('keeps runtime resources available through extraResources', () => {
+    const bundledPluginResources = expect.objectContaining({
+      from: 'resources/plugins/launch',
+      to: 'plugins/launch'
+    })
+    for (const platform of ['mac', 'linux', 'win']) {
+      expect(electronBuilderConfig[platform].extraResources).toContainEqual({
+        from: 'resources/skills',
+        to: 'skills'
+      })
+      expect(electronBuilderConfig[platform].extraResources).toEqual(
+        expect.arrayContaining([bundledPluginResources])
+      )
+    }
     expect(electronBuilderConfig.mac.extraResources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -58,8 +107,70 @@ describe('electron-builder config', () => {
         expect.objectContaining({
           from: 'native/computer-use-windows/runtime.ps1',
           to: 'computer-use-windows/runtime.ps1'
+        }),
+        expect.objectContaining({
+          from: 'native/windows-cli-launcher/.build/orca.exe',
+          to: 'bin/orca.exe'
         })
       ])
+    )
+  })
+
+  // Why: the Windows CLI shim is delivered only via extraResources to
+  // resources/bin/orca.cmd (beside the native resources/bin/orca.exe). If the
+  // source tree is also packed into app.asar it gets extracted by
+  // asarUnpack:['resources/**'] to app.asar.unpacked/resources/win32/bin/orca.cmd,
+  // a duplicate with no adjacent orca.exe that fails to launch (#7351).
+  it('keeps the Windows CLI shim source tree out of app.asar', () => {
+    expect(electronBuilderConfig.files).toEqual(
+      expect.arrayContaining(['!resources/win32{,/**/*}'])
+    )
+    // Regression guard: the working shim must still ship via extraResources.
+    expect(electronBuilderConfig.win.extraResources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'resources/win32/bin/orca.cmd',
+          to: 'bin/orca.cmd'
+        })
+      ])
+    )
+  })
+
+  // Why: on macOS 26 UNUserNotificationCenter aborts for executables launched
+  // from Contents/Resources, so the helper must ship in Contents/MacOS (#7929).
+  it('ships the mac notification-status helper in Contents/MacOS, not Resources', () => {
+    expect(electronBuilderConfig.mac.extraFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'native/notification-status-macos/.build/release/orca-notification-status',
+          to: 'MacOS/orca-notification-status'
+        })
+      ])
+    )
+    expect(electronBuilderConfig.mac.extraResources).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ to: 'orca-notification-status' })])
+    )
+  })
+
+  it('unpacks the compiled CommonJS boundary with CLI runtime files', () => {
+    expect(electronBuilderConfig.asarUnpack).toEqual(
+      expect.arrayContaining(['out/package.json', 'out/cli/**', 'out/shared/**'])
+    )
+  })
+
+  // Why: without the unpacked entry the watcher client silently falls back to
+  // in-process @parcel/watcher, reintroducing the #7547 main-process crash.
+  it('unpacks the forked parcel-watcher process entry', () => {
+    expect(electronBuilderConfig.asarUnpack).toEqual(
+      expect.arrayContaining(['out/main/parcel-watcher-process-entry.js'])
+    )
+  })
+
+  // Why: the watchdog only arms in packaged builds, and its ELECTRON_RUN_AS_NODE
+  // fork resolves the entry from app.asar.unpacked — inside the asar it never runs.
+  it('unpacks the forked main-thread hang-watchdog entry', () => {
+    expect(electronBuilderConfig.asarUnpack).toEqual(
+      expect.arrayContaining(['out/main/main-thread-hang-watchdog-entry.js'])
     )
   })
 
@@ -95,6 +206,58 @@ describe('electron-builder config', () => {
         delete process.env.ORCA_LINUX_ARM64_RELEASE
       } else {
         process.env.ORCA_LINUX_ARM64_RELEASE = original
+      }
+      delete require.cache[configPath]
+      require('../electron-builder.config.cjs')
+    }
+  })
+
+  it('overrides packaged semver only for local macOS builds', () => {
+    const configPath = require.resolve('../electron-builder.config.cjs')
+    const original = process.env.ORCA_LOCAL_BUILD_VERSION
+    const originalMacRelease = process.env.ORCA_MAC_RELEASE
+    try {
+      delete require.cache[configPath]
+      delete process.env.ORCA_MAC_RELEASE
+      process.env.ORCA_LOCAL_BUILD_VERSION = '1.4.159-rc.0.local.123.abc'
+      expect(require('../electron-builder.config.cjs').extraMetadata).toEqual({
+        version: '1.4.159-rc.0.local.123.abc'
+      })
+    } finally {
+      if (originalMacRelease === undefined) {
+        delete process.env.ORCA_MAC_RELEASE
+      } else {
+        process.env.ORCA_MAC_RELEASE = originalMacRelease
+      }
+      if (original === undefined) {
+        delete process.env.ORCA_LOCAL_BUILD_VERSION
+      } else {
+        process.env.ORCA_LOCAL_BUILD_VERSION = original
+      }
+      delete require.cache[configPath]
+      require('../electron-builder.config.cjs')
+    }
+  })
+
+  it('never applies local semver to release packaging', () => {
+    const configPath = require.resolve('../electron-builder.config.cjs')
+    const originalLocalVersion = process.env.ORCA_LOCAL_BUILD_VERSION
+    const originalMacRelease = process.env.ORCA_MAC_RELEASE
+    try {
+      delete require.cache[configPath]
+      process.env.ORCA_LOCAL_BUILD_VERSION = '1.4.159-local.123.abc'
+      process.env.ORCA_MAC_RELEASE = '1'
+      expect(require('../electron-builder.config.cjs').extraMetadata).toBeUndefined()
+    } finally {
+      if (originalLocalVersion === undefined) {
+        delete process.env.ORCA_LOCAL_BUILD_VERSION
+      } else {
+        process.env.ORCA_LOCAL_BUILD_VERSION = originalLocalVersion
+      }
+      if (originalMacRelease === undefined) {
+        delete process.env.ORCA_MAC_RELEASE
+      } else {
+        process.env.ORCA_MAC_RELEASE = originalMacRelease
       }
       delete require.cache[configPath]
       require('../electron-builder.config.cjs')
@@ -164,6 +327,40 @@ describe('electron-builder config', () => {
       ).resolves.toEqual([])
     } finally {
       await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('copies the Windows node-pty ConPTY runtime beside the rebuilt addon', async () => {
+    for (const arch of ['x64', 'arm64']) {
+      const resourcesDir = await mkdtemp(join(tmpdir(), `orca-node-pty-conpty-${arch}-`))
+      try {
+        const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
+        const releaseDir = join(nodePtyDir, 'build', 'Release')
+        const conptyRoot = join(nodePtyDir, 'third_party', 'conpty', '0.1.0')
+        await mkdir(releaseDir, { recursive: true })
+        await writeFile(join(releaseDir, 'conpty.node'), 'native addon placeholder', 'utf8')
+        for (const sourceArch of ['x64', 'arm64']) {
+          const sourceDir = join(conptyRoot, `win10-${sourceArch}`)
+          await mkdir(sourceDir, { recursive: true })
+          await writeFile(join(sourceDir, 'conpty.dll'), `dll payload ${sourceArch}`, 'utf8')
+          await writeFile(
+            join(sourceDir, 'OpenConsole.exe'),
+            `console payload ${sourceArch}`,
+            'utf8'
+          )
+        }
+
+        prunePackagedNodePty(resourcesDir, 'win32', arch)
+
+        await expect(readFile(join(releaseDir, 'conpty', 'conpty.dll'), 'utf8')).resolves.toBe(
+          `dll payload ${arch}`
+        )
+        await expect(readFile(join(releaseDir, 'conpty', 'OpenConsole.exe'), 'utf8')).resolves.toBe(
+          `console payload ${arch}`
+        )
+      } finally {
+        await rm(resourcesDir, { recursive: true, force: true })
+      }
     }
   })
 
@@ -288,7 +485,21 @@ describe('electron-builder config', () => {
         const resourcesDir = join(root, 'linux-unpacked', 'resources')
         const launcherPath = join(resourcesDir, 'bin', 'orca-ide')
         await mkdir(join(resourcesDir, 'bin'), { recursive: true })
+        await cp(
+          join(process.cwd(), 'resources', 'plugins', 'launch'),
+          join(resourcesDir, 'plugins', 'launch'),
+          { recursive: true }
+        )
         await mkdir(join(resourcesDir, 'node_modules', 'zod', 'src'), { recursive: true })
+        // Why: afterPack now fails hard when the unpacked daemon entry is
+        // missing, so the fixture must carry one like a real package layout.
+        const unpackedMainDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main')
+        await mkdir(unpackedMainDir, { recursive: true })
+        await writeFile(
+          join(unpackedMainDir, 'daemon-entry.js'),
+          'console.error("Usage: daemon-entry <socket>"); process.exit(1)\n',
+          'utf8'
+        )
         await writeFile(launcherPath, '#!/usr/bin/env bash\n', { encoding: 'utf8', mode: 0o644 })
 
         await electronBuilderConfig.afterPack({

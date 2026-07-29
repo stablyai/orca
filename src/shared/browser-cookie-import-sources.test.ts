@@ -9,6 +9,7 @@ describe('getBrowserCookieImportSourceLabels', () => {
       'Arc',
       'Brave',
       'Comet',
+      'Helium',
       'Firefox',
       'Safari'
     ])

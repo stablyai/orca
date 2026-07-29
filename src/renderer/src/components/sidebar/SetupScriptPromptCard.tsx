@@ -26,6 +26,7 @@ import {
   type LastVisibleSetupScriptPrompt,
   useSetupScriptPromptProjectContext
 } from './setup-script-prompt-render-state'
+import { useSetupScriptPromptRevalidation } from './useSetupScriptPromptRevalidation'
 import { translate } from '@/i18n/i18n'
 
 type PromptState = SetupScriptPromptInspection
@@ -112,6 +113,14 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
   const handleRetryInspection = useCallback(() => {
     setInspectionRetryKey((value) => value + 1)
   }, [])
+
+  useSetupScriptPromptRevalidation({
+    activeRepo,
+    isDismissed,
+    sidebarOpen,
+    promptState,
+    requestRevalidation: handleRetryInspection
+  })
 
   useEffect(() => {
     if (
@@ -354,6 +363,14 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     if (renderedPromptState?.status === 'ok' && renderedPromptState.hasEffectiveSetup) {
       lastVisiblePromptRef.current = null
     }
+    return null
+  }
+
+  // Why: a forbidden (mobile-scope) inspection is permanent, so suppress the
+  // retry-able card entirely — the global scope-mismatch banner explains it and
+  // a retry would just re-fire repo.hooksCheck on every repo focus.
+  if (renderedPromptState.status === 'forbidden') {
+    lastVisiblePromptRef.current = null
     return null
   }
 

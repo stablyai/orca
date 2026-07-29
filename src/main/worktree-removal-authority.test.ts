@@ -4,6 +4,7 @@ import {
   isWorktreePathMissing,
   stripOrcaProvenanceMetaUpdates
 } from './worktree-removal-safety'
+import type { WorktreeMeta } from '../shared/types'
 
 describe('isWorktreePathMissing', () => {
   it('recognizes missing-path errors from local and remote stat providers', async () => {
@@ -33,10 +34,7 @@ describe('canCleanupUnregisteredOrcaWorktreeDirectory', () => {
   it('does not treat orcaCreatedAt alone as cleanup authority', () => {
     expect(
       canCleanupUnregisteredOrcaWorktreeDirectory({
-        meta: { orcaCreatedAt: Date.now() },
-        worktreePath: '/outside/orphan',
-        repo: { path: '/repo' },
-        knownOrcaLayouts: []
+        meta: { orcaCreatedAt: Date.now() }
       })
     ).toBe(false)
     expect(
@@ -44,10 +42,7 @@ describe('canCleanupUnregisteredOrcaWorktreeDirectory', () => {
         meta: {
           orcaCreatedAt: Date.now(),
           orcaCreationSource: 'runtime'
-        },
-        worktreePath: '/outside/orphan',
-        repo: { path: '/repo' },
-        knownOrcaLayouts: []
+        }
       })
     ).toBe(true)
   })
@@ -55,32 +50,40 @@ describe('canCleanupUnregisteredOrcaWorktreeDirectory', () => {
   it('accepts legacy Orca-created metadata before explicit provenance existed', () => {
     expect(
       canCleanupUnregisteredOrcaWorktreeDirectory({
-        meta: { createdAt: Date.now() },
-        worktreePath: '/outside/orphan',
-        repo: { path: '/repo' },
-        knownOrcaLayouts: []
+        meta: { createdAt: Date.now() }
       })
     ).toBe(true)
   })
 
-  it('accepts legacy repo-nested Orca workspace paths without metadata provenance', () => {
+  it('does not treat creation layout metadata alone as cleanup authority', () => {
+    const layoutOnlyMeta: WorktreeMeta = {
+      displayName: '',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      linkedGitLabMR: null,
+      linkedGitLabIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      workspaceStatus: 'todo',
+      orcaCreationWorkspaceLayout: { path: '/orca/workspaces', nestWorkspaces: true }
+    }
+
     expect(
       canCleanupUnregisteredOrcaWorktreeDirectory({
-        meta: undefined,
-        worktreePath: '/orca/workspaces/app/legacy-orphan',
-        repo: { path: '/repos/app' },
-        knownOrcaLayouts: [{ path: '/orca/workspaces', nestWorkspaces: true }]
+        meta: layoutOnlyMeta
       })
-    ).toBe(true)
+    ).toBe(false)
   })
 
-  it('does not trust flat workspace-root paths without legacy metadata', () => {
+  it('does not trust paths without provenance or legacy metadata', () => {
     expect(
       canCleanupUnregisteredOrcaWorktreeDirectory({
-        meta: undefined,
-        worktreePath: '/orca/workspaces/legacy-orphan',
-        repo: { path: '/repos/app' },
-        knownOrcaLayouts: [{ path: '/orca/workspaces', nestWorkspaces: false }]
+        meta: undefined
       })
     ).toBe(false)
   })

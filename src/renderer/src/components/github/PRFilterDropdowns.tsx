@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { type PickerOption } from '@/components/github/PRFilterPickers'
+import type { PickerOption } from '@/components/github/PRFilterPickers'
 import {
   SectionDetail,
   SectionMenu,
@@ -86,13 +86,15 @@ export default function PRFilterDropdowns({
   const labelsState = useRepoLabelsBySlug(
     popoverOpen ? owner : null,
     popoverOpen ? repo : null,
-    settings
+    settings,
+    primarySlug?.host
   )
   const assigneesState = useRepoAssigneesBySlug(
     popoverOpen ? owner : null,
     popoverOpen ? repo : null,
     undefined,
-    settings
+    settings,
+    primarySlug?.host
   )
 
   // Why: surface @me as a first-class option even though it's not a real

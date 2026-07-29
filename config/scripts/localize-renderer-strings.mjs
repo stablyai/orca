@@ -4,7 +4,8 @@ import { createHash } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 import process from 'node:process'
 
-import ts from 'typescript'
+// TypeScript 7 is a native CLI; AST consumers still need the legacy JavaScript API.
+import ts from 'typescript-api'
 
 import { collectLocalizationCandidates } from './audit-localization-coverage.mjs'
 

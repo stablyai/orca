@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
@@ -5,14 +7,15 @@ import { useAppStore } from '@/store'
 import { DEFAULT_AGENT_HIBERNATION_IDLE_MS } from './agent-hibernation-planner'
 import {
   resetAgentHibernationCoordinatorForTests,
+  runAgentHibernationTick,
   startAgentHibernationCoordinator
 } from './agent-hibernation-coordinator'
 import { hydrateDrivers, setDriverForPty } from './pane-manager/mobile-driver-state'
 import {
-  registerVisibleTerminalWorktree,
-  resetForegroundTerminalWorktreeIdsForTests,
-  setForegroundTerminalWorktreeIds
-} from './foreground-terminal-worktrees'
+  registerVisibleTerminalTab,
+  resetForegroundTerminalTabIdsForTests,
+  setForegroundTerminalTabIds
+} from './foreground-terminal-tabs'
 import {
   recordAgentHibernationPaneOutput,
   resetAgentHibernationOutputActivityForTests
@@ -23,6 +26,7 @@ import type { AppState } from '@/store/types'
 
 const NOW = 10_000_000
 const LEAF = '11111111-1111-4111-8111-111111111111'
+const PI_TRANSCRIPT_PATH = join(tmpdir(), 'pi-session-1.jsonl')
 
 const mockRuntimeEnvironmentCall = vi.fn()
 
@@ -76,12 +80,20 @@ function installEligibleState(
   overrides: Partial<AppState> = {}
 ): typeof shutdownCompletedAgentPaneForHibernation {
   const e = entry()
+  const runtimeOwnerEnvironmentId = overrides.settings?.activeRuntimeEnvironmentId ?? undefined
   useAppStore.setState({
     settings: {
       experimentalAgentHibernation: true,
       agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS
     } as never,
     activeWorktreeId: 'wt-active',
+    repos: [],
+    worktreesByRepo: {
+      'fixture-repo': [
+        { id: 'wt-bg', repoId: 'fixture-repo', hostId: 'local', runtimeOwnerEnvironmentId }
+      ]
+    } as never,
+    detectedWorktreesByRepo: {},
     tabsByWorktree: { 'wt-bg': [tab()] },
     terminalLayoutsByTabId: { 'tab-1': layout() },
     ptyIdsByTabId: { 'tab-1': ['pty-1'] },
@@ -163,7 +175,7 @@ function deferred<T>(): {
 afterEach(() => {
   resetAgentHibernationCoordinatorForTests()
   clearRuntimeCompatibilityCacheForTests()
-  resetForegroundTerminalWorktreeIdsForTests()
+  resetForegroundTerminalTabIdsForTests()
   resetAgentHibernationOutputActivityForTests()
   hydrateDrivers([])
   mockRuntimeEnvironmentCall.mockReset()
@@ -187,6 +199,52 @@ describe('agent sleep coordinator', () => {
       ptyId: 'pty-1'
     })
     expect(useAppStore.getState().shutdownWorktreeTerminals).not.toHaveBeenCalled()
+  })
+
+  it('hibernates completed Pi after the periodic recovery capture', async () => {
+    vi.useFakeTimers()
+    const piEntry = {
+      ...entry(),
+      agentType: 'pi' as const,
+      providerSession: {
+        key: 'session_id' as const,
+        id: 'pi-session-1',
+        transcriptPath: PI_TRANSCRIPT_PATH
+      }
+    }
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
+      agentStatusByPaneKey: { [piEntry.paneKey]: piEntry },
+      sleepingAgentSessionsByPaneKey: {
+        [piEntry.paneKey]: {
+          paneKey: piEntry.paneKey,
+          tabId: piEntry.tabId,
+          worktreeId: piEntry.worktreeId!,
+          agent: 'pi',
+          providerSession: piEntry.providerSession,
+          prompt: '',
+          state: 'working',
+          capturedAt: piEntry.updatedAt,
+          updatedAt: piEntry.updatedAt,
+          origin: 'live'
+        }
+      }
+    })
+
+    const liveRecord = useAppStore.getState().sleepingAgentSessionsByPaneKey[piEntry.paneKey]
+    useAppStore.getState().captureAllSleepingAgentSessions('periodic')
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[piEntry.paneKey]).toBe(liveRecord)
+
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(shutdown).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(shutdown).toHaveBeenCalledWith('wt-bg', {
+      paneKey: piEntry.paneKey,
+      tabId: 'tab-1',
+      leafId: LEAF,
+      ptyId: 'pty-1'
+    })
   })
 
   it('hibernates an eligible pane when a sibling shell PTY is live', async () => {
@@ -229,10 +287,10 @@ describe('agent sleep coordinator', () => {
     expect(shutdown).not.toHaveBeenCalled()
   })
 
-  it('does not hibernate a foreground worktree that is not the active worktree', async () => {
+  it('does not hibernate a foreground terminal tab that is not in the active worktree', async () => {
     vi.useFakeTimers()
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
-    setForegroundTerminalWorktreeIds(['wt-bg'])
+    setForegroundTerminalTabIds(['tab-1'])
     startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
 
     await vi.advanceTimersByTimeAsync(3000)
@@ -240,21 +298,27 @@ describe('agent sleep coordinator', () => {
     expect(shutdown).not.toHaveBeenCalled()
   })
 
-  it('does not hibernate a worktree with a visible mounted terminal pane', async () => {
+  it('does not hibernate a visible mounted terminal tab', async () => {
     vi.useFakeTimers()
+    vi.setSystemTime(NOW)
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
-    const unregister = registerVisibleTerminalWorktree('wt-bg')
-    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+    const unregister = registerVisibleTerminalTab('tab-1')
 
-    await vi.advanceTimersByTimeAsync(3000)
+    await runAgentHibernationTick()
     expect(shutdown).not.toHaveBeenCalled()
 
+    vi.setSystemTime(NOW + 1_000)
     unregister()
-    // Why: the coordinator requires one tick to confirm a stable candidate
-    // and a second tick to revalidate before shutdown.
-    await vi.advanceTimersByTimeAsync(1000)
-    await vi.advanceTimersByTimeAsync(1000)
+    await runAgentHibernationTick()
+    expect(shutdown).not.toHaveBeenCalled()
 
+    vi.setSystemTime(NOW + 1_000 + DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1)
+    await runAgentHibernationTick()
+    expect(shutdown).not.toHaveBeenCalled()
+
+    await runAgentHibernationTick()
+    await Promise.resolve()
+    await Promise.resolve()
     expect(shutdown).toHaveBeenCalledWith('wt-bg', {
       paneKey: `tab-1:${LEAF}`,
       tabId: 'tab-1',
@@ -290,6 +354,37 @@ describe('agent sleep coordinator', () => {
     await vi.advanceTimersByTimeAsync(1000)
 
     expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('restarts confirmation when a foreground terminal visit refreshes idle state', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
+
+    await runAgentHibernationTick()
+    expect(shutdown).not.toHaveBeenCalled()
+
+    vi.setSystemTime(NOW + 1_999)
+    setForegroundTerminalTabIds(['tab-1'])
+    vi.setSystemTime(NOW + 2_000)
+    setForegroundTerminalTabIds([])
+
+    await runAgentHibernationTick()
+    expect(shutdown).not.toHaveBeenCalled()
+
+    vi.setSystemTime(NOW + 2_000 + DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1)
+    await runAgentHibernationTick()
+    expect(shutdown).not.toHaveBeenCalled()
+
+    await runAgentHibernationTick()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(shutdown).toHaveBeenCalledWith('wt-bg', {
+      paneKey: `tab-1:${LEAF}`,
+      tabId: 'tab-1',
+      leafId: LEAF,
+      ptyId: 'pty-1'
+    })
   })
 
   it('blocks shutdown when terminal input arrives between confirmation ticks', async () => {

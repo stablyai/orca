@@ -34,6 +34,7 @@ import {
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export {
+  getTerminalAdvancedTypographySearchEntries,
   getTerminalTypographySearchEntries,
   getTerminalRenderingSearchEntries,
   getTerminalCursorSearchEntries
@@ -114,7 +115,7 @@ export function getTerminalPaneSearchEntries(platform: {
           ...getTerminalWindowsPowershellImplementationSearchEntry()
         ]
       : []),
-    ...(platform.isWindows ? getTerminalRightClickToPasteSearchEntry() : []),
+    ...getTerminalRightClickToPasteSearchEntry(),
     ...getTerminalSetupScriptSearchEntries(),
     ...getManageSessionsSearchEntries(),
     ...getTerminalAdvancedSearchEntries(),

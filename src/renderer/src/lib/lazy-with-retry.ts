@@ -99,12 +99,24 @@ function isKnownDynamicImportFailure(error: unknown): boolean {
     return true
   }
 
+  // Why: a stale/truncated/corrupt chunk parses as invalid JS, so import()
+  // rejects with a native SyntaxError ("Unexpected token ')'", "Unexpected end
+  // of input", …). That reaches this catch only from the chunk's fetch+parse
+  // phase — a recoverable corrupt-chunk failure. Genuine module-evaluation
+  // logic bugs throw ordinary Errors (still surfaced raw) or fail later during
+  // React render (outside this load path), so they are unaffected.
+  if (error.name === 'SyntaxError') {
+    return true
+  }
+
   return [
     /failed to fetch dynamically imported module/i,
     /error loading dynamically imported module/i,
     /importing a module script failed/i,
     /failed to load module script/i,
-    /loading chunk .+ failed/i
+    /loading chunk .+ failed/i,
+    /unexpected token/i,
+    /unexpected end of (input|script|json)/i
   ].some((pattern) => pattern.test(error.message))
 }
 

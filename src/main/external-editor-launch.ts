@@ -1,5 +1,7 @@
 import { existsSync } from 'node:fs'
 import { basename, posix, win32 } from 'node:path'
+import { parseWslUncPath } from '../shared/wsl-paths'
+import { isVsCodeLauncherExecutable } from '../shared/vscode-remote-ssh-launcher'
 import { resolveCliCommand } from './codex-cli/command'
 import { getCmdExePath } from './win32-utils'
 
@@ -106,11 +108,23 @@ function shouldShowWindowsConsole(
   return platform === 'win32' && WINDOWS_CONSOLE_EDITORS.has(getLauncherBaseName(command, options))
 }
 
-function buildExecutableArgs(editorCommand: string, pathValue: string): string[] {
-  if (getLauncherBaseName(editorCommand) === 'cursor') {
+function buildExecutableArgs(
+  editorCommand: string,
+  pathValue: string,
+  platform: NodeJS.Platform
+): string[] {
+  const launcherBaseName = getLauncherBaseName(editorCommand)
+  if (launcherBaseName === 'cursor') {
     // Why: Cursor can route bare folder launches through the last active
     // workbench. A new window keeps "Open in Cursor" scoped to this worktree.
     return ['--new-window', pathValue]
+  }
+  if (platform === 'win32' && isVsCodeLauncherExecutable(editorCommand)) {
+    const wslPath = parseWslUncPath(pathValue)
+    if (wslPath) {
+      // Why: VS Code otherwise treats a WSL UNC path as a local Windows folder.
+      return ['--remote', `wsl+${wslPath.distro}`, wslPath.linuxPath]
+    }
   }
   return [pathValue]
 }
@@ -156,7 +170,7 @@ export function resolveExternalEditorLaunchSpec(
       kind: 'executable',
       hideWindowsConsole: !shouldShowWindowsConsole(editorCommand, platform),
       spawnCmd: editorCommand,
-      spawnArgs: buildExecutableArgs(editorCommand, pathValue)
+      spawnArgs: buildExecutableArgs(editorCommand, pathValue, platform)
     }
   }
 
@@ -169,6 +183,37 @@ export function resolveExternalEditorLaunchSpec(
     kind: 'executable',
     hideWindowsConsole: !shouldShowWindowsConsole(editorCommand, platform),
     spawnCmd: editorCommand,
-    spawnArgs: buildExecutableArgs(editorCommand, pathValue)
+    spawnArgs: buildExecutableArgs(editorCommand, pathValue, platform)
+  }
+}
+
+export function resolveVsCodeRemoteSshLaunchSpec(
+  command: string | undefined,
+  pathValue: string,
+  authority: string,
+  options: { platform?: NodeJS.Platform; fileExists?: (path: string) => boolean } = {}
+): ExternalEditorLaunchSpec | null {
+  const platform = options.platform ?? process.platform
+  const fileExists = options.fileExists ?? existsSync
+  const trimmed = command?.trim() || EXTERNAL_EDITOR_CLI_COMMAND
+
+  let editorCommand: string
+  if (isDirectExecutablePath(trimmed, platform, fileExists)) {
+    editorCommand = stripMatchingQuotes(trimmed)
+  } else {
+    if (isCompoundShellCommand(trimmed)) {
+      return null
+    }
+    editorCommand = resolveCliCommand(trimmed, { platform })
+  }
+
+  if (!isVsCodeLauncherExecutable(editorCommand)) {
+    return null
+  }
+  return {
+    kind: 'executable',
+    hideWindowsConsole: true,
+    spawnCmd: editorCommand,
+    spawnArgs: ['--remote', `ssh-remote+${authority}`, pathValue]
   }
 }

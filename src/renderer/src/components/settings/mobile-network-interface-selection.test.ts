@@ -1,10 +1,20 @@
-import { describe, expect, it } from 'vitest'
-import { selectRefreshedNetworkAddress } from './mobile-network-interface-selection'
+import { describe, it, expect } from 'vitest'
+import {
+  selectRefreshedNetworkAddress,
+  type MobileNetworkInterface
+} from './mobile-network-interface-selection'
 
-const LAN = { name: 'en0', address: '192.168.1.24' }
-const TAILNET = { name: 'tailscale0', address: '100.64.1.20' }
+const LAN: MobileNetworkInterface = { name: 'en0', address: '192.168.1.24' }
+const TAILNET: MobileNetworkInterface = { name: 'tailscale0', address: '100.64.1.20' }
 
 describe('selectRefreshedNetworkAddress', () => {
+  // Why: regression for the manual-address branch the PR adds — a
+  // transient empty refresh must not clobber the user's typed address.
+  it('keeps a manual address when refresh returns no interfaces', () => {
+    expect(selectRefreshedNetworkAddress('my-mac.ts.net', [], true)).toBe('my-mac.ts.net')
+  })
+
+  // Existing behavior is preserved verbatim from the spec.
   it('keeps the selected address when refresh discovers a new tailnet interface', () => {
     expect(selectRefreshedNetworkAddress(LAN.address, [LAN, TAILNET])).toBe(LAN.address)
   })

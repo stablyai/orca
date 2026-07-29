@@ -1,5 +1,5 @@
-import { request as httpRequest, type ClientRequest, type IncomingMessage } from 'http'
-import { request as httpsRequest } from 'https'
+import { request as httpRequest, type ClientRequest, type IncomingMessage } from 'node:http'
+import { request as httpsRequest } from 'node:https'
 import { extractJpegFrames } from './mjpeg-frame-parser'
 
 const RECONNECT_DELAY_MS = 1_000

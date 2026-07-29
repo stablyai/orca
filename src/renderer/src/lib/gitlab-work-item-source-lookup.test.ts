@@ -94,17 +94,58 @@ describe('GitLab source lookup routing', () => {
         sourceContext: runtimeSourceContext,
         state: 'opened',
         page: 1,
-        perPage: 12
+        perPage: 12,
+        query: 'fix login'
       })
     ).resolves.toMatchObject({ items: [{ repoId: 'renderer-repo', number: 7 }] })
 
+    // Why (#6263): the typed query must reach the runtime RPC so GitLab search
+    // actually filters; previously the field was never threaded through.
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
       'gitlab.listMRs',
-      { repo: 'runtime-repo', state: 'opened', page: 1, perPage: 12 },
+      { repo: 'runtime-repo', state: 'opened', page: 1, perPage: 12, query: 'fix login' },
       { timeoutMs: 30_000 }
     )
     expect(window.api.gl.listMRs).not.toHaveBeenCalled()
+  })
+
+  it('forwards the search query to local GitLab MR lists over Electron IPC', async () => {
+    const localSourceContext: TaskSourceContext = {
+      ...runtimeSourceContext,
+      hostId: 'local',
+      repoId: 'local-repo'
+    }
+    vi.mocked(window.api.gl.listMRs).mockResolvedValue({
+      items: [gitlabItem({ repoId: 'local-returned' })],
+      page: 1,
+      perPage: 12,
+      totalCount: 1,
+      totalPages: 1
+    })
+
+    await expect(
+      listGitLabMRsForSource({
+        repoPath: '/workspace/app',
+        repoId: 'local-repo',
+        sourceContext: localSourceContext,
+        state: 'opened',
+        page: 1,
+        perPage: 12,
+        query: 'fix login'
+      })
+    ).resolves.toMatchObject({ items: [{ repoId: 'local-repo', number: 7 }] })
+
+    expect(window.api.gl.listMRs).toHaveBeenCalledWith({
+      repoPath: '/workspace/app',
+      repoId: 'local-repo',
+      sourceContext: localSourceContext,
+      state: 'opened',
+      page: 1,
+      perPage: 12,
+      query: 'fix login'
+    })
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
   })
 
   it('keeps local GitLab lookups on Electron IPC with source context', async () => {

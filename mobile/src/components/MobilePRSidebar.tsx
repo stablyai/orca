@@ -14,9 +14,11 @@ import {
   type MobilePrTitleAction
 } from '../session/use-mobile-pr-title-action'
 import { useMobilePrAiTriage, type MobilePrAiTriage } from '../session/use-mobile-pr-ai-triage'
+import { usePRBotAuthorOverrides } from '../session/use-pr-bot-author-overrides'
 import { buildFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
+import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
 import { PRSidebarHeader } from './pr-sidebar/PRSidebarHeader'
 import { PRConflictingFilesSection } from './pr-sidebar/PRConflictingFilesSection'
 import { PRActionsSection } from './pr-sidebar/PRActionsSection'
@@ -34,17 +36,15 @@ type Props = {
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
-  // Current git branch — feeds the create-PR prefill in the no-PR empty state.
   gitBranch: string | null
+  gitStatus: MobileGitStatusResult | null
   headSha: string | null
-  // Applied by the docked column so content clears the home indicator (the screen's
-  // SafeAreaView is edges={['top']} only).
   bottomInset?: number
+  // Hub chrome already shows open-on-web; hide the in-body icon there.
+  showOpenOnWeb?: boolean
 }
 
-// The shell switches on the controller's state machine and renders the sections
-// (header/actions/reviewers/checks). The mutation hook is created here (hooks must
-// run unconditionally) and only fires once a PR is ready. Style only from mobile-theme.
+// Mutation hooks run unconditionally here and gate internally until a PR is ready.
 export function MobilePRSidebar({
   state,
   onRetry,
@@ -53,18 +53,17 @@ export function MobilePRSidebar({
   connState,
   worktreeId,
   gitBranch,
+  gitStatus,
   headSha,
-  bottomInset = 0
+  bottomInset = 0,
+  showOpenOnWeb = true
 }: Props) {
   const branch = prSidebarRenderBranch(state)
   // prNumber is 0 until ready; the hook gates on `ready` so it never fires early.
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
-  const prRepo =
-    state.kind === 'ready'
-      ? state.data.pr.prRepo
-        ? { owner: state.data.pr.prRepo.owner, repo: state.data.pr.prRepo.repo }
-        : null
-      : null
+  // Prefer the stable PRInfo.prRepo reference — cloning owner/repo each render
+  // reallocates and thrash-updates the mutation/comment/title hooks.
+  const prRepo = state.kind === 'ready' ? (state.data.pr.prRepo ?? null) : null
   const actions = useMobilePrActions({
     client,
     connState,
@@ -74,8 +73,6 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
-  // Separate hook for the interactive comment timeline (reply/resolve/add). Like
-  // useMobilePrActions it must run unconditionally; it gates internally on a client.
   const commentActions = useMobilePrCommentActions({
     client,
     connState,
@@ -84,8 +81,6 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
-  // Inline title-edit action. Like the others it must run unconditionally and gates
-  // internally on a client; refetches authoritative PR data after a successful edit.
   const titleAction = useMobilePrTitleAction({
     client,
     connState,
@@ -94,15 +89,23 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
-  // AI triage (Fix checks / Resolve conflicts). Like the other hooks it must run
-  // unconditionally; it gates internally on a connected client.
   const triage = useMobilePrAiTriage({ client, connState, worktreeId })
+  // Keyed on the PR payload identity so overrides re-fetch with each PR refetch
+  // instead of staying a stale one-shot snapshot for the whole session.
+  const botAuthorOverrides = usePRBotAuthorOverrides(
+    client,
+    connState,
+    state.kind === 'ready' ? state.data.details : null
+  )
 
   return (
     <ScrollView
       style={{ flex: 1 }}
       contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset }]}
       keyboardShouldPersistTaps="handled"
+      // Why: root-comment / reply composers sit at the bottom of this scroll
+      // area; without keyboard insets the focused field stays under the keyboard.
+      automaticallyAdjustKeyboardInsets
       showsVerticalScrollIndicator={false}
     >
       <PrSidebarContent
@@ -111,12 +114,16 @@ export function MobilePRSidebar({
         onRetry={onRetry}
         refetch={refetch}
         client={client}
+        connState={connState}
         worktreeId={worktreeId}
         gitBranch={gitBranch}
+        gitStatus={gitStatus}
         actions={actions}
         commentActions={commentActions}
         titleAction={titleAction}
         triage={triage}
+        botAuthorOverrides={botAuthorOverrides}
+        showOpenOnWeb={showOpenOnWeb}
       />
     </ScrollView>
   )
@@ -128,24 +135,32 @@ function PrSidebarContent({
   onRetry,
   refetch,
   client,
+  connState,
   worktreeId,
   gitBranch,
+  gitStatus,
   actions,
   commentActions,
   titleAction,
-  triage
+  triage,
+  showOpenOnWeb,
+  botAuthorOverrides
 }: {
   branch: ReturnType<typeof prSidebarRenderBranch>
   state: PrSidebarState
   onRetry: () => void
   refetch: () => void
   client: RpcClient | null
+  connState: ConnectionState
   worktreeId: string
   gitBranch: string | null
+  gitStatus: MobileGitStatusResult | null
   actions: MobilePrActions
   commentActions: MobilePrCommentActions
   titleAction: MobilePrTitleAction
   triage: MobilePrAiTriage
+  showOpenOnWeb: boolean
+  botAuthorOverrides: ReadonlySet<string>
 }) {
   if (branch === 'loading') {
     return (
@@ -194,6 +209,8 @@ function PrSidebarContent({
         client={client}
         worktreeId={worktreeId}
         gitBranch={gitBranch}
+        gitStatus={gitStatus}
+        connState={connState}
         onCreated={refetch}
       />
     )
@@ -209,6 +226,8 @@ function PrSidebarContent({
         titleAction={titleAction}
         triage={triage}
         refetch={refetch}
+        botAuthorOverrides={botAuthorOverrides}
+        showOpenOnWeb={showOpenOnWeb}
       />
     )
   }
@@ -223,7 +242,9 @@ function PrSidebarSections({
   commentActions,
   titleAction,
   triage,
-  refetch
+  refetch,
+  showOpenOnWeb,
+  botAuthorOverrides
 }: {
   data: Extract<PrSidebarState, { kind: 'ready' }>['data']
   client: RpcClient | null
@@ -233,6 +254,8 @@ function PrSidebarSections({
   titleAction: MobilePrTitleAction
   triage: MobilePrAiTriage
   refetch: () => void
+  showOpenOnWeb: boolean
+  botAuthorOverrides: ReadonlySet<string>
 }) {
   const pr = data.pr
   // Bind the triage launchers to this PR's data; the prompt builders are pure so
@@ -262,19 +285,30 @@ function PrSidebarSections({
     isBusy: triage.isBusy('resolve-conflicts'),
     error: triage.error
   }
+  // One card for identity + actions so the ready PR isn't a stack of thin
+  // duplicate blocks (badge row, title, branches, then another action band).
   return (
     <>
-      <PRSidebarHeader pr={data.pr} details={data.details} titleAction={titleAction} />
-      {/* Conflicting-files section mirrors desktop order: directly below the header,
-          before actions/checks. Renders only when the PR has merge conflicts. */}
+      <View style={styles.section}>
+        <View style={styles.sectionBody}>
+          <PRSidebarHeader
+            pr={data.pr}
+            details={data.details}
+            titleAction={titleAction}
+            showOpenOnWeb={showOpenOnWeb}
+            bare
+          />
+          <PRActionsSection
+            pr={data.pr}
+            actions={actions}
+            client={client}
+            worktreeId={worktreeId}
+            onUnlinked={refetch}
+          />
+        </View>
+      </View>
+      {/* Own titled section when present; null otherwise (no empty chrome). */}
       <PRConflictingFilesSection pr={data.pr} triage={conflictsTriage} />
-      <PRActionsSection
-        pr={data.pr}
-        actions={actions}
-        client={client}
-        worktreeId={worktreeId}
-        onUnlinked={refetch}
-      />
       <PRReviewersSection
         details={data.details}
         actions={actions}
@@ -294,6 +328,7 @@ function PrSidebarSections({
         prState={data.pr.state}
         prRepo={data.pr.prRepo ?? null}
         actions={commentActions}
+        botAuthorOverrides={botAuthorOverrides}
       />
     </>
   )

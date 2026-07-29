@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { execFileSync } from 'child_process'
-import { existsSync, mkdtempSync, writeFileSync } from 'fs'
-import * as fs from 'fs/promises'
-import * as path from 'path'
-import { tmpdir } from 'os'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
+import { tmpdir } from 'node:os'
 import { RelayContext } from './context'
 import { GitHandler } from './git-handler'
 import {
@@ -86,13 +86,33 @@ describe('GitHandler pull reconciliation', () => {
     return consumerDir
   }
 
-  it('explains how to configure a pull policy when divergent branches have no strategy', async () => {
+  it('falls back to a merge when divergent branches have no configured strategy', async () => {
     const consumerDir = createDivergentFixture()
 
-    await expect(dispatcher.callRequest('git.pull', { worktreePath: consumerDir })).rejects.toThrow(
-      'Pull needs a Git pull policy for divergent branches. Configure one for this repository'
-    )
+    await expect(
+      dispatcher.callRequest('git.pull', { worktreePath: consumerDir })
+    ).resolves.not.toThrow()
 
+    // Merge reconciliation yields a two-parent commit and both sides' files.
+    const parentRefs = execGit(consumerDir, ['log', '-1', '--pretty=%P']).trim().split(/\s+/)
+    expect(parentRefs).toHaveLength(2)
+    expect(existsSync(path.join(consumerDir, 'remote.txt'))).toBe(true)
+    expect(existsSync(path.join(consumerDir, 'local.txt'))).toBe(true)
+    expect(execGit(consumerDir, ['status', '--short'])).toBe('')
+  }, 15_000)
+
+  it('preserves configured fast-forward-only pull semantics on divergent branches', async () => {
+    const consumerDir = createDivergentFixture()
+    execGit(consumerDir, ['config', 'pull.ff', 'only'])
+
+    // Why: an explicit ff-only policy must still fail on divergence rather than
+    // getting silently reconciled by the merge fallback.
+    await expect(
+      dispatcher.callRequest('git.pull', { worktreePath: consumerDir })
+    ).rejects.toThrow()
+
+    const parentRefs = execGit(consumerDir, ['log', '-1', '--pretty=%P']).trim().split(/\s+/)
+    expect(parentRefs).toHaveLength(1)
     expect(execGit(consumerDir, ['status', '--short'])).toBe('')
   }, 15_000)
 

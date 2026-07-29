@@ -23,7 +23,7 @@
  *   node config/scripts/terminal-e2e-helpers.mjs --port 9444 --command 'echo hello'
  */
 
-import { execFileSync } from 'child_process'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 

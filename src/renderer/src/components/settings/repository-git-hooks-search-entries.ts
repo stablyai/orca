@@ -117,6 +117,10 @@ export function getRepositoryGitHooksSearchEntries(repo: Repo): SettingsSearchEn
           'auto.components.settings.repository.search.f9d84b7971',
           'setup run policy'
         ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.waitForSetupBeforeAgent',
+          'wait for setup before starting agent'
+        ),
         ...translateSearchKeyword('auto.components.settings.repository.search.80c490b012', 'ask'),
         ...translateSearchKeyword(
           'auto.components.settings.repository.search.a69c5cbe90',
