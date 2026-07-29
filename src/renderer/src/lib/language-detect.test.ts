@@ -47,6 +47,12 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\Users\\alice\\.codex\\LOG.JSONL')).toBe('jsonl')
   })
 
+  it('maps .jsp/.jspf files to the dedicated jsp language id (case-insensitive)', () => {
+    expect(detectLanguage('src/main/webapp/WEB-INF/views/list.jsp')).toBe('jsp')
+    expect(detectLanguage('src/main/webapp/WEB-INF/include/header.jspf')).toBe('jsp')
+    expect(detectLanguage('views/DETAIL.JSP')).toBe('jsp')
+  })
+
   it('keeps .json/.jsonc on the built-in json language and unknown on plaintext', () => {
     expect(detectLanguage('config/settings.json')).toBe('json')
     expect(detectLanguage('config/tsconfig.jsonc')).toBe('json')

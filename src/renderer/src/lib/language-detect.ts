@@ -84,6 +84,8 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.vue': 'vue',
   '.svelte': 'svelte',
   '.astro': 'astro',
+  '.jsp': 'jsp',
+  '.jspf': 'jsp',
   '.sv': 'systemverilog',
   '.svh': 'systemverilog',
   '.v': 'verilog',
