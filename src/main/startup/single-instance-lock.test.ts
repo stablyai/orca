@@ -56,7 +56,7 @@ describe('acquireSingleInstanceLock', () => {
     expect(acquired).toBe(true)
     expect(fake.requestSingleInstanceLock).toHaveBeenCalledTimes(1)
     expect(fake.on).toHaveBeenCalledTimes(1)
-    expect(fake.on).toHaveBeenCalledWith('second-instance', expect.any(Function))
+    expect(fake.on).toHaveBeenCalledWith('second-instance', onSecondInstance)
     expect(fake.listeners['second-instance']).toHaveLength(1)
   })
 
@@ -68,25 +68,9 @@ describe('acquireSingleInstanceLock', () => {
 
     const [registered] = fake.listeners['second-instance'] ?? []
     expect(registered).toBeDefined()
-    registered?.({}, ['/some/app', '/some/file.md'])
+    registered?.()
 
-    expect(onSecondInstance).toHaveBeenCalledWith(['/some/app', '/some/file.md'])
-  })
-
-  it('forwards the second instance argv to the callback', () => {
-    const handlers = new Map<string, (event: unknown, argv: string[]) => void>()
-    const app = {
-      requestSingleInstanceLock: () => true,
-      on: (eventName: string, handler: (event: unknown, argv: string[]) => void) => {
-        handlers.set(eventName, handler)
-      }
-    } as unknown as App
-
-    const onSecondInstance = vi.fn()
-    expect(acquireSingleInstanceLock(app, onSecondInstance)).toBe(true)
-
-    handlers.get('second-instance')?.({}, ['/opt/orca/orca', '/home/x/a.md'])
-    expect(onSecondInstance).toHaveBeenCalledWith(['/opt/orca/orca', '/home/x/a.md'])
+    expect(onSecondInstance).toHaveBeenCalledTimes(1)
   })
 })
 
