@@ -29,10 +29,14 @@ describe('orchestration skill guidance', () => {
     const skill = readSkill()
     const toolBoundary = getSection(skill, 'Tool Boundary')
 
-    expect(toolBoundary).toContain(
-      'must create Orca runtime state with `orca orchestration task-create` and `orca orchestration dispatch --inject`'
+    expect(toolBoundary).toContain('must create or bind a Run')
+    expect(toolBoundary).toContain('create the Task with `orca orchestration task-create`')
+    expect(toolBoundary).toContain('preferred `orca orchestration worker-start` composition')
+    expect(toolBoundary).toContain('low-level `orca orchestration dispatch --inject` path')
+    expect(toolBoundary).not.toContain('or `orca orchestration run`')
+    expect(skill).toContain(
+      '`coordinator-start`, `coordinator-stop`, `run`, and `run-stop` are retired scheduler commands'
     )
-    expect(toolBoundary).toContain('or `orca orchestration run`')
     expect(toolBoundary).toContain(
       'Do not substitute non-Orca subagent tools, generic agent-spawn APIs, or chat-only parallel worker features'
     )
@@ -45,6 +49,41 @@ describe('orchestration skill guidance', () => {
     expect(toolBoundary).toContain(
       'do not retroactively describe the external worker as orchestrated'
     )
+  })
+
+  it('teaches attested adoption without reviving the retired scheduler', () => {
+    const skill = readSkill()
+    const migration = getSection(skill, 'Contract Migration')
+
+    expect(migration).toContain(
+      'adopts a live pre-update orchestration assignment into an ordinary Run'
+    )
+    expect(migration).toContain(
+      'preserves the existing agent process, PTY/session, terminal handle, tab/leaf/pane, worktree or folder workspace, Task, and Dispatch'
+    )
+    expect(migration).toContain('never restarts or replaces the worker')
+    expect(migration).toContain('The retired scheduler is not revived')
+    expect(migration).toContain('[LEGACY COMPATIBILITY]')
+    expect(migration).toContain('[LEGACY READ-ONLY]')
+    expect(migration).toContain(
+      'Loss of lifecycle authority does not invalidate the existing assignment, process, or filesystem work.'
+    )
+    expect(migration).toContain(
+      'It must not spawn, write, signal, stop, switch, focus, split, or inject a terminal.'
+    )
+    expect(migration).not.toContain('task-list --run run_legacy_local')
+    expect(migration).toContain('run_legacy_local is an empty audit tombstone')
+    expect(migration).toContain('Recovered orchestration work from a contract update')
+    expect(migration).toContain('run-show --id <adopted_run_id>')
+    expect(migration).toContain('task-list --run <adopted_run_id>')
+    expect(migration).toContain('Legacy inspection remains available without consuming mail')
+    expect(migration).toContain('run-use --id <adopted_run_id> --takeover-legacy')
+    expect(migration).toContain('Takeover fences only the old coordinator')
+    expect(migration).toContain('Live legacy workers keep their original Tasks, Dispatches')
+    expect(migration).toContain(
+      'keep the original worker as the only editor until it reaches a stable handoff point'
+    )
+    expect(migration).toContain('a conflict-free placement for any remaining work')
   })
 
   it('treats long-running worker waits as liveness checkpoints, not failures', () => {
@@ -213,13 +252,13 @@ describe('orchestration skill guidance', () => {
     const messaging = getSection(skill, 'Messaging')
     const workerTerminals = getSection(skill, 'Worker Terminals')
     const agentFirstExample = workerTerminals.match(
-      /```bash\norca worktree create --name <task-name> --agent codex --json\n[\s\S]*?```/
+      /```bash\norca worktree create --name <task-name> --agent codex --setup run --json\n[\s\S]*?```/
     )?.[0]
 
     expect(workerTerminals).toContain('For an allowed new worktree, use agent-first:')
     expect(workerTerminals).toContain('fallback shell + agent pair')
     expect(workerTerminals).toContain(
-      'Repo setup or default-terminal settings may still add tabs or splits'
+      'repo setup and default-terminal settings may add intentional tabs or splits'
     )
     expect(workerTerminals).toContain('without configured default tabs')
     expect(workerTerminals).toContain(
@@ -229,12 +268,11 @@ describe('orchestration skill guidance', () => {
     expect(workerTerminals).not.toContain('ends with **one** agent tab')
     expect(agentFirstExample).toBeDefined()
     expect(agentFirstExample).not.toContain('orca terminal list')
+    expect(agentFirstExample).toContain('agentTerminalHandle')
     expect(agentFirstExample).toContain('startupTerminal.handle')
-    expect(messaging).toContain(
-      'Use `startupTerminal.handle` from the create response when present'
-    )
-    expect(messaging).toContain('continue with the replacement only')
-    expect(messaging).toContain('it does not remotely wake another terminal')
+    expect(messaging).toContain('Prefer `agentTerminalHandle` from the create response')
+    expect(messaging).toContain('Continue with the replacement handle only')
+    expect(messaging).toContain('never writes to terminal input or remotely wakes another terminal')
     expect(messaging).toContain('Use `orchestration dispatch --inject` to deliver a tracked task')
   })
 })

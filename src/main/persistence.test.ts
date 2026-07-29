@@ -3691,6 +3691,21 @@ describe('Store', () => {
     expect(hostSession.lastVisitedAtByWorktreeId?.['r1::/path/wt1']).toBeUndefined()
   })
 
+  it('lists only persisted workspace-session host partitions', async () => {
+    const store = await createStore()
+    expect(store.getWorkspaceSessionHostIds()).toEqual(['local'])
+
+    store.getWorkspaceSession('ssh:not-persisted')
+    store.setWorkspaceSession(getDefaultWorkspaceSession(), 'ssh:ssh-a')
+    store.setWorkspaceSession(getDefaultWorkspaceSession(), 'runtime:environment-a')
+
+    expect(store.getWorkspaceSessionHostIds()).toEqual([
+      'local',
+      'ssh:ssh-a',
+      'runtime:environment-a'
+    ])
+  })
+
   it('removeProject removes the derived project host setup compatibility record', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1' }))

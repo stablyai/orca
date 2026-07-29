@@ -1,6 +1,5 @@
 // Why: regression coverage for the install-probe contract — the "node-pty is not available" bug shipped because every guard layer was silent.
 
-import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -77,129 +76,14 @@ import {
 } from './ssh-relay-versioned-install'
 import { acquireInstallLock } from './ssh-relay-install-lock'
 import { tryAcquireRelayRepairLock } from './ssh-relay-repair-lock'
-import type { SshConnection } from './ssh-connection'
-
-type SftpWriteCapture = {
-  paths: string[]
-  contents: Record<string, string>
-  // execCommand call count observed when ws.end() ran, per path — pins "package.json written before npm install".
-  execCallCountAtWrite: Record<string, number>
-}
-
-type SftpCallback = (err: Error | null, resolved?: string) => void
-const NO_SUCH_SFTP_FILE = Object.assign(new Error('No such file'), { code: 2 })
-
-function makeMockConnection(capture: SftpWriteCapture): SshConnection {
-  // Why: production attaches/removes real listeners (including prependOnceListener), so the fake must be an emitter.
-  const sftpCreate = (): unknown => {
-    const sftp = new EventEmitter()
-    return Object.assign(sftp, {
-      mkdir: vi.fn((_p: string, cb: SftpCallback) => cb(null)),
-      // This host's shell home and SFTP start directory agree, so no namespace redirect is possible.
-      realpath: vi.fn((_p: string, cb: SftpCallback) => cb(null, '/home/u')),
-      lstat: vi.fn((_p: string, cb: SftpCallback) => cb(NO_SUCH_SFTP_FILE)),
-      createWriteStream: vi.fn().mockImplementation((path: string) => {
-        capture.paths.push(path)
-        const ws = new EventEmitter()
-        return Object.assign(ws, {
-          end: vi.fn((data?: string) => {
-            capture.contents[path] = `${capture.contents[path] ?? ''}${data ?? ''}`
-            capture.execCallCountAtWrite[path] = vi.mocked(execCommand).mock.calls.length
-            setTimeout(() => ws.emit('close'), 0)
-          })
-        })
-      }),
-      end: vi.fn(() => setTimeout(() => sftp.emit('close'), 0))
-    })
-  }
-  return {
-    canRunConcurrentExecCommands: vi.fn().mockReturnValue(false),
-    exec: vi.fn().mockResolvedValue({
-      on: vi.fn(),
-      stderr: { on: vi.fn() },
-      stdin: {},
-      stdout: { on: vi.fn() },
-      close: vi.fn()
-    }),
-    sftp: vi.fn().mockImplementation(() => Promise.resolve(sftpCreate()))
-  } as unknown as SshConnection
-}
-
-type ExecResponse = string | { reject: string }
-
-function decodePowerShellCommand(command: string): string | null {
-  const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
-  return match ? Buffer.from(match[1], 'base64').toString('utf16le') : null
-}
-
-// Happy-path exec order: uname, $HOME, mkdir, chmod node, npm install, chmod prebuilds, probe, [cat stderr + rm if MISSING], [rebuild → chmod → re-probe if MISSING], DEAD, READY.
-// When the probe rejects (SSH channel close or vanished install dir), the catch skips both stderr-capture and the rm.
-function makeExecResponses(opts: {
-  npmInstall: 'ok' | { reject: string }
-  // 'ok'      : probe resolves with the sentinel; rm runs once
-  // 'missing' : probe resolves with 'MISSING'; cat stderr + rm both run
-  // 'dir-gone': probe rejects (cd-failure), exec rejects directly
-  // { reject }: probe rejects with custom error (e.g. SSH channel)
-  probe: 'ok' | 'missing' | 'dir-gone' | { reject: string }
-  // Override probe stdout entirely for shell-noise/pollution-prefix pressure tests.
-  probeStdoutOverride?: string
-  // Result after the automatic rebuild; defaults to missing so legacy tests still exercise the degraded-mode warning.
-  repairProbe?: 'ok' | 'missing'
-  // Raw stdout for the toolchain probe in installNativeDeps' catch; defaults to a full toolchain so the original npm error propagates unchanged.
-  toolchainProbe?: string
-}): ExecResponse[] {
-  // npm install failure aborts after the catch probes the toolchain; no chmod/probe/launch slots are reached.
-  if (opts.npmInstall !== 'ok') {
-    return [
-      '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
-      '/home/u',
-      '', // mkdir remoteDir (uploadRelay)
-      '', // chmod +x node
-      opts.npmInstall, // npm install rejects
-      opts.toolchainProbe ?? 'HAVE make\nHAVE g++\nHAVE cc\nHAVE python3\nPKG apt-get'
-    ]
-  }
-  const probeSlot: ExecResponse =
-    opts.probeStdoutOverride !== undefined
-      ? opts.probeStdoutOverride
-      : opts.probe === 'ok'
-        ? 'ORCA-NPTY-PROBE-OK\n'
-        : opts.probe === 'missing'
-          ? 'MISSING\n' // shell-level `|| echo MISSING` after require throw
-          : opts.probe === 'dir-gone'
-            ? { reject: 'cd: no such file or directory' }
-            : opts.probe
-  const slots: ExecResponse[] = [
-    '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
-    '/home/u',
-    '', // mkdir remoteDir (uploadRelay)
-    '', // chmod +x node
-    opts.npmInstall === 'ok' ? '' : opts.npmInstall,
-    '', // chmod prebuilds
-    probeSlot
-  ]
-  // Cleanup execs only run when the probe resolved (not when it rejected).
-  const probeResolved = typeof probeSlot === 'string'
-  if (probeResolved) {
-    const probeOk = probeSlot.includes('ORCA-NPTY-PROBE-OK')
-    if (!probeOk) {
-      slots.push('') // cat stderr (graceful failure path captures detail)
-    }
-    slots.push('') // rm -f stderr (best-effort cleanup)
-    if (!probeOk) {
-      slots.push('') // npm rebuild with lifecycle scripts explicitly enabled
-      slots.push('') // chmod prebuilds after rebuild
-      const repairProbe = opts.repairProbe === 'ok' ? 'ORCA-NPTY-PROBE-OK\n' : 'MISSING\n'
-      slots.push(repairProbe)
-      if (!repairProbe.includes('ORCA-NPTY-PROBE-OK')) {
-        slots.push('') // cat stderr after unsuccessful rebuild
-      }
-      slots.push('') // rm -f stderr after rebuild probe
-    }
-  }
-  slots.push('DEAD', 'READY')
-  return slots
-}
+import {
+  decodePowerShellCommand,
+  makeExecResponses,
+  makeMockConnection,
+  makeRepairToolchainSkipExecResponses,
+  type ExecResponse,
+  type SftpWriteCapture
+} from './ssh-relay-native-deps-install-fixture'
 
 describe('installNativeDeps (via deployAndLaunchRelay)', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>
@@ -294,14 +178,90 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     expect(warnMessages.some((m) => m.includes('[ssh-relay][NATIVE-DEPS-INSTALL-FAIL]'))).toBe(true)
   })
 
-  it('rewrites the npm failure into an actionable build-tools message when the remote toolchain is missing', async () => {
+  it('connects without node-pty when the remote toolchain is missing, instead of failing the host', async () => {
     const conn = makeMockConnection(sftpCapture)
     feed(
       makeExecResponses({
         npmInstall: { reject: 'gyp ERR! stack Error: not found: make' },
-        probe: 'ok',
-        // No HAVE lines + apk present: the tailored hint must come from the remote probe, not a hardcoded apt fallback.
+        nodePtySkipRetry: 'ok',
         toolchainProbe: 'PKG apk'
+      })
+    )
+
+    // node-pty only backs terminals, so a host that cannot compile it still gets files and git.
+    await expect(deployAndLaunchRelay(conn)).resolves.toBeDefined()
+    expect(vi.mocked(finalizeInstall)).toHaveBeenCalled()
+
+    const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
+    const reinstall = execCalls.findLast((c) => c.includes('npm install')) ?? ''
+    expect(reinstall).toContain('@parcel/watcher@')
+    expect(reinstall).not.toContain('node-pty@')
+    // The skip path must stop here: rebuilding is pointless on a host with no compiler.
+    expect(execCalls.some((c) => c.includes('npm rebuild'))).toBe(false)
+    // node-pty is legitimately absent, so its probe result must not raise the degraded-mode alarm.
+    const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
+    expect(warnMessages.some((m) => m.includes('[ssh-relay][WATCHER-MISSING-NPTY-SKIPPED]'))).toBe(
+      false
+    )
+    // The rewritten manifest must drop node-pty too, or npm reconciles it back and rebuilds.
+    const pkgPath = sftpCapture.paths.findLast((p) => p.endsWith('/package.json')) as string
+    // The capture concatenates every write to a path; the rewrite is the last manifest line.
+    const latest = sftpCapture.contents[pkgPath].trim().split('\n').at(-1) as string
+    const deps = (JSON.parse(latest) as { dependencies: object }).dependencies
+    expect(deps).toHaveProperty('@parcel/watcher')
+    expect(deps).not.toHaveProperty('node-pty')
+  })
+
+  it('warns when @parcel/watcher is also unloadable after node-pty was skipped', async () => {
+    const conn = makeMockConnection(sftpCapture)
+    feed(
+      makeExecResponses({
+        npmInstall: { reject: 'gyp ERR! stack Error: not found: make' },
+        nodePtySkipRetry: 'ok',
+        nodePtySkipWatcher: 'missing'
+      })
+    )
+
+    // Watcher failure (e.g. glibc below the floor) is non-fatal, but silent dead file watching is not acceptable.
+    await expect(deployAndLaunchRelay(conn)).resolves.toBeDefined()
+    const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
+    expect(warnMessages.some((m) => m.includes('[ssh-relay][WATCHER-MISSING-NPTY-SKIPPED]'))).toBe(
+      true
+    )
+    expect(vi.mocked(finalizeInstall)).toHaveBeenCalledTimes(1)
+    const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
+    expect(execCalls.some((c) => c.includes('npm rebuild'))).toBe(false)
+  })
+
+  it('hard-fails on a gyp error when the remote toolchain is actually complete', async () => {
+    const conn = makeMockConnection(sftpCapture)
+    feed(
+      makeExecResponses({
+        npmInstall: { reject: 'gyp ERR! stack Error: not found: make' },
+        // Probe contradicts the gyp output: the tools are all there, so the real cause is unknown.
+        toolchainProbe: 'HAVE make\nHAVE g++\nHAVE python3\nPKG apt-get'
+      })
+    )
+
+    const error = await deployAndLaunchRelay(conn).catch((e: Error) => e)
+    // Degrading here would silently drop terminals on a host that can build them.
+    expect((error as Error).message).toContain('gyp ERR!')
+    expect((error as Error).message).not.toContain('build tools')
+
+    const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
+    expect(execCalls.filter((c) => c.includes('npm install'))).toHaveLength(1)
+    expect(execCalls.some((c) => c.includes("rm -rf 'node_modules/node-pty'"))).toBe(false)
+    expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
+  })
+
+  it('still reports the actionable build-tools error when the node-pty-less retry also fails', async () => {
+    const conn = makeMockConnection(sftpCapture)
+    feed(
+      makeExecResponses({
+        npmInstall: { reject: 'gyp ERR! stack Error: not found: make' },
+        // No HAVE lines + apk present: the tailored hint must come from the remote probe, not a hardcoded apt fallback.
+        toolchainProbe: 'PKG apk',
+        nodePtySkipRetry: { reject: 'npm ERR! registry unreachable' }
       })
     )
 
@@ -314,10 +274,14 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     expect(message).toContain('sudo apk add build-base python3')
     // The raw npm/node-gyp output is preserved for triage, not discarded.
     expect(message).toContain('not found: make')
-
-    const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
+    // The retry's own cause is unrelated to the toolchain, so it must survive as cause + a log line.
+    expect((error as Error).cause).toBeInstanceOf(Error)
+    expect(((error as Error).cause as Error).message).toContain('registry unreachable')
+    const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
     expect(
-      execCalls.some((c) => c.includes('command -v "$t"') && c.includes('command -v "$p"'))
+      warnMessages.some(
+        (m) => m.includes('[ssh-relay][NPTY-SKIP-RETRY-FAIL]') && m.includes('registry unreachable')
+      )
     ).toBe(true)
     expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
   })
@@ -717,6 +681,23 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     expect(installCommand).toContain('node_modules/@parcel/watcher')
     expect(installCommand).toContain("-name 'watcher-*'")
     expect(installCommand).not.toContain("rm -rf 'node_modules/node-pty'")
+  })
+
+  it('keeps the caller resets when a repair reconnect has to drop node-pty', async () => {
+    vi.mocked(isRelayAlreadyInstalled).mockResolvedValue(true)
+    const conn = makeMockConnection(sftpCapture)
+    feed(makeRepairToolchainSkipExecResponses())
+
+    await expect(deployAndLaunchRelay(conn)).resolves.toBeDefined()
+    expect(vi.mocked(finalizeInstall)).toHaveBeenCalledTimes(1)
+
+    const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
+    const reinstall = execCalls.findLast((c) => c.includes('npm install')) ?? ''
+    expect(reinstall).not.toContain('node-pty@')
+    expect(reinstall).toContain("rm -rf 'node_modules/node-pty'")
+    // Dropping the repair's own resets here leaves npm calling the broken watcher up to date.
+    expect(reinstall).toContain("rm -rf 'node_modules/@parcel/watcher'")
+    expect(reinstall).toContain("-name 'watcher-*'")
   })
 
   it('launches an already-installed relay in degraded mode when repair throws', async () => {

@@ -219,6 +219,78 @@ describe('captureTerminalShutdownLayout', () => {
     expect(buffer).toHaveLength(fittingRows * 1024 + CURSOR_HOME.length)
   })
 
+  it('bounds serialize probes while capping an oversized buffer by UTF-8 bytes', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const multibyteRow = 'é'.repeat(1024)
+    const serialize = vi.fn((options?: { scrollback?: number }) =>
+      multibyteRow.repeat(options?.scrollback ?? 0)
+    )
+    const pane = {
+      id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
+      terminal: mockTerminal(512),
+      serializeAddon: { serialize }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      getActivePane: vi.fn(() => pane)
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      manager: manager as never,
+      container: mockRootForPane(1),
+      expandedPaneId: null,
+      paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
+      paneTitlesByPaneId: { 1: 'ssh shell' },
+      existingLayout: undefined
+    })
+
+    // Full pass plus at most MAX_SCROLLBACK_FIT_PROBES fit probes; a bisection took 10+.
+    expect(serialize.mock.calls.length).toBeLessThanOrEqual(5)
+    expect(getUtf8ByteLength(layout.buffersByLeafId?.[LEAF_ID] ?? '')).toBeLessThanOrEqual(
+      TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
+    )
+  })
+
+  it('keeps most of the byte budget when dense recent rows sit above sparse scrollback', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    // Why this shape: the common terminal profile (a long quiet prompt history under a dense
+    // build/agent run) makes bytes-per-row wildly non-uniform, which a pure secant step creeps on.
+    const DENSE_ROWS = 1_000
+    const DENSE_ROW = 'x'.repeat(600)
+    const serialize = vi.fn((options?: { scrollback?: number }) => {
+      const rows = options?.scrollback ?? 0
+      const dense = Math.min(rows, DENSE_ROWS)
+      return '.'.repeat(Math.max(rows - DENSE_ROWS, 0)) + DENSE_ROW.repeat(dense)
+    })
+    const pane = {
+      id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
+      terminal: mockTerminal(5_000),
+      serializeAddon: { serialize }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      getActivePane: vi.fn(() => pane)
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      manager: manager as never,
+      container: mockRootForPane(1),
+      expandedPaneId: null,
+      paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
+      paneTitlesByPaneId: { 1: 'ssh shell' },
+      existingLayout: undefined
+    })
+
+    const bytes = getUtf8ByteLength(layout.buffersByLeafId?.[LEAF_ID] ?? '')
+    expect(bytes).toBeLessThanOrEqual(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT)
+    expect(bytes).toBeGreaterThan(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT * 0.9)
+    expect(serialize.mock.calls.length).toBeLessThanOrEqual(5)
+  })
+
   it('does not preserve prior scrollback buffers or refs for a cleared leaf', async () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
     const pane = {

@@ -50,6 +50,11 @@ internal static class OrcaCliLauncher
                 "ORCA_NODE_REPL_EXTERNAL_MODULE"
             );
             startInfo.EnvironmentVariables["ELECTRON_RUN_AS_NODE"] = "1";
+            startInfo.EnvironmentVariables["ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER"] = "1";
+            startInfo.EnvironmentVariables["ORCA_CLI_COMMAND"] =
+                Environment.GetEnvironmentVariable("ORCA_CLI_COMMAND") == "orca-ide"
+                    ? "orca-ide"
+                    : "orca";
 
             using (Process child = Process.Start(startInfo))
             {

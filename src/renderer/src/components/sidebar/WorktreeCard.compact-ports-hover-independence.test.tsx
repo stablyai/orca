@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, type ReactNode } from 'react'
-import React from 'react'
+import React, { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'

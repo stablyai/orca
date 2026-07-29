@@ -101,6 +101,7 @@ import {
   normalizeWorkspaceStatuses
 } from '../../../../shared/workspace-statuses'
 import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
+import { clampCombinedDiffFileTreeWidth } from '../../../../shared/combined-diff-file-tree-width'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
@@ -868,6 +869,8 @@ export type UISlice = {
   setHideAutomationGeneratedWorkspaces: (v: boolean) => void
   hideCliCreatedWorkspaces: boolean
   setHideCliCreatedWorkspaces: (v: boolean) => void
+  hideDetachedHeadWorkspaces: boolean
+  setHideDetachedHeadWorkspaces: (v: boolean) => void
   showDotfilesByWorktree: Record<string, boolean>
   setShowDotfilesForWorktree: (worktreeId: string, showDotfiles: boolean) => void
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
@@ -2033,6 +2036,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setHideAutomationGeneratedWorkspaces: (v) => set({ hideAutomationGeneratedWorkspaces: v }),
   hideCliCreatedWorkspaces: false,
   setHideCliCreatedWorkspaces: (v) => set({ hideCliCreatedWorkspaces: v }),
+  hideDetachedHeadWorkspaces: false,
+  setHideDetachedHeadWorkspaces: (v) => set({ hideDetachedHeadWorkspaces: v }),
 
   showDotfilesByWorktree: {},
   setShowDotfilesForWorktree: (worktreeId, showDotfiles) =>
@@ -2412,6 +2417,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           undefined,
           s.markdownTocPanelWidth
         ),
+        combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
+          ui.combinedDiffFileTreeWidth,
+          undefined,
+          s.combinedDiffFileTreeWidth
+        ),
         rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
         rightSidebarTab: rightSidebarRoute.rightSidebarTab,
         rightSidebarExplorerView: rightSidebarRoute.rightSidebarExplorerView,
@@ -2432,6 +2442,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
         hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
         hideCliCreatedWorkspaces: ui.hideCliCreatedWorkspaces === true,
+        hideDetachedHeadWorkspaces: ui.hideDetachedHeadWorkspaces === true,
         showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
         // Why: startup hydrates UI before repo catalogs, so defer repo-filter validation to the all-host refresh.
         filterRepoIds:
@@ -2574,6 +2585,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         'activeNudgeId' in s.updateStatus ? (s.updateStatus.activeNudgeId ?? null) : null
       // Why: persist dismissal so relaunch doesn't immediately re-show the same card until a newer release.
       void window.api.ui.set({ dismissedUpdateVersion }).catch(console.error)
+      // Why: main can't otherwise tell an offered update was abandoned, which keeps a local-build session pinned and stalls background checks.
+      void window.api.updater.dismissAvailableUpdate().catch(console.error)
       // Why: only consume the nudge campaign for cards from a nudge cycle, not ordinary dismissals.
       if (activeNudgeId) {
         void window.api.updater.dismissNudge().catch(console.error)

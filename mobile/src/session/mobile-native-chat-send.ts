@@ -8,12 +8,21 @@ type MobileTerminalClient = {
   type: 'mobile'
 }
 
+// Why: Ctrl+U kills the TUI's current input line (desktop native chat sends the
+// same byte before its body), so a launch-context prefill parked there cannot
+// concatenate with a mobile chat message. The host writes text bytes verbatim.
+const CLEAR_UNSUBMITTED_INPUT = '\x15'
+
 type MobileNativeChatSendArgs = {
   client: RpcClient
   terminal: string
   text: string
   enter?: boolean
+  clearInputFirst?: boolean
   mobileClient?: MobileTerminalClient
+  /** Shared budget for a whole user action (heal → paste → text, or one selector's
+   *  keystroke sequence). Omit to give this write its own full budget. */
+  deadline?: number
 }
 
 /** 'unknown' = the RPC failed without proof the request never reached the
@@ -21,16 +30,42 @@ type MobileNativeChatSendArgs = {
  *  frame was written) — callers must not present it as a definite send failure. */
 export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown'
 
+/** Without an explicit timeout `sendRequest` waits for reconnect indefinitely, and
+ *  the composer holds `sending` (send arrow dimmed, no error) for as long as it
+ *  pends. Chat writes are interactive: fail them so the user can retry. */
+export const MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS = 15_000
+export const MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS = 2_000
+
+/** Opens a budget for one user action. Multi-write actions (heal → paste → text, a
+ *  paced selector answer) must share one so the composer's `sending` window stays
+ *  bounded by MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS instead of multiplying by it. */
+export function openMobileNativeChatSendBudget(): number {
+  return Date.now() + MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS
+}
+
 export async function sendMobileNativeChatMessageWithOutcome(
   args: MobileNativeChatSendArgs
 ): Promise<MobileNativeChatSendOutcome> {
+  const timeoutMs =
+    args.deadline === undefined ? MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS : args.deadline - Date.now()
+  // Starting an underfunded final write risks delivery followed by a false timeout.
+  if (timeoutMs < MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS) {
+    return 'rejected'
+  }
   try {
-    const response = await args.client.sendRequest('terminal.send', {
-      terminal: args.terminal,
-      text: args.text,
-      enter: args.enter ?? true,
-      ...(args.mobileClient ? { client: args.mobileClient } : {})
-    })
+    const response = await args.client.sendRequest(
+      'terminal.send',
+      {
+        terminal: args.terminal,
+        text: args.clearInputFirst ? `${CLEAR_UNSUBMITTED_INPUT}${args.text}` : args.text,
+        enter: args.enter ?? true,
+        ...(args.mobileClient ? { client: args.mobileClient } : {})
+      },
+      // The budget covers this whole write, reconnect wait included — a chat send
+      // that spends its ceiling waiting to connect and then starts a fresh clock
+      // pins the composer for twice as long.
+      { timeoutMs, budgetSpansConnect: true }
+    )
     return isTerminalSendRpcAccepted(response) ? 'accepted' : 'rejected'
   } catch (error) {
     // Why: a logical relay↔direct cutover rejects the in-flight send without

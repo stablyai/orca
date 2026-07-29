@@ -69,10 +69,11 @@ async function openComposerWithLinkedWorkItem(
 
 async function switchComposerProject(page: Page, projectName: string): Promise<void> {
   const composer = page.getByRole('dialog')
-  const combobox = composer.locator('button[data-project-combobox-root="true"]')
+  const combobox = composer.getByRole('combobox', { name: 'Project' })
+  const comboboxRoot = composer.locator('div[data-project-combobox-root="true"]')
   await combobox.click()
   await page.getByRole('option', { name: new RegExp(projectName) }).click()
-  await expect(combobox).toContainText(projectName)
+  await expect(comboboxRoot).toContainText(projectName)
 }
 
 test.describe('New workspace composer linked item across project switches', () => {

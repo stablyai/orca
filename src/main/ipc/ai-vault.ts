@@ -121,21 +121,18 @@ async function scanAiVaultSessionsByHostScope(
   if (executionHostScope === 'all') {
     const runtimeHosts = getActiveRuntimeAiVaultHostInfosResult()
     const runtimeResults = runtimeHosts.issue ? [runtimeHosts.issue] : []
-    return mergeAiVaultListResults(
-      await Promise.all([
-        scanLocalAiVaultSessions(args),
-        ...getActiveSshAiVaultHostInfos().map((hostInfo) =>
-          scanSshAiVaultSessions(hostInfo.targetId, args)
-        ),
-        ...runtimeHosts.hostInfos.map((hostInfo) =>
-          scanRuntimeAiVaultSessions(hostInfo, args, {
-            timeoutMs: AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS
-          })
-        ),
-        ...runtimeResults
-      ]),
-      args?.limit
-    )
+    const scannedResults = await Promise.all([
+      scanLocalAiVaultSessions(args),
+      ...getActiveSshAiVaultHostInfos().map((hostInfo) =>
+        scanSshAiVaultSessions(hostInfo.targetId, args)
+      ),
+      ...runtimeHosts.hostInfos.map((hostInfo) =>
+        scanRuntimeAiVaultSessions(hostInfo, args, {
+          timeoutMs: AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS
+        })
+      )
+    ])
+    return mergeAiVaultListResults([...scannedResults, ...runtimeResults], args?.limit)
   }
 
   const parsed = parseExecutionHostId(executionHostScope)

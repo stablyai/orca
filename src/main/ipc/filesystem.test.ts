@@ -1376,6 +1376,32 @@ describe('registerFilesystemHandlers', () => {
     expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, { includeIgnored: false })
   })
 
+  it('passes configured shared links through the local status path', async () => {
+    const sharedStore = {
+      ...store,
+      getRepos: () => [
+        {
+          ...store.getRepos()[0],
+          symlinkPaths: ['node_modules']
+        }
+      ],
+      getAllWorktreeMeta: () => ({
+        [`repo-1::${WORKTREE_FEATURE_PATH}`]: {}
+      })
+    }
+    registerWorktreeRootsForRepo(sharedStore as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    getStatusMock.mockResolvedValue({ entries: [] })
+
+    registerFilesystemHandlers(sharedStore as never)
+
+    await handlers.get('git:status')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
+
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      includeIgnored: false,
+      sharedLinkPaths: ['node_modules']
+    })
+  })
+
   it('allows git operations on the known repo root without rebuilding the worktree cache', async () => {
     getStatusMock.mockResolvedValue({ entries: [] })
 

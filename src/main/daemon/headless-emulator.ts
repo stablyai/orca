@@ -299,6 +299,16 @@ export class HeadlessEmulator {
     return lines
   }
 
+  getBufferTailLines(limit: number): string[] {
+    const buffer = this.terminal.buffer.active
+    const start = Math.max(0, buffer.length - Math.max(0, Math.floor(limit)))
+    const lines: string[] = []
+    for (let row = start; row < buffer.length; row += 1) {
+      lines.push(buffer.getLine(row)?.translateToString(true) ?? '')
+    }
+    return lines
+  }
+
   getCwd(): string | null {
     return this.oscText.cwd
   }

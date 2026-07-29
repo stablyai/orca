@@ -10,4 +10,7 @@ export type OpenSessionOptions = {
 
 export type HistoryManagerOptions = {
   onWriteError?: (sessionId: string, error: Error) => void
+  checkpointMaxBytes?: number
 }
+
+export type HistoryCheckpointResult = 'committed' | 'retryable' | 'unavailable'

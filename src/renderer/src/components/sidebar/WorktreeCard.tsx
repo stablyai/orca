@@ -1114,14 +1114,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
     },
     [hoverReview, openTaskPage, repo]
   )
+  const hoverReviewProvider = hoverReview?.provider
   const hasExplicitLinkedReview =
-    (hoverReview?.provider === 'github' && worktree.linkedPR !== null) ||
-    (hoverReview?.provider === 'gitlab' && linkedGitLabMR !== null) ||
-    (hoverReview?.provider === 'bitbucket' && linkedBitbucketPR !== null) ||
-    (hoverReview?.provider === 'azure-devops' && linkedAzureDevOpsPR !== null) ||
-    (hoverReview?.provider === 'gitea' && linkedGiteaPR !== null)
+    (hoverReviewProvider === 'github' && worktree.linkedPR !== null) ||
+    (hoverReviewProvider === 'gitlab' && linkedGitLabMR !== null) ||
+    (hoverReviewProvider === 'bitbucket' && linkedBitbucketPR !== null) ||
+    (hoverReviewProvider === 'azure-devops' && linkedAzureDevOpsPR !== null) ||
+    (hoverReviewProvider === 'gitea' && linkedGiteaPR !== null)
   const handleUnlinkReview = useCallback(() => {
-    switch (hoverReview?.provider) {
+    switch (hoverReviewProvider) {
       case 'github':
         void updateWorktreeMeta(worktree.id, { linkedPR: null })
         return
@@ -1136,12 +1137,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
         return
       case 'gitea':
         void updateWorktreeMeta(worktree.id, { linkedGiteaPR: null })
-        return
+        break
       case 'unsupported':
       case undefined:
         break
     }
-  }, [hoverReview?.provider, updateWorktreeMeta, worktree.id])
+  }, [hoverReviewProvider, updateWorktreeMeta, worktree.id])
   const handleOpenLinearIssueInOrca = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()

@@ -55,6 +55,7 @@ import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-st
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { WorktreeParentPickerPopover } from './WorktreeParentPickerPopover'
+import { WorktreeDeveloperMenu } from './WorktreeDeveloperMenu'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
@@ -101,6 +102,16 @@ const EMPTY_CYCLIC_LINEAGE_IDS: ReadonlySet<string> = new Set()
 // data. Extracted as a pure function so the stable-reference contract is unit-testable.
 export function selectMenuScopedMap<T>(menuOpen: boolean, live: T, empty: T): T {
   return menuOpen ? live : empty
+}
+
+// Why: the Developer submenu is hidden by default and revealed only by holding
+// Option/Alt at right-click. altKey is the same physical key on every platform
+// (Option on macOS, Alt on Windows/Linux), so no platform branch is needed.
+export function shouldRevealWorktreeDeveloperMenu(args: {
+  developerMenuRevealed: boolean
+  isMultiContext: boolean
+}): boolean {
+  return args.developerMenuRevealed && !args.isMultiContext
 }
 
 export function hasWorktreeParentLink(
@@ -330,6 +341,11 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const repo = useRepoById(worktree.repoId)
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const [menuOpen, setMenuOpen] = useState(false)
+  // Why: the Developer submenu is a power-user affordance, so it is revealed by
+  // holding Option/Alt at right-click — captured at open time (like the Help
+  // menu's admin options) so the submenu can't appear or vanish mid-menu and
+  // shift the rows under the pointer.
+  const [developerMenuRevealed, setDeveloperMenuRevealed] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [contextWorktrees, setContextWorktrees] = useState<readonly Worktree[]>(
     effectiveSelectedWorktrees
@@ -462,6 +478,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const setMenuOpenState = useCallback(
     (open: boolean) => {
       setMenuOpen(open)
+      if (!open) {
+        // Why: the reveal is per-open, so a later plain right-click can't inherit it.
+        setDeveloperMenuRevealed(false)
+      }
       onOpenChange?.(open)
     },
     [onOpenChange]
@@ -730,6 +750,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         event.preventDefault()
         contextMenuOpenedAtRef.current = Date.now()
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+        setDeveloperMenuRevealed(event.altKey)
         setContextWorktrees(onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
         const bounds = event.currentTarget.getBoundingClientRect()
         setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
@@ -924,6 +945,12 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             </>
           ) : null}
 
+          {shouldRevealWorktreeDeveloperMenu({ developerMenuRevealed, isMultiContext }) ? (
+            <>
+              <WorktreeDeveloperMenu worktreeId={worktree.id} disabled={isDeleting} />
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuItem

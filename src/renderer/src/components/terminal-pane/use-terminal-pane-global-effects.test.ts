@@ -50,11 +50,6 @@ vi.mock('react', async (importOriginal) => {
     useEffect: (effect: () => void | (() => void)) => {
       effect()
     },
-    // Why: visibility suspend/resume runs in useLayoutEffect so WebGL is live
-    // before the first paint of a revealed worktree (avoids DOM bold flash).
-    useLayoutEffect: (effect: () => void | (() => void)) => {
-      effect()
-    },
     useRef: <T>(value: T) => {
       const index = reactRefState.index
       reactRefState.index += 1
@@ -241,9 +236,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     delete (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver
   })
 
-  it('resumes WebGL and fits before flushing backlog so paint is GPU and grid is stable', () => {
-    // Why: resume before flush avoids DOM bold flash; fit before flush avoids
-    // writing backlog onto the transient DOM↔WebGL one-column-off grid.
+  it('flushes visible terminal panes before resuming rendering and fitting', () => {
     const order: string[] = []
     const terminalA = { name: 'terminal-a' }
     const terminalB = { name: 'terminal-b' }
@@ -306,23 +299,18 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(order).toEqual([
       'capture:terminal-a',
       'capture:terminal-b',
-      'resume',
-      'fit-reveal',
-      'intent:terminal-a',
-      'intent:terminal-b',
       'recover:terminal-a',
       'flush:terminal-a',
       'recover:terminal-b',
       'flush:terminal-b',
+      'resume',
+      'fit-reveal',
       'intent:terminal-a',
       'intent:terminal-b',
       'reset-atlas',
       'refresh',
       'reveal-repaint'
     ])
-    // Why: flush must not land between resume and the corrective reveal fit.
-    expect(order.indexOf('resume')).toBeLessThan(order.indexOf('fit-reveal'))
-    expect(order.indexOf('fit-reveal')).toBeLessThan(order.indexOf('flush:terminal-a'))
     expect(mocks.restoreScrollStateAfterLayout).not.toHaveBeenCalled()
     expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(1, terminalA, {
       maxChars: 256 * 1024
@@ -333,62 +321,6 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(mocks.fitPanes).not.toHaveBeenCalled()
     expect(isActiveRef.current).toBe(true)
     expect(isVisibleRef.current).toBe(true)
-  })
-
-  it('records mount-visible completion before PaneManager exists so first tab hide stays light', () => {
-    // Why: PaneManager is created in a passive lifecycle effect after this layout
-    // pass. Bookkeeping must still mark hasCompletedVisibleResume so the first
-    // intra-worktree hide does not take the !hasCompleted suspend branch.
-    const terminal = { name: 'terminal-a' }
-    const manager = {
-      getPanes: vi.fn(() => [{ id: 1, terminal }]),
-      resumeRendering: vi.fn(),
-      resetWebglTextureAtlases: vi.fn(),
-      scheduleRevealRepaint: vi.fn(),
-      scheduleRevealPresent: vi.fn(),
-      refreshAllPanes: vi.fn(),
-      suspendRendering: vi.fn(),
-      fitAllPanes: vi.fn(),
-      fitAllRevealedPanes: vi.fn(),
-      getActivePane: vi.fn(() => null),
-      setActivePane: vi.fn()
-    }
-    registerManagerForReset(manager)
-    const managerRef: { current: typeof manager | null } = { current: null }
-    const baseArgs = {
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      managerRef: managerRef as never,
-      containerRef: { current: null },
-      paneTransportsRef: { current: new Map() },
-      isActiveRef: { current: false },
-      isVisibleRef: { current: false },
-      paneCount: 0,
-      isSyncFitEnabled: true,
-      isWorktreeActive: true,
-      toggleExpandPane: vi.fn()
-    }
-
-    // Mount visible before the manager exists (layout before passive create).
-    beginHookRender()
-    useTerminalPaneGlobalEffects({
-      ...baseArgs,
-      isActive: true,
-      isVisible: true
-    })
-    expect(manager.resumeRendering).not.toHaveBeenCalled()
-
-    // Manager appears; visibility unchanged so the layout effect does not re-run.
-    // First hide still must keep WebGL (light path).
-    managerRef.current = manager
-    beginHookRender()
-    useTerminalPaneGlobalEffects({
-      ...baseArgs,
-      paneCount: 1,
-      isActive: false,
-      isVisible: false
-    })
-    expect(manager.suspendRendering).not.toHaveBeenCalled()
   })
 
   it('uses a light resume for tab switches while the worktree stays active', () => {

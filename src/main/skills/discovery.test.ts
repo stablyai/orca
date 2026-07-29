@@ -24,14 +24,17 @@ describe('skill discovery', () => {
     const home = join(root, 'home')
     const repo = join(root, 'repo')
     const codexSkill = join(home, '.codex', 'skills', 'review')
+    const ompSkill = join(home, '.omp', 'agent', 'skills', 'planning')
     const repoSkill = join(repo, '.claude', 'skills', 'docs')
     await mkdir(codexSkill, { recursive: true })
+    await mkdir(ompSkill, { recursive: true })
     await mkdir(repoSkill, { recursive: true })
     await writeFile(
       join(codexSkill, 'SKILL.md'),
       ['---', 'name: code-review', 'description: Review code changes.', '---', ''].join('\n')
     )
     await writeFile(join(repoSkill, 'SKILL.md'), '# Docs\n\nWrite project docs.')
+    await writeFile(join(ompSkill, 'SKILL.md'), '# Planning\n\nPlan OMP work.')
 
     const result = await discoverSkills({
       homeDir: home,
@@ -39,11 +42,18 @@ describe('skill discovery', () => {
       repos: [makeRepo(repo)]
     })
 
-    expect(result.skills.map((skill) => skill.name).sort()).toEqual(['Docs', 'code-review'])
+    expect(result.skills.map((skill) => skill.name).sort()).toEqual([
+      'Docs',
+      'Planning',
+      'code-review'
+    ])
     expect(result.skills.find((skill) => skill.name === 'code-review')?.providers).toEqual([
       'codex'
     ])
     expect(result.skills.find((skill) => skill.name === 'Docs')?.providers).toEqual(['claude'])
+    expect(result.skills.find((skill) => skill.name === 'Planning')?.providers).toEqual([
+      'agent-skills'
+    ])
   })
 
   it('discovers the enabled Claude plugin version applicable to the project cwd', async () => {
@@ -197,6 +207,7 @@ describe('skill discovery', () => {
         '/home/test/.grok/skills',
         '/home/test/.config/opencode/skills',
         '/home/test/.pi/agent/skills',
+        '/home/test/.omp/agent/skills',
         '/home/test/.gemini/skills',
         '/home/test/.gemini/antigravity/skills',
         '/home/test/.cursor/skills'
@@ -209,6 +220,11 @@ describe('skill discovery', () => {
         expect(root.providers).toEqual(['agent-skills'])
       }
     }
+    // Why: the native-chat picker admits a root when its owner is null, so leaving
+    // OMP's home shared would leak OMP-only skills into every other agent's picker.
+    expect(
+      roots.find((root) => root.path.replace(/\\/g, '/') === '/home/test/.omp/agent/skills')?.owner
+    ).toBe('omp')
   })
 
   it('does not add runtime-owned repository paths to local scan roots', () => {

@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: this suite exercises the full hook HTTP surface (Claude/Codex/Gemini parsing, transcript chunked scan, paneKey dispatch) and keeping the scenarios co-located avoids fixture drift across files. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -57,6 +58,7 @@ const TAB_A_PANE = makePaneKey('tab-A', LEAF_5)
 
 type Body = {
   paneKey: string
+  launchToken?: string
   tabId?: string
   worktreeId?: string
   env?: string
@@ -1466,6 +1468,39 @@ describe('AgentHookServer listener replay', () => {
         receivedAt: expect.any(Number),
         observedInCurrentRuntime: true
       })
+    ])
+  })
+
+  it('notifies provider-session subscribers without changing status listener arguments', () => {
+    const server = new AgentHookServer()
+    const statuses = vi.fn()
+    const sessions = vi.fn()
+    server.subscribeStatusChanges(statuses)
+    server.subscribeProviderSessionChanges(sessions)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        worktreeId: 'wt-1',
+        providerSession: {
+          key: 'session_id',
+          id: 'pi-session-1',
+          transcriptPath: '/tmp/pi-session-1.jsonl'
+        },
+        providerSessionOnly: true,
+        payload: { state: 'done', agentType: 'pi' }
+      },
+      'conn-1'
+    )
+
+    expect(statuses).toHaveBeenCalledWith([])
+    expect(sessions).toHaveBeenCalledWith([
+      {
+        paneKey: PANE,
+        sessionId: 'pi-session-1',
+        transcriptPath: '/tmp/pi-session-1.jsonl',
+        worktreeId: 'wt-1'
+      }
     ])
   })
 
@@ -6221,7 +6256,10 @@ describe('Last-status persistence', () => {
     try {
       await postHookEvent(
         server,
-        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'persist me' })
+        buildBody(
+          { hook_event_name: 'UserPromptSubmit', prompt: 'persist me' },
+          { launchToken: 'launch-bearer-must-not-persist' }
+        )
       )
       // Synchronous flush via stop() captures the trailing-debounced write.
       server.flushStatusPersistSync()
@@ -6236,8 +6274,145 @@ describe('Last-status persistence', () => {
         stateStartedAt: expect.any(Number),
         payload: expect.objectContaining({ state: 'working', prompt: 'persist me' })
       })
+      expect(file.entries[PANE].launchToken).toBeUndefined()
+      expect(file.entries[PANE].launchTokenHash).toBe(
+        createHash('sha256').update('launch-bearer-must-not-persist').digest('hex')
+      )
+      expect(readFileSync(lastStatusPath(), 'utf8')).not.toContain('launch-bearer-must-not-persist')
     } finally {
       server.stop()
+    }
+  })
+
+  it('scrubs a legacy persisted launch bearer while retaining its authority commitment', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = recentTs()
+    const launchToken = 'legacy-launch-bearer'
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            launchToken,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            connectionId: null,
+            receivedAt,
+            stateStartedAt: receivedAt,
+            payload: {
+              state: 'working',
+              prompt: 'legacy worker',
+              agentType: 'codex'
+            }
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const launchTokenHash = createHash('sha256').update(launchToken).digest('hex')
+      expect(server.getHydratedAuthorityCommitments()).toEqual([
+        expect.objectContaining({ paneKey: PANE, launchTokenHash })
+      ])
+      expect(server.getStatusSnapshotForPane(PANE)[0]?.launchToken).toBeUndefined()
+
+      const persisted = readFileSync(lastStatusPath(), 'utf8')
+      expect(persisted).not.toContain(launchToken)
+      expect(JSON.parse(persisted).entries[PANE]).toMatchObject({ launchTokenHash })
+    } finally {
+      server.stop()
+    }
+
+    const restartedServer = new AgentHookServer()
+    await restartedServer.start({ env: 'production', userDataPath })
+    try {
+      expect(restartedServer.getHydratedAuthorityCommitments()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          launchTokenHash: createHash('sha256').update(launchToken).digest('hex')
+        })
+      ])
+      expect(restartedServer.getStatusSnapshotForPane(PANE)[0]?.launchToken).toBeUndefined()
+    } finally {
+      restartedServer.stop()
+    }
+  })
+
+  it('persists SSH authority through transient clears until explicit retirement', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = recentTs()
+    const launchToken = 'retained-ssh-launch-bearer'
+    const launchTokenHash = createHash('sha256').update(launchToken).digest('hex')
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            launchTokenHash,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            connectionId: 'ssh-target',
+            receivedAt,
+            stateStartedAt: receivedAt,
+            payload: {
+              state: 'working',
+              prompt: 'retained SSH worker',
+              agentType: 'codex'
+            }
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const first = new AgentHookServer()
+    await first.start({ env: 'production', userDataPath })
+    first.clearStatusEntriesForConnection('ssh-target')
+    first.flushStatusPersistSync()
+    first.stop()
+
+    const afterClear = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+    expect(afterClear.entries).toEqual({})
+    expect(afterClear.authorityCommitments[PANE]).toMatchObject({
+      paneKey: PANE,
+      launchTokenHash,
+      connectionId: 'ssh-target'
+    })
+
+    const restored = new AgentHookServer()
+    await restored.start({ env: 'production', userDataPath })
+    expect(
+      restored.attestCompatibilityAuthority({
+        paneKey: PANE,
+        launchTokenHash,
+        connectionId: 'ssh-target',
+        terminalProvenance: 'restored'
+      })
+    ).toEqual({ paneKey: PANE, source: 'hydrated_commitment' })
+    restored.retirePaneAuthority(PANE)
+    restored.flushStatusPersistSync()
+    restored.stop()
+
+    const retired = new AgentHookServer()
+    await retired.start({ env: 'production', userDataPath })
+    try {
+      expect(
+        retired.attestCompatibilityAuthority({
+          paneKey: PANE,
+          launchTokenHash,
+          connectionId: 'ssh-target',
+          terminalProvenance: 'restored'
+        })
+      ).toBeNull()
+    } finally {
+      retired.stop()
     }
   })
 
@@ -7050,6 +7225,38 @@ describe('AgentHookServer ingestRemote', () => {
     }
   })
 
+  it('fans a Pi session-only status out to plugins, not just the renderer', () => {
+    const server = new AgentHookServer()
+    const rendererListener = vi.fn()
+    const pluginListener = vi.fn()
+    server.setListener(rendererListener)
+    server.subscribeEnrichedStatus(pluginListener)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        providerSession: {
+          key: 'session_id',
+          id: 'pi-session-1',
+          transcriptPath: '/tmp/pi-session-1.jsonl'
+        },
+        providerSessionOnly: true,
+        payload: { state: 'done', prompt: '', agentType: 'pi' }
+      },
+      'conn-1'
+    )
+
+    // The session-only path returns early, so it must not skip the plugin tap.
+    expect(rendererListener).toHaveBeenCalledWith(
+      expect.objectContaining({ paneKey: PANE, providerSessionOnly: true })
+    )
+    expect(pluginListener).toHaveBeenCalledWith(
+      expect.objectContaining({ paneKey: PANE, providerSessionOnly: true })
+    )
+  })
+
   it('rejects invalid remote metadata-only session envelopes', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
@@ -7575,6 +7782,82 @@ describe('AgentHookServer ingestRemote', () => {
 })
 
 describe('AgentHookServer ingestTerminalStatus', () => {
+  // Why: the OSC 9999 payload cannot carry a provider session, so letting it overwrite the row
+  // erased the session id from persisted rows and from headless `orca serve` — which serves these
+  // rows straight to mobile — leaving Chat UI with no transcript to subscribe to (#10630).
+  it('keeps the cached provider session when an OSC status completes the turn', () => {
+    const server = new AgentHookServer()
+    const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        providerSession,
+        payload: { state: 'working', prompt: 'summarize the diff', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      connectionId: 'conn-1',
+      payload: { state: 'done', prompt: 'summarize the diff', agentType: 'claude' }
+    })
+
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', providerSession })
+  })
+
+  // Why: an OSC ping that names no agent — or the literal 'unknown', which
+  // resolveAgentStatusIdentity treats identically — makes no claim about the pane's identity, so it
+  // must not read as a mismatch. Missing this stripped the session from persisted and headless rows
+  // while the live renderer kept it, blanking mobile chat only after a restart (#10630).
+  it.each([undefined, 'unknown' as const])(
+    'keeps the cached provider session when an OSC status claims agentType %s',
+    (agentType) => {
+      const server = new AgentHookServer()
+      const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
+
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          providerSession,
+          payload: { state: 'working', prompt: 'summarize the diff', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        connectionId: 'conn-1',
+        payload: {
+          state: 'done',
+          prompt: 'summarize the diff',
+          ...(agentType ? { agentType } : {})
+        }
+      })
+
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ providerSession })
+    }
+  )
+
+  it('drops the cached provider session when an OSC status starts a new turn', () => {
+    const server = new AgentHookServer()
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        providerSession: { key: 'session_id' as const, id: 'claude-session-1' },
+        payload: { state: 'done', prompt: 'first', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      connectionId: 'conn-1',
+      payload: { state: 'working', prompt: 'second', agentType: 'claude' }
+    })
+
+    expect(server.getStatusSnapshot()[0]?.providerSession).toBeUndefined()
+  })
+
   it('forwards runtime terminal status through the normal listener and snapshot path', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

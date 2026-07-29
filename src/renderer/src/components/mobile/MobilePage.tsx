@@ -32,6 +32,7 @@ export default function MobilePage(): React.JSX.Element {
 
   const [pairQrDataUrl, setPairQrDataUrl] = useState<string | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
+  const [pairingQrError, setPairingQrError] = useState(false)
   // Mode the displayed QR actually encodes; can be 'local-only' under an
   // Anywhere selection when Relay provisioning degraded server-side.
   const [encodedConnectionMode, setEncodedConnectionMode] =
@@ -74,6 +75,7 @@ export default function MobilePage(): React.JSX.Element {
     pairingRequestIdRef,
     setPairQrDataUrl,
     setPairingUrl,
+    setPairingQrError,
     setPairLoading,
     setEncodedConnectionMode
   })
@@ -100,6 +102,7 @@ export default function MobilePage(): React.JSX.Element {
     pairingRequestIdRef,
     setPairQrDataUrl,
     setPairingUrl,
+    setPairingQrError,
     setPairLoading,
     regenerate: (mode, opts) => void generatePairing(opts.rotate, undefined, mode)
   })
@@ -174,6 +177,21 @@ export default function MobilePage(): React.JSX.Element {
     [generatePairing, networkInterfaces, connectionMode, signedIn]
   )
 
+  const beforeCustomAddressChange = useCallback(
+    async (address: string): Promise<boolean> => {
+      if (!canMintMobilePairingOffer({ connectionMode, signedIn })) {
+        return true
+      }
+      try {
+        const result = await window.api.mobile.getPairingQR({ address, connectionMode })
+        return result.available && result.qrDataUrl !== null
+      } catch {
+        return false
+      }
+    },
+    [connectionMode, signedIn]
+  )
+
   const copyPairingCode = useCallback(async () => {
     if (!pairingUrl) {
       return
@@ -218,6 +236,7 @@ export default function MobilePage(): React.JSX.Element {
     hasGeneratedRef.current = false
     setPairQrDataUrl(null)
     setPairingUrl(null)
+    setPairingQrError(false)
     setEncodedConnectionMode(null)
     showFirstPairingFlow()
   }
@@ -228,6 +247,7 @@ export default function MobilePage(): React.JSX.Element {
     hasGeneratedRef.current = false
     setPairQrDataUrl(null)
     setPairingUrl(null)
+    setPairingQrError(false)
     setEncodedConnectionMode(null)
     showPairAnotherDeviceFlow()
   }
@@ -263,6 +283,7 @@ export default function MobilePage(): React.JSX.Element {
       generatePairing={(rotate) => void generatePairing(rotate)}
       canGeneratePairing={canGenerate}
       handleAddressChange={handleAddressChange}
+      beforeCustomAddressChange={beforeCustomAddressChange}
       handleBack={handleBack}
       handleContinue={handleContinue}
       installQrUrl={installQrUrl}
@@ -277,6 +298,7 @@ export default function MobilePage(): React.JSX.Element {
       handleConnectionModeChange={handleConnectionModeChange}
       pairQrDataUrl={pairQrDataUrl}
       pairingUrl={pairingUrl}
+      pairingQrError={pairingQrError}
       relayDegraded={
         pairQrDataUrl != null &&
         connectionMode === 'automatic' &&

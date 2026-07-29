@@ -173,6 +173,9 @@ export function resumeSleepingAgentSessionsForWorktree(
     if (options?.skipClaimKeys?.has(claimKey)) {
       continue
     }
+    if (record.automaticResumeBlockedBy === 'legacy-orchestration-worker') {
+      continue
+    }
     if (isInvalidWorktreeActivationRecord(record)) {
       state.clearSleepingAgentSession(record.paneKey)
       continue

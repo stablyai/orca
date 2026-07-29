@@ -6,8 +6,11 @@ import {
   callRuntimeRpc,
   clearRuntimeCompatibilityCacheForTests
 } from '../../runtime/runtime-rpc-client'
-import { createRuntimeStatusSlice, type RuntimeStatusSlice } from './runtime-status'
-import { getRuntimeEnvironmentConnectionGeneration } from './runtime-status'
+import {
+  createRuntimeStatusSlice,
+  type RuntimeStatusSlice,
+  getRuntimeEnvironmentConnectionGeneration
+} from './runtime-status'
 
 function createSliceStore() {
   return create<RuntimeStatusSlice>()((...a) => ({
