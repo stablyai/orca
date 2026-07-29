@@ -96,7 +96,7 @@ describe('AccountsPane', () => {
     const markup = renderPane(getDefaultSettings('/tmp'))
 
     expect(markup).toMatch(
-      /Mostrando cuentas para [Ee]ste dispositivo\. Las nuevas cuentas se agregan allí\./
+      /Mostrando cuentas para [Ee]ste dispositivo\. Las nuevas cuentas se añaden allí\./
     )
     expect(markup).not.toContain('This device')
   })

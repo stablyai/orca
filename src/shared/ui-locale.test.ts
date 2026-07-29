@@ -72,6 +72,8 @@ describe('ui-locale', () => {
   it('resolves explicit Latin American Spanish independently of system locale', () => {
     expect(resolveUiLocale(UI_LANGUAGE_SPANISH_LATAM, 'en-US')).toBe('es-419')
     expect(resolveUiLocale(UI_LANGUAGE_SPANISH_LATAM, 'es-ES')).toBe('es-419')
+  })
+
   it('preserves a selected plugin language bundle id', () => {
     expect(resolveUiLocale('plugin:orca-samples.portuguese/pt-BR')).toBe(
       'plugin:orca-samples.portuguese/pt-BR'
