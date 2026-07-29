@@ -9,7 +9,6 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS],
     notes: [
       'Reads bundled guide metadata locally without contacting the Orca runtime.',
-      'Without --json, prints just the skill names, one per line.',
       'With --json, prints a topics array of canonical names and one-line descriptions.',
       'Use `orca skills get <name>` for the full guide, or `orca skills install` to install skills.'
     ]
@@ -36,7 +35,8 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Reads the bundled skill registry locally without contacting the Orca runtime.',
       'Resolves to the same `npx skills add <repo> --skill <name> ...` command used by ' +
-        'Orca Settings, then runs it via npx and forwards its output and exit code.',
+        'Orca Settings, plus the non-interactive flags an unattended host needs ' +
+        '(`npx --yes` and `-y`), then runs it and forwards its output and exit code.',
       'Installs globally (all projects, adds --global) by default. Use --local to install ' +
         'into the current project instead.',
       'Use --dry-run to print the resolved command without running it.',
@@ -60,9 +60,11 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Reads the bundled skill registry locally without contacting the Orca runtime.',
       'Resolves to the same `npx skills update <names...>` command used by Orca Settings, ' +
-        'then runs it via npx and forwards its output and exit code.',
+        'plus the non-interactive flags an unattended host needs (`npx --yes` and `-y`), ' +
+        'then runs it and forwards its output and exit code.',
       'Updates the global install (all projects, adds --global) by default. Use --local to ' +
         'update the current project instead.',
+      'Only refreshes skills that are already installed; use `orca skills install` first.',
       'Use --dry-run to print the resolved command without running it.',
       "--json is only supported with --dry-run; a real update streams npx's own " +
         'output live, which is not JSON.',

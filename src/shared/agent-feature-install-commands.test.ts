@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildAgentFeatureSkillInstallArgs,
   buildAgentFeatureSkillInstallCommand,
+  ORCA_CLI_SKILL_INSTALL_COMMAND,
   buildAgentFeatureSkillUpdateArgs,
   buildAgentFeatureSkillUpdateCommand,
   COMPUTER_USE_SKILL_UPDATE_COMMAND,
@@ -40,6 +41,26 @@ describe('agent feature skill commands', () => {
       'orchestration',
       '--global'
     ])
+  })
+
+  it('keeps the copyable Settings commands interactive by default', () => {
+    // Why: -y skips the agent picker. A human pasting from Settings should still
+    // get it; only an unattended spawn opts in.
+    expect(buildAgentFeatureSkillInstallCommand(['orca-cli'])).not.toContain('-y')
+    expect(buildAgentFeatureSkillUpdateCommand('orca-cli')).not.toContain('-y')
+    expect(ORCA_CLI_SKILL_INSTALL_COMMAND).not.toContain('-y')
+    expect(ORCA_CLI_SKILL_UPDATE_COMMAND).not.toContain('-y')
+  })
+
+  it('appends -y for an unattended run', () => {
+    expect(buildAgentFeatureSkillInstallCommand(['orca-cli'], { yes: true })).toBe(
+      'npx skills add https://github.com/stablyai/orca --skill orca-cli --global -y'
+    )
+    expect(buildAgentFeatureSkillUpdateCommand(['orca-cli'], { global: false, yes: true })).toBe(
+      'npx skills update orca-cli --project -y'
+    )
+    expect(buildAgentFeatureSkillInstallArgs(['orca-cli'], { yes: true }).at(-1)).toBe('-y')
+    expect(buildAgentFeatureSkillUpdateArgs(['orca-cli'], { yes: true }).at(-1)).toBe('-y')
   })
 
   it('builds single-skill update commands', () => {

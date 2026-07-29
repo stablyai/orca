@@ -523,7 +523,7 @@ export function formatFlagHelp(flag: string): string {
     json: '--json                 Emit machine-readable JSON',
     key: '--key <key>            Key argument for this command',
     limit: '--limit <n>            Maximum number of rows to return',
-    local: '--local                Install into the current project instead of globally',
+    local: '--local                Target the current project instead of the global install',
     mode: '--mode <mode>          Mode such as edit, diff, or both',
     'mouse-button': '--mouse-button <btn>   Mouse button: left, right, or middle',
     name: '--name <name>          Name for the new worktree or automation',

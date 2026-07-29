@@ -746,17 +746,27 @@ orca skills install --all --dry-run                       # print the npx comman
 
 This resolves the same `npx skills add <repo> --skill <name> ...` command
 Settings would show you (adding `--global` unless `--local` is passed), then
-runs it via `npx` and forwards its output and exit code. It requires
-`node`/`npx` on the host; it does not need a running Orca runtime.
+runs it and forwards its output and exit code. It requires `node`/`npx` on the
+host; it does not need a running Orca runtime.
 
-To refresh already-installed skills, `orca skills update` mirrors the same flags
-(`--skill`, `--all`, `--local`, `--dry-run`, `--json`) and resolves to
-`npx skills update <names...>`:
+Unlike the command Settings shows, the spawned one adds `npx --yes` and `-y`.
+Without them the `skills` CLI opens an interactive agent picker and blocks
+forever on any allocated TTY — which includes a normal `ssh` session. Use
+`--dry-run` to see the exact command that will run.
+
+To refresh already-installed skills, `orca skills update` mirrors the same
+selection flags (`--skill`, `--all`, `--local`, `--dry-run`) and resolves to
+`npx skills update <names...>` with the same scope flag:
 
 ```bash
 orca skills update --all                                  # update every bundled skill globally
 orca skills update --skill orca-cli --dry-run             # print the npx command without running it
 ```
+
+`orca skills update` only refreshes skills that are already installed — it exits
+0 without doing anything for a skill that is missing, so install it first. Both
+commands accept `--json` only together with `--dry-run`; a real run streams the
+`skills` CLI's own non-JSON output.
 
 ## Troubleshooting
 

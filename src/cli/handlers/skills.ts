@@ -2,11 +2,11 @@ import { spawn } from 'node:child_process'
 import type { CommandHandler } from '../dispatch'
 import { RuntimeClientError } from '../runtime-client'
 import { getRepeatedStringFlag } from '../flags'
+import { resolveCliCommand } from '../../main/codex-cli/command'
+import { getSpawnArgsForWindows } from '../../main/win32-utils'
 import {
   buildAgentFeatureSkillInstallArgs,
-  buildAgentFeatureSkillInstallCommand,
-  buildAgentFeatureSkillUpdateArgs,
-  buildAgentFeatureSkillUpdateCommand
+  buildAgentFeatureSkillUpdateArgs
 } from '../../shared/agent-feature-install-commands'
 
 type BundledSkillGuide = {
@@ -92,11 +92,12 @@ function resolveSelectedSkillNames(
 
 function runNpxSkills(args: string[]): Promise<number> {
   return new Promise((resolve, reject) => {
-    const isWindows = process.platform === 'win32'
-    const executable = isWindows ? (process.env.ComSpec ?? 'cmd.exe') : 'npx'
-    // Why: `.cmd` shims need cmd.exe; invoking it explicitly avoids shell-mode argv rewriting.
-    const childArgs = isWindows ? ['/d', '/s', '/c', 'npx.cmd', ...args] : args
-    const child = spawn(executable, childArgs, { stdio: 'inherit' })
+    // Why: a bare PATH lookup misses nvm/fnm/volta installs, and hardcoding
+    // `npx.cmd` both misses `npx.exe` shims and hides a missing npx behind
+    // cmd.exe's own exit code, so the friendly error below never fires.
+    const resolved = resolveCliCommand('npx')
+    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolved, args)
+    const child = spawn(spawnCmd, spawnArgs, { stdio: 'inherit' })
     // Why: a missing npx/Node on a headless host surfaces as a raw spawn ENOENT;
     // wrap it so the CLI reports an actionable message like every other failure here.
     child.once('error', (error) => {
@@ -116,24 +117,23 @@ function runNpxSkills(args: string[]): Promise<number> {
 
 type SkillMutationVerb = 'install' | 'update'
 
-function buildSkillMutationCommand(
-  verb: SkillMutationVerb,
-  skillNames: string[],
-  global: boolean
-): string {
-  return verb === 'install'
-    ? buildAgentFeatureSkillInstallCommand(skillNames, { global })
-    : buildAgentFeatureSkillUpdateCommand(skillNames, { global })
-}
-
 function buildNpxSkillsArgs(
   verb: SkillMutationVerb,
   skillNames: string[],
   global: boolean
 ): string[] {
-  return verb === 'install'
-    ? buildAgentFeatureSkillInstallArgs(skillNames, { global })
-    : buildAgentFeatureSkillUpdateArgs(skillNames, { global })
+  const skillArgs =
+    verb === 'install'
+      ? buildAgentFeatureSkillInstallArgs(skillNames, { global, yes: true })
+      : buildAgentFeatureSkillUpdateArgs(skillNames, { global, yes: true })
+  // Why: a cold package cache makes bare `npx` prompt before it will fetch
+  // `skills`, which strands an unattended host just like the picker does.
+  return ['--yes', ...skillArgs]
+}
+
+/** Render the exact argv a real run spawns, so --dry-run can never drift from it. */
+function formatNpxCommand(args: string[]): string {
+  return `npx ${args.join(' ')}`
 }
 
 function formatSkillSelectionHelp(verb: SkillMutationVerb, skillNames: string[]): string {
@@ -164,7 +164,8 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
     }
 
     const global = flags.get('local') !== true
-    const command = buildSkillMutationCommand(verb, skillNames, global)
+    const npxArgs = buildNpxSkillsArgs(verb, skillNames, global)
+    const command = formatNpxCommand(npxArgs)
     const dryRun = flags.get('dry-run') === true
 
     if (dryRun) {
@@ -189,7 +190,7 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
     // Why: stdio is inherited for the child below, so this status line must go to
     // stderr — stdout is npx's own output, not this command's JSON channel.
     process.stderr.write(`Running: ${command}\n`)
-    process.exitCode = await runNpxSkills(buildNpxSkillsArgs(verb, skillNames, global))
+    process.exitCode = await runNpxSkills(npxArgs)
   }
 }
 
@@ -206,7 +207,9 @@ export const SKILL_HANDLERS: Record<string, CommandHandler> = {
       description: guide.description.replace(/\s+/g, ' ').trim()
     }))
     writeStdout(
-      json ? JSON.stringify({ topics }, null, 2) : topics.map((topic) => topic.name).join('\n')
+      json
+        ? JSON.stringify({ topics }, null, 2)
+        : topics.map((topic) => `${topic.name}: ${topic.description}`).join('\n')
     )
   },
   'skills get': async ({ flags, json }) => {

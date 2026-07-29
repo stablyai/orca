@@ -8,9 +8,13 @@ export const ORCA_LINEAR_SKILL_NAME = 'orca-linear'
 export const LINEAR_TICKETS_SKILL_NAME = 'linear-tickets'
 export const LINEAR_AGENT_SKILL_NAMES = [ORCA_LINEAR_SKILL_NAME, LINEAR_TICKETS_SKILL_NAME] as const
 
+// Why: `yes` defaults to false so every Settings/onboarding string a human pastes
+// keeps its interactive prompts. Only an unattended spawn opts in.
+export type AgentFeatureSkillCommandOptions = { global?: boolean; yes?: boolean }
+
 export function buildAgentFeatureSkillInstallArgs(
   skillNames: readonly string[],
-  options: { global?: boolean } = {}
+  options: AgentFeatureSkillCommandOptions = {}
 ): string[] {
   if (skillNames.length === 0) {
     throw new Error('At least one skill name is required.')
@@ -23,20 +27,23 @@ export function buildAgentFeatureSkillInstallArgs(
     'add',
     ORCA_SKILLS_REPOSITORY_URL,
     ...skillArgs,
-    ...(global ? ['--global'] : [])
+    ...(global ? ['--global'] : []),
+    // Why: without -y `skills add` opens an interactive agent picker and blocks
+    // forever on any TTY, which is every ssh session.
+    ...(options.yes ? ['-y'] : [])
   ]
 }
 
 export function buildAgentFeatureSkillInstallCommand(
   skillNames: readonly string[],
-  options: { global?: boolean } = {}
+  options: AgentFeatureSkillCommandOptions = {}
 ): string {
   return `npx ${buildAgentFeatureSkillInstallArgs(skillNames, options).join(' ')}`
 }
 
 export function buildAgentFeatureSkillUpdateArgs(
   skillNames: string | readonly string[],
-  options: { global?: boolean } = {}
+  options: AgentFeatureSkillCommandOptions = {}
 ): string[] {
   const rawNames = typeof skillNames === 'string' ? [skillNames] : skillNames
   const names = rawNames.map((name) => name.trim()).filter((name) => name.length > 0)
@@ -44,12 +51,18 @@ export function buildAgentFeatureSkillUpdateArgs(
     throw new Error('A skill name is required.')
   }
   const global = options.global ?? true
-  return ['skills', 'update', ...names, global ? '--global' : '--project']
+  return [
+    'skills',
+    'update',
+    ...names,
+    global ? '--global' : '--project',
+    ...(options.yes ? ['-y'] : [])
+  ]
 }
 
 export function buildAgentFeatureSkillUpdateCommand(
   skillNames: string | readonly string[],
-  options: { global?: boolean } = {}
+  options: AgentFeatureSkillCommandOptions = {}
 ): string {
   return `npx ${buildAgentFeatureSkillUpdateArgs(skillNames, options).join(' ')}`
 }
