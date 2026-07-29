@@ -3,7 +3,10 @@
 import { spawnSync } from 'node:child_process'
 import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 
-runNodeScript('config/scripts/build-codex-micro-sidecar.mjs')
+runNodeScript(
+  'config/scripts/build-codex-micro-sidecar.mjs',
+  process.env.ORCA_CODEX_MICRO_PREBUILT === '1' ? ['--verify-prebuilt'] : []
+)
 
 if (process.platform === 'win32') {
   runNodeScript('config/scripts/build-windows-cli-launcher.mjs')
@@ -32,8 +35,8 @@ function runPnpmScript(scriptName) {
   }
 }
 
-function runNodeScript(scriptPath) {
-  const result = spawnSync(process.execPath, [scriptPath], { stdio: 'inherit' })
+function runNodeScript(scriptPath, args = []) {
+  const result = spawnSync(process.execPath, [scriptPath, ...args], { stdio: 'inherit' })
   if (result.signal) {
     process.kill(process.pid, result.signal)
   }

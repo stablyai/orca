@@ -833,6 +833,33 @@ jobs:
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked
 
+  codex-micro-linux-floor:
+    name: Codex Micro Linux floor
+    runs-on: ubuntu-22.04
+    container: ubuntu:20.04
+
+    steps:
+      - name: Install build tools
+        run: apt-get update && apt-get install -y binutils build-essential ca-certificates git pkg-config
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: 1.97.1
+
+      - name: Build and verify sidecar
+        run: node config/scripts/build-codex-micro-sidecar.mjs
+
   # Why: PR E2E is advisory and only validates changed specs; scheduled and
   # release runs retain full-suite coverage.
   e2e-paths:

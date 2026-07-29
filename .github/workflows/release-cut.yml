@@ -1145,11 +1145,65 @@ jobs:
       - name: Confirm blocking release gates passed
         run: echo "All blocking release gates passed; artifact builds may start."
 
+  build-codex-micro-linux:
+    needs:
+      - cut
+      - create-release
+      - release-preflight
+    if: needs.cut.outputs.should_release == 'true' && needs.release-preflight.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            arch: x64
+          - os: ubuntu-22.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    container: ubuntu:20.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Install build tools
+        run: apt-get update && apt-get install -y binutils build-essential ca-certificates git pkg-config
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: 1.97.1
+
+      - name: Build and verify sidecar
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+        run: node config/scripts/build-codex-micro-sidecar.mjs
+
+      - name: Upload sidecar
+        uses: actions/upload-artifact@v7
+        with:
+          name: codex-micro-linux-${{ matrix.arch }}-${{ needs.cut.outputs.tag }}
+          path: native/codex-micro/dist/linux-${{ matrix.arch }}/codex-micro
+          if-no-files-found: error
+          retention-days: 1
+
   build:
     needs:
       - cut
       - create-release
       - release-preflight
+      - build-codex-micro-linux
     if: needs.cut.outputs.should_release == 'true'
     strategy:
       fail-fast: false
@@ -1224,6 +1278,13 @@ jobs:
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
           git checkout "$WORKFLOW_SHA" -- .github/actions
           test -f "$action_path"
+
+      - name: Download Codex Micro sidecar
+        if: startsWith(matrix.platform, 'linux-')
+        uses: actions/download-artifact@v8
+        with:
+          name: codex-micro-${{ matrix.platform }}-${{ needs.cut.outputs.tag }}
+          path: native/codex-micro/dist/${{ matrix.platform }}
 
       # pnpm must be on PATH before setup-node so setup-node can locate the store for caching.
       - name: Setup pnpm
@@ -1335,6 +1396,7 @@ jobs:
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+          ORCA_CODEX_MICRO_PREBUILT: ${{ startsWith(matrix.platform, 'linux-') && '1' || '' }}
 
       - name: Gate runtime file-watcher process isolation
         if: runner.os == 'Linux'

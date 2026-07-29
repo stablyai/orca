@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process'
-import { chmod, copyFile, mkdir } from 'node:fs/promises'
+import { access, chmod, copyFile, mkdir } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 
@@ -54,6 +54,30 @@ export function verifyStagedSidecar({ platform, output, verifyLinux = verifyLinu
   }
 }
 
+export async function verifyPrebuiltSidecar({
+  platform = process.platform,
+  arch = process.env.npm_config_arch || process.arch,
+  distRoot: prebuiltDistRoot = distRoot,
+  verifyLinux = verifyLinuxGlibcFloor
+} = {}) {
+  const output = join(
+    prebuiltDistRoot,
+    distDirectoryName(platform, arch),
+    binaryNameForPlatform(platform)
+  )
+  try {
+    await access(output)
+  } catch {
+    throw new Error(`Missing prebuilt Codex Micro sidecar: ${output}`)
+  }
+  if (platform !== 'win32') {
+    await chmod(output, 0o755)
+  }
+  verifyStagedSidecar({ platform, output, verifyLinux })
+  console.log(`[codex-micro-build] verified prebuilt ${output}`)
+  return output
+}
+
 export async function buildCodexMicroSidecar({
   platform = process.platform,
   arch = process.env.npm_config_arch || process.arch
@@ -78,5 +102,7 @@ export async function buildCodexMicroSidecar({
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
-  await buildCodexMicroSidecar()
+  await (process.argv.includes('--verify-prebuilt')
+    ? verifyPrebuiltSidecar()
+    : buildCodexMicroSidecar())
 }
