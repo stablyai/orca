@@ -5,12 +5,13 @@ const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown'])
 // Why: the test host's path flavor must not decide whether a Windows path counts as absolute.
 const ABSOLUTE_PATH_PATTERN = /^(?:\/|\\\\|[A-Za-z]:[\\/])/
 
-// Why: the function only registers the open-file event, so no need to pull in the full App type.
+// Why: the function only registers these two events, so no need to pull in the full App type.
 export type OsFileOpenApp = {
   on(
     event: 'open-file',
     listener: (event: { preventDefault: () => void }, filePath: string) => void
   ): void
+  on(event: 'second-instance', listener: (event: unknown, argv: string[]) => void): void
 }
 
 export function isMarkdownFilePath(candidate: string): boolean {
@@ -88,4 +89,10 @@ export function registerOsFileOpenRequests(options: {
   for (const filePath of extractMarkdownPathsFromArgv(argv)) {
     queue.enqueue(filePath)
   }
+  // Why: Windows/Linux deliver a later file-open launch as a second OS process, relayed here via second-instance.
+  app.on('second-instance', (_event, secondArgv) => {
+    for (const filePath of extractMarkdownPathsFromArgv(secondArgv)) {
+      queue.enqueue(filePath)
+    }
+  })
 }

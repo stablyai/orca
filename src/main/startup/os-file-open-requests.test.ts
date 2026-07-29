@@ -150,29 +150,37 @@ describe('filterExistingFiles', () => {
 })
 
 type OpenFileHandler = (event: { preventDefault: () => void }, filePath: string) => void
+type SecondInstanceHandler = (event: unknown, argv: string[]) => void
 
 function createFakeApp(): OsFileOpenApp & {
-  fire: (filePath: string) => boolean
+  fireOpenFile: (filePath: string) => boolean
+  fireSecondInstance: (argv: string[]) => void
   on: ReturnType<typeof vi.fn>
 } {
-  const handlers: OpenFileHandler[] = []
-  const on = vi.fn((eventName: string, handler: OpenFileHandler) => {
+  const openFileHandlers: OpenFileHandler[] = []
+  const secondInstanceHandlers: SecondInstanceHandler[] = []
+  const on = vi.fn((eventName: string, handler: OpenFileHandler | SecondInstanceHandler) => {
     if (eventName === 'open-file') {
-      handlers.push(handler)
+      openFileHandlers.push(handler as OpenFileHandler)
+    } else if (eventName === 'second-instance') {
+      secondInstanceHandlers.push(handler as SecondInstanceHandler)
     }
   })
-  const app: OsFileOpenApp & { fire: (filePath: string) => boolean; on: ReturnType<typeof vi.fn> } =
-    {
-      on: on as OsFileOpenApp['on'] & ReturnType<typeof vi.fn>,
-      fire(filePath) {
-        let defaultPrevented = false
-        for (const handler of handlers) {
-          handler({ preventDefault: () => (defaultPrevented = true) }, filePath)
-        }
-        return defaultPrevented
+  return {
+    on: on as OsFileOpenApp['on'] & ReturnType<typeof vi.fn>,
+    fireOpenFile(filePath) {
+      let defaultPrevented = false
+      for (const handler of openFileHandlers) {
+        handler({ preventDefault: () => (defaultPrevented = true) }, filePath)
+      }
+      return defaultPrevented
+    },
+    fireSecondInstance(argv) {
+      for (const handler of secondInstanceHandlers) {
+        handler({}, argv)
       }
     }
-  return app
+  }
 }
 
 describe('registerOsFileOpenRequests', () => {
@@ -181,7 +189,7 @@ describe('registerOsFileOpenRequests', () => {
     const app = createFakeApp()
     registerOsFileOpenRequests({ app, queue, platform: 'darwin', argv: [] })
 
-    expect(app.fire('/Users/x/a.md')).toBe(true)
+    expect(app.fireOpenFile('/Users/x/a.md')).toBe(true)
     expect(queue.drain()).toEqual(['/Users/x/a.md'])
   })
 
@@ -197,7 +205,16 @@ describe('registerOsFileOpenRequests', () => {
     expect(queue.drain()).toEqual([])
   })
 
-  it('reads argv on win32 and does not subscribe to open-file', () => {
+  it('subscribes only to open-file on darwin, never second-instance', () => {
+    const queue = createOsFileOpenRequestQueue()
+    const app = createFakeApp()
+    registerOsFileOpenRequests({ app, queue, platform: 'darwin', argv: [] })
+
+    expect(app.on).toHaveBeenCalledTimes(1)
+    expect(app.on).toHaveBeenCalledWith('open-file', expect.any(Function))
+  })
+
+  it('reads argv on win32 and subscribes to second-instance instead of open-file', () => {
     const queue = createOsFileOpenRequestQueue()
     const app = createFakeApp()
     registerOsFileOpenRequests({
@@ -207,7 +224,8 @@ describe('registerOsFileOpenRequests', () => {
       argv: ['C:\\Orca.exe', 'C:\\Users\\x\\a.md']
     })
 
-    expect(app.on).not.toHaveBeenCalled()
+    expect(app.on).toHaveBeenCalledTimes(1)
+    expect(app.on).toHaveBeenCalledWith('second-instance', expect.any(Function))
     expect(queue.drain()).toEqual(['C:\\Users\\x\\a.md'])
   })
 
@@ -221,5 +239,27 @@ describe('registerOsFileOpenRequests', () => {
       argv: ['/opt/orca/orca', '/home/x/a.md']
     })
     expect(queue.drain()).toEqual(['/home/x/a.md'])
+  })
+
+  it('enqueues markdown paths from a later win32 second-instance launch, filtering flags and non-markdown', () => {
+    const queue = createOsFileOpenRequestQueue()
+    const app = createFakeApp()
+    registerOsFileOpenRequests({ app, queue, platform: 'win32', argv: ['C:\\Orca.exe'] })
+    queue.drain()
+
+    app.fireSecondInstance(['C:\\Orca.exe', '--flag', 'C:\\Users\\x\\b.md', 'C:\\Users\\x\\b.txt'])
+
+    expect(queue.drain()).toEqual(['C:\\Users\\x\\b.md'])
+  })
+
+  it('enqueues markdown paths from a later linux second-instance launch', () => {
+    const queue = createOsFileOpenRequestQueue()
+    const app = createFakeApp()
+    registerOsFileOpenRequests({ app, queue, platform: 'linux', argv: ['/opt/orca/orca'] })
+    queue.drain()
+
+    app.fireSecondInstance(['/opt/orca/orca', '/home/x/b.md'])
+
+    expect(queue.drain()).toEqual(['/home/x/b.md'])
   })
 })
