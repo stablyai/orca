@@ -211,6 +211,30 @@ describe('appendGitConfigEnv', () => {
 })
 
 describe('mergeGitConfigEnvProtocol', () => {
+  it('collapses case-insensitive Windows keys and keeps the override casing', () => {
+    const env = mergeGitConfigEnvProtocol(
+      { Path: 'base-path', HOME: 'base-home' },
+      { PATH: 'override-path' },
+      'win32'
+    )
+
+    expect(Object.keys(env).filter((key) => key.toLowerCase() === 'path')).toEqual(['PATH'])
+    expect(env.PATH).toBe('override-path')
+    expect(env.Path).toBeUndefined()
+    expect(env.HOME).toBe('base-home')
+  })
+
+  it('preserves case-distinct environment keys on POSIX', () => {
+    const env = mergeGitConfigEnvProtocol(
+      { Path: 'mixed-case-path' },
+      { PATH: 'uppercase-path' },
+      'linux'
+    )
+
+    expect(env.Path).toBe('mixed-case-path')
+    expect(env.PATH).toBe('uppercase-path')
+  })
+
   it('replaces inherited indexed config atomically when an override has a smaller count', () => {
     const env = mergeGitConfigEnvProtocol(
       {

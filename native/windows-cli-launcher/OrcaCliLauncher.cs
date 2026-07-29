@@ -10,6 +10,8 @@ internal static class OrcaCliLauncher
     {
         try
         {
+            NormalizeEnvironmentVariableCasing("Path", "PATH");
+
             string launcherDirectory = Path.GetDirectoryName(typeof(OrcaCliLauncher).Assembly.Location);
             string resourcesDirectory = Directory.GetParent(launcherDirectory).FullName;
             string appDirectory = Directory.GetParent(resourcesDirectory).FullName;
@@ -61,6 +63,20 @@ internal static class OrcaCliLauncher
         {
             Console.Error.WriteLine("Unable to start the Orca CLI: {0}", error.Message);
             return 1;
+        }
+    }
+
+    private static void NormalizeEnvironmentVariableCasing(
+        string preferredName,
+        string alternateName
+    )
+    {
+        string value = Environment.GetEnvironmentVariable(preferredName);
+        Environment.SetEnvironmentVariable(alternateName, null);
+        Environment.SetEnvironmentVariable(preferredName, null);
+        if (value != null)
+        {
+            Environment.SetEnvironmentVariable(preferredName, value);
         }
     }
 

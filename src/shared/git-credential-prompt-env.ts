@@ -6,9 +6,22 @@ const GIT_CONFIG_INDEXED_KEY_RE = /^GIT_CONFIG_(?:KEY|VALUE)_(\d+)$/
 /** Merge an indexed-config protocol as one atomic environment value. */
 export function mergeGitConfigEnvProtocol(
   baseEnv: NodeJS.ProcessEnv,
-  overrideEnv: NodeJS.ProcessEnv | undefined
+  overrideEnv: NodeJS.ProcessEnv | undefined,
+  platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
-  const next = { ...baseEnv, ...overrideEnv }
+  const next: NodeJS.ProcessEnv = {}
+  const keyByNormalizedName = new Map<string, string>()
+  for (const env of [baseEnv, overrideEnv]) {
+    for (const [key, value] of Object.entries(env ?? {})) {
+      const normalizedName = platform === 'win32' ? key.toLowerCase() : key
+      const previousKey = keyByNormalizedName.get(normalizedName)
+      if (previousKey && previousKey !== key) {
+        delete next[previousKey]
+      }
+      next[key] = value
+      keyByNormalizedName.set(normalizedName, key)
+    }
+  }
   if (!overrideEnv || !Object.keys(overrideEnv).some((key) => GIT_CONFIG_WSLENV_KEY_RE.test(key))) {
     return next
   }
