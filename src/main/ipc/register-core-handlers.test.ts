@@ -64,7 +64,9 @@ const {
   registerLocalhostWorktreeLabelHandlersMock,
   registerNativeChatHandlersMock,
   registerEmulatorFrameStreamHandlersMock,
-  registerEmulatorVideoStreamHandlersMock
+  registerEmulatorVideoStreamHandlersMock,
+  registerAuditedWorkflowHandlersMock,
+  registerAuditedWorkflowDevTransitionHandlersMock
 } = vi.hoisted(() => ({
   getPathMock: vi.fn(() => '/test/user-data'),
   listEnvironmentsMock: vi.fn(() => []),
@@ -129,13 +131,24 @@ const {
   registerLocalhostWorktreeLabelHandlersMock: vi.fn(),
   registerNativeChatHandlersMock: vi.fn(),
   registerEmulatorFrameStreamHandlersMock: vi.fn(),
-  registerEmulatorVideoStreamHandlersMock: vi.fn()
+  registerEmulatorVideoStreamHandlersMock: vi.fn(),
+  registerAuditedWorkflowHandlersMock: vi.fn(),
+  registerAuditedWorkflowDevTransitionHandlersMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: {
-    getPath: getPathMock
+    getPath: getPathMock,
+    isPackaged: false
   }
+}))
+
+vi.mock('./audited-workflow', () => ({
+  registerAuditedWorkflowHandlers: registerAuditedWorkflowHandlersMock
+}))
+
+vi.mock('./audited-workflow-dev-transitions', () => ({
+  registerAuditedWorkflowDevTransitionHandlers: registerAuditedWorkflowDevTransitionHandlersMock
 }))
 
 vi.mock('../../shared/runtime-environment-store', () => ({
@@ -445,6 +458,8 @@ describe('registerCoreHandlers', () => {
     registerNativeChatHandlersMock.mockReset()
     registerEmulatorFrameStreamHandlersMock.mockReset()
     registerEmulatorVideoStreamHandlersMock.mockReset()
+    registerAuditedWorkflowHandlersMock.mockReset()
+    registerAuditedWorkflowDevTransitionHandlersMock.mockReset()
   })
 
   it('passes the store through to handler registrars that need it', async () => {
@@ -504,6 +519,12 @@ describe('registerCoreHandlers', () => {
     expect(registerMiniMaxCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGrokAccountHandlersMock).toHaveBeenCalled()
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits, codexAccounts)
+    expect(registerAuditedWorkflowHandlersMock).toHaveBeenCalledWith(store)
+    // Why: app.isPackaged is false in this module mock, so the dev-only
+    // transition control is registered here — see the dedicated packaged-build
+    // test in register-core-handlers-audited-workflow-dev-gating.test.ts for
+    // proof it is skipped when app.isPackaged is true.
+    expect(registerAuditedWorkflowDevTransitionHandlersMock).toHaveBeenCalled()
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()
     expect(registerJiraHandlersMock).toHaveBeenCalled()
@@ -647,5 +668,7 @@ describe('registerCoreHandlers', () => {
     // Why: ipcMain.handle throws on duplicate channel registration, so the
     // memory handler must not be wired up a second time on reactivation.
     expect(registerMemoryHandlersMock).not.toHaveBeenCalled()
+    expect(registerAuditedWorkflowHandlersMock).not.toHaveBeenCalled()
+    expect(registerAuditedWorkflowDevTransitionHandlersMock).not.toHaveBeenCalled()
   })
 })

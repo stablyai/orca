@@ -32,6 +32,10 @@ import {
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
 import { buildAppFontFamily } from '@/lib/app-font-family'
+import {
+  isAuditedWorkflowAvailable,
+  normalizeAuditedWorkflowActiveView
+} from '@/components/audited-workflow/audited-workflow-availability'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -327,6 +331,7 @@ const Settings = lazy(() => import('./components/settings/Settings'))
 const SkillsPage = lazy(() => import('./components/skills/SkillsPage'))
 const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('./components/mobile/MobilePage'))
+const AuditedWorkflowPage = lazy(() => import('./components/audited-workflow/AuditedWorkflowPage'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
 const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'))
 const WorkspaceCleanupDialog = lazy(
@@ -482,7 +487,12 @@ function App(): React.JSX.Element {
     }))
   )
 
-  const activeView = useAppStore((s) => s.activeView)
+  // Why: normalize at the single read point so every downstream check in this
+  // component (terminal-visibility conditions included) sees a real fallback
+  // to 'terminal' rather than an un-navigable 'auditedWorkflow' value that
+  // slipped in via setActiveView/restoration in the paired web client. See
+  // normalizeAuditedWorkflowActiveView in audited-workflow-availability.ts.
+  const activeView = useAppStore((s) => normalizeAuditedWorkflowActiveView(s.activeView))
   const activeModal = useAppStore((s) => s.activeModal)
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
@@ -2353,6 +2363,9 @@ function App(): React.JSX.Element {
                               {activeView === 'activity' ? <ActivityPrototypePage /> : null}
                               {activeView === 'space' ? <WorkspaceSpacePage /> : null}
                               {activeView === 'mobile' ? <MobilePage /> : null}
+                              {activeView === 'auditedWorkflow' && isAuditedWorkflowAvailable() ? (
+                                <AuditedWorkflowPage />
+                              ) : null}
                               {activeView === 'terminal' &&
                               creationLayoutActive &&
                               activePendingCreationId ? (

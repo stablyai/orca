@@ -2662,6 +2662,15 @@ export function useIpcEvents(): void {
       unsubs.push(unsubscribeWorkspaceSpaceProgress)
     }
 
+    const unsubscribeAuditedTaskChanged = window.api.auditedWorkflow?.onTaskChanged?.(
+      (projection) => {
+        useAppStore.getState().applyAuditedTaskChanged(projection)
+      }
+    )
+    if (unsubscribeAuditedTaskChanged) {
+      unsubs.push(unsubscribeAuditedTaskChanged)
+    }
+
     // Why: hydrate initial SSH state for all targets so worktree cards show correct connect state on launch.
     void (async () => {
       try {

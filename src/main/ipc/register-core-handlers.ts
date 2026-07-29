@@ -2,6 +2,9 @@ import { app } from 'electron'
 import { registerAppHandlers } from './app'
 import { registerCliHandlers } from './cli'
 import { registerPreflightHandlers } from './preflight'
+import { registerAuditedWorkflowHandlers } from './audited-workflow'
+import { registerAuditedWorkflowDevTransitionHandlers } from './audited-workflow-dev-transitions'
+import { shouldRegisterAuditedWorkflowDevTransitions } from './audited-workflow-dev-transitions-gate'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { StatsCollector } from '../stats/collector'
@@ -176,6 +179,13 @@ export function registerCoreHandlers(
   registerComputerUsePermissionHandlers()
   registerSettingsHandlers(store, agentAwakeService)
   registerSkillsHandlers(store)
+  registerAuditedWorkflowHandlers(store)
+  // Why: dev-only manual state-machine control (plan §15) — the IPC channel
+  // must not exist in a packaged build, so this call is gated here rather
+  // than inside registerAuditedWorkflowDevTransitionHandlers itself.
+  if (shouldRegisterAuditedWorkflowDevTransitions(app.isPackaged)) {
+    registerAuditedWorkflowDevTransitionHandlers()
+  }
   if (automations) {
     registerAutomationHandlers(store, automations)
   }

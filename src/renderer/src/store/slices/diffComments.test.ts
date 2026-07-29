@@ -145,6 +145,7 @@ import { createRecentlyClosedTabsSlice } from './recently-closed-tabs'
 import { createOrcaProfilesSlice } from './orca-profiles'
 import { createNewIssueDraftSlice } from './new-issue-draft'
 import { createRemoteServerUpdatesSlice } from './remote-server-updates'
+import { createAuditedWorkflowSlice } from './audited-workflow'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -187,7 +188,8 @@ function createTestStore() {
     ...createRecentlyClosedTabsSlice(...a),
     ...createOrcaProfilesSlice(...a),
     ...createNewIssueDraftSlice(...a),
-    ...createRemoteServerUpdatesSlice(...a)
+    ...createRemoteServerUpdatesSlice(...a),
+    ...createAuditedWorkflowSlice(...a)
   }))
 }
 

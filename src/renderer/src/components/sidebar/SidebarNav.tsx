@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   MessageCircleQuestion,
   Search,
+  ShieldCheck,
   Smartphone
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -25,6 +26,7 @@ import { SetupGuideSidebarEntry } from './SetupGuideSidebarEntry'
 import { SidebarTaskNavButton } from './SidebarTaskNavButton'
 import { HideSidebarMenu } from './sidebar-nav-controls'
 import { translate } from '@/i18n/i18n'
+import { isAuditedWorkflowAvailable } from '@/components/audited-workflow/audited-workflow-availability'
 
 export { getSetupGuideSidebarEntryReady, shouldShowSetupGuideEntry } from './SetupGuideSidebarEntry'
 
@@ -32,6 +34,16 @@ export function shouldShowAgentsButton(
   settings: Pick<GlobalSettings, 'experimentalActivity'> | null | undefined
 ): boolean {
   return settings?.experimentalActivity === true
+}
+
+// Why: the experimental flag alone is not enough — Audited Workflow is
+// Electron-IPC-only, so the entry must stay hidden in the paired web client
+// even when a local user has the flag persisted on (settings sync across
+// desktop/web). See audited-workflow-availability.ts.
+export function shouldShowAuditedWorkflowButton(
+  settings: Pick<GlobalSettings, 'experimentalAuditedWorkflow'> | null | undefined
+): boolean {
+  return settings?.experimentalAuditedWorkflow === true && isAuditedWorkflowAvailable()
 }
 
 export function shouldShowAgentDashboardButton(
@@ -148,6 +160,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
   const openActivityPage = useAppStore((s) => s.openActivityPage)
   const openMobilePage = useAppStore((s) => s.openMobilePage)
+  const openAuditedWorkflowPage = useAppStore((s) => s.openAuditedWorkflowPage)
   const openModal = useAppStore((s) => s.openModal)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const activeView = useAppStore((s) => s.activeView)
@@ -155,9 +168,11 @@ const SidebarNav = React.memo(function SidebarNav() {
   const showAgentDashboardButton = useAppStore((s) => shouldShowAgentDashboardButton(s.settings))
   const showAutomationsButton = useAppStore((s) => shouldShowAutomationsButton(s.settings))
   const showMobileButton = useAppStore((s) => shouldShowMobileButton(s.settings))
+  const showAuditedWorkflowButton = useAppStore((s) => shouldShowAuditedWorkflowButton(s.settings))
   const automationsActive = activeView === 'automations'
   const activityActive = activeView === 'activity'
   const mobileActive = activeView === 'mobile'
+  const auditedWorkflowActive = activeView === 'auditedWorkflow'
   const activityUnreadCount = useActivityUnreadCount(showAgentsButton, 'sidebar-badge')
   const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showMobileButton)
   const hideAutomationsButton = React.useCallback(() => {
@@ -231,6 +246,30 @@ const SidebarNav = React.memo(function SidebarNav() {
               {activityUnreadCount}
             </span>
           ) : null}
+        </button>
+      ) : null}
+      {showAuditedWorkflowButton ? (
+        <button
+          type="button"
+          onClick={openAuditedWorkflowPage}
+          aria-current={auditedWorkflowActive ? 'page' : undefined}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+            auditedWorkflowActive
+              ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+              : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+          )}
+        >
+          <ShieldCheck
+            className={cn(
+              'size-4 shrink-0',
+              !auditedWorkflowActive && 'text-worktree-sidebar-foreground/30'
+            )}
+            strokeWidth={auditedWorkflowActive ? 2.25 : 1.75}
+          />
+          <span className="flex-1">
+            {translate('auto.components.sidebar.SidebarNav.auditedWorkflow', 'Audited Workflow')}
+          </span>
         </button>
       ) : null}
       {showMobileButton ? (

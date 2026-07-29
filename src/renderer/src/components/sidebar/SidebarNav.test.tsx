@@ -84,6 +84,7 @@ import {
   getSetupGuideSidebarEntryReady,
   shouldShowAgentDashboardButton,
   shouldShowAgentsButton,
+  shouldShowAuditedWorkflowButton,
   shouldShowAutomationsButton,
   shouldShowMobileButton,
   shouldShowSetupGuideEntry
@@ -232,6 +233,39 @@ describe('SidebarNav', () => {
         experimentalActivity: true
       })
     ).toBe(true)
+  })
+
+  it('hides the Audited Workflow entry while settings are loading', () => {
+    expect(shouldShowAuditedWorkflowButton(null)).toBe(false)
+  })
+
+  it('hides the Audited Workflow entry while its experiment is off', () => {
+    expect(
+      shouldShowAuditedWorkflowButton({
+        ...getDefaultSettings('/tmp'),
+        experimentalAuditedWorkflow: false
+      })
+    ).toBe(false)
+  })
+
+  it('shows the Audited Workflow entry when its experiment is on', () => {
+    expect(
+      shouldShowAuditedWorkflowButton({
+        ...getDefaultSettings('/tmp'),
+        experimentalAuditedWorkflow: true
+      })
+    ).toBe(true)
+  })
+
+  it('hides the Audited Workflow entry in the paired web client even when the flag is true', () => {
+    const settings = { ...getDefaultSettings('/tmp'), experimentalAuditedWorkflow: true }
+    const webWindow = window as unknown as { __ORCA_WEB_CLIENT__?: boolean }
+    webWindow.__ORCA_WEB_CLIENT__ = true
+    try {
+      expect(shouldShowAuditedWorkflowButton(settings)).toBe(false)
+    } finally {
+      webWindow.__ORCA_WEB_CLIENT__ = undefined
+    }
   })
 
   it('shows the Agent Dashboard entry only when its experiment is enabled', () => {

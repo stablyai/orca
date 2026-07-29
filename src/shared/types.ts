@@ -2964,6 +2964,11 @@ export type GlobalSettings = {
   experimentalNewWorktreeCardStyle?: boolean
   /** Experimental: per-workspace on-demand environment recipes and setup surface. */
   experimentalEphemeralVms?: boolean
+  /** Experimental: Audited Workflow — a stricter, additive task workflow with
+   *  human-gated plan review, code audit, approval, commit, and landing.
+   *  Off never provisions its worktree/DB state or surfaces its nav entry;
+   *  does not affect the normal agent-session workflow. */
+  experimentalAuditedWorkflow?: boolean
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */
   compactWorktreeCards: boolean
   /** Legacy persisted key from the Experimental rollout; new writes use compactWorktreeCards. */
@@ -3243,6 +3248,7 @@ export type TopLevelView =
   | 'space'
   | 'skills'
   | 'mobile'
+  | 'auditedWorkflow'
 
 export type PersistedUIState = {
   lastActiveRepoId: string | null

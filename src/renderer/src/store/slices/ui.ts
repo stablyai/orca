@@ -105,6 +105,10 @@ import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import {
+  isAuditedWorkflowAvailable,
+  normalizeAuditedWorkflowActiveView
+} from '@/components/audited-workflow/audited-workflow-availability'
+import {
   filterSetupScriptPromptDismissalsToValidRepos,
   getSetupScriptPromptDismissalKey,
   sanitizeSetupScriptPromptDismissals
@@ -496,7 +500,8 @@ function hydratedUIPartialMatchesState(state: AppState, hydrated: Partial<UISlic
 
 function sanitizeHydratedActiveView(
   value: PersistedUIState['activeView'],
-  experimentalActivityEnabled: boolean
+  experimentalActivityEnabled: boolean,
+  experimentalAuditedWorkflowEnabled: boolean
 ): TopLevelView {
   // Why: older data (pre-activeView) or a view a different build doesn't have
   // falls back to terminal rather than rendering nothing.
@@ -507,7 +512,17 @@ function sanitizeHydratedActiveView(
   if (value === 'activity' && !experimentalActivityEnabled) {
     return 'terminal'
   }
-  return value
+  // Why: a persisted 'auditedWorkflow' view from a session where the flag was
+  // on must not restore to a blank surface once the flag is turned back off.
+  if (value === 'auditedWorkflow' && !experimentalAuditedWorkflowEnabled) {
+    return 'terminal'
+  }
+  // Why: environment normalization (paired web client can never activate
+  // Audited Workflow, even if hydration runs there with the flag on via
+  // synced settings) is centralized in normalizeAuditedWorkflowActiveView so
+  // this rule is defined in exactly one place. See
+  // audited-workflow-availability.ts.
+  return normalizeAuditedWorkflowActiveView(value)
 }
 
 let agentSendTargetModeInstanceCounter = 0
@@ -611,6 +626,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'auditedWorkflow'
   previousViewBeforeSettings:
     | 'terminal'
     | 'tasks'
@@ -619,6 +635,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'auditedWorkflow'
   previousViewBeforeActivity:
     | 'terminal'
     | 'settings'
@@ -627,6 +644,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'auditedWorkflow'
   previousViewBeforeAutomations:
     | 'terminal'
     | 'settings'
@@ -635,6 +653,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'auditedWorkflow'
   previousViewBeforeSpace:
     | 'terminal'
     | 'settings'
@@ -643,6 +662,7 @@ export type UISlice = {
     | 'automations'
     | 'skills'
     | 'mobile'
+    | 'auditedWorkflow'
   previousViewBeforeSkills:
     | 'terminal'
     | 'settings'
@@ -651,6 +671,7 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'mobile'
+    | 'auditedWorkflow'
   previousViewBeforeMobile:
     | 'terminal'
     | 'settings'
@@ -659,6 +680,18 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'auditedWorkflow'
+  previousViewBeforeAuditedWorkflow:
+    | 'terminal'
+    | 'settings'
+    | 'tasks'
+    | 'activity'
+    | 'automations'
+    | 'space'
+    | 'skills'
+    | 'mobile'
+  openAuditedWorkflowPage: () => void
+  closeAuditedWorkflowPage: () => void
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -1225,7 +1258,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeSpace: 'terminal',
   previousViewBeforeSkills: 'terminal',
   previousViewBeforeMobile: 'terminal',
-  setActiveView: (view) => set({ activeView: view }),
+  previousViewBeforeAuditedWorkflow: 'terminal',
+  // Why: the generic setter is called from many restoration/sync call sites
+  // that don't know about Audited Workflow's environment restriction —
+  // normalize here so a stray 'auditedWorkflow' value can never reach the
+  // paired web client through any of them. See
+  // normalizeAuditedWorkflowActiveView in audited-workflow-availability.ts.
+  setActiveView: (view) => set({ activeView: normalizeAuditedWorkflowActiveView(view) }),
   taskPageData: {},
   taskResumeState: undefined,
   githubTaskDrawerWorkItem: null,
@@ -1419,6 +1458,27 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   closeActivityPage: () =>
     set((state) => ({
       activeView: state.previousViewBeforeActivity
+    })),
+  openAuditedWorkflowPage: () => {
+    // Why: the setting alone gates local opt-in, not environment — Audited
+    // Workflow is Electron-IPC-only, so programmatic navigation (deep links,
+    // keyboard shortcuts, restored state) must never activate it in the
+    // paired web client even if the persisted flag is true. See
+    // audited-workflow-availability.ts.
+    if (get().settings?.experimentalAuditedWorkflow !== true || !isAuditedWorkflowAvailable()) {
+      return
+    }
+    set((state) => ({
+      activeView: 'auditedWorkflow',
+      previousViewBeforeAuditedWorkflow:
+        state.activeView === 'auditedWorkflow'
+          ? state.previousViewBeforeAuditedWorkflow
+          : state.activeView
+    }))
+  },
+  closeAuditedWorkflowPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeAuditedWorkflow
     })),
   selectedAutomationId: null,
   setSelectedAutomationId: (id) => set({ selectedAutomationId: id }),
@@ -2522,7 +2582,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
         activeView:
           source === 'startup'
-            ? sanitizeHydratedActiveView(ui.activeView, s.settings?.experimentalActivity === true)
+            ? sanitizeHydratedActiveView(
+                ui.activeView,
+                s.settings?.experimentalActivity === true,
+                s.settings?.experimentalAuditedWorkflow === true
+              )
             : s.activeView,
         persistedUIReady: true
       }

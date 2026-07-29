@@ -94,6 +94,30 @@ async function renderExperimentalPane(args: {
 }
 
 describe('ExperimentalPane', () => {
+  it('renders the Audited Workflow toggle in the local Electron renderer', () => {
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
+    )
+
+    expect(markup).toContain('Audited Workflow')
+    expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(
+      'Audited Workflow'
+    )
+  })
+
+  it('hides the Audited Workflow toggle in the paired web client', () => {
+    const webWindow = window as unknown as { __ORCA_WEB_CLIENT__?: boolean }
+    webWindow.__ORCA_WEB_CLIENT__ = true
+    try {
+      const markup = renderToStaticMarkup(
+        <ExperimentalPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
+      )
+      expect(markup).not.toContain('Audited Workflow')
+    } finally {
+      webWindow.__ORCA_WEB_CLIENT__ = undefined
+    }
+  })
+
   it('does not render compact worktree cards after graduation from Experimental', () => {
     const markup = renderToStaticMarkup(
       <ExperimentalPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />

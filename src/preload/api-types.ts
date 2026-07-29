@@ -9,6 +9,15 @@ import type {
   HostedReviewProvider
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
+import type {
+  AuditedTaskStatusProjection,
+  AuditedWorkflowDevTransitionParams,
+  AuditedWorkflowDevTransitionResult,
+  AuditedWorkflowGetTaskParams,
+  AuditedWorkflowListTasksParams,
+  AuditedWorkflowSelectTaskParams,
+  AuditedWorkflowSelectTaskResult
+} from '../shared/audited-workflow-types'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
@@ -2458,6 +2467,18 @@ export type PreloadApi = {
   skills: {
     discover: (target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>
     freshnessInventory: () => Promise<SkillFreshnessInventory>
+  }
+  auditedWorkflow: {
+    listTasks: (params?: AuditedWorkflowListTasksParams) => Promise<AuditedTaskStatusProjection[]>
+    getTask: (params: AuditedWorkflowGetTaskParams) => Promise<AuditedTaskStatusProjection | null>
+    selectTask: (
+      params: AuditedWorkflowSelectTaskParams
+    ) => Promise<AuditedWorkflowSelectTaskResult>
+    onTaskChanged: (callback: (projection: AuditedTaskStatusProjection) => void) => () => void
+    // Dev-build-only; undefined in a packaged build (see ipc/audited-workflow-dev-transitions.ts).
+    devTransition?: (
+      params: AuditedWorkflowDevTransitionParams
+    ) => Promise<AuditedWorkflowDevTransitionResult>
   }
   pet: {
     import: () => Promise<CustomPet | null>

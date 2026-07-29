@@ -4,6 +4,15 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
+import type {
+  AuditedTaskStatusProjection,
+  AuditedWorkflowDevTransitionParams,
+  AuditedWorkflowDevTransitionResult,
+  AuditedWorkflowGetTaskParams,
+  AuditedWorkflowListTasksParams,
+  AuditedWorkflowSelectTaskParams,
+  AuditedWorkflowSelectTaskResult
+} from '../shared/audited-workflow-types'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
@@ -2322,6 +2331,36 @@ const api = {
       ipcRenderer.invoke('skills:discover', target),
     freshnessInventory: (): Promise<SkillFreshnessInventory> =>
       ipcRenderer.invoke('skills:freshnessInventory')
+  },
+
+  auditedWorkflow: {
+    listTasks: (params?: AuditedWorkflowListTasksParams): Promise<AuditedTaskStatusProjection[]> =>
+      ipcRenderer.invoke('auditedWorkflow:listTasks', params),
+    getTask: (params: AuditedWorkflowGetTaskParams): Promise<AuditedTaskStatusProjection | null> =>
+      ipcRenderer.invoke('auditedWorkflow:getTask', params),
+    selectTask: (
+      params: AuditedWorkflowSelectTaskParams
+    ): Promise<AuditedWorkflowSelectTaskResult> =>
+      ipcRenderer.invoke('auditedWorkflow:selectTask', params),
+    onTaskChanged: (callback: (projection: AuditedTaskStatusProjection) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        projection: AuditedTaskStatusProjection
+      ): void => callback(projection)
+      ipcRenderer.on('auditedWorkflow:taskChanged', listener)
+      return () => ipcRenderer.removeListener('auditedWorkflow:taskChanged', listener)
+    },
+    // Why: undefined in a packaged build — the dev transition IPC handler is
+    // never registered when app.isPackaged, so this stays absent from the
+    // bundle rather than merely hidden (plan §15, item 10).
+    ...(import.meta.env.DEV
+      ? {
+          devTransition: (
+            params: AuditedWorkflowDevTransitionParams
+          ): Promise<AuditedWorkflowDevTransitionResult> =>
+            ipcRenderer.invoke('auditedWorkflow:devTransition', params)
+        }
+      : {})
   },
 
   pet: {

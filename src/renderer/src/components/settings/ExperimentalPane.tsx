@@ -15,6 +15,7 @@ import {
   MIN_AGENT_HIBERNATION_IDLE_MS,
   getEffectiveAgentHibernationIdleMs
 } from '@/lib/agent-hibernation-planner'
+import { isAuditedWorkflowAvailable } from '@/components/audited-workflow/audited-workflow-availability'
 
 export { getExperimentalPaneSearchEntries }
 
@@ -38,6 +39,12 @@ export function ExperimentalPane({
   const showAgentsView = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentsView
   ])
+  // Why: Audited Workflow is Electron-IPC-only — never show the toggle in
+  // the paired web client, regardless of search matches. See
+  // audited-workflow-availability.ts.
+  const showAuditedWorkflow =
+    isAuditedWorkflowAvailable() &&
+    matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().auditedWorkflow])
   const showAgentDashboard = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentDashboard
   ])
@@ -145,6 +152,57 @@ export function ExperimentalPane({
               <span
                 className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
                   settings.experimentalActivity ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+        </SearchableSetting>
+      ) : null}
+
+      {showAuditedWorkflow ? (
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.ExperimentalPane.auditedWorkflow.title',
+            'Audited Workflow'
+          )}
+          description={translate(
+            'auto.components.settings.ExperimentalPane.auditedWorkflow.description',
+            'A stricter, additive task workflow with human-gated plan review, code audit, approval, commit, and landing.'
+          )}
+          keywords={getExperimentalSearchEntry().auditedWorkflow.keywords}
+          className="space-y-3 py-2"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.ExperimentalPane.auditedWorkflow.title',
+                  'Audited Workflow'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.ExperimentalPane.auditedWorkflow.description',
+                  'Adds an Audited Workflow entry to the left sidebar. Does not change the normal agent-session workflow. Experimental — no model invocation or Git mutation is implemented yet.'
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.experimentalAuditedWorkflow === true}
+              onClick={() =>
+                updateSettings({
+                  experimentalAuditedWorkflow: !settings.experimentalAuditedWorkflow
+                })
+              }
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+                settings.experimentalAuditedWorkflow ? 'bg-foreground' : 'bg-muted-foreground/30'
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
+                  settings.experimentalAuditedWorkflow ? 'translate-x-4' : 'translate-x-0.5'
                 }`}
               />
             </button>
