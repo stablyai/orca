@@ -10021,6 +10021,40 @@ describe('Store', () => {
     expect(store.getSshRemotePtyLeases()).toEqual([])
   })
 
+  it('selects grid repo ownership by execution host when repo ids overlap', async () => {
+    const store = await createStore()
+    const worktreeId = 'shared-grid::/remote/repo/worktree'
+    store.addRepo(makeRepo({ id: 'shared-grid', path: '/local/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared-grid',
+        path: '/remote/repo',
+        connectionId: 'ssh-grid',
+        executionHostId: 'ssh:ssh-grid'
+      })
+    )
+
+    store.persistOrchestrationGridPtyBinding({
+      hostId: 'ssh:ssh-grid',
+      sshTargetId: 'ssh-grid',
+      worktreeId,
+      tabId: 'grid-tab',
+      leafId: TEST_LEAF_1,
+      ptyId: 'ssh:ssh-grid@@grid-pty',
+      layout: {
+        root: { type: 'leaf', leafId: TEST_LEAF_1 },
+        activeLeafId: TEST_LEAF_1,
+        expandedLeafId: null,
+        layoutMode: 'orchestration-grid'
+      }
+    })
+
+    expect(store.getWorkspaceSession('ssh:ssh-grid').tabsByWorktree[worktreeId]?.[0]?.id).toBe(
+      'grid-tab'
+    )
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeId]).toBeUndefined()
+  })
+
   it('persists a grid in the owning SSH folder workspace partition', async () => {
     const store = await createStore()
     const group = store.createProjectGroup({

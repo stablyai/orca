@@ -6852,7 +6852,17 @@ export class Store {
       throw new Error('Orchestration grid SSH target requires an SSH execution host')
     }
     const repoId = getRepoIdFromWorktreeId(args.worktreeId)
-    const repo = this.state.repos.find((candidate) => candidate.id === repoId)
+    const reposForId = this.state.repos.filter((candidate) => candidate.id === repoId)
+    const repoForHost = reposForId.find((candidate) => getRepoExecutionHostId(candidate) === hostId)
+    // Why: repo ids may overlap across execution hosts, so ownership must use
+    // the matching host instead of whichever persisted row happens to be first.
+    const repoHostId = repoForHost
+      ? getRepoExecutionHostId(repoForHost)
+      : reposForId.length === 1
+        ? getRepoExecutionHostId(reposForId[0])
+        : reposForId.length === 0
+          ? LOCAL_EXECUTION_HOST_ID
+          : null
     const workspaceScope = parseWorkspaceKey(args.worktreeId)
     const folderWorkspace =
       workspaceScope?.type === 'folder'
@@ -6883,7 +6893,7 @@ export class Store {
       // the repo or worktree-meta rows used by Git-backed worktrees.
       folderWorkspaceHostId ??
       normalizeExecutionHostId(this.state.worktreeMeta[args.worktreeId]?.hostId) ??
-      (repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID)
+      repoHostId
     // Why: a caller-supplied internally consistent SSH pair must not move a
     // worktree's terminal state into a different host partition.
     if (persistedHostId !== hostId) {
