@@ -92,13 +92,6 @@ export function endpointPort(endpoint: string): string | undefined {
   }
 }
 
-// Why: `wss://host` dials :443 implicitly, but endpointPort reports only written ports — reading
-// its undefined as "no port known" rewrites a reverse-proxied host to DEFAULT_PORT on save. Bare
-// ws stays undefined because that is the LAN shape DEFAULT_PORT is meant for.
-export function endpointPortOrSchemeDefault(endpoint: string): string | undefined {
-  return endpointPort(endpoint) ?? (endpointScheme(endpoint) === 'wss' ? '443' : undefined)
-}
-
 export function endpointScheme(endpoint: string): 'ws' | 'wss' {
   try {
     const protocol = new URL(endpoint).protocol.replace(':', '')

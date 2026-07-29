@@ -15,12 +15,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
-import {
-  displayHostEndpoint,
-  endpointPortOrSchemeDefault,
-  endpointScheme,
-  normalizeHostEndpoint
-} from '../../../src/transport/host-endpoint'
+import { displayHostEndpoint, normalizeHostEndpoint } from '../../../src/transport/host-endpoint'
+import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-edit'
 import { useForceReconnect, usePrimeHosts } from '../../../src/transport/client-context'
 import type { HostProfile } from '../../../src/transport/types'
 
@@ -68,24 +64,26 @@ export default function EditHostScreen() {
     void load()
   }, [load])
 
-  // Why: a wss host paired through a reverse proxy stores no explicit :443; reading only the
-  // written port would save it back as :6768 and strand the host.
-  const fallbackPort = host ? endpointPortOrSchemeDefault(host.endpoint) : undefined
-  const fallbackScheme = host ? endpointScheme(host.endpoint) : 'ws'
-
-  const normalizedEndpoint = useMemo(
-    () => normalizeHostEndpoint(address, { fallbackPort, fallbackScheme }),
-    [address, fallbackPort, fallbackScheme]
+  const endpointEdit = useMemo(
+    () =>
+      host
+        ? resolveHostEndpointEdit(host.endpoint, address)
+        : { addressChanged: false, normalizedEndpoint: normalizeHostEndpoint(address) },
+    [address, host]
   )
+  const { normalizedEndpoint } = endpointEdit
 
   const nameTrimmed = name.trim()
   const nameChanged = host != null && nameTrimmed.length > 0 && nameTrimmed !== host.name
   const endpointChanged =
-    host != null && normalizedEndpoint.ok && normalizedEndpoint.endpoint !== host.endpoint
+    host != null &&
+    endpointEdit.addressChanged &&
+    normalizedEndpoint.ok &&
+    normalizedEndpoint.endpoint !== host.endpoint
   const canSave =
     host != null &&
     nameTrimmed.length > 0 &&
-    normalizedEndpoint.ok &&
+    (!endpointEdit.addressChanged || normalizedEndpoint.ok) &&
     (nameChanged || endpointChanged) &&
     !saving
 
@@ -98,14 +96,19 @@ export default function EditHostScreen() {
       setSaveError('Enter a name.')
       return
     }
-    if (!normalizedEndpoint.ok) {
+    if (endpointEdit.addressChanged && !normalizedEndpoint.ok) {
       setSaveError(normalizedEndpoint.error)
       return
     }
 
     const willRename = nextName !== host.name
-    const willUpdateEndpoint = normalizedEndpoint.endpoint !== host.endpoint
-    if (!willRename && !willUpdateEndpoint) {
+    const nextEndpoint =
+      endpointEdit.addressChanged &&
+      normalizedEndpoint.ok &&
+      normalizedEndpoint.endpoint !== host.endpoint
+        ? normalizedEndpoint.endpoint
+        : undefined
+    if (!willRename && nextEndpoint === undefined) {
       router.back()
       return
     }
@@ -119,7 +122,7 @@ export default function EditHostScreen() {
       // other, and a host removed mid-edit throws instead of no-oping.
       await updateHostNameAndEndpoint(host.id, {
         ...(willRename ? { name: nextName } : {}),
-        ...(willUpdateEndpoint ? { endpoint: normalizedEndpoint.endpoint } : {})
+        ...(nextEndpoint !== undefined ? { endpoint: nextEndpoint } : {})
       })
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save host.')
@@ -142,7 +145,7 @@ export default function EditHostScreen() {
     setSaving(false)
     router.back()
 
-    if (willUpdateEndpoint) {
+    if (nextEndpoint !== undefined) {
       // Why: reconnect is a follow-on side effect of a save that already
       // committed — its failure or a hang must not be reported as a save
       // failure or block navigating back.
