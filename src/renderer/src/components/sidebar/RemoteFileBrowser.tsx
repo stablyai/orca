@@ -634,7 +634,7 @@ export function RemoteFileBrowser({
             </>
           )}
           {pathSegments.map((segment, i) => (
-            <React.Fragment key={i}>
+            <React.Fragment key={breadcrumbPathTo(i)}>
               <ChevronRight className="size-2.5 shrink-0 text-muted-foreground/50" />
               <button
                 type="button"
