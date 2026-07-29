@@ -118,6 +118,16 @@ async function main() {
     console.log(`| ${name} | ${formatMs(summary[name])} |`)
   }
   console.log(`\n[bench] results written to ${outPath}`)
+
+  // Thrown after the results are written so the file survives for triage. All
+  // medians null is a benchmark that never ran, not a benchmark that found
+  // nothing — reporting it as success is how a broken CI job goes green.
+  if (!iterations.some((iteration) => iteration.outcome === 'ok')) {
+    throw new Error(
+      `No launch reached "${args.waitForEvent}" (${iterations.length} attempted). ` +
+        'Check the build and the launch environment.'
+    )
+  }
 }
 
 main().catch((error) => {

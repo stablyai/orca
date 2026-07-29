@@ -87,6 +87,31 @@ export function parseStartupLine(line) {
 }
 
 /**
+ * Ubuntu CI cannot run Electron's setuid chrome-sandbox out of node_modules, so
+ * a raw spawn() without --no-sandbox aborts with SIGTRAP before the first
+ * milestone — every launch reads as `early-exit` and the run produces no data.
+ * Mirrors tests/e2e/helpers/electron-launch-args.ts; the GPU switches keep a
+ * headless Xvfb session on a software path.
+ *
+ * Both arms receive identical switches, so the paired comparison is unaffected;
+ * a Linux run is a software-rendering configuration and its absolute phase
+ * timings are not comparable to a local desktop run.
+ */
+function headlessLinuxSwitches() {
+  if (process.platform !== 'linux') {
+    return []
+  }
+  return [
+    '--no-sandbox',
+    '--disable-gpu',
+    '--disable-gpu-compositing',
+    '--disable-gpu-sandbox',
+    '--disable-dev-shm-usage',
+    '--in-process-gpu'
+  ]
+}
+
+/**
  * `exe` runs a packaged build; otherwise the npm `electron` binary loads
  * `appDir` (the repo's own `out/` unless an arm supplies its own tree).
  */
@@ -95,7 +120,8 @@ export function runIteration({ exe, appDir, timeoutMs, lingerMs, waitForEvent, l
     // Why: npm's `electron` package exposes the platform-specific executable;
     // hardcoding electron.exe made this benchmark unusable on macOS/Linux.
     const command = exe ?? require('electron')
-    const commandArgs = exe ? [] : [appDir ?? repoRoot]
+    const switches = headlessLinuxSwitches()
+    const commandArgs = exe ? switches : [...switches, appDir ?? repoRoot]
     const events = []
     const startedAt = process.hrtime.bigint()
     const child = spawn(command, commandArgs, {

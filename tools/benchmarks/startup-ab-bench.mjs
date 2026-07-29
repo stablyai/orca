@@ -202,6 +202,23 @@ function reportPhases(summaries, phaseNames) {
 }
 
 /**
+ * A launch that never reached its awaited milestone measured nothing. Some
+ * failures are tolerable — one flaky launch drops its pair from every phase —
+ * but zero completions is a broken harness or environment, not an inconclusive
+ * result, and must not be reported as a run that merely lacked a verdict.
+ */
+function summariseOutcomes(pairs) {
+  const outcomes = {}
+  for (const pair of pairs) {
+    for (const run of [pair.baseline, pair.candidate]) {
+      outcomes[run.outcome] = (outcomes[run.outcome] ?? 0) + 1
+    }
+  }
+  const total = pairs.length * 2
+  return { outcomes, completed: outcomes.ok ?? 0, total }
+}
+
+/**
  * Whether the phase verdicts above may be quoted at all. Drift means the run
  * measured the machine; unmeasured controls mean nothing checked whether it did.
  */
@@ -275,6 +292,7 @@ async function main() {
   const controlPhaseNames = args.controlPhases.split(',').filter(Boolean)
   const drift = detectDrift(summaries, controlPhaseNames)
   const measurementStatus = resolveMeasurementStatus(drift)
+  const launches = summariseOutcomes(pairs)
 
   const outPath = writeBenchmarkResults(join(scriptDir, 'results'), args.label, {
     label: args.label,
@@ -288,6 +306,8 @@ async function main() {
     measurementStatus,
     driftDetected: drift.detected,
     unmeasuredControlPhases: drift.unmeasured,
+    launchOutcomes: launches.outcomes,
+    completedLaunches: launches.completed,
     fixtureDir: sanitizeLocalPath(fixtureDir),
     fixtureFiles: args.files,
     stateProfile: args.stateProfile,
@@ -309,6 +329,21 @@ async function main() {
   reportPhases(summaries, phaseNames)
   reportDrift(drift, measurementStatus)
   console.log(`\n[ab] results written to ${outPath}`)
+
+  if (launches.completed < launches.total) {
+    const detail = Object.entries(launches.outcomes)
+      .map(([outcome, count]) => `${outcome}=${count}`)
+      .join(' ')
+    console.log(`[ab] launch outcomes: ${detail}`)
+  }
+  // Thrown after the results are written so the file still uploads for triage.
+  if (launches.completed === 0) {
+    throw new Error(
+      `No launch reached "${args.waitForEvent}" (${launches.total} attempted). ` +
+        'The benchmark did not run, which is a broken harness or environment rather ' +
+        'than an inconclusive result — check the arms and the launch environment.'
+    )
+  }
 }
 
 main().catch((error) => {
