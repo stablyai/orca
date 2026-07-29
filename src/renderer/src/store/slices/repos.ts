@@ -1408,6 +1408,7 @@ function getRuntimeTargetCachePrefix(
 type FolderWorkspacePathStatusRouteOptions = { runtimeEnvironmentId?: string | null }
 type AddRepoPathRouteOptions = { runtimeEnvironmentId?: string | null }
 type RuntimeCatalogFetchOptions = { runtimeEnvironmentId?: string | null }
+type CreateProjectGroupRouteOptions = { runtimeEnvironmentId?: string | null }
 
 function getFolderWorkspacePathStatusRouteSettings(
   options: FolderWorkspacePathStatusRouteOptions | undefined,
@@ -1420,6 +1421,15 @@ function getFolderWorkspacePathStatusRouteSettings(
 
 function getAddRepoPathRouteSettings(
   options: AddRepoPathRouteOptions | undefined,
+  fallbackSettings: GlobalSettings | null
+): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined {
+  return options && 'runtimeEnvironmentId' in options
+    ? { activeRuntimeEnvironmentId: options.runtimeEnvironmentId ?? null }
+    : fallbackSettings
+}
+
+function getCreateProjectGroupRouteSettings(
+  options: CreateProjectGroupRouteOptions | undefined,
   fallbackSettings: GlobalSettings | null
 ): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined {
   return options && 'runtimeEnvironmentId' in options
@@ -1672,7 +1682,10 @@ export type RepoSlice = {
     runtimeEnvironmentId?: string | null
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
-  createProjectGroup: (name: string) => Promise<ProjectGroup | null>
+  createProjectGroup: (
+    name: string,
+    options?: CreateProjectGroupRouteOptions
+  ) => Promise<ProjectGroup | null>
   createFolderWorkspace: (
     args: {
       projectGroupId: string
@@ -2482,9 +2495,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  createProjectGroup: async (name) => {
+  createProjectGroup: async (name, options) => {
     try {
-      const target = getActiveRuntimeTarget(get().settings)
+      const target = getActiveRuntimeTarget(
+        getCreateProjectGroupRouteSettings(options, get().settings)
+      )
       const group =
         target.kind === 'local'
           ? await window.api.projectGroups.create({
