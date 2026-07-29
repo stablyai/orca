@@ -116,6 +116,11 @@ describe('orchestration skill agent coverage', () => {
         directoryPath: '/Users/test/.pi/agent/skills/orchestration'
       },
       {
+        agent: 'omp',
+        rootPath: '/Users/test/.omp/agent/skills',
+        directoryPath: '/Users/test/.omp/agent/skills/orchestration'
+      },
+      {
         agent: 'gemini',
         rootPath: '/Users/test/.gemini/skills',
         directoryPath: '/Users/test/.gemini/skills/orchestration'

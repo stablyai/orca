@@ -50,7 +50,9 @@ describe('skill discovery', () => {
       'codex'
     ])
     expect(result.skills.find((skill) => skill.name === 'Docs')?.providers).toEqual(['claude'])
-    expect(result.skills.find((skill) => skill.name === 'Planning')?.providers).toEqual(['omp'])
+    expect(result.skills.find((skill) => skill.name === 'Planning')?.providers).toEqual([
+      'agent-skills'
+    ])
   })
 
   it('discovers the enabled Claude plugin version applicable to the project cwd', async () => {
@@ -147,7 +149,6 @@ describe('skill discovery', () => {
     const rootPaths = roots.map((root) => root.path.replace(/\\/g, '/'))
     expect(rootPaths).not.toContain('/remote/repo/.claude/skills')
     expect(rootPaths).toContain('/workspace/current/.claude/skills')
-    expect(rootPaths).toContain('/home/test/.omp/agent/skills')
   })
 
   it('scans each provider home skill root that npx skills --global writes to', () => {
@@ -162,6 +163,7 @@ describe('skill discovery', () => {
         '/home/test/.grok/skills',
         '/home/test/.config/opencode/skills',
         '/home/test/.pi/agent/skills',
+        '/home/test/.omp/agent/skills',
         '/home/test/.gemini/skills',
         '/home/test/.gemini/antigravity/skills',
         '/home/test/.cursor/skills'
@@ -174,6 +176,11 @@ describe('skill discovery', () => {
         expect(root.providers).toEqual(['agent-skills'])
       }
     }
+    // Why: the native-chat picker gates a root by `owner`, so OMP's home must be
+    // attributed to OMP rather than left shared.
+    expect(
+      roots.find((root) => root.path.replace(/\\/g, '/') === '/home/test/.omp/agent/skills')?.owner
+    ).toBe('omp')
   })
 
   it('does not add runtime-owned repository paths to local scan roots', () => {

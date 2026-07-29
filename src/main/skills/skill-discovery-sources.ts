@@ -98,14 +98,6 @@ export function buildSkillDiscoverySources(
       'claude'
     ),
     source(
-      'home-omp',
-      'OMP home',
-      pathApi.join(home, '.omp', 'agent', 'skills'),
-      'home',
-      ['omp'],
-      'omp'
-    ),
-    source(
       'codex-plugin-cache',
       'Codex plugin cache',
       pathApi.join(home, '.codex', 'plugins', 'cache'),
@@ -138,6 +130,14 @@ export function buildSkillDiscoverySources(
       'home',
       ['agent-skills'],
       'pi'
+    ),
+    source(
+      'home-omp',
+      'OMP home',
+      pathApi.join(home, '.omp', 'agent', 'skills'),
+      'home',
+      ['agent-skills'],
+      'omp'
     ),
     source(
       'home-gemini',
