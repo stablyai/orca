@@ -2,6 +2,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest'
+import type { OsFileOpenApp } from './os-file-open-requests'
 import {
   createOsFileOpenRequestQueue,
   extractMarkdownPathsFromArgv,
@@ -92,10 +93,8 @@ describe('filterExistingFiles', () => {
   let directoryPath: string
 
   beforeAll(async () => {
-    tempDir = await mkdir(
-      join(tmpdir(), `orca-test-${Date.now()}-${Math.random().toString(36).slice(2)}`),
-      { recursive: true }
-    )
+    tempDir = join(tmpdir(), `orca-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    await mkdir(tempDir, { recursive: true })
     existingFile = join(tempDir, 'test.md')
     await writeFile(existingFile, 'test content')
     directoryPath = join(tempDir, 'subdir')
@@ -152,23 +151,28 @@ describe('filterExistingFiles', () => {
 
 type OpenFileHandler = (event: { preventDefault: () => void }, filePath: string) => void
 
-function createFakeApp(): { on: ReturnType<typeof vi.fn>; fire: (filePath: string) => boolean } {
+function createFakeApp(): OsFileOpenApp & {
+  fire: (filePath: string) => boolean
+  on: ReturnType<typeof vi.fn>
+} {
   const handlers: OpenFileHandler[] = []
   const on = vi.fn((eventName: string, handler: OpenFileHandler) => {
     if (eventName === 'open-file') {
       handlers.push(handler)
     }
   })
-  return {
-    on,
-    fire(filePath) {
-      let defaultPrevented = false
-      for (const handler of handlers) {
-        handler({ preventDefault: () => (defaultPrevented = true) }, filePath)
+  const app: OsFileOpenApp & { fire: (filePath: string) => boolean; on: ReturnType<typeof vi.fn> } =
+    {
+      on: on as OsFileOpenApp['on'] & ReturnType<typeof vi.fn>,
+      fire(filePath) {
+        let defaultPrevented = false
+        for (const handler of handlers) {
+          handler({ preventDefault: () => (defaultPrevented = true) }, filePath)
+        }
+        return defaultPrevented
       }
-      return defaultPrevented
     }
-  }
+  return app
 }
 
 describe('registerOsFileOpenRequests', () => {

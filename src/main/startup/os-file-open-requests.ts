@@ -1,10 +1,17 @@
-import type { App } from 'electron'
 import { stat } from 'node:fs/promises'
 import { extname } from 'node:path'
 
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown'])
 // Why: the test host's path flavor must not decide whether a Windows path counts as absolute.
 const ABSOLUTE_PATH_PATTERN = /^(?:\/|\\\\|[A-Za-z]:[\\/])/
+
+// Why: the function only registers the open-file event, so no need to pull in the full App type.
+export type OsFileOpenApp = {
+  on(
+    event: 'open-file',
+    listener: (event: { preventDefault: () => void }, filePath: string) => void
+  ): void
+}
 
 export function isMarkdownFilePath(candidate: string): boolean {
   return (
@@ -64,7 +71,7 @@ export async function filterExistingFiles(paths: readonly string[]): Promise<str
 }
 
 export function registerOsFileOpenRequests(options: {
-  app: Pick<App, 'on'>
+  app: OsFileOpenApp
   queue: OsFileOpenRequestQueue
   platform: NodeJS.Platform
   argv: readonly string[]
