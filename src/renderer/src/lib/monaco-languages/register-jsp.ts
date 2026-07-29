@@ -2,13 +2,16 @@ import type * as Monaco from 'monaco-editor'
 
 type MonacoModule = typeof Monaco
 
-// Why: token names must exist in Monaco's built-in themes or they render
-// unstyled. Plain `operator` is only defined as operator.scss/sql/swift in
-// vs-dark, so operators use `keyword.operator`, which falls back to `keyword`.
+// Why: `ignoreCase` is off because scriptlets are Java, which is case-sensitive
+// — with it on, `List list` colours the variable as a type. Monarch has no
+// per-rule casing, so the four HTML tags that genuinely need it spell it out.
+//
+// Token names must exist in the built-in themes: vs-dark defines
+// operator.scss/sql/swift but no plain `operator`, so operators use
+// `keyword.operator`, which falls back to `keyword`.
 export const jspMonarchLanguage: Monaco.languages.IMonarchLanguage = {
   defaultToken: '',
   tokenPostfix: '.jsp',
-  ignoreCase: true,
   brackets: [
     { open: '{', close: '}', token: 'delimiter.curly' },
     { open: '[', close: ']', token: 'delimiter.square' },
@@ -19,14 +22,13 @@ export const jspMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/<%--/, 'comment', '@jspComment'],
       [/<%@/, 'metatag', '@jspDirective'],
       [/<%[=!]?/, 'metatag', '@jspScriptlet'],
-      [/\$\{/, 'delimiter.curly', '@elExpression'],
-      [/<script(?=[\s>])/, 'tag', '@scriptOpen'],
-      [/<style(?=[\s>])/, 'tag', '@styleOpen'],
+      [/[$#]\{/, 'delimiter.curly', '@elExpression'],
+      [/<[sS][cC][rR][iI][pP][tT](?=[\s>])/, 'tag', '@scriptOpen'],
+      [/<[sS][tT][yY][lL][eE](?=[\s>])/, 'tag', '@styleOpen'],
       [/<!--/, 'comment', '@htmlComment'],
       [/<\/?[a-zA-Z][\w.-]*:[\w.-]+/, 'tag', '@tagRest'],
       [/<\/?[a-zA-Z][\w-]*/, 'tag', '@tagRest'],
-      [/[^<$]+/, ''],
-      [/./, '']
+      [/[^<$#]+/, '']
     ],
 
     htmlComment: [
@@ -49,10 +51,10 @@ export const jspMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/=/, 'delimiter'],
       [/"[^"]*"/, 'attribute.value'],
       [/'[^']*'/, 'attribute.value'],
-      [/\s+/, 'white'],
-      [/./, '']
+      [/\s+/, 'white']
     ],
 
+    // Covers `<% %>`, `<%= %>` and `<%! %>`; all three need the same Java tokens.
     jspScriptlet: [
       [/%>/, 'metatag', '@pop'],
       [/\/\/[^\n]*/, 'comment'],
@@ -61,17 +63,18 @@ export const jspMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/'([^'\\]|\\.)*'/, 'string'],
       [/\b(?:true|false|null)\b/, 'constant'],
       [
-        /\b(?:if|else|for|while|do|switch|case|default|break|continue|return|try|catch|finally|throw|throws|new|instanceof|import|package|class|public|private|protected|static|final)\b/,
+        /\b(?:if|else|for|while|do|switch|case|default|break|continue|return|try|catch|finally|throw|throws|new|instanceof|import|package|class|interface|enum|extends|implements|public|private|protected|static|final|abstract|synchronized|assert|this|super)\b/,
         'keyword'
       ],
       [/\b(?:int|long|short|byte|float|double|boolean|char|void|String|Object|List|Map)\b/, 'type'],
       [/\d[\d_]*\.?[\d_]*(?:[eE][-+]?\d+)?[fFdDlL]?/, 'number'],
       [/[{}()[\]]/, '@brackets'],
-      [/[<>=!&|+\-*/%^~?:]+/, 'keyword.operator'],
+      // Why: `%` is split out with a lookahead so a run like `i++%>` cannot
+      // swallow the closing `%>` and leak Java tokenization to end of file.
+      [/%(?!>)|[<>=!&|+\-*/^~?:]+/, 'keyword.operator'],
       [/[;,.]/, 'delimiter'],
       [/[a-zA-Z_$][\w$]*/, 'identifier'],
-      [/\s+/, 'white'],
-      [/./, '']
+      [/\s+/, 'white']
     ],
 
     javaBlockComment: [
@@ -88,41 +91,43 @@ export const jspMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/'([^'\\]|\\.)*'/, 'string'],
       [/\d[\d_]*\.?[\d_]*/, 'number'],
       [/[()[\]]/, '@brackets'],
+      // `fn:length(x)` — the namespace colon is a separator, not an operator.
+      [/:(?=[a-zA-Z_])/, 'delimiter'],
       [/[<>=!&|+\-*/%?:]+/, 'keyword.operator'],
       [/[,.]/, 'delimiter'],
       [/[a-zA-Z_$][\w$]*/, 'variable'],
-      [/\s+/, 'white'],
-      [/./, '']
+      [/\s+/, 'white']
     ],
 
     // Shared by plain HTML, JSTL and custom tags: attribute values may embed
     // both EL and scriptlet expressions.
     tagRest: [
       [/\/?>/, 'tag', '@pop'],
-      [/\$\{/, 'delimiter.curly', '@elExpression'],
+      [/<%--/, 'comment', '@jspComment'],
+      [/[$#]\{/, 'delimiter.curly', '@elExpression'],
       [/<%[=!]?/, 'metatag', '@jspScriptlet'],
-      [/[a-zA-Z_:][\w.:-]*(?=\s*=)/, 'attribute.name'],
       [/[a-zA-Z_:][\w.:-]*/, 'attribute.name'],
       [/=/, 'delimiter'],
       [/"/, 'attribute.value', '@attributeValueDouble'],
       [/'/, 'attribute.value', '@attributeValueSingle'],
-      [/\s+/, 'white'],
-      [/./, '']
+      [/\s+/, 'white']
     ],
 
     attributeValueDouble: [
       [/"/, 'attribute.value', '@pop'],
-      [/\$\{/, 'delimiter.curly', '@elExpression'],
+      [/<%--/, 'comment', '@jspComment'],
+      [/[$#]\{/, 'delimiter.curly', '@elExpression'],
       [/<%[=!]?/, 'metatag', '@jspScriptlet'],
-      [/[^"$<]+/, 'attribute.value'],
+      [/[^"$#<]+/, 'attribute.value'],
       [/./, 'attribute.value']
     ],
 
     attributeValueSingle: [
       [/'/, 'attribute.value', '@pop'],
-      [/\$\{/, 'delimiter.curly', '@elExpression'],
+      [/<%--/, 'comment', '@jspComment'],
+      [/[$#]\{/, 'delimiter.curly', '@elExpression'],
       [/<%[=!]?/, 'metatag', '@jspScriptlet'],
-      [/[^'$<]+/, 'attribute.value'],
+      [/[^'$#<]+/, 'attribute.value'],
       [/./, 'attribute.value']
     ],
 
@@ -131,14 +136,18 @@ export const jspMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/>/, { token: 'tag', switchTo: '@scriptBody', nextEmbedded: 'javascript' }],
       { include: '@tagRest' }
     ],
-    scriptBody: [[/<\/script\s*>/, { token: 'tag', next: '@pop', nextEmbedded: '@pop' }]],
+    scriptBody: [
+      [/<\/[sS][cC][rR][iI][pP][tT]\s*>/, { token: 'tag', next: '@pop', nextEmbedded: '@pop' }]
+    ],
 
     styleOpen: [
       [/\/>/, 'tag', '@pop'],
       [/>/, { token: 'tag', switchTo: '@styleBody', nextEmbedded: 'css' }],
       { include: '@tagRest' }
     ],
-    styleBody: [[/<\/style\s*>/, { token: 'tag', next: '@pop', nextEmbedded: '@pop' }]]
+    styleBody: [
+      [/<\/[sS][tT][yY][lL][eE]\s*>/, { token: 'tag', next: '@pop', nextEmbedded: '@pop' }]
+    ]
   }
 }
 
@@ -168,21 +177,19 @@ export const jspLanguageConfiguration: Monaco.languages.LanguageConfiguration = 
 }
 
 // Why: JSP is HTML plus server-side template syntax — the same shape Monaco
-// already serves for Razor and Handlebars. Reusing the HTML language service
-// gives tag completion, hovers and folding. Diagnostics and formatting stay off
-// because that service does not understand scriptlets and would report them as
-// malformed markup.
+// already serves for Razor and Handlebars. Only the ten keys below are read by
+// the HTML mode. Formatting and rename are off because both act on a parse of
+// the file as HTML, and `<% ... %>` is not markup: formatting would move it and
+// rename would edit spans derived from a mis-parse.
 export const jspHtmlModeConfiguration: Monaco.html.ModeConfiguration = {
   completionItems: true,
   hovers: true,
   documentSymbols: true,
   links: true,
   documentHighlights: true,
-  rename: true,
-  colors: true,
-  foldingRanges: true,
   selectionRanges: true,
-  diagnostics: false,
+  foldingRanges: true,
+  rename: false,
   documentFormattingEdits: false,
   documentRangeFormattingEdits: false
 }
@@ -202,5 +209,7 @@ export function registerJspLanguage(monaco: MonacoModule): void {
   })
   monaco.languages.setMonarchTokensProvider('jsp', jspMonarchLanguage)
   monaco.languages.setLanguageConfiguration('jsp', jspLanguageConfiguration)
+  // Why: registering twice would create a second worker and provider set —
+  // the call has no internal dedupe — so it stays behind the guard above.
   monaco.html.registerHTMLLanguageService('jsp', undefined, jspHtmlModeConfiguration)
 }
