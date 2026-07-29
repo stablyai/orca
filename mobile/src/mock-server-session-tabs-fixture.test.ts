@@ -58,6 +58,12 @@ describe('mock server session tabs fixture', () => {
     })
   })
 
+  it('passes a bare worktree selector through unprefixed', () => {
+    const response = listSessionTabs('repo-1::worktree-1')
+
+    expect((response.result as { worktree: string }).worktree).toBe('repo-1::worktree-1')
+  })
+
   it('falls back to the same worktree terminal.list uses when no selector is sent', () => {
     const terminals = callRpc('terminal.list').result as {
       terminals: { worktreeId: string }[]
