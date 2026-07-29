@@ -151,6 +151,11 @@ describe('AgentSkillSetupPanel installed-command call sites', () => {
     expect(source).toContain('command={skillCommand}')
     expect(source).toContain('shellOverride={activeSkillRuntime.terminalShellOverride}')
     expect(source).not.toContain('command={ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}')
+    // This terminal auto-pastes with no install gate, so a repair-required runtime
+    // must fall back to the host rather than skip the Windows npx preflight.
+    expect(source).toContain(
+      'activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime'
+    )
   })
 
   it('fails when a production caller can show the default Update action without installedCommand', () => {
