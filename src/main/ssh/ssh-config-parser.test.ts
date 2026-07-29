@@ -216,6 +216,12 @@ Host repeated
   ProxyUseFdpass no
   ProxyJump first-jump
   ProxyJump second-jump
+
+Host repeated-disabled
+  IdentitiesOnly no
+  IdentitiesOnly yes
+  ProxyUseFdpass no
+  ProxyUseFdpass yes
 `)
 
     expect(hosts[0]).toEqual({
@@ -228,6 +234,11 @@ Host repeated
       proxyCommand: 'ssh -W %h:%p first-bastion',
       proxyUseFdpass: true,
       proxyJump: 'first-jump'
+    })
+    expect(hosts[1]).toEqual({
+      host: 'repeated-disabled',
+      identitiesOnly: false,
+      proxyUseFdpass: false
     })
   })
 
