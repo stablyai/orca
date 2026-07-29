@@ -117,7 +117,8 @@ function startDesktopMultiplexSubscribe(
 }
 
 function sendDesktopMultiplexSubscribe(
-  handlers: Map<number, (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void>
+  handlers: Map<number, (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void>,
+  capabilities: Record<string, 1> = { ackOutput: 1, desktopViewportClaims: 1 }
 ) {
   handlers.get(0)?.(
     decodeTerminalStreamFrame(
@@ -129,13 +130,161 @@ function sendDesktopMultiplexSubscribe(
           streamId: 7,
           terminal: 'terminal-1',
           client: { id: 'desktop-1', type: 'desktop' },
-          capabilities: { ackOutput: 1, desktopViewportClaims: 1 },
+          capabilities,
           viewport: { cols: 120, rows: 40 }
         })
       })
     )!
   )
 }
+
+describe('terminal multiplex write-unavailable signalling', () => {
+  async function sendInputAfterSubscribe(options: {
+    capabilities?: Record<string, 1>
+    sendTerminal: OrcaRuntimeService['sendTerminal']
+    driver?: { kind: 'idle' } | { kind: 'mobile'; clientId: string }
+  }) {
+    const harness = startDesktopMultiplexSubscribe({
+      sendTerminal: options.sendTerminal,
+      getDriver: vi.fn().mockReturnValue(options.driver ?? { kind: 'idle' })
+    })
+    await vi.waitFor(() =>
+      expect(harness.messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+    )
+    sendDesktopMultiplexSubscribe(harness.handlers, options.capabilities)
+    await vi.waitFor(() =>
+      expect(harness.messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(
+        true
+      )
+    )
+    harness.binaryFrames.splice(0)
+    harness.handlers.get(7)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Input,
+          streamId: 7,
+          seq: 1,
+          payload: encodeTerminalStreamText('hello')
+        })
+      )!
+    )
+    return harness
+  }
+
+  const writeUnavailableFrames = (harness: {
+    binaryFrames: Uint8Array<ArrayBufferLike>[]
+  }): NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>[] =>
+    harness.binaryFrames
+      .map((bytes) => decodeTerminalStreamFrame(bytes))
+      .filter((frame) => frame?.opcode === TerminalStreamOpcode.WriteUnavailable)
+      .map((frame) => frame!)
+
+  it('tells a capable client its input never reached the PTY', async () => {
+    const harness = await sendInputAfterSubscribe({
+      capabilities: { ackOutput: 1, desktopViewportClaims: 1, writeUnavailable: 1 },
+      sendTerminal: vi
+        .fn()
+        .mockResolvedValue({ handle: 'terminal-1', accepted: false, bytesWritten: 0 })
+    })
+
+    await vi.waitFor(() => expect(writeUnavailableFrames(harness)).toHaveLength(1))
+    expect(decodeTerminalStreamJson(writeUnavailableFrames(harness)[0].payload)).toEqual({
+      reason: 'not_writable'
+    })
+  })
+
+  it('reports a thrown terminal_not_writable the same way', async () => {
+    const harness = await sendInputAfterSubscribe({
+      capabilities: { ackOutput: 1, desktopViewportClaims: 1, writeUnavailable: 1 },
+      sendTerminal: vi.fn().mockRejectedValue(new Error('terminal_not_writable'))
+    })
+
+    await vi.waitFor(() => expect(writeUnavailableFrames(harness)).toHaveLength(1))
+  })
+
+  // Why: an unknown opcode fails decode and kills the whole multiplexed connection on older clients.
+  it('stays silent for a client that never declared the capability', async () => {
+    const harness = await sendInputAfterSubscribe({
+      sendTerminal: vi
+        .fn()
+        .mockResolvedValue({ handle: 'terminal-1', accepted: false, bytesWritten: 0 })
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(writeUnavailableFrames(harness)).toEqual([])
+  })
+
+  it('stays silent when the send succeeded', async () => {
+    const harness = await sendInputAfterSubscribe({
+      capabilities: { ackOutput: 1, desktopViewportClaims: 1, writeUnavailable: 1 },
+      sendTerminal: vi
+        .fn()
+        .mockResolvedValue({ handle: 'terminal-1', accepted: true, bytesWritten: 5 })
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(writeUnavailableFrames(harness)).toEqual([])
+  })
+
+  // Why (regression): the write is awaited, so an Unsubscribe can land first and the client can
+  // hand the same streamId to a different pane. Reporting the dead pane's rejection on that id
+  // would recover a terminal that is writing fine.
+  it('stays silent when the stream detached before the rejected write resolved', async () => {
+    let releaseSend: (result: unknown) => void = () => {}
+    const sendTerminal = vi.fn().mockReturnValue(
+      new Promise((resolve) => {
+        releaseSend = resolve
+      })
+    )
+    const harness = await sendInputAfterSubscribe({
+      capabilities: { ackOutput: 1, desktopViewportClaims: 1, writeUnavailable: 1 },
+      sendTerminal: sendTerminal as unknown as OrcaRuntimeService['sendTerminal']
+    })
+    await vi.waitFor(() => expect(sendTerminal).toHaveBeenCalled())
+
+    harness.handlers.get(7)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Unsubscribe,
+          streamId: 7,
+          seq: 2,
+          payload: new Uint8Array()
+        })
+      )!
+    )
+    // The replacement pane now owns streamId 7.
+    sendDesktopMultiplexSubscribe(harness.handlers, {
+      ackOutput: 1,
+      desktopViewportClaims: 1,
+      writeUnavailable: 1
+    })
+    await vi.waitFor(() =>
+      expect(
+        harness.messages.filter((msg) => JSON.parse(msg).result?.type === 'subscribed')
+      ).toHaveLength(2)
+    )
+
+    releaseSend({ handle: 'terminal-1', accepted: false, bytesWritten: 0 })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(writeUnavailableFrames(harness)).toEqual([])
+  })
+
+  // Why: a phone holding the input floor is a healthy pane, not an undeliverable one (docs/mobile-presence-lock.md).
+  it('stays silent when the mobile presence lock owns the pane', async () => {
+    const sendTerminal = vi
+      .fn()
+      .mockResolvedValue({ handle: 'terminal-1', accepted: false, bytesWritten: 0 })
+    const harness = await sendInputAfterSubscribe({
+      capabilities: { ackOutput: 1, desktopViewportClaims: 1, writeUnavailable: 1 },
+      sendTerminal,
+      driver: { kind: 'mobile', clientId: 'phone-1' }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(sendTerminal).not.toHaveBeenCalled()
+    expect(writeUnavailableFrames(harness)).toEqual([])
+  })
+})
 
 describe('terminal multiplex RPC', () => {
   it.each(['refuses', 'throws'] as const)(

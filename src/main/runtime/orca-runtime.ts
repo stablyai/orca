@@ -1564,6 +1564,10 @@ const RECENT_PTY_PATH_CANDIDATE_LIMIT = 1024
 const RECENT_PTY_PATH_CANDIDATE_MAX_BYTES = 4 * 1024
 const RECENT_PTY_PATH_CANDIDATE_TOTAL_BYTES = 64 * 1024
 const SSH_PANE_RECOVERY_GRACE_MS = 30_000
+// Why: the renderer resolves the mount against its own graph and can legitimately find nothing to
+// mount, which it reports by doing nothing. Retry after this long so a later subscribe gets another
+// attempt, while still coalescing the burst of subscribes a single reconnect produces.
+const UNOBSERVED_PTY_ATTACH_RETRY_MS = 10_000
 
 function isClientDisconnectedError(error: unknown): boolean {
   return error instanceof Error && error.message === 'client_disconnected'
@@ -2646,6 +2650,10 @@ export class OrcaRuntimeService {
   // iterates them all. Listeners are cleaned up via subscriptionCleanups.
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
+  // Why: single-flight per PTY so repeated subscribes to a never-observed pane don't spam mount
+  // requests. Holds the request time, not just the id — the renderer can drop the mount silently,
+  // and a permanent latch would leave the pane in exactly the state this attach exists to repair.
+  private unobservedPtyAttachRequests = new Map<string, number>()
   private wslDistroByPtyId = new Map<string, string>()
   private titleObservationSequence = 0
   private headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
@@ -7779,6 +7787,8 @@ export class OrcaRuntimeService {
       pty.connected = true
       pty.disconnectedAt = null
       pty.lastOutputAt = at
+      // The output pipeline is proven; a later subscribe may request a fresh attach if it breaks again.
+      this.unobservedPtyAttachRequests.delete(ptyId)
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
       pty.tailPendingAnsi = normalized.pendingAnsi
       const nextTail = appendNormalizedToTailBuffer(
@@ -11176,6 +11186,7 @@ export class OrcaRuntimeService {
     this.remoteDesktopHostReclaimTargets.delete(ptyId)
     this.remoteDesktopViewerRevisions.delete(ptyId)
     this.disposeHeadlessTerminal(ptyId)
+    this.unobservedPtyAttachRequests.delete(ptyId)
     this.agentDetector?.onExit(ptyId)
     if (pty) {
       pty.connected = false
@@ -23464,6 +23475,34 @@ export class OrcaRuntimeService {
       this.graphSyncCallbacks.push(check)
       check()
     })
+  }
+
+  // Why: the daemon outlives the app, so after a host restart a session can be alive with its
+  // shell running while nothing is attached — output goes only to the daemon and every remote
+  // keystroke lands in a terminal no one can see. Mounting the owning tab rebuilds that pipeline.
+  requestHostPaneAttachForUnobservedPty(handle: string, ptyId: string): boolean {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty || pty.lastOutputAt !== null) {
+      return false
+    }
+    if (this.ptyController?.hasRendererSerializer?.(ptyId) === true) {
+      return false
+    }
+    if (this.hasHeadlessTerminalState(ptyId)) {
+      return false
+    }
+    const requestedAt = this.unobservedPtyAttachRequests.get(ptyId)
+    const now = Date.now()
+    if (requestedAt !== undefined && now - requestedAt < UNOBSERVED_PTY_ATTACH_RETRY_MS) {
+      return false
+    }
+    this.unobservedPtyAttachRequests.set(ptyId, now)
+    const requested = this.requestRendererTerminalTabMount(handle)
+    if (!requested) {
+      // Headless host has no window to mount into; let a later subscribe retry.
+      this.unobservedPtyAttachRequests.delete(ptyId)
+    }
+    return requested
   }
 
   // Why: never-mounted tabs have no PTY or snapshot; synthetic handles need the ptyId to mount the exact owning tab.

@@ -981,15 +981,32 @@ export function createRemoteRuntimePtyTransport(
       pendingClaimInput += text
       return
     }
-    void callRuntime('terminal.send', {
+    void callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
       terminal: targetHandle,
       text,
       client: { id: clientId, type: 'desktop' },
       ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
-    }).catch((error) => {
-      handleRemoteTerminalError(error)
     })
+      .then((result) => {
+        // Why: a rejected send is silent by protocol — without this the keystrokes just vanish.
+        // Why the handle re-check: recovery can rebind `handle` while this RPC is in flight, and
+        // recovering the replacement pane over a dead pane's rejection would remount the wrong terminal.
+        if (connected && handle === targetHandle && result.send.accepted !== true) {
+          notifyWriteUnavailable()
+        }
+      })
+      .catch((error) => {
+        handleRemoteTerminalError(error)
+      })
   })
+
+  // Why: the pane turns this into remount-based recovery, the same response local PTYs get from `pty:writeUnavailable`.
+  function notifyWriteUnavailable(): void {
+    if (destroyed) {
+      return
+    }
+    storedCallbacks.onWriteUnavailable?.()
+  }
 
   function sendViewportUpdate(cols: number, rows: number, claim = false): void {
     const targetHandle = handle
@@ -1151,6 +1168,11 @@ export function createRemoteRuntimePtyTransport(
     if (isRecoverableRemoteRuntimeConnectionError(toRemoteRuntimeClientErrorLike(error))) {
       // Why: a partition is attachment state, not a terminal failure; keep the red error surface for actionable fatal errors.
       scheduleResubscribeAfterTransportClose()
+      return
+    }
+    if (message.includes('terminal_not_writable')) {
+      // Why: the pane is mirroring a PTY that cannot accept input; remount recovery can rebind it, a red banner cannot.
+      notifyWriteUnavailable()
       return
     }
     connecting = false
@@ -1409,6 +1431,11 @@ export function createRemoteRuntimePtyTransport(
         onDriverChanged: (driver) => {
           if (isCurrentSubscription() && subscribedPtyId) {
             setDriverForPty(subscribedPtyId, driver)
+          }
+        },
+        onWriteUnavailable: () => {
+          if (isCurrentSubscription()) {
+            notifyWriteUnavailable()
           }
         },
         onTransportClose: ({ recoverable }) => {

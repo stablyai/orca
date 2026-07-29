@@ -57,6 +57,8 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onDriverChanged?: (
     driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
   ) => void
+  /** Host proved this stream's input never reached a PTY; the pane owns recovery. */
+  onWriteUnavailable?: () => void
   onTransportClose?: (event: { recoverable: boolean }) => void
 }
 
@@ -324,7 +326,9 @@ class RemoteRuntimeTerminalMultiplexer {
           client: args.client,
           viewport: args.viewport,
           capabilities:
-            args.client.type === 'desktop' ? { ackOutput: 1, desktopViewportClaims: 1 } : undefined
+            args.client.type === 'desktop'
+              ? { ackOutput: 1, desktopViewportClaims: 1, writeUnavailable: 1 }
+              : undefined
         })
       )
       if (!sent) {
@@ -690,6 +694,10 @@ class RemoteRuntimeTerminalMultiplexer {
       } else {
         this.sendDeferredResyncSnapshot(stream)
       }
+      return
+    }
+    if (frame.opcode === TerminalStreamOpcode.WriteUnavailable) {
+      stream.callbacks.onWriteUnavailable?.()
       return
     }
     if (frame.opcode === TerminalStreamOpcode.Error) {

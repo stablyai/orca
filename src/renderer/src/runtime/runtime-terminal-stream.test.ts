@@ -102,12 +102,13 @@ describe('remote runtime terminal data subscriptions', () => {
       subscribeFrame &&
       decodeTerminalStreamJson<{
         streamId: number
-        capabilities?: { ackOutput?: 1; desktopViewportClaims?: 1 }
+        capabilities?: { ackOutput?: 1; desktopViewportClaims?: 1; writeUnavailable?: 1 }
       }>(subscribeFrame.payload)
     expect(subscribePayload?.streamId).toEqual(expect.any(Number))
     expect(subscribePayload?.capabilities).toEqual({
       ackOutput: 1,
-      desktopViewportClaims: 1
+      desktopViewportClaims: 1,
+      writeUnavailable: 1
     })
 
     callbacks?.onBinary?.(
