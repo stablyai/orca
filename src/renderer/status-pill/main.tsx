@@ -12,7 +12,6 @@ import type {
 import { EMPTY_STATUS_PILL_SUMMARY } from '../../shared/status-pill-preload-api'
 import { AgentRowView } from './agent-row'
 import { PendingQuestionCard } from './pending-question-card'
-import { PillDot } from './pill-dot'
 import { buildPanelTitle, pickTone, type Tone } from './status-pill-formatters'
 import { usePillDrag } from './use-pill-drag'
 import { usePillContentRect } from './use-pill-content-rect'
@@ -193,8 +192,10 @@ function StatusPill(): React.JSX.Element {
     }
   }
 
-  const showBar = hovered || expanded
-  const showPanel = expanded && (summary.pendingQuestion !== undefined || rows.length > 0)
+  // Why: Vibe Island / Dynamic Island model — the bar is ALWAYS visible
+  //  (legible at a glance), and the panel unfolds below on hover or when a
+  //  question is pending. No dot/collapsed state.
+  const showPanel = hovered || expanded
 
   return (
     <div
@@ -206,50 +207,31 @@ function StatusPill(): React.JSX.Element {
         setExpanded(false)
       }}
     >
-      {showBar ? (
-        <>
-          <PillBody
-            tone={tone}
-            pulse={pulse}
-            attention={attention}
-            summary={summary}
-            onClick={() => {
-              // Why: a click on the bar brings Orca forward AND unfolds the
-              // panel (the "click -> stack unfolds" mode).
-              window.api?.fireClick()
-              setExpanded(true)
-            }}
-            onContextMenu={(event) => {
-              event.preventDefault()
-              window.api?.fireContextMenu()
-            }}
-          />
-          {showPanel ? (
-            <AgentPanel
-              summary={summary}
-              rows={rows}
-              tone={tone}
-              pulse={pulse}
-              onAnswer={handleAnswer}
-              onFocusPane={(paneKey, worktreeId) =>
-                window.api?.focusPane({ paneKey, worktreeId: worktreeId ?? null })
-              }
-              answeringPaneKey={answeringPaneKey}
-              answerError={answerError}
-            />
-          ) : null}
-        </>
-      ) : (
-        <PillDot
+      <PillBody
+        tone={tone}
+        pulse={pulse}
+        attention={attention}
+        summary={summary}
+        onClick={() => window.api?.fireClick()}
+        onContextMenu={(event) => {
+          event.preventDefault()
+          window.api?.fireContextMenu()
+        }}
+      />
+      {showPanel && (summary.pendingQuestion !== undefined || rows.length > 0) ? (
+        <AgentPanel
+          summary={summary}
+          rows={rows}
           tone={tone}
           pulse={pulse}
-          onClick={() => window.api?.fireClick()}
-          onContextMenu={(event) => {
-            event.preventDefault()
-            window.api?.fireContextMenu()
-          }}
+          onAnswer={handleAnswer}
+          onFocusPane={(paneKey, worktreeId) =>
+            window.api?.focusPane({ paneKey, worktreeId: worktreeId ?? null })
+          }
+          answeringPaneKey={answeringPaneKey}
+          answerError={answerError}
         />
-      )}
+      ) : null}
       <StyleBaseline />
     </div>
   )

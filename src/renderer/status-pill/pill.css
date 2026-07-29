@@ -84,32 +84,6 @@ body {
 }
 
 /* ── Resting Dynamic Island bar ────────────────────── */
-.pill-dot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--island-bg);
-  border: 1px solid var(--border);
-  box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
-    0 10px 26px var(--shadow-color),
-    0 3px 8px var(--shadow-color);
-  cursor: pointer;
-  backdrop-filter: blur(30px) saturate(160%);
-  -webkit-backdrop-filter: blur(30px) saturate(160%);
-  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-.pill-dot:hover {
-  transform: scale(1.08);
-}
-.pill-dot .indicator {
-  width: 10px;
-  height: 10px;
-}
-
 .pill {
   position: relative;
   display: inline-flex;
