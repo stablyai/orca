@@ -12,6 +12,7 @@ import {
   mkdirSync,
   readFileSync,
   realpathSync,
+  rmSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -66,6 +67,15 @@ export function ensureFixture(fixtureDir, options) {
     ['Service Worker', 'CacheStorage'],
     ['terminal-scrollback-snapshots']
   ]
+  // Why: a rebuild writes fileCount files but does not remove the ones already
+  // there, so shrinking the count would leave the surplus on disk and the new
+  // manifest would claim a smaller fixture than exists — misreporting the one
+  // quantity this fixture models. The default fixture path encodes the shape,
+  // so only an explicit --fixture-dir reaches a rebuild in the same directory.
+  // Scoped to the buckets this function owns: --fixture-dir may point anywhere.
+  for (const bucket of buckets) {
+    rmSync(join(fixtureDir, bucket[0]), { recursive: true, force: true })
+  }
   const payload = 'x'.repeat(1024)
   let written = 0
   const started = Date.now()

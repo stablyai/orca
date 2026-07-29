@@ -182,7 +182,10 @@ export function startMainThreadChurnProbe(): void {
       gapsOver250Ms++
       if (stalls.length < MAX_STALLS_PER_REPORT) {
         stalls.push({
-          fromMs: Math.round(previous),
+          // One nominal tick after the previous callback: `gap` already
+          // subtracts TICK_MS, so anchoring at `previous` would report a span
+          // 25ms wider than the stall it names and place its start too early.
+          fromMs: Math.round(previous + TICK_MS),
           toMs: Math.round(now),
           gapMs: Math.round(gap)
         })

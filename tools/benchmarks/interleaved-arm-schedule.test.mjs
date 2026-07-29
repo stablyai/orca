@@ -70,8 +70,10 @@ describe('meanLaunchPositions', () => {
     const baselineMean = observed.slice(0, 8).reduce((sum, v) => sum + v, 0) / 8
     const candidateMean = observed.slice(8).reduce((sum, v) => sum + v, 0) / 8
 
-    // The real gain is -100ms; the blocked design reports it as +-0ms.
-    expect(candidateMean - baselineMean).toBeCloseTo(-100 + driftPerSlot * 8, 10)
+    // The real gain is -100ms. The blocked design reports -20ms: the 8 slots of
+    // drift between the two blocks (+80ms) are charged entirely to the candidate,
+    // erasing four fifths of a real improvement.
+    expect(candidateMean - baselineMean).toBeCloseTo(-20, 10)
   })
 })
 

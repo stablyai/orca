@@ -47,6 +47,12 @@ The run ends with a **drift control** block. It reports the same statistics for 
 
 Only `attributable` licenses a number. A control phase reporting `no-data` is not a quiet machine — it is a control that never fired, which is why it is listed separately rather than counted as agreement.
 
+The JSON also records `completedLaunches` and a `launchOutcomes` breakdown. A run where no launch reached the awaited milestone exits non-zero rather than reporting an absent verdict: that is a broken harness or environment, not an inconclusive measurement.
+
+### Reading a result file that pre-dates these fields
+
+`measurementStatus`, `unmeasuredControlPhases`, `launchOutcomes`, and `completedLaunches` were added after some committed evidence was produced. Files without them — currently `results/startup-lazy-onboarding-ab-*.json` — carry only `driftDetected`, which the rule above deliberately does not accept as a substitute. Reconstruct the status by hand before quoting such a file: look up each name in its `controlPhases` inside `phaseSummaries` and confirm every one is present and not `no-data`. If they all are and `driftDetected` is `false`, the run is what `attributable` now means. If any control phase is missing or `no-data`, it is `controls-unmeasured` and no verdict in it was ever attributable. Regenerating is preferable when the numbers still matter.
+
 ## Design decisions
 
 | Topic | Decision |

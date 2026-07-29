@@ -181,10 +181,16 @@ export function runIteration({ exe, appDir, timeoutMs, lingerMs, waitForEvent, l
         recordLine(line)
       }
     })
-    // Flush before the exit handler so a trailing awaited milestone can still
-    // resolve the launch as 'ok' rather than 'early-exit'.
+    // Why: stderr's 'end' and the child's 'exit' come from different emitters,
+    // so registration order guarantees nothing about which lands first. Flush
+    // inside the exit handler too — before the outcome is locked — otherwise an
+    // exit-first ordering strands a trailing milestone in the buffer and the
+    // launch is recorded as 'early-exit' despite having completed.
     child.stderr.on('end', flushBuffer)
-    child.on('exit', () => finish('early-exit'))
+    child.on('exit', () => {
+      flushBuffer()
+      finish('early-exit')
+    })
     child.on('error', () => finish('spawn-error'))
   })
 }
