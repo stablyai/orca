@@ -30,15 +30,18 @@ function isOrchestrationSkill(skill: DiscoveredSkill): boolean {
   )
 }
 
+// Why: `native-chat-agent-profiles.ts` carries the same rule as `skillSourceOwner`;
+// keep the two in step when an agent starts reading another agent's roots.
 function getSkillSourceOwnerForAgent(agent: TuiAgent): AgentType {
   // Why: both launch Claude Code and therefore consume Claude-owned skill roots.
   return agent === 'claude-agent-teams' || agent === 'openclaude' ? 'claude' : agent
 }
 
-function agentHasOrchestrationSkillFromSources(
+/** `skills` and `sources` must come from the same discovery scan. */
+export function agentHasOrchestrationSkill(
   agent: TuiAgent,
   skills: readonly DiscoveredSkill[],
-  sourcesByPath: ReadonlyMap<string, SkillDiscoverySource>
+  sources: readonly SkillDiscoverySource[]
 ): boolean {
   const owner = getSkillSourceOwnerForAgent(agent)
   return skills.some((skill) => {
@@ -48,27 +51,18 @@ function agentHasOrchestrationSkillFromSources(
     // Why: symlink dedup can merge global and repo installs; each source retains
     // the ownership and scope needed to classify every contributing root.
     const rootPaths = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
-    return rootPaths.some((rootPath) => {
-      const source = sourcesByPath.get(rootPath)
-      return Boolean(
-        source && source.sourceKind !== 'repo' && (source.owner === null || source.owner === owner)
+    return rootPaths.some((rootPath) =>
+      // Why: one path can carry several sources — a workspace whose cwd is the
+      // home dir scans `~/.claude/skills` as both a home and a repo root. Keying
+      // by path would let the repo duplicate shadow the owning home root.
+      sources.some(
+        (source) =>
+          source.path === rootPath &&
+          source.sourceKind !== 'repo' &&
+          (source.owner === null || source.owner === owner)
       )
-    })
+    )
   })
-}
-
-function indexSkillSources(
-  sources: readonly SkillDiscoverySource[]
-): ReadonlyMap<string, SkillDiscoverySource> {
-  return new Map(sources.map((source) => [source.path, source]))
-}
-
-export function agentHasOrchestrationSkill(
-  agent: TuiAgent,
-  skills: readonly DiscoveredSkill[],
-  sources: readonly SkillDiscoverySource[]
-): boolean {
-  return agentHasOrchestrationSkillFromSources(agent, skills, indexSkillSources(sources))
 }
 
 export function sortOrchestrationAgents(agents: readonly TuiAgent[]): TuiAgent[] {
@@ -87,10 +81,9 @@ export function getOrchestrationSkillAgentStatuses(
   detectedAgents: readonly TuiAgent[],
   sources: readonly SkillDiscoverySource[]
 ): OrchestrationSkillAgentStatus[] {
-  const sourcesByPath = indexSkillSources(sources)
   return sortOrchestrationAgents(detectedAgents).map((agent) => ({
     agent,
     label: getAgentLabel(agent),
-    installed: agentHasOrchestrationSkillFromSources(agent, skills, sourcesByPath)
+    installed: agentHasOrchestrationSkill(agent, skills, sources)
   }))
 }

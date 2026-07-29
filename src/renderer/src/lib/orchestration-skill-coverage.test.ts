@@ -232,6 +232,56 @@ describe('orchestration skill agent coverage', () => {
     expect(agentHasOrchestrationSkill('grok', skills, [codexRoot, repoRoot])).toBe(false)
   })
 
+  it('keeps the owning home root when a repo root duplicates its path', () => {
+    // Why: a workspace whose cwd is the home dir scans ~/.claude/skills as both a
+    // home and a repo root, and the repo duplicate sorts last by label.
+    const skills = [
+      skill({
+        providers: ['claude'],
+        sourceKind: 'home',
+        rootPath: '/Users/test/.claude/skills',
+        directoryPath: '/Users/test/.claude/skills/orchestration'
+      })
+    ]
+
+    expect(
+      agentHasOrchestrationSkill('claude', skills, [
+        source('/Users/test/.claude/skills', 'claude'),
+        source('/Users/test/.claude/skills', 'claude', 'repo')
+      ])
+    ).toBe(true)
+  })
+
+  it('leaves an agent uncovered when no source claims the skill root', () => {
+    const skills = [
+      skill({
+        providers: ['claude'],
+        sourceKind: 'home',
+        rootPath: '/Users/test/.claude/skills',
+        directoryPath: '/Users/test/.claude/skills/orchestration'
+      })
+    ]
+
+    expect(agentHasOrchestrationSkill('claude', skills, [])).toBe(false)
+  })
+
+  it('marks OpenClaude from ~/.claude/skills like Claude Code', () => {
+    const skills = [
+      skill({
+        providers: ['claude'],
+        sourceKind: 'home',
+        rootPath: '/Users/test/.claude/skills',
+        directoryPath: '/Users/test/.claude/skills/orchestration'
+      })
+    ]
+
+    expect(
+      agentHasOrchestrationSkill('openclaude', skills, [
+        source('/Users/test/.claude/skills', 'claude')
+      ])
+    ).toBe(true)
+  })
+
   it('marks a multi-segment provider-home agent from a Windows-style path', () => {
     expect(
       agentHasOrchestrationSkill(
