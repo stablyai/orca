@@ -1,7 +1,8 @@
 import path from 'node:path'
-import type { Page } from '@stablyai/playwright-test'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
+import { createRestartSession } from './helpers/orca-restart'
 
 // Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/constants.ts.
 // E2E specs avoid importing renderer/shared modules into the Playwright runner.
@@ -9,14 +10,23 @@ const FLOATING_WORKTREE_ID = 'global-floating-terminal'
 const OPEN_PANEL_SELECTOR = '[data-floating-terminal-panel][aria-hidden="false"]'
 const PANEL_SELECTOR = '[data-floating-terminal-panel]'
 
-async function seedFloatingMarkdownFile(
-  page: Page
-): Promise<{ originalName: string; originalPath: string; renamedName: string; tabId: string }> {
+async function seedFloatingMarkdownFile(page: Page): Promise<{
+  originalName: string
+  originalPath: string
+  intermediateName: string
+  intermediatePath: string
+  renamedName: string
+  renamedPath: string
+  tabId: string
+}> {
   const directory = await page.evaluate(() => window.api.app.getFloatingMarkdownDirectory())
   const suffix = Date.now().toString(36)
   const originalName = `floating-rename-${suffix}.md`
+  const intermediateName = `floating-entered-${suffix}.md`
   const renamedName = `floating-renamed-${suffix}.md`
   const originalPath = path.join(directory, originalName)
+  const intermediatePath = path.join(directory, intermediateName)
+  const renamedPath = path.join(directory, renamedName)
   const tabId = await page.evaluate(
     async ({ filePath, originalName, worktreeId }) => {
       const store = window.__store
@@ -53,7 +63,15 @@ async function seedFloatingMarkdownFile(
     },
     { filePath: originalPath, originalName, worktreeId: FLOATING_WORKTREE_ID }
   )
-  return { originalName, originalPath, renamedName, tabId }
+  return {
+    originalName,
+    originalPath,
+    intermediateName,
+    intermediatePath,
+    renamedName,
+    renamedPath,
+    tabId
+  }
 }
 
 async function openFloatingPanel(page: Page): Promise<void> {
@@ -66,51 +84,120 @@ async function openFloatingPanel(page: Page): Promise<void> {
   await expect(page.locator(OPEN_PANEL_SELECTOR)).toBeVisible()
 }
 
-test('floating workspace Markdown rename updates the tab and file on disk', async ({
-  orcaPage
-}) => {
-  await waitForSessionReady(orcaPage)
-  const seeded = await seedFloatingMarkdownFile(orcaPage)
-  await openFloatingPanel(orcaPage)
+test('floating workspace Markdown renames survive an app restart', async (// oxlint-disable-next-line no-empty-pattern -- This persistence test owns both Electron launches.
+{}, testInfo) => {
+  test.setTimeout(300_000)
+  const session = createRestartSession(testInfo)
+  let firstApp: ElectronApplication | null = null
+  let secondApp: ElectronApplication | null = null
 
-  const panel = orcaPage.locator(OPEN_PANEL_SELECTOR)
-  const tab = panel.locator(`[data-tab-id="${seeded.tabId}"]`)
-  await expect(tab).toContainText(seeded.originalName)
-  await tab.dispatchEvent('contextmenu', { button: 2, clientX: 120, clientY: 80 })
-  const renameMenuItem = orcaPage.getByRole('menuitem').filter({ hasText: 'Rename' }).first()
-  await expect(renameMenuItem).toBeVisible()
-  await renameMenuItem.click()
+  try {
+    const first = await session.launch()
+    firstApp = first.app
+    await waitForSessionReady(first.page)
+    const seeded = await seedFloatingMarkdownFile(first.page)
+    await openFloatingPanel(first.page)
 
-  const renameInput = panel.getByRole('textbox', {
-    name: `Rename file ${seeded.originalName}`,
-    exact: true
-  })
-  await renameInput.fill(seeded.renamedName)
-  await renameInput.press('Enter')
+    const panel = first.page.locator(OPEN_PANEL_SELECTOR)
+    const tab = panel.locator(`[data-tab-id="${seeded.tabId}"]`)
+    await expect(tab).toContainText(seeded.originalName)
+    await tab.click({ button: 'right' })
+    const renameMenuItem = first.page.getByRole('menuitem').filter({ hasText: 'Rename' }).first()
+    await expect(renameMenuItem).toBeVisible()
+    await renameMenuItem.click()
 
-  await expect(tab).toContainText(seeded.renamedName)
-  await expect
-    .poll(() =>
-      orcaPage.evaluate(
-        async ({ renamedName, worktreeId }) => {
-          const file = window.__store
-            ?.getState()
-            .openFiles.find(
-              (candidate) =>
-                candidate.worktreeId === worktreeId && candidate.filePath.endsWith(renamedName)
-            )
-          if (!file) {
-            return null
+    const enterInput = panel.getByRole('textbox', {
+      name: `Rename file ${seeded.originalName}`,
+      exact: true
+    })
+    await enterInput.fill(seeded.intermediateName)
+    await enterInput.press('Enter')
+    await expect(tab).toContainText(seeded.intermediateName)
+
+    await tab.getByText(seeded.intermediateName, { exact: true }).dispatchEvent('dblclick')
+    const blurInput = panel.getByRole('textbox', {
+      name: `Rename file ${seeded.intermediateName}`,
+      exact: true
+    })
+    await blurInput.fill(seeded.renamedName)
+    await panel.locator('[data-floating-terminal-shortcut-surface]').click()
+    await expect(tab).toContainText(seeded.renamedName)
+    await expect
+      .poll(() =>
+        first.page.evaluate(
+          async ({ renamedPath, originalPath, intermediatePath }) => ({
+            content: (await window.api.fs.readFile({ filePath: renamedPath })).content,
+            originalExists: await window.api.fs.pathExists({ filePath: originalPath }),
+            intermediateExists: await window.api.fs.pathExists({ filePath: intermediatePath })
+          }),
+          {
+            renamedPath: seeded.renamedPath,
+            originalPath: seeded.originalPath,
+            intermediatePath: seeded.intermediatePath
           }
-          return (await window.api.fs.readFile({ filePath: file.filePath })).content
-        },
-        { renamedName: seeded.renamedName, worktreeId: FLOATING_WORKTREE_ID }
+        )
       )
-    )
-    .toContain('# Floating rename')
-  await expect
-    .poll(() =>
-      orcaPage.evaluate((filePath) => window.api.fs.pathExists({ filePath }), seeded.originalPath)
-    )
-    .toBe(false)
+      .toEqual({
+        content: '# Floating rename\n',
+        originalExists: false,
+        intermediateExists: false
+      })
+
+    await session.close(firstApp)
+    firstApp = null
+
+    const second = await session.launch()
+    secondApp = second.app
+    await waitForSessionReady(second.page)
+    await openFloatingPanel(second.page)
+
+    const restoredPanel = second.page.locator(OPEN_PANEL_SELECTOR)
+    const restoredTab = restoredPanel.locator('[data-tab-id]').filter({
+      hasText: seeded.renamedName
+    })
+    await expect(restoredTab).toContainText(seeded.renamedName)
+    await expect
+      .poll(() =>
+        second.page.evaluate(
+          async ({ renamedPath, originalPath, intermediatePath, worktreeId }) => {
+            const file = window.__store
+              ?.getState()
+              .openFiles.find(
+                (candidate) =>
+                  candidate.worktreeId === worktreeId && candidate.filePath === renamedPath
+              )
+            return {
+              restoredPath: file?.filePath ?? null,
+              content: (await window.api.fs.readFile({ filePath: renamedPath })).content,
+              originalExists: await window.api.fs.pathExists({ filePath: originalPath }),
+              intermediateExists: await window.api.fs.pathExists({ filePath: intermediatePath })
+            }
+          },
+          {
+            renamedPath: seeded.renamedPath,
+            originalPath: seeded.originalPath,
+            intermediatePath: seeded.intermediatePath,
+            worktreeId: FLOATING_WORKTREE_ID
+          }
+        )
+      )
+      .toEqual({
+        restoredPath: seeded.renamedPath,
+        content: '# Floating rename\n',
+        originalExists: false,
+        intermediateExists: false
+      })
+  } finally {
+    for (const app of [secondApp, firstApp]) {
+      if (!app) {
+        continue
+      }
+      try {
+        await session.close(app)
+      } catch {
+        // best-effort cleanup
+      }
+    }
+    await session.dispose()
+  }
 })
