@@ -48,8 +48,7 @@ export function agentHasOrchestrationSkill(
     if (!isOrchestrationSkill(skill)) {
       return false
     }
-    // Why: symlink dedup can merge global and repo installs; each source retains
-    // the ownership and scope needed to classify every contributing root.
+    // Why: dedup keeps one row, so the roots it absorbed still have to be classified.
     const rootPaths = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
     return rootPaths.some((rootPath) =>
       // Why: one path can carry several sources — a workspace whose cwd is the

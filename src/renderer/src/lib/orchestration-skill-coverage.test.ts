@@ -98,6 +98,26 @@ describe('orchestration skill agent coverage', () => {
     ).toBe(true)
   })
 
+  it('marks Claude from an enabled plugin install', () => {
+    // Why: Claude Code loads skills from enabled plugins, so an owned plugin root
+    // counts the same as the Codex plugin cache does.
+    expect(
+      agentHasOrchestrationSkill(
+        'claude',
+        [
+          skill({
+            providers: ['claude', 'agent-skills'],
+            sourceKind: 'plugin',
+            sourceLabel: 'Claude plugin',
+            rootPath: '/Users/test/.claude/plugins/repos/vendor/pack/skills',
+            directoryPath: '/Users/test/.claude/plugins/repos/vendor/pack/skills/orchestration'
+          })
+        ],
+        [source('/Users/test/.claude/plugins/repos/vendor/pack/skills', 'claude', 'plugin')]
+      )
+    ).toBe(true)
+  })
+
   it('ignores repo-scoped orchestration installs', () => {
     expect(
       agentHasOrchestrationSkill(
