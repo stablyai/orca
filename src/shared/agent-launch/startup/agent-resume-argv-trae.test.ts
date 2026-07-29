@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { isResumableTuiAgent } from '../../agent-session/lifecycle/agent-session-resume'
+import {
+  extractAgentProviderSession,
+  isResumableTuiAgent
+} from '../../agent-session/lifecycle/agent-session-resume'
 import { getAgentResumeArgv } from './agent-resume-argv'
 
 describe('Trae resume argv', () => {
@@ -17,5 +20,12 @@ describe('Trae resume argv', () => {
 
   it('rejects trae resume when the provider session key is not session_id', () => {
     expect(getAgentResumeArgv('trae', { key: 'conversation_id', id: 'x' })).toBeNull()
+  })
+
+  it.each([
+    [{ session_id: 'trae-session' }, { key: 'session_id', id: 'trae-session' }],
+    [{ sessionId: 'trae-camel' }, { key: 'session_id', id: 'trae-camel' }]
+  ] as const)('extracts a Trae provider session from %j', (payload, expected) => {
+    expect(extractAgentProviderSession('trae', payload)).toEqual(expected)
   })
 })
