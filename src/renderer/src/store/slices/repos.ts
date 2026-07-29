@@ -2444,6 +2444,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const target = getActiveRuntimeTarget(
         settingsForRuntimeOwner(get().settings, args.runtimeEnvironmentId)
       )
+      const focusedTarget = getActiveRuntimeTarget(get().settings)
       const result =
         target.kind === 'local'
           ? await window.api.projectGroups.importNested(args)
@@ -2459,15 +2460,22 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               },
               { timeoutMs: 60_000 }
             )
-      const catalogOptions =
-        'runtimeEnvironmentId' in args
-          ? { runtimeEnvironmentId: args.runtimeEnvironmentId }
-          : undefined
-      await get().fetchProjectGroups(catalogOptions)
-      await get().fetchFolderWorkspaces(catalogOptions)
-      await (args.runtimeEnvironmentId
-        ? get().fetchRuntimeEnvironmentRepos(args.runtimeEnvironmentId)
-        : get().fetchRepos(catalogOptions))
+      if (args.runtimeEnvironmentId) {
+        const catalogOptions = { runtimeEnvironmentId: args.runtimeEnvironmentId }
+        await get().fetchProjectGroups(catalogOptions)
+        await get().fetchFolderWorkspaces(catalogOptions)
+        await get().fetchRuntimeEnvironmentRepos(args.runtimeEnvironmentId)
+      } else if (getRuntimeTargetHostId(target) === getRuntimeTargetHostId(focusedTarget)) {
+        await get().fetchProjectGroups()
+        await get().fetchFolderWorkspaces()
+        await get().fetchRepos()
+      } else {
+        // Why: focused-host fetches replace the catalogs wholesale, so an import
+        // routed off the focused host would be refreshed away; merge every host.
+        await get().fetchProjectGroupsForAllHosts()
+        await get().fetchFolderWorkspacesForAllHosts()
+        await get().fetchReposForAllHosts()
+      }
       set({ folderWorkspacePathStatuses: {} })
       return result
     } catch (err) {
