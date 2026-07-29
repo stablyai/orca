@@ -1,11 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   collectMobileBumps,
   defaultLimitForPath,
   diffBaseline,
+  formatPruneSummary,
   hasMaxLinesDisable,
   parseBaseline,
+  planBaselinePrune,
+  printStaleFailure,
   pruneBaseline
 } from './check-max-lines-ratchet.mjs'
 
@@ -151,5 +154,33 @@ describe('diffBaseline', () => {
     expect(pruneBaseline(current, baseline)).toEqual([
       'mobile-config app/h/*/session/*.tsx max=5015'
     ])
+  })
+
+  it('reports stale removals and lowered mobile updates separately', () => {
+    const plan = planBaselinePrune(
+      ['inline current.ts', 'mobile-config app/h/*/session/*.tsx max=5000'],
+      new Set([
+        'inline current.ts',
+        'inline stale.ts',
+        'mobile-config app/h/*/session/*.tsx max=5015'
+      ])
+    )
+    expect(formatPruneSummary(plan)).toBe(
+      'Pruned baseline to 2 entries (removed 1 stale entry; updated 1 lowered mobile ceiling).'
+    )
+  })
+
+  it('explains stale removals separately from lowered mobile baseline updates', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    printStaleFailure(
+      ['inline stale.ts'],
+      [{ glob: 'app/h/*/session/*.tsx', from: 5015, to: 5000 }]
+    )
+    const output = error.mock.calls.map(([message]) => message).join('\n')
+    error.mockRestore()
+
+    expect(output).toContain('These stale entries must be removed to keep re-adding blocked:')
+    expect(output).toContain('These lowered ceilings must update their baseline values:')
+    expect(output).toContain('mobile ceiling dropped from 5015 to 5000')
   })
 })

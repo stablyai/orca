@@ -155,6 +155,23 @@ export function pruneBaseline(current, baseline) {
     .sort()
 }
 
+export function planBaselinePrune(current, baseline) {
+  const { added, stale, increased, lowered } = diffBaseline(current, baseline)
+  return {
+    added,
+    increased,
+    kept: pruneBaseline(current, baseline),
+    lowered,
+    stale
+  }
+}
+
+export function formatPruneSummary({ kept, stale, lowered }) {
+  const staleLabel = stale.length === 1 ? 'entry' : 'entries'
+  const ceilingLabel = lowered.length === 1 ? 'ceiling' : 'ceilings'
+  return `Pruned baseline to ${kept.length} entries (removed ${stale.length} stale ${staleLabel}; updated ${lowered.length} lowered mobile ${ceilingLabel}).`
+}
+
 // Collect every current suppression entry from the tracked tree.
 export function collectCurrentSuppressions(root = process.cwd()) {
   const tracked = execFileSync('git', ['ls-files', '*.ts', '*.tsx', '*.mjs'], {
@@ -229,7 +246,7 @@ function printAddedFailure(added, increased) {
   console.error('')
 }
 
-function printStaleFailure(stale, lowered) {
+export function printStaleFailure(stale, lowered) {
   for (const entry of stale) {
     console.error(`::error::Stale max-lines baseline entry (prune it): ${entry}`)
   }
@@ -238,22 +255,27 @@ function printStaleFailure(stale, lowered) {
   }
   console.error('')
   console.error('╭────────────────────────────────────────────────────────────────────────────╮')
-  console.error('│  ⚠️  max-lines baseline is out of date — nice work removing a bypass!         │')
+  console.error('│  ⚠️  max-lines baseline needs to shrink.                                      │')
   console.error('╰────────────────────────────────────────────────────────────────────────────╯')
   console.error('')
-  const shrinkCount = stale.length + lowered.length
-  console.error(`  ${shrinkCount} max-lines baseline entr(y/ies) can now shrink.`)
-  console.error(
-    '  The baseline may only shrink, so these must be removed to keep re-adding blocked:'
-  )
-  console.error('')
-  for (const entry of stale) {
-    console.error(`    • ${entry}`)
+  if (stale.length > 0) {
+    console.error(`  ${stale.length} stale baseline entr(y/ies) no longer have a suppression.`)
+    console.error('  These stale entries must be removed to keep re-adding blocked:')
+    console.error('')
+    for (const entry of stale) {
+      console.error(`    • ${entry}`)
+    }
+    console.error('')
   }
-  for (const { glob, from, to } of lowered) {
-    console.error(`    • ${glob}\n        ↳ mobile ceiling dropped from ${from} to ${to}`)
+  if (lowered.length > 0) {
+    console.error(`  ${lowered.length} mobile max-lines ceiling(s) decreased.`)
+    console.error('  These lowered ceilings must update their baseline values:')
+    console.error('')
+    for (const { glob, from, to } of lowered) {
+      console.error(`    • ${glob}\n        ↳ mobile ceiling dropped from ${from} to ${to}`)
+    }
+    console.error('')
   }
-  console.error('')
   console.error(`  ✅  Fix it (one command):  pnpm check:max-lines-ratchet --prune`)
   console.error('')
 }
@@ -316,15 +338,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     // Remove stale entries and record mobile ceiling decreases; never add or raise a bypass.
     const current = collectCurrentSuppressions(root)
     const baseline = parseBaseline(fs.readFileSync(path.join(root, BASELINE_PATH), 'utf8'))
-    const { added, increased } = diffBaseline(current, baseline)
-    const kept = pruneBaseline(current, baseline)
-    writeBaseline(root, kept)
-    console.log(
-      `Pruned baseline to ${kept.length} entries (removed ${baseline.size - kept.length}).`
-    )
-    if (added.length > 0 || increased.length > 0) {
+    const plan = planBaselinePrune(current, baseline)
+    writeBaseline(root, plan.kept)
+    console.log(formatPruneSummary(plan))
+    if (plan.added.length > 0 || plan.increased.length > 0) {
       console.error(
-        `::error::--prune does not add entries or raise mobile ceilings; ${added.length + increased.length} policy violation(s) remain — split those files.`
+        `::error::--prune does not add entries or raise mobile ceilings; ${plan.added.length + plan.increased.length} policy violation(s) remain — split those files.`
       )
       process.exit(1)
     }
