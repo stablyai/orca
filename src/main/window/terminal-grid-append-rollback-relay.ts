@@ -42,3 +42,21 @@ export function requestTerminalGridAppendRollback(
     }
   })
 }
+
+export async function rollbackMismatchedTerminalGridAppend(
+  mainWindow: BrowserWindow,
+  identity: { transactionId: string; tabId: string; leafId: string }
+): Promise<never> {
+  const mismatchError = new Error('Terminal grid reply did not match its staged identity')
+  try {
+    // Why: the renderer has already committed this actual identity; remove it
+    // before main rejects and aborts the staged PTY.
+    await requestTerminalGridAppendRollback(mainWindow, identity)
+  } catch (rollbackError) {
+    throw new AggregateError(
+      [mismatchError, rollbackError],
+      `${mismatchError.message}; renderer rollback failed`
+    )
+  }
+  throw mismatchError
+}

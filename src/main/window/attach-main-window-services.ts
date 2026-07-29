@@ -68,7 +68,10 @@ import {
   setWorktreeBaseDirectoryWatcherSyncContext
 } from '../ipc/worktree-base-directory-watcher'
 import { logStartupMilestone } from '../startup/startup-diagnostics'
-import { requestTerminalGridAppendRollback } from './terminal-grid-append-rollback-relay'
+import {
+  requestTerminalGridAppendRollback,
+  rollbackMismatchedTerminalGridAppend
+} from './terminal-grid-append-rollback-relay'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
@@ -424,7 +427,15 @@ function registerRuntimeWindowLifecycle(
             rollbackIdentity &&
             (reply.tabId !== rollbackIdentity.tabId || reply.leafId !== rollbackIdentity.leafId)
           ) {
-            reject(new Error('Terminal grid reply did not match its staged identity'))
+            if (reply.leafId) {
+              void rollbackMismatchedTerminalGridAppend(mainWindow, {
+                transactionId: requestId,
+                tabId: reply.tabId,
+                leafId: reply.leafId
+              }).catch(reject)
+            } else {
+              reject(new Error('Terminal grid reply did not match its staged identity'))
+            }
             return
           }
           resolve({
@@ -444,7 +455,7 @@ function registerRuntimeWindowLifecycle(
         }
         ipcMain.on('terminal:tabCreateReply', handler)
         try {
-          send('ui:createTerminal', {
+          const sent = send('ui:createTerminal', {
             requestId,
             worktreeId,
             ptyId: opts.ptyId,
@@ -472,6 +483,11 @@ function registerRuntimeWindowLifecycle(
               : {}),
             ...(opts.placement !== undefined ? { placement: opts.placement } : {})
           })
+          if (!sent) {
+            clearTimeout(timer)
+            ipcMain.removeListener('terminal:tabCreateReply', handler)
+            reject(new Error('Terminal reveal window is no longer available'))
+          }
         } catch (error) {
           // Why: a synchronous renderer dispatch failure cannot ever receive a
           // reply, so release its request-owned listener and timeout immediately.

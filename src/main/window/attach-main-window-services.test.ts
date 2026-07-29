@@ -1169,6 +1169,21 @@ describe('attachMainWindowServices', () => {
       { sender: mainWindow.webContents },
       { requestId: payload.requestId, tabId: 'tab-grid', leafId: 'leaf-other' }
     )
+    const rollbackPayload = sendMock.mock.calls.find(
+      ([channel]) => channel === 'ui:rollbackTerminalGridAppend'
+    )?.[1]
+    const rollbackReplyHandler = onMock.mock.calls.find(
+      ([channel]) => channel === 'terminal:gridAppendRollbackReply'
+    )?.[1]
+    expect(rollbackPayload).toMatchObject({
+      transactionId: payload.requestId,
+      tabId: 'tab-grid',
+      leafId: 'leaf-other'
+    })
+    rollbackReplyHandler?.(
+      { sender: mainWindow.webContents },
+      { requestId: rollbackPayload.requestId }
+    )
 
     await expect(reveal).rejects.toThrow('did not match its staged identity')
   })

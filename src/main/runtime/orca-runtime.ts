@@ -7577,6 +7577,7 @@ export class OrcaRuntimeService {
     ptyId: string
   ): TerminalLayoutSnapshot {
     const stagedLeafIds = collectTerminalLayoutLeafIds(staged.root)
+    const stagedLeafIdSet = new Set(stagedLeafIds)
     const acknowledgedLeafIds = collectTerminalLayoutLeafIds(acknowledged.root)
     const acknowledgedLeafIdSet = new Set(acknowledgedLeafIds)
     const stagedExistingLeafIds = stagedLeafIds.filter((candidate) => candidate !== leafId)
@@ -7585,6 +7586,7 @@ export class OrcaRuntimeService {
       acknowledged.ptyIdsByLeafId?.[leafId] !== ptyId ||
       acknowledgedLeafIdSet.size !== acknowledgedLeafIds.length ||
       !acknowledgedLeafIdSet.has(leafId) ||
+      acknowledgedLeafIds.some((candidate) => !stagedLeafIdSet.has(candidate)) ||
       (stagedExistingLeafIds.length > 0 &&
         !stagedExistingLeafIds.some((candidate) => acknowledgedLeafIdSet.has(candidate)))
     ) {
@@ -7600,7 +7602,7 @@ export class OrcaRuntimeService {
     ): Record<string, T> | undefined => {
       const records = Object.fromEntries(
         Object.entries({ ...acknowledgedRecords, ...stagedRecords }).filter(([candidate]) =>
-          acknowledgedLeafIdSet.has(candidate)
+          stagedLeafIdSet.has(candidate)
         )
       ) as Record<string, T>
       return Object.keys(records).length > 0 ? records : undefined
@@ -7608,6 +7610,19 @@ export class OrcaRuntimeService {
     const merged: TerminalLayoutSnapshot = {
       ...stagedClone,
       ...acknowledgedClone,
+      // Why: a renderer can be mounted from an older subset; its geometry may
+      // not retire canonical live members from the host-owned grid.
+      root: stagedClone.root,
+      activeLeafId:
+        acknowledgedClone.activeLeafId &&
+        stagedLeafIdSet.has(acknowledgedClone.activeLeafId)
+          ? acknowledgedClone.activeLeafId
+          : stagedClone.activeLeafId,
+      expandedLeafId:
+        acknowledgedClone.expandedLeafId &&
+        stagedLeafIdSet.has(acknowledgedClone.expandedLeafId)
+          ? acknowledgedClone.expandedLeafId
+          : stagedClone.expandedLeafId,
       ptyIdsByLeafId: {
         ...mergeDurableLeafRecords(acknowledgedClone.ptyIdsByLeafId, stagedClone.ptyIdsByLeafId),
         [leafId]: ptyId
