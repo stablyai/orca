@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest'
 import {
   createOsFileOpenRequestQueue,
   extractMarkdownPathsFromArgv,
+  filterExistingFiles,
   isMarkdownFilePath
 } from './os-file-open-requests'
 
@@ -78,5 +82,69 @@ describe('createOsFileOpenRequestQueue', () => {
     queue.enqueue('/Users/x/a.md')
     expect(deliver).not.toHaveBeenCalled()
     expect(queue.drain()).toEqual(['/Users/x/a.md'])
+  })
+})
+
+describe('filterExistingFiles', () => {
+  let tempDir: string
+  let existingFile: string
+  let directoryPath: string
+
+  beforeAll(async () => {
+    tempDir = await mkdir(
+      join(tmpdir(), `orca-test-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+      { recursive: true }
+    )
+    existingFile = join(tempDir, 'test.md')
+    await writeFile(existingFile, 'test content')
+    directoryPath = join(tempDir, 'subdir')
+    await mkdir(directoryPath)
+  })
+
+  afterAll(async () => {
+    await rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('returns existing files', async () => {
+    const result = await filterExistingFiles([existingFile])
+    expect(result).toEqual([existingFile])
+  })
+
+  it('filters out directories', async () => {
+    const result = await filterExistingFiles([directoryPath])
+    expect(result).toEqual([])
+  })
+
+  it('filters out missing paths without rejecting', async () => {
+    const result = await filterExistingFiles(['/nonexistent/path/that/does/not/exist.md'])
+    expect(result).toEqual([])
+  })
+
+  it('preserves input order for existing files', async () => {
+    const file1 = join(tempDir, 'a.md')
+    const file2 = join(tempDir, 'b.md')
+    const file3 = join(tempDir, 'c.md')
+    await writeFile(file1, 'a')
+    await writeFile(file2, 'b')
+    await writeFile(file3, 'c')
+
+    const result = await filterExistingFiles([file3, file1, file2])
+    expect(result).toEqual([file3, file1, file2])
+  })
+
+  it('filters mixed paths, keeping only existing files in order', async () => {
+    const file1 = join(tempDir, 'x.md')
+    const file2 = join(tempDir, 'y.md')
+    await writeFile(file1, 'x')
+    await writeFile(file2, 'y')
+
+    const result = await filterExistingFiles([
+      file1,
+      '/nonexistent.md',
+      directoryPath,
+      file2,
+      '/another/missing.md'
+    ])
+    expect(result).toEqual([file1, file2])
   })
 })
