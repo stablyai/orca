@@ -231,6 +231,8 @@ type PaneCleanupField =
   | 'compositionHandler'
   | 'focusClassSyncCleanup'
   | 'ligaturesAddon'
+  | 'linkifierHoverResetDisposable'
+  | 'linkifierMouseLeaveResetDisposable'
   | 'paneDragCleanup'
   | 'paneMouseEnterHandler'
   | 'panePointerDownHandler'
@@ -287,6 +289,10 @@ function createPaneResourceCleanupLedger(pane: ManagedPaneInternal): PaneCleanup
   trackPaneCleanupField(ledger, pane, 'paneDragCleanup', (cleanup) => cleanup())
   trackPaneCleanupField(ledger, pane, 'focusClassSyncCleanup', (cleanup) => cleanup())
   trackPaneCleanupField(ledger, pane, 'terminalScrollIntentDisposable', (item) => item.dispose())
+  trackPaneCleanupField(ledger, pane, 'linkifierHoverResetDisposable', (item) => item.dispose())
+  trackPaneCleanupField(ledger, pane, 'linkifierMouseLeaveResetDisposable', (item) =>
+    item.dispose()
+  )
   trackPaneCleanupField(ledger, pane, 'arabicShapingJoinerCleanup', (cleanup) => cleanup())
   trackPaneCleanupField(ledger, pane, 'compositionHandler', (handler) => {
     pane.terminal.element?.removeEventListener('compositionstart', handler)
@@ -297,6 +303,7 @@ function createPaneResourceCleanupLedger(pane: ManagedPaneInternal): PaneCleanup
     () => cancelPendingWebglRefresh(pane),
     () => detachPaneFitResizeObserver(pane),
     () => clearPendingSplitScrollRestore(pane),
+    () => cancelDeferredScrollRestore(pane.terminal),
     () => disposeWebgl(pane),
     () => pane.searchAddon.dispose(),
     () => pane.serializeAddon.dispose(),

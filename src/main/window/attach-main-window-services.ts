@@ -444,11 +444,11 @@ function registerRuntimeWindowLifecycle(
         }
         ipcMain.on('terminal:tabCreateReply', handler)
         try {
-          const sent = send('ui:createTerminal', {
+          send('ui:createTerminal', {
             requestId,
             worktreeId,
             ptyId: opts.ptyId,
-            ...(opts.command ? { command: opts.command } : {}),
+            ...(opts.command !== undefined ? { command: opts.command } : {}),
             title: opts.title ?? undefined,
             ...(opts.cwd ? { cwd: opts.cwd } : {}),
             ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
@@ -457,41 +457,25 @@ function registerRuntimeWindowLifecycle(
             ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
             activate: opts.activate !== false,
             ...(opts.presentation ? { presentation: opts.presentation } : {}),
-            // Why: pre-minted tabId from main keeps the renderer's tab id aligned
-            // with the paneKey baked into the PTY env at spawn time, so hook
-            // events route to the right slot.
+            // Why: pre-minted tabId aligns the renderer tab id with the paneKey baked into the PTY env, so hook events route right.
             ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
             ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
             ...(opts.splitFromLeafId !== undefined
               ? { splitFromLeafId: opts.splitFromLeafId }
               : {}),
-            ...(opts.splitSourceLeafIds !== undefined
-              ? { splitSourceLeafIds: opts.splitSourceLeafIds }
-              : {}),
             ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {}),
             ...(opts.splitTelemetrySource !== undefined
               ? { splitTelemetrySource: opts.splitTelemetrySource }
-              : {}),
-            ...(opts.placement ? { placement: opts.placement } : {})
+              : {})
           })
-          if (!sent) {
-            clearTimeout(timer)
-            ipcMain.removeListener('terminal:tabCreateReply', handler)
-            reject(new Error('Terminal reveal window is no longer available'))
-          }
         } catch (error) {
-          // Why: a synchronous webContents failure must not leave the transaction
-          // listener/timer alive after the staged PTY owner receives rejection.
+          // Why: a synchronous renderer dispatch failure cannot ever receive a
+          // reply, so release its request-owned listener and timeout immediately.
           clearTimeout(timer)
           ipcMain.removeListener('terminal:tabCreateReply', handler)
           reject(error)
         }
-      }),
-    resolveLegacyWorkerTerminalRecovery: (paneKey, resolution, ptyId) =>
-      send('agentStatus:legacyWorkerTerminalRecovery', {
-        paneKey,
-        resolution,
-        ...(ptyId ? { ptyId } : {})
+
       }),
     splitTerminal: (tabId, paneRuntimeId, opts) => {
       send('ui:splitTerminal', {
