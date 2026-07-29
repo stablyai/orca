@@ -2573,6 +2573,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // id, same pane) can retire it instead of labeling the new conversation.
         const titleSessionId = entryForGeneratedTitle.providerSession?.id
         // Why: setAgentStatus is high-frequency, so only parse dispatch preambles when a title write is actually possible.
+        // A forced replace already answers that question, so the short-circuit skipping the
+        // session-aware check below is the conclusion, not a missed case.
         const mayWriteGeneratedTitle =
           get().settings?.tabAutoGenerateTitle === true &&
           (shouldReplaceGeneratedTitle ||
