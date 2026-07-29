@@ -10,6 +10,10 @@ import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import { createTerminalNativeOnlyShortcutTracker } from './terminal-native-only-shortcut'
 import {
+  createTerminalImeShortcutGuard,
+  writeTerminalShortcutInPtyOrder
+} from './terminal-ime-shortcut-guard'
+import {
   keybindingMatchesAction,
   type KeybindingOverrides,
   type KeybindingPlatform,
@@ -264,6 +268,7 @@ export function useTerminalKeyboardShortcuts({
     // location from its own keydown event and clear it on keyup.
     let optionKeyLocation = 0
     const nativeOnlyShortcutTracker = createTerminalNativeOnlyShortcutTracker()
+    const imeShortcutGuard = createTerminalImeShortcutGuard()
     const onModifierDown = (e: KeyboardEvent): void => {
       if (e.key === 'Alt') {
         optionKeyLocation = e.location
@@ -313,6 +318,14 @@ export function useTerminalKeyboardShortcuts({
       }
       const keyboardScope = keyboardScopeRef.current
       if (keyboardScope && !keyboardEventBelongsToScope(e, keyboardScope)) {
+        return
+      }
+
+      // Why: an IME's committing press repeats as a second keydown for the same
+      // key, so consuming it here fires the shortcut twice — once before the
+      // composition it commits has even reached the PTY.
+      const imeVerdict = imeShortcutGuard.classifyKeydown(e)
+      if (imeVerdict === 'ime-owned') {
         return
       }
 
@@ -421,18 +434,20 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        const sent = paneTransportsRef.current.get(pane.id)?.sendInput(action.data) === true
-        if (sent) {
-          recordTerminalUserInputForLeaf(tabId, pane.leafId)
-          if (action.data === '\x1b[13;2u') {
-            // Why: this direct shortcut write does not pass through PTY onData,
-            // so no-OSC shells need an explicit post-write confirmation ladder.
-            const binding = panePtyBindingsRef.current.get(pane.id) as
-              | (IDisposable & { requestDroidReconfirmation?: () => void })
-              | undefined
-            binding?.requestDroidReconfirmation?.()
+        writeTerminalShortcutInPtyOrder(imeVerdict, () => {
+          const sent = paneTransportsRef.current.get(pane.id)?.sendInput(action.data) === true
+          if (sent) {
+            recordTerminalUserInputForLeaf(tabId, pane.leafId)
+            if (action.data === '\x1b[13;2u') {
+              // Why: this direct shortcut write does not pass through PTY onData,
+              // so no-OSC shells need an explicit post-write confirmation ladder.
+              const binding = panePtyBindingsRef.current.get(pane.id) as
+                | (IDisposable & { requestDroidReconfirmation?: () => void })
+                | undefined
+              binding?.requestDroidReconfirmation?.()
+            }
           }
-        }
+        })
         return
       }
 
@@ -663,6 +678,7 @@ export function useTerminalKeyboardShortcuts({
       window.removeEventListener('keyup', onNativeOnlyShortcutCompanion, { capture: true })
       window.removeEventListener('beforeinput', onNativeOnlyBeforeInput, { capture: true })
       window.removeEventListener('blur', onNativeOnlyBlur)
+      imeShortcutGuard.dispose()
     }
   }, [
     isActive,

@@ -59,7 +59,7 @@ export type XtermImeKeyboardOptions = {
 
 export const TERMINAL_INTERRUPT_INPUT = '\x03'
 const TERMINAL_MODIFIER_KEYS = new Set(['Alt', 'AltGraph', 'Control', 'Meta', 'Shift'])
-const TERMINAL_IME_OWNED_KEYS = new Set([
+export const TERMINAL_IME_OWNED_KEYS = new Set([
   'ArrowDown',
   'ArrowLeft',
   'ArrowRight',
