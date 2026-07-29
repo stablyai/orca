@@ -756,7 +756,8 @@ forever on any allocated TTY — which includes a normal `ssh` session. Use
 
 To refresh already-installed skills, `orca skills update` mirrors the same
 selection flags (`--skill`, `--all`, `--local`, `--dry-run`) and resolves to
-`npx skills update <names...>` with the same scope flag:
+`npx skills update <names...>` with a matching scope flag — `--global`, or
+`--project` when you pass `--local`:
 
 ```bash
 orca skills update --all                                  # update every bundled skill globally
@@ -764,9 +765,16 @@ orca skills update --skill orca-cli --dry-run             # print the npx comman
 ```
 
 `orca skills update` only refreshes skills that are already installed — it exits
-0 without doing anything for a skill that is missing, so install it first. Both
-commands accept `--json` only together with `--dry-run`; a real run streams the
-`skills` CLI's own non-JSON output.
+0 without doing anything for a skill that is missing, so install it first. More
+generally, a 0 exit means the `skills` CLI ran without erroring, not that it
+wrote anything; read its output to confirm what changed.
+
+`--json` covers the skill listing and `--dry-run`. A real run streams the
+`skills` CLI's own non-JSON output and rejects `--json`.
+
+Both commands install onto the machine that runs them. In an Orca SSH workspace
+or the WSL bridge the `orca` shim forwards commands to the Orca host, so they
+refuse to run there and print the command to run on the machine you want.
 
 ## Troubleshooting
 

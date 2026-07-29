@@ -422,7 +422,7 @@ describe('orca skills CLI', () => {
         '--global',
         '-y'
       ],
-      { stdio: 'inherit' }
+      expect.objectContaining({ stdio: 'inherit' })
     )
   })
 
@@ -585,6 +585,48 @@ describe('orca skills CLI', () => {
       'npx',
       ['--yes', 'skills', 'update', 'alpha', '--project', '-y'],
       expect.objectContaining({ stdio: 'inherit' })
+    )
+  })
+
+  it('refuses a real run when the shell forwards orca to the Orca host', async () => {
+    vi.stubEnv('ORCA_CLI_CWD', '/home/alice/wt')
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['skills', 'install', '--skill', 'alpha'], '/tmp/repo')
+
+    // Why: the SSH relay and WSL bridge run argv on the Orca host, so a real
+    // install there would silently skip the machine the user is sitting on.
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+    expect(String(errorSpy.mock.calls[0]?.[0])).toContain('writes to the machine that runs it')
+  })
+
+  it('still allows --dry-run through the host-forwarding shim', async () => {
+    vi.stubEnv('ORCA_CLI_CWD', '/home/alice/wt')
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+
+    await main(['skills', 'install', '--skill', 'alpha', '--dry-run'], '/tmp/repo')
+
+    expect(stdoutText(stdoutSpy)).toContain('npx --yes skills add')
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBeUndefined()
+  })
+
+  it('puts the resolved npx directory on the child PATH', async () => {
+    const child = createFakeChild()
+    spawnMock.mockReturnValue(child)
+    resolveCliCommandMock.mockReturnValue('/home/alice/.nvm/versions/node/v22/bin/npx')
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    const resultPromise = main(['skills', 'install', '--skill', 'alpha'], '/tmp/repo')
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+    child.emit('exit', 0, null)
+    await resultPromise
+
+    // Why: npx is an `env node` script, so an off-PATH npx exits 127 with no
+    // 'error' event unless node ships alongside it on the child's PATH.
+    expect(spawnMock.mock.calls[0]?.[2]?.env?.PATH?.split(':')[0]).toBe(
+      '/home/alice/.nvm/versions/node/v22/bin'
     )
   })
 

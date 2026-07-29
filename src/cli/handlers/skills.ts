@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process'
 import type { CommandHandler } from '../dispatch'
 import { RuntimeClientError } from '../runtime-client'
+import { delimiter, dirname } from 'node:path'
 import { getRepeatedStringFlag } from '../flags'
-import { resolveCliCommand } from '../../main/codex-cli/command'
+import { getVersionManagerBinPaths, resolveCliCommand } from '../../main/codex-cli/command'
 import { getSpawnArgsForWindows } from '../../main/win32-utils'
 import {
   buildAgentFeatureSkillInstallArgs,
@@ -90,14 +91,42 @@ function resolveSelectedSkillNames(
   return [...canonicalNames].sort()
 }
 
+/** PATH with the resolved npx's own directory first, so its `env node` shebang resolves. */
+function buildNpxPath(resolvedNpx: string): string {
+  const own = dirname(resolvedNpx)
+  const existing = process.env.PATH ?? process.env.Path ?? ''
+  return [own, ...getVersionManagerBinPaths(), existing].filter(Boolean).join(delimiter)
+}
+
 function runNpxSkills(args: string[]): Promise<number> {
   return new Promise((resolve, reject) => {
     // Why: a bare PATH lookup misses nvm/fnm/volta installs, and hardcoding
     // `npx.cmd` both misses `npx.exe` shims and hides a missing npx behind
     // cmd.exe's own exit code, so the friendly error below never fires.
     const resolved = resolveCliCommand('npx')
-    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolved, args)
-    const child = spawn(spawnCmd, spawnArgs, { stdio: 'inherit' })
+    let spawnCmd: string
+    let spawnArgs: string[]
+    try {
+      ;({ spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolved, args))
+    } catch {
+      // Why: the guard rejects cmd metacharacters, and only the resolved npx
+      // path can carry them here — a username like `A&B` puts them in it.
+      reject(
+        new RuntimeClientError(
+          'invalid_environment',
+          `Cannot run npx from "${resolved}": the path contains characters cmd.exe would ` +
+            'reinterpret. Install Node.js somewhere without & | < > ^ " % ! in the path.'
+        )
+      )
+      return
+    }
+    // Why: npx is an `#!/usr/bin/env node` script, so resolving it off PATH is
+    // not enough — without node alongside it the child exits 127 with no
+    // 'error' event and the message below never fires.
+    const child = spawn(spawnCmd, spawnArgs, {
+      stdio: 'inherit',
+      env: { ...process.env, PATH: buildNpxPath(resolved) }
+    })
     // Why: a missing npx/Node on a headless host surfaces as a raw spawn ENOENT;
     // wrap it so the CLI reports an actionable message like every other failure here.
     child.once('error', (error) => {
@@ -184,6 +213,18 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
         'invalid_argument',
         `orca skills ${verb} --json only supports --dry-run. Real ${verb}s stream ` +
           "npx's own output, which isn't JSON."
+      )
+    }
+
+    // Why: every other orca command RPCs into the app, so running on the host is
+    // right for them. This one writes skills to the caller's own disk, and the
+    // SSH relay and WSL bridge both forward argv to the Orca host — installing
+    // there instead would silently skip the machine the user is sitting on.
+    if (process.env.ORCA_CLI_CWD) {
+      throw new RuntimeClientError(
+        'invalid_environment',
+        `orca skills ${verb} writes to the machine that runs it, but this shell forwards ` +
+          `orca to the Orca host. Run this instead, on the machine you want it on:\n  ${command}`
       )
     }
 

@@ -40,8 +40,8 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
       'Installs globally (all projects, adds --global) by default. Use --local to install ' +
         'into the current project instead.',
       'Use --dry-run to print the resolved command without running it.',
-      "--json is only supported with --dry-run; a real install streams npx's own " +
-        'output live, which is not JSON.',
+      'With --json, the skill listing and --dry-run emit JSON; a real install streams ' +
+        "npx's own non-JSON output live and rejects --json.",
       'Omit --skill and --all to list installable skill names.',
       'Intended for headless hosts (SSH, containers, CI) with no desktop Settings UI to copy the install command from.'
     ],
@@ -66,8 +66,8 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
         'update the current project instead.',
       'Only refreshes skills that are already installed; use `orca skills install` first.',
       'Use --dry-run to print the resolved command without running it.',
-      "--json is only supported with --dry-run; a real update streams npx's own " +
-        'output live, which is not JSON.',
+      'With --json, the skill listing and --dry-run emit JSON; a real update streams ' +
+        "npx's own non-JSON output live and rejects --json.",
       'Omit --skill and --all to list updatable skill names.',
       'Intended for headless hosts (SSH, containers, CI) with no desktop Settings UI to copy the update command from.'
     ],
