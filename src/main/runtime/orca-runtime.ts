@@ -27247,7 +27247,7 @@ export class OrcaRuntimeService {
     return Date.now() - completedAtMs <= AGENT_STATUS_STALE_AFTER_MS ? dispatch : undefined
   }
 
-  private getTerminalHandleForPaneKey(paneKey: string): string | null {
+  getTerminalHandleForPaneKey(paneKey: string): string | null {
     const parsed = parsePaneKey(paneKey)
     const leaf = parsed ? this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId)) : undefined
     if (leaf?.ptyId && leaf.connected) {
