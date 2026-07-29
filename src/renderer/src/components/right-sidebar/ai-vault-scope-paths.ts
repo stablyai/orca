@@ -26,15 +26,15 @@ function collectWorkspaceScopePaths(
 
   const priorWorktreeIds = activeWorktree.priorWorktreeIds ?? []
   // Built once instead of rescanning every live worktree per prior id.
-  const worktreeIdByPath =
-    priorWorktreeIds.length > 0 ? buildWorktreeIdByComparisonPath(liveWorktrees) : null
+  const claimedComparisonPaths =
+    priorWorktreeIds.length > 0 ? buildClaimedComparisonPaths(liveWorktrees, activeWorktree) : null
 
   for (const priorWorktreeId of priorWorktreeIds) {
     const parsed = splitWorktreeIdForFilesystem(priorWorktreeId)
     if (!parsed || parsed.repoId !== activeWorktree.repoId) {
       continue
     }
-    if (isAiVaultWorkspaceScopePathClaimed(parsed.worktreePath, activeWorktree, worktreeIdByPath)) {
+    if (isAiVaultWorkspaceScopePathClaimed(parsed.worktreePath, claimedComparisonPaths)) {
       continue
     }
     addAiVaultWorkspaceScopePath(accumulator, parsed.worktreePath)
@@ -139,36 +139,41 @@ function addAiVaultWorkspaceScopePath(accumulator: ScopePathAccumulator, pathVal
   accumulator.paths.push(trimmedPath)
 }
 
-/** Comparison path → owning worktree id, so a claim check is one lookup. */
-function buildWorktreeIdByComparisonPath(
-  liveWorktrees: readonly Pick<Worktree, 'id' | 'path'>[]
-): Map<string, string> {
-  const worktreeIdByPath = new Map<string, string>()
+/**
+ * Comparison paths owned by a worktree *other than* the active one.
+ *
+ * Why exclude the active worktree while building rather than when reading: a
+ * path→id map would otherwise have to pick one owner among duplicates, and
+ * picking the active worktree would mask a real claimant sitting later in the
+ * list. Excluding it up front means any surviving entry is a claim by
+ * definition, which matches the previous `some()` regardless of ordering.
+ */
+function buildClaimedComparisonPaths(
+  liveWorktrees: readonly Pick<Worktree, 'id' | 'path'>[],
+  activeWorktree: Pick<Worktree, 'id'>
+): Set<string> {
+  const claimedPaths = new Set<string>()
   for (const worktree of liveWorktrees) {
+    if (worktree.id === activeWorktree.id) {
+      continue
+    }
     const trimmedPath = worktree.path.trim()
     if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath)) {
       continue
     }
-    // First writer wins, matching the previous `some()` short-circuit order.
-    const comparisonPath = normalizeRuntimePathForComparison(trimmedPath)
-    if (!worktreeIdByPath.has(comparisonPath)) {
-      worktreeIdByPath.set(comparisonPath, worktree.id)
-    }
+    claimedPaths.add(normalizeRuntimePathForComparison(trimmedPath))
   }
-  return worktreeIdByPath
+  return claimedPaths
 }
 
 function isAiVaultWorkspaceScopePathClaimed(
   pathValue: string,
-  activeWorktree: Pick<Worktree, 'id'>,
-  worktreeIdByComparisonPath: Map<string, string> | null
+  claimedComparisonPaths: Set<string> | null
 ): boolean {
   const trimmedPath = pathValue.trim()
-  if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath) || !worktreeIdByComparisonPath) {
+  if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath) || !claimedComparisonPaths) {
     return false
   }
-  const comparisonPath = normalizeRuntimePathForComparison(trimmedPath)
   // AI Vault sessions are keyed by cwd only, so any live worktree now owning this path wins.
-  const owningWorktreeId = worktreeIdByComparisonPath.get(comparisonPath)
-  return owningWorktreeId !== undefined && owningWorktreeId !== activeWorktree.id
+  return claimedComparisonPaths.has(normalizeRuntimePathForComparison(trimmedPath))
 }
