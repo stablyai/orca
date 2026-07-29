@@ -9,6 +9,7 @@ import { buildWslLoginShellCommand } from '../../../../shared/wsl-login-shell-co
 import {
   buildSkillCommandForRuntime,
   buildSkillInstallCommandForRuntime,
+  getAgentSkillTerminalShellOverride,
   getSelectedAgentRuntime,
   getSkillDiscoveryTargetForRuntime
 } from './CliSkillRuntimeSetup'
@@ -29,11 +30,9 @@ function getWslOuterShellScript(command: string): string {
 }
 
 describe('CliSkillRuntimeSetup runtime helpers', () => {
-  const windowsNpxPreflightPrefix =
-    'cmd.exe /d /s /c "where.exe npx.cmd >nul 2>nul & if errorlevel 1 ('
+  const windowsNpxPreflightPrefix = 'cmd.exe /d /s /c "where.exe npx >nul 2>nul & if errorlevel 1 ('
   const windowsNpxGuidance =
-    'echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx, then restart Orca and try again. & echo If Node.js is already installed, add it to PATH before restarting Orca. & exit /b 1'
-  const windowsNpxCommand = (command: string): string => command.replace(/^npx\b/i, 'npx.cmd')
+    'echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx. & echo Then close this terminal and start skill setup again - a new terminal picks up the updated PATH. & exit /b 1'
 
   it('wraps WSL skill installs as a directly runnable selected-distro command', () => {
     const skillCommand = 'npx skills add orchestration --global'
@@ -65,7 +64,7 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     )
 
     expect(command).toContain("wsl.exe -d 'Ubuntu'")
-    expect(command).not.toContain('where.exe npx.cmd')
+    expect(command).not.toContain('where.exe npx')
     expect(decodeWslLoginShellScript(command)).toContain(
       'exec "$_orca_wsl_shell" -ilc \'npx skills add orchestration --global\''
     )
@@ -155,16 +154,14 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
         },
         'win32'
       )
-    ).toBe(
-      `${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${windowsNpxCommand(installCommand)})"`
-    )
+    ).toBe(`${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`)
   })
 
   it('treats missing runtime as a preflighted Windows host fallback for skill installs', () => {
     const installCommand = buildAgentFeatureSkillInstallCommand(['orca-cli', 'orchestration'])
 
     expect(buildSkillCommandForRuntime(installCommand, undefined, 'win32')).toBe(
-      `${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${windowsNpxCommand(installCommand)})"`
+      `${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`
     )
   })
 
@@ -180,9 +177,7 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
         },
         'win32'
       )
-    ).toBe(
-      `${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${windowsNpxCommand(installCommand)})"`
-    )
+    ).toBe(`${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`)
   })
 
   it('treats missing runtime as a preflighted Windows host fallback for skill updates', () => {
@@ -190,9 +185,7 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
 
     expect(
       buildSkillCommandForRuntime('npx skills update orca-cli --global', undefined, 'win32')
-    ).toBe(
-      `${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${windowsNpxCommand(installCommand)})"`
-    )
+    ).toBe(`${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`)
   })
 
   it('keeps non-Windows host skill installs on the direct npx path', () => {
@@ -234,6 +227,39 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
         'win32'
       )
     ).toBe('orca skills list')
+  })
+
+  it('emits a cmd.exe payload that cannot break its own if/else block', () => {
+    const wrapped = buildSkillCommandForRuntime(
+      buildAgentFeatureSkillInstallCommand(['orca-cli', 'orchestration']),
+      { runtime: 'host', label: 'Windows' },
+      'win32'
+    )
+
+    // cmd.exe /s strips only the first and last quote and passes the rest verbatim.
+    expect(wrapped.match(/"/g)).toHaveLength(2)
+    const blocks = /if errorlevel 1 \((.*)\) else \((.*)\)"$/.exec(wrapped)
+    expect(blocks).not.toBeNull()
+    for (const block of [blocks![1], blocks![2]]) {
+      // Any of these would close the block early or redirect inside cmd.exe.
+      expect(block).not.toMatch(/[()"%!^|<>]/)
+    }
+  })
+
+  it('forces PowerShell for the skill terminal when Windows runs a POSIX-family shell', () => {
+    const hostRuntime = { runtime: 'host', label: 'Windows' } as const
+    const overrideFor = (terminalWindowsShell: string): string | undefined =>
+      getAgentSkillTerminalShellOverride(
+        'win32',
+        { ...getDefaultSettings('/tmp'), terminalWindowsShell },
+        hostRuntime
+      )
+
+    // Git Bash rewrites the leading /d /s /c arguments as MSYS paths.
+    expect(overrideFor('git-bash')).toBe('powershell.exe')
+    expect(overrideFor('wsl.exe')).toBe('powershell.exe')
+    expect(overrideFor('cmd.exe')).toBeUndefined()
+    expect(overrideFor('powershell.exe')).toBeUndefined()
   })
 
   it('preserves the selected WSL distro for skill discovery', () => {

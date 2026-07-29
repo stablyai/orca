@@ -8,6 +8,7 @@ import {
   quotePowerShellNativeArgument
 } from '../../../../shared/powershell-native-argument'
 import { buildWslLoginShellCommand } from '../../../../shared/wsl-login-shell-command'
+import { resolveWindowsShellStartupFamily } from '../../../../shared/windows-terminal-shell'
 import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
@@ -143,11 +144,11 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
   }
 
   const missingNpxGuidance =
-    'echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx, then restart Orca and try again. & echo If Node.js is already installed, add it to PATH before restarting Orca. & exit /b 1'
-  const executableCommand = trimmedCommand.replace(/^npx\b/i, 'npx.cmd')
-  // Why: cmd.exe provides one shell-neutral boundary for PowerShell, Command
-  // Prompt, and Git Bash while executing the exact shim that the preflight found.
-  return `cmd.exe /d /s /c "where.exe npx.cmd >nul 2>nul & if errorlevel 1 (${missingNpxGuidance}) else (${executableCommand})"`
+    'echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx. & echo Then close this terminal and start skill setup again - a new terminal picks up the updated PATH. & exit /b 1'
+  // Why: cmd.exe is one shell-neutral boundary for PowerShell and Command
+  // Prompt, and it resolves the bare name through PATHEXT for both the
+  // preflight and the executed command, so shims such as npx.exe still count.
+  return `cmd.exe /d /s /c "where.exe npx >nul 2>nul & if errorlevel 1 (${missingNpxGuidance}) else (${trimmedCommand})"`
 }
 
 function getSkillCommandPlatform(): NodeJS.Platform {
@@ -193,7 +194,11 @@ export function getAgentSkillTerminalShellOverride(
   if (runtime.runtime === 'wsl') {
     return 'powershell.exe'
   }
-  return settings.terminalWindowsShell.toLowerCase() === 'wsl.exe' ? 'powershell.exe' : undefined
+  // Why: generated skill commands are PowerShell/cmd syntax, so a POSIX-family
+  // Windows shell (wsl.exe, Git Bash) would mangle the wrapper we hand it.
+  return resolveWindowsShellStartupFamily(settings.terminalWindowsShell) === 'posix'
+    ? 'powershell.exe'
+    : undefined
 }
 
 export async function ensureWslCliAvailableForAgentSkillTerminal(

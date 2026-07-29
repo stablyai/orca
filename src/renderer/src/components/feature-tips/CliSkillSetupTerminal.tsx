@@ -10,10 +10,14 @@ import { translate } from '@/i18n/i18n'
 
 export function CliSkillSetupTerminal(): React.JSX.Element {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
-  const skillCommand = buildSkillCommandForRuntime(
-    ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND,
-    activeSkillRuntime.agentRuntime
-  )
+  // Why: a repair-required runtime resolves to a WSL distro that is missing, so
+  // fall back to the plain command rather than emitting an unrunnable wsl.exe one.
+  const skillCommand = activeSkillRuntime.installDisabledReason
+    ? ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND
+    : buildSkillCommandForRuntime(
+        ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND,
+        activeSkillRuntime.agentRuntime
+      )
 
   const handleCopySkillCommand = async (): Promise<void> => {
     try {
