@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createWorktreeLinkedPaths } from './worktree-symlinks'
+import { createWorktreeSharedPaths } from './worktree-symlinks'
 import {
   ensureWorktreeSharedSymlinkExclude,
   resolveWorktreeGitCommonDir,
@@ -134,6 +134,23 @@ describe('ensureWorktreeSharedSymlinkExclude', () => {
     expect(readFileSync(excludePath, 'utf8')).toBe('/node_modules\n')
   })
 
+  posixIt('still appends bare rule when only a directory-only pattern exists', async () => {
+    const primary = join(root, 'primary')
+    initRepoWithCommit(primary)
+    const worktree = join(root, 'worktree-dir-only')
+    git(primary, ['worktree', 'add', '--quiet', '-b', 'feature-dir', worktree])
+    symlinkSync(join(primary, '.gitignore'), join(worktree, 'node_modules'))
+
+    const commonDir = (await resolveWorktreeGitCommonDir(worktree))!
+    const excludePath = join(commonDir, 'info', 'exclude')
+    // Directory-only form does not cover symlinks — must still write /node_modules.
+    writeFileSync(excludePath, 'node_modules/\n')
+
+    await ensureWorktreeSharedSymlinkExclude(worktree, ['node_modules'])
+    expect(readFileSync(excludePath, 'utf8')).toContain('/node_modules\n')
+    git(worktree, ['check-ignore', '-q', 'node_modules'])
+  })
+
   posixIt('skips real directories that already match directory-only ignore', async () => {
     const primary = join(root, 'primary')
     initRepoWithCommit(primary)
@@ -153,7 +170,7 @@ describe('ensureWorktreeSharedSymlinkExclude', () => {
   })
 
   posixIt(
-    'materialize path writes exclude so git add -A cannot stage the absolute-path symlink',
+    'shared-path materialize writes exclude so git add -A cannot stage the absolute-path symlink',
     async () => {
       const primary = join(root, 'primary')
       initRepoWithCommit(primary)
@@ -163,7 +180,9 @@ describe('ensureWorktreeSharedSymlinkExclude', () => {
       mkdirSync(join(primary, 'node_modules'))
       writeFileSync(join(primary, 'node_modules', 'pkg.js'), 'secret')
 
-      await createWorktreeLinkedPaths(primary, worktree, ['node_modules'], {
+      // Why: exclude widening is scoped to sharedDirectories (createWorktreeSharedPaths),
+      // not every generic linked path.
+      await createWorktreeSharedPaths(primary, worktree, ['node_modules'], {
         platform: 'linux'
       })
 

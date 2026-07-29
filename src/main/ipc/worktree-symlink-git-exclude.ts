@@ -1,13 +1,6 @@
 import { appendFile, lstat, mkdir, readFile, stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 
-/**
- * Root-anchored pattern with no trailing slash.
- *
- * Why: directory-only rules (`node_modules/`) match real directories but not the
- * worktree shared-dir symlink Git treats as a file, so `git add -A` can stage a
- * mode-120000 blob whose content is the absolute primary path (issue #11077).
- */
 /** Normalize a worktree-relative shared path for filesystem lookup. */
 function normalizeSharedRelativePath(relativePath: string): string | null {
   // Why: do not trim trailing spaces — they can be part of a real basename.
@@ -36,6 +29,13 @@ function escapeGitignoreLiteralSegment(segment: string): string {
     .replace(/ /g, '\\ ')
 }
 
+/**
+ * Root-anchored pattern with no trailing slash.
+ *
+ * Why: directory-only rules (`node_modules/`) match real directories but not the
+ * worktree shared-dir symlink Git treats as a file, so `git add -A` can stage a
+ * mode-120000 blob whose content is the absolute primary path (issue #11077).
+ */
 export function sharedSymlinkExcludePattern(relativePath: string): string | null {
   const rel = normalizeSharedRelativePath(relativePath)
   if (!rel) {
@@ -45,8 +45,10 @@ export function sharedSymlinkExcludePattern(relativePath: string): string | null
 }
 
 function excludePatternAlreadyListed(content: string, pattern: string): boolean {
+  // Why: only exact bare/`/`-anchored forms cover symlinks. Directory-only
+  // `name/` must NOT count as already listed — that is the bug this PR fixes.
   const bare = pattern.startsWith('/') ? pattern.slice(1) : pattern
-  const candidates = new Set([pattern, `${pattern}/`, bare, `${bare}/`])
+  const candidates = new Set([pattern, bare])
   return content
     .split(/\r?\n/)
     .map((line) => line.trim())

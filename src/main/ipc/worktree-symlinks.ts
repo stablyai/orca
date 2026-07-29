@@ -264,16 +264,6 @@ export async function createWorktreeLinkedPaths(
   options: WorktreeLinkedPathOptions = {}
 ): Promise<void> {
   await materializeWorktreePaths(primaryPath, worktreePath, paths, 'link', options)
-  // Why: directory-only ignore misses shared-dir symlinks; cover them in
-  // info/exclude so `git add -A` cannot stage absolute-path mode-120000 blobs.
-  try {
-    await ensureWorktreeSharedSymlinkExclude(worktreePath, paths)
-  } catch (error) {
-    console.warn(
-      `[worktree-symlinks] Failed to ignore shared-directory symlinks against git add -A:`,
-      error
-    )
-  }
 }
 
 /** Copy includes independently, isolate per-path failures, and report budget refusals to the creator. */
@@ -294,6 +284,17 @@ export async function createWorktreeSharedPaths(
   options: WorktreeLinkedPathOptions = {}
 ): Promise<void> {
   await materializeWorktreePaths(primaryPath, worktreePath, paths, 'share', options)
+  // Why: only sharedDirectories need the exclude widen — generic linked paths
+  // (e.g. .worktreeinclude) must not all land in info/exclude. Directory-only
+  // ignore misses shared-dir symlinks so git add -A can stage mode-120000 blobs.
+  try {
+    await ensureWorktreeSharedSymlinkExclude(worktreePath, paths)
+  } catch (error) {
+    console.warn(
+      `[worktree-symlinks] Failed to ignore shared-directory symlinks against git add -A:`,
+      error
+    )
+  }
 }
 
 /** Link configured relative paths, creating nested parents and isolating per-path failures. */
