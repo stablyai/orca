@@ -16,3 +16,7 @@ export function getRendererAppPlatform(): NodeJS.Platform {
   }
   return 'win32'
 }
+
+export function isMacOs(): boolean {
+  return getRendererAppPlatform() === 'darwin'
+}

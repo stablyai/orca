@@ -8,7 +8,7 @@ import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
 } from '../../../../shared/modifier-double-tap-detector'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/quick-commands-menu-events'
 import { useAppStore } from '@/store'
 
@@ -48,7 +48,7 @@ export function useTabBarQuickCommandsShortcut({
     if (activeView !== 'terminal') {
       return
     }
-    const platform = getShortcutPlatform()
+    const platform = getRendererAppPlatform()
     const doubleTapDetector = new ModifierDoubleTapDetector()
     const matchesShortcut = (input: KeybindingInput, target: EventTarget | null): boolean => {
       const context = getQuickCommandsShortcutContext(target)

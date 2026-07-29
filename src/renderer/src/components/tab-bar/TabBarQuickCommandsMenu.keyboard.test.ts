@@ -58,8 +58,8 @@ vi.mock('../../../../shared/keybindings', () => ({
   keybindingMatchesAction: keybindingsMock.matchAction
 }))
 
-vi.mock('@/lib/shortcut-platform', () => ({
-  getShortcutPlatform: () => 'darwin' as const
+vi.mock('@/lib/renderer-app-platform', () => ({
+  getRendererAppPlatform: () => 'darwin' as const
 }))
 
 vi.mock('@/store', () => ({

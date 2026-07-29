@@ -7,8 +7,8 @@ const shortcutState = vi.hoisted(() => ({
   platform: 'darwin' as NodeJS.Platform
 }))
 
-vi.mock('@/lib/shortcut-platform', () => ({
-  getShortcutPlatform: () => shortcutState.platform
+vi.mock('@/lib/renderer-app-platform', () => ({
+  getRendererAppPlatform: () => shortcutState.platform
 }))
 
 vi.mock('@/store', () => ({

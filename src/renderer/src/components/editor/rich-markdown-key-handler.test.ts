@@ -4,10 +4,10 @@ import StarterKit from '@tiptap/starter-kit'
 import { createIsolatedMarkdownExtensionForTests } from './isolated-markdown-extension-for-tests'
 import { createRichMarkdownKeyHandler, type KeyHandlerContext } from './rich-markdown-key-handler'
 
-// Why: keybinding matching resolves the platform from navigator.userAgent,
-// which is environment-dependent under vitest; pin it for determinism.
-vi.mock('@/lib/shortcut-platform', () => ({
-  getShortcutPlatform: () => 'darwin' as NodeJS.Platform
+// Why: keybinding matching resolves the platform through the preload-aware
+// renderer platform module; pin it for deterministic shortcut coverage.
+vi.mock('@/lib/renderer-app-platform', () => ({
+  getRendererAppPlatform: () => 'darwin' as NodeJS.Platform
 }))
 
 const extensions = [StarterKit, createIsolatedMarkdownExtensionForTests()]

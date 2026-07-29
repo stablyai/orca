@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { installTerminalImeCompositionTracker } from '@/components/terminal-pane/terminal-ime-composition-tracker'
 import { installTerminalImeNativeTextForwarder } from '@/components/terminal-pane/terminal-ime-native-text-forwarder'
 import { getMacNativeTextInputSourceTracker } from '@/components/terminal-pane/terminal-ime-input-source'
@@ -18,7 +18,7 @@ export type PreviewImeBridge = {
  * TerminalPane's forwarder, macOS-only like the pane's install.
  */
 export function installPreviewImeBridge(terminal: Terminal): PreviewImeBridge | null {
-  if (getShortcutPlatform() !== 'darwin') {
+  if (getRendererAppPlatform() !== 'darwin') {
     return null
   }
   // Why: prewarm the async input-source lookup before the first native-text key needs classification.

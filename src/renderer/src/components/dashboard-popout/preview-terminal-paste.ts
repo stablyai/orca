@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import {
   executeTerminalPastePlan,
   planTerminalPasteWithYield
@@ -38,7 +38,7 @@ export function createPreviewClipboardPaster(deps: {
     if (!targetIsCurrent()) {
       return
     }
-    const platform = getShortcutPlatform()
+    const platform = getRendererAppPlatform()
     const plan = await planTerminalPasteWithYield({
       text,
       source,

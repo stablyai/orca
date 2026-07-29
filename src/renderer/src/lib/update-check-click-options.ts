@@ -1,10 +1,10 @@
 import type { UpdateCheckOptions } from '../../../shared/types'
-import { getShortcutPlatform } from './shortcut-platform'
+import { isMacOs } from './renderer-app-platform'
 
 type UpdateCheckClickEvent = Pick<MouseEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>
 
 function isMacShortcutPlatform(): boolean {
-  return getShortcutPlatform() === 'darwin'
+  return isMacOs()
 }
 
 export function getUpdateCheckHint(isMac = isMacShortcutPlatform()): string {

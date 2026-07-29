@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react'
 import type { JSX, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
-import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { translate } from '@/i18n/i18n'
 
 // Why: the visual leans on direct DOM mutation (typing into a node, swapping
@@ -275,7 +275,7 @@ function SlashRow(props: {
 
 export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Element {
   const { reducedMotion } = props
-  const editorShortcutPrefix = getShortcutPlatform() === 'darwin' ? '⌘' : 'Ctrl+'
+  const editorShortcutPrefix = getRendererAppPlatform() === 'darwin' ? '⌘' : 'Ctrl+'
   const boldShortcutLabel = `${editorShortcutPrefix}B`
   const italicShortcutLabel = `${editorShortcutPrefix}I`
 

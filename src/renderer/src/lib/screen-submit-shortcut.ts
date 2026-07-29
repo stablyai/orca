@@ -1,4 +1,4 @@
-import { getShortcutPlatform } from './shortcut-platform'
+import { getRendererAppPlatform } from './renderer-app-platform'
 
 type ScreenSubmitShortcutEvent = {
   key: string
@@ -21,16 +21,16 @@ export function isScreenSubmitShortcut(event: ScreenSubmitShortcutEvent): boolea
   }
   // Why: screen submit is form-local behavior, so it stays fixed to the
   // platform convention instead of reading user-configurable app keybindings.
-  const platform = getShortcutPlatform()
+  const platform = getRendererAppPlatform()
   return platform === 'darwin'
     ? Boolean(event.metaKey) && !event.ctrlKey
     : Boolean(event.ctrlKey) && !event.metaKey
 }
 
 export function getScreenSubmitModifierLabel(): string {
-  return getShortcutPlatform() === 'darwin' ? '⌘' : 'Ctrl'
+  return getRendererAppPlatform() === 'darwin' ? '⌘' : 'Ctrl'
 }
 
 export function getScreenSubmitShortcutLabel(): string {
-  return getShortcutPlatform() === 'darwin' ? '⌘ Enter' : 'Ctrl+Enter'
+  return getRendererAppPlatform() === 'darwin' ? '⌘ Enter' : 'Ctrl+Enter'
 }

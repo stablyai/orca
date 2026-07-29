@@ -83,7 +83,7 @@ import {
 } from '@/lib/windows-terminal-capabilities'
 import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import {
   isWebClientLocation,
@@ -610,7 +610,9 @@ function Settings(): React.JSX.Element {
       if (event.defaultPrevented) {
         return
       }
-      if (!keybindingMatchesAction('settings.search', event, getShortcutPlatform(), keybindings)) {
+      if (
+        !keybindingMatchesAction('settings.search', event, getRendererAppPlatform(), keybindings)
+      ) {
         return
       }
       const input = searchInputRef.current

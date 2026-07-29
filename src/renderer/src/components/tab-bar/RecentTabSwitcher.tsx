@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { FileText, GitCompare, Globe2, TerminalSquare } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { activateCyclableTab } from '../../hooks/ipc-tab-switch'
-import { getShortcutPlatform } from '../../hooks/useShortcutLabel'
+import { getRendererAppPlatform } from '../../lib/renderer-app-platform'
 import {
   isRecentTabSwitcherCommitRelease,
   matchesRecentTabSwitcherChord
@@ -113,7 +113,7 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       const store = useAppStore.getState()
-      if (matchesRecentTabSwitcherChord(event, getShortcutPlatform(), store.keybindings)) {
+      if (matchesRecentTabSwitcherChord(event, getRendererAppPlatform(), store.keybindings)) {
         // Why: Electron's native before-input-event path is authoritative, but
         // CDP/test-dispatched keys can reach the renderer directly. Respect the
         // keybinding registry here too so tests do not bypass user customization.
