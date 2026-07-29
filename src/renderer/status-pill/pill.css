@@ -340,7 +340,9 @@ body {
 
 .agent-list {
   padding: 6px 0 10px;
-  max-height: 560px;
+  /* Why: no fixed height cap — the panel grows to fit every agent and the
+     window follows via statusPill:resize. overflow-y stays as a safety net
+     only for the degenerate case where the list outgrows the screen. */
   overflow-y: auto;
 }
 
