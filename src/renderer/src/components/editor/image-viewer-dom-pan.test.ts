@@ -106,15 +106,12 @@ describe('image viewer DOM pan', () => {
 
   it.each([
     ['pointercancel', 'pointercancel'],
-    ['blur', 'blur'],
     ['lostpointercapture', 'lostpointercapture']
   ] as const)('cleans up on %s', (eventType, reason) => {
     const { onEnd, ownerWindow, surface } = createGesture()
 
     if (eventType === 'lostpointercapture') {
       surface.dispatch(eventType, pointerEvent(7))
-    } else if (eventType === 'blur') {
-      ownerWindow.dispatch(eventType)
     } else {
       ownerWindow.dispatch(eventType, pointerEvent(7))
     }

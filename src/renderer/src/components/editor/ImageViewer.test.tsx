@@ -132,13 +132,17 @@ function findPreviewImage(node: unknown): ReactElementLike {
   return image
 }
 
-async function renderExpandedImageViewer(content: string): Promise<unknown> {
+async function renderExpandedImageViewer(
+  content: string,
+  layout: 'fill' | 'intrinsic' = 'fill'
+): Promise<unknown> {
   reactHookRuntime.index = 0
   const module = await import('./ImageViewer')
   return expandNode(
     module.default({
       content,
       filePath: '/repo/preview.png',
+      layout,
       mimeType: 'image/png'
     })
   )
@@ -194,7 +198,7 @@ describe('ImageViewer preview source retry', () => {
     expect(findElementsByType(rendered, 'img')).toHaveLength(0)
   })
 
-  it('binds panning to both surfaces and disables native image dragging', async () => {
+  it('binds panning to both scrollable surfaces and disables native image dragging', async () => {
     const rendered = await renderExpandedImageViewer(pngBase64(1))
     const panSurfaces = findElementsByType(rendered, 'div').filter(
       (element) => element.props.onPointerDown && element.props.onClickCapture
@@ -211,5 +215,25 @@ describe('ImageViewer preview source retry', () => {
     for (const image of findElementsByType(rendered, 'img')) {
       expect(image.props.draggable).toBe(false)
     }
+  })
+
+  it('keeps intrinsic inline layout clickable without disabling popup panning', async () => {
+    const rendered = await renderExpandedImageViewer(pngBase64(1), 'intrinsic')
+    const inlineSurface = findElementsByType(rendered, 'div').find(
+      (element) => element.props.title === 'Open image in popup'
+    )
+    if (!inlineSurface) {
+      throw new Error('inline image surface not found')
+    }
+    const panSurfaces = findElementsByType(rendered, 'div').filter(
+      (element) => element.props.onPointerDown && element.props.onClickCapture
+    )
+
+    expect(inlineSurface.props.onClick).toBeTypeOf('function')
+    expect(inlineSurface.props.onClickCapture).toBeUndefined()
+    expect(inlineSurface.props.onPointerDown).toBeUndefined()
+    expect(inlineSurface.props.onPointerEnter).toBeUndefined()
+    expect(inlineSurface.props.onPointerLeave).toBeUndefined()
+    expect(panSurfaces).toHaveLength(1)
   })
 })

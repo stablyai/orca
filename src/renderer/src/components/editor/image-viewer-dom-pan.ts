@@ -58,7 +58,6 @@ export function beginImageViewerPan({
     ownerWindow.removeEventListener('pointermove', handlePointerMove)
     ownerWindow.removeEventListener('pointerup', handlePointerUp)
     ownerWindow.removeEventListener('pointercancel', handlePointerCancel)
-    ownerWindow.removeEventListener('blur', handleWindowBlur)
     surface.removeEventListener('lostpointercapture', handleLostPointerCapture)
     onDraggingChange(false)
     onEnd({ didDrag, reason, trigger })
@@ -104,8 +103,6 @@ export function beginImageViewerPan({
     }
   }
 
-  const handleWindowBlur = (): void => cleanup('blur')
-
   onDraggingChange(true)
   try {
     surface.setPointerCapture(pointerId)
@@ -115,7 +112,6 @@ export function beginImageViewerPan({
   ownerWindow.addEventListener('pointermove', handlePointerMove)
   ownerWindow.addEventListener('pointerup', handlePointerUp)
   ownerWindow.addEventListener('pointercancel', handlePointerCancel)
-  ownerWindow.addEventListener('blur', handleWindowBlur)
   surface.addEventListener('lostpointercapture', handleLostPointerCapture)
 
   return cleanup

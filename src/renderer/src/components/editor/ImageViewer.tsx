@@ -61,6 +61,7 @@ export default function ImageViewer({
   }
   const isPdf = mimeType === 'application/pdf'
   const isIntrinsicLayout = layout === 'intrinsic'
+  const inlinePan = isIntrinsicLayout ? null : imagePan
   const previewSrc = useMemo(
     () => buildImageDataUri(mimeType, cleanedContent),
     [cleanedContent, mimeType]
@@ -255,16 +256,16 @@ export default function ImageViewer({
           ref={setInlineSurfaceRef}
           className={cn(
             'bg-muted/20',
-            imagePan.cursorClassName ?? 'cursor-pointer',
+            inlinePan?.cursorClassName ?? 'cursor-pointer',
             isIntrinsicLayout
               ? 'flex justify-center overflow-visible p-4'
               : 'flex-1 overflow-auto scrollbar-editor'
           )}
           onClick={openPopup}
-          onClickCapture={imagePan.onClickCapture}
-          onPointerDown={imagePan.onPointerDown}
-          onPointerEnter={imagePan.onPointerEnter}
-          onPointerLeave={imagePan.onPointerLeave}
+          onClickCapture={inlinePan?.onClickCapture}
+          onPointerDown={inlinePan?.onPointerDown}
+          onPointerEnter={inlinePan?.onPointerEnter}
+          onPointerLeave={inlinePan?.onPointerLeave}
           title={translate('auto.components.editor.ImageViewer.77bfc9b35a', 'Open image in popup')}
         >
           <div
