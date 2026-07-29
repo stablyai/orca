@@ -11,13 +11,13 @@ import { translate } from '@/i18n/i18n'
 export function CliSkillSetupTerminal(): React.JSX.Element {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   // Why: a repair-required runtime resolves to a WSL distro that is missing, so
-  // fall back to the plain command rather than emitting an unrunnable wsl.exe one.
-  const skillCommand = activeSkillRuntime.installDisabledReason
-    ? ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND
-    : buildSkillCommandForRuntime(
-        ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND,
-        activeSkillRuntime.agentRuntime
-      )
+  // drop back to the host runtime. This terminal auto-pastes with no install
+  // gate, and repair-required only happens on Windows, so it still needs the
+  // npx preflight.
+  const skillCommand = buildSkillCommandForRuntime(
+    ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND,
+    activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime
+  )
 
   const handleCopySkillCommand = async (): Promise<void> => {
     try {

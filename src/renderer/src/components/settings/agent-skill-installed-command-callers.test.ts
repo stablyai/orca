@@ -64,7 +64,10 @@ const updateCapableCallers = new Map<string, readonly string[]>([
     [
       'ORCA_CLI_SKILL_UPDATE_COMMAND',
       'installedCommand={cliSkillUpdateCommand}',
-      'terminalShellOverride={activeSkillRuntime.terminalShellOverride}'
+      'terminalShellOverride={activeSkillRuntime.terminalShellOverride}',
+      // Detection here scans the local host only, so the command must stay host-built.
+      'buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND)',
+      'buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND)'
     ]
   ]
 ])
@@ -73,7 +76,8 @@ const installOnlyCallers = new Map<string, readonly string[]>([
   [
     'src/renderer/src/components/emulator-pane/MobileEmulatorAgentSetupGuideSteps.tsx',
     [
-      'buildSkillCommandForRuntime(',
+      // Detection here scans the local host only, so the command must stay host-built.
+      'buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND)',
       'command={skillInstallCommand}',
       'terminalShellOverride={activeSkillRuntime.terminalShellOverride}',
       'showInstallWhenInstalled={!setup.cliSkillInstalled}'
