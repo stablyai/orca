@@ -1,10 +1,16 @@
+import type { App } from 'electron'
 import { stat } from 'node:fs/promises'
-import { extname, isAbsolute } from 'node:path'
+import { extname } from 'node:path'
 
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown'])
+// Why: the test host's path flavor must not decide whether a Windows path counts as absolute.
+const ABSOLUTE_PATH_PATTERN = /^(?:\/|\\\\|[A-Za-z]:[\\/])/
 
 export function isMarkdownFilePath(candidate: string): boolean {
-  return isAbsolute(candidate) && MARKDOWN_EXTENSIONS.has(extname(candidate).toLowerCase())
+  return (
+    ABSOLUTE_PATH_PATTERN.test(candidate) &&
+    MARKDOWN_EXTENSIONS.has(extname(candidate).toLowerCase())
+  )
 }
 
 export function extractMarkdownPathsFromArgv(argv: readonly string[]): string[] {
@@ -55,4 +61,24 @@ export async function filterExistingFiles(paths: readonly string[]): Promise<str
     })
   )
   return results.filter((entry): entry is string => entry !== null)
+}
+
+export function registerOsFileOpenRequests(options: {
+  app: Pick<App, 'on'>
+  queue: OsFileOpenRequestQueue
+  platform: NodeJS.Platform
+  argv: readonly string[]
+}): void {
+  const { app, argv, platform, queue } = options
+  if (platform === 'darwin') {
+    // Why: macOS delivers open-file before app.ready, so this must run at module load — not inside whenReady.
+    app.on('open-file', (event, filePath) => {
+      event.preventDefault()
+      queue.enqueue(filePath)
+    })
+    return
+  }
+  for (const filePath of extractMarkdownPathsFromArgv(argv)) {
+    queue.enqueue(filePath)
+  }
 }

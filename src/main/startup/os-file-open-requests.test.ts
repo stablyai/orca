@@ -6,7 +6,8 @@ import {
   createOsFileOpenRequestQueue,
   extractMarkdownPathsFromArgv,
   filterExistingFiles,
-  isMarkdownFilePath
+  isMarkdownFilePath,
+  registerOsFileOpenRequests
 } from './os-file-open-requests'
 
 describe('isMarkdownFilePath', () => {
@@ -146,5 +147,75 @@ describe('filterExistingFiles', () => {
       '/another/missing.md'
     ])
     expect(result).toEqual([file1, file2])
+  })
+})
+
+type OpenFileHandler = (event: { preventDefault: () => void }, filePath: string) => void
+
+function createFakeApp(): { on: ReturnType<typeof vi.fn>; fire: (filePath: string) => boolean } {
+  const handlers: OpenFileHandler[] = []
+  const on = vi.fn((eventName: string, handler: OpenFileHandler) => {
+    if (eventName === 'open-file') {
+      handlers.push(handler)
+    }
+  })
+  return {
+    on,
+    fire(filePath) {
+      let defaultPrevented = false
+      for (const handler of handlers) {
+        handler({ preventDefault: () => (defaultPrevented = true) }, filePath)
+      }
+      return defaultPrevented
+    }
+  }
+}
+
+describe('registerOsFileOpenRequests', () => {
+  it('routes macOS open-file events into the queue and prevents the default', () => {
+    const queue = createOsFileOpenRequestQueue()
+    const app = createFakeApp()
+    registerOsFileOpenRequests({ app, queue, platform: 'darwin', argv: [] })
+
+    expect(app.fire('/Users/x/a.md')).toBe(true)
+    expect(queue.drain()).toEqual(['/Users/x/a.md'])
+  })
+
+  it('ignores argv on macOS so a double-registered path is not queued twice', () => {
+    const queue = createOsFileOpenRequestQueue()
+    const app = createFakeApp()
+    registerOsFileOpenRequests({
+      app,
+      queue,
+      platform: 'darwin',
+      argv: ['/Applications/Orca', '/Users/x/a.md']
+    })
+    expect(queue.drain()).toEqual([])
+  })
+
+  it('reads argv on win32 and does not subscribe to open-file', () => {
+    const queue = createOsFileOpenRequestQueue()
+    const app = createFakeApp()
+    registerOsFileOpenRequests({
+      app,
+      queue,
+      platform: 'win32',
+      argv: ['C:\\Orca.exe', 'C:\\Users\\x\\a.md']
+    })
+
+    expect(app.on).not.toHaveBeenCalled()
+    expect(queue.drain()).toEqual(['C:\\Users\\x\\a.md'])
+  })
+
+  it('reads argv on linux', () => {
+    const queue = createOsFileOpenRequestQueue()
+    const app = createFakeApp()
+    registerOsFileOpenRequests({
+      app,
+      queue,
+      platform: 'linux',
+      argv: ['/opt/orca/orca', '/home/x/a.md']
+    })
+    expect(queue.drain()).toEqual(['/home/x/a.md'])
   })
 })
