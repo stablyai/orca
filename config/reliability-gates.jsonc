@@ -17,6 +17,103 @@
   },
   "gates": [
     {
+      "id": "mobile-ui.drawer-close-continuity",
+      "title": "Mobile drawers finish closing despite parent rerenders",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "mobile-ui",
+      "layer": "react-native-modal-lifecycle",
+      "surfaces": [
+        "host action sheet",
+        "host rename navigation",
+        "host removal confirmation",
+        "shared mobile bottom drawers"
+      ],
+      "platforms": [
+        "ios",
+        "android",
+        "macos"
+      ],
+      "providers": [
+        "provider-independent"
+      ],
+      "coveredPlatforms": [
+        "ios",
+        "macos"
+      ],
+      "coveredProviders": [
+        "provider-independent"
+      ],
+      "coverageNotes": "A deterministic React lifecycle test proves callback churn cannot restart an in-flight drawer close, and an iOS 26.5 simulator run covers Edit Host plus confirmed host removal. Android native-modal behavior remains a live-test gap.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/8791"
+      ],
+      "invariant": "Once a bottom drawer begins closing, unrelated parent rerenders must not replace its completion callback or restart the native hide animation. The drawer must unmount once and deliver the latest after-close action exactly once.",
+      "oracle": "Render one drawer, begin closing it, rerender with new parent callbacks before completion, and require every MountedBottomDrawer frame to retain one onHidden identity. Trigger that completion barrier repeatedly, then require the drawer's null render to commit before only the latest after-close callback runs exactly once.",
+      "commands": [
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/components/bottom-drawer-close-lifecycle.test.ts",
+        "Manual iOS 26.5 simulator: long-press paired host; open Edit host; return; long-press host; Remove; confirm Remove; assert host disappears"
+      ],
+      "testFiles": [
+        "mobile/src/components/bottom-drawer-close-lifecycle.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "mobile/src/components/bottom-drawer-close-lifecycle.test.ts",
+          "assertions": [
+            "keeps close stable and delivers the latest action once after unmount"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-28",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/components/bottom-drawer-close-lifecycle.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.18,
+          "summary": "The focused lifecycle harness passed with stable completion identity, latest-callback delivery, and drawer unmount assertions."
+        },
+        {
+          "date": "2026-07-28",
+          "runner": "manual",
+          "platform": "ios",
+          "command": "Manual iOS 26.5 simulator: long-press paired host; open Edit host; return; long-press host; Remove; confirm Remove; assert host disappears",
+          "result": "passed",
+          "durationSeconds": 37,
+          "summary": "Edit host opened responsively after the drawer closed; returning and confirming Remove deleted the host without freezing."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 5,
+        "scope": "focused React lifecycle contract test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "One deterministic local contract run and one iOS simulator flow exist; CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "On current main, the harness failed because each parent render created a different onHidden callback. The stable completion callback fix passes the byte-identical oracle; restoring the inline callback reproduces the failure."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Any number of parent rerenders retains one close-completion identity, so they add zero hide-animation restarts, timers, listeners, or after-close deliveries."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak history.",
+        "Run the host Edit and Remove flows on a physical iOS device and an Android emulator or device.",
+        "Keep the callback-identity and exactly-once delivery assertions intact for every shared drawer lifecycle change."
+      ],
+      "knownGaps": [
+        "Android native-modal behavior has no live evidence.",
+        "The simulator run used an unreachable stored host rather than a connected multi-worktree host.",
+        "The contract test injects the hide-completion barrier instead of running Reanimated."
+      ],
+      "demotionRule": "Keep experimental or demote if parent rerenders can restart drawer hiding, after-close delivery duplicates or goes stale, the focused contract flakes, or either mobile platform retains a touch-blocking modal."
+    },
+    {
       "id": "mobile-relay.endpoint-recovery",
       "title": "Mobile relay recovery retries offline hosts and races direct endpoints",
       "maturity": "experimental",

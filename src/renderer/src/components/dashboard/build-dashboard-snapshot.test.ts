@@ -394,7 +394,21 @@ describe('buildDashboardSnapshot', () => {
 
     expect(snapshot.cards[0].workspaceStatusId).toBeUndefined()
     expect(snapshot.cards[0].subagents).toBeUndefined()
+    // Why: the card has a live pty, so only the count-path gate keeps the
+    // host-input resolution off the sidebar's per-status-tick rebuild.
+    expect(snapshot.cards[0].ptyId).toBe('pty1')
+    expect(snapshot.cards[0].terminalInput).toBeUndefined()
     expect(linkedReviewReads).toBe(0)
+  })
+
+  it("resolves a live pty's host-input profile for card snapshots", () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({ agentStatusByPaneKey: { [PANE_KEY]: entry({}) } }),
+      NOW
+    )
+
+    expect(snapshot.cards[0].terminalInput?.windowsShiftEnterEncoding).toBe('alt-enter')
+    expect(snapshot.cards[0].terminalInput?.kittyKeyboardAdvertised).toBe(true)
   })
 
   it('relays the idle-column setting in the serialized snapshot', () => {

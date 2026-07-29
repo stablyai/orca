@@ -29,6 +29,20 @@ const MAX_LABEL_LENGTH = DASHBOARD_MAX_LABEL_LENGTH
 const DASHBOARD_BUCKETS = new Set(['attention', 'working', 'done', 'idle'])
 const DASHBOARD_DOT_STATES = new Set(['working', 'blocked', 'waiting', 'done', 'idle'])
 const DASHBOARD_REVIEW_STATES = new Set(['open', 'closed', 'merged', 'draft'])
+const DASHBOARD_HOST_PLATFORMS = new Set([
+  'aix',
+  'android',
+  'cygwin',
+  'darwin',
+  'freebsd',
+  'haiku',
+  'linux',
+  'netbsd',
+  'openbsd',
+  'sunos',
+  'win32'
+])
+const WINDOWS_SHIFT_ENTER_ENCODINGS = new Set(['alt-enter', 'csi-u'])
 
 function isBoundedString(value: unknown, maxLength: number, allowEmpty = false): value is string {
   return typeof value === 'string' && value.length <= maxLength && (allowEmpty || value.length > 0)
@@ -263,6 +277,26 @@ function isDashboardCard(value: unknown): boolean {
     isFiniteNumber(card.stateChangedAt) &&
     typeof card.unseen === 'boolean' &&
     isOptionalBoundedString(card.askSummary, AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH) &&
-    isOptionalBoundedString(card.conversationName, MAX_LABEL_LENGTH)
+    isOptionalBoundedString(card.conversationName, MAX_LABEL_LENGTH) &&
+    isDashboardTerminalInput(card.terminalInput)
+  )
+}
+
+function isDashboardTerminalInput(value: unknown): boolean {
+  if (value === undefined) {
+    return true
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  const input = value as Record<string, unknown>
+  return (
+    typeof input.hostPlatform === 'string' &&
+    DASHBOARD_HOST_PLATFORMS.has(input.hostPlatform) &&
+    typeof input.localWindowsConpty === 'boolean' &&
+    isOptionalBoundedString(input.osRelease, MAX_LABEL_LENGTH) &&
+    typeof input.windowsShiftEnterEncoding === 'string' &&
+    WINDOWS_SHIFT_ENTER_ENCODINGS.has(input.windowsShiftEnterEncoding) &&
+    typeof input.kittyKeyboardAdvertised === 'boolean'
   )
 }
