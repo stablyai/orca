@@ -40,7 +40,20 @@ async function resolveProjectGroupId(filePath: string, folderPath: string): Prom
   return created?.id ?? null
 }
 
-export async function openOsRequestedFile(filePath: string): Promise<void> {
+// Why: concurrent calls must not both miss the same not-yet-created workspace and each create a duplicate.
+let openOsRequestedFileChain: Promise<void> = Promise.resolve()
+
+export function openOsRequestedFile(filePath: string): Promise<void> {
+  const run = openOsRequestedFileChain.then(() => openOsRequestedFileSerially(filePath))
+  // Why: swallow so a rejected call doesn't wedge the chain for callers queued after it.
+  openOsRequestedFileChain = run.then(
+    () => undefined,
+    () => undefined
+  )
+  return run
+}
+
+async function openOsRequestedFileSerially(filePath: string): Promise<void> {
   const existing = findWorkspaceForFilePath(filePath, collectWorkspaceCandidates())
   let worktreeId = existing?.workspace.id ?? null
   // Why: an empty relative path means the match was the workspace root itself, not a file in it.

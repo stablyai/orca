@@ -110,6 +110,10 @@ import {
 } from './runtime/sync-runtime-graph'
 import { useWebSessionTabsSync } from './runtime/web-session-tabs-sync'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
+import {
+  pullPendingOsRequestedFiles,
+  useOsRequestedFileOpening
+} from './hooks/use-os-requested-file-opening'
 import { MacosTccPromptNoticeHost } from './hooks/MacosTccPromptNoticeHost'
 import { useRadixBodyPointerEventsRecovery } from './hooks/useRadixBodyPointerEventsRecovery'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
@@ -756,6 +760,7 @@ function App(): React.JSX.Element {
   useGlobalFileDrop()
   useAutoAckViewedAgent()
   useDashboardPopoutBridge(settings?.experimentalAgentDashboardPopout === true)
+  useOsRequestedFileOpening()
 
   useEffect(() => {
     return onOnboardingReopened(setOnboarding)
@@ -983,6 +988,8 @@ function App(): React.JSX.Element {
             actions.pruneLastVisitedTimestamps()
             actions.seedActiveWorktreeLastVisitedIfMissing()
           })
+          // Why: pull after session hydration — matching an existing workspace needs worktreesByRepo/folderWorkspaces populated.
+          await pullPendingOsRequestedFiles(() => cancelled)
           await timeRendererStartupStep('fetch-browser-session-profiles', () =>
             actions.fetchBrowserSessionProfiles()
           )
