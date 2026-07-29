@@ -6,13 +6,9 @@ import {
   type RpcResponse
 } from '../scripts/mock-server-rpc-handlers'
 
-function listSessionTabs(worktree: string): RpcResponse {
+function callRpc(method: string, params?: Record<string, unknown>): RpcResponse {
   let response: RpcResponse | undefined
-  const request: RpcRequest = {
-    id: 'request-1',
-    method: 'session.tabs.list',
-    params: { worktree }
-  }
+  const request: RpcRequest = { id: 'request-1', method, ...(params ? { params } : {}) }
   handleRequest(
     request,
     (nextResponse) => {
@@ -22,6 +18,10 @@ function listSessionTabs(worktree: string): RpcResponse {
   )
   expect(response).toBeDefined()
   return response!
+}
+
+function listSessionTabs(worktree: string): RpcResponse {
+  return callRpc('session.tabs.list', { worktree })
 }
 
 describe('mock server session tabs fixture', () => {
@@ -56,5 +56,16 @@ describe('mock server session tabs fixture', () => {
         }
       ]
     })
+  })
+
+  it('falls back to the same worktree terminal.list uses when no selector is sent', () => {
+    const terminals = callRpc('terminal.list').result as {
+      terminals: { worktreeId: string }[]
+    }
+    const expected = terminals.terminals[0]?.worktreeId
+    expect(expected).toBeTruthy()
+
+    const tabs = callRpc('session.tabs.list').result as { worktree: string }
+    expect(tabs.worktree).toBe(expected)
   })
 })

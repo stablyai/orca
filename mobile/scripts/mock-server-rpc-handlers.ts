@@ -126,7 +126,7 @@ export function handleRequest(
     handleMockFilePreviewRequest(request, respond, success, error) ||
     handleMockAccountRequest(request, respond, success, error) ||
     handleMockNativeChatRequest(request, respond, success, error, ws) ||
-    handleMockSessionTabsRequest(request, respond, success)
+    handleMockSessionTabsRequest(request, respond, success, terminalListWorktreeId)
   ) {
     return
   }

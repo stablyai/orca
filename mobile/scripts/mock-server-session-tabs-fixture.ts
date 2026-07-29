@@ -10,22 +10,15 @@ const PARENT_TAB_ID = 'tab-1'
 // The host only ever publishes terminal-layout UUIDs here; pane-key parsing
 // rejects any other shape, so a placeholder would mask pane-attribution bugs.
 const LEAF_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479'
-// Surface ids are `${parentTabId}::${leafId}`, matching mobileTerminalSurfaceId.
+// The host publishes terminal surfaces as `${parentTabId}::${leafId}`.
 const SURFACE_TAB_ID = `${PARENT_TAB_ID}::${LEAF_ID}`
-
-function worktreeIdOf(selector: unknown): string {
-  if (typeof selector !== 'string') {
-    return 'mock'
-  }
-  return selector.startsWith('id:') ? selector.slice(3) : selector
-}
 
 /** One ready terminal tab bound to the `term-1` fixture. Mirrors the full
  *  `session.tabs.list` contract so mock-server repros of tab, split-pane, and
  *  pane-attribution bugs aren't shape-incomplete. */
-function createMockSessionTabs(worktree: unknown): RuntimeMobileSessionTabsResult {
+function createMockSessionTabs(worktreeId: string): RuntimeMobileSessionTabsResult {
   return {
-    worktree: worktreeIdOf(worktree),
+    worktree: worktreeId,
     publicationEpoch: PUBLICATION_EPOCH,
     snapshotVersion: 1,
     activeGroupId: GROUP_ID,
@@ -60,11 +53,15 @@ function createMockSessionTabs(worktree: unknown): RuntimeMobileSessionTabsResul
 export function handleMockSessionTabsRequest(
   request: RpcRequest,
   respond: (response: RpcResponse) => void,
-  success: (id: string, result: unknown, streaming?: boolean) => RpcResponse
+  success: (id: string, result: unknown, streaming?: boolean) => RpcResponse,
+  // Shared with `terminal.list` so both surfaces agree on which worktree an
+  // absent or `id:`-prefixed selector means.
+  resolveWorktreeId: (selector: unknown) => string | undefined
 ): boolean {
   if (request.method !== 'session.tabs.list') {
     return false
   }
-  respond(success(request.id, createMockSessionTabs(request.params?.worktree)))
+  const worktreeId = resolveWorktreeId(request.params?.worktree) ?? 'mock'
+  respond(success(request.id, createMockSessionTabs(worktreeId)))
   return true
 }
