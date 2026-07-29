@@ -137,9 +137,7 @@ export type TokenizeCustomCommandResult =
 
 export type CommandTemplatePathFlavor = 'posix' | 'windows'
 
-// Why: this parser only groups argv; Windows keeps path separators literal,
-// while POSIX targets retain the existing backslash escapes. We do not expand
-// variables, substitutions, globs, or `~`.
+// Why: POSIX honors backslash escapes; Windows preserves them literally.
 export function tokenizeCustomCommandTemplate(
   template: string,
   pathFlavor: CommandTemplatePathFlavor = 'posix'
