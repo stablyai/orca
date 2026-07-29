@@ -3,7 +3,7 @@ import { registerBrowserOverlaySlotViewport } from './browser-page-viewport'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import type { BrowserTab as BrowserTabState, Tab, TabGroup } from '../../../../shared/types'
-import BrowserPane from './BrowserPane'
+import BrowserPane, { type BrowserFindShortcutScope } from './BrowserPane'
 import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
 import { useBrowserAutomationVisibilityForAny } from './browser-automation-visibility'
 import { useBrowserMobileDriverForAny } from '@/lib/pane-manager/browser-mobile-driver-state'
@@ -24,8 +24,7 @@ type BrowserOverlaySlotProps = {
   // Why: undefined = orphan tab (in browserTabs but not referenced by any group's unified-tab list); the fallback branch keeps these hidden.
   groupId: string | undefined
   isActive: boolean
-  // Why: active-in-group ≠ focused split. Find (Cmd/Ctrl+F) must only arm for the focused split, or the browser claims the chord from a focused terminal in the same split (#11348).
-  isFocused: boolean
+  findShortcutScope: BrowserFindShortcutScope
   // Why: overlay is a sibling of the group layout, so pane focus doesn't bubble to TabGroupPanel; re-sync it here or split-view clicks leave activeGroupIdByWorktree stale.
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   isWorktreeActive: boolean
@@ -36,7 +35,7 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   browserTab,
   groupId,
   isActive,
-  isFocused,
+  findShortcutScope,
   onFocusOwningGroup,
   isWorktreeActive
 }: BrowserOverlaySlotProps): React.JSX.Element {
@@ -101,7 +100,11 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
       <div ref={setSlotViewportRef} className="absolute inset-0 flex min-h-0 flex-col" />
       {/* Why: hidden worktrees park the heavy pane subtree; visible ones keep stable slots so reparenting can't destroy the webview guest. */}
       {shouldMountPane ? (
-        <BrowserPane browserTab={browserTab} isActive={isActive} isFocused={isFocused} />
+        <BrowserPane
+          browserTab={browserTab}
+          isActive={isActive}
+          findShortcutScope={findShortcutScope}
+        />
       ) : null}
     </div>
   )
@@ -161,15 +164,20 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
       {browserTabs.map((browserTab) => {
         const assignment = assignments.get(browserTab.id)
         const isActive = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
-        // Why: focused only when this browser's group is the focused split — not merely the active tab in its own group.
-        const isFocused = isActive && assignment?.groupId === focusedGroupId
+        const findShortcutScope: BrowserFindShortcutScope = !isActive
+          ? 'inactive'
+          : focusedGroupId === undefined
+            ? 'owned-target'
+            : assignment?.groupId === focusedGroupId
+              ? 'focused'
+              : 'inactive'
         return (
           <BrowserOverlaySlot
             key={browserTab.id}
             browserTab={browserTab}
             groupId={assignment?.groupId}
             isActive={isActive}
-            isFocused={isFocused}
+            findShortcutScope={findShortcutScope}
             onFocusOwningGroup={focusOwningGroup}
             isWorktreeActive={isWorktreeActive}
           />

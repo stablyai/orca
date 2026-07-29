@@ -286,6 +286,25 @@ describe('keybindings', () => {
     expect(keybindingMatchesAction('editor.addReviewNote', oldCtrlAltChord, 'win32')).toBe(false)
   })
 
+  it('maps browser Find to Command on macOS and Control elsewhere', () => {
+    const commandF = {
+      key: 'f',
+      code: 'KeyF',
+      meta: true,
+      control: false,
+      alt: false,
+      shift: false
+    }
+    const controlF = { ...commandF, meta: false, control: true }
+
+    expect(keybindingMatchesAction('browser.find', commandF, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('browser.find', controlF, 'darwin')).toBe(false)
+    expect(keybindingMatchesAction('browser.find', controlF, 'linux')).toBe(true)
+    expect(keybindingMatchesAction('browser.find', controlF, 'win32')).toBe(true)
+    expect(keybindingMatchesAction('browser.find', commandF, 'linux')).toBe(false)
+    expect(keybindingMatchesAction('browser.find', commandF, 'win32')).toBe(false)
+  })
+
   it('defines platform-native replace-in-editor shortcuts', () => {
     expect(getEffectiveKeybindingsForAction('editor.replace', 'darwin')).toEqual(['Mod+Alt+F'])
     expect(getEffectiveKeybindingsForAction('editor.replace', 'linux')).toEqual(['Mod+H'])

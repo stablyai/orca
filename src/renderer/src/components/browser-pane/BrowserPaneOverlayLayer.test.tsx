@@ -40,16 +40,16 @@ vi.mock('./BrowserPane', () => ({
   default: ({
     browserTab,
     isActive,
-    isFocused
+    findShortcutScope
   }: {
     browserTab: BrowserTabState
     isActive: boolean
-    isFocused?: boolean
+    findShortcutScope?: string
   }) => (
     <span
       data-browser-pane-id={browserTab.id}
       data-browser-pane-active={isActive ? 'true' : 'false'}
-      data-browser-pane-focused={isFocused ? 'true' : 'false'}
+      data-browser-find-shortcut-scope={findShortcutScope}
     />
   )
 }))
@@ -78,7 +78,7 @@ describe('BrowserPaneOverlayLayer', () => {
 
     // browser-a is the active tab of group-1, and group-1 is the focused split.
     expect(markup).toContain(
-      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-pane-focused="true"'
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="focused"'
     )
   })
 
@@ -91,7 +91,47 @@ describe('BrowserPaneOverlayLayer', () => {
     const markup = renderOverlay({ isWorktreeActive: true })
 
     expect(markup).toContain(
-      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-pane-focused="false"'
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="inactive"'
+    )
+  })
+
+  it('limits Find to the owning target while focused-group state is unavailable', () => {
+    mocks.state = createState()
+    mocks.state.activeGroupIdByWorktree = {}
+
+    const markup = renderOverlay({ isWorktreeActive: true })
+
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="owned-target"'
+    )
+  })
+
+  it('keeps Find ownership with group identities after split order changes', () => {
+    mocks.state = createState()
+    const [tabA, tabB] = mocks.state.unifiedTabsByWorktree['wt-1']
+    const [groupA] = mocks.state.groupsByWorktree['wt-1']
+    mocks.state.unifiedTabsByWorktree = {
+      'wt-1': [{ ...tabB, groupId: 'group-2' }, tabA]
+    }
+    mocks.state.groupsByWorktree = {
+      'wt-1': [
+        {
+          id: 'group-2',
+          worktreeId: 'wt-1',
+          activeTabId: tabB.id,
+          tabOrder: [tabB.id]
+        },
+        { ...groupA, tabOrder: [tabA.id] }
+      ]
+    }
+
+    const markup = renderOverlay({ isWorktreeActive: true })
+
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="focused"'
+    )
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-b" data-browser-pane-active="true" data-browser-find-shortcut-scope="inactive"'
     )
   })
 
