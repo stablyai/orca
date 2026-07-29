@@ -82,8 +82,11 @@ internal static class OrcaTmuxShim
         }
     }
 
-    // Matches %NAME% with a shell-variable-shaped NAME regardless of whether it is currently defined,
-    // so the verdict does not depend on the environment the child happens to inherit.
+    // Any closing % after a variable-shaped opening counts, not just %NAME% — cmd also expands the
+    // modifier forms %NAME:~0,1% and %NAME:a=b%, and a scanner that required an all-name-character
+    // body walked straight past them. Matching on shape rather than on the variable being defined
+    // keeps the verdict independent of whatever environment the child inherits.
+    // tmux's %1 / %99 pane ids open with a digit, so they are not variable-shaped and still pass.
     private static bool ContainsEnvironmentReference(string value)
     {
         for (int index = 0; index < value.Length; index += 1)
@@ -102,13 +105,7 @@ internal static class OrcaTmuxShim
             {
                 continue;
             }
-
-            scan += 1;
-            while (scan < value.Length && (Char.IsLetterOrDigit(value[scan]) || value[scan] == '_'))
-            {
-                scan += 1;
-            }
-            if (scan < value.Length && value[scan] == '%')
+            if (value.IndexOf('%', scan) >= 0)
             {
                 return true;
             }

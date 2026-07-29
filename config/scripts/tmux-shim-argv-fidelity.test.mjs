@@ -245,9 +245,16 @@ describe('windows tmux shim', () => {
         writeFileSync(batchPath, `@echo off\r\n"${recorder}" %*\r\n`, 'utf8')
         const env = { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: batchPath }
 
-        const refused = spawnSync(shim, ['send-keys', '-t', '%1', '%PATH%'], { env, encoding: 'utf8' })
-        expect(refused.status).toBe(1)
-        expect(refused.stderr).toContain('%NAME%')
+        // The modifier forms matter as much as the plain one: cmd expands %PATH:~0,1% and
+        // %PATH:a=b% too, and a name-characters-only scan walks straight past them.
+        for (const hostile of ['%PATH%', '%PATH:~0,1%', '%PATH:x=y%', '%_x%']) {
+          const refused = spawnSync(shim, ['send-keys', '-t', '%1', hostile], {
+            env,
+            encoding: 'utf8'
+          })
+          expect(refused.status, `expected ${hostile} to be refused`).toBe(1)
+          expect(refused.stderr).toContain('%NAME%')
+        }
 
         const allowed = spawnSync(shim, ['send-keys', '-t', '%1', '%99', '100%'], {
           env,
