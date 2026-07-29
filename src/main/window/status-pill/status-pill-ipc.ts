@@ -85,40 +85,6 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
     }
     args.setWindowPosition({ x, y })
   }
-  // Why: the renderer measures its content (ResizeObserver) and asks main to
-  // grow/shrink the window so the expanded panel never clips. Main keeps the
-  // window centered on the same display (current center x - new width/2) so
-  // the capsule appears to grow symmetrically, and y stable so it stays
-  // anchored at the top of the screen.
-  const resizeHandler = (payload: unknown): void => {
-    if (!payload || typeof payload !== 'object' || args.window.isDestroyed()) {
-      return
-    }
-    const { width, height } = payload as { width?: unknown; height?: unknown }
-    if (typeof width !== 'number' || typeof height !== 'number') {
-      return
-    }
-    if (!Number.isFinite(width) || !Number.isFinite(height)) {
-      return
-    }
-    try {
-      const current = args.window.getBounds()
-      const nextWidth = Math.round(width)
-      const nextHeight = Math.round(height)
-      const currentCenterX = current.x + Math.round(current.width / 2)
-      args.window.setBounds(
-        {
-          x: currentCenterX - Math.round(nextWidth / 2),
-          y: current.y,
-          width: nextWidth,
-          height: nextHeight
-        },
-        false
-      )
-    } catch (error) {
-      args.warn('[status-pill] resize failed', error)
-    }
-  }
   // Why: toggle click-through so transparent padding pixels pass clicks to
   // apps behind the overlay (default), while interactive regions capture them
   // when hovered.
@@ -164,7 +130,6 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
   ipcMain.on('statusPill:contextMenu', contextMenuHandler)
   ipcMain.on('statusPill:focusPane', focusPaneHandler)
   ipcMain.on('statusPill:setWindowPosition', setWindowPositionHandler)
-  ipcMain.on('statusPill:resize', resizeHandler)
   ipcMain.on('statusPill:setInteractive', setInteractiveHandler)
   ipcMain.handle('statusPill:getSnapshot', snapshotHandler)
   ipcMain.handle('statusPill:getAgentRows', rowsHandler)
@@ -177,7 +142,6 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
     ipcMain.removeListener('statusPill:contextMenu', contextMenuHandler)
     ipcMain.removeListener('statusPill:focusPane', focusPaneHandler)
     ipcMain.removeListener('statusPill:setWindowPosition', setWindowPositionHandler)
-    ipcMain.removeListener('statusPill:resize', resizeHandler)
     ipcMain.removeListener('statusPill:setInteractive', setInteractiveHandler)
     ipcMain.removeHandler('statusPill:getSnapshot')
     ipcMain.removeHandler('statusPill:getAgentRows')

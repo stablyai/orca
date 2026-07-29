@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Display } from 'electron'
-import {
-  computeStatusPillPlacement,
-  computeStatusPillPlacementForPoint,
-  hasMacNotch,
-  pickDisplayForCursor
-} from './placement'
+import { computeStatusPillPlacement, hasMacNotch, pickDisplayForCursor } from './placement'
 
 function makeDisplay(overrides: Partial<Display> = {}): Display {
   return {
@@ -203,67 +198,5 @@ describe('pickDisplayForCursor', () => {
       bounds: { x: 0, y: 0, width: 1920, height: 1080 }
     })
     expect(pickDisplayForCursor([external], null)).toBe(external)
-  })
-})
-
-describe('computeStatusPillPlacementForPoint', () => {
-  it('clamps a pinned point into the containing display work area', () => {
-    const display = makeDisplay({
-      workArea: { x: 0, y: 40, width: 1920, height: 1040 }
-    })
-    const placement = computeStatusPillPlacementForPoint({
-      displays: [display],
-      point: { x: 600, y: 80 },
-      pillWidth: 320,
-      pillHeight: 32
-    })
-    expect(placement).toEqual({ x: 600, y: 80, width: 356, height: 72 })
-  })
-
-  it('clamps an off-right-edge point back into bounds', () => {
-    const display = makeDisplay({
-      workArea: { x: 0, y: 0, width: 1920, height: 1080 }
-    })
-    const placement = computeStatusPillPlacementForPoint({
-      displays: [display],
-      point: { x: 5000, y: 4 },
-      pillWidth: 320,
-      pillHeight: 32
-    })
-    // Why: the rightmost valid origin keeps the full WINDOW (capsule + padding)
-    // on screen.
-    expect(placement?.x).toBe(1920 - 356)
-    expect(placement?.y).toBe(4)
-  })
-
-  it('falls back to the primary display when the pinned monitor is gone', () => {
-    const primary = makeDisplay({ id: 1, internal: true })
-    // Why: a second display that does NOT contain the point simulates an
-    // unplugged monitor — the pill must not stay stranded off-screen.
-    const external = makeDisplay({
-      id: 2,
-      internal: false,
-      bounds: { x: 1920, y: 0, width: 1920, height: 1080 },
-      workArea: { x: 1920, y: 0, width: 1920, height: 1080 }
-    })
-    const placement = computeStatusPillPlacementForPoint({
-      displays: [primary, external],
-      point: { x: -4000, y: -4000 },
-      pillWidth: 320,
-      pillHeight: 32
-    })
-    expect(placement?.x).toBe(0)
-    expect(placement?.y).toBe(0)
-  })
-
-  it('returns null when there are no displays', () => {
-    expect(
-      computeStatusPillPlacementForPoint({
-        displays: [],
-        point: { x: 10, y: 10 },
-        pillWidth: 320,
-        pillHeight: 32
-      })
-    ).toBeNull()
   })
 })

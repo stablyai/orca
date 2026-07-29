@@ -2,7 +2,6 @@ import { BrowserWindow, screen, type Display, type Rectangle } from 'electron'
 import { join } from 'node:path'
 import {
   computeStatusPillPlacement,
-  computeStatusPillPlacementForPoint,
   getCursorScreenPointSafe,
   pickDisplayForCursor
 } from './placement'
@@ -125,9 +124,7 @@ export function createStatusPillWindow(
       width: PILL_WINDOW_WIDTH,
       height: PILL_WINDOW_HEIGHT,
       frame: false,
-      // Why: allow programmatic resize via setBounds when the expanded panel
-      // outgrows the resting window. Disables only user-driven resize.
-      resizable: true,
+      resizable: false,
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
@@ -368,29 +365,33 @@ export function createStatusPillWindow(
     if (displays.length === 0) {
       return null
     }
-    // Why: when the user has dragged the pill, keep it where they put it. The
-    // pinned-point helper re-clamps into the display that contains the point
-    // (falling back to the primary when that monitor is gone) so the pill can
-    // never land off-screen.
-    if (persisted) {
-      return computeStatusPillPlacementForPoint({
-        displays,
-        point: persisted,
-        pillWidth: PILL_WIDTH,
-        pillHeight: PILL_HEIGHT
-      })
-    }
-    const cursor = getCursorScreenPointSafe(screen)
-    const display = pickDisplayForCursor(displays, cursor)
+    // Why: pick the display the pill lives on — the cursor's display by
+    // default, or the one containing the persisted drag point.
+    const point = persisted ?? getCursorScreenPointSafe(screen)
+    const display = pickDisplayForCursor(displays, point) ?? displays[0]
     if (!display) {
       return null
     }
-    return computeStatusPillPlacement({
+    // Why: reuse placement only to resolve X (centered, or the user-pinned x
+    // clamped into the work area) + the window width. We deliberately IGNORE
+    // the helper's height: the window spans the full work-area height so the
+    // expanded panel can grow downward without ever needing a resize (which
+    // was unreliable on macOS). The bar renders at the window's top via the
+    // renderer's #root padding-top.
+    const base = computeStatusPillPlacement({
       pillWidth: PILL_WIDTH,
       pillHeight: PILL_HEIGHT,
       display,
-      platform: process.platform
+      platform: process.platform,
+      pinnedXOffset: persisted?.x
     })
+    const workArea = display.workArea
+    return {
+      x: base.x,
+      y: workArea.y,
+      width: base.width,
+      height: workArea.height
+    }
   }
 }
 

@@ -82,37 +82,6 @@ export const PILL_WINDOW_PADDING_X = 18
 export const PILL_WINDOW_PADDING_TOP = 6
 export const PILL_WINDOW_PADDING_BOTTOM = 34
 
-/** Compute the pill window's rectangle for a user-pinned position, clamped
- *  into the work area of the display that contains the point. The `point` is
- *  the desired window origin (what the drag persists via window.getPosition),
- *  so the returned rectangle covers the full window (capsule + padding). If
- *  the point's display is gone (monitor unplugged), it falls back to the
- *  primary/internal display so the pill is never stranded off-screen. Returns
- *  null when there are no displays. */
-export function computeStatusPillPlacementForPoint(input: {
-  displays: Display[]
-  point: { x: number; y: number }
-  pillWidth: number
-  pillHeight: number
-}): { x: number; y: number; width: number; height: number } | null {
-  const { displays, point, pillWidth, pillHeight } = input
-  if (displays.length === 0) {
-    return null
-  }
-  // Why: the point is the window origin; clamp the full window rectangle
-  // (capsule + padding) so the capsule + shadow halo never leave the display.
-  const windowWidth = pillWidth + PILL_WINDOW_PADDING_X * 2
-  const windowHeight = pillHeight + PILL_WINDOW_PADDING_TOP + PILL_WINDOW_PADDING_BOTTOM
-  // Why: pickDisplayForCursor already resolves "the display whose bounds
-  // contain this point", with a sensible internal/first fallback, so we reuse
-  // it for the pinned point.
-  const display = pickDisplayForCursor(displays, point) ?? displays[0]
-  const workArea = display.workArea
-  const x = clamp(point.x, workArea.x, workArea.x + Math.max(0, workArea.width - windowWidth))
-  const y = clamp(point.y, workArea.y, workArea.y + Math.max(0, workArea.height - windowHeight))
-  return { x, y, width: windowWidth, height: windowHeight }
-}
-
 /** Compute the pill window's screen rectangle for the chosen display +
  *  platform. The rectangle covers the *window* (capsule + padding), so the
  *  capsule body is centered inside the returned bounds and the box-shadow halo

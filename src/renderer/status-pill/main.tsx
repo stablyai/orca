@@ -14,7 +14,6 @@ import { AgentRowView } from './agent-row'
 import { PendingQuestionCard } from './pending-question-card'
 import { buildPanelTitle, pickTone, type Tone } from './status-pill-formatters'
 import { usePillDrag } from './use-pill-drag'
-import { usePillResize } from './use-pill-resize'
 
 declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
@@ -38,17 +37,10 @@ function StatusPill(): React.JSX.Element {
   const [answerError, setAnswerError] = useState<string | null>(null)
   const [attention, setAttention] = useState(false)
   const attentionTimer = useRef<number | null>(null)
-  // Why: keep a stable ref to the .pill-stack so the ResizeObserver can drive
-  // window resizing without re-creating the observer on every render.
-  const stackRef = useRef<HTMLDivElement | null>(null)
   // Why: read inside the attention-pulse handler without depending on a
   // re-subscribe when preferences change, so a question that lands while the
   // effect is closed over stale prefs still honors reduced-motion.
   const prefersReducedMotionRef = useRef(false)
-
-  // Why: drive the BrowserWindow resize from the live .pill-stack size so the
-  // expanded panel never clips (resting window is capsule-sized).
-  usePillResize(window.api, stackRef)
 
   useEffect(() => {
     if (!api) {
@@ -196,7 +188,6 @@ function StatusPill(): React.JSX.Element {
 
   return (
     <div
-      ref={stackRef}
       className={`pill-stack ${entered ? 'pill-enter' : ''}`}
       onMouseEnter={() => {
         setExpanded(true)
