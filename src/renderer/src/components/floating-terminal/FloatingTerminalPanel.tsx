@@ -70,7 +70,9 @@ import {
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
-import { createTerminalPaneHandleRegistry } from './terminal-pane-handle-registry'
+import {
+  createTerminalPaneHandleRegistry
+} from './terminal-pane-handle-registry'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   keybindingMatchesAction,
