@@ -70,6 +70,43 @@ describe('quick-open-search', () => {
     ).toEqual(['src/components/Button.tsx', 'button-area/deep/path/file.tsx'])
   })
 
+  it('matches every whitespace-separated term regardless of term order', () => {
+    const files = prepareQuickOpenFiles(['apps/web/.env', 'apps/api/.env', 'packages/shared/.env'])
+
+    expect(rankQuickOpenFiles('.env api', files).map((item) => item.path)).toEqual([
+      'apps/api/.env'
+    ])
+    expect(rankQuickOpenFiles('api .env', files).map((item) => item.path)).toEqual([
+      'apps/api/.env'
+    ])
+  })
+
+  it('deduplicates terms separated by mixed whitespace', () => {
+    const files = prepareQuickOpenFiles(['apps/api/.env', 'services/api/.env.local'])
+
+    expect(rankQuickOpenFiles('\t.env\napi api  ', files)).toEqual(
+      rankQuickOpenFiles('.env api', files)
+    )
+  })
+
+  it('keeps matches whose combined term score is negative one', () => {
+    const files = prepareQuickOpenFiles(['a1234b/c/file.ts'])
+
+    expect(rankQuickOpenFiles('ab c', files)).toEqual([{ path: 'a1234b/c/file.ts', score: -1 }])
+  })
+
+  it('keeps multi-term matches when an individual term scores negative one', () => {
+    const files = prepareQuickOpenFiles(['a123/b/c/file.ts'])
+
+    expect(rankQuickOpenFiles('ab c', files)).toEqual([{ path: 'a123/b/c/file.ts', score: -6 }])
+  })
+
+  it('preserves the single-term negative-one exclusion', () => {
+    const files = prepareQuickOpenFiles(['a123/b/file.ts'])
+
+    expect(rankQuickOpenFiles('ab', files)).toEqual([])
+  })
+
   it('uses natural order for tie-heavy results at the limit boundary', () => {
     const files = Array.from({ length: 10 }, (_, index) => `src/path-${9 - index}.bin`)
 
@@ -101,6 +138,40 @@ describe('quick-open-search', () => {
         (_, index) => `bulk/special-${index}/needle.ts`
       )
     )
+  })
+
+  it('returns 50 top-ranked multi-term results from a 100k synthetic list', () => {
+    const fillerCount = 99_940
+    const topCandidateCount = 60
+    const files = [
+      ...Array.from(
+        { length: fillerCount },
+        (_, index) => `n-x-e-x-e-x-d-x-l-x-e/group-${index}/file.ts`
+      ),
+      ...Array.from({ length: topCandidateCount }, (_, index) => `bulk/special-${index}/needle.ts`)
+    ]
+
+    const results = rankQuickOpenFiles('needle special', prepareQuickOpenFiles(files))
+
+    expect(results).toHaveLength(QUICK_OPEN_RESULT_LIMIT)
+    expect(results.map((item) => item.path)).toEqual(
+      Array.from(
+        { length: QUICK_OPEN_RESULT_LIMIT },
+        (_, index) => `bulk/special-${index}/needle.ts`
+      )
+    )
+  })
+
+  it('ranks multi-term matches through the streaming path used on remote hosts', () => {
+    const ranker = new QuickOpenPathRanker('.env api', 8)
+    for (const path of ['apps/web/.env', 'apps/api/.env', 'packages/shared/.env']) {
+      ranker.consider(path)
+    }
+
+    expect(ranker.result()).toEqual({
+      paths: ['apps/api/.env'],
+      totalCount: 1
+    })
   })
 
   it('returns scores sorted ascending', () => {
@@ -184,6 +255,22 @@ describe('quick-open-search', () => {
         prepareQuickOpenFiles(['src/a.ts'])
       )
     ).toEqual([])
+  })
+
+  it('rejects queries with more than 32 unique terms', () => {
+    const terms = Array.from({ length: 33 }, (_, index) => `term-${index}`)
+    const file = {
+      path: terms.join('/'),
+      inputIndex: 0,
+      get lowerPath(): string {
+        throw new Error('excessive terms must not scan indexed paths')
+      },
+      get lowerFilename(): string {
+        throw new Error('excessive terms must not scan indexed filenames')
+      }
+    } as QuickOpenIndexedFile
+
+    expect(rankQuickOpenFiles(terms.join(' '), [file])).toEqual([])
   })
 
   it('matches Windows-style path queries against slash-normalized file paths', () => {
