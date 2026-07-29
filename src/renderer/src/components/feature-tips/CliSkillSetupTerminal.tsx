@@ -1,10 +1,21 @@
+import { Suspense } from 'react'
 import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { OnboardingInlineCommandTerminal } from '@/components/onboarding/OnboardingInlineCommandTerminal'
 import { ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { translate } from '@/i18n/i18n'
+
+// Why: keeps the xterm-backed inline terminal out of the entry's eager
+// modulepreload graph; this tip renders far off the first-paint path.
+const OnboardingInlineCommandTerminal = lazyWithRetry(
+  () =>
+    import('@/components/onboarding/OnboardingInlineCommandTerminal').then((module) => ({
+      default: module.OnboardingInlineCommandTerminal
+    })),
+  { reloadKey: 'cli-skill-setup-terminal' }
+)
 
 export function CliSkillSetupTerminal(): React.JSX.Element {
   const handleCopySkillCommand = async (): Promise<void> => {
@@ -57,26 +68,28 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
           </TooltipContent>
         </Tooltip>
       </div>
-      <OnboardingInlineCommandTerminal
-        command={ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}
-        title={translate(
-          'auto.components.feature.tips.CliSkillSetupTerminal.84e9576dac',
-          'Skill setup'
-        )}
-        ariaLabel={translate(
-          'auto.components.feature.tips.CliSkillSetupTerminal.43b60ec5c3',
-          'Orca CLI and orchestration skill install terminal'
-        )}
-        description={translate(
-          'auto.components.feature.tips.CliSkillSetupTerminal.1953e90447',
-          'Press Enter to install the Orca CLI orchestration skill for your agents.'
-        )}
-        terminalHeightPx={280}
-        terminalTopMarginPx={8}
-        descriptionPaddingClassName="px-4 py-2"
-        autoScrollIntoView={false}
-        worktreeId="feature-tip-cli-skills-terminal"
-      />
+      <Suspense fallback={null}>
+        <OnboardingInlineCommandTerminal
+          command={ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}
+          title={translate(
+            'auto.components.feature.tips.CliSkillSetupTerminal.84e9576dac',
+            'Skill setup'
+          )}
+          ariaLabel={translate(
+            'auto.components.feature.tips.CliSkillSetupTerminal.43b60ec5c3',
+            'Orca CLI and orchestration skill install terminal'
+          )}
+          description={translate(
+            'auto.components.feature.tips.CliSkillSetupTerminal.1953e90447',
+            'Press Enter to install the Orca CLI orchestration skill for your agents.'
+          )}
+          terminalHeightPx={280}
+          terminalTopMarginPx={8}
+          descriptionPaddingClassName="px-4 py-2"
+          autoScrollIntoView={false}
+          worktreeId="feature-tip-cli-skills-terminal"
+        />
+      </Suspense>
     </div>
   )
 }

@@ -1,9 +1,16 @@
-import { useCallback, useEffect, useState, type ComponentProps, type ReactNode } from 'react'
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useState,
+  type ComponentProps,
+  type ReactNode
+} from 'react'
 import { Copy, Loader2, RefreshCw, Terminal } from 'lucide-react'
 import { toast } from 'sonner'
 import { IntegrationStatusPill } from '../integration-status-pill'
 import { SkillFreshnessStatusPill } from '../skills/SkillFreshnessStatusPill'
-import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
@@ -11,6 +18,17 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+
+// Why: this panel is reachable from Settings, but its inline terminal drags the
+// whole xterm graph (~1.8MB chunk) into the renderer's eager modulepreload set,
+// where V8 compiles it before did-finish-load even when the panel never renders.
+const OnboardingInlineCommandTerminal = lazyWithRetry(
+  () =>
+    import('../onboarding/OnboardingInlineCommandTerminal').then((module) => ({
+      default: module.OnboardingInlineCommandTerminal
+    })),
+  { reloadKey: 'agent-skill-setup-terminal' }
+)
 
 type AgentSkillSetupPanelVariant = 'card' | 'inline'
 type SkillPrerequisiteStatus = Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>
@@ -355,22 +373,24 @@ export function AgentSkillSetupPanel({
               </TooltipContent>
             </Tooltip>
           </div>
-          <OnboardingInlineCommandTerminal
-            worktreeId={terminalWorktreeId}
-            command={openTerminalCommand}
-            title={terminalTitle}
-            description={translate(
-              'auto.components.settings.AgentSkillSetupPanel.runCommandDescription',
-              'Press Enter to run the command.'
-            )}
-            ariaLabel={terminalAriaLabel}
-            terminalHeightPx={terminalHeightPx}
-            shellOverride={terminalShellOverride}
-            terminalTopMarginPx={8}
-            descriptionPaddingClassName="px-4 py-2"
-            autoScrollIntoView={false}
-            onTerminalExit={notifyInstalledAgentSkillsChanged}
-          />
+          <Suspense fallback={null}>
+            <OnboardingInlineCommandTerminal
+              worktreeId={terminalWorktreeId}
+              command={openTerminalCommand}
+              title={terminalTitle}
+              description={translate(
+                'auto.components.settings.AgentSkillSetupPanel.runCommandDescription',
+                'Press Enter to run the command.'
+              )}
+              ariaLabel={terminalAriaLabel}
+              terminalHeightPx={terminalHeightPx}
+              shellOverride={terminalShellOverride}
+              terminalTopMarginPx={8}
+              descriptionPaddingClassName="px-4 py-2"
+              autoScrollIntoView={false}
+              onTerminalExit={notifyInstalledAgentSkillsChanged}
+            />
+          </Suspense>
         </div>
       ) : null}
     </div>
