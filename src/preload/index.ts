@@ -2374,7 +2374,7 @@ const api = {
         ipcRenderer.off('osFileOpen:opened', handler)
       }
     }
-  },
+  } satisfies PreloadApi['osFileOpen'],
 
   shell: {
     openPath: (path: string): Promise<void> => ipcRenderer.invoke('shell:openPath', path),
