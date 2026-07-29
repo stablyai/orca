@@ -174,10 +174,11 @@ export type StatusPillPreloadApi = {
   /** Move the pill window to a screen origin. Called on each pointermove
    *  during a drag; main debounces the persisted write. */
   setWindowPosition: (position: { x: number; y: number }) => void
-  /** Ask main to resize the pill BrowserWindow so the renderer content (which
-   *  just expanded/collapsed) fits without clipping. Main keeps the window
-   *  centered on the same display. */
-  resize: (width: number, height: number) => void
+  /** Report the renderer's interactive content rect (the pill/panel bounding
+   *  box, relative to the window top-left) so the main process can hit-test
+   *  the global cursor against it and toggle click-through. Sent whenever the
+   *  pill-stack resizes (dot -> bar -> panel). */
+  setContentRect: (rect: { left: number; top: number; width: number; height: number }) => void
   /** Send raw bytes (option number, label text, Escape, …) to the agent PTY
    *  that asked the currently-pending question. Returns whether the write
    *  reached a live terminal. Main resolves the paneKey → terminal handle →

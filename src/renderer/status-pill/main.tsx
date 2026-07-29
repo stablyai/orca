@@ -15,7 +15,7 @@ import { PendingQuestionCard } from './pending-question-card'
 import { PillDot } from './pill-dot'
 import { buildPanelTitle, pickTone, type Tone } from './status-pill-formatters'
 import { usePillDrag } from './use-pill-drag'
-import { usePillResize } from './use-pill-resize'
+import { usePillContentRect } from './use-pill-content-rect'
 
 declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
@@ -43,7 +43,7 @@ function StatusPill(): React.JSX.Element {
   // Why: keep a stable ref to the .pill-stack so the ResizeObserver can drive
   // window resizing (dot -> bar -> panel) without re-creating the observer.
   const stackRef = useRef<HTMLDivElement | null>(null)
-  usePillResize(window.api, stackRef)
+  usePillContentRect(window.api, stackRef)
   // Why: read inside the attention-pulse handler without depending on a
   // re-subscribe when preferences change, so a question that lands while the
   // effect is closed over stale prefs still honors reduced-motion.

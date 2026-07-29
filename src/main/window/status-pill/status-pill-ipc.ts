@@ -27,6 +27,9 @@ export type StatusPillIpcArgs = {
   getWindowPosition: () => { x: number; y: number }
   /** Move the pill window to a screen origin and (debounced) persist it. */
   setWindowPosition: (position: { x: number; y: number }) => void
+  /** Receive the renderer's interactive content rect (relative to the window
+   *  top-left) so main can hit-test the global cursor and toggle click-through. */
+  onContentRect: (rect: { left: number; top: number; width: number; height: number }) => void
   warn: (message: string, error?: unknown) => void
 }
 
@@ -85,38 +88,30 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
     }
     args.setWindowPosition({ x, y })
   }
-  // Why: the renderer measures its content (ResizeObserver) and asks main to
-  // grow/shrink the window so the expanded panel never clips. Main keeps the
-  // window centered on the same display (current center x - new width/2) and
-  // the top y stable so the bar stays anchored at the top of the screen.
-  const resizeHandler = (payload: unknown): void => {
-    if (!payload || typeof payload !== 'object' || args.window.isDestroyed()) {
+  // Why: the renderer reports its interactive content rect (relative to the
+  // window top-left) whenever it resizes. Main offsets it by the live window
+  // origin and hit-tests the global cursor against it to toggle click-through
+  // (see createStatusPillWindow). This is how the tall transparent overlay
+  // stays click-through everywhere except over the actual pill/panel.
+  const contentRectHandler = (payload: unknown): void => {
+    if (!payload || typeof payload !== 'object') {
       return
     }
-    const { width, height } = payload as { width?: unknown; height?: unknown }
-    if (typeof width !== 'number' || typeof height !== 'number') {
+    const { left, top, width, height } = payload as {
+      left?: unknown
+      top?: unknown
+      width?: unknown
+      height?: unknown
+    }
+    if (
+      typeof left !== 'number' ||
+      typeof top !== 'number' ||
+      typeof width !== 'number' ||
+      typeof height !== 'number'
+    ) {
       return
     }
-    if (!Number.isFinite(width) || !Number.isFinite(height)) {
-      return
-    }
-    try {
-      const current = args.window.getBounds()
-      const nextWidth = Math.round(width)
-      const nextHeight = Math.round(height)
-      const currentCenterX = current.x + Math.round(current.width / 2)
-      args.window.setBounds(
-        {
-          x: currentCenterX - Math.round(nextWidth / 2),
-          y: current.y,
-          width: nextWidth,
-          height: nextHeight
-        },
-        false
-      )
-    } catch (error) {
-      args.warn('[status-pill] resize failed', error)
-    }
+    args.onContentRect({ left, top, width, height })
   }
   const answerHandler = async (payload: unknown): Promise<StatusPillAnswerResult> =>
     answerAgentFromPill(payload, args)
@@ -145,7 +140,7 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
   ipcMain.on('statusPill:contextMenu', contextMenuHandler)
   ipcMain.on('statusPill:focusPane', focusPaneHandler)
   ipcMain.on('statusPill:setWindowPosition', setWindowPositionHandler)
-  ipcMain.on('statusPill:resize', resizeHandler)
+  ipcMain.on('statusPill:contentRect', contentRectHandler)
   ipcMain.handle('statusPill:getSnapshot', snapshotHandler)
   ipcMain.handle('statusPill:getAgentRows', rowsHandler)
   ipcMain.handle('statusPill:getInitialPreferences', prefsHandler)
@@ -157,7 +152,7 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
     ipcMain.removeListener('statusPill:contextMenu', contextMenuHandler)
     ipcMain.removeListener('statusPill:focusPane', focusPaneHandler)
     ipcMain.removeListener('statusPill:setWindowPosition', setWindowPositionHandler)
-    ipcMain.removeListener('statusPill:resize', resizeHandler)
+    ipcMain.removeListener('statusPill:contentRect', contentRectHandler)
     ipcMain.removeHandler('statusPill:getSnapshot')
     ipcMain.removeHandler('statusPill:getAgentRows')
     ipcMain.removeHandler('statusPill:getInitialPreferences')
