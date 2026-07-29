@@ -64,6 +64,17 @@ describe('terminal IME shortcut guard', () => {
     expect(guard.classifyKeydown(REAL_ENTER)).toBe('plain')
   })
 
+  it('does not carry a pending commit into the next composition', () => {
+    const { guard, compose, commit } = openGuard()
+    compose()
+    commit()
+    // Why: a session that starts without an intervening keydown proves xterm's
+    // queued flush already ran, so deferring behind it would order against nothing.
+    compose()
+
+    expect(guard.classifyKeydown({ key: 'a' })).toBe('plain')
+  })
+
   it('leaves keys outside the IME-owned set alone while composing', () => {
     const { guard, compose } = openGuard()
     compose()

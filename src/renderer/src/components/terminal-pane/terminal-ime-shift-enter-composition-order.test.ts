@@ -59,6 +59,7 @@ function pressShiftEnter(ptyWrites: string[], textarea: HTMLTextAreaElement): vo
   if (real !== 'ime-owned') {
     writeTerminalShortcutInPtyOrder(real, sendShiftEnter)
   }
+  guard.dispose()
 }
 
 describe('Shift+Enter during an IME composition', () => {

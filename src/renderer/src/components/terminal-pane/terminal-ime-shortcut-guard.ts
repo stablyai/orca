@@ -1,13 +1,10 @@
 import type { IDisposable } from '@xterm/xterm'
 import { TERMINAL_IME_OWNED_KEYS } from './xterm-bypass-policy'
 
-// Why: two writers reach one PTY — xterm's onData path and the shortcut layer's
-// direct transport write — and only the former is ordered against IME output.
-// A macOS IME delivers one Shift+Enter pressed mid-composition as two keydowns:
-// a committing press that ends the composition, then the real press. Both match
-// the plain shortcut rules, so the shortcut fired twice, and both writes landed
-// ahead of the committed glyph, which xterm only queues on a setTimeout(0) taken
-// at compositionend. Anyone adding another direct write inherits that hazard.
+// Why: two writers reach one PTY — xterm's onData and the shortcut layer's direct
+// transport write — and only the former is ordered against IME output. An IME also
+// delivers one mid-composition Shift+Enter as two keydowns, so the shortcut fired
+// twice and both writes beat the glyph. Any new direct writer inherits the hazard.
 
 export type TerminalImeShortcutKeyEvent = {
   key: string
@@ -33,25 +30,24 @@ export function createTerminalImeShortcutGuard(
   let compositionFlushPending = false
   const markCompositionStart = (): void => {
     compositionActive = true
+    // Why: a new session proves the previous flush already ran.
+    compositionFlushPending = false
   }
   const markCompositionEnd = (): void => {
     compositionActive = false
     compositionFlushPending = true
   }
-  // Why the options object over a bare `true`: Node's EventTarget only matches
-  // the boolean form on add, so a bare `true` would make `dispose` a no-op under
-  // the node test environment while still working in the renderer.
+  // Why not a bare `true`: Node's EventTarget matches it only on add, so `dispose`
+  // would silently no-op under the node test environment.
   const capture = { capture: true } as const
   target.addEventListener('compositionstart', markCompositionStart, capture)
   target.addEventListener('compositionend', markCompositionEnd, capture)
 
   return {
     classifyKeydown: (event) => {
-      // Why live composition state rather than the keyCode 229 marker: an IME
-      // reports 229 outside any composition too — the first key after a macOS
-      // input-source switch, and Sogou/fcitx candidate commits — and claiming
-      // those would swallow the shortcut with no second press to redo it.
-      // xterm-bypass-policy.ts passes exactly those events for the same reason.
+      // Why live state, not the keyCode 229 marker: IMEs report 229 outside any
+      // composition too, and claiming those drops the shortcut with no second
+      // press to redo it. xterm-bypass-policy.ts passes them for the same reason.
       if (
         (compositionActive || event.isComposing === true) &&
         TERMINAL_IME_OWNED_KEYS.has(event.key)
@@ -78,10 +74,7 @@ export function writeTerminalShortcutInPtyOrder(
     write()
     return
   }
-  // Why: xterm would flush its queued glyph synchronously on this keydown, but
-  // the shortcut layer stops propagation before xterm sees it. A same-delay timer
-  // queued now runs after the one compositionend already took, restoring order.
-  // It must stay a timer: a microtask or a MessageChannel yield would both run
-  // ahead of that pending flush and reintroduce the bug.
+  // Why a timer specifically: it lands after the one compositionend already took,
+  // while a microtask or MessageChannel yield would run ahead of that flush.
   setTimeout(write, 0)
 }
