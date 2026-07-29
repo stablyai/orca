@@ -281,6 +281,68 @@ describe('all-host folder workspace startup catalogs', () => {
     ])
   })
 
+  it('clears missing restored owners only for hydrated folder catalog hosts', async () => {
+    runtimeEnvironmentsList.mockResolvedValue([
+      { id: 'env-1', name: 'lobster' },
+      { id: 'env-2', name: 'shrimp' }
+    ])
+    const secondRemoteGroup: ProjectGroup = {
+      ...remoteProjectGroup,
+      id: 'remote-group-2',
+      executionHostId: 'runtime:env-2'
+    }
+    runtimeEnvironmentCall.mockImplementation(
+      (args: RuntimeEnvironmentCallRequest & { selector: string }) => {
+        if (args.selector === 'env-1') {
+          throw new Error('runtime_unreachable')
+        }
+        if (args.method === 'projectGroup.list') {
+          return {
+            id: 'rpc-project-group-list-env-2',
+            ok: true,
+            result: { groups: [secondRemoteGroup] },
+            _meta: { runtimeId: 'runtime-env-2' }
+          }
+        }
+        if (args.method === 'folderWorkspace.list') {
+          return {
+            id: 'rpc-folder-workspace-list-env-2',
+            ok: true,
+            result: { folderWorkspaces: [] },
+            _meta: { runtimeId: 'runtime-env-2' }
+          }
+        }
+        return {
+          id: 'rpc-other-env-2',
+          ok: true,
+          result: { repos: [], projects: [], setups: [] },
+          _meta: { runtimeId: 'runtime-env-2' }
+        }
+      }
+    )
+    const localFolderKey = folderWorkspaceKey('local-folder')
+    const missingLocalFolderKey = folderWorkspaceKey('missing-local-folder')
+    const missingFailedRuntimeFolderKey = folderWorkspaceKey('missing-runtime-folder-env-1')
+    const missingHydratedRuntimeFolderKey = folderWorkspaceKey('missing-runtime-folder-env-2')
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      restoredRuntimeHostIdByWorkspaceSessionKey: {
+        [localFolderKey]: 'runtime:env-1',
+        [missingLocalFolderKey]: 'local',
+        [missingFailedRuntimeFolderKey]: 'runtime:env-1',
+        [missingHydratedRuntimeFolderKey]: 'runtime:env-2'
+      }
+    })
+
+    await store.getState().fetchProjectGroupsForAllHosts()
+    await store.getState().fetchFolderWorkspacesForAllHosts()
+
+    expect(store.getState().restoredRuntimeHostIdByWorkspaceSessionKey).toEqual({
+      [missingFailedRuntimeFolderKey]: 'runtime:env-1'
+    })
+  })
+
   it('does not repeat offline runtime compatibility probes across startup catalog loads', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     runtimeEnvironmentTransportCall.mockResolvedValue({
