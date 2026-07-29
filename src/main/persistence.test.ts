@@ -10021,6 +10021,56 @@ describe('Store', () => {
     expect(store.getSshRemotePtyLeases()).toEqual([])
   })
 
+  it('persists a grid in the owning SSH folder workspace partition', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Remote platform',
+      parentPath: '/remote/platform',
+      connectionId: 'ssh-folder',
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      name: 'Remote workers'
+    })
+    const worktreeId = folderWorkspaceKey(workspace.id)
+
+    store.persistOrchestrationGridPtyBinding({
+      hostId: 'ssh:ssh-folder',
+      sshTargetId: 'ssh-folder',
+      worktreeId,
+      tabId: 'folder-grid-tab',
+      leafId: TEST_LEAF_1,
+      ptyId: 'ssh:ssh-folder@@folder-grid-pty',
+      layout: {
+        root: { type: 'leaf', leafId: TEST_LEAF_1 },
+        activeLeafId: TEST_LEAF_1,
+        expandedLeafId: null,
+        layoutMode: 'orchestration-grid'
+      }
+    })
+
+    const remoteSession = store.getWorkspaceSession('ssh:ssh-folder')
+    expect(remoteSession.tabsByWorktree[worktreeId]?.[0]).toMatchObject({
+      id: 'folder-grid-tab',
+      ptyId: 'ssh:ssh-folder@@folder-grid-pty'
+    })
+    expect(remoteSession.terminalLayoutsByTabId['folder-grid-tab']).toMatchObject({
+      layoutMode: 'orchestration-grid',
+      ptyIdsByLeafId: { [TEST_LEAF_1]: 'ssh:ssh-folder@@folder-grid-pty' }
+    })
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeId]).toBeUndefined()
+    expect(store.getSshRemotePtyLeases()).toEqual([
+      expect.objectContaining({
+        targetId: 'ssh-folder',
+        worktreeId,
+        tabId: 'folder-grid-tab',
+        leafId: TEST_LEAF_1,
+        state: 'attached'
+      })
+    ])
+  })
+
   it('persists grid incarnation identity and advances the initial topology revision', async () => {
     const store = await createStore()
     const paneKey = `grid-tab:${TEST_LEAF_2}`

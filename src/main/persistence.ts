@@ -6850,6 +6850,31 @@ export class Store {
     } else if (sshTargetId) {
       throw new Error('Orchestration grid SSH target requires an SSH execution host')
     }
+    const repoId = getRepoIdFromWorktreeId(args.worktreeId)
+    const repo = this.state.repos.find((candidate) => candidate.id === repoId)
+    const workspaceScope = parseWorkspaceKey(args.worktreeId)
+    const folderWorkspace =
+      workspaceScope?.type === 'folder'
+        ? this.state.folderWorkspaces?.find(
+            (candidate) => candidate.id === workspaceScope.folderWorkspaceId
+          )
+        : undefined
+    const folderWorkspaceHostId = folderWorkspace
+      ? folderWorkspace.connectionId
+        ? toSshExecutionHostId(folderWorkspace.connectionId)
+        : LOCAL_EXECUTION_HOST_ID
+      : null
+    const persistedHostId =
+      // Why: folder scopes own execution provenance directly and do not have
+      // the repo or worktree-meta rows used by Git-backed worktrees.
+      folderWorkspaceHostId ??
+      normalizeExecutionHostId(this.state.worktreeMeta[args.worktreeId]?.hostId) ??
+      (repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID)
+    // Why: a caller-supplied internally consistent SSH pair must not move a
+    // worktree's terminal state into a different host partition.
+    if (persistedHostId !== hostId) {
+      throw new Error('Orchestration grid execution host does not own the worktree')
+    }
     const hadPartition =
       hostId === LOCAL_EXECUTION_HOST_ID ||
       this.state.workspaceSessionsByHostId?.[hostId] !== undefined
