@@ -21,11 +21,11 @@ import {
   normalizeGitLabSearchQuery
 } from '../gitlab/gitlab-preload-args'
 import { recordGitLabProjectRecent } from '../gitlab/gitlab-project-recents'
+import { setConfiguredGitLabUrl } from '../gitlab/gitlab-known-host-probe'
 import {
-  getConfiguredGitLabHost,
-  setConfiguredGitLabUrl
-} from '../gitlab/gitlab-known-host-probe'
-import { normalizeGitLabHost } from '../gitlab/project-ref-parser'
+  assertConfiguredGitLabHost,
+  assertConfiguredProjectRef
+} from '../gitlab/configured-instance-host-guard'
 import {
   addIssueComment,
   addMRInlineComment,
@@ -101,30 +101,6 @@ function assertRegisteredRepo(args: GitLabRepoSelectorArgs, store: Store): Repo 
 
 function repoConnectionId(repo: Repo): string | null {
   return repo.connectionId ?? null
-}
-
-// Why: a renderer-supplied host is a `glab --hostname` override that bypasses
-// remote resolution entirely, so it must be pinned to the one configured
-// instance — otherwise a crafted payload routes credentialed calls at an
-// arbitrary GitLab. Callers that supply no host keep the resolved-remote path.
-function assertConfiguredGitLabHost(host: string | null | undefined): string {
-  const configured = getConfiguredGitLabHost()
-  if (!configured) {
-    throw new Error('Access denied: no GitLab instance is configured')
-  }
-  if (normalizeGitLabHost(host ?? '') !== configured) {
-    throw new Error('Access denied: GitLab host does not match the configured instance')
-  }
-  return configured
-}
-
-function assertConfiguredProjectRef<T extends { host: string }>(
-  projectRef: T | null | undefined
-): T | null | undefined {
-  if (projectRef) {
-    assertConfiguredGitLabHost(projectRef.host)
-  }
-  return projectRef
 }
 
 function localGitOptions(store: Store, repo: Repo): LocalGitExecOptions {
