@@ -2407,10 +2407,21 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         }
       ).client
       const requestSpy = vi.spyOn(client, 'request')
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
 
       expect(result.coldRestore?.scrollback).toContain('LEGACY-MARKER')
+      expect(warn).toHaveBeenCalledWith(
+        '[daemon] cold-restore history seed unavailable for legacy protocol',
+        {
+          sessionId,
+          daemonProtocolVersion: 29,
+          requiredProtocolVersion: 30,
+          seedCodeUnits: TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS + 'LEGACY-MARKER'.length + 1,
+          seedChunkCount: 3
+        }
+      )
       expect(requestSpy.mock.calls.map(([type]) => type)).not.toContain('startHistorySeedTransfer')
       const createPayload = requestSpy.mock.calls.find(([type]) => type === 'createOrAttach')?.[1]
       expect(createPayload).not.toHaveProperty('historySeed')
@@ -2420,6 +2431,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         writers: Map<string, unknown>
       }
       expect(managerInternals.writers.has(sessionId)).toBe(false)
+      warn.mockRestore()
     })
 
     it('repairs legacy hostname UNC cwd for WSL spawn and cold-restore metadata', async () => {
