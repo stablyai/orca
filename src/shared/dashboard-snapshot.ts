@@ -19,6 +19,11 @@ export const DASHBOARD_BUCKET_ORDER: readonly DashboardBucket[] = [
   'idle'
 ]
 
+/** Max length of a card's display labels. The producer truncates to this and
+ *  the main-process validator enforces it, so an unbounded name (a long
+ *  `terminal rename`, an OSC title) cannot cost the card its place on the board. */
+export const DASHBOARD_MAX_LABEL_LENGTH = 1_024
+
 /** Kept distinct from `bucket` so attention cards retain their precise dot state. */
 export type DashboardCardDotState = 'working' | 'blocked' | 'waiting' | 'done' | 'idle'
 

@@ -53,6 +53,24 @@ const mainSender = { id: 1, send: vi.fn() }
 const popoutSender = { id: 2, send: vi.fn() }
 const untrustedSender = { id: 3, send: vi.fn() }
 const SNAPSHOT = { generatedAt: 1, cards: [] }
+const CARD = {
+  paneKey: 'tab-1:leaf-1',
+  ptyId: 'pty-1',
+  agentType: 'codex',
+  bucket: 'working',
+  dotState: 'working',
+  task: 'Ship it',
+  repoId: 'repo-1',
+  worktreeId: 'worktree-1',
+  tabId: 'tab-1',
+  leafId: 'leaf-1',
+  repoName: 'Orca',
+  worktreeName: 'Dashboard',
+  startedAt: 1,
+  finishedAt: null,
+  stateChangedAt: 1,
+  unseen: false
+}
 
 function makeWindow(sender: typeof mainSender) {
   return {
@@ -129,6 +147,40 @@ describe('registerDashboardPopoutHandlers', () => {
 
     handlers.get('dashboard:publishSnapshot')!({ sender: mainSender } as never, SNAPSHOT)
     expect(popoutSender.send).toHaveBeenCalledWith('dashboard:snapshot', SNAPSHOT)
+  })
+
+  // Why: an over-long label used to drop the whole snapshot silently, leaving
+  // the board frozen on its last good paint with nothing logged.
+  it('keeps publishing the board when one card is invalid, and says so', () => {
+    const popout = makeWindow(popoutSender)
+    getPopoutMock.mockReturnValue(popout)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const good = { ...CARD, paneKey: 'tab-1:leaf-1' }
+    const bad = { ...CARD, paneKey: 'tab-2:leaf-2', conversationName: 'x'.repeat(1_025) }
+
+    handlers.get('dashboard:publishSnapshot')!({ sender: mainSender } as never, {
+      generatedAt: 2,
+      cards: [good, bad]
+    })
+
+    expect(popoutSender.send).toHaveBeenCalledWith('dashboard:snapshot', {
+      generatedAt: 2,
+      cards: [good]
+    })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('dropped 1 invalid card'))
+    warn.mockRestore()
+  })
+
+  it('logs when a snapshot is rejected outright', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    handlers.get('dashboard:publishSnapshot')!({ sender: mainSender } as never, {
+      generatedAt: Number.NaN,
+      cards: []
+    })
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('rejected malformed snapshot'))
+    warn.mockRestore()
   })
 
   it('replays the cached snapshot only to the popout and nudges only the trusted main renderer', () => {

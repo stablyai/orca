@@ -3,6 +3,7 @@ import {
   collectWorkspaceSpaceDirectoryEntries,
   createWorkspaceSpaceScanBudget,
   estimateWorkspaceSpaceEntryRetainedBytes,
+  estimateWorkspaceSpaceListingRetainedBytes,
   releaseWorkspaceSpaceScanEntries,
   WorkspaceSpaceScanCapacityError
 } from './workspace-space-scan-budget'
@@ -12,8 +13,8 @@ describe('workspace space scan budget', () => {
     const entries = [{ name: 'first' }, { name: 'second' }]
     const parentPath = '/workspace'
     const exactBytes = entries.reduce(
-      (total, entry) => total + estimateWorkspaceSpaceEntryRetainedBytes(parentPath, entry.name),
-      0
+      (total, entry) => total + estimateWorkspaceSpaceEntryRetainedBytes(entry.name),
+      estimateWorkspaceSpaceListingRetainedBytes(parentPath)
     )
 
     await expect(
@@ -43,15 +44,15 @@ describe('workspace space scan budget', () => {
         () => undefined
       )
     ).rejects.toThrow('readdir exploded')
-    expect(budget).toMatchObject({ entries: 0, retainedBytes: 0 })
+    expect(budget).toMatchObject({ retainedBytes: 0 })
   })
 
   it('frees capacity for later directories once a listing is released', async () => {
     const parentPath = '/workspace'
     const entries = [{ name: 'first' }, { name: 'second' }]
     const exactBytes = entries.reduce(
-      (total, entry) => total + estimateWorkspaceSpaceEntryRetainedBytes(parentPath, entry.name),
-      0
+      (total, entry) => total + estimateWorkspaceSpaceEntryRetainedBytes(entry.name),
+      estimateWorkspaceSpaceListingRetainedBytes(parentPath)
     )
     const budget = createWorkspaceSpaceScanBudget({ maxRetainedBytes: exactBytes })
 
@@ -63,7 +64,7 @@ describe('workspace space scan budget', () => {
       () => undefined
     )
     // Why: a cumulative counter would reject the identical second listing here.
-    releaseWorkspaceSpaceScanEntries(budget, first.entries.length, first.retainedBytes)
+    releaseWorkspaceSpaceScanEntries(budget, first.retainedBytes)
 
     await expect(
       collectWorkspaceSpaceDirectoryEntries(

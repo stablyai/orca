@@ -7,6 +7,7 @@ export type SkillGroupStatus = 'update-available' | 'cannot-update'
 
 export type SkillLocationChip =
   | 'current'
+  | 'newer'
   | 'unrecognized'
   | 'inaccessible'
   | 'duplicate'
@@ -53,9 +54,14 @@ export function locationChip(installation: SkillFreshnessInstallation): SkillLoc
       return 'plugin-cache'
     case 'canonical-copy':
     case 'provider-alias':
-      // Why: a supported location only needs a chip when it's already up to date,
-      // to explain why the update won't touch it; the out-of-date main copy is bare.
-      return installation.status === 'current' ? 'current' : null
+      // Why: a supported location only needs a chip when the update won't touch it —
+      // already current, or ahead of what this build knows. The out-of-date main copy
+      // is bare, and 'newer' is what keeps a bare chip meaning "behind, and fixable":
+      // reinstalling a copy that is ahead would quietly roll the user back.
+      if (installation.status === 'current') {
+        return 'current'
+      }
+      return installation.status === 'newer-known' ? 'newer' : null
   }
 }
 

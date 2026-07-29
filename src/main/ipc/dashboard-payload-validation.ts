@@ -1,4 +1,9 @@
-import type { DashboardRevealAgentArgs, DashboardSnapshot } from '../../shared/dashboard-snapshot'
+import {
+  DASHBOARD_MAX_LABEL_LENGTH,
+  type DashboardRevealAgentArgs,
+  type DashboardSnapshot
+} from '../../shared/dashboard-snapshot'
+import { BoundedMap } from '../../shared/bounded-map'
 import { sanitizeRepoIcon } from '../../shared/repo-icon'
 import {
   AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
@@ -11,8 +16,16 @@ const MAX_DASHBOARD_CARDS = 1_000
 const MAX_DASHBOARD_SUBAGENTS = 100
 const MAX_DASHBOARD_REPO_ICONS = 500
 const MAX_DASHBOARD_FILTER_OPTIONS = 500
+// Why: sanitizing an image icon base64-decodes the whole data URI to read a
+// 24-byte header, and the renderer republishes the same icons every 250 ms.
+const MAX_CACHED_ICON_SRC_BYTES = 8 * 1024 * 1024
+const imageIconValidity = new BoundedMap<string, boolean>({
+  maxEntries: MAX_DASHBOARD_REPO_ICONS,
+  maxBytes: MAX_CACHED_ICON_SRC_BYTES,
+  sizeOf: (_valid, key) => key.length * 2
+})
 const MAX_ID_LENGTH = 4_096
-const MAX_LABEL_LENGTH = 1_024
+const MAX_LABEL_LENGTH = DASHBOARD_MAX_LABEL_LENGTH
 const DASHBOARD_BUCKETS = new Set(['attention', 'working', 'done', 'idle'])
 const DASHBOARD_DOT_STATES = new Set(['working', 'blocked', 'waiting', 'done', 'idle'])
 const DASHBOARD_REVIEW_STATES = new Set(['open', 'closed', 'merged', 'draft'])
@@ -62,6 +75,41 @@ export function isDashboardSnapshot(value: unknown): value is DashboardSnapshot 
   )
 }
 
+export type DashboardSnapshotAdmission = {
+  snapshot: DashboardSnapshot
+  /** Cards dropped for failing validation; the rest of the board still paints. */
+  droppedCardCount: number
+}
+
+/**
+ * Why: one malformed card used to reject the whole snapshot, and the pop-out
+ * then replayed its last good board forever with nothing logged. A single
+ * over-long label must cost that card, not every other agent's live status.
+ * Snapshot-level fields still reject outright — there is no partial board to
+ * salvage when the frame itself is unusable.
+ */
+export function admitDashboardSnapshot(value: unknown): DashboardSnapshotAdmission | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  const snapshot = value as Record<string, unknown>
+  if (
+    !isFiniteNumber(snapshot.generatedAt) ||
+    !Array.isArray(snapshot.cards) ||
+    snapshot.cards.length > MAX_DASHBOARD_CARDS ||
+    (snapshot.showIdle !== undefined && typeof snapshot.showIdle !== 'boolean') ||
+    !isDashboardFilterOptions(snapshot.filterOptions) ||
+    !isDashboardRepoIcons(snapshot.repoIconsByRepoId)
+  ) {
+    return null
+  }
+  const cards = snapshot.cards.filter(isDashboardCard)
+  return {
+    snapshot: { ...(snapshot as unknown as DashboardSnapshot), cards },
+    droppedCardCount: snapshot.cards.length - cards.length
+  }
+}
+
 function isDashboardFilterOptions(value: unknown): boolean {
   if (value === undefined) {
     return true
@@ -107,9 +155,7 @@ function isDashboardRepoIcons(value: unknown): boolean {
   return (
     entries.length <= MAX_DASHBOARD_REPO_ICONS &&
     entries.every(
-      ([repoId, icon]) =>
-        isBoundedString(repoId, MAX_ID_LENGTH) &&
-        (icon === null || sanitizeRepoIcon(icon) !== undefined)
+      ([repoId, icon]) => isBoundedString(repoId, MAX_ID_LENGTH) && (icon === null || isIcon(icon))
     )
   )
 }
@@ -150,6 +196,38 @@ function isDashboardSubagents(value: unknown): boolean {
       )
     })
   )
+}
+
+/** Memoizes only the image branch, whose cost is proportional to payload size. */
+function isIcon(icon: unknown): boolean {
+  const key = imageIconCacheKey(icon)
+  if (key === null) {
+    return sanitizeRepoIcon(icon) !== undefined
+  }
+  const cached = imageIconValidity.get(key)
+  if (cached !== undefined) {
+    return cached
+  }
+  const valid = sanitizeRepoIcon(icon) !== undefined
+  imageIconValidity.set(key, valid)
+  return valid
+}
+
+/** Cache key for an image icon; null when the verdict is already cheap. */
+function imageIconCacheKey(icon: unknown): string | null {
+  if (!icon || typeof icon !== 'object' || Array.isArray(icon)) {
+    return null
+  }
+  const candidate = icon as Record<string, unknown>
+  // Why: `source` and `src` are the only fields an image icon can be rejected
+  // on — `label` is normalized rather than rejected — so they alone key it.
+  // Length-prefixed because a valid `src` may contain whitespace, so a plain
+  // separator would let a rejected icon collide with an accepted one's verdict.
+  return candidate.type === 'image' &&
+    typeof candidate.src === 'string' &&
+    typeof candidate.source === 'string'
+    ? `${candidate.source.length}:${candidate.source}${candidate.src}`
+    : null
 }
 
 function isDashboardCard(value: unknown): boolean {

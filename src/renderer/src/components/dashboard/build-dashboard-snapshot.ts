@@ -1,10 +1,11 @@
 import type { AppState } from '@/store/types'
-import type {
-  DashboardBucket,
-  DashboardCard,
-  DashboardCardDotState,
-  DashboardCardSubagent,
-  DashboardSnapshot
+import {
+  DASHBOARD_MAX_LABEL_LENGTH,
+  type DashboardBucket,
+  type DashboardCard,
+  type DashboardCardDotState,
+  type DashboardCardSubagent,
+  type DashboardSnapshot
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { DEFAULT_WORKSPACE_STATUSES } from '../../../../shared/workspace-statuses'
@@ -79,6 +80,18 @@ function nonEmpty(value: string | undefined): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined
 }
 
+/** Why: these labels come from unbounded sources (`terminal rename`, OSC titles,
+ *  display names). Over the validator's bound the card would be dropped. */
+function boundedLabel(value: string): string {
+  return value.length > DASHBOARD_MAX_LABEL_LENGTH
+    ? value.slice(0, DASHBOARD_MAX_LABEL_LENGTH)
+    : value
+}
+
+function boundedLabelOrUndefined(value: string | undefined): string | undefined {
+  return value === undefined ? undefined : boundedLabel(value)
+}
+
 /** Mirrors useAgentRowConversationName so the board and the sidebar label the
  *  same agent with the same name. */
 function rowConversationName(
@@ -129,8 +142,10 @@ export function buildDashboardSnapshot(
     options.includeFilterOptions === false
       ? undefined
       : {
+          // Why: filterOptions is snapshot-level, so an over-long project label
+          // costs the WHOLE board, not one card. Bound it at the producer.
           projects: [...new Map(activeWorktrees.map(({ repo }) => [repo.id, repo])).values()].map(
-            (repo) => ({ id: repo.id, label: repo.displayName })
+            (repo) => ({ id: repo.id, label: boundedLabel(repo.displayName) })
           ),
           workspaceStatuses: (state.workspaceStatuses && state.workspaceStatuses.length > 0
             ? state.workspaceStatuses
@@ -261,8 +276,8 @@ export function buildDashboardSnapshot(
         worktreeId,
         tabId,
         leafId,
-        repoName: repo.displayName,
-        worktreeName: worktree.displayName,
+        repoName: boundedLabel(repo.displayName),
+        worktreeName: boundedLabel(worktree.displayName),
         workspaceStatusId: context?.workspaceStatus.id,
         workspaceStatusLabel: context?.workspaceStatus.label,
         workspaceStatusColor: context?.workspaceStatus.color,
@@ -280,7 +295,7 @@ export function buildDashboardSnapshot(
           !isTitleDerived &&
           (state.acknowledgedAgentsByPaneKey?.[row.paneKey] ?? 0) < row.entry.stateStartedAt,
         askSummary: bucket === 'attention' ? (row.entry.interactivePrompt ?? undefined) : undefined,
-        conversationName: rowConversationName(row, generatedTitlesEnabled)
+        conversationName: boundedLabelOrUndefined(rowConversationName(row, generatedTitlesEnabled))
       })
     }
   }
