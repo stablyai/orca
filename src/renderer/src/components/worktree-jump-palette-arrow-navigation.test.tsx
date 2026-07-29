@@ -215,6 +215,9 @@ describe('worktree jump palette arrow navigation', () => {
 
     const { container } = render(<PaletteHarness entries={WORKTREES_THEN_TABS} />)
     press(container, 'ArrowDown')
+    // Why: initial selection and the first ArrowDown also scroll; only calls
+    // after the clear prove the boundary crossing itself scrolled.
+    scrollIntoView.mockClear()
     press(container, 'ArrowDown')
 
     expect(selectedId(container)).toBe('workspace-tab:term')
