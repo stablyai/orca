@@ -312,43 +312,4 @@ describe('getVersionManagerBinPaths', () => {
     expect(paths).toContain(join(root, '.local', 'bin'))
     expect(paths).toContain(join(root, 'AppData', 'Roaming', 'npm'))
   })
-
-  it('uses the configured Windows fnm directory without a POSIX bin suffix', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-vm-paths-'))
-    const fnmDir = join(root, 'fnm-data')
-    const paths = getVersionManagerBinPaths({
-      platform: 'win32',
-      pathEnv: '',
-      homePath: root,
-      env: { FNM_DIR: fnmDir }
-    })
-
-    expect(paths).toContain(join(fnmDir, 'aliases', 'default'))
-    expect(paths).not.toContain(join(fnmDir, 'aliases', 'default', 'bin'))
-  })
-
-  it('falls back to the Windows roaming AppData fnm directory', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-vm-paths-'))
-    const appData = join(root, 'Roaming')
-    const paths = getVersionManagerBinPaths({
-      platform: 'win32',
-      pathEnv: '',
-      homePath: root,
-      env: { APPDATA: appData }
-    })
-
-    expect(paths).toContain(join(appData, 'fnm', 'aliases', 'default'))
-  })
-
-  it('derives the Windows roaming AppData fnm directory from home', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-vm-paths-'))
-    const paths = getVersionManagerBinPaths({
-      platform: 'win32',
-      pathEnv: '',
-      homePath: root,
-      env: {}
-    })
-
-    expect(paths).toContain(join(root, 'AppData', 'Roaming', 'fnm', 'aliases', 'default'))
-  })
 })

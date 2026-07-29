@@ -1,6 +1,6 @@
 import { accessSync, constants, existsSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { delimiter, dirname, join } from 'node:path'
+import { delimiter, dirname, join, win32 } from 'node:path'
 
 type ResolveCommandOptions = {
   pathEnv?: string | null
@@ -94,9 +94,21 @@ function getFnmDefaultDirectory(
   if (platform !== 'win32') {
     return join(homePath, '.fnm', 'aliases', 'default', 'bin')
   }
-  const appData = env.APPDATA?.trim() || join(homePath, 'AppData', 'Roaming')
-  const fnmDir = env.FNM_DIR?.trim() || join(appData, 'fnm')
-  return join(fnmDir, 'aliases', 'default')
+  const appData =
+    getFullyQualifiedWindowsEnvironmentPath(env.APPDATA) ??
+    win32.join(homePath, 'AppData', 'Roaming')
+  const fnmDir = getFullyQualifiedWindowsEnvironmentPath(env.FNM_DIR) ?? win32.join(appData, 'fnm')
+  return win32.join(fnmDir, 'aliases', 'default')
+}
+
+function getFullyQualifiedWindowsEnvironmentPath(value: string | undefined): string | null {
+  const normalized = value?.trim()
+  return normalized &&
+    !normalized.includes('\0') &&
+    win32.isAbsolute(normalized) &&
+    win32.parse(normalized).root.length > 1
+    ? normalized
+    : null
 }
 
 function getBaseVersionManagerDirectories(
