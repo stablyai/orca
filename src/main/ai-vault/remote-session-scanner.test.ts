@@ -255,6 +255,36 @@ describe('scanRemoteAiVaultSessions', () => {
     })
   })
 
+  it('prunes non-session OpenClaw subtrees from remote discovery', async () => {
+    const provider = new MemoryRemoteProvider()
+    const openClawRoot = '/home/ada/.openclaw/agents'
+    provider.addFile(
+      `${openClawRoot}/main/sessions/openclaw-session.jsonl`,
+      messageGraphTranscript('openclaw-session', 'Canonical OpenClaw session'),
+      40
+    )
+    provider.addFile(
+      `${openClawRoot}/main/agent/codex-home/sessions/nested.jsonl`,
+      messageGraphTranscript('nested-session', 'Nested Codex home'),
+      41
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions.map((session) => session.sessionId)).toEqual(['openclaw-session'])
+    expect(provider.readDirPaths.filter((path) => path.startsWith(openClawRoot))).toEqual([
+      openClawRoot,
+      `${openClawRoot}/main`,
+      `${openClawRoot}/main/sessions`
+    ])
+  })
+
   it('parses only canonical Antigravity transcripts on SSH hosts', async () => {
     const provider = new MemoryRemoteProvider()
     const sessionId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
@@ -733,6 +763,22 @@ function codexTranscript(args: {
         role: 'user',
         content: [{ type: 'text', text: args.title }]
       }
+    }
+  ])
+}
+
+function messageGraphTranscript(sessionId: string, title: string): string {
+  return jsonLines([
+    {
+      type: 'session',
+      id: sessionId,
+      timestamp: '2026-07-04T04:00:00.000Z',
+      cwd: '/home/ada/repo'
+    },
+    {
+      type: 'message',
+      timestamp: '2026-07-04T04:00:01.000Z',
+      message: { role: 'user', content: [{ type: 'text', text: title }] }
     }
   ])
 }
