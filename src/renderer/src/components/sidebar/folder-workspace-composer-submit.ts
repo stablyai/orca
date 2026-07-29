@@ -5,6 +5,7 @@ import {
 } from '@/lib/new-workspace'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { useAppStore } from '@/store'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
@@ -80,7 +81,8 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
 }): AgentStartupPlan | null {
   const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
     args.linkedWorkItem,
-    args.note
+    args.note,
+    useAppStore.getState().settings?.linearLaunchPromptTemplate
   )
   const linkedDraftPrompt = (draftPrompt ?? prompt.trim()) || null
   const draftLaunchPlan = linkedDraftPrompt

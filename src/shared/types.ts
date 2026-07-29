@@ -3007,6 +3007,10 @@ export type GlobalSettings = {
   githubProjects?: GitHubProjectSettings
   /** AI commit-message config (agent, model, per-model thinking, prompt suffix). Optional to avoid migrating existing profiles. */
   commitMessageAi?: CommitMessageAiSettings
+  /** Optional template for the first instruction injected when launching a
+      worktree from a Linear issue. Empty = built-in default. Placeholders:
+      {{identifier}} (e.g. TEAM-1234) and {{url}}. */
+  linearLaunchPromptTemplate?: string
   /** Source-control AI generation settings for commit messages and hosted-review drafts. */
   sourceControlAi?: SourceControlAiSettings
   /** GitLab project preferences (pinned + recent paths). Optional for pre-GitLab profiles; persistence merge fills the default. */

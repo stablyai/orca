@@ -6968,6 +6968,10 @@
           "53e9aabfc0": "可用时使用 OpenSSH 多路复用。对于有自定义 SSH 限制的主机，请关闭此项。"
         },
         "TasksPane": {
+          "cbcd4247a4": "Customize the first instruction Orca sends to the agent when you start a worktree from a Linear issue.",
+          "8490b38b7e": "Launch prompt template",
+          "6a0d7e542a": "Leave empty to use the default. The issue identifier and URL variables are shown in the field placeholder.",
+          "f37954bf8a": "Linked Linear issue: {{identifier}}\n{{url}}",
           "3a72b9745e": "选择要在“任务”页面和侧边栏快捷键中显示的任务提供商。",
           "f71d8a9dd3": "任务提供者",
           "71644aba56": "选择要在“任务”页面源选择器和侧边栏快捷键中显示的任务提供商。至少需保留一个可见提供商。",
@@ -8614,6 +8618,15 @@
         },
         "tasks": {
           "search": {
+            "a1f2e3d4c5": "linear",
+            "b2f3e4d5c6": "prompt",
+            "c3f4e5d6b7": "template",
+            "d4f5e6c7b8": "launch",
+            "e5f6d7c8b9": "instruction",
+            "f6a7c8b9d0": "identifier",
+            "a7b8c9d0e1": "url",
+            "9580d17a8c": "Launch prompt template",
+            "4253030e8d": "Leave empty to use the default. The issue identifier and URL variables are shown in the field placeholder.",
             "58cda6f9c0": "隐藏",
             "44083ae418": "展示",
             "604d8e4089": "阿特拉斯语",

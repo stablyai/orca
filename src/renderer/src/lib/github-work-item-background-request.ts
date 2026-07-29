@@ -72,9 +72,10 @@ function resolveGitHubWorkItemPrompt(item: GitHubWorkItem): QuickCreateLinkedWor
   const resolver = resolveQuickCreateLinkedWorkItemPrompt as unknown as (
     linkedWorkItem: GitHubWorkItem,
     note: string,
-    opts?: { cliAvailable: boolean }
+    template?: string
   ) => QuickCreateLinkedWorkItemPromptResult
-  return resolver(item, '', { cliAvailable: false })
+  // GitHub items never hit the Linear path, so no template is passed.
+  return resolver(item, '')
 }
 
 export function buildGitHubWorkItemBackendStartup(

@@ -63,6 +63,7 @@ export type LinearLaunchContextArgs = {
   identifier: string | undefined
   title?: string
   url?: string
+  template?: string
 }
 
 function isLinearWorkItemReference(
@@ -82,6 +83,29 @@ function isLinearWorkItemReference(
   )
 }
 
+const LINEAR_TEMPLATE_LINE_SPLIT = /\r\n|\r|\n/
+const UNRESOLVED_TEMPLATE_PLACEHOLDER = /\{\{[^{}]+\}\}/
+
+// Why: user templates are free text; substitute the two known tokens, then drop
+// blank lines (and lines left with an unknown placeholder) so an unfilled
+// placeholder never leaves a dangling or literal-token line.
+function renderLinearLaunchTemplate(
+  template: string,
+  identifier: string,
+  url: string
+): string | null {
+  const rendered = template
+    .split('{{identifier}}')
+    .join(identifier)
+    .split('{{url}}')
+    .join(url)
+    .split(LINEAR_TEMPLATE_LINE_SPLIT)
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0 && !UNRESOLVED_TEMPLATE_PLACEHOLDER.test(line))
+    .join('\n')
+  return rendered.length > 0 ? rendered : null
+}
+
 // Why: Linear ticket prose is third-party source data; terminal drafts may
 // carry only stable identity/link fields from the selected issue.
 export function buildLinearLaunchContextBlock(args: LinearLaunchContextArgs): string | null {
@@ -89,6 +113,11 @@ export function buildLinearLaunchContextBlock(args: LinearLaunchContextArgs): st
   const url = args.url?.trim()
   if (!identifier && !url) {
     return null
+  }
+
+  const template = args.template?.trim()
+  if (template) {
+    return renderLinearLaunchTemplate(template, identifier ?? '', url ?? '')
   }
 
   const lines = [identifier ? `Linked Linear issue: ${identifier}` : 'Linked Linear issue']
@@ -157,14 +186,16 @@ export function getLinkedWorkItemPromptContext(
         'provider' | 'url' | 'title' | 'linearIdentifier'
       > & { linkedContext?: LinkedWorkItemContext })
     | null
-    | undefined
+    | undefined,
+  template?: string
 ): { linkedUrls: string[]; linkedContextBlocks: string[] } {
   if (isLinearWorkItemReference(linkedWorkItem)) {
     const linearBlock = buildLinearLaunchContextBlock({
       provider: linkedWorkItem?.provider,
       identifier: linkedWorkItem?.linearIdentifier,
       title: linkedWorkItem?.title,
-      url: linkedWorkItem?.url
+      url: linkedWorkItem?.url,
+      template
     })
     return linearBlock
       ? { linkedUrls: [], linkedContextBlocks: [linearBlock] }
@@ -183,6 +214,7 @@ export function getLaunchableWorkItemDraftContent(args: {
   title?: string
   linearIdentifier?: string
   linkedContext?: LinkedWorkItemContext
+  template?: string
 }): string {
   if (args.pasteContent?.trim()) {
     return args.pasteContent
@@ -192,7 +224,8 @@ export function getLaunchableWorkItemDraftContent(args: {
       provider: args.provider,
       identifier: args.linearIdentifier,
       title: args.title,
-      url: args.url
+      url: args.url,
+      template: args.template
     })
     return linearBlock ? formatDraftContextBlock(linearBlock) : ''
   }
@@ -213,24 +246,31 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
       > & { linkedContext?: LinkedWorkItemContext })
     | null
     | undefined,
-  note: string
+  note: string,
+  template?: string
 ): { prompt: string; draftPrompt: string | null } {
   const trimmedNote = note.trim()
-  const linearBlock = isLinearWorkItemReference(linkedWorkItem)
+  const isLinear = isLinearWorkItemReference(linkedWorkItem)
+  const linearBlock = isLinear
     ? buildLinearLaunchContextBlock({
         provider: linkedWorkItem?.provider,
         identifier: linkedWorkItem?.linearIdentifier,
         title: linkedWorkItem?.title,
-        url: linkedWorkItem?.url
+        url: linkedWorkItem?.url,
+        template
       })
     : null
   const linearDraft = linearBlock ? formatDraftContextBlock(linearBlock) : null
   const linkedUrl = linkedWorkItem?.url?.trim() || null
+  // Why: a non-blank Linear template that renders empty means "no context" — don't
+  // fall back to injecting the raw URL (keeps parity with the composer path).
   const draftPrompt = linearDraft
     ? [trimmedNote, linearDraft].filter(Boolean).join('\n\n')
-    : linkedUrl
-      ? [trimmedNote, linkedUrl].filter(Boolean).join('\n\n')
-      : null
+    : isLinear && template?.trim()
+      ? null
+      : linkedUrl
+        ? [trimmedNote, linkedUrl].filter(Boolean).join('\n\n')
+        : null
   const isLinearTypedOnly = linkedWorkItem?.number === 0 && Boolean(trimmedNote) && !draftPrompt
   return {
     prompt: isLinearTypedOnly ? trimmedNote : '',
