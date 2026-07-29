@@ -9,6 +9,7 @@ import {
 } from '../../../../shared/powershell-native-argument'
 import { buildWslLoginShellCommand } from '../../../../shared/wsl-login-shell-command'
 import { getProjectAgentSkillTerminalShellOverride } from '@/lib/project-skill-runtime'
+import { useAppStore } from '@/store'
 import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
@@ -130,7 +131,13 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
   currentPlatform: NodeJS.Platform
 ): string {
   const trimmedCommand = command.trim()
-  if (currentPlatform !== 'win32' || !/^npx\s+skills\s+(?:add|update)\b/i.test(trimmedCommand)) {
+  if (
+    currentPlatform !== 'win32' ||
+    // Why: skill setup terminals spawn on the focused runtime environment, so a
+    // Windows client must not hand a cmd.exe command to a remote host.
+    isRemoteRuntimeEnvironmentFocused() ||
+    !/^npx\s+skills\s+(?:add|update)\b/i.test(trimmedCommand)
+  ) {
     return command
   }
 
@@ -140,6 +147,10 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
   // Prompt, and it resolves the bare name through PATHEXT for both the
   // preflight and the executed command, so shims such as npx.exe still count.
   return `cmd.exe /d /s /c "where.exe npx >nul 2>nul & if errorlevel 1 (${missingNpxGuidance}) else (${trimmedCommand})"`
+}
+
+function isRemoteRuntimeEnvironmentFocused(): boolean {
+  return Boolean(useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim())
 }
 
 function getSkillCommandPlatform(): NodeJS.Platform {

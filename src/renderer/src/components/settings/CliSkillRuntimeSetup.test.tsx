@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
 import { buildWslLoginShellCommand } from '../../../../shared/wsl-login-shell-command'
+import { useAppStore } from '@/store'
 import {
   buildSkillCommandForRuntime,
   buildSkillInstallCommandForRuntime,
@@ -214,6 +215,22 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
         'linux'
       )
     ).toBe('npx skills update orchestration --global')
+  })
+
+  it('skips the Windows preflight while a remote runtime environment is focused', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'remote-linux' }
+    })
+
+    try {
+      // Setup terminals spawn on the focused runtime, so cmd.exe would not exist there.
+      expect(
+        buildSkillCommandForRuntime(installCommand, { runtime: 'host', label: 'Windows' }, 'win32')
+      ).toBe(installCommand)
+    } finally {
+      useAppStore.setState({ settings: getDefaultSettings('/tmp') })
+    }
   })
 
   it('does not wrap unrelated Windows host commands', () => {
