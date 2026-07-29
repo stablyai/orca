@@ -3,8 +3,8 @@ import type { CommandHandler } from '../dispatch'
 import { RuntimeClientError } from '../runtime-client'
 import { delimiter, dirname } from 'node:path'
 import { getRepeatedStringFlag } from '../flags'
-import { getVersionManagerBinPaths, resolveCliCommand } from '../../main/codex-cli/command'
-import { getSpawnArgsForWindows } from '../../main/win32-utils'
+import { resolveCliCommand } from '../../main/codex-cli/command'
+import { getSpawnArgsForWindows, UnsafeWindowsBatchArgumentsError } from '../../main/win32-utils'
 import {
   buildAgentFeatureSkillInstallArgs,
   buildAgentFeatureSkillUpdateArgs
@@ -93,9 +93,14 @@ function resolveSelectedSkillNames(
 
 /** PATH with the resolved npx's own directory first, so its `env node` shebang resolves. */
 function buildNpxPath(resolvedNpx: string): string {
+  // Why: resolveCliCommand falls back to the bare name when it finds nothing, and
+  // dirname('npx') is '.', so prepending it blindly would run ./npx out of the
+  // caller's checkout instead of reporting that npx is missing.
   const own = dirname(resolvedNpx)
   const existing = process.env.PATH ?? process.env.Path ?? ''
-  return [own, ...getVersionManagerBinPaths(), existing].filter(Boolean).join(delimiter)
+  // Why: every version manager ships node beside npx in the same bin directory,
+  // so the resolved sibling is all the child needs to run npx's shebang.
+  return [own === '.' ? '' : own, existing].filter(Boolean).join(delimiter)
 }
 
 function runNpxSkills(args: string[]): Promise<number> {
@@ -108,9 +113,13 @@ function runNpxSkills(args: string[]): Promise<number> {
     let spawnArgs: string[]
     try {
       ;({ spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolved, args))
-    } catch {
+    } catch (error) {
       // Why: the guard rejects cmd metacharacters, and only the resolved npx
       // path can carry them here — a username like `A&B` puts them in it.
+      if (!(error instanceof UnsafeWindowsBatchArgumentsError)) {
+        reject(error)
+        return
+      }
       reject(
         new RuntimeClientError(
           'invalid_environment',

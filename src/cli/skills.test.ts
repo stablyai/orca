@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { delimiter } from 'node:path'
 import type * as CodexCliCommandModule from '../main/codex-cli/command'
 
 const { guideModuleLoadMock, resolveCliCommandMock, runtimeClientConstructorMock, spawnMock } =
@@ -625,9 +626,44 @@ describe('orca skills CLI', () => {
 
     // Why: npx is an `env node` script, so an off-PATH npx exits 127 with no
     // 'error' event unless node ships alongside it on the child's PATH.
-    expect(spawnMock.mock.calls[0]?.[2]?.env?.PATH?.split(':')[0]).toBe(
-      '/home/alice/.nvm/versions/node/v22/bin'
-    )
+    const env = spawnMock.mock.calls[0]?.[2]?.env
+    expect(env?.PATH?.split(delimiter)[0]).toBe('/home/alice/.nvm/versions/node/v22/bin')
+    // Why: the child still needs the inherited PATH and the rest of the parent
+    // environment; replacing it outright breaks git, node, HOME and npm config.
+    expect(env?.PATH?.endsWith(process.env.PATH ?? '')).toBe(true)
+    expect(env?.HOME ?? env?.USERPROFILE).toBe(process.env.HOME ?? process.env.USERPROFILE)
+  })
+
+  it('reports a Windows npx path cmd.exe would reinterpret', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    vi.stubEnv('ComSpec', 'C:\\Windows\\System32\\cmd.exe')
+    resolveCliCommandMock.mockReturnValue('C:\\Users\\A&B\\npx.cmd')
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    await main(['skills', 'install', '--skill', 'alpha'], '/tmp/repo')
+
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+    expect(String(errorSpy.mock.calls[0]?.[0])).toContain('cmd.exe would reinterpret')
+  })
+
+  it('never puts the current directory on the child PATH when npx is unresolvable', async () => {
+    const child = createFakeChild()
+    spawnMock.mockReturnValue(child)
+    // Why: resolveCliCommand returns the bare name when it finds nothing, and
+    // dirname('npx') is '.', which would run ./npx out of the caller's checkout.
+    resolveCliCommandMock.mockReturnValue('npx')
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    const resultPromise = main(['skills', 'install', '--skill', 'alpha'], '/tmp/repo')
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+    child.emit('exit', 0, null)
+    await resultPromise
+
+    const entries = spawnMock.mock.calls[0]?.[2]?.env?.PATH?.split(delimiter) ?? []
+    expect(entries).not.toContain('.')
+    expect(entries).not.toContain('')
   })
 
   it('accumulates a repeated --skill instead of keeping only the last one', async () => {
