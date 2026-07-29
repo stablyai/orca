@@ -31,7 +31,13 @@ const updateCapableCallers = new Map<string, readonly string[]>([
   ],
   [
     'src/renderer/src/components/settings/EphemeralVmsPane.tsx',
-    ['EPHEMERAL_VMS_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
+    [
+      'EPHEMERAL_VMS_SKILL_UPDATE_COMMAND',
+      'installedCommand={updateCommand}',
+      // An absent runtime must still resolve to the host so the Windows npx
+      // preflight applies, as it does on the sibling panes.
+      'const installCommand = activeSkillRuntime.installDisabledReason'
+    ]
   ],
   [
     'src/renderer/src/components/settings/CliSection.tsx',
