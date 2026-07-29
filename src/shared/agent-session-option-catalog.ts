@@ -85,8 +85,29 @@ export function mergeCatalogModels(
     return {
       ...model,
       ...live,
-      options: live.optionsAuthoritative ? live.options : model.options
+      options: live.optionsAuthoritative
+        ? live.options
+        : mergeOptionsById(model.options, live.options)
     }
+  })
+  return [...merged, ...discoveredById.values()]
+}
+
+// Why: when discovery is not authoritative (e.g. only a Fast tier was found
+// but no effort levels), augment the seed options with discovered additions
+// rather than silently dropping the seed effort picker.
+function mergeOptionsById(
+  seed: readonly CatalogOption[],
+  discovered: readonly CatalogOption[]
+): CatalogOption[] {
+  const discoveredById = new Map(discovered.map((option) => [option.id, option]))
+  const merged = seed.map((option) => {
+    const live = discoveredById.get(option.id)
+    if (!live) {
+      return option
+    }
+    discoveredById.delete(option.id)
+    return live
   })
   return [...merged, ...discoveredById.values()]
 }

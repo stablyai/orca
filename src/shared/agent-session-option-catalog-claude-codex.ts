@@ -180,13 +180,18 @@ function codexDiscoveredFastMode(model: CommitMessageModelCapability): CatalogOp
 }
 
 export function codexCatalogModelFromCapability(model: CommitMessageModelCapability): CatalogModel {
-  const options = [codexDiscoveredEffort(model), codexDiscoveredFastMode(model)].filter(
+  const discoveredEffort = codexDiscoveredEffort(model)
+  const discoveredFastMode = codexDiscoveredFastMode(model)
+  const options = [discoveredEffort, discoveredFastMode].filter(
     (option): option is CatalogOption => option !== null
   )
   return {
     id: model.id,
     label: model.label,
-    optionsAuthoritative: options.length > 0,
+    // Why: only mark authoritative when discovery produced an effort picker —
+    // a Fast-only result augments the seed options rather than replacing them,
+    // so the static effort picker is not silently dropped.
+    optionsAuthoritative: discoveredEffort !== null,
     options
   }
 }

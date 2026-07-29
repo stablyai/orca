@@ -112,6 +112,30 @@ describe('agent session option catalog', () => {
     })
   })
 
+  it('preserves seed effort when Codex discovery returns only a Fast tier', () => {
+    const catalog = getAgentSessionOptionCatalog('codex')!
+    const parsed = catalog.listModels!.parse(
+      JSON.stringify({
+        models: [
+          {
+            slug: 'gpt-5.5',
+            display_name: 'GPT-5.5 live',
+            service_tiers: [{ id: 'priority', name: 'Fast', description: '1.5x speed' }]
+          }
+        ]
+      })
+    )
+    const merged = mergeCatalogModels(catalog.models, parsed)
+    const model = merged.find((m) => m.id === 'gpt-5.5')!
+
+    // Why: Fast-only discovery augments the seed rather than replacing it,
+    // so the static effort picker must survive alongside the new fastMode.
+    expect(model.optionsAuthoritative).toBe(false)
+    const optionIds = model.options.map(({ id }) => id)
+    expect(optionIds).toContain('effort')
+    expect(optionIds).toContain('fastMode')
+  })
+
   it('composes Cursor effort and fast mode into the supported slug form', () => {
     const resolved = resolveAgentSessionOptionLaunch('cursor', {
       model: 'gpt-5.3-codex',

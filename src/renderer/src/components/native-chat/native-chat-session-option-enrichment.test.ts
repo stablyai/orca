@@ -120,4 +120,37 @@ describe('native chat session option enrichment', () => {
     ensureNativeChatModelEnrichment({ agent: 'claude', hostKey: 'local', discover })
     expect(discover).not.toHaveBeenCalled()
   })
+
+  it('backs off after consecutive discovery failures instead of retrying immediately', async () => {
+    const discover = vi.fn().mockRejectedValue(new Error('host down'))
+
+    ensureNativeChatModelEnrichment({ agent: 'cursor', hostKey: 'ssh:broken', discover })
+    await vi.waitFor(() => expect(discover).toHaveBeenCalledOnce())
+
+    // Why: the first failure should schedule a backoff, so an immediate second
+    // call must not fire discovery again.
+    ensureNativeChatModelEnrichment({ agent: 'cursor', hostKey: 'ssh:broken', discover })
+    expect(discover).toHaveBeenCalledOnce()
+  })
+
+  it('retries after the backoff window elapses', async () => {
+    const discover = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('flap'))
+      .mockResolvedValueOnce([{ id: 'account-model', label: 'Account model', options: [] }])
+
+    ensureNativeChatModelEnrichment({ agent: 'cursor', hostKey: 'ssh:flap', discover })
+    await vi.waitFor(() => expect(discover).toHaveBeenCalledOnce())
+
+    // Why: advance fake timers past the backoff so the next call retries.
+    vi.useFakeTimers()
+    await vi.advanceTimersByTimeAsync(500)
+    ensureNativeChatModelEnrichment({ agent: 'cursor', hostKey: 'ssh:flap', discover })
+    await vi.waitFor(() => expect(discover).toHaveBeenCalledTimes(2))
+    vi.useRealTimers()
+
+    await vi.waitFor(() =>
+      expect(readNativeChatEnrichedModels('cursor', 'ssh:flap')).not.toBeNull()
+    )
+  })
 })
