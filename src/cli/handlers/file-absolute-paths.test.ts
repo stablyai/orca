@@ -45,37 +45,42 @@ describe('absolute file CLI paths', () => {
 
   it('reproduces the issue positional WSL command without invalid_relative_path', async () => {
     const issuePath = '/root/orca/workspaces/xxx/xxx/xxx.ts'
-    callMock.mockImplementation(async (method: string, params: { relativePath?: string }) => {
-      if (method === 'worktree.list') {
-        return worktreeListFixture([buildWorktree('/root/orca/workspaces/xxx', 'feature')])
-      }
-      if (method === 'worktree.show') {
-        return okFixture('req_show', {
-          worktree: buildWorktree('/root/orca/workspaces/xxx', 'feature')
+    process.env.WSL_DISTRO_NAME = 'Ubuntu'
+    try {
+      callMock.mockImplementation(async (method: string, params: { relativePath?: string }) => {
+        if (method === 'worktree.list') {
+          return worktreeListFixture([buildWorktree('//wsl.localhost/Ubuntu/root/orca/workspaces/xxx', 'feature')])
+        }
+        if (method === 'worktree.show') {
+          return okFixture('req_show', {
+            worktree: buildWorktree('//wsl.localhost/Ubuntu/root/orca/workspaces/xxx', 'feature')
+          })
+        }
+        if (method === 'files.open' && params.relativePath?.startsWith('/')) {
+          throw new Error('invalid_relative_path')
+        }
+        return okFixture('req_open', {
+          worktree: 'wt-1',
+          relativePath: params.relativePath,
+          kind: 'text',
+          opened: true
         })
-      }
-      if (method === 'files.open' && params.relativePath?.startsWith('/')) {
-        throw new Error('invalid_relative_path')
-      }
-      return okFixture('req_open', {
-        worktree: 'wt-1',
-        relativePath: params.relativePath,
-        kind: 'text',
-        opened: true
       })
-    })
 
-    await main(['file', 'open', issuePath], '/root/orca/workspaces/xxx')
+      await main(['file', 'open', issuePath], '//wsl.localhost/Ubuntu/root/orca/workspaces/xxx')
 
-    expect(process.exitCode).toBeUndefined()
-    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.show', {
-      worktree: 'id:repo::/root/orca/workspaces/xxx'
-    })
-    expect(callMock).toHaveBeenNthCalledWith(3, 'files.open', {
-      worktree: 'id:repo::/root/orca/workspaces/xxx',
-      relativePath: 'xxx/xxx.ts'
-    })
+      expect(process.exitCode).toBeUndefined()
+      expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
+      expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.show', {
+        worktree: 'id:repo:://wsl.localhost/Ubuntu/root/orca/workspaces/xxx'
+      })
+      expect(callMock).toHaveBeenNthCalledWith(3, 'files.open', {
+        worktree: 'id:repo:://wsl.localhost/Ubuntu/root/orca/workspaces/xxx',
+        relativePath: 'xxx/xxx.ts'
+      })
+    } finally {
+      delete process.env.WSL_DISTRO_NAME
+    }
   })
 
   it('relativizes absolute file diff paths', async () => {

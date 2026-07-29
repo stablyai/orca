@@ -58,7 +58,14 @@ async function resolveFilePath(
   const result = await ctx.client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
     worktree
   })
-  const relativePath = relativePathInsideRoot(result.result.worktree.path, path)
+
+  let matchPath = path
+  const wslDistro = process.env.WSL_DISTRO_NAME
+  if (wslDistro && path.startsWith('/')) {
+    matchPath = `//wsl.localhost/${wslDistro}${path}`
+  }
+
+  const relativePath = relativePathInsideRoot(result.result.worktree.path, matchPath)
   if (relativePath === '') {
     throw new RuntimeClientError(
       'invalid_argument',
