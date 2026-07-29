@@ -31,7 +31,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'dsh',
   'jcode',
   'kiro',
-  'hermes'
+  'hermes',
+  'trae'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]

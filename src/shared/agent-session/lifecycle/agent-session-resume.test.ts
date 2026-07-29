@@ -2,11 +2,16 @@ import { describe, expect, it } from 'vitest'
 import {
   agentProviderSessionsEqual,
   extractAgentProviderSession,
+  isResumableTuiAgent,
   normalizeAgentProviderSession
 } from './agent-session-resume'
 import { getAgentResumeArgv } from '../../agent-resume-argv'
 
 describe('agent session resume metadata', () => {
+  it('treats trae as a resumable TUI agent', () => {
+    expect(isResumableTuiAgent('trae')).toBe(true)
+  })
+
   it.each([
     ['claude', { session_id: 'claude-session' }, { key: 'session_id', id: 'claude-session' }],
     ['codex', { session_id: 'codex-session' }, { key: 'session_id', id: 'codex-session' }],
@@ -89,9 +94,14 @@ describe('agent session resume metadata', () => {
     ],
     ['jcode', { key: 'session_id', id: 'session_jc_1' }, ['jcode', '--resume', 'session_jc_1']],
     ['hermes', { key: 'session_id', id: 's1' }, ['hermes', '--resume', 's1']],
-    ['dsh', { key: 'session_id', id: 's1' }, ['dsh-tui', '--backend=dsh', '--resume', 's1']]
+    ['dsh', { key: 'session_id', id: 's1' }, ['dsh-tui', '--backend=dsh', '--resume', 's1']],
+    ['trae', { key: 'session_id', id: 'trae-session' }, ['traecli', '--resume', 'trae-session']]
   ] as const)('builds %s resume argv', (agent, providerSession, expected) => {
     expect(getAgentResumeArgv(agent, providerSession)).toEqual(expected)
+  })
+
+  it('rejects trae resume when provider session key is not session_id', () => {
+    expect(getAgentResumeArgv('trae', { key: 'conversation_id', id: 'x' })).toBeNull()
   })
 
   it('rejects unsupported sources and unsafe ids', () => {
