@@ -23,6 +23,23 @@ export function findGroupForTab(
   return groups.find((g) => g.id === groupId) ?? null
 }
 
+/** Stand-in group for a tab whose group record is missing, rebuilt from the tabs still pointing at
+ *  that id. Lets a close finish instead of dead-ending on the lookup; never persisted. */
+export function reconstructGroupForOrphanedTab(
+  tabs: readonly Tab[],
+  worktreeId: string,
+  tab: Tab
+): TabGroup {
+  return {
+    id: tab.groupId,
+    worktreeId,
+    activeTabId: tab.id,
+    tabOrder: tabs
+      .filter((candidate) => candidate.groupId === tab.groupId)
+      .map((candidate) => candidate.id)
+  }
+}
+
 export function findGroupAndWorktree(
   groupsByWorktree: Record<string, TabGroup[]>,
   groupId: string
