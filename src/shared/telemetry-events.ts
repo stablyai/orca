@@ -242,6 +242,7 @@ type BooleanGlobalSettingsKey = {
 export const SETTINGS_CHANGED_WHITELIST = [
   'editorAutoSave',
   'openLinksInApp',
+  'openLinksInAppModifierInverts',
   'experimentalMobile',
   'experimentalPet',
   'experimentalNativeChat',

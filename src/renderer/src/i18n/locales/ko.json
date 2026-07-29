@@ -7635,6 +7635,12 @@
             "8dd4805991": "파일",
             "68d1db8929": "markdown",
             "90425d313c": "Shift",
+            "linkRoutingModifier": {
+              "routing": "라우팅",
+              "modifier": "수정자",
+              "invert": "반전",
+              "opposite": "반대"
+            },
             "72c58f7792": "웹뷰",
             "82ba1c80ea": "로컬호스트",
             "bea27bac4b": "링크",
@@ -9550,6 +9556,12 @@
           "serviceManagerHelp": "이 서버를 시작하는 서비스 관리자를 통해 Orca를 업데이트하세요.",
           "unpackedHelp": "개발 빌드는 소스 체크아웃에서 업데이트해야 합니다.",
           "legacyHelp": "원격 업데이트를 활성화하려면 이 서버를 수동으로 한 번 업데이트하세요."
+        },
+        "BrowserLinkRoutingModifierSetting": {
+          "titleSystem": "Hold Shift to open in your web browser",
+          "titleOrca": "Hold Shift to open in Orca",
+          "descriptionSystem": "Links open in Orca, so {{chord}}+click sends one to your system browser instead.",
+          "descriptionOrca": "Links open in your system browser. When enabled, {{chord}}+click opens one in Orca's built-in browser instead."
         },
         "PluginConsentDialog": {
           "workerTrust": "백그라운드 워커 — 자체 프로세스 실행",

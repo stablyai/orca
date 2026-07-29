@@ -1918,6 +1918,30 @@ describe('orchestration RPC methods', () => {
       expect(db.getDispatchContextById(result.dispatch.id)?.assignee_pane_key).toBe('tab_w:leaf_w')
     })
 
+    it('commits the target process launch token on a manual dispatch', async () => {
+      setup()
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+        runtimeId: runtime.getRuntimeId(),
+        terminalHandle: 'term_a',
+        ptyId: 'pty_a',
+        worktreeId: 'repo::worktree',
+        paneKey: 'tab_w:leaf_w',
+        processIncarnation: 'runtime_test:term_a:1',
+        launchTokenHash: 'launch-token-hash',
+        hostScope: { kind: 'local', hostId: 'local' }
+      })
+      const task = db.createTask({ spec: 'work' })
+
+      const result = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a'
+      })) as { dispatch: { id: string } }
+
+      expect(db.getDispatchContextById(result.dispatch.id)?.launch_token_hash).toBe(
+        'launch-token-hash'
+      )
+    })
+
     it('rejects dispatch for a pending task', async () => {
       setup()
       const parent = db.createTask({ spec: 'parent' })
@@ -2159,6 +2183,32 @@ describe('orchestration RPC methods', () => {
       expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
         'term_worker',
         expect.stringContaining('--dispatch-capability dcap_')
+      )
+    })
+
+    it('commits the launched worker token with its durable authority', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+        runtimeId: runtime.getRuntimeId(),
+        terminalHandle: 'term_worker',
+        ptyId: 'pty_worker',
+        worktreeId: 'repo::worktree',
+        paneKey: 'tab_worker:leaf_worker',
+        processIncarnation: 'runtime_test:term_worker:1',
+        launchTokenHash: 'worker-launch-token-hash',
+        hostScope: { kind: 'local', hostId: 'local' }
+      })
+      const task = db.createTask({ spec: 'persist worker identity' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as { dispatchId: string }
+
+      expect(db.getDispatchContextById(result.dispatchId)?.launch_token_hash).toBe(
+        'worker-launch-token-hash'
       )
     })
 

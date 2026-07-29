@@ -76,7 +76,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 11, y: 1 }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -86,7 +86,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 3, y: 2 }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -111,7 +111,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 11, y: 1 }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -121,7 +121,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 1, y: 2 }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -136,7 +136,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 11, y: 1 }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -146,7 +146,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 2, y: 2 }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(false)
     expect(openUrlMock).not.toHaveBeenCalled()
@@ -163,7 +163,7 @@ describe('edge-wrapped terminal HTTP links', () => {
       expect(
         openHttpLinkAtBufferPosition(buffer, { x: 11, y: 1 }, COLS, {
           worktreeId: 'wt-1',
-          forceSystemBrowser: true
+          modifierHeld: true
         })
       ).toBe(true)
       expect(openUrlMock).toHaveBeenCalledOnce()
@@ -173,7 +173,7 @@ describe('edge-wrapped terminal HTTP links', () => {
       expect(
         openHttpLinkAtBufferPosition(buffer, { x: 2, y: 2 }, COLS, {
           worktreeId: 'wt-1',
-          forceSystemBrowser: true
+          modifierHeld: true
         })
       ).toBe(false)
       expect(openUrlMock).not.toHaveBeenCalled()
@@ -189,7 +189,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 11, y: 1 }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -199,7 +199,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 11, y: 2 }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -218,7 +218,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 11, y: 1 }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -228,7 +228,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 20, y: 2 }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -245,7 +245,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 4, y: 2 }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -268,7 +268,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 191, y: 1 }, cols, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -278,7 +278,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 10, y: rows.length }, cols, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -298,7 +298,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 11, y: 1 }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -308,7 +308,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 5, y: rowTexts.length }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -342,7 +342,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 5, y: rowTexts.length }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -361,7 +361,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 11, y: 1 }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -377,7 +377,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: firstRow.indexOf('https') + 8, y: 1 }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -394,7 +394,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 10, y: 1 }, COLS, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(false)
     expect(openUrlMock).not.toHaveBeenCalled()
@@ -416,7 +416,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(
       openHttpLinkAtBufferPosition(buffer, { x: 10, y: 1 }, cols, {
         worktreeId: 'wt-1',
-        forceSystemBrowser: true
+        modifierHeld: true
       })
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()

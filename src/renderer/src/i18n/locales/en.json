@@ -7710,6 +7710,12 @@
             "8dd4805991": "file",
             "68d1db8929": "markdown",
             "90425d313c": "shift",
+            "linkRoutingModifier": {
+              "routing": "routing",
+              "modifier": "modifier",
+              "invert": "invert",
+              "opposite": "opposite"
+            },
             "72c58f7792": "webview",
             "82ba1c80ea": "localhost",
             "bea27bac4b": "links",
@@ -9573,6 +9579,12 @@
           "serviceManagerHelp": "Update Orca through the service manager that starts this server.",
           "unpackedHelp": "Development builds must be updated from their source checkout.",
           "legacyHelp": "Update this server manually once to enable remote updates."
+        },
+        "BrowserLinkRoutingModifierSetting": {
+          "titleSystem": "Hold Shift to open in your web browser",
+          "titleOrca": "Hold Shift to open in Orca",
+          "descriptionSystem": "Links open in Orca, so {{chord}}+click sends one to your system browser instead.",
+          "descriptionOrca": "Links open in your system browser. When enabled, {{chord}}+click opens one in Orca's built-in browser instead."
         },
         "PluginConsentDialog": {
           "workerTrust": "Background worker — runs its own process",

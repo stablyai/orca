@@ -198,6 +198,8 @@ async function runOrcaCliMode(sockPath: string, argv: string[]): Promise<void> {
   let nextSeq = 1
   let highestReceivedSeq = 0
   const requestId = 1
+  const postOutputRequestId = 2
+  let initialExitCode = 0
 
   const sendRequest = (): void => {
     const env = pickRemoteCliEnv(process.env)
@@ -219,6 +221,59 @@ async function runOrcaCliMode(sockPath: string, argv: string[]): Promise<void> {
     sock.write(frame)
   }
 
+  const finish = (exitCode: number): void => {
+    sock.destroy()
+    process.exit(exitCode)
+  }
+
+  const sendPostOutput = (postOutput: unknown): void => {
+    sock.write(
+      encodeJsonRpcFrame(
+        {
+          jsonrpc: '2.0',
+          id: postOutputRequestId,
+          method: 'orca.cli.postOutput',
+          params: { postOutput, env: pickRemoteCliEnv(process.env) }
+        },
+        nextSeq++,
+        highestReceivedSeq
+      )
+    )
+  }
+
+  const writeOutput = (
+    result: { stdout?: unknown; stderr?: unknown },
+    onFlushed: (error?: Error) => void
+  ): void => {
+    const writes = [
+      [process.stdout, result.stdout],
+      [process.stderr, result.stderr]
+    ].filter((entry): entry is [NodeJS.WriteStream, string] => typeof entry[1] === 'string')
+    if (writes.length === 0) {
+      onFlushed()
+      return
+    }
+    let pending = writes.length
+    let completed = false
+    for (const [stream, output] of writes) {
+      stream.write(output, (error) => {
+        if (completed) {
+          return
+        }
+        if (error) {
+          completed = true
+          onFlushed(error)
+          return
+        }
+        pending -= 1
+        if (pending === 0) {
+          completed = true
+          onFlushed()
+        }
+      })
+    }
+  }
+
   const decoder = new FrameDecoder((frame: DecodedFrame) => {
     if (frame.id > highestReceivedSeq) {
       highestReceivedSeq = frame.id
@@ -227,28 +282,41 @@ async function runOrcaCliMode(sockPath: string, argv: string[]): Promise<void> {
       return
     }
     const msg = parseJsonRpcMessage(frame.payload)
-    if (!('id' in msg) || msg.id !== requestId || !('result' in msg || 'error' in msg)) {
+    if (
+      !('id' in msg) ||
+      (msg.id !== requestId && msg.id !== postOutputRequestId) ||
+      !('result' in msg || 'error' in msg)
+    ) {
       return
     }
     const response = msg as JsonRpcResponse
     if (response.error) {
       process.stderr.write(`${response.error.message}\n`)
-      sock.destroy()
-      process.exit(1)
+      finish(1)
+      return
+    }
+    if (response.id === postOutputRequestId) {
+      finish(initialExitCode)
+      return
     }
     const result = (response.result ?? {}) as {
       stdout?: unknown
       stderr?: unknown
       exitCode?: unknown
+      postOutput?: unknown
     }
-    if (typeof result.stdout === 'string' && result.stdout.length > 0) {
-      process.stdout.write(result.stdout)
-    }
-    if (typeof result.stderr === 'string' && result.stderr.length > 0) {
-      process.stderr.write(result.stderr)
-    }
-    sock.destroy()
-    process.exit(typeof result.exitCode === 'number' ? result.exitCode : 0)
+    initialExitCode = typeof result.exitCode === 'number' ? result.exitCode : 0
+    writeOutput(result, (error) => {
+      if (error) {
+        finish(1)
+        return
+      }
+      if (result.postOutput === undefined) {
+        finish(initialExitCode)
+        return
+      }
+      sendPostOutput(result.postOutput)
+    })
   })
 
   const connectTimeout = setTimeout(() => {
@@ -439,6 +507,12 @@ async function main(): Promise<void> {
 
   dispatcher.onRequest('orca.cli', async (params, context) => {
     return await dispatcher.requestAnyClient('orca.cli', params, {
+      excludeClientId: context.clientId,
+      timeoutMs: remoteCliRequestTimeoutMs(params)
+    })
+  })
+  dispatcher.onRequest('orca.cli.postOutput', async (params, context) => {
+    return await dispatcher.requestAnyClient('orca.cli.postOutput', params, {
       excludeClientId: context.clientId,
       timeoutMs: remoteCliRequestTimeoutMs(params)
     })

@@ -49,6 +49,7 @@ import type {
   RuntimeMarkdownSaveTabResult
 } from '../../shared/mobile-markdown-document'
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
+import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
 import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
@@ -347,14 +348,20 @@ function registerRuntimeWindowLifecycle(
     revealTerminalSession: (worktreeId, opts) =>
       new Promise((resolve, reject) => {
         const requestId = randomUUID()
+        const expectedIdentity = opts.expectedProcessIdentity
+          ? opts.tabId && opts.leafId
+            ? { worktreeId, tabId: opts.tabId, leafId: opts.leafId, ptyId: opts.ptyId }
+            : null
+          : undefined
+        if (expectedIdentity === null) {
+          reject(new Error('terminal_reveal_identity_required'))
+          return
+        }
         const timer = setTimeout(() => {
           ipcMain.removeListener('terminal:tabCreateReply', handler)
           reject(new Error('Terminal reveal timed out'))
         }, 10_000)
-        const handler = (
-          event: Electron.IpcMainEvent,
-          reply: { requestId: string; tabId?: string; title?: string; error?: string }
-        ): void => {
+        const handler = (event: Electron.IpcMainEvent, reply: TerminalTabCreateReply): void => {
           // Why: requestId is renderer-supplied, so only the targeted main window may satisfy the reveal.
           if (event.sender !== mainWindow.webContents || reply.requestId !== requestId) {
             return
@@ -365,7 +372,22 @@ function registerRuntimeWindowLifecycle(
             reject(new Error(reply.error))
             return
           }
-          resolve({ tabId: reply.tabId!, title: reply.title })
+          if (
+            expectedIdentity &&
+            (!reply.identity ||
+              reply.identity.worktreeId !== expectedIdentity.worktreeId ||
+              reply.identity.tabId !== expectedIdentity.tabId ||
+              reply.identity.leafId !== expectedIdentity.leafId ||
+              reply.identity.ptyId !== expectedIdentity.ptyId)
+          ) {
+            reject(new Error('terminal_reveal_identity_mismatch'))
+            return
+          }
+          resolve({
+            tabId: reply.tabId!,
+            title: reply.title,
+            ...(reply.identity ? { identity: reply.identity } : {})
+          })
         }
         ipcMain.on('terminal:tabCreateReply', handler)
         send('ui:createTerminal', {
@@ -387,8 +409,15 @@ function registerRuntimeWindowLifecycle(
           ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {}),
           ...(opts.splitTelemetrySource !== undefined
             ? { splitTelemetrySource: opts.splitTelemetrySource }
-            : {})
+            : {}),
+          ...(opts.focus !== undefined ? { focus: opts.focus } : {})
         })
+      }),
+    resolveLegacyWorkerTerminalRecovery: (paneKey, resolution, ptyId) =>
+      send('agentStatus:legacyWorkerTerminalRecovery', {
+        paneKey,
+        resolution,
+        ...(ptyId ? { ptyId } : {})
       }),
     splitTerminal: (tabId, paneRuntimeId, opts) => {
       send('ui:splitTerminal', {

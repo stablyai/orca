@@ -36,6 +36,21 @@ export type WorkerSetupReceipt = {
     | 'not_applicable'
 }
 
+export function requireWorkerAuthority(runtime: OrcaRuntimeService, terminalHandle: string) {
+  const authority = runtime.getOrchestrationDispatchAuthority(terminalHandle)
+  const paneKey = authority?.paneKey ?? runtime.getTerminalPaneKey(terminalHandle)
+  const processIncarnation =
+    authority?.processIncarnation ?? runtime.getTerminalProcessIncarnation(terminalHandle)
+  if (!paneKey || !processIncarnation) {
+    throw new Error('stable_pane_required')
+  }
+  return {
+    paneKey,
+    processIncarnation,
+    ...(authority?.launchTokenHash ? { launchTokenHash: authority.launchTokenHash } : {})
+  }
+}
+
 export async function createExistingWorktreeWorkerTerminal(args: {
   runtime: OrcaRuntimeService
   worktreeId: string

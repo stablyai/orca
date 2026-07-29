@@ -32,6 +32,7 @@ import {
   getTerminalUrlOpenHint,
   installFilePathLinkClickFallback
 } from './terminal-link-handlers'
+import { terminalUrlOpenHintOptionsFor } from './terminal-link-open-hints'
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { handleOscLink } from './terminal-osc-link-routing'
@@ -503,6 +504,77 @@ export function getPreviousVisibleForTerminalPane(args: {
   return args.previous.isVisible
 }
 
+type TerminalPaneCloseManager = {
+  closePane: (paneId: number) => void
+  detachPaneForExternalMove: (paneId: number) => boolean
+  retirePanePreservingPty: (paneId: number) => boolean
+  getNumericIdForLeaf: (leafId: string) => number | null
+  getPanes: () => unknown[]
+}
+
+export function applyTerminalPaneCloseRequest(args: {
+  detail: CloseTerminalPaneDetail
+  manager: TerminalPaneCloseManager
+  closeTab: () => void
+  closeTabPreservingPty: () => void
+  getPtyIdForLeaf?: (leafId: string) => string | undefined
+}): 'ignored' | 'pane' | 'tab' {
+  if (
+    args.detail.expectedPtyId &&
+    (!args.detail.leafId ||
+      args.getPtyIdForLeaf?.(args.detail.leafId) !== args.detail.expectedPtyId)
+  ) {
+    return 'ignored'
+  }
+  const paneRuntimeId =
+    args.detail.paneRuntimeId ??
+    (args.detail.leafId ? args.manager.getNumericIdForLeaf(args.detail.leafId) : null)
+  if (paneRuntimeId === null || paneRuntimeId === undefined) {
+    return 'ignored'
+  }
+  if (args.manager.getPanes().length <= 1) {
+    if (args.detail.preservePty) {
+      args.closeTabPreservingPty()
+    } else {
+      args.closeTab()
+    }
+    return 'tab'
+  }
+  if (args.detail.preservePty) {
+    if (args.detail.retireSurface) {
+      args.manager.retirePanePreservingPty(paneRuntimeId)
+    } else {
+      args.manager.detachPaneForExternalMove(paneRuntimeId)
+    }
+  } else {
+    args.manager.closePane(paneRuntimeId)
+  }
+  return 'pane'
+}
+
+export function retireMountedTerminalPaneSurface(args: {
+  paneKey: string
+  paneId: number
+  tabId: string
+  ptyId: string | null
+  retireAgentPaneAuthority: (
+    paneKey: string,
+    options?: { preserveSleepingAgentSession?: boolean }
+  ) => void
+  syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
+  clearTabPtyId: (tabId: string, ptyId: string) => void
+  transport?: { detach?: () => void; destroy?: () => void }
+}): void {
+  args.retireAgentPaneAuthority(args.paneKey, {
+    preserveSleepingAgentSession: true
+  })
+  if (args.ptyId) {
+    args.syncPanePtyLayoutBinding(args.paneId, null)
+    args.clearTabPtyId(args.tabId, args.ptyId)
+  }
+  args.transport?.detach?.()
+}
+
 /** Wires mounted terminal panes to renderer state and terminal event handling. */
 export function useTerminalPaneLifecycle({
   tabId,
@@ -760,7 +832,9 @@ export function useTerminalPaneLifecycle({
     })
 
     const fileOpenLinkHint = getTerminalFileOpenHint()
-    const urlOpenLinkHint = getTerminalUrlOpenHint()
+    // Why: read settingsRef at fire time so toggling link routing applies without recreating panes.
+    const getUrlOpenLinkHint = (): string =>
+      getTerminalUrlOpenHint(terminalUrlOpenHintOptionsFor(settingsRef.current))
     const osc7UncHost = extractUncHost(startupCwd)
 
     let releaseWebviewDragPassthrough: (() => void) | null = null
@@ -1062,6 +1136,7 @@ export function useTerminalPaneLifecycle({
           hover: (_event, text) => {
             oscTooltipHoverToken += 1
             const hoverToken = oscTooltipHoverToken
+            const urlOpenLinkHint = getUrlOpenLinkHint()
             pane.linkTooltip.textContent = `${text} (${urlOpenLinkHint})`
             pane.linkTooltip.style.display = ''
             void formatTerminalUrlTooltip(text, urlOpenLinkHint).then((nextText) => {
@@ -1105,6 +1180,7 @@ export function useTerminalPaneLifecycle({
       onPaneClosed: (paneId, closedPane) => {
         onPtyRecoveryStateRef?.current?.(paneId, null)
         const isDetachedToTab = closedPane?.reason === 'detach'
+        const isRetiredSurface = closedPane?.reason === 'retire'
         const linkProviderDisposable = linkProviderDisposablesRef.current.get(paneId)
         if (linkProviderDisposable) {
           linkProviderDisposable.dispose()
@@ -1181,14 +1257,25 @@ export function useTerminalPaneLifecycle({
           panePtyBindings.delete(paneId)
         }
         const leafId = closedPane?.leafId
-        if (leafId && !isDetachedToTab) {
+        if (leafId && isRetiredSurface) {
+          retireMountedTerminalPaneSurface({
+            paneKey: makePaneKey(tabId, leafId),
+            paneId,
+            tabId,
+            ptyId: closedPtyId,
+            retireAgentPaneAuthority: useAppStore.getState().retireAgentPaneAuthority,
+            syncPanePtyLayoutBinding,
+            clearTabPtyId,
+            ...(transport ? { transport } : {})
+          })
+        } else if (leafId && !isDetachedToTab) {
           // Why: revoke only this pane's authority; an exact tombstone blocks queued hooks without suppressing siblings.
           const paneKey = makePaneKey(tabId, leafId)
           useAppStore.getState().retireAgentPaneAuthority(paneKey)
         }
-        if (transport) {
+        if (transport && !isRetiredSurface) {
           if (isDetachedToTab) {
-            // Why: detach hands the PTY to a new tab, so drop renderer listeners without a process teardown.
+            // Why: detach hands the PTY to a new tab, so drop renderer listeners without process teardown.
             transport.detach?.()
           } else {
             const ptyId = suppressIntentionalPaneCloseExit(
@@ -1359,6 +1446,7 @@ export function useTerminalPaneLifecycle({
           requestOpenLinksInAppPreference
         })
       },
+      linkOpenHint: getUrlOpenLinkHint,
       formatLinkTooltip: (url, openLinkHint) => formatTerminalUrlTooltip(url, openLinkHint),
       // Why: hidden panes stay mounted so PTYs survive navigation, but their WebGL contexts drain Chromium's budget and can blank visible panes.
       initialRenderingSuspended: !isVisibleRef.current,
@@ -1542,16 +1630,32 @@ export function useTerminalPaneLifecycle({
       if (!mgr) {
         return
       }
-      if (mgr.getPanes().length <= 1) {
-        // Why: route through closeTerminalTab (not raw closeTab) so a pinned tab hits the confirmation guard — this was the one path that silently dropped pinned tabs.
-        closeTerminalTab(tabId)
-      } else {
-        mgr.closePane(detail.paneRuntimeId)
-        scheduleRuntimeGraphSync()
-        syncCanExpandState()
-        queueResizeAll(isActive)
-        persistLayoutSnapshot()
+      const result = applyTerminalPaneCloseRequest({
+        detail,
+        manager: mgr,
+        getPtyIdForLeaf: (leafId) =>
+          useAppStore.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId],
+        closeTab: () => closeTerminalTab(tabId),
+        closeTabPreservingPty: () => {
+          const store = useAppStore.getState()
+          if (detail.retireSurface && detail.leafId) {
+            store.retireAgentPaneAuthority(makePaneKey(tabId, detail.leafId), {
+              preserveSleepingAgentSession: true
+            })
+          }
+          store.closeTab(tabId, {
+            reason: 'pty-exit',
+            captureRecentlyClosed: false
+          })
+        }
+      })
+      if (result !== 'pane') {
+        return
       }
+      scheduleRuntimeGraphSync()
+      syncCanExpandState()
+      queueResizeAll(isActive)
+      persistLayoutSnapshot()
     }
     window.addEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
 

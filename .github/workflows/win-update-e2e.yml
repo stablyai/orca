@@ -128,6 +128,7 @@ jobs:
           node tools/win-update-e2e/run.mjs `
             --from "$env:FROM_EXE" `
             --to "$env:TO_EXE" `
+            --require-distinct-artifacts `
             --expect "$env:EXPECT" `
             --soak-seconds "$env:SOAK_SECONDS" 2>&1 | Tee-Object -FilePath $log
           exit $LASTEXITCODE

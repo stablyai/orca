@@ -1176,6 +1176,9 @@ export function connectPanePty(
     const [paneKey, record] = selectedLegacyMatch
     return { paneKey, record }
   }
+  const isLegacyWorkerAutomaticResumeBlocked = (): boolean =>
+    getSleepingRecordForPane(useAppStore.getState())?.record.automaticResumeBlockedBy ===
+    'legacy-orchestration-worker'
   const clearSleepingRecordProviderDuplicates = (
     state: ReturnType<typeof useAppStore.getState>,
     consumed: { paneKey: string; record: SleepingAgentSessionRecord }
@@ -4776,6 +4779,9 @@ export function connectPanePty(
       const entry = state.agentStatusByPaneKey[cacheKey]
       const sleepingRecordEntry = getSleepingRecordForPane(state)
       const sleepingRecord = sleepingRecordEntry?.record
+      if (isLegacyWorkerAutomaticResumeBlocked()) {
+        return null
+      }
       const useLiveEntry = entry && entry.state !== 'done'
       const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent
       if (!agent || !isResumableTuiAgent(agent)) {
@@ -5002,6 +5008,9 @@ export function connectPanePty(
       startupOverride?: PendingStartupCommand | null,
       options: FreshSpawnOptions = {}
     ): Promise<string | null> => {
+      if (isLegacyWorkerAutomaticResumeBlocked()) {
+        return Promise.resolve(null)
+      }
       if (useAppStore.getState().deleteStateByWorktreeId?.[deps.worktreeId]?.isDeleting) {
         // Why: the worktree is being deleted; its PTYs were just killed for the
         // filesystem teardown. A fresh shell must not spawn into a directory the
@@ -7919,6 +7928,30 @@ export function connectPanePty(
       return true
     }
 
+    const attachRetainedLegacyPty = (ptyId: string): boolean => {
+      try {
+        clearPaneMode2031State()
+        clearHiddenOutputRestoreState()
+        const outputCallbacks = captureTransportOutputCallbacks(reportError)
+        transport.attach({
+          existingPtyId: ptyId,
+          callbacks: outputCallbacks.callbacks
+        })
+        const attachedPtyId = transport.getPtyId() ?? ptyId
+        bindActivePanePty(attachedPtyId, {
+          updateTabPtyId: 'if-missing',
+          sampleVisibleForegroundAgent: true
+        })
+        if (isRemoteRuntimePtyId(attachedPtyId)) {
+          registerPaneSerializerFor(attachedPtyId)
+        }
+        return true
+      } catch (err) {
+        reportError(err instanceof Error ? err.message : String(err))
+        return false
+      }
+    }
+
     // Why: trigger the deferred SSH connect per-tab (not per-target) so multiple tabs for one target reattach independently.
     // Must run before session-id resolution: the SSH provider isn't registered until connect succeeds.
     if (connectionId) {
@@ -7952,7 +7985,8 @@ export function connectPanePty(
       console.warn(
         `[pty-connection] SSH tab=${deps.tabId} connectionId=${connectionId} pendingSessionId=${pendingSessionId} sshConnected=${gate.sshConnected}`
       )
-      if (gate.enterDeferredFlow) {
+      const legacyWorkerOwnsPane = isLegacyWorkerAutomaticResumeBlocked()
+      if (gate.enterDeferredFlow && (!legacyWorkerOwnsPane || !gate.sshConnected)) {
         void (async () => {
           // Why: for a passphrase target with no cached credential, don't auto-fire ssh.connect — a prompt popping just from focusing a tab / Cmd+J would surprise the user.
           // Wait for a user-initiated connect first; no-passphrase targets return false here and auto-connect as before.
@@ -8057,6 +8091,13 @@ export function connectPanePty(
             return
           }
           if (pendingSessionId) {
+            if (isLegacyWorkerAutomaticResumeBlocked()) {
+              if (attachRetainedLegacyPty(pendingSessionId)) {
+                useAppStore.getState().removeDeferredSshSessionId(deps.tabId)
+                scheduleRuntimeGraphSync()
+              }
+              return
+            }
             console.warn(
               `[pty-connection] Attempting reattach for tab=${deps.tabId} sessionId=${pendingSessionId}`
             )
@@ -8281,14 +8322,18 @@ export function connectPanePty(
         : null
     // Why: after a daemon crash + cold restore, a stale session-to-tab mapping can make a tab hold a ptyId from another worktree.
     // Restoring it would paint the wrong terminal content, so drop the reattach and spawn fresh.
-    const deferredReattachSessionId =
-      runtimeHostPtyWakeHint ??
-      (candidateReattachSessionId &&
-      !isRemoteRuntimePtyId(candidateReattachSessionId) &&
-      !candidateHasEagerBuffer &&
-      isSessionOwnedByWorktree(candidateReattachSessionId, deps.worktreeId)
-        ? candidateReattachSessionId
-        : null)
+    const legacyAttachOnlyPtyId = isLegacyWorkerAutomaticResumeBlocked()
+      ? candidateReattachSessionId
+      : null
+    const deferredReattachSessionId = legacyAttachOnlyPtyId
+      ? null
+      : (runtimeHostPtyWakeHint ??
+        (candidateReattachSessionId &&
+        !isRemoteRuntimePtyId(candidateReattachSessionId) &&
+        !candidateHasEagerBuffer &&
+        isSessionOwnedByWorktree(candidateReattachSessionId, deps.worktreeId)
+          ? candidateReattachSessionId
+          : null))
     recordPtyConnectDiagnostic(
       `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedRemoteLeafPtyId ?? detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hadExistingPaneTransportAtConnect} pendingKey=${pendingSpawnKey}`
     )
@@ -8435,36 +8480,48 @@ export function connectPanePty(
           })
         })
       armDirectSshPaneRetryTimeout(trackedReattachPromise, directSshRetryAttempt)
-    } else if (detachedRemoteLeafPtyId || detachedLivePtyId || eagerLivePtyId) {
+    } else if (
+      legacyAttachOnlyPtyId ||
+      detachedRemoteLeafPtyId ||
+      detachedLivePtyId ||
+      eagerLivePtyId
+    ) {
       // Why: mirrored web-leaf panes must attach to their exact remote PTY, not spawn a replacement host tab.
       // eagerLivePtyId covers a still-live background PTY (e.g. an automation agent) with a live eager buffer to adopt.
-      const attachPtyId = detachedRemoteLeafPtyId ?? detachedLivePtyId ?? eagerLivePtyId!
+      const attachPtyId =
+        legacyAttachOnlyPtyId ?? detachedRemoteLeafPtyId ?? detachedLivePtyId ?? eagerLivePtyId!
       recordPtyConnectDiagnostic(`pane=${pane.id} -> ATTACH detached=${attachPtyId}`)
       allowInitialIdleCacheSeed = false
-      // Why: surface synchronous attach failures via reportError so the pane shows a diagnostic instead of a blank surface.
-      // On throw, clear the stale ptyId from the tab and fresh-spawn — else the next remount reads the same dead id and loops here.
-      try {
-        clearPaneMode2031State()
-        clearHiddenOutputRestoreState()
-        const outputCallbacks = captureTransportOutputCallbacks(reportError)
-        transport.attach({
-          existingPtyId: attachPtyId,
-          cols,
-          rows,
-          callbacks: outputCallbacks.callbacks
-        })
-        const attachedPtyId = transport.getPtyId() ?? attachPtyId
-        bindActivePanePty(attachedPtyId, {
-          updateTabPtyId: 'if-missing',
-          sampleVisibleForegroundAgent: true
-        })
-        if (attachPtyId === eagerLivePtyId || isRemoteRuntimePtyId(attachedPtyId)) {
-          registerPaneSerializerFor(attachedPtyId)
+      if (legacyAttachOnlyPtyId) {
+        if (attachRetainedLegacyPty(legacyAttachOnlyPtyId) && connectionId) {
+          useAppStore.getState().removeDeferredSshSessionId(deps.tabId)
         }
-      } catch (err) {
-        reportError(err instanceof Error ? err.message : String(err))
-        deps.clearTabPtyId(deps.tabId, attachPtyId)
-        startFreshSpawn()
+      } else {
+        // Why: surface synchronous attach failures via reportError so the pane shows a diagnostic instead of a blank surface.
+        // On throw, clear the stale ptyId from the tab and fresh-spawn — else the next remount reads the same dead id and loops here.
+        try {
+          clearPaneMode2031State()
+          clearHiddenOutputRestoreState()
+          const outputCallbacks = captureTransportOutputCallbacks(reportError)
+          transport.attach({
+            existingPtyId: attachPtyId,
+            cols,
+            rows,
+            callbacks: outputCallbacks.callbacks
+          })
+          const attachedPtyId = transport.getPtyId() ?? attachPtyId
+          bindActivePanePty(attachedPtyId, {
+            updateTabPtyId: 'if-missing',
+            sampleVisibleForegroundAgent: true
+          })
+          if (attachPtyId === eagerLivePtyId || isRemoteRuntimePtyId(attachedPtyId)) {
+            registerPaneSerializerFor(attachedPtyId)
+          }
+        } catch (err) {
+          reportError(err instanceof Error ? err.message : String(err))
+          deps.clearTabPtyId(deps.tabId, attachPtyId)
+          startFreshSpawn()
+        }
       }
     } else {
       allowInitialIdleCacheSeed = false

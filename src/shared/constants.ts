@@ -263,6 +263,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     openLinksInApp: false,
     localhostWorktreeLabelsEnabled: false,
     openLinksInAppPreferencePrompted: false,
+    openLinksInAppModifierInverts: false,
     openAgentTabsInChatByDefault: false,
     experimentalNativeChat: false,
     nativeChatSessionOptions: {},

@@ -24,7 +24,6 @@ const LEGACY_FALLBACK_OPTIONS: HostCliPassthroughOptions = {
   userDataPath: '/host/user-data',
   entryExists: () => false
 }
-
 type FakeChild = EventEmitter & {
   stdout: EventEmitter
   stderr: EventEmitter
@@ -80,6 +79,7 @@ describe('runRemoteOrcaCli', () => {
           }
         }
       }),
+      getLegacyAdoption: vi.fn(() => undefined),
       getActiveDispatchForIdentity: vi.fn(() => undefined),
       getCurrentRunForPane: vi.fn(() => undefined),
       findActiveRemoteAttachmentForPane: vi.fn(() => undefined)

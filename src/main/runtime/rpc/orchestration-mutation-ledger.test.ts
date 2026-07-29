@@ -252,7 +252,10 @@ describe('durable orchestration mutation ledger', () => {
   })
 
   it('recovers a lost ask acceptance without creating a second question', async () => {
-    const db = new OrchestrationDb(':memory:')
+    const dir = mkdtempSync(join(tmpdir(), 'orca-mutation-ask-recovery-'))
+    paths.push(dir)
+    const dbPath = join(dir, 'orchestration.db')
+    const db = new OrchestrationDb(dbPath)
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_worker:leaf_worker')
@@ -290,7 +293,16 @@ describe('durable orchestration mutation ledger', () => {
     const first = firstDispatcher.dispatch(askRequest, { signal: controller.signal })
     await vi.waitFor(() => expect(db.getInbox(10)).toHaveLength(1))
 
-    const restartedDispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+    const restartedDb = new OrchestrationDb(dbPath)
+    const restartedRuntime = new OrcaRuntimeService()
+    restartedRuntime.setOrchestrationDb(restartedDb)
+    vi.spyOn(restartedRuntime, 'getTerminalPaneKey').mockReturnValue('tab_worker:leaf_worker')
+    vi.spyOn(restartedRuntime, 'getTerminalProcessIncarnation').mockReturnValue('runtime:pty:1')
+    vi.spyOn(restartedRuntime, 'notifyMessageArrived').mockImplementation(() => {})
+    const restartedDispatcher = new RpcDispatcher({
+      runtime: restartedRuntime,
+      methods: ORCHESTRATION_METHODS
+    })
     const recovered = await restartedDispatcher.dispatch({ ...askRequest, id: 'rpc_ask_2' })
     expect(recovered).toMatchObject({
       ok: true,
@@ -304,6 +316,7 @@ describe('durable orchestration mutation ledger', () => {
 
     controller.abort()
     await first
+    restartedDb.close()
     db.close()
   })
 })

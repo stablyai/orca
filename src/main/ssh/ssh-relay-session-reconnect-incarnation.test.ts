@@ -1,20 +1,47 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { randomUUID } from 'node:crypto'
+import type * as NodeCrypto from 'node:crypto'
 import { SshRelaySession } from './ssh-relay-session'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
-const { muxRequestMock } = vi.hoisted(() => ({ muxRequestMock: vi.fn() }))
+type MockMuxInstance = {
+  requestHandlers: Map<string, (params: Record<string, unknown>) => Promise<unknown>>
+}
+
+const { muxRequestMock, muxInstancesRaw } = vi.hoisted(() => ({
+  muxRequestMock: vi.fn(),
+  muxInstancesRaw: [] as unknown[]
+}))
+const muxInstances = muxInstancesRaw as MockMuxInstance[]
 
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
 vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: vi.fn().mockResolvedValue('') }))
+vi.mock('node:crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeCrypto>()
+  return { ...actual, randomUUID: vi.fn() }
+})
+vi.mock('./ssh-remote-orca-cli', () => ({
+  runRemoteOrcaCli: vi.fn().mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' })
+}))
 vi.mock('./ssh-channel-multiplexer', () => ({
   SshChannelMultiplexer: class MockSshChannelMultiplexer {
+    requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
     notify = vi.fn()
     request = muxRequestMock
     onNotification = vi.fn().mockReturnValue(() => {})
-    onRequest = vi.fn().mockReturnValue(() => {})
+    onRequest = vi.fn(
+      (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+        this.requestHandlers.set(method, handler)
+        return () => this.requestHandlers.delete(method)
+      }
+    )
     onDispose = vi.fn().mockReturnValue(() => {})
     dispose = vi.fn()
     isDisposed = vi.fn().mockReturnValue(false)
+
+    constructor() {
+      muxInstancesRaw.push(this)
+    }
   }
 }))
 vi.mock('../agent-hooks/remote-managed-hook-installers', () => ({
@@ -98,11 +125,72 @@ function emitExitDuringAttach(payload: { id: string; code: number; incarnationId
 describe('SshRelaySession reconnect incarnation ordering', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    muxInstances.splice(0)
     delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
     muxRequestMock.mockReset()
     muxRequestMock.mockResolvedValue([])
+    vi.mocked(randomUUID).mockReset()
+    vi.mocked(randomUUID).mockReturnValue('00000000-0000-4000-8000-000000000001')
     mockDeploySuccess()
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+  })
+
+  it('keeps the winning reconnect incarnation when a stale health check resolves last', async () => {
+    const initialIncarnation = '00000000-0000-4000-8000-000000000001'
+    const winningIncarnation = '00000000-0000-4000-8000-000000000002'
+    const staleIncarnation = '00000000-0000-4000-8000-000000000003'
+    let resolveStaleHealthCheck!: (value: unknown) => void
+    const staleHealthCheck = new Promise((resolve) => {
+      resolveStaleHealthCheck = resolve
+    })
+    let resolveHomeCalls = 0
+    muxRequestMock.mockImplementation((method: string) => {
+      if (method !== 'session.resolveHome') {
+        return Promise.resolve([])
+      }
+      resolveHomeCalls += 1
+      return resolveHomeCalls === 2 ? staleHealthCheck : Promise.resolve('/')
+    })
+    vi.mocked(randomUUID)
+      .mockReturnValueOnce(initialIncarnation)
+      .mockReturnValueOnce(winningIncarnation)
+      .mockReturnValue(staleIncarnation)
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const runtime = {
+      registerOrchestrationCompatibilitySshAttachment: vi.fn(
+        (_targetId: string, connectionIncarnation: string) => ({
+          attachmentId: `attachment-${connectionIncarnation}`,
+          connectionIncarnation
+        })
+      ),
+      releaseOrchestrationCompatibilitySshAttachment: vi.fn()
+    }
+    const session = new SshRelaySession(
+      'target-1',
+      getMainWindow,
+      mockStore,
+      mockPortForward,
+      runtime as never
+    )
+    await session.establish(mockConn)
+
+    const staleReconnect = session.reconnect(mockConn)
+    await vi.waitFor(() => expect(resolveHomeCalls).toBe(2))
+    await session.reconnect(mockConn)
+    expect(session.getState()).toBe('ready')
+
+    resolveStaleHealthCheck('/')
+    await staleReconnect
+
+    const winningCliHandler = muxInstances[2]?.requestHandlers.get('orca.cli')
+    expect(winningCliHandler).toBeDefined()
+    await winningCliHandler?.({ argv: ['status'], cwd: '/', env: {} })
+
+    expect(runtime.registerOrchestrationCompatibilitySshAttachment).toHaveBeenCalledWith(
+      'target-1',
+      winningIncarnation
+    )
+    expect(randomUUID).toHaveBeenCalledTimes(2)
   })
 
   it('restores and persists exact incarnation proof from reconnect attach', async () => {
