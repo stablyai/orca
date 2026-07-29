@@ -28,6 +28,7 @@
  * output and disk cache state into the timings.
  *
  * Results: tools/benchmarks/results/startup-<label>-<timestamp>.json
+ * Methodology and how to read a verdict: docs/reference/startup-benchmark-methodology.md
  */
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'

@@ -23,6 +23,7 @@
  *
  * Comparing two builds? Prefer `startup-ab-bench.mjs`: medians from two
  * separate single-arm runs cannot separate the change from machine drift.
+ * See docs/reference/startup-benchmark-methodology.md.
  *
  * Prereq (when not using --exe): `pnpm build:electron-vite` so out/ exists.
  * Results: tools/benchmarks/results/startup-<label>-<timestamp>.json
