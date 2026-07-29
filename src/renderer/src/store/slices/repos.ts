@@ -2293,6 +2293,15 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
 
     const hydratedFolderWorkspaceHostIds = new Set<ExecutionHostId>()
+    const clearRestoredOwnersForHydratedHosts = (): void => {
+      set((s) => ({
+        restoredRuntimeHostIdByWorkspaceSessionKey: clearRestoredFolderWorkspaceSessionOwners(
+          s.restoredRuntimeHostIdByWorkspaceSessionKey,
+          s,
+          { hydratedFolderWorkspaceHostIds }
+        )
+      }))
+    }
     try {
       const target = { kind: 'local' as const }
       const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
@@ -2302,6 +2311,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     } catch (err) {
       console.error('Failed to fetch local folder workspaces for all-host load:', err)
     }
+    clearRestoredOwnersForHydratedHosts()
     if (options?.remoteHosts === 'skip') {
       return
     }
@@ -2323,13 +2333,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         }
       })
     )
-    set((s) => ({
-      restoredRuntimeHostIdByWorkspaceSessionKey: clearRestoredFolderWorkspaceSessionOwners(
-        s.restoredRuntimeHostIdByWorkspaceSessionKey,
-        s,
-        { hydratedFolderWorkspaceHostIds }
-      )
-    }))
+    clearRestoredOwnersForHydratedHosts()
   },
 
   getFolderWorkspacePathStatusCacheKey: (request, options) =>

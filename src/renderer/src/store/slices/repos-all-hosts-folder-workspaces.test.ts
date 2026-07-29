@@ -343,6 +343,28 @@ describe('all-host folder workspace startup catalogs', () => {
     })
   })
 
+  it('clears missing local restored owners when remote hosts are skipped', async () => {
+    const missingLocalFolderKey = folderWorkspaceKey('missing-local-folder')
+    const missingRemoteFolderKey = folderWorkspaceKey('missing-runtime-folder')
+    const store = createTestStore()
+    store.setState({
+      restoredRuntimeHostIdByWorkspaceSessionKey: {
+        [missingLocalFolderKey]: 'local',
+        [missingRemoteFolderKey]: 'runtime:env-1'
+      }
+    })
+
+    await store.getState().fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })
+    await store.getState().fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
+
+    expect(store.getState().folderWorkspaces).toEqual([
+      { ...localFolderWorkspace, executionHostId: 'local' }
+    ])
+    expect(store.getState().restoredRuntimeHostIdByWorkspaceSessionKey).toEqual({
+      [missingRemoteFolderKey]: 'runtime:env-1'
+    })
+  })
+
   it('does not repeat offline runtime compatibility probes across startup catalog loads', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     runtimeEnvironmentTransportCall.mockResolvedValue({
