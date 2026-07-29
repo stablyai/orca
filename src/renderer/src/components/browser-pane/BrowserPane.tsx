@@ -755,11 +755,15 @@ function retryBrowserTabLoad(
 
 export default function BrowserPane({
   browserTab,
-  isActive
+  isActive,
+  isFocused
 }: {
   browserTab: BrowserWorkspaceState
   isActive: boolean
+  // Why: whether this browser's split holds focus. Gates Find (Cmd/Ctrl+F) so a focused terminal in the same split keeps the chord (#11348). Floating panels omit it and fall back to isActive.
+  isFocused?: boolean
 }): React.JSX.Element {
+  const resolvedIsFocused = isFocused ?? isActive
   const activeRuntimeEnvironmentId = useAppStore((s) =>
     getRuntimeEnvironmentIdForWorktree(s, browserTab.worktreeId)
   )
@@ -852,6 +856,7 @@ export default function BrowserPane({
               sessionProfileId={browserTab.sessionProfileId ?? null}
               sessionPartition={browserTab.sessionPartition ?? null}
               isActive={isActive && page.id === activeBrowserPage?.id}
+              isFocused={resolvedIsFocused && page.id === activeBrowserPage?.id}
               isAutomationVisible={automationVisiblePageIds.has(page.id)}
               isMobileDriven={mobileDrivenPageIds.has(page.id)}
               inputLocked={activeBrowserDriver.kind === 'mobile'}
@@ -2755,6 +2760,7 @@ function BrowserPagePane({
   sessionProfileId,
   sessionPartition,
   isActive,
+  isFocused,
   isAutomationVisible,
   isMobileDriven,
   inputLocked,
@@ -2767,6 +2773,8 @@ function BrowserPagePane({
   sessionProfileId: string | null
   sessionPartition: string | null
   isActive: boolean
+  // Why: this browser's split holds focus; the renderer-path Find listener is window-global, so it must only arm when focused or it steals Cmd/Ctrl+F from a focused terminal in the same split (#11348).
+  isFocused: boolean
   isAutomationVisible: boolean
   isMobileDriven: boolean
   inputLocked: boolean
@@ -3446,8 +3454,9 @@ function BrowserPagePane({
 
   // Cmd/Ctrl+F — find in page (renderer path: focus on browser chrome)
   // Why: unlike bare C/S grab shortcuts, Cmd+F should always open find even from the address bar (matches Chrome/Safari).
+  // Gate on isFocused, not isActive: this is a window-global capture listener, so an active-but-unfocused browser in a split would otherwise swallow Cmd/Ctrl+F from the focused terminal (#11348).
   useEffect(() => {
-    if (!isActive) {
+    if (!isFocused) {
       return
     }
     const shortcutPlatform = getShortcutPlatform()
@@ -3461,7 +3470,7 @@ function BrowserPagePane({
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isActive, keybindings])
+  }, [isFocused, keybindings])
 
   // Cmd/Ctrl+F — find in page (IPC path: focus inside webview guest)
   // Why: a focused guest is a separate Chromium process, so main forwards the chord back here.

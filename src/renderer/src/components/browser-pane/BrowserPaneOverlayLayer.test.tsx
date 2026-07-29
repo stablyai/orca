@@ -6,6 +6,7 @@ type MockAppState = {
   browserTabsByWorktree: Record<string, readonly BrowserTabState[]>
   unifiedTabsByWorktree: Record<string, readonly Tab[]>
   groupsByWorktree: Record<string, readonly TabGroup[]>
+  activeGroupIdByWorktree: Record<string, string>
   focusGroup: (worktreeId: string, groupId: string) => void
 }
 
@@ -36,10 +37,19 @@ vi.mock('@/lib/pane-manager/browser-mobile-driver-state', () => ({
 }))
 
 vi.mock('./BrowserPane', () => ({
-  default: ({ browserTab, isActive }: { browserTab: BrowserTabState; isActive: boolean }) => (
+  default: ({
+    browserTab,
+    isActive,
+    isFocused
+  }: {
+    browserTab: BrowserTabState
+    isActive: boolean
+    isFocused?: boolean
+  }) => (
     <span
       data-browser-pane-id={browserTab.id}
       data-browser-pane-active={isActive ? 'true' : 'false'}
+      data-browser-pane-focused={isFocused ? 'true' : 'false'}
     />
   )
 }))
@@ -61,6 +71,28 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(markup).toContain('data-browser-pane-active="true"')
     expect(markup).toContain('data-browser-pane-id="browser-b"')
     expect(markup).toContain('data-browser-pane-active="false"')
+  })
+
+  it('marks the active browser pane focused when its own group holds focus', () => {
+    const markup = renderOverlay({ isWorktreeActive: true })
+
+    // browser-a is the active tab of group-1, and group-1 is the focused split.
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-pane-focused="true"'
+    )
+  })
+
+  it('keeps an active browser pane unfocused when another split holds focus (#11348)', () => {
+    // Terminal split (group-2) holds keyboard focus; the browser stays the active
+    // tab within its own group-1 but must not claim the focused-split Find shortcut.
+    mocks.state = createState()
+    mocks.state.activeGroupIdByWorktree = { 'wt-1': 'group-2' }
+
+    const markup = renderOverlay({ isWorktreeActive: true })
+
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-pane-focused="false"'
+    )
   })
 
   it('marks automation-visible inactive browser panes paintable without remounting them', () => {
@@ -126,6 +158,8 @@ function createState(): MockAppState {
         }
       ]
     },
+    // Default: the browser's own group holds focus, so active === focused.
+    activeGroupIdByWorktree: { 'wt-1': 'group-1' },
     focusGroup: mocks.focusGroup
   }
 }

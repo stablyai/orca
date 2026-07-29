@@ -24,6 +24,8 @@ type BrowserOverlaySlotProps = {
   // Why: undefined = orphan tab (in browserTabs but not referenced by any group's unified-tab list); the fallback branch keeps these hidden.
   groupId: string | undefined
   isActive: boolean
+  // Why: active-in-group ≠ focused split. Find (Cmd/Ctrl+F) must only arm for the focused split, or the browser claims the chord from a focused terminal in the same split (#11348).
+  isFocused: boolean
   // Why: overlay is a sibling of the group layout, so pane focus doesn't bubble to TabGroupPanel; re-sync it here or split-view clicks leave activeGroupIdByWorktree stale.
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   isWorktreeActive: boolean
@@ -34,6 +36,7 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   browserTab,
   groupId,
   isActive,
+  isFocused,
   onFocusOwningGroup,
   isWorktreeActive
 }: BrowserOverlaySlotProps): React.JSX.Element {
@@ -97,12 +100,14 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
     >
       <div ref={setSlotViewportRef} className="absolute inset-0 flex min-h-0 flex-col" />
       {/* Why: hidden worktrees park the heavy pane subtree; visible ones keep stable slots so reparenting can't destroy the webview guest. */}
-      {shouldMountPane ? <BrowserPane browserTab={browserTab} isActive={isActive} /> : null}
+      {shouldMountPane ? (
+        <BrowserPane browserTab={browserTab} isActive={isActive} isFocused={isFocused} />
+      ) : null}
     </div>
   )
 })
 
-// Why: memoize so parent re-renders on props this layer doesn't consume (e.g. focusedGroupId) don't rerun its selector or assignments mapping.
+// Why: memoize so parent re-renders on props this layer doesn't consume don't rerun its selector or assignments mapping (focused-split state comes from the store selector below, not props).
 const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
   worktreeId,
   isWorktreeActive
@@ -110,11 +115,13 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
   worktreeId: string
   isWorktreeActive: boolean
 }): React.JSX.Element {
-  const { browserTabs, unifiedTabs, groups } = useAppStore(
+  const { browserTabs, unifiedTabs, groups, focusedGroupId } = useAppStore(
     useShallow((state) => ({
       browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
       unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
-      groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS
+      groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS,
+      // Why: the focused split within this worktree; gates the browser Find shortcut so a focused terminal in the same split keeps Cmd/Ctrl+F (#11348).
+      focusedGroupId: state.activeGroupIdByWorktree[worktreeId]
     }))
   )
   const focusGroup = useAppStore((state) => state.focusGroup)
@@ -154,12 +161,15 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
       {browserTabs.map((browserTab) => {
         const assignment = assignments.get(browserTab.id)
         const isActive = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
+        // Why: focused only when this browser's group is the focused split — not merely the active tab in its own group.
+        const isFocused = isActive && assignment?.groupId === focusedGroupId
         return (
           <BrowserOverlaySlot
             key={browserTab.id}
             browserTab={browserTab}
             groupId={assignment?.groupId}
             isActive={isActive}
+            isFocused={isFocused}
             onFocusOwningGroup={focusOwningGroup}
             isWorktreeActive={isWorktreeActive}
           />
