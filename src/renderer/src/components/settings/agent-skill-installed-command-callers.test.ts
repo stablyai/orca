@@ -71,6 +71,7 @@ const installOnlyCallers = new Map<string, readonly string[]>([
     [
       'buildSkillCommandForRuntime(',
       'command={skillInstallCommand}',
+      'terminalShellOverride={activeSkillRuntime.terminalShellOverride}',
       'showInstallWhenInstalled={!setup.cliSkillInstalled}'
     ]
   ]

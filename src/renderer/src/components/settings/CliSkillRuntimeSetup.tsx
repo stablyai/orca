@@ -8,7 +8,7 @@ import {
   quotePowerShellNativeArgument
 } from '../../../../shared/powershell-native-argument'
 import { buildWslLoginShellCommand } from '../../../../shared/wsl-login-shell-command'
-import { resolveWindowsShellStartupFamily } from '../../../../shared/windows-terminal-shell'
+import { getProjectAgentSkillTerminalShellOverride } from '@/lib/project-skill-runtime'
 import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
@@ -87,11 +87,7 @@ export function buildSkillCommandForRuntime(
     currentPlatform
   )
   if (resolvedRuntime.runtime !== 'wsl') {
-    return wrapWindowsSkillCommandWithNpxPrerequisite(
-      normalizedCommand,
-      resolvedRuntime,
-      currentPlatform
-    )
+    return wrapWindowsSkillCommandWithNpxPrerequisite(normalizedCommand, currentPlatform)
   }
 
   const distroArg = resolvedRuntime.wslDistro?.trim()
@@ -131,15 +127,10 @@ function normalizeWindowsSkillUpdateCommand(
 
 function wrapWindowsSkillCommandWithNpxPrerequisite(
   command: string,
-  runtime: LocalAgentRuntime,
   currentPlatform: NodeJS.Platform
 ): string {
   const trimmedCommand = command.trim()
-  if (
-    runtime.runtime === 'wsl' ||
-    currentPlatform !== 'win32' ||
-    !/^npx\s+skills\s+(?:add|update)\b/i.test(trimmedCommand)
-  ) {
+  if (currentPlatform !== 'win32' || !/^npx\s+skills\s+(?:add|update)\b/i.test(trimmedCommand)) {
     return command
   }
 
@@ -188,17 +179,11 @@ export function getAgentSkillTerminalShellOverride(
   settings: GlobalSettings,
   runtime: LocalAgentRuntime
 ): string | undefined {
-  if (currentPlatform !== 'win32') {
-    return undefined
-  }
-  if (runtime.runtime === 'wsl') {
-    return 'powershell.exe'
-  }
-  // Why: generated skill commands are PowerShell/cmd syntax, so a POSIX-family
-  // Windows shell (wsl.exe, Git Bash) would mangle the wrapper we hand it.
-  return resolveWindowsShellStartupFamily(settings.terminalWindowsShell) === 'posix'
-    ? 'powershell.exe'
-    : undefined
+  return getProjectAgentSkillTerminalShellOverride(
+    currentPlatform as NodeJS.Platform,
+    settings,
+    runtime
+  )
 }
 
 export async function ensureWslCliAvailableForAgentSkillTerminal(
