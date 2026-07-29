@@ -9,8 +9,6 @@ import {
 import { useAppStore } from '../store'
 import { getRendererAppPlatform } from '../lib/renderer-app-platform'
 
-export { getRendererAppPlatform }
-
 export type ShortcutKeyComboDetails = {
   keys: string[]
   doubleTap: boolean

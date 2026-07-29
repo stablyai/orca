@@ -3,11 +3,7 @@ import { isMacOs } from './renderer-app-platform'
 
 type UpdateCheckClickEvent = Pick<MouseEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>
 
-function isMacShortcutPlatform(): boolean {
-  return isMacOs()
-}
-
-export function getUpdateCheckHint(isMac = isMacShortcutPlatform()): string {
+export function getUpdateCheckHint(isMac = isMacOs()): string {
   const rcClickLabel = isMac ? '⇧+click' : 'Shift+click'
   const perfClickLabel = isMac ? '⌘+click' : 'Ctrl+click'
   const releaseHints = `${rcClickLabel} checks the latest RC; ${perfClickLabel} checks the latest perf build.`
@@ -16,7 +12,7 @@ export function getUpdateCheckHint(isMac = isMacShortcutPlatform()): string {
 
 export function getUpdateCheckClickOptions(
   event: UpdateCheckClickEvent,
-  isMac = isMacShortcutPlatform()
+  isMac = isMacOs()
 ): UpdateCheckOptions {
   if (isMac && event.altKey) {
     return { localBuild: true }
