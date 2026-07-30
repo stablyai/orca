@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { linkSync, lstatSync, renameSync, unlinkSync, type Stats } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 
 export function publishActiveManagedOverlay({
@@ -55,7 +55,7 @@ function canPublishProfileOverlayByHardLink(
   targetPath: string,
   fileName: string
 ): boolean {
-  const probePath = uniqueOverlaySiblingPath(targetPath, 'probe', 'tmp')
+  const probePath = profileOverlayProbePath(targetPath)
   try {
     linkSync(stagePath, probePath)
   } catch (error) {
@@ -75,6 +75,7 @@ function canPublishProfileOverlayByHardLink(
       probePath,
       error
     )
+    removeActiveOverlayProbe(probePath, fileName)
     return false
   }
   return true
@@ -170,6 +171,16 @@ function removeActiveOverlayStage(stagePath: string, fileName: string): void {
   }
 }
 
+function removeActiveOverlayProbe(probePath: string, fileName: string): void {
+  try {
+    unlinkSync(probePath)
+  } catch (error) {
+    if (!isNotFoundError(error)) {
+      console.warn('[codex-config] Retained profile overlay hard-link probe:', fileName, probePath)
+    }
+  }
+}
+
 function warnRetainedQuarantine(fileName: string, quarantinePath: string, reason: unknown): void {
   console.warn(
     '[codex-config] Retained profile overlay quarantine for manual recovery:',
@@ -179,9 +190,14 @@ function warnRetainedQuarantine(fileName: string, quarantinePath: string, reason
   )
 }
 
+function profileOverlayProbePath(targetPath: string): string {
+  // Why: persistent unlink denial must cap retained probes at one per target.
+  return join(dirname(targetPath), `.orca-profile-overlay-probe-${basename(targetPath)}.tmp`)
+}
+
 function uniqueOverlaySiblingPath(
   targetPath: string,
-  role: 'probe' | 'quarantine' | 'stage',
+  role: 'quarantine' | 'stage',
   extension: string
 ): string {
   return join(

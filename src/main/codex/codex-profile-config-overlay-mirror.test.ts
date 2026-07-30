@@ -20,6 +20,7 @@ const { fsFault } = vi.hoisted(() => ({
   fsFault: {
     activePublishFinalLinkError: null as { code: string; targetPath: string } | null,
     activePublishHardlinkError: null as { code: string } | null,
+    activePublishProbeUnlinkFailures: 0,
     activeTargetRace: null as { contents: string; targetPath: string } | null,
     quarantineTargetRace: null as { contents: string; targetPath: string } | null,
     readdirPath: null as string | null,
@@ -83,6 +84,17 @@ vi.mock('node:fs', async () => {
       }
       actual.linkSync(existingPath, newPath)
     },
+    unlinkSync: (path: Parameters<typeof actual.unlinkSync>[0]) => {
+      if (
+        typeof path === 'string' &&
+        path.includes('.orca-profile-overlay-probe-') &&
+        fsFault.activePublishProbeUnlinkFailures > 0
+      ) {
+        fsFault.activePublishProbeUnlinkFailures -= 1
+        throw Object.assign(new Error('injected probe unlink failure'), { code: 'EACCES' })
+      }
+      actual.unlinkSync(path)
+    },
     renameSync: (
       oldPath: Parameters<typeof actual.renameSync>[0],
       newPath: Parameters<typeof actual.renameSync>[1]
@@ -138,6 +150,7 @@ let systemHomePath: string
 beforeEach(() => {
   fsFault.activePublishFinalLinkError = null
   fsFault.activePublishHardlinkError = null
+  fsFault.activePublishProbeUnlinkFailures = 0
   fsFault.activeTargetRace = null
   fsFault.quarantineTargetRace = null
   fsFault.readdirPath = null
@@ -152,6 +165,7 @@ beforeEach(() => {
 afterEach(() => {
   fsFault.activePublishFinalLinkError = null
   fsFault.activePublishHardlinkError = null
+  fsFault.activePublishProbeUnlinkFailures = 0
   fsFault.activeTargetRace = null
   fsFault.quarantineTargetRace = null
   fsFault.readdirPath = null
@@ -315,6 +329,43 @@ describe('syncCodexProfileConfigOverlaysIntoManagedHome', () => {
       )
     ).toEqual([])
     expect(warn).toHaveBeenCalled()
+  })
+
+  it('retries cleanup after a one-shot hard-link probe unlink failure', () => {
+    writeFileSync(sourceOverlayPath(), 'model = "managed"\n', 'utf-8')
+    mkdirSync(runtimeHomePath, { recursive: true })
+    const oldContents = 'model = "old-runtime-copy"\n'
+    writeFileSync(runtimeOverlayPath(), oldContents, 'utf-8')
+    fsFault.activePublishProbeUnlinkFailures = 1
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    syncOverlays()
+
+    expect(readFileSync(runtimeOverlayPath(), 'utf-8')).toBe(oldContents)
+    expect(
+      readdirSync(runtimeHomePath).filter(
+        (name) => name.includes('overlay-stage') || name.includes('overlay-probe')
+      )
+    ).toEqual([])
+    expect(warn).toHaveBeenCalled()
+  })
+
+  it('does not accumulate hard-link probes after persistent unlink failures', () => {
+    writeFileSync(sourceOverlayPath(), 'model = "managed"\n', 'utf-8')
+    mkdirSync(runtimeHomePath, { recursive: true })
+    const oldContents = 'model = "old-runtime-copy"\n'
+    writeFileSync(runtimeOverlayPath(), oldContents, 'utf-8')
+    fsFault.activePublishProbeUnlinkFailures = 4
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    syncOverlays()
+    syncOverlays()
+
+    expect(readFileSync(runtimeOverlayPath(), 'utf-8')).toBe(oldContents)
+    expect(
+      readdirSync(runtimeHomePath).filter((name) => name.includes('overlay-probe'))
+    ).toHaveLength(1)
+    expect(readdirSync(runtimeHomePath).some((name) => name.includes('overlay-stage'))).toBe(false)
   })
 
   it('restores the active target after a one-shot final publish failure', () => {
