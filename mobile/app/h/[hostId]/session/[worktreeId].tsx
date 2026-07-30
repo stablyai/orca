@@ -924,7 +924,6 @@ export default function SessionScreen() {
   const [terminalTextScale, setTerminalTextScale] = useState(1)
   // Why: terminal command-bar autocomplete opt-in, reloaded on focus so a Settings → Terminal toggle takes effect on return.
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
-  const shouldSendTabForTap = useTerminalDoubleTapTab()
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
     useState<MobileTerminalLinkOpenMode>('orca-browser')
   const [liveInputCapture, setLiveInputCapture] = useState('')
@@ -937,6 +936,7 @@ export default function SessionScreen() {
     toggleTerminalLiveInput
   } = useTerminalLiveInputModePreference({ hostId, worktreeId })
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
+  const shouldSendTabForTap = useTerminalDoubleTapTab(activeHandle)
   // Reactive teardown signal for the native-chat covered stream; see unsubscribeTerminal.
   const [coveredStreamRevision, setCoveredStreamRevision] = useState(0)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
@@ -3097,6 +3097,7 @@ export default function SessionScreen() {
       deviceToken: deviceTokenRef.current
     })
   }
+  // Why: the ref keeps double-tap and repeat callbacks current across terminal switches/reconnects.
   const handleAccessoryKeyRef = useRef(handleAccessoryKey)
   handleAccessoryKeyRef.current = handleAccessoryKey
   const sendLiveTerminalInput = useCallback(
@@ -3494,7 +3495,6 @@ export default function SessionScreen() {
   // Why: hold-to-repeat matches iOS cadence (400ms then 45ms); non-repeatable keys fire once (holding is destructive).
   const repeatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const repeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  // Why: ref keeps repeat firing the current callback; else a mid-hold tab switch/reconnect routes bytes to a stale terminal.
   const stopAccessoryRepeat = useCallback(() => {
     if (repeatTimeoutRef.current) {
       clearTimeout(repeatTimeoutRef.current)

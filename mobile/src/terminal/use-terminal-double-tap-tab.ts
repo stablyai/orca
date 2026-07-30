@@ -1,9 +1,9 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { loadTerminalDoubleTapTabEnabled } from '../storage/preferences'
 import { resolveTerminalDoubleTapTab, type TerminalTapRecord } from './terminal-double-tap-tab'
 
-export function useTerminalDoubleTapTab(): (handle: string) => boolean {
+export function useTerminalDoubleTapTab(activeHandle: string | null): (handle: string) => boolean {
   const [enabled, setEnabled] = useState(false)
   const lastTapRef = useRef<TerminalTapRecord | null>(null)
 
@@ -22,6 +22,10 @@ export function useTerminalDoubleTapTab(): (handle: string) => boolean {
       }
     }, [])
   )
+
+  useEffect(() => {
+    lastTapRef.current = null
+  }, [activeHandle])
 
   return useCallback(
     (handle: string) => {
