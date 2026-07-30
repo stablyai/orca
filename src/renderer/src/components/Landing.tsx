@@ -245,6 +245,18 @@ export default function Landing(): React.JSX.Element {
   // reported the wrong host's git/gh state.
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+  const invalidatePreflightStatus = useAppStore((s) => s.invalidatePreflightStatus)
+  const activeRuntimeIdentity = useAppStore((s) => {
+    const environmentId = s.settings?.activeRuntimeEnvironmentId?.trim() ?? 'local'
+    const runtimeStatus =
+      environmentId === 'local' ? undefined : s.runtimeStatusByEnvironmentId.get(environmentId)
+    const reachability = runtimeStatus
+      ? runtimeStatus.status === null
+        ? 'unreachable'
+        : 'reachable'
+      : 'unknown'
+    return `${environmentId}:${runtimeStatus?.connectionGeneration ?? 0}:${reachability}`
+  })
 
   const preflightIssues = useMemo(
     () =>
@@ -257,6 +269,11 @@ export default function Landing(): React.JSX.Element {
   )
 
   useEffect(() => {
+    if (activeRuntimeIdentity.endsWith(':unreachable')) {
+      invalidatePreflightStatus()
+      return
+    }
+
     void refreshPreflightStatus()
 
     // Why: users often install/authenticate gh outside Orca. Re-check when the
@@ -274,7 +291,7 @@ export default function Landing(): React.JSX.Element {
       document.removeEventListener('visibilitychange', handleWindowActive)
       window.removeEventListener('focus', handleWindowActive)
     }
-  }, [refreshPreflightStatus])
+  }, [activeRuntimeIdentity, invalidatePreflightStatus, refreshPreflightStatus])
 
   useEffect(() => {
     if (preflightIssues.length === 0) {

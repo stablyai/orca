@@ -14,6 +14,9 @@ describe('landing preflight runtime ownership boundary', () => {
 
     expect(text).toContain('refreshPreflightStatus')
     expect(text).toContain('s.preflightStatus')
+    expect(text).toContain('activeRuntimeIdentity')
+    expect(text).toContain('invalidatePreflightStatus')
+    expect(text).toContain('runtimeStatusByEnvironmentId')
   })
 
   // Why: window.api.preflight.check always probes the local client. The

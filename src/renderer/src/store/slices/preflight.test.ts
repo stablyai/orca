@@ -124,6 +124,22 @@ describe('createPreflightSlice', () => {
     expect(store.getState().preflightStatusLoading).toBe(false)
   })
 
+  it('invalidates an in-flight result when its runtime session ends', async () => {
+    resetPreflightMocks()
+    const stale = deferred<PreflightStatus>()
+    preflightCheck.mockReturnValueOnce(stale.promise)
+    const store = createTestStore()
+
+    const request = store.getState().refreshPreflightStatus()
+    store.getState().invalidatePreflightStatus()
+    stale.resolve(makeStatus(true))
+    await request
+
+    expect(store.getState().preflightStatus).toBeNull()
+    expect(store.getState().preflightStatusChecked).toBe(false)
+    expect(store.getState().preflightStatusContextKey).toBeNull()
+  })
+
   it('lets forced checks bypass non-forced dedupe and win stale races', async () => {
     resetPreflightMocks()
     const stale = deferred<PreflightStatus>()
