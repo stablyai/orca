@@ -178,17 +178,20 @@ describe('account CLI handlers', () => {
     expect(path.split(delimiter)[0]).toBe(nodeBin)
   })
 
-  it('updates the effective Windows PATH when both casing aliases exist', async () => {
+  it('updates the effective Windows PATH regardless of native environment casing', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     process.env.Path = 'C:\\stale'
     const nodeBin = 'C:\\Users\\test\\.volta\\bin'
+    const effectivePathBefore = process.env.PATH ?? process.env.Path ?? ''
     getVersionManagerBinPathsMock.mockReturnValue([nodeBin])
 
     await ACCOUNT_HANDLERS['account add'](context('codex'))
 
     const env = spawnMock.mock.calls[0]?.[2].env as NodeJS.ProcessEnv
-    expect(env.PATH).toBe(`${nodeBin}${delimiter}${process.env.PATH}`)
-    expect(env.Path).toBe('C:\\stale')
+    const pathValues = Object.entries(env)
+      .filter(([key]) => key.toLowerCase() === 'path')
+      .map(([, value]) => value)
+    expect(pathValues).toContain(`${nodeBin}${delimiter}${effectivePathBefore}`)
   })
 
   it('removes scoped Claude credentials and restores the legacy Keychain item', async () => {
@@ -211,6 +214,7 @@ describe('account CLI handlers', () => {
 
   it('waits for physical child close before removing interrupted login credentials', async () => {
     // Why: deleting first lets the still-live login recreate credentials afterward.
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     const kill = vi.fn()
     const child = Object.assign(new EventEmitter(), { kill })
     let codexHome = ''
@@ -244,6 +248,7 @@ describe('account CLI handlers', () => {
   it('cleans up when an SSH hangup ends the login', async () => {
     // Why: this flow targets headless/SSH hosts, where a dropped connection
     // delivers SIGHUP — Node's default terminates without running cleanup.
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     const child = Object.assign(new EventEmitter(), { kill: vi.fn() })
     let codexHome = ''
     spawnMock.mockImplementation((_command, _args, options: { env: Record<string, string> }) => {
