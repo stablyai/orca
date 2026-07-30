@@ -48,12 +48,23 @@ describe('subscribeRuntimeClientEvents', () => {
       result: { type: 'worktreesChanged', repoId: 'repo-1' }
     })
     capturedOnResponse({
+      ok: true,
+      result: {
+        type: 'terminalSideEffects',
+        batch: { ptyId: 'pty-1', seq: 7, facts: [{ kind: 'bell' }] }
+      }
+    })
+    capturedOnResponse({
       ok: false,
       error: { code: 'method_not_found', message: 'missing' }
     })
 
-    expect(onEvent).toHaveBeenCalledTimes(1)
+    expect(onEvent).toHaveBeenCalledTimes(2)
     expect(onEvent).toHaveBeenCalledWith({ type: 'worktreesChanged', repoId: 'repo-1' })
+    expect(onEvent).toHaveBeenCalledWith({
+      type: 'terminalSideEffects',
+      batch: { ptyId: 'pty-1', seq: 7, facts: [{ kind: 'bell' }] }
+    })
     expect(onError).toHaveBeenCalledWith({ code: 'method_not_found', message: 'missing' })
 
     subscription.unsubscribe()

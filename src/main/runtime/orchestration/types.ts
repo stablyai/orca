@@ -14,6 +14,8 @@ export type MessageType = (typeof MESSAGE_TYPES)[number]
 
 export type MessagePriority = 'normal' | 'high' | 'urgent'
 
+export type MessageDeliveryContract = 'legacy_direct' | 'current_delivery' | 'audit_only'
+
 export type TaskStatus = 'pending' | 'ready' | 'dispatched' | 'completed' | 'failed' | 'blocked'
 
 export type DispatchStatus = 'pending' | 'dispatched' | 'completed' | 'failed' | 'circuit_broken'
@@ -58,6 +60,46 @@ export type DeliveryRow = {
   message_ids: string
   status: DeliveryStatus
   created_at: string
+  acknowledged_at: string | null
+}
+
+export type LegacyAdoptionRow = {
+  source_run_id: string
+  adopted_run_id: string
+  scheduler_state_lost: number
+  adopted_at: string
+}
+
+export type LegacyPrincipalRole = 'worker' | 'coordinator'
+
+export type LegacyPrincipalStatus = 'committed' | 'settled' | 'revoked'
+
+export type LegacyCompatibilityPrincipalRow = {
+  id: string
+  run_id: string
+  dispatch_id: string | null
+  role: LegacyPrincipalRole
+  host_scope: string
+  terminal_handle: string
+  pane_key: string
+  launch_token_hash: string
+  process_incarnation: string | null
+  status: LegacyPrincipalStatus
+}
+
+export type LegacyOperationReceiptRow = {
+  principal_id: string
+  operation_key: string
+  method: string
+  payload_hash: string
+  effect_id: string
+  response_json: string
+  completed_at: string
+}
+
+export type LegacyMailReceiptRow = {
+  principal_id: string
+  message_id: string
   acknowledged_at: string | null
 }
 
@@ -117,6 +159,19 @@ export type WorkerDispatchRow = {
   updated_at: string
 }
 
+export type LegacyWorkerTerminalRecoveryRow = {
+  dispatch_id: string
+  task_id: string
+  dispatch_status: DispatchStatus
+  contract_version: number
+  assignee_handle: string | null
+  assignee_pane_key: string | null
+  process_incarnation: string | null
+  worker_state: WorkerDispatchState
+  worktree_id: string | null
+  agent_terminal_handle: string | null
+}
+
 export type FederatedDispatchRow = {
   dispatch_id: string
   environment_id: string
@@ -170,6 +225,7 @@ export type FederationRelayItemRow = {
 export type MessageRow = {
   id: string
   run_id: string
+  delivery_contract?: MessageDeliveryContract
   from_handle: string
   to_handle: string
   subject: string
@@ -204,6 +260,8 @@ export type DispatchContextRow = {
   id: string
   run_id: string
   task_id: string
+  contract_version: number
+  launch_token_hash: string | null
   assignee_handle: string | null
   assignee_pane_key: string | null
   capability_hash: string | null
@@ -238,4 +296,5 @@ export type CoordinatorRun = {
   poll_interval_ms: number
   created_at: string
   completed_at: string | null
+  scheduler_lost_at: string | null
 }

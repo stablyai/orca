@@ -713,6 +713,20 @@ describe('remote hook service installers', () => {
     expect(byAgent.get('copilot')).toBe('installed')
   })
 
+  it('installs only positively detected remote agents', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    const results = await installRemoteManagedAgentHooks(sftp, '/home/dev', {
+      agents: ['codex']
+    })
+
+    expect(results.map((result) => result.agent)).toEqual(['codex'])
+    const paths = [...fs.files.keys(), ...fs.dirs]
+    for (const unusedHome of ['.factory', '.gemini', '.grok', '.hermes', '.commandcode']) {
+      expect(paths.some((path) => path.includes(`/home/dev/${unusedHome}`))).toBe(false)
+    }
+  })
+
   it('stops before the next installer when its relay request is cancelled', async () => {
     const controller = new AbortController()
     const claudeInstall = vi

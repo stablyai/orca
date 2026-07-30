@@ -13,6 +13,7 @@ describe('smart-workspace-localized-options', () => {
       'Smart',
       'GitHub',
       'Linear',
+      'Jira',
       'GitLab',
       'Branch',
       'Name'
@@ -24,6 +25,7 @@ describe('smart-workspace-localized-options', () => {
       '智能',
       'GitHub',
       'Linear',
+      'Jira',
       'GitLab',
       '分支',
       '名称'
@@ -35,6 +37,7 @@ describe('smart-workspace-localized-options', () => {
       'Smart',
       'GitHub',
       'Linear',
+      'Jira',
       'GitLab',
       'Branch',
       'Name'

@@ -46,20 +46,20 @@ export function EphemeralVmsPane(): React.JSX.Element {
   const mountedRef = useMountedRef()
   const refreshGenerationRef = useRef(0)
 
-  const installCommand =
-    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
-      ? buildSkillCommandForRuntime(
-          EPHEMERAL_VMS_SKILL_INSTALL_COMMAND,
-          activeSkillRuntime.agentRuntime
-        )
-      : EPHEMERAL_VMS_SKILL_INSTALL_COMMAND
-  const updateCommand =
-    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
-      ? buildSkillCommandForRuntime(
-          EPHEMERAL_VMS_SKILL_UPDATE_COMMAND,
-          activeSkillRuntime.agentRuntime
-        )
-      : EPHEMERAL_VMS_SKILL_UPDATE_COMMAND
+  // Why: an absent runtime still resolves to the local host, which is what the
+  // seven sibling panes rely on to reach the Windows npx preflight.
+  const installCommand = activeSkillRuntime.installDisabledReason
+    ? EPHEMERAL_VMS_SKILL_INSTALL_COMMAND
+    : buildSkillCommandForRuntime(
+        EPHEMERAL_VMS_SKILL_INSTALL_COMMAND,
+        activeSkillRuntime.agentRuntime
+      )
+  const updateCommand = activeSkillRuntime.installDisabledReason
+    ? EPHEMERAL_VMS_SKILL_UPDATE_COMMAND
+    : buildSkillCommandForRuntime(
+        EPHEMERAL_VMS_SKILL_UPDATE_COMMAND,
+        activeSkillRuntime.agentRuntime
+      )
 
   const {
     installed: skillDetected,
@@ -144,8 +144,8 @@ export function EphemeralVmsPane(): React.JSX.Element {
     <div className="space-y-6" data-settings-section="ephemeral-vms">
       <AgentSkillSetupPanel
         title={translate(
-          'auto.components.settings.EphemeralVmsPane.skillTitle',
-          'Per-Workspace Environments skill'
+          'auto.components.settings.EphemeralVmsPane.cloudVmSkillTitle',
+          'Cloud VM setup skill'
         )}
         description={translate(
           'auto.components.settings.EphemeralVmsPane.skillDescription',
@@ -153,8 +153,14 @@ export function EphemeralVmsPane(): React.JSX.Element {
         )}
         command={installCommand}
         installedCommand={updateCommand}
-        terminalTitle="Ephemeral VMs setup"
-        terminalAriaLabel="Ephemeral VMs skill install terminal"
+        terminalTitle={translate(
+          'auto.components.settings.EphemeralVmsPane.cloudVmTerminalTitle',
+          'Cloud VM setup'
+        )}
+        terminalAriaLabel={translate(
+          'auto.components.settings.EphemeralVmsPane.cloudVmTerminalAriaLabel',
+          'Cloud VM skill install terminal'
+        )}
         terminalWorktreeId="settings-ephemeral-vms-skill-terminal"
         terminalShellOverride={activeSkillRuntime.terminalShellOverride}
         installed={skillDetected}
@@ -258,8 +264,8 @@ export function EphemeralVmsPane(): React.JSX.Element {
             variant="outline"
             size="icon-sm"
             aria-label={translate(
-              'auto.components.settings.EphemeralVmsPane.refresh',
-              'Refresh ephemeral VM recipes'
+              'auto.components.settings.EphemeralVmsPane.cloudVmRefresh',
+              'Refresh Cloud VM recipes'
             )}
             onClick={() => void refresh()}
             disabled={isLoading}

@@ -37,12 +37,7 @@ function renderRenameRow(): {
   const onSubmit = vi.fn()
   const view = render(
     <div>
-      <InlineInputRow
-        depth={1}
-        inlineInput={renameInput}
-        onSubmit={onSubmit}
-        onCancel={vi.fn()}
-      />
+      <InlineInputRow depth={1} inlineInput={renameInput} onSubmit={onSubmit} onCancel={vi.fn()} />
       {/* Rows are Radix context-menu triggers, so a genuine click on a neighbour
           used to be indistinguishable from Radix restoring focus after a close. */}
       <button type="button" data-slot="context-menu-trigger">

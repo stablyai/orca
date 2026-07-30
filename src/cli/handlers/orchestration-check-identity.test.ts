@@ -71,4 +71,24 @@ describe('orchestration check identity', () => {
       })
     )
   })
+
+  it('preserves the pinned legacy --inject check signature', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_legacy_worker'
+
+    await invokeCheck(
+      new Map<string, string | boolean>([
+        ['unread', true],
+        ['inject', true]
+      ])
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.check',
+      expect.objectContaining({
+        terminal: 'term_legacy_worker',
+        unread: true,
+        inject: true
+      })
+    )
+  })
 })

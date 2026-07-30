@@ -11,6 +11,7 @@ import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../share
 import type { AgentAwakeService } from '../agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network-proxy'
 import { normalizeAppIconId } from '../../shared/app-icon'
@@ -23,6 +24,7 @@ import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
+import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -148,14 +150,26 @@ export function registerSettingsHandlers(
     if ('keepComputerAwakeWhileAgentsRun' in sanitizedArgs) {
       agentAwakeService?.setEnabled(result.keepComputerAwakeWhileAgentsRun)
     }
-    if (
-      'agentStatusHooksEnabled' in sanitizedArgs &&
-      before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled
-    ) {
+    const hookSettingChanged =
+      ('agentStatusHooksEnabled' in sanitizedArgs &&
+        before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled) ||
+      ('disabledTuiAgents' in sanitizedArgs &&
+        !haveSameDisabledTuiAgents(before.disabledTuiAgents, result.disabledTuiAgents))
+    if (hookSettingChanged) {
       try {
-        applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled)
+        await applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled, result, {
+          shouldHydrateShellPath: app.isPackaged && process.platform !== 'win32',
+          onInstallError: recordManagedHookInstallFailure,
+          shouldContinue: (agent) => {
+            const settings = store.getSettings()
+            return (
+              settings.agentStatusHooksEnabled !== false &&
+              !settings.disabledTuiAgents.includes(agent)
+            )
+          }
+        })
       } catch (error) {
-        console.warn('[settings] failed to apply agentStatusHooksEnabled:', error)
+        console.warn('[settings] failed to reconcile managed agent hooks:', error)
       }
     }
     if ('uiLanguage' in sanitizedArgs && before.uiLanguage !== result.uiLanguage) {

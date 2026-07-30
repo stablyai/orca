@@ -29,7 +29,7 @@ export function handleTerminalWebLinkClick(
     deps.terminal &&
     openHttpLinkAtTerminalMouseEvent(deps.terminal, event, {
       worktreeId: deps.worktreeId,
-      forceSystemBrowser: Boolean(event.shiftKey),
+      modifierHeld: Boolean(event.shiftKey),
       requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference
     })
   ) {

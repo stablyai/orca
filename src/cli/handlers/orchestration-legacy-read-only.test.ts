@@ -179,6 +179,7 @@ describe('legacy orchestration CLI inspection', () => {
           id: 'msg_current',
           run_id: 'run_current',
           from_handle: 'term_current',
+          to_handle: 'run:run_current',
           subject: 'current question',
           type: 'question',
           body: 'May I continue?',
@@ -217,7 +218,8 @@ describe('legacy orchestration CLI inspection', () => {
     expect(response.result.formatted).not.toContain('RUNTIME_SENTINEL')
     expect(
       response.result.formatted.split('\n').filter((line) => line.startsWith('[Reply:'))
-    ).toEqual(['[Reply: orca orchestration reply --id msg_current --from term_coord --body "..."]'])
+    ).toEqual(['[Reply: orca orchestration reply --id msg_current --body "..."]'])
+    expect(response.result.formatted).not.toContain('--from run:run_current')
   })
 
   it('preserves runtime formatting when every message belongs to a current Run', async () => {

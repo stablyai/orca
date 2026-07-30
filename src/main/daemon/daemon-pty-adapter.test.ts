@@ -1180,6 +1180,30 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
   })
 
+  describe('probePtyLiveness', () => {
+    it('reads daemon truth before a fresh adapter has attached the session', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const activeSessionIds = (adapter as unknown as { activeSessionIds: Set<string> })
+        .activeSessionIds
+      activeSessionIds.clear()
+
+      expect(adapter.hasPty(id)).toBe(false)
+      await expect(adapter.probePtyLiveness(id)).resolves.toBe(true)
+      await expect(adapter.probePtyLiveness('missing-session')).resolves.toBe(false)
+    })
+
+    it('returns unknown when the daemon cannot answer', async () => {
+      const client = (
+        adapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      vi.spyOn(client, 'request').mockRejectedValueOnce(new Error('unavailable'))
+
+      await expect(adapter.probePtyLiveness('session')).resolves.toBeNull()
+    })
+  })
+
   describe('getBufferSnapshot', () => {
     it('returns the daemon model with its absolute stream sequence', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })

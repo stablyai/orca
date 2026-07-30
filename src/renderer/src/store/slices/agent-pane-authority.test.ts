@@ -72,6 +72,39 @@ describe('agent pane authority', () => {
     expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET)
   })
 
+  it('can retire live pane authority while retaining a migration recovery fence', () => {
+    const store = createTestStore()
+    store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'target' })
+    store.getState().registerAgentLaunchConfig(TARGET, { agentArgs: '', agentEnv: {} })
+    store.setState({
+      sleepingAgentSessionsByPaneKey: {
+        [TARGET]: {
+          paneKey: TARGET,
+          tabId: 'tab-target',
+          worktreeId: 'wt-1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'session-1' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1,
+          automaticResumeBlockedBy: 'legacy-orchestration-worker'
+        }
+      }
+    })
+
+    store.getState().retireAgentPaneAuthority(TARGET, { preserveSleepingAgentSession: true })
+
+    const state = store.getState()
+    expect(state.agentStatusByPaneKey[TARGET]).toBeUndefined()
+    expect(state.agentLaunchConfigByPaneKey[TARGET]).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey[TARGET]).toMatchObject({
+      automaticResumeBlockedBy: 'legacy-orchestration-worker'
+    })
+    expect(state.recentlyRetiredAgentStatusPaneKeys[TARGET]).toBe(true)
+    expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET)
+  })
+
   it('keeps a physical pane routed through chained detaches until its current owner closes', () => {
     const store = createTestStore()
     store.getState().setAgentStatus(SOURCE, { state: 'working', prompt: 'source' })
