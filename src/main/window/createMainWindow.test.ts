@@ -2068,7 +2068,7 @@ describe('createMainWindow', () => {
         nativeThemeMock.shouldUseDarkColors = true
         withPlatform(platform, () => themeListener?.())
         expect(browserWindowInstance.setTitleBarOverlay).toHaveBeenLastCalledWith({
-          color: '#0a0a0a',
+          color: '#171717',
           symbolColor: '#fafafa',
           height: 43
         })

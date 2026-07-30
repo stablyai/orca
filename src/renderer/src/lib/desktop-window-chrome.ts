@@ -23,3 +23,14 @@ export function shouldRenderCustomWindowControls({
   // needs the renderer-drawn min/max/close controls.
   return !isWebClient && platform === 'linux'
 }
+
+export function resolveWindowControlsWidth({
+  platform,
+  isWebClient
+}: DesktopWindowChromeInput): string {
+  if (!shouldRenderDesktopWindowChrome({ platform, isWebClient })) {
+    return '0px'
+  }
+  // Why: webFrame zoom scales CSS pixels while Windows native caption buttons stay fixed-width.
+  return platform === 'win32' ? 'calc(138px / var(--ui-zoom-factor, 1))' : '138px'
+}

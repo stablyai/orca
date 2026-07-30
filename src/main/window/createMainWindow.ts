@@ -136,14 +136,19 @@ const TRAFFIC_LIGHT_X = 16
 const MIN_WIDTH = 600
 const MIN_HEIGHT = 400
 
-// Why: native WCO cannot read CSS variables; mirror --background/--foreground from main.css.
+// Why: BrowserWindow cannot read CSS variables before the renderer loads; mirror --background.
 function getWindowBackgroundColor(): string {
   return nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff'
 }
 
+// Why: native WCO cannot read CSS variables; mirror the --card titlebar surface from main.css.
+function getWindowTitleBarColor(): string {
+  return nativeTheme.shouldUseDarkColors ? '#171717' : '#ffffff'
+}
+
 function getWindowsTitleBarOverlay(height: number): Electron.TitleBarOverlayOptions {
   return {
-    color: getWindowBackgroundColor(),
+    color: getWindowTitleBarColor(),
     symbolColor: nativeTheme.shouldUseDarkColors ? '#fafafa' : '#0a0a0a',
     height
   }

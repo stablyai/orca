@@ -27,6 +27,7 @@ import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import {
   isPairedWebClientWindow,
+  resolveWindowControlsWidth,
   shouldRenderCustomWindowControls,
   shouldRenderDesktopWindowChrome
 } from '@/lib/desktop-window-chrome'
@@ -220,6 +221,10 @@ const hasCustomTitleBar = shouldRenderDesktopWindowChrome({
 // Why: Windows uses Electron's native Window Controls Overlay for Win11 Snap
 // Layouts. Only frameless Linux still needs renderer-drawn caption buttons.
 const hasCustomWindowControls = shouldRenderCustomWindowControls({
+  platform: shortcutPlatform,
+  isWebClient
+})
+const windowControlsWidth = resolveWindowControlsWidth({
   platform: shortcutPlatform,
   isWebClient
 })
@@ -2081,7 +2086,7 @@ function App(): React.JSX.Element {
         {
           '--collapsed-sidebar-header-width': `${collapsedSidebarHeaderWidth}px`,
           // Shared so surfaces can avoid the Windows/Linux window-controls overlay without hardcoding 138px everywhere.
-          '--window-controls-width': hasCustomTitleBar ? '138px' : '0px',
+          '--window-controls-width': windowControlsWidth,
           // Side-position activity bar uses this to push icons below the Windows/Linux window-controls overlay.
           '--window-controls-height': hasCustomTitleBar ? '36px' : '0px'
         } as React.CSSProperties
