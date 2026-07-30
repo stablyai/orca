@@ -33,22 +33,12 @@ type ElectronPowerApis = {
   powerSaveBlocker: PowerSaveBlocker
 }
 
-// Why: keep this module importable under incomplete `vi.mock('electron')` fixtures
-// used by orca-runtime tests. Resolve Electron power APIs only when constructing.
+// Why: lazy-resolve Electron so incomplete `vi.mock('electron')` fixtures still import this module.
 function loadElectronPowerApis(): ElectronPowerApis {
-  // Why: lazy CJS resolve avoids static electron named-import mock breakage in orca-runtime tests.
   return require('electron') as ElectronPowerApis
 }
 
-/**
- * Keeps the display/compositor awake while any browser.screencast stream is live.
- *
- * Why: mobile/remote browser panes consume CDP screencast frames from the host
- * Chromium. Display sleep and occlusion park the compositor, so frames stop even
- * though the main process, PTYs, and guest `setBackgroundThrottling(false)` stay
- * healthy. Gate the same prevent-display-sleep path agents use on active
- * screencast subscriptions so idle hosts still save power.
- */
+/** Keeps display/compositor awake while browser.screencast streams need CDP frames. */
 export class BrowserScreencastAwakeService {
   private readonly activeTokens = new Set<string>()
   private blockerId: number | null = null
@@ -198,8 +188,7 @@ export class BrowserScreencastAwakeService {
       return
     }
     const id = this.blockerId
-    // Why: clear before reconcile so a flaky isStarted() after a successful stop
-    // cannot strand a stale id and skip the next startBlocker.
+    // Why: clear before stop so a later flaky isStarted() cannot strand a stale id.
     this.blockerId = null
     try {
       this.blocker.stop(id)

@@ -165,10 +165,7 @@ function syncMainWindowBackgroundThrottlingForScreencast(
     return
   }
   try {
-    // Why: keep the main renderer painting while a remote/mobile screencast needs
-    // compositor frames. Electron has no getter for the current throttle flag, so
-    // restore to `true` — the intentional createMainWindow default on darwin and
-    // Electron's default elsewhere — when the last stream ends.
+    // Why: Electron has no throttle getter; restore `true` (createMainWindow default) when idle.
     contents.setBackgroundThrottling(!screencastActive)
   } catch {
     // Why: the window can tear down between the null-check and the call during quit.
