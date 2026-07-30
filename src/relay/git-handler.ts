@@ -11,6 +11,15 @@ import {
   parseWorktreeList
 } from './git-handler-utils'
 import { parseNumstat } from '../shared/git-uncommitted-line-stats'
+import type { GitStashExec } from '../shared/git-stash-commands'
+import {
+  applyStashWith,
+  clearStashesWith,
+  dropStashWith,
+  listStashesWith,
+  popStashWith,
+  stashChangesWith
+} from '../shared/git-stash-commands'
 import {
   computeDiff,
   branchCompare as branchCompareOp,
@@ -108,6 +117,35 @@ function resolveSubmoduleStatusArea(
     return params.area
   }
   return 'unstaged'
+}
+
+/**
+ * Absent ref means "the latest entry". A present-but-malformed one is rejected
+ * rather than coerced to absent: silently reading it as "latest" would redirect
+ * apply/pop to a different entry instead of refusing a bad request.
+ */
+function readStashRefParam(params: Record<string, unknown>): string | null {
+  if (params.ref === undefined || params.ref === null) {
+    return null
+  }
+  if (typeof params.ref !== 'string') {
+    throw new Error('invalid_stash_ref')
+  }
+  return params.ref
+}
+
+/**
+ * Same rule for the oid — coercing a malformed one to undefined would disable
+ * the concurrent-stash guard exactly when the caller asked for it.
+ */
+function readExpectedStashOidParam(params: Record<string, unknown>): string | undefined {
+  if (params.expectedCommitOid === undefined || params.expectedCommitOid === null) {
+    return undefined
+  }
+  if (typeof params.expectedCommitOid !== 'string') {
+    throw new Error('invalid_stash_oid')
+  }
+  return params.expectedCommitOid
 }
 
 function isWindowsAbsolutePath(value: string): boolean {
@@ -224,6 +262,12 @@ export class GitHandler {
     this.dispatcher.onRequest('git.localBranches', (p) => this.localBranches(p))
     this.dispatcher.onRequest('git.discard', (p) => this.discard(p))
     this.dispatcher.onRequest('git.bulkDiscard', (p) => this.bulkDiscard(p))
+    this.dispatcher.onRequest('git.stashList', (p) => this.stashList(p))
+    this.dispatcher.onRequest('git.stashPush', (p) => this.stashPush(p))
+    this.dispatcher.onRequest('git.stashApply', (p) => this.stashApply(p))
+    this.dispatcher.onRequest('git.stashPop', (p) => this.stashPop(p))
+    this.dispatcher.onRequest('git.stashDrop', (p) => this.stashDrop(p))
+    this.dispatcher.onRequest('git.stashClear', (p) => this.stashClear(p))
     this.dispatcher.onRequest('git.conflictOperation', (p) => this.conflictOperation(p))
     this.dispatcher.onRequest('git.branchCompare', (p) => this.branchCompare(p))
     this.dispatcher.onRequest('git.commitCompare', (p) => this.commitCompare(p))
@@ -754,6 +798,72 @@ export class GitHandler {
     } finally {
       this.clearGitMutationReadCaches()
     }
+  }
+
+  // ─── Stash ───────────────────────────────────────────────────────────
+  // Why: stash is not reachable through git.exec — git-exec-validator only allows
+  // read-only subcommands — so each operation gets a dedicated method. Params
+  // arrive untyped here, so every one re-validates rather than trusting the RPC
+  // schema; the shared command core in ../shared/git-stash-commands does that
+  // validation and is the same code the local host runs.
+
+  private stashExec(): GitStashExec {
+    return (args, cwd) => this.git(args, cwd)
+  }
+
+  private async stashList(params: Record<string, unknown>) {
+    const entries = await listStashesWith(this.stashExec(), params.worktreePath as string)
+    return { entries }
+  }
+
+  private async stashPush(params: Record<string, unknown>) {
+    return this.runWithGitReadCacheClear(() =>
+      stashChangesWith(this.stashExec(), params.worktreePath as string, {
+        includeUntracked: params.includeUntracked === true,
+        ...(typeof params.message === 'string' ? { message: params.message } : {})
+      })
+    )
+  }
+
+  private async stashApply(params: Record<string, unknown>) {
+    return this.runWithGitReadCacheClear(() =>
+      applyStashWith(
+        this.stashExec(),
+        params.worktreePath as string,
+        readStashRefParam(params),
+        readExpectedStashOidParam(params)
+      )
+    )
+  }
+
+  private async stashPop(params: Record<string, unknown>) {
+    return this.runWithGitReadCacheClear(() =>
+      popStashWith(
+        this.stashExec(),
+        params.worktreePath as string,
+        readStashRefParam(params),
+        readExpectedStashOidParam(params)
+      )
+    )
+  }
+
+  private async stashDrop(params: Record<string, unknown>) {
+    await this.runWithGitReadCacheClear(() =>
+      dropStashWith(
+        this.stashExec(),
+        params.worktreePath as string,
+        params.ref as string,
+        readExpectedStashOidParam(params)
+      )
+    )
+    return { ok: true as const }
+  }
+
+  private async stashClear(params: Record<string, unknown>) {
+    await this.runWithGitReadCacheClear(() =>
+      clearStashesWith(this.stashExec(), params.worktreePath as string)
+    )
+    return { ok: true as const }
   }
 
   private literalPathspec(filePath: string): string {

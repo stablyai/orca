@@ -27,6 +27,7 @@ import {
   GitTargetedRemote,
   WorktreeSelector
 } from './git-params'
+import { GitStashDrop, GitStashPush, GitStashRestore } from './git-stash-params'
 
 type CommitMessageGenerationOverride = {
   commitMessageAi?: GlobalSettings['commitMessageAi']
@@ -160,6 +161,50 @@ export const GIT_METHODS: RpcMethod[] = [
     name: 'git.localBranches',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.listRuntimeGitLocalBranches(params.worktree)
+  }),
+  defineMethod({
+    name: 'git.stashList',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => ({
+      entries: await runtime.listRuntimeGitStashes(params.worktree)
+    })
+  }),
+  defineMethod({
+    name: 'git.stashPush',
+    params: GitStashPush,
+    handler: async (params, { runtime }) =>
+      runtime.pushRuntimeGitStash(params.worktree, {
+        includeUntracked: params.includeUntracked === true,
+        ...(params.message !== undefined ? { message: params.message } : {})
+      })
+  }),
+  defineMethod({
+    name: 'git.stashApply',
+    params: GitStashRestore,
+    handler: async (params, { runtime }) =>
+      runtime.applyRuntimeGitStash(params.worktree, params.ref ?? null, params.expectedCommitOid)
+  }),
+  defineMethod({
+    name: 'git.stashPop',
+    params: GitStashRestore,
+    handler: async (params, { runtime }) =>
+      runtime.popRuntimeGitStash(params.worktree, params.ref ?? null, params.expectedCommitOid)
+  }),
+  defineMethod({
+    name: 'git.stashDrop',
+    params: GitStashDrop,
+    handler: async (params, { runtime }) => {
+      await runtime.dropRuntimeGitStash(params.worktree, params.ref, params.expectedCommitOid)
+      return { ok: true as const }
+    }
+  }),
+  defineMethod({
+    name: 'git.stashClear',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => {
+      await runtime.clearRuntimeGitStashes(params.worktree)
+      return { ok: true as const }
+    }
   }),
   defineMethod({
     name: 'git.diff',

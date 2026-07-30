@@ -60,6 +60,21 @@ import {
   getCommitCompare,
   getCommitDiff
 } from '../git/status'
+import {
+  applyStash,
+  clearStashes,
+  dropStash,
+  listStashes,
+  popStash,
+  stashChanges
+} from '../git/stash'
+import type {
+  GitStashEntry,
+  GitStashMutationResult,
+  GitStashPushResult
+} from '../../shared/git-stash-types'
+import type { IGitProvider } from '../providers/types'
+
 import { getHistory } from '../git/history'
 import {
   cancelGenerateCommitMessageLocal,
@@ -148,6 +163,12 @@ import {
   applyGitStatusUpstreamRefWatchRequest,
   type GitStatusUpstreamRefWatchRequest
 } from './git-status-upstream-ref-watch-request'
+
+type GitStashChannelArgs = { worktreePath: string; connectionId?: string }
+type GitStashRestoreChannelArgs = GitStashChannelArgs & {
+  ref?: string | null
+  expectedCommitOid?: string
+}
 
 // Why: Monaco degrades features on large files like VS Code, so a 5MB block would needlessly lock out ordinary JSON/log files.
 const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
@@ -2258,6 +2279,103 @@ export function registerFilesystemHandlers(
       await bulkDiscardChanges(worktreePath, filePaths, gitOptions)
     }
   )
+
+  // ─── Stash ─────────────────────────────────────────────────────────
+  // Why: stash refs and messages are validated in ../git/stash (shared with the
+  // relay), so these handlers only resolve the host and route SSH vs local.
+
+  ipcMain.handle(
+    'git:stashList',
+    async (_event, args: GitStashChannelArgs): Promise<GitStashEntry[]> => {
+      const routed = await routeGitStashRequest(args)
+      return routed.provider
+        ? routed.provider.listStashes(args.worktreePath)
+        : listStashes(routed.worktreePath, routed.gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:stashPush',
+    async (
+      _event,
+      args: GitStashChannelArgs & { includeUntracked?: boolean; message?: string }
+    ): Promise<GitStashPushResult> => {
+      const pushOptions = {
+        includeUntracked: args.includeUntracked === true,
+        // Why: match the relay's guard — a non-string here would reach execFile's
+        // args array, which requires strings.
+        ...(typeof args.message === 'string' ? { message: args.message } : {})
+      }
+      const routed = await routeGitStashRequest(args)
+      return routed.provider
+        ? routed.provider.stashChanges(args.worktreePath, pushOptions)
+        : stashChanges(routed.worktreePath, pushOptions, routed.gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:stashApply',
+    async (_event, args: GitStashRestoreChannelArgs): Promise<GitStashMutationResult> => {
+      const routed = await routeGitStashRequest(args)
+      const ref = args.ref ?? null
+      return routed.provider
+        ? routed.provider.applyStash(args.worktreePath, ref, args.expectedCommitOid)
+        : applyStash(routed.worktreePath, ref, args.expectedCommitOid, routed.gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:stashPop',
+    async (_event, args: GitStashRestoreChannelArgs): Promise<GitStashMutationResult> => {
+      const routed = await routeGitStashRequest(args)
+      const ref = args.ref ?? null
+      return routed.provider
+        ? routed.provider.popStash(args.worktreePath, ref, args.expectedCommitOid)
+        : popStash(routed.worktreePath, ref, args.expectedCommitOid, routed.gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:stashDrop',
+    async (
+      _event,
+      args: GitStashChannelArgs & { ref: string; expectedCommitOid?: string }
+    ): Promise<void> => {
+      const routed = await routeGitStashRequest(args)
+      if (routed.provider) {
+        return routed.provider.dropStash(args.worktreePath, args.ref, args.expectedCommitOid)
+      }
+      await dropStash(routed.worktreePath, args.ref, args.expectedCommitOid, routed.gitOptions)
+    }
+  )
+
+  ipcMain.handle('git:stashClear', async (_event, args: GitStashChannelArgs): Promise<void> => {
+    const routed = await routeGitStashRequest(args)
+    if (routed.provider) {
+      return routed.provider.clearStashes(args.worktreePath)
+    }
+    await clearStashes(routed.worktreePath, routed.gitOptions)
+  })
+
+  async function routeGitStashRequest(args: GitStashChannelArgs): Promise<{
+    provider: IGitProvider | null
+    worktreePath: string
+    gitOptions: ReturnType<typeof getLocalGitOptionsForRegisteredWorktree>
+  }> {
+    if (args.connectionId) {
+      const provider = getSshGitProvider(args.connectionId)
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      return { provider, worktreePath: args.worktreePath, gitOptions: {} }
+    }
+    const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+    return {
+      provider: null,
+      worktreePath,
+      gitOptions: getLocalGitOptionsForRegisteredWorktree(store, args.worktreePath, worktreePath)
+    }
+  }
 
   ipcMain.handle(
     'git:bulkStage',

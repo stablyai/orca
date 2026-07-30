@@ -31,6 +31,16 @@ features, and wrappers can report a host version that differs from the binary
 used inside WSL or SSH. A behavior probe plus a precise fallback is the final
 authority.
 
+A feature does not automatically need a capability. Stash is the worked example:
+every flag the Source Control stash actions use — `stash push` (2.13), `-m`,
+`--include-untracked`, `stash list --format`/`-z`, and
+`apply`/`pop`/`drop`/`clear [--] <ref>` — predates the 2.25 baseline, so there is
+no slug, no predicate, and no fallback. `git stash push --staged` (2.35) would
+need one, which is why the staged-only variant was deliberately left out. The
+proof lives in `src/shared/git-binary-compatibility.test.ts`, which exercises the
+whole stash argv against the real-binary matrix below; if that case ever fails on
+the oldest image, add a capability rather than loosening the assertion.
+
 ## Current Capabilities
 
 | Capability              | Preferred behavior                                | Compatibility behavior                                                                  |

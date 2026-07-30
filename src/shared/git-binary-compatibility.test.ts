@@ -13,6 +13,7 @@ import {
   hasUnsupportedRevParsePathFormatEcho,
   isUnsupportedWorktreeListZError
 } from './git-worktree-command-capabilities'
+import { GIT_STASH_LIST_ARGS, parseGitStashList } from './git-stash-list-output'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
 import {
   githubPullRequestHeadLocalRef,
@@ -175,6 +176,33 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       )
       await expect(runGit([...legacyArgs, head, head])).resolves.toBeDefined()
     }
+  })
+
+  it('runs every stash command the app needs with no capability fallback', async () => {
+    // Why: stash is deliberately ungated — `push` (2.13), `-m`, `--include-untracked`,
+    // `list --format`, `-z`, and `apply|pop|drop|clear [--] <ref>` all predate the
+    // 2.25 baseline. This test is the proof; if it fails on the oldest image, the
+    // feature needs a GitCapability slug rather than a looser assertion here.
+    await writeFile(join(repoPath, 'tracked.txt'), 'stash compatibility\n')
+    const pushed = await runGit(['stash', 'push', '-m', 'compat: probe', '--'])
+    expect(`${pushed.stdout}${pushed.stderr}`).toMatch(/saved working directory/i)
+
+    const listed = await runGit([...GIT_STASH_LIST_ARGS])
+    const entries = parseGitStashList(listed.stdout)
+    expect(entries).toHaveLength(1)
+    expect(entries[0].ref).toBe('stash@{0}')
+    expect(entries[0].commitOid).toMatch(/^[0-9a-f]{40}$/)
+    expect(entries[0].subject).toContain('compat: probe')
+
+    // `--` before the ref must be accepted on every supported release.
+    await expect(runGit(['stash', 'apply', '--', 'stash@{0}'])).resolves.toBeDefined()
+    await runGit(['checkout', '--', 'tracked.txt'])
+    await expect(runGit(['stash', 'pop', '--', 'stash@{0}'])).resolves.toBeDefined()
+
+    // Restore the shared fixture repo for the remaining cases.
+    await runGit(['checkout', '--', 'tracked.txt'])
+    await runGit(['stash', 'clear'])
+    expect(parseGitStashList((await runGit([...GIT_STASH_LIST_ARGS])).stdout)).toEqual([])
   })
 
   it('fetches hosted review heads into dedicated refs', async () => {

@@ -25,6 +25,13 @@ import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-hi
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree-id'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import type {
+  GitStashEntry,
+  GitStashMutationResult,
+  GitStashPushOptions,
+  GitStashPushResult,
+  GitStashTarget
+} from '../../../shared/git-stash-types'
 
 export type RuntimeGenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }
@@ -926,6 +933,142 @@ export async function discardRuntimeGitPath(
     'git.discard',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), filePath },
     { timeoutMs: 15_000 }
+  )
+}
+
+// ─── Stash ───────────────────────────────────────────────────────────
+// Why: mutations get a longer budget than the list read — `stash push` rewrites
+// the whole working tree, which is slow on a large repo over SSH.
+const STASH_READ_TIMEOUT_MS = 10_000
+const STASH_MUTATION_TIMEOUT_MS = 30_000
+
+export async function listRuntimeGitStashes(context: RuntimeGitContext): Promise<GitStashEntry[]> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.stashList({
+      worktreePath: resolveLocalWorktreePath(context),
+      connectionId: context.connectionId
+    })
+  }
+  const result = await callRuntimeRpc<{ entries: GitStashEntry[] }>(
+    target,
+    'git.stashList',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
+    { timeoutMs: STASH_READ_TIMEOUT_MS }
+  )
+  return result.entries
+}
+
+export async function pushRuntimeGitStash(
+  context: RuntimeGitContext,
+  pushOptions: GitStashPushOptions = {}
+): Promise<GitStashPushResult> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.stashPush({
+      worktreePath: resolveLocalWorktreePath(context),
+      includeUntracked: pushOptions.includeUntracked,
+      message: pushOptions.message,
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<GitStashPushResult>(
+    target,
+    'git.stashPush',
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      includeUntracked: pushOptions.includeUntracked === true,
+      ...(pushOptions.message !== undefined ? { message: pushOptions.message } : {})
+    },
+    { timeoutMs: STASH_MUTATION_TIMEOUT_MS }
+  )
+}
+
+export async function applyRuntimeGitStash(
+  context: RuntimeGitContext,
+  target: GitStashTarget | null
+): Promise<GitStashMutationResult> {
+  return restoreRuntimeGitStash(context, 'apply', target)
+}
+
+export async function popRuntimeGitStash(
+  context: RuntimeGitContext,
+  target: GitStashTarget | null
+): Promise<GitStashMutationResult> {
+  return restoreRuntimeGitStash(context, 'pop', target)
+}
+
+async function restoreRuntimeGitStash(
+  context: RuntimeGitContext,
+  mode: 'apply' | 'pop',
+  stashTarget: GitStashTarget | null
+): Promise<GitStashMutationResult> {
+  const target = getActiveRuntimeTarget(context.settings)
+  const channel = mode === 'apply' ? 'stashApply' : 'stashPop'
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git[channel]({
+      worktreePath: resolveLocalWorktreePath(context),
+      ref: stashTarget?.ref ?? null,
+      expectedCommitOid: stashTarget?.expectedCommitOid,
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<GitStashMutationResult>(
+    target,
+    mode === 'apply' ? 'git.stashApply' : 'git.stashPop',
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      // Why: omit ref entirely rather than sending null — the RPC schema reads
+      // its absence as "target the newest entry".
+      ...(stashTarget ? { ref: stashTarget.ref } : {}),
+      ...(stashTarget?.expectedCommitOid
+        ? { expectedCommitOid: stashTarget.expectedCommitOid }
+        : {})
+    },
+    { timeoutMs: STASH_MUTATION_TIMEOUT_MS }
+  )
+}
+
+export async function dropRuntimeGitStash(
+  context: RuntimeGitContext,
+  stashTarget: GitStashTarget
+): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.stashDrop({
+      worktreePath: resolveLocalWorktreePath(context),
+      ref: stashTarget.ref,
+      expectedCommitOid: stashTarget.expectedCommitOid,
+      connectionId: context.connectionId
+    })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'git.stashDrop',
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      ref: stashTarget.ref,
+      ...(stashTarget.expectedCommitOid ? { expectedCommitOid: stashTarget.expectedCommitOid } : {})
+    },
+    { timeoutMs: STASH_MUTATION_TIMEOUT_MS }
+  )
+}
+
+export async function clearRuntimeGitStashes(context: RuntimeGitContext): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.stashClear({
+      worktreePath: resolveLocalWorktreePath(context),
+      connectionId: context.connectionId
+    })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'git.stashClear',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
+    { timeoutMs: STASH_MUTATION_TIMEOUT_MS }
   )
 }
 

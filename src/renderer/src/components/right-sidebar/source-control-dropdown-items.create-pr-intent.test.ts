@@ -2,8 +2,15 @@ import { describe, expect, it } from 'vitest'
 import {
   resolveDropdownItems,
   type DropdownActionInputs,
+  type DropdownEntry,
   type DropdownItem
 } from './source-control-dropdown-items'
+
+// Why: the menu carries separators AND the nested Stash group, so narrowing on
+// `!== 'separator'` alone would silently type the submenu as a row.
+function isDropdownRow(entry: DropdownEntry): entry is DropdownItem {
+  return entry.kind !== 'separator' && entry.kind !== 'stash_submenu'
+}
 
 // Why: a shared defaults object keeps each case row terse while making the
 // "this is the one knob that differs from the baseline" intent obvious.
@@ -37,9 +44,7 @@ describe('resolveDropdownItems Create PR intent', () => {
         }
       })
     )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
+    const byKind = Object.fromEntries(items.filter(isDropdownRow).map((e) => [e.kind, e]))
     expect(byKind.create_pr.disabled).toBe(false)
     expect(byKind.create_pr.hint).toBe('Push first')
     expect(byKind.push_create_pr.label).toBe('Push before PR')
@@ -106,9 +111,7 @@ describe('resolveDropdownItems Create PR intent', () => {
         }
       })
     )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
+    const byKind = Object.fromEntries(items.filter(isDropdownRow).map((e) => [e.kind, e]))
     expect(byKind.create_pr.label).toBe('Create MR')
     expect(byKind.create_pr.hint).toBe('Push first')
     expect(byKind.create_pr.disabled).toBe(false)
@@ -133,9 +136,7 @@ describe('resolveDropdownItems Create PR intent', () => {
           }
         })
       )
-      const byKind = Object.fromEntries(
-        items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-      )
+      const byKind = Object.fromEntries(items.filter(isDropdownRow).map((e) => [e.kind, e]))
       expect(byKind.create_pr.label).toBe('Create PR')
       expect(byKind.create_pr.hint).toBe('Push first')
       expect(byKind.create_pr.disabled).toBe(false)
@@ -162,9 +163,7 @@ describe('resolveDropdownItems Create PR intent', () => {
         }
       })
     )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
+    const byKind = Object.fromEntries(items.filter(isDropdownRow).map((e) => [e.kind, e]))
     expect(byKind.create_pr.hint).toBe(hint)
   })
 
@@ -182,9 +181,7 @@ describe('resolveDropdownItems Create PR intent', () => {
         }
       })
     )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
+    const byKind = Object.fromEntries(items.filter(isDropdownRow).map((e) => [e.kind, e]))
     expect(byKind.create_pr.hint).toBe('Run glab auth login in this environment')
   })
 })

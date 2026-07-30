@@ -15,11 +15,25 @@ import {
   canClickBlockedCreateReviewReason,
   resolveHostedReviewAuthInstruction
 } from './source-control-create-review-blocked-action'
+import { resolveStashSubmenu } from './source-control-stash-menu-items'
 
 export type DropdownActionInputs = PrimaryActionInputs & {
   conflictOperation?: GitConflictOperation
   isPullRequestOperationActive?: boolean
   rebaseBaseRef?: string | null
+  /** Why: Stash and Stash (Include Untracked) must disable independently, and
+   * PrimaryActionInputs only knows whether unstaged changes exist at all. */
+  untrackedCount?: number
+  /**
+   * Staged + unstaged **tracked** entries. Required to tell a tracked
+   * modification from an untracked file: `hasUnstagedChanges` is true for both,
+   * so plain Stash would otherwise look available on an untracked-only tree and
+   * then no-op ("No local changes to save"). Defaults to `stagedCount`, which is
+   * tracked by definition.
+   */
+  trackedChangeCount?: number
+  /** undefined means "not read yet", mirroring the upstreamStatus convention. */
+  stashCount?: number
 }
 
 export type DropdownActionKind =
@@ -38,6 +52,14 @@ export type DropdownActionKind =
   | 'rebase_base'
   | 'fetch'
   | 'publish'
+  | 'stash'
+  | 'stash_include_untracked'
+  | 'stash_pop_latest'
+  | 'stash_pop_pick'
+  | 'stash_apply_latest'
+  | 'stash_apply_pick'
+  | 'stash_drop_pick'
+  | 'stash_drop_all'
 
 export type DropdownItem = {
   kind: DropdownActionKind
@@ -50,7 +72,19 @@ export type DropdownItem = {
 
 export type DropdownSeparator = { kind: 'separator' }
 
-export type DropdownEntry = DropdownItem | DropdownSeparator
+/**
+ * A nested group. Its literal discriminant (rather than a generic 'submenu')
+ * keeps the kinds assertions in the tests readable if a second group is added.
+ */
+export type DropdownSubmenu = {
+  kind: 'stash_submenu'
+  label: string
+  title: string
+  disabled: boolean
+  items: (DropdownItem | DropdownSeparator)[]
+}
+
+export type DropdownEntry = DropdownItem | DropdownSeparator | DropdownSubmenu
 
 function describePushCount(ahead: number): string {
   return `Push ${ahead} commit${ahead === 1 ? '' : 's'}`
@@ -139,7 +173,10 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     hasCurrentBranch = true,
     canPushLinkedReviewWithoutUpstream = false,
     rebaseBaseRef,
-    isPullRequestOperationActive = false
+    isPullRequestOperationActive = false,
+    untrackedCount = 0,
+    trackedChangeCount,
+    stashCount
   } = inputs
 
   const hasStaged = stagedCount > 0
@@ -540,7 +577,14 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     syncItem,
     rebaseItem,
     fetchItem,
-    publishItem
+    publishItem,
+    { kind: 'separator' },
+    resolveStashSubmenu({
+      hasTrackedChanges: (trackedChangeCount ?? stagedCount) > 0,
+      untrackedCount,
+      stashCount,
+      globalBusy
+    })
   ]
   if (conflictOperation === 'merge' || conflictOperation === 'rebase') {
     const isRebase = conflictOperation === 'rebase'
@@ -559,16 +603,26 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   if (!isPullRequestOperationActive) {
     return entries
   }
-  return entries.map((entry) =>
-    entry.kind === 'separator'
-      ? entry
-      : {
-          ...entry,
-          title: translate(
-            'auto.components.right.sidebar.source.control.dropdown.items.7aad2c0240',
-            'Hosted review operation in progress…'
-          ),
-          disabled: true
-        }
+  const busyTitle = translate(
+    'auto.components.right.sidebar.source.control.dropdown.items.7aad2c0240',
+    'Hosted review operation in progress…'
   )
+  return entries.map((entry) => {
+    if (entry.kind === 'separator') {
+      return entry
+    }
+    if (entry.kind === 'stash_submenu') {
+      // Why: disabling only the trigger would leave enabled-looking rows inside
+      // the group once it opens.
+      return {
+        ...entry,
+        title: busyTitle,
+        disabled: true,
+        items: entry.items.map((item) =>
+          item.kind === 'separator' ? item : { ...item, title: busyTitle, disabled: true }
+        )
+      }
+    }
+    return { ...entry, title: busyTitle, disabled: true }
+  })
 }
