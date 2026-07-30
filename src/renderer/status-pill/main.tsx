@@ -10,9 +10,7 @@ import type {
   StatusPillSummary
 } from '../../shared/status-pill-preload-api'
 import { EMPTY_STATUS_PILL_SUMMARY } from '../../shared/status-pill-preload-api'
-import { AgentRowView } from './agent-row'
-import { PendingQuestionCard } from './pending-question-card'
-import { buildPanelTitle, pickTone, type Tone } from './status-pill-formatters'
+import { Island } from './island'
 import { usePillDrag } from './use-pill-drag'
 import { usePillContentRect } from './use-pill-content-rect'
 
@@ -26,7 +24,7 @@ declare global {
 const EMPTY_SUMMARY = EMPTY_STATUS_PILL_SUMMARY
 
 /** Pill root: subscribes to main's snapshot/rows push channels, manages
- *  expand/collapse state, routes answer clicks to preload.answerQuestion. */
+ *  compact/expand state, routes answer + focus clicks through preload. */
 function StatusPill(): React.JSX.Element {
   const api = window.api
   const [summary, setSummary] = useState<StatusPillSummary>(EMPTY_SUMMARY)
@@ -39,14 +37,11 @@ function StatusPill(): React.JSX.Element {
   const [answerError, setAnswerError] = useState<string | null>(null)
   const [attention, setAttention] = useState(false)
   const attentionTimer = useRef<number | null>(null)
-  // Why: keep a stable ref to the .pill-stack so the ResizeObserver can drive
-  // window resizing (dot -> bar -> panel) without re-creating the observer.
   const stackRef = useRef<HTMLDivElement | null>(null)
-  usePillContentRect(window.api, stackRef)
-  // Why: read inside the attention-pulse handler without depending on a
-  // re-subscribe when preferences change, so a question that lands while the
-  // effect is closed over stale prefs still honors reduced-motion.
   const prefersReducedMotionRef = useRef(false)
+
+  const drag = usePillDrag()
+  usePillContentRect(window.api, stackRef)
 
   useEffect(() => {
     if (!api) {
@@ -63,9 +58,6 @@ function StatusPill(): React.JSX.Element {
         setRows(next)
       }
     })
-    // Why: main pokes this channel when an agent newly asks a question (after
-    // cooldown). Run a one-shot attention bounce so the user notices even when
-    // focused on another app; skip the animation under reduced-motion.
     const unsubAttention = api.onAttentionPulse(() => {
       if (!mounted || prefersReducedMotionRef.current) {
         return
@@ -139,19 +131,6 @@ function StatusPill(): React.JSX.Element {
     }
   }, [])
 
-  useEffect(() => {
-    if (
-      typeof window !== 'undefined' &&
-      (window as Window & { __orcaPillDebugExpand?: boolean }).__orcaPillDebugExpand === true
-    ) {
-      setExpanded(true)
-    }
-  }, [])
-
-  // Why: auto-expand the panel when a pending question lands, so the user
-  // notices the prompt without having to hover. Stay expanded until the
-  // pending question clears. Depends on paneKey + interactivePrompt string
-  // rather than the object reference so identical content doesn't loop.
   const pendingKey = summary.pendingQuestion?.paneKey
   const pendingPayload = summary.pendingQuestion?.interactivePrompt
   useEffect(() => {
@@ -168,11 +147,6 @@ function StatusPill(): React.JSX.Element {
     const isDark = preferences?.shouldUseDarkColors ?? false
     document.documentElement.classList.toggle('dark', isDark)
   }, [preferences?.shouldUseDarkColors])
-
-  const tone = pickTone(summary)
-  const pulse =
-    preferences?.prefersReducedMotion !== true &&
-    (summary.working > 0 || summary.blocked > 0 || summary.waiting > 0)
 
   const handleAnswer = async (paneKey: string, raw: string): Promise<void> => {
     if (!api) {
@@ -192,209 +166,45 @@ function StatusPill(): React.JSX.Element {
     }
   }
 
-  // Why: Vibe Island / Dynamic Island model — the bar is ALWAYS visible
-  //  (legible at a glance), and the panel unfolds below on hover or when a
-  //  question is pending. No dot/collapsed state.
-  const showPanel = hovered || expanded
+  const handleClick = (): void => {
+    if (drag.consumeClick()) {
+      return
+    }
+    window.api?.fireClick()
+  }
+
+  // Why: Vibe Island model — compact island always visible, expands on hover or
+  //  when a question is pending.
+  const showExpanded = hovered || expanded
 
   return (
-    <div
-      ref={stackRef}
-      className={`pill-stack ${entered ? 'pill-enter' : ''}`}
+    <Island
+      summary={summary}
+      rows={rows}
+      expanded={showExpanded && rows.length > 0}
+      entered={entered}
+      attention={attention}
+      dragging={drag.dragging}
+      pending={summary.pendingQuestion}
+      onAnswer={handleAnswer}
+      onFocusPane={(paneKey, worktreeId) =>
+        window.api?.focusPane({ paneKey, worktreeId: worktreeId ?? null })
+      }
+      answeringPaneKey={answeringPaneKey}
+      answerError={answerError}
+      onMouseDown={drag.onMouseDown}
+      onClick={handleClick}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        window.api?.fireContextMenu()
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => {
         setHovered(false)
         setExpanded(false)
       }}
-    >
-      <PillBody
-        tone={tone}
-        pulse={pulse}
-        attention={attention}
-        summary={summary}
-        onClick={() => window.api?.fireClick()}
-        onContextMenu={(event) => {
-          event.preventDefault()
-          window.api?.fireContextMenu()
-        }}
-      />
-      {showPanel && (summary.pendingQuestion !== undefined || rows.length > 0) ? (
-        <AgentPanel
-          summary={summary}
-          rows={rows}
-          tone={tone}
-          pulse={pulse}
-          onAnswer={handleAnswer}
-          onFocusPane={(paneKey, worktreeId) =>
-            window.api?.focusPane({ paneKey, worktreeId: worktreeId ?? null })
-          }
-          answeringPaneKey={answeringPaneKey}
-          answerError={answerError}
-        />
-      ) : null}
-      <StyleBaseline />
-    </div>
-  )
-}
-
-/** Resting capsule: indicator dot + counts + activity label. Keyboard-
- *  operable (Enter / Space) per the WAI-ARIA button pattern. The body is also
- *  draggable: a pointer down + move repositions the pill window, while a click
- *  without movement still focuses the Orca main window. */
-function PillBody({
-  tone,
-  pulse,
-  attention,
-  summary,
-  onClick,
-  onContextMenu
-}: {
-  tone: Tone
-  pulse: boolean
-  attention: boolean
-  summary: StatusPillSummary
-  onClick: () => void
-  onContextMenu: (event: React.MouseEvent) => void
-}): React.JSX.Element {
-  const drag = usePillDrag()
-  // Why: keyboard activation (Enter / Space) so screen-reader and keyboard
-  // users can focus the pill via Tab and trigger the click handler. The pill
-  // div is `role="button"` so this matches the WAI-ARIA button pattern.
-  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      onClick()
-    }
-  }
-  const handleClick = (): void => {
-    if (drag.consumeClick()) {
-      return
-    }
-    onClick()
-  }
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label="Orca agent status"
-      onClick={handleClick}
-      onMouseDown={drag.onMouseDown}
-      onContextMenu={onContextMenu}
-      onKeyDown={onKeyDown}
-      className={`pill pill-${tone} ${pulse ? 'pill-pulse' : ''} ${
-        drag.dragging ? 'pill-dragging' : ''
-      } ${attention ? 'pill-attention' : ''}`}
-    >
-      <span className="indicator" aria-hidden="true">
-        <span className="indicator-ring" />
-        <span className="indicator-dot" />
-      </span>
-      {summary.hasAnyActivity ? (
-        <span className="counts">
-          {summary.working > 0 ? <CountGroup kind="working" value={summary.working} /> : null}
-          {summary.blocked > 0 ? <CountGroup kind="blocked" value={summary.blocked} /> : null}
-          {summary.waiting > 0 ? <CountGroup kind="waiting" value={summary.waiting} /> : null}
-          {summary.recentDone > 0 ? <CountGroup kind="done" value={summary.recentDone} /> : null}
-        </span>
-      ) : null}
-      {summary.activityLabel ? (
-        <>
-          <span className="divider" />
-          <span className="label" title={summary.activityLabel}>
-            {summary.activityLabel}
-          </span>
-        </>
-      ) : (
-        <span className="label label-idle">No recent activity</span>
-      )}
-    </div>
-  )
-}
-
-function CountGroup({
-  kind,
-  value
-}: {
-  kind: 'working' | 'blocked' | 'waiting' | 'done'
-  value: number
-}): React.JSX.Element {
-  return (
-    <span className="count-group">
-      <span className={`count-dot count-dot-${kind}`} />
-      <span className="count-value">{value}</span>
-    </span>
-  )
-}
-
-/** Expanded glass panel rendered below the pill on hover or pending question.
- *  Hosts the question/approval card (when present) + the multi-agent list. */
-function AgentPanel({
-  summary,
-  rows,
-  tone,
-  pulse,
-  onAnswer,
-  onFocusPane,
-  answeringPaneKey,
-  answerError
-}: {
-  summary: StatusPillSummary
-  rows: StatusPillAgentRow[]
-  tone: Tone
-  pulse: boolean
-  onAnswer: (paneKey: string, raw: string) => Promise<void>
-  onFocusPane: (paneKey: string, worktreeId?: string | null) => void
-  answeringPaneKey: string | null
-  answerError: string | null
-}): React.JSX.Element {
-  const total = summary.working + summary.blocked + summary.waiting + summary.recentDone
-  const title = summary.pendingQuestion ? 'Agent needs you' : buildPanelTitle(summary)
-  return (
-    <div className="panel" role="dialog" aria-label="Orca agents">
-      <div className="panel-head">
-        <span className={`indicator pill-${tone} ${pulse ? 'pill-pulse' : ''}`} aria-hidden="true">
-          <span className="indicator-ring" />
-          <span className="indicator-dot" />
-        </span>
-        <span className="panel-title">{title}</span>
-        <span className="panel-meta">
-          {total} session{total === 1 ? '' : 's'}
-        </span>
-      </div>
-      {summary.pendingQuestion ? (
-        <PendingQuestionCard
-          pending={summary.pendingQuestion}
-          onAnswer={onAnswer}
-          submitting={answeringPaneKey === summary.pendingQuestion.paneKey}
-          error={answerError}
-        />
-      ) : null}
-      <div className="agent-list">
-        {rows.map((row, index) => (
-          <AgentRowView
-            key={`${row.paneKey}-${row.receivedAt}`}
-            row={row}
-            index={index}
-            onFocusPane={onFocusPane}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function StyleBaseline(): React.JSX.Element {
-  return (
-    <style>{`
-      .pill-stack {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 8px;
-        width: max-content;
-        max-width: 600px;
-      }
-    `}</style>
+      stackRef={stackRef}
+    />
   )
 }
 
