@@ -17,9 +17,11 @@ import {
   readPendingSendCache,
   writePendingSendCache,
   type NativeChatCommandMarker,
+  type NativeChatCommandMarkerScope,
   type NativeChatPendingSend
 } from './native-chat-pending'
 import { retainPendingSendsForConversation } from './native-chat-pending-conversation'
+import { withoutNativeChatPendingOccurrence } from './native-chat-pending-occurrence'
 
 export type NativeChatPendingEchoes = {
   pending: NativeChatPendingSend[]
@@ -65,9 +67,13 @@ export function useNativeChatPendingEchoes(args: {
   )
   // Slash commands aren't chat turns, so they get a small local "Ran /clear"
   // system line instead of a user bubble. Capped + cached per conversation.
-  const [commandMarkers, setCommandMarkers] = useState<NativeChatCommandMarker[]>(() =>
-    readCommandMarkerCache(commandMarkerScope)
-  )
+  // The scope travels with the markers: the retain effect below must be able to
+  // tell that a value still describes the conversation it was read for.
+  const [markerState, setMarkerState] = useState<{
+    scope: NativeChatCommandMarkerScope
+    markers: NativeChatCommandMarker[]
+  }>(() => ({ scope: commandMarkerScope, markers: readCommandMarkerCache(commandMarkerScope) }))
+  const commandMarkers = markerState.markers
   // Reset the optimistic queue only when the pane/agent changes. A fresh launch
   // often learns its provider session id after the first send; clearing pending
   // on that transition briefly flashes the empty state before the transcript
@@ -79,7 +85,10 @@ export function useNativeChatPendingEchoes(args: {
   // Command markers are session-scoped because slash commands like /clear are
   // local feedback for a specific transcript boundary.
   useEffect(() => {
-    setCommandMarkers(readCommandMarkerCache(commandMarkerScope))
+    setMarkerState({
+      scope: commandMarkerScope,
+      markers: readCommandMarkerCache(commandMarkerScope)
+    })
     clearWorkingSuppression()
   }, [clearWorkingSuppression, commandMarkerScope])
   // Prune echoes whose real user turn is now in the transcript.
@@ -89,11 +98,22 @@ export function useNativeChatPendingEchoes(args: {
   // Drop echoes the pane's current conversation can never match, so a replaced
   // conversation cannot strand an old prompt as its newest bubble.
   useEffect(() => {
+    // Why: moving the chat view to another leaf changes both scopes in one
+    // commit, so this would otherwise run against the new pane's echoes while
+    // still holding the previous pane's `/clear` — and the drop it writes to the
+    // pane cache is permanent. Wait for the markers that describe this
+    // conversation; the effect above delivers them in that same commit.
+    if (markerState.scope !== commandMarkerScope) {
+      return
+    }
     setPending((prev) => {
-      const next = retainPendingSendsForConversation(prev, { sessionId, markers: commandMarkers })
+      const next = retainPendingSendsForConversation(prev, {
+        sessionId,
+        markers: markerState.markers
+      })
       return next === prev ? prev : writePendingSendCache(pendingScope, next)
     })
-  }, [commandMarkers, pendingScope, sessionId])
+  }, [commandMarkerScope, markerState, pendingScope, sessionId])
   const recordSend = useCallback(
     (text: string, imagePaths?: string[]) => {
       clearWorkingSuppression()
@@ -117,14 +137,23 @@ export function useNativeChatPendingEchoes(args: {
     (pendingId: string) => {
       // Why: detach/interrupt cancels the delayed Enter, so its optimistic echo
       // must not come back from the pane cache as a prompt that was delivered.
-      const next = readPendingSendCache(pendingScope).filter((entry) => entry.id !== pendingId)
+      // A cancelled send also consumes no transcript occurrence, so a repeat of
+      // the same text queued after it must stop waiting on the slot this echo
+      // would have taken.
+      const cached = readPendingSendCache(pendingScope)
+      const removedIndex = cached.findIndex((entry) => entry.id === pendingId)
+      const next =
+        removedIndex < 0 ? cached : withoutNativeChatPendingOccurrence(cached, removedIndex)
       setPending(writePendingSendCache(pendingScope, next))
     },
     [pendingScope]
   )
   const recordSlashCommand = useCallback(
     (command: string) => {
-      setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command))
+      setMarkerState({
+        scope: commandMarkerScope,
+        markers: appendCommandMarkerCache(commandMarkerScope, command)
+      })
     },
     [commandMarkerScope]
   )

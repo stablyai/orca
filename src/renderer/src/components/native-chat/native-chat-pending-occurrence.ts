@@ -249,6 +249,41 @@ export function renumberNativeChatPendingOccurrences<T extends NativeChatPending
   })
 }
 
+/**
+ * Remove `removedIndex` and pull its later same-key siblings down one occurrence.
+ *
+ * For a cancelled send the transcript is unchanged, so — unlike a conversation
+ * swap — absolute renumbering would be wrong: it also erases the elevation a
+ * pruned or capped-out predecessor legitimately left behind (`PENDING_SEND_LIMIT`
+ * drops the oldest echo while its send still lands, so its turn still arrives and
+ * still consumes an occurrence). Only the cancelled send consumes nothing, so
+ * only the entries queued after it move, and only by one.
+ */
+export function withoutNativeChatPendingOccurrence<T extends NativeChatPendingOccurrence>(
+  pending: readonly T[],
+  removedIndex: number
+): T[] {
+  const removed = pending[removedIndex]
+  if (!removed) {
+    return [...pending]
+  }
+  const key = nativeChatPendingMatchKey(removed)
+  const next: T[] = []
+  for (const [index, entry] of pending.entries()) {
+    if (index === removedIndex) {
+      continue
+    }
+    const occurrence = entry.matchingOccurrence
+    const shifts =
+      index > removedIndex &&
+      occurrence !== undefined &&
+      occurrence > 1 &&
+      nativeChatPendingMatchKey(entry) === key
+    next.push(shifts ? { ...entry, matchingOccurrence: occurrence - 1 } : entry)
+  }
+  return next
+}
+
 export function nativeChatPendingMatchingAfter(pending: NativeChatPendingOccurrence): number {
   return pending.matchingAfterTimestamp ?? pending.afterMessageTimestamp ?? pending.sentAt
 }

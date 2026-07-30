@@ -11,18 +11,28 @@ import { useNativeChatPendingEchoes } from './use-native-chat-pending-echoes'
 
 const NO_MESSAGES: NativeChatMessage[] = []
 
-function renderEchoes(sessionId: string | null, messages: NativeChatMessage[] = NO_MESSAGES) {
+type EchoProps = {
+  sessionId: string | null
+  messages: NativeChatMessage[]
+  paneKey?: string
+}
+
+function renderEchoProps(initialProps: EchoProps) {
   return renderHook(
-    (props: { sessionId: string | null; messages: NativeChatMessage[] }) =>
+    (props: EchoProps) =>
       useNativeChatPendingEchoes({
-        paneKey: 'tab-1:leaf-1',
+        paneKey: props.paneKey ?? 'tab-1:leaf-1',
         agent: 'claude',
         sessionId: props.sessionId,
         messages: props.messages,
         setWorkingInterrupted: vi.fn()
       }),
-    { initialProps: { sessionId, messages } }
+    { initialProps }
   )
+}
+
+function renderEchoes(sessionId: string | null, messages: NativeChatMessage[] = NO_MESSAGES) {
+  return renderEchoProps({ sessionId, messages })
 }
 
 describe('useNativeChatPendingEchoes', () => {
@@ -68,5 +78,64 @@ describe('useNativeChatPendingEchoes', () => {
       result.current.recordSlashCommand('/clear')
     })
     expect(result.current.pending).toEqual([])
+  })
+
+  it('does not judge a pane with the previous pane markers when the chat view moves', () => {
+    // The chat surface is one portal per tab, so moving it to another leaf changes
+    // paneKey in place: both scopes change in the same commit while the marker
+    // state still describes the leaf we came from.
+    const { result, rerender } = renderEchoProps({
+      sessionId: 'session-2',
+      messages: NO_MESSAGES,
+      paneKey: 'tab-1:leaf-2'
+    })
+    act(() => {
+      result.current.recordSend('leaf two prompt')
+    })
+    rerender({ sessionId: 'session-1', messages: NO_MESSAGES, paneKey: 'tab-1:leaf-1' })
+    act(() => {
+      result.current.recordSlashCommand('/clear')
+    })
+    rerender({ sessionId: 'session-2', messages: NO_MESSAGES, paneKey: 'tab-1:leaf-2' })
+    expect(result.current.pending.map((entry) => entry.text)).toEqual(['leaf two prompt'])
+  })
+
+  it('releases the occurrence a cancelled send would have taken', () => {
+    const { result } = renderEchoes('session-1')
+    let firstId = ''
+    act(() => {
+      firstId = result.current.recordSend('ping')
+    })
+    act(() => {
+      result.current.recordSend('ping')
+    })
+    expect(result.current.pending.map((entry) => entry.matchingOccurrence)).toEqual([undefined, 2])
+    act(() => {
+      result.current.cancelSend(firstId)
+    })
+    expect(result.current.pending.map((entry) => entry.matchingOccurrence)).toEqual([1])
+  })
+
+  it('keeps the occurrence a capped-out echo still owns when a later send is cancelled', () => {
+    // The oldest echo is trimmed at PENDING_SEND_LIMIT while its send still
+    // lands, so its transcript turn still arrives and still consumes an
+    // occurrence. Cancelling a later send must not renumber that away.
+    const { result } = renderEchoes('session-1')
+    const ids: string[] = []
+    for (let index = 0; index < 9; index += 1) {
+      act(() => {
+        ids.push(result.current.recordSend('ping'))
+      })
+    }
+    expect(result.current.pending).toHaveLength(8)
+    expect(result.current.pending[0]?.matchingOccurrence).toBe(2)
+    const survivorId = result.current.pending[1]?.id ?? ''
+    act(() => {
+      result.current.cancelSend(result.current.pending[0]?.id ?? '')
+    })
+    expect(result.current.pending[0]?.id).toBe(survivorId)
+    // Was occurrence 3 behind the trimmed echo and the cancelled one; only the
+    // cancelled one released its slot.
+    expect(result.current.pending[0]?.matchingOccurrence).toBe(2)
   })
 })
