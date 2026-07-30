@@ -1315,6 +1315,7 @@ function getRuntimeTargetCachePrefix(
 
 type FolderWorkspacePathStatusRouteOptions = { runtimeEnvironmentId?: string | null }
 type AddRepoPathRouteOptions = { runtimeEnvironmentId?: string | null }
+type RuntimeCatalogFetchOptions = { runtimeEnvironmentId?: string | null }
 
 function getFolderWorkspacePathStatusRouteSettings(
   options: FolderWorkspacePathStatusRouteOptions | undefined,
@@ -1536,12 +1537,12 @@ export type RepoSlice = {
   reposFetchGeneration: number
   pendingSshRepoReadoptions: SshRepoReadoption[]
   recordSshRepoReadoptions: (readoptions: SshRepoReadoption[]) => void
-  fetchRepos: () => Promise<void>
+  fetchRepos: (options?: RuntimeCatalogFetchOptions) => Promise<void>
   fetchReposForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
   fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
-  fetchProjectGroups: () => Promise<void>
+  fetchProjectGroups: (options?: RuntimeCatalogFetchOptions) => Promise<void>
   fetchProjectGroupsForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
-  fetchFolderWorkspaces: () => Promise<void>
+  fetchFolderWorkspaces: (options?: RuntimeCatalogFetchOptions) => Promise<void>
   fetchFolderWorkspacesForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
   addRepo: () => Promise<Repo | null>
   addRepoPath: (
@@ -1672,7 +1673,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       }
     }),
 
-  fetchRepos: async () => {
+  fetchRepos: async (options) => {
     // Why: overlapping repos:changed fetches can resolve out of order; a stale one must not overwrite a newer result and resurrect deleted projects (#7020).
     let generation = 0
     set((s) => {
@@ -1680,7 +1681,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       return { reposFetchGeneration: generation }
     })
     try {
-      const target = getActiveRuntimeTarget(get().settings)
+      const target = getActiveRuntimeTarget(
+        settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
+      )
       const catalog = await fetchRepoCatalogForTarget(target)
       // A newer fetchRepos superseded us while we awaited — drop this stale result.
       if (get().reposFetchGeneration !== generation) {
@@ -1919,9 +1922,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  fetchProjectGroups: async () => {
+  fetchProjectGroups: async (options) => {
     try {
-      const target = getActiveRuntimeTarget(get().settings)
+      const target = getActiveRuntimeTarget(
+        settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
+      )
       const { projectGroups } = await fetchProjectGroupsForTarget(target, [])
       set({
         projectGroups,
@@ -1967,10 +1972,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     )
   },
 
-  fetchFolderWorkspaces: async () => {
+  fetchFolderWorkspaces: async (options) => {
     try {
       const folderWorkspaceUpdates = getFolderWorkspaceUpdateCoordinator(get)
-      const target = getActiveRuntimeTarget(get().settings)
+      const target = getActiveRuntimeTarget(
+        settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
+      )
       const catalog = await fetchFolderWorkspaceCatalogForTarget(target)
       const current = get()
       folderWorkspaceUpdates.recordCatalogReplacement(
@@ -2181,9 +2188,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               },
               { timeoutMs: 60_000 }
             )
-      await get().fetchProjectGroups()
-      await get().fetchFolderWorkspaces()
-      await get().fetchRepos()
+      const catalogOptions =
+        'runtimeEnvironmentId' in args
+          ? { runtimeEnvironmentId: args.runtimeEnvironmentId }
+          : undefined
+      await get().fetchProjectGroups(catalogOptions)
+      await get().fetchFolderWorkspaces(catalogOptions)
+      await get().fetchRepos(catalogOptions)
       set({ folderWorkspacePathStatuses: {} })
       return result
     } catch (err) {

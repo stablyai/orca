@@ -51,7 +51,7 @@ export function useAddRepoNestedImportFlow({
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
   getNestedRepoRuntimeKind: (connectionId: string | null) => NestedRepoTelemetryRuntimeKind
-  onGitRepoReady: (repoId: string, source: AddRepoExistingWorkspaceSource) => Promise<void>
+  onGitRepoReady: (repoId: string, source: AddRepoExistingWorkspaceSource, runtimeEnvironmentId?: string | null) => Promise<void>
   setIsAdding: (isAdding: boolean) => void
 }): {
   handleImportNestedRepos: (mode: 'group' | 'separate') => Promise<void>
@@ -194,7 +194,7 @@ export function useAddRepoNestedImportFlow({
             : activeRuntimeEnvironmentId?.trim()
               ? 'runtime_server_path'
               : 'local_folder_picker'
-          await onGitRepoReady(repo.id, source)
+          await onGitRepoReady(repo.id, source, ...(nestedRuntimeEnvironmentId ? [nestedRuntimeEnvironmentId] : []))
         }
       } catch (err) {
         if (gen === nestedImportGenRef.current) {
@@ -237,7 +237,6 @@ export function useAddRepoNestedImportFlow({
       setIsAdding
     ]
   )
-
   const handleOpenNestedRootFolder = useCallback(async (): Promise<void> => {
     if (!nestedScan) {
       return
@@ -264,12 +263,15 @@ export function useAddRepoNestedImportFlow({
         closeModal()
         state.openModal('confirm-non-git-folder', {
           folderPath: path,
-          connectionId: nestedConnectionId
+          connectionId: nestedConnectionId,
+          ...(nestedRuntimeEnvironmentId
+            ? { runtimeEnvironmentId: nestedRuntimeEnvironmentId }
+            : {})
         })
         return
       }
       const repo = await state.addNonGitFolder(path, {
-        runtimeEnvironmentId: activeRuntimeEnvironmentId?.trim() || null
+        runtimeEnvironmentId: nestedRuntimeEnvironmentId?.trim() || null
       })
       if (gen !== nestedImportGenRef.current) {
         return
@@ -286,18 +288,7 @@ export function useAddRepoNestedImportFlow({
         setIsAdding(false)
       }
     }
-  }, [
-    activeRuntimeEnvironmentId,
-    closeModal,
-    getNestedRepoRuntimeKind,
-    nestedAttemptId,
-    nestedConnectionId,
-    nestedRuntimeKind,
-    nestedScan,
-    nestedSelectedPaths.size,
-    setIsAdding
-  ])
-
+  }, [closeModal, getNestedRepoRuntimeKind, nestedAttemptId, nestedConnectionId, nestedRuntimeKind, nestedRuntimeEnvironmentId, nestedScan, nestedSelectedPaths.size, setIsAdding])
   return {
     handleImportNestedRepos,
     handleOpenNestedRootFolder,

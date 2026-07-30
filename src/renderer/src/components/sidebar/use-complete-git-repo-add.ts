@@ -29,7 +29,11 @@ export function useCompleteGitRepoAdd({
   const detectedTelemetryTrackedRef = useRef<Set<string>>(new Set())
 
   return useCallback(
-    async (repoId: string, source: AddRepoExistingWorkspaceSource): Promise<void> => {
+    async (
+      repoId: string,
+      source: AddRepoExistingWorkspaceSource,
+      runtimeEnvironmentId?: string | null
+    ): Promise<void> => {
       const worktrees = useAppStore.getState().worktreesByRepo[repoId] ?? []
       const sortedWorktrees = [...worktrees].sort((a, b) => {
         if (a.lastActivityAt !== b.lastActivityAt) {
@@ -56,6 +60,7 @@ export function useCompleteGitRepoAdd({
       await finishProjectAddWithDefaultCheckout({
         repoId,
         source,
+        runtimeEnvironmentId,
         closeModal,
         setHideDefaultBranchWorkspace
       })

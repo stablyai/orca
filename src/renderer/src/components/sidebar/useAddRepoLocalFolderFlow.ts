@@ -62,7 +62,7 @@ export function useAddRepoLocalFolderFlow({
   setActiveNestedScanId: (scanId: string | null) => void
   setNestedScanInProgress: (inProgress: boolean) => void
   showNestedRepoReview: ShowNestedRepoReview
-  onGitRepoReady: (repoId: string, source: AddRepoExistingWorkspaceSource) => Promise<void>
+  onGitRepoReady: (repoId: string, source: AddRepoExistingWorkspaceSource, runtimeEnvironmentId?: string | null) => Promise<void>
   setIsAdding: (isAdding: boolean) => void
   setAddProjectBusyLabel: (label: string | null) => void
 }): {
@@ -177,7 +177,11 @@ export function useAddRepoLocalFolderFlow({
           if (mode === 'batch') {
             return { status: 'completed', repo }
           }
-          await onGitRepoReady(repo.id, source)
+          await onGitRepoReady(
+            repo.id,
+            source,
+            ...(activeRuntimeEnvironmentId ? [activeRuntimeEnvironmentId] : [])
+          )
         } else {
           // Why: folder repos skip the Git default-checkout handoff and activate
           // their synthetic root workspace in the folder add flow.
@@ -267,10 +271,14 @@ export function useAddRepoLocalFolderFlow({
         )
       }
       if (shouldDeferGitRepoReady && gitRepoIds.length > 0) {
-        await onGitRepoReady(gitRepoIds[0], source)
+        await onGitRepoReady(
+          gitRepoIds[0],
+          source,
+          ...(activeRuntimeEnvironmentId ? [activeRuntimeEnvironmentId] : [])
+        )
       }
     },
-    [addLocalPathForGeneration, onGitRepoReady]
+    [activeRuntimeEnvironmentId, addLocalPathForGeneration, onGitRepoReady]
   )
 
   useEffect(() => {
