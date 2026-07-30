@@ -30150,7 +30150,7 @@ export class OrcaRuntimeService {
     if (!record || record.runtimeId !== this.runtimeId) {
       return null
     }
-    return record.worktreeId ?? null
+    return record.worktreeId
   }
 
   private setPtyManagementTitleFromObservedTitle(
