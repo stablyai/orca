@@ -2,9 +2,10 @@ import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import {
+  getBrowserLinkRoutingDescription,
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
-} from './browser-link-routing-modifier-copy'
+} from './browser-link-routing-copy'
 
 type BrowserShortcutPlatform = {
   isMac: boolean
@@ -14,33 +15,6 @@ function getDefaultBrowserShortcutPlatform(): BrowserShortcutPlatform {
   return {
     isMac: typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
   }
-}
-
-export function getBrowserLinkRoutingShortcutLabel(platform: BrowserShortcutPlatform): string {
-  return platform.isMac ? '⇧⌘-click' : 'Shift+Ctrl+click'
-}
-
-// Why: "always" stops being true once inverting is on, so only then does the nested
-// row take over the chord sentence — with it off this reads exactly as it always has.
-// Each variant is a complete catalog entry — stitching a translated suffix onto a
-// translated base breaks in locales whose sentence order differs from English.
-export function getBrowserLinkRoutingDescription(
-  platform: BrowserShortcutPlatform = getDefaultBrowserShortcutPlatform(),
-  modifierInverts = false
-): string {
-  if (modifierInverts) {
-    // Why: hand-named key — the codemod hash of this sentence collides with
-    // 904ce58440, whose source text was this same sentence as the template head.
-    return translate(
-      'auto.components.settings.browser.search.linkRoutingBase',
-      "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor."
-    )
-  }
-  return translate(
-    'auto.components.settings.browser.search.904ce58440',
-    "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. {{value0}} always uses your system browser.",
-    { value0: getBrowserLinkRoutingShortcutLabel(platform) }
-  )
 }
 
 export function getBrowserPaneSearchEntries(

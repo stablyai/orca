@@ -7795,9 +7795,7 @@
             "a942905148": "新規ブラウザ タブを作成するときに開かれる URL。空白のタブを開くには、空白のままにします。",
             "c3903322d2": "デフォルトのホームページ",
             "19ea5607cf": "ローカルホストのワークツリーのラベル",
-            "4e0fdf0a3f": "ワークスペース ポートをワークツリー固有の Orca localhost URL として開くと、ブラウザーのタブを区別しやすくなります。",
-            "linkRoutingBase": "ターミナル、Markdown、エディターの http(s) リンクを Orca の組み込みブラウザで開きます。",
-            "904ce58440": "ターミナル、Markdown、エディターの http(s) リンクを Orca の組み込みブラウザで開きます。{{value0}} は常にシステム ブラウザを使用します。"
+            "4e0fdf0a3f": "ワークスペース ポートをワークツリー固有の Orca localhost URL として開くと、ブラウザーのタブを区別しやすくなります。"
           },
           "use": {
             "search": {
@@ -9652,6 +9650,10 @@
           "serviceManagerHelp": "このサーバーを開始するサービスマネージャーを通じてOrcaを更新してください。",
           "unpackedHelp": "開発ビルドはソースチェックアウトから更新する必要があります。",
           "legacyHelp": "リモート更新を有効にするには、このサーバーを手動で一度更新してください。"
+        },
+        "BrowserLinkRoutingSetting": {
+          "description": "ターミナル、Markdown、エディターの http(s) リンクを Orca の組み込みブラウザで開きます。{{shortcut}} は常にシステム ブラウザを使用します。",
+          "descriptionBase": "ターミナル、Markdown、エディターの http(s) リンクを Orca の組み込みブラウザで開きます。"
         },
         "BrowserLinkRoutingModifierSetting": {
           "titleSystem": "Hold Shift to open in your web browser",

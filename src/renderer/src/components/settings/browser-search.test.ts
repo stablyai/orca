@@ -2,15 +2,13 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import ko from '@/i18n/locales/ko.json'
 import { i18n } from '@/i18n/i18n'
+import { getBrowserPaneSearchEntries } from './browser-search'
 import {
   getBrowserLinkRoutingDescription,
   getBrowserLinkRoutingShortcutLabel,
-  getBrowserPaneSearchEntries
-} from './browser-search'
-import {
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
-} from './browser-link-routing-modifier-copy'
+} from './browser-link-routing-copy'
 
 describe('browser settings search copy', () => {
   it('uses macOS shortcut symbols for Link Routing copy and search metadata', () => {
@@ -129,7 +127,8 @@ describe('browser link routing modifier copy', () => {
 // literal, so it stayed English in every locale. Asserting only "no {{...}} leaked"
 // cannot catch that — the English literal has no placeholder either.
 describe('Link Routing description localization', () => {
-  const KEY = 'auto.components.settings.browser.search.904ce58440'
+  const KEY = 'auto.components.settings.BrowserLinkRoutingSetting.description'
+  const BASE_KEY = 'auto.components.settings.BrowserLinkRoutingSetting.descriptionBase'
 
   beforeEach(async () => {
     await i18n.changeLanguage('en')
@@ -137,16 +136,16 @@ describe('Link Routing description localization', () => {
 
   it('renders the Korean copy with the shortcut interpolated', async () => {
     const koCopy = (
-      ko.auto.components.settings.browser.search as unknown as Record<string, string>
-    )['904ce58440']
+      ko.auto.components.settings.BrowserLinkRoutingSetting as unknown as Record<string, string>
+    )['description']
     expect(koCopy).toBeTruthy()
-    expect(koCopy).toContain('{{value0}}')
+    expect(koCopy).toContain('{{shortcut}}')
 
     i18n.addResourceBundle('ko', 'translation', ko, true, true)
     await i18n.changeLanguage('ko')
 
     const description = getBrowserLinkRoutingDescription({ isMac: true })
-    expect(description).toBe(koCopy.replace('{{value0}}', '⇧⌘-click'))
+    expect(description).toBe(koCopy.replace('{{shortcut}}', '⇧⌘-click'))
     expect(description).not.toMatch(/\{\{.+?\}\}/)
     // Fails when the copy is a hardcoded English literal.
     expect(description).not.toContain("Orca's built-in browser")
@@ -163,8 +162,8 @@ describe('Link Routing description localization', () => {
 
   it('renders the Korean copy for the invert-on variant', async () => {
     const koBase = (
-      ko.auto.components.settings.browser.search as unknown as Record<string, string>
-    )['linkRoutingBase']
+      ko.auto.components.settings.BrowserLinkRoutingSetting as unknown as Record<string, string>
+    )['descriptionBase']
     expect(koBase).toBeTruthy()
 
     i18n.addResourceBundle('ko', 'translation', ko, true, true)
@@ -178,6 +177,6 @@ describe('Link Routing description localization', () => {
 
   it('uses the catalog key rather than an inline literal', () => {
     expect(i18n.exists(KEY)).toBe(true)
-    expect(i18n.exists('auto.components.settings.browser.search.linkRoutingBase')).toBe(true)
+    expect(i18n.exists(BASE_KEY)).toBe(true)
   })
 })

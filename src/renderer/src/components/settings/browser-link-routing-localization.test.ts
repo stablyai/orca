@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { i18n } from '@/i18n/i18n'
-import { getBrowserLinkRoutingDescription } from './browser-search'
+import { getBrowserLinkRoutingDescription } from './browser-link-routing-copy'
 
 // The Link Routing description was a bare template literal, so it stayed English in every
 // locale while its own title and the rest of the pane translated. It carries the platform
