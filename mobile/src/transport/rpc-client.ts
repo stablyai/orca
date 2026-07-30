@@ -89,7 +89,7 @@ export type RpcClient = {
     viewport: { cols: number; rows: number }
   ) => void
   getState: () => ConnectionState
-  // 0 means never failed (reset on successful open); the UI escalates "Reconnecting…" to "Can't connect" past a threshold.
+  // 0 means never failed (reset once the handshake authenticates); the UI escalates "Reconnecting…" to "Can't connect" past a threshold.
   getReconnectAttempt: () => number
   // Last 'connected' timestamp (ms epoch); null = never connected. Lets the UI tell "never reachable" from "transient blip".
   getLastConnectedAt: () => number | null
@@ -220,6 +220,8 @@ export function connect(
     })
     if (next === 'connected') {
       lastConnectedAt = Date.now()
+      // Why: only a completed E2EE handshake proves the path is healthy (issue #10119).
+      reconnectAttempt = 0
       // Why: a clean handshake proves the token is valid — reset the auth retry budget.
       authRejectionCount = 0
       for (const waiter of connectWaiters.splice(0)) {
@@ -348,7 +350,9 @@ export function connect(
       }
       console.log('[net] ws.onopen', { attempt: reconnectAttempt })
       clearConnectTimer()
-      reconnectAttempt = 0
+      // Why: no reconnectAttempt reset here — an open socket isn't a healthy session
+      // until e2ee_authenticated. Resetting pre-handshake pinned the counter at 0↔1,
+      // so a handshake-stall loop never escalated past "Connecting…" (issue #10119).
       setState('handshaking')
       emitLog('success', 'WebSocket open', 'Starting E2EE handshake')
 

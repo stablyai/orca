@@ -1,12 +1,15 @@
 import { useCallback, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import {
+  clearMobileNativeChatInput,
   openMobileNativeChatSendBudget,
   sendMobileNativeChatMessageWithOutcome,
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
+import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
+import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
 
 export type MobileNativeChatMessageSend = {
   /** Composer send that syncs the draft (clear on send, restore on rejection). */
@@ -32,6 +35,9 @@ export function useMobileNativeChatMessageSend(args: {
   handleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
+  /** Launch-context text Orca parked on the agent's TUI input line, or null. Read
+   *  at send time so the pre-clear can be sized to every line it occupies. */
+  readSeededLaunchDraftSeed: () => MobileNativeChatLaunchDraftSeed | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
@@ -48,6 +54,7 @@ export function useMobileNativeChatMessageSend(args: {
     handleRef,
     deviceTokenRef,
     captureSendOrigin,
+    readSeededLaunchDraftSeed,
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,
@@ -95,6 +102,36 @@ export function useMobileNativeChatMessageSend(args: {
       if (syncComposer) {
         clearDraftForSend(origin, text)
       }
+      // Why: a parked launch draft is routinely multi-line, and one Ctrl+U clears
+      // only one logical line. Size the clear to the text Orca injected, with
+      // slack — the user can also have typed into the TUI line directly, so that
+      // line count is a lower bound. Mobile cannot read the agent's screen, so
+      // there is no empty-line observable to confirm against here; the upper
+      // bound plus the host's write acceptance is what makes it safe.
+      //
+      // The burst goes out as its OWN write: bundled into the body write it
+      // arrived as literal Ctrl+U text and the draft concatenated (see
+      // clearMobileNativeChatInput). A rejected clear aborts the send rather
+      // than pasting on top of an uncleared line.
+      const seededLaunchDraft = readSeededLaunchDraftSeed()
+      if (seededLaunchDraft && !images?.length) {
+        const cleared = await clearMobileNativeChatInput({
+          client,
+          terminal: handle,
+          clearInput: buildAgentTuiClearInputForText(seededLaunchDraft.text),
+          deadline,
+          ...(deviceTokenRef.current
+            ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
+            : {})
+        })
+        if (!cleared) {
+          if (syncComposer) {
+            restoreRejectedDraft(origin, text)
+          }
+          onSendError('Message not sent')
+          return 'rejected'
+        }
+      }
       const outcome = await sendMobileNativeChatMessageWithOutcome({
         client,
         terminal: handle,
@@ -105,7 +142,20 @@ export function useMobileNativeChatMessageSend(args: {
         // this message. An image send already led its own paste with Ctrl+U, and a
         // second one here would wipe the image it just pasted (desktop's image path
         // likewise clears once, before the paste, and never again).
-        clearInputFirst: !images?.length,
+        //
+        // Also skipped once the dedicated clear above ran: the line is already
+        // empty, and a Ctrl+U written immediately before body text in the SAME
+        // write reaches the agent as a literal control character rather than a
+        // keypress (observed live as a stray \x15 heading the received message).
+        clearInputFirst: !images?.length && !seededLaunchDraft,
+        ...(syncComposer && typeof seededLaunchDraft?.createdAt === 'number'
+          ? {
+              resolvedLaunchDraft: {
+                text: seededLaunchDraft.text,
+                createdAt: seededLaunchDraft.createdAt
+              }
+            }
+          : {}),
         deadline,
         ...(deviceTokenRef.current
           ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
@@ -141,6 +191,7 @@ export function useMobileNativeChatMessageSend(args: {
       handleRef,
       holdUnconfirmedSend,
       onSendError,
+      readSeededLaunchDraftSeed,
       restoreRejectedDraft
     ]
   )

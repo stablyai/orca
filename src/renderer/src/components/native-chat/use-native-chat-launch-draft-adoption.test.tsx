@@ -175,6 +175,17 @@ describe('useNativeChatLaunchDraftSignal', () => {
     expect(result.current.launchDraft).not.toBeNull()
   })
 
+  it('resolves immediately from an accepted mobile submission', () => {
+    mocks.storeState.nativeChatLaunchDraftByTabId = {
+      'tab-1': launchDraft({ adopted: true, resolved: true, createdAt: SEEDED_AT })
+    }
+
+    const { result } = renderSignal([], true)
+
+    expect(result.current.launchDraftResolved).toBe(true)
+    expect(result.current.launchDraft?.resolved).toBe(true)
+  })
+
   it('ignores a draft seeded for another agent', () => {
     mocks.storeState.nativeChatLaunchDraftByTabId = {
       'tab-1': launchDraft({ agent: 'codex', createdAt: SEEDED_AT })

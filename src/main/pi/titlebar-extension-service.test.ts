@@ -643,6 +643,35 @@ describe('PiTitlebarExtensionService', () => {
         rmSync(fakeHome, { recursive: true, force: true })
       }
     })
+
+    it('bare-shell prep does not create missing ~/.pi or ~/.omp homes (#10196)', () => {
+      const fakeHome = mkdtempSync(join(tmpdir(), 'orca-no-eager-agent-home-'))
+      expect(existsSync(join(fakeHome, '.pi'))).toBe(false)
+      expect(existsSync(join(fakeHome, '.omp'))).toBe(false)
+
+      homedirOverride.current = fakeHome
+      try {
+        const svc = new PiTitlebarExtensionService()
+        const piEnv = svc.buildPtyEnv('pty-bare-pi', undefined, 'pi', {
+          materializeDefaultHome: false
+        })
+        const ompEnv = svc.buildPtyEnv('pty-bare-omp', undefined, 'omp', {
+          materializeDefaultHome: false
+        })
+
+        expect(piEnv).toEqual({})
+        expect(existsSync(join(fakeHome, '.pi'))).toBe(false)
+        expect(existsSync(join(fakeHome, '.omp'))).toBe(false)
+        expect(ompEnv.ORCA_OMP_SOURCE_AGENT_DIR).toBeUndefined()
+        expect(ompEnv.ORCA_OMP_STATUS_EXTENSION).toEqual(
+          expect.stringContaining('omp-managed-status-extension')
+        )
+        expect(existsSync(ompEnv.ORCA_OMP_STATUS_EXTENSION!)).toBe(true)
+      } finally {
+        homedirOverride.current = ''
+        rmSync(fakeHome, { recursive: true, force: true })
+      }
+    })
   })
 
   describe('isSafeDescendCandidate (Windows junction regression guard)', () => {
