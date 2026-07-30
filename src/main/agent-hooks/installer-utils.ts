@@ -151,11 +151,11 @@ export function wrapWindowsCmdHookCommand(scriptPath: string): string {
   return WINDOWS_CMD_SAFE_PATH.test(scriptPath) ? scriptPath : wrapWindowsHookCommand(scriptPath)
 }
 
-export const WINDOWS_GIT_BASH_SAFE_PATH = /^[A-Za-z0-9_.:/~-]+$/
+export const WINDOWS_GIT_BASH_SAFE_PATH = /^\P{Cc}+$/u
 
 export function wrapWindowsGitBashHookCommand(scriptPath: string): string {
   const bashPath = scriptPath.replaceAll('\\', '/')
-  // Why: Claude's Git Bash runner can execute a forward-slash .cmd directly; unsafe paths stay encoded.
+  // Why: single quotes keep spaces, metacharacters, and non-ASCII (CJK profiles) literal, so only control characters need the encoded launcher (#8430).
   return WINDOWS_GIT_BASH_SAFE_PATH.test(bashPath)
     ? `if [ -f ${quotePosixShellString(bashPath)} ]; then ${quotePosixShellString(bashPath)}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     : wrapWindowsHookCommand(scriptPath)

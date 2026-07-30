@@ -16,6 +16,7 @@ vi.mock('electron', () => ({
 
 import type { SFTPWrapper } from 'ssh2'
 import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
+import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from '../agent-hooks/hook-stdin-contract'
 import { ClaudeHookService } from './hook-service'
 import { OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
 
@@ -24,8 +25,6 @@ const STATUSLINE_SCRIPT_FILE_NAME =
   process.platform === 'win32' ? 'claude-statusline.cmd' : 'claude-statusline.sh'
 const OPENCLAUDE_SCRIPT_FILE_NAME =
   process.platform === 'win32' ? 'openclaude-hook.cmd' : 'openclaude-hook.sh'
-const WINDOWS_POWERSHELL_LAUNCHER =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
 const isClaudeManagedCommand = createManagedCommandMatcher(CLAUDE_SCRIPT_FILE_NAME)
 const isOpenClaudeManagedCommand = createManagedCommandMatcher(OPENCLAUDE_SCRIPT_FILE_NAME)
 
@@ -307,12 +306,10 @@ describe('ClaudeHookService.install', () => {
     }
   })
 
-  // Why: #6078 — Claude Code runs hooks through Git Bash, and an unquoted path
-  // with a space (e.g. `C:/Users/Jane Doe`) splits at the space. The managed
-  // command must use an encoded launcher so Git Bash/cmd.exe never splits or
-  // expands the raw path before invoking the managed .cmd.
+  // Why: #6078 — spaces in the profile path must never split the hook command; the
+  // fast path single-quotes the script path, so a spaced home rides Git Bash directly.
   it.skipIf(process.platform !== 'win32')(
-    'wraps the managed hook command to survive spaces in the profile path (#6078)',
+    'quotes the managed hook command so spaces in the profile path survive (#6078)',
     () => {
       const tmpHome = mkdtempSync(join(tmpdir(), 'orca claude home with spaces '))
       vi.stubEnv('HOME', tmpHome)
@@ -324,9 +321,18 @@ describe('ClaudeHookService.install', () => {
           readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8')
         ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
 
+        const scriptPath = join(
+          tmpHome,
+          '.orca',
+          'agent-hooks',
+          CLAUDE_SCRIPT_FILE_NAME
+        ).replaceAll('\\', '/')
+        const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
         for (const eventName of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
           const command = settings.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
+          expect(command).toBe(
+            `if [ -f ${quoted} ]; then ${quoted}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+          )
         }
       } finally {
         vi.unstubAllEnvs()

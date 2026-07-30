@@ -563,18 +563,42 @@ describe('wrapWindowsGitBashHookCommand', () => {
     )
   })
 
-  it('falls back to the encoded launcher when bash would split the path', () => {
-    const scriptPath = 'C:\\Users\\Jane Doe\\.orca\\agent-hooks\\claude-hook.cmd'
-    const command = wrapWindowsGitBashHookCommand(scriptPath)
-    expect(command).toMatch(qualifiedWindowsPowerShellCommand)
-    expect(decodeWindowsHookCommand(command)).toBe(expectedDecodedWindowsHookCommand(scriptPath))
+  it('quotes paths with spaces through the fast path', () => {
+    expect(
+      wrapWindowsGitBashHookCommand('C:\\Users\\Jane Doe\\.orca\\agent-hooks\\claude-hook.cmd')
+    ).toBe(
+      `if [ -f 'C:/Users/Jane Doe/.orca/agent-hooks/claude-hook.cmd' ]; then 'C:/Users/Jane Doe/.orca/agent-hooks/claude-hook.cmd'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+    )
   })
 
-  it('falls back to the encoded launcher when bash metacharacters are present', () => {
-    const scriptPath = 'C:\\Users\\alice & bob\\.orca\\agent-hooks\\claude-hook.cmd'
+  it('keeps bash metacharacters inert inside the quoted fast path', () => {
+    expect(
+      wrapWindowsGitBashHookCommand('C:\\Users\\alice & bob\\.orca\\agent-hooks\\claude-hook.cmd')
+    ).toBe(
+      `if [ -f 'C:/Users/alice & bob/.orca/agent-hooks/claude-hook.cmd' ]; then 'C:/Users/alice & bob/.orca/agent-hooks/claude-hook.cmd'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+    )
+  })
+
+  it('takes the fast path for non-ASCII home directories', () => {
+    expect(
+      wrapWindowsGitBashHookCommand('C:\\Users\\홍길동\\.orca\\agent-hooks\\claude-hook.cmd')
+    ).toBe(
+      `if [ -f 'C:/Users/홍길동/.orca/agent-hooks/claude-hook.cmd' ]; then 'C:/Users/홍길동/.orca/agent-hooks/claude-hook.cmd'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+    )
+  })
+
+  it('escapes single quotes inside the fast path', () => {
+    expect(
+      wrapWindowsGitBashHookCommand("C:\\Users\\O'Brien\\.orca\\agent-hooks\\claude-hook.cmd")
+    ).toBe(
+      `if [ -f 'C:/Users/O'\\''Brien/.orca/agent-hooks/claude-hook.cmd' ]; then 'C:/Users/O'\\''Brien/.orca/agent-hooks/claude-hook.cmd'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+    )
+  })
+
+  it('falls back to the encoded launcher when control characters are present', () => {
+    const scriptPath = 'C:\\Users\\evil\n\\.orca\\agent-hooks\\claude-hook.cmd'
     const command = wrapWindowsGitBashHookCommand(scriptPath)
     expect(command).toMatch(qualifiedWindowsPowerShellCommand)
-    expect(command).not.toContain('& bob')
     expect(decodeWindowsHookCommand(command)).toBe(expectedDecodedWindowsHookCommand(scriptPath))
   })
 })
