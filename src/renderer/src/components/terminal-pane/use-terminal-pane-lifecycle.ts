@@ -145,6 +145,7 @@ import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
 } from './terminal-pane-close-identity'
+import { runTerminalSplitPaneAgentCloseCleanup } from './terminal-split-pane-agent-close-cleanup'
 
 export function resetTerminalKeyboardProtocolAfterInterrupt(terminal: Terminal): void {
   // Guarded output path so a throwing xterm can't escape the key handler.
@@ -1259,7 +1260,23 @@ export function useTerminalPaneLifecycle({
         const terminalTab = useAppStore
           .getState()
           .tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
-        if (!isDetachedToTab && shouldClearLaunchAgentForClosedPane(terminalTab, closedPtyId)) {
+        const closedLeafId = closedPane?.leafId
+        if (closedLeafId && !isDetachedToTab) {
+          const survivingPanes = managerRef.current?.getPanes() ?? []
+          runTerminalSplitPaneAgentCloseCleanup({
+            tabId,
+            worktreeId,
+            closedPaneId: paneId,
+            closedLeafId,
+            closedPtyId,
+            survivingPaneIds: new Set(survivingPanes.map((pane) => pane.id)),
+            survivingPaneKeys: survivingPanes.map((pane) => makePaneKey(tabId, pane.leafId)),
+            getState: useAppStore.getState
+          })
+        } else if (
+          !isDetachedToTab &&
+          shouldClearLaunchAgentForClosedPane(terminalTab, closedPtyId)
+        ) {
           useAppStore.getState().clearTabLaunchAgent(tabId)
         }
         const panePtyBinding = panePtyBindings.get(paneId)
@@ -1302,7 +1319,13 @@ export function useTerminalPaneLifecycle({
           }
           paneTransportsRef.current.delete(paneId)
         }
-        clearRuntimePaneTitle(tabId, paneId)
+        if (!closedLeafId || isDetachedToTab) {
+          clearRuntimePaneTitle(tabId, paneId)
+          const survivingPaneIds = new Set(
+            managerRef.current?.getPanes().map((pane) => pane.id) ?? []
+          )
+          useAppStore.getState().retainRuntimePaneTitlesForTab(tabId, survivingPaneIds)
+        }
         paneFontSizesRef.current.delete(paneId)
         replayingPanesRef.current.delete(paneId)
         restoredViewportBlankingPanesRef.current.delete(paneId)
@@ -1329,7 +1352,10 @@ export function useTerminalPaneLifecycle({
         if (newActivePane) {
           reportActiveRendererPtyForPane(paneTransportsRef.current, newActivePane.id)
           const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
-          updateTabTitle(tabId, resolveTabTitleAfterPaneClose(paneTitles, newActivePane.id))
+          updateTabTitle(
+            tabId,
+            resolveTabTitleAfterPaneClose(paneTitles, newActivePane.id, terminalTab)
+          )
         }
         scheduleRuntimeGraphSync()
       },

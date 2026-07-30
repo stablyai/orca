@@ -1024,6 +1024,7 @@ function TerminalPane(
     if (Object.keys(mergedPtyIds).length > 0) {
       layout.ptyIdsByLeafId = mergedPtyIds
     }
+    layout.paneIdsByLeafId = Object.fromEntries(currentPanes.map((pane) => [pane.leafId, pane.id]))
     layout.activeLeafId = resolveTerminalLayoutActiveLeafId({
       root: layout.root,
       activeLeafId: layout.activeLeafId,
@@ -1276,14 +1277,26 @@ function TerminalPane(
         clearSessionRestoredBannerForPane(paneId)
         const leafId = manager.getLeafId(paneId)
         if (leafId) {
-          useAppStore.getState().setCacheTimerStartedAt(makePaneKey(tabId, leafId), null)
-          useAppStore.getState().dropAgentStatus(makePaneKey(tabId, leafId))
+          removedTitleLeafIdsRef.current.add(leafId)
+        }
+        if (paneId in paneTitlesRef.current) {
+          const next = { ...paneTitlesRef.current }
+          delete next[paneId]
+          paneTitlesRef.current = next
+          setPaneTitles((prev) => {
+            if (!(paneId in prev)) {
+              return prev
+            }
+            const nextTitles = { ...prev }
+            delete nextTitles[paneId]
+            return nextTitles
+          })
         }
         syncPanePtyLayoutBinding(paneId, null)
         manager.closePane(paneId)
       }
     },
-    [clearSessionRestoredBannerForPane, onCloseTab, syncPanePtyLayoutBinding, tabId]
+    [clearSessionRestoredBannerForPane, onCloseTab, syncPanePtyLayoutBinding]
   )
 
   // Cmd+W confirms before killing a shell with a running child (e.g. npm run dev); idle prompts close immediately, and Ctrl+D bypasses by design.

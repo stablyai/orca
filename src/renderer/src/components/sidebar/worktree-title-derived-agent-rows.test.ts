@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../../shared/types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { detachTerminalLayoutLeaf } from '@/components/terminal-pane/terminal-layout-leaf-detach'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 
 const LEAF_ID_1 = '77777777-7777-4777-8777-777777777777'
@@ -266,6 +267,127 @@ describe('buildTitleDerivedAgentRows', () => {
       },
       ptyIdsByTabId: { 'tab-1': ['pty-codex'] },
       terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('does not keep a title-derived row after split close prunes the agent leaf binding', () => {
+    const detached = detachTerminalLayoutLeaf(
+      {
+        ...makeSplitLayout(),
+        ptyIdsByLeafId: { [LEAF_ID_1]: 'pty-agent', [LEAF_ID_2]: 'pty-shell' },
+        paneIdsByLeafId: { [LEAF_ID_1]: 1, [LEAF_ID_2]: 2 }
+      },
+      LEAF_ID_1
+    )
+    expect(detached).not.toBeNull()
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 2: 'bash' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-shell'] },
+      terminalLayoutsByTabId: {
+        'tab-1': detached!.sourceLayout
+      },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('does not synthesize a row for a closed split leaf that lost its PTY binding', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: '⠋ Codex',
+          2: 'bash'
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-shell'] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          ...makeSplitLayout(),
+          ptyIdsByLeafId: { [LEAF_ID_2]: 'pty-shell' },
+          paneIdsByLeafId: { [LEAF_ID_1]: 1, [LEAF_ID_2]: 2 }
+        }
+      },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('does not attribute a surviving split shell to tab launchAgent after the agent pane closes', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'codex' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 2: '⠼ demo-repo' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-shell'] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          ...makeSplitLayout(),
+          ptyIdsByLeafId: { [LEAF_ID_2]: 'pty-shell' },
+          paneIdsByLeafId: { [LEAF_ID_2]: 2 }
+        }
+      },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('does not resurrect a title-derived row for a suppressed split leaf', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'codex' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠋ Codex' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-codex'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      suppressedTitleDerivedLeafIdsByTabId: { 'tab-1': { [LEAF_ID_1]: true } },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('drops stale agent titles that replay to a removed split leaf', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 2: '⠋ Codex' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-shell'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('does not synthesize title-derived rows from a polluted tab title when the runtime map is empty', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { title: '⠋ Codex' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {},
+      ptyIdsByTabId: { 'tab-1': ['pty-shell'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
       now: 2000
     })
 

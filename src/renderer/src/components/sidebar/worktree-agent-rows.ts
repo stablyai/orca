@@ -7,17 +7,8 @@ import {
   type AgentStatusEntry,
   type AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
-import {
-  makePaneKey,
-  parseLegacyNumericPaneKey,
-  parsePaneKey
-} from '../../../../shared/stable-pane-id'
-import type {
-  TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
-  TerminalTab
-} from '../../../../shared/types'
-import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
 import {
   buildTitleDerivedAgentRows,
   resolveAgentTypeFromTerminalTitle
@@ -29,6 +20,11 @@ import {
   effectiveWorktreeAgentRowStartedAt,
   tabFromWorktreeAttributedStatusEntry
 } from './worktree-agent-row-fallback-tab'
+import {
+  isAgentPaneKeyLiveInLayout,
+  isRetainedLegacyAliasOfSeenStablePane,
+  markCompletedWorkerParentPaneKeysSeen
+} from './worktree-agent-row-pane-gates'
 
 /**
  * Resolves the sidebar row agent type, prioritizing launch agent configuration
@@ -92,115 +88,6 @@ function entryWithRuntimeOrchestration(
   return { ...entry, orchestration }
 }
 
-function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
-  if (!node) {
-    return 0
-  }
-  if (node.type === 'leaf') {
-    return 1
-  }
-  return countTerminalLayoutLeaves(node.first) + countTerminalLayoutLeaves(node.second)
-}
-
-function seenStablePaneKeysForTab(seenPaneKeys: Set<string>, tabId: string): string[] {
-  const keys: string[] = []
-  for (const paneKey of seenPaneKeys) {
-    const parsed = parsePaneKey(paneKey)
-    if (parsed?.tabId === tabId) {
-      keys.push(paneKey)
-    }
-  }
-  return keys
-}
-
-function isRetainedLegacyAliasOfSeenStablePane(args: {
-  paneKey: string
-  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
-  seenPaneKeys: Set<string>
-}): boolean {
-  const legacy = parseLegacyNumericPaneKey(args.paneKey)
-  if (!legacy) {
-    return false
-  }
-  const stablePaneKeys = seenStablePaneKeysForTab(args.seenPaneKeys, legacy.tabId)
-  if (stablePaneKeys.length === 0) {
-    return false
-  }
-
-  const layout = args.terminalLayoutsByTabId?.[legacy.tabId]
-  const leafId = resolveRuntimePaneTitleLeafId(layout, legacy.numericPaneId)
-  if (leafId) {
-    return args.seenPaneKeys.has(makePaneKey(legacy.tabId, leafId))
-  }
-
-  // Why: old PaneManager ids can advance across remounts/updates even for a
-  // single physical pane. Once the tab has exactly one current stable pane,
-  // retained numeric rows under that tab are stale aliases of it.
-  return countTerminalLayoutLeaves(layout?.root) === 1 && stablePaneKeys.length === 1
-}
-
-function markSeenPaneKeyForCurrentTab(args: {
-  paneKey: string | undefined
-  currentTabIds: Set<string>
-  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
-  seenPaneKeys: Set<string>
-}): void {
-  if (!args.paneKey) {
-    return
-  }
-  const parsed = parsePaneKey(args.paneKey)
-  if (parsed) {
-    if (args.currentTabIds.has(parsed.tabId)) {
-      args.seenPaneKeys.add(args.paneKey)
-    }
-    return
-  }
-
-  const legacy = parseLegacyNumericPaneKey(args.paneKey)
-  if (!legacy || !args.currentTabIds.has(legacy.tabId)) {
-    return
-  }
-  args.seenPaneKeys.add(args.paneKey)
-  const leafId = resolveRuntimePaneTitleLeafId(
-    args.terminalLayoutsByTabId?.[legacy.tabId],
-    legacy.numericPaneId
-  )
-  if (leafId) {
-    args.seenPaneKeys.add(makePaneKey(legacy.tabId, leafId))
-  }
-}
-
-function markCompletedWorkerParentPaneKeysSeen(args: {
-  entries: AgentStatusEntry[]
-  retained: RetainedAgentEntry[]
-  runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
-  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
-  currentTabIds: Set<string>
-  seenPaneKeys: Set<string>
-}): void {
-  const markEntry = (entry: AgentStatusEntry): void => {
-    const rowEntry = entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)
-    if (rowEntry.state !== 'done') {
-      return
-    }
-    // Why: completed worker rows can be attributed to a child pane while the
-    // visible parent pane still has a stale spinner title.
-    markSeenPaneKeyForCurrentTab({
-      paneKey: rowEntry.orchestration?.parentPaneKey,
-      currentTabIds: args.currentTabIds,
-      terminalLayoutsByTabId: args.terminalLayoutsByTabId,
-      seenPaneKeys: args.seenPaneKeys
-    })
-  }
-
-  for (const entry of args.entries) {
-    markEntry(entry)
-  }
-  for (const retained of args.retained) {
-    markEntry(retained.entry)
-  }
-}
-
 export function buildWorktreeAgentRows(args: {
   tabs: TerminalTab[]
   entries: AgentStatusEntry[]
@@ -209,6 +96,8 @@ export function buildWorktreeAgentRows(args: {
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
+  recentlyRetiredAgentStatusPaneKeys?: Record<string, true>
+  suppressedTitleDerivedLeafIdsByTabId?: Record<string, Record<string, true>>
   now: number
 }): DashboardAgentRow[] {
   const rows: DashboardAgentRow[] = []
@@ -232,6 +121,9 @@ export function buildWorktreeAgentRows(args: {
   for (const tab of args.tabs) {
     const explicitEntries = entriesByTabId.get(tab.id) ?? []
     for (const entry of explicitEntries) {
+      if (!isAgentPaneKeyLiveInLayout(entry.paneKey, args)) {
+        continue
+      }
       const rowEntry = entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)
       const isFresh = isExplicitAgentStatusFresh(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS)
       const shouldDecay =
@@ -260,7 +152,9 @@ export function buildWorktreeAgentRows(args: {
     runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey,
     terminalLayoutsByTabId: args.terminalLayoutsByTabId,
     currentTabIds,
-    seenPaneKeys
+    seenPaneKeys,
+    entryWithRuntimeOrchestration: (entry) =>
+      entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)
   })
 
   rows.push(...buildTitleDerivedAgentRows({ ...args, seenPaneKeys }))
@@ -270,6 +164,9 @@ export function buildWorktreeAgentRows(args: {
   // worktree card instead of waiting for tab membership that may never arrive.
   for (const entry of args.entries) {
     if (seenPaneKeys.has(entry.paneKey)) {
+      continue
+    }
+    if (!isAgentPaneKeyLiveInLayout(entry.paneKey, args)) {
       continue
     }
     const rowEntry = entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)

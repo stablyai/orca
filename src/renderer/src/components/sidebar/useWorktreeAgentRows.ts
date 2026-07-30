@@ -74,6 +74,12 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
   const runtimeAgentOrchestrationByPaneKey = useAppStore(
     useShallow((s) => (active ? selectRuntimeAgentOrchestrationForWorktree(s, worktreeId) : {}))
   )
+  const recentlyRetiredAgentStatusPaneKeys = useAppStore(
+    useShallow((s) => (active ? s.recentlyRetiredAgentStatusPaneKeys : {}))
+  )
+  const suppressedTitleDerivedLeafIdsByTabId = useAppStore(
+    useShallow((s) => (active ? s.suppressedTitleDerivedLeafIdsByTabId : {}))
+  )
   const agentFreshnessSignature = useAppStore((s) =>
     active ? selectAgentFreshness(s) : EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
   )
@@ -104,6 +110,8 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
         ptyIdsByTabId,
         terminalLayoutsByTabId,
         runtimeAgentOrchestrationByPaneKey,
+        recentlyRetiredAgentStatusPaneKeys,
+        suppressedTitleDerivedLeafIdsByTabId,
         now
       })
     )
@@ -118,6 +126,8 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     ptyIdsByTabId,
     terminalLayoutsByTabId,
     runtimeAgentOrchestrationByPaneKey,
+    recentlyRetiredAgentStatusPaneKeys,
+    suppressedTitleDerivedLeafIdsByTabId,
     agentFreshnessSignature
   ])
 }

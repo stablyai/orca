@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../shared/types'
 import {
   resolveRuntimePaneTitleForLeaf,
+  resolveRuntimePaneTitleForLayoutLeaf,
   resolveRuntimePaneTitleLeafResolution
 } from './runtime-pane-title-leaf-id'
 
@@ -46,6 +47,38 @@ describe('resolveRuntimePaneTitleForLeaf', () => {
 
   it('uses a lone title when the tab has no resolved layout root', () => {
     expect(resolveRuntimePaneTitleForLeaf(undefined, { 7: 'Codex' }, LEAF_A)).toBe('Codex')
+  })
+})
+
+describe('resolveRuntimePaneTitleForLayoutLeaf', () => {
+  it('reads runtime titles through the live pane id bound to the leaf', () => {
+    expect(
+      resolveRuntimePaneTitleForLayoutLeaf(
+        {
+          ...leafLayout,
+          activeLeafId: null,
+          expandedLeafId: null,
+          paneIdsByLeafId: { [LEAF_A]: 1 }
+        },
+        { 1: 'Codex', 2: 'stale Codex' },
+        LEAF_A
+      )
+    ).toBe('Codex')
+  })
+
+  it('does not replay a lone closed-pane title onto an unmapped survivor leaf', () => {
+    expect(
+      resolveRuntimePaneTitleForLayoutLeaf(
+        {
+          root: { type: 'leaf', leafId: LEAF_B },
+          activeLeafId: LEAF_B,
+          expandedLeafId: null,
+          paneIdsByLeafId: { [LEAF_B]: 2 }
+        },
+        { 1: '⠋ Codex' },
+        LEAF_B
+      )
+    ).toBeNull()
   })
 })
 

@@ -1086,6 +1086,8 @@ export type TerminalLayoutSnapshot = {
   /** User-assigned pane titles, keyed by stable layout leaf UUID.
    *  Persisted alongside buffers via the existing session:set flow. */
   titlesByLeafId?: Record<string, string>
+  /** Live PaneManager numeric ids per layout leaf for runtime title lookup. */
+  paneIdsByLeafId?: Record<string, number>
 }
 
 /** Minimal subset of OpenFile persisted across restarts.

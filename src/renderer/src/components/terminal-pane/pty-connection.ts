@@ -4,7 +4,17 @@ import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import type { IBuffer, IDisposable } from '@xterm/xterm'
 import { resolveCursorAgentImeAnchor } from '@/lib/pane-manager/terminal-ime-anchor'
 import { installTerminalImeCompositionRoute } from './terminal-ime-composition-route'
-import { detectAgentStatusFromTitle, agentTypeToIconAgent, isClaudeAgent } from '@/lib/agent-status'
+import {
+  detectAgentStatusFromTitle,
+  agentTypeToIconAgent,
+  isClaudeAgent,
+  formatAgentTypeLabel
+} from '@/lib/agent-status'
+import {
+  isExplicitAgentStatusFresh,
+  resolveCommittedTitleAgentType,
+  resolveTitleActivityLabel
+} from '@/lib/pane-agent-evidence'
 import { resolvePaneTitleDecision } from './terminal-title-evidence'
 import { blocksCodexPaneInput } from '../codex-restart-notice-state'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
@@ -180,6 +190,7 @@ import { resolveSshPaneConnectGate } from './ssh-pane-connect-gate'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { e2eConfig } from '@/lib/e2e-config'
 import {
+  AGENT_STATUS_STALE_AFTER_MS,
   isFreshNonDoneAgentStatus,
   type AgentStatusEntry,
   type AgentType
@@ -287,7 +298,7 @@ import {
   resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-title-owner'
 import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
-import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
+
 import {
   isExpectedAgentProcess,
   recognizeAgentProcessFromCommandLine
@@ -2692,6 +2703,9 @@ export function connectPanePty(
     rawTitle: string,
     meta?: { staleWorkingTitleClear?: boolean }
   ): void => {
+    if (disposed) {
+      return
+    }
     // Why: one owner-aware decision drives the display label, the runtime/tab
     // title, task-completion tracking, and the renderer gate, so raw title text
     // can no longer disable GPU behind stronger owner evidence (#7428/#7447).
@@ -2802,6 +2816,43 @@ export function connectPanePty(
         state: 'working',
         prompt: normalizedPrompt || (currentEntry?.state === 'working' ? currentEntry.prompt : ''),
         agentType: 'command-code'
+      },
+      currentTitle,
+      undefined,
+      routing
+    )
+  }
+
+  const seedTitleSideEffectWorkingStatus = (): void => {
+    const routing = resolveCurrentAgentStatusRouting()
+    if (!routing) {
+      return
+    }
+    const now = Date.now()
+    const currentState = useAppStore.getState()
+    const currentEntry = currentState.agentStatusByPaneKey[cacheKey]
+    if (
+      currentEntry &&
+      isExplicitAgentStatusFresh(currentEntry, now, AGENT_STATUS_STALE_AFTER_MS) &&
+      (currentEntry.state === 'working' ||
+        currentEntry.state === 'waiting' ||
+        currentEntry.state === 'blocked')
+    ) {
+      return
+    }
+    const agentType = getAuthoritativePaneAgent()
+    if (!agentType || agentType === 'unknown') {
+      return
+    }
+    const currentTitle = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
+    const titleLabel = currentTitle ? resolveTitleActivityLabel(currentTitle) : null
+    const prompt = currentEntry?.prompt?.trim() || titleLabel || formatAgentTypeLabel(agentType)
+    currentState.setAgentStatus(
+      cacheKey,
+      {
+        state: 'working',
+        prompt,
+        agentType
       },
       currentTitle,
       undefined,
@@ -3236,6 +3287,7 @@ export function connectPanePty(
   const onAgentBecameWorking = (): void => {
     suppressNativeWindowsIdleCodexFocusReports = false
     clearSuppressedTitleSideEffects()
+    seedTitleSideEffectWorkingStatus()
     if (syncAgentTaskCompleteTrackingEnabled()) {
       requiresFreshWorkingForAgentTaskCompleteNotification = false
       agentCompletionCoordinator.observeTitleWorking()

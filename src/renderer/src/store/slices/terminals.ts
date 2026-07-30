@@ -536,6 +536,8 @@ export type TerminalSlice = {
   ptyIdsByTabId: Record<string, string[]>
   /** Live pane titles by tabId then paneId; preserves per-pane agent status (unlike the legacy tab title) while TerminalPane is mounted. */
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  /** Split leaves tombstoned on agent-pane close so title-derived rows cannot resurrect them. */
+  suppressedTitleDerivedLeafIdsByTabId: Record<string, Record<string, true>>
   /** Per-tab unread flags (BEL or agent-complete); ephemeral UI state, not persisted. Cleared when the user activates/interacts with the tab. */
   unreadTerminalTabs: Record<string, true>
   /** Pane-keyed attention marker (narrower than unreadTerminalTabs); clears when the user interacts with the exact pane that raised it. */
@@ -672,6 +674,8 @@ export type TerminalSlice = {
   clearTabLaunchAgent: (tabId: string) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
+  retainRuntimePaneTitlesForTab: (tabId: string, survivingPaneIds: ReadonlySet<number>) => void
+  suppressTitleDerivedAgentLeaf: (tabId: string, leafId: string) => void
   /** Mark a tab unread (agent working→idle); skipped when the tab is visible, since a "seen" flag would never clear. */
   markTerminalTabUnread: (tabId: string) => void
   markTerminalPaneUnread: (paneKey: string) => void
@@ -998,6 +1002,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   activeTabIdByWorktree: {},
   ptyIdsByTabId: {},
   runtimePaneTitlesByTabId: {},
+  suppressedTitleDerivedLeafIdsByTabId: {},
   unreadTerminalTabs: {},
   unreadTerminalPanes: {},
   unreadAgentCompletionPanes: {},
@@ -1587,6 +1592,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       delete nextPendingReconnectPtyIdByTabId[tabId]
       const nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
       delete nextRuntimePaneTitlesByTabId[tabId]
+      const nextSuppressedTitleDerivedLeafIdsByTabId = {
+        ...s.suppressedTitleDerivedLeafIdsByTabId
+      }
+      delete nextSuppressedTitleDerivedLeafIdsByTabId[tabId]
       const nextDirectSshPaneRetryByTabId = { ...s.directSshPaneRetryByTabId }
       delete nextDirectSshPaneRetryByTabId[tabId]
       const nextDirectSshLivePtyBindingByTabId = {
@@ -1699,6 +1708,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         deferredSshSessionIdsByTabId: nextDeferredSshSessionIdsByTabId,
         pendingReconnectPtyIdByTabId: nextPendingReconnectPtyIdByTabId,
         runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
+        suppressedTitleDerivedLeafIdsByTabId: nextSuppressedTitleDerivedLeafIdsByTabId,
         directSshPaneRetryByTabId: nextDirectSshPaneRetryByTabId,
         directSshLivePtyBindingByTabId: nextDirectSshLivePtyBindingByTabId,
         directSshPaneRetryHistoryByTabId: nextDirectSshPaneRetryHistoryByTabId,
@@ -2092,6 +2102,60 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return {
         runtimePaneTitlesByTabId: next,
         ...(shouldBump ? { sortEpoch: s.sortEpoch + 1 } : {})
+      }
+    })
+  },
+
+  retainRuntimePaneTitlesForTab: (tabId, survivingPaneIds) => {
+    set((s) => {
+      const currentByPane = s.runtimePaneTitlesByTabId[tabId]
+      if (!currentByPane) {
+        return s
+      }
+      const nextByPane: Record<number, string> = {}
+      let removedClassifiedTitle = false
+      for (const [paneId, title] of Object.entries(currentByPane)) {
+        const numericPaneId = Number(paneId)
+        if (!survivingPaneIds.has(numericPaneId)) {
+          if (classifyTitleActivity(title) !== null) {
+            removedClassifiedTitle = true
+          }
+          continue
+        }
+        nextByPane[numericPaneId] = title
+      }
+      if (Object.keys(nextByPane).length === Object.keys(currentByPane).length) {
+        return s
+      }
+      const next = { ...s.runtimePaneTitlesByTabId }
+      if (Object.keys(nextByPane).length > 0) {
+        next[tabId] = nextByPane
+      } else {
+        delete next[tabId]
+      }
+      const ownerWorktreeId = removedClassifiedTitle
+        ? getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+        : null
+      const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
+      const shouldBump = removedClassifiedTitle && ownerWorktreeId !== null && !isActive
+      return {
+        runtimePaneTitlesByTabId: next,
+        ...(shouldBump ? { sortEpoch: s.sortEpoch + 1 } : {})
+      }
+    })
+  },
+
+  suppressTitleDerivedAgentLeaf: (tabId, leafId) => {
+    set((s) => {
+      const current = s.suppressedTitleDerivedLeafIdsByTabId[tabId]
+      if (current?.[leafId]) {
+        return s
+      }
+      return {
+        suppressedTitleDerivedLeafIdsByTabId: {
+          ...s.suppressedTitleDerivedLeafIdsByTabId,
+          [tabId]: { ...current, [leafId]: true }
+        }
       }
     })
   },
@@ -3149,6 +3213,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const nextRuntimePaneTitlesByTabId = keepIdentifiers
         ? s.runtimePaneTitlesByTabId
         : { ...s.runtimePaneTitlesByTabId }
+      const nextSuppressedTitleDerivedLeafIdsByTabId = keepIdentifiers
+        ? s.suppressedTitleDerivedLeafIdsByTabId
+        : { ...s.suppressedTitleDerivedLeafIdsByTabId }
       const nextSuppressedPtyExitIds = {
         ...s.suppressedPtyExitIds,
         ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
@@ -3187,6 +3254,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       for (const tab of tabs) {
         if (!keepIdentifiers) {
           delete nextRuntimePaneTitlesByTabId[tab.id]
+          delete nextSuppressedTitleDerivedLeafIdsByTabId[tab.id]
         }
         delete nextPendingSetupSplitByTabId[tab.id]
         delete nextPendingIssueCommandSplitByTabId[tab.id]
@@ -3246,6 +3314,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ptyIdsByTabId: nextPtyIdsByTabId,
         lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
         runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
+        suppressedTitleDerivedLeafIdsByTabId: nextSuppressedTitleDerivedLeafIdsByTabId,
         suppressedPtyExitIds: nextSuppressedPtyExitIds,
         pendingPtyShutdownIds: nextPendingPtyShutdownIds,
         pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,

@@ -59,7 +59,8 @@ const terminalLayoutSnapshotSchema = z.object({
   ptyIdsByLeafId: z.record(z.string(), z.string()).optional(),
   buffersByLeafId: z.record(z.string(), z.string()).optional(),
   scrollbackRefsByLeafId: z.record(z.string(), z.string()).optional(),
-  titlesByLeafId: z.record(z.string(), z.string()).optional()
+  titlesByLeafId: z.record(z.string(), z.string()).optional(),
+  paneIdsByLeafId: z.record(z.string(), z.number()).optional()
 })
 
 // ─── Terminal tab (legacy) ──────────────────────────────────────────

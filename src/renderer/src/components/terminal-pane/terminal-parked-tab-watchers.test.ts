@@ -94,7 +94,7 @@ type MockStoreState = {
 let mockStoreState: MockStoreState
 
 vi.mock('@/store', () => ({
-  useAppStore: { getState: () => mockStoreState }
+  useAppStore: { getState: () => ({ ...mockStoreState, retainRuntimePaneTitlesForTab: vi.fn() }) }
 }))
 
 import {

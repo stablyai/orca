@@ -52,12 +52,32 @@ function omitLeafRecord(
   return Object.keys(next).length > 0 ? next : undefined
 }
 
+function omitLeafNumberRecord(
+  source: Record<string, number> | undefined,
+  leafId: string
+): Record<string, number> | undefined {
+  if (!source || !Object.prototype.hasOwnProperty.call(source, leafId)) {
+    return source
+  }
+  const next = { ...source }
+  delete next[leafId]
+  return Object.keys(next).length > 0 ? next : undefined
+}
+
 function singleLeafRecord(
   source: Record<string, string> | undefined,
   leafId: string
 ): Record<string, string> | undefined {
   const value = source?.[leafId]
   return value ? { [leafId]: value } : undefined
+}
+
+function singleLeafNumberRecord(
+  source: Record<string, number> | undefined,
+  leafId: string
+): Record<string, number> | undefined {
+  const value = source?.[leafId]
+  return value === undefined ? undefined : { [leafId]: value }
 }
 
 export function detachTerminalLayoutLeaf(
@@ -83,6 +103,7 @@ export function detachTerminalLayoutLeaf(
   const buffersByLeafId = omitLeafRecord(layout.buffersByLeafId, leafId)
   const scrollbackRefsByLeafId = omitLeafRecord(layout.scrollbackRefsByLeafId, leafId)
   const titlesByLeafId = omitLeafRecord(layout.titlesByLeafId, leafId)
+  const paneIdsByLeafId = omitLeafNumberRecord(layout.paneIdsByLeafId, leafId)
   const sourceLayout: TerminalLayoutSnapshot = {
     root: removal.node,
     activeLeafId: resolveTerminalLayoutActiveLeafId({
@@ -94,13 +115,15 @@ export function detachTerminalLayoutLeaf(
     ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
     ...(buffersByLeafId ? { buffersByLeafId } : {}),
     ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),
-    ...(titlesByLeafId ? { titlesByLeafId } : {})
+    ...(titlesByLeafId ? { titlesByLeafId } : {}),
+    ...(paneIdsByLeafId ? { paneIdsByLeafId } : {})
   }
 
   const detachedPtyIdsByLeafId = singleLeafRecord(layout.ptyIdsByLeafId, leafId)
   const detachedBuffersByLeafId = singleLeafRecord(layout.buffersByLeafId, leafId)
   const detachedScrollbackRefsByLeafId = singleLeafRecord(layout.scrollbackRefsByLeafId, leafId)
   const detachedTitlesByLeafId = singleLeafRecord(layout.titlesByLeafId, leafId)
+  const detachedPaneIdsByLeafId = singleLeafNumberRecord(layout.paneIdsByLeafId, leafId)
   return {
     sourceLayout,
     detachedLayout: {
@@ -112,7 +135,8 @@ export function detachTerminalLayoutLeaf(
       ...(detachedScrollbackRefsByLeafId
         ? { scrollbackRefsByLeafId: detachedScrollbackRefsByLeafId }
         : {}),
-      ...(detachedTitlesByLeafId ? { titlesByLeafId: detachedTitlesByLeafId } : {})
+      ...(detachedTitlesByLeafId ? { titlesByLeafId: detachedTitlesByLeafId } : {}),
+      ...(detachedPaneIdsByLeafId ? { paneIdsByLeafId: detachedPaneIdsByLeafId } : {})
     },
     ptyId: detachedPtyIdsByLeafId?.[leafId] ?? null
   }

@@ -63,6 +63,24 @@ export function resolveRuntimePaneTitleForLeaf(
   return resolveRuntimePaneTitleLeafResolution(tabLayout, paneTitles, leafId).title
 }
 
+export function resolveRuntimePaneTitleForLayoutLeaf(
+  tabLayout: TerminalLayoutSnapshot | undefined,
+  paneTitles: Record<number, string> | undefined,
+  leafId: string
+): string | null {
+  const paneIdsByLeafId = tabLayout?.paneIdsByLeafId
+  const mappedPaneId = paneIdsByLeafId?.[leafId]
+  if (mappedPaneId != null) {
+    return paneTitles?.[mappedPaneId]?.trim() || null
+  }
+  // Why: once pane ids are bound per leaf, replay-order fallback must not
+  // attribute a closed pane's lone title to an unrelated survivor.
+  if (paneIdsByLeafId && Object.keys(paneIdsByLeafId).length > 0) {
+    return null
+  }
+  return resolveRuntimePaneTitleForLeaf(tabLayout, paneTitles, leafId)
+}
+
 export function resolveRuntimePaneTitleLeafResolution(
   tabLayout: { root?: TerminalLayoutSnapshot['root'] } | undefined,
   paneTitles: Record<number, string> | undefined,

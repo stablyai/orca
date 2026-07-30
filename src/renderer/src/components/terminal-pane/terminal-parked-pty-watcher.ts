@@ -117,6 +117,12 @@ export function collapseParkedExitedLeaf(tabId: string, ptyId: string): void {
     state.clearTabLaunchAgent(tabId)
   }
   state.setTabLayout(tabId, detached.sourceLayout)
+  const survivingPaneIds = new Set(
+    [...(parkedWatchersByTabId.get(tabId)?.paneIdByPtyId.entries() ?? [])]
+      .filter(([candidatePtyId]) => candidatePtyId !== ptyId)
+      .map(([, paneId]) => paneId)
+  )
+  state.retainRuntimePaneTitlesForTab(tabId, survivingPaneIds)
   const activeLeafId = detached.sourceLayout.activeLeafId
   const activePtyId = activeLeafId
     ? detached.sourceLayout.ptyIdsByLeafId?.[activeLeafId]
@@ -126,6 +132,10 @@ export function collapseParkedExitedLeaf(tabId: string, ptyId: string): void {
     : null
   state.updateTabTitle(
     tabId,
-    resolveTabTitleAfterPaneClose(state.runtimePaneTitlesByTabId[tabId] ?? {}, activePaneId)
+    resolveTabTitleAfterPaneClose(
+      state.runtimePaneTitlesByTabId[tabId] ?? {},
+      activePaneId,
+      terminalTab
+    )
   )
 }

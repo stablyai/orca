@@ -224,6 +224,27 @@ describe('buildWorktreeAgentRows', () => {
     expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY_1])
   })
 
+  it('drops hook rows whose pane leaf is no longer in the tab layout', () => {
+    const closedAgentPaneKey = makePaneKey('tab-1', LEAF_ID_1_SECOND)
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [
+        makeEntry(closedAgentPaneKey, 2000, {
+          state: 'working',
+          agentType: 'codex',
+          prompt: 'Codex'
+        })
+      ],
+      retained: [],
+      terminalLayoutsByTabId: {
+        'tab-1': makeSinglePaneLayout(LEAF_ID_1)
+      },
+      now: 3000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
   it('keeps a retained legacy numeric row for a different split pane', () => {
     const liveEntry = makeEntry(PANE_KEY_1, 2000, {
       state: 'working',

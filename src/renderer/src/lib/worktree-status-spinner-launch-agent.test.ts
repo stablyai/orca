@@ -123,7 +123,7 @@ describe('#9040 spinner attribution matches named-provider dot/row agreement', (
 
   it('agrees for a spinner pane title too', () => {
     const tab = { id: 'tab-1', title: 'bash', launchAgent: 'claude' } satisfies Partial<TerminalTab>
-    const paneTitles = { 'tab-1': { 0: '⠙ refactoring the parser' } }
+    const paneTitles = { 'tab-1': { 1: '⠙ refactoring the parser' } }
     const layouts = { 'tab-1': singleLeafLayout() }
 
     expect(

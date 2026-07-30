@@ -2,6 +2,10 @@ import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { formatAgentTypeLabel, isClaudeManagementTitle } from '@/lib/agent-status'
 import { containsBrailleSpinner } from '../../../../shared/agent-title-core'
 import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
+import {
+  resolveRuntimePaneTitleForLayoutLeaf,
+  resolveRuntimePaneTitleLeafIdFromRoot
+} from '@/lib/runtime-pane-title-leaf-id'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import type {
   AgentStatusEntry,
@@ -50,6 +54,7 @@ export function buildTitleDerivedAgentRows(args: {
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
+  suppressedTitleDerivedLeafIdsByTabId?: Record<string, Record<string, true>>
   seenPaneKeys: Set<string>
   now: number
 }): DashboardAgentRow[] {
@@ -63,21 +68,28 @@ export function buildTitleDerivedAgentRows(args: {
       continue
     }
     const layout = terminalLayoutsByTabId[tab.id]
-    const paneTitles = runtimePaneTitlesByTabId[tab.id]
-    const paneTitleEntries =
-      paneTitles && Object.keys(paneTitles).length > 0
-        ? Object.entries(paneTitles).sort(([a], [b]) => Number(a) - Number(b))
-        : []
+    const unfilteredPaneTitles = runtimePaneTitlesByTabId[tab.id]
+    const paneTitles = filterRuntimePaneTitlesToLayoutBindings(unfilteredPaneTitles, layout)
+    const layoutLeafIds = collectLeafIds(layout?.root ?? null)
+    const hasRuntimePaneTitles = paneTitles && Object.keys(paneTitles).length > 0
+    const allowLaunchAgentSpinnerFallback = layoutLeafIds.length <= 1
 
-    if (paneTitleEntries.length > 0) {
-      for (const [paneId, title] of paneTitleEntries) {
-        const leafId = resolveLeafIdForTitleFallback({
-          layout,
-          paneTitleEntries,
-          paneId: Number(paneId),
-          title
-        })
-        if (!leafId) {
+    const ptyIdsByLeafId = layout?.ptyIdsByLeafId
+    const gateTitleDerivedLeafOnLivePty =
+      ptyIdsByLeafId !== undefined && Object.keys(ptyIdsByLeafId).length > 0
+
+    const suppressedLeafIds = args.suppressedTitleDerivedLeafIdsByTabId?.[tab.id]
+
+    if (hasRuntimePaneTitles && layoutLeafIds.length > 0) {
+      for (const leafId of layoutLeafIds) {
+        if (suppressedLeafIds?.[leafId]) {
+          continue
+        }
+        if (gateTitleDerivedLeafOnLivePty && !ptyIdsByLeafId[leafId]) {
+          continue
+        }
+        const title = resolveRuntimePaneTitleForLayoutLeaf(layout, paneTitles, leafId)
+        if (!title) {
           continue
         }
         const row = buildTitleDerivedAgentRow({
@@ -85,6 +97,7 @@ export function buildTitleDerivedAgentRows(args: {
           leafId,
           title,
           now: args.now,
+          allowLaunchAgentSpinnerFallback,
           runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
         })
         if (!row || args.seenPaneKeys.has(row.paneKey)) {
@@ -96,8 +109,32 @@ export function buildTitleDerivedAgentRows(args: {
       continue
     }
 
+    if (hasRuntimePaneTitles) {
+      continue
+    }
+
+    const hadUnfilteredRuntimePaneTitles =
+      unfilteredPaneTitles && Object.keys(unfilteredPaneTitles).length > 0
+    // Why: pane titles existed but none matched a live layout leaf — they belong
+    // to removed split panes. Suppress the tab title fallback so stale agent
+    // output is not re-synthesized.
+    if (hadUnfilteredRuntimePaneTitles) {
+      continue
+    }
+
+    // Why: suppress polluted tab titles (spinner + named agent) when there is no
+    // launchAgent to back the attribution. Bare spinners with a launchAgent pass
+    // through so launchAgent can provide the type.
+    if (
+      !tab.launchAgent &&
+      containsBrailleSpinner(tab.title) &&
+      resolveAgentTypeFromTerminalTitle(tab.title)
+    ) {
+      continue
+    }
+
     const leafId = layout?.activeLeafId ?? collectLeafIds(layout?.root ?? null)[0]
-    if (!leafId) {
+    if (!leafId || suppressedLeafIds?.[leafId]) {
       continue
     }
     const row = buildTitleDerivedAgentRow({
@@ -105,6 +142,7 @@ export function buildTitleDerivedAgentRows(args: {
       leafId,
       title: tab.title,
       now: args.now,
+      allowLaunchAgentSpinnerFallback,
       runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
     })
     if (!row || args.seenPaneKeys.has(row.paneKey)) {
@@ -121,11 +159,47 @@ export function buildTitleDerivedAgentRows(args: {
  * Constructs a dashboard agent row from a terminal tab's title fallback,
  * normalising Pi-compatible agent names to their owner.
  */
+function filterRuntimePaneTitlesToLayoutBindings(
+  paneTitles: Record<number, string> | undefined,
+  layout: TerminalLayoutSnapshot | undefined
+): Record<number, string> | undefined {
+  if (!paneTitles) {
+    return paneTitles
+  }
+  const layoutLeafIds = collectLeafIds(layout?.root ?? null)
+  if (layoutLeafIds.length === 0) {
+    return paneTitles
+  }
+  const liveLeafIds = new Set(layoutLeafIds)
+  const paneIdsByLeafId = layout?.paneIdsByLeafId
+  if (paneIdsByLeafId && Object.keys(paneIdsByLeafId).length > 0) {
+    const livePaneIds = new Set(Object.values(paneIdsByLeafId))
+    const filtered: Record<number, string> = {}
+    for (const [paneId, title] of Object.entries(paneTitles)) {
+      const numericPaneId = Number(paneId)
+      if (livePaneIds.has(numericPaneId)) {
+        filtered[numericPaneId] = title
+      }
+    }
+    return filtered
+  }
+  const filtered: Record<number, string> = {}
+  for (const [paneId, title] of Object.entries(paneTitles)) {
+    const numericPaneId = Number(paneId)
+    const leafId = resolveRuntimePaneTitleLeafIdFromRoot(layout?.root, String(numericPaneId))
+    if (leafId && liveLeafIds.has(leafId)) {
+      filtered[numericPaneId] = title
+    }
+  }
+  return filtered
+}
+
 function buildTitleDerivedAgentRow(args: {
   tab: TerminalTab
   leafId: string
   title: string
   now: number
+  allowLaunchAgentSpinnerFallback: boolean
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
 }): DashboardAgentRow | null {
   const title = normalizeCompatibleAgentTitleForOwner(args.title, args.tab.launchAgent)
@@ -152,7 +226,10 @@ function buildTitleDerivedAgentRow(args: {
   // title alone, so a non-agent title must never become a row. Residual: a split
   // pane whose own title carries a braille glyph is still attributed to launchAgent.
   const agentType =
-    titleAgentType ?? (containsBrailleSpinner(title) ? (args.tab.launchAgent ?? null) : null)
+    titleAgentType ??
+    (args.allowLaunchAgentSpinnerFallback && containsBrailleSpinner(title)
+      ? (args.tab.launchAgent ?? null)
+      : null)
   if (!agentType) {
     return null
   }
@@ -226,28 +303,6 @@ function titleStatusToRowState(
     return 'working'
   }
   return 'idle'
-}
-
-function resolveLeafIdForTitleFallback(args: {
-  layout: TerminalLayoutSnapshot | undefined
-  paneTitleEntries: [string, string][]
-  paneId: number
-  title: string
-}): string | null {
-  const matchingTitleLeafIds = Object.entries(args.layout?.titlesByLeafId ?? {})
-    .filter(([, title]) => title === args.title)
-    .map(([leafId]) => leafId)
-  if (matchingTitleLeafIds.length === 1) {
-    return matchingTitleLeafIds[0]
-  }
-
-  const leafIds = collectLeafIds(args.layout?.root ?? null)
-  if (leafIds.length === 1) {
-    return leafIds[0]
-  }
-
-  const paneIndex = args.paneTitleEntries.findIndex(([paneId]) => Number(paneId) === args.paneId)
-  return paneIndex >= 0 ? (leafIds[paneIndex] ?? null) : null
 }
 
 function collectLeafIds(node: TerminalPaneLayoutNode | null): string[] {
