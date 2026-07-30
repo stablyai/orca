@@ -13,6 +13,7 @@ import { TERMINAL_WRITE_PUMP_JS } from './terminal-webview-write-pump-injected'
 import { TERMINAL_QUERY_REPLY_JS } from './terminal-webview-query-reply-injected'
 import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
 import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-injected'
+import { TERMINAL_WHEEL_SCROLL_JS } from './terminal-webview-wheel-scroll-injected'
 
 const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   background: colors.terminalBg,
@@ -1635,6 +1636,10 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
   // terminal-webview-tap-dispatch-injected.ts (extracted for max-lines).
   ${TERMINAL_TAP_DISPATCH_JS}
 
+  // External mouse / trackpad scroll: see
+  // terminal-webview-wheel-scroll-injected.ts (extracted for max-lines).
+  ${TERMINAL_WHEEL_SCROLL_JS}
+
   btnCopy.addEventListener('click', function(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -1690,6 +1695,8 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     // replacement needs gesture handlers or tab-switch replays stop scrolling.
     targetSurface.addEventListener('mousedown', function(e) { e.preventDefault(); e.stopPropagation(); }, true);
     targetSurface.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); }, true);
+
+    attachSurfaceWheelHandler(targetSurface);
 
     targetSurface.addEventListener('touchstart', function(e) {
       if (dispatcherShouldBlockSurface()) return;

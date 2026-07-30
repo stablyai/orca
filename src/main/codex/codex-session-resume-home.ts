@@ -13,6 +13,15 @@ const ROLLOUT_RELATIVE_PATH = new RegExp(`^${DATED_ROLLOUT_TAIL}$`)
 // Why: case-insensitive because trusted-home matching folds Windows path case too.
 const CODEX_ROLLOUT_LAYOUT_PATH = new RegExp(`(?:^|/)sessions/${DATED_ROLLOUT_TAIL}$`, 'i')
 
+/** `resume` pins CODEX_HOME to the account that owns the rollout. `fresh` means
+ *  provenance could not be verified, so the caller drops the resume argv — an
+ *  unverifiable rollout must never resume under whichever account is selected now.
+ *  `claimedCodexProvenance` gates the user-facing notice: a path that claimed real
+ *  Codex layout is worth reporting, stale cross-agent metadata is not. */
+export type CodexSessionResumePreparation =
+  | { outcome: 'resume'; codexHomePath: string }
+  | { outcome: 'fresh'; claimedCodexProvenance: boolean }
+
 function isCodexRolloutInsideSessionsRoot(sessionsRoot: string, filePath: string): boolean {
   const relativePath = relativePathInsideRoot(sessionsRoot, filePath)
   return Boolean(relativePath && ROLLOUT_RELATIVE_PATH.test(relativePath.replace(/\\/g, '/')))
@@ -91,6 +100,33 @@ export function claimsCodexRolloutLayout(transcriptPath: string | undefined): bo
     return false
   }
   return CODEX_ROLLOUT_LAYOUT_PATH.test(persistedPath.replace(/\\/g, '/'))
+}
+
+/**
+ * Verified provenance, or an explicit fall-back to a fresh session. Never rejects:
+ * the caller drops the resume argv on `fresh`, so a rollout Orca cannot place under a
+ * trusted home resumes nowhere instead of resuming under the selected account (#10793).
+ *
+ * The rescan ranking inputs are required here for the same reason they are required on
+ * findTrustedCodexSessionResume, and are forwarded wholesale so this wrapper cannot drop one.
+ */
+export async function resolveCodexSessionResumeProvenance(args: {
+  sessionId: string
+  transcriptPath: string | undefined
+  trustedCodexHomes: readonly string[]
+  getSelectedAccountCodexHome: () => string | null
+  systemCodexHomePath: string | null
+  sharedRuntimeCodexHomePath: string | null
+  fileIsRegular?: (filePath: string) => boolean
+  listSessionFiles?: (sessionsRoot: string) => AsyncIterable<string>
+}): Promise<
+  | { outcome: 'resume'; homePath: string; transcriptPath: string }
+  | { outcome: 'fresh'; claimedCodexProvenance: boolean }
+> {
+  const sessionSource = await findTrustedCodexSessionResume(args)
+  return sessionSource
+    ? { outcome: 'resume', ...sessionSource }
+    : { outcome: 'fresh', claimedCodexProvenance: claimsCodexRolloutLayout(args.transcriptPath) }
 }
 
 /**

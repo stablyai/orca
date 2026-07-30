@@ -1,15 +1,15 @@
-import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import {
-  buildAgentDraftLaunchPlan,
-  buildAgentStartupPlan,
-  type AgentStartupPlan
-} from '@/lib/tui-agent-startup'
+import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
-import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
-import { deliverLaunchPromptToAgentTab } from '@/lib/agent-launch-prompt-delivery'
+import { tuiAgentToAgentKind } from '@/lib/telemetry'
+import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
+import {
+  deliverLaunchPromptToAgentTab,
+  seedNativeChatLaunchDraftForAgentTab
+} from '@/lib/agent-launch-prompt-delivery'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -26,7 +26,6 @@ import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
-import { translate } from '@/i18n/i18n'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
@@ -124,63 +123,13 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
-  // argv/flag agents fold the prompt into the launch command; followup/generated launches deliver it via post-launch paste.
-  let startupPlan: AgentStartupPlan | null = null
-  let pasteDraftAfterLaunch: string | null = null
-  let submitPastedPrompt = false
+  const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = planLaunchAgentStartupPrompt({
+    base: startupPlanBase,
+    prompt: trimmedPrompt,
+    promptDelivery,
+    isFollowupPath
+  })
   let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
-
-  if (hasPrompt && promptDelivery === 'submit-after-ready') {
-    // Why: multi-line generated prompts are too large for a shell argv, so launch clean then paste+submit in the TUI.
-    startupPlan = buildAgentStartupPlan({
-      ...startupPlanBase,
-      prompt: '',
-      allowEmptyPromptLaunch: true
-    })
-    pasteDraftAfterLaunch = trimmedPrompt
-    submitPastedPrompt = true
-  } else if (hasPrompt && promptDelivery === 'draft') {
-    const draftLaunchPlan = buildAgentDraftLaunchPlan({
-      ...startupPlanBase,
-      draft: trimmedPrompt
-    })
-    if (draftLaunchPlan) {
-      startupPlan = {
-        agent: draftLaunchPlan.agent,
-        launchCommand: draftLaunchPlan.launchCommand,
-        expectedProcess: draftLaunchPlan.expectedProcess,
-        followupPrompt: null,
-        launchConfig: draftLaunchPlan.launchConfig,
-        ...(draftLaunchPlan.sessionOptions
-          ? { sessionOptions: draftLaunchPlan.sessionOptions }
-          : {}),
-        ...(draftLaunchPlan.startupCommandDelivery
-          ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
-          : {}),
-        ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
-      }
-    } else {
-      startupPlan = buildAgentStartupPlan({
-        ...startupPlanBase,
-        prompt: '',
-        allowEmptyPromptLaunch: true
-      })
-      pasteDraftAfterLaunch = trimmedPrompt
-    }
-  } else if (hasPrompt && isFollowupPath) {
-    startupPlan = buildAgentStartupPlan({
-      ...startupPlanBase,
-      prompt: '',
-      allowEmptyPromptLaunch: true
-    })
-    pasteDraftAfterLaunch = trimmedPrompt
-  } else {
-    startupPlan = buildAgentStartupPlan({
-      ...startupPlanBase,
-      prompt: hasPrompt ? trimmedPrompt : '',
-      allowEmptyPromptLaunch: !hasPrompt
-    })
-  }
 
   if (!startupPlan) {
     return null
@@ -192,6 +141,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   const initialViewModeProps = initialAgentTabViewModeProps(store.settings, {
     agent,
     promptDelivery: viewModePromptDelivery,
+    launchDraftText: trimmedPrompt,
     nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
       getConnectionIdFromState(store, worktreeId)
     )
@@ -259,41 +209,25 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   })
   // Why: fire-and-forget the paste-after-ready delivery so callers keep the synchronous { tabId, startupPlan } signature.
   // Why: safe to call unconditionally — the helper short-circuits (no paste) for native-prefill agents already holding the draft.
+  if (hasPrompt && promptDelivery === 'draft' && pasteDraftAfterLaunch === null) {
+    // Why: the draft rode in on argv (Claude --prefill etc.), so no paste runs
+    // and deliverLaunchPromptToAgentTab never seeds. Mirror it into chat here.
+    seedNativeChatLaunchDraftForAgentTab({ tabId: tab.id, agent, text: trimmedPrompt })
+  }
   if (pasteDraftAfterLaunch !== null) {
-    // Why: onTimeout surfaces silent paste failures — a stalled readiness wait would otherwise drop notes silently.
-    let failureNotified = false
+    const timeoutNotice = createPasteReadinessTimeoutNotice({
+      worktreeId,
+      tabId: tab.id,
+      agent,
+      submitted: submitPastedPrompt
+    })
     const deliveryPromise = deliverLaunchPromptToAgentTab({
       tabId: tab.id,
       content: pasteDraftAfterLaunch,
       agent,
       submit: submitPastedPrompt,
       forcePaste: promptDelivery === 'submit-after-ready',
-      onTimeout: () => {
-        const state = useAppStore.getState()
-        const tabsForWorktree = state.tabsByWorktree[worktreeId] ?? []
-        const currentTab = tabsForWorktree.find((t) => t.id === tab.id)
-        if (currentTab?.ptyId === null) {
-          // Why: PTY never spawned = genuine launch failure; stay silent so the caller emits the sole notice.
-          return
-        }
-        if (!currentTab || state.activeWorktreeId !== worktreeId) {
-          // Why: user cancelled (closed tab / switched worktrees); mark notified so the deferred caller suppresses its toast too.
-          failureNotified = true
-          return
-        }
-        toast.message(
-          translate(
-            'auto.lib.launch.agent.in.new.tab.a5a1f7033f',
-            "Your {{value0}} wasn't sent — paste it once the agent is ready.",
-            { value0: submitPastedPrompt ? 'prompt' : 'notes' }
-          )
-        )
-        failureNotified = true
-        track('agent_error', {
-          error_class: 'paste_readiness_timeout',
-          agent_kind: tuiAgentToAgentKind(agent)
-        })
-      }
+      onTimeout: timeoutNotice.onTimeout
     }).then((delivered) => {
       if (delivered) {
         if (agent === 'command-code' && submitPastedPrompt) {
@@ -303,7 +237,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         }
         onPromptDelivered?.()
       }
-      return { delivered, failureNotified: !delivered && failureNotified }
+      return { delivered, failureNotified: !delivered && timeoutNotice.wasNotified() }
     })
     if (promptDelivery === 'submit-after-ready') {
       promptDeliveryResult = deliveryPromise

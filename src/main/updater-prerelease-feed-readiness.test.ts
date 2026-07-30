@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { publishingIncident } from './updater-prerelease-feed-reproduction.fixture'
 
 const { netFetchMock } = vi.hoisted(() => ({
   netFetchMock: vi.fn()
@@ -35,20 +36,35 @@ function isPlatformManifestRequest(url: string): boolean {
 function respondWithAtom(
   tags: string[],
   missingManifestTags: string[] = [],
-  missingAssetTags: string[] = []
+  missingAssetTags: string[] = [],
+  unavailableManifestTags: string[] = [],
+  missingManifestStatus = 404
 ): void {
   const missingManifests = new Set(missingManifestTags)
   const missingAssets = new Set(missingAssetTags)
+  const unavailableManifests = new Set(unavailableManifestTags)
   netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
     if (url === 'https://github.com/stablyai/orca/releases.atom') {
-      return Promise.resolve({ ok: true, text: () => Promise.resolve(buildAtomFeed(tags)) })
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(buildAtomFeed(tags))
+      })
     }
 
     const manifestMatch = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z]+)?\.yml$/)
     if (manifestMatch) {
       const tag = decodeURIComponent(manifestMatch[1])
+      if (unavailableManifests.has(tag)) {
+        return Promise.resolve({
+          ok: false,
+          status: 503,
+          text: () => Promise.resolve('')
+        })
+      }
       return Promise.resolve({
         ok: !missingManifests.has(tag),
+        status: missingManifests.has(tag) ? missingManifestStatus : 200,
         text: () => Promise.resolve(buildManifest(tag))
       })
     }
@@ -57,11 +73,12 @@ function respondWithAtom(
     if (assetMatch && init?.method === 'HEAD') {
       return Promise.resolve({
         ok: !missingAssets.has(decodeURIComponent(assetMatch[1])),
+        status: missingAssets.has(decodeURIComponent(assetMatch[1])) ? 404 : 200,
         text: () => Promise.resolve('')
       })
     }
 
-    return Promise.resolve({ ok: false, text: () => Promise.resolve('') })
+    return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
   })
 }
 
@@ -111,7 +128,72 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
     netFetchMock.mockResolvedValue({ ok: false, text: () => Promise.resolve('') })
     await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 1)).resolves.toEqual({
       tags: [],
-      state: 'unavailable'
+      state: 'unavailable',
+      unavailableReason: 'feed'
+    })
+  })
+
+  it('does not classify a non-positive tag limit as feed unavailability', async () => {
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 0)).resolves.toEqual({
+      tags: [],
+      state: 'no-newer'
+    })
+    expect(netFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('reproduces the v1.4.142 publishing incident as not-ready', async () => {
+    respondWithAtom(
+      publishingIncident.atomTags,
+      [publishingIncident.atomStableTag],
+      [publishingIncident.atomStableTag],
+      [],
+      publishingIncident.missingManifestStatus
+    )
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    expect(
+      await fetchNewerReleaseTagsWithReadiness(publishingIncident.installedVersion, 1, {
+        includePrerelease: false
+      })
+    ).toEqual({
+      tags: [],
+      state: publishingIncident.expectedState
+    })
+  })
+
+  it('reports an unavailable newest manifest instead of pinning an older release', async () => {
+    respondWithAtom(['v1.4.28', 'v1.4.27'], [], [], ['v1.4.28'])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 1)).resolves.toEqual({
+      tags: [],
+      state: 'unavailable',
+      unavailableReason: 'manifest'
+    })
+  })
+
+  it('reports transport failures as unavailable instead of not-ready', async () => {
+    netFetchMock.mockImplementation((url: string) => {
+      if (url === 'https://github.com/stablyai/orca/releases.atom') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(buildAtomFeed(['v1.4.28']))
+        })
+      }
+      return Promise.reject(new Error('ETIMEDOUT'))
+    })
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.27', 1)).resolves.toEqual({
+      tags: [],
+      state: 'unavailable',
+      unavailableReason: 'manifest'
     })
   })
 
@@ -120,6 +202,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
       if (url === 'https://github.com/stablyai/orca/releases.atom') {
         return Promise.resolve({
           ok: true,
+          status: 200,
           text: () => Promise.resolve(buildAtomFeed(['v1.4.28', 'v1.4.27']))
         })
       }
@@ -129,14 +212,15 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
         const version = decodeURIComponent(manifestMatch[1]).replace(/^v/i, '')
         return Promise.resolve({
           ok: true,
+          status: 200,
           text: () =>
             Promise.resolve(
               [
                 `version: ${version}`,
                 'files:',
-                `  - url: Orca-${version}-mac.zip`,
+                '  - url: orca-windows-setup.exe',
                 '    sha512: test',
-                `  - url: Orca-${version}-arm64-mac.zip`,
+                `  - url: Orca-${version}-mac.zip`,
                 '    sha512: test',
                 `path: Orca-${version}-mac.zip`
               ].join('\n')
@@ -145,8 +229,12 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
       }
 
       if (init?.method === 'HEAD') {
+        const latest = url.includes('/v1.4.28/')
+        const unavailable = latest && url.endsWith('/Orca-1.4.28-mac.zip')
+        const missing = latest && url.endsWith('/orca-windows-setup.exe')
         return Promise.resolve({
-          ok: !url.endsWith('/Orca-1.4.28-arm64-mac.zip'),
+          ok: !missing && !unavailable,
+          status: missing ? publishingIncident.missingWindowsAssetStatus : unavailable ? 503 : 200,
           text: () => Promise.resolve('')
         })
       }
@@ -165,12 +253,58 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
     })
   })
 
+  it('treats an explicit asset 404 as not-ready when another asset is unavailable', async () => {
+    netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
+      if (url === 'https://github.com/stablyai/orca/releases.atom') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(buildAtomFeed(['v1.4.28']))
+        })
+      }
+      if (isPlatformManifestRequest(url)) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              [
+                'version: 1.4.28',
+                'files:',
+                '  - url: orca-windows-setup.exe',
+                '    sha512: test',
+                '  - url: Orca-1.4.28-mac.zip',
+                '    sha512: test'
+              ].join('\n')
+            )
+        })
+      }
+      if (init?.method === 'HEAD') {
+        const isWindowsAsset = url.endsWith('/orca-windows-setup.exe')
+        return Promise.resolve({
+          ok: false,
+          status: isWindowsAsset ? publishingIncident.missingWindowsAssetStatus : 503,
+          text: () => Promise.resolve('')
+        })
+      }
+      return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
+    })
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 1)).resolves.toEqual({
+      tags: [],
+      state: 'not-ready'
+    })
+  })
+
   it('accepts absolute manifest asset URLs without rewriting them to release asset paths', async () => {
     const assetUrls: string[] = []
     netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
       if (url === 'https://github.com/stablyai/orca/releases.atom') {
         return Promise.resolve({
           ok: true,
+          status: 200,
           text: () => Promise.resolve(buildAtomFeed(['v1.4.27']))
         })
       }
@@ -192,7 +326,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
 
       if (init?.method === 'HEAD') {
         assetUrls.push(url)
-        return Promise.resolve({ ok: true, text: () => Promise.resolve('') })
+        return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('') })
       }
 
       return Promise.resolve({ ok: false, text: () => Promise.resolve('') })
@@ -214,18 +348,26 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
       }
 
       if (url.includes('/releases/download/v1.4.28/')) {
-        return Promise.resolve({ ok: true, text: () => Promise.resolve('files:\n  - url: [') })
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve('files:\n  - url: [')
+        })
       }
 
       if (url.includes('/releases/download/v1.4.27/') && isPlatformManifestRequest(url)) {
-        return Promise.resolve({ ok: true, text: () => Promise.resolve(buildManifest('v1.4.27')) })
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(buildManifest('v1.4.27'))
+        })
       }
 
       if (init?.method === 'HEAD') {
-        return Promise.resolve({ ok: true, text: () => Promise.resolve('') })
+        return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('') })
       }
 
-      return Promise.resolve({ ok: false, text: () => Promise.resolve('') })
+      return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
     })
 
     const { fetchNewerReleaseTag, fetchNewerReleaseTagsWithReadiness } =

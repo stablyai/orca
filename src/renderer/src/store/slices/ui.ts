@@ -101,9 +101,13 @@ import {
   normalizeWorkspaceStatuses
 } from '../../../../shared/workspace-statuses'
 import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
+import { clampCombinedDiffFileTreeWidth } from '../../../../shared/combined-diff-file-tree-width'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
-import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
+import {
+  isSettingsNavigationTarget,
+  type SettingsNavigationTarget
+} from '@/lib/settings-navigation-types'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   getSetupScriptPromptDismissalKey,
@@ -739,12 +743,7 @@ export type UISlice = {
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
   closeSettingsPage: () => void
-  settingsNavigationTarget: {
-    pane: SettingsNavTarget
-    repoId: string | null
-    sectionId?: string
-    intent?: 'add-quick-command' | 'add-remote-orca-server' | 'add-ssh-host'
-  } | null
+  settingsNavigationTarget: SettingsNavigationTarget | null
   openSettingsTarget: (target: NonNullable<UISlice['settingsNavigationTarget']>) => void
   clearSettingsTarget: () => void
   /** Which host the Projects Settings pane shows per project (keyed by projectId). Ephemeral on purpose — never persisted, so reload reopens on the effective host. */
@@ -1502,7 +1501,15 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       return { activeView: previousView }
     }),
   settingsNavigationTarget: null,
-  openSettingsTarget: (target) => set({ settingsNavigationTarget: target }),
+  openSettingsTarget: (target) => {
+    if (!isSettingsNavigationTarget(target)) {
+      if (import.meta.env.DEV) {
+        throw new TypeError('openSettingsTarget received an invalid navigation target')
+      }
+      return
+    }
+    set({ settingsNavigationTarget: target })
+  },
   clearSettingsTarget: () => set({ settingsNavigationTarget: null }),
   settingsProjectHostSelection: {},
   settingsProjectSetupSelection: {},
@@ -2416,6 +2423,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           undefined,
           s.markdownTocPanelWidth
         ),
+        combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
+          ui.combinedDiffFileTreeWidth,
+          undefined,
+          s.combinedDiffFileTreeWidth
+        ),
         rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
         rightSidebarTab: rightSidebarRoute.rightSidebarTab,
         rightSidebarExplorerView: rightSidebarRoute.rightSidebarExplorerView,
@@ -2579,6 +2591,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         'activeNudgeId' in s.updateStatus ? (s.updateStatus.activeNudgeId ?? null) : null
       // Why: persist dismissal so relaunch doesn't immediately re-show the same card until a newer release.
       void window.api.ui.set({ dismissedUpdateVersion }).catch(console.error)
+      // Why: main can't otherwise tell an offered update was abandoned, which keeps a local-build session pinned and stalls background checks.
+      void window.api.updater.dismissAvailableUpdate().catch(console.error)
       // Why: only consume the nudge campaign for cards from a nudge cycle, not ordinary dismissals.
       if (activeNudgeId) {
         void window.api.updater.dismissNudge().catch(console.error)

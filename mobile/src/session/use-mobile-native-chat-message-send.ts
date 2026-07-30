@@ -109,6 +109,8 @@ export function useMobileNativeChatMessageSend(args: {
           client,
           terminal,
           text,
+          // A second clear would wipe an image pasted by the caller.
+          clearInputFirst: !images?.length,
           deadline,
           ...(deviceTokenRef.current
             ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }

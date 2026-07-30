@@ -69,7 +69,8 @@ function makeConnection(): SshConnection {
   }
   return {
     canRunConcurrentExecCommands: vi.fn().mockReturnValue(true),
-    exec: vi.fn().mockResolvedValue(channel)
+    exec: vi.fn().mockResolvedValue(channel),
+    writeFile: vi.fn().mockResolvedValue(undefined)
   } as unknown as SshConnection
 }
 

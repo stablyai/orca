@@ -1,80 +1,52 @@
 import { expect, vi } from 'vitest'
 
-const { execFileMock, operationFiles, mkdtempMock, rmMock, writeFileMock } = vi.hoisted(() => {
-  const files = new Map<string, string>()
-  return {
-    execFileMock: vi.fn(),
-    operationFiles: files,
-    mkdtempMock: vi.fn(async (prefix: string) => `${prefix}${files.size}`),
-    rmMock: vi.fn(async () => undefined),
-    writeFileMock: vi.fn(async (filePath: string, data: string | Buffer) => {
-      files.set(filePath, Buffer.isBuffer(data) ? data.toString('utf8') : data)
-    })
-  }
-})
-
-vi.mock('child_process', () => ({
-  execFile: execFileMock
+const { executeSupervisedDesktopProviderMock } = vi.hoisted(() => ({
+  executeSupervisedDesktopProviderMock: vi.fn()
 }))
 
-vi.mock('fs/promises', () => ({
-  mkdtemp: mkdtempMock,
-  rm: rmMock,
-  writeFile: writeFileMock
+vi.mock('./computer-provider-supervisor-client', () => ({
+  executeSupervisedDesktopProvider: executeSupervisedDesktopProviderMock
 }))
 
 export async function createDesktopScriptProviderClient(
-  platform: 'linux' | 'windows',
-  executablePath: string
+  _platform: 'linux' | 'windows',
+  _executablePath: string
 ) {
   const { DesktopScriptProviderClient } = await import('./desktop-script-provider-client')
-  return new DesktopScriptProviderClient(platform, executablePath)
+  return new DesktopScriptProviderClient()
 }
 
 export function resetDesktopScriptProviderTestHarness(): void {
   vi.useRealTimers()
-  execFileMock.mockReset()
-  operationFiles.clear()
-  mkdtempMock.mockClear()
-  rmMock.mockClear()
-  writeFileMock.mockClear()
-}
-
-export function mockDesktopProviderSubprocessThatIgnoresTimeout({
-  kill,
-  once
-}: {
-  kill: (signal: string) => void
-  once: () => void
-}): void {
-  execFileMock.mockImplementationOnce(() => ({ kill, once }) as never)
-}
-
-export function expectDesktopProviderSubprocessStarted(): void {
-  expect(execFileMock).toHaveBeenCalled()
+  executeSupervisedDesktopProviderMock.mockReset()
 }
 
 export function expectDesktopProviderSubprocessStartCount(count: number): void {
-  expect(execFileMock).toHaveBeenCalledTimes(count)
+  expect(executeSupervisedDesktopProviderMock).toHaveBeenCalledTimes(count)
+}
+
+export function mockBridgeExecutionError(message: string): void {
+  executeSupervisedDesktopProviderMock.mockResolvedValueOnce({
+    stdout: '',
+    stderr: message,
+    error: { message, killed: false }
+  })
 }
 
 export function mockBridgeResponse(
   response: unknown,
   inspectOperation?: (operation: Record<string, unknown>) => void
 ): void {
-  execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
-    const operationPath = _args?.at(-1)
-    if (inspectOperation && typeof operationPath === 'string') {
-      const operation = operationFiles.get(operationPath)
-      if (!operation) {
-        throw new Error(`Missing mocked operation file: ${operationPath}`)
+  executeSupervisedDesktopProviderMock.mockImplementationOnce(
+    async (operation: Record<string, unknown>) => {
+      inspectOperation?.(operation)
+      return {
+        stdout: JSON.stringify(response),
+        stderr: '',
+        error: null
       }
-      inspectOperation(JSON.parse(operation) as Record<string, unknown>)
     }
-    const done = callback as (error: Error | null, stdout: string, stderr: string) => void
-    done(null, JSON.stringify(response), '')
-    return null as never
-  })
+  )
 }
 
 export function sampleBridgeSnapshot(name: string, value: string) {

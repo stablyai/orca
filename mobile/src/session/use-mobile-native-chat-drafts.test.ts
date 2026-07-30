@@ -2,29 +2,10 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { assistantTextMessage, userTextMessage } from './native-chat-message-fixtures'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts>
-
-function userTextMessage(id: string, text: string): NativeChatMessage {
-  return {
-    id,
-    role: 'user',
-    blocks: [{ type: 'text', text }],
-    timestamp: null,
-    source: 'transcript'
-  }
-}
-
-function assistantTextMessage(id: string, text: string): NativeChatMessage {
-  return {
-    id,
-    role: 'assistant',
-    blocks: [{ type: 'text', text }],
-    timestamp: null,
-    source: 'transcript'
-  }
-}
 
 describe('useMobileNativeChatDrafts', () => {
   let renderer: ReactTestRenderer | null = null
@@ -43,18 +24,27 @@ describe('useMobileNativeChatDrafts', () => {
   function Harness({
     tabId,
     sessionId = `session-${tabId}`,
-    messages = []
+    messages = [],
+    launchDraft = null,
+    chatActive = true,
+    transcriptLoading = false
   }: {
     tabId: string
     sessionId?: string | null
     messages?: NativeChatMessage[]
+    launchDraft?: string | null
+    chatActive?: boolean
+    transcriptLoading?: boolean
   }): null {
     state = useMobileNativeChatDrafts({
       hostId: 'host',
       worktreeId: 'worktree',
       tabId,
       sessionId,
-      messages
+      messages,
+      launchDraft,
+      chatActive,
+      transcriptLoading
     })
     return null
   }

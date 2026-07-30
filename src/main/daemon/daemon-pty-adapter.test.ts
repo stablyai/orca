@@ -16,10 +16,12 @@ import { HeadlessEmulator } from './headless-emulator'
 import { getHistorySessionDirName } from './history-paths'
 import type { HistoryReader } from './history-reader'
 import type { SubprocessHandle } from './session'
+import type { PendingOutputRecord } from './types'
 import type { DaemonFileLog } from './daemon-file-log'
 import type * as DaemonHealthModule from './daemon-health'
 import { getDaemonSocketPath } from './daemon-spawner'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
+import { TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS } from './terminal-history-seed-chunks'
 
 const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
   getMacDaemonSystemResolverHealthMock: vi.fn(async () => 'unknown')
@@ -765,6 +767,177 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
   })
 
+  describe('mode 2031 fact compatibility (#9993)', () => {
+    let onEventSpy: ReturnType<typeof vi.spyOn>
+    // Why these tests exist: daemons survive app updates, so a NEW desktop can be
+    // driving a PRESERVED older daemon. Those daemons emit '2031-subscribe' but have
+    // no unsubscribe fact at all. For a gate-managed pane the renderer never sees the
+    // bytes, so main's facts are the only thing that can retire the subscription —
+    // trusting a subscribe that can never be retracted leaves it live forever, and the
+    // next theme flip injects CSI 997 into whatever shell replaced the exited TUI.
+    function captureForwardedFacts(target: DaemonPtyAdapter): {
+      kinds: () => string[]
+      emit: (fact: { kind: string }) => void
+    } {
+      const forwarded: string[] = []
+      target.onBackgroundStreamEvent((payload) => {
+        if (payload.kind === 'transientFact') {
+          forwarded.push((payload.fact as { kind: string }).kind)
+        }
+      })
+      const listeners: ((event: unknown) => void)[] = []
+      onEventSpy = vi.spyOn(DaemonClient.prototype, 'onEvent').mockImplementation((listener) => {
+        listeners.push(listener)
+        return () => {}
+      })
+      return {
+        kinds: () => forwarded,
+        emit: (fact) => {
+          expect(listeners.length).toBeGreaterThan(0)
+          for (const listener of listeners) {
+            // `type: 'event'` is the envelope the routing switch requires.
+            listener({
+              type: 'event',
+              event: 'transientFact',
+              sessionId: 'session-1',
+              payload: fact
+            })
+          }
+        }
+      }
+    }
+
+    it('drops a pre-v29 daemon 2031-subscribe it could never retract', () => {
+      // v28 is the version shipping today, so this is the live upgrade hazard: a v28
+      // daemon preserved across an app update, still holding real sessions.
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+      try {
+        const captured = captureForwardedFacts(legacy)
+        // Force a fresh wire-up so the spy above is the listener the adapter installs.
+        legacy['removeEventListener'] = null
+        legacy['setupEventRouting']()
+        captured.emit({ kind: '2031-subscribe' })
+        captured.emit({ kind: 'bell' })
+
+        // The unretractable subscribe is withheld; unrelated facts still flow, so the
+        // gate is narrow rather than "ignore this daemon's facts".
+        expect(captured.kinds()).toEqual(['bell'])
+      } finally {
+        legacy.dispose()
+        onEventSpy.mockRestore()
+      }
+    })
+
+    it('never delegates scan authority to a v28 daemon, so a hidden withdrawal is still seen', () => {
+      // The scenario the fact filter alone does NOT cover, and the reason the gate sits
+      // on backgrounding: while the pane is VISIBLE, main's own scanner registers the
+      // 2031 subscribe (bytes transit main either way). Only backgrounding hands scan
+      // authority to the daemon. If a v28 daemon were allowed to take it, the TUI could
+      // exit while hidden with no party able to emit the withdrawal — #9993 via upgrade.
+      const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+      try {
+        legacy.setPtyBackgrounded('v28-session', true)
+        expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
+          sessionId: 'v28-session',
+          background: false
+        })
+      } finally {
+        legacy.dispose()
+        notifySpy.mockRestore()
+      }
+    })
+
+    it('delegates scan authority to a v29 daemon, which can retract', () => {
+      const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
+      try {
+        current.setPtyBackgrounded('v29-session', true)
+        expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
+          sessionId: 'v29-session',
+          background: true
+        })
+      } finally {
+        current.dispose()
+        notifySpy.mockRestore()
+      }
+    })
+
+    it('forwards a provisional subscribe with the foreground handoff marker', () => {
+      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
+      const forwarded: unknown[] = []
+      current.onBackgroundStreamEvent((payload) => forwarded.push(payload))
+      const listeners: ((event: unknown) => void)[] = []
+      onEventSpy = vi.spyOn(DaemonClient.prototype, 'onEvent').mockImplementation((listener) => {
+        listeners.push(listener)
+        return () => {}
+      })
+      try {
+        current['removeEventListener'] = null
+        current['setupEventRouting']()
+        for (const listener of listeners) {
+          listener({
+            type: 'event',
+            event: 'sessionBackgroundMarker',
+            sessionId: 'session-1',
+            payload: {
+              background: false,
+              scanSeedAnsi: '\x1b[?',
+              mode2031PendingSubscribe: true
+            }
+          })
+        }
+
+        expect(forwarded).toEqual([
+          {
+            id: 'session-1',
+            kind: 'backgroundMarker',
+            background: false,
+            scanSeedAnsi: '\x1b[?',
+            mode2031PendingSubscribe: true
+          }
+        ])
+      } finally {
+        current.dispose()
+        onEventSpy.mockRestore()
+      }
+    })
+
+    it('forwards a v28 unsubscribe, which can only retire state main registered', () => {
+      // Asymmetric on purpose: an unretractable subscribe is the hazard, a withdrawal
+      // never is. A stale relay tracker on a preserved daemon must still be able to
+      // clear a subscription rather than be silenced into stranding it.
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+      try {
+        const captured = captureForwardedFacts(legacy)
+        legacy['removeEventListener'] = null
+        legacy['setupEventRouting']()
+        captured.emit({ kind: '2031-unsubscribe' })
+
+        expect(captured.kinds()).toEqual(['2031-unsubscribe'])
+      } finally {
+        legacy.dispose()
+        onEventSpy.mockRestore()
+      }
+    })
+
+    it('forwards 2031 facts from a v29 daemon that can retract them', () => {
+      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
+      try {
+        const captured = captureForwardedFacts(current)
+        current['removeEventListener'] = null
+        current['setupEventRouting']()
+        captured.emit({ kind: '2031-subscribe' })
+        captured.emit({ kind: '2031-unsubscribe' })
+
+        expect(captured.kinds()).toEqual(['2031-subscribe', '2031-unsubscribe'])
+      } finally {
+        current.dispose()
+        onEventSpy.mockRestore()
+      }
+    })
+  })
+
   describe('background stream thinning compatibility', () => {
     it('reports authoritative snapshot support only for protocol v20 and newer', () => {
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 19 })
@@ -828,6 +1001,111 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         )
       } finally {
         legacy.dispose()
+        notifySpy.mockRestore()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
+    })
+
+    it.each([
+      { protocolVersion: 28, clearsHint: true },
+      { protocolVersion: 29, clearsHint: false }
+    ])(
+      'uses protocol v$protocolVersion background authority before spawn',
+      async ({ protocolVersion, clearsHint }) => {
+        const ensureConnectedSpy = vi
+          .spyOn(DaemonClient.prototype, 'ensureConnected')
+          .mockResolvedValue()
+        const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
+          isNew: true,
+          pid: null,
+          shellState: 'unsupported',
+          snapshot: null
+        } as never)
+        const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+        const target = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion })
+        const sessionId = `spawn-v${protocolVersion}-session`
+        try {
+          await target.spawn({ sessionId, cols: 80, rows: 24 })
+
+          if (clearsHint) {
+            expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
+              sessionId,
+              background: false
+            })
+            expect(notifySpy.mock.invocationCallOrder[0]).toBeLessThan(
+              requestSpy.mock.invocationCallOrder[0]
+            )
+          } else {
+            expect(notifySpy).not.toHaveBeenCalledWith(
+              'setSessionBackground',
+              expect.objectContaining({ sessionId })
+            )
+          }
+        } finally {
+          target.dispose()
+          notifySpy.mockRestore()
+          requestSpy.mockRestore()
+          ensureConnectedSpy.mockRestore()
+        }
+      }
+    )
+
+    it('clears a preserved v28 background hint before attaching, so scan authority comes home', async () => {
+      // The gate on setPtyBackgrounded only binds THIS process. Daemons outlive the desktop:
+      // a v28 that a previous desktop backgrounded is still scanning when a new desktop
+      // attaches, and this process never called setPtyBackgrounded for it — so without the
+      // pre-attach clear the daemon keeps authority it can never retract (#9993).
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
+        isNew: false,
+        pid: 4242,
+        shellState: 'unsupported',
+        snapshot: null
+      } as never)
+      const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+      try {
+        await legacy.attach('preserved-v28-session')
+
+        expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
+          sessionId: 'preserved-v28-session',
+          background: false
+        })
+        expect(notifySpy.mock.invocationCallOrder[0]).toBeLessThan(
+          requestSpy.mock.invocationCallOrder[0]
+        )
+      } finally {
+        legacy.dispose()
+        notifySpy.mockRestore()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
+    })
+
+    it('leaves a v29 background hint alone on attach, because it can retract on its own', async () => {
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
+        isNew: false,
+        pid: 4242,
+        shellState: 'unsupported',
+        snapshot: null
+      } as never)
+      const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
+      try {
+        await current.attach('preserved-v29-session')
+
+        expect(notifySpy).not.toHaveBeenCalledWith(
+          'setSessionBackground',
+          expect.objectContaining({ sessionId: 'preserved-v29-session' })
+        )
+      } finally {
+        current.dispose()
         notifySpy.mockRestore()
         requestSpy.mockRestore()
         ensureConnectedSpy.mockRestore()
@@ -899,6 +1177,30 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(lastSubprocess.resize).not.toHaveBeenCalledWith(80, 24)
       const applied = await adapter.getAppliedSize(id)
       expect(applied?.cols).not.toBe(80)
+    })
+  })
+
+  describe('probePtyLiveness', () => {
+    it('reads daemon truth before a fresh adapter has attached the session', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const activeSessionIds = (adapter as unknown as { activeSessionIds: Set<string> })
+        .activeSessionIds
+      activeSessionIds.clear()
+
+      expect(adapter.hasPty(id)).toBe(false)
+      await expect(adapter.probePtyLiveness(id)).resolves.toBe(true)
+      await expect(adapter.probePtyLiveness('missing-session')).resolves.toBe(false)
+    })
+
+    it('returns unknown when the daemon cannot answer', async () => {
+      const client = (
+        adapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      vi.spyOn(client, 'request').mockRejectedValueOnce(new Error('unavailable'))
+
+      await expect(adapter.probePtyLiveness('session')).resolves.toBeNull()
     })
   })
 
@@ -1548,7 +1850,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           snapshot: null
         }
       })
-      const checkpoint = vi.fn(async () => {})
+      const checkpoint = vi.fn(async () => 'committed' as const)
       const appendIncrements = vi.fn(async () => 'ok' as const)
       const dispose = vi.fn(async () => {})
       const disconnect = vi.fn()
@@ -1604,11 +1906,18 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       function makeCooldownHarness(takeResult: {
         overflowed: boolean
         appendResult?: 'ok' | 'needs-checkpoint'
+        checkpointResult?: 'committed' | 'retryable' | 'unavailable'
+        snapshotRecords?: PendingOutputRecord[]
       }): CooldownInternals {
         historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
         const request = vi.fn(async (_type: string, payload: Record<string, unknown>) => {
           if (payload.includeSnapshot === true) {
-            return { records: [], seq: 2, overflowed: false, snapshot: { cols: 80, rows: 24 } }
+            return {
+              records: takeResult.snapshotRecords ?? [],
+              seq: 2,
+              overflowed: false,
+              snapshot: { cols: 80, rows: 24 }
+            }
           }
           return {
             records: [{ kind: 'output', data: 'x' }],
@@ -1620,7 +1929,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         const internals = historyAdapter as unknown as CooldownInternals
         internals.client = { request, disconnect: vi.fn() }
         internals.historyManager = {
-          checkpoint: vi.fn(async () => {}),
+          checkpoint: vi.fn(async () => takeResult.checkpointResult ?? 'committed'),
           appendIncrements: vi.fn(async () => takeResult.appendResult ?? 'ok'),
           dispose: vi.fn(async () => {})
         }
@@ -1681,6 +1990,26 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         await expect(internals.checkpointSessions(['capped'])).resolves.toEqual(new Set(['capped']))
         expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
         expect(internals.sessionsNeedingFullCheckpoint.has('capped')).toBe(false)
+      })
+
+      it('defers a teardown checkpoint that fails to serialize and drops its held tail', async () => {
+        const internals = makeCooldownHarness({
+          overflowed: false,
+          checkpointResult: 'retryable',
+          // Held shell-ready bytes ride out with the teardown snapshot (Session.prepareForFinalSnapshot).
+          snapshotRecords: [{ kind: 'output', data: 'held tail' }]
+        })
+
+        await expect(
+          internals.checkpointSessions(['sleeping'], { final: true, teardown: true })
+        ).resolves.toEqual(new Set())
+
+        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
+        expect(internals.sessionsNeedingFullCheckpoint.has('sleeping')).toBe(true)
+        // Why the tail must not be appended: the output this take drained went into the failed snapshot, so the tail
+        // would land at a contiguous seq over that hole and pass the log's gap detection.
+        expect(internals.historyManager.appendIncrements).not.toHaveBeenCalled()
+        expect(internals.lastFullCheckpointAt.has('sleeping')).toBe(false)
       })
     })
 
@@ -1951,6 +2280,146 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         cols: 120,
         rows: 40
       })
+    })
+
+    it('uploads a large cold-restore seed in bounded protocol chunks', async () => {
+      const sessionId = 'chunked-cold-restore'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      const snapshotAnsi = `${'x'.repeat(TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS + 1)}\r\nCHUNKED-SEED-MARKER`
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/chunked',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-07-25T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(
+        join(sessionDir, 'checkpoint.json'),
+        JSON.stringify({
+          snapshotAnsi,
+          scrollbackAnsi: '',
+          rehydrateSequences: '',
+          cwd: '/projects/chunked',
+          cols: 80,
+          rows: 24,
+          modes: {
+            bracketedPaste: false,
+            mouseTracking: false,
+            applicationCursor: false,
+            alternateScreen: false
+          },
+          scrollbackLines: 0,
+          generation: 0,
+          checkpointedAt: '2026-07-25T10:00:00Z'
+        })
+      )
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const client = (
+        historyAdapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      const requestSpy = vi.spyOn(client, 'request')
+
+      const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+
+      expect(result.coldRestore?.scrollback).toContain('CHUNKED-SEED-MARKER')
+      expect(requestSpy.mock.calls.map(([type]) => type)).toEqual(
+        expect.arrayContaining([
+          'startHistorySeedTransfer',
+          'appendHistorySeedTransfer',
+          'finishHistorySeedTransfer',
+          'createOrAttach'
+        ])
+      )
+      const createPayload = requestSpy.mock.calls.find(([type]) => type === 'createOrAttach')?.[1]
+      expect(createPayload).toMatchObject({
+        historySeedTransferId: expect.any(String)
+      })
+      expect(createPayload).not.toHaveProperty('historySeed')
+      await expect(historyAdapter.getBufferSnapshot(sessionId)).resolves.toMatchObject({
+        data: expect.stringContaining('CHUNKED-SEED-MARKER')
+      })
+    })
+
+    it('keeps large recovery renderer-only with a preserved legacy daemon', async () => {
+      await server.shutdown()
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        protocolVersion: 29,
+        spawnSubprocess: (opts) => {
+          lastSpawnOpts = opts
+          lastSubprocess = createMockSubprocess()
+          return lastSubprocess
+        }
+      })
+      await server.start()
+      const sessionId = 'legacy-large-cold-restore'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      const checkpointPath = join(sessionDir, 'checkpoint.json')
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/legacy',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-07-25T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(
+        checkpointPath,
+        JSON.stringify({
+          snapshotAnsi: `${'x'.repeat(TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS + 1)}LEGACY-MARKER`,
+          scrollbackAnsi: '',
+          rehydrateSequences: '',
+          cwd: '/projects/legacy',
+          cols: 80,
+          rows: 24,
+          modes: {
+            bracketedPaste: false,
+            mouseTracking: false,
+            applicationCursor: false,
+            alternateScreen: false
+          },
+          scrollbackLines: 0,
+          generation: 0,
+          checkpointedAt: '2026-07-25T10:00:00Z'
+        })
+      )
+      historyAdapter = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        protocolVersion: 29,
+        historyPath: historyDir
+      })
+      const client = (
+        historyAdapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      const requestSpy = vi.spyOn(client, 'request')
+
+      const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+
+      expect(result.coldRestore?.scrollback).toContain('LEGACY-MARKER')
+      expect(requestSpy.mock.calls.map(([type]) => type)).not.toContain('startHistorySeedTransfer')
+      const createPayload = requestSpy.mock.calls.find(([type]) => type === 'createOrAttach')?.[1]
+      expect(createPayload).not.toHaveProperty('historySeed')
+      expect(createPayload).not.toHaveProperty('historySeedTransferId')
+      expect(existsSync(checkpointPath)).toBe(true)
+      const managerInternals = historyAdapter.getHistoryManager()! as unknown as {
+        writers: Map<string, unknown>
+      }
+      expect(managerInternals.writers.has(sessionId)).toBe(false)
     })
 
     it('repairs legacy hostname UNC cwd for WSL spawn and cold-restore metadata', async () => {

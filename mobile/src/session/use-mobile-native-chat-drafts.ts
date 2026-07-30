@@ -3,17 +3,17 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   countUserTextOccurrences,
   findLandedUnconfirmedSends,
-  reconcilePendingMessages,
   type UnconfirmedSend
 } from './mobile-native-chat-draft-reconcile'
 import {
-  NO_PENDING_MESSAGES,
   UNCONFIRMED_SEND_DEADLINE_MS,
   type MobileNativeChatPendingMessage,
   type MobileNativeChatSendOrigin
 } from './mobile-native-chat-draft-contract'
 import { isDraftRev, useMobileNativeChatDraftMutations } from './mobile-native-chat-draft-state'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import { useMobileNativeChatLaunchDraft } from './use-mobile-native-chat-launch-draft'
+import { useMobileNativeChatPendingMessages } from './use-mobile-native-chat-pending-messages'
 
 export type { MobileNativeChatPendingMessage } from './mobile-native-chat-draft-contract'
 
@@ -23,6 +23,15 @@ export function useMobileNativeChatDrafts(args: {
   tabId: string | null
   sessionId: string | null
   messages: readonly NativeChatMessage[]
+  /** Host-provided launch context still parked as an unsent TUI-input draft. */
+  launchDraft?: string | null
+  /** Whether the tab is currently resolved to the chat view. Off-chat the
+   *  launch-draft effects hold their state instead of acting on it. */
+  chatActive?: boolean
+  /** `messages` is not yet this session's real history (read in flight, or the
+   *  transcript still belongs to the previously active tab), so it cannot be
+   *  trusted to decline or retire the seed. */
+  transcriptLoading?: boolean
 }): {
   composerText: string
   setComposerText: Dispatch<SetStateAction<string>>
@@ -39,15 +48,20 @@ export function useMobileNativeChatDrafts(args: {
     onUnconfirmed: () => void
   ) => void
 } {
-  const { hostId, worktreeId, tabId, sessionId, messages } = args
+  const {
+    hostId,
+    worktreeId,
+    tabId,
+    sessionId,
+    messages,
+    launchDraft,
+    chatActive = true,
+    transcriptLoading
+  } = args
   const draftKey = mobileNativeChatScopeKey(hostId, worktreeId, tabId)
   const pendingKey = draftKey && sessionId ? `${draftKey}\0${sessionId}` : null
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const draftsRef = useRef<Record<string, string>>({})
-  const [pendingBySession, setPendingBySession] = useState<
-    Record<string, MobileNativeChatPendingMessage[]>
-  >({})
-  const pendingCounterRef = useRef(0)
   const draftEditRevisionsRef = useRef<Record<string, number>>({})
   const messagesRef = useRef(messages)
   messagesRef.current = messages
@@ -69,6 +83,15 @@ export function useMobileNativeChatDrafts(args: {
     },
     []
   )
+
+  useMobileNativeChatLaunchDraft({
+    chatActive,
+    draftKey,
+    launchDraft,
+    messages,
+    transcriptLoading,
+    updateDrafts
+  })
 
   const setComposerText: Dispatch<SetStateAction<string>> = useCallback(
     (value) => {
@@ -112,46 +135,7 @@ export function useMobileNativeChatDrafts(args: {
     draftEditRevisionsRef
   )
 
-  const acceptSend = useCallback(
-    (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => {
-      // Why: the first prompt can be sent before the provider reports a session
-      // id; wait for an id before keying an optimistic echo.
-      if (!origin.pendingKey) {
-        return
-      }
-      const pendingKey = origin.pendingKey
-      pendingCounterRef.current += 1
-      setPendingBySession((previous) => {
-        const current = previous[pendingKey] ?? NO_PENDING_MESSAGES
-        const earlierOutstanding = current.filter(
-          (pending) =>
-            pending.text.trim() === origin.normalizedText &&
-            pending.expectedOccurrence > origin.baselineOccurrences
-        ).length
-        // An empty-text send reconciles by image-echo ordinal: every outstanding
-        // send's ridden-along images echo as `[Image: source: …]` turns after
-        // this send's baseline tail, ahead of this send's own echo.
-        const expectedImageEchoOrdinal =
-          current.reduce(
-            (sum, pending) =>
-              sum + (pending.images?.length ?? (pending.text.trim() === '' ? 1 : 0)),
-            0
-          ) + Math.max(1, images?.length ?? 0)
-        const pending: MobileNativeChatPendingMessage = {
-          id: `pending-${pendingCounterRef.current}`,
-          text,
-          expectedOccurrence:
-            origin.normalizedText === ''
-              ? expectedImageEchoOrdinal
-              : origin.baselineOccurrences + earlierOutstanding + 1,
-          baselineTailMessageId: origin.baselineTailMessageId,
-          ...(images && images.length > 0 ? { images } : {})
-        }
-        return { ...previous, [pendingKey]: [...current, pending] }
-      })
-    },
-    []
-  )
+  const { acceptSend, pending } = useMobileNativeChatPendingMessages(pendingKey, messages)
 
   // Why: a relay drop mid-send loses only the ack in the common case — the
   // desktop already delivered the message. Hold the send instead of claiming
@@ -290,28 +274,6 @@ export function useMobileNativeChatDrafts(args: {
       unconfirmedRef.current = []
     }
   }, [])
-
-  const pending = pendingKey
-    ? (pendingBySession[pendingKey] ?? NO_PENDING_MESSAGES)
-    : NO_PENDING_MESSAGES
-  useEffect(() => {
-    if (!pendingKey || pending.length === 0) {
-      return
-    }
-    setPendingBySession((previous) => {
-      const current = previous[pendingKey] ?? []
-      const next = reconcilePendingMessages(messages, current)
-      if (next === current) {
-        return previous
-      }
-      if (next.length > 0) {
-        return { ...previous, [pendingKey]: next }
-      }
-      const remaining = { ...previous }
-      delete remaining[pendingKey]
-      return remaining
-    })
-  }, [messages, pending, pendingKey])
 
   return {
     composerText: draftKey ? (drafts[draftKey] ?? '') : '',

@@ -33,6 +33,7 @@ import {
   foldClaudeBackgroundTasksIntoRoster,
   idleClaudeTeammateByName,
   readClaudeBackgroundAgentTasks,
+  reapRestoredClaudeSubagentsWithoutLiveAgent,
   stopClaudeSubagent,
   upsertWorkingClaudeSubagent,
   type ClaudeSubagentRoster
@@ -45,6 +46,12 @@ import {
   upsertCodexSubagent,
   type CodexSubagentRoster
 } from './codex-subagent-roster'
+import {
+  createCodexSubagentTranscriptState,
+  hasTrackedCodexTranscriptSubagents,
+  reconcileCodexSubagentTranscript,
+  type CodexSubagentTranscriptState
+} from './codex-subagent-transcript'
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from './agent-hook-relay'
 import {
@@ -111,6 +118,8 @@ export type HookListenerState = {
   claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
   /** Live thread-spawn children per Codex pane. */
   codexSubagentRosterByPaneKey: Map<string, CodexSubagentRoster>
+  /** Incremental parent/child rollout cursors for Codex collaboration v2. */
+  codexSubagentTranscriptByPaneKey: Map<string, CodexSubagentTranscriptState>
   /** Root Codex state/model, kept separate from child hook traffic. */
   codexLeadStateByPaneKey: Map<string, CodexLeadTurnState>
 }
@@ -141,6 +150,7 @@ export function createHookListenerState(): HookListenerState {
     claudeSubagentRosterByPaneKey: new Map(),
     claudeLeadStateByPaneKey: new Map(),
     codexSubagentRosterByPaneKey: new Map(),
+    codexSubagentTranscriptByPaneKey: new Map(),
     codexLeadStateByPaneKey: new Map()
   }
 }
@@ -154,6 +164,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
   state.claudeLeadStateByPaneKey.delete(paneKey)
   state.codexSubagentRosterByPaneKey.delete(paneKey)
+  state.codexSubagentTranscriptByPaneKey.delete(paneKey)
   state.codexLeadStateByPaneKey.delete(paneKey)
 }
 
@@ -197,6 +208,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.codexSubagentTranscriptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexLeadStateByPaneKey, fromPaneKey, toPaneKey)
 }
 
@@ -238,6 +250,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.claudeSubagentRosterByPaneKey.clear()
   state.claudeLeadStateByPaneKey.clear()
   state.codexSubagentRosterByPaneKey.clear()
+  state.codexSubagentTranscriptByPaneKey.clear()
   state.codexLeadStateByPaneKey.clear()
 }
 
@@ -2266,6 +2279,7 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
   switch (source) {
     case 'claude':
     // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit is its new-turn boundary too.
+    // falls through
     case 'kimi':
       return eventName === 'UserPromptSubmit'
     case 'codex':
@@ -2359,6 +2373,7 @@ function extractToolFields(
   switch (source) {
     case 'claude':
     // Why: Kimi Code uses Claude's tool_name/tool_input payload fields verbatim.
+    // falls through
     case 'kimi':
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
@@ -2469,9 +2484,30 @@ export function seedClaudeSubagentRosterFromSnapshots(
       agentType: snapshot.agentType,
       description: snapshot.description,
       // Why: the seed can be a phantom (child finished while Orca was down, SubagentStop lost); let a PRESENT background_tasks list omitting the id remove it, not gate the pane 'working' forever.
-      backgroundTasksAuthoritative: true
+      backgroundTasksAuthoritative: true,
+      // Why: an idle parent never emits that list, so the inventory reap alone can strand the seed; mark it for the liveness reap below.
+      restoredFromSnapshot: true
     })
   }
+}
+
+/** Reap this pane's unconfirmed restored seeds because no live agent process backs
+ *  the pane any more (its PTY died while Orca was down, so no finish hook could
+ *  arrive). Callers must have proven the pane is LOCAL-launched — a remote/SSH
+ *  agent runs on the far host and can never appear in a local process index.
+ *  Returns whether the roster changed. */
+export function reapRestoredClaudeSubagentsForDeadPane(
+  state: HookListenerState,
+  paneKey: string
+): boolean {
+  const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+  if (!roster || !reapRestoredClaudeSubagentsWithoutLiveAgent(roster)) {
+    return false
+  }
+  if (roster.size === 0) {
+    state.claudeSubagentRosterByPaneKey.delete(paneKey)
+  }
+  return true
 }
 
 /** Drop a child-owned waiting state when the child stops/idles, restoring the displaced lead state; without a stash, fall back to 'working' (a transient spinner beats a permanently stuck card). */
@@ -3096,6 +3132,22 @@ function getOrCreateCodexSubagentRoster(
   return roster
 }
 
+function getOrCreateCodexSubagentTranscriptState(
+  state: HookListenerState,
+  paneKey: string
+): CodexSubagentTranscriptState {
+  let transcriptState = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+  if (!transcriptState) {
+    transcriptState = createCodexSubagentTranscriptState()
+    state.codexSubagentTranscriptByPaneKey.set(paneKey, transcriptState)
+  }
+  return transcriptState
+}
+
+export function hasCodexTranscriptSubagents(state: HookListenerState, paneKey: string): boolean {
+  return hasTrackedCodexTranscriptSubagents(state.codexSubagentTranscriptByPaneKey.get(paneKey))
+}
+
 export function seedCodexStateFromSnapshot(
   state: HookListenerState,
   paneKey: string,
@@ -3176,7 +3228,7 @@ export function reconcileRemoteCodexState(
     }
   } else {
     const leadState = codexLeadStateForHookEvent(eventName)
-    if (eventName === 'SessionStart' || eventName === 'Stop') {
+    if (eventName === 'SessionStart' || (eventName === 'Stop' && !payload.subagents)) {
       roster.clear()
     }
     if (leadState) {
@@ -3323,7 +3375,17 @@ function normalizeCodexEvent(
   if (eventName === 'SessionStart') {
     // Why: a pane can host a new Codex process after the old one exited without child Stop hooks.
     state.codexSubagentRosterByPaneKey.delete(paneKey)
-  } else if (eventName === 'Stop') {
+    state.codexSubagentTranscriptByPaneKey.delete(paneKey)
+  }
+  const transcriptPath = readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
+  if (transcriptPath) {
+    reconcileCodexSubagentTranscript(
+      getOrCreateCodexSubagentTranscriptState(state, paneKey),
+      getOrCreateCodexSubagentRoster(state, paneKey),
+      transcriptPath
+    )
+  }
+  if (eventName === 'Stop' && !hasCodexTranscriptSubagents(state, paneKey)) {
     // Why: Codex CLI 0.144 can omit child Stop hooks; later child activity safely recreates any agent still running.
     state.codexSubagentRosterByPaneKey.delete(paneKey)
   }

@@ -290,6 +290,28 @@ class BrowserSessionRegistry {
     })
   }
 
+  // Why: a degraded import still rewrites the live session, so an older staged DB must stop replaying over it.
+  clearPendingCookieImport(partition: string): void {
+    const meta = this.loadPersistedMeta()
+    if (!(partition in meta.pendingCookieImports)) {
+      return
+    }
+    const pendingCookieImports = { ...meta.pendingCookieImports }
+    const stagedPath = pendingCookieImports[partition]
+    delete pendingCookieImports[partition]
+    this.persistMeta({
+      pendingCookieImports,
+      pendingCookieDbPath: pendingCookieImports[this.defaultPartition] ?? null
+    })
+    for (const suffix of ['', '-wal', '-shm']) {
+      try {
+        unlinkSync(stagedPath + suffix)
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
+
   persistUserAgent(partition: string, userAgent: string | null): void {
     const meta = this.loadPersistedMeta()
     const userAgentByPartition = { ...meta.userAgentByPartition }

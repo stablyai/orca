@@ -10,6 +10,10 @@ import {
 } from './useComposerState'
 
 const HOOK_SOURCE = readFileSync(join(__dirname, 'useComposerState.ts'), 'utf8')
+const RECIPE_OPTIONS_SOURCE = readFileSync(
+  join(__dirname, 'useEphemeralVmRecipeOptions.ts'),
+  'utf8'
+)
 
 function sourceBetween(source: string, startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -644,6 +648,22 @@ describe('useComposerState host-context boundaries', () => {
     expect(quickSubmit).not.toContain('platform: CLIENT_PLATFORM')
   })
 
+  // Why: activation no longer rebuilds a startup from `createdWithAgent`, so this
+  // caller's own `startup` is the only thing that launches the agent it planned.
+  it('passes its own startup to activation when submit planned an agent', () => {
+    const activation = sourceBetween(
+      HOOK_SOURCE,
+      'const activation = activateAndRevealWorktree(worktree.id, {',
+      'if (startupPlan) {'
+    )
+
+    expect(activation).toContain('...(startupPlan && !backendSpawnedStartup')
+    expect(activation).toContain('command: startupPlan.launchCommand')
+    expect(activation).toContain('launchAgent: tuiAgent')
+    // The removed activation-time fallback must not come back through this caller.
+    expect(HOOK_SOURCE).not.toContain('buildCreatedAgentReopenStartup')
+  })
+
   it('prepares linked quick-create drafts for the selected default agent', () => {
     const quickSubmit = sourceBetween(
       HOOK_SOURCE,
@@ -704,8 +724,12 @@ describe('useComposerState host-context boundaries', () => {
       'const selectedRepoConnectionId'
     )
     expect(recipeLoadSection).toContain('settings?.experimentalEphemeralVms === true')
-    expect(recipeLoadSection).toContain('!ephemeralVmsEnabled')
-    expect(recipeLoadSection).toContain('window.api.ephemeralVm')
+    expect(recipeLoadSection).toContain('useEphemeralVmRecipeOptions')
+    expect(recipeLoadSection).toContain('enabled: ephemeralVmsEnabled')
+    expect(RECIPE_OPTIONS_SOURCE).toContain('args.enabled &&')
+    expect(RECIPE_OPTIONS_SOURCE).toContain('window.api.ephemeralVm')
+    expect(RECIPE_OPTIONS_SOURCE).toContain('window.api.plugins.onChanged')
+    expect(RECIPE_OPTIONS_SOURCE).toContain('requestGeneration')
 
     const submitSection = sourceBetween(
       HOOK_SOURCE,

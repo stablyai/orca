@@ -10,6 +10,7 @@ import type {
 } from '../providers/types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import { probePtyOwners } from './daemon-pty-liveness-probe'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -106,6 +107,10 @@ export class DaemonPtyRouter implements IPtyProvider {
       return routed.hasPty(id)
     }
     return this.current.hasPty(id) || this.legacy.some((adapter) => adapter.hasPty(id))
+  }
+
+  async probePtyLiveness(id: string): Promise<boolean | null> {
+    return await probePtyOwners(id, this.sessionAdapters.get(id), this.allAdapters())
   }
 
   write(id: string, data: string): void {

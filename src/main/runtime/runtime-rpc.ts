@@ -6,6 +6,11 @@ import { join } from 'node:path'
 import type { RuntimeMetadata, RuntimeTransportMetadata } from '../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { writeRuntimeMetadata } from './runtime-metadata'
+import {
+  RUNTIME_METADATA_OWNERSHIP_POLL_MS,
+  watchRuntimeMetadataOwnership,
+  type RuntimeMetadataOwnershipWatch
+} from './runtime-metadata-ownership-watch'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { errorResponse } from './rpc/errors'
@@ -57,6 +62,8 @@ type OrcaRuntimeRpcServerOptions = {
   // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
   keepaliveIntervalMs?: number
   longPollCap?: number
+  // Why: test-only override for the ownership reclaim cadence.
+  metadataOwnershipPollMs?: number
 }
 
 export type PairingOfferUnavailableReason =
@@ -450,6 +457,7 @@ export class OrcaRuntimeRpcServer {
   private readonly authToken = randomBytes(24).toString('hex')
   private readonly keepaliveIntervalMs: number
   private readonly longPollCap: number
+  private readonly metadataOwnershipPollMs: number
   private readonly askLongPollCap: number
   private readonly relayRevokeOutbox: RelayRevokeOutbox
   private deviceRegistry: DeviceRegistry | null = null
@@ -458,6 +466,7 @@ export class OrcaRuntimeRpcServer {
   private tlsFingerprint: string | null = null
   private activeTransports: RpcTransport[] = []
   private transports: RuntimeTransportMetadata[] = []
+  private metadataOwnershipWatch: RuntimeMetadataOwnershipWatch | null = null
   private mobileSocketWiring: MobileSocketWiring | null = null
   private mobileRelayPairingProvider: MobileRelayPairingProvider | null = null
   private onUnpairedDeviceAuthFailure: (() => void) | null = null
@@ -485,7 +494,8 @@ export class OrcaRuntimeRpcServer {
     preferPinnedWsPort = false,
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
-    longPollCap = LONG_POLL_CAP
+    longPollCap = LONG_POLL_CAP,
+    metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS
   }: OrcaRuntimeRpcServerOptions) {
     this.runtime = runtime
     this.dispatcher = new RpcDispatcher({ runtime })
@@ -498,6 +508,7 @@ export class OrcaRuntimeRpcServer {
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
+    this.metadataOwnershipPollMs = metadataOwnershipPollMs
     // Why: derived, not configurable — the reservation must hold for whatever cap a caller picks.
     this.askLongPollCap = Math.max(1, Math.floor(longPollCap * ASK_LONG_POLL_SHARE))
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
@@ -1003,12 +1014,38 @@ export class OrcaRuntimeRpcServer {
       await Promise.all(activeTransports.map((t) => t.stop().catch(() => {}))).catch(() => {})
       throw error
     }
+
+    this.metadataOwnershipWatch = watchRuntimeMetadataOwnership({
+      userDataPath: this.userDataPath,
+      ownedPid: this.pid,
+      ownedRuntimeId: this.runtime.getRuntimeId(),
+      pollIntervalMs: this.metadataOwnershipPollMs,
+      republish: () => {
+        // Why: never advertise endpoints we already tore down.
+        if (this.activeTransports.length === 0) {
+          return
+        }
+        this.writeMetadata()
+      },
+      onReclaim: (previous) => {
+        console.warn(
+          `[runtime] Reclaimed orca-runtime.json from a dead runtime (pid ${previous?.pid ?? 'none'}); republished pid ${this.pid}.`
+        )
+      }
+    })
+  }
+
+  /** Why: test-only seam — runs one ownership check instead of waiting out the poll interval. */
+  checkRuntimeMetadataOwnership(): void {
+    this.metadataOwnershipWatch?.check()
   }
 
   async stop(): Promise<void> {
     const transports = this.activeTransports
     this.activeTransports = []
     this.transports = []
+    this.metadataOwnershipWatch?.stop()
+    this.metadataOwnershipWatch = null
     this.mobileSocketWiring = null
     if (transports.length === 0) {
       return
@@ -1218,6 +1255,7 @@ export class OrcaRuntimeRpcServer {
         pairedDeviceId: device.deviceId,
         // Why: gates the mobile-only payload diet so full-screen web/desktop clients aren't truncated.
         clientKind: device.scope,
+        clientCapabilities: authenticatedSocket?.clientCapabilities,
         pairing: pairingContext,
         signal: abortRegistration?.signal,
         sendBinary,

@@ -105,8 +105,16 @@ vi.mock('./MobilePairingConnectionOptions', () => ({
   )
 }))
 vi.mock('./MobilePairingQrSection', () => ({
-  MobilePairingQrSection: (props: { qrDataUrl: string | null }) => (
-    <span data-testid="qr">{props.qrDataUrl ?? 'none'}</span>
+  MobilePairingQrSection: (props: {
+    qrDataUrl: string | null
+    pairingUrl: string | null
+    qrError: boolean
+  }) => (
+    <div>
+      <span data-testid="qr">{props.qrDataUrl ?? 'none'}</span>
+      <span data-testid="pairing-url">{props.pairingUrl ?? 'none'}</span>
+      <span data-testid="qr-error">{String(props.qrError)}</span>
+    </div>
   )
 }))
 vi.mock('./MobilePairedDevicesSection', () => ({
@@ -222,6 +230,25 @@ describe('MobilePane pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Generate' }))
     await waitFor(() => expect(screen.getByTestId('qr')).toHaveTextContent('base64,qr'))
     expect(screen.queryByTestId('relay-degraded-notice')).not.toBeInTheDocument()
+  })
+
+  it('keeps the copy fallback when QR encoding fails', async () => {
+    getPairingQR.mockResolvedValue({
+      available: true,
+      qrDataUrl: null,
+      qrError: 'encoding_failed',
+      pairingUrl: 'orca://pair?code=copy-fallback',
+      endpoint: 'wss://host.example/large',
+      connectionMode: 'automatic'
+    })
+    const user = userEvent.setup()
+    render(<MobilePane />)
+
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+
+    await waitFor(() => expect(screen.getByTestId('qr-error')).toHaveTextContent('true'))
+    expect(screen.getByTestId('qr')).toHaveTextContent('none')
+    expect(screen.getByTestId('pairing-url')).toHaveTextContent('copy-fallback')
   })
 
   it('persists the chosen path when the mode changes', async () => {

@@ -51,6 +51,16 @@ export function getParkedTerminalWatcherTabIds(): string[] {
   return Array.from(parkedWatchersByTabId.keys())
 }
 
+/**
+ * Whether this tab is parked right now — the reveal remount's own mount effect
+ * runs before the host effect that disposes the watcher (child effects first),
+ * so a pane reading this at connect time can tell a park-reveal from an
+ * in-place reattach. Empty entries are pinned-close tombstones, not live parks.
+ */
+export function isTerminalTabParked(tabId: string): boolean {
+  return (parkedWatchersByTabId.get(tabId)?.disposersByPtyId.size ?? 0) > 0
+}
+
 export function disposeParkedTabWatchers(tabId: string): void {
   const entry = parkedWatchersByTabId.get(tabId)
   if (!entry) {

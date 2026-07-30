@@ -1,9 +1,10 @@
-import { spawn, type ChildProcess } from 'node:child_process'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import type net from 'node:net'
-import { release, tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { release } from 'node:os'
+import {
+  claimSupervisedMacOSProvider,
+  releaseSupervisedMacOSProvider,
+  startSupervisedMacOSProvider
+} from './computer-provider-supervisor-client'
 import { connectMacOSProviderSocket } from './macos-native-provider-socket'
 import { RuntimeClientError } from './runtime-client-error'
 
@@ -11,7 +12,7 @@ const HELPER_CONNECT_TIMEOUT_MS = 10_000
 
 export type StartedMacOSProviderSocket = {
   socket: net.Socket
-  socketDirectory: string
+  sessionId: string
   socketPath: string
   socketToken: string
 }
@@ -64,100 +65,51 @@ export function consumeNativeProviderLines(
 }
 
 export async function startMacOSNativeProviderSocket({
-  helperExecutablePath,
   isCurrent
 }: {
-  helperExecutablePath: string
   isCurrent: (socketPath: string) => boolean
 }): Promise<StartedMacOSProviderSocket> {
-  const socketDirectory = mkdtempSync(join(tmpdir(), 'orca-computer-use-'))
-  chmodSync(socketDirectory, 0o700)
-  const socketPath = join(socketDirectory, 'provider.sock')
-  const socketToken = randomUUID()
-  const socketTokenPath = join(socketDirectory, 'provider.token')
-  writeFileSync(socketTokenPath, socketToken, { encoding: 'utf8', mode: 0o600 })
-  // Why: launching the nested helper via LaunchServices can make TCC evaluate
-  // Orca.app as responsible; the signed helper executable owns this grant.
-  const provider = spawnProvider(helperExecutablePath, socketPath, socketTokenPath)
-  const providerFailure = waitForProviderLaunchFailure(provider)
+  const started = await startSupervisedMacOSProvider()
   const connectAbort = new AbortController()
+  let socket: net.Socket | null = null
   try {
-    const socket = await Promise.race([
-      connectMacOSProviderSocket(socketPath, HELPER_CONNECT_TIMEOUT_MS, connectAbort.signal),
-      providerFailure.promise
+    socket = await Promise.race([
+      connectMacOSProviderSocket(
+        started.socketPath,
+        HELPER_CONNECT_TIMEOUT_MS,
+        connectAbort.signal
+      ),
+      started.termination
     ])
-    providerFailure.cleanup()
-    rmSync(socketTokenPath, { force: true })
-    if (!isCurrent(socketPath)) {
+    if (!isCurrent(started.socketPath)) {
       socket.destroy()
-      cleanupSocketDirectory(socketDirectory)
       throw new RuntimeClientError(
         'accessibility_error',
         'native macOS provider startup was superseded'
       )
     }
-    return { socket, socketDirectory, socketPath, socketToken }
+    await claimSupervisedMacOSProvider(started.sessionId)
+    if (!isCurrent(started.socketPath)) {
+      socket.destroy()
+      throw new RuntimeClientError(
+        'accessibility_error',
+        'native macOS provider startup was superseded'
+      )
+    }
+    return {
+      socket,
+      sessionId: started.sessionId,
+      socketPath: started.socketPath,
+      socketToken: started.socketToken
+    }
   } catch (error) {
     connectAbort.abort()
-    providerFailure.cleanup()
-    // Why: connect failures happen after spawn; terminate the detached helper
-    // so repeated startup attempts do not leave orphan providers.
-    provider.kill('SIGTERM')
-    if (isCurrent(socketPath)) {
-      cleanupSocketDirectory(socketDirectory)
-    }
+    socket?.destroy()
+    await releaseSupervisedMacOSProvider(started.sessionId).catch(() => undefined)
     throw error
   }
 }
 
-function cleanupSocketDirectory(socketDirectory: string): void {
-  rmSync(socketDirectory, { recursive: true, force: true })
-}
-
-function spawnProvider(
-  helperExecutablePath: string,
-  socketPath: string,
-  socketTokenPath: string
-): ChildProcess {
-  const provider = spawn(
-    helperExecutablePath,
-    ['--agent', socketPath, '--token-file', socketTokenPath],
-    { detached: true, stdio: 'ignore' }
-  )
-  provider.unref()
-  return provider
-}
-
-function waitForProviderLaunchFailure(provider: ChildProcess): {
-  promise: Promise<never>
-  cleanup: () => void
-} {
-  let cleanup = (): void => {}
-  const promise = new Promise<never>((_resolve, reject) => {
-    const fail = (error: Error) => {
-      reject(
-        new RuntimeClientError(
-          'accessibility_error',
-          `native macOS helper app failed to start: ${error.message}`
-        )
-      )
-    }
-    const exit = (code: number | null, signal: NodeJS.Signals | null) => {
-      reject(
-        new RuntimeClientError(
-          'accessibility_error',
-          `native macOS helper app exited before connecting: ${
-            typeof code === 'number' ? `code ${code}` : `signal ${signal ?? 'unknown'}`
-          }`
-        )
-      )
-    }
-    provider.once('error', fail)
-    provider.once('exit', exit)
-    cleanup = () => {
-      provider.off('error', fail)
-      provider.off('exit', exit)
-    }
-  })
-  return { promise, cleanup }
+export function releaseMacOSNativeProviderSocketSession(sessionId: string): Promise<void> {
+  return releaseSupervisedMacOSProvider(sessionId)
 }

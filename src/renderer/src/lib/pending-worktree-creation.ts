@@ -87,6 +87,9 @@ export type WorktreeCreationRequest = {
    *  did not already spawn it. Null for blank-shell creates. */
   startupPlan: AgentStartupPlan | null
   quickPrompt: string
+  /** Launch context delivered only as an unsent TUI-input draft (argv prefill or
+   *  startup paste); completion seeds the chat-composer copy from it. */
+  launchDraftPrompt?: string
   quickTelemetry: AgentStartedTelemetry | null
   /** When the composer stays open for sequential creates, completion must not
    *  steal focus from the next workspace name field. */

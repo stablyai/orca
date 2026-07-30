@@ -83,11 +83,19 @@ import { track } from '../telemetry/client'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
+import type {
+  HostRepoCatalogSnapshot,
+  ListReposForExecutionHostArgs
+} from '../../shared/host-repo-catalog-contract'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
-import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-projection'
+import {
+  getProjectHostSetupForRepo,
+  getProjectIdForProviderIdentity
+} from '../../shared/project-host-setup-projection'
 import {
   getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
@@ -101,6 +109,8 @@ import {
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { runWithGitReadCacheInvalidation } from '../git/status'
+import { isAdmissibleDirectSshAuthority } from '../../shared/ssh-retained-payload-admission'
+import { isCurrentSshProviderAuthority } from '../ssh/ssh-provider-authority'
 
 // Why: `method` is the IPC entry point the user took, not what they added (never path/URL/name); repos:create → 'folder_picker'.
 // Why: `isGitRepo` is a non-identifying git-vs-folder signal from the caller's detection; pass undefined when unknown, never default false.
@@ -119,6 +129,102 @@ function emitRepoAdded(method: RepoMethod, alreadyExisted: boolean, isGitRepo?: 
   track('repo_added', props)
 }
 
+function hasValidCatalogSshAuthority(
+  args: ListReposForExecutionHostArgs
+): args is Extract<ListReposForExecutionHostArgs, { expectedAuthority: unknown }> {
+  if (!('expectedAuthority' in args)) {
+    return false
+  }
+  return isAdmissibleDirectSshAuthority(args.expectedAuthority)
+}
+
+function repoHostContradictsConnection(repo: Repo): boolean {
+  if (!repo.executionHostId || !repo.connectionId) {
+    return false
+  }
+  const explicitHost = parseExecutionHostId(repo.executionHostId)
+  return explicitHost?.kind !== 'ssh' || explicitHost.targetId !== repo.connectionId
+}
+
+function getConsistentRepoCatalogForHost(
+  repos: readonly Repo[],
+  host: NonNullable<ReturnType<typeof parseExecutionHostId>>
+): Repo[] | null {
+  const hasContradiction = repos.some(
+    (repo) =>
+      repoHostContradictsConnection(repo) &&
+      (getRepoExecutionHostId(repo) === host.id ||
+        (host.kind === 'ssh' && repo.connectionId === host.targetId))
+  )
+  return hasContradiction ? null : repos.filter((repo) => getRepoExecutionHostId(repo) === host.id)
+}
+
+async function listReposForExecutionHost(
+  store: Store,
+  args: ListReposForExecutionHostArgs
+): Promise<HostRepoCatalogSnapshot> {
+  const parsedHost = parseExecutionHostId(args?.executionHostId)
+  const rejected = (
+    reason: Extract<HostRepoCatalogSnapshot, { authoritative: false }>['reason']
+  ): HostRepoCatalogSnapshot => ({
+    authoritative: false,
+    executionHostId: args.executionHostId,
+    reason
+  })
+  if (!parsedHost || parsedHost.kind === 'runtime') {
+    return rejected('rejected')
+  }
+  if (parsedHost.kind === 'local') {
+    if ('expectedAuthority' in args) {
+      return rejected('rejected')
+    }
+    const repos = getConsistentRepoCatalogForHost(store.getRepos(), parsedHost)
+    if (!repos) {
+      return rejected('rejected')
+    }
+    return {
+      authoritative: true,
+      authority: { kind: 'local', executionHostId: LOCAL_EXECUTION_HOST_ID },
+      repos: structuredClone(repos)
+    }
+  }
+  if (
+    !hasValidCatalogSshAuthority(args) ||
+    args.expectedAuthority.targetId !== parsedHost.targetId
+  ) {
+    return rejected('rejected')
+  }
+  const authority = { ...args.expectedAuthority }
+  if (!isCurrentSshProviderAuthority(authority)) {
+    return rejected('stale')
+  }
+  const provider = getSshGitProvider(parsedHost.targetId)
+  if (!provider) {
+    return rejected('unavailable')
+  }
+  const matchingRepos = getConsistentRepoCatalogForHost(store.getRepos(), parsedHost)
+  if (!matchingRepos) {
+    return rejected('rejected')
+  }
+  const repos = structuredClone(matchingRepos)
+  await Promise.resolve()
+  if (
+    getSshGitProvider(parsedHost.targetId) !== provider ||
+    !isCurrentSshProviderAuthority(authority)
+  ) {
+    return rejected('stale')
+  }
+  return {
+    authoritative: true,
+    authority: {
+      kind: 'direct-ssh',
+      executionHostId: parsedHost.id,
+      ...authority
+    },
+    repos
+  }
+}
+
 function buildProjectHostSetupResult(store: Store, repo: Repo): ProjectHostSetupResult {
   const setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
   const project = store.getProjects().find((entry) => entry.id === setup.projectId)
@@ -132,20 +238,23 @@ function alignRepoWithRequestedProject(
   store: Store,
   repo: Repo,
   projectId: string,
-  setupMethod: ProjectHostSetupExistingFolderArgs['setupMethod'] = 'imported-existing-folder'
+  setupMethod: ProjectHostSetupExistingFolderArgs['setupMethod'] = 'imported-existing-folder',
+  requestedProviderIdentity?: ProjectHostSetupExistingFolderArgs['projectProviderIdentity']
 ): ProjectHostSetupResult {
   let setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
   if (setup.projectId !== projectId) {
     const project = store.getProjects().find((entry) => entry.id === projectId)
-    if (!project?.providerIdentity || project.providerIdentity.provider !== 'github') {
+    // Why: the selected project can exist only on the source host, so its structured identity travels with the request.
+    const identity = project?.providerIdentity ?? requestedProviderIdentity
+    if (!identity || getProjectIdForProviderIdentity(identity) !== projectId) {
       throw new Error('Imported folder does not match the selected project identity.')
     }
     // Why: stamp the selected project's provider identity when the folder lacks upstream, so projection can merge it.
     const updated = store.updateRepo(repo.id, {
       upstream: {
-        owner: project.providerIdentity.owner,
-        repo: project.providerIdentity.repo,
-        ...(project.providerIdentity.host ? { host: project.providerIdentity.host } : {})
+        owner: identity.owner,
+        repo: identity.repo,
+        ...(identity.host ? { host: identity.host } : {})
       }
     })
     if (!updated) {
@@ -698,6 +807,14 @@ const ProjectGroupMoveProjectArgs = z.object({
 
 const ProjectHostSetupExistingFolderIpcArgs = z.object({
   projectId: z.string().min(1),
+  projectProviderIdentity: z
+    .object({
+      provider: z.literal('github'),
+      owner: z.string().min(1),
+      repo: z.string().min(1),
+      host: z.string().min(1).optional()
+    })
+    .optional(),
   hostId: z.string().min(1),
   path: z.string().min(1),
   kind: z.enum(['git', 'folder']).optional(),
@@ -1119,6 +1236,7 @@ async function runNestedRepoScanForIpc(
 export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): void {
   // Remove previously registered handlers so we can re-register on macOS app re-activation (new window).
   ipcMain.removeHandler('repos:list')
+  ipcMain.removeHandler('repos:listForExecutionHost')
   ipcMain.removeHandler('repos:add')
   ipcMain.removeHandler('repos:remove')
   ipcMain.removeHandler('repos:removeForHost')
@@ -1174,6 +1292,12 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     })
     return store.getRepos()
   })
+
+  ipcMain.handle(
+    'repos:listForExecutionHost',
+    (_event, args: ListReposForExecutionHostArgs): Promise<HostRepoCatalogSnapshot> =>
+      listReposForExecutionHost(store, args)
+  )
 
   ipcMain.handle('projects:list', () => {
     enrichMissingRepoGitRemoteIdentities(store, {
@@ -1268,11 +1392,6 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if (!parsedHost) {
         throw new Error(`Unsupported host: ${args.hostId}`)
       }
-      const existingProject = store.getProjects().find((project) => project.id === args.projectId)
-      if (!existingProject) {
-        throw new Error(`Project not found: ${args.projectId}`)
-      }
-
       const result =
         parsedHost.kind === 'local'
           ? await addLocalRepoFromPath(store, args.path, args.kind)
@@ -1290,15 +1409,26 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if ('error' in result) {
         throw new Error(result.error)
       }
+      let aligned: ProjectHostSetupResult
+      try {
+        aligned = alignRepoWithRequestedProject(
+          store,
+          result.repo,
+          args.projectId,
+          args.setupMethod,
+          args.projectProviderIdentity
+        )
+      } catch (err) {
+        // Why: an import that cannot be linked must not leave a new repo registration or authorization root behind.
+        if (!result.alreadyExisted) {
+          store.removeProject(result.repo.id)
+          invalidateAuthorizedRootsCache()
+        }
+        throw err
+      }
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
       emitRepoAdded('folder_picker', result.alreadyExisted)
-      const aligned = alignRepoWithRequestedProject(
-        store,
-        result.repo,
-        args.projectId,
-        args.setupMethod
-      )
       if (result.alreadyExisted) {
         await prepareLocalWorktreeRootForRepo(store, aligned.repo)
       }

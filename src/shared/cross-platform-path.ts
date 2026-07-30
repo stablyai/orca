@@ -70,15 +70,28 @@ export function getRuntimePathBasename(value: string): string {
   return trimmed.split(/[\\/]/).findLast(Boolean) ?? ''
 }
 
-export function isPathInsideOrEqual(rootPath: string, candidatePath: string): boolean {
+/**
+ * Pre-normalizes the root so a fan-out normalizes it once, not once per candidate.
+ *
+ * Why the name says "normalized": candidates must already be run through
+ * `normalizeRuntimePathForComparison`. That function is not idempotent for WSL UNC
+ * paths (`//wsl.localhost/Ubuntu/A` folds to `//wsl/ubuntu/A`, which a second pass
+ * lowercases further), so a raw candidate here would silently fail to match.
+ */
+export function createNormalizedPathInsideOrEqualMatcher(
+  rootPath: string
+): (normalizedCandidate: string) => boolean {
   const root = normalizeRuntimePathForComparison(rootPath)
-  const candidate = normalizeRuntimePathForComparison(candidatePath)
-  if (candidate === root) {
-    return true
-  }
   const rootWithBoundary =
     root === '/' || /^[a-z]:\/$/i.test(root) ? root : `${root.replace(/\/+$/, '')}/`
-  return candidate.startsWith(rootWithBoundary)
+  return (normalizedCandidate) =>
+    normalizedCandidate === root || normalizedCandidate.startsWith(rootWithBoundary)
+}
+
+export function isPathInsideOrEqual(rootPath: string, candidatePath: string): boolean {
+  return createNormalizedPathInsideOrEqualMatcher(rootPath)(
+    normalizeRuntimePathForComparison(candidatePath)
+  )
 }
 
 export function relativePathInsideRoot(rootPath: string, candidatePath: string): string | null {

@@ -1,5 +1,9 @@
 import { computerProviderUnavailableMessage } from './computer-provider-unavailable-message'
 import { currentComputerProvider, shutdownComputerProviders } from './computer-provider-lifecycle'
+import {
+  handleComputerProviderSupervisorMessage,
+  shutdownComputerProviderSupervisorClient
+} from './computer-provider-supervisor-client'
 import { RuntimeClientError } from './runtime-client-error'
 
 type SidecarRequest = {
@@ -20,6 +24,9 @@ process.once('SIGINT', () => {
 process.once('beforeExit', shutdownProviders)
 
 process.on('message', (message: unknown) => {
+  if (handleComputerProviderSupervisorMessage(message)) {
+    return
+  }
   void handleMessage(message)
 })
 
@@ -122,4 +129,5 @@ function errorToResponse(error: unknown): { code: string; message: string } {
 
 function shutdownProviders(): void {
   shutdownComputerProviders()
+  shutdownComputerProviderSupervisorClient()
 }

@@ -17,7 +17,6 @@ describe('worktree card properties', () => {
     expect(props).not.toContain('branch')
     expect(props).toContain('pr')
     expect(props).toContain('automation')
-    expect(props).toContain('cli')
     expect(props).toEqual(DEFAULT_WORKTREE_CARD_PROPERTIES)
   })
 

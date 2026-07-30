@@ -13,7 +13,11 @@ const { prepareEphemeralVmWorkspaceTargetMock } = vi.hoisted(() => ({
 type TestActiveView = 'terminal' | 'tasks'
 
 const store = {
-  settings: { activeRuntimeEnvironmentId: null as string | null },
+  settings: {
+    activeRuntimeEnvironmentId: null as string | null,
+    experimentalNativeChat: undefined as boolean | undefined,
+    openAgentTabsInChatByDefault: undefined as boolean | undefined
+  },
   activeView: 'terminal' as TestActiveView,
   activePendingCreationId: 'creation-1' as string | null,
   repos: [{ id: 'repo-runtime', connectionId: null }],
@@ -39,7 +43,11 @@ const store = {
   setSidebarOpen: vi.fn(),
   createWorktree: vi.fn(() => new Promise(() => {})),
   setupProjectExistingFolder: vi.fn(),
-  refreshRuntimeEnvironmentStatus: vi.fn()
+  refreshRuntimeEnvironmentStatus: vi.fn(),
+  seedNativeChatLaunchDraft: vi.fn(),
+  setTabViewMode: vi.fn(),
+  tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string }[]>,
+  unifiedTabsByWorktree: {}
 }
 
 vi.mock('@/store', () => ({
@@ -57,8 +65,8 @@ vi.mock('@/lib/worktree-activation', () => ({
   ensureWorktreeHasInitialTerminal: vi.fn()
 }))
 
-vi.mock('@/lib/new-workspace-terminal-focus', () => ({
-  queueNewWorkspaceTerminalFocus: vi.fn()
+vi.mock('@/lib/workspace-activation-terminal-focus', () => ({
+  queueWorkspaceActivationTerminalFocus: vi.fn()
 }))
 
 vi.mock('@/lib/new-workspace', () => ({
@@ -80,7 +88,7 @@ import {
   activateAndRevealWorktree,
   ensureWorktreeHasInitialTerminal
 } from '@/lib/worktree-activation'
-import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-focus'
+import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import {
   beginBackgroundWorktreePreparation,
   continueBackgroundWorktreeCreation,
@@ -92,11 +100,15 @@ const FLOW_SOURCE = readFileSync(join(__dirname, 'worktree-creation-flow.ts'), '
 beforeEach(() => {
   vi.clearAllMocks()
   store.settings.activeRuntimeEnvironmentId = null
+  store.settings.experimentalNativeChat = undefined
+  store.settings.openAgentTabsInChatByDefault = undefined
   store.activeView = 'terminal'
   store.activePendingCreationId = 'creation-1'
   store.repos = []
   store.pendingWorktreeCreations = { 'creation-1': makePendingCreation(makeRequest()) }
   store.createWorktree.mockImplementation(() => new Promise(() => {}))
+  store.tabsByWorktree = {}
+  store.unifiedTabsByWorktree = {}
   vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('tab-1')
 })
 
@@ -498,7 +510,7 @@ describe('staged background worktree creation', () => {
       undefined,
       { activateCreatedTabs: false }
     )
-    expect(queueNewWorkspaceTerminalFocus).not.toHaveBeenCalled()
+    expect(queueWorkspaceActivationTerminalFocus).not.toHaveBeenCalled()
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
       cleanupVm: false
     })
@@ -622,6 +634,204 @@ describe('staged background worktree creation', () => {
       expect(activateAndRevealWorktree).toHaveBeenCalledWith(
         'wt-1',
         expect.objectContaining({ issueCommand: { command: 'gh issue view 42' } })
+      )
+    )
+    expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
+  })
+
+  it('seeds the chat-composer launch draft on completion for draft launches', async () => {
+    store.activeView = 'terminal'
+    store.activePendingCreationId = 'creation-1'
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' }
+    })
+    vi.mocked(activateAndRevealWorktree).mockReturnValueOnce({ primaryTabId: 'tab-1' })
+
+    const started = continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({
+        agent: 'claude',
+        startupPlan: {
+          agent: 'claude',
+          launchCommand: 'claude --prefill x',
+          expectedProcess: 'claude',
+          followupPrompt: null,
+          launchConfig: { agentArgs: '', agentEnv: {} }
+        },
+        launchDraftPrompt: 'https://github.com/o/r/issues/12'
+      })
+    )
+
+    expect(started).toBe(true)
+    await vi.waitFor(() =>
+      expect(store.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
+        tabId: 'tab-1',
+        agent: 'claude',
+        text: 'https://github.com/o/r/issues/12',
+        createdAt: expect.any(Number)
+      })
+    )
+  })
+
+  it('seeds the backend-spawned agent tab, not the worktree default terminal tab', async () => {
+    // Repo default tabs ("dev server", "logs", …) make activation's primaryTabId
+    // a tab that runs no agent; main's startup terminal is the agent's own tab.
+    store.activeView = 'terminal'
+    store.activePendingCreationId = 'creation-1'
+    store.tabsByWorktree = { 'wt-1': [{ id: 'dev-server' }, { id: 'agent-tab' }] }
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' },
+      startupTerminal: { tabId: 'agent-tab', spawned: true }
+    })
+    vi.mocked(activateAndRevealWorktree).mockReturnValueOnce({ primaryTabId: 'dev-server' })
+
+    continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({
+        agent: 'claude',
+        startupPlan: {
+          agent: 'claude',
+          launchCommand: 'claude --prefill x',
+          expectedProcess: 'claude',
+          followupPrompt: null,
+          launchConfig: { agentArgs: '', agentEnv: {} }
+        },
+        launchDraftPrompt: 'https://github.com/o/r/issues/12'
+      })
+    )
+
+    await vi.waitFor(() => expect(store.seedNativeChatLaunchDraft).toHaveBeenCalled())
+    expect(store.seedNativeChatLaunchDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'agent-tab' })
+    )
+  })
+
+  it.each([
+    ['mirrorable local Grok', 'grok', 'https://github.com/o/r/issues/12', 'chat'],
+    ['multi-line Claude', 'claude', 'note\nhttps://github.com/o/r/issues/12', 'terminal']
+  ] as const)('passes %s draft mode to backend startup', async (_label, agent, draft, viewMode) => {
+    store.settings.experimentalNativeChat = true
+    store.settings.openAgentTabsInChatByDefault = true
+    store.repos = [{ id: 'repo-1', connectionId: null }]
+    continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({
+        agent,
+        startup: { command: `${agent} --prefill x`, launchAgent: agent },
+        startupPlan: {
+          agent,
+          launchCommand: `${agent} --prefill x`,
+          expectedProcess: agent,
+          followupPrompt: null,
+          launchConfig: { agentArgs: '', agentEnv: {} }
+        },
+        launchDraftPrompt: draft
+      })
+    )
+
+    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalled())
+    const createCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
+    expect(createCall?.[16]).toEqual({
+      command: `${agent} --prefill x`,
+      launchAgent: agent,
+      viewMode
+    })
+  })
+
+  it('carries launchDraftText into activation for an argv-prefill launch', async () => {
+    // Why: the draft rides inside `launchCommand` here, so the plan sets no
+    // draftPrompt — without launchDraftText the initial view-mode decision
+    // never sees a draft and opens chat on an unmirrorable one.
+    store.activeView = 'terminal'
+    store.activePendingCreationId = 'creation-1'
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' }
+    })
+    vi.mocked(activateAndRevealWorktree).mockReturnValueOnce({ primaryTabId: 'tab-1' })
+
+    continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({
+        agent: 'claude',
+        startupPlan: {
+          agent: 'claude',
+          launchCommand: "claude --prefill 'https://github.com/o/r/issues/12'",
+          expectedProcess: 'claude',
+          followupPrompt: null,
+          launchConfig: { agentArgs: '', agentEnv: {} }
+        },
+        launchDraftPrompt: 'https://github.com/o/r/issues/12'
+      })
+    )
+
+    await vi.waitFor(() => expect(activateAndRevealWorktree).toHaveBeenCalled())
+    const startup = vi.mocked(activateAndRevealWorktree).mock.calls[0]?.[1]?.startup
+    expect(startup?.draftPrompt).toBeUndefined()
+    expect(startup?.launchDraftText).toBe('https://github.com/o/r/issues/12')
+  })
+
+  it('does not seed a launch draft without draft launch context', async () => {
+    store.activeView = 'terminal'
+    store.activePendingCreationId = 'creation-1'
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' }
+    })
+    vi.mocked(activateAndRevealWorktree).mockReturnValueOnce({ primaryTabId: 'tab-1' })
+
+    continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({
+        agent: 'claude',
+        startupPlan: {
+          agent: 'claude',
+          launchCommand: 'claude',
+          expectedProcess: 'claude',
+          followupPrompt: null,
+          launchConfig: { agentArgs: '', agentEnv: {} }
+        }
+      })
+    )
+
+    await vi.waitFor(() => expect(activateAndRevealWorktree).toHaveBeenCalled())
+    expect(store.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
+  })
+
+  // Why: activation no longer rebuilds a startup from `createdWithAgent`, so this
+  // caller's own `startup` is the only thing that launches the agent it created.
+  it('passes its own startup to activation when the create requested an agent', async () => {
+    store.activeView = 'terminal'
+    store.activePendingCreationId = 'creation-1'
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-1', repoId: 'repo-1' }
+    })
+    vi.mocked(activateAndRevealWorktree).mockReturnValueOnce({ primaryTabId: 'tab-1' })
+
+    const started = continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({
+        agent: 'codex',
+        startupPlan: {
+          agent: 'codex',
+          launchCommand: 'codex',
+          expectedProcess: 'codex',
+          followupPrompt: null,
+          launchConfig: { agent: 'codex', command: 'codex' },
+          draftPrompt: 'ship it'
+        } as never
+      })
+    )
+
+    expect(started).toBe(true)
+    await vi.waitFor(() =>
+      expect(activateAndRevealWorktree).toHaveBeenCalledWith(
+        'wt-1',
+        expect.objectContaining({
+          startup: expect.objectContaining({
+            command: 'codex',
+            launchAgent: 'codex',
+            draftPrompt: 'ship it'
+          })
+        })
       )
     )
     expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()

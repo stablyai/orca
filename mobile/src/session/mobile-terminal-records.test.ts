@@ -87,6 +87,29 @@ describe('mobile terminal records', () => {
     ).toEqual([])
   })
 
+  it('treats a launch draft appearing or retracting as a session-tab change', () => {
+    // The route keeps `prev` when these compare equal, so a frame whose only
+    // delta is the draft would never reach the chat composer.
+    const base: MobileTerminalSessionTab = {
+      type: 'terminal',
+      id: 'term-1::leaf-1',
+      parentTabId: 'term-1',
+      leafId: 'leaf-1',
+      title: 'Claude',
+      status: 'ready',
+      terminal: 'pty-1',
+      isActive: true
+    }
+    const seeded: MobileTerminalSessionTab = {
+      ...base,
+      launchDraft: 'https://github.com/o/r/issues/12'
+    }
+
+    expect(mobileSessionTabsEqual([base], [seeded])).toBe(false)
+    expect(mobileSessionTabsEqual([seeded], [base])).toBe(false)
+    expect(mobileSessionTabsEqual([seeded], [{ ...seeded }])).toBe(true)
+  })
+
   it('treats terminal agent-status changes as session-tab changes', () => {
     const base: MobileTerminalSessionTab = {
       type: 'terminal',

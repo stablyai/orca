@@ -15,7 +15,9 @@ import {
 } from './terminal-history-log'
 import type { SessionMeta } from './terminal-history-metadata'
 import { clearTerminalHistoryRecoveryProtection } from './terminal-history-recovery-quarantine'
-import type { PendingOutputRecord, TerminalCheckpointFile, TerminalSnapshot } from './types'
+import type { PendingOutputRecord, TerminalSnapshot } from './types'
+import { TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES } from './terminal-history-file-limits'
+import { serializeTerminalCheckpointWithinLimit } from './terminal-checkpoint-serializer'
 
 // Why 5MB: bounds cold-restore replay time and per-session disk; hitting the cap triggers one checkpoint that resets the log.
 const LOG_MAX_BYTES = 5 * 1024 * 1024
@@ -28,7 +30,8 @@ export class TerminalHistorySessionWriter {
 
   constructor(
     readonly dir: string,
-    fresh: boolean
+    fresh: boolean,
+    private readonly checkpointMaxBytes = TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
   ) {
     this.checkpointPath = join(dir, 'checkpoint.json')
     this.logPath = join(dir, 'output.log')
@@ -55,31 +58,38 @@ export class TerminalHistorySessionWriter {
     return 'ok'
   }
 
-  async checkpoint(snapshot: TerminalSnapshot): Promise<void> {
+  async checkpoint(
+    snapshot: TerminalSnapshot
+  ): Promise<{ result: 'committed' } | { result: 'retryable'; error: Error }> {
     // Why: snapshot.cwd is null until OSC-7; preserve meta.json's usable cwd for cold restore.
     const effectiveCwd = snapshot.cwd ?? this.readMeta()?.cwd ?? null
     this.resolveLogState()
     const generation = (this.logGeneration ?? 0) + 1
-    const checkpointFile: TerminalCheckpointFile = {
-      snapshotAnsi: snapshot.snapshotAnsi,
-      scrollbackAnsi: snapshot.scrollbackAnsi,
-      oscLinks: snapshot.oscLinks,
-      rehydrateSequences: snapshot.rehydrateSequences,
-      cwd: effectiveCwd,
-      cols: snapshot.cols,
-      rows: snapshot.rows,
-      modes: snapshot.modes,
-      scrollbackLines: snapshot.scrollbackLines,
-      generation,
-      checkpointedAt: new Date().toISOString()
+    let data: string
+    try {
+      data = await serializeTerminalCheckpointWithinLimit(
+        snapshot,
+        {
+          cwd: effectiveCwd,
+          generation,
+          checkpointedAt: new Date().toISOString()
+        },
+        this.checkpointMaxBytes
+      )
+    } catch (error) {
+      return {
+        result: 'retryable',
+        error: error instanceof Error ? error : new Error(String(error))
+      }
     }
     const tmpPath = `${this.checkpointPath}.tmp`
-    await fsPromises.writeFile(tmpPath, JSON.stringify(checkpointFile))
+    await fsPromises.writeFile(tmpPath, data)
     await fsPromises.rename(tmpPath, this.checkpointPath)
     await fsPromises.writeFile(this.logPath, encodeLogHeader(generation))
     this.logGeneration = generation
     this.logBytes = LOG_HEADER_BYTES
     clearTerminalHistoryRecoveryProtection(this.dir)
+    return { result: 'committed' }
   }
 
   // Why: a warm writer must append to the existing generation without clobbering its log.

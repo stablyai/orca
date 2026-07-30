@@ -35,9 +35,21 @@ function terminalDialogIsOpen(): boolean {
 export function useDashboardSnapshot(): DashboardSnapshot {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot>(EMPTY_DASHBOARD_SNAPSHOT)
   const columnSignatureRef = useRef('')
+  const retainedRepoIconsRef = useRef<DashboardSnapshot['repoIconsByRepoId']>(undefined)
 
   useEffect(() => {
-    const apply = (next: DashboardSnapshot): void => {
+    const apply = (incoming: DashboardSnapshot): void => {
+      // The bridge omits repoIconsByRepoId on throttled republishes when it has
+      // not changed, rather than re-sending data URLs 4x/sec. Retain the last
+      // map we were given; the bridge always re-sends it when this window opens
+      // or asks, so the retained value can never be the only copy.
+      const next =
+        incoming.repoIconsByRepoId === undefined && retainedRepoIconsRef.current
+          ? { ...incoming, repoIconsByRepoId: retainedRepoIconsRef.current }
+          : incoming
+      if (next.repoIconsByRepoId !== undefined) {
+        retainedRepoIconsRef.current = next.repoIconsByRepoId
+      }
       const nextSignature = columnSignature(next)
       const layoutChanged = nextSignature !== columnSignatureRef.current
       columnSignatureRef.current = nextSignature

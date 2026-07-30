@@ -1,106 +1,21 @@
-import { execFile } from 'node:child_process'
+import { executeSupervisedDesktopProvider } from './computer-provider-supervisor-client'
 import { RuntimeClientError } from './runtime-client-error'
-import type { DesktopScriptPlatform } from './desktop-script-provider-paths'
+import type { BridgeRequest } from './desktop-script-provider-types'
 
-const REQUEST_TIMEOUT_MS = 30_000
-const FORCE_KILL_GRACE_MS = 1_000
-
-export function execBridge(
-  platform: DesktopScriptPlatform,
-  scriptPath: string,
-  operationPath: string
+export async function execBridge(
+  request: BridgeRequest
 ): Promise<{ stdout: string; stderr: string }> {
-  const command = platform === 'windows' ? 'powershell.exe' : 'python3'
-  const args =
-    platform === 'windows'
-      ? [
-          '-NoProfile',
-          '-NonInteractive',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-File',
-          scriptPath,
-          operationPath
-        ]
-      : [scriptPath, operationPath]
-  return new Promise((resolve, reject) => {
-    let child: ReturnType<typeof execFile> | null = null
-    let settled = false
-    let forceKillTimer: ReturnType<typeof setTimeout> | null = null
+  const result = await executeSupervisedDesktopProvider(withoutUndefinedValues(request))
+  if (result.error) {
+    throw mapBridgeError(result.error.message)
+  }
+  return { stdout: result.stdout, stderr: result.stderr }
+}
 
-    const clearForceKillTimer = (): void => {
-      if (forceKillTimer) {
-        clearTimeout(forceKillTimer)
-        forceKillTimer = null
-      }
-    }
-
-    const finish = (
-      error: Error | null,
-      result?: { stdout: string; stderr: string },
-      options: { keepForceKillTimer?: boolean } = {}
-    ): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timeout)
-      if (!options.keepForceKillTimer) {
-        clearForceKillTimer()
-      }
-      if (error) {
-        reject(error)
-        return
-      }
-      resolve(result ?? { stdout: '', stderr: '' })
-    }
-
-    // Why: native automation can hang inside platform APIs; reject promptly,
-    // then escalate cleanup if the bridge ignores the graceful termination.
-    const timeout = setTimeout(() => {
-      child?.kill('SIGTERM')
-      forceKillTimer = setTimeout(() => {
-        child?.kill('SIGKILL')
-        forceKillTimer = null
-      }, FORCE_KILL_GRACE_MS)
-      finish(
-        new RuntimeClientError(
-          'action_timeout',
-          `desktop provider timed out after ${REQUEST_TIMEOUT_MS}ms`
-        ),
-        undefined,
-        { keepForceKillTimer: true }
-      )
-    }, REQUEST_TIMEOUT_MS)
-
-    try {
-      child = execFile(
-        command,
-        args,
-        {
-          env: process.env,
-          maxBuffer: 20 * 1024 * 1024,
-          timeout: REQUEST_TIMEOUT_MS,
-          windowsHide: true
-        },
-        (error, stdout, stderr) => {
-          if (error) {
-            const message = stderr.trim() || stdout.trim() || error.message
-            finish(
-              error.killed
-                ? new RuntimeClientError('action_timeout', message)
-                : mapBridgeError(message)
-            )
-            return
-          }
-          finish(null, { stdout, stderr })
-        }
-      )
-      child?.once('exit', clearForceKillTimer)
-    } catch (error) {
-      finish(mapBridgeError(error instanceof Error ? error.message : String(error)))
-    }
-  })
+function withoutUndefinedValues(request: BridgeRequest): BridgeRequest {
+  return Object.fromEntries(
+    Object.entries(request).filter(([, value]) => value !== undefined)
+  ) as BridgeRequest
 }
 
 export function mapBridgeError(message: string): RuntimeClientError {
@@ -112,7 +27,7 @@ export function mapBridgeError(message: string): RuntimeClientError {
     return new RuntimeClientError('app_blocked', text)
   }
   if (
-    /unsupported capability|hotkey.*require|paste_text requires|GDK is required for non-character key synthesis/i.test(
+    /unsupported capability|hotkey.*require|paste_text requires|modified clicks require xdotool|GDK is required for non-character key synthesis/i.test(
       text
     )
   ) {

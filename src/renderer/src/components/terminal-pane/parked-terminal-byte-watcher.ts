@@ -16,6 +16,12 @@ import {
   isAgentTaskCompleteOsNotificationEnabledFromState,
   isAgentTaskCompleteTrackingEnabledFromState
 } from './agent-task-complete-policy'
+import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
+import { createOsc133CommandFinishedScanner } from '../../../../shared/terminal-osc133-command-finished'
+import {
+  createParkedTerminalCommandStatusPolicy,
+  readInFlightCommandCodeTurn
+} from './parked-terminal-command-status'
 import { startParkedTerminalMode2031Responder } from './parked-terminal-mode2031-responder'
 import { subscribeToPtyData } from './pty-data-sidecar-subscriptions'
 import { createPtyOutputProcessor } from './pty-transport'
@@ -187,6 +193,16 @@ export function startParkedTerminalByteWatcher(
     }
   }
 
+  // Why: command-lifecycle signals drive store-level policy only (git nudge, SSH same-turn
+  // status drop, Command Code seed/settle); the pane-coupled parts stay with the mounted pane.
+  const commandStatusPolicy = createParkedTerminalCommandStatusPolicy({
+    ptyId,
+    worktreeId,
+    tabId,
+    paneId,
+    paneKey
+  })
+
   // Why: with the authority switch on, the fact consumer is the single policy consumer — registering byte parsers too would double-fire bells.
   const mainSideEffectAuthority = isMainTerminalSideEffectAuthorityForPty({
     settings: useAppStore.getState().settings,
@@ -214,12 +230,30 @@ export function startParkedTerminalByteWatcher(
   const observeTerminalGitHubPRLink = mainSideEffectAuthority
     ? null
     : createTerminalGitHubPRLinkDetector()
+  // Why (byte-parser mode only): mode parity — main's tracker emits these as facts; the byte
+  // path scans the same shared parsers the mounted kill-switch-off pane uses.
+  const commandFinishedScanner = mainSideEffectAuthority
+    ? null
+    : createOsc133CommandFinishedScanner(commandStatusPolicy.onCommandFinished)
+  // Why the seed: this detector is recreated per park cycle with no startup command
+  // to fast-arm it, and a Command Code TUI parked mid-turn is long past its banner —
+  // unseeded it would never scrape the turn's return to the idle composer.
+  const commandCodeOutputStatusDetector = mainSideEffectAuthority
+    ? null
+    : createCommandCodeOutputStatusDetector({
+        inFlightTurn: readInFlightCommandCodeTurn(paneKey),
+        onWorking: commandStatusPolicy.onCommandCodeWorking,
+        onDone: commandStatusPolicy.onCommandCodeDone
+      })
   const unregisterFactConsumer = mainSideEffectAuthority
     ? registerTerminalSideEffectFactConsumer({
         ptyId,
         // Why: ordinary park already has a pane-owned title; the flag below requests a snapshot only when no pane did.
         callbacks: {
           ...sideEffectCallbacks,
+          onCommandFinished: commandStatusPolicy.onCommandFinished,
+          onCommandCodeWorking: commandStatusPolicy.onCommandCodeWorking,
+          onCommandCodeDone: commandStatusPolicy.onCommandCodeDone,
           onPrLink: (link) =>
             useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link),
           // Why (gate mode only): the 2031 subscribe arrives as a fact, but the reply stays here — query authority stays with the view/watcher (invariant 6).
@@ -247,6 +281,8 @@ export function startParkedTerminalByteWatcher(
       : subscribeToPtyData(ptyId, (data) => {
           // Why: empty pane callbacks — no xterm to deliver bytes to, the watcher wants only the parser side effects.
           processor.processData(data, {})
+          commandFinishedScanner?.scan(data)
+          commandCodeOutputStatusDetector?.observe(data)
           if (observeTerminalGitHubPRLink) {
             for (const link of observeTerminalGitHubPRLink(data)) {
               useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link)
@@ -266,6 +302,8 @@ export function startParkedTerminalByteWatcher(
     unregisterFactConsumer?.()
     // Why: clears tracker/timer/detector state so the watcher can't fire after the revealed pane's live parsers take over.
     processor?.clearAccumulatedState()
+    commandFinishedScanner?.reset()
+    commandStatusPolicy.dispose()
     clearBellNotificationTimer()
     clearAgentTaskCompleteTimer()
     pendingBellNotification = false
