@@ -60,6 +60,7 @@ import {
   resolveMobileSyntaxLanguage
 } from '../../../src/session/mobile-file-syntax'
 import { buildGitHubCheckSummary } from '../../../src/tasks/github-check-summary'
+import { buildGitLabCheckSummary } from '../../../src/tasks/gitlab-check-summary'
 import { buildTaskWorkspaceCreateParams } from '../../../src/tasks/workspace-create-params'
 import { MOBILE_TASKS_CAPABILITY } from '../../../src/tasks/mobile-tasks-capability'
 import {
@@ -138,6 +139,7 @@ import {
 import type {
   BaseRefSearchResult,
   GitHubOwnerRepo,
+  GitHubPRCheckSummary,
   PersistedTrustedOrcaHooks,
   SparsePreset,
   TuiAgent
@@ -195,13 +197,6 @@ type GitHubPRReviewSummary = {
   state?: string | null
   avatarUrl?: string | null
 }
-type GitHubPRCheckSummary = {
-  state: 'success' | 'failure' | 'pending' | 'neutral' | 'none'
-  total: number
-  passed: number
-  failed: number
-  pending: number
-}
 type GitHubPRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
 
 type GitHubPRReviewerRow = {
@@ -237,6 +232,7 @@ type GitLabWorkItem = {
   baseRefName?: string
   isCrossRepository?: boolean
   projectRef?: { host: string; path: string }
+  checksSummary?: GitHubPRCheckSummary
   repoId: string
   repoName: string
 }
@@ -4363,6 +4359,19 @@ export default function MobileTasksScreen() {
             assignees: details.assignees ?? [],
             pipelineJobs: details.pipelineJobs ?? []
           })
+          const checksSummary = buildGitLabCheckSummary(details.pipelineJobs ?? [])
+          setActionItem((current) =>
+            current?.provider === 'gitlab' && current.source.id === actionItem.source.id
+              ? { ...current, source: { ...current.source, checksSummary } }
+              : current
+          )
+          setItems((current) =>
+            current.map((candidate) =>
+              candidate.provider === 'gitlab' && candidate.source.id === actionItem.source.id
+                ? { ...candidate, source: { ...candidate.source, checksSummary } }
+                : candidate
+            )
+          )
         }
         return
       }

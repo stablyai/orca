@@ -187,7 +187,13 @@ export function readCheckSummary(value: unknown): GitHubPRCheckSummary | undefin
     return undefined
   }
   const state = value.state
-  if (state !== 'success' && state !== 'failure' && state !== 'pending' && state !== 'none') {
+  if (
+    state !== 'success' &&
+    state !== 'failure' &&
+    state !== 'pending' &&
+    state !== 'neutral' &&
+    state !== 'none'
+  ) {
     return undefined
   }
   return {
@@ -195,6 +201,7 @@ export function readCheckSummary(value: unknown): GitHubPRCheckSummary | undefin
     total: readNumber(value.total) ?? 0,
     passed: readNumber(value.passed) ?? 0,
     failed: readNumber(value.failed) ?? 0,
-    pending: readNumber(value.pending) ?? 0
+    pending: readNumber(value.pending) ?? 0,
+    neutral: readNumber(value.neutral) ?? 0
   }
 }

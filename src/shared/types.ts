@@ -1543,11 +1543,12 @@ export type GitHubAssignableUser = {
 }
 
 export type GitHubPRCheckSummary = {
-  state: 'success' | 'failure' | 'pending' | 'none'
+  state: 'success' | 'failure' | 'pending' | 'neutral' | 'none'
   total: number
   passed: number
   failed: number
   pending: number
+  neutral: number
 }
 
 export type GitHubPRReviewSummary = {

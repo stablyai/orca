@@ -1,12 +1,9 @@
-import {
-  buildGitHubCheckSummary,
-  type GitHubCheckLike,
-  type GitHubCheckSummary
-} from './github-check-summary'
+import { buildGitHubCheckSummary, type GitHubCheckLike } from './github-check-summary'
+import type { GitHubPRCheckSummary } from '../../../src/shared/types'
 
 type GitLabPipelineJobLike = { status: string }
 
-export function buildGitLabCheckSummary(jobs: GitLabPipelineJobLike[]): GitHubCheckSummary {
+export function buildGitLabCheckSummary(jobs: GitLabPipelineJobLike[]): GitHubPRCheckSummary {
   return buildGitHubCheckSummary(
     jobs.map((job): GitHubCheckLike => {
       const status = job.status.toLowerCase()
