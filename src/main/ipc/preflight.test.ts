@@ -94,6 +94,7 @@ import {
   registerPreflightHandlers,
   runPreflightCheck
 } from './preflight'
+import { getDetectedTuiAgentExecutable } from '../../shared/detected-agent-executables'
 
 type HandlerMap = Record<string, (_event?: unknown, args?: unknown) => Promise<unknown>>
 
@@ -792,6 +793,25 @@ describe('preflight', () => {
     })
 
     await expect(detectInstalledAgentExecutables({ wslDistro: 'Ubuntu' })).resolves.toBeNull()
+  })
+
+  it('clears published executable aliases when resetting the preflight cache', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'cursor') {
+        return { stdout: '/Users/test/.local/bin/cursor\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['cursor'])
+    expect(getDetectedTuiAgentExecutable('cursor')).toBe('cursor')
+
+    _resetPreflightCache()
+
+    expect(getDetectedTuiAgentExecutable('cursor')).toBeUndefined()
   })
 
   it('does not report Claude Agent Teams from WSL agent detection', async () => {
