@@ -181,6 +181,84 @@ describe.each([
     terminal.dispose()
   })
 
+  it('removes a Windows IME preedit character when Backspace arrives as keyCode 229', async () => {
+    const { emitted, terminal, textarea } = openTerminal(TerminalType)
+    start(textarea, 'm')
+    await nextEventLoop()
+
+    textarea.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Backspace',
+        code: 'Backspace',
+        keyCode: 229,
+        bubbles: true,
+        cancelable: true
+      })
+    )
+    await nextEventLoop()
+
+    const compositionView = terminal.element?.querySelector<HTMLElement>('.composition-view')
+    expect(compositionView?.textContent?.replaceAll('\u200e', '')).toBe('')
+    expect(emitted).toEqual([])
+    terminal.dispose()
+  })
+
+  it('edits only the active preedit when Windows IME deletion arrives as keyCode 229', async () => {
+    const cases = [
+      { key: 'Backspace', caret: 2, expected: 'n' },
+      { key: 'Delete', caret: 0, expected: 'i' }
+    ] as const
+
+    for (const testCase of cases) {
+      const { emitted, terminal, textarea } = openTerminal(TerminalType)
+      start(textarea, 'ni')
+      await nextEventLoop()
+      textarea.setSelectionRange(testCase.caret, testCase.caret)
+
+      textarea.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: testCase.key,
+          code: testCase.key,
+          keyCode: 229,
+          bubbles: true,
+          cancelable: true
+        })
+      )
+      await nextEventLoop()
+
+      const compositionView = terminal.element?.querySelector<HTMLElement>('.composition-view')
+      expect(compositionView?.textContent?.replaceAll('\u200e', '')).toBe(testCase.expected)
+      expect(textarea.value).toBe(testCase.expected)
+      expect(emitted).toEqual([])
+      terminal.dispose()
+    }
+  })
+
+  it('prefers native IME progress over deferred deletion reconciliation', async () => {
+    const { emitted, terminal, textarea } = openTerminal(TerminalType)
+    start(textarea, 'm')
+    await nextEventLoop()
+
+    textarea.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Backspace',
+        code: 'Backspace',
+        keyCode: 229,
+        bubbles: true,
+        cancelable: true
+      })
+    )
+    composition(textarea, 'compositionupdate', 'ma')
+    textarea.value = 'ma'
+    textarea.setSelectionRange(2, 2)
+    await nextEventLoop()
+
+    const compositionView = terminal.element?.querySelector<HTMLElement>('.composition-view')
+    expect(compositionView?.textContent?.replaceAll('\u200e', '')).toBe('ma')
+    expect(emitted).toEqual([])
+    terminal.dispose()
+  })
+
   it('bounds tracked timers during same-task transaction bursts', async () => {
     const { emitted, terminal, textarea } = openTerminal(TerminalType)
     let maximumTimerCount = 0

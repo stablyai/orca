@@ -116,6 +116,14 @@ export function shouldSuppressTerminalImeKeyboardEvent(
   if (!isXtermHandledKeyEvent(event.type)) {
     return false
   }
+  const isTrackedCompositionDeletion =
+    event.type === 'keydown' &&
+    compositionActive &&
+    event.keyCode === 229 &&
+    (event.key === 'Backspace' || event.key === 'Delete')
+  if (isTrackedCompositionDeletion) {
+    return false
+  }
   // Why: IMEs own Process-key / composing keystrokes — letting xterm translate
   // them corrupts committed CJK text. Bare macOS/Linux keydown 229 is exempt:
   // it must reach xterm's CompositionHelper so it can schedule its textarea

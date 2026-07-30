@@ -246,6 +246,25 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
     }
   })
 
+  it('lets xterm reconcile IME deletion during a tracked composition', () => {
+    for (const options of [windowsComposing, linuxComposing]) {
+      for (const key of ['Backspace', 'Delete']) {
+        expect(
+          shouldSuppressTerminalImeKeyboardEvent(
+            event({ key, code: key, keyCode: 229, isComposing: true }),
+            options
+          )
+        ).toBe(false)
+        expect(
+          shouldSuppressTerminalImeKeyboardEvent(
+            event({ type: 'keyup', key, code: key, keyCode: 229, isComposing: true }),
+            options
+          )
+        ).toBe(true)
+      }
+    }
+  })
+
   it('suppresses IME-owned editing keys while composition is active', () => {
     expect(
       shouldSuppressTerminalImeKeyboardEvent(

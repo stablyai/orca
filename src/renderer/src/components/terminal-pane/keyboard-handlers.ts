@@ -760,37 +760,6 @@ export function useTerminalKeyboardShortcuts({
           deferredNewlineSender.releaseRedispatchedEnter(e)
           return
         }
-
-        const manager = managerRef.current
-        const keyboardScope = keyboardScopeRef.current
-        if (
-          manager &&
-          !isEditableTarget(e.target) &&
-          (!keyboardScope || keyboardEventBelongsToScope(e, keyboardScope))
-        ) {
-          const pane = manager.getActivePane() ?? manager.getPanes()[0]
-          if (pane && hasPendingTerminalImeComposition(pane.terminal.element)) {
-            const action = resolveShortcutEvent({
-              key: 'Enter',
-              code: e.code,
-              metaKey: false,
-              ctrlKey: modifiedEnterKind === 'ctrl',
-              altKey: false,
-              shiftKey: modifiedEnterKind === 'shift',
-              repeat: false
-            })
-            if (action?.type === 'sendInput') {
-              e.preventDefault()
-              e.stopImmediatePropagation()
-              deferredNewlineSender.defer(
-                e,
-                pane.terminal.element,
-                createCapturedInputSender(pane, action.data)
-              )
-              return
-            }
-          }
-        }
       }
 
       if (modifiedEnterKind) {

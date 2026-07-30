@@ -31,6 +31,7 @@ function keyboardEvent(
 function createHarness(): {
   deps: KeyboardHandlersDeps
   editable: HTMLInputElement
+  sendInput: ReturnType<typeof vi.fn>
   startComposition: () => void
   terminalInput: HTMLTextAreaElement
   dispose: () => void
@@ -97,6 +98,7 @@ function createHarness(): {
   return {
     deps,
     editable,
+    sendInput,
     terminalInput,
     startComposition: () => {
       terminalElement.dispatchEvent(
@@ -271,6 +273,34 @@ describe('Windows IME keyboard ownership', () => {
     harness.terminalInput.dispatchEvent(redispatch)
 
     expect(redispatch.defaultPrevented).toBe(true)
+    hook.unmount()
+    harness.dispose()
+  })
+
+  it('does not turn a Shift IME toggle with an orphan Enter keyup into a newline', () => {
+    const harness = createHarness()
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+    harness.startComposition()
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', {
+        key: 'Shift',
+        code: 'ShiftLeft',
+        keyCode: 16,
+        timeStamp: 1,
+        shiftKey: true
+      })
+    )
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keyup', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        timeStamp: 2
+      })
+    )
+    vi.runAllTimers()
+
+    expect(harness.sendInput).not.toHaveBeenCalled()
     hook.unmount()
     harness.dispose()
   })
