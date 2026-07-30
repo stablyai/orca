@@ -2,7 +2,8 @@ import { useRef, useState } from 'react'
 import type {
   Repo,
   TerminalQuickCommand,
-  TerminalQuickCommandScope
+  TerminalQuickCommandScope,
+  TuiAgent
 } from '../../../../shared/types'
 import {
   getTerminalQuickCommandAction,
@@ -21,7 +22,6 @@ import {
 import { Label } from '@/components/ui/label'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import type { TuiAgent } from '../../../../shared/types'
 import { TerminalQuickCommandActionToggle } from './TerminalQuickCommandActionToggle'
 import { TerminalQuickCommandAdvancedSection } from './TerminalQuickCommandAdvancedSection'
 import { TerminalQuickCommandContentSection } from './TerminalQuickCommandContentSection'

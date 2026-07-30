@@ -154,10 +154,10 @@ vi.mock('./ssh-config-parser', () => ({
 
 import {
   SshConnection,
-  SshConnectionManager,
   shouldUseSystemSshTransport,
   type SshConnectionCallbacks
 } from './ssh-connection'
+import { SshConnectionManager } from './ssh-connection-manager'
 import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
 import {
   downloadFileViaSystemSsh,
@@ -456,6 +456,50 @@ describe('SshConnection', () => {
     await conn.disconnect()
 
     expect(conn.getState().status).toBe('disconnected')
+  })
+
+  it('rejects late ssh2 ready after disconnect without resurrecting the connection', async () => {
+    const callbacks = createCallbacks()
+    const conn = new SshConnection(createTarget(), callbacks)
+
+    const connectResult = conn.connect().catch((error: Error) => error)
+    for (let i = 0; i < 5 && clientInstances.length === 0; i++) {
+      await Promise.resolve()
+    }
+    expect(clientInstances).toHaveLength(1)
+    await conn.disconnect()
+
+    await expect(connectResult).resolves.toMatchObject({
+      message: 'SSH connection attempt was cancelled'
+    })
+    expect(conn.getState()).toMatchObject({ status: 'disconnected', error: null })
+    expect(callbacks.onStateChange).not.toHaveBeenCalledWith(
+      'target-1',
+      expect.objectContaining({ status: 'connected' })
+    )
+  })
+
+  it('keeps disconnected state when ssh2 reports a late startup error', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'Connection lost before handshake'
+    const callbacks = createCallbacks()
+    const conn = new SshConnection(createTarget(), callbacks)
+
+    const connectResult = conn.connect().catch((error: Error) => error)
+    for (let i = 0; i < 5 && clientInstances.length === 0; i++) {
+      await Promise.resolve()
+    }
+    expect(clientInstances).toHaveLength(1)
+    await conn.disconnect()
+
+    await expect(connectResult).resolves.toMatchObject({
+      message: 'Connection lost before handshake'
+    })
+    expect(conn.getState()).toMatchObject({ status: 'disconnected', error: null })
+    expect(callbacks.onStateChange).not.toHaveBeenCalledWith(
+      'target-1',
+      expect.objectContaining({ status: 'error' })
+    )
   })
 
   it('getTarget returns a copy of the target', () => {

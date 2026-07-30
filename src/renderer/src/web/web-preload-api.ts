@@ -111,6 +111,7 @@ import {
   type StoredWebRuntimeEnvironment
 } from './web-runtime-environment'
 import { parseWebPairingInput } from './web-pairing'
+import { copyClipboardTextViaExecCommand } from './web-clipboard-copy-fallback'
 import { WebRuntimeClient } from './web-runtime-client'
 import { RuntimeRpcCallQueuePool } from '../../../shared/runtime-rpc-call-queue'
 import {
@@ -147,6 +148,14 @@ const SESSION_STORAGE_KEY = 'orca.web.workspaceSession.v1'
 const ONBOARDING_STORAGE_KEY = 'orca.web.onboarding.v1'
 const GITHUB_CACHE_STORAGE_KEY = 'orca.web.githubCache.v1'
 const KEYBINDINGS_STORAGE_KEY = 'orca.web.keybindings.v1'
+// Why: paired web clients lack Electron env/preload state; the E2E build gate keeps URL overrides out of releases.
+const webE2EExposeStore = String(import.meta.env.VITE_EXPOSE_STORE) === 'true'
+const webE2EQuery = webE2EExposeStore ? new URLSearchParams(window.location.search) : null
+const webE2EConfig = createE2EConfig({
+  exposeStore: webE2EExposeStore,
+  terminalParkingDelayMs: Number(webE2EQuery?.get('orcaE2ETerminalParkingDelayMs')) || null,
+  terminalRetentionLimit: Number(webE2EQuery?.get('orcaE2ETerminalRetentionLimit')) || null
+})
 // Why: paired clients need parity for large dev sessions; the runtime default stays capped for lower-level RPC callers.
 const WEB_RUNTIME_WORKTREE_LIST_LIMIT = 10_000
 const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = CLIPBOARD_IMAGE_MAX_BASE64_CHARS
@@ -159,6 +168,7 @@ const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
 let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntimeEnvironment()
 let activeClient: WebRuntimeClient | null = null
 let activeClientEnvironmentId: string | null = null
+const manuallyDisconnectedEnvironmentIds = new Set<string>()
 let cachedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
 let cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
 const runtimeCallQueuePool = new RuntimeRpcCallQueuePool()
@@ -488,6 +498,26 @@ export function installWebPreloadApi(): void {
   window.api = withFallback(createWebPreloadApi(), []) as PreloadApi
 }
 
+async function writeWebClipboardText(text: string): Promise<void> {
+  await assertClipboardTextWriteWithinLimitWithYield(text)
+  const clipboard = navigator.clipboard
+  if (typeof clipboard?.writeText === 'function') {
+    try {
+      await clipboard.writeText(text)
+      return
+    } catch (error) {
+      // Preserve the current user-activation turn for the synchronous fallback.
+      if (copyClipboardTextViaExecCommand(text)) {
+        return
+      }
+      throw error
+    }
+  }
+  if (!copyClipboardTextViaExecCommand(text)) {
+    throw new Error('Clipboard write is unavailable in this browser context')
+  }
+}
+
 function createWebPreloadApi(): Partial<PreloadApi> {
   const webOrcaProfileAuthStatus = () =>
     Promise.resolve({
@@ -523,6 +553,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         writeJson(UI_STORAGE_KEY, mergeWebUIState(readLocalWebUIState(), ui))
       },
       awaitFirstWindowStartupServices: () => Promise.resolve(),
+      recoverLegacyWorkerTerminalsForRendererStartup: () => Promise.resolve(),
       startupDiagnostic: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),
       setUnreadDockBadgeCount: () => Promise.resolve(),
@@ -626,7 +657,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       orgMemberRemove: async () => ({ status: 'unconfigured' })
     },
     e2e: {
-      getConfig: () => createE2EConfig({})
+      getConfig: () => webE2EConfig
     },
     settings: {
       get: async () => getRuntimeBackedStoredSettings(),
@@ -782,6 +813,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     claudeAccounts: createAccountsApi(),
     cli: createCliApi(),
     agentHooks: createAgentHooksApi(),
+    macosTccPrompts: createMacosTccPromptsApi(),
     // Why: the desktop derives this from the host filesystem, which the web
     // client has no view of; reporting synced keeps the warning banner silent.
     codexConfigSync: {
@@ -813,6 +845,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       inferQuestionAnswered: () => Promise.resolve(false),
       onMigrationUnsupported: () => noopUnsubscribe,
       onMigrationUnsupportedClear: () => noopUnsubscribe,
+      onLegacyWorkerTerminalRecovery: () => noopUnsubscribe,
       getMigrationUnsupportedSnapshot: () => Promise.resolve([]),
       drop: () => {},
       dropByTabPrefix: () => {},
@@ -1063,7 +1096,7 @@ function writeWebKeybindingAction(
   bindings: string[] | null
 ): KeybindingFileSnapshot {
   if (!isKeybindingActionId(actionId)) {
-    throw new Error(`Unknown keybinding action "${actionId}".`)
+    throw new Error(`Unknown keybinding action "${String(actionId)}".`)
   }
   const normalizedBindings =
     bindings === null ? null : normalizeKeybindingArrayForAction(actionId, bindings)
@@ -1324,6 +1357,7 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
       const previousEnvironment = activeEnvironment
       closeActiveRuntimeClients()
       activeEnvironment = createStoredWebRuntimeEnvironment({ name, offer, previousEnvironment })
+      manuallyDisconnectedEnvironmentIds.clear()
       saveStoredWebRuntimeEnvironment(activeEnvironment)
       return { environment: redactStoredWebRuntimeEnvironment(activeEnvironment) }
     },
@@ -1332,16 +1366,28 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
     remove: async ({ selector }) => {
       const environment = resolveEnvironment(selector)
       if (activeEnvironment?.id === environment.id) {
-        disconnectActiveRuntimeEnvironment()
+        removeActiveRuntimeEnvironment()
       }
+      manuallyDisconnectedEnvironmentIds.delete(environment.id)
       return { removed: redactStoredWebRuntimeEnvironment(environment) }
     },
     disconnect: async ({ selector }) => {
       const environment = resolveEnvironment(selector)
       if (activeEnvironment?.id === environment.id) {
+        manuallyDisconnectedEnvironmentIds.add(environment.id)
         disconnectActiveRuntimeEnvironment()
       }
       return { disconnected: redactStoredWebRuntimeEnvironment(environment) }
+    },
+    connect: ({ selector, timeoutMs }) => {
+      const environment = resolveEnvironment(selector)
+      manuallyDisconnectedEnvironmentIds.delete(environment.id)
+      return callEnvironmentEnvelope<RuntimeStatus>(
+        environment.id,
+        'status.get',
+        undefined,
+        timeoutMs
+      )
     },
     getStatus: ({ selector, timeoutMs }) =>
       callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
@@ -1350,7 +1396,12 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
     subscribe: async ({ selector, method, params, timeoutMs }, callbacks) => {
       const environment = resolveEnvironment(selector)
       const client = getClientForEnvironment(environment)
-      return client.subscribe(method, params, callbacks, { timeoutMs })
+      const subscription = await client.subscribe(method, params, callbacks, { timeoutMs })
+      if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+        subscription.unsubscribe()
+        throw new Error('runtime_manually_disconnected')
+      }
+      return subscription
     }
   }
 }
@@ -2488,10 +2539,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       }
       return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
-    writeClipboardText: async (text) => {
-      await assertClipboardTextWriteWithinLimitWithYield(text)
-      await (navigator.clipboard?.writeText?.(text) ?? Promise.resolve())
-    },
+    writeClipboardText: writeWebClipboardText,
+    writeTerminalClipboardText: writeWebClipboardText,
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     writeClipboardImage: () => Promise.resolve(),
@@ -2547,6 +2596,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onZoomBrowserPage: () => noopUnsubscribe,
     onHardReloadBrowserPage: () => noopUnsubscribe,
     onCloseActiveTab: () => noopUnsubscribe,
+    onCloseFloatingItem: () => noopUnsubscribe,
+    onSelectFloatingIndex: () => noopUnsubscribe,
     onSwitchTab: () => noopUnsubscribe,
     onSwitchTabAcrossAllTypes: () => noopUnsubscribe,
     onSwitchRecentTab: () => noopUnsubscribe,
@@ -2583,7 +2634,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     syncTrafficLights: () => {},
     setMarkdownEditorFocused: () => {},
     setTerminalInputFocused: () => {},
-    setFloatingTerminalInputFocused: () => {},
+    setFloatingFocus: () => {},
     setShortcutRecorderFocused: () => {},
     onRichMarkdownContextCommand: () => noopUnsubscribe,
     onFullscreenChanged: () => noopUnsubscribe,
@@ -2739,6 +2790,17 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
   }
 }
 
+function createMacosTccPromptsApi(): NonNullable<Partial<PreloadApi>['macosTccPrompts']> {
+  // Why: TCC is a macOS-desktop concept; the web client has no log stream to watch.
+  return {
+    onThreshold: () => noopUnsubscribe,
+    consumePending: () => Promise.resolve(null),
+    acknowledgePending: () => Promise.resolve(),
+    releasePending: () => Promise.resolve(),
+    dismiss: () => Promise.resolve()
+  }
+}
+
 function createDeveloperPermissionsApi(): NonNullable<Partial<PreloadApi>['developerPermissions']> {
   return {
     getStatus: () => Promise.resolve([]),
@@ -2791,8 +2853,16 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
         schemaVersion: 1,
         installations: [],
         eligibleUpdateNames: [],
+        scanIssues: [],
         scannedAt: Date.now()
-      })
+      }),
+    // Why: with no local skill homes there is nothing to update, so the run rail
+    // reports a permanently idle state rather than spawning anything.
+    startUpdateRun: () => Promise.resolve({ started: false as const, reason: 'invalid-names' }),
+    cancelUpdateRun: () => Promise.resolve(),
+    acknowledgeUpdateRun: () => Promise.resolve(),
+    getUpdateRun: () => Promise.resolve({ state: 'idle' as const }),
+    onUpdateRun: () => () => {}
   }
 }
 
@@ -2876,7 +2946,14 @@ function createAccountsApi(): never {
     cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: () => Promise.resolve(empty),
     remove: () => Promise.resolve(empty),
-    select: () => Promise.resolve(empty)
+    select: () => Promise.resolve(empty),
+    // Why: launch accounts are recorded on the host that owns the PTY, which the
+    // web client never is — report no stale panes rather than reject the sweep.
+    listStalePanes: () => Promise.resolve([]),
+    // Why empty rather than absent: the same host owns both records, so a web
+    // client has no recorded lane to offer and every pane falls to derivation.
+    listRecordedPaneLanes: () => Promise.resolve({}),
+    forgetStalePanes: () => Promise.resolve()
   } as never
 }
 
@@ -2888,6 +2965,7 @@ function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> {
     download: () => Promise.resolve(),
     quitAndInstall: () => Promise.resolve(),
     dismissNudge: () => Promise.resolve(),
+    dismissAvailableUpdate: () => Promise.resolve(),
     onStatus: () => noopUnsubscribe,
     onClearDismissal: () => noopUnsubscribe
   }
@@ -3076,7 +3154,7 @@ function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
     listDetectedPorts: () => Promise.resolve([]),
     onPortForwardsChanged: () => noopUnsubscribe,
     onDetectedPortsChanged: () => noopUnsubscribe,
-    browseDir: () => Promise.resolve({ entries: [], resolvedPath: '' }),
+    browseDir: () => Promise.resolve({ entries: [], resolvedPath: '', pathFlavor: 'posix' }),
     onCredentialRequest: () => noopUnsubscribe,
     onCredentialResolved: () => noopUnsubscribe,
     submitCredential: () => Promise.resolve()
@@ -3089,9 +3167,18 @@ async function callRuntimeEnvelope<TResult = unknown>(
   timeoutMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   const environment = requireActiveEnvironment()
-  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () =>
-    getClientForEnvironment(environment).call(method, params, { timeoutMs })
-  )
+  if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+    return manuallyDisconnectedResponse(environment)
+  }
+  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
+    if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+      return Promise.resolve(manuallyDisconnectedResponse(environment))
+    }
+    return getClientForEnvironment(environment).call(method, params, { timeoutMs })
+  })
+  if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+    return manuallyDisconnectedResponse(environment)
+  }
   updateEnvironmentFromResponse(environment, response)
   return response as RuntimeRpcResponse<TResult>
 }
@@ -3103,9 +3190,18 @@ async function callEnvironmentEnvelope<TResult = unknown>(
   timeoutMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   const environment = resolveEnvironment(selector)
-  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () =>
-    getClientForEnvironment(environment).call(method, params, { timeoutMs })
-  )
+  if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+    return manuallyDisconnectedResponse(environment)
+  }
+  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
+    if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+      return Promise.resolve(manuallyDisconnectedResponse(environment))
+    }
+    return getClientForEnvironment(environment).call(method, params, { timeoutMs })
+  })
+  if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+    return manuallyDisconnectedResponse(environment)
+  }
   updateEnvironmentFromResponse(environment, response)
   return response as RuntimeRpcResponse<TResult>
 }
@@ -3282,6 +3378,9 @@ async function getRemoteRuntimeStatus(): Promise<RuntimeStatus> {
 }
 
 function getClientForEnvironment(environment: StoredWebRuntimeEnvironment): WebRuntimeClient {
+  if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+    throw new Error('runtime_manually_disconnected')
+  }
   if (!activeClient || activeClientEnvironmentId !== environment.id) {
     activeClient?.close()
     activeClient = new WebRuntimeClient(getPreferredWebPairingOffer(environment))
@@ -3299,8 +3398,29 @@ function closeActiveRuntimeClients(): void {
 
 function disconnectActiveRuntimeEnvironment(): void {
   closeActiveRuntimeClients()
+}
+
+function removeActiveRuntimeEnvironment(): void {
+  disconnectActiveRuntimeEnvironment()
   clearStoredWebRuntimeEnvironment()
   activeEnvironment = null
+}
+
+function manuallyDisconnectedResponse(
+  environment: StoredWebRuntimeEnvironment
+): RuntimeRpcResponse<never> {
+  return {
+    id: 'runtime.manualDisconnect',
+    ok: false,
+    error: {
+      code: 'runtime_manually_disconnected',
+      message: translate(
+        'auto.web.webPreloadApi.runtimeEnvironmentManuallyDisconnected',
+        'Runtime environment is manually disconnected.'
+      )
+    },
+    _meta: { runtimeId: environment.runtimeId }
+  }
 }
 
 function resolveEnvironment(selector: string): StoredWebRuntimeEnvironment {

@@ -74,6 +74,7 @@ describe('HeroFlow height', () => {
         onCopyInstallUrl={vi.fn()}
         pairQrDataUrl={null}
         pairingUrl={null}
+        pairingQrError={false}
         relayDegraded={false}
         pairLoading={false}
         connectionMode="automatic"
@@ -84,6 +85,7 @@ describe('HeroFlow height', () => {
         networkInterfaces={[]}
         selectedAddress={undefined}
         onSelectedAddressChange={vi.fn()}
+        beforeCustomAddressChange={vi.fn().mockResolvedValue(true)}
         onRefreshNetworkInterfaces={vi.fn()}
         refreshingNetworkInterfaces={false}
         onBack={vi.fn()}
@@ -112,6 +114,7 @@ describe('HeroFlow height', () => {
         onCopyInstallUrl={vi.fn()}
         pairQrDataUrl={null}
         pairingUrl={null}
+        pairingQrError={false}
         relayDegraded={false}
         pairLoading={false}
         connectionMode="automatic"
@@ -122,6 +125,7 @@ describe('HeroFlow height', () => {
         networkInterfaces={[]}
         selectedAddress={undefined}
         onSelectedAddressChange={vi.fn()}
+        beforeCustomAddressChange={vi.fn().mockResolvedValue(true)}
         onRefreshNetworkInterfaces={vi.fn()}
         refreshingNetworkInterfaces={false}
         onBack={vi.fn()}
@@ -150,5 +154,15 @@ describe('HeroFlow height', () => {
   it('hides the degradation notice when the code encodes what was selected', () => {
     renderFlow(1, { pairQrDataUrl: 'data:image/png;base64,qr' })
     expect(screen.queryByTestId('relay-degraded-notice')).not.toBeInTheDocument()
+  })
+
+  it('shows an encoder error while keeping the copy fallback enabled', () => {
+    renderFlow(1, {
+      pairingQrError: true,
+      pairingUrl: 'orca://pair?code=copy-fallback'
+    })
+
+    expect(screen.getByRole('alert')).toHaveTextContent('couldn’t be rendered as a QR code')
+    expect(screen.getByRole('button', { name: /Copy pairing code/ })).toBeEnabled()
   })
 })

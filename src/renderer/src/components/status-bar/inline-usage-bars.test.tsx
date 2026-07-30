@@ -99,6 +99,31 @@ describe('InlineUsageBars', () => {
     expect(markup).toContain('32% used now')
   })
 
+  it('keeps the footer meter for weekly-only Codex usage', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const limits: ProviderRateLimits = {
+      provider: 'codex',
+      session: null,
+      weekly: {
+        usedPercent: 37,
+        windowMinutes: 10_080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={limits} compact={false} display="used" />
+    )
+
+    expect(markup).toContain('w-[48px] h-[6px]')
+    expect(markup).toContain('width:37%')
+    expect(markup).toContain('37% used wk')
+  })
+
   it('shows remaining copy and remaining meter fill', async () => {
     mocks.usagePercentageDisplay = 'remaining'
     const { InlineUsageBars } = await import('./StatusBar')

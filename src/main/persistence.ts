@@ -75,9 +75,16 @@ import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setu
 import { isPluginPanelTabKey } from '../shared/plugins/plugin-manifest'
 import type { GitRemoteIdentity } from '../shared/git-remote-identity'
 import {
+  areTaskSourceContextsEqual,
   buildTaskSourceContextFromRepo,
-  buildWorkspaceRunContext
+  buildWorkspaceRunContext,
+  normalizeStoredTaskSourceContext
 } from '../shared/task-source-context'
+import {
+  areWorkspaceLinkedItemsEqual,
+  normalizeWorkspaceLinkedItem
+} from '../shared/workspace-linked-item'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../shared/workspace-linked-item-source-context'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
 import { normalizePersistedMobileClientTabSelections } from './runtime/client-session-tab-selection-persistence'
@@ -94,7 +101,16 @@ import {
   type SshTarget
 } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostOrder,
+  normalizeExecutionHostId,
+  normalizeVisibleExecutionHostIds,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../shared/execution-host'
 import {
   getDefaultPersistedState,
   getDefaultNotificationSettings,
@@ -116,14 +132,6 @@ import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../shared/usage-percentage-display-change-notice'
 import { normalizePRBotAuthorOverrides } from '../shared/pr-bot-author-overrides'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostOrder,
-  normalizeExecutionHostId,
-  normalizeVisibleExecutionHostIds,
-  toSshExecutionHostId,
-  type ExecutionHostId
-} from '../shared/execution-host'
 import { toRelaySshPtyId } from './providers/ssh-pty-id'
 import {
   migrateUiHostScopeSshTargetId,
@@ -193,6 +201,7 @@ import {
   normalizeWorkspaceStatuses
 } from '../shared/workspace-statuses'
 import { clampMarkdownTocPanelWidth } from '../shared/markdown-toc-panel-width'
+import { clampCombinedDiffFileTreeWidth } from '../shared/combined-diff-file-tree-width'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree-ownership'
 import { sanitizeRepoIcon } from '../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../shared/repo-badge-color'
@@ -412,6 +421,29 @@ function gcStaleWorktreeMeta(state: PersistedState): number {
     removed++
   }
   return removed
+}
+
+function normalizeWorktreeLinkedItemMetadata(state: PersistedState): boolean {
+  let changed = false
+  for (const meta of Object.values(state.worktreeMeta ?? {})) {
+    const linkedWorkItem = normalizeWorkspaceLinkedItem(meta.linkedWorkItem)
+    const sourceContext = normalizeStoredTaskSourceContext(meta.linkedTaskSourceContext)
+    const linkedTaskSourceContext = isWorkspaceLinkedItemSourceContextMatch(
+      linkedWorkItem,
+      sourceContext
+    )
+      ? sourceContext
+      : null
+    if (!areWorkspaceLinkedItemsEqual(meta.linkedWorkItem, linkedWorkItem)) {
+      meta.linkedWorkItem = linkedWorkItem
+      changed = true
+    }
+    if (!areTaskSourceContextsEqual(meta.linkedTaskSourceContext, linkedTaskSourceContext)) {
+      meta.linkedTaskSourceContext = linkedTaskSourceContext
+      changed = true
+    }
+  }
+  return changed
 }
 
 function readGithubCacheSnapshot(dataFile: string): PersistedState['githubCache'] | null {
@@ -1111,6 +1143,7 @@ function backfillLegacyAutomationContexts(
 type LegacySshTarget = SshTarget & {
   remoteWorkspaceSyncEnabled?: unknown
   remoteWorkspaceSyncGracePeriodSeconds?: unknown
+  experimentalPtySourceCreditV1?: unknown
 }
 
 // Why: old targets predate configHost; default to label-based lookup so imported SSH aliases still resolve via ssh -G.
@@ -1125,6 +1158,7 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   delete target.remoteWorkspaceSyncGracePeriodSeconds
   delete target.relayGracePeriodSeconds
   delete target.systemSshConnectionReuse
+  delete target.experimentalPtySourceCreditV1
   // Why: prefer the synced grace over stale relayGracePeriodSeconds so a user's "unlimited" (0) survives migration.
   const relayGracePeriodSeconds =
     legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
@@ -3486,6 +3520,10 @@ export class Store {
     }
     result = folderScopeConnectionMigration.state
 
+    if (normalizeWorktreeLinkedItemMetadata(result)) {
+      this.loadNeedsSave = true
+    }
+
     if (gcStaleWorktreeMeta(result) > 0) {
       this.loadNeedsSave = true
     }
@@ -4061,6 +4099,7 @@ export class Store {
     name?: string
     folderPath?: string | null
     linkedTask?: FolderWorkspace['linkedTask']
+    linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
     connectionId?: string | null
     createdWithAgent?: FolderWorkspace['createdWithAgent']
     pendingFirstAgentMessageRename?: boolean
@@ -4076,13 +4115,18 @@ export class Store {
       throw new Error('Folder-backed project group not found.')
     }
     const now = Date.now()
+    const linkedTask = normalizeWorkspaceLinkedItem(input.linkedTask)
+    const sourceContext = normalizeStoredTaskSourceContext(input.linkedTaskSourceContext)
     const workspace: FolderWorkspace = {
       id: randomUUID(),
       projectGroupId: group.id,
       name: normalizeFolderWorkspaceName(input.name, `${group.name} workspace`),
       folderPath,
       connectionId: input.connectionId ?? group.connectionId ?? null,
-      linkedTask: input.linkedTask ?? null,
+      linkedTask,
+      linkedTaskSourceContext: isWorkspaceLinkedItemSourceContextMatch(linkedTask, sourceContext)
+        ? sourceContext
+        : null,
       comment: '',
       isArchived: false,
       isUnread: false,
@@ -4109,6 +4153,7 @@ export class Store {
         | 'name'
         | 'folderPath'
         | 'linkedTask'
+        | 'linkedTaskSourceContext'
         | 'comment'
         | 'isArchived'
         | 'isUnread'
@@ -4134,7 +4179,27 @@ export class Store {
       workspace.folderPath = updates.folderPath
     }
     if (updates.linkedTask !== undefined) {
-      workspace.linkedTask = updates.linkedTask
+      workspace.linkedTask = normalizeWorkspaceLinkedItem(updates.linkedTask)
+      if (
+        workspace.linkedTaskSourceContext &&
+        !isWorkspaceLinkedItemSourceContextMatch(
+          workspace.linkedTask,
+          workspace.linkedTaskSourceContext
+        )
+      ) {
+        workspace.linkedTaskSourceContext = null
+      }
+    }
+    if (updates.linkedTaskSourceContext !== undefined) {
+      const linkedTaskSourceContext = normalizeStoredTaskSourceContext(
+        updates.linkedTaskSourceContext
+      )
+      workspace.linkedTaskSourceContext = isWorkspaceLinkedItemSourceContextMatch(
+        workspace.linkedTask,
+        linkedTaskSourceContext
+      )
+        ? linkedTaskSourceContext
+        : null
     }
     if (updates.comment !== undefined) {
       workspace.comment = updates.comment
@@ -4471,9 +4536,13 @@ export class Store {
     > & {
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
-    }
+    },
+    hostId?: ExecutionHostId
   ): Repo | null {
-    const repo = this.state.repos.find((r) => r.id === id)
+    const repo = this.state.repos.find(
+      (candidate) =>
+        candidate.id === id && (!hostId || getRepoExecutionHostId(candidate) === hostId)
+    )
     if (!repo) {
       return null
     }
@@ -5012,6 +5081,16 @@ export class Store {
   setWorktreeMeta(worktreeId: string, meta: Partial<WorktreeMeta>): WorktreeMeta {
     const existing = this.state.worktreeMeta[worktreeId] || getDefaultWorktreeMeta()
     const updated = { ...existing, ...meta }
+    updated.linkedWorkItem = normalizeWorkspaceLinkedItem(updated.linkedWorkItem)
+    const linkedTaskSourceContext = normalizeStoredTaskSourceContext(
+      updated.linkedTaskSourceContext
+    )
+    updated.linkedTaskSourceContext = isWorkspaceLinkedItemSourceContextMatch(
+      updated.linkedWorkItem,
+      linkedTaskSourceContext
+    )
+      ? linkedTaskSourceContext
+      : null
     if (!updated.instanceId) {
       updated.instanceId = randomUUID()
     }
@@ -5506,6 +5585,9 @@ export class Store {
       osc52ClipboardDefaultOnNoticePending:
         this.state.ui?.osc52ClipboardDefaultOnNoticePending === true,
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(this.state.ui?.markdownTocPanelWidth),
+      combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
+        this.state.ui?.combinedDiffFileTreeWidth
+      ),
       visibleWorkspaceHostIds: normalizeVisibleExecutionHostIds(
         this.state.ui?.visibleWorkspaceHostIds
       ),
@@ -5605,6 +5687,9 @@ export class Store {
       ),
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(
         sanitizedUpdates.markdownTocPanelWidth ?? this.state.ui?.markdownTocPanelWidth
+      ),
+      combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
+        sanitizedUpdates.combinedDiffFileTreeWidth ?? this.state.ui?.combinedDiffFileTreeWidth
       ),
       visibleWorkspaceHostIds:
         updates.visibleWorkspaceHostIds !== undefined
@@ -5759,6 +5844,17 @@ export class Store {
       return this.state.workspaceSession ?? getDefaultWorkspaceSession()
     }
     return this.state.workspaceSessionsByHostId?.[resolved] ?? getDefaultWorkspaceSession()
+  }
+
+  getWorkspaceSessionHostIds(): ExecutionHostId[] {
+    const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
+    for (const key of Object.keys(this.state.workspaceSessionsByHostId ?? {})) {
+      const hostId = normalizeExecutionHostId(key)
+      if (hostId) {
+        hostIds.add(hostId)
+      }
+    }
+    return [...hostIds]
   }
 
   readTerminalScrollbackSnapshot(ref: string): string | null {
@@ -6701,6 +6797,8 @@ function getDefaultWorktreeMeta(): WorktreeMeta {
     linkedBitbucketPR: null,
     linkedAzureDevOpsPR: null,
     linkedGiteaPR: null,
+    linkedWorkItem: null,
+    linkedTaskSourceContext: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

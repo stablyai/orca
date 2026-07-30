@@ -45,6 +45,7 @@ import {
 } from '@/lib/workspace-file-drag'
 import type { GitFileStatus } from '../../../../shared/types'
 import { STATUS_LABELS } from './status-display'
+import { RENAME_HOTSPOT_ATTR } from './file-explorer-dir-toggle-timing'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerRowDrag } from './useFileExplorerRowDrag'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
@@ -229,21 +230,12 @@ export function InlineInputRow({
         }}
         onFocus={clearBlurTimeout}
         onBlur={(e) => {
-          // When a Radix menu (context or dropdown) closes, it restores focus
-          // to its trigger button, which steals focus from this input before
-          // the user can type. Detect this by checking relatedTarget — if focus
-          // moved to any menu trigger, it's Radix cleanup, not a user action.
-          if (
-            e.relatedTarget instanceof HTMLElement &&
-            (e.relatedTarget.closest('[data-slot="context-menu-trigger"]') ||
-              e.relatedTarget.closest('[data-slot="dropdown-menu-trigger"]'))
-          ) {
-            scheduleInputRefocus()
-            return
-          }
           // During the grace period after mount, menu close focus management
-          // may shift focus away (often relatedTarget is null). Re-focus
-          // instead of dismissing the still-empty input.
+          // may shift focus away before the user can type. Re-focus instead of
+          // dismissing the still-empty input. Past that window a blur is the
+          // user leaving, so commit like Finder does rather than clinging to
+          // the edit state — every row is itself a context-menu trigger, so
+          // relatedTarget can't tell an ordinary row click from Radix cleanup.
           if (!focusSettled.current) {
             scheduleInputRefocus()
             return
@@ -635,6 +627,9 @@ export function FileExplorerRow({
             </>
           )}
           <span
+            // Why: marks the rename hotspot so the row's click handler can hold
+            // back the directory toggle until the double-click window closes.
+            {...{ [RENAME_HOTSPOT_ATTR]: '' }}
             className={cn(
               'truncate',
               isSelected && !nodeStatus && !isIgnored && 'text-accent-foreground',
@@ -651,10 +646,8 @@ export function FileExplorerRow({
                   : undefined
             }
             onDoubleClick={(e) => {
-              // Why: the row itself swallows double-click for "pin preview" /
-              // directory toggle. Scope rename to the filename text only so
-              // those behaviors stay intact on the icon and empty row area,
-              // matching VS Code's rename hotspot.
+              // Why: scope rename to the filename text so "pin preview" and the
+              // directory toggle stay reachable on the icon and empty row area.
               e.stopPropagation()
               onStartRename(node)
             }}

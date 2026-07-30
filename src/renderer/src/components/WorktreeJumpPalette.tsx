@@ -23,7 +23,6 @@ import {
   CommandEmpty,
   CommandItem
 } from '@/components/ui/command'
-import { branchName } from '@/lib/git-utils'
 import { parseGitHubIssueOrPRNumber, parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import { getLinkedWorkItemSuggestedName, getLinkedWorkItemWorkspaceName } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
@@ -40,6 +39,7 @@ import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { cn } from '@/lib/utils'
 import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/worktree-status'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
   getWorktreePaletteSearchScope,
@@ -47,6 +47,10 @@ import {
   type MatchRange,
   type PaletteSearchResult
 } from '@/lib/worktree-palette-search'
+import {
+  resolveWorktreeBranchLabel,
+  resolveWorktreeDisplayName
+} from '@/lib/worktree-default-display-name'
 import {
   CREATE_WORKTREE_ITEM_ID,
   createWorktreePaletteRequestGuard,
@@ -1271,12 +1275,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         )
         return
       }
-      activateAndRevealWorktree(worktreeId)
+      const activation = activateAndRevealWorktree(worktreeId)
       recordFeatureInteraction('cmd-j-workspace-open')
       skipRestoreFocusRef.current = true
       closeModal()
       setSelectedItemId('')
-      focusFallbackSurface()
+      // Why: #9939 — the unscoped fallback grabs the first terminal in the document, which is
+      // often the worktree we just left, now hidden. Focus the destination's own tab instead.
+      if (!queueWorkspaceActivationTerminalFocus(worktreeId, activation)) {
+        focusFallbackSurface()
+      }
     },
     [closeModal, focusFallbackSurface, recordFeatureInteraction]
   )
@@ -1445,7 +1453,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         return
       }
       if (previousWorktreeIdRef.current) {
-        focusFallbackSurface()
+        // Why: #9939 — sidebar reveal keeps the same worktree, so restore the exact element the
+        // user came from rather than the first terminal in the document.
+        focusFallbackSurface(previousFocusElementRef.current)
       }
     },
     [
@@ -1516,7 +1526,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       const activeMatch = matches.find((w) => w.repoId === state.activeRepoId) ?? matches[0]
       if (activeMatch) {
         closeModal()
-        activateAndRevealWorktree(activeMatch.id)
+        // Why: #9939 — jumping to an already-open workspace must focus its own terminal.
+        const activation = activateAndRevealWorktree(activeMatch.id)
+        if (!queueWorkspaceActivationTerminalFocus(activeMatch.id, activation)) {
+          focusFallbackSurface()
+        }
         recordFeatureInteraction('cmd-j-workspace-open')
         return
       }
@@ -1543,7 +1557,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       const activeMatch = matches.find((w) => w.repoId === state.activeRepoId) ?? matches[0]
       if (activeMatch) {
         closeModal()
-        activateAndRevealWorktree(activeMatch.id)
+        // Why: #9939 — jumping to an already-open workspace must focus its own terminal.
+        const activation = activateAndRevealWorktree(activeMatch.id)
+        if (!queueWorkspaceActivationTerminalFocus(activeMatch.id, activation)) {
+          focusFallbackSurface()
+        }
         recordFeatureInteraction('cmd-j-workspace-open')
         return
       }
@@ -1617,6 +1635,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     closeModal,
     createLookupGuard,
     createWorktreeName,
+    focusFallbackSurface,
     openModal,
     prefetchCreateWorkspaceBaseForComposer,
     recordFeatureInteraction,
@@ -1778,7 +1797,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 const worktree = entry.worktree
                 const repo = repoMap.get(worktree.repoId)
                 const repoName = repo?.displayName ?? ''
-                const branch = branchName(worktree.branch)
+                // Why: both must match searchWorktrees' resolution, or highlight ranges land on
+                // the wrong text — and a branch-less row would throw here before search ever ran.
+                const branch = resolveWorktreeBranchLabel(worktree)
+                const worktreeLabel = resolveWorktreeDisplayName(worktree)
                 const status = getWorktreeStatus(
                   tabsByWorktree[worktree.id] ?? [],
                   browserTabsByWorktree[worktree.id] ?? [],
@@ -1846,11 +1868,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                             <span className="truncate text-[14px] font-semibold text-foreground">
                               {entry.match.displayNameRange ? (
                                 <HighlightedText
-                                  text={worktree.displayName}
+                                  text={worktreeLabel}
                                   matchRange={entry.match.displayNameRange}
                                 />
                               ) : (
-                                worktree.displayName
+                                worktreeLabel
                               )}
                             </span>
                             {isCurrentWorktree && (

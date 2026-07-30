@@ -85,8 +85,14 @@ Terminals:
   terminal close            Close a terminal pane/session, or its whole tab with --tab
 
 Orchestration:
+  orchestration run-create  Create and bind a lightweight orchestration Run
+  orchestration run-use     Bind this coordinator terminal to an existing Run
+  orchestration run-current Show this terminal's bound Run
+  orchestration run-list    List lightweight orchestration Runs
+  orchestration run-show    Show one lightweight orchestration Run
   orchestration send        Send an inter-agent message
-  orchestration check       Check messages for a terminal
+  orchestration check       Check the bound Run mailbox
+  orchestration ask         Ask the coordinator a blocking question
   orchestration reply       Reply to a message
   orchestration inbox       Show all messages across recipients
   orchestration task-create Create an orchestration task
@@ -94,8 +100,13 @@ Orchestration:
   orchestration task-update Update a task status
   orchestration dispatch    Dispatch a task to a terminal
   orchestration dispatch-show Show dispatch context for a task
-  orchestration run         Start the coordinator loop
-  orchestration run-stop    Stop the active coordinator run
+  orchestration worker-start Start a supervised worker locally or on a connected Orca server
+  orchestration worker-show Inspect one supervised worker
+  orchestration worker-read Read bounded output from one supervised worker
+  orchestration worker-stop Stop one supervised worker
+  orchestration worker-abandon Fence an uncertain worker without claiming it stopped
+  orchestration coordinator-start Start the legacy automatic coordinator loop
+  orchestration coordinator-stop Stop the legacy automatic coordinator loop
   orchestration gate-create Create a decision gate blocking a task
   orchestration gate-resolve Resolve a pending decision gate
   orchestration gate-list   List decision gates
@@ -419,6 +430,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'linear list-issues' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous list-issues page'
   }
+  if (command === 'orchestration worker-read' && flag === 'cursor') {
+    return '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'
+  }
   if (command === 'linear list-issues' && flag === 'workspace') {
     return '--workspace <id|all>  Connected Linear workspace id, or all'
   }
@@ -509,6 +523,7 @@ export function formatFlagHelp(flag: string): string {
     limit: '--limit <n>            Maximum number of rows to return',
     mode: '--mode <mode>          Mode such as edit, diff, or both',
     'mouse-button': '--mouse-button <btn>   Mouse button: left, right, or middle',
+    modifiers: '--modifiers <chord>  Modifier keys held only for this click',
     name: '--name <name>          Name for the new worktree or automation',
     'no-parent': '--no-parent            Force no parent lineage for unrelated work',
     'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',

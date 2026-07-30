@@ -43,18 +43,27 @@ describe('useMobileNativeChatDrafts', () => {
   function Harness({
     tabId,
     sessionId = `session-${tabId}`,
-    messages = []
+    messages = [],
+    launchDraft = null,
+    chatActive = true,
+    transcriptLoading = false
   }: {
     tabId: string
     sessionId?: string | null
     messages?: NativeChatMessage[]
+    launchDraft?: string | null
+    chatActive?: boolean
+    transcriptLoading?: boolean
   }): null {
     state = useMobileNativeChatDrafts({
       hostId: 'host',
       worktreeId: 'worktree',
       tabId,
       sessionId,
-      messages
+      messages,
+      launchDraft,
+      chatActive,
+      transcriptLoading
     })
     return null
   }

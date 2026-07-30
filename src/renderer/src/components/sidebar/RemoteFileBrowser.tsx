@@ -17,8 +17,10 @@ import {
   shouldDeferRemoteFileBrowserPasteResolve,
   type DirEntry
 } from './remote-file-browser-helpers'
+import { driveBreadcrumbPath, splitBrowsePath } from './remote-file-browser-drive-paths'
 import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
 import { translate } from '@/i18n/i18n'
+import type { FilesystemPathFlavor } from '../../../../shared/types'
 
 type RemoteFileBrowserProps = (
   | { targetId: string; runtimeEnvironmentId?: never }
@@ -33,7 +35,11 @@ const FILE_HINT_MS = 2000
 const FILE_HINT_TEXT = "Files can't be opened as a project"
 const PATH_DEBOUNCE_MS = 300
 
-type BrowseResult = { resolvedPath: string; entries: DirEntry[] }
+type BrowseResult = {
+  resolvedPath: string
+  entries: DirEntry[]
+  pathFlavor: FilesystemPathFlavor
+}
 
 type PreviewState = {
   resolvedPath: string
@@ -52,6 +58,7 @@ export function RemoteFileBrowser({
 }: RemoteFileBrowserProps): React.JSX.Element {
   const [resolvedPath, setResolvedPath] = useState('')
   const [entries, setEntries] = useState<DirEntry[]>([])
+  const [pathFlavor, setPathFlavor] = useState<FilesystemPathFlavor>('posix')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
@@ -142,6 +149,7 @@ export function RemoteFileBrowser({
         }
         setResolvedPath(result.resolvedPath)
         setEntries(result.entries)
+        setPathFlavor(result.pathFlavor)
         // Only bare `~` yields the home dir itself; `~/sub` resolves elsewhere and must not overwrite the home anchor.
         if (dirPath === '~') {
           homePathRef.current = result.resolvedPath
@@ -184,17 +192,17 @@ export function RemoteFileBrowser({
 
   const navigateInto = useCallback(
     (name: string) => {
-      navigate(joinPath(resolvedPath, name))
+      navigate(joinPath(resolvedPath, name, pathFlavor))
     },
-    [resolvedPath, navigate]
+    [resolvedPath, navigate, pathFlavor]
   )
 
   const navigateUp = useCallback(() => {
     if (resolvedPath === '/') {
       return
     }
-    navigate(parentPath(resolvedPath))
-  }, [resolvedPath, navigate])
+    navigate(parentPath(resolvedPath, pathFlavor))
+  }, [resolvedPath, navigate, pathFlavor])
 
   const filteredEntries = useMemo(() => filterEntries(entries, filter), [entries, filter])
 
@@ -217,7 +225,7 @@ export function RemoteFileBrowser({
   // Resolve a path-mode input into preview state; stable callback so paste and the debounce tick share one instance.
   const resolvePathInput = useCallback(
     async (raw: string) => {
-      const parsed = parsePathInput(raw)
+      const parsed = parsePathInput(raw, pathFlavor)
       if (parsed.mode !== 'path') {
         return
       }
@@ -238,6 +246,8 @@ export function RemoteFileBrowser({
       let basePath: string
       if (parsed.base === 'root') {
         basePath = '/'
+      } else if (parsed.base === 'drive') {
+        basePath = parsed.driveRoot ?? '/'
       } else if (parsed.base === 'home') {
         if (!homePathRef.current) {
           setPreview({
@@ -300,11 +310,11 @@ export function RemoteFileBrowser({
           }
           if (outcome.type === 'stay') {
             if (segment === '..') {
-              currentPath = parentPath(currentPath)
+              currentPath = parentPath(currentPath, listing.pathFlavor)
             }
             continue
           }
-          currentPath = joinPath(currentPath, outcome.name)
+          currentPath = joinPath(currentPath, outcome.name, listing.pathFlavor)
         }
 
         const finalListing = await fetchListing(currentPath)
@@ -332,7 +342,7 @@ export function RemoteFileBrowser({
         })
       }
     },
-    [resolvedPath, fetchListing]
+    [resolvedPath, fetchListing, pathFlavor]
   )
 
   // Filter-mode edits stay local; path-mode edits trigger a debounced resolve, but trailing-filter-only edits stay local too.
@@ -357,7 +367,7 @@ export function RemoteFileBrowser({
         return
       }
 
-      if (!isPathMode(raw)) {
+      if (!isPathMode(raw, pathFlavor)) {
         // Leaving path mode: drop preview immediately so the committed directory reappears without a flicker.
         if (preview) {
           setPreview(null)
@@ -370,7 +380,7 @@ export function RemoteFileBrowser({
         return
       }
 
-      const parsed = parsePathInput(raw)
+      const parsed = parsePathInput(raw, pathFlavor)
       // Fast path: unchanged committed prefix updates only the local filter, so intra-segment typing issues no browseDir call.
       if (
         parsed.mode === 'path' &&
@@ -392,7 +402,7 @@ export function RemoteFileBrowser({
         resolvePathInput(raw)
       }, PATH_DEBOUNCE_MS)
     },
-    [clearFileHint, preview, resolvePathInput]
+    [clearFileHint, preview, resolvePathInput, pathFlavor]
   )
 
   const handleInputPaste = useCallback(
@@ -414,12 +424,12 @@ export function RemoteFileBrowser({
           debounceTimerRef.current = null
         }
         const value = inputRef.current?.value ?? ''
-        if (!isRemoteFileBrowserPathResolveTextTooLarge(value) && isPathMode(value)) {
+        if (!isRemoteFileBrowserPathResolveTextTooLarge(value) && isPathMode(value, pathFlavor)) {
           resolvePathInput(value)
         }
       }, 0)
     },
-    [resolvePathInput]
+    [resolvePathInput, pathFlavor]
   )
 
   // Select always returns the committed directory; disabled during a path preview to avoid a mismatched selection.
@@ -442,13 +452,13 @@ export function RemoteFileBrowser({
       clickTimerRef.current = setTimeout(() => {
         clickTimerRef.current = null
         if (entry.isDirectory) {
-          navigate(joinPath(listParentPath, entry.name))
+          navigate(joinPath(listParentPath, entry.name, pathFlavor))
         } else {
           triggerFileHint()
         }
       }, 220)
     },
-    [navigate, triggerFileHint, listParentPath, preview?.loading]
+    [navigate, triggerFileHint, listParentPath, preview?.loading, pathFlavor]
   )
 
   const handleRowDoubleClick = useCallback(
@@ -461,9 +471,9 @@ export function RemoteFileBrowser({
         clearTimeout(clickTimerRef.current)
         clickTimerRef.current = null
       }
-      onSelect(joinPath(listParentPath, entry.name))
+      onSelect(joinPath(listParentPath, entry.name, pathFlavor))
     },
-    [listParentPath, onSelect, preview?.loading]
+    [listParentPath, onSelect, preview?.loading, pathFlavor]
   )
 
   const handleFilterKeyDown = useCallback(
@@ -475,7 +485,7 @@ export function RemoteFileBrowser({
             e.preventDefault()
             return
           }
-          const parsed = parsePathInput(filter)
+          const parsed = parsePathInput(filter, pathFlavor)
           // Fully-resolved directory (trailing `/` or bare base marker): navigate to the preview path itself.
           if (parsed.mode === 'path' && parsed.trailingFilter === '') {
             e.preventDefault()
@@ -487,7 +497,7 @@ export function RemoteFileBrowser({
           const action = decideEnterAction(filtered)
           if (action.type === 'navigate') {
             e.preventDefault()
-            navigate(joinPath(preview.resolvedPath, action.name))
+            navigate(joinPath(preview.resolvedPath, action.name, pathFlavor))
           } else if (action.type === 'fileHint') {
             e.preventDefault()
             triggerFileHint()
@@ -542,11 +552,21 @@ export function RemoteFileBrowser({
       resolvedPath,
       triggerFileHint,
       clearFileHint,
-      onCancel
+      onCancel,
+      pathFlavor
     ]
   )
 
-  const pathSegments = resolvedPath.split('/').filter(Boolean)
+  // Preserve the separator shape when rebuilding drive breadcrumbs.
+  const browseParts = splitBrowsePath(resolvedPath, pathFlavor)
+  const pathSegments = browseParts.segments
+  const breadcrumbPathTo = useCallback(
+    (segmentIndex: number): string =>
+      browseParts.kind === 'drive'
+        ? driveBreadcrumbPath(browseParts.driveRoot, browseParts.segments, segmentIndex)
+        : `/${browseParts.segments.slice(0, segmentIndex + 1).join('/')}`,
+    [browseParts]
+  )
 
   // Render the preview listing (own filter/error) during path mode, the committed listing otherwise.
   const isPreviewActive = preview !== null
@@ -598,12 +618,27 @@ export function RemoteFileBrowser({
           >
             /
           </button>
-          {pathSegments.map((segment, i) => (
-            <React.Fragment key={i}>
+          {browseParts.kind === 'drive' && (
+            <>
               <ChevronRight className="size-2.5 shrink-0 text-muted-foreground/50" />
               <button
                 type="button"
-                onClick={() => navigate(`/${pathSegments.slice(0, i + 1).join('/')}`)}
+                onClick={() => navigate(browseParts.driveRoot)}
+                className={cn(
+                  'truncate max-w-[120px] hover:text-foreground transition-colors cursor-pointer px-0.5',
+                  pathSegments.length === 0 && 'text-foreground font-medium'
+                )}
+              >
+                {browseParts.driveRoot.slice(0, 2)}
+              </button>
+            </>
+          )}
+          {pathSegments.map((segment, i) => (
+            <React.Fragment key={breadcrumbPathTo(i)}>
+              <ChevronRight className="size-2.5 shrink-0 text-muted-foreground/50" />
+              <button
+                type="button"
+                onClick={() => navigate(breadcrumbPathTo(i))}
                 className={cn(
                   'truncate max-w-[120px] hover:text-foreground transition-colors cursor-pointer px-0.5',
                   i === pathSegments.length - 1 && 'text-foreground font-medium'
@@ -752,9 +787,9 @@ export function RemoteFileBrowser({
   )
 }
 
-// Portion of raw before the final `/`; lets callers tell a trailing-filter-only edit from a committed-segment change.
+// Portion before the final separator; distinguishes filter-only edits from committed-path changes.
 function committedPrefix(raw: string): string {
-  const i = raw.lastIndexOf('/')
+  const i = Math.max(raw.lastIndexOf('/'), raw.lastIndexOf('\\'))
   return i === -1 ? '' : raw.slice(0, i + 1)
 }
 

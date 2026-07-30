@@ -1,5 +1,4 @@
 import type {
-  GlobalSettings,
   JiraAuthType,
   JiraComment,
   JiraConnectionStatus,
@@ -19,34 +18,34 @@ import type {
   JiraUser,
   JiraViewer
 } from '../../../shared/types'
-import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
-import {
-  getTaskSourceRuntimeSettings,
-  type TaskSourceContext
-} from '../../../shared/task-source-context'
+import { searchLocalJiraIssues } from './local-jira-search-cancellation'
+import { callRuntimeRpc, RuntimeRpcCallError } from './runtime-rpc-client'
 import { isRuntimeProviderSearchQueryWithinLimit } from './runtime-provider-search-bounds'
+import { readRuntimeJiraPayload } from './runtime-jira-payload-stream'
+import { getJiraRuntimeTarget, type RuntimeJiraSettings } from './runtime-jira-target'
 
-export type RuntimeJiraSettings =
-  | Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
-  | TaskSourceContext
-  | null
-  | undefined
+export { jiraLookupIssueSummary, jiraReadStatus } from './runtime-jira-summary-client'
+export type { RuntimeJiraSettings } from './runtime-jira-target'
 
 export type JiraConnectResult = { ok: true; viewer: JiraViewer } | { ok: false; error: string }
 export type JiraCommentResult = { ok: true; id: string } | { ok: false; error: string }
 
-function isTaskSourceRuntimeSettings(settings: RuntimeJiraSettings): settings is TaskSourceContext {
-  return settings !== null && settings !== undefined && 'kind' in settings
-}
-
-function getJiraRuntimeTarget(
-  settings: RuntimeJiraSettings
-): ReturnType<typeof getActiveRuntimeTarget> {
-  // Why: task source context makes provider ownership explicit; legacy callers
-  // still pass focused runtime settings until Tasks finishes migrating.
-  return getActiveRuntimeTarget(
-    isTaskSourceRuntimeSettings(settings) ? getTaskSourceRuntimeSettings(settings) : settings
-  )
+async function readRemoteJiraPayload<TResult>(
+  target: { kind: 'environment'; environmentId: string },
+  streamMethod: string,
+  fallbackMethod: string,
+  args: unknown
+): Promise<TResult> {
+  try {
+    return await readRuntimeJiraPayload<TResult>(target, streamMethod, args)
+  } catch (error) {
+    if (!(error instanceof RuntimeRpcCallError) || error.code !== 'method_not_found') {
+      throw error
+    }
+    // Older runtimes predate image payload streaming but still return text-only
+    // Jira details safely through the original one-shot method.
+    return callRuntimeRpc<TResult>(target, fallbackMethod, args, { timeoutMs: 30_000 })
+  }
 }
 
 export async function jiraStatus(settings: RuntimeJiraSettings): Promise<JiraConnectionStatus> {
@@ -114,16 +113,21 @@ export async function jiraSearchIssues(
   settings: RuntimeJiraSettings,
   jql: string,
   limit?: number,
-  siteId?: JiraSiteSelection | null
+  siteId?: JiraSiteSelection | null,
+  signal?: AbortSignal
 ): Promise<JiraIssue[]> {
   if (!isRuntimeProviderSearchQueryWithinLimit(jql)) {
     return []
   }
   const target = getJiraRuntimeTarget(settings)
   const args = { jql, limit, siteId: siteId ?? undefined }
-  return target.kind === 'environment'
-    ? callRuntimeRpc<JiraIssue[]>(target, 'jira.searchIssues', args, { timeoutMs: 30_000 })
-    : window.api.jira.searchIssues(args)
+  if (target.kind === 'environment') {
+    return callRuntimeRpc<JiraIssue[]>(target, 'jira.searchIssues', args, {
+      timeoutMs: 30_000,
+      signal
+    })
+  }
+  return signal ? searchLocalJiraIssues(args, signal) : window.api.jira.searchIssues(args)
 }
 
 export async function jiraListIssues(
@@ -147,7 +151,7 @@ export async function jiraGetIssue(
   const target = getJiraRuntimeTarget(settings)
   const args = { key, siteId: siteId ?? undefined }
   return target.kind === 'environment'
-    ? callRuntimeRpc<JiraIssue | null>(target, 'jira.getIssue', args, { timeoutMs: 30_000 })
+    ? readRemoteJiraPayload<JiraIssue | null>(target, 'jira.getIssueStream', 'jira.getIssue', args)
     : window.api.jira.getIssue(args)
 }
 
@@ -197,7 +201,12 @@ export async function jiraIssueComments(
   const target = getJiraRuntimeTarget(settings)
   const args = { key, siteId: siteId ?? undefined }
   return target.kind === 'environment'
-    ? callRuntimeRpc<JiraComment[]>(target, 'jira.issueComments', args, { timeoutMs: 30_000 })
+    ? readRemoteJiraPayload<JiraComment[]>(
+        target,
+        'jira.issueCommentsStream',
+        'jira.issueComments',
+        args
+      )
     : window.api.jira.issueComments(args)
 }
 

@@ -21,6 +21,7 @@ const {
   subscribeRemoteRuntimeSharedControlRequestMock,
   getRemoteRuntimeSharedControlDiagnosticsMock,
   reconnectRemoteRuntimeSharedControlConnectionMock,
+  retryRemoteRuntimeSharedControlConnectionsNowMock,
   closeRemoteRuntimeRequestConnectionMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -35,6 +36,7 @@ const {
   subscribeRemoteRuntimeSharedControlRequestMock: vi.fn(),
   getRemoteRuntimeSharedControlDiagnosticsMock: vi.fn(),
   reconnectRemoteRuntimeSharedControlConnectionMock: vi.fn(),
+  retryRemoteRuntimeSharedControlConnectionsNowMock: vi.fn(),
   closeRemoteRuntimeRequestConnectionMock: vi.fn()
 }))
 
@@ -59,6 +61,7 @@ vi.mock('./runtime-environment-request-connections', () => ({
   subscribeRemoteRuntimeSharedControlRequest: subscribeRemoteRuntimeSharedControlRequestMock,
   getRemoteRuntimeSharedControlDiagnostics: getRemoteRuntimeSharedControlDiagnosticsMock,
   reconnectRemoteRuntimeSharedControlConnection: reconnectRemoteRuntimeSharedControlConnectionMock,
+  retryRemoteRuntimeSharedControlConnectionsNow: retryRemoteRuntimeSharedControlConnectionsNowMock,
   closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
 }))
 
@@ -115,6 +118,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReset()
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue(null)
     reconnectRemoteRuntimeSharedControlConnectionMock.mockReset()
+    retryRemoteRuntimeSharedControlConnectionsNowMock.mockReset()
     closeRemoteRuntimeRequestConnectionMock.mockReset()
   })
 
@@ -131,6 +135,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:resolve',
       'runtimeEnvironments:remove',
       'runtimeEnvironments:disconnect',
+      'runtimeEnvironments:connect',
+      'runtimeEnvironments:retryConnectionsNow',
       'runtimeEnvironments:getStatus',
       'runtimeEnvironments:call',
       'runtimeEnvironments:subscribe',
@@ -150,12 +156,23 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:resolve',
       'runtimeEnvironments:remove',
       'runtimeEnvironments:disconnect',
+      'runtimeEnvironments:connect',
       'runtimeEnvironments:getStatus',
       'runtimeEnvironments:call',
       'runtimeEnvironments:subscribe',
-      'runtimeEnvironments:unsubscribe'
+      'runtimeEnvironments:unsubscribe',
+      'runtimeEnvironments:retryConnectionsNow'
     ])
     expect(removeAllListenersMock).toHaveBeenCalledWith('runtimeEnvironments:subscriptionBinary')
+  })
+
+  it('advances pending shared-control reconnects through IPC', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+
+    const retryConnectionsNow = handler<undefined, void>('runtimeEnvironments:retryConnectionsNow')
+    await retryConnectionsNow(null, undefined)
+
+    expect(retryRemoteRuntimeSharedControlConnectionsNowMock).toHaveBeenCalledTimes(1)
   })
 
   it('stores, resolves, lists, and removes environments under Electron userData', async () => {
@@ -215,6 +232,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
 
   it('disconnects a saved runtime without removing it', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: { runtimeId: 'runtime-remote' },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
 
     const add = handler<
       { name: string; pairingCode: string },
@@ -235,6 +258,39 @@ describe('registerRuntimeEnvironmentHandlers', () => {
 
     const list = handler<undefined, { id: string; name: string }[]>('runtimeEnvironments:list')
     expect(await list(null, undefined)).toMatchObject([{ id: added.environment.id, name: 'desk' }])
+
+    const getStatus = handler<{ selector: string }, { ok: boolean; error?: { code: string } }>(
+      'runtimeEnvironments:getStatus'
+    )
+    await expect(getStatus(null, { selector: 'desk' })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'runtime_manually_disconnected' }
+    })
+    const call = handler<
+      { selector: string; method: string },
+      { ok: boolean; error?: { code: string } }
+    >('runtimeEnvironments:call')
+    await expect(call(null, { selector: 'desk', method: 'repo.list' })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'runtime_manually_disconnected' }
+    })
+    const subscribe = handler<{ selector: string; method: string }, { subscriptionId: string }>(
+      'runtimeEnvironments:subscribe'
+    )
+    await expect(
+      subscribe(null, { selector: 'desk', method: 'terminal.multiplex' })
+    ).rejects.toThrow('runtime_manually_disconnected')
+    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+    expect(subscribeRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+
+    const connect = handler<{ selector: string }, { ok: boolean; result?: { runtimeId: string } }>(
+      'runtimeEnvironments:connect'
+    )
+    await expect(connect(null, { selector: 'desk' })).resolves.toMatchObject({
+      ok: true,
+      result: { runtimeId: 'runtime-remote' }
+    })
+    expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledOnce()
   })
 
   it('marks environments owned by ephemeral VM runtimes in the public list', async () => {
@@ -1140,9 +1196,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { disconnected: { id: string; name: string } }
     >('runtimeEnvironments:disconnect')
     await disconnect(null, { selector: 'desk' })
+    const connect = handler<{ selector: string }, { ok: boolean }>('runtimeEnvironments:connect')
+    await connect(null, { selector: 'desk' })
     await call(null, { selector: 'desk', method: 'repo.list' })
 
     expect(sendRemoteRuntimeRequestMock.mock.calls.map((call) => call[1])).toEqual([
+      'status.get',
       'status.get',
       'status.get'
     ])

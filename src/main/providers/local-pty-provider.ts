@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- Why: splitting spawn() would scatter tightly coupled PTY lifecycle logic (scan → ready → write → exit) with no cleaner ownership seam. */
-import { basename, delimiter } from 'node:path'
+import { basename, delimiter, win32 as pathWin32 } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { win32 as pathWin32 } from 'node:path'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
@@ -12,7 +11,7 @@ import { buildWindowsPowerShellSpawnAttempts } from './windows-shell-fallback-ch
 import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
-import { parseWslPath, isWslAvailable } from '../wsl'
+import { getDefaultWslDistro, parseWslPath, isWslAvailable } from '../wsl'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import {
   injectHistoryEnv,
@@ -548,6 +547,10 @@ export class LocalPtyProvider implements IPtyProvider {
       process.platform === 'win32'
         ? getWslContextFromPreferredDistro(args.terminalWindowsWslDistro)
         : undefined
+    let launchWslContext =
+      wslInfo !== null
+        ? getWslContextFromPreferredDistro(wslInfo.distro)
+        : (worktreeWslContext ?? preferredWslContext)
 
     let shellPath: string
     let shellArgs: string[]
@@ -573,6 +576,9 @@ export class LocalPtyProvider implements IPtyProvider {
         process.env.COMSPEC ||
         'powershell.exe'
       const shellFamily = worktreeWslContext ? 'wsl.exe' : requestedShellFamily
+      if (!launchWslContext && pathWin32.basename(shellFamily).toLowerCase() === 'wsl.exe') {
+        launchWslContext = getWslContextFromPreferredDistro(getDefaultWslDistro())
+      }
       const normalizedShellFamily = pathWin32.basename(shellFamily).toLowerCase()
       const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellFamily)
       // Why: normalize setting-value and path forms to the PowerShell family so the resolver can fall back to inbox powershell.exe.
@@ -607,7 +613,7 @@ export class LocalPtyProvider implements IPtyProvider {
         shellPath,
         cwd,
         defaultCwd,
-        wslContext: worktreeWslContext ?? preferredWslContext,
+        wslContext: launchWslContext,
         startupCommand: args.command
       })
       const primaryAttempt = windowsFallbackAttempts[0]
@@ -622,7 +628,7 @@ export class LocalPtyProvider implements IPtyProvider {
           shellPath,
           cwd,
           defaultCwd,
-          worktreeWslContext ?? preferredWslContext,
+          launchWslContext,
           args.command
         )
         shellArgs = resolved.shellArgs
@@ -673,8 +679,7 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     const isWslShell = Boolean(wslInfo) || pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
-    const launchWslDistro =
-      wslInfo?.distro ?? worktreeWslContext?.distro ?? preferredWslContext?.distro ?? null
+    const launchWslDistro = isWslShell ? (launchWslContext?.distro ?? null) : null
     const finalEnv = this.opts.buildSpawnEnv
       ? this.opts.buildSpawnEnv(id, spawnEnv, {
           command: args.command,
@@ -797,7 +802,7 @@ export class LocalPtyProvider implements IPtyProvider {
     let historyResult: ReturnType<typeof injectHistoryEnv> | null = null
     if (historyEnabled) {
       historyResult = injectHistoryEnv(finalEnv, worktreeId, effectiveShellPath, cwd, {
-        wslDistro: preferredWslContext?.distro ?? worktreeWslContext?.distro ?? null
+        wslDistro: launchWslDistro
       })
       logHistoryInjection(worktreeId, historyResult)
     }

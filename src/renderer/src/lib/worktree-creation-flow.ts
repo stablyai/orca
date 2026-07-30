@@ -8,7 +8,7 @@ import {
   type WorktreeStartupPayload
 } from '@/lib/worktree-activation'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
-import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-focus'
+import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   attachEphemeralVmRuntimeToWorkspace,
@@ -26,7 +26,8 @@ import type {
   WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
+import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/worktree-creation-agent-seeds'
+import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mode'
 
 type ContinueBackgroundWorktreeCreationOptions = {
   revealCreationSurface?: boolean
@@ -49,6 +50,9 @@ function buildStartupOpt(
     ...(plan.launchToken ? { launchToken: plan.launchToken } : {}),
     ...(request.agent ? { launchAgent: request.agent } : {}),
     ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
+    // Why: view-mode only. An argv-prefill plan sets no draftPrompt, so this is
+    // the sole signal that this launch starts with unsent context in the TUI.
+    ...(request.launchDraftPrompt ? { launchDraftText: request.launchDraftPrompt } : {}),
     ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
     // Why: command-code shows its prompt in the tab status before the first
     // hook fires, so the prompt is threaded through here.
@@ -150,6 +154,7 @@ async function executeWorktreeCreation(
 
   let result: CreateWorktreeResult
   try {
+    const backendStartup = resolveBackendDraftStartup(preparedRequest)
     result = await useAppStore
       .getState()
       .createWorktree(
@@ -169,7 +174,7 @@ async function executeWorktreeCreation(
         preparedRequest.workspaceStatus,
         preparedRequest.linkedGitLabMR,
         preparedRequest.linkedGitLabIssue,
-        preparedRequest.startup,
+        backendStartup,
         preparedRequest.pendingFirstAgentMessageRename,
         creationId,
         preparedRequest.linkedLinearIssueWorkspaceId,
@@ -178,7 +183,15 @@ async function executeWorktreeCreation(
         preparedRequest.linkedAzureDevOpsPR,
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
-        createParent ? { parentWorktreeId: createParent.id } : undefined
+        {
+          ...(createParent ? { parentWorktreeId: createParent.id } : {}),
+          ...(preparedRequest.linkedWorkItem !== undefined
+            ? { linkedWorkItem: preparedRequest.linkedWorkItem }
+            : {}),
+          ...(preparedRequest.linkedTaskSourceContext !== undefined
+            ? { linkedTaskSourceContext: preparedRequest.linkedTaskSourceContext }
+            : {})
+        }
       )
   } catch (error) {
     // Why: a missing entry means the user cancelled mid-flight — abandon
@@ -268,16 +281,13 @@ async function executeWorktreeCreation(
   // Why: clearing synchronously right after activation lets React commit the
   // panel→terminal swap in one frame — no two-row flicker, no empty-terminal flash.
   useAppStore.getState().removePendingWorktreeCreation(creationId, { cleanupVm: false })
-  if (preparedRequest.startupPlan && preparedRequest.agent) {
-    const optionScopeKey = primaryTabId ?? result.startupTerminal?.tabId
-    if (optionScopeKey) {
-      seedNativeChatAppliedSessionOptions(
-        optionScopeKey,
-        preparedRequest.agent,
-        preparedRequest.startupPlan.sessionOptions
-      )
-    }
-  }
+  seedAgentTabStateAfterWorktreeCreate({
+    request: preparedRequest,
+    worktreeId: worktree.id,
+    primaryTabId,
+    startupTerminalTabId: result.startupTerminal?.tabId,
+    backendSpawned
+  })
   if (preparedRequest.startupPlan && !backendSpawned) {
     void ensureAgentStartupInTerminal({
       worktreeId: worktree.id,
@@ -286,7 +296,7 @@ async function executeWorktreeCreation(
     })
   }
   if (shouldActivateOnCompletion && !preparedRequest.suppressTerminalFocusOnCompletion) {
-    queueNewWorkspaceTerminalFocus(worktree.id, activation)
+    queueWorkspaceActivationTerminalFocus(worktree.id, activation)
   }
 
   // Why: awaiting the note IPC before the swap would add a visible round-trip to

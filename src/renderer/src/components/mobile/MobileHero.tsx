@@ -40,6 +40,7 @@ type HeroFlowProps = {
   onCopyInstallUrl: () => void
   pairQrDataUrl: string | null
   pairingUrl: string | null
+  pairingQrError: boolean
   /** True when the shown QR degraded to local-only under an Anywhere selection. */
   relayDegraded: boolean
   pairLoading: boolean
@@ -51,6 +52,7 @@ type HeroFlowProps = {
   networkInterfaces: readonly MobileNetworkInterface[]
   selectedAddress: string | undefined
   onSelectedAddressChange: (address: string) => void
+  beforeCustomAddressChange: (address: string) => Promise<boolean>
   onRefreshNetworkInterfaces: () => void
   refreshingNetworkInterfaces: boolean
   onBack: () => void
@@ -70,6 +72,7 @@ export function HeroFlow({
   onCopyInstallUrl,
   pairQrDataUrl,
   pairingUrl,
+  pairingQrError,
   relayDegraded,
   pairLoading,
   connectionMode,
@@ -80,6 +83,7 @@ export function HeroFlow({
   networkInterfaces,
   selectedAddress,
   onSelectedAddressChange,
+  beforeCustomAddressChange,
   onRefreshNetworkInterfaces,
   refreshingNetworkInterfaces,
   onBack,
@@ -303,6 +307,20 @@ export function HeroFlow({
                   </span>
                 </p>
               ) : null}
+              {pairingQrError ? (
+                <p
+                  className="flex w-full min-w-0 items-start gap-1.5 text-xs text-destructive"
+                  role="alert"
+                >
+                  <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                  <span className="min-w-0">
+                    {translate(
+                      'auto.components.mobile.MobileHero.pairingQrError',
+                      'This pairing code couldn’t be rendered as a QR code. Copy it into Orca Mobile instead.'
+                    )}
+                  </span>
+                </p>
+              ) : null}
             </div>
             <div className="mp-pairing-controls">
               <div className="mp-network-row">
@@ -313,6 +331,7 @@ export function HeroFlow({
                   networkInterfaces={networkInterfaces}
                   selectedAddress={selectedAddress}
                   onSelectedAddressChange={onSelectedAddressChange}
+                  beforeCustomAddressChange={beforeCustomAddressChange}
                   // Why: direct-first and local-only pairing both advertise a
                   // local route; keeping it visible also prevents mode shifts.
                   disabled={false}

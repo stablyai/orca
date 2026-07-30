@@ -67,7 +67,8 @@ const RECOGNIZED_ORCA_YAML_KEYS = new Set([
   'scripts',
   'issueCommand',
   'defaultTabs',
-  'environmentRecipes'
+  'environmentRecipes',
+  'worktree'
 ])
 
 /** True when `orca.yaml` has a top-level key this version of Orca does not handle. */

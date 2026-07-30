@@ -31,7 +31,13 @@ const updateCapableCallers = new Map<string, readonly string[]>([
   ],
   [
     'src/renderer/src/components/settings/EphemeralVmsPane.tsx',
-    ['EPHEMERAL_VMS_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
+    [
+      'EPHEMERAL_VMS_SKILL_UPDATE_COMMAND',
+      'installedCommand={updateCommand}',
+      // An absent runtime must still resolve to the host so the Windows npx
+      // preflight applies, as it does on the sibling panes.
+      'const installCommand = activeSkillRuntime.installDisabledReason'
+    ]
   ],
   [
     'src/renderer/src/components/settings/CliSection.tsx',
@@ -61,14 +67,27 @@ const updateCapableCallers = new Map<string, readonly string[]>([
   ],
   [
     'src/renderer/src/components/settings/MobileEmulatorAgentControlRow.tsx',
-    ['ORCA_CLI_SKILL_UPDATE_COMMAND', 'installedCommand={cliSkillUpdateCommand}']
+    [
+      'ORCA_CLI_SKILL_UPDATE_COMMAND',
+      'installedCommand={cliSkillUpdateCommand}',
+      'terminalShellOverride={activeSkillRuntime.terminalShellOverride}',
+      // Detection here scans the local host only, so the command must stay host-built.
+      'buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND)',
+      'buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND)'
+    ]
   ]
 ])
 
 const installOnlyCallers = new Map<string, readonly string[]>([
   [
     'src/renderer/src/components/emulator-pane/MobileEmulatorAgentSetupGuideSteps.tsx',
-    ['showInstallWhenInstalled={!setup.cliSkillInstalled}']
+    [
+      // Detection here scans the local host only, so the command must stay host-built.
+      'buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND)',
+      'command={skillInstallCommand}',
+      'terminalShellOverride={activeSkillRuntime.terminalShellOverride}',
+      'showInstallWhenInstalled={!setup.cliSkillInstalled}'
+    ]
   ]
 ])
 
@@ -127,6 +146,22 @@ describe('AgentSkillSetupPanel installed-command call sites', () => {
     expect(source).toContain('installedCommand={orchestrationUpdateCommand}')
     expect(source).not.toContain('Copy update command')
     expect(source).not.toContain('copyUpdateCommand')
+  })
+
+  it('routes the combined feature-tip install through runtime command setup', () => {
+    const source = readRepoFile(
+      'src/renderer/src/components/feature-tips/CliSkillSetupTerminal.tsx'
+    )
+
+    expect(source).toContain('buildSkillCommandForRuntime(')
+    expect(source).toContain('command={skillCommand}')
+    expect(source).toContain('shellOverride={activeSkillRuntime.terminalShellOverride}')
+    expect(source).not.toContain('command={ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}')
+    // This terminal auto-pastes with no install gate, so a repair-required runtime
+    // must fall back to the host rather than skip the Windows npx preflight.
+    expect(source).toContain(
+      'activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime'
+    )
   })
 
   it('fails when a production caller can show the default Update action without installedCommand', () => {

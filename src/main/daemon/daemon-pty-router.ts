@@ -10,6 +10,8 @@ import type {
 } from '../providers/types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import { probePtyOwners } from './daemon-pty-liveness-probe'
+import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -108,6 +110,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.current.hasPty(id) || this.legacy.some((adapter) => adapter.hasPty(id))
   }
 
+  async probePtyLiveness(id: string): Promise<boolean | null> {
+    return await probePtyOwners(id, this.sessionAdapters.get(id), this.allAdapters())
+  }
+
   write(id: string, data: string): void {
     this.adapterFor(id).write(id, data)
   }
@@ -132,15 +138,16 @@ export class DaemonPtyRouter implements IPtyProvider {
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<void> {
-    await this.adapterFor(id).shutdown(id, opts)
-    // Why: sleep passes keepHistory=true and re-spawns against the same
-    // sessionId on wake. If we delete the routing entry here, adapterFor()
-    // falls back to `this.current` on wake — for a session that originally
-    // lived on a legacy adapter (different protocolVersion), the wake-side
-    // createOrAttach lands on the wrong adapter and creates a fresh session,
-    // losing the cold-restore from the legacy adapter's history dir.
-    if (!opts.keepHistory) {
-      this.sessionAdapters.delete(id)
+    const adapter = this.adapterFor(id)
+    const migrateHistory = shouldHandoffDaemonHistory(opts.keepHistory, adapter, this.current)
+    await adapter.shutdown(id, opts)
+    if (!opts.keepHistory || migrateHistory) {
+      if (migrateHistory) {
+        adapter.ackColdRestore(id)
+      }
+      if (this.sessionAdapters.get(id) === adapter) {
+        this.sessionAdapters.delete(id)
+      }
     }
   }
 

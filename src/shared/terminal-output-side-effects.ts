@@ -13,7 +13,10 @@ import {
   normalizeTerminalTitle
 } from './agent-detection'
 import { createBellDetector } from './terminal-bell-detector'
-import { scanMode2031Sequences } from './terminal-color-scheme-protocol'
+import {
+  INITIAL_MODE_2031_REPLY_SCAN_STATE,
+  scanMode2031ReplyDecision
+} from './terminal-color-scheme-protocol'
 import {
   createTerminalGitHubPRLinkDetector,
   type TerminalGitHubPRLink
@@ -40,6 +43,11 @@ export type TerminalTitleFactMeta = {
   staleWorkingTitleClear?: boolean
 }
 
+type TerminalTitleTrackerChunkOptions = {
+  titleScanData?: string
+  mode2031PendingSubscribe?: boolean
+}
+
 export type TerminalTitleTrackerCallbacks = {
   /** Fired once per observed OSC title, in byte order — including the synthesized cleared title when the stale-working timer fires. */
   onTitle?: (normalizedTitle: string, rawTitle: string, meta?: TerminalTitleFactMeta) => void
@@ -60,11 +68,18 @@ export type TerminalTitleTrackerCallbacks = {
    * hidden-delivery-gated renderer views answer the color-scheme query without byte access.
    */
   onMode2031Subscribe?: () => void
+  /**
+   * Fired per chunk that ends *unsubscribed* after having carried 2031 bytes. Gated
+   * views never see the withdrawal (main drops their bytes), so without this fact
+   * their subscription registry goes stale and a later theme flip pushes CSI 997
+   * into a shell that already withdrew — #9993 through the theme-change door.
+   */
+  onMode2031Unsubscribe?: () => void
 }
 
 export type TerminalTitleTracker = {
   /** Feed one raw PTY chunk; titles are applied synchronously in byte order. */
-  handleChunk: (data: string, options?: { titleScanData?: string }) => void
+  handleChunk: (data: string, options?: TerminalTitleTrackerChunkOptions) => void
   /**
    * Apply a main-fabricated OSC title/BEL frame (agent hook spinner frames). Parsed statelessly,
    * never through the chunk bell detector, so a synthetic tick can't corrupt cross-chunk escape state.
@@ -99,7 +114,8 @@ export function createTerminalTitleTracker(
     onBell,
     onCommandFinished,
     onPrLink,
-    onMode2031Subscribe
+    onMode2031Subscribe,
+    onMode2031Unsubscribe
   } = callbacks
   const bellDetector = onBell ? createBellDetector() : null
   // Why: created only when a consumer exists so headless serve never pays the per-chunk 133/URL scans.
@@ -108,8 +124,7 @@ export function createTerminalTitleTracker(
     : null
   let prLinkDetector = onPrLink ? createTerminalGitHubPRLinkDetector() : null
   let transientFactScanningSuppressed = false
-  // Why: a DECSET 2031 subscribe can split across chunks; carry a bounded tail so split sequences still match.
-  let mode2031ScanTail = ''
+  let mode2031ReplyScanState = INITIAL_MODE_2031_REPLY_SCAN_STATE
   // Why: seed both so a mid-session tracker behaves as if it had observed the pane's last live title (renderer parity).
   let lastEmittedTitle: string | null =
     options.initialTitle !== undefined ? normalizeTerminalTitle(options.initialTitle) : null
@@ -148,7 +163,7 @@ export function createTerminalTitleTracker(
     agentTracker?.handleTitle(rawTitle)
   }
 
-  function handleChunk(data: string, options: { titleScanData?: string } = {}): void {
+  function handleChunk(data: string, options: TerminalTitleTrackerChunkOptions = {}): void {
     const titleScanData = options.titleScanData ?? data
     // Why: hot path — scan for the OSC introducer once and share it with the bell detector's fast-path gate.
     const containsOscIntroducer = data.includes('\x1b]')
@@ -195,11 +210,16 @@ export function createTerminalTitleTracker(
           onPrLink?.(link)
         }
       }
-      if (onMode2031Subscribe) {
-        const mode2031Scan = scanMode2031Sequences(mode2031ScanTail, data)
-        mode2031ScanTail = mode2031Scan.tail
-        if (mode2031Scan.subscribe) {
-          onMode2031Subscribe()
+      if (onMode2031Subscribe || onMode2031Unsubscribe) {
+        const previousMode2031ReplyScanState = options.mode2031PendingSubscribe
+          ? { ...mode2031ReplyScanState, pendingSubscribe: true }
+          : mode2031ReplyScanState
+        const result = scanMode2031ReplyDecision(previousMode2031ReplyScanState, data)
+        mode2031ReplyScanState = result.state
+        if (result.decision === 'subscribed') {
+          onMode2031Subscribe?.()
+        } else if (result.decision === 'unsubscribed') {
+          onMode2031Unsubscribe?.()
         }
       }
     }
@@ -245,7 +265,7 @@ export function createTerminalTitleTracker(
         // Cross-chunk carry predates the gapped span; reset it so stale state can't swallow real bells or mint phantom facts.
         bellDetector?.reset()
         commandFinishedScanner?.reset()
-        mode2031ScanTail = ''
+        mode2031ReplyScanState = INITIAL_MODE_2031_REPLY_SCAN_STATE
         if (prLinkDetector) {
           prLinkDetector = createTerminalGitHubPRLinkDetector()
         }
@@ -256,7 +276,7 @@ export function createTerminalTitleTracker(
       agentTracker?.reset()
       bellDetector?.reset()
       commandFinishedScanner?.reset()
-      mode2031ScanTail = ''
+      mode2031ReplyScanState = INITIAL_MODE_2031_REPLY_SCAN_STATE
     }
   }
 }

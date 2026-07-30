@@ -7,6 +7,7 @@ import {
   foldClaudeBackgroundTasksIntoRoster,
   idleClaudeTeammateByName,
   readClaudeBackgroundAgentTasks,
+  reapRestoredClaudeSubagentsWithoutLiveAgent,
   stopClaudeSubagent,
   upsertWorkingClaudeSubagent,
   type ClaudeSubagentRoster
@@ -475,5 +476,53 @@ describe('claude-subagent-roster', () => {
     // Why: idle rows serialize their parked state so the sidebar renders them.
     expect(snapshots?.map((s) => s.state)).toEqual(['idle', 'working', 'working'])
     expect(claudeRosterToSnapshots(new Map())).toBeUndefined()
+  })
+})
+
+describe('restored-row liveness reap', () => {
+  const restored = (id: string): ClaudeSubagentRoster =>
+    new Map([
+      [
+        id,
+        {
+          state: 'working' as const,
+          startedAt: 100,
+          backgroundTasksAuthoritative: true,
+          restoredFromSnapshot: true
+        }
+      ]
+    ])
+
+  it('drops a restored row when no agent process is left behind it', () => {
+    const roster = restored('areview-loop-c237a4c577493352')
+    expect(reapRestoredClaudeSubagentsWithoutLiveAgent(roster)).toBe(true)
+    expect(claudeRosterHasWorkingSubagent(roster)).toBe(false)
+  })
+
+  it('keeps a row a live lifecycle event re-tracked', () => {
+    const roster = restored('areview-loop-c237a4c577493352')
+    upsertWorkingClaudeSubagent(roster, 'areview-loop-c237a4c577493352', {}, 150)
+    expect(reapRestoredClaudeSubagentsWithoutLiveAgent(roster)).toBe(false)
+    expect(claudeRosterHasWorkingSubagent(roster)).toBe(true)
+  })
+
+  it('keeps a row a live inventory confirmed as running', () => {
+    const roster = restored('a9')
+    foldClaudeBackgroundTasksIntoRoster(roster, [task({ id: 'a9' })], 150)
+    expect(reapRestoredClaudeSubagentsWithoutLiveAgent(roster)).toBe(false)
+    expect(claudeRosterHasWorkingSubagent(roster)).toBe(true)
+  })
+
+  it('leaves rows this listener tracked from live events alone', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    upsertWorkingClaudeSubagent(roster, 'a1', {}, 100)
+    expect(reapRestoredClaudeSubagentsWithoutLiveAgent(roster)).toBe(false)
+    expect(roster.has('a1')).toBe(true)
+  })
+
+  it('leaves the inventory reap of a restored row working', () => {
+    const roster = restored('aprobe1-6d3cb5b5')
+    foldClaudeBackgroundTasksIntoRoster(roster, [task({ id: 'other', teammate: true })], 200)
+    expect(roster.has('aprobe1-6d3cb5b5')).toBe(false)
   })
 })

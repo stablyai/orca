@@ -1,10 +1,12 @@
 import {
-  PAIRING_CODE_MAX_CHARACTERS,
-  PAIRING_INPUT_MAX_CHARACTERS,
   PAIRING_OFFER_VERSION,
   PairingOfferSchema,
   type PairingOffer
 } from './mobile-relay-pairing-offer'
+import {
+  PAIRING_CODE_MAX_CHARACTERS,
+  PAIRING_INPUT_MAX_CHARACTERS
+} from './mobile-pairing-protocol-limits'
 
 export { PAIRING_OFFER_VERSION, PairingOfferSchema }
 export type { PairingOffer }

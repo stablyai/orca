@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   claimsCodexRolloutLayout,
   findTrustedCodexSessionResume,
+  resolveCodexSessionResumeProvenance,
   resolveTrustedCodexSessionResumeHome
 } from './codex-session-resume-home'
 
@@ -460,5 +461,82 @@ describe('claimsCodexRolloutLayout', () => {
     expect(
       claimsCodexRolloutLayout('/Users/example/.codex/sessions/2026/07/20/nested/rollout-a.jsonl')
     ).toBe(false)
+  })
+})
+
+describe('resolveCodexSessionResumeProvenance', () => {
+  function writeRollout(sessionId: string): { homePath: string; rolloutPath: string } {
+    const homePath = mkdtempSync(join(tmpdir(), 'orca-codex-resume-provenance-'))
+    tempRoots.push(homePath)
+    const rolloutPath = join(
+      homePath,
+      'sessions',
+      '2026',
+      '07',
+      '20',
+      `rollout-2026-07-20T12-00-00-${sessionId}.jsonl`
+    )
+    mkdirSync(join(rolloutPath, '..'), { recursive: true })
+    writeFileSync(rolloutPath, 'rollout')
+    return { homePath, rolloutPath }
+  }
+
+  it('starts fresh for a rollout file that really exists under a home Orca no longer trusts', async () => {
+    // Why: the discriminating case — the file is present, so only the trust check can
+    // reject it. Resuming here would run the session under the selected account.
+    const sessionId = '019f81b9-19a9-7651-a8d1-352d9420bd11'
+    const removed = writeRollout(sessionId)
+    const trusted = mkdtempSync(join(tmpdir(), 'orca-codex-resume-provenance-'))
+    tempRoots.push(trusted)
+
+    await expect(
+      resolveCodexSessionResumeProvenance({
+        sessionId,
+        transcriptPath: removed.rolloutPath,
+        trustedCodexHomes: [trusted],
+        ...withoutHomeRanking
+      })
+    ).resolves.toEqual({ outcome: 'fresh', claimedCodexProvenance: true })
+  })
+
+  it('resumes from the originating home when that home is still trusted', async () => {
+    const sessionId = '019f81b9-19a9-7651-a8d1-352d9420bd11'
+    const origin = writeRollout(sessionId)
+
+    await expect(
+      resolveCodexSessionResumeProvenance({
+        sessionId,
+        transcriptPath: origin.rolloutPath,
+        trustedCodexHomes: [origin.homePath],
+        ...withoutHomeRanking
+      })
+    ).resolves.toEqual({
+      outcome: 'resume',
+      homePath: origin.homePath,
+      transcriptPath: origin.rolloutPath
+    })
+  })
+
+  it('starts fresh silently for cross-agent provenance on a pane relabeled codex', async () => {
+    await expect(
+      resolveCodexSessionResumeProvenance({
+        sessionId: '019f81b9-19a9-7651-a8d1-352d9420bd11',
+        transcriptPath: '/Users/example/.claude/projects/repo/019f81b9.jsonl',
+        trustedCodexHomes: ['/Users/example/.codex'],
+        ...withoutHomeRanking
+      })
+    ).resolves.toEqual({ outcome: 'fresh', claimedCodexProvenance: false })
+  })
+
+  it('reports a missing rollout under a trusted home as rejected Codex provenance', async () => {
+    await expect(
+      resolveCodexSessionResumeProvenance({
+        sessionId: '019f81b9-19a9-7651-a8d1-352d9420bd11',
+        transcriptPath: '/Users/example/.codex/sessions/2026/07/20/rollout-gone.jsonl',
+        trustedCodexHomes: ['/Users/example/.codex'],
+        ...withoutHomeRanking,
+        fileIsRegular: () => false
+      })
+    ).resolves.toEqual({ outcome: 'fresh', claimedCodexProvenance: true })
   })
 })

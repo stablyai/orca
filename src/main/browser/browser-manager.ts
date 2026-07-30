@@ -43,14 +43,17 @@ import {
   buildBrowserIframeClickedLinkRoutingScript
 } from './browser-clicked-link-routing'
 import { cleanElectronUserAgent } from './browser-session-ua'
-import type { BrowserViewportOverride } from '../../shared/types'
+import type {
+  BrowserViewportOverride,
+  BrowserCertificateFailure,
+  BrowserLoadError
+} from '../../shared/types'
 import {
   type BrowserAnnotationViewportBridgeOptions,
   BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID,
   buildBrowserAnnotationViewportBridgeScript
 } from '../../shared/browser-annotation-viewport-bridge'
 import type { KeybindingOverrides } from '../../shared/keybindings'
-import type { BrowserCertificateFailure, BrowserLoadError } from '../../shared/types'
 import {
   BrowserCertificateTrustController,
   type ManagedBrowserGuestContext
@@ -1711,7 +1714,8 @@ export class BrowserManager {
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
         shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
         isMobileEmulatorEnabled: () => this.settingsResolver?.().mobileEmulatorEnabled !== false,
-        getKeybindings: () => this.settingsResolver?.().keybindings
+        getKeybindings: () => this.settingsResolver?.().keybindings,
+        resolveWorktreeId: (tabId) => this.worktreeIdByTabId.get(tabId) ?? null
       })
     )
   }

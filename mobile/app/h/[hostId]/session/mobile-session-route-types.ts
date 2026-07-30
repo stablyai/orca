@@ -26,6 +26,8 @@ export type MobileSessionTab =
       /** Agent Orca launched in this terminal, if any. This makes chat eligible
        *  before the first live agent-status update reaches the mobile client. */
       launchAgent?: TuiAgent
+      /** Host-provided launch context still parked as an unsent TUI-input draft. */
+      launchDraft?: string
       terminalTheme?: MobileTerminalTheme
       isActive: boolean
     }
