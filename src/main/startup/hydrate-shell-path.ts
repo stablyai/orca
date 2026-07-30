@@ -318,12 +318,21 @@ function uniquePathSegments(segments: string[], pathKey: (segment: string) => st
 const VERSION_MANAGER_INSTALL_BIN_RE =
   /(?:^|[/\\])(?:\.?mise[/\\]installs|\.nvm[/\\]versions|\.asdf[/\\]installs)[/\\][^/\\]+[/\\][^/\\]+[/\\]bin$/i
 
-const FNM_MULTISHELL_BIN_RE = /(?:^|[/\\])fnm_multishells[/\\]/i
+// Why: fnm session dirs are `fnm_multishells/<pid>_<ts>[/bin]`. Require that shape
+// so arbitrary paths containing the substring (e.g. /opt/myapp/fnm_multishells/tools)
+// are not treated as version-manager installs.
+const FNM_MULTISHELL_SESSION_RE = /(?:^|[/\\])fnm_multishells[/\\]\d+_\d+(?:[/\\]bin)?$/i
 
-/** @internal - exported for unit tests. */
-export function isObsoleteVersionManagerInstallSegment(segment: string): boolean {
+/**
+ * Structural match for version-manager install / session bin paths.
+ * Staleness is decided by the caller (segment absent from shell PATH).
+ * @internal - exported for unit tests.
+ */
+export function isVersionManagerInstallPath(segment: string): boolean {
   const normalized = segment.replace(/\\/g, '/')
-  return VERSION_MANAGER_INSTALL_BIN_RE.test(normalized) || FNM_MULTISHELL_BIN_RE.test(normalized)
+  return (
+    VERSION_MANAGER_INSTALL_BIN_RE.test(normalized) || FNM_MULTISHELL_SESSION_RE.test(normalized)
+  )
 }
 
 /** Shell order wins over seeded PATH; report newly added segments for diagnostics. */
@@ -347,7 +356,7 @@ export function mergePathSegments(segments: string[]): string[] {
     ...shellSegments,
     ...currentSegments.filter(
       (segment) =>
-        !shellSegmentSet.has(pathKey(segment)) && !isObsoleteVersionManagerInstallSegment(segment)
+        !shellSegmentSet.has(pathKey(segment)) && !isVersionManagerInstallPath(segment)
     )
   ]
   const next = merged.join(pathDelimiter)
