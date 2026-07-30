@@ -75,6 +75,22 @@ describe('listWindowsDrives', () => {
     })
   })
 
+  it('surfaces programming errors from isDirectory', async () => {
+    const error = new TypeError('programmer bug')
+    const statPath = async (p: string): Promise<Stats> => {
+      if (p === 'D:\\') {
+        return {
+          isDirectory: () => {
+            throw error
+          }
+        } as unknown as Stats
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    }
+
+    await expect(listWindowsDrives(statPath)).rejects.toBe(error)
+  })
+
   it('returns healthy drives among tolerated and unexpected stat failures', async () => {
     const error = Object.assign(new Error('EIO'), { code: 'EIO' })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)

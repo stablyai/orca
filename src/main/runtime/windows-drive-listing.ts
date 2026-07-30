@@ -26,15 +26,16 @@ export async function listWindowsDrives(
   const roots = await Promise.all(
     [...DRIVE_LETTERS].map(async (letter) => {
       const root = `${letter}:\\`
+      let stats: Stats
       try {
-        const stats = await statPath(root)
-        return stats.isDirectory() ? root : null
+        stats = await statPath(root)
       } catch (error) {
         if (!isExpectedUnavailableDriveError(error)) {
           console.warn('[windows-drive-listing] Failed to stat drive', { root, error })
         }
         return null
       }
+      return stats.isDirectory() ? root : null
     })
   )
   return {
