@@ -60,6 +60,9 @@ const api: StatusPillPreloadApi = {
   setCapturing: (capturing: boolean): void => {
     ipcRenderer.send('statusPill:setCapturing', capturing)
   },
+  setExpanded: (expanded: boolean): void => {
+    ipcRenderer.send('statusPill:setExpanded', expanded)
+  },
   answerQuestion: (paneKey: string, raw: string): Promise<StatusPillAnswerResult> =>
     ipcRenderer.invoke('statusPill:answerAgent', { paneKey, raw })
 }

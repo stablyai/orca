@@ -32,6 +32,8 @@ export type StatusPillIpcArgs = {
   onContentRect: (rect: { left: number; top: number; width: number; height: number }) => void
   /** Lock/unlock capture for the duration of a pointer press (drag safety). */
   onSetCapturing: (capturing: boolean) => void
+  /** Tell main the island is expanded (forces full capture while expanded). */
+  onSetExpanded: (expanded: boolean) => void
   warn: (message: string, error?: unknown) => void
 }
 
@@ -118,6 +120,9 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
   const setCapturingHandler = (payload: unknown): void => {
     args.onSetCapturing(payload === true)
   }
+  const setExpandedHandler = (payload: unknown): void => {
+    args.onSetExpanded(payload === true)
+  }
   const answerHandler = async (payload: unknown): Promise<StatusPillAnswerResult> =>
     answerAgentFromPill(payload, args)
   // Why: validate the focus target against the live rows so a stale or
@@ -147,6 +152,7 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
   ipcMain.on('statusPill:setWindowPosition', setWindowPositionHandler)
   ipcMain.on('statusPill:contentRect', contentRectHandler)
   ipcMain.on('statusPill:setCapturing', setCapturingHandler)
+  ipcMain.on('statusPill:setExpanded', setExpandedHandler)
   ipcMain.handle('statusPill:getSnapshot', snapshotHandler)
   ipcMain.handle('statusPill:getAgentRows', rowsHandler)
   ipcMain.handle('statusPill:getInitialPreferences', prefsHandler)
@@ -160,6 +166,7 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
     ipcMain.removeListener('statusPill:setWindowPosition', setWindowPositionHandler)
     ipcMain.removeListener('statusPill:contentRect', contentRectHandler)
     ipcMain.removeListener('statusPill:setCapturing', setCapturingHandler)
+    ipcMain.removeListener('statusPill:setExpanded', setExpandedHandler)
     ipcMain.removeHandler('statusPill:getSnapshot')
     ipcMain.removeHandler('statusPill:getAgentRows')
     ipcMain.removeHandler('statusPill:getInitialPreferences')

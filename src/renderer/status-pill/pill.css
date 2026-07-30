@@ -149,6 +149,41 @@ body {
   gap: 7px;
 }
 
+.island-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 2px;
+}
+.island-head-title {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+}
+.pin-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+.pin-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+.pin-btn.is-pinned {
+  background: var(--vi-work);
+  color: #06112a;
+}
+
 .usage-line {
   display: flex;
   align-items: center;

@@ -183,6 +183,10 @@ export type StatusPillPreloadApi = {
    *  the duration of a pointer press, so a drag never gets cut by the
    *  click-through poll when the cursor briefly leaves the content rect. */
   setCapturing: (capturing: boolean) => void
+  /** Tell main the island is expanded. While expanded, main forces full click
+   *  capture (no click-through) so clicks on the panel/rows always land — the
+   *  compact poll is only used when collapsed. */
+  setExpanded: (expanded: boolean) => void
   /** Send raw bytes (option number, label text, Escape, …) to the agent PTY
    *  that asked the currently-pending question. Returns whether the write
    *  reached a live terminal. Main resolves the paneKey → terminal handle →

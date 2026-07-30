@@ -17,6 +17,7 @@ export function startClickThroughPoll(
       height: number
     } | null
     isCapturing: () => boolean
+    isExpanded: () => boolean
   }
 ): () => void {
   window.setIgnoreMouseEvents(true)
@@ -24,7 +25,9 @@ export function startClickThroughPoll(
     if (window.isDestroyed()) {
       return
     }
-    let overContent = state.isCapturing()
+    // Why: expanded island and an active press both force full capture so
+    // panel clicks and drags never get dropped to the app behind.
+    let overContent = state.isExpanded() || state.isCapturing()
     if (!overContent) {
       const rect = state.getContentRect()
       if (rect) {

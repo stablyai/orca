@@ -256,6 +256,10 @@ export function createStatusPillWindow(
   // capturing even if the cursor briefly leaves the content rect — otherwise
   // the poll would flip back to click-through mid-drag and sever the drag.
   let capturing = false
+  // Why: while the island is expanded, force full capture so clicks on the
+  // panel/rows always land (the compact cursor poll is only reliable for the
+  // small resting island).
+  let expanded = false
   const detachIpc = attachStatusPillIpcListeners({
     window,
     onFocusMainWindow: options.onFocusMainWindow,
@@ -269,6 +273,9 @@ export function createStatusPillWindow(
     },
     onSetCapturing: (value) => {
       capturing = value
+    },
+    onSetExpanded: (value) => {
+      expanded = value
     },
     warn,
     // Why: the renderer drives manual dragging (mousedown → mousemove). It
@@ -301,7 +308,8 @@ export function createStatusPillWindow(
   // rect (or while a pointer is pressed). Reliable across platforms, no forwarding.
   const stopClickThroughPoll = startClickThroughPoll(window, {
     getContentRect: () => contentRect,
-    isCapturing: () => capturing
+    isCapturing: () => capturing,
+    isExpanded: () => expanded
   })
 
   // Why: push the initial snapshot as soon as the renderer signals it is

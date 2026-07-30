@@ -56,6 +56,8 @@ export function Island({
   entered,
   attention,
   dragging,
+  pinned,
+  onTogglePin,
   pending,
   onAnswer,
   onFocusPane,
@@ -74,6 +76,8 @@ export function Island({
   entered: boolean
   attention: boolean
   dragging: boolean
+  pinned: boolean
+  onTogglePin: () => void
   pending?: StatusPillPendingQuestion
   onAnswer: (paneKey: string, raw: string) => Promise<void>
   onFocusPane: (paneKey: string, worktreeId?: string | null) => void
@@ -117,6 +121,24 @@ export function Island({
       <div className="island-stack">
         {expanded && rows.length > 0 ? (
           <div className="island-expanded">
+            <div className="island-head">
+              <span className="island-head-title">
+                {total} session{total === 1 ? '' : 's'}
+              </span>
+              <button
+                type="button"
+                className={`pin-btn ${pinned ? 'is-pinned' : ''}`}
+                title={pinned ? 'Unpin' : 'Pin to move'}
+                aria-label={pinned ? 'Unpin island' : 'Pin island'}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onTogglePin()
+                }}
+              >
+                {pinned ? '📌' : '📍'}
+              </button>
+            </div>
             <div className="session session-hero">
               <PixelPet state={petState} size={18} />
               <div className="si">

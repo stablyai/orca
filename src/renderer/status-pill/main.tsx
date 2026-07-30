@@ -32,6 +32,7 @@ function StatusPill(): React.JSX.Element {
   const [preferences, setPreferences] = useState<StatusPillPreferences | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [hovered, setHovered] = useState(false)
+  const [pinned, setPinned] = useState(false)
   const [entered, setEntered] = useState(false)
   const [answeringPaneKey, setAnsweringPaneKey] = useState<string | null>(null)
   const [answerError, setAnswerError] = useState<string | null>(null)
@@ -174,8 +175,11 @@ function StatusPill(): React.JSX.Element {
   }
 
   // Why: Vibe Island model — compact island always visible, expands on hover or
-  //  when a question is pending.
-  const showExpanded = hovered || expanded
+  //  when a question is pending, or stays open while pinned (to move it).
+  const showExpanded = hovered || expanded || pinned
+  useEffect(() => {
+    window.api?.setExpanded(showExpanded)
+  }, [showExpanded])
 
   return (
     <Island
@@ -185,6 +189,8 @@ function StatusPill(): React.JSX.Element {
       entered={entered}
       attention={attention}
       dragging={drag.dragging}
+      pinned={pinned}
+      onTogglePin={() => setPinned((p) => !p)}
       pending={summary.pendingQuestion}
       onAnswer={handleAnswer}
       onFocusPane={(paneKey, worktreeId) =>
@@ -201,7 +207,9 @@ function StatusPill(): React.JSX.Element {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => {
         setHovered(false)
-        setExpanded(false)
+        if (!pinned) {
+          setExpanded(false)
+        }
       }}
       stackRef={stackRef}
     />
