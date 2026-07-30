@@ -1798,11 +1798,14 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       expect(hostListCalls).toBeGreaterThan(1)
       expect(hostListCalls).toBeLessThan(25)
+      // The reconnect opens with a materialize (session.tabs.activate) and then
+      // polls the inventory, so the first list runs one backoff into the budget.
       const listTimeouts = runtimeCall.mock.calls
         .map(([args]) => args)
         .filter((args) => args.method === 'session.tabs.list')
         .map((args) => args.timeoutMs as number)
-      expect(listTimeouts[0]).toBe(15_000)
+      expect(listTimeouts[0]).toBeGreaterThan(14_000)
+      expect(listTimeouts[0]).toBeLessThanOrEqual(15_000)
       expect(listTimeouts.every((timeoutMs) => timeoutMs > 0 && timeoutMs <= 15_000)).toBe(true)
       expect(listTimeouts.at(-1)).toBeLessThanOrEqual(1_000)
       expect(onError).not.toHaveBeenCalled()
@@ -1870,6 +1873,104 @@ describe('createRemoteRuntimePtyTransport', () => {
           return payload ? [payload.terminal] : []
         })
       expect(subscribedTerminals).toEqual(['terminal-stale', 'terminal-after-timeout'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('materializes a host surface whose PTY died instead of polling a dead inventory', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onError = vi.fn()
+      const onPtyExit = vi.fn()
+      const onPtyRebind = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'web-terminal-tab-1',
+        leafId: 'pane:1',
+        onPtyExit,
+        onPtyRebind
+      })
+
+      resolvedPaneHandle = 'terminal-before-restart'
+      transport.attach({
+        existingPtyId: 'remote:env-1@@terminal-before-restart',
+        cols: 80,
+        rows: 24,
+        callbacks: { onError }
+      })
+      await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+      const activateCalls = (): {
+        method: string
+        params?: { tabId?: string; leafId?: string }
+      }[] =>
+        runtimeCall.mock.calls
+          .map(([args]) => args)
+          .filter((args) => args.method === 'session.tabs.activate')
+      const activateCallsBeforeStale = activateCalls().length
+
+      // The host restarted: it still publishes the surface, but the PTY is gone, so
+      // only session.tabs.activate can mint an attachable handle for it again.
+      let materialized = false
+      const hostSnapshot = (): unknown => ({
+        worktree: 'wt-1',
+        publicationEpoch: 'epoch-2',
+        snapshotVersion: materialized ? 3 : 2,
+        activeGroupId: null,
+        activeTabId: 'tab-1::pane:1',
+        activeTabType: 'terminal',
+        tabs: [
+          {
+            type: 'terminal',
+            id: 'tab-1::pane:1',
+            parentTabId: 'tab-1',
+            leafId: 'pane:1',
+            title: 'Claude Code',
+            isActive: true,
+            ...(materialized
+              ? { status: 'ready', terminal: 'terminal-after-restart' }
+              : { status: 'pending-handle', terminal: null })
+          }
+        ]
+      })
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'session.tabs.activate') {
+          materialized = true
+          return { ok: true, result: hostSnapshot() }
+        }
+        if (args.method === 'session.tabs.list') {
+          return { ok: true, result: hostSnapshot() }
+        }
+        return { ok: true, result: {} }
+      })
+
+      subscriptionCallbacks?.onResponse({
+        ok: true,
+        result: {
+          type: 'error',
+          streamId: latestSubscribePayload().streamId,
+          message: 'terminal_handle_stale'
+        }
+      })
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      expect(activateCalls().length).toBeGreaterThan(activateCallsBeforeStale)
+      expect(activateCalls().at(-1)?.params).toMatchObject({
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        notifyClients: false,
+        navigation: 'caller'
+      })
+      await vi.waitFor(() =>
+        expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-after-restart' })
+      )
+      expect(onPtyRebind).toHaveBeenCalledWith(
+        'remote:env-1@@terminal-after-restart',
+        'remote:env-1@@terminal-before-restart'
+      )
+      expect(onPtyExit).not.toHaveBeenCalled()
+      expect(onError).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }

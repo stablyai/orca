@@ -498,6 +498,32 @@ export function createRemoteRuntimePtyTransport(
     )
   }
 
+  // Why: the host only materializes a pending surface's PTY inside
+  // session.tabs.activate, so every path that must produce an attachable handle
+  // has to activate rather than only list.
+  function activateHostSessionSurface(
+    hostTabId: string,
+    worktree: string,
+    timeoutMs?: number
+  ): Promise<RuntimeMobileSessionTabsResult> {
+    return callRuntime<RuntimeMobileSessionTabsResult>(
+      'session.tabs.activate',
+      {
+        worktree,
+        tabId: hostTabId,
+        ...(leafId ? { leafId } : {}),
+        notifyClients: false,
+        navigation: 'caller'
+      },
+      timeoutMs
+    )
+  }
+
+  function isMissingHostSessionSurfaceError(error: unknown): boolean {
+    const message = runtimeTerminalErrorMessage(error)
+    return message.includes('tab_not_found') || message.includes('terminal_not_found')
+  }
+
   async function waitForHostSessionHandle(
     hostTabId: string,
     isCurrent: () => boolean
@@ -508,16 +534,9 @@ export function createRemoteRuntimePtyTransport(
     const worktree = toRuntimeWorktreeSelector(worktreeId)
     let activated: RuntimeMobileSessionTabsResult
     try {
-      activated = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.activate', {
-        worktree,
-        tabId: hostTabId,
-        ...(leafId ? { leafId } : {}),
-        notifyClients: false,
-        navigation: 'caller'
-      })
+      activated = await activateHostSessionSurface(hostTabId, worktree)
     } catch (error) {
-      const message = runtimeTerminalErrorMessage(error)
-      if (message.includes('tab_not_found') || message.includes('terminal_not_found')) {
+      if (isMissingHostSessionSurfaceError(error)) {
         return null
       }
       throw error
@@ -634,6 +653,12 @@ export function createRemoteRuntimePtyTransport(
     const worktree = toRuntimeWorktreeSelector(worktreeId)
     const startedAt = Date.now()
     let pollMs = HOST_SESSION_ATTACH_POLL_MS
+    // Why: a host surface whose PTY died with the host's desktop session stays
+    // `pending-handle` forever under list-only polling, which stranded the pane
+    // behind a Reconnect button that could not work until a human reopened the
+    // workspace on the host. Activating re-materializes the PTY for this exact
+    // tab/leaf identity; it is a no-op once the surface is ready again.
+    let surfaceActivated = false
     let lastListError: unknown = null
     let lastReadyHandle: string | null = null
     let sawSuccessfulInventory = false
@@ -667,18 +692,21 @@ export function createRemoteRuntimePtyTransport(
         return finishBoundedWait()
       }
       try {
-        const listed = await listRemoteRuntimeSessionTabsDeduped({
-          environmentId: currentRuntimeEnvironmentId,
-          worktreeId,
-          load: () =>
-            callRuntime<RuntimeMobileSessionTabsResult>(
-              'session.tabs.list',
-              {
-                worktree
-              },
-              requestRemainingMs
-            )
-        })
+        const listed = surfaceActivated
+          ? await listRemoteRuntimeSessionTabsDeduped({
+              environmentId: currentRuntimeEnvironmentId,
+              worktreeId,
+              load: () =>
+                callRuntime<RuntimeMobileSessionTabsResult>(
+                  'session.tabs.list',
+                  {
+                    worktree
+                  },
+                  requestRemainingMs
+                )
+            })
+          : await activateHostSessionSurface(hostTabId, worktree, requestRemainingMs)
+        surfaceActivated = true
         lastListError = null
         sawSuccessfulInventory = true
         const nextHandle = findReadyHostSessionHandle(listed, hostTabId)
@@ -698,6 +726,11 @@ export function createRemoteRuntimePtyTransport(
       } catch (error) {
         // Why: the inventory can race the reconnect that invalidated the handle; unknown liveness must not retire the pane.
         lastListError = error
+        // Why: a missing surface must be proven by an inventory snapshot, not by a
+        // failed activate; transient activate failures retry the materialize.
+        if (isMissingHostSessionSurfaceError(error)) {
+          surfaceActivated = true
+        }
       }
       const remainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
       if (remainingMs <= 0) {
