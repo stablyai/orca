@@ -442,6 +442,26 @@ describe('buildSections', () => {
     expect(sections[0]?.data.map((item) => item.worktreeId)).toEqual(['main', 'child'])
   })
 
+  it('keeps missing repo identity separate from a repository named with the key sentinel', () => {
+    const sections = buildSections(
+      [
+        worktree({ worktreeId: 'missing', repoId: 'repo-missing', repo: '' }),
+        worktree({ worktreeId: 'literal', repoId: 'repo-literal', repo: '__missing_repo__' })
+      ],
+      'manual',
+      { filterRepoIds: new Set(), hideSleeping: false, hideDefaultBranch: false },
+      '',
+      'repo',
+      new Set(),
+      new Map([['__missing_repo__', '__missing_repo__']])
+    )
+
+    expect(sections.map(({ key, title }) => ({ key, title }))).toEqual([
+      { key: 'missing-repo', title: 'Unknown' },
+      { key: 'repo:__missing_repo__', title: '__missing_repo__' }
+    ])
+  })
+
   it('renders empty repo sections from repo placeholders in repo grouping', () => {
     const sections = buildSections(
       [worktree({ repoId: 'repo-1', repo: 'orca' })],
