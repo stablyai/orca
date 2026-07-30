@@ -14,8 +14,10 @@ import {
   createTerminalImeModifiedEnterChordOwner,
   getTerminalImeModifiedEnterKind,
   isTerminalImeEnterKeyUp,
-  isTerminalImeProcessEnter
+  isTerminalImeProcessEnter,
+  isTerminalImeRedispatchableKey
 } from './terminal-ime-deferred-newline'
+import { TERMINAL_IME_OWNED_KEYS } from './xterm-bypass-policy'
 import { hasPendingTerminalImeComposition } from './terminal-ime-composition-route'
 import {
   requestCapturedTerminalReconfirmation,
@@ -443,14 +445,18 @@ export function useTerminalKeyboardShortcuts({
       }
 
       const modifiedEnterChord = isWindows ? getModifiedEnterChord(e) : null
+      // Why: the chord owner tracks Enter chords only, while the deferral covers every
+      // key the IME re-dispatches — Ctrl/Cmd+Backspace, Cmd+Delete and the word-motion
+      // arrows double the same way Enter does.
+      const isRedispatchedEnter = e.key === 'Enter' && e.keyCode === 13
       if (
-        e.key === 'Enter' &&
-        e.keyCode === 13 &&
         !e.isComposing &&
-        ((modifiedEnterChord && modifiedEnterChordOwner.absorb(modifiedEnterChord)) ||
-          deferredNewlineSender.absorbRedispatchedEnter(e))
+        ((isRedispatchedEnter &&
+          modifiedEnterChord &&
+          modifiedEnterChordOwner.absorb(modifiedEnterChord)) ||
+          (isTerminalImeRedispatchableKey(e) && deferredNewlineSender.absorbRedispatchedEnter(e)))
       ) {
-        // Chromium can drop the modifier when re-dispatching the committing Enter.
+        // Chromium can drop the modifier when re-dispatching the committing press.
         e.preventDefault()
         e.stopImmediatePropagation()
         return
@@ -532,8 +538,13 @@ export function useTerminalKeyboardShortcuts({
           return
         }
         const sendResolvedInput = createCapturedInputSender(pane, action.data)
-        if ((e.isComposing || hasPendingImeComposition) && (e.key === 'Enter' || imeProcessEnter)) {
-          if (isWindows) {
+        if (
+          (e.isComposing || hasPendingImeComposition) &&
+          (TERMINAL_IME_OWNED_KEYS.has(e.key) || imeProcessEnter)
+        ) {
+          // Why: getModifiedEnterChord keys off the held modifier alone, so claiming on a
+          // non-Enter key would take the single Enter-chord slot and block the real chord.
+          if (isWindows && (e.key === 'Enter' || imeProcessEnter)) {
             const chord = getModifiedEnterChord(e)
             if (chord && !modifiedEnterChordOwner.claim(chord)) {
               return

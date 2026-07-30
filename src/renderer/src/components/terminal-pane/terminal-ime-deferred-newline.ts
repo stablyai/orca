@@ -2,6 +2,7 @@ import {
   hasPendingTerminalImeComposition,
   XTERM_COMPOSITION_SESSION_END_EVENT
 } from './terminal-ime-composition-route'
+import { TERMINAL_IME_OWNED_KEYS } from './xterm-bypass-policy'
 
 export const TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS = 200
 
@@ -118,6 +119,17 @@ export function isTerminalImeProcessEnter(
 
 export function isTerminalImeEnterKeyUp(event: Pick<KeyboardEvent, 'key' | 'keyCode'>): boolean {
   return event.key === 'Enter' && event.keyCode === 13
+}
+
+/**
+ * Whether a keydown can be the IME re-dispatching its own committing press.
+ * The re-dispatch always carries the real key, never the 229 composition marker,
+ * and only the keys the IME consumes mid-composition are ever re-dispatched.
+ */
+export function isTerminalImeRedispatchableKey(
+  event: Pick<KeyboardEvent, 'key' | 'keyCode'>
+): boolean {
+  return TERMINAL_IME_OWNED_KEYS.has(event.key) && event.keyCode !== 229
 }
 
 type DeferredNewlineState = {
