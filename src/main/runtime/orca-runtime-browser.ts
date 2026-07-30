@@ -64,6 +64,7 @@ import {
   importCookiesFromBrowser,
   selectBrowserProfile
 } from '../browser/browser-cookie-import'
+import { browserScreencastAwakeService } from '../browser-screencast-awake-service'
 import { waitForTabRegistration, waitForWorktreeTabRegistration } from '../ipc/browser'
 
 export type BrowserCommandTargetParams = {
@@ -154,12 +155,45 @@ export type RuntimeBrowserCommandHost = {
   ): void
 }
 
+function syncMainWindowBackgroundThrottlingForScreencast(
+  host: RuntimeBrowserCommandHost,
+  screencastActive: boolean
+): void {
+  const window = host.getAvailableAuthoritativeWindow()
+  const contents = window?.webContents
+  if (!contents || contents.isDestroyed?.() === true) {
+    return
+  }
+  try {
+    // Why: keep the main renderer painting while a remote/mobile screencast needs
+    // compositor frames; restore the default throttle when the last stream ends.
+    contents.setBackgroundThrottling(!screencastActive)
+  } catch {
+    // Why: the window can tear down between the null-check and the call during quit.
+  }
+}
+
 export class RuntimeBrowserCommands {
   private readonly activeScreencastPageIds = new Set<string>()
   private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
   private readonly stoppingScreencastPageIds = new Map<string, Promise<void>>()
+  private screencastAwakeActive = false
 
   constructor(private readonly host: RuntimeBrowserCommandHost) {}
+
+  private syncScreencastAwake(): void {
+    const shouldKeepAwake = this.activeScreencastsByPageId.size > 0
+    if (shouldKeepAwake === this.screencastAwakeActive) {
+      return
+    }
+    this.screencastAwakeActive = shouldKeepAwake
+    if (shouldKeepAwake) {
+      browserScreencastAwakeService.acquire('runtime-browser-screencast')
+    } else {
+      browserScreencastAwakeService.release('runtime-browser-screencast')
+    }
+    syncMainWindowBackgroundThrottlingForScreencast(this.host, shouldKeepAwake)
+  }
 
   private requireAgentBrowserBridge(): AgentBrowserBridge {
     const bridge = this.host.getAgentBrowserBridge()
@@ -492,6 +526,7 @@ export class RuntimeBrowserCommands {
       done: activeDone
     }
     this.activeScreencastsByPageId.set(browserPageId, activeRecord)
+    this.syncScreencastAwake()
     try {
       session = await startBrowserScreencast(guest, {
         format,
@@ -518,6 +553,7 @@ export class RuntimeBrowserCommands {
       if (this.activeScreencastsByPageId.get(browserPageId) === activeRecord) {
         this.activeScreencastsByPageId.delete(browserPageId)
       }
+      this.syncScreencastAwake()
       resolveActiveDone()
       throw error
     }
@@ -533,6 +569,7 @@ export class RuntimeBrowserCommands {
       ) {
         this.stoppingScreencastPageIds.delete(browserPageId)
       }
+      this.syncScreencastAwake()
       resolveActiveDone()
     }
     const markStopping = (): void => {

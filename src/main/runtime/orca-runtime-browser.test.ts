@@ -9,7 +9,9 @@ const {
   startBrowserScreencastMock,
   waitForTabRegistrationMock,
   waitForWorktreeTabRegistrationMock,
-  browserSessionRegistryMock
+  browserSessionRegistryMock,
+  browserScreencastAwakeAcquireMock,
+  browserScreencastAwakeReleaseMock
 } = vi.hoisted(() => ({
   ipcMainOnMock: vi.fn(),
   ipcMainRemoveListenerMock: vi.fn(),
@@ -17,6 +19,8 @@ const {
   startBrowserScreencastMock: vi.fn(),
   waitForTabRegistrationMock: vi.fn(),
   waitForWorktreeTabRegistrationMock: vi.fn(),
+  browserScreencastAwakeAcquireMock: vi.fn(),
+  browserScreencastAwakeReleaseMock: vi.fn(),
   browserSessionRegistryMock: {
     profiles: new Map([
       [
@@ -53,6 +57,15 @@ vi.mock('electron', () => ({
 
 vi.mock('../browser/browser-screencast-stream', () => ({
   startBrowserScreencast: startBrowserScreencastMock
+}))
+
+vi.mock('../browser-screencast-awake-service', () => ({
+  browserScreencastAwakeService: {
+    acquire: browserScreencastAwakeAcquireMock,
+    release: browserScreencastAwakeReleaseMock,
+    dispose: vi.fn(),
+    getActiveCount: vi.fn(() => 0)
+  }
 }))
 
 vi.mock('../ipc/browser', () => ({
@@ -112,6 +125,8 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     waitForTabRegistrationMock.mockResolvedValue(undefined)
     waitForWorktreeTabRegistrationMock.mockReset()
     waitForWorktreeTabRegistrationMock.mockResolvedValue(undefined)
+    browserScreencastAwakeAcquireMock.mockReset()
+    browserScreencastAwakeReleaseMock.mockReset()
     browserSessionRegistryMock.getDefaultProfile.mockReset()
     browserSessionRegistryMock.getDefaultProfile.mockImplementation(() =>
       browserSessionRegistryMock.profiles.get('default')
@@ -552,6 +567,38 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     await second.session.done
     expect(secondStop).toHaveBeenCalledTimes(1)
   }, 10_000)
+
+  it('keeps the host awake and unthrottles the main window only while a screencast is live', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
+    const done = deferred<void>()
+    const stop = vi.fn(() => done.resolve())
+    startBrowserScreencastMock.mockResolvedValue({ stop, done: done.promise })
+    const setBackgroundThrottling = vi.fn()
+    const getAvailableAuthoritativeWindow = vi.fn(() => ({
+      webContents: { setBackgroundThrottling, isDestroyed: () => false }
+    }))
+
+    const commands = new RuntimeBrowserCommands(
+      createHost({ getAvailableAuthoritativeWindow: getAvailableAuthoritativeWindow as never })
+    )
+    const session = await commands.browserScreencast(
+      { worktree: 'id:wt-1', page: 'page-1', format: 'jpeg' },
+      { sendBinary: vi.fn() }
+    )
+
+    expect(browserScreencastAwakeAcquireMock).toHaveBeenCalledTimes(1)
+    expect(browserScreencastAwakeAcquireMock).toHaveBeenCalledWith('runtime-browser-screencast')
+    expect(setBackgroundThrottling).toHaveBeenCalledWith(false)
+    expect(browserScreencastAwakeReleaseMock).not.toHaveBeenCalled()
+
+    session.session.stop()
+    await session.session.done
+
+    expect(browserScreencastAwakeReleaseMock).toHaveBeenCalledTimes(1)
+    expect(browserScreencastAwakeReleaseMock).toHaveBeenCalledWith('runtime-browser-screencast')
+    expect(setBackgroundThrottling).toHaveBeenLastCalledWith(true)
+  })
 })
 
 describe('RuntimeBrowserCommands headless offscreen routing', () => {
