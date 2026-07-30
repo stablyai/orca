@@ -99,6 +99,8 @@
   --color-terminal-pane-title-on-light-separator: var(--terminal-pane-title-on-light-separator);
   --color-ai-action-accent: var(--ai-action-accent);
   --color-status-success: var(--status-success);
+  --color-agent-rim-attention: var(--agent-rim-attention);
+  --color-agent-rim-done: var(--agent-rim-done);
   --color-status-success-background: var(--status-success-background);
   --color-status-success-border: var(--status-success-border);
   --color-tab-group-split-divider: var(--tab-group-split-divider);
@@ -172,6 +174,9 @@
   --status-success: #15803d;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  /* Agent-state pane/row rim: amber = needs-you (waiting/blocked), green = unviewed completion. */
+  --agent-rim-attention: #d97706;
+  --agent-rim-done: var(--status-success);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -275,6 +280,9 @@
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  /* Agent-state pane/row rim (dark). */
+  --agent-rim-attention: #fbbf24;
+  --agent-rim-done: var(--status-success);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
