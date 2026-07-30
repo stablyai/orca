@@ -20,7 +20,9 @@ import {
   getEndpointFileName,
   hasCodexTranscriptSubagents,
   hasPendingAgentResultText,
+  HOOK_CWD_MAX_LENGTH,
   HOOK_REQUEST_SLOWLORIS_MS,
+  MAX_PANE_KEY_LEN,
   normalizeHookPayload,
   preparePendingGrokResultDiscovery,
   readHookBodyCwdAttribution,
@@ -215,15 +217,18 @@ export class RelayAgentHookServer {
   }
 
   private warnForeignCwdOnce(paneKey: string, worktreeId?: string, sourceCwd?: string): void {
+    // Why: these run pre-validation, so slice before retaining/logging — a token-holding
+    // client could otherwise park 1MB strings in the set and emit multi-MB log lines.
+    const boundedPaneKey = paneKey.slice(0, MAX_PANE_KEY_LEN)
     if (
-      this.warnedForeignCwdPaneKeys.has(paneKey) ||
+      this.warnedForeignCwdPaneKeys.has(boundedPaneKey) ||
       this.warnedForeignCwdPaneKeys.size >= FOREIGN_CWD_WARN_PANE_CAP
     ) {
       return
     }
-    this.warnedForeignCwdPaneKeys.add(paneKey)
+    this.warnedForeignCwdPaneKeys.add(boundedPaneKey)
     process.stderr.write(
-      `[relay-hook-server] dropping status: reported worktree does not own the reporting session (paneKey=${paneKey} worktreeId=${worktreeId ?? ''} sourceCwd=${sourceCwd ?? ''})\n`
+      `[relay-hook-server] dropping status: reported worktree does not own the reporting session (paneKey=${boundedPaneKey} worktreeId=${(worktreeId ?? '').slice(0, HOOK_CWD_MAX_LENGTH)} sourceCwd=${sourceCwd ?? ''})\n`
     )
   }
 
@@ -302,12 +307,7 @@ export class RelayAgentHookServer {
       // paths — before normalization, so a foreign daemon-hosted session cannot seed
       // per-pane listener state (subagent rosters, lead-turn records) or the replay cache.
       const attribution = readHookBodyCwdAttribution(body)
-      const rawCwdContradiction = hookCwdContradictsWorktree(
-        attribution.worktreeId,
-        attribution.sourceCwd
-      )
       if (
-        rawCwdContradiction &&
         hookCwdContradictsWorktreeAfterLocalResolve(attribution.worktreeId, attribution.sourceCwd)
       ) {
         this.warnForeignCwdOnce(attribution.paneKey, attribution.worktreeId, attribution.sourceCwd)
@@ -317,12 +317,6 @@ export class RelayAgentHookServer {
       }
       const event = normalizeHookPayload(this.state, source, body, this.env)
       if (event) {
-        if (rawCwdContradiction) {
-          // Why: this host proved the contradiction is symlink aliasing (raw disjoint, resolved
-          // nested). Orca's re-guard cannot resolve remote paths, so forwarding the cwd would
-          // make it re-drop a proven-legitimate row.
-          event.sourceCwd = undefined
-        }
         // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
         const env = this.bodyEnv(body)
         const version = this.bodyVersion(body)
@@ -379,6 +373,17 @@ export class RelayAgentHookServer {
     env?: string,
     version?: string
   ): void {
+    if (
+      event.sourceCwd !== undefined &&
+      hookCwdContradictsWorktree(event.worktreeId, event.sourceCwd)
+    ) {
+      // Why: every leg that caches/forwards funnels here — live ingest, the assistant-message
+      // retry, and the codex subagent poll re-normalize the raw body and re-attach the cwd.
+      // An event only reaches this point after the pre-normalize refusal, so a surviving raw
+      // contradiction is proven symlink aliasing; forwarding the cwd would make Orca's raw
+      // re-guard re-drop the row, and caching it would poison replay after reconnect.
+      event.sourceCwd = undefined
+    }
     if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
       this.clearAssistantMessageRetry(event.paneKey)
     }

@@ -55,16 +55,29 @@ export function hookCwdContradictsWorktree(
   return !isPathInsideOrEqual(workspace, session) && !isPathInsideOrEqual(session, workspace)
 }
 
-/** Paths this host does not have stay raw, so foreign-host paths keep the string verdict. */
-function realpathIfExists(path: string): string {
+/** Paths this host does not have stay raw, so foreign-host paths keep the string verdict.
+ *  `null` means the path exists here but cannot be resolved (EPERM-style mounts, deleted
+ *  mid-check) — with the alias question unanswerable on a local path, the caller keeps. */
+function realpathIfExists(path: string): string | null {
   try {
     if (existsSync(path)) {
       return realpathSync.native(path)
     }
   } catch {
-    // Fall through to the raw spelling.
+    return null
   }
   return path
+}
+
+const MACOS_DATA_VOLUME_PREFIX = '/System/Volumes/Data'
+
+/** Firmlinks are not symlinks — realpath keeps /System/Volumes/Data/Users/… even though it
+ *  names /Users/…. Folding the data-volume prefix runs only when the raw verdict already
+ *  said drop, so it can only rescue rows. */
+function foldMacOsDataVolumePrefix(path: string): string {
+  return process.platform === 'darwin' && path.startsWith(`${MACOS_DATA_VOLUME_PREFIX}/`)
+    ? path.slice(MACOS_DATA_VOLUME_PREFIX.length)
+    : path
 }
 
 /**
@@ -87,6 +100,13 @@ export function hookCwdContradictsWorktreeAfterLocalResolve(
   if (!parsed || !cwd) {
     return true
   }
-  const resolvedWorktreeId = `${parsed.repoId}${WORKTREE_ID_SEPARATOR}${realpathIfExists(parsed.worktreePath)}`
-  return hookCwdContradictsWorktree(resolvedWorktreeId, realpathIfExists(cwd))
+  const resolvedWorktreePath = realpathIfExists(parsed.worktreePath)
+  const resolvedCwd = realpathIfExists(cwd)
+  if (resolvedWorktreePath === null || resolvedCwd === null) {
+    return false
+  }
+  return hookCwdContradictsWorktree(
+    `${parsed.repoId}${WORKTREE_ID_SEPARATOR}${foldMacOsDataVolumePrefix(resolvedWorktreePath)}`,
+    foldMacOsDataVolumePrefix(resolvedCwd)
+  )
 }

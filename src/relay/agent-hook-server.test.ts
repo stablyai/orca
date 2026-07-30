@@ -113,6 +113,105 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
+  it('refuses the foreign event before it can seed relay listener state', async () => {
+    // Why: normalization mutates per-pane listener state; a refusal placed after it would
+    // let a foreign SubagentStart plant roster rows that the pane's own next event re-emits.
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const postHook = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${port}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: JSON.stringify({
+            paneKey: PANE_KEY,
+            tabId: 'tab-1',
+            worktreeId: 'repo-1::/nonexistent-orca-relay/worktree-a',
+            env: 'remote',
+            version: '1',
+            payload
+          })
+        })
+      await postHook({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'sa-foreign',
+        cwd: '/nonexistent-orca-relay/session-b'
+      })
+      expect(forward).not.toHaveBeenCalled()
+      await postHook({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'own session',
+        cwd: '/nonexistent-orca-relay/worktree-a'
+      })
+      expect(forward).toHaveBeenCalledTimes(1)
+      expect(forward.mock.calls[0][0].payload.prompt).toBe('own session')
+      expect(forward.mock.calls[0][0].payload.subagents ?? []).toEqual([])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('keeps the alias strip on the assistant-message retry leg', async () => {
+    // Why: the retry re-normalizes the raw body, which re-attaches the contradicting cwd;
+    // the strip must hold at the cache/forward choke point or Orca's raw re-guard drops the
+    // enriched row (and the poisoned replay cache drops it again after reconnect).
+    const real = join(dir, 'real-workspace')
+    mkdirSync(real, { recursive: true })
+    const link = join(dir, 'linked-workspace')
+    try {
+      symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir')
+    } catch {
+      return // Restricted hosts that cannot create links have nothing to verify here.
+    }
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    const transcriptPath = join(dir, 'events.jsonl')
+    writeFileSync(transcriptPath, '')
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const res = await fetch(`http://127.0.0.1:${port}/hook/copilot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: `repo-1::${link}`,
+          env: 'remote',
+          version: '1',
+          payload: { hook_event_name: 'Stop', transcriptPath, cwd: realpathSync(real) }
+        })
+      })
+      expect(res.status).toBe(204)
+      expect(forward.mock.calls[0]?.[0].sourceCwd).toBeUndefined()
+
+      // Let the first 50ms retry miss, then land the transcript for a later attempt.
+      await new Promise((resolve) => setTimeout(resolve, 70))
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          type: 'assistant.message',
+          data: { content: 'Retry leg completed.' }
+        })}\n`
+      )
+      await new Promise((resolve) => setTimeout(resolve, 120))
+
+      const last = forward.mock.calls.at(-1)?.[0]
+      expect(last?.payload.lastAssistantMessage).toBe('Retry leg completed.')
+      expect(last?.sourceCwd).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+
   it('strips sourceCwd when the contradiction is only symlink aliasing of the worktree', async () => {
     // Why: raw disjoint but resolved nested means the same directory spelled two ways.
     // Orca's re-guard cannot resolve this host's paths, so forwarding the cwd would make

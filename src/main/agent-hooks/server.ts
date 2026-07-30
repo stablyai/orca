@@ -950,14 +950,21 @@ export class AgentHookServer {
       this.reportedForeignCwdTelemetry = true
       track('agent_hook_unattributed', { reason: 'cwd_worktree_mismatch' })
     }
+    // Why: the early guard runs pre-validation, so slice before retaining/logging — a
+    // token-holding client could otherwise park 1MB strings in the set and in the log.
+    const boundedPaneKey = event.paneKey.slice(0, MAX_PANE_KEY_LEN)
     if (
-      !this.warnedForeignCwdPaneKeys.has(event.paneKey) &&
+      !this.warnedForeignCwdPaneKeys.has(boundedPaneKey) &&
       this.warnedForeignCwdPaneKeys.size < FOREIGN_CWD_WARN_PANE_CAP
     ) {
-      this.warnedForeignCwdPaneKeys.add(event.paneKey)
+      this.warnedForeignCwdPaneKeys.add(boundedPaneKey)
       console.warn(
         '[agent-hooks] dropping status: reported worktree does not own the reporting session',
-        { paneKey: event.paneKey, worktreeId: event.worktreeId, sourceCwd: event.sourceCwd }
+        {
+          paneKey: boundedPaneKey,
+          worktreeId: event.worktreeId?.slice(0, HOOK_CWD_MAX_LENGTH),
+          sourceCwd: event.sourceCwd
+        }
       )
     }
     return true

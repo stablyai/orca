@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -137,6 +137,55 @@ describe('hookCwdContradictsWorktreeAfterLocalResolve', () => {
       expect(hookCwdContradictsWorktree(`${REPO}::${link}`, physicalSessionCwd)).toBe(true)
       expect(
         hookCwdContradictsWorktreeAfterLocalResolve(`${REPO}::${link}`, physicalSessionCwd)
+      ).toBe(false)
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  it('clears the mirror alias where the session cwd is the symlinked spelling', () => {
+    // Why: the alias can sit on either side — a logical $PWD-style cwd against a physically
+    // stored worktree needs the cwd side resolved, not just the worktree side.
+    const base = mkdtempSync(join(tmpdir(), 'orca-cwd-attr-'))
+    try {
+      const real = join(base, 'real-workspace')
+      mkdirSync(join(real, 'src'), { recursive: true })
+      const link = join(base, 'linked-workspace')
+      try {
+        symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir')
+      } catch {
+        return // Restricted hosts that cannot create links have nothing to verify here.
+      }
+      const physicalWorktree = realpathSync(real)
+      const linkSpelledCwd = join(link, 'src')
+      expect(hookCwdContradictsWorktree(`${REPO}::${physicalWorktree}`, linkSpelledCwd)).toBe(true)
+      expect(
+        hookCwdContradictsWorktreeAfterLocalResolve(`${REPO}::${physicalWorktree}`, linkSpelledCwd)
+      ).toBe(false)
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  it('treats the macOS data-volume firmlink spelling as the same directory', () => {
+    // Why: firmlinks are not symlinks — realpath keeps /System/Volumes/Data/… even though it
+    // names the same directory, so resolution alone cannot rescue a firmlink-spelled workspace.
+    const base = mkdtempSync(join(tmpdir(), 'orca-cwd-attr-'))
+    try {
+      const physical = realpathSync(base)
+      const firmlinkSpelled = `/System/Volumes/Data${physical}`
+      if (process.platform !== 'darwin' || !existsSync(firmlinkSpelled)) {
+        return // The alias only exists on macOS data-volume layouts.
+      }
+      mkdirSync(join(physical, 'ws', 'src'), { recursive: true })
+      expect(
+        hookCwdContradictsWorktree(`${REPO}::${firmlinkSpelled}/ws`, join(physical, 'ws', 'src'))
+      ).toBe(true)
+      expect(
+        hookCwdContradictsWorktreeAfterLocalResolve(
+          `${REPO}::${firmlinkSpelled}/ws`,
+          join(physical, 'ws', 'src')
+        )
       ).toBe(false)
     } finally {
       rmSync(base, { recursive: true, force: true })
