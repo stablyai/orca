@@ -9,6 +9,7 @@ import type {
 } from './types'
 import {
   getHiddenExternalWorktrees,
+  getHiddenImportableExternalWorktrees,
   getNewExternalWorktreeInboxWorktrees,
   getVisibleExternalWorktrees,
   mergeExternalWorktreeInboxPaths,
@@ -191,6 +192,96 @@ describe('external worktree inbox', () => {
     expect(manual.ownership).toBe('external')
     expect(manual.visible).toBe(false)
     expect(getNewExternalWorktreeInboxWorktrees(detectedResult([manual]), repo)).toEqual([manual])
+  })
+
+  it('offers agent scratch for import in both hide and show visibility modes', () => {
+    const scratch = detectedWorktree({
+      id: 'agent-scratch',
+      path: '/repo/.claude/worktrees/agent-1',
+      ownership: 'agent-scratch'
+    })
+    const detected = detectedResult([scratch])
+
+    expect(getNewExternalWorktreeInboxWorktrees(detected, repo)).toEqual([scratch])
+    expect(
+      getNewExternalWorktreeInboxWorktrees(detected, {
+        ...repo,
+        externalWorktreeVisibility: 'show'
+      })
+    ).toEqual([scratch])
+  })
+
+  it('offers agent scratch before the initial import prompt is dismissed', () => {
+    // Why: the prompt is only dismissable from the card, which never renders for
+    // a scratch-only repo, so gating scratch on it would strand the import.
+    const scratch = detectedWorktree({
+      id: 'agent-scratch',
+      path: '/repo/.claude/worktrees/agent-1',
+      ownership: 'agent-scratch'
+    })
+
+    expect(
+      getNewExternalWorktreeInboxWorktrees(detectedResult([scratch]), {
+        ...repo,
+        externalWorktreeVisibilityPromptDismissedAt: undefined
+      })
+    ).toEqual([scratch])
+  })
+
+  it('keeps suppression and the inbox baseline authoritative over agent scratch', () => {
+    const scratch = detectedWorktree({
+      id: 'agent-scratch',
+      path: '/repo/.claude/worktrees/agent-1',
+      ownership: 'agent-scratch'
+    })
+    const detected = detectedResult([scratch])
+
+    expect(
+      getNewExternalWorktreeInboxWorktrees(detected, {
+        ...repo,
+        externalWorktreeDiscoverySuppressedAt: 1
+      })
+    ).toEqual([])
+    expect(
+      getNewExternalWorktreeInboxWorktrees(detected, {
+        ...repo,
+        externalWorktreeInboxBaselinePaths: ['/repo/.claude/worktrees/agent-1']
+      })
+    ).toEqual([])
+  })
+
+  it('keeps non-scratch externals out of the inbox while visibility already shows them', () => {
+    const external = detectedWorktree({ id: 'external', path: '/scratch/new-one' })
+    const scratch = detectedWorktree({
+      id: 'agent-scratch',
+      path: '/repo/.claude/worktrees/agent-1',
+      ownership: 'agent-scratch'
+    })
+
+    expect(
+      getNewExternalWorktreeInboxWorktrees(detectedResult([external, scratch]), {
+        ...repo,
+        externalWorktreeVisibility: 'show'
+      })
+    ).toEqual([scratch])
+  })
+
+  it('separates importable hidden worktrees from user-facing ones', () => {
+    const external = detectedWorktree({ id: 'external', path: '/scratch/new-one' })
+    const scratch = detectedWorktree({
+      id: 'agent-scratch',
+      path: '/repo/.claude/worktrees/agent-1',
+      ownership: 'agent-scratch'
+    })
+    const detected = detectedResult([
+      external,
+      scratch,
+      detectedWorktree({ id: 'orca-managed', ownership: 'orca-managed' }),
+      detectedWorktree({ id: 'selected', selectedCheckout: true })
+    ])
+
+    expect(getHiddenImportableExternalWorktrees(detected)).toEqual([external, scratch])
+    expect(getHiddenExternalWorktrees(detected)).toEqual([external])
   })
 
   it('suppresses non-authoritative detected results', () => {

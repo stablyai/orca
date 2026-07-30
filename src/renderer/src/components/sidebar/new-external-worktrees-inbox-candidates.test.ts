@@ -88,6 +88,26 @@ describe('buildNewExternalWorktreesInboxCandidates', () => {
     ).toBe(0)
   })
 
+  it('builds inbox candidates for agent scratch even when visibility already shows externals', () => {
+    const scratch = detectedWorktree({
+      id: 'repo-1::/repo/.claude/worktrees/agent-1',
+      path: '/repo/.claude/worktrees/agent-1',
+      displayName: 'agent-1',
+      ownership: 'agent-scratch'
+    })
+
+    expect(
+      buildNewExternalWorktreesInboxCandidates({
+        repos: [{ ...repo, externalWorktreeVisibility: 'show' }],
+        visibleWorktrees: [visibleWorktree],
+        detectedWorktreesByRepo: { [repo.id]: detectedResult([scratch]) }
+      }).get(repo.id)
+    ).toMatchObject({
+      repo: { id: repo.id },
+      inboxWorktrees: [{ id: 'repo-1::/repo/.claude/worktrees/agent-1' }]
+    })
+  })
+
   it('suppresses inbox candidates when discovery is permanently hidden or visibility is show', () => {
     const detectedWorktreesByRepo = { [repo.id]: detectedResult([detectedWorktree()]) }
 
