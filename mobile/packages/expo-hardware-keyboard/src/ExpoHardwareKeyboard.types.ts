@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { StyleProp, ViewStyle } from 'react-native'
 
 export type HardwareKeyboardModifiers = {
   readonly ctrl: boolean
@@ -17,5 +18,5 @@ export type HardwareKeyboardCaptureViewProps = {
   readonly enabled?: boolean
   readonly onHardwareKey?: (event: { nativeEvent: HardwareKeyboardKeyEvent }) => void
   readonly children?: ReactNode
-  readonly style?: unknown
+  readonly style?: StyleProp<ViewStyle>
 }

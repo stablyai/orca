@@ -47,6 +47,7 @@ public class HardwareKeyboardCaptureView: ExpoView {
       return
     }
     let key = Self.canonicalKey(fromInput: input)
+    // UIKeyCommand repeats callbacks but does not expose repeat state.
     onHardwareKey([
       "key": key,
       "modifiers": [
