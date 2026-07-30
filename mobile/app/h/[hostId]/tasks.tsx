@@ -62,7 +62,7 @@ import {
 import { buildGitHubCheckSummary } from '../../../src/tasks/github-check-summary'
 import { buildGitLabCheckSummary } from '../../../src/tasks/gitlab-check-summary'
 import {
-  getGitHubPRSignalTone,
+  getHostedReviewSignalTone,
   getHostedChecksLabel
 } from '../../../src/tasks/mobile-hosted-check-status'
 import { buildTaskWorkspaceCreateParams } from '../../../src/tasks/workspace-create-params'
@@ -9697,7 +9697,7 @@ export default function MobileTasksScreen() {
                         <View
                           style={[
                             styles.prSignalChip,
-                            getPrSignalToneStyle(getGitHubPRSignalTone(item.source, 'review'))
+                            getPrSignalToneStyle(getHostedReviewSignalTone(item.source, 'review'))
                           ]}
                         >
                           <Text style={styles.prSignalText} numberOfLines={1}>
@@ -9708,7 +9708,7 @@ export default function MobileTasksScreen() {
                       <View
                         style={[
                           styles.prSignalChip,
-                          getPrSignalToneStyle(getGitHubPRSignalTone(item.source, 'checks'))
+                          getPrSignalToneStyle(getHostedReviewSignalTone(item.source, 'checks'))
                         ]}
                       >
                         <Text style={styles.prSignalText} numberOfLines={1}>
@@ -9719,7 +9719,7 @@ export default function MobileTasksScreen() {
                         <View
                           style={[
                             styles.prSignalChip,
-                            getPrSignalToneStyle(getGitHubPRSignalTone(item.source, 'merge'))
+                            getPrSignalToneStyle(getHostedReviewSignalTone(item.source, 'merge'))
                           ]}
                         >
                           <Text style={styles.prSignalText} numberOfLines={1}>

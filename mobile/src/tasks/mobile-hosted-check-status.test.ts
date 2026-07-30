@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getGitHubPRSignalTone, getHostedChecksLabel } from './mobile-hosted-check-status'
+import { getHostedChecksLabel, getHostedReviewSignalTone } from './mobile-hosted-check-status'
 
 describe('mobile hosted check status', () => {
   it('renders a hydrated neutral GitLab summary as unresolved checks', () => {
@@ -12,6 +12,15 @@ describe('mobile hosted check status', () => {
       neutral: 1
     }
     expect(getHostedChecksLabel({ checksSummary: summary })).toBe('Unresolved checks')
-    expect(getGitHubPRSignalTone({ checksSummary: summary }, 'checks')).toBe('neutral')
+    expect(getHostedReviewSignalTone({ checksSummary: summary }, 'checks')).toBe('neutral')
+  })
+
+  it('accepts provider-neutral GitHub status fields without a shared work-item type', () => {
+    expect(
+      getHostedReviewSignalTone(
+        { reviewDecision: 'APPROVED', reviewRequests: [], mergeable: 'UNKNOWN' },
+        'review'
+      )
+    ).toBe('success')
   })
 })

@@ -1,4 +1,12 @@
-import type { ProviderCheckSummary, GitHubWorkItem } from '../../../src/shared/types'
+import type { ProviderCheckSummary } from '../../../src/shared/types'
+
+export type MobileHostedReviewStatus = {
+  checksSummary?: ProviderCheckSummary
+  reviewDecision?: string | null
+  reviewRequests?: readonly unknown[]
+  mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
+  mergeStateStatus?: string | null
+}
 
 export function getHostedChecksLabel(item: { checksSummary?: ProviderCheckSummary }): string {
   const summary = item.checksSummary
@@ -19,11 +27,8 @@ export function getHostedChecksLabel(item: { checksSummary?: ProviderCheckSummar
     : `${summary.passed}/${summary.total} passed`
 }
 
-export function getGitHubPRSignalTone(
-  item: Pick<
-    GitHubWorkItem,
-    'reviewDecision' | 'reviewRequests' | 'checksSummary' | 'mergeable' | 'mergeStateStatus'
-  >,
+export function getHostedReviewSignalTone(
+  item: MobileHostedReviewStatus,
   signal: 'review' | 'checks' | 'merge'
 ): 'neutral' | 'success' | 'warning' | 'danger' {
   if (signal === 'review') {
