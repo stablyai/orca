@@ -52,10 +52,12 @@
   --m-mono: 'Menlo', 'SF Mono', monospace;
 
   position: relative;
+  container-type: inline-size;
   display: block;
   width: 100%;
   height: 100%;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   color: var(--foreground);
 }
 
@@ -72,8 +74,7 @@
   gap: clamp(56px, 7vw, 112px);
   padding: 56px;
   width: 100%;
-  height: 100%;
-  overflow: hidden;
+  min-height: 100%;
   background-color: transparent;
   /* Why: the page should feel branded without putting copy over decorative
      blobs; a token-based dot texture stays quiet in both themes. */
@@ -612,6 +613,20 @@
   font-weight: 600;
 }
 
+/* Why: empty QR frames need readable copy without looking like a stuck loader overlay. */
+.mobile-page-root .mp-qr-empty {
+  position: absolute;
+  inset: 10px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
 .mobile-page-root .mp-qr-stack {
   display: flex;
   flex-direction: column;
@@ -681,6 +696,14 @@
   align-items: start;
 }
 
+.mobile-page-root .mp-pairing-layout.has-failure {
+  grid-template-areas:
+    'copy qr'
+    'relay qr'
+    'failure failure'
+    'controls controls';
+}
+
 .mobile-page-root .mp-pairing-copy {
   grid-area: copy;
   min-width: 0;
@@ -701,6 +724,10 @@
 .mobile-page-root .mp-pairing-controls {
   grid-area: controls;
   min-width: 0;
+}
+
+.mobile-page-root .mp-pairing-failure {
+  grid-area: failure;
 }
 
 /* Why: align the QR's top with the body copy ("Scan the QR…") instead
@@ -2100,5 +2127,35 @@
   .mobile-page-root .mp-lead {
     margin-bottom: 16px;
     font-size: 17px;
+  }
+}
+
+/* Why: the app sidebar narrows this page without changing viewport media
+   queries; keep this after viewport rules so real page width wins. */
+@container (max-width: 1080px) {
+  .mobile-page-root .mp-hero {
+    --mp-flow-card-padding: 20px;
+
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 24px;
+    padding: 52px 28px 28px;
+  }
+
+  .mobile-page-root .mp-hero-copy {
+    min-height: 0;
+  }
+
+  .mobile-page-root .mp-h1 {
+    font-size: 44px;
+  }
+
+  .mobile-page-root .mp-stage {
+    height: min(420px, 42vh);
+  }
+
+  .mobile-page-root .mp-phone-frame {
+    width: min(290px, 100%);
   }
 }

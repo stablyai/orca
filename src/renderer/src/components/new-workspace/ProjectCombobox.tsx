@@ -204,7 +204,7 @@ export default function ProjectCombobox({
                   </span>
                   <ProjectOptionDetail
                     detail={selected.detail}
-                    className="min-w-0 flex-1 shrink-[999] justify-end text-xs text-muted-foreground"
+                    className="min-w-0 flex-1 shrink-[999] justify-end text-right text-xs text-muted-foreground"
                   />
                 </div>
               </div>

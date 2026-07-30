@@ -149,7 +149,10 @@
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "El historial de sesiones de Agents no está disponible para este host de ejecución.",
-        "runtimeEnvironmentManuallyDisconnected": "El entorno de ejecución se ha desconectado manualmente."
+        "runtimeEnvironmentManuallyDisconnected": "El entorno de ejecución se ha desconectado manualmente.",
+        "loopbackPairingBlocked": "Este enlace de acceso apunta de nuevo a este dispositivo.",
+        "remotePairingUnreachable": "No se puede acceder a Orca en {{endpoint}}.",
+        "remotePairingInvalidDetails": "Este enlace de acceso contiene datos de conexión no válidos."
       },
       "web": {
         "preload": {
@@ -350,6 +353,18 @@
             }
           }
         }
+      },
+      "remotePairingCopy": {
+        "invalidInput": "Introduce un enlace de acceso de Orca o un código de emparejamiento.",
+        "mobileOnly": "Este enlace concede acceso solo para dispositivos móviles. Genera un enlace para otro cliente de Orca.",
+        "invalidDestination": "Este enlace de acceso contiene un destino no válido.",
+        "unsupportedDestination": "Este enlace de acceso contiene un destino no compatible.",
+        "nonConnectableDestination": "Este enlace de acceso contiene un destino al que no se puede conectar.",
+        "loopback": "Bucle local",
+        "tailscale": "Dirección de Tailscale",
+        "lan": "Dirección LAN privada",
+        "public": "Dirección pública",
+        "custom": "Nombre de host personalizado"
       },
       "ensure": {
         "simulator": {
@@ -5006,7 +5021,11 @@
           "importing": "Importando...",
           "importSshConfig": "Importar ~/.ssh/config",
           "sshPersistenceDefault": "Los terminales remotos en este host seguirán activos hasta que los cierres o restablezcas el relay.",
-          "advanced": "Advanced"
+          "advanced": "Advanced",
+          "linkDestination": "Destino del enlace",
+          "sshTunnel": "Estoy usando un túnel SSH",
+          "sshTunnelHelp": "De lo contrario, este enlace apunta a este dispositivo y no puede identificar el otro equipo.",
+          "loopbackBlocked": "Activa la opción de túnel SSH o crea un enlace nuevo con la dirección de Tailscale o LAN del otro host."
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "Error de reconexión",
@@ -6676,7 +6695,22 @@
           "orcaVersion": "Orca v{{value0}}",
           "removeActiveServerBlocked": "Choose another Active Server in Advanced before removing this server.",
           "removeActiveServerDescription": "Choose another Active Server in Advanced before removing this server. Existing host sessions are left alone.",
-          "updatingServers": "Updating servers…"
+          "updatingServers": "Updating servers…",
+          "workflow": "Flujo de servidor remoto",
+          "connectWorkflow": "Conectarse a un host",
+          "connectWorkflowHelp": "Esta aplicación se conecta a otra máquina",
+          "shareWorkflow": "Compartir este host",
+          "shareWorkflowHelp": "Otros dispositivos se conectan a esta máquina",
+          "troubleshootWorkflow": "Solución de problemas de conexión",
+          "sshTunnelRequired": "Se requiere un túnel SSH",
+          "troubleshootTitle": "Crear un enlace nuevo en el otro host",
+          "troubleshootDescription": "Un enlace que usa 127.0.0.1 apunta al dispositivo que lo abre, no al equipo que lo creó.",
+          "troubleshootStepShare": "En el otro equipo, abre Compartir este host.",
+          "troubleshootStepAddress": "Elige Otro dispositivo y selecciona su dirección de Tailscale o LAN.",
+          "troubleshootStepRegenerate": "Genera un enlace de acceso nuevo y usa aquí solo el más reciente.",
+          "troubleshootTunnel": "¿Usas un reenvío local SSH? Vuelve a Conectarse a un host, pega el enlace de bucle local y activa «Estoy usando un túnel SSH» en Avanzado.",
+          "cloudVmWorkflow": "VM en la nube",
+          "cloudVmWorkflowHelp": "Gestionar máquinas en la nube creadas mediante recetas"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "Copiar {{value0}}"
@@ -6715,7 +6749,20 @@
           "custom-description": "Anuncia una dirección que otro dispositivo pueda alcanzar: un host de LAN o Tailscale, o una URL ws(s):// completa.",
           "custom-hint": "Introduce un host, host:puerto o una URL ws(s)://.",
           "custom-cancel": "Cancelar",
-          "custom-use": "Usar dirección"
+          "custom-use": "Usar dirección",
+          "intentQuestion": "¿Dónde se abrirá este enlace?",
+          "anotherDevice": "Otro dispositivo",
+          "anotherDeviceHelp": "Tailscale, LAN u otra dirección accesible",
+          "localOnly": "Solo este equipo",
+          "localOnlyHelp": "Un navegador o cliente Orca en este equipo",
+          "customAddress": "Dirección personalizada",
+          "customAddressHelp": "Túnel SSH, proxy inverso o nombre de host personalizado",
+          "recommended": "Recomendado",
+          "localLink": "Enlace solo local",
+          "localLinkHelp": "Este enlace solo funciona en un navegador o cliente Orca que se ejecute en este equipo.",
+          "noExternalAddress": "No se encontró una dirección para otro dispositivo. Conecta este equipo a una LAN o a Tailscale, actualiza o elige Dirección personalizada.",
+          "staleAddress": "La dirección de conexión cambió. Genera un enlace nuevo para {{address}}.",
+          "customInvalid": "Introduce un host, host:puerto, dirección IPv6 o URL ws(s):// válidos."
         },
         "Settings": {
           "3bf149e873": "Configuración del proyecto > {{value0}}",
@@ -9375,18 +9422,25 @@
           "empty": "No hay runtimes de VM temporales que limpiar.",
           "copyCleanup": "Copiar comando",
           "retry": "Reintentar limpieza",
-          "cleanup": "Limpiar"
+          "cleanup": "Limpiar",
+          "cloudVmLoadFailed": "No se pudieron cargar los runtimes de VM en la nube.",
+          "cloudVmCleanupFailedToast": "No se pudo limpiar el runtime de VM en la nube.",
+          "cloudVmMarkedCleaned": "El runtime de VM en la nube se marcó como limpiado.",
+          "cloudVmCleaned": "Se limpió el runtime de VM en la nube.",
+          "cloudVmTitle": "Runtimes de VM en la nube",
+          "cloudVmRefresh": "Actualizar runtimes de VM en la nube",
+          "cloudVmLoading": "Comprobando runtimes de VM en la nube…",
+          "cloudVmEmptyWithSetup": "Aún no hay runtimes de VM en la nube. Crea uno desde un espacio de trabajo mediante una receta de entorno."
         },
         "ephemeralVms": {
           "search": {
-            "title": "Entornos por espacio de trabajo",
-            "description": "Aprende cómo las recetas del repositorio dan a cada espacio de trabajo su propio entorno desechable bajo demanda."
+            "description": "Aprende cómo las recetas del repositorio dan a cada espacio de trabajo su propio entorno desechable bajo demanda.",
+            "cloudVmTitle": "VM en la nube"
           }
         },
         "EphemeralVmsPane": {
           "loadError": "No se pudieron cargar las recetas.",
           "copyError": "No se pudo copiar el prompt.",
-          "skillTitle": "Skill de entornos por espacio de trabajo",
           "skillDescription": "Configura, construye, autentica y valida recetas de entornos del repositorio.",
           "whatTitle": "Lo que la skill hace contigo",
           "whatScaffold": "Escribe la receta y los scripts para tu proveedor, conectados mediante un servidor Orca o SSH.",
@@ -9397,13 +9451,16 @@
           "copied": "Copiado",
           "recipes": "Recetas",
           "recipesHelp": "Las recetas de orca.yaml y de los plugins activados aparecen aquí, listas para iniciar un espacio de trabajo.",
-          "refresh": "Actualizar recetas de VMs efímeras",
           "checking": "Comprobando recetas…",
-          "none": "Aún no se han encontrado recetas."
+          "none": "Aún no se han encontrado recetas.",
+          "cloudVmSkillTitle": "Skill de configuración de VM en la nube",
+          "cloudVmRefresh": "Actualizar recetas de VM en la nube",
+          "cloudVmTerminalTitle": "Configuración de VM en la nube",
+          "cloudVmTerminalAriaLabel": "Terminal de instalación de la skill de VM en la nube"
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Muestra controles de configuración y destinos de ejecución de espacios de trabajo para entornos bajo demanda del repositorio.",
-          "toggleLabel": "Activar o desactivar entornos por espacio de trabajo"
+          "cloudVmToggleLabel": "Activar o desactivar VM en la nube"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agente",
@@ -9849,6 +9906,50 @@
             "logs": "registros de plugins",
             "development": "plugins de desarrollo"
           }
+        },
+        "RuntimeHostAccessForm": {
+          "getLink": "Obtener un enlace de acceso del otro host",
+          "stepOpenShare": "Abre Ajustes → Servidores remotos de Orca → Compartir este host.",
+          "stepChooseAddress": "Elige Otro dispositivo y selecciona una dirección accesible.",
+          "stepCopyLink": "Genera el enlace y, a continuación, copia el enlace «Emparejar otro cliente de Orca».",
+          "name": "Nombre en Orca",
+          "namePlaceholder": "Estación de trabajo Linux",
+          "nameHelp": "Esto solo cambia cómo aparece el equipo en Orca.",
+          "accessLink": "Enlace de acceso",
+          "accessLinkPlaceholder": "orca://pair?code=...",
+          "accessLinkHelp": "Orca muestra el destino antes de conectarse. Las credenciales permanecen ocultas.",
+          "destination": "Destino del enlace",
+          "loopbackTitle": "Este enlace apunta de nuevo a este dispositivo",
+          "loopbackDescription": "Usa {{endpoint}}, que apunta al dispositivo que abre el enlace, no al otro equipo que lo creó.",
+          "loopbackRecovery": "En el otro equipo, crea un enlace nuevo con Otro dispositivo y elige su dirección de Tailscale o LAN.",
+          "identityMismatch": "El host Orca alcanzado no coincide con este enlace de acceso",
+          "identityMismatchHelp": "Orca llegó a {{endpoint}}, pero ese host no coincide con este enlace. Genera un enlace nuevo en el otro host.",
+          "invalidLink": "Este enlace de acceso ya no es válido",
+          "invalidLinkHelp": "Genera un enlace de acceso nuevo en el otro host e inténtalo de nuevo.",
+          "incompatible": "Las versiones de Orca no son compatibles",
+          "incompatibleHelp": "Actualiza Orca en este dispositivo y en el otro host e inténtalo de nuevo.",
+          "interrupted": "Conexión interrumpida",
+          "interruptedHelp": "La conexión se detuvo durante la verificación. Comprueba la red o el túnel SSH e inténtalo de nuevo.",
+          "unavailable": "Host no disponible",
+          "unavailableHelp": "Asegúrate de que Orca se esté ejecutando en el otro host y de que la red o el túnel SSH puedan acceder a {{endpoint}}.",
+          "advanced": "Avanzado",
+          "sshTunnel": "Estoy usando un túnel SSH hacia esta dirección local",
+          "sshTunnelHelp": "Mantén el túnel activo mientras usas esta conexión.",
+          "headlessHelp": "¿Usas orca serve sin interfaz? Ejecuta orca serve --pairing-address <host-accesible> en el otro equipo.",
+          "cancel": "Cancelar",
+          "addWithTunnel": "Añadir host mediante túnel",
+          "addHost": "Añadir host",
+          "connectionDetails": "Detalles de conexión",
+          "endpointKind": "Tipo de destino",
+          "networkConnection": "Conexión de red",
+          "notAttempted": "No se intentó"
+        },
+        "CloudVmSetupGuide": {
+          "title": "Crear una VM en la nube",
+          "description": "Las VMs en la nube se crean a partir de recetas de entorno al crear un espacio de trabajo.",
+          "setupRecipe": "Configura una receta de entorno para tu proveedor de nube.",
+          "createWorkspace": "Crea un espacio de trabajo y selecciona esa receta en Ejecutar en.",
+          "openSetup": "Configurar recetas de entorno"
         }
       },
       "right": {
@@ -11501,7 +11602,6 @@
           "2f077ef4eb": ", y escanea el código.",
           "3aa7bb2d8b": "Emparejar escritorio",
           "d1495e5e64": "Abre Orca Mobile, toca",
-          "901c98bb93": "Empareja este",
           "3960f5c339": "Paso 2 de 2",
           "3241f3c26a": "QR de instalación",
           "7af266b80d": "Código QR de instalación",

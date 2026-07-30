@@ -133,7 +133,7 @@ describe('seedAgentTabStateAfterWorktreeCreate', () => {
     setTabs([{ id: 'agent-tab', launchAgent: 'claude', viewMode: 'chat' }])
 
     seedAgentTabStateAfterWorktreeCreate({
-      request: { ...request, launchDraftPrompt: 'note\rhttps://github.com/o/r/issues/12' },
+      request: { ...request, launchDraftPrompt: 'note\u2028https://github.com/o/r/issues/12' },
       worktreeId: 'wt-1',
       primaryTabId: 'agent-tab',
       startupTerminalTabId: 'agent-tab',
