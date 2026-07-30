@@ -16,6 +16,7 @@ import {
 import net from 'node:net'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { prepareDevComputerHelper } from './dev-computer-helper-prepare.mjs'
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
 
 // Why: Electron-based hosts (e.g. Claude Code, VS Code) set
@@ -518,6 +519,23 @@ if (!userPassedPort && !isHelpOrVersion) {
   }
 }
 prepareDevWebClient()
+prepareDevComputerHelper({
+  env: process.env,
+  isHelpOrVersion,
+  platform: process.platform,
+  repoRoot,
+  runBuild: () => {
+    execFileSync(
+      process.execPath,
+      [path.join(repoRoot, 'config', 'scripts', 'build-computer-macos.mjs')],
+      {
+        cwd: repoRoot,
+        stdio: 'inherit',
+        env: process.env
+      }
+    )
+  }
+})
 const forwardedArgs = ['dev', ...forwardedRaw, ...forwardedExtras]
 const child = spawn(process.execPath, [electronViteCli, ...forwardedArgs], {
   stdio: 'inherit',
