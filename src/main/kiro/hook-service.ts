@@ -125,7 +125,9 @@ function readBackup(): SettingsBackup | null {
       parsed &&
       typeof parsed === 'object' &&
       !Array.isArray(parsed) &&
-      typeof (parsed as SettingsBackup).previous === 'object'
+      typeof (parsed as SettingsBackup).previous === 'object' &&
+      (parsed as SettingsBackup).previous !== null &&
+      !Array.isArray((parsed as SettingsBackup).previous)
     ) {
       return parsed as SettingsBackup
     }
@@ -188,14 +190,13 @@ export class KiroHookService {
         detail: 'Could not read Kiro CLI settings (cli.json)'
       }
     }
-    const changedKeys = MANAGED_KEYS.filter((key) => settings[key] !== MANAGED_SETTINGS[key])
-    if (changedKeys.length === 0) {
-      return buildStatus(settings, configPath)
-    }
-    // Why: only snapshot once - re-installs must not overwrite the true
-    // pre-Orca state with Orca's own managed values. Snapshot every managed
-    // key (not just the ones changing) so remove() can tell "user already had
-    // this value" apart from "Orca introduced this key".
+    // Why: snapshot the user's pre-Orca values once, BEFORE any early return.
+    // Even when the user already has every managed value set, we must record a
+    // backup - otherwise a later remove() finds none and blind-deletes keys the
+    // user configured themselves. Snapshot every managed key (not just the ones
+    // changing) so remove() can tell "user already had this value" apart from
+    // "Orca introduced this key". Re-installs never overwrite an existing
+    // backup, keeping the true pre-Orca state.
     if (!readBackup()) {
       const previous: Record<string, unknown> = {}
       for (const key of MANAGED_KEYS) {
@@ -204,6 +205,10 @@ export class KiroHookService {
         }
       }
       writeJsonAtomic(getBackupPath(), { previous } satisfies SettingsBackup)
+    }
+    const changedKeys = MANAGED_KEYS.filter((key) => settings[key] !== MANAGED_SETTINGS[key])
+    if (changedKeys.length === 0) {
+      return buildStatus(settings, configPath)
     }
     const next = { ...settings, ...MANAGED_SETTINGS }
     writeJsonAtomic(configPath, next)
@@ -223,6 +228,13 @@ export class KiroHookService {
       }
     }
     const backup = readBackup()
+    // Why: no backup means Orca never recorded a pre-install state (never
+    // installed, or a prior remove() already consumed it). Do NOT touch
+    // settings that merely happen to equal our managed values - they are the
+    // user's, not ours.
+    if (!backup) {
+      return this.getStatus()
+    }
     const next: KiroCliSettings = { ...settings }
     let changed = false
     for (const key of MANAGED_KEYS) {
@@ -231,7 +243,7 @@ export class KiroHookService {
       if (next[key] !== MANAGED_SETTINGS[key]) {
         continue
       }
-      if (backup && key in backup.previous) {
+      if (key in backup.previous) {
         next[key] = backup.previous[key]
       } else {
         delete next[key]
