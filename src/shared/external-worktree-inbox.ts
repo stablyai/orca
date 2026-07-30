@@ -43,6 +43,17 @@ export function getHiddenExternalWorktrees(
   )
 }
 
+export function getHiddenImportableExternalWorktrees(
+  detected: DetectedWorktreeListResult | undefined
+): DetectedWorktree[] {
+  if (detected?.authoritative !== true) {
+    return []
+  }
+  return detected.worktrees.filter(
+    (worktree) => !worktree.visible && isImportableExternalWorktree(worktree)
+  )
+}
+
 export function getVisibleExternalWorktrees(
   detected: DetectedWorktreeListResult | undefined
 ): DetectedWorktree[] {
@@ -62,6 +73,12 @@ function isUserFacingExternalWorktree(worktree: DetectedWorktree): boolean {
     worktree.ownership !== 'orca-managed' &&
     worktree.ownership !== 'agent-scratch'
   )
+}
+
+function isImportableExternalWorktree(worktree: DetectedWorktree): boolean {
+  // Why: scratch is not user-facing, but the visibility toggle can never reveal
+  // it, so explicit import is its only reachable path back (#10324).
+  return !worktree.selectedCheckout && worktree.ownership !== 'orca-managed'
 }
 
 export function isExternalWorktreeDiscoverySuppressed(
@@ -93,16 +110,21 @@ export function getNewExternalWorktreeInboxWorktrees(
   detected: DetectedWorktreeListResult | undefined,
   repo: Repo
 ): DetectedWorktree[] {
-  if (!shouldOfferNewExternalWorktreeInbox(repo)) {
+  if (isExternalWorktreeDiscoverySuppressed(repo)) {
     return []
   }
+  // Why: the visibility toggle and its first-run prompt only govern non-Orca
+  // worktrees, so gating scratch on either leaves it unreachable (#10324).
+  const offersNonScratch = shouldOfferNewExternalWorktreeInbox(repo)
   const baseline = new Set(
     (repo.externalWorktreeInboxBaselinePaths ?? []).map((path) =>
       normalizeExternalWorktreeInboxPath(path)
     )
   )
-  return getHiddenExternalWorktrees(detected).filter(
-    (worktree) => !baseline.has(normalizeExternalWorktreeInboxPath(worktree.path))
+  return getHiddenImportableExternalWorktrees(detected).filter(
+    (worktree) =>
+      (offersNonScratch || worktree.ownership === 'agent-scratch') &&
+      !baseline.has(normalizeExternalWorktreeInboxPath(worktree.path))
   )
 }
 
