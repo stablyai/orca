@@ -283,7 +283,12 @@ describe('terminal tab retirement store boundary', () => {
       id: 'rpc-1',
       ok: true,
       result: {
-        close: { handle: 'terminal-1', tabId: 'tab-1', ptyKilled: false, blockedReason: 'close_rate_limited' }
+        close: {
+          handle: 'terminal-1',
+          tabId: 'tab-1',
+          ptyKilled: false,
+          blockedReason: 'close_rate_limited'
+        }
       },
       _meta: { runtimeId: 'local-runtime' }
     })

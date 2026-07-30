@@ -71,7 +71,9 @@ function connectionActorKey(ctx: RuntimeCloseClientContext): string {
 }
 
 function targetKey(target: RuntimeCloseTarget): string {
-  return target.kind === 'session-tab' ? `session:${target.worktree}` : `terminal:${target.terminal}`
+  return target.kind === 'session-tab'
+    ? `session:${target.worktree}`
+    : `terminal:${target.terminal}`
 }
 
 function worktreeMatches(selector: string, worktreeId: string): boolean {

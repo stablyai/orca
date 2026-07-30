@@ -1541,15 +1541,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           .filter((result) => result.status === 'rejected').length
         // Why: the close policy soft-denies inside a success envelope, so a
         // fulfilled promise is not proof the host PTY died — count those too.
-        const runtimeFailures = results
-          .slice(localOrSshTaskCount)
-          .filter((result) => {
-            if (result.status === 'rejected') {
-              return true
-            }
-            const close = (result.value as { close?: RuntimeTerminalClose } | undefined)?.close
-            return close?.ptyKilled !== true
-          }).length
+        const runtimeFailures = results.slice(localOrSshTaskCount).filter((result) => {
+          if (result.status === 'rejected') {
+            return true
+          }
+          const close = (result.value as { close?: RuntimeTerminalClose } | undefined)?.close
+          return close?.ptyKilled !== true
+        }).length
         if (localOrSshFailures > 0 || runtimeFailures > 0) {
           console.warn('[terminal-retirement] provider teardown failed', {
             tabId,

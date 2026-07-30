@@ -679,5 +679,4 @@ describe('launchAgentBackgroundSession', () => {
       })
     )
   })
-
 })

@@ -28,7 +28,10 @@ function runtimeStub(): OrcaRuntimeService {
         _worktree: string | undefined,
         _clientMutationId: string | undefined,
         _reconcileExisting: boolean,
-        create: (canonicalWorktreeSelector?: string, preAllocatedHandle?: string) => Promise<unknown>
+        create: (
+          canonicalWorktreeSelector?: string,
+          preAllocatedHandle?: string
+        ) => Promise<unknown>
       ) => create(undefined, undefined)
     ),
     closeTerminal: vi.fn().mockResolvedValue({
@@ -374,11 +377,7 @@ describe('runtime terminal close policy', () => {
       policy.evaluate(RUNTIME_CLIENT, target, userCloseIntent({ requestId: 'budget-1' }))
     ).toMatchObject({ allowed: true })
     expect(
-      policy.evaluate(
-        sameDeviceOtherConnection,
-        target,
-        userCloseIntent({ requestId: 'budget-2' })
-      )
+      policy.evaluate(sameDeviceOtherConnection, target, userCloseIntent({ requestId: 'budget-2' }))
     ).toMatchObject({ allowed: false, reason: 'close_rate_limited' })
     expect(
       policy.evaluate(otherDevice, target, userCloseIntent({ requestId: 'budget-3' }))

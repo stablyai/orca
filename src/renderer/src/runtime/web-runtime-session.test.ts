@@ -1710,10 +1710,9 @@ describe('web runtime session tab actions', () => {
       ENVIRONMENT_ID,
       WORKTREE_ID
     )
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[web-runtime-session] close blocked by host policy',
-      { blockedReason: 'close_rate_limited' }
-    )
+    expect(warnSpy).toHaveBeenCalledWith('[web-runtime-session] close blocked by host policy', {
+      blockedReason: 'close_rate_limited'
+    })
   })
 
   it('suppresses lifecycle closes when terminal-incarnation evidence is missing', async () => {
