@@ -5,9 +5,11 @@ import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } fro
 import {
   execInTerminal,
   sendToTerminal,
+  waitForActivePaneHookDescriptor,
   waitForActivePanePtyId,
   waitForActiveTerminalManager
 } from './helpers/terminal'
+import { waitForTerminalPtyDataInjector } from './helpers/terminal-pty-injection'
 
 const STREAMING_FIXTURE_PATH = path.join(
   process.cwd(),
@@ -85,24 +87,44 @@ async function dispatchSubRowWheelUp(page: Page): Promise<void> {
     if (!pane?.terminal.element) {
       throw new Error('Active terminal pane unavailable')
     }
+    pane.terminal.element.dispatchEvent(
+      new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+        deltaY: -2
+      })
+    )
+  })
+}
+
+async function dispatchRealWheel(page: Page, deltaY: number): Promise<void> {
+  const point = await page.evaluate(() => {
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!pane?.terminal.element) {
+      throw new Error('Active terminal pane unavailable')
+    }
     const screen = pane.terminal.element.querySelector<HTMLElement>('.xterm-screen')
     if (!screen) {
       throw new Error('Active terminal screen unavailable')
     }
     const rect = screen.getBoundingClientRect()
-    // A -2px delta is far below one cell height: xterm scrolls zero rows, the
-    // viewport stays at the bottom, but the wheel listener still observes an
-    // upward wheel — the phantom-pin shape from trackpad jitter.
-    const event = new WheelEvent('wheel', {
-      bubbles: true,
-      cancelable: true,
-      clientX: rect.left + rect.width / 2,
-      clientY: rect.top + Math.min(rect.height - 1, 40),
-      deltaMode: WheelEvent.DOM_DELTA_PIXEL,
-      deltaY: -2
-    })
-    pane.terminal.element.dispatchEvent(event)
+    return {
+      x: rect.left + rect.width / 2,
+      y: rect.top + Math.min(rect.height - 1, 40)
+    }
   })
+  await page.mouse.move(point.x, point.y)
+  await page.mouse.wheel(0, deltaY)
 }
 
 async function dispatchPlainHomeKeydown(page: Page): Promise<void> {
@@ -142,6 +164,60 @@ async function dispatchPlainHomeKeydown(page: Page): Promise<void> {
   })
 }
 
+async function injectQueuedWriteThenType(page: Page, paneKey: string): Promise<void> {
+  await page.evaluate((targetPaneKey) => {
+    const injectionTarget = window as Window & {
+      __terminalPtyDataInjection?: { inject: (paneKey: string, data: string) => boolean }
+    }
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!pane) {
+      throw new Error('Active terminal pane unavailable')
+    }
+    const terminal = pane.terminal
+    const originalWrite = terminal.write
+    const holder: { write: { data: string; callback?: () => void } | null } = { write: null }
+    terminal.write = ((data: string, callback?: () => void) => {
+      holder.write = { data, callback }
+    }) as typeof terminal.write
+    try {
+      const payload = '\x1b[?2026h\r\x1b[2KWorking in-flight\x1b[?2026l'
+      if (!injectionTarget.__terminalPtyDataInjection?.inject(targetPaneKey, payload)) {
+        throw new Error('PTY injector unavailable')
+      }
+      const textarea = pane.container.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+      if (!textarea) {
+        throw new Error('xterm helper textarea unavailable')
+      }
+      textarea.focus()
+      const event = new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: 'x',
+        code: 'KeyX'
+      })
+      Object.defineProperty(event, 'keyCode', { configurable: true, value: 88 })
+      Object.defineProperty(event, 'which', { configurable: true, value: 88 })
+      textarea.dispatchEvent(event)
+    } finally {
+      terminal.write = originalWrite
+    }
+    const heldWrite = holder.write
+    if (!heldWrite) {
+      throw new Error('Foreground terminal write was not captured')
+    }
+    originalWrite.call(terminal, heldWrite.data, heldWrite.callback)
+  }, paneKey)
+}
+
 async function startStreamingFixturePhase1(page: Page): Promise<string> {
   await waitForSessionReady(page)
   await waitForActiveWorktree(page)
@@ -159,6 +235,8 @@ test.describe('terminal scroll intent keeps following output', () => {
   }) => {
     const ptyId = await startStreamingFixturePhase1(orcaPage)
 
+    // A -2px delta is far below one cell height: xterm scrolls zero rows, but
+    // the intent listener still observes the trackpad-jitter-shaped wheel.
     await dispatchSubRowWheelUp(orcaPage)
     await orcaPage.waitForTimeout(INTENT_SETTLE_WAIT_MS)
 
@@ -176,5 +254,59 @@ test.describe('terminal scroll intent keeps following output', () => {
     // phase-2 release, exactly like a user pressing Home mid-generation.
     await dispatchPlainHomeKeydown(orcaPage)
     await waitForMarkerAtBottom(orcaPage, 'STREAM_PHASE2_DONE')
+  })
+
+  test('a real wheel pin stays fixed while visible output streams', async ({ orcaPage }) => {
+    const ptyId = await startStreamingFixturePhase1(orcaPage)
+
+    await dispatchRealWheel(orcaPage, -240)
+    await expect
+      .poll(async () => {
+        const probe = await probeActiveViewport(orcaPage, 'STREAM_PHASE1_DONE')
+        return probe ? probe.baseY - probe.viewportY : 0
+      })
+      .toBeGreaterThan(1)
+    const pinned = await probeActiveViewport(orcaPage, 'STREAM_PHASE1_DONE')
+    if (!pinned) {
+      throw new Error('terminal viewport unavailable after wheel pin')
+    }
+
+    await sendToTerminal(orcaPage, ptyId, 'g')
+    await expect
+      .poll(
+        async () => {
+          const probe = await probeActiveViewport(orcaPage, 'STREAM_PHASE2_DONE')
+          return Boolean(probe && probe.containsMarker && probe.viewportY === pinned.viewportY)
+        },
+        { timeout: 30_000, message: 'visible streaming output moved the wheel-pinned viewport' }
+      )
+      .toBe(true)
+  })
+
+  test('typing after a pinned write is queued resumes follow-output', async ({ orcaPage }) => {
+    await startStreamingFixturePhase1(orcaPage)
+    const { paneKey } = await waitForActivePaneHookDescriptor(orcaPage)
+    await waitForTerminalPtyDataInjector(orcaPage, paneKey)
+
+    await dispatchRealWheel(orcaPage, -320)
+    await expect
+      .poll(async () => {
+        const probe = await probeActiveViewport(orcaPage, 'STREAM_PHASE1_DONE')
+        return probe ? probe.baseY - probe.viewportY : 0
+      })
+      .toBeGreaterThan(2)
+
+    // Hold the xterm write call so typing deterministically lands between the
+    // old per-write intent capture and its completion-time enforcement from #8625.
+    await injectQueuedWriteThenType(orcaPage, paneKey)
+    await expect
+      .poll(
+        async () => {
+          const probe = await probeActiveViewport(orcaPage, 'STREAM_PHASE1_DONE')
+          return probe ? probe.baseY - probe.viewportY : Number.NaN
+        },
+        { timeout: 5_000, intervals: [25] }
+      )
+      .toBe(0)
   })
 })

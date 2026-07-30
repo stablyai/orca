@@ -7,6 +7,7 @@ import type {
   JiraIssue,
   LinearIssue,
   PersistedUIState,
+  Repo,
   TerminalTab,
   Worktree
 } from '../../../../shared/types'
@@ -22,6 +23,7 @@ import { buildAgentNotificationId } from '../../../../shared/agent-notification-
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
+import { getRepoHostIdentityForParts } from './repo-host-identity'
 
 const mocks = vi.hoisted(() => ({
   sendNotesToActiveAgentSession: vi.fn(),
@@ -76,6 +78,7 @@ function createUIStore(): StoreApi<AppState> {
     rightSidebarOpen: false,
     rightSidebarWidth: 280,
     markdownTocPanelWidth: 240,
+    combinedDiffFileTreeWidth: 256,
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
     ...createSettingsSearchState(args[0]),
@@ -725,6 +728,8 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(createUIStore().getState().visibleWorkspaceHostIds).toBeNull()
     expect(getDefaultUIState().workspaceHostOrder).toEqual([])
     expect(createUIStore().getState().workspaceHostOrder).toEqual([])
+    expect(getDefaultUIState().manualRepoOrder).toEqual([])
+    expect(createUIStore().getState().manualRepoOrder).toEqual([])
   })
 
   it('defaults the persisted active view to terminal', () => {
@@ -856,7 +861,9 @@ describe('createUISlice hydratePersistedUI', () => {
 
   it('preserves persisted repo filters until repos are loaded', () => {
     const store = createUIStore()
-    const remoteDismissalKey = getSetupScriptPromptDismissalKey('remote-repo')
+    const remoteDismissalKey = getSetupScriptPromptDismissalKey(
+      getRepoHostIdentityForParts('remote-repo', 'runtime:env-1')
+    )
 
     store.getState().hydratePersistedUI(
       makePersistedUI({
@@ -878,8 +885,12 @@ describe('createUISlice hydratePersistedUI', () => {
 
   it('validates persisted repo filters when repos are already loaded', () => {
     const store = createUIStore()
-    const localDismissalKey = getSetupScriptPromptDismissalKey('local-repo')
-    const staleDismissalKey = getSetupScriptPromptDismissalKey('stale-repo')
+    const localDismissalKey = getSetupScriptPromptDismissalKey(
+      getRepoHostIdentityForParts('local-repo', 'local')
+    )
+    const staleDismissalKey = getSetupScriptPromptDismissalKey(
+      getRepoHostIdentityForParts('stale-repo', 'local')
+    )
     store.setState({
       repos: [
         { id: 'local-repo', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 1 }
@@ -971,6 +982,41 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().workspaceHostOrder).toEqual(['ssh:win%20vm', 'local'])
   })
 
+  it('hydrates and immediately applies the manual cross-host repo order', () => {
+    const store = createUIStore()
+    const local: Repo = {
+      id: 'same',
+      path: '/local',
+      displayName: 'Local',
+      badgeColor: '#000',
+      addedAt: 1,
+      executionHostId: 'local'
+    }
+    const remote: Repo = {
+      ...local,
+      path: '/remote',
+      displayName: 'Remote',
+      executionHostId: 'runtime:node-b'
+    }
+    store.setState({ repos: [local, remote] })
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        manualRepoOrder: [
+          { hostId: 'runtime:node-b', repoId: 'same' },
+          { hostId: 'invalid' as never, repoId: 'ignored' },
+          { hostId: 'local', repoId: 'same' }
+        ]
+      })
+    )
+
+    expect(store.getState().manualRepoOrder).toEqual([
+      { hostId: 'runtime:node-b', repoId: 'same' },
+      { hostId: 'local', repoId: 'same' }
+    ])
+    expect(store.getState().repos).toEqual([remote, local])
+  })
+
   it('falls back to all hosts for invalid persisted workspace host scopes', () => {
     const store = createUIStore()
 
@@ -993,6 +1039,14 @@ describe('createUISlice hydratePersistedUI', () => {
 
     expect(store.getState().settingsProjectHostSelection).toEqual({
       'git:acme/app': 'runtime:home-mac'
+    })
+    expect(store.getState().settingsProjectSetupSelection).toEqual({})
+
+    store
+      .getState()
+      .setSettingsProjectHostSelection('git:acme/app', 'runtime:home-mac', 'jump-setup')
+    expect(store.getState().settingsProjectSetupSelection).toEqual({
+      'git:acme/app': 'jump-setup'
     })
     // Ephemeral: never written through the UI persistence pipeline.
     expect(setUI).not.toHaveBeenCalled()
@@ -1180,6 +1234,16 @@ describe('createUISlice hydratePersistedUI', () => {
     )
 
     expect(store.getState().markdownTocPanelWidth).toBe(200)
+  })
+
+  it('clamps persisted combined diff file tree widths into the supported range', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ combinedDiffFileTreeWidth: 100 }))
+    expect(store.getState().combinedDiffFileTreeWidth).toBe(200)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ combinedDiffFileTreeWidth: 5_000 }))
+    expect(store.getState().combinedDiffFileTreeWidth).toBe(640)
   })
 
   it('preserves right sidebar widths above the former 500px cap', () => {
@@ -1412,6 +1476,34 @@ describe('createUISlice hydratePersistedUI', () => {
     )
 
     expect(store.getState().usagePercentageDisplay).toBe('used')
+  })
+
+  it('persists and hydrates the status bar usage mode', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    expect(store.getState().statusBarUsageMode).toBe('verbose')
+
+    store.getState().setStatusBarUsageMode('compact')
+
+    expect(store.getState().statusBarUsageMode).toBe('compact')
+    expect(setUI).toHaveBeenCalledWith({ statusBarUsageMode: 'compact' })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ statusBarUsageMode: 'verbose' }))
+    expect(store.getState().statusBarUsageMode).toBe('verbose')
+  })
+
+  it('defaults invalid status bar usage modes to verbose', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        statusBarUsageMode: 'expanded' as PersistedUIState['statusBarUsageMode']
+      })
+    )
+
+    expect(store.getState().statusBarUsageMode).toBe('verbose')
   })
 
   it('clamps persisted workspace board column width', () => {
@@ -1835,6 +1927,28 @@ describe('createUISlice hydratePersistedUI', () => {
 })
 
 describe('createUISlice settings navigation', () => {
+  it('accepts a host-qualified setup guide target', () => {
+    const store = createUIStore()
+    store.getState().openSettingsTarget({ pane: 'setup-guide', repoId: null, hostId: 'ssh:host-1' })
+    expect(store.getState().settingsNavigationTarget).toEqual({
+      pane: 'setup-guide',
+      repoId: null,
+      hostId: 'ssh:host-1'
+    })
+  })
+
+  it('rejects malformed settings targets before storing them', () => {
+    const store = createUIStore()
+    const openSettingsTarget = store.getState().openSettingsTarget as unknown as (
+      target: unknown
+    ) => void
+
+    expect(() =>
+      openSettingsTarget({ pane: 'repo', repoId: 'repo-1', hostId: 'invalid' })
+    ).toThrowError('openSettingsTarget received an invalid navigation target')
+    expect(store.getState().settingsNavigationTarget).toBeNull()
+  })
+
   it('prefetches the restored default task source when provider settings drifted', () => {
     const store = createUIStore()
     const prefetchWorkItems = vi.fn()
@@ -2052,6 +2166,53 @@ describe('createUISlice new workspace draft', () => {
       number: 42,
       title: 'Legacy issue',
       url: 'https://github.com/acme/repo/issues/42'
+    })
+  })
+
+  it('preserves serializable Jira identity and bound source context in drafts', () => {
+    const store = createUIStore()
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: 'project-1',
+      hostId: 'runtime:env-1' as const,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      },
+      accountLabel: 'ada@example.com'
+    }
+
+    store.getState().setNewWorkspaceDraft({
+      repoId: 'repo-1',
+      name: 'orca-123-link-jira',
+      prompt: '',
+      note: '',
+      attachments: [],
+      linkedWorkItem: {
+        provider: 'jira',
+        type: 'issue',
+        number: 0,
+        title: 'ORCA-123 Link Jira',
+        url: 'https://company.atlassian.net/browse/ORCA-123',
+        jiraIdentifier: 'ORCA-123'
+      },
+      linkedTaskSourceContext,
+      agent: 'claude',
+      linkedIssue: '',
+      linkedPR: null,
+      linkedGitLabIssue: null,
+      linkedGitLabMR: null
+    })
+
+    expect(store.getState().newWorkspaceDraft).toMatchObject({
+      linkedWorkItem: {
+        provider: 'jira',
+        jiraIdentifier: 'ORCA-123'
+      },
+      linkedTaskSourceContext
     })
   })
 })
@@ -3257,5 +3418,97 @@ describe('createUISlice space navigation', () => {
     store.getState().closeSpacePage()
 
     expect(store.getState().activeView).toBe('tasks')
+  })
+})
+
+describe('openDiffNotesSendMenuForActiveWorktree', () => {
+  function stubDiffNotesStore(
+    comments: { sentAt?: number }[],
+    activeWorktreeId: string | null = 'wt-1'
+  ): { store: StoreApi<AppState>; setRightSidebarTab: ReturnType<typeof vi.fn> } {
+    const store = createUIStore()
+    const setRightSidebarTab = vi.fn()
+    store.setState({
+      activeWorktreeId,
+      getDiffComments: () => comments,
+      setRightSidebarTab,
+      setRightSidebarOpen: vi.fn()
+    } as unknown as Partial<AppState>)
+    return { store, setRightSidebarTab }
+  }
+
+  it('reveals Source Control and bumps the open request when unsent notes exist', () => {
+    const { store, setRightSidebarTab } = stubDiffNotesStore([{ sentAt: 10 }, {}])
+
+    expect(store.getState().openDiffNotesSendMenuForActiveWorktree()).toBe(true)
+    expect(setRightSidebarTab).toHaveBeenCalledWith('source-control')
+    expect(store.getState().diffNotesSendMenuOpenRequest).toMatchObject({
+      worktreeId: 'wt-1',
+      nonce: 1
+    })
+    expect(store.getState().diffNotesSendMenuOpenRequest?.issuedAt).toBeTypeOf('number')
+
+    // A second request increments the nonce so the menu reopens.
+    expect(store.getState().openDiffNotesSendMenuForActiveWorktree()).toBe(true)
+    expect(store.getState().diffNotesSendMenuOpenRequest).toMatchObject({
+      worktreeId: 'wt-1',
+      nonce: 2
+    })
+  })
+
+  it('is a no-op when every note is already sent', () => {
+    const { store, setRightSidebarTab } = stubDiffNotesStore([{ sentAt: 10 }])
+
+    expect(store.getState().openDiffNotesSendMenuForActiveWorktree()).toBe(false)
+    expect(setRightSidebarTab).not.toHaveBeenCalled()
+    expect(store.getState().diffNotesSendMenuOpenRequest).toBeNull()
+  })
+
+  it('is a no-op when there is no active worktree', () => {
+    const { store } = stubDiffNotesStore([{}], null)
+
+    expect(store.getState().openDiffNotesSendMenuForActiveWorktree()).toBe(false)
+    expect(store.getState().diffNotesSendMenuOpenRequest).toBeNull()
+  })
+
+  it('clears the request only for the matching worktree', () => {
+    const { store } = stubDiffNotesStore([{}])
+    store.getState().openDiffNotesSendMenuForActiveWorktree()
+
+    store.getState().consumeDiffNotesSendMenuOpenRequest('other-wt')
+    expect(store.getState().diffNotesSendMenuOpenRequest).not.toBeNull()
+
+    store.getState().consumeDiffNotesSendMenuOpenRequest('wt-1')
+    expect(store.getState().diffNotesSendMenuOpenRequest).toBeNull()
+  })
+})
+
+describe('createUISlice clearOsc52ClipboardDefaultOnNotice', () => {
+  it('restores the armed notice from persisted UI', () => {
+    const store = createUIStore()
+
+    expect(store.getState().osc52ClipboardDefaultOnNoticePending).toBe(false)
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ osc52ClipboardDefaultOnNoticePending: true }))
+
+    expect(store.getState().osc52ClipboardDefaultOnNoticePending).toBe(true)
+  })
+
+  it('stops the toast this session even when the persist fails', () => {
+    // Why local-first: the flag is the only thing keeping the toast off screen, and a
+    // rejected ui.set must not leave it re-firing on every render of this session. Losing
+    // the persist just re-arms the notice next launch, which is the safe direction.
+    const setUI = vi.fn(() => Promise.reject(new Error('runtime offline')))
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ osc52ClipboardDefaultOnNoticePending: true }))
+
+    store.getState().clearOsc52ClipboardDefaultOnNotice()
+
+    expect(store.getState().osc52ClipboardDefaultOnNoticePending).toBe(false)
+    expect(setUI).toHaveBeenCalledWith({ osc52ClipboardDefaultOnNoticePending: false })
   })
 })

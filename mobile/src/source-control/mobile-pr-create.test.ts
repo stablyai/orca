@@ -40,6 +40,7 @@ function eligibility(
     canCreate: true,
     blockedReason: null,
     nextAction: null,
+    reviewLookupOutcome: 'not_found',
     defaultBaseRef: 'main',
     title: 'Add feature',
     body: '',
@@ -118,10 +119,113 @@ describe('mobile create form gating parity', () => {
         body: desktopEligibility.body ?? '',
         canCreate: desktopEligibility.canCreate,
         blockedReason: desktopEligibility.blockedReason,
-        nextAction: desktopEligibility.nextAction
+        nextAction: desktopEligibility.nextAction,
+        // Mobile receives the lookup outcome from eligibility; thread it so the
+        // gate reflects real prefills (current hosts always populate it).
+        reviewLookupOutcome: desktopEligibility.reviewLookupOutcome
       }) === null
 
     expect(mobileAllowsComposer).toBe(desktopAllowsComposer)
+  })
+
+  it('fails closed when the review-lookup outcome is missing (older host)', () => {
+    // A host that predates `reviewLookupOutcome` leaves review existence unproven.
+    // Mobile must not open Create / Push & Create on that ambiguity.
+    expect(
+      getMobilePrCreateBlockMessage({
+        provider: 'github',
+        base: 'main',
+        title: 'Add feature',
+        body: '',
+        canCreate: true,
+        blockedReason: null
+      })
+    ).toBe(
+      'Orca could not confirm whether this branch already has a pull request. Try again in a moment.'
+    )
+    expect(
+      getMobilePrCreateBlockMessage({
+        provider: 'github',
+        base: 'main',
+        title: 'Add feature',
+        body: '',
+        canCreate: false,
+        blockedReason: 'needs_push'
+      })
+    ).toBe(
+      'Orca could not confirm whether this branch already has a pull request. Try again in a moment.'
+    )
+  })
+
+  it('desktop gate hard-blocks on positive unresolved review evidence', () => {
+    // Mobile lacks review-lookup signals, so it fails closed on ambiguity: the
+    // shared desktop gate must return false even when eligibility looks ready.
+    expect(
+      shouldOpenChecksPanelCreateComposer({
+        activeReview: null,
+        isFolder: false,
+        branch: 'feature/x',
+        hostedReviewCreation: eligibility({ canCreate: true }),
+        reviewLookup: 'positive_unresolved'
+      })
+    ).toBe(false)
+  })
+
+  it('desktop gate hard-blocks during a hard refresh error', () => {
+    expect(
+      shouldOpenChecksPanelCreateComposer({
+        activeReview: null,
+        isFolder: false,
+        branch: 'feature/x',
+        hostedReviewCreation: eligibility({ canCreate: true }),
+        hasHardRefreshError: true
+      })
+    ).toBe(false)
+  })
+
+  it('fails closed on an unavailable review lookup even when eligibility looks ready', () => {
+    // The existing-review lookup could not prove there is no PR; mobile has no
+    // review-lookup signal of its own, so create must be blocked.
+    expect(
+      getMobilePrCreateBlockMessage({
+        provider: 'github',
+        base: 'main',
+        title: 'Add feature',
+        body: '',
+        canCreate: true,
+        blockedReason: null,
+        reviewLookupOutcome: 'unavailable'
+      })
+    ).toBe(
+      'Orca could not confirm whether this branch already has a pull request. Try again in a moment.'
+    )
+  })
+
+  it('fails closed on unavailable even on the needs_push Push & Create path', () => {
+    // needs_push would normally be allowed (Push & Create); an unavailable lookup
+    // must still block it — this is the fail-open gap the parity gate closes.
+    const mobileBlocked =
+      getMobilePrCreateBlockMessage({
+        provider: 'github',
+        base: 'main',
+        title: 'Add feature',
+        body: '',
+        canCreate: false,
+        blockedReason: 'needs_push',
+        reviewLookupOutcome: 'unavailable'
+      }) !== null
+    const desktopAllowsComposer = shouldOpenChecksPanelCreateComposer({
+      activeReview: null,
+      isFolder: false,
+      branch: 'feature/x',
+      hostedReviewCreation: eligibility({
+        canCreate: false,
+        blockedReason: 'needs_push',
+        reviewLookupOutcome: 'unavailable'
+      })
+    })
+    expect(mobileBlocked).toBe(true)
+    expect(desktopAllowsComposer).toBe(false)
   })
 
   it('stays safely blocked for a reason added by a newer desktop contract', () => {
@@ -158,7 +262,8 @@ describe('resolveMobilePrPrefill', () => {
         nextAction: null,
         defaultBaseRef: 'develop',
         title: 'Add feature',
-        body: 'Body'
+        body: 'Body',
+        reviewLookupOutcome: 'not_found'
       })
     ])
     await expect(resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)).resolves.toEqual({
@@ -168,7 +273,8 @@ describe('resolveMobilePrPrefill', () => {
       body: 'Body',
       canCreate: true,
       blockedReason: null,
-      nextAction: null
+      nextAction: null,
+      reviewLookupOutcome: 'not_found'
     })
   })
 
@@ -182,7 +288,8 @@ describe('resolveMobilePrPrefill', () => {
         nextAction: 'push',
         defaultBaseRef: 'main',
         title: 'Add feature',
-        body: ''
+        body: '',
+        reviewLookupOutcome: 'not_found'
       })
     ])
     const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)
@@ -198,7 +305,8 @@ describe('resolveMobilePrPrefill', () => {
         review: null,
         blockedReason: 'dirty',
         nextAction: 'commit',
-        defaultBaseRef: 'main'
+        defaultBaseRef: 'main',
+        reviewLookupOutcome: 'not_found'
       })
     ])
     const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)
@@ -209,15 +317,39 @@ describe('resolveMobilePrPrefill', () => {
 
   it('returns a blocked fallback when eligibility is unavailable', async () => {
     const client = clientWith([fail('nope')])
-    await expect(resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)).resolves.toEqual({
+    const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)
+    expect(prefill).toEqual({
       provider: 'github',
       base: 'main',
       title: 'feature/x',
       body: '',
       canCreate: false,
       blockedReason: null,
-      nextAction: null
+      nextAction: null,
+      // Eligibility could not be resolved, so the review lookup is unproven.
+      reviewLookupOutcome: 'unavailable'
     })
+    // A prefill Orca could not resolve must not offer create.
+    expect(getMobilePrCreateBlockMessage(prefill)).not.toBeNull()
+  })
+
+  it('threads reviewLookupOutcome from eligibility into the prefill and blocks needs_push', async () => {
+    const client = clientWith([
+      ok({
+        provider: 'github',
+        canCreate: false,
+        review: null,
+        blockedReason: 'needs_push',
+        nextAction: 'push',
+        defaultBaseRef: 'main',
+        title: 'Add feature',
+        body: '',
+        reviewLookupOutcome: 'unavailable'
+      })
+    ])
+    const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)
+    expect(prefill.reviewLookupOutcome).toBe('unavailable')
+    expect(getMobilePrCreateBlockMessage(prefill)).not.toBeNull()
   })
 
   it('blocks without calling the RPC when there is no branch', async () => {

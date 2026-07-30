@@ -61,6 +61,7 @@ function createMockDispatcher() {
     notify: vi.fn((method: string, params?: Record<string, unknown>) => {
       notifications.push({ method, params })
     }),
+    notifyClient: vi.fn(),
     onClientDetached: vi.fn((listener: (clientId: number) => void) => {
       detachListeners.add(listener)
       return () => detachListeners.delete(listener)
@@ -153,6 +154,7 @@ describe('FsHandler', () => {
     expect(methods).toContain('fs.listFiles')
     expect(methods).toContain('fs.workspaceSpaceScan')
     expect(methods).toContain('fs.watch')
+    expect(methods).toContain('fs.unwatchAndWait')
 
     const notifMethods = Array.from(dispatcher._notificationHandlers.keys())
     expect(notifMethods).toContain('fs.unwatch')
@@ -493,6 +495,28 @@ describe('FsHandler', () => {
     await expect(fs.access(filePath)).rejects.toThrow()
   })
 
+  it('holds the relay watcher fence through recursive directory deletion', async () => {
+    const directoryPath = path.join(tmpDir, 'watched-orphan')
+    mkdirSync(directoryPath)
+    const unsubscribe = vi.fn()
+    mockSubscribe.mockResolvedValue({ unsubscribe })
+    await dispatcher.callRequest(
+      'fs.watch',
+      { rootPath: directoryPath, watchId: 77 },
+      { clientId: 3, isStale: () => false }
+    )
+
+    await dispatcher.callRequest('fs.deletePath', { targetPath: directoryPath, recursive: true })
+
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect(dispatcher.notifyClient).toHaveBeenCalledWith(3, 'fs.watchFailed', {
+      rootPath: directoryPath,
+      watchId: 77,
+      message: 'Remote worktree is being removed'
+    })
+    await expect(fs.access(directoryPath)).rejects.toThrow()
+  })
+
   it('createFile creates an empty file with parent dirs', async () => {
     const filePath = path.join(tmpDir, 'deep', 'nested', 'file.txt')
     await dispatcher.callRequest('fs.createFile', { filePath })
@@ -732,6 +756,129 @@ describe('FsHandler', () => {
       }
     )
     expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('settles acknowledged unwatch only after native unsubscribe completes', async () => {
+    let resolveUnsubscribe: () => void = () => {}
+    const unsubscribe = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveUnsubscribe = resolve
+        })
+    )
+    mockSubscribe.mockResolvedValue({ unsubscribe })
+    await dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
+
+    let settled = false
+    const unwatch = dispatcher.callRequest('fs.unwatchAndWait', { rootPath: tmpDir }).then(() => {
+      settled = true
+    })
+    await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(1))
+    expect(settled).toBe(false)
+
+    resolveUnsubscribe()
+    await unwatch
+    expect(settled).toBe(true)
+  })
+
+  it('waits for in-flight native setup before acknowledging teardown', async () => {
+    handler.dispose()
+    let resolveSubscribe: (value: { unsubscribe: () => Promise<void> }) => void = () => {}
+    const unsubscribe = vi.fn(async () => undefined)
+    const subscribe = vi.fn(
+      () =>
+        new Promise<{ unsubscribe: () => Promise<void> }>((resolve) => {
+          resolveSubscribe = resolve
+        })
+    )
+    handler = new FsHandler(dispatcher as unknown as RelayDispatcher, new RelayContext(), {
+      dispose: vi.fn(),
+      forgetRoot: vi.fn(),
+      subscribe
+    })
+
+    const watch = dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
+    let unwatchSettled = false
+    const unwatch = dispatcher.callRequest('fs.unwatchAndWait', { rootPath: tmpDir }).then(() => {
+      unwatchSettled = true
+    })
+    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(1))
+    expect(unwatchSettled).toBe(false)
+
+    resolveSubscribe({ unsubscribe })
+    await Promise.all([watch, unwatch])
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('joins a physical unsubscribe already started by the notification path', async () => {
+    let resolveUnsubscribe: () => void = () => {}
+    const unsubscribe = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveUnsubscribe = resolve
+        })
+    )
+    mockSubscribe.mockResolvedValue({ unsubscribe })
+    await dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
+    dispatcher.callNotification('fs.unwatch', { rootPath: tmpDir })
+
+    let settled = false
+    const joined = dispatcher.callRequest('fs.unwatchAndWait', { rootPath: tmpDir }).then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    resolveUnsubscribe()
+    await joined
+  })
+
+  it('blocks replacement watches behind physical unsubscribe and counts the pending slot', async () => {
+    let resolveUnsubscribe: () => void = () => {}
+    const unsubscribe = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveUnsubscribe = resolve
+        })
+    )
+    mockSubscribe.mockResolvedValue({ unsubscribe })
+    await dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
+    dispatcher.callNotification('fs.unwatch', { rootPath: tmpDir })
+
+    const replacement = dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
+    for (let index = 0; index < 19; index += 1) {
+      await dispatcher.callRequest('fs.watch', {
+        rootPath: path.join(tmpDir, `pending-cap-${index}`)
+      })
+    }
+    await expect(
+      dispatcher.callRequest('fs.watch', { rootPath: path.join(tmpDir, 'over-pending-cap') })
+    ).rejects.toThrow('Maximum number of file watchers reached')
+    expect(mockSubscribe).toHaveBeenCalledTimes(20)
+
+    resolveUnsubscribe()
+    await replacement
+    expect(mockSubscribe).toHaveBeenCalledTimes(21)
+  })
+
+  it('retains a failed native unsubscribe slot until acknowledged retry succeeds', async () => {
+    const unsubscribe = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('native handle still active'))
+      .mockResolvedValueOnce(undefined)
+    mockSubscribe.mockResolvedValue({ unsubscribe })
+    await dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
+
+    await expect(dispatcher.callRequest('fs.unwatchAndWait', { rootPath: tmpDir })).rejects.toThrow(
+      'native handle still active'
+    )
+    await expect(
+      dispatcher.callRequest('fs.unwatchAndWait', { rootPath: tmpDir })
+    ).resolves.toBeUndefined()
+    expect(unsubscribe).toHaveBeenCalledTimes(2)
+
+    await expect(dispatcher.callRequest('fs.watch', { rootPath: tmpDir })).resolves.toBeUndefined()
+    expect(mockSubscribe).toHaveBeenCalledTimes(2)
   })
 
   it('allows a shared watch attach even when the root watch cap is full', async () => {

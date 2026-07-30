@@ -13,12 +13,7 @@ import { buildDefaultTerminalOptions } from './pane-terminal-options'
 import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
 import { ENABLE_WEBGL_RENDERER } from './pane-webgl-renderer'
 import { installGuardedLinkProviderRegistration } from './terminal-link-provider-guard'
-
-function getTerminalUrlOpenHint(): string {
-  return navigator.userAgent.includes('Mac')
-    ? '⌘+click to open or ⇧⌘+click for system browser'
-    : 'Ctrl+click to open or Shift+Ctrl+click for system browser'
-}
+import { installWindowsCtrlAltChordRepair } from './terminal-windows-ctrl-alt-chord-classification'
 
 function defaultLinkTooltipText(uri: string, openLinkHint: string): string {
   return `${uri} (${openLinkHint})`
@@ -55,24 +50,19 @@ export function createPaneDOM(
   // line) escapes to window.onerror and gets the renderer killed. Guard every
   // provider registered after this point — addon-internal and Orca's own.
   installGuardedLinkProviderRegistration(terminal)
+  installWindowsCtrlAltChordRepair(terminal)
   const fitAddon = new FitAddon()
   const searchAddon = new SearchAddon()
   const unicode11Addon = new Unicode11Addon()
-  const openLinkHint = getTerminalUrlOpenHint()
   // Why: async tooltip formatting can resolve after hover changes, so stale
   // results must not overwrite the tooltip for the currently hovered link.
   let linkTooltipHoverToken = 0
 
   const linkTooltip = document.createElement('div')
-  linkTooltip.className = 'pane-link-tooltip'
-  linkTooltip.classList.add('xterm-hover')
-  // Why: Ghostty-style URL hover belongs to the terminal window corner; do not
-  // let terminal content padding shift it inward.
-  linkTooltip.style.cssText =
-    'display:none;position:absolute;bottom:0;left:0;z-index:40;' +
-    'padding:5px 8px;border-radius:4px;font-size:11px;font-family:inherit;' +
-    'color:#a1a1aa;background:rgba(24,24,27,0.85);border:1px solid rgba(63,63,70,0.6);' +
-    'pointer-events:none;max-width:80%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+  // Why: styles live in terminal.css (.pane-link-tooltip) so the hover URL stays
+  // flush to the pane corner without inline padding/offset drift.
+  linkTooltip.className = 'pane-link-tooltip xterm-hover'
+  linkTooltip.style.display = 'none'
 
   const dragHandle = document.createElement('div')
   dragHandle.className = 'pane-drag-handle'
@@ -86,6 +76,7 @@ export function createPaneDOM(
         if (uri) {
           linkTooltipHoverToken += 1
           const hoverToken = linkTooltipHoverToken
+          const openLinkHint = options.linkOpenHint()
           linkTooltip.textContent = defaultLinkTooltipText(uri, openLinkHint)
           linkTooltip.style.display = ''
           const formatted = options.formatLinkTooltip?.(uri, openLinkHint)
@@ -148,6 +139,7 @@ export function createPaneDOM(
     compositionHandler: null,
     focusClassSyncCleanup: null,
     terminalScrollIntentDisposable: null,
+    linkifierMouseLeaveResetDisposable: null,
     arabicShapingJoinerCleanup: null,
     pendingSplitScrollState: null,
     pendingSplitScrollRafIds: [],

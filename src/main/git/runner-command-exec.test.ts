@@ -501,6 +501,32 @@ describe('runner execFile timeout handling', () => {
     })
   })
 
+  it('routes fixed commands through an explicitly selected WSL distro', async () => {
+    await withPlatform('win32', async () => {
+      const child = createMockChildProcess(1234)
+      execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
+        cb(null, 'hostname github.com\n', '')
+        return child
+      })
+
+      await commandExecFileAsync('ssh', ['-G', '--', 'github-work'], {
+        cwd: String.raw`C:\repo`,
+        timeout: 5_000,
+        wslDistro: 'Ubuntu'
+      })
+
+      expect(execFileMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        ['-d', 'Ubuntu', '--', 'bash', '-c', expect.any(String)],
+        expect.objectContaining({ cwd: undefined }),
+        expect.any(Function)
+      )
+      const shellCommand = execFileMock.mock.calls[0]?.[1]?.[5] as string
+      expect(shellCommand).toContain('/mnt/c/repo')
+      expect(shellCommand).toContain("'ssh' '-G' '--' 'github-work'")
+    })
+  })
+
   it('forwards synthesized network SSH policy into the selected WSL distro', async () => {
     await withPlatform('win32', async () => {
       const child = createMockChildProcess(1234)
@@ -660,6 +686,22 @@ describe('gitStreamStdout', () => {
 
     await rejection
     expect(child.kill).toHaveBeenCalled()
+  })
+
+  it('handles a late spawn error after cancellation', async () => {
+    const child = createMockChildProcess(0)
+    spawnMock.mockReturnValue(child)
+    const controller = new AbortController()
+
+    const promise = gitStreamStdout(['status'], {
+      cwd: '/repo',
+      signal: controller.signal,
+      onStdout: () => {}
+    })
+    controller.abort()
+
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+    expect(() => child.emit('error', new Error('spawn ENOENT'))).not.toThrow()
   })
 })
 

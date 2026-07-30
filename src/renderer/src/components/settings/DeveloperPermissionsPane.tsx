@@ -105,7 +105,7 @@ const PERMISSIONS: PermissionDefinition[] = [
     get description() {
       return translate(
         'auto.components.settings.DeveloperPermissionsPane.7ca17b62c8',
-        'Recommended when projects, worktrees, or symlinked files touch macOS-protected folders.'
+        "macOS names Orca when the agents it runs read other apps' data, because Orca is the responsible process for terminal commands. Grant this to Orca and Orca Helper to reduce those prompts. Then quit Orca, end any surviving Orca Helper process, and reopen Orca."
       )
     },
     actionLabel: 'Open Settings',
@@ -128,10 +128,7 @@ const PERMISSIONS: PermissionDefinition[] = [
   {
     id: 'local-network',
     get label() {
-      return translate(
-        'auto.components.settings.DeveloperPermissionsPane.e7bb06007c',
-        'Local Network'
-      )
+      return translate('auto.components.settings.DeveloperPermissionsPane.e7bb06007c', 'LAN')
     },
     get description() {
       return translate(

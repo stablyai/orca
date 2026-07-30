@@ -120,7 +120,9 @@ export async function recoverLocalWindowsWorktreeRemoval(
 
   // Why: this error means Git accepted removal and started deleting the path;
   // finish that partial success with Windows retries, then verify Git metadata.
-  await args.closeWatcher(args.canonicalWorktreePath).catch(() => {})
+  // Why: Windows recovery recursively deletes the remaining directory, so it
+  // must fail closed while a watcher process may still own a native handle.
+  await args.closeWatcher(args.canonicalWorktreePath)
   try {
     await removeLocalWorktreePath(args.canonicalWorktreePath, args.localWorktreeGitOptions)
   } catch (error) {

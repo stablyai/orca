@@ -51,4 +51,21 @@ describe('applyWorktreeUpdates', () => {
     expect(result['repo-b']?.[0]).toBe(samePathDifferentProject)
     expect(result['repo-b']?.[0]?.displayName).toBe('Project B')
   })
+
+  it('never lets a present-but-undefined value clobber existing worktree fields', () => {
+    const target = makeWorktree({
+      id: 'repo-a::/Users/alice/project',
+      repoId: 'repo-a',
+      displayName: 'Project A',
+      comment: 'notes'
+    })
+
+    const result = applyWorktreeUpdates({ 'repo-a': [target] }, target.id, {
+      displayName: undefined,
+      comment: 'edited'
+    })
+
+    expect(result['repo-a']?.[0]?.displayName).toBe('Project A')
+    expect(result['repo-a']?.[0]?.comment).toBe('edited')
+  })
 })

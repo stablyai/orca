@@ -53,6 +53,14 @@ export class DeviceRegistry {
   }
 
   addDevice(name: string, scope: DeviceScope = 'mobile'): DeviceEntry {
+    return this.createAndPersistDevice(this.devices, name, scope)
+  }
+
+  private createAndPersistDevice(
+    existingDevices: DeviceEntry[],
+    name: string,
+    scope: DeviceScope
+  ): DeviceEntry {
     const entry: DeviceEntry = {
       deviceId: randomUUID(),
       name,
@@ -61,8 +69,10 @@ export class DeviceRegistry {
       pairedAt: Date.now(),
       lastSeenAt: 0
     }
-    this.devices.push(entry)
-    this.save()
+    const nextDevices = [...existingDevices, entry]
+    // Why: a credential is not valid until its durable registry write succeeds.
+    this.save(nextDevices)
+    this.devices = nextDevices
     return entry
   }
 
@@ -87,8 +97,8 @@ export class DeviceRegistry {
   // until a phone actually pairs, so users have no way to revoke a leaked
   // pre-pairing token.
   rotatePendingDevice(name: string, scope: DeviceScope = 'mobile'): DeviceEntry {
-    this.devices = this.devices.filter((d) => d.lastSeenAt !== 0 || d.scope !== scope)
-    return this.addDevice(name, scope)
+    const retainedDevices = this.devices.filter((d) => d.lastSeenAt !== 0 || d.scope !== scope)
+    return this.createAndPersistDevice(retainedDevices, name, scope)
   }
 
   removeDevice(deviceId: string): boolean {
@@ -177,7 +187,7 @@ export class DeviceRegistry {
     }
   }
 
-  private save(): void {
-    writeSecureJsonFile(this.registryPath, this.devices)
+  private save(devices: DeviceEntry[] = this.devices): void {
+    writeSecureJsonFile(this.registryPath, devices)
   }
 }

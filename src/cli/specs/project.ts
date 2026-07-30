@@ -27,7 +27,10 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca project setup-existing-folder --project <id> --host <host-id> --path <path> [--kind git|folder] [--display-name <name>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'path', 'kind', 'display-name'],
-    notes: ['For remote runtimes, --path must be an absolute path on the remote server.'],
+    notes: [
+      'For remote runtimes, --path must be an absolute path on the remote server.',
+      'SSH targets are set up through the desktop UI because the desktop client owns SSH connections.'
+    ],
     examples: [
       'orca project setup-existing-folder --project github:stablyai/orca --host local --path ~/orca',
       'orca project setup-existing-folder --project github:stablyai/orca --host runtime:gpu --path /home/me/orca --kind git --json'

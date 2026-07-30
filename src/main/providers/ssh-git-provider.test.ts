@@ -57,7 +57,12 @@ describe('SshGitProvider', () => {
   })
 
   it('getStatus sends git.status request', async () => {
-    const statusResult = { entries: [], conflictOperation: 'unknown' }
+    const statusResult = {
+      entries: [{ path: 'generated/a.ts', status: 'untracked', area: 'untracked' }],
+      conflictOperation: 'unknown',
+      didHitLimit: true,
+      statusLength: 1_001
+    }
     mux.request.mockResolvedValue(statusResult)
 
     const result = await provider.getStatus('/home/user/repo')
@@ -95,6 +100,22 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenNthCalledWith(2, 'git.status', {
       worktreePath: '/home/user/repo'
     })
+  })
+
+  it('getStatus forwards line-stat reuse and cancellation to the relay', async () => {
+    const controller = new AbortController()
+    mux.request.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+
+    await provider.getStatus('/home/user/repo', {
+      reuseLineStats: true,
+      signal: controller.signal
+    })
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.status',
+      { worktreePath: '/home/user/repo', reuseLineStats: true },
+      { signal: controller.signal }
+    )
   })
 
   it('getSubmoduleStatus sends git.submoduleStatus request', async () => {
@@ -874,14 +895,86 @@ describe('SshGitProvider', () => {
     })
   })
 
-  it('fetchGitLabMergeRequestHead sends git.fetchGitLabMergeRequestHead request', async () => {
-    await provider.fetchGitLabMergeRequestHead('/home/user/repo', 'origin', 42)
+  it('fetchGitLabMergeRequestHead sends the durable-ref git.fetchGitLabMergeRequestHeadRef request', async () => {
+    mux.request.mockResolvedValueOnce({
+      localRef: 'refs/orca/merge-requests/origin-abc/42'
+    })
 
-    expect(mux.request).toHaveBeenCalledWith('git.fetchGitLabMergeRequestHead', {
+    const localRef = await provider.fetchGitLabMergeRequestHead('/home/user/repo', 'origin', 42)
+
+    expect(mux.request).toHaveBeenCalledWith('git.fetchGitLabMergeRequestHeadRef', {
       worktreePath: '/home/user/repo',
       remote: 'origin',
       mrIid: 42
     })
+    expect(localRef).toBe('refs/orca/merge-requests/origin-abc/42')
+  })
+
+  it('fetchGitLabMergeRequestHead maps old relays to the reconnect message', async () => {
+    const methodNotFound = Object.assign(
+      new Error('Method not found: git.fetchGitLabMergeRequestHeadRef'),
+      { code: -32601 }
+    )
+    mux.request.mockRejectedValueOnce(methodNotFound)
+
+    await expect(
+      provider.fetchGitLabMergeRequestHead('/home/user/repo', 'origin', 42)
+    ).rejects.toThrow(
+      'This SSH host is running an older Orca relay that cannot fetch merge request heads. Reconnect to deploy the latest relay, then try again.'
+    )
+  })
+
+  it('fetchGitLabMergeRequestHead rethrows non-method-not-found errors', async () => {
+    const error = new Error('fatal: could not read from remote repository')
+    mux.request.mockRejectedValueOnce(error)
+
+    await expect(
+      provider.fetchGitLabMergeRequestHead('/home/user/repo', 'origin', 42)
+    ).rejects.toBe(error)
+  })
+
+  it('fetchGitHubPullRequestHead sends git.fetchGitHubPullRequestHead request', async () => {
+    mux.request.mockResolvedValueOnce({ localRef: 'refs/orca/pull/origin-abc/42' })
+
+    const localRef = await provider.fetchGitHubPullRequestHead('/home/user/repo', 'origin', 42)
+
+    expect(mux.request).toHaveBeenCalledWith('git.fetchGitHubPullRequestHead', {
+      worktreePath: '/home/user/repo',
+      remote: 'origin',
+      prNumber: 42
+    })
+    expect(localRef).toBe('refs/orca/pull/origin-abc/42')
+  })
+
+  it('fetchGitHubPullRequestHead rejects relays that omit the durable localRef', async () => {
+    mux.request.mockResolvedValueOnce({})
+
+    await expect(
+      provider.fetchGitHubPullRequestHead('/home/user/repo', 'origin', 42)
+    ).rejects.toThrow('did not return the durable pull request head ref')
+  })
+
+  it('fetchGitHubPullRequestHead maps old relays to the reconnect message', async () => {
+    const methodNotFound = Object.assign(
+      new Error('Method not found: git.fetchGitHubPullRequestHead'),
+      { code: -32601 }
+    )
+    mux.request.mockRejectedValueOnce(methodNotFound)
+
+    await expect(
+      provider.fetchGitHubPullRequestHead('/home/user/repo', 'origin', 42)
+    ).rejects.toThrow(
+      'This SSH host is running an older Orca relay that cannot fetch pull request heads. Reconnect to deploy the latest relay, then try again.'
+    )
+  })
+
+  it('fetchGitHubPullRequestHead rethrows non-method-not-found errors', async () => {
+    const error = new Error('fatal: could not read from remote repository')
+    mux.request.mockRejectedValueOnce(error)
+
+    await expect(provider.fetchGitHubPullRequestHead('/home/user/repo', 'origin', 42)).rejects.toBe(
+      error
+    )
   })
 
   it('getBranchDiff sends git.branchDiff request', async () => {
@@ -916,7 +1009,7 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenCalledTimes(1)
     pendingDiff.resolve()
 
-    await expect(Promise.all(reads)).resolves.toEqual(Array(8).fill(diff))
+    await expect(Promise.all(reads)).resolves.toEqual(Array.from({ length: 8 }, () => diff))
 
     mux.request.mockReset()
     const branchDiffs = [diff]
@@ -933,7 +1026,9 @@ describe('SshGitProvider', () => {
     await waitForRequestCount(mux.request, 1)
     expect(mux.request).toHaveBeenCalledTimes(1)
     pendingBranchDiff.resolve()
-    await expect(Promise.all(branchReads)).resolves.toEqual(Array(8).fill(branchDiffs))
+    await expect(Promise.all(branchReads)).resolves.toEqual(
+      Array.from({ length: 8 }, () => branchDiffs)
+    )
 
     mux.request.mockReset()
     const pendingCommitDiff = deferredValue(diff)
@@ -950,7 +1045,7 @@ describe('SshGitProvider', () => {
     await waitForRequestCount(mux.request, 1)
     expect(mux.request).toHaveBeenCalledTimes(1)
     pendingCommitDiff.resolve()
-    await expect(Promise.all(commitReads)).resolves.toEqual(Array(8).fill(diff))
+    await expect(Promise.all(commitReads)).resolves.toEqual(Array.from({ length: 8 }, () => diff))
   })
 
   it('retries diff RPCs after an in-flight rejection settles', async () => {

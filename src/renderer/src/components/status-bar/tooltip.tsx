@@ -13,6 +13,7 @@ import {
 } from './usage-error-copy'
 import {
   clampUsedPercent,
+  getDisplayedUsagePercentage,
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
@@ -184,17 +185,56 @@ export function getWindowSections(
 // `text-background` for primary text and `text-background/50` for secondary
 // to stay readable inside the inverted tooltip container.
 
-// Why: color-coded by consumption so users can quickly gauge urgency.
-// Matches common harness usage meters (Claude/Codex): bars fill with % used.
-// Green = comfortable (<60% used), yellow = caution (60-80%), red = critical (≥80%).
+// Why: urgency color tracks % used even when fill represents % remaining;
+// low usage stays neutral so persistent chrome stays quiet.
 export function barColor(usedPct: number): string {
   if (usedPct < 60) {
-    return 'bg-green-500'
+    return 'bg-muted-foreground/40'
   }
   if (usedPct < 80) {
     return 'bg-yellow-500'
   }
   return 'bg-red-500'
+}
+
+function ProviderRateLimitWindowSection({
+  window,
+  label,
+  textClass,
+  mutedClass,
+  emptyBarClass,
+  usagePercentageDisplay
+}: {
+  window: RateLimitWindow | null
+  label: string
+  textClass: string
+  mutedClass: string
+  emptyBarClass: string
+  usagePercentageDisplay: UsagePercentageDisplay
+}): React.JSX.Element | null {
+  if (!window) {
+    return null
+  }
+  const usedPct = clampUsedPercent(window.usedPercent)
+  const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
+  const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - Date.now()) : null
+
+  return (
+    <div className="space-y-1">
+      <div className={`font-medium ${textClass}`}>{label}</div>
+      <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
+        {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
+        <div
+          className={`h-full rounded-full ${barColor(usedPct)} transition-all duration-300`}
+          style={{ width: `${displayedPct}%` }}
+        />
+      </div>
+      <div className={`flex justify-between ${mutedClass}`}>
+        <span>{formatUsagePercentageLabel(usedPct, usagePercentageDisplay)}</span>
+        {resetLabel && <span>{resetLabel}</span>}
+      </div>
+    </div>
+  )
 }
 
 export function ProviderPanel({
@@ -268,38 +308,6 @@ export function ProviderPanel({
       ? formatResetCreditExpiry(p.rateLimitResetCredits?.nextExpiresAt, resetCreditCount)
       : null
 
-  const PanelWindowSection = ({
-    w,
-    label
-  }: {
-    w: RateLimitWindow | null
-    label: string
-  }): React.JSX.Element | null => {
-    if (!w) {
-      return null
-    }
-    // Why: preference changes the copy only; consumption-based bar direction
-    // preserves the empty/green to full/red meter convention from #8167.
-    const usedPct = clampUsedPercent(w.usedPercent)
-    const resetLabel = w.resetsAt ? formatResetCountdown(w.resetsAt - Date.now()) : null
-
-    return (
-      <div className="space-y-1">
-        <div className={`font-medium ${textClass}`}>{label}</div>
-        <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
-          <div
-            className={`h-full rounded-full ${barColor(usedPct)} transition-all duration-300`}
-            style={{ width: `${usedPct}%` }}
-          />
-        </div>
-        <div className={`flex justify-between ${mutedClass}`}>
-          <span>{formatUsagePercentageLabel(usedPct, usagePercentageDisplay)}</span>
-          {resetLabel && <span>{resetLabel}</span>}
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className={`${className ?? 'w-full'} space-y-3 text-xs`}>
       <div>
@@ -328,7 +336,15 @@ export function ProviderPanel({
       <div className={`border-t ${dividerClass}`} />
 
       {getWindowSections(p).map((s) => (
-        <PanelWindowSection key={s.label} w={s.window} label={s.label} />
+        <ProviderRateLimitWindowSection
+          key={s.label}
+          window={s.window}
+          label={s.label}
+          textClass={textClass}
+          mutedClass={mutedClass}
+          emptyBarClass={emptyBarClass}
+          usagePercentageDisplay={usagePercentageDisplay}
+        />
       ))}
 
       {p.error ? (

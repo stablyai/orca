@@ -9,6 +9,7 @@ import { opencodeDiscoveries } from './session-scanner-opencode-sources'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 import { normalizeAgentSessionsDir } from './session-scanner-values'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
+import { antigravityDiscoveries } from './session-scanner-antigravity-sources'
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
@@ -20,7 +21,6 @@ const COPILOT_SESSIONS_DIR = join(
   'session-state'
 )
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
-const GROK_SESSIONS_DIR = resolveGrokSessionsDir()
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
 const OPENCLAW_STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() || join(homedir(), '.openclaw')
@@ -124,6 +124,7 @@ function standardDiscoveries(
   issues: AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery>[] {
   return [
+    ...antigravityDiscoveries(options, wslHomeDirs, limit, issues),
     ...sessionRootDirs(options.geminiSessionsDir ?? GEMINI_SESSIONS_DIR, wslHomeDirs, [
       '.gemini',
       'tmp'
@@ -173,7 +174,9 @@ function grokDiscoveries(
   limit: number,
   issues: AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery>[] {
-  return sessionRootDirs(options.grokSessionsDir ?? GROK_SESSIONS_DIR, wslHomeDirs, [
+  // Resolved lazily: a module-scope call binds across chunks at init time, which
+  // breaks whenever bundle ordering puts this module before its import.
+  return sessionRootDirs(options.grokSessionsDir ?? resolveGrokSessionsDir(), wslHomeDirs, [
     '.grok',
     'sessions'
   ]).map((rootDir) =>

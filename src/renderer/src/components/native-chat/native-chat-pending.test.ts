@@ -134,11 +134,41 @@ describe('prunePendingSends', () => {
     expect(prunePendingSends(pending, [oldUser, oldAnswer])).toEqual(pending)
   })
 
+  it('prunes a first send against a timestampless transcript turn (grok)', () => {
+    const pending = [{ ...pendingOf('p1', 'rename it'), afterMessageId: null }]
+    const transcript = [
+      { ...userMessage('u1', 'rename it'), timestamp: null },
+      { ...assistantMessage('a1', 'done'), timestamp: null }
+    ]
+
+    expect(prunePendingSends(pending, transcript)).toEqual([])
+  })
+
   it('prunes only one of two identical pending sends for one completed turn', () => {
     const pending = [pendingOf('p1', 'repeat'), pendingOf('p2', 'repeat')]
     expect(
       prunePendingSends(pending, [userMessage('u1', 'repeat'), assistantMessage('a1', 'done')])
     ).toEqual([pendingOf('p2', 'repeat')])
+  })
+
+  it('prunes consecutive optimistic sends that were glued into one transcript user turn', () => {
+    const pending = [pendingOf('p1', 'tell me a joke'), pendingOf('p2', 'continue')]
+    expect(
+      prunePendingSends(pending, [
+        userMessage('u1', 'tell me a jokecontinue'),
+        assistantMessage('a1', 'a joke')
+      ])
+    ).toEqual([])
+  })
+
+  it('does not treat an unrelated longer user turn as a glued match', () => {
+    const pending = [pendingOf('p1', 'hi')]
+    expect(
+      prunePendingSends(pending, [
+        userMessage('u1', 'history of the project'),
+        assistantMessage('a1', 'ok')
+      ])
+    ).toEqual(pending)
   })
 })
 
@@ -179,6 +209,13 @@ describe('pendingSendsAsMessages', () => {
     expect(pendingSendsAsMessages(pending, [])).toHaveLength(1)
   })
 
+  it('hides consecutive optimistic sends once a glued transcript user turn lands', () => {
+    const pending = [pendingOf('p1', 'tell me a joke'), pendingOf('p2', 'continue')]
+    expect(pendingSendsAsMessages(pending, [userMessage('u1', 'tell me a jokecontinue')])).toEqual(
+      []
+    )
+  })
+
   it('keeps a repeated prompt visible when its only match predates the send boundary', () => {
     const history = [userMessage('old-user', 'run tests'), assistantMessage('old-answer', 'passed')]
     const pending = [{ ...pendingOf('new-send', 'run tests'), afterMessageId: 'old-answer' }]
@@ -217,6 +254,14 @@ describe('pendingSendsAsMessages', () => {
 
     expect(pendingSendsAsMessages(pending, remoteTranscript)).toEqual([])
     expect(prunePendingSends(pending, remoteTranscript)).toEqual([])
+  })
+
+  it('hides a first send while its timestampless transcript turn is visible (grok)', () => {
+    const pending = [{ ...pendingOf('p1', 'rename it'), afterMessageId: null }]
+
+    expect(
+      pendingSendsAsMessages(pending, [{ ...userMessage('u1', 'rename it'), timestamp: null }])
+    ).toEqual([])
   })
 
   it('hides only one of two identical pending sends for one real user turn', () => {
@@ -311,6 +356,20 @@ describe('launchPromptAsMessage', () => {
         { ...assistantMessage('a1', 'working'), timestamp: 44 }
       ])
     ).toBe(true)
+  })
+
+  // Grok transcripts carry no timestamps; before the null-matchable rule the
+  // seeded bubble was never hidden or pruned and sat rank-pinned at the list
+  // tail forever, reading as the conversation reordering.
+  it('hides and prunes the launch prompt against a timestampless transcript (grok)', () => {
+    const entry = { tabId: 'tab-1', agent: 'grok' as const, text: 'rename it', createdAt: 42 }
+    const transcript = [
+      { ...userMessage('u1', 'rename it'), timestamp: null },
+      { ...assistantMessage('a1', 'done'), timestamp: null }
+    ]
+
+    expect(launchPromptAsMessage(entry, transcript)).toBeNull()
+    expect(shouldPruneLaunchPrompt(entry, transcript)).toBe(true)
   })
 
   it('does not bind a launch prompt to an older identical completed turn', () => {

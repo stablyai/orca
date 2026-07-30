@@ -6,6 +6,7 @@ import type {
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
 import type { OrcaCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
+import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 type ExchangeCodeArgs = {
   code: string
@@ -173,6 +174,7 @@ async function postJson<T>(url: string, body: unknown, accessToken?: string): Pr
     signal: AbortSignal.timeout(CLOUD_REQUEST_TIMEOUT_MS)
   })
   if (!response.ok) {
+    await cancelUnreadResponseBody(response)
     throw new OrcaCloudRequestError(response.status)
   }
   return (await response.json()) as T

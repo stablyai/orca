@@ -1,7 +1,4 @@
-/* eslint-disable max-lines -- Why: this file contains a multi-line inline
-   JS plugin source emitted into OpenCode's plugins directory as a single
-   file; splitting the plugin source across TS modules would obscure the
-   runtime artifact and scatter tightly coupled string-template logic. */
+/* eslint-disable max-lines -- Why: holds an inline JS plugin source emitted as one file; splitting across TS modules would scatter tightly coupled string-template logic. */
 import { app } from 'electron'
 import { join } from 'node:path'
 import {
@@ -28,33 +25,13 @@ type OpenCodeOverlayManifest = {
   pluginEntries: string[]
 }
 
-// Why: the id passed in by pty.ts's daemon path is a sessionId shaped like
-// "<worktreeId>@@<uuid>" where worktreeId itself contains "::" and a
-// filesystem path (slashes, colons). Earlier the id was a simple numeric
-// counter, so rejecting anything with "/" or ":" was a safe guard against
-// path traversal. After the daemon-parity refactor (#1148) the sessionId
-// shape changed, and the old regex silently rejected every legitimate id,
-// leaving OPENCODE_CONFIG_DIR unset and the plugin never loading.
-//
-// Keep an input-bounds guard (non-empty, bounded length) for defense in
-// depth, and derive the on-disk directory name via hash so any caller's id —
-// including ones containing path separators — produces a short, stable,
-// filesystem-safe name. Hashing also eliminates path-traversal risk at the
-// source: the directory name is always 32 hex chars, never a prefix/suffix
-// of the caller's input.
-// Why: 1024 is a generous sanity cap — daemon-shaped ids embed a worktree
-// filesystem path plus "@@<uuid>", and this bound prevents pathological inputs
-// from burning CPU in the SHA-256 step. Since the id is hashed anyway, 1024
-// is decoupled from PATH_MAX.
+// Why: bounds-check only — the id is a daemon sessionId with path separators, hashed downstream to a filesystem-safe name (an old regex rejecting "/"/":" broke every such id, #1148); 1024 just caps pathological hash input.
 function isUsableId(id: string): boolean {
   return typeof id === 'string' && id.length > 0 && id.length <= 1024
 }
 
 function toSafeDirName(id: string): string {
-  // Why: SHA-256 truncated to 32 hex chars (128 bits) is ample for a
-  // per-session directory name — collisions require ~2^64 concurrent sessions
-  // to become likely, far beyond any real workload. Hex keeps the name
-  // portable across all filesystems (no base64 padding, no `/`).
+  // Why: 32 hex chars (128 bits) makes collisions negligible and stays filesystem-portable (no base64 padding or `/`).
   return createHash('sha256').update(id).digest('hex').slice(0, 32)
 }
 
@@ -63,13 +40,7 @@ export function getOpenCodePluginSource(): string {
 }
 
 export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
-  // Why: the plugin runs inside the OpenCode Node process and POSTs to the
-  // unified agent-hooks server shared with Claude/Codex/Gemini. It reads the
-  // same ORCA_PANE_KEY / ORCA_TAB_ID / ORCA_WORKTREE_ID / ORCA_AGENT_HOOK_*
-  // env vars that Orca injects into every PTY, so OpenCode panes flow into
-  // agentStatusByPaneKey via the same IPC path as every other agent. Event
-  // mapping is done plugin-side (SessionBusy / SessionIdle / PermissionRequest)
-  // so the server-side normalizer can keep its one-event-per-case switch shape.
+  // Why: plugin runs in OpenCode's Node process and POSTs Orca's ORCA_* PTY env to the shared agent-hooks server; events are mapped plugin-side to fit the server's per-case switch.
   return [
     '// Why: process-lifetime guard so a recurring parse error on a malformed',
     "// endpoint file does not spam OpenCode's stderr once per hook post.",
@@ -157,12 +128,48 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     '  };',
     '}',
     '',
+    'function hookEndpointKey() {',
+    '  const coords = resolveHookCoords();',
+    '  return [coords.port || "", coords.token || "", coords.env, coords.version].join("\\u0000");',
+    '}',
+    '',
     'function getStatusType(event) {',
     '  return event?.properties?.status?.type ?? event?.status?.type ?? null;',
     '}',
     '',
-    'let lastStatus = "idle";',
-    'const childSessionById = new Map();',
+    'const HOOK_POST_TIMEOUT_MS = 2000;',
+    'const SESSION_LOOKUP_TIMEOUT_MS = 2000;',
+    'const MAX_SESSION_ANCESTRY_DEPTH = 32;',
+    'const STATUS_RETRY_BASE_MS = 500;',
+    'const STATUS_RETRY_MAX_MS = 30000;',
+    'let desiredStatus = "idle";',
+    'let desiredHookEventName = "SessionIdle";',
+    'let desiredStatusKey = "idle:";',
+    'let desiredStatusProperties = {};',
+    'let desiredFactoryID = null;',
+    'let deliveredStatusKey = "idle:";',
+    'let deliveredEndpointKey = "";',
+    'let statusDeliveryDirty = false;',
+    'let statusRevision = 0;',
+    'let statusRetryAttempt = 0;',
+    'let statusRetryTimer = null;',
+    'let lifecycleQueue = Promise.resolve();',
+    'let busyRecoveryQueued = false;',
+    'let busyRecoveryUsed = false;',
+    'let busyRecoveryEndpointKey = "";',
+    'let stateArrivalRevision = 0;',
+    '// Why: OpenCode can create directory-scoped factories and concurrent root',
+    '// sessions in one pane; module ownership lets waiting/busy aggregate safely.',
+    'let nextFactoryID = 0;',
+    'const activeFactoryIDs = new Set();',
+    'const disposingFactoryIDs = new Set();',
+    'const busyRootOwnerBySessionID = new Map();',
+    '// Why: a matching Idle must retire fail-open Busy even when the SDK client',
+    '// is unavailable, without granting an unrelated unknown Idle authority.',
+    'const provisionalBusyByKey = new Map();',
+    'const pendingAttentionByKey = new Map();',
+    'const rootSessionById = new Map();',
+    'const rootSessionLookupById = new Map();',
     '',
     '// Why: message.part.updated re-sends the FULL accumulated text of the part',
     '// after every streamed append, so posting each event forwards O(n^2) bytes',
@@ -175,27 +182,49 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     'const MESSAGE_PART_MAX_CHARS = 4000;',
     'let pendingAssistantPart = null;',
     'let assistantPartFlushTimer = null;',
+    'let messagePartPostInFlight = null;',
+    'let deliveredMessagePartFactoryID = null;',
     'let lastAssistantPartPostAt = 0;',
     '',
     'function capMessagePartText(text) {',
     '  return text.length > MESSAGE_PART_MAX_CHARS ? text.slice(0, MESSAGE_PART_MAX_CHARS) : text;',
     '}',
     '',
-    'async function flushPendingAssistantPart() {',
+    'async function postMessagePart(properties, factoryID) {',
+    '  while (messagePartPostInFlight) await messagePartPostInFlight;',
+    '  const delivery = post("MessagePart", properties);',
+    '  messagePartPostInFlight = delivery;',
+    '  try {',
+    '    const delivered = await delivery;',
+    '    if (delivered) deliveredMessagePartFactoryID = factoryID;',
+    '  } finally {',
+    '    if (messagePartPostInFlight === delivery) messagePartPostInFlight = null;',
+    '  }',
+    '}',
+    '',
+    'async function flushPendingAssistantPart(force = false) {',
     '  if (assistantPartFlushTimer) {',
     '    clearTimeout(assistantPartFlushTimer);',
     '    assistantPartFlushTimer = null;',
     '  }',
+    '  // Why: an idle/waiting transition must wait for every older preview;',
+    '  // keep one post in flight while later snapshots coalesce in memory.',
+    '  while (messagePartPostInFlight) await messagePartPostInFlight;',
     '  const pending = pendingAssistantPart;',
     '  pendingAssistantPart = null;',
     '  if (!pending) return;',
+    '  if (',
+    '    !activeFactoryIDs.has(pending.factoryID) ||',
+    '    disposingFactoryIDs.has(pending.factoryID)',
+    '  ) return;',
+    '  if (!force && pending.authorityRevision !== stateArrivalRevision) return;',
     '  lastAssistantPartPostAt = Date.now();',
-    '  await post("MessagePart", {',
+    '  await postMessagePart({',
     '    role: pending.role,',
     '    text: capMessagePartText(pending.text),',
     '    messageID: pending.messageID,',
     '    sessionID: pending.sessionID,',
-    '  });',
+    '  }, pending.factoryID);',
     '}',
     '',
     'function queueAssistantPart(part) {',
@@ -233,27 +262,112 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     '// Why: oh-my-opencode style tools spawn child sessions that emit their',
     '// own session.idle / message events. Those child completions must not',
     '// flip the root Orca pane to done or overwrite the parent turn preview.',
-    '// Detect child sessions by checking `parentID` via client.session.list(),',
-    '// cache the result per session, and fail closed (assume child) on lookup errors',
-    '// so a transient SDK failure cannot create false "done" transitions.',
-    'async function isChildSession(client, sessionID) {',
-    '  if (!sessionID) return true;',
-    '  if (childSessionById.has(sessionID)) return childSessionById.get(sessionID);',
-    '  if (!client?.session?.list) return true;',
+    '// Resolve the full parentID chain so descendant attention can be attributed',
+    '// to the root while child completion and previews remain non-authoritative.',
+    'async function resolveRootSessionID(client, sessionID) {',
+    '  if (!sessionID) return null;',
+    '  if (rootSessionById.has(sessionID)) return rootSessionById.get(sessionID);',
+    '  if (!client?.session?.get && !client?.session?.list) return null;',
+    '  if (rootSessionLookupById.has(sessionID)) return rootSessionLookupById.get(sessionID);',
+    '  const lookup = lookupRootSessionID(client, sessionID);',
+    '  rootSessionLookupById.set(sessionID, lookup);',
     '  try {',
-    '    const sessions = await client.session.list();',
-    '    const list = Array.isArray(sessions?.data) ? sessions.data : [];',
-    '    const session = list.find((entry) => entry?.id === sessionID);',
-    '    const isChild = !!session?.parentID;',
-    '    if (childSessionById.size >= 128) {',
-    '      const first = childSessionById.keys().next().value;',
-    '      if (first !== undefined) childSessionById.delete(first);',
+    '    return await lookup;',
+    '  } finally {',
+    '    if (rootSessionLookupById.get(sessionID) === lookup) {',
+    '      rootSessionLookupById.delete(sessionID);',
     '    }',
-    '    childSessionById.set(sessionID, isChild);',
-    '    return isChild;',
-    '  } catch {',
-    '    return true;',
     '  }',
+    '}',
+    '',
+    'async function isChildSession(client, sessionID) {',
+    '  const rootSessionID = await resolveRootSessionID(client, sessionID);',
+    '  return rootSessionID === null ? null : rootSessionID !== sessionID;',
+    '}',
+    '',
+    'function rememberSessionRoot(sessionID, rootSessionID) {',
+    '  if (rootSessionById.size >= 128 && !rootSessionById.has(sessionID)) {',
+    '    const first = rootSessionById.keys().next().value;',
+    '    if (first !== undefined) rootSessionById.delete(first);',
+    '  }',
+    '  rootSessionById.set(sessionID, rootSessionID);',
+    '}',
+    '',
+    'async function lookupRootSessionID(client, sessionID) {',
+    '  const controller = new AbortController();',
+    '  let timeout;',
+    '  const deadline = new Promise((_, reject) => {',
+    '    timeout = setTimeout(() => {',
+    '      controller.abort();',
+    '      reject(new Error("session lookup timed out"));',
+    '    }, SESSION_LOOKUP_TIMEOUT_MS);',
+    '    if (timeout.unref) timeout.unref();',
+    '  });',
+    '  try {',
+    '    const rootSessionID = await Promise.race([',
+    '      walkSessionParents(client, sessionID, controller.signal),',
+    '      deadline,',
+    '    ]);',
+    '    return rootSessionID;',
+    '  } catch {',
+    '    return null;',
+    '  } finally {',
+    '    clearTimeout(timeout);',
+    '  }',
+    '}',
+    '',
+    'async function walkSessionParents(client, sessionID, signal) {',
+    '  const lineage = [];',
+    '  let currentSessionID = sessionID;',
+    '  // Why: malformed or unexpectedly deep ancestry must not monopolize the',
+    '  // lifecycle FIFO even when every individual SDK lookup succeeds.',
+    '  while (lineage.length < MAX_SESSION_ANCESTRY_DEPTH) {',
+    '    const cachedRoot = rootSessionById.get(currentSessionID);',
+    '    if (cachedRoot) {',
+    '      for (const id of lineage) rememberSessionRoot(id, cachedRoot);',
+    '      return cachedRoot;',
+    '    }',
+    '    if (lineage.includes(currentSessionID)) return null;',
+    '    lineage.push(currentSessionID);',
+    '    const sessions = await lookupSessionList(client, currentSessionID, signal);',
+    '    const list = Array.isArray(sessions?.data) ? sessions.data : [];',
+    '    const session = list.find((entry) => entry?.id === currentSessionID);',
+    '    if (!session) return null;',
+    '    if (!session.parentID) {',
+    '      for (const id of lineage) rememberSessionRoot(id, currentSessionID);',
+    '      return currentSessionID;',
+    '    }',
+    '    currentSessionID = session.parentID;',
+    '  }',
+    '  return null;',
+    '}',
+    '',
+    'async function lookupSessionList(client, sessionID, signal) {',
+    '  // Why: point lookup avoids the SDK list page dropping older children;',
+    '  // current SDKs put AbortSignal in a second options argument, while legacy',
+    '  // generated clients accept one request-options object.',
+    '  if (client?.session?.get) {',
+    '    const calls = client.session.get.length >= 2',
+    '      ? [',
+    '          [{ sessionID }, { signal }],',
+    '          [{ path: { id: sessionID }, signal }],',
+    '        ]',
+    '      : [[{ path: { id: sessionID }, signal }]];',
+    '    for (const args of calls) {',
+    '      try {',
+    '        const result = await client.session.get(...args);',
+    '        if (result?.data?.id === sessionID) return { data: [result.data] };',
+    '      } catch {',
+    '        if (signal.aborted) throw new Error("session lookup aborted");',
+    '        // Try the other supported SDK generation, then list fallback.',
+    '      }',
+    '    }',
+    '  }',
+    '  if (!client?.session?.list) return { data: [] };',
+    '  if (client.session.list.length >= 2) {',
+    '    return client.session.list({}, { signal });',
+    '  }',
+    '  return client.session.list({ signal });',
     '}',
     '',
     'async function post(hookEventName, extraProperties) {',
@@ -263,7 +377,7 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     '  // the OpenCode process), not per-Orca-instance.',
     '  const coords = resolveHookCoords();',
     '  const paneKey = process.env.ORCA_PANE_KEY;',
-    '  if (!coords.port || !coords.token || !paneKey) return;',
+    '  if (!coords.port || !coords.token || !paneKey) return false;',
     `  const url = \`http://127.0.0.1:\${coords.port}${hookPathname}\`;`,
     '  const body = JSON.stringify({',
     '    paneKey,',
@@ -274,28 +388,421 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     '    version: coords.version,',
     '    payload: { hook_event_name: hookEventName, ...(extraProperties || {}) },',
     '  });',
+    '  const controller = new AbortController();',
+    '  const timeout = setTimeout(() => controller.abort(), HOOK_POST_TIMEOUT_MS);',
+    '  if (timeout.unref) timeout.unref();',
     '  try {',
-    '    await fetch(url, {',
+    '    const response = await fetch(url, {',
     '      method: "POST",',
     '      headers: {',
     '        "Content-Type": "application/json",',
     '        "X-Orca-Agent-Hook-Token": coords.token,',
     '      },',
     '      body,',
+    '      signal: controller.signal,',
     '    });',
+    '    return response.ok;',
     '  } catch {',
     '    // Why: OpenCode session events must never fail the agent run just',
     '    // because Orca is unavailable or the local loopback request failed.',
+    '    return false;',
+    '  } finally {',
+    '    clearTimeout(timeout);',
     '  }',
     '}',
     '',
-    'async function setStatus(next, extraProperties) {',
-    '  // Why: dedupe so a flurry of session.status idle events after a turn',
-    '  // does not spam the dashboard with redundant done transitions.',
-    '  if (lastStatus === next) return;',
-    '  lastStatus = next;',
+    'function enqueueLifecycle(task) {',
+    '  // Why: OpenCode intentionally fire-and-forgets hook promises, so async',
+    '  // lookups and posts need their own FIFO to preserve event order.',
+    '  const run = lifecycleQueue.then(async () => {',
+    '    try {',
+    '      await task();',
+    '    } catch {',
+    '      // Hook delivery must never reject into OpenCode.',
+    '    }',
+    '  });',
+    '  lifecycleQueue = run;',
+    '  return run;',
+    '}',
+    '',
+    'function clearStatusRetry() {',
+    '  if (statusRetryTimer) clearTimeout(statusRetryTimer);',
+    '  statusRetryTimer = null;',
+    '}',
+    '',
+    'function scheduleStatusRetry(revision) {',
+    '  if (',
+    '    statusRetryTimer ||',
+    '    revision !== statusRevision ||',
+    '    !statusDeliveryDirty ||',
+    '    !activeFactoryIDs.has(desiredFactoryID)',
+    '  ) return;',
+    '  const delay = Math.min(',
+    '    STATUS_RETRY_BASE_MS * Math.pow(2, Math.min(statusRetryAttempt, 6)),',
+    '    STATUS_RETRY_MAX_MS',
+    '  );',
+    '  statusRetryAttempt = Math.min(statusRetryAttempt + 1, 7);',
+    '  statusRetryTimer = setTimeout(() => {',
+    '    statusRetryTimer = null;',
+    '    void enqueueLifecycle(async () => {',
+    '      if (',
+    '        revision !== statusRevision ||',
+    '        !statusDeliveryDirty ||',
+    '        !activeFactoryIDs.has(desiredFactoryID)',
+    '      ) return;',
+    '      await publishDesiredStatus(revision);',
+    '    });',
+    '  }, delay);',
+    '  if (statusRetryTimer.unref) statusRetryTimer.unref();',
+    '}',
+    '',
+    'async function publishDesiredStatus(revision) {',
+    '  if (revision !== statusRevision) return;',
+    '  if (!activeFactoryIDs.has(desiredFactoryID)) return;',
+    '  const endpointKey = hookEndpointKey();',
+    '  if (',
+    '    !statusDeliveryDirty &&',
+    '    deliveredStatusKey === desiredStatusKey &&',
+    '    deliveredEndpointKey === endpointKey &&',
+    '    deliveredMessagePartFactoryID === null',
+    '  ) return;',
+    '  const delivered = await post(desiredHookEventName, desiredStatusProperties);',
+    '  if (revision !== statusRevision) return;',
+    '  if (!delivered) {',
+    '    statusDeliveryDirty = true;',
+    '    scheduleStatusRetry(revision);',
+    '    return;',
+    '  }',
+    '  clearStatusRetry();',
+    '  statusRetryAttempt = 0;',
+    '  deliveredStatusKey = desiredStatusKey;',
+    '  deliveredEndpointKey = endpointKey;',
+    '  deliveredMessagePartFactoryID = null;',
+    '  statusDeliveryDirty = false;',
+    '}',
+    '',
+    'async function setDeliveryTarget(',
+    '  next,',
+    '  nextKey,',
+    '  hookEventName,',
+    '  extraProperties,',
+    '  factoryID',
+    ') {',
+    '  const endpointChanged = deliveredEndpointKey !== hookEndpointKey();',
+    '  if (',
+    '    nextKey === desiredStatusKey &&',
+    '    nextKey === deliveredStatusKey &&',
+    '    desiredFactoryID === factoryID &&',
+    '    !statusDeliveryDirty &&',
+    '    !endpointChanged &&',
+    '    deliveredMessagePartFactoryID === null',
+    '  ) return;',
+    '  const targetChanged = nextKey !== desiredStatusKey || desiredFactoryID !== factoryID;',
+    '  clearStatusRetry();',
+    '  if (targetChanged) {',
+    '    statusRetryAttempt = 0;',
+    '    busyRecoveryUsed = false;',
+    '    busyRecoveryEndpointKey = "";',
+    '  }',
+    '  desiredStatus = next;',
+    '  desiredHookEventName = hookEventName;',
+    '  desiredStatusKey = nextKey;',
+    '  desiredStatusProperties = extraProperties || {};',
+    '  desiredFactoryID = factoryID;',
+    '  statusDeliveryDirty =',
+    '    statusDeliveryDirty ||',
+    '    deliveredMessagePartFactoryID !== null ||',
+    '    deliveredStatusKey !== nextKey ||',
+    '    endpointChanged;',
+    '  const revision = ++statusRevision;',
+    '  await publishDesiredStatus(revision);',
+    '}',
+    '',
+    'async function setStatus(next, extraProperties, factoryID) {',
+    '  const nextKey = next + ":" + (extraProperties?.sessionID || "");',
     '  const hookEventName = next === "busy" ? "SessionBusy" : "SessionIdle";',
-    '  await post(hookEventName, extraProperties);',
+    '  await setDeliveryTarget(next, nextKey, hookEventName, extraProperties, factoryID);',
+    '}',
+    '',
+    'async function setAttention(hookEventName, properties, factoryID, sourceSessionID) {',
+    '  const requestID = properties?.id || properties?.sessionID || "";',
+    '  const requestKey = attentionKey(factoryID, hookEventName, requestID, sourceSessionID);',
+    '  await flushPendingAssistantPart(true);',
+    '  await setDeliveryTarget(',
+    '    "waiting",',
+    '    "waiting:" + requestKey,',
+    '    hookEventName,',
+    '    properties,',
+    '    factoryID',
+    '  );',
+    '}',
+    '',
+    'function recoverBusyFromDelta(client, sessionID, factoryID) {',
+    '  if (busyRecoveryQueued) return lifecycleQueue;',
+    '  if (',
+    '    busyRecoveryUsed &&',
+    '    busyRecoveryEndpointKey === hookEndpointKey()',
+    '  ) return lifecycleQueue;',
+    '  busyRecoveryQueued = true;',
+    '  return enqueueLifecycle(async () => {',
+    '    try {',
+    '      if (!activeFactoryIDs.has(factoryID)) return;',
+    '      if (sessionID && (await isChildSession(client, sessionID)) === true) return;',
+    '      if (!activeFactoryIDs.has(factoryID)) return;',
+    '      const endpointKey = hookEndpointKey();',
+    '      const endpointChanged = deliveredEndpointKey !== endpointKey;',
+    '      if (desiredStatus !== "busy" || (!statusDeliveryDirty && !endpointChanged)) return;',
+    '      if (busyRecoveryUsed && !endpointChanged) return;',
+    '      busyRecoveryUsed = true;',
+    '      busyRecoveryEndpointKey = endpointKey;',
+    '      clearStatusRetry();',
+    '      statusDeliveryDirty = true;',
+    '      const revision = ++statusRevision;',
+    '      await publishDesiredStatus(revision);',
+    '    } finally {',
+    '      busyRecoveryQueued = false;',
+    '    }',
+    '  });',
+    '}',
+    '',
+    'function currentAttention() {',
+    '  let latestQuestion = null;',
+    '  for (const attention of pendingAttentionByKey.values()) {',
+    '    if (attention.hookEventName === "PermissionRequest") return attention;',
+    '    latestQuestion = attention;',
+    '  }',
+    '  return latestQuestion;',
+    '}',
+    '',
+    'function attentionKey(factoryID, hookEventName, requestID, sourceSessionID) {',
+    '  // Why: custom plugins may reuse request IDs across sessions or factories;',
+    '  // JSON tuple identity prevents one owner from hiding another blocker.',
+    '  return JSON.stringify([factoryID, hookEventName, requestID, sourceSessionID || ""]);',
+    '}',
+    '',
+    'function clearAttentionForSession(sessionID, factoryID) {',
+    '  let rootSessionID = null;',
+    '  for (const [key, attention] of pendingAttentionByKey) {',
+    '    if (attention.sourceSessionID === sessionID && attention.factoryID === factoryID) {',
+    '      pendingAttentionByKey.delete(key);',
+    '      rootSessionID = attention.properties?.sessionID || sessionID;',
+    '    }',
+    '  }',
+    '  return rootSessionID;',
+    '}',
+    '',
+    'function clearQuestionForToolPart(part, sessionID, factoryID) {',
+    '  if (',
+    '    part?.type !== "tool" ||',
+    '    part.tool !== "question" ||',
+    '    (part.state?.status !== "completed" && part.state?.status !== "error")',
+    '  ) return null;',
+    '  let rootSessionID = null;',
+    '  for (const [key, attention] of pendingAttentionByKey) {',
+    '    const tool = attention.properties?.tool;',
+    '    if (',
+    '      attention.hookEventName === "AskUserQuestion" &&',
+    '      attention.sourceSessionID === sessionID &&',
+    '      attention.factoryID === factoryID &&',
+    '      tool?.messageID === part.messageID &&',
+    '      tool?.callID === part.callID',
+    '    ) {',
+    '      pendingAttentionByKey.delete(key);',
+    '      rootSessionID = attention.properties?.sessionID || sessionID;',
+    '    }',
+    '  }',
+    '  return rootSessionID;',
+    '}',
+    '',
+    'function clearAttentionForResolution(event, sessionID, factoryID) {',
+    '  const hookEventName =',
+    '    event.type === "permission.replied" ? "PermissionRequest" : "AskUserQuestion";',
+    '  const requestID = event.properties?.requestID || "";',
+    '  const key = attentionKey(factoryID, hookEventName, requestID, sessionID);',
+    '  const attention = pendingAttentionByKey.get(key);',
+    '  if (!attention || attention.sourceSessionID !== sessionID) return null;',
+    '  pendingAttentionByKey.delete(key);',
+    '  return attention.properties?.sessionID || sessionID;',
+    '}',
+    '',
+    'function provisionalBusyKey(factoryID, sessionID) {',
+    '  return JSON.stringify([factoryID, sessionID || ""]);',
+    '}',
+    '',
+    'function rememberProvisionalBusy(sessionID, factoryID) {',
+    '  const key = provisionalBusyKey(factoryID, sessionID);',
+    '  // Why: active ownership cannot be LRU-evicted without allowing false',
+    '  // Idle; exact matching Idle or factory disposal lifecycle-bounds it.',
+    '  provisionalBusyByKey.delete(key);',
+    '  provisionalBusyByKey.set(key, { sessionID, factoryID });',
+    '}',
+    '',
+    'function clearProvisionalBusy(sessionID, factoryID) {',
+    '  return provisionalBusyByKey.delete(provisionalBusyKey(factoryID, sessionID));',
+    '}',
+    '',
+    'function clearKnownBusyRoot(sessionID, factoryID) {',
+    '  if (busyRootOwnerBySessionID.get(sessionID) !== factoryID) return false;',
+    '  busyRootOwnerBySessionID.delete(sessionID);',
+    '  return true;',
+    '}',
+    '',
+    'function latestBusyOwner() {',
+    '  let latest = null;',
+    '  for (const [sessionID, factoryID] of busyRootOwnerBySessionID) {',
+    '    latest = { sessionID, factoryID };',
+    '  }',
+    '  for (const provisional of provisionalBusyByKey.values()) {',
+    '    latest = provisional;',
+    '  }',
+    '  return latest;',
+    '}',
+    '',
+    'async function publishAggregateStatus(fallbackFactoryID, preferredSessionID) {',
+    '  const attention = currentAttention();',
+    '  if (attention) {',
+    '    await setAttention(',
+    '      attention.hookEventName,',
+    '      attention.properties,',
+    '      attention.factoryID,',
+    '      attention.sourceSessionID',
+    '    );',
+    '    return;',
+    '  }',
+    '  const busyOwner = latestBusyOwner();',
+    '  if (busyOwner) {',
+    '    await setStatus("busy", { sessionID: busyOwner.sessionID }, busyOwner.factoryID);',
+    '    return;',
+    '  }',
+    '  await setStatus("idle", { sessionID: preferredSessionID }, fallbackFactoryID);',
+    '}',
+    '',
+    'async function publishOwnershipChange(fallbackFactoryID, preferredSessionID) {',
+    '  stateArrivalRevision += 1;',
+    '  // Why: exact blocker/Busy retirement is authoritative even if ancestry',
+    '  // lookup failed; every older preview must settle before its replacement.',
+    '  await flushPendingAssistantPart(true);',
+    '  await publishAggregateStatus(fallbackFactoryID, preferredSessionID);',
+    '}',
+    '',
+    'async function handleLifecycleEvent(client, event, factoryID) {',
+    '  const sessionID = event.properties?.sessionID;',
+    '  const statusType = getStatusType(event);',
+    '  const isResolutionEvent =',
+    '    event.type === "permission.replied" ||',
+    '    event.type === "question.replied" ||',
+    '    event.type === "question.rejected";',
+    '  if (isResolutionEvent) {',
+    '    // Why: the stored owner already identifies the root, so replies clear',
+    '    // immediately even when OpenCode session lookup is slow or unavailable.',
+    '    const rootSessionID = clearAttentionForResolution(event, sessionID, factoryID);',
+    '    if (rootSessionID) await publishOwnershipChange(factoryID, rootSessionID);',
+    '    return;',
+    '  }',
+    '  const isAttentionEvent =',
+    '    event.type === "permission.asked" ||',
+    '    event.type === "question.asked";',
+    "  // Why: attention without OpenCode's required sessionID cannot be",
+    '  // correlated to a later reply/Idle, so it must not become UI authority.',
+    '  if (isAttentionEvent && !sessionID) return;',
+    '  const canFailOpen =',
+    '    statusType === "busy" || statusType === "retry" || isAttentionEvent;',
+    '  const rootSessionID = sessionID ? await resolveRootSessionID(client, sessionID) : null;',
+    '  const childState = rootSessionID === null ? null : rootSessionID !== sessionID;',
+    '  const isIdleEvent = event.type === "session.idle" || statusType === "idle";',
+    '  const resolvedProvisionalBusy =',
+    '    childState === false || (childState === true && isIdleEvent)',
+    '      ? clearProvisionalBusy(sessionID, factoryID)',
+    '      : false;',
+    '  if (resolvedProvisionalBusy && childState === false) {',
+    '    busyRootOwnerBySessionID.delete(sessionID);',
+    '    busyRootOwnerBySessionID.set(sessionID, factoryID);',
+    '  }',
+    '  // Why: child work rolls up to the pane; ignore its normal lifecycle noise,',
+    '  // but preserve blockers that still require the pane owner to respond.',
+    '  if (childState === true && !isAttentionEvent) {',
+    '    let attentionRootSessionID = null;',
+    '    if (isIdleEvent) {',
+    '      attentionRootSessionID = clearAttentionForSession(sessionID, factoryID);',
+    '    }',
+    '    if (resolvedProvisionalBusy || attentionRootSessionID) {',
+    '      await publishOwnershipChange(factoryID, attentionRootSessionID || rootSessionID);',
+    '    }',
+    '    return;',
+    '  }',
+    '  if (childState === null && !canFailOpen) {',
+    '    if (isIdleEvent) {',
+    '      // Why: recorded ownership can safely retire a blocker during an SDK',
+    '      // outage without granting unknown child Idle authority over root state.',
+    '      const attentionRootSessionID = clearAttentionForSession(sessionID, factoryID);',
+    '      const clearedProvisionalBusy = clearProvisionalBusy(sessionID, factoryID);',
+    '      const clearedKnownBusyRoot = clearKnownBusyRoot(sessionID, factoryID);',
+    '      if (attentionRootSessionID || clearedProvisionalBusy || clearedKnownBusyRoot) {',
+    '        await publishOwnershipChange(factoryID, attentionRootSessionID || sessionID);',
+    '      }',
+    '    }',
+    '    return;',
+    '  }',
+    '  if (childState === null && (statusType === "busy" || statusType === "retry")) {',
+    '    // Unknown lineage may be child work, so keep exact provisional ownership',
+    '    // only until matching Idle/disposal; other blockers still take priority.',
+    '    clearAttentionForSession(sessionID, factoryID);',
+    '    rememberProvisionalBusy(sessionID, factoryID);',
+    '    await publishAggregateStatus(factoryID, sessionID);',
+    '    return;',
+    '  }',
+    '  if (event.type === "permission.asked" || event.type === "question.asked") {',
+    '    stateArrivalRevision += 1;',
+    '    // Why: attention must share the lifecycle FIFO and retry target so a',
+    '    // delayed Busy post cannot overwrite a newer human blocker.',
+    '    const hookEventName =',
+    '      event.type === "permission.asked" ? "PermissionRequest" : "AskUserQuestion";',
+    '    // Why: show the blocker on the root turn while retaining its real child',
+    '    // owner for exact reply, tool-completion, and disposal cleanup.',
+    '    const properties = { ...(event.properties || {}), sessionID: rootSessionID || sessionID };',
+    '    const requestID = properties.id || sessionID || "";',
+    '    const key = attentionKey(factoryID, hookEventName, requestID, sessionID);',
+    '    // Why: unresolved blockers are live UI authority and cannot be evicted;',
+    '    // reply, exact Idle, tool completion, or factory disposal retires them.',
+    '    pendingAttentionByKey.set(key, {',
+    '      hookEventName,',
+    '      properties,',
+    '      factoryID,',
+    '      sourceSessionID: sessionID,',
+    '    });',
+    '    await publishAggregateStatus(factoryID, rootSessionID || sessionID);',
+    '    return;',
+    '  }',
+    '  if (isIdleEvent) {',
+    '    stateArrivalRevision += 1;',
+    '    const idleKey = "idle:" + (sessionID || "");',
+    '    // Why: current OpenCode emits canonical idle followed by deprecated',
+    '    // session.idle; a failed canonical post should keep its backoff.',
+    '    if (',
+    '      event.type === "session.idle" &&',
+    '      desiredStatusKey === idleKey &&',
+    '      statusDeliveryDirty &&',
+    '      statusRetryTimer',
+    '    ) return;',
+    '    // Why: flush the coalesced final reply snapshot before the idle',
+    '    // transition so the done-state preview shows the completed message.',
+    '    await flushPendingAssistantPart(true);',
+    '    clearAttentionForSession(sessionID, factoryID);',
+    '    if (busyRootOwnerBySessionID.get(sessionID) === factoryID) {',
+    '      busyRootOwnerBySessionID.delete(sessionID);',
+    '    }',
+    '    await publishAggregateStatus(factoryID, sessionID);',
+    '    return;',
+    '  }',
+    '  // Why: recoverable compaction failures emit session.error and continue;',
+    '  // canonical session.status is the authority for actual completion.',
+    '  if (event.type === "session.error") return;',
+    '  if (statusType === "busy" || statusType === "retry") {',
+    '    clearAttentionForSession(sessionID, factoryID);',
+    '    busyRootOwnerBySessionID.delete(sessionID);',
+    '    busyRootOwnerBySessionID.set(sessionID, factoryID);',
+    '    await publishAggregateStatus(factoryID, sessionID);',
+    '  }',
     '}',
     '',
     '// Why: accept the factory argument as an optional opaque parameter instead',
@@ -305,9 +812,14 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     '// UnknownError before any event is ever dispatched.',
     'export const OrcaOpenCodeStatusPlugin = async (_ctx) => {',
     '  const client = _ctx?.client;',
+    '  const factoryID = ++nextFactoryID;',
+    '  activeFactoryIDs.add(factoryID);',
+    '  let disposed = false;',
     '  return {',
     '  event: async ({ event }) => {',
-    '    if (!event?.type) return;',
+    '    if (disposed || !event?.type) return;',
+    '    const authorityRevision = stateArrivalRevision;',
+    '    const statusType = getStatusType(event);',
     '',
     '    // Why: cache the message role BEFORE the async isChildSession check.',
     '    // OpenCode fires message.updated (user) and message.part.updated (text)',
@@ -322,29 +834,58 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     '    }',
     '',
     '    const sessionID = event.properties?.sessionID;',
-    '    if (sessionID && (await isChildSession(client, sessionID))) {',
+    '    const updatedPart = event.properties?.part;',
+    '    if (',
+    '      event.type === "message.part.updated" &&',
+    '      updatedPart?.type === "tool" &&',
+    '      updatedPart.tool === "question" &&',
+    '      (updatedPart.state?.status === "completed" || updatedPart.state?.status === "error")',
+    '    ) {',
+    '      await enqueueLifecycle(async () => {',
+    '        if (disposed) return;',
+    '        // Why: stored ownership clears child questions without waiting on',
+    '        // ancestry lookup even though ordinary child message parts stay hidden.',
+    '        const rootSessionID = clearQuestionForToolPart(updatedPart, sessionID, factoryID);',
+    '        if (!rootSessionID) return;',
+    '        await publishOwnershipChange(factoryID, rootSessionID);',
+    '      });',
     '      return;',
     '    }',
     '',
-    '    if (event.type === "permission.asked") {',
-    '      // Why: permission asks are not a session state transition — emit',
-    '      // without mutating lastStatus so the next SessionBusy/SessionIdle',
-    '      // still fires. The server maps PermissionRequest to `waiting`.',
-    '      await post("PermissionRequest", event.properties || {});',
+    '    if (',
+    '      event.type === "session.status" ||',
+    '      event.type === "session.idle" ||',
+    '      event.type === "session.error" ||',
+    '      event.type === "permission.asked" ||',
+    '      event.type === "question.asked" ||',
+    '      event.type === "permission.replied" ||',
+    '      event.type === "question.replied" ||',
+    '      event.type === "question.rejected"',
+    '    ) {',
+    '      await enqueueLifecycle(() =>',
+    '        disposed ? undefined : handleLifecycleEvent(client, event, factoryID)',
+    '      );',
     '      return;',
     '    }',
     '',
-    '    if (event.type === "question.asked") {',
-    '      // Why: question.asked fires when OpenCode uses an ask-the-user tool',
-    '      // (distinct from permission.asked, which blocks on tool approval).',
-    '      // The agent is idle-but-waiting on a human reply, not running, so we',
-    '      // must flip the pane to the same red "needs attention" state used for',
-    '      // permission requests. Like permission.asked, do not touch lastStatus',
-    '      // so the next SessionBusy/SessionIdle after the user answers still',
-    '      // fires and restores the normal working/done flow.',
-    '      await post("AskUserQuestion", event.properties || {});',
+    '    if (event.type === "message.part.delta") {',
+    '      const properties = event.properties || {};',
+    '      if (',
+    '        properties.field === "text" &&',
+    '        typeof properties.delta === "string" &&',
+    '        properties.delta.length > 0',
+    '      ) {',
+    '        await recoverBusyFromDelta(client, sessionID, factoryID);',
+    '      }',
     '      return;',
     '    }',
+    '',
+    '    if (sessionID && (await isChildSession(client, sessionID)) !== false) {',
+    '      return;',
+    '    }',
+    '    if (disposed) return;',
+    '    if (authorityRevision !== stateArrivalRevision) return;',
+    '    if (desiredStatus === "waiting") return;',
     '',
     '    if (event.type === "message.updated") {',
     '      // Why: role is already cached above the isChildSession await so the',
@@ -372,31 +913,84 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     '        // Why: user prompts arrive as a single event, not a stream — post',
     '        // immediately (still capped) so the throttle slot stays free for',
     '        // the assistant reply that follows within the same window.',
-    '        await post("MessagePart", { role, text: capMessagePartText(part.text), messageID: part.messageID, sessionID });',
+    '        await postMessagePart(',
+    '          { role, text: capMessagePartText(part.text), messageID: part.messageID, sessionID },',
+    '          factoryID',
+    '        );',
     '        return;',
     '      }',
-    '      queueAssistantPart({ role, text: part.text, messageID: part.messageID, sessionID });',
+    '      queueAssistantPart({',
+    '        role,',
+    '        text: part.text,',
+    '        messageID: part.messageID,',
+    '        sessionID,',
+    '        authorityRevision,',
+    '        factoryID,',
+    '      });',
     '      return;',
     '    }',
     '',
-    '    if (event.type === "session.idle" || event.type === "session.error") {',
-    '      // Why: flush the coalesced final reply snapshot before the idle',
-    '      // transition so the done-state preview shows the completed message.',
-    '      await flushPendingAssistantPart();',
-    '      await setStatus("idle", { sessionID });',
-    '      return;',
-    '    }',
-    '',
-    '    if (event.type === "session.status") {',
-    '      const statusType = getStatusType(event);',
-    '      if (statusType === "busy" || statusType === "retry") {',
-    '        await setStatus("busy", { sessionID });',
-    '        return;',
+    '  },',
+    '  dispose: async () => {',
+    '    if (disposed) return;',
+    '    disposed = true;',
+    '    disposingFactoryIDs.add(factoryID);',
+    '    await enqueueLifecycle(async () => {',
+    '      // An older MessagePart must settle before disposal publishes the',
+    '      // replacement state, or its late Working update could win.',
+    '      while (messagePartPostInFlight) await messagePartPostInFlight;',
+    '      for (const [sessionID, ownerID] of busyRootOwnerBySessionID) {',
+    '        if (ownerID === factoryID) busyRootOwnerBySessionID.delete(sessionID);',
     '      }',
-    '      if (statusType === "idle") {',
-    '        await setStatus("idle", { sessionID });',
+    '      for (const [key, provisional] of provisionalBusyByKey) {',
+    '        if (provisional.factoryID === factoryID) provisionalBusyByKey.delete(key);',
     '      }',
-    '    }',
+    '      for (const [key, attention] of pendingAttentionByKey) {',
+    '        if (attention.factoryID === factoryID) pendingAttentionByKey.delete(key);',
+    '      }',
+    '      if (pendingAssistantPart?.factoryID === factoryID) {',
+    '        if (assistantPartFlushTimer) clearTimeout(assistantPartFlushTimer);',
+    '        assistantPartFlushTimer = null;',
+    '        pendingAssistantPart = null;',
+    '      }',
+    '      const ownsDeliveredMessagePart = deliveredMessagePartFactoryID === factoryID;',
+    '      if (desiredFactoryID === factoryID || ownsDeliveredMessagePart) {',
+    '        clearStatusRetry();',
+    '        statusRevision += 1;',
+    '        // A MessagePart may have changed the listener to Working after the',
+    '        // same lifecycle key was delivered; force that key to be reasserted.',
+    '        statusDeliveryDirty = ownsDeliveredMessagePart;',
+    '        busyRecoveryUsed = false;',
+    '        busyRecoveryEndpointKey = "";',
+    '        const fallbackFactoryID = Array.from(activeFactoryIDs).find(',
+    '          (id) => id !== factoryID',
+    '        );',
+    '        if (fallbackFactoryID !== undefined) {',
+    '          await publishAggregateStatus(',
+    '            fallbackFactoryID,',
+    '            desiredStatusProperties?.sessionID',
+    '          );',
+    '        } else {',
+    '          // Why: Instance disposal can happen while the PTY stays alive;',
+    '          // publish a final idle so Orca does not retain a dead owner.',
+    '          if (!deliveredStatusKey.startsWith("idle:") || ownsDeliveredMessagePart) {',
+    '            await setStatus(',
+    '              "idle",',
+    '              { sessionID: desiredStatusProperties?.sessionID },',
+    '              factoryID',
+    '            );',
+    '          }',
+    '          clearStatusRetry();',
+    '          desiredStatus = "idle";',
+    '          desiredHookEventName = "SessionIdle";',
+    '          desiredStatusKey = "idle:";',
+    '          desiredStatusProperties = {};',
+    '          desiredFactoryID = null;',
+    '        }',
+    '      }',
+    '      activeFactoryIDs.delete(factoryID);',
+    '      disposingFactoryIDs.delete(factoryID);',
+    '    });',
     '  },',
     '  };',
     '};',
@@ -404,35 +998,20 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
   ].join('\n')
 }
 
-// Why: OpenCode hooks used to run their own loopback HTTP server + IPC
-// channel (pty:opencode-status). That pathway produced a synthetic terminal
-// title but never entered agentStatusByPaneKey, so the unified dashboard
-// never saw OpenCode sessions. The service now only installs the plugin
-// file into OPENCODE_CONFIG_DIR — the plugin POSTs directly to the shared
-// agent-hooks server (/hook/opencode), so OpenCode rides the same status
-// pipeline as Claude/Codex/Gemini.
+// Why: installs the plugin into OPENCODE_CONFIG_DIR so it POSTs to the shared agent-hooks server, unifying OpenCode status with Claude/Codex/Gemini (the old loopback-IPC path never reached agentStatusByPaneKey).
 export class OpenCodeHookService {
   clearPty(_ptyId: string): void {
-    // Why: OpenCode can materialize thousands of plugin runtime files under
-    // OPENCODE_CONFIG_DIR. This teardown runs on Electron's main process hot
-    // path, so recursive deletion here can freeze the whole app on Windows
-    // while Node, antivirus, or indexing still holds file handles.
-    //
-    // Current builds use app/source-scoped config dirs, not PTY-scoped dirs,
-    // so there is no live PTY-owned OpenCode filesystem state to remove.
+    // Why: no-op — config dirs are app/source-scoped now, and recursive delete on the main-process hot path could freeze on Windows.
   }
 
   buildPtyEnv(ptyId: string, existingConfigDir?: string | undefined): Record<string, string> {
     if (!isUsableId(ptyId)) {
-      // Why: defense-in-depth. If the id fails the bounds guard, a user-set
-      // OPENCODE_CONFIG_DIR should still be preserved so OpenCode loads the
-      // user's own config — only the Orca status plugin is forfeited.
+      // Why: on a bad id, still preserve a user-set OPENCODE_CONFIG_DIR; only the Orca status plugin is forfeited.
       return existingConfigDir ? { OPENCODE_CONFIG_DIR: existingConfigDir } : {}
     }
 
     if (!existingConfigDir) {
-      // Why: OpenCode may install plugin dependencies under this root. Sharing
-      // it prevents per-terminal node_modules churn and teardown freezes.
+      // Why: share one config root so OpenCode's plugin deps don't churn node_modules per terminal.
       const configDir = this.writeSharedPluginConfig()
       if (!configDir) {
         return {}
@@ -440,10 +1019,7 @@ export class OpenCodeHookService {
       return { OPENCODE_CONFIG_DIR: configDir }
     }
 
-    // Why: do NOT `mkdir -p` the user's typoed path — overriding it with an
-    // Orca-owned dir is the exact config-replacement failure mode documented in
-    // docs/opencode-config-dir-collision.md. Let OpenCode surface the typo on
-    // its own; we only forfeit our status plugin for this pane.
+    // Why: don't mkdir the user's (possibly typoed) path — that's the config-replacement failure mode in docs/opencode-config-dir-collision.md; let OpenCode surface it.
     if (!existsSync(existingConfigDir)) {
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
@@ -455,11 +1031,7 @@ export class OpenCodeHookService {
       this.mirrorUserConfig(existingConfigDir, overlayDir)
       this.writePluginIntoOverlay(overlayDir)
     } catch {
-      // Why: overlay creation is best-effort. Symlink-creation can fail on
-      // Windows without developer mode (EPERM), userData can be read-only on
-      // locked-down corporate machines, etc. In every case, preserve the
-      // user's OPENCODE_CONFIG_DIR — a missing status plugin is a vastly
-      // smaller harm than silently dropping the user's auth/models/keymap.
+      // Why: best-effort — symlink creation needs Windows developer mode (else EPERM) and userData may be read-only; preserve the user's config over dropping their auth/models/keymap.
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
 
@@ -513,17 +1085,10 @@ export class OpenCodeHookService {
     }
   }
 
-  // Why: walks the user's OPENCODE_CONFIG_DIR top-level entries. The
-  // `plugins/` subdirectory gets created as a real directory in the overlay
-  // so Orca can drop a sibling file alongside the user's plugins; everything
-  // else (opencode.json, auth.json, themes/, etc.) is mirrored as a single
-  // top-level entry via symlink/junction so user edits propagate live on
-  // POSIX (and on Windows-with-developer-mode) without copying files.
+  // Why: mirror user config entries as symlinks so edits propagate live; only plugins/ becomes a real overlay dir so Orca can drop a sibling plugin file.
   private mirrorUserConfig(sourceDir: string, overlayDir: string): void {
     const previousManifest = this.readOverlayManifest(overlayDir)
-    // Why: source-scoped overlays persist across terminals. Only remove paths
-    // Orca previously mirrored, so deleted/replaced user config cannot stay
-    // stale while OpenCode-owned runtime dirs such as node_modules survive.
+    // Why: overlays persist across terminals; remove only Orca-mirrored paths so stale user config clears but OpenCode runtime dirs (node_modules) survive.
     this.clearManifestEntries(overlayDir, previousManifest)
 
     const nextManifest: OpenCodeOverlayManifest = { topLevelEntries: [], pluginEntries: [] }
@@ -532,43 +1097,25 @@ export class OpenCodeHookService {
       const sourcePath = join(sourceDir, entry.name)
 
       if (entry.name === 'plugins') {
-        // Why: check isSymbolicLink BEFORE isDirectory — a Windows junction
-        // can report both as true on a Dirent, and we must take the symlink
-        // branch so the per-entry mirroring (not a single mirrorEntry call
-        // that would create a symlink at <overlay>/plugins) handles it.
+        // Why: check isSymbolicLink before isDirectory — a Windows junction reports both, and the symlink branch must win.
         const isSymlink = entry.isSymbolicLink()
         let isLinkPointingToDir = false
         if (isSymlink) {
           try {
             isLinkPointingToDir = statSync(sourcePath).isDirectory()
           } catch {
-            // Why: broken symlink (target missing) or permission error — fall
-            // through to the default mirrorEntry path so the dangling link is
-            // mirrored verbatim rather than write-through-resolved.
+            // Why: broken/inaccessible symlink — mirror the dangling link verbatim instead of resolving through it.
             isLinkPointingToDir = false
           }
         }
 
         if ((!isSymlink && entry.isDirectory()) || isLinkPointingToDir) {
-          // Why: when the user's plugins/ is a symlink-to-dir, resolve to the
-          // real target so readdir returns the actual entries and child paths
-          // join against the resolved root. mirrorEntry then creates symlinks
-          // pointing into the resolved real plugins (not back through the
-          // user's link), and <overlay>/plugins itself stays a real dir so
-          // writePluginIntoOverlay can never write through to the user's FS.
+          // Why: resolve a symlinked plugins/ to its real target so <overlay>/plugins stays a real dir and writePluginIntoOverlay can't write through the user's link.
           const resolvedSource = isLinkPointingToDir ? realpathSync(sourcePath) : sourcePath
           const overlayPluginsDir = join(overlayDir, 'plugins')
           mkdirSync(overlayPluginsDir, { recursive: true })
           for (const pluginEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
-            // Why: skip a user file with the same filename as Orca's plugin —
-            // mirroring it here would either resolve a same-named target via
-            // symlink (writePluginIntoOverlay then clobbers the user's file
-            // through the link) or collide on Windows with the directory entry
-            // about to be created by writePluginIntoOverlay. Either way the
-            // user's plugin would be lost. Skipping yields the desired
-            // semantics: Orca's status plugin runs and the user's same-named
-            // plugin is shadowed for this PTY only — their source file on disk
-            // is untouched.
+            // Why: skip a user plugin sharing Orca's filename; mirroring it would let writePluginIntoOverlay clobber the user's file.
             if (pluginEntry.name === ORCA_OPENCODE_PLUGIN_FILE) {
               continue
             }
@@ -589,13 +1136,7 @@ export class OpenCodeHookService {
     this.writeOverlayManifest(overlayDir, nextManifest)
   }
 
-  // Why: write Orca's status plugin into the overlay's plugins/ dir. The
-  // pre-write unlink is the load-bearing part — POSIX writeFileSync over a
-  // symlink writes through to the link target, so without it a user-owned
-  // plugin with this filename would be clobbered through a mirrored link.
-  // Skipping the same-named user file in mirrorUserConfig already prevents
-  // the link from being created, but the unlink keeps this function safe
-  // even if a stale overlay slips through with the link still in place.
+  // Why: pre-write unlink guards against POSIX writeFileSync writing through a mirrored symlink and clobbering a same-named user plugin.
   private writePluginIntoOverlay(overlayDir: string): void {
     const pluginsDir = join(overlayDir, 'plugins')
     mkdirSync(pluginsDir, { recursive: true })
@@ -603,8 +1144,7 @@ export class OpenCodeHookService {
     try {
       unlinkSync(pluginPath)
     } catch {
-      // No-op: file may not exist on a fresh overlay. Any persistent failure
-      // (e.g. permissions) will surface on the writeFileSync below.
+      // File may not exist on a fresh overlay; a real failure surfaces on writeFileSync below.
     }
     writeFileSync(pluginPath, getOpenCodePluginSource())
   }
@@ -616,9 +1156,7 @@ export class OpenCodeHookService {
       mkdirSync(pluginsDir, { recursive: true })
       writeFileSync(join(pluginsDir, ORCA_OPENCODE_PLUGIN_FILE), getOpenCodePluginSource())
     } catch {
-      // Why: on Windows, userData directories can be locked by antivirus or
-      // indexers (EPERM/EBUSY). Plugin config is non-critical — the PTY should
-      // still spawn without the OpenCode status plugin.
+      // Why: userData can be locked on Windows (EPERM/EBUSY); plugin is non-critical, so spawn without it.
       return null
     }
     return configDir

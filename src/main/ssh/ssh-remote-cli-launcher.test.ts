@@ -1,13 +1,18 @@
 import { Buffer } from 'node:buffer'
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createRemoteCliInstallPlan } from './ssh-remote-cli-launcher'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
-const itWindows = process.platform === 'win32' ? it : it.skip
+// Why: cold csc.exe startup exceeds Vitest's 5s unit budget on hosted Windows;
+// keep the larger allowance scoped to the real compiler integration test.
+function itWindows(name: string, test: () => void): void {
+  const runner = process.platform === 'win32' ? it : it.skip
+  runner(name, { timeout: 15_000 }, test)
+}
 
 function decodePowerShellCommand(command: string): string {
   const encoded = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)?.[1]
@@ -18,21 +23,26 @@ function decodePowerShellCommand(command: string): string {
 }
 
 describe('SSH remote Orca CLI launcher', () => {
-  it('compiles a native Windows launcher without a cmd.exe argument bridge', () => {
-    const hostPlatform = getRemoteHostPlatform('win32-x64')
-    const plan = createRemoteCliInstallPlan({
+  function windowsInstallPlan(): ReturnType<typeof createRemoteCliInstallPlan> {
+    return createRemoteCliInstallPlan({
       binDir: 'C:/Users/me user/.orca-relay/bin',
       relayDir: 'C:/Users/me user/.orca-remote/relay-v1',
       nodePath: 'C:/Program Files/nodejs/node.exe',
       sockPath: '\\\\.\\pipe\\orca-relay-123',
-      hostPlatform
+      credentialFile: 'C:/Users/me user/.orca-remote/relay-v1/relay.sock.credential',
+      hostPlatform: getRemoteHostPlatform('win32-x64')
     })
+  }
+
+  it('compiles a native Windows launcher without a cmd.exe argument bridge', () => {
+    const plan = windowsInstallPlan()
 
     expect(plan.launcherPath).toBe('C:/Users/me user/.orca-relay/bin/orca.exe')
     expect(plan.files).toHaveLength(1)
     expect(plan.files[0]?.path).toBe('C:/Users/me user/.orca-relay/bin/orca-launcher.cs')
     expect(plan.files[0]?.contents).toContain('ProcessStartInfo')
     expect(plan.files[0]?.contents).toContain('"--orca-cli"')
+    expect(plan.files[0]?.contents).toContain('socketPath + ".credential"')
     expect(plan.files[0]?.contents).toContain("value[index] == '\"'")
     expect(plan.files[0]?.contents).toContain("character == '\\\\'")
     expect(plan.files[0]?.contents).not.toContain('cmd.exe')
@@ -49,7 +59,24 @@ describe('SSH remote Orca CLI launcher', () => {
     expect(compileScript).toContain('/out:orca.exe')
     expect(compileScript).toContain('C:/Users/me user/.orca-relay/bin/orca-launcher.cs')
     expect(compileScript).toContain('C:/Users/me user/.orca-relay/bin/orca.cmd')
-    expect(compileScript.indexOf('orca.cmd')).toBeLessThan(compileScript.indexOf('csc.exe'))
+  })
+
+  it('removes the legacy orca.cmd only after every compile guard has passed', () => {
+    const script = decodePowerShellCommand(windowsInstallPlan().postWriteCommands[0] ?? '')
+    const legacyShimRemoval =
+      "Remove-Item -LiteralPath 'C:/Users/me user/.orca-relay/bin/orca.cmd' -Force -ErrorAction SilentlyContinue"
+    // Why: a host missing csc.exe or failing the compile must keep its existing
+    // CLI, so every fail-closed guard precedes the legacy %* shim removal.
+    const guards = [
+      "if (-not $compiler) { Write-Error 'Unable to find the .NET Framework C# compiler required for the Orca SSH CLI launcher.'; exit 1 }",
+      'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
+      "if (-not (Test-Path -LiteralPath 'C:/Users/me user/.orca-relay/bin/orca.exe' -PathType Leaf))"
+    ]
+    expect(script).toContain(legacyShimRemoval)
+    for (const guard of guards) {
+      expect(script).toContain(guard)
+      expect(script.indexOf(guard)).toBeLessThan(script.indexOf(legacyShimRemoval))
+    }
   })
 
   itWindows('preserves a multiline argument through the compiled remote launcher', () => {
@@ -58,11 +85,13 @@ describe('SSH remote Orca CLI launcher', () => {
       const binDir = join(root, 'bin').replaceAll('\\', '/')
       const relayDir = join(root, 'relay').replaceAll('\\', '/')
       const sockPath = '\\\\.\\pipe\\orca-relay-test'
+      const credentialFile = `${relayDir}/relay.sock.credential`
       const plan = createRemoteCliInstallPlan({
         binDir,
         relayDir,
         nodePath: process.execPath,
         sockPath,
+        credentialFile,
         hostPlatform: getRemoteHostPlatform('win32-x64')
       })
       for (const file of plan.files) {
@@ -102,7 +131,8 @@ describe('SSH remote Orca CLI launcher', () => {
             ...process.env,
             ORCA_RELAY_NODE_PATH: process.execPath,
             ORCA_RELAY_DIR: relayDir,
-            ORCA_RELAY_SOCKET_PATH: sockPath
+            ORCA_RELAY_SOCKET_PATH: sockPath,
+            ORCA_RELAY_CREDENTIAL_FILE: credentialFile
           }
         }
       )
@@ -111,6 +141,8 @@ describe('SSH remote Orca CLI launcher', () => {
       expect(JSON.parse(launched.stdout)).toEqual([
         '--sock-path',
         sockPath,
+        '--credential-file',
+        credentialFile,
         '--orca-cli',
         'orchestration',
         'send',
@@ -118,6 +150,72 @@ describe('SSH remote Orca CLI launcher', () => {
         body,
         '--json'
       ])
+
+      const defaulted = spawnSync(plan.launcherPath, ['status'], {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          ORCA_RELAY_NODE_PATH: process.execPath,
+          ORCA_RELAY_DIR: relayDir,
+          ORCA_RELAY_SOCKET_PATH: sockPath,
+          ORCA_RELAY_CREDENTIAL_FILE: ''
+        }
+      })
+      expect(defaulted.status, defaulted.stderr).toBe(0)
+      expect(JSON.parse(defaulted.stdout)).toEqual([
+        '--sock-path',
+        sockPath,
+        '--credential-file',
+        `${sockPath}.credential`,
+        '--orca-cli',
+        'status'
+      ])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  itWindows('preserves the existing orca.cmd when the compiler is missing', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca remote cli '))
+    try {
+      const binDir = join(root, 'bin').replaceAll('\\', '/')
+      mkdirSync(binDir, { recursive: true })
+      const legacyShimPath = join(binDir, 'orca.cmd')
+      writeFileSync(legacyShimPath, '@echo legacy orca cli\r\n', 'utf8')
+
+      const plan = createRemoteCliInstallPlan({
+        binDir,
+        relayDir: join(root, 'relay').replaceAll('\\', '/'),
+        nodePath: process.execPath,
+        sockPath: '\\\\.\\pipe\\orca-relay-test',
+        credentialFile: join(root, 'relay', 'relay.sock.credential').replaceAll('\\', '/'),
+        hostPlatform: getRemoteHostPlatform('win32-x64')
+      })
+      for (const file of plan.files) {
+        mkdirSync(dirname(file.path), { recursive: true })
+        writeFileSync(file.path, file.contents, 'utf8')
+      }
+
+      const encoded = plan.postWriteCommands[0]?.match(/-EncodedCommand\s+(\S+)/)?.[1]
+      expect(encoded).toBeTruthy()
+      // Point WINDIR at a directory with no csc.exe so compiler discovery fails.
+      const compile = spawnSync(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-EncodedCommand',
+          encoded!
+        ],
+        { encoding: 'utf8', env: { ...process.env, WINDIR: root, SystemRoot: root } }
+      )
+
+      expect(compile.status).not.toBe(0)
+      expect(existsSync(legacyShimPath), 'existing orca.cmd must survive a failed install').toBe(
+        true
+      )
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

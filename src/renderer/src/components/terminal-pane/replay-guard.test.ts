@@ -4,6 +4,7 @@ import {
   isPaneReplaying,
   replayIntoTerminal,
   replayIntoTerminalAsync,
+  waitForTerminalReplayWritesParsed,
   type ReplayingPanesRef
 } from './replay-guard'
 import { configureLazyArabicShapingJoiner } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
@@ -418,6 +419,27 @@ describe('replay-guard', () => {
 })
 
 describe('replay-guard stall handling (probe-certified release)', () => {
+  it('waits for the FIFO replay sentinel without releasing on elapsed time', async () => {
+    vi.useFakeTimers()
+    const { terminal } = makeFakePane(1)
+    let resolved = false
+
+    void waitForTerminalReplayWritesParsed(terminal, { stallCheckMs: 1_000 }).then(() => {
+      resolved = true
+    })
+    expect(terminal.lastData).toEqual([''])
+
+    vi.advanceTimersByTime(1_000)
+    expect(terminal.lastData).toEqual(['', ''])
+    expect(resolved).toBe(false)
+    vi.advanceTimersByTime(60_000)
+    expect(resolved).toBe(false)
+
+    terminal.flush()
+    await Promise.resolve()
+    expect(resolved).toBe(true)
+  })
+
   it('HOLDS the guard while a slow replay is still parsing — a probe is queued, never a blind release', () => {
     // Why this is the load-bearing safety test: a time-based release here
     // would leak xterm auto-replies into the shell (and a leaked ESC into an
@@ -468,6 +490,43 @@ describe('replay-guard stall handling (probe-certified release)', () => {
         'terminal_replay_guard_lost_completion',
         { paneId: 1 }
       )
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('records correlatable replay identity without exposing worktree or PTY paths', () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const ref = makeRef()
+      const { pane, terminal } = makeFakePane(1)
+      pane.leafId = 'leaf-private-identity' as ManagedPane['leafId']
+
+      replayIntoTerminal(pane, ref, 'restored bytes', {
+        breadcrumbIdentity: {
+          tabId: 'tab-private-identity',
+          worktreeId: 'repo::/Users/alice/private-worktree',
+          ptyId: '/Users/alice/private-worktree@@ab12cd34'
+        },
+        stallCheckMs: 1_000
+      })
+      terminal.pendingCallbacks.shift()
+      vi.advanceTimersByTime(1_000)
+      terminal.flush()
+
+      const breadcrumbData = mocks.recordRendererCrashBreadcrumb.mock.calls[0]?.[1]
+      expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+        'terminal_replay_guard_lost_completion',
+        {
+          paneId: 1,
+          leafIdHash: expect.stringMatching(/^[0-9a-f]{8}$/),
+          tabIdHash: expect.stringMatching(/^[0-9a-f]{8}$/),
+          worktreeIdHash: expect.stringMatching(/^[0-9a-f]{8}$/),
+          ptyId: '…@@ab12cd34'
+        }
+      )
+      expect(JSON.stringify(breadcrumbData)).not.toContain('/Users/alice')
     } finally {
       errorSpy.mockRestore()
     }

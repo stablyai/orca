@@ -20,6 +20,7 @@
  *      a typeable pane
  */
 
+import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
@@ -42,8 +43,12 @@ import {
   probeKeyboardType,
   probeOwnershipRebuildRevival
 } from './helpers/terminal-input-probes'
+import { waitForRestoredTerminalInputReady } from './helpers/restored-terminal-input-readiness'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/pty-session-id-format'
+
+const REQUIRE_WINDOWS_TERMINAL_RESTART_E2E =
+  process.env.ORCA_REQUIRE_WINDOWS_TERMINAL_RESTART_E2E === '1'
 
 function readDaemonPid(userDataDir: string): number {
   const raw = readFileSync(
@@ -57,11 +62,61 @@ function readDaemonPid(userDataDir: string): number {
   return parsed.pid
 }
 
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
+      return false
+    }
+    throw error
+  }
+}
+
+async function terminateDaemonForColdRestart(pid: number): Promise<void> {
+  if (!isProcessAlive(pid)) {
+    return
+  }
+  if (process.platform === 'win32') {
+    try {
+      execFileSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {
+        stdio: 'pipe',
+        timeout: 10_000
+      })
+    } catch (error) {
+      if (isProcessAlive(pid)) {
+        throw error
+      }
+    }
+  } else {
+    try {
+      process.kill(pid, 'SIGKILL')
+    } catch (error) {
+      // Why: the daemon can self-exit between the liveness guard and this
+      // signal; tolerate ESRCH like the Windows branch re-checks liveness.
+      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+        throw error
+      }
+    }
+  }
+  await expect
+    .poll(() => isProcessAlive(pid), {
+      timeout: 10_000,
+      message: `daemon ${pid} remained alive after forced termination`
+    })
+    .toBe(false)
+}
+
 function seededRepoPathOrSkip(): string {
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
     ? readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
     : ''
-  test.skip(!repoPath || !existsSync(repoPath), 'Global setup did not produce a seeded test repo')
+  const unavailable = !repoPath || !existsSync(repoPath)
+  if (unavailable && REQUIRE_WINDOWS_TERMINAL_RESTART_E2E) {
+    throw new Error('Required Windows restart E2E seeded repo is unavailable')
+  }
+  test.skip(unavailable, 'Global setup did not produce a seeded test repo')
   return repoPath
 }
 
@@ -99,18 +154,23 @@ async function settleRestoredLaunch(page: Page): Promise<void> {
  */
 async function expectRestoredPaneAcceptsInput(page: Page, context: string): Promise<void> {
   const ptyIds = await getStorePtyIds(page)
-  const kbAlive = await probeKeyboardType(page, 'KB_RESTORED_OK', 15_000)
+  const readinessAlive =
+    ptyIds.length > 0 && (await waitForRestoredTerminalInputReady(page, ptyIds[0], 15_000))
+  const kbAlive = readinessAlive && (await probeKeyboardType(page, 'KB_RESTORED_OK', 15_000))
   const directAlive =
     ptyIds.length > 0 && (await probeDirectWrite(page, ptyIds[0], 'DIRECT_RESTORED_OK', 15_000))
-  if (!kbAlive || !directAlive) {
+  if (!readinessAlive || !kbAlive || !directAlive) {
+    const ownershipRebuildAttempted = !directAlive && ptyIds.length > 0
     const revived =
-      ptyIds.length > 0 &&
+      ownershipRebuildAttempted &&
       (await probeOwnershipRebuildRevival(page, ptyIds[0], 'REVIVED_RESTORED_OK'))
     throw new Error(
       buildFrozenPaneReport(context, {
         directAlive,
         transportAlive: kbAlive,
         revivedByOwnershipRebuild: revived,
+        ownershipRebuildAttempted,
+        readinessAlive,
         ptyIds,
         terminalTail: await getTerminalContent(page)
       })
@@ -223,7 +283,6 @@ test('restored pane recovers input after the daemon un-wedges', async (// oxlint
 
 test('cold-restored pane accepts typing after the daemon died between launches', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
 {}, testInfo) => {
-  test.skip(process.platform === 'win32', 'POSIX signal semantics keep this deterministic')
   test.setTimeout(300_000)
   const repoPath = seededRepoPathOrSkip()
   const session = createRestartSession(testInfo)
@@ -240,7 +299,7 @@ test('cold-restored pane accepts typing after the daemon died between launches',
 
     // The daemon dies uncleanly between runs (crash, reboot, force-kill). The
     // persisted session now references sessions no living daemon holds.
-    process.kill(daemonPid, 'SIGKILL')
+    await terminateDaemonForColdRestart(daemonPid)
 
     const second = await session.launch()
     secondApp = second.app

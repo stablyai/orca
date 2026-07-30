@@ -122,7 +122,7 @@ vi.mock('./pty', () => ({
   getLocalPtyProvider: getLocalPtyProviderMock
 }))
 
-vi.mock('../terminal-history', () => ({
+vi.mock('../terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
@@ -264,7 +264,11 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       emitWorktreeBaseStatus: vi.fn(),
       recordOptimisticReconcileToken: vi.fn().mockReturnValue('token-1'),
       reconcileWorktreeBaseStatus: vi.fn(),
-      clearOptimisticReconcileToken: vi.fn()
+      clearOptimisticReconcileToken: vi.fn(),
+      closeFileWatchersForRemoval: vi.fn().mockResolvedValue(undefined),
+      acquireFileWatcherRemoval: vi.fn().mockResolvedValue({
+        finish: vi.fn().mockResolvedValue(undefined)
+      })
     }
     registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })
@@ -424,6 +428,10 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       })
     )
     expect(store.removeWorktreeMeta).toHaveBeenCalledWith('repo-1::C:/workspaces/improve-dashboard')
+    // Windows history lives under a path-derived hash, so scheduling must not regress on this path only.
+    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(
+      'repo-1::C:/workspaces/improve-dashboard'
+    )
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
       repoId: 'repo-1'
     })

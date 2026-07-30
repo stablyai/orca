@@ -152,6 +152,8 @@ export function parseWorktreeList(
     let isBare = false
     let locked = false
     let lockReason = ''
+    let prunable = false
+    let prunableReason = ''
 
     for (const line of lines) {
       if (line.startsWith('worktree ')) {
@@ -166,6 +168,12 @@ export function parseWorktreeList(
         locked = true
         const rawReason = line.slice('locked'.length).trim()
         lockReason = options.nulDelimited ? rawReason : decodeGitCQuotedPath(rawReason)
+      } else if (line === 'prunable' || line.startsWith('prunable ')) {
+        // Why: Git ≥ 2.36 flags registrations whose directory is gone; ignoring
+        // it surfaces the stale worktree as a live workspace (issue #8389).
+        prunable = true
+        const rawReason = line.slice('prunable'.length).trim()
+        prunableReason = options.nulDelimited ? rawReason : decodeGitCQuotedPath(rawReason)
       }
     }
 
@@ -177,6 +185,8 @@ export function parseWorktreeList(
         isBare,
         ...(locked ? { locked: true } : {}),
         ...(lockReason ? { lockReason } : {}),
+        ...(prunable ? { prunable: true } : {}),
+        ...(prunableReason ? { prunableReason } : {}),
         isMainWorktree: worktrees.length === 0
       })
     }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { blitMarkupScene, renderCommittedLayer } from './markup-canvas-render'
 import { useMarkupKeyboardShortcuts, type PendingText } from './useMarkupKeyboardShortcuts'
 import { useMarkupPointerHandlers } from './useMarkupPointerHandlers'
@@ -139,7 +140,7 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
       }
       setDoc((document) =>
         commitShape(document, {
-          id: crypto.randomUUID(),
+          id: createBrowserUuid(),
           kind: 'text',
           color,
           at,

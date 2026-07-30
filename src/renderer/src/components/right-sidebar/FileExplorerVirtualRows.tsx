@@ -28,6 +28,7 @@ type FileExplorerVirtualRowsProps = {
   deleteShortcutLabel: string
   connectionId?: string | null
   runtimeDownloadContext?: RuntimeFileOperationArgs | null
+  supportsFolderDownload?: boolean
   onClick: (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => void
   onDoubleClick: (node: TreeNode) => void
   onViewFile: (node: TreeNode) => void
@@ -73,6 +74,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     deleteShortcutLabel,
     connectionId,
     runtimeDownloadContext,
+    supportsFolderDownload = false,
     onClick,
     onDoubleClick,
     onViewFile,
@@ -176,6 +178,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               deleteShortcutLabel={deleteShortcutLabel}
               connectionId={connectionId}
               runtimeDownloadContext={runtimeDownloadContext}
+              supportsFolderDownload={supportsFolderDownload}
               canCollapseFolderSubtree={canCollapseFolderSubtree}
               targetDir={n.isDirectory ? n.path : dirname(n.path)}
               targetDepth={n.isDirectory ? n.depth + 1 : n.depth}

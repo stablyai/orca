@@ -26,6 +26,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     activeBrowserTabIdByWorktree: {},
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
+    browserCertificateFailuresByPageId: {},
     openFiles: [],
     editorDrafts: {},
     activeTabId: null,
@@ -60,6 +61,7 @@ function makeSharedOverrides(): Partial<AppState> {
     activeBrowserTabIdByWorktree: {},
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
+    browserCertificateFailuresByPageId: {},
     openFiles: [],
     editorDrafts: {},
     agentStatusByPaneKey: {},
@@ -384,6 +386,48 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
   })
 
+  it('changes when a native-chat launch draft is seeded or cleared', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const launchDraft = {
+      tabId: 'term-1',
+      agent: 'claude' as const,
+      text: 'https://github.com/o/r/issues/12',
+      createdAt: 1
+    }
+
+    const before = getRuntimeMobileSessionSyncKey(
+      makeState({ ...sharedOverrides, nativeChatLaunchDraftByTabId: {} })
+    )
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        nativeChatLaunchDraftByTabId: { 'term-1': launchDraft }
+      })
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+
+  it('does not skip the App subscriber gate when a launch draft is seeded', () => {
+    // The key is never even built when this gate skips, so the draft-aware key
+    // case above cannot catch a regression here.
+    const sharedOverrides = makeSharedOverrides()
+    const before = makeState({ ...sharedOverrides, nativeChatLaunchDraftByTabId: {} })
+    const after = makeState({
+      ...sharedOverrides,
+      nativeChatLaunchDraftByTabId: {
+        'term-1': {
+          tabId: 'term-1',
+          agent: 'claude' as const,
+          text: 'https://github.com/o/r/issues/12',
+          createdAt: 1
+        }
+      }
+    })
+
+    expect(canSkipRuntimeMobileSessionSyncKeyBuild(after, before)).toBe(false)
+  })
+
   it('changes when explicit agent status epoch changes', () => {
     const sharedOverrides = makeSharedOverrides()
     const before = getRuntimeMobileSessionSyncKey(
@@ -665,6 +709,73 @@ describe('buildMobileSessionTabSnapshots', () => {
         })
       ])
     )
+  })
+
+  it('publishes the native-chat launch draft on terminal surface tabs', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const state = makeState({
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'Terminal 1', launchAgent: 'claude' }]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as unknown as AppState['terminalLayoutsByTabId'],
+      nativeChatLaunchDraftByTabId: {
+        'term-1': {
+          tabId: 'term-1',
+          agent: 'claude',
+          text: 'https://github.com/o/r/issues/12',
+          createdAt: 1
+        }
+      }
+    })
+
+    const snapshot = buildMobileSessionTabSnapshots(state)[0]
+
+    expect(snapshot?.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        parentTabId: 'term-1',
+        launchDraft: 'https://github.com/o/r/issues/12'
+      })
+    ])
+  })
+
+  it('withholds a launch draft seeded for a different agent than the tab runs', () => {
+    // The seed is keyed by tab id, which survives an agent switch. Desktop's
+    // consumer declines on mismatch; publishing anyway would prefill the new
+    // agent's mobile chat with the previous agent's link.
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const state = makeState({
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'Terminal 1', launchAgent: 'codex' }]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as unknown as AppState['terminalLayoutsByTabId'],
+      nativeChatLaunchDraftByTabId: {
+        'term-1': {
+          tabId: 'term-1',
+          agent: 'claude',
+          text: 'https://github.com/o/r/issues/12',
+          createdAt: 1
+        }
+      }
+    })
+
+    const snapshot = buildMobileSessionTabSnapshots(state)[0]
+
+    expect(snapshot?.tabs[0]).not.toHaveProperty('launchDraft')
   })
 
   it('preserves source-control diff metadata for mobile file tabs', () => {

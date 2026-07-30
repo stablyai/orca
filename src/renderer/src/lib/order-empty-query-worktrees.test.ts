@@ -70,6 +70,24 @@ describe('orderEmptyQueryWorktrees', () => {
     expect(result.switchableWorktreesForRows.map((w) => w.id)).toEqual(['a', 'b'])
   })
 
+  it('does not crash the switcher when a visible worktree has no displayName (crash 99657ab1)', () => {
+    // displayName is typed `string` but arrives undefined for persisted/discovered
+    // worktrees; the bare localeCompare tie-break used to throw and take down Cmd+J.
+    const named = wt({ id: 'a', displayName: 'apple', lastActivityAt: 100 })
+    const unnamed = wt({
+      id: 'b',
+      displayName: undefined as unknown as string,
+      lastActivityAt: 100
+    })
+    expect(() =>
+      orderEmptyQueryWorktrees({
+        visibleWorktrees: [named, unnamed],
+        activeWorktreeId: null,
+        lastVisitedAtByWorktreeId: {}
+      })
+    ).not.toThrow()
+  })
+
   it('excludes current worktree from rows but includes it in state list', () => {
     const cur = wt({ id: 'cur', displayName: 'cur' })
     const other = wt({ id: 'other', displayName: 'other' })

@@ -4,6 +4,7 @@ import type {
   ProjectGroupHeaderDragBucketKey,
   ProjectGroupHeaderDragRect
 } from './project-group-header-drop'
+import { REPO_HEADER_ACTION_SELECTOR } from './project-header-drag-contract'
 import type { ProjectGroup } from '../../../../shared/types'
 
 export type ProjectGroupDragState = {
@@ -50,14 +51,14 @@ export const PROJECT_GROUP_HEADER_DRAG_THRESHOLD_PX = 4
 
 const PROJECT_GROUP_HEADER_DRAG_HANDLE_SELECTOR = '[data-project-group-header-drag-handle]'
 
-const PROJECT_GROUP_HEADER_ACTION_SELECTOR =
-  '[data-repo-header-action], [data-repo-header-collapse-affordance], button, a, input, textarea, select, [contenteditable=""], [contenteditable="true"]'
-
 export function isProjectGroupHeaderDragHandleTarget(
   target: EventTarget | null,
   currentTarget: HTMLElement
 ): boolean {
-  if (!(target instanceof HTMLElement)) {
+  // Why: the group icon renders as an <svg>, so pressing it makes the event
+  // target an SVGElement (not an HTMLElement). Match Element so dragging by the
+  // icon still arms the drag; closest/contains work on any Element.
+  if (!(target instanceof Element)) {
     return false
   }
   const dragHandle = target.closest(PROJECT_GROUP_HEADER_DRAG_HANDLE_SELECTOR)
@@ -68,10 +69,10 @@ export function isProjectGroupHeaderActionTarget(
   target: EventTarget | null,
   currentTarget: HTMLElement
 ): boolean {
-  if (!(target instanceof HTMLElement) || target === currentTarget) {
+  // Why: an <svg> icon inside an action button is an SVGElement, so match
+  // Element to still treat it as an action target and not arm a drag.
+  if (!(target instanceof Element) || target === currentTarget) {
     return false
   }
-  return (
-    currentTarget.contains(target) && target.closest(PROJECT_GROUP_HEADER_ACTION_SELECTOR) !== null
-  )
+  return currentTarget.contains(target) && target.closest(REPO_HEADER_ACTION_SELECTOR) !== null
 }

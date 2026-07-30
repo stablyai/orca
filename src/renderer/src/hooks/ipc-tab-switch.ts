@@ -18,9 +18,9 @@ type CycleContext = {
 }
 
 /**
- * Shared setup for the Cmd/Ctrl+Shift+[ / ] chords (both the type-scoped and
- * across-all-types variants). Returns null when there is no active worktree
- * or the visible nav has at most one tab (nothing to cycle).
+ * Shared setup for the type-scoped and across-all-types tab-cycle actions.
+ * Returns null when there is no active worktree or the visible nav has at most
+ * one tab (nothing to cycle).
  */
 function resolveCycleContext(): CycleContext | null {
   const store = useAppStore.getState()
@@ -87,7 +87,9 @@ export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab)
 }
 
 /**
- * Handle Cmd/Ctrl+Shift+[ / ] direction switching within the active tab type.
+ * Handle direction switching within the active tab type (same-type cycle).
+ * The default chord is Cmd/Ctrl+Alt+[ / ] for fresh installs; pre-swap installs
+ * keep Cmd/Ctrl+Shift+[ / ] via the seed migration, and either is rebindable.
  * Extracted from useIpcEvents to keep file size under the max-lines lint threshold.
  * Returns true if a tab switch occurred, false otherwise.
  */
@@ -114,14 +116,13 @@ export function handleSwitchTab(direction: number): boolean {
 }
 
 /**
- * Handle Cmd/Ctrl+Alt+Shift+[ / ] cycling across every visible tab,
- * regardless of tab type.
+ * Handle cycling across every visible tab, regardless of tab type.
  *
- * Why: companion chord to the type-scoped Cmd/Ctrl+Shift+[ / ] that ships as
- * the default. The type-scoped chord is the VS Code-style per-pane cycle;
- * this one gives users an escape hatch back to the pre-scope "cycle through
- * everything" behavior without needing a settings toggle (see PR #1281
- * discussion). Returns true if a tab switch occurred, false otherwise.
+ * Why: companion chord to the type-scoped same-type cycle. Fresh installs bind
+ * this broad cycle to Cmd/Ctrl+Shift+[ / ] — the widespread "switch tab" chord —
+ * and the same-type cycle to Cmd/Ctrl+Alt+[ / ]; pre-swap installs keep the
+ * inverse via the seed migration (see PR #1281 for the original type-scope
+ * rationale). Returns true if a tab switch occurred, false otherwise.
  */
 export function handleSwitchTabAcrossAllTypes(direction: number): boolean {
   const ctx = resolveCycleContext()

@@ -178,12 +178,12 @@ async function createBackgroundTab(args: {
       env: args.launch.env
     })
   } catch (error) {
-    store.closeTab(tab.id, { recordInteraction: false })
+    store.closeTab(tab.id, { recordInteraction: false, reason: 'cleanup' })
     throw error
   }
   if (
     await retireUnownedTerminal({
-      tabId: tab.id,
+      owner: { tabId: tab.id },
       ptyId,
       runtimeTarget: { kind: 'local' }
     })
@@ -215,7 +215,7 @@ async function addSetupSplit(args: {
   })
   if (
     await retireUnownedTerminal({
-      tabId: args.tab.tabId,
+      owner: { tabId: args.tab.tabId },
       ptyId: setupPtyId,
       runtimeTarget: { kind: 'local' }
     })

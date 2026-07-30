@@ -6,15 +6,24 @@ import {
   type WatcherProcessEvent,
   type WatcherProcessSubscription
 } from '../ipc/parcel-watcher-process'
-import { isWatcherProcessFailure } from '../ipc/parcel-watcher-process-failure'
+import {
+  isWatcherProcessFailure,
+  type WatcherProcessFailure
+} from '../ipc/parcel-watcher-process-failure'
 import {
   WATCHER_IGNORE_DIRS,
   buildParcelWatcherIgnoreOptions
 } from '../ipc/filesystem-watcher-ignore'
+import { createRuntimeRootOwnershipReleaser } from './runtime-root-watch-ownership'
+import { closeRuntimeRootWatch } from './runtime-root-watch-teardown'
+import {
+  RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS,
+  RUNTIME_FILE_WATCH_MAX_SETUP_ATTEMPTS
+} from '../../shared/runtime-file-watch-limits'
+import { PromiseSettlementWaiters } from '../../shared/promise-settlement-waiters'
 
 const RUNTIME_FILE_WATCH_IGNORE_OPTIONS = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
 const RUNTIME_FILE_WATCH_EVENT_LIMIT = 200
-const RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS = 60_000
 
 type RuntimeFileWatchSubscriber = {
   onEvents: (events: FsChangeEvent[]) => void
@@ -24,16 +33,22 @@ type RuntimeFileWatchSubscriber = {
 type RuntimeRootWatch = {
   rootPath: string
   subscribers: Set<RuntimeFileWatchSubscriber>
-  start: Promise<void>
+  startWaiters: PromiseSettlementWaiters<void>
   subscription: WatcherProcessSubscription | null
   abortController: AbortController
   generation: number
   closed: boolean
+  closePromise: Promise<void> | null
+  terminalReleaseError: WatcherProcessFailure | null
 }
 
 // Why: paired clients watching the same worktree share one native subscription.
 // Different roots are assigned across the bounded crash-isolated child pool.
 const runtimeRootWatches = new Map<string, RuntimeRootWatch>()
+const {
+  release: releaseRuntimeRootOwnership,
+  releaseAfterFailure: releaseRuntimeRootAfterFailure
+} = createRuntimeRootOwnershipReleaser(runtimeRootWatches, forgetRuntimeWatcherProcessRoot)
 
 function overflowEvent(rootPath: string): FsChangeEvent[] {
   return [{ kind: 'overflow', absolutePath: rootPath }]
@@ -63,10 +78,7 @@ function terminateRootWatch(root: RuntimeRootWatch, error: Error): void {
   root.closed = true
   root.generation++
   root.abortController.abort()
-  if (runtimeRootWatches.get(root.rootPath) === root) {
-    runtimeRootWatches.delete(root.rootPath)
-  }
-  forgetRuntimeWatcherProcessRoot(root.rootPath)
+  releaseRuntimeRootAfterFailure(root, error)
   const subscribers = Array.from(root.subscribers)
   root.subscribers.clear()
   for (const subscriber of subscribers) {
@@ -74,14 +86,14 @@ function terminateRootWatch(root: RuntimeRootWatch, error: Error): void {
   }
 }
 
-function closeInitialRootWatch(root: RuntimeRootWatch): void {
+function closeInitialRootWatch(root: RuntimeRootWatch, error: unknown): void {
   root.closed = true
   root.generation++
   root.abortController.abort()
-  if (runtimeRootWatches.get(root.rootPath) === root) {
-    runtimeRootWatches.delete(root.rootPath)
-  }
-  forgetRuntimeWatcherProcessRoot(root.rootPath)
+  releaseRuntimeRootAfterFailure(
+    root,
+    error instanceof Error ? error : new Error('file watcher setup failed')
+  )
   root.subscribers.clear()
 }
 
@@ -142,19 +154,22 @@ function subscribeRuntimeRootWatch(root: RuntimeRootWatch): Promise<void> {
 }
 
 async function startInitialRuntimeRootWatch(root: RuntimeRootWatch): Promise<void> {
-  try {
-    await subscribeRuntimeRootWatch(root)
-  } catch (firstError) {
-    if (root.closed || !shouldRetryInitialWatch(firstError)) {
-      closeInitialRootWatch(root)
-      throw firstError
-    }
+  for (let attempt = 0; attempt < RUNTIME_FILE_WATCH_MAX_SETUP_ATTEMPTS; attempt++) {
     try {
       await subscribeRuntimeRootWatch(root)
-      emitToSubscribers(root, overflowEvent(root.rootPath))
-    } catch (isolatedError) {
-      closeInitialRootWatch(root)
-      throw isolatedError
+      if (attempt > 0) {
+        emitToSubscribers(root, overflowEvent(root.rootPath))
+      }
+      return
+    } catch (error) {
+      if (
+        root.closed ||
+        attempt + 1 >= RUNTIME_FILE_WATCH_MAX_SETUP_ATTEMPTS ||
+        !shouldRetryInitialWatch(error)
+      ) {
+        closeInitialRootWatch(root, error)
+        throw error
+      }
     }
   }
 }
@@ -169,25 +184,30 @@ function recoverRuntimeRootWatch(
   }
   root.subscription = null
   emitToSubscribers(root, overflowEvent(root.rootPath))
-  root.start = subscribeRuntimeRootWatch(root).catch((recoveryError: unknown) => {
+  const recovery = subscribeRuntimeRootWatch(root).catch((recoveryError: unknown) => {
     if (!root.closed) {
       terminateRootWatch(root, recoveryError instanceof Error ? recoveryError : terminalError)
+      return
     }
+    throw recoveryError
   })
+  root.startWaiters = new PromiseSettlementWaiters(recovery)
 }
 
 function createRuntimeRootWatch(rootPath: string): RuntimeRootWatch {
   const root: RuntimeRootWatch = {
     rootPath,
     subscribers: new Set(),
-    start: Promise.resolve(),
+    startWaiters: new PromiseSettlementWaiters(Promise.resolve()),
     subscription: null,
     abortController: new AbortController(),
     generation: 0,
-    closed: false
+    closed: false,
+    closePromise: null,
+    terminalReleaseError: null
   }
   runtimeRootWatches.set(rootPath, root)
-  root.start = startInitialRuntimeRootWatch(root)
+  root.startWaiters = new PromiseSettlementWaiters(startInitialRuntimeRootWatch(root))
   return root
 }
 
@@ -196,16 +216,40 @@ async function releaseRuntimeRootWatch(
   subscriber: RuntimeFileWatchSubscriber
 ): Promise<void> {
   root.subscribers.delete(subscriber)
-  if (root.closed || root.subscribers.size > 0) {
+  if (root.closed) {
+    if (root.closePromise) {
+      await root.closePromise
+    }
+    if (root.terminalReleaseError) {
+      throw root.terminalReleaseError
+    }
     return
   }
-  root.closed = true
-  root.generation++
-  root.abortController.abort()
-  if (runtimeRootWatches.get(root.rootPath) === root) {
-    runtimeRootWatches.delete(root.rootPath)
+  if (root.subscribers.size > 0) {
+    return
   }
-  await root.subscription?.unsubscribe()
+  await closeRuntimeRootWatchOnce(root)
+}
+
+function closeRuntimeRootWatchOnce(root: RuntimeRootWatch): Promise<void> {
+  root.closePromise ??= closeRuntimeRootWatch(
+    root,
+    root.startWaiters.promise,
+    () => releaseRuntimeRootOwnership(root),
+    (error) => releaseRuntimeRootAfterFailure(root, error)
+  )
+  return root.closePromise
+}
+
+export async function closeFileExplorerWatcherInWatcherProcess(rootPath: string): Promise<void> {
+  const root = runtimeRootWatches.get(rootPath)
+  if (!root) {
+    return
+  }
+  // Why: destructive cleanup owns every same-root subscriber, including a
+  // setup that failed before it could publish an unsubscribe callback.
+  root.subscribers.clear()
+  await closeRuntimeRootWatchOnce(root)
 }
 
 /**
@@ -219,13 +263,28 @@ export async function watchFileExplorerInWatcherProcess(
   onTerminalError: (error: Error) => void = () => undefined,
   signal?: AbortSignal
 ): Promise<() => Promise<void>> {
-  const root = runtimeRootWatches.get(rootPath) ?? createRuntimeRootWatch(rootPath)
+  const existingRoot = runtimeRootWatches.get(rootPath)
+  if (existingRoot?.closed) {
+    if (!existingRoot.closePromise) {
+      throw existingRoot.terminalReleaseError ?? new Error('file watcher closed during setup')
+    }
+    // Why: a replacement cannot share a native root whose prior generation
+    // is still closing; join its exact release before creating the next owner.
+    await existingRoot.closePromise
+    if (signal?.aborted) {
+      throw createRuntimeRootAbortError()
+    }
+    return watchFileExplorerInWatcherProcess(rootPath, callback, onTerminalError, signal)
+  }
+  const root = existingRoot ?? createRuntimeRootWatch(rootPath)
   const subscriber: RuntimeFileWatchSubscriber = { onEvents: callback, onTerminalError }
   root.subscribers.add(subscriber)
   try {
     await waitForRuntimeRootStart(root, subscriber, signal)
   } catch (error) {
-    root.subscribers.delete(subscriber)
+    // Why: paired unwatch cannot acknowledge until native cancellation or
+    // physical exit releases this root for an immediate replacement watch.
+    await releaseRuntimeRootWatch(root, subscriber)
     throw error
   }
   if (root.closed) {
@@ -245,32 +304,21 @@ function waitForRuntimeRootStart(
   signal: AbortSignal | undefined
 ): Promise<void> {
   if (!signal) {
-    return root.start
+    return root.startWaiters.promise
   }
   if (signal.aborted) {
-    void releaseRuntimeRootWatch(root, subscriber)
+    root.subscribers.delete(subscriber)
     return Promise.reject(new Error('file watcher subscription aborted'))
   }
-  return new Promise((resolve, reject) => {
-    let settled = false
-    const finish = (callback: () => void): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      signal.removeEventListener('abort', handleAbort)
-      callback()
-    }
-    const handleAbort = (): void => {
-      void releaseRuntimeRootWatch(root, subscriber)
-      finish(() => reject(new Error('file watcher subscription aborted')))
-    }
-    signal.addEventListener('abort', handleAbort, { once: true })
-    root.start.then(
-      () => finish(resolve),
-      (error: unknown) => finish(() => reject(error))
-    )
+  return root.startWaiters.wait({
+    signal,
+    createAbortError: createRuntimeRootAbortError,
+    onAbandon: () => root.subscribers.delete(subscriber)
   })
+}
+
+function createRuntimeRootAbortError(): Error {
+  return new Error('file watcher subscription aborted')
 }
 
 export function resetRuntimeRootWatchersForTest(): void {
@@ -283,4 +331,8 @@ export function resetRuntimeRootWatchersForTest(): void {
   }
   runtimeRootWatches.clear()
   resetRuntimeWatcherProcessForTest()
+}
+
+export function getRuntimeRootWatchWaiterCountForTest(rootPath: string): number {
+  return runtimeRootWatches.get(rootPath)?.startWaiters.waiterCount ?? 0
 }

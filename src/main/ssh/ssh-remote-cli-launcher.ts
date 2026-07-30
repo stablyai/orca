@@ -7,6 +7,7 @@ type RemoteCliInstallEnv = {
   relayDir: string
   nodePath: string
   sockPath: string
+  credentialFile?: string
   hostPlatform: RemoteHostPlatform
 }
 
@@ -35,6 +36,11 @@ internal static class OrcaRemoteCliLauncher
             string nodePath = RequireEnvironmentVariable("ORCA_RELAY_NODE_PATH");
             string relayDirectory = RequireEnvironmentVariable("ORCA_RELAY_DIR");
             string socketPath = RequireEnvironmentVariable("ORCA_RELAY_SOCKET_PATH");
+            string credentialFile = Environment.GetEnvironmentVariable("ORCA_RELAY_CREDENTIAL_FILE");
+            if (String.IsNullOrEmpty(credentialFile))
+            {
+                credentialFile = socketPath + ".credential";
+            }
             string relayPath = Path.Combine(relayDirectory, "relay.js");
 
             if (!File.Exists(nodePath))
@@ -51,7 +57,7 @@ internal static class OrcaRemoteCliLauncher
             ProcessStartInfo startInfo = new ProcessStartInfo
             {
                 FileName = nodePath,
-                Arguments = BuildArguments(relayPath, socketPath, args),
+                Arguments = BuildArguments(relayPath, socketPath, credentialFile, args),
                 UseShellExecute = false
             };
 
@@ -78,12 +84,14 @@ internal static class OrcaRemoteCliLauncher
         return value;
     }
 
-    private static string BuildArguments(string relayPath, string socketPath, string[] args)
+    private static string BuildArguments(string relayPath, string socketPath, string credentialFile, string[] args)
     {
         StringBuilder commandLine = new StringBuilder();
         AppendArgument(commandLine, relayPath);
         AppendArgument(commandLine, "--sock-path");
         AppendArgument(commandLine, socketPath);
+        AppendArgument(commandLine, "--credential-file");
+        AppendArgument(commandLine, credentialFile);
         AppendArgument(commandLine, "--orca-cli");
         foreach (string arg in args)
         {
@@ -169,9 +177,6 @@ function createWindowsLauncherCompileCommand(
     .join(' ')
   return powerShellCommand(
     [
-      // Why: an upgrade must not leave the old %* batch bridge callable when
-      // compiler discovery fails; losing the convenience CLI is safer.
-      `Remove-Item -LiteralPath ${powerShellLiteral(legacyShimPath)} -Force -ErrorAction SilentlyContinue`,
       `Set-Location -ErrorAction Stop -LiteralPath ${powerShellLiteral(binDir)}`,
       '$windowsDirectory = if ($env:WINDIR) { $env:WINDIR } else { $env:SystemRoot }',
       `$compilerCandidates = @((Join-Path $windowsDirectory 'Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe'), (Join-Path $windowsDirectory 'Microsoft.NET\\Framework\\v4.0.30319\\csc.exe'))`,
@@ -180,6 +185,9 @@ function createWindowsLauncherCompileCommand(
       `& $compiler ${compilerArgs}`,
       'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
       `if (-not (Test-Path -LiteralPath ${powerShellLiteral(launcherPath)} -PathType Leaf)) { Write-Error 'The Orca SSH CLI launcher compiler produced no executable.'; exit 1 }`,
+      // Why: remove the legacy %* bridge only after a successful compile, so a
+      // host missing csc.exe keeps its existing CLI (orca.exe shadows orca.cmd).
+      `Remove-Item -LiteralPath ${powerShellLiteral(legacyShimPath)} -Force -ErrorAction SilentlyContinue`,
       `Remove-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Force`
     ].join('; ')
   )
@@ -223,11 +231,12 @@ export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliI
           `ORCA_RELAY_NODE_PATH=\${ORCA_RELAY_NODE_PATH:-${quoteSh(env.nodePath)}}`,
           `ORCA_RELAY_DIR=\${ORCA_RELAY_DIR:-${quoteSh(env.relayDir)}}`,
           `ORCA_RELAY_SOCKET_PATH=\${ORCA_RELAY_SOCKET_PATH:-${quoteSh(env.sockPath)}}`,
+          `ORCA_RELAY_CREDENTIAL_FILE=\${ORCA_RELAY_CREDENTIAL_FILE:-${quoteSh(env.credentialFile ?? `${env.sockPath}.credential`)}}`,
           'if [ ! -S "$ORCA_RELAY_SOCKET_PATH" ]; then',
           '  echo "Orca SSH CLI bridge cannot find the relay socket: $ORCA_RELAY_SOCKET_PATH" >&2',
           '  exit 1',
           'fi',
-          'exec "$ORCA_RELAY_NODE_PATH" "$ORCA_RELAY_DIR/relay.js" --sock-path "$ORCA_RELAY_SOCKET_PATH" --orca-cli "$@"',
+          'exec "$ORCA_RELAY_NODE_PATH" "$ORCA_RELAY_DIR/relay.js" --sock-path "$ORCA_RELAY_SOCKET_PATH" --credential-file "$ORCA_RELAY_CREDENTIAL_FILE" --orca-cli "$@"',
           ''
         ].join('\n')
       }

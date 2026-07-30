@@ -19,6 +19,9 @@ export function MobileHostCard(props: {
 }) {
   const connected = props.state === 'connected'
   const isError = ['warning', 'unreachable', 'auth-failed'].includes(props.verdict.kind)
+  const worktreeSummary = props.worktreeCounts
+    ? `${props.worktreeCounts.total} worktree${props.worktreeCounts.total === 1 ? '' : 's'}${props.worktreeCounts.active > 0 ? ` · ${props.worktreeCounts.active} active` : ''}`
+    : null
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
@@ -38,14 +41,16 @@ export function MobileHostCard(props: {
         </Text>
         <View style={styles.meta}>
           <StatusDot state={props.state} verdict={props.verdict} />
-          <Text style={[styles.metaText, isError && { color: colors.statusRed }]}>
+          <Text style={[styles.metaText, isError && { color: colors.statusRed }]} numberOfLines={1}>
             {verdictDisplayLabel(props.verdict)}
             {connected ? ` · ${mobileConnectionPathLabel(props.path)}` : ''}
-            {connected && props.worktreeCounts
-              ? ` · ${props.worktreeCounts.total} worktree${props.worktreeCounts.total !== 1 ? 's' : ''}${props.worktreeCounts.active > 0 ? ` · ${props.worktreeCounts.active} active` : ''}`
-              : ''}
           </Text>
         </View>
+        {connected && worktreeSummary ? (
+          <Text style={styles.worktreeMetaText} numberOfLines={1}>
+            {worktreeSummary}
+          </Text>
+        ) : null}
         {props.verdict.kind === 'unreachable' && !props.host.relay ? (
           <Text style={styles.discoveryHint} numberOfLines={2}>
             Update desktop Orca and sign in to connect from anywhere
@@ -80,8 +85,14 @@ const styles = StyleSheet.create({
   },
   main: { flex: 1, minWidth: 0, marginRight: spacing.sm },
   name: { color: colors.textPrimary, fontSize: 15, fontWeight: '600', lineHeight: 20 },
-  meta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
-  metaText: { fontSize: 12, color: colors.textSecondary },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, minWidth: 0 },
+  metaText: { flex: 1, fontSize: 12, color: colors.textSecondary },
+  worktreeMetaText: {
+    marginTop: 2,
+    marginLeft: spacing.xl,
+    fontSize: 12,
+    color: colors.textMuted
+  },
   discoveryHint: {
     marginTop: spacing.xs,
     fontSize: 11,

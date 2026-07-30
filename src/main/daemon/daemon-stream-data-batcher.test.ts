@@ -77,6 +77,23 @@ describe('DaemonStreamDataBatcher', () => {
     }
   })
 
+  it('preserves transformed span metadata through an immediate flush', () => {
+    const { batcher, streamSocket } = createBatcher()
+
+    batcher.enqueue('client-1', 'session-1', '', {
+      flushImmediately: true,
+      rawLength: 9,
+      seq: 17,
+      transformed: true
+    })
+
+    expect(streamSocket.write).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(streamSocket.write.mock.calls[0]?.[0]))).toMatchObject({
+      event: 'data',
+      payload: { data: '', rawLength: 9, seq: 17, sequenceChars: 9, transformed: true }
+    })
+  })
+
   it('keeps large pending output batched even when an interactive redraw follows', () => {
     vi.useFakeTimers()
     try {

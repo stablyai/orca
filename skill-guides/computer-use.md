@@ -69,6 +69,7 @@ ORCA computer get-app-state --app <app> --json
 ORCA computer get-app-state --app <app> --restore-window --json
 ORCA computer click --app <app> --element-index <index> --json
 ORCA computer click --app <app> --x 100 --y 100 --json
+ORCA computer click --app <app> --x 100 --y 100 --modifiers CmdOrCtrl+Shift --json
 ORCA computer perform-secondary-action --app <app> --element-index <index> --action <name> --json
 ORCA computer set-value --app <app> --element-index <index> --value "text" --json
 ORCA computer type-text --app <app> --text "text" --json
@@ -95,6 +96,7 @@ printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index
 - After any UI-changing action, use the returned state or rerun `get-app-state` before choosing the next element index.
 - Use `type-text` only after focusing a field and confirming the app has a focused text receiver; synthetic keyboard delivery is reported as unverified, so inspect the returned state before assuming text landed.
 - Use `press-key` for single/navigation keys such as Return, Escape, Tab, and arrows. Use `hotkey` only for one modifier chord plus one key, such as `CmdOrCtrl+A` or `CmdOrCtrl+Shift+P`; prefer `CmdOrCtrl+...` for cross-platform combos.
+- Use `click --modifiers <chord>` for modifier-clicks. Never synthesize separate modifier-down and modifier-up commands around a click; interruption can leave a modifier logically held.
 - Some actions work in background apps, but this is app-dependent. If success does not change the UI, refresh state and choose a more semantic action or restore/focus the window.
 - Prefer `set-value` for text fields that expose values; it can report verified value writes when the provider can read the refreshed value.
 - Coordinates are window-local; use coordinates from the latest screenshot/state for the same target window.

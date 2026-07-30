@@ -5,6 +5,7 @@ import type {
   TuiAgent,
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus,
+  WorkspaceLinkedItem,
   WorktreeStartupLaunch
 } from '../../../shared/types'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
@@ -32,6 +33,8 @@ export type WorktreeCreationRequest = {
   /** Source host/account that produced the linked task. Kept separate from the
    *  run context so Retry does not infer provider ownership from the run host. */
   taskSourceContext?: TaskSourceContext | null
+  linkedWorkItem?: WorkspaceLinkedItem | null
+  linkedTaskSourceContext?: TaskSourceContext | null
   /** Host/setup where the new workspace should run. Duplicates repoId by design:
    *  repoId keeps old create APIs working, while this records the project-first
    *  host intent for retry, diagnostics, and future metadata writes. */
@@ -87,6 +90,9 @@ export type WorktreeCreationRequest = {
    *  did not already spawn it. Null for blank-shell creates. */
   startupPlan: AgentStartupPlan | null
   quickPrompt: string
+  /** Launch context delivered only as an unsent TUI-input draft (argv prefill or
+   *  startup paste); completion seeds the chat-composer copy from it. */
+  launchDraftPrompt?: string
   quickTelemetry: AgentStartedTelemetry | null
   /** When the composer stays open for sequential creates, completion must not
    *  steal focus from the next workspace name field. */

@@ -183,7 +183,8 @@ describe('resolveDropdownItems', () => {
           review: null,
           canCreate: false,
           blockedReason: 'needs_sync',
-          nextAction: 'sync'
+          nextAction: 'sync',
+          reviewLookupOutcome: 'not_found'
         }
       })
     )
@@ -360,7 +361,8 @@ describe('resolveDropdownItems', () => {
           review: null,
           canCreate: true,
           blockedReason: null,
-          nextAction: null
+          nextAction: null,
+          reviewLookupOutcome: 'not_found'
         }
       })
     )
@@ -671,7 +673,8 @@ describe('resolveDropdownItems', () => {
           review: null,
           canCreate: false,
           blockedReason: 'needs_push',
-          nextAction: 'push'
+          nextAction: 'push',
+          reviewLookupOutcome: 'not_found'
         }
       })
     )
@@ -693,7 +696,8 @@ describe('resolveDropdownItems', () => {
           review: null,
           canCreate: false,
           blockedReason: 'needs_push',
-          nextAction: 'push'
+          nextAction: 'push',
+          reviewLookupOutcome: 'not_found'
         }
       })
     )
@@ -719,7 +723,8 @@ describe('resolveDropdownItems', () => {
             review: null,
             canCreate: false,
             blockedReason: 'needs_push',
-            nextAction: 'push'
+            nextAction: 'push',
+            reviewLookupOutcome: 'not_found'
           }
         })
       )
@@ -747,7 +752,8 @@ describe('resolveDropdownItems', () => {
           review: null,
           canCreate: false,
           blockedReason: 'auth_required',
-          nextAction: 'authenticate'
+          nextAction: 'authenticate',
+          reviewLookupOutcome: 'not_found'
         }
       })
     )
@@ -766,7 +772,8 @@ describe('resolveDropdownItems', () => {
           review: null,
           canCreate: false,
           blockedReason: 'auth_required',
-          nextAction: 'authenticate'
+          nextAction: 'authenticate',
+          reviewLookupOutcome: 'not_found'
         }
       })
     )

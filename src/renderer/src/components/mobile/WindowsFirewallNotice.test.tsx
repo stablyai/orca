@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { WindowsFirewallNotice } from './WindowsFirewallNotice'
 
@@ -28,6 +28,7 @@ describe('WindowsFirewallNotice', () => {
       supported: true,
       port: 6768,
       ruleAllowed: false,
+      blockingRuleDetected: false,
       privateFirewallEnabled: true,
       networkCategory: 'private',
       inspectionAvailable: true
@@ -45,15 +46,28 @@ describe('WindowsFirewallNotice', () => {
 
   it('repairs only after explicit user action and hides after success', async () => {
     const repairWindowsFirewall = vi.fn().mockResolvedValue({ ok: true })
-    setMobileApi({
-      getWindowsFirewallStatus: vi.fn().mockResolvedValue({
+    const getWindowsFirewallStatus = vi
+      .fn()
+      .mockResolvedValueOnce({
         supported: true,
         port: 6768,
         ruleAllowed: false,
+        blockingRuleDetected: false,
         privateFirewallEnabled: true,
         networkCategory: 'private',
         inspectionAvailable: true
-      }),
+      })
+      .mockResolvedValueOnce({
+        supported: true,
+        port: 6768,
+        ruleAllowed: true,
+        blockingRuleDetected: false,
+        privateFirewallEnabled: true,
+        networkCategory: 'private',
+        inspectionAvailable: true
+      })
+    setMobileApi({
+      getWindowsFirewallStatus,
       repairWindowsFirewall
     })
     const user = userEvent.setup()
@@ -61,9 +75,75 @@ describe('WindowsFirewallNotice', () => {
 
     await user.click(await screen.findByRole('button', { name: /allow phone connections/i }))
     expect(repairWindowsFirewall).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(getWindowsFirewallStatus).toHaveBeenCalledTimes(2))
     await waitFor(() =>
       expect(screen.queryByText(/allow phone connections through/i)).not.toBeInTheDocument()
     )
+  })
+
+  it('reports an overriding Block rule and stays actionable if repair cannot clear it', async () => {
+    const blockedStatus = {
+      supported: true,
+      port: 6768,
+      ruleAllowed: false,
+      blockingRuleDetected: true,
+      privateFirewallEnabled: true,
+      networkCategory: 'private',
+      inspectionAvailable: true
+    }
+    const getWindowsFirewallStatus = vi.fn().mockResolvedValue(blockedStatus)
+    const repairWindowsFirewall = vi.fn().mockResolvedValue({ ok: true })
+    setMobileApi({ getWindowsFirewallStatus, repairWindowsFirewall })
+    const user = userEvent.setup()
+    render(<WindowsFirewallNotice pairingReady address="192.168.0.108" />)
+
+    expect(await screen.findByText(/Windows may be blocking Orca Mobile/i)).toBeInTheDocument()
+    expect(screen.getByText(/Block rule can override/i)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /repair firewall access/i }))
+
+    await waitFor(() => expect(getWindowsFirewallStatus).toHaveBeenCalledTimes(2))
+    expect(screen.getByText(/Windows may be blocking Orca Mobile/i)).toBeInTheDocument()
+  })
+
+  it('ignores a stale inspection that resolves after a newer result', async () => {
+    const blockedStatus = {
+      supported: true,
+      port: 6768,
+      ruleAllowed: false,
+      blockingRuleDetected: true,
+      privateFirewallEnabled: true,
+      networkCategory: 'private',
+      inspectionAvailable: true
+    }
+    const clearedStatus = { ...blockedStatus, ruleAllowed: true, blockingRuleDetected: false }
+    let resolveStale: (status: typeof blockedStatus) => void = () => {}
+    const getWindowsFirewallStatus = vi
+      .fn()
+      .mockResolvedValueOnce(blockedStatus)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveStale = resolve
+          })
+      )
+      .mockResolvedValueOnce(clearedStatus)
+    setMobileApi({ getWindowsFirewallStatus })
+    render(<WindowsFirewallNotice pairingReady address="192.168.0.108" />)
+    expect(await screen.findByText(/Windows may be blocking Orca Mobile/i)).toBeInTheDocument()
+
+    // Why: UAC elevation bounces window focus, so an older in-flight
+    // inspection can resolve after a newer one and must not win.
+    window.dispatchEvent(new Event('focus'))
+    window.dispatchEvent(new Event('focus'))
+    await waitFor(() => expect(getWindowsFirewallStatus).toHaveBeenCalledTimes(3))
+    await waitFor(() =>
+      expect(screen.queryByText(/Windows may be blocking Orca Mobile/i)).not.toBeInTheDocument()
+    )
+
+    await act(async () => {
+      resolveStale(blockedStatus)
+    })
+    expect(screen.queryByText(/Windows may be blocking Orca Mobile/i)).not.toBeInTheDocument()
   })
 
   it('does not offer a firewall rule while the selected network is public', async () => {
@@ -73,6 +153,7 @@ describe('WindowsFirewallNotice', () => {
         supported: true,
         port: 6768,
         ruleAllowed: true,
+        blockingRuleDetected: false,
         privateFirewallEnabled: false,
         networkCategory: 'public',
         inspectionAvailable: true
@@ -95,6 +176,7 @@ describe('WindowsFirewallNotice', () => {
       supported: true,
       port: 6768,
       ruleAllowed: false,
+      blockingRuleDetected: false,
       privateFirewallEnabled: true,
       networkCategory: 'domain',
       inspectionAvailable: true

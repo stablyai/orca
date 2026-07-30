@@ -1,8 +1,13 @@
-import WebSocket from 'ws'
+import WebSocket, { type RawData } from 'ws'
+import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { RpcTransport } from './transport'
 import type { MobileSocketTransport, MobileSocketTransportMetadata } from './mobile-socket-wiring'
 
 const MAX_RELAY_MESSAGE_BYTES = 1024 * 1024
+// Why: terminate() normally emits 'close' within one tick; 5s covers slow
+// teardown without letting a dead socket hold stop() (and app quit) hostage.
+export const RELAY_SOCKET_CLOSE_TIMEOUT_MS = 5_000
+const RELAY_SOCKET_CLOSE_WAIT_CONCURRENCY = 32
 
 type RelayMessagePayload = string | Uint8Array<ArrayBufferLike>
 
@@ -46,6 +51,8 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
   private readonly socketsByConnectionId = new Map<string, WebSocket>()
   private readonly metadataBySocket = new Map<WebSocket, MobileSocketTransportMetadata>()
   private readonly clientIds = new Map<WebSocket, string>()
+  private readonly detachListenersBySocket = new Map<WebSocket, () => void>()
+  private readonly closeWaitsBySocket = new Map<WebSocket, Promise<void>>()
   private messageHandler: Parameters<MobileSocketTransport['onMessage']>[0] | null = null
   private closeHandler: Parameters<MobileSocketTransport['onConnectionClose']>[0] | null = null
   private stopped = false
@@ -102,7 +109,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
       .filter(([, candidate]) => candidate === clientId)
       .map(([socket]) => socket)
     for (const socket of sockets) {
-      socket.terminate()
+      void this.terminateWithinCloseDeadline(socket)
     }
     return sockets.length
   }
@@ -114,10 +121,9 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
   async stop(): Promise<void> {
     this.stopped = true
     const sockets = [...this.metadataBySocket.keys()]
-    for (const socket of sockets) {
-      socket.terminate()
-    }
-    await Promise.all(sockets.map((socket) => this.waitForClose(socket)))
+    await forEachWithConcurrency(sockets, RELAY_SOCKET_CLOSE_WAIT_CONCURRENCY, (socket) =>
+      this.terminateWithinCloseDeadline(socket)
+    )
   }
 
   async openConnection(connection: RelayConnectionOpen): Promise<void> {
@@ -145,6 +151,9 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
       let finalized = false
       const deadline = setTimeout(() => {
         socket.terminate()
+        // Why: attach expiry makes the socket unusable; release it even if terminate never emits close.
+        finalize()
+        this.quarantineDetachedSocket(socket)
         if (!opened) {
           reject(new Error('relay_host_data_attach_timeout'))
         }
@@ -155,16 +164,12 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
         }
         finalized = true
         clearTimeout(deadline)
-        this.socketsByConnectionId.delete(connection.connId)
-        this.metadataBySocket.delete(socket)
-        const clientId = this.clientIds.get(socket) ?? null
-        this.clientIds.delete(socket)
-        this.onConnectionClosed?.(connection.connId)
-        const hasOtherConnections =
-          clientId !== null && [...this.clientIds.values()].includes(clientId)
-        this.closeHandler?.(clientId, socket, hasOtherConnections)
+        this.finalizeConnection(connection.connId, socket)
       }
-      socket.on('message', (raw, isBinary) => {
+      const onMessage = (raw: RawData, isBinary: boolean): void => {
+        if (this.stopped || finalized) {
+          return
+        }
         if (!attached) {
           attached = true
           clearTimeout(deadline)
@@ -175,14 +180,14 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
         this.messageHandler?.(
           message,
           (response) => {
-            if (socket.readyState === socket.OPEN) {
+            if (!this.stopped && !finalized && socket.readyState === socket.OPEN) {
               socket.send(response)
             }
           },
           socket
         )
-      })
-      socket.once('open', () => {
+      }
+      const onOpen = (): void => {
         opened = true
         const networkSocket = (
           socket as unknown as { _socket?: { setNoDelay(value: boolean): void } }
@@ -197,21 +202,106 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
           })
         )
         resolve()
-      })
-      socket.once('error', (error) => {
+      }
+      const onError = (error: Error): void => {
         if (!opened) {
           finalize()
           reject(error)
         }
+      }
+      this.detachListenersBySocket.set(socket, () => {
+        finalized = true
+        socket.off('message', onMessage)
+        socket.off('open', onOpen)
+        socket.off('error', onError)
+        socket.off('close', finalize)
       })
+      socket.on('message', onMessage)
+      socket.once('open', onOpen)
+      socket.once('error', onError)
       socket.once('close', finalize)
     })
   }
 
   private waitForClose(socket: WebSocket): Promise<void> {
     if (socket.readyState === socket.CLOSED) {
+      const connectionId = this.connectionIdForSocket(socket)
+      if (connectionId) {
+        this.finalizeConnection(connectionId, socket)
+      }
       return Promise.resolve()
     }
-    return new Promise((resolve) => socket.once('close', resolve))
+    // Why: a half-open relay socket after system sleep can never emit 'close';
+    // an unbounded wait here wedges stop() and blocks app quit (#9447).
+    return new Promise((resolve) => {
+      const onClose = (): void => {
+        clearTimeout(deadline)
+        resolve()
+      }
+      const deadline = setTimeout(() => {
+        socket.off('close', onClose)
+        const connectionId = this.connectionIdForSocket(socket)
+        if (connectionId) {
+          this.finalizeConnection(connectionId, socket)
+        }
+        this.quarantineDetachedSocket(socket)
+        resolve()
+      }, RELAY_SOCKET_CLOSE_TIMEOUT_MS)
+      socket.once('close', onClose)
+      if (socket.readyState === socket.CLOSED) {
+        onClose()
+      }
+    })
+  }
+
+  private terminateWithinCloseDeadline(socket: WebSocket): Promise<void> {
+    const existing = this.closeWaitsBySocket.get(socket)
+    if (existing) {
+      return existing
+    }
+    const pending = this.waitForClose(socket)
+    this.closeWaitsBySocket.set(socket, pending)
+    void pending.then(() => {
+      if (this.closeWaitsBySocket.get(socket) === pending) {
+        this.closeWaitsBySocket.delete(socket)
+      }
+    })
+    // Why: install the close waiter first because test doubles and native wrappers can close synchronously.
+    socket.terminate()
+    return pending
+  }
+
+  private connectionIdForSocket(socket: WebSocket): string | undefined {
+    const metadata = this.metadataBySocket.get(socket)
+    return metadata?.transport === 'relay' ? metadata.basisConnId : undefined
+  }
+
+  private quarantineDetachedSocket(socket: WebSocket): void {
+    if (socket.readyState === socket.CLOSED) {
+      return
+    }
+    // Why: forced cleanup can precede ws's terminal error/close event.
+    const swallowLateError = (): void => {}
+    const clearQuarantine = (): void => {
+      socket.off('error', swallowLateError)
+      socket.off('close', clearQuarantine)
+    }
+    socket.on('error', swallowLateError)
+    socket.once('close', clearQuarantine)
+  }
+
+  private finalizeConnection(connectionId: string, socket: WebSocket): void {
+    if (this.socketsByConnectionId.get(connectionId) !== socket) {
+      return
+    }
+    this.socketsByConnectionId.delete(connectionId)
+    this.metadataBySocket.delete(socket)
+    this.detachListenersBySocket.get(socket)?.()
+    this.detachListenersBySocket.delete(socket)
+    const clientId = this.clientIds.get(socket) ?? null
+    this.clientIds.delete(socket)
+    this.onConnectionClosed?.(connectionId)
+    const hasOtherConnections = clientId !== null && [...this.clientIds.values()].includes(clientId)
+    this.closeHandler?.(clientId, socket, hasOtherConnections)
   }
 }

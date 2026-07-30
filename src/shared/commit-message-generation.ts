@@ -7,6 +7,8 @@ export type CommitMessageDraftContext = {
   branch: string | null
   stagedSummary: string
   stagedPatch: string
+  /** Workspace-linked GitHub issue number. Omitted entirely when none resolves. */
+  linkedIssue?: number | null
 }
 
 export type CommitMessageDraftOptions = {

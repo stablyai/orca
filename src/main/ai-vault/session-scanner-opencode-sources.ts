@@ -1,15 +1,10 @@
 import { readdir } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import { resolveOpenCodeStorageDirectory } from '../opencode/opencode-data-directory'
 import { listOpenCodeDatabases } from '../opencode-usage/scanner'
 import { discoverOpenCodeSessions } from './session-scanner-opencode-sqlite-discovery'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
-
-const OPENCODE_STORAGE_DIR = join(
-  process.env.OPENCODE_CONFIG_DIR?.trim() || join(homedir(), '.local', 'share', 'opencode'),
-  'storage'
-)
 
 export function opencodeDiscoveries(
   options: AiVaultScanOptions,
@@ -33,7 +28,7 @@ function opencodeStorageDirs(
   wslHomeDirs: readonly string[]
 ): string[] {
   return [
-    options.opencodeStorageDir ?? OPENCODE_STORAGE_DIR,
+    options.opencodeStorageDir ?? resolveOpenCodeStorageDirectory(),
     ...wslHomeDirs.map((homeDir) => join(homeDir, '.local', 'share', 'opencode', 'storage'))
   ]
 }

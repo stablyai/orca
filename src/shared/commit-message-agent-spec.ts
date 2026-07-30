@@ -1,5 +1,6 @@
 import type { TuiAgent } from './types'
 import { isTuiAgentEnabled } from './tui-agent-selection'
+import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
 /* eslint-disable max-lines -- Why: this is the single registry for non-interactive commit-message agents, their model discovery parsers, and UI capabilities. */
 
@@ -56,6 +57,11 @@ export type CommitMessageAgentCapability = {
   models: CommitMessageModelCapability[]
   defaultModelId: string
 }
+
+export const COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS = {
+  structuralTokens: 64 * 1024,
+  nestingDepth: 16
+} as const
 
 const BASIC_THINKING_LEVELS: ThinkingLevel[] = [
   { id: 'low', label: 'Low' },
@@ -135,6 +141,7 @@ function withOpenAiThinking(
 
 export function parseCodexModels(stdout: string): CommitMessageModel[] {
   try {
+    assertJsonTextStructureWithinLimits(stdout, COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS)
     const parsed = JSON.parse(stdout) as {
       models?: {
         slug?: string

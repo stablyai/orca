@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { FEATURE_WALL_MAX_DWELL_MS } from '../../../../shared/feature-wall-telemetry'
-import type { FeatureWallExitAction } from '../../../../shared/feature-wall-tour-depth'
-import type { FeatureWallTourDepthSummary } from '../../../../shared/feature-wall-tour-depth'
+import type {
+  FeatureWallExitAction,
+  FeatureWallTourDepthSummary
+} from '../../../../shared/feature-wall-tour-depth'
 import type {
   EventProps,
   FeatureWallOpenSourceTelemetry

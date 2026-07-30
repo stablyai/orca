@@ -12,7 +12,9 @@ import { useTerminalWebReadyWatchdog } from './terminal-webview-ready-watchdog'
 import { XTERM_WEBVIEW_SOURCE } from './terminal-webview-html'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { createTerminalWebViewPendingMessages } from './terminal-webview-pending-messages'
+import { dispatchTerminalWebViewNotification } from './terminal-webview-notification-dispatch'
 import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
+import { createTerminalWriteCoalescer } from './terminal-write-coalescer'
 
 type Props = TerminalWebViewProps
 
@@ -84,6 +86,19 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     [pendingMessages, sendToWebView]
   )
 
+  // Why: a busy PTY delivers ~200 stream frames/s; coalescing here collapses the
+  // per-frame bridge + WebKit IPC + paint cost that runs the phone hot (#9302).
+  const writeCoalescer = useMemo(
+    () => createTerminalWriteCoalescer((data) => postMessage({ type: 'write', data })),
+    [postMessage]
+  )
+
+  useEffect(() => {
+    return () => {
+      writeCoalescer.clear()
+    }
+  }, [writeCoalescer])
+
   const confirmWebReady = useCallback(
     (notifyParent: boolean) => {
       pendingPingIdRef.current = null
@@ -143,81 +158,21 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
           const rows = typeof msg.rows === 'number' ? msg.rows : null
           resolve(cols && rows && cols >= 20 && rows >= 8 ? { cols, rows } : null)
         }
-      } else if (msg.type === 'log') {
-        // Surface fit-scale diagnostics in the RN/Metro console.
-        const tag = typeof msg.tag === 'string' ? msg.tag : '[fit]'
-        // eslint-disable-next-line no-console
-        console.log(tag, msg.payload)
-      } else if (msg.type === 'error') {
-        const message = typeof msg.message === 'string' ? msg.message : 'Unknown terminal error'
-        reportEngineError(message, msg.fatal !== false)
-      } else if (msg.type === 'set-select-mode') {
-        onSelectionMode?.(!!msg.enabled)
-      } else if (msg.type === 'selection') {
-        const text = typeof msg.text === 'string' ? msg.text : ''
-        onSelectionCopy?.(text)
-      } else if (msg.type === 'selection-evicted') {
-        onSelectionEvicted?.()
-      } else if (msg.type === 'modes') {
-        const mouseTrackingMode =
-          msg.mouseTrackingMode === 'x10' ||
-          msg.mouseTrackingMode === 'vt200' ||
-          msg.mouseTrackingMode === 'drag' ||
-          msg.mouseTrackingMode === 'any'
-            ? msg.mouseTrackingMode
-            : 'none'
-        onModesChanged?.({
-          bracketedPasteMode: !!msg.bracketedPasteMode,
-          altScreen: !!msg.altScreen,
-          mouseTrackingMode,
-          sgrMouseMode: !!msg.sgrMouseMode,
-          sgrMousePixelsMode: !!msg.sgrMousePixelsMode
+      } else {
+        dispatchTerminalWebViewNotification(msg, {
+          reportEngineError,
+          onSelectionMode,
+          onSelectionCopy,
+          onSelectionEvicted,
+          onModesChanged,
+          onKeyboardAvoidanceMetrics,
+          onHaptic,
+          onTerminalInput,
+          onTerminalTap,
+          onFileTap,
+          onOpenUrl,
+          onTextScaleChange
         })
-      } else if (msg.type === 'terminal-input') {
-        const bytes = typeof msg.bytes === 'string' ? msg.bytes : ''
-        if (bytes.length > 0) {
-          onTerminalInput?.(bytes)
-        }
-      } else if (msg.type === 'terminal-tap') {
-        onTerminalTap?.()
-      } else if (msg.type === 'terminal-file-tap') {
-        const pathText = typeof msg.pathText === 'string' ? msg.pathText : ''
-        if (pathText.length > 0) {
-          const line = typeof msg.line === 'number' ? msg.line : null
-          const column = typeof msg.column === 'number' ? msg.column : null
-          onFileTap?.(pathText, line, column)
-        }
-      } else if (msg.type === 'open-url') {
-        const url = typeof msg.url === 'string' ? msg.url : ''
-        if (url.length > 0) {
-          onOpenUrl?.(url)
-        }
-      } else if (msg.type === 'keyboard-avoidance-metrics') {
-        const cursorY = typeof msg.cursorY === 'number' ? msg.cursorY : 0
-        const rows = typeof msg.rows === 'number' ? msg.rows : 0
-        onKeyboardAvoidanceMetrics?.({
-          cursorY,
-          rows,
-          altScreen: !!msg.altScreen
-        })
-      } else if (msg.type === 'haptic') {
-        const kind = msg.kind
-        if (
-          kind === 'selection' ||
-          kind === 'success' ||
-          kind === 'error' ||
-          kind === 'edge-bump'
-        ) {
-          onHaptic?.(kind)
-        }
-      } else if (msg.type === 'font-scale-changed') {
-        const scale = typeof msg.fontScale === 'number' ? msg.fontScale : 0
-        if (scale > 0) {
-          onTextScaleChange?.(scale)
-        }
-      } else if (msg.type === 'mobile-clip-cancel-by-pinch') {
-        // eslint-disable-next-line no-console
-        console.warn('[mobile-clip] selection cancelled by pinch')
       }
     },
     [
@@ -245,7 +200,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     // Why: messages queued for a previous WebView generation are stale after a reload;
     // dropping them avoids replaying terminal chunks before the next init snapshot.
     pendingMessages.clear()
-  }, [armWebReadyWatchdog, pendingMessages])
+    writeCoalescer.clear()
+  }, [armWebReadyWatchdog, pendingMessages, writeCoalescer])
 
   const handleReload = useCallback(() => {
     clearEngineError()
@@ -258,10 +214,11 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     isWebReadyRef.current = false
     pendingPingIdRef.current = null
     pendingMessages.clear()
+    writeCoalescer.clear()
     clearEngineError()
     armWebReadyWatchdog()
     webViewRef.current?.reload()
-  }, [armWebReadyWatchdog, clearEngineError, pendingMessages])
+  }, [armWebReadyWatchdog, clearEngineError, pendingMessages, writeCoalescer])
 
   useEffect(() => {
     postMessage({ type: 'set-theme', terminalTheme })
@@ -287,7 +244,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         pendingPingIdRef.current = sendToWebView({ type: 'ping' })
       },
       write(data: string) {
-        postMessage({ type: 'write', data })
+        writeCoalescer.write(data)
       },
       init(
         cols: number,
@@ -312,6 +269,9 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         readyPromiseRef.current = new Promise<void>((resolve) => {
           readyResolveRef.current = resolve
         })
+        // Why: pending chunks are pre-snapshot data; the init snapshot supersedes
+        // them, and writing them after init would corrupt the fresh buffer.
+        writeCoalescer.clear()
         postMessage({
           type: 'init',
           cols,
@@ -324,12 +284,16 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         })
       },
       resize(cols: number, rows: number) {
+        // Why: resize/reflow must observe all prior writes or bytes reorder.
+        writeCoalescer.flushNow()
         postMessage({ type: 'resize', cols, rows })
       },
       reflow(cols: number, rows: number) {
+        writeCoalescer.flushNow()
         postMessage({ type: 'reflow', cols, rows })
       },
       clear() {
+        writeCoalescer.clear()
         postMessage({ type: 'clear' })
       },
       measureFitDimensions(
@@ -396,7 +360,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         })
       }
     }),
-    [armWebReadyWatchdog, postMessage, sendToWebView, terminalTheme, textScale]
+    [armWebReadyWatchdog, postMessage, sendToWebView, terminalTheme, textScale, writeCoalescer]
   )
 
   return (

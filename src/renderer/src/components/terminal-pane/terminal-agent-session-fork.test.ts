@@ -105,7 +105,7 @@ describe('forkAgentSessionFromPane', () => {
     vi.stubGlobal('window', {
       api: {
         ui: {
-          writeClipboardText: mockWriteClipboardText
+          writeTerminalClipboardText: mockWriteClipboardText
         },
         agentTrust: {
           markTrusted: mockMarkTrusted
@@ -521,7 +521,7 @@ describe('copyAgentSessionContextFromPane', () => {
     vi.clearAllMocks()
     mockWriteClipboardText.mockResolvedValue(undefined)
     vi.stubGlobal('window', {
-      api: { ui: { writeClipboardText: mockWriteClipboardText } }
+      api: { ui: { writeTerminalClipboardText: mockWriteClipboardText } }
     })
   })
 

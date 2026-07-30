@@ -6,6 +6,7 @@ export type WindowsMobileFirewallStatus =
       supported: true
       port: number
       ruleAllowed: boolean
+      blockingRuleDetected: boolean
       privateFirewallEnabled: boolean
       networkCategory: WindowsNetworkCategory
       inspectionAvailable: boolean

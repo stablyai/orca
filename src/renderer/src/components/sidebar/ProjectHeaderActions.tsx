@@ -3,8 +3,11 @@ import { cn } from '@/lib/utils'
 
 // Why: desktop hover actions should not permanently reserve project-title width;
 // touch devices keep them in normal flow because there is no hover reveal.
+// Why: title surface uses cursor-grab; force pointer here so … / + / chevron
+// (and gaps) never show the reorder hand. self-stretch fills the row height in
+// flow so the gutter beside buttons is still an action hit target, not a drag arm.
 export const PROJECT_HEADER_ACTIONS_CLASS_NAME = cn(
-  'flex shrink-0 items-center gap-0.5',
+  'flex shrink-0 cursor-pointer items-center gap-0.5 self-stretch',
   'can-hover:absolute can-hover:right-1 can-hover:top-1/2 can-hover:z-10 can-hover:-translate-y-1/2',
   'can-hover:rounded-md can-hover:bg-worktree-sidebar can-hover:pl-1',
   'can-hover:pointer-events-none can-hover:opacity-0 can-hover:transition-opacity',

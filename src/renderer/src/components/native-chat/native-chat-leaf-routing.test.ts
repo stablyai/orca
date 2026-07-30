@@ -73,8 +73,28 @@ describe('resolveNativeChatLeafRoute', () => {
         chatLeafId: 'agent-leaf',
         activeLeafId: 'shell-leaf',
         chatLeafStillMounted: true,
-        chatLeafIsEligible: true,
         activeLeafIsEligible: false
+      })
+    ).toEqual({ chatLeafId: 'agent-leaf', exitChat: false })
+  })
+
+  it('keeps chat attached through a transient eligibility loss and reconnect', () => {
+    const disconnected = resolveNativeChatLeafRoute({
+      isChatViewMode: true,
+      chatLeafId: 'agent-leaf',
+      activeLeafId: 'agent-leaf',
+      chatLeafStillMounted: true,
+      activeLeafIsEligible: false
+    })
+
+    expect(disconnected).toEqual({ chatLeafId: 'agent-leaf', exitChat: false })
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: true,
+        chatLeafId: disconnected.chatLeafId,
+        activeLeafId: 'agent-leaf',
+        chatLeafStillMounted: true,
+        activeLeafIsEligible: true
       })
     ).toEqual({ chatLeafId: 'agent-leaf', exitChat: false })
   })
@@ -86,23 +106,21 @@ describe('resolveNativeChatLeafRoute', () => {
         chatLeafId: 'closed-leaf',
         activeLeafId: 'agent-sibling',
         chatLeafStillMounted: false,
-        chatLeafIsEligible: false,
         activeLeafIsEligible: true
       })
     ).toEqual({ chatLeafId: 'agent-sibling', exitChat: false })
   })
 
-  it('moves chat to an eligible active sibling when its mounted leaf becomes ineligible', () => {
+  it('does not move chat when its mounted leaf temporarily becomes ineligible', () => {
     expect(
       resolveNativeChatLeafRoute({
         isChatViewMode: true,
         chatLeafId: 'stopped-agent',
         activeLeafId: 'agent-sibling',
         chatLeafStillMounted: true,
-        chatLeafIsEligible: false,
         activeLeafIsEligible: true
       })
-    ).toEqual({ chatLeafId: 'agent-sibling', exitChat: false })
+    ).toEqual({ chatLeafId: 'stopped-agent', exitChat: false })
   })
 
   it('exits chat rather than inheriting an active shell after close', () => {
@@ -112,23 +130,47 @@ describe('resolveNativeChatLeafRoute', () => {
         chatLeafId: 'closed-agent',
         activeLeafId: 'shell-leaf',
         chatLeafStillMounted: false,
-        chatLeafIsEligible: false,
         activeLeafIsEligible: false
       })
     ).toEqual({ chatLeafId: null, exitChat: true })
   })
 
-  it('exits chat when its leaf becomes ineligible and the active leaf is a shell', () => {
+  it('keeps chat open when its mounted leaf loses agent evidence', () => {
     expect(
       resolveNativeChatLeafRoute({
         isChatViewMode: true,
         chatLeafId: 'stopped-agent',
         activeLeafId: 'shell-leaf',
         chatLeafStillMounted: true,
-        chatLeafIsEligible: false,
         activeLeafIsEligible: false
       })
+    ).toEqual({ chatLeafId: 'stopped-agent', exitChat: false })
+  })
+
+  it('exits chat when the mounted agent has authoritatively returned to its shell', () => {
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: true,
+        chatLeafId: 'exited-agent',
+        activeLeafId: 'exited-agent',
+        chatLeafStillMounted: true,
+        activeLeafIsEligible: true,
+        chatLeafHasConfirmedAgentExit: true
+      })
     ).toEqual({ chatLeafId: null, exitChat: true })
+  })
+
+  it('moves chat to an eligible sibling after the owning agent exits', () => {
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: true,
+        chatLeafId: 'exited-agent',
+        activeLeafId: 'agent-sibling',
+        chatLeafStillMounted: true,
+        activeLeafIsEligible: true,
+        chatLeafHasConfirmedAgentExit: true
+      })
+    ).toEqual({ chatLeafId: 'agent-sibling', exitChat: false })
   })
 
   it('attaches a tab-level chat request to the eligible active leaf', () => {
@@ -138,7 +180,6 @@ describe('resolveNativeChatLeafRoute', () => {
         chatLeafId: null,
         activeLeafId: 'active-agent',
         chatLeafStillMounted: false,
-        chatLeafIsEligible: false,
         activeLeafIsEligible: true
       })
     ).toEqual({ chatLeafId: 'active-agent', exitChat: false })
@@ -151,7 +192,6 @@ describe('resolveNativeChatLeafRoute', () => {
         chatLeafId: 'restored-agent',
         activeLeafId: null,
         chatLeafStillMounted: false,
-        chatLeafIsEligible: false,
         activeLeafIsEligible: false
       })
     ).toEqual({ chatLeafId: 'restored-agent', exitChat: false })
@@ -164,7 +204,6 @@ describe('resolveNativeChatLeafRoute', () => {
         chatLeafId: 'agent-leaf',
         activeLeafId: 'agent-leaf',
         chatLeafStillMounted: true,
-        chatLeafIsEligible: true,
         activeLeafIsEligible: true
       })
     ).toEqual({ chatLeafId: null, exitChat: false })

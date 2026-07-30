@@ -23,16 +23,11 @@ type WorktreeBatchDeleteOptions = {
 type WorktreeDeleteWithToastOptions = {
   force?: boolean
   onForceDeleted?: (worktreeId: string) => void
-  // Why: batch deletes suppress the per-delete focus handoff and instead focus a
-  // single survivor after the whole batch settles (see runWorktreeDeletesInParallel).
+  // Why: batch deletes suppress the per-delete focus handoff to focus one survivor after the batch (see runWorktreeDeletesInParallel).
   focusSuccessorOnDelete?: boolean
 }
 
-// Why: a failed delete almost always means the worktree still has changes
-// that need attention (uncommitted work, unpushed commits, conflicts). The
-// "View" affordance should surface those changes directly, not just bring
-// the worktree into focus, so the user lands on the diff panel where the
-// blocking work is visible.
+// Why: a failed delete usually means unresolved changes, so land on the diff panel, not just focus the worktree.
 function viewWorktreeDiff(worktreeId: string): void {
   activateAndRevealWorktree(worktreeId)
   const state = useAppStore.getState()
@@ -51,20 +46,14 @@ export async function runWorktreeDeletesInParallel(
   targets: readonly Pick<Worktree, 'id' | 'displayName' | 'repoId' | 'path'>[],
   options: WorktreeDeleteWithToastOptions = {}
 ): Promise<string[]> {
-  // Why: capture the viewed workspace before any delete runs so we can focus a
-  // single survivor once the batch settles, rather than per delete.
+  // Why: capture the viewed workspace before any delete so we can focus one survivor after the batch settles, not per delete.
   const activeWorktreeIdBefore = useAppStore.getState().activeWorktreeId
   const commitBatchFocus = activeWorktreeIdBefore
     ? prepareActiveWorktreeFocusAfterDelete(activeWorktreeIdBefore)
     : null
-  // Why: deletes are serialized per repo to avoid git lock races, but every
-  // selected/lineage workspace should show in-flight feedback immediately.
+  // Why: mark every target deleting up front for immediate in-flight feedback, even though deletes serialize per repo.
   useAppStore.getState().markWorktreesDeleting(targets.map((target) => target.id))
-  // Why: `git worktree remove`/`prune`/`branch -D` mutate repo-wide ref state
-  // and contend on `.git/packed-refs.lock` and per-worktree HEAD.lock. Running
-  // every target through Promise.all races those locks on the same repo and
-  // intermittently fails one or more deletes. Serialize per repoId while
-  // still letting deletes across different repos run concurrently.
+  // Why: worktree remove/prune/branch -D race on shared ref locks; group by repoId to serialize per repo (cross-repo stays parallel).
   const groups = new Map<string, (typeof targets)[number][]>()
   for (const target of targets) {
     const group = groups.get(target.repoId)
@@ -75,9 +64,7 @@ export async function runWorktreeDeletesInParallel(
     }
   }
   for (const group of groups.values()) {
-    // Why: selected parent+child workspace deletes must remove nested children
-    // first. Otherwise the parent delete is correctly rejected because it still
-    // contains another registered worktree.
+    // Why: delete nested children first — else the parent delete is rejected while it still contains a registered worktree.
     group.sort((a, b) => b.path.length - a.path.length)
   }
   const groupResults = await Promise.all(
@@ -96,8 +83,7 @@ export async function runWorktreeDeletesInParallel(
         if (deleted) {
           deletedInGroup.push(target.id)
         } else {
-          // Why: after a descendant delete fails, deleting an ancestor can still
-          // remove that child from disk when it lives under the parent directory.
+          // Why: after a descendant delete fails, deleting an ancestor can still remove that child from disk (it lives under the parent).
           failedInGroup.push(target)
         }
       }
@@ -105,9 +91,7 @@ export async function runWorktreeDeletesInParallel(
     })
   )
   const deletedSet = new Set(groupResults.flat())
-  // Why: focus a survivor once, after the batch settles, rather than per delete —
-  // an intermediate focus could land on (and spawn a terminal in) a workspace this
-  // same batch is about to delete.
+  // Why: focus a survivor once after the batch settles — an intermediate focus could spawn a terminal in a to-be-deleted workspace.
   if (activeWorktreeIdBefore && deletedSet.has(activeWorktreeIdBefore)) {
     commitBatchFocus?.()
   }
@@ -115,17 +99,10 @@ export async function runWorktreeDeletesInParallel(
 }
 
 /**
- * Shared delete-with-toast flow used by both DeleteWorktreeDialog (confirm
- * path) and WorktreeContextMenu (skip-confirm path). Centralizes the error
- * toast copy, the "Force Delete" action wiring, and the "View" affordance so
- * both entry points behave identically from the user's perspective.
+ * Shared delete-with-toast flow for both DeleteWorktreeDialog (confirm) and
+ * WorktreeContextMenu (skip-confirm), so both entry points behave identically.
  *
- * Why this is a module helper rather than a store action: the behavior is
- * intrinsically UI-shaped — it shows sonner toasts, registers action/cancel
- * handlers, and depends on `activateAndRevealWorktree` (a renderer-only
- * helper). Keeping it in the renderer layer avoids bleeding toast/UI
- * concerns into the store slice while still preventing the two delete
- * entry points from drifting apart.
+ * A renderer-layer helper (not a store action) to keep UI concerns out of the store slice.
  */
 export function runWorktreeDeleteWithToast(
   worktreeId: string,
@@ -139,8 +116,7 @@ export function runWorktreeDeleteWithToast(
   return removeWorktree(worktreeId, options.force === true)
     .then((result) => {
       if (result.ok) {
-        // Why: keep the user on a live workspace instead of the Landing screen
-        // when they delete the one they were viewing.
+        // Why: keep the user on a live workspace instead of the Landing screen when they delete the one they were viewing.
         if (focusSuccessor) {
           commitFocus()
         }
@@ -158,9 +134,7 @@ export function runWorktreeDeleteWithToast(
         hasKnownChanges,
         onViewChanges: () => viewWorktreeDiff(worktreeId),
         onForceDelete: () => {
-          // Why: recapture at click time — the user may have navigated away
-          // while the failed-delete toast was open, so focus only hands off
-          // when this is still the workspace they are viewing.
+          // Why: recapture at click time — the user may have navigated away while the toast was open, so focus only hands off if still viewed.
           const commitForceFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
           const forceRemoval = useAppStore.getState().removeWorktree(worktreeId, true)
           forceRemoval
@@ -226,18 +200,11 @@ export function runWorktreeDeleteWithToast(
 }
 
 /**
- * Shared funnel for the standard (non-folder) delete decision tree, called
- * from both WorktreeContextMenu and MemoryStatusSegment. Mirrors the
- * `runSleepWorktree` pattern: reads state imperatively so the helper can be
- * invoked from any handler without plumbing selectors through props, then
- * branches on the user's `skipDeleteWorktreeConfirm` preference — either
- * running the delete immediately with toast feedback, or opening the
- * confirmation modal.
+ * Shared funnel for the standard (non-folder) delete decision tree (WorktreeContextMenu,
+ * MemoryStatusSegment); branches on the `skipDeleteWorktreeConfirm` preference.
  *
- * The missing-record guard here is defense-in-depth — the caller is
- * responsible for disabling UI when this is known ahead of time, but we still
- * refuse to act if the record disappeared between render and click (e.g. a
- * concurrent delete or state reset).
+ * The missing-record guard is defense-in-depth: refuse to act if the record vanished
+ * between render and click (concurrent delete or state reset).
  */
 export function runWorktreeDelete(worktreeId: string): void {
   const state = useAppStore.getState()
@@ -247,8 +214,7 @@ export function runWorktreeDelete(worktreeId: string): void {
   }
   if (target.isMainWorktree) {
     const repo = state.repos.find((entry) => entry.id === target.repoId)
-    // Why: git refuses to delete the primary checkout, but users can still
-    // remove the owning project from Orca without deleting disk contents.
+    // Why: git refuses to delete the primary checkout; users can still remove the owning project from Orca (disk contents kept).
     state.openModal('confirm-remove-folder', {
       repoId: target.repoId,
       displayName: repo?.displayName ?? target.displayName
@@ -257,16 +223,8 @@ export function runWorktreeDelete(worktreeId: string): void {
   }
   state.clearWorktreeDeleteState(worktreeId)
 
-  // Why: a workspace on a removed/disconnected SSH host cannot go through the
-  // normal remote removal — its provider is gone, so worktrees:remove throws
-  // before any cleanup. Route to a dialog that offers reconnect-and-delete
-  // (when the target still exists) or a local-only forget.
-  //
-  // Skip this on paired web/mobile clients: SSH targets/labels/connection state
-  // are desktop-only, so those clients have empty sshTargetLabels and would
-  // misclassify every SSH repo as a ghost, routing to a forget dialog whose
-  // local-only backend is unavailable there. Their normal worktree.rm RPC path
-  // already handles the delete against the desktop runtime.
+  // Why: a disconnected SSH host has no provider, so worktrees:remove throws; route to reconnect-and-delete or local-only forget.
+  // Skip on paired web/mobile clients: SSH state is desktop-only, so empty sshTargetLabels misclassifies SSH repos as ghosts; their worktree.rm RPC still handles the delete.
   const matchingRepos = state.repos.filter((entry) => entry.id === target.repoId)
   const repo = target.hostId
     ? findRepoForHost(matchingRepos, target.repoId, { hostId: target.hostId })
@@ -281,11 +239,7 @@ export function runWorktreeDelete(worktreeId: string): void {
         sshTargetLabels: state.sshTargetLabels
       })
   if (sshResolution.kind === 'ghost' || sshResolution.kind === 'disconnected') {
-    // Why no lineage-children warning here (unlike the normal path below):
-    // forget-local is metadata-only and per-worktree, so it can't fail on a
-    // still-registered child the way a remote git removal would. Any descendants
-    // live on the same ghost host and remain independently visible/forgettable —
-    // they are not orphaned unrecoverably.
+    // Why no lineage-children warning: forget-local is metadata-only per-worktree, so it can't fail on a still-registered child.
     state.openModal('forget-ssh-workspace', {
       worktreeId,
       displayName: target.displayName,
@@ -338,8 +292,7 @@ export function runWorktreeBatchDelete(
     state.clearWorktreeDeleteState(target.id)
   }
 
-  // Why: bulk cleanup can destroy many directories at once, so batch deletes
-  // and Space-triggered deletes must keep an explicit confirmation step.
+  // Why: bulk cleanup can destroy many directories at once, so batch/Space deletes keep an explicit confirmation step.
   const singleTargetHasLineageChildren =
     targets.length === 1 &&
     getWorkspaceDeleteLineage(targets[0], state.allWorktrees(), state.worktreeLineageById)

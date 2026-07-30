@@ -249,9 +249,10 @@ function main(): void {
         await subscription?.unsubscribe()
       })
     } catch (err) {
-      process.stderr.write(
-        `[parcel-watcher-process] unsubscribe ${id} failed: ${errorMessage(err)}\n`
-      )
+      const message = errorMessage(err)
+      process.stderr.write(`[parcel-watcher-process] unsubscribe ${id} failed: ${message}\n`)
+      send({ op: 'unsubscribe-failed', id, message })
+      return
     } finally {
       subscriptionActivityRevision++
     }

@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { shallow } from 'zustand/shallow'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 import { findTabAgentEntry } from '../native-chat/native-chat-tab-agent-entry'
 import {
+  createTabBarAgentProjectionSelector,
+  selectTabBarAgentProjections,
   selectNativeChatTabWideFallbackUnsafeTabsById,
   selectTabAgentTypesByTabId
 } from './tab-agent-types-by-tab-id'
@@ -204,5 +206,175 @@ describe('selectTabAgentTypesByTabId', () => {
 
   it('ignores malformed pane keys with no tab id', () => {
     expect(selectTabAgentTypesByTabId({ ':leaf-a': entry({ agentType: 'claude' }) })).toEqual({})
+  })
+
+  it('shares one pair of global scans across retained TabBar consumers', () => {
+    const onStatusEntryVisited = vi.fn()
+    const onAgentTypeLayoutVisited = vi.fn()
+    const onUnsafeLayoutVisited = vi.fn()
+    const select = createTabBarAgentProjectionSelector({
+      onStatusEntryVisited,
+      onAgentTypeLayoutVisited,
+      onUnsafeLayoutVisited
+    })
+    const statuses = {
+      'tab-1:leaf-a': entry({ agentType: 'claude' }),
+      'tab-2:leaf-a': entry({ agentType: 'codex' }),
+      'tab-3:leaf-a': entry({ agentType: 'grok' })
+    }
+    const layouts = {
+      'tab-1': splitLayout('leaf-a'),
+      'tab-2': splitLayout('leaf-a')
+    }
+
+    for (let consumer = 0; consumer < 100; consumer++) {
+      select({
+        settings: { experimentalNativeChat: true },
+        agentStatusByPaneKey: statuses,
+        terminalLayoutsByTabId: layouts
+      })
+    }
+
+    expect(onStatusEntryVisited).toHaveBeenCalledTimes(3)
+    expect(onAgentTypeLayoutVisited).toHaveBeenCalledTimes(2)
+    expect(onUnsafeLayoutVisited).toHaveBeenCalledTimes(2)
+  })
+
+  it('reuses outputs and invalidates only the projection whose input changed', () => {
+    const onStatusEntryVisited = vi.fn()
+    const onAgentTypeLayoutVisited = vi.fn()
+    const onUnsafeLayoutVisited = vi.fn()
+    const select = createTabBarAgentProjectionSelector({
+      onStatusEntryVisited,
+      onAgentTypeLayoutVisited,
+      onUnsafeLayoutVisited
+    })
+    const split = { 'tab-1': splitLayout('leaf-a') }
+    const working = {
+      'tab-1:leaf-a': entry({ agentType: 'claude', state: 'working' }),
+      'tab-1:leaf-b': entry({ agentType: 'codex', state: 'working' })
+    }
+
+    const first = select({
+      settings: { experimentalNativeChat: true },
+      agentStatusByPaneKey: working,
+      terminalLayoutsByTabId: split
+    })
+    const done = {
+      'tab-1:leaf-a': entry({ agentType: 'claude', state: 'done' }),
+      'tab-1:leaf-b': entry({ agentType: 'codex', state: 'done' })
+    }
+    const afterStatus = select({
+      settings: { experimentalNativeChat: true },
+      agentStatusByPaneKey: done,
+      terminalLayoutsByTabId: split
+    })
+
+    expect(afterStatus).toBe(first)
+    expect(onStatusEntryVisited).toHaveBeenCalledTimes(4)
+    expect(onAgentTypeLayoutVisited).toHaveBeenCalledTimes(2)
+    expect(onUnsafeLayoutVisited).toHaveBeenCalledTimes(1)
+
+    const singleLeaf = {
+      'tab-1': {
+        root: { type: 'leaf' as const, leafId: 'leaf-b' },
+        activeLeafId: 'leaf-b',
+        expandedLeafId: null
+      }
+    }
+    const afterLayout = select({
+      settings: { experimentalNativeChat: true },
+      agentStatusByPaneKey: done,
+      terminalLayoutsByTabId: singleLeaf
+    })
+
+    expect(afterLayout.tabAgentTypesByTabId).toEqual({ 'tab-1': 'codex' })
+    expect(afterLayout.tabAgentTypesByTabId).not.toBe(first.tabAgentTypesByTabId)
+    expect(afterLayout.nativeChatTabWideFallbackUnsafeTabsById).toEqual({})
+    expect(afterLayout.nativeChatTabWideFallbackUnsafeTabsById).not.toBe(
+      first.nativeChatTabWideFallbackUnsafeTabsById
+    )
+    expect(onStatusEntryVisited).toHaveBeenCalledTimes(6)
+    expect(onAgentTypeLayoutVisited).toHaveBeenCalledTimes(3)
+    expect(onUnsafeLayoutVisited).toHaveBeenCalledTimes(2)
+  })
+
+  it('normalizes missing maps to shared empty inputs', () => {
+    const select = createTabBarAgentProjectionSelector()
+
+    const first = select({ settings: { experimentalNativeChat: true } })
+
+    expect(select({ settings: { experimentalNativeChat: true } })).toBe(first)
+  })
+
+  it('releases enabled inputs on disable and rescans them after re-enabling', () => {
+    const onStatusEntryVisited = vi.fn()
+    const onAgentTypeLayoutVisited = vi.fn()
+    const onUnsafeLayoutVisited = vi.fn()
+    const select = createTabBarAgentProjectionSelector({
+      onStatusEntryVisited,
+      onAgentTypeLayoutVisited,
+      onUnsafeLayoutVisited
+    })
+    const state = {
+      settings: { experimentalNativeChat: true },
+      agentStatusByPaneKey: { 'tab-1:leaf-a': entry({ agentType: 'claude' }) },
+      terminalLayoutsByTabId: { 'tab-1': splitLayout('leaf-a') }
+    }
+
+    const first = select(state)
+    select({ ...state, settings: { experimentalNativeChat: false } })
+    const afterReenable = select(state)
+
+    expect(afterReenable).not.toBe(first)
+    expect(onStatusEntryVisited).toHaveBeenCalledTimes(2)
+    expect(onAgentTypeLayoutVisited).toHaveBeenCalledTimes(2)
+    expect(onUnsafeLayoutVisited).toHaveBeenCalledTimes(2)
+  })
+
+  it('production selector skips all map scans while native chat is disabled', () => {
+    let statusEnumerations = 0
+    let layoutEnumerations = 0
+    const statuses = new Proxy(
+      { 'tab-1:leaf-a': entry({ agentType: 'claude' }) },
+      {
+        ownKeys(target) {
+          statusEnumerations++
+          return Reflect.ownKeys(target)
+        }
+      }
+    )
+    const layouts = new Proxy(
+      { 'tab-1': splitLayout('leaf-a') },
+      {
+        ownKeys(target) {
+          layoutEnumerations++
+          return Reflect.ownKeys(target)
+        }
+      }
+    )
+    const disabledState = {
+      settings: { experimentalNativeChat: false },
+      agentStatusByPaneKey: statuses,
+      terminalLayoutsByTabId: layouts
+    }
+
+    const disabled = selectTabBarAgentProjections(disabledState)
+    for (let consumer = 0; consumer < 100; consumer++) {
+      expect(selectTabBarAgentProjections(disabledState)).toBe(disabled)
+    }
+    expect(statusEnumerations).toBe(0)
+    expect(layoutEnumerations).toBe(0)
+
+    const enabledState = {
+      ...disabledState,
+      settings: { experimentalNativeChat: true }
+    }
+    const enabled = selectTabBarAgentProjections(enabledState)
+    for (let consumer = 0; consumer < 100; consumer++) {
+      expect(selectTabBarAgentProjections(enabledState)).toBe(enabled)
+    }
+    expect(statusEnumerations).toBe(1)
+    expect(layoutEnumerations).toBe(2)
   })
 })

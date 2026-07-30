@@ -9,7 +9,10 @@ vi.mock('./codex-cli/command', () => ({
 }))
 
 import { getCmdExePath } from './win32-utils'
-import { resolveExternalEditorLaunchSpec } from './external-editor-launch'
+import {
+  resolveExternalEditorLaunchSpec,
+  resolveVsCodeRemoteSshLaunchSpec
+} from './external-editor-launch'
 
 describe('resolveExternalEditorLaunchSpec', () => {
   beforeEach(() => {
@@ -254,4 +257,71 @@ describe('resolveExternalEditorLaunchSpec', () => {
       spawnArgs: ['/d', '/s', '/c', `code --reuse-window ${pathValue}`]
     })
   })
+})
+
+describe('resolveVsCodeRemoteSshLaunchSpec', () => {
+  beforeEach(() => {
+    resolveCliCommandMock.mockReset()
+    resolveCliCommandMock.mockImplementation((command: string) => command)
+  })
+
+  it.each(['code', 'code-insiders'])('builds exact Remote-SSH arguments for %s', (command) => {
+    expect(
+      resolveVsCodeRemoteSshLaunchSpec(command, '/home/Ada Lovelace/project', 'builder', {
+        platform: 'linux'
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: command,
+      spawnArgs: ['--remote', 'ssh-remote+builder', '/home/Ada Lovelace/project']
+    })
+  })
+
+  it.each([
+    'C:\\Program Files\\Microsoft VS Code\\Code.exe',
+    'C:\\Program Files\\Microsoft VS Code Insiders\\Code - Insiders.exe',
+    'C:\\Tools\\code.cmd',
+    'C:\\Tools\\code-insiders.bat'
+  ])('supports the direct Windows launcher %s', (command) => {
+    expect(
+      resolveVsCodeRemoteSshLaunchSpec(command, 'C:\\Users\\Ada Lovelace\\project', 'builder', {
+        platform: 'win32'
+      })?.spawnArgs
+    ).toEqual(['--remote', 'ssh-remote+builder', 'C:\\Users\\Ada Lovelace\\project'])
+  })
+
+  it('supports an existing direct POSIX launcher path containing spaces', () => {
+    const command = '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code'
+    expect(
+      resolveVsCodeRemoteSshLaunchSpec(command, '/srv/project', 'builder', {
+        platform: 'darwin',
+        fileExists: (candidate) => candidate === command
+      })
+    ).toMatchObject({
+      kind: 'executable',
+      spawnCmd: command,
+      spawnArgs: ['--remote', 'ssh-remote+builder', '/srv/project']
+    })
+  })
+
+  it('recognizes a simple CLI name resolved to a Windows shim', () => {
+    resolveCliCommandMock.mockReturnValueOnce('C:\\Tools\\Code.CMD')
+    expect(
+      resolveVsCodeRemoteSshLaunchSpec('code', '/srv/project', 'builder', {
+        platform: 'win32'
+      })
+    ).toMatchObject({ spawnCmd: 'C:\\Tools\\Code.CMD' })
+  })
+
+  it.each(['cursor', 'zed', 'code --reuse-window', 'open -a "Visual Studio Code"'])(
+    'rejects unsupported and compound SSH commands: %s',
+    (command) => {
+      expect(
+        resolveVsCodeRemoteSshLaunchSpec(command, '/srv/project', 'builder', {
+          platform: 'linux'
+        })
+      ).toBeNull()
+    }
+  )
 })

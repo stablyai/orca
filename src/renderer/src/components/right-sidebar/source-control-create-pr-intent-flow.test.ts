@@ -189,7 +189,8 @@ describe('source-control Create PR intent flow helpers', () => {
           review: null,
           canCreate: false,
           blockedReason: 'no_upstream',
-          nextAction: 'publish'
+          nextAction: 'publish',
+          reviewLookupOutcome: 'not_found'
         }
       })
     ).toBe('publish')
@@ -203,7 +204,8 @@ describe('source-control Create PR intent flow helpers', () => {
           review: null,
           canCreate: false,
           blockedReason: 'needs_push',
-          nextAction: 'push'
+          nextAction: 'push',
+          reviewLookupOutcome: 'not_found'
         }
       })
     ).toBe('push')
@@ -223,13 +225,16 @@ describe('source-control Create PR intent flow helpers', () => {
           review: null,
           canCreate: false,
           blockedReason: 'needs_sync',
-          nextAction: 'sync'
+          nextAction: 'sync',
+          reviewLookupOutcome: 'not_found'
         }
       })
     ).toBe('force_push')
   })
 
-  it('blocks ordinary diverged branches and unpublished branches without commits', () => {
+  it('fast-forwards behind-only branches, blocks diverged and unpublished-without-commits branches', () => {
+    // Genuinely diverged (local + non-equivalent remote commits): auto-merging
+    // would reconcile without consent, so the intent flow keeps the explicit stop.
     expect(
       resolveCreatePrIntentRemoteStep({
         upstreamStatus: { hasUpstream: true, ahead: 1, behind: 1 },
@@ -239,10 +244,27 @@ describe('source-control Create PR intent flow helpers', () => {
           review: null,
           canCreate: false,
           blockedReason: 'needs_sync',
-          nextAction: 'sync'
+          nextAction: 'sync',
+          reviewLookupOutcome: 'not_found'
         }
       })
     ).toBe('blocked')
+
+    // Behind with no local commits: pure --ff-only (never plain merge sync).
+    expect(
+      resolveCreatePrIntentRemoteStep({
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 3 },
+        hasCurrentBranch: true,
+        hostedReviewCreation: {
+          provider: 'github',
+          review: null,
+          canCreate: false,
+          blockedReason: 'needs_sync',
+          nextAction: 'sync',
+          reviewLookupOutcome: 'not_found'
+        }
+      })
+    ).toBe('fast_forward')
 
     expect(
       resolveCreatePrIntentRemoteStep({
@@ -254,7 +276,8 @@ describe('source-control Create PR intent flow helpers', () => {
           review: null,
           canCreate: false,
           blockedReason: 'no_upstream',
-          nextAction: 'publish'
+          nextAction: 'publish',
+          reviewLookupOutcome: 'not_found'
         }
       })
     ).toBe('blocked')
