@@ -3,13 +3,8 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
-// Drives the per-pane agent-state rim (see terminal.css `.pane[data-agent-rim]`).
-// Mirrors terminal-pane-attention-subscriptions.ts, but keys off agent status:
-//   - waiting/blocked -> amber "needs you" rim (persists until the state resolves;
-//     viewing the pane does NOT clear it — the user has to respond).
-//   - unviewed completion -> green rim, sourced from `unreadAgentCompletionPanes`,
-//     which the store already sets on completion and auto-acks on view
-//     (see useAutoAckViewedAgent). Viewing the pane clears it, cmux-style.
+// Drives the per-pane agent-state rim (see terminal.css `.pane[data-agent-rim]`),
+// mirroring terminal-pane-attention-subscriptions.ts but keyed off agent status.
 
 type Listener = () => void
 type StoreState = ReturnType<typeof useAppStore.getState>
@@ -20,8 +15,10 @@ let prevStatus: StoreState['agentStatusByPaneKey'] | null = null
 let prevCompletion: StoreState['unreadAgentCompletionPanes'] | null = null
 
 // Priority: needs-you (amber) > unviewed completion (green) > none.
-// `interrupted` is excluded from "needs you" so this matches the sidebar row,
-// whose getAgentDotState() reports interrupted rather than waiting/blocked.
+// `interrupted` is excluded from "needs you" to match the sidebar row, whose
+// getAgentDotState() reports interrupted rather than waiting/blocked.
+// The `working` guard keeps a not-yet-cleared completion marker from painting a
+// pane green once its agent has restarted a new task on the same pane.
 function rimFor(
   state: AgentStatusState | undefined,
   interrupted: boolean,
@@ -30,7 +27,7 @@ function rimFor(
   if (!interrupted && (state === 'waiting' || state === 'blocked')) {
     return 'waiting'
   }
-  if (completionUnread) {
+  if (completionUnread && state !== 'working') {
     return 'done'
   }
   return null

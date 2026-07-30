@@ -267,11 +267,13 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         isFocusedPane && 'bg-worktree-sidebar-accent',
         (dotState === 'waiting' || dotState === 'blocked') &&
           'ring-1 ring-inset ring-agent-rim-attention/60',
-        // Green only when there is no amber; otherwise tailwind-merge would keep
-        // the later ring color and flip the amber > green priority.
+        // Green only when there is no amber (otherwise tailwind-merge keeps the
+        // later ring color and flips amber > green) and the agent isn't working
+        // (a not-yet-cleared completion marker must not paint a restarted agent).
         completionUnread &&
           dotState !== 'waiting' &&
           dotState !== 'blocked' &&
+          dotState !== 'working' &&
           'ring-1 ring-inset ring-agent-rim-done/60',
         sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
         sendTargetStatus === 'disabled' && 'cursor-default opacity-60'

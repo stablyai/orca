@@ -165,6 +165,32 @@ describe('agent pane rim subscriptions', () => {
     expect(pane.container.hasAttribute('data-agent-rim')).toBe(false)
   })
 
+  it('falls back to the done rim for an interrupted pane with an unviewed completion', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    storeMock.state = {
+      agentStatusByPaneKey: { [paneKey]: { state: 'waiting', interrupted: true } },
+      unreadAgentCompletionPanes: { [paneKey]: true }
+    }
+    const pane = createPane(LEAF_1)
+
+    applyAgentPaneRimToManager(createManager([pane]) as never, 'tab-1')
+
+    expect(pane.container.getAttribute('data-agent-rim')).toBe('done')
+  })
+
+  it('does not paint a working pane green from a not-yet-cleared completion marker', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    storeMock.state = {
+      agentStatusByPaneKey: { [paneKey]: { state: 'working' } },
+      unreadAgentCompletionPanes: { [paneKey]: true }
+    }
+    const pane = createPane(LEAF_1)
+
+    applyAgentPaneRimToManager(createManager([pane]) as never, 'tab-1')
+
+    expect(pane.container.hasAttribute('data-agent-rim')).toBe(false)
+  })
+
   it('marks an unviewed-completion pane as the done rim', () => {
     storeMock.state = {
       ...storeMock.state,
