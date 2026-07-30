@@ -260,8 +260,8 @@ export function UsageRosterPanel({
           value={statusBarUsageMode}
           onChange={onStatusBarUsageModeChange}
           ariaLabel={translate(
-            'auto.components.status.bar.UsageRosterPanel.displayModeAria',
-            'Usage display mode'
+            'auto.components.status.bar.UsageRosterPanel.footerDetailAria',
+            'Usage footer detail'
           )}
           size="sm"
           equalWidth
