@@ -69,6 +69,25 @@ function setPath(
   return next
 }
 
+function canonicalizeOverlayPath(
+  sourceEnv: NodeJS.ProcessEnv,
+  overlay: Record<string, string> | undefined
+): Record<string, string> | undefined {
+  const overlayPathEntries = Object.entries(overlay ?? {}).filter(
+    ([key]) => key.toLowerCase() === 'path'
+  )
+  if (overlayPathEntries.length === 0) {
+    return overlay
+  }
+  const [overlayPathKey, overlayPathValue] = overlayPathEntries.at(-1)!
+  const pathKey =
+    Object.keys(sourceEnv).find((key) => key.toLowerCase() === 'path') ?? overlayPathKey
+  if (overlayPathEntries.length === 1 && overlayPathKey === pathKey) {
+    return overlay
+  }
+  return setPath(overlay ?? {}, pathKey, overlayPathValue)
+}
+
 function prependUniquePath(directory: string, inheritedPath: string): string {
   const remaining = inheritedPath
     .split(';')
@@ -128,27 +147,28 @@ export async function withWindowsFnmNodeFallback(
   }
 
   const sourceEnv = options.sourceEnv ?? process.env
-  const effectiveEnv = mergeWindowsEnv(sourceEnv, overlay)
+  const canonicalOverlay = canonicalizeOverlayPath(sourceEnv, overlay)
+  const effectiveEnv = mergeWindowsEnv(sourceEnv, canonicalOverlay)
   const probeNode = options.probeNode ?? probeNodeWithCmd
   if (await probeNode(effectiveEnv)) {
-    return overlay
+    return canonicalOverlay
   }
 
   const pathKey =
-    Object.keys(overlay ?? {}).find((key) => key.toLowerCase() === 'path') ??
     Object.keys(sourceEnv).find((key) => key.toLowerCase() === 'path') ??
+    Object.keys(canonicalOverlay ?? {}).find((key) => key.toLowerCase() === 'path') ??
     'Path'
   const inheritedPath = readEnv(effectiveEnv, 'PATH') ?? ''
   const fnmDirectory = normalizeSingleWindowsPathEntry(
     getWindowsFnmDefaultDirectory(options.homePath ?? homedir(), effectiveEnv)
   )
   if (!fnmDirectory) {
-    return overlay
+    return canonicalOverlay
   }
   const candidateProbeEnv = setPath(effectiveEnv, pathKey, fnmDirectory)
   if (!(await probeNode(candidateProbeEnv))) {
-    return overlay
+    return canonicalOverlay
   }
 
-  return setPath(overlay ?? {}, pathKey, prependUniquePath(fnmDirectory, inheritedPath))
+  return setPath(canonicalOverlay ?? {}, pathKey, prependUniquePath(fnmDirectory, inheritedPath))
 }

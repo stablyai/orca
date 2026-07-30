@@ -23,6 +23,13 @@ function sourceEnv(pathValue: string, extra: NodeJS.ProcessEnv = {}): NodeJS.Pro
   return env
 }
 
+function sourceEnvWithPathKey(pathKey: string, pathValue: string): NodeJS.ProcessEnv {
+  const env = sourceEnv(pathValue)
+  delete env.Path
+  env[pathKey] = pathValue
+  return env
+}
+
 function createNode(directory: string): string {
   mkdirSync(directory, { recursive: true })
   const target = join(directory, 'node.exe')
@@ -87,10 +94,10 @@ describe('Windows fnm Node child fallback', () => {
     expect(probeNode).toHaveBeenCalledTimes(1)
   })
 
-  it('preserves an inherited uppercase PATH key when fallback is needed', async () => {
+  it('uses the inherited PATH key spelling when fallback is needed', async () => {
     const fnmDir = 'C:\\fnm'
     const expectedDirectory = win32.join(fnmDir, 'aliases', 'default')
-    const probeNode = vi.fn<WindowsNodeProbe>(async (env) => env.PATH === expectedDirectory)
+    const probeNode = vi.fn<WindowsNodeProbe>(async (env) => env.Path === expectedDirectory)
 
     const result = await withWindowsFnmNodeFallback(
       { PATH: 'C:\\existing', FNM_DIR: fnmDir },
@@ -102,8 +109,30 @@ describe('Windows fnm Node child fallback', () => {
       }
     )
 
-    expect(result?.PATH).toBe(`${expectedDirectory};C:\\existing`)
-    expect(result).not.toHaveProperty('Path')
+    expect(result?.Path).toBe(`${expectedDirectory};C:\\existing`)
+    expect(result).not.toHaveProperty('PATH')
+  })
+
+  it.each([
+    ['PATH', 'Path'],
+    ['Path', 'PATH'],
+    ['Path', 'path']
+  ])('canonicalizes a working %s/%s provider merge', async (sourceKey, overlayKey) => {
+    const overlay = { [overlayKey]: 'C:\\agent-node', FNM_DIR: 'C:\\fnm' }
+    const source = { [sourceKey]: 'C:\\source' }
+    const probeNode = vi.fn<WindowsNodeProbe>().mockResolvedValue(true)
+
+    const result = await withWindowsFnmNodeFallback(overlay, {
+      platform: 'win32',
+      probeNode,
+      sourceEnv: source
+    })
+    const providerEnv = { ...source, ...result }
+
+    expect(Object.keys(providerEnv).filter((key) => key.toLowerCase() === 'path')).toEqual([
+      sourceKey
+    ])
+    expect(providerEnv[sourceKey]).toBe('C:\\agent-node')
   })
 
   it.each([
@@ -198,6 +227,30 @@ describe('Windows fnm Node child fallback', () => {
 })
 
 describe('native Windows fnm Node child fallback', () => {
+  itWindows.each([
+    ['PATH', 'Path'],
+    ['Path', 'PATH'],
+    ['Path', 'path']
+  ])('keeps fnm first after a real %s/%s provider merge', async (sourceKey, overlayKey) => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-fnm-path-key-'))
+    tempDirectories.push(root)
+    const fnmRoot = join(root, 'fnm')
+    const fnmNode = createNode(join(fnmRoot, 'aliases', 'default'))
+    const system32 = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')
+    const source = sourceEnvWithPathKey(sourceKey, system32)
+
+    const result = await withWindowsFnmNodeFallback(
+      { [overlayKey]: system32, FNM_DIR: fnmRoot },
+      { homePath: root, sourceEnv: source }
+    )
+    const providerEnv = { ...source, ...result }
+
+    expect(Object.keys(providerEnv).filter((key) => key.toLowerCase() === 'path')).toEqual([
+      sourceKey
+    ])
+    expect(normalized(runNode(providerEnv))).toBe(normalized(fnmNode))
+  })
+
   itWindows('keeps a real working inherited node.exe ahead of fnm', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-fnm-inherited-'))
     tempDirectories.push(root)
