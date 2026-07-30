@@ -141,4 +141,12 @@ describe('pairing RPC methods', () => {
     ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(createOffer).not.toHaveBeenCalled()
   })
+
+  it('rejects oversized address on pairing.createOffer', async () => {
+    const createOffer = vi.fn()
+    await expect(
+      dispatchPairing('pairing.createOffer', { address: 'a'.repeat(2049) }, { createOffer })
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(createOffer).not.toHaveBeenCalled()
+  })
 })
