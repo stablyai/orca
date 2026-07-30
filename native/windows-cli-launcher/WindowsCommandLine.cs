@@ -3,8 +3,9 @@ using System.Text;
 
 internal static class WindowsCommandLine
 {
-    // Why: Windows argv quoting requires backslash-doubling before embedded quotes; extracted
-    // from OrcaCliLauncher.cs so both OrcaCliLauncher and OrcaTmuxShim share the same algorithm.
+    /// <summary>Quotes one argument for a direct CreateProcess target, per the CRT/CommandLineToArgvW rules.</summary>
+    /// <remarks>Windows argv quoting requires backslash-doubling before embedded quotes; extracted from
+    /// OrcaCliLauncher.cs so both OrcaCliLauncher and OrcaTmuxShim share the same algorithm.</remarks>
     internal static string Quote(string value)
     {
         bool requiresQuotes = value.Length == 0;
@@ -45,11 +46,12 @@ internal static class WindowsCommandLine
         return quoted.ToString();
     }
 
-    // Why: cmd.exe does not honour CRT's \" escape, so a quote inside a Quote()d argument closes
-    // cmd's quoted region and exposes the rest as operators (BatBadBut / CVE-2024-24576). Doubling
-    // the quote leaves cmd inside a quoted region while CommandLineToArgvW still reads one literal
-    // quote, so the batch target's %* forwards the original argv. Always quotes: an unquoted & or |
-    // is an operator to cmd even when the value has no whitespace.
+    /// <summary>Quotes one argument for a cmd.exe target, which re-parses the command line.</summary>
+    /// <remarks>cmd.exe does not honour CRT's \" escape, so a quote inside a Quote()d argument closes
+    /// cmd's quoted region and exposes the rest as operators (BatBadBut / CVE-2024-24576). Doubling
+    /// the quote leaves cmd inside a quoted region while CommandLineToArgvW still reads one literal
+    /// quote, so the batch target's %* forwards the original argv. Always quotes: an unquoted &amp; or |
+    /// is an operator to cmd even when the value has no whitespace.</remarks>
     internal static string QuoteForCmd(string value)
     {
         StringBuilder quoted = new StringBuilder("\"");
@@ -80,12 +82,14 @@ internal static class WindowsCommandLine
         return quoted.ToString();
     }
 
-    // Why: both entry-points need to prepend a subcommand argument before the forwarded argv.
+    /// <summary>Joins a leading argument and the forwarded argv using direct-executable quoting.</summary>
+    /// <remarks>Both entry-points need to prepend a subcommand argument before the forwarded argv.</remarks>
     internal static string Join(string first, string[] rest)
     {
         return Join(first, rest, false);
     }
 
+    /// <summary>Joins a leading argument and the forwarded argv, choosing cmd.exe or CRT quoting.</summary>
     internal static string Join(string first, string[] rest, bool forCmd)
     {
         StringBuilder commandLine = new StringBuilder(forCmd ? QuoteForCmd(first) : Quote(first));

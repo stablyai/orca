@@ -49,10 +49,12 @@ if (result.status !== 0) {
   process.exit(result.status ?? 1)
 }
 
+/** Where a named target's executable is written when --output is omitted. */
 function defaultOutputPath(projectRoot, target) {
   return join(projectRoot, 'native', 'windows-cli-launcher', '.build', `${target}.exe`)
 }
 
+/** The C# sources compiled for a named target. */
 function sourceFilesForTarget(target, projectRoot) {
   const base = join(projectRoot, 'native', 'windows-cli-launcher')
   switch (target) {
@@ -65,6 +67,7 @@ function sourceFilesForTarget(target, projectRoot) {
   }
 }
 
+/** Locates the .NET Framework csc.exe, which ships with Windows and needs no SDK install. */
 function findFrameworkCompiler(env) {
   const windowsDirectory = env.WINDIR ?? env.SystemRoot
   if (!windowsDirectory) {
@@ -77,6 +80,7 @@ function findFrameworkCompiler(env) {
   return candidates.find((candidate) => existsSync(candidate)) ?? null
 }
 
+/** Reads `--name value` from argv, or undefined when absent. */
 function readArg(name) {
   const index = process.argv.indexOf(name)
   return index >= 0 ? process.argv[index + 1] : undefined

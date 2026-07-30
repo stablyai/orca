@@ -21,9 +21,13 @@ import {
 import { readEnvVar } from '../../shared/env-var-casing'
 import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
 
-// Why: pid alone repeats across concurrent teammate launches and Date.now() is millisecond-resolution,
-// so two calls could pick the same tmp name and corrupt the shim mid-copy.
 let tmpSequence = 0
+/**
+ * A staging path unique to this call.
+ *
+ * Why: pid alone repeats across concurrent teammate launches and Date.now() is millisecond-resolution,
+ * so two calls could pick the same tmp name and corrupt the shim mid-copy.
+ */
 function tmpPathFor(targetPath: string): string {
   tmpSequence += 1
   return `${targetPath}.${process.pid}.${tmpSequence}.tmp`
@@ -35,6 +39,7 @@ export type ClaudeAgentTeamsLaunchPlan = {
   envToDelete?: string[]
 }
 
+/** Materialises the private shim directory Orca puts ahead of any real tmux on PATH. */
 export async function ensureClaudeAgentTeamsShimDir(root = defaultShimRoot()): Promise<string> {
   await mkdir(root, { recursive: true })
   await writeIfChanged(join(root, 'tmux'), unixShimScript())
@@ -48,6 +53,7 @@ export async function ensureClaudeAgentTeamsShimDir(root = defaultShimRoot()): P
   return root
 }
 
+/** The command and environment for an agent-teams launch, or null when the command is not eligible. */
 export async function buildClaudeAgentTeamsLaunchPlan(args: {
   command: string | undefined
   mode: ClaudeAgentTeamsMode | undefined
@@ -74,6 +80,7 @@ export async function buildClaudeAgentTeamsLaunchPlan(args: {
   }
 }
 
+/** The executable the shim should call back into: explicit override, bundled launcher, then PATH. */
 export function resolveClaudeAgentTeamsShimBin(
   env: Record<string, string | undefined> = process.env
 ): string {
@@ -94,10 +101,12 @@ export function resolveClaudeAgentTeamsShimBin(
   )
 }
 
+/** The per-user directory the tmux shim is installed into. */
 function defaultShimRoot(): string {
   return join(homedir(), '.orca', 'claude-agent-teams-bin')
 }
 
+/** The packaged Orca CLI for this platform, or null when not running from a package. */
 function bundledLauncherPath(): string | null {
   if (!process.resourcesPath) {
     return null
@@ -114,6 +123,7 @@ function bundledLauncherPath(): string | null {
   return null
 }
 
+/** First directory in `pathValue` holding an executable `command`, else null. */
 function findExecutableOnPath(command: string, pathValue: string | undefined): string | null {
   for (const directory of pathValue?.split(delimiter) ?? []) {
     if (!directory) {
@@ -127,6 +137,7 @@ function findExecutableOnPath(command: string, pathValue: string | undefined): s
   return null
 }
 
+/** Whether `candidate` exists and is runnable — existence alone on Windows, which has no x bit. */
 function isExecutableFile(candidate: string): boolean {
   try {
     if (!existsSync(candidate)) {
@@ -139,6 +150,7 @@ function isExecutableFile(candidate: string): boolean {
   }
 }
 
+/** The POSIX `tmux` shim script forwarding argv to `agent-teams-tmux`. */
 function unixShimScript(): string {
   return [
     '#!/usr/bin/env sh',
@@ -148,6 +160,7 @@ function unixShimScript(): string {
   ].join('\n')
 }
 
+/** The `tmux.cmd` shim; the compiled tmux.exe wins bare-name lookups, so this is the fallback. */
 function windowsShimScript(): string {
   return [
     '@echo off',
@@ -160,6 +173,7 @@ function windowsShimScript(): string {
   ].join('\r\n')
 }
 
+/** Writes `content` only when it differs, staging then renaming so a crash cannot truncate the target. */
 async function writeIfChanged(path: string, content: string): Promise<void> {
   try {
     if ((await readFile(path, 'utf8')) === content) {
@@ -185,6 +199,7 @@ async function writeIfChanged(path: string, content: string): Promise<void> {
   }
 }
 
+/** Copies the bundled shim when size or mtime differs; returns whether a copy happened. */
 async function copyIfChanged(sourcePath: string, targetPath: string): Promise<boolean> {
   let sourceStat: { size: number; mtimeMs: number; atimeMs: number }
   try {
@@ -222,8 +237,12 @@ async function copyIfChanged(sourcePath: string, targetPath: string): Promise<bo
   }
 }
 
-// Why: Electron sets resourcesPath in dev runs too, so the packaged miss has to fall through
-// to the dev build or `pnpm run build:windows-shims` would never take effect.
+/**
+ * The compiled tmux.exe to install, preferring the packaged copy over the dev build.
+ *
+ * Why: Electron sets resourcesPath in dev runs too, so the packaged miss has to fall through
+ * to the dev build or `pnpm run build:windows-shims` would never take effect.
+ */
 function resolveBundledTmuxShimPath(): string | null {
   const candidates = [
     process.resourcesPath

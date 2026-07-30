@@ -13,6 +13,7 @@ export type ParsedTmuxArgs = {
 
 const TMUX_FORMAT_VAR_RE = /#\{[^}]+\}/g
 
+/** Splits tmux argv into a subcommand and its remaining arguments. */
 export function splitTmuxCommand(argv: string[]): ParsedTmuxCommand {
   const globalValueFlags = new Set(['-L', '-S', '-f'])
   const globalBoolFlags = new Set(['-V', '-v'])
@@ -36,6 +37,7 @@ export function splitTmuxCommand(argv: string[]): ParsedTmuxCommand {
   throw new Error('tmux shim requires a command')
 }
 
+/** Parses tmux-style flags and positionals into a structured form. */
 export function parseTmuxArgs(
   args: string[],
   valueFlags: string[],
@@ -93,10 +95,12 @@ export function parseTmuxArgs(
   return { flags, values, positional }
 }
 
+/** Reads a flag's value, or undefined when the flag is absent or boolean-only. */
 export function tmuxValue(parsed: ParsedTmuxArgs, flag: string): string | undefined {
   return parsed.values.get(flag)?.at(-1)
 }
 
+/** Substitutes `#{...}` placeholders in a tmux format string. */
 export function renderTmuxFormat(
   format: string | undefined,
   context: Record<string, string>,
@@ -113,6 +117,7 @@ export function renderTmuxFormat(
   return rendered || fallback
 }
 
+/** Converts send-keys tokens into the literal text to write to the pane. */
 export function tmuxSendKeysText(tokens: string[], literal: boolean): string {
   if (literal) {
     return tokens.join(' ')
@@ -163,6 +168,7 @@ const TMUX_NAMED_KEYS = new Map<string, string>([
   ['delete', '\x1b[3~']
 ])
 
+/** The escape sequence for a named key or control chord, or null when the token is plain text. */
 function tmuxSpecialKeyText(token: string): string | null {
   const key = token.toLowerCase()
   const named = TMUX_NAMED_KEYS.get(key)
@@ -178,6 +184,7 @@ function tmuxSpecialKeyText(token: string): string | null {
   return null
 }
 
+/** Whether the command launches Claude directly rather than through a shell wrapper or pipeline. */
 export function isDirectClaudeCommand(command: string | undefined): boolean {
   const trimmed = command?.trim() ?? ''
   if (!trimmed) {
@@ -190,6 +197,7 @@ export function isDirectClaudeCommand(command: string | undefined): boolean {
   return first === 'claude' || first.endsWith('/claude')
 }
 
+/** Adds `--teammate-mode auto`, making the native-panes intent explicit in the command. */
 export function addClaudeTeammateModeAuto(command: string): string {
   if (/(^|\s)--teammate-mode(?:\s|=|$)/.test(command)) {
     return command
@@ -197,6 +205,7 @@ export function addClaudeTeammateModeAuto(command: string): string {
   return command.replace(/^(\S+)/, '$1 --teammate-mode auto')
 }
 
+/** Adds `--teammate-mode in-process`, used where native panes are unsupported. */
 export function addClaudeTeammateModeInProcess(command: string): string {
   if (/(^|\s)--teammate-mode(?:\s|=|$)/.test(command)) {
     return command

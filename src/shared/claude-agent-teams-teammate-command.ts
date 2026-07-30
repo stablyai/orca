@@ -14,6 +14,10 @@ type Token = { value: string; start: number; end: number }
 
 const ENV_ASSIGNMENT_RE = /^([A-Za-z_][A-Za-z0-9_]*)=([\s\S]*)$/
 
+/**
+ * Splits `cd <dir> && env K=V … <cmd>` into a working directory, environment and bare command.
+ * An instruction that does not match that shape is returned unchanged.
+ */
 export function parseTeammateCommand(
   raw: string,
   platform: NodeJS.Platform = process.platform
@@ -60,6 +64,7 @@ export function parseTeammateCommand(
   return cwd === undefined ? { env, command } : { cwd, env, command }
 }
 
+/** Splits on whitespace, unwrapping quoted runs, and records each token's offset in the input. */
 function tokenize(input: string): Token[] {
   const tokens: Token[] = []
   let cursor = 0

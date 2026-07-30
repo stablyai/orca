@@ -148,6 +148,7 @@ function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
   return distro ? ['-d', distro, ...shellArgs] : shellArgs
 }
 
+/** Rewrites a `C:\…` path into the `/c/…` form an MSYS shell expects. */
 function normalizeMsysDrivePath(cwd: string): string {
   const match = cwd.match(/^\/([A-Za-z])(?:\/(.*))?$/)
   if (!match) {

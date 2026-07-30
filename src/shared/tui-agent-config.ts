@@ -315,14 +315,17 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
   }
 }
 
+/** Whether `id` names a terminal-UI agent Orca knows how to detect and launch. */
 export function isTuiAgent(value: unknown): value is TuiAgent {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(TUI_AGENT_CONFIG, value)
 }
 
+/** The probe commands used to decide whether an agent is installed on this host. */
 export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {
   return [config.detectCmd, ...(config.detectCmdAliases ?? [])]
 }
 
+/** The command that starts an agent on the given platform. */
 export function getTuiAgentLaunchCommand(
   config: TuiAgentConfig,
   platform: NodeJS.Platform,

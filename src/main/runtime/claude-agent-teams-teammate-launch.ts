@@ -8,10 +8,14 @@ export type TeammateLaunch = {
   env: Record<string, string>
 }
 
-// Why: Claude Code hands the shim a POSIX shell string (`cd <dir> && env K=V … <cmd>`) which
-// only runs where the pane's shell is POSIX — PowerShell rejects `&&` and resolves `env` to
-// nothing useful. Decompose it into Orca's own spawn options so no shell syntax is emitted
-// and every pane shell behaves identically.
+/**
+ * Turns Claude's teammate instruction into pane spawn options.
+ *
+ * Why: Claude Code hands the shim a POSIX shell string (`cd <dir> && env K=V … <cmd>`) which
+ * only runs where the pane's shell is POSIX — PowerShell rejects `&&` and resolves `env` to
+ * nothing useful. Decompose it into Orca's own spawn options so no shell syntax is emitted
+ * and every pane shell behaves identically.
+ */
 export function resolveTeammateLaunch(
   rawCommand: string,
   team: AgentTeam,
