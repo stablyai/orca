@@ -10,6 +10,7 @@ import {
   resolvePrivateKey,
   resolveUnencryptedExplicitPrivateKey
 } from './ssh-auth-resolution'
+import { isOpenSshConfigBackedTarget } from './system-ssh-args'
 
 export { findDefaultKeyFile, resolveAgentSocket } from './ssh-auth-resolution'
 
@@ -180,7 +181,10 @@ export function buildConnectConfig(
 ): ConnectConfig {
   const effectiveHost = resolveEffectiveHost(target, resolved)
   const effectivePort = resolveEffectivePort(target, resolved)
-  const effectiveUser = target.username || resolved?.user || ''
+  const effectiveUser =
+    isOpenSshConfigBackedTarget(target) && resolved
+      ? (resolved.user ?? target.username)
+      : target.username || resolved?.user || ''
 
   const config: Record<string, unknown> = {
     host: effectiveHost,
@@ -214,6 +218,9 @@ export function buildConnectConfig(
 }
 
 function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | null): string {
+  if (isOpenSshConfigBackedTarget(target) && resolved?.hostname) {
+    return resolved.hostname
+  }
   if (shouldUseResolvedEndpoint(target, resolved)) {
     return resolved!.hostname
   }
@@ -221,6 +228,9 @@ function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | n
 }
 
 function resolveEffectivePort(target: SshTarget, resolved: SshResolvedConfig | null): number {
+  if (isOpenSshConfigBackedTarget(target) && resolved) {
+    return resolved.port || target.port || 22
+  }
   // Why: imported config aliases store 22 as the schema default even when an
   // included/wildcard OpenSSH rule later resolves a different effective Port.
   if (target.configHost && target.port === 22 && resolved?.port) {
@@ -249,6 +259,12 @@ export function resolveEffectiveProxy(
   target: SshTarget,
   resolved: SshResolvedConfig | null
 ): EffectiveProxy | undefined {
+  if (isOpenSshConfigBackedTarget(target) && resolved) {
+    if (resolved.proxyCommand) {
+      return { kind: 'proxy-command', command: resolved.proxyCommand }
+    }
+    return resolved.proxyJump ? { kind: 'jump-host', jumpHost: resolved.proxyJump } : undefined
+  }
   if (target.proxyCommand) {
     return { kind: 'proxy-command', command: target.proxyCommand }
   }

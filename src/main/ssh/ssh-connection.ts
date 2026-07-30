@@ -19,6 +19,7 @@ import {
 } from './ssh-system-fallback'
 import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
 import { removeControlSocketPath } from './ssh-control-socket'
+import { isOpenSshConfigBackedTarget } from './system-ssh-args'
 import {
   INITIAL_RETRY_ATTEMPTS,
   INITIAL_RETRY_DELAY_MS,
@@ -82,7 +83,11 @@ function isGitHubRestrictedShellProbeSuccess(
     return false
   }
 
-  const effectiveUser = (target.username?.trim() || resolvedConfig?.user?.trim())?.toLowerCase()
+  const effectiveUser = (
+    isOpenSshConfigBackedTarget(target) && resolvedConfig
+      ? resolvedConfig.user?.trim() || target.username?.trim()
+      : target.username?.trim() || resolvedConfig?.user?.trim()
+  )?.toLowerCase()
   if (effectiveUser !== 'git') {
     return false
   }
@@ -631,7 +636,11 @@ export class SshConnection {
       return
     }
     // Why: ssh2 lacks gssapi-with-mic; GSSAPIAuthentication hosts try Kerberos SSO via system OpenSSH first, then fall through to key/credential auth.
-    if (this.target.gssapiAuthentication === true) {
+    if (
+      isOpenSshConfigBackedTarget(this.target) && resolved
+        ? resolved.gssapiAuthentication === true
+        : this.target.gssapiAuthentication === true
+    ) {
       try {
         await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved, true)
         return
@@ -1362,6 +1371,14 @@ export function shouldUseSystemSshTransport(
   target: SshTarget,
   resolved: Pick<SshResolvedConfig, 'proxyUseFdpass' | 'proxyCommand' | 'proxyJump'> | null
 ): boolean {
+  if (isOpenSshConfigBackedTarget(target) && resolved) {
+    return (
+      process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT === '1' ||
+      resolved.proxyUseFdpass === true ||
+      resolved.proxyCommand != null ||
+      resolved.proxyJump != null
+    )
+  }
   return (
     process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT === '1' ||
     target.proxyCommand != null ||

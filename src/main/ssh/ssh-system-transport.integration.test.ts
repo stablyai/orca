@@ -231,7 +231,7 @@ describe('system SSH transport integration', () => {
     async () => {
       delete process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT
       const conn = new SshConnection(
-        { ...makeTarget(), gssapiAuthentication: true },
+        { ...makeTarget(), source: 'manual', gssapiAuthentication: true },
         { onStateChange: vi.fn() }
       )
       await conn.connect()
