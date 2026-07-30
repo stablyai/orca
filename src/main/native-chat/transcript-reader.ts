@@ -10,7 +10,8 @@ import { resolveSessionFilePath, type ResolveSessionFileOptions } from './sessio
 import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
-  decodeGrokTranscriptLine
+  decodeGrokTranscriptLine,
+  decodeOmpTranscriptLine
 } from './transcript-line-decoders'
 import { decodeTranscriptStream } from './transcript-stream-lines'
 
@@ -54,6 +55,9 @@ export async function readNativeChatTranscript(
     }
     if (transcriptAgent === 'grok') {
       return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
+    }
+    if (transcriptAgent === 'omp') {
+      return { messages: await readTranscript(filePath, decodeOmpTranscriptLine) }
     }
     return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
   } catch (err) {
