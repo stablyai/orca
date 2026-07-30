@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { CDPSession, Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -12,6 +12,12 @@ import {
   waitForActiveTerminalManager,
   waitForTerminalOutput
 } from './helpers/terminal'
+import {
+  dispatchWindowsImeBackspace,
+  dispatchWindowsImeShiftToggle,
+  readPtyInputCount,
+  readPtyInputs
+} from './helpers/windows-ime-native-events'
 
 type ImeEventLogEntry = {
   type: string
@@ -249,10 +255,6 @@ async function readImeEventLog(page: Page): Promise<ImeEventLogEntry[]> {
   })
 }
 
-function readPtyInputCount(inputLogPath: string): number {
-  return readFileSync(inputLogPath, 'utf8').split(/\r?\n/).filter(Boolean).length
-}
-
 async function readActiveCompositionText(page: Page): Promise<string> {
   return page.evaluate(() => {
     const active = document.activeElement
@@ -356,46 +358,6 @@ async function dispatchImeProcessKey(session: CDPSession, code: string): Promise
     nativeVirtualKeyCode: 229,
     text: '',
     unmodifiedText: ''
-  })
-}
-
-async function dispatchImeBackspace(session: CDPSession): Promise<void> {
-  for (const type of ['rawKeyDown', 'keyUp'] as const) {
-    await session.send('Input.dispatchKeyEvent', {
-      type,
-      key: 'Backspace',
-      code: 'Backspace',
-      windowsVirtualKeyCode: 229,
-      nativeVirtualKeyCode: 229,
-      text: '',
-      unmodifiedText: ''
-    })
-  }
-}
-
-async function dispatchImeShiftToggle(session: CDPSession): Promise<void> {
-  await session.send('Input.dispatchKeyEvent', {
-    type: 'rawKeyDown',
-    key: 'Shift',
-    code: 'ShiftLeft',
-    windowsVirtualKeyCode: 16,
-    nativeVirtualKeyCode: 16,
-    modifiers: 8
-  })
-  await session.send('Input.dispatchKeyEvent', {
-    type: 'keyUp',
-    key: 'Enter',
-    code: 'Enter',
-    windowsVirtualKeyCode: 13,
-    nativeVirtualKeyCode: 13,
-    modifiers: 8
-  })
-  await session.send('Input.dispatchKeyEvent', {
-    type: 'keyUp',
-    key: 'Shift',
-    code: 'ShiftLeft',
-    windowsVirtualKeyCode: 16,
-    nativeVirtualKeyCode: 16
   })
 }
 
@@ -605,17 +567,18 @@ test.describe('Chinese IME terminal chat input repro', () => {
 
       const expectedSubmitted = ['你好', '一二三四五六七八九十']
       await setImeComposition(session, 's')
-      await dispatchImeShiftToggle(session)
-      await waitForLivePrompt(orcaPage, '')
-      await expect.poll(() => readActiveCompositionText(orcaPage)).toBe('s')
+      await dispatchWindowsImeShiftToggle(session)
+      await waitForLivePrompt(orcaPage, 's')
+      await expect.poll(() => readActiveCompositionText(orcaPage)).toBe('')
       await expect
         .poll(async () => (await readPromptState(orcaPage))?.submitted)
         .toEqual(expectedSubmitted)
-      await commitImeText(session, '')
+      await orcaPage.keyboard.press('Backspace')
+      await waitForLivePrompt(orcaPage, '')
 
       await setImeComposition(session, 'x')
       const inputCountBeforeImeBackspace = readPtyInputCount(inputLogPath)
-      await dispatchImeBackspace(session)
+      await dispatchWindowsImeBackspace(session)
       await waitForLivePrompt(orcaPage, '')
       await expect
         .poll(() => readActiveCompositionText(orcaPage), {
@@ -638,9 +601,15 @@ test.describe('Chinese IME terminal chat input repro', () => {
         'Windows-style IME process keys should be observable in the event trace'
       ).toBe(true)
       expect(
-        log.filter((entry) => entry.type === 'keydown' && entry.key === 'Backspace').length,
-        'Backspace should cover native preedit, prompt deletion, and Windows keyCode 229'
-      ).toBe(3)
+        log.some(
+          (entry) =>
+            entry.type === 'keydown' &&
+            entry.key === 'Process' &&
+            entry.code === 'Backspace' &&
+            entry.keyCode === 229
+        ),
+        'native Windows IME Backspace should arrive as Process/Backspace/229'
+      ).toBe(true)
     } finally {
       await attachImeEvidence(orcaPage, testInfo, 'final-ime-evidence').catch(() => undefined)
       await session.detach().catch(() => undefined)
@@ -676,11 +645,13 @@ test.describe('Chinese IME terminal chat input repro', () => {
 
       await setImeComposition(session, 's')
       const inputCountBeforeShift = readPtyInputCount(inputLogPath)
-      await dispatchImeShiftToggle(session)
-      await waitForLivePrompt(orcaPage, '')
-      await expect.poll(() => readActiveCompositionText(orcaPage)).toBe('s')
+      await dispatchWindowsImeShiftToggle(session)
+      await waitForLivePrompt(orcaPage, 's')
+      await expect.poll(() => readActiveCompositionText(orcaPage)).toBe('')
       await expect.poll(async () => (await readPromptState(orcaPage))?.submitted).toEqual([])
-      await expect.poll(() => readPtyInputCount(inputLogPath)).toBe(inputCountBeforeShift)
+      await expect
+        .poll(() => readPtyInputs(inputLogPath).slice(inputCountBeforeShift))
+        .toEqual(['s'])
     } finally {
       await attachImeEvidence(orcaPage, testInfo, 'final-windows-shift-ime-evidence').catch(
         () => undefined

@@ -81,6 +81,11 @@ import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
 import { installTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import {
+  armTerminalImeDeletionReleaseGuard,
+  consumeTerminalImeDeletionRelease,
+  createTerminalImeDeletionReleaseGuard
+} from './terminal-ime-deletion-release-guard'
+import {
   armTerminalImePendingCandidateKeyRelease,
   clearTerminalImePendingCandidateKeyRelease,
   createTerminalImePendingCandidateKeyReleases,
@@ -887,6 +892,7 @@ export function useTerminalPaneLifecycle({
         let pendingTerminalInterruptKeyup = false
         const pendingTerminalImeCandidateKeyReleases =
           createTerminalImePendingCandidateKeyReleases()
+        const terminalImeDeletionReleaseGuard = createTerminalImeDeletionReleaseGuard()
         const isMac = navigator.userAgent.includes('Mac')
         // Why: Android/ChromeOS UAs also contain "Linux"; scope the fcitx candidate-key policy to desktop Linux.
         const isLinux =
@@ -928,6 +934,18 @@ export function useTerminalPaneLifecycle({
             linuxImeCandidateState?.observeKeyboardEvent(e, linuxCandidateClassification)
           }
           const now = Date.now()
+          const compositionActive = imeCompositionTracker.isActive()
+          const pendingCompositionDeletionReleaseActive = consumeTerminalImeDeletionRelease(
+            terminalImeDeletionReleaseGuard,
+            e,
+            now
+          )
+          armTerminalImeDeletionReleaseGuard(
+            terminalImeDeletionReleaseGuard,
+            e,
+            compositionActive,
+            now
+          )
           const pendingCandidateReleaseGuardActive =
             shouldApplyTerminalImePendingCandidateKeyRelease(
               e,
@@ -935,11 +953,12 @@ export function useTerminalPaneLifecycle({
               now
             )
           const imeKeyboardOptions = {
-            compositionActive: imeCompositionTracker.isActive(),
+            compositionActive,
             candidateKeyGuardActive:
               imeCompositionTracker.isCandidateKeyGuardActive() ||
               pendingCandidateReleaseGuardActive,
             pendingCandidateKeyReleaseActive: pendingCandidateReleaseGuardActive,
+            pendingCompositionDeletionReleaseActive,
             linuxOrphanCandidateDigitGuardActive:
               linuxCandidateClassification.candidateDigitGuardActive,
             isMac,

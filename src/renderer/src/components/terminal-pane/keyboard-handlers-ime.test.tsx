@@ -277,27 +277,45 @@ describe('Windows IME keyboard ownership', () => {
     harness.dispose()
   })
 
-  it('does not turn a Shift IME toggle with an orphan Enter keyup into a newline', () => {
+  it('does not turn a native Windows IME Shift toggle into a newline', () => {
     const harness = createHarness()
     const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
     harness.startComposition()
-    harness.terminalInput.dispatchEvent(
+    for (const event of [
+      keyboardEvent('keydown', {
+        key: 'Process',
+        code: 'ShiftLeft',
+        keyCode: 229,
+        timeStamp: 1,
+        isComposing: true,
+        shiftKey: true
+      }),
       keyboardEvent('keydown', {
         key: 'Shift',
         code: 'ShiftLeft',
         keyCode: 16,
-        timeStamp: 1,
+        timeStamp: 2,
+        isComposing: true,
         shiftKey: true
-      })
-    )
-    harness.terminalInput.dispatchEvent(
+      }),
       keyboardEvent('keyup', {
-        key: 'Enter',
-        code: 'Enter',
-        keyCode: 13,
-        timeStamp: 2
+        key: 'Process',
+        code: 'ShiftLeft',
+        keyCode: 229,
+        timeStamp: 3,
+        isComposing: true,
+        shiftKey: true
+      }),
+      keyboardEvent('keyup', {
+        key: 'Shift',
+        code: 'ShiftLeft',
+        keyCode: 16,
+        timeStamp: 4,
+        isComposing: true
       })
-    )
+    ]) {
+      harness.terminalInput.dispatchEvent(event)
+    }
     vi.runAllTimers()
 
     expect(harness.sendInput).not.toHaveBeenCalled()

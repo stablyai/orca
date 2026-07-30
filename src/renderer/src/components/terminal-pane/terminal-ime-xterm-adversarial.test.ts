@@ -2,6 +2,12 @@
 import { createRequire } from 'node:module'
 import { Terminal as EsmTerminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  armTerminalImeDeletionReleaseGuard,
+  consumeTerminalImeDeletionRelease,
+  createTerminalImeDeletionReleaseGuard
+} from './terminal-ime-deletion-release-guard'
+import { shouldSuppressTerminalImeKeyboardEvent } from './xterm-bypass-policy'
 
 const requireFromHere = createRequire(import.meta.url)
 const { Terminal: CjsTerminal } = requireFromHere('@xterm/xterm') as {
@@ -181,20 +187,32 @@ describe.each([
     terminal.dispose()
   })
 
-  it('removes a Windows IME preedit character when Backspace arrives as keyCode 229', async () => {
+  it('accepts native Microsoft Pinyin deletion of a one-letter preedit', async () => {
     const { emitted, terminal, textarea } = openTerminal(TerminalType)
     start(textarea, 'm')
     await nextEventLoop()
 
     textarea.dispatchEvent(
       new KeyboardEvent('keydown', {
-        key: 'Backspace',
+        key: 'Process',
         code: 'Backspace',
         keyCode: 229,
         bubbles: true,
         cancelable: true
       })
     )
+    composition(textarea, 'compositionupdate', '')
+    textarea.value = ''
+    textarea.setSelectionRange(0, 0)
+    textarea.dispatchEvent(
+      new InputEvent('input', {
+        bubbles: true,
+        data: null,
+        inputType: 'deleteContentBackward',
+        isComposing: false
+      })
+    )
+    composition(textarea, 'compositionend', '')
     await nextEventLoop()
 
     const compositionView = terminal.element?.querySelector<HTMLElement>('.composition-view')
@@ -203,10 +221,82 @@ describe.each([
     terminal.dispose()
   })
 
+  it('does not leak the paired Backspace release under Kitty event reporting', async () => {
+    const { emitted, terminal, textarea } = openTerminal(TerminalType)
+    const deletionReleaseGuard = createTerminalImeDeletionReleaseGuard()
+    let compositionActive = false
+    textarea.addEventListener('compositionstart', () => {
+      compositionActive = true
+    })
+    textarea.addEventListener('compositionend', () => {
+      compositionActive = false
+    })
+    terminal.attachCustomKeyEventHandler((keyboardEvent) => {
+      const now = Date.now()
+      const pendingCompositionDeletionReleaseActive = consumeTerminalImeDeletionRelease(
+        deletionReleaseGuard,
+        keyboardEvent,
+        now
+      )
+      armTerminalImeDeletionReleaseGuard(
+        deletionReleaseGuard,
+        keyboardEvent,
+        compositionActive,
+        now
+      )
+      return !shouldSuppressTerminalImeKeyboardEvent(keyboardEvent, {
+        compositionActive,
+        candidateKeyGuardActive: false,
+        pendingCandidateKeyReleaseActive: false,
+        pendingCompositionDeletionReleaseActive,
+        isMac: false,
+        isLinux: false
+      })
+    })
+    await new Promise<void>((resolve) => terminal.write('\x1b[>10u', resolve))
+    start(textarea, 'm')
+    await nextEventLoop()
+
+    textarea.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Process',
+        code: 'Backspace',
+        keyCode: 229,
+        bubbles: true,
+        cancelable: true
+      })
+    )
+    composition(textarea, 'compositionupdate', '')
+    textarea.value = ''
+    textarea.setSelectionRange(0, 0)
+    composition(textarea, 'compositionend', '')
+    textarea.dispatchEvent(
+      new KeyboardEvent('keyup', {
+        key: 'Process',
+        code: 'Backspace',
+        keyCode: 229,
+        bubbles: true
+      })
+    )
+    textarea.dispatchEvent(
+      new KeyboardEvent('keyup', {
+        key: 'Backspace',
+        code: 'Backspace',
+        keyCode: 8,
+        bubbles: true
+      })
+    )
+    await nextEventLoop()
+
+    expect(emitted).toEqual([])
+    terminal.dispose()
+  })
+
   it('edits only the active preedit when Windows IME deletion arrives as keyCode 229', async () => {
     const cases = [
-      { key: 'Backspace', caret: 2, expected: 'n' },
-      { key: 'Delete', caret: 0, expected: 'i' }
+      { eventKey: 'Process', code: 'Backspace', caret: 2, expected: 'n' },
+      { eventKey: 'Process', code: 'Delete', caret: 0, expected: 'i' },
+      { eventKey: 'Backspace', code: '', caret: 2, expected: 'n' }
     ] as const
 
     for (const testCase of cases) {
@@ -217,8 +307,8 @@ describe.each([
 
       textarea.dispatchEvent(
         new KeyboardEvent('keydown', {
-          key: testCase.key,
-          code: testCase.key,
+          key: testCase.eventKey,
+          code: testCase.code,
           keyCode: 229,
           bubbles: true,
           cancelable: true
@@ -234,6 +324,36 @@ describe.each([
     }
   })
 
+  it('expires deferred deletion ownership before a later empty composition update', async () => {
+    const { emitted, terminal, textarea } = openTerminal(TerminalType)
+    start(textarea, 'ni')
+    await nextEventLoop()
+
+    const dispatchBackspace = (): void => {
+      textarea.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Process',
+          code: 'Backspace',
+          keyCode: 229,
+          bubbles: true,
+          cancelable: true
+        })
+      )
+    }
+
+    dispatchBackspace()
+    await nextEventLoop()
+    expect(textarea.value).toBe('n')
+
+    composition(textarea, 'compositionupdate', '')
+    dispatchBackspace()
+    await nextEventLoop()
+
+    expect(textarea.value).toBe('')
+    expect(emitted).toEqual([])
+    terminal.dispose()
+  })
+
   it('prefers native IME progress over deferred deletion reconciliation', async () => {
     const { emitted, terminal, textarea } = openTerminal(TerminalType)
     start(textarea, 'm')
@@ -241,7 +361,7 @@ describe.each([
 
     textarea.dispatchEvent(
       new KeyboardEvent('keydown', {
-        key: 'Backspace',
+        key: 'Process',
         code: 'Backspace',
         keyCode: 229,
         bubbles: true,

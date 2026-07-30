@@ -246,18 +246,38 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
     }
   })
 
+  it('suppresses the ordinary keyup paired with a completed IME deletion', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ type: 'keyup', key: 'Backspace', code: 'Backspace', keyCode: 8 }),
+        { ...windowsIdle, pendingCompositionDeletionReleaseActive: true }
+      )
+    ).toBe(true)
+  })
+
   it('lets xterm reconcile IME deletion during a tracked composition', () => {
     for (const options of [windowsComposing, linuxComposing]) {
-      for (const key of ['Backspace', 'Delete']) {
+      for (const { key, code } of [
+        { key: 'Process', code: 'Backspace' },
+        { key: 'Process', code: 'Delete' },
+        { key: 'Backspace', code: '' },
+        { key: 'Delete', code: '' }
+      ]) {
         expect(
           shouldSuppressTerminalImeKeyboardEvent(
-            event({ key, code: key, keyCode: 229, isComposing: true }),
+            event({ key, code, keyCode: 229, isComposing: true }),
             options
           )
         ).toBe(false)
         expect(
           shouldSuppressTerminalImeKeyboardEvent(
-            event({ type: 'keyup', key, code: key, keyCode: 229, isComposing: true }),
+            event({
+              type: 'keyup',
+              key,
+              code,
+              keyCode: 229,
+              isComposing: true
+            }),
             options
           )
         ).toBe(true)

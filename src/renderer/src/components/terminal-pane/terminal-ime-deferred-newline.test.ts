@@ -325,6 +325,7 @@ describe('isTerminalImeProcessEnter', () => {
   const event = (overrides: Partial<KeyboardEvent> = {}) =>
     ({
       key: 'Process',
+      code: 'Enter',
       keyCode: 229,
       metaKey: false,
       ctrlKey: false,
@@ -342,6 +343,7 @@ describe('isTerminalImeProcessEnter', () => {
 
   it.each([
     { key: 'Enter' },
+    { code: 'ShiftLeft' },
     { keyCode: 13 },
     { shiftKey: false },
     { ctrlKey: true },

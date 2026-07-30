@@ -215,12 +215,12 @@ describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
   })
 
   it('lets xterm reconcile IME deletion during a tracked composition', () => {
-    expect(
-      shouldSuppressTerminalImeKeyboardEvent(
-        event({ key: 'Backspace', code: 'Backspace', keyCode: 229, isComposing: true }),
-        composing
-      )
-    ).toBe(false)
+    for (const deletionEvent of [
+      event({ key: 'Process', code: 'Backspace', keyCode: 229, isComposing: true }),
+      event({ key: 'Backspace', code: '', keyCode: 229, isComposing: true })
+    ]) {
+      expect(shouldSuppressTerminalImeKeyboardEvent(deletionEvent, composing)).toBe(false)
+    }
   })
 
   it('suppresses IME-owned editing keys while composition is active', () => {
