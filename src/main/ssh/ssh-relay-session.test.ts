@@ -146,6 +146,20 @@ describe('SshRelaySession', () => {
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
   })
 
+  it('removes the context-pressure settings listener on detach', () => {
+    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const cleanup = vi.fn()
+    Object.assign(mockStore, {
+      getSettings: vi.fn(() => ({ experimentalContextPressure: false })),
+      onSettingsChanged: vi.fn(() => cleanup)
+    })
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    session.detach()
+
+    expect(cleanup).toHaveBeenCalledOnce()
+  })
+
   it('hands each PTY data event exactly once to the bounded main intake', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
     const runtime = { onPtyData: vi.fn(), onPtyExit: vi.fn() }

@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: the agent-status slice co-locates live map, retained snapshots, retention-suppression, and tab-prefix sweep so the teardown contract stays readable end-to-end. Splitting across files would scatter the drop/remove/retain interactions that must stay in lockstep. */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import { agentContextUsageEqual } from '../../../../shared/agent-context-pressure'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   AGENT_STATE_HISTORY_MAX,
@@ -1838,6 +1839,18 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             : undefined) ??
           matchedRegistryLaunchConfig ??
           matchedSleepingLaunchConfig
+        // Why: most hook pings omit contextUsage ("no update") — cache the last reading across
+        // the turn like `model`; an explicit null clears it. Reuse the prior ref when equal so
+        // identity-comparing subscribers skip re-renders on repeat readings.
+        const previousContextUsage =
+          canReuseExistingProviderSession && !providerSessionChanged
+            ? existing?.contextUsage
+            : undefined
+        const contextUsage =
+          payload.contextUsage === undefined ||
+          agentContextUsageEqual(previousContextUsage, payload.contextUsage)
+            ? previousContextUsage
+            : payload.contextUsage
         const entry: AgentStatusEntry = {
           state: payload.state,
           prompt: payload.prompt,
@@ -1877,6 +1890,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             : payload.subagents,
           ...(providerSession ? { providerSession } : {}),
           ...(promptInteractionKey ? { promptInteractionKey } : {}),
+          contextUsage,
           // Why: `interrupted` is done-only; parseAgentStatusPayload already clamps it for non-done states, so write it through directly.
           interrupted: payload.interrupted
         }
@@ -1923,6 +1937,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             entry.lastAssistantMessage !== existing.lastAssistantMessage ||
             entry.orchestration !== existing.orchestration ||
             entry.subagents !== existing.subagents ||
+            entry.contextUsage !== existing.contextUsage ||
             entry.providerSession !== existing.providerSession ||
             entry.interrupted !== existing.interrupted)
         const retentionRelevantChange =

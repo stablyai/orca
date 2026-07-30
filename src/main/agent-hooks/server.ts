@@ -47,6 +47,12 @@ import {
   parseClaudeStatusLineBody,
   type ClaudeStatusLineRateLimits
 } from '../../shared/claude-statusline-rate-limits'
+import { parseClaudeStatusLineContextUsage } from '../../shared/claude-statusline-context-window'
+import {
+  agentContextUsageEqual,
+  normalizeAgentContextUsage,
+  type AgentContextUsage
+} from '../../shared/agent-context-pressure'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusClearIpcPayload,
@@ -550,6 +556,7 @@ function attachClaudePermissionToolUseId(
 }
 
 export class AgentHookServer {
+  private contextPressureEnabled = true
   private server: ReturnType<typeof createServer> | null = null
   private port = 0
   private token = ''
@@ -614,6 +621,35 @@ export class AgentHookServer {
     listener: ((event: ClaudeStatusLineRateLimits) => void) | null
   ): void {
     this.onClaudeStatusLine = listener
+  }
+
+  setContextPressureEnabled(enabled: boolean): void {
+    if (this.contextPressureEnabled === enabled) {
+      return
+    }
+    this.contextPressureEnabled = enabled
+    this.maybeWriteEndpointFile()
+    if (enabled) {
+      return
+    }
+    let changed = false
+    for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
+      if (entry.providerSessionOnly || entry.payload.contextUsage === undefined) {
+        continue
+      }
+      const enriched = entry as EnrichedAgentHookEventPayload
+      const updated: EnrichedAgentHookEventPayload = {
+        ...enriched,
+        payload: { ...enriched.payload, contextUsage: null }
+      }
+      this.state.lastStatusByPaneKey.set(paneKey, updated)
+      this.emitEnrichedStatus(updated)
+      changed = true
+    }
+    if (changed) {
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+    }
   }
 
   subscribeStatusChanges(listener: StatusChangeListener): () => void {
@@ -1121,7 +1157,14 @@ export class AgentHookServer {
             }
           }
     const effectivePayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
-    if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
+    const contextGatedPayload =
+      !this.contextPressureEnabled && effectivePayload.payload.contextUsage !== undefined
+        ? {
+            ...effectivePayload,
+            payload: { ...effectivePayload.payload, contextUsage: null }
+          }
+        : effectivePayload
+    if (previous && shouldKeepClaudePermissionVisible(previous, contextGatedPayload)) {
       return previous
     }
     // Why: some TUIs emit a delayed tool/working hook after Ctrl+C stopped the turn; don't let it resurrect the row.
@@ -1149,21 +1192,86 @@ export class AgentHookServer {
       return previous
     }
     if (
-      effectivePayload.payload.state !== 'done' ||
-      effectivePayload.payload.lastAssistantMessage
+      contextGatedPayload.payload.state !== 'done' ||
+      contextGatedPayload.payload.lastAssistantMessage
     ) {
       this.clearAssistantMessageRetry(effectivePayload.paneKey)
     }
     if (!identity.inheritedFromActivePane) {
-      this.maybeTrackAgentPromptSent(effectivePayload, previous)
+      this.maybeTrackAgentPromptSent(contextGatedPayload, previous)
     }
-    const enriched = this.attachStatusTiming(effectivePayload, now)
+    // Why: most hook events omit contextUsage (Claude's arrives via applyPaneContextUsage;
+    // codex payloads carry their rollout reading directly); inherit the pane's last reading
+    // so persistence/snapshot replay keep it across pings.
+    // An agentType change means a new session, whose reading no longer applies.
+    const contextPreservedPayload =
+      contextGatedPayload.payload.contextUsage === undefined &&
+      contextGatedPayload.hookEventName !== 'SessionStart' &&
+      previous?.payload.contextUsage != null &&
+      previous.payload.agentType === contextGatedPayload.payload.agentType
+        ? {
+            ...contextGatedPayload,
+            payload: {
+              ...contextGatedPayload.payload,
+              contextUsage: previous.payload.contextUsage
+            }
+          }
+        : contextGatedPayload
+    const enriched = this.attachStatusTiming(contextPreservedPayload, now)
     this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
     this.emitEnrichedStatus(enriched)
     return enriched
+  }
+
+  /** Upsert a provider-reported context reading onto a pane's cached status row.
+   *  Provider-neutral seam: fed by the Claude statusline today, other providers later.
+   *  No row is fabricated — a reading with no established status entry is dropped
+   *  (the feed re-reports within its throttle window once hooks create the row). */
+  applyPaneContextUsage(
+    rawPaneKey: string,
+    usage: AgentContextUsage | null,
+    providerSessionId?: string
+  ): void {
+    if (!this.contextPressureEnabled) {
+      return
+    }
+    const paneKey = this.resolvePaneKeyAlias(
+      typeof rawPaneKey === 'string' ? rawPaneKey.trim() : ''
+    )
+    if (!isValidPaneKey(paneKey) || this.shouldSuppressClosedTabStatus(paneKey)) {
+      return
+    }
+    const existing = this.state.lastStatusByPaneKey.get(paneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    if (!existing || existing.providerSessionOnly) {
+      return
+    }
+    if (
+      providerSessionId !== undefined &&
+      existing.providerSession?.id !== undefined &&
+      providerSessionId !== existing.providerSession.id
+    ) {
+      return
+    }
+    const normalized = normalizeAgentContextUsage(usage)
+    if (
+      normalized === undefined ||
+      agentContextUsageEqual(existing.payload.contextUsage, normalized)
+    ) {
+      return
+    }
+    const updated: EnrichedAgentHookEventPayload = {
+      ...existing,
+      payload: { ...existing.payload, contextUsage: normalized }
+    }
+    this.state.lastStatusByPaneKey.set(paneKey, updated)
+    this.scheduleStatusPersist()
+    // Why: skip notifyStatusChangeListeners — those notifications carry only state/receivedAt, neither changed.
+    this.emitEnrichedStatus(updated)
   }
 
   // Why: every status emit must reach plugins too, so a new early-return path
@@ -1222,7 +1330,16 @@ export class AgentHookServer {
       }
       const subagentsChanged =
         JSON.stringify(normalized.payload.subagents) !== JSON.stringify(original.payload.subagents)
-      const next = subagentsChanged ? this.applyNormalizedStatus(normalized) : original
+      let next = subagentsChanged ? this.applyNormalizedStatus(normalized) : original
+      if (!subagentsChanged && normalized.payload.contextUsage !== undefined) {
+        // Why: the poll's rollout re-read can surface a fresh token_count between hook
+        // events; re-arm off the stored row or the identity check ends the poll.
+        this.applyPaneContextUsage(original.paneKey, normalized.payload.contextUsage)
+        next =
+          (this.state.lastStatusByPaneKey.get(original.paneKey) as
+            | EnrichedAgentHookEventPayload
+            | undefined) ?? next
+      }
       this.scheduleCodexSubagentPoll(source, body, next)
     }, CODEX_SUBAGENT_POLL_MS)
     this.codexSubagentPollTimers.set(original.paneKey, timer)
@@ -1719,6 +1836,8 @@ export class AgentHookServer {
       providerSessionOnly?: unknown
       isReplay?: boolean
       payload: unknown
+      contextUsage?: unknown
+      contextSessionId?: unknown
     },
     connectionId: string
   ): void {
@@ -1745,6 +1864,23 @@ export class AgentHookServer {
       return
     }
     if (!parsedPaneKey) {
+      return
+    }
+    if (envelope.contextUsage !== undefined) {
+      if (envelope.payload !== undefined) {
+        return
+      }
+      const contextUsage = normalizeAgentContextUsage(envelope.contextUsage)
+      if (contextUsage !== undefined) {
+        this.applyPaneContextUsage(
+          paneKey,
+          contextUsage,
+          typeof envelope.contextSessionId === 'string' &&
+            envelope.contextSessionId.trim().length > 0
+            ? envelope.contextSessionId.trim()
+            : undefined
+        )
+      }
       return
     }
     if (envelope.tabId !== undefined && typeof envelope.tabId !== 'string') {
@@ -1886,6 +2022,14 @@ export class AgentHookServer {
           const statusLineEvent = parseClaudeStatusLineBody(body)
           if (statusLineEvent) {
             this.onClaudeStatusLine?.(statusLineEvent)
+          }
+          const contextReading = parseClaudeStatusLineContextUsage(body)
+          if (contextReading) {
+            this.applyPaneContextUsage(
+              contextReading.paneKey,
+              contextReading.usage,
+              contextReading.sessionId
+            )
           }
           res.writeHead(204)
           res.end()
@@ -2298,7 +2442,8 @@ export class AgentHookServer {
       port: this.port,
       token: this.token,
       env: this.env,
-      version: ORCA_HOOK_PROTOCOL_VERSION
+      version: ORCA_HOOK_PROTOCOL_VERSION,
+      contextPressureEnabled: this.contextPressureEnabled
     })
     this.endpointFileWritten = ok
   }

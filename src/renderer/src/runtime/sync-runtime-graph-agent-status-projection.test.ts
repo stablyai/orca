@@ -33,7 +33,8 @@ function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
         toolInput: entry.toolInput ?? null,
         interactivePrompt: entry.interactivePrompt ?? null,
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
-        interrupted: entry.interrupted ?? null
+        interrupted: entry.interrupted ?? null,
+        contextUsage: entry.contextUsage ?? null
       }))
   )
 }
@@ -116,5 +117,22 @@ describe('mobile agent-status projection equivalence', () => {
         projection: buildRuntimeMobileAgentStatusProjectionForTests(current)
       }).toEqual({ round, projection: referenceProjection(current) })
     }
+  })
+
+  it('re-fires on a context-usage-only change so paired clients see fresh pressure', () => {
+    resetRuntimeMobileAgentStatusProjectionCacheForTests()
+    const base: AppState['agentStatusByPaneKey'] = { 'tab-0:leaf-0': makeEntry(0) }
+    const before = buildRuntimeMobileAgentStatusProjectionForTests(base)
+    const withReading: AppState['agentStatusByPaneKey'] = {
+      'tab-0:leaf-0': makeEntry(0, { contextUsage: { usedTokens: 120_000, maxTokens: 200_000 } })
+    }
+    const after = buildRuntimeMobileAgentStatusProjectionForTests(withReading)
+    expect(after).not.toBe(before)
+    expect(after).toEqual(referenceProjection(withReading))
+    // Same reading again (new object, equal values) keeps the projection stable.
+    const repeat = buildRuntimeMobileAgentStatusProjectionForTests({
+      'tab-0:leaf-0': makeEntry(0, { contextUsage: { usedTokens: 120_000, maxTokens: 200_000 } })
+    })
+    expect(repeat).toEqual(after)
   })
 })

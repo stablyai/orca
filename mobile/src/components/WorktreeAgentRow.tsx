@@ -4,6 +4,7 @@ import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { colors, spacing } from '../theme/mobile-theme'
 import { agentDisplayLabel, agentDotState, formatTimeAgo } from '../worktree/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
+import { ContextPressureDot } from './ContextPressureDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
 
 const INDENT_PER_DEPTH = 14
@@ -33,6 +34,8 @@ function WorktreeAgentRowComponent({ agent, depth, now, unvisited }: Props) {
       <Text style={[styles.label, unvisited && styles.labelUnvisited]} numberOfLines={1}>
         {label}
       </Text>
+      {/* Individual rows show all known pressure levels. */}
+      {agent.contextPressure ? <ContextPressureDot pressure={agent.contextPressure} /> : null}
       <Text style={styles.time}>{ts}</Text>
     </View>
   )

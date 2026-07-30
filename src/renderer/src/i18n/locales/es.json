@@ -817,6 +817,19 @@
         "9375620cc3": "Reinicia esta sesión para usar {{value0}}. Se mantiene en la cuenta anterior hasta que lo hagas.",
         "6133594b12": "Mantener cuenta anterior"
       },
+      "ContextPressureIndicator": {
+        "ariaLabel": "Ventana de contexto al {{value0}}% de uso",
+        "usageDetail": "Ventana de contexto: {{value0}}{{value1}} de {{value2}} tokens ({{value3}}%)",
+        "usagePercent": "Ventana de contexto: {{value0}}% en uso",
+        "limitSource": "Límite de contexto efectivo: {{value0}}",
+        "sourceProvider": "informado por el proveedor",
+        "sourceModel": "máximo del modelo",
+        "sourceSoftCap": "límite blando",
+        "derivedUsage": "Uso de tokens derivado de un porcentaje informado por el proveedor",
+        "levelOk": "saludable",
+        "levelWarning": "acercándose al límite",
+        "levelCritical": "cerca del límite"
+      },
       "FirstLaunchBanner": {
         "b9e1b966c7": "Descartar aviso",
         "94cc673726": "Entiendo",
@@ -4347,7 +4360,8 @@
           "65a9820bd1": "Estados de Agents",
           "219ebf1961": "Nombre de rama",
           "folderPathIdentity": "Rama / ruta de carpeta",
-          "cli": "Orca CLI"
+          "cli": "Orca CLI",
+          "contextPressure": "Presión de contexto"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Conectando...",
@@ -5747,6 +5761,27 @@
             "modeAriaLabel": "Modo de apertura del Panel de agentes",
             "modeInWindow": "En ventana",
             "modePopout": "Ventana emergente"
+          },
+          "contextPressure": {
+            "title": "Presión de contexto",
+            "copy": "Muestra un indicador verde/amarillo/rojo del uso de la ventana de contexto en filas, tarjetas y pestañas de agentes. Las sesiones sin uso informado por el proveedor no muestran indicador.",
+            "toggleLabel": "Alternar presión de contexto",
+            "warnLabel": "Avisar al",
+            "warnDescription": "Porcentaje del límite efectivo de contexto en el que el indicador se pone amarillo.",
+            "criticalLabel": "Crítico al",
+            "criticalDescription": "Porcentaje del límite efectivo de contexto en el que el indicador se pone rojo.",
+            "softLimitsLabel": "Límites blandos",
+            "softLimitsDescription": "Límites absolutos de tokens por global, provider:<id>, agent:<type> o model:<id>. Se siguen admitiendo claves de modelo y agente sin prefijo. Gana el límite coincidente más específico.",
+            "softLimitKeyPlaceholder": "global, provider:id, model:id o agent:type",
+            "softLimitKeyAriaLabel": "Clave del límite blando: global, proveedor, modelo o tipo de agente",
+            "softLimitTokensPlaceholder": "Tokens",
+            "softLimitTokensAriaLabel": "Límite blando en tokens",
+            "softLimitTokensSuffix": "tokens",
+            "addLimit": "Añadir límite",
+            "confirmAddLimit": "Añadir",
+            "cancelAddLimit": "Cancelar la adición del límite blando",
+            "removeLimit": "Quitar el límite blando de {{value0}}",
+            "duplicateLimit": "Ya existe un límite blando con esta clave."
           }
         },
         "FloatingWorkspacePane": {
@@ -7995,6 +8030,17 @@
             "agentDashboard": {
               "title": "Panel de agentes",
               "description": "Tablero Kanban para monitorear agentes en diferentes worktrees, en ventana o como ventana emergente."
+            },
+            "contextPressure": {
+              "title": "Presión de contexto",
+              "description": "Indicador tipo semáforo del uso de la ventana de contexto de los agentes, con umbrales configurables y límites blandos de tokens.",
+              "context": "contexto",
+              "tokens": "tokens",
+              "usage": "uso",
+              "limit": "límite",
+              "window": "ventana",
+              "pressure": "presión",
+              "compaction": "compactación"
             }
           }
         },

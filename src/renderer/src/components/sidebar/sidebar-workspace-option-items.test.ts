@@ -64,4 +64,23 @@ describe('worktree card property options', () => {
 
     expect(options.find((option) => option.id === 'branch')?.label).toBe('Branch / folder path')
   })
+
+  it('offers the context-pressure option only while its experimental flag is on', () => {
+    expect(getWorktreeCardPropertyOptions().map((option) => option.id)).not.toContain(
+      'context-pressure'
+    )
+    expect(
+      getWorktreeCardPropertyOptions({ newCardStyle: true }).map((option) => option.id)
+    ).not.toContain('context-pressure')
+
+    for (const newCardStyle of [false, true]) {
+      const options = getWorktreeCardPropertyOptions({
+        newCardStyle,
+        contextPressureEnabled: true
+      })
+      const option = options.find((candidate) => candidate.id === 'context-pressure')
+      expect(option?.properties).toEqual(['context-pressure'])
+      expect(option?.label).toBe('Context pressure')
+    }
+  })
 })

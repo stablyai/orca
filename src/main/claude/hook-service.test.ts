@@ -215,6 +215,27 @@ describe('ClaudeHookService.install', () => {
     }
   })
 
+  it('rewrites a managed statusline when tracking is disabled after restart', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-statusline-disabled-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      const service = new ClaudeHookService()
+      service.install()
+      service.setContextPressureEnabled(false)
+
+      const script = readFileSync(
+        join(tmpHome, '.orca', 'agent-hooks', STATUSLINE_SCRIPT_FILE_NAME),
+        'utf-8'
+      )
+      expect(script).toContain('rate_limits')
+      expect(script).not.toContain('context_window')
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
   it('never overwrites a user-owned statusLine command', () => {
     const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-user-statusline-'))
     vi.stubEnv('HOME', tmpHome)
@@ -405,10 +426,10 @@ describe('ClaudeHookService.installRemote', () => {
     expect(script).toContain('--data-urlencode "payload@-"')
     expect(script).not.toContain('--data-urlencode "payload=${payload}"')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/claude-hook.sh')).toBe(0o755)
-    // Why: no remote statusLine — this path serves SSH remotes and WSL guests, whose relay
-    // listener doesn't route /statusline/claude and whose accounts aren't attributable locally.
-    expect(parsed.statusLine).toBeUndefined()
-    expect(fs.files.get('/home/dev/.orca/agent-hooks/claude-statusline.sh')).toBeUndefined()
+    expect(parsed.statusLine.command).toContain('/home/dev/.orca/agent-hooks/claude-statusline.sh')
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/claude-statusline.sh')).toContain(
+      '/statusline/claude'
+    )
   })
 
   it('reports parse error when remote settings.json cannot be parsed', async () => {

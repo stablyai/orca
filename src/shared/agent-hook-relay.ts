@@ -23,6 +23,7 @@
 //   default env is `remote`, a location marker ignored by dev-vs-prod checks.
 
 import type { ParsedAgentStatusPayload } from './agent-status-types'
+import type { AgentContextUsage } from './agent-context-pressure'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { AgentHookTarget } from './agent-hook-types'
 
@@ -93,7 +94,10 @@ export type AgentHookRelayEnvelope = {
   version?: string
   /** Pre-normalized status payload from the relay's `normalizeHookPayload`.
    *  Orca's `ingestRemote` validates it again at the SSH trust boundary. */
-  payload: ParsedAgentStatusPayload
+  payload?: ParsedAgentStatusPayload
+  /** Normalized context-only reading from a remote statusline. */
+  contextUsage?: AgentContextUsage | null
+  contextSessionId?: string
 }
 
 /** JSON-RPC notification method name carried over the relay control channel. */
@@ -112,6 +116,9 @@ export const AGENT_HOOK_INSTALL_PLUGINS_METHOD = 'agent_hook.installPlugins' as 
 /** JSON-RPC request method that asks the remote relay to install every
  *  managed hook using its local filesystem instead of WAN-bound SFTP. */
 export const AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD = 'agent_hook.installManagedHooks' as const
+
+/** Updates the relay endpoint flag sourced by managed Claude statusline scripts. */
+export const AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD = 'agent_hook.setContextPressure' as const
 
 export type AgentHookInstallManagedHooksParams = {
   /** SHA-256 fingerprint of the server key negotiated by Orca's SSH transport. */

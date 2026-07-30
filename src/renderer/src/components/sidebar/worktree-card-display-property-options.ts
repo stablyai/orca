@@ -69,3 +69,15 @@ export const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
     }
   }
 ]
+
+/** Offered only while experimentalContextPressure is on — toggling a property
+ *  that can never render would read as a broken checkbox. */
+export const CONTEXT_PRESSURE_PROPERTY_OPTION: { id: WorktreeCardProperty; label: string } = {
+  id: 'context-pressure',
+  get label() {
+    return translate(
+      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.contextPressure',
+      'Context pressure'
+    )
+  }
+}

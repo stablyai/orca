@@ -17,11 +17,11 @@ afterEach(() => {
 })
 
 describe('getManagedStatusLineScript (posix)', () => {
-  it('guards on rate_limits before sourcing the endpoint or spawning curl', () => {
+  it('guards on rate_limits/context_window before sourcing the endpoint or spawning curl', () => {
     stubPlatform('darwin')
     const script = getManagedStatusLineScript('local')
-    expect(script).toBe(getManagedStatusLineScript('posix'))
-    const guardIndex = script.indexOf('*\'"rate_limits"\'*')
+    // Why one alternation: two separate case arms would double-exit-0 on payloads carrying only one key.
+    const guardIndex = script.indexOf('*\'"rate_limits"\'*|*\'"context_window"\'*')
     const endpointIndex = script.indexOf('ORCA_AGENT_HOOK_ENDPOINT')
     const curlIndex = script.indexOf('curl -sS')
     expect(guardIndex).toBeGreaterThan(-1)
@@ -37,21 +37,40 @@ describe('getManagedStatusLineScript (posix)', () => {
     expect(script).toContain('#!/bin/sh')
     expect(script).not.toContain('curl.exe')
   })
+
+  it('keeps rate limits active but excludes context posts while pressure tracking is off', () => {
+    const script = getManagedStatusLineScript('posix', false)
+    expect(script).toContain('*\'"rate_limits"\'*) ;;')
+    expect(script).toContain(
+      '*\'"context_window"\'*) [ "$ORCA_CONTEXT_PRESSURE_ENABLED" = "1" ] || exit 0 ;;'
+    )
+    expect(script.indexOf('ORCA_AGENT_HOOK_ENDPOINT')).toBeLessThan(
+      script.indexOf('*\'"context_window"\'*')
+    )
+  })
 })
 
 describe('getManagedStatusLineScript (win32 local)', () => {
-  it('guards on rate_limits via findstr before the endpoint call and curl spawn', () => {
+  it('keeps only the rate-limit findstr guard while pressure tracking is off', () => {
+    stubPlatform('win32')
+    const script = getManagedStatusLineScript('local', false)
+    expect(script).toContain('/c:\\"rate_limits\\"')
+    expect(script).not.toContain('/c:\\"context_window\\"')
+  })
+  it('guards on rate_limits/context_window via findstr before the endpoint call and curl spawn', () => {
     stubPlatform('win32')
     const script = getManagedStatusLineScript('local')
     const captureIndex = script.indexOf('more.com')
-    // Why: the \"-escaped needle makes findstr match the quoted JSON key, not any path containing rate_limits.
-    const guardIndex = script.indexOf('findstr.exe" /c:\\"rate_limits\\"')
+    const rateLimitGuardIndex = script.indexOf('findstr.exe" /c:\\"rate_limits\\"')
+    const contextGuardIndex = script.indexOf('findstr.exe" /c:\\"context_window\\"')
     const endpointIndex = script.indexOf('call "%ORCA_AGENT_HOOK_ENDPOINT%"')
     const curlIndex = script.indexOf('curl.exe')
     expect(captureIndex).toBeGreaterThan(-1)
-    expect(guardIndex).toBeGreaterThan(captureIndex)
-    expect(guardIndex).toBeLessThan(endpointIndex)
+    expect(rateLimitGuardIndex).toBeGreaterThan(captureIndex)
+    expect(contextGuardIndex).toBeGreaterThan(rateLimitGuardIndex)
+    expect(contextGuardIndex).toBeLessThan(endpointIndex)
     expect(endpointIndex).toBeLessThan(curlIndex)
+    expect(script).toContain('if not errorlevel 1 goto :orca_statusline_match')
     expect(script).toContain('if errorlevel 1 goto :orca_statusline_cleanup')
   })
 
@@ -215,7 +234,8 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
     scriptPath: string,
     dir: string,
     payload: string,
-    paneKey = PANE_KEY
+    paneKey = PANE_KEY,
+    contextPressureEnabled = '1'
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const child = spawn('sh', [scriptPath], {
@@ -224,6 +244,7 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
           TMPDIR: dir,
           ORCA_AGENT_HOOK_PORT: '65535',
           ORCA_AGENT_HOOK_TOKEN: 'test-token',
+          ORCA_CONTEXT_PRESSURE_ENABLED: contextPressureEnabled,
           ORCA_PANE_KEY: paneKey
         },
         stdio: ['pipe', 'ignore', 'pipe']
@@ -345,11 +366,55 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
     expect(readFileSync(stampPathFor(dir, 'legacy-tab-b_1'), 'utf8')).toBe('1')
   })
 
-  it('never touches curl or the stamp for payloads without rate_limits', async () => {
+  it('never touches curl or the stamp for payloads without rate_limits or context_window', async () => {
     const { scriptPath, dir, curlLog, dateLog } = makeHarness()
     await runScript(scriptPath, dir, '{"model":{"id":"claude-fable-5"}}')
     expect(lineCount(curlLog)).toBe(0)
     expect(lineCount(dateLog)).toBe(0)
     expect(() => readFileSync(stampPathFor(dir), 'utf8')).toThrow()
+  })
+
+  it('posts payloads that carry context_window without rate_limits (API-key sessions)', async () => {
+    const { scriptPath, dir, curlLog, payloadLog } = makeHarness()
+    const payload = JSON.stringify({
+      cost: { total_duration_ms: 1_000 },
+      context_window: { context_window_size: 200_000, current_usage: { input_tokens: 8_500 } }
+    })
+    await runScript(scriptPath, dir, payload)
+    expect(lineCount(curlLog)).toBe(1)
+    expect(readFileSync(payloadLog, 'utf8')).toBe(payload)
+    expect(readFileSync(stampPathFor(dir), 'utf8')).toBe('1')
+  })
+
+  it('applies live remote context-pressure state without affecting rate limits', async () => {
+    const { scriptPath, dir, curlLog } = makeHarness()
+    const contextPayload = JSON.stringify({
+      cost: { total_duration_ms: 1_000 },
+      context_window: { current_usage: { input_tokens: 10 } }
+    })
+    await runScript(scriptPath, dir, contextPayload, PANE_KEY, '0')
+    expect(lineCount(curlLog)).toBe(0)
+    await runScript(scriptPath, dir, contextPayload, PANE_KEY, '1')
+    expect(lineCount(curlLog)).toBe(1)
+  })
+
+  it('shares one throttle across rate-limit and context posts', async () => {
+    const { scriptPath, dir, curlLog } = makeHarness()
+    await runScript(scriptPath, dir, rateLimitPayload(1_000))
+    const contextPayload = JSON.stringify({
+      cost: { total_duration_ms: 2_000 },
+      context_window: { current_usage: { input_tokens: 10 } }
+    })
+    await runScript(scriptPath, dir, contextPayload)
+    expect(lineCount(curlLog)).toBe(1)
+    await runScript(
+      scriptPath,
+      dir,
+      JSON.stringify({
+        cost: { total_duration_ms: 16_500 },
+        context_window: { current_usage: { input_tokens: 20 } }
+      })
+    )
+    expect(lineCount(curlLog)).toBe(2)
   })
 })

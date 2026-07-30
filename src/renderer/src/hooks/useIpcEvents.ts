@@ -3091,7 +3091,8 @@ export function useIpcEvents(): void {
         lastAssistantMessage: data.lastAssistantMessage,
         interrupted: data.interrupted,
         // Why: same trap as interactivePrompt — this rebuild is a field whitelist, so subagent child rows vanish if omitted.
-        subagents: data.subagents
+        subagents: data.subagents,
+        contextUsage: data.contextUsage
       })
       if (!payload) {
         return 'dropped'

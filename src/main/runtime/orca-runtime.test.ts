@@ -11251,6 +11251,62 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('carries the freshest explicit contextUsage reading on terminal.agentStatus', async () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = makePaneKey('tab-1', leafId)
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey,
+          state: 'working',
+          prompt: '',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: Date.now(),
+          stateStartedAt: Date.now(),
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          contextUsage: { usedTokens: 120_000, maxTokens: 200_000 }
+        }
+      ]
+    })
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'claude'
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'repo terminal',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.getTerminalAgentStatus(terminal.handle)).resolves.toEqual({
+      handle: terminal.handle,
+      isRunningAgent: true,
+      status: 'working',
+      contextUsage: { usedTokens: 120_000, maxTokens: 200_000 }
+    })
+  })
+
   it('uses strong provider confirmation to authorize fresh hook state over a shell foreground', async () => {
     const getForegroundProcess = vi.fn(async () => 'powershell.exe')
     const confirmForegroundProcess = vi.fn(async () => 'claude')
@@ -17030,6 +17086,46 @@ describe('OrcaRuntimeService', () => {
     await waitForMobileSessionTabsEvents(events, 1)
     expect(events).toHaveLength(1)
 
+    unsubscribe()
+  })
+
+  it('republishes retained rows only for semantic context usage changes', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'context-change-pty' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const events: RuntimeMobileSessionTabsResult[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'context-change-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    events.length = 0
+    const emit = (contextUsage?: string): void => {
+      const field = contextUsage === undefined ? '' : `,"contextUsage":${contextUsage}`
+      runtime.onPtyData(
+        'context-change-pty',
+        `\x1b]9999;{"state":"working","agentType":"codex"${field}}\x07`,
+        100
+      )
+    }
+    emit('{"usedTokens":100,"maxTokens":200}')
+    await waitForMobileSessionTabsEvents(events, 1)
+    emit('{"usedTokens":150,"maxTokens":200}')
+    await waitForMobileSessionTabsEvents(events, 2)
+    emit('{"usedTokens":150,"maxTokens":200}')
+    emit()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(events).toHaveLength(2)
+    emit('{"usedTokens":150,"maxTokens":300}')
+    await waitForMobileSessionTabsEvents(events, 3)
+    emit('null')
+    await waitForMobileSessionTabsEvents(events, 4)
+    expect(events).toHaveLength(4)
     unsubscribe()
   })
 
@@ -32394,6 +32490,145 @@ describe('OrcaRuntimeService', () => {
     expect(summary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
     expect(summary?.agents).toEqual([
       expect.objectContaining({ paneKey, prompt: 'fresh OSC row', agentType: 'codex' })
+    ])
+  })
+
+  it('attaches host-computed context pressure to agent rows when the experimental flag is on', async () => {
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(
+      {
+        ...store,
+        getSettings: () => ({ ...store.getSettings(), experimentalContextPressure: true })
+      } as never,
+      undefined,
+      {
+        getAgentStatusSnapshot: () => [
+          {
+            paneKey: 'tab-1:33333333-3333-4333-8333-333333333333',
+            worktreeId: TEST_WORKTREE_ID,
+            tabId: 'tab-1',
+            state: 'working',
+            prompt: 'pressure row',
+            agentType: 'claude',
+            connectionId: null,
+            receivedAt: now,
+            stateStartedAt: now - 100,
+            contextUsage: { usedTokens: 150_000, maxTokens: 200_000 }
+          },
+          {
+            paneKey: 'tab-1:44444444-4444-4444-8444-444444444444',
+            worktreeId: TEST_WORKTREE_ID,
+            tabId: 'tab-1',
+            state: 'working',
+            prompt: 'no reading',
+            agentType: 'claude',
+            connectionId: null,
+            receivedAt: now,
+            stateStartedAt: now - 100
+          }
+        ]
+      }
+    )
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const agents = worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)?.agents ?? []
+    // 150k of 200k = 75%, past the default 70% warn threshold.
+    expect(agents.find((a) => a.prompt === 'pressure row')?.contextPressure).toEqual({
+      level: 'warning',
+      usedPercent: 75,
+      usedTokens: 150_000,
+      limitTokens: 200_000,
+      limitSource: 'provider',
+      usedTokensSource: undefined
+    })
+    // Honest unknown: a session without a provider reading carries no field at all.
+    expect(agents.find((a) => a.prompt === 'no reading')).not.toHaveProperty('contextPressure')
+  })
+
+  it('omits context pressure from agent rows when the experimental flag is off', async () => {
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'tab-1:33333333-3333-4333-8333-333333333333',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'working',
+          prompt: 'gated off',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100,
+          contextUsage: { usedTokens: 190_000, maxTokens: 200_000 }
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const agents = worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)?.agents ?? []
+    expect(agents).toHaveLength(1)
+    // Why: raw contextUsage stays retained, but the wire row must not leak a
+    // pressure verdict while the desktop gate is off.
+    expect(agents[0]).not.toHaveProperty('contextPressure')
+  })
+
+  it('computes context pressure for OSC-retained rows and honors custom thresholds', async () => {
+    const leafId = '55555555-5555-4555-8555-555555555555'
+    const paneKey = `tab-1:${leafId}`
+    const runtime = new OrcaRuntimeService(
+      {
+        ...store,
+        getSettings: () => ({
+          ...store.getSettings(),
+          experimentalContextPressure: true,
+          contextPressureWarnPercent: 40,
+          contextPressureCriticalPercent: 60
+        })
+      } as never,
+      undefined
+    )
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Codex',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+    runtime.onPtyData(
+      'pty-1',
+      '\x1b]9999;{"state":"working","prompt":"ship it","agentType":"codex","contextUsage":{"usedTokens":130000,"maxTokens":200000}}\x07',
+      321
+    )
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const agents = worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)?.agents ?? []
+    // 65% is past the custom 60% critical threshold (default would say 'ok').
+    expect(agents).toEqual([
+      expect.objectContaining({
+        paneKey,
+        contextPressure: {
+          level: 'critical',
+          usedPercent: 65,
+          usedTokens: 130_000,
+          limitTokens: 200_000,
+          limitSource: 'provider',
+          usedTokensSource: undefined
+        }
+      })
     ])
   })
 

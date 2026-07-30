@@ -20,6 +20,8 @@ import {
   Workflow
 } from 'lucide-react'
 import CacheTimer, { usePromptCacheCountdownStartedAt } from './CacheTimer'
+import { ContextPressureIndicator } from '@/components/ContextPressureIndicator'
+import { useWorktreeContextPressure } from './context-pressure-selection'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
@@ -647,6 +649,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showCli = cardProps.includes('cli')
   const showComment = cardProps.includes('comment')
   const showPorts = cardProps.includes('ports')
+  const showContextPressure = cardProps.includes('context-pressure')
   const shouldRefreshHostedReview = newCardStyle ? showStatus : showPR
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
@@ -1179,6 +1182,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const cacheTtlMs = useAppStore((s) =>
     showAggregateCacheTimer ? (s.settings?.promptCacheTtlMs ?? 0) : 0
   )
+  // Worst-of context pressure across the worktree's live agents. Aggregate
+  // surface: warning/critical only (alertOnly), so an at-risk workspace stays
+  // visible even when its per-agent rows are collapsed or hidden.
+  const worktreeContextPressure = useWorktreeContextPressure(worktree.id, showContextPressure, true)
   // Why: pinned trees mix repos, so the repo icon shows regardless of groupBy's hideRepoBadge.
   const showPinnedRepoIcon = inPinnedSection && !!repo
   // Why: new card style retired the Compact/Detailed switch; repo identity uses the compact chip, not a lower pill.
@@ -1214,10 +1221,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
     showDetachedHeadInMetaRow ||
     showConflictOperationBadge ||
     cacheStartedAt != null ||
+    worktreeContextPressure != null ||
     showMetaRowDetails
   )
   const hasMetaRow = compactCards
-    ? hasMetadataBadge || cacheStartedAt != null
+    ? hasMetadataBadge || cacheStartedAt != null || worktreeContextPressure != null
     : hasDetailedMetaRowContent
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
   // Why: normalize the title once so title/branch de-dupe and identity-only hover eligibility stay in sync.
@@ -1719,6 +1727,19 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
               {cacheStartedAt != null && (
                 <CacheTimer startedAt={cacheStartedAt} ttlMs={cacheTtlMs} />
+              )}
+
+              {worktreeContextPressure && (
+                <ContextPressureIndicator
+                  level={worktreeContextPressure.level}
+                  usedPercent={worktreeContextPressure.usedPercent}
+                  usedTokens={worktreeContextPressure.usedTokens}
+                  limitTokens={worktreeContextPressure.limitTokens}
+                  limitSource={worktreeContextPressure.limitSource}
+                  usedTokensSource={worktreeContextPressure.usedTokensSource}
+                  size="sm"
+                  tooltipSide="right"
+                />
               )}
             </div>
 

@@ -817,6 +817,19 @@
         "9375620cc3": "このセッションを再起動して {{value0}} を使用してください。それまでは前のアカウントのままです。",
         "6133594b12": "以前のアカウントを保持"
       },
+      "ContextPressureIndicator": {
+        "ariaLabel": "コンテキストウィンドウ使用率 {{value0}}%",
+        "usageDetail": "コンテキストウィンドウ: {{value0}}{{value1}} / {{value2}}トークン（{{value3}}%）",
+        "usagePercent": "コンテキストウィンドウ: {{value0}}% 使用中",
+        "limitSource": "有効なコンテキスト上限: {{value0}}",
+        "sourceProvider": "プロバイダー報告値",
+        "sourceModel": "モデル上限",
+        "sourceSoftCap": "ソフト上限",
+        "derivedUsage": "プロバイダー報告の割合から算出したトークン使用量",
+        "levelOk": "健全",
+        "levelWarning": "上限に接近",
+        "levelCritical": "上限間近"
+      },
       "FirstLaunchBanner": {
         "b9e1b966c7": "通知を閉じる",
         "94cc673726": "了解",
@@ -4328,7 +4341,8 @@
           "219ebf1961": "ブランチ名",
           "automation": "自動化",
           "folderPathIdentity": "ブランチ / フォルダパス",
-          "cli": "Orca CLI"
+          "cli": "Orca CLI",
+          "contextPressure": "コンテキストプレッシャー"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "接続中...",
@@ -5732,6 +5746,27 @@
             "modeAriaLabel": "エージェント ダッシュボードの開き方",
             "modeInWindow": "ウィンドウ内",
             "modePopout": "ポップアウト"
+          },
+          "contextPressure": {
+            "title": "コンテキストプレッシャー",
+            "copy": "agent の行・カード・タブに、コンテキストウィンドウ使用量を緑/黄/赤のインジケーターで表示します。プロバイダーが使用量を報告しないセッションにはインジケーターを表示しません。",
+            "toggleLabel": "コンテキストプレッシャーを切り替え",
+            "warnLabel": "警告しきい値",
+            "warnDescription": "インジケーターが黄色になる、実効コンテキスト上限に対する割合（%）です。",
+            "criticalLabel": "危険しきい値",
+            "criticalDescription": "インジケーターが赤になる、実効コンテキスト上限に対する割合（%）です。",
+            "softLimitsLabel": "ソフト上限",
+            "softLimitsDescription": "global、provider:<id>、agent:<type>、model:<id> ごとの絶対トークン上限。接頭辞なしのモデル／エージェントキーも引き続き使用できます。最も具体的な一致が優先されます。",
+            "softLimitKeyPlaceholder": "global、provider:id、model:id、agent:type",
+            "softLimitKeyAriaLabel": "ソフト上限キー（global、provider:id、model:id、agent:type）",
+            "softLimitTokensPlaceholder": "トークン",
+            "softLimitTokensAriaLabel": "ソフト上限（トークン）",
+            "softLimitTokensSuffix": "トークン",
+            "addLimit": "上限を追加",
+            "confirmAddLimit": "追加",
+            "cancelAddLimit": "ソフト上限の追加をキャンセル",
+            "removeLimit": "{{value0}} のソフト上限を削除",
+            "duplicateLimit": "このキーのソフトリミットは既に存在します。"
           }
         },
         "FloatingWorkspacePane": {
@@ -8017,6 +8052,17 @@
             "agentDashboard": {
               "title": "エージェント ダッシュボード",
               "description": "ワークツリーエージェントを監視するカンバンボード。ウィンドウ内またはポップアウトで表示できます。"
+            },
+            "contextPressure": {
+              "title": "コンテキストプレッシャー",
+              "description": "agent のコンテキストウィンドウ使用量を信号機式のインジケーターで表示します。しきい値とソフトトークン上限を設定できます。",
+              "context": "コンテキスト",
+              "tokens": "トークン",
+              "usage": "使用量",
+              "limit": "上限",
+              "window": "ウィンドウ",
+              "pressure": "プレッシャー",
+              "compaction": "コンパクト化"
             }
           }
         },

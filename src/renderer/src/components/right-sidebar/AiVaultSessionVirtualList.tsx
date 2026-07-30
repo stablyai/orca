@@ -1,6 +1,7 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { ContextPressureSnapshot } from '../../../../shared/agent-context-pressure'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { cn } from '@/lib/utils'
@@ -51,6 +52,7 @@ export function AiVaultSessionVirtualList({
   buildResumeStartup,
   getOriginalPaneTarget,
   getSessionLiveState,
+  getSessionContextPressure,
   getWorktreeInfo,
   getSessionResumeState,
   getSessionResumeActions,
@@ -76,6 +78,7 @@ export function AiVaultSessionVirtualList({
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
+  getSessionContextPressure: (session: AiVaultSession) => ContextPressureSnapshot | null
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
@@ -204,6 +207,7 @@ export function AiVaultSessionVirtualList({
               buildResumeStartup={buildResumeStartup}
               getOriginalPaneTarget={getOriginalPaneTarget}
               getSessionLiveState={getSessionLiveState}
+              getSessionContextPressure={getSessionContextPressure}
               getWorktreeInfo={getWorktreeInfo}
               getSessionResumeState={getSessionResumeState}
               getSessionResumeActions={getSessionResumeActions}
@@ -239,6 +243,7 @@ function AiVaultVirtualRow({
   buildResumeStartup,
   getOriginalPaneTarget,
   getSessionLiveState,
+  getSessionContextPressure,
   getWorktreeInfo,
   getSessionResumeState,
   getSessionResumeActions,
@@ -266,6 +271,7 @@ function AiVaultVirtualRow({
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
+  getSessionContextPressure: (session: AiVaultSession) => ContextPressureSnapshot | null
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
@@ -337,6 +343,7 @@ function AiVaultVirtualRow({
         <VaultSessionRow
           session={row.session}
           liveState={getSessionLiveState(row.session)}
+          contextPressure={getSessionContextPressure(row.session)}
           resumeStartup={buildResumeStartup(row.session, resumeState?.worktreeId)}
           realHomeResumeStartup={buildResumeStartup(
             { ...row.session, codexHome: null },

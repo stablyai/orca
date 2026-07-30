@@ -223,6 +223,7 @@ import {
 } from './claude-accounts/live-pty-gate'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer, type AgentHookProviderSessionIdentity } from './agent-hooks/server'
+import { claudeHookService } from './claude/hook-service'
 import { createHookProviderSessionInvalidator } from './agent-hooks/hook-provider-session-invalidation'
 import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
@@ -793,11 +794,7 @@ ipcMain.handle(
   }
 )
 
-/** A PTY that dies while Orca is down never runs the teardown that clears pane
- *  state, so hydrate can rebuild a Claude subagent roster that no later hook can
- *  retire — pinning the pane 'working' and locking its agent out of hibernation
- *  for good. Once provider and hook hydration settle, targeted PTY liveness can
- *  retire only rows whose local owner is proven gone. */
+/** Retires hydrated subagent rows whose local PTY died while Orca was down. */
 async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
   const currentStore = store
   if (!currentStore) {
@@ -2029,10 +2026,25 @@ void app.whenReady().then(async () => {
   const activeOrcaProfile = ensureActiveOrcaProfile()
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
   wslHookRelayManager.setManagedHookSettingsResolver(() => store?.getSettings() ?? null)
+  agentHookServer.setContextPressureEnabled(
+    store.getSettings().experimentalContextPressure === true
+  )
+  claudeHookService.setContextPressureEnabled(
+    store.getSettings().experimentalContextPressure === true
+  )
+  wslHookRelayManager.setContextPressureEnabled(
+    store.getSettings().experimentalContextPressure === true
+  )
   logStartupMilestone('store-loaded')
   // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
   store.onSettingsChanged((updates, settings) => {
+    if ('experimentalContextPressure' in updates) {
+      const enabled = settings.experimentalContextPressure === true
+      agentHookServer.setContextPressureEnabled(enabled)
+      claudeHookService.setContextPressureEnabled(enabled)
+      wslHookRelayManager.setContextPressureEnabled(enabled)
+    }
     if ('terminalWindowsWslDistro' in updates) {
       // Why: synchronize fallback WSL distro updates to runner.
       setDefaultWslDistroOverride(settings.terminalWindowsWslDistro ?? null)
@@ -2834,8 +2846,7 @@ void app.whenReady().then(async () => {
     }
     // Why: headless serve never opens a renderer, so arm scheduled automation dispatch here.
     automations.start()
-    // Why: serve deletes worktrees too, and the history GC that normally drains delete tombstones is
-    // armed from the main window — without this, a quit mid-removal leaks the tree until a desktop launch.
+    // Headless serve must schedule cleanup without the main window.
     scheduleAllPendingHistoryTreeRemovals()
     await printServeReady(serveOptions)
     return
@@ -2963,8 +2974,7 @@ app.on('will-quit', (e) => {
   killAllPty()
   const watcherShutdown = shutdownWatchersOnce()
   store?.flush()
-  // Why: usage-cache writes are queued off the main thread, so a quit right after setEnabled or a
-  // scan completion would drop the final snapshot. Captured before any await; joins the barrier below.
+  // Join queued usage-cache writes before quitting.
   const usageCacheFlush = Promise.all([
     claudeUsage?.flush(),
     codexUsage?.flush(),

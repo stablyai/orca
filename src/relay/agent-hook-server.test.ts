@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
@@ -63,12 +63,55 @@ describe('RelayAgentHookServer', () => {
       expect(envelope.paneKey).toBe(PANE_KEY)
       expect(envelope.tabId).toBe('tab-1')
       expect(envelope.connectionId).toBeNull()
-      expect(envelope.payload.state).toBe('working')
-      expect(envelope.payload.prompt).toBe('hi')
+      expect(envelope.payload?.state).toBe('working')
+      expect(envelope.payload?.prompt).toBe('hi')
       // Why: the relay forwards body env/version so Orca's warn-once
       // protocol diagnostics and remote-location marker survive the wire.
       expect(envelope.env).toBe('remote')
       expect(envelope.version).toBe('1')
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('forwards only normalized context usage from a Claude statusline', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const body = new URLSearchParams({
+        paneKey: PANE_KEY,
+        payload: JSON.stringify({
+          rate_limits: { five_hour: { utilization: 90 } },
+          context_window: {
+            context_window_size: 200_000,
+            current_usage: { input_tokens: 10_000, cache_read_input_tokens: 20_000 }
+          }
+        })
+      })
+      const post = () =>
+        fetch(`http://127.0.0.1:${port}/statusline/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body
+        })
+      expect((await post()).status).toBe(204)
+      expect(forward).not.toHaveBeenCalled()
+      server.setContextPressureEnabled(true)
+      const response = await post()
+      expect(response.status).toBe(204)
+      expect(forward).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'claude',
+          paneKey: PANE_KEY,
+          contextUsage: expect.objectContaining({ usedTokens: 30_000, maxTokens: 200_000 })
+        })
+      )
+      expect(forward.mock.calls[0][0]).not.toHaveProperty('rate_limits')
     } finally {
       server.stop()
     }
@@ -119,7 +162,7 @@ describe('RelayAgentHookServer', () => {
       const replayed = server.replayCachedPayloadsForPanes()
       expect(replayed).toBe(1)
       expect(forward).toHaveBeenCalledTimes(1)
-      expect(forward.mock.calls[0][0].payload.prompt).toBe('cache me')
+      expect(forward.mock.calls[0][0].payload!.prompt).toBe('cache me')
       // Why: replay must preserve the wire envelope's env/version (and source)
       // so protocol diagnostics and the remote-location marker survive replay.
       expect(forward.mock.calls[0][0].source).toBe('claude')
@@ -276,6 +319,21 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
+  it('publishes live context-pressure state for remote statusline guards', async () => {
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward: vi.fn() })
+    await server.start()
+    try {
+      const { endpointFilePath } = server.getCoordinates()
+      expect(readFileSync(endpointFilePath, 'utf8')).toContain('ORCA_CONTEXT_PRESSURE_ENABLED=0')
+      server.setContextPressureEnabled(true)
+      expect(readFileSync(endpointFilePath, 'utf8')).toContain('ORCA_CONTEXT_PRESSURE_ENABLED=1')
+      server.setContextPressureEnabled(false)
+      expect(readFileSync(endpointFilePath, 'utf8')).toContain('ORCA_CONTEXT_PRESSURE_ENABLED=0')
+    } finally {
+      server.stop()
+    }
+  })
+
   it('keeps Copilot transcript retry alive across a following SessionEnd event', async () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
@@ -312,7 +370,7 @@ describe('RelayAgentHookServer', () => {
           payload: { hook_event_name: 'SessionEnd', reason: 'complete' }
         })
       })
-      expect(forward.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBeUndefined()
+      expect(forward.mock.calls.at(-1)?.[0].payload!.lastAssistantMessage).toBeUndefined()
 
       // Let the first 50ms retry miss so continuation across SessionEnd is proven.
       await new Promise((resolve) => setTimeout(resolve, 70))
@@ -325,7 +383,7 @@ describe('RelayAgentHookServer', () => {
       )
       await new Promise((resolve) => setTimeout(resolve, 120))
 
-      expect(forward.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBe(
+      expect(forward.mock.calls.at(-1)?.[0].payload!.lastAssistantMessage).toBe(
         'Relay transcript completed.'
       )
     } finally {
@@ -376,7 +434,7 @@ describe('RelayAgentHookServer', () => {
       })
 
       expect(response.status).toBe(204)
-      expect(forward.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBeUndefined()
+      expect(forward.mock.calls.at(-1)?.[0].payload!.lastAssistantMessage).toBeUndefined()
 
       writeFileSync(
         join(sessionDir, 'chat_history.jsonl'),
@@ -384,7 +442,7 @@ describe('RelayAgentHookServer', () => {
       )
       await new Promise((resolve) => setTimeout(resolve, 120))
 
-      expect(forward.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBe('Relay Grok reply.')
+      expect(forward.mock.calls.at(-1)?.[0].payload!.lastAssistantMessage).toBe('Relay Grok reply.')
     } finally {
       server.stop()
       vi.unstubAllEnvs()
@@ -476,7 +534,7 @@ describe('RelayAgentHookServer', () => {
       await post({ hookEventName: 'UserPromptSubmit', prompt: 'delayed relay result' })
       await post({ hookEventName: 'Stop', sessionId, cwd })
       await new Promise((resolve) => setTimeout(resolve, 300))
-      expect(forward.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBeUndefined()
+      expect(forward.mock.calls.at(-1)?.[0].payload!.lastAssistantMessage).toBeUndefined()
 
       writeFileSync(
         history,
@@ -485,7 +543,7 @@ describe('RelayAgentHookServer', () => {
       releaseDiscovery()
 
       await vi.waitFor(() => {
-        expect(forward.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBe(
+        expect(forward.mock.calls.at(-1)?.[0].payload!.lastAssistantMessage).toBe(
           'Relay found after discovery.'
         )
       })

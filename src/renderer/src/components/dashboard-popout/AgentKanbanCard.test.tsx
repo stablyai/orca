@@ -44,6 +44,19 @@ function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
   }
 }
 
+function pressure(
+  overrides: Partial<NonNullable<DashboardCard['contextPressure']>> = {}
+): NonNullable<DashboardCard['contextPressure']> {
+  return {
+    level: 'warning',
+    usedPercent: 80,
+    usedTokens: 160_000,
+    limitTokens: 200_000,
+    limitSource: 'provider',
+    ...overrides
+  }
+}
+
 function renderCard(props: {
   card: DashboardCard
   now: number
@@ -265,6 +278,110 @@ describe('AgentKanbanCard', () => {
     )
     expect(agentIconRender).toHaveBeenCalledTimes(2)
     expect(screen.getByText('2m')).toBeInTheDocument()
+  })
+
+  it('renders the context-pressure dot beside the state dot from the snapshot field', () => {
+    const { container } = renderCard({
+      card: card({ contextPressure: pressure({ level: 'critical', usedPercent: 95 }) }),
+      now: 2_000
+    })
+
+    expect(container.querySelector('[data-context-pressure="critical"]')).not.toBeNull()
+    expect(screen.getByTestId('state-dot')).toBeInTheDocument()
+  })
+
+  it('keeps the context-pressure dot when a pending question replaces the state dot', () => {
+    const { container } = renderCard({
+      card: card({
+        bucket: 'attention',
+        dotState: 'waiting',
+        askSummary: 'Approve deploy?',
+        contextPressure: pressure({ usedPercent: 82 })
+      }),
+      now: 2_000
+    })
+
+    expect(container.querySelector('[data-context-pressure="warning"]')).not.toBeNull()
+    expect(screen.queryByTestId('state-dot')).not.toBeInTheDocument()
+  })
+
+  it('renders no indicator when the snapshot has no context pressure', () => {
+    const { container } = renderCard({ card: card(), now: 2_000 })
+
+    expect(container.querySelector('[data-context-pressure]')).toBeNull()
+  })
+
+  it('rerenders on a context-pressure change but not on an identical clone', () => {
+    const onOpenTerminal = vi.fn()
+    const initial = card({
+      startedAt: 0,
+      contextPressure: pressure()
+    })
+    const { container, rerender } = render(
+      <TooltipProvider>
+        <AgentKanbanCard card={initial} now={2_000} onOpenTerminal={onOpenTerminal} />
+      </TooltipProvider>
+    )
+    expect(agentIconRender).toHaveBeenCalledTimes(1)
+
+    // A fresh structured clone with equal pressure must reuse the memoized card.
+    rerender(
+      <TooltipProvider>
+        <AgentKanbanCard
+          card={{ ...initial, contextPressure: { ...initial.contextPressure! } }}
+          now={2_000}
+          onOpenTerminal={onOpenTerminal}
+        />
+      </TooltipProvider>
+    )
+    expect(agentIconRender).toHaveBeenCalledTimes(1)
+
+    rerender(
+      <TooltipProvider>
+        <AgentKanbanCard
+          card={{
+            ...initial,
+            contextPressure: pressure({
+              usedPercent: 80,
+              usedTokens: 800_000,
+              limitTokens: 1_000_000,
+              limitSource: 'soft-cap'
+            })
+          }}
+          now={2_000}
+          onOpenTerminal={onOpenTerminal}
+        />
+      </TooltipProvider>
+    )
+    expect(agentIconRender).toHaveBeenCalledTimes(2)
+
+    rerender(
+      <TooltipProvider>
+        <AgentKanbanCard
+          card={{
+            ...initial,
+            contextPressure: pressure({ level: 'critical', usedPercent: 95 })
+          }}
+          now={2_000}
+          onOpenTerminal={onOpenTerminal}
+        />
+      </TooltipProvider>
+    )
+    expect(agentIconRender).toHaveBeenCalledTimes(3)
+    expect(container.querySelector('[data-context-pressure="critical"]')).not.toBeNull()
+
+    // Dropping the field entirely (agent back under the warn threshold) re-renders too.
+    rerender(
+      <TooltipProvider>
+        <AgentKanbanCard
+          card={{ ...initial, contextPressure: undefined }}
+          now={2_000}
+          onOpenTerminal={onOpenTerminal}
+        />
+      </TooltipProvider>
+    )
+    expect(agentIconRender).toHaveBeenCalledTimes(4)
+    expect(container.querySelector('[data-context-pressure]')).toBeNull()
   })
 
   it('rerenders when the repo icon changes', () => {

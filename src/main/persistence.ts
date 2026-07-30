@@ -65,7 +65,8 @@ import type {
   TerminalLayoutSnapshot,
   TerminalTab,
   WorkspaceSessionPatch,
-  WorkspaceSessionState
+  WorkspaceSessionState,
+  WorktreeCardProperty
 } from '../shared/types'
 import {
   deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
@@ -119,6 +120,7 @@ import {
   getDefaultUIState,
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
+  DEFAULT_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeProperties,
   isDefaultedCompactWorktreeCardProperties,
   normalizeAgentActivityDisplayMode,
@@ -132,6 +134,12 @@ import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../shared/usage-percentage-display-change-notice'
 import { normalizePRBotAuthorOverrides } from '../shared/pr-bot-author-overrides'
+import {
+  DEFAULT_CONTEXT_PRESSURE_CRITICAL_PERCENT,
+  DEFAULT_CONTEXT_PRESSURE_WARN_PERCENT,
+  normalizeContextPressurePercent,
+  normalizeContextPressureSoftLimits
+} from '../shared/agent-context-pressure'
 import { toRelaySshPtyId } from './providers/ssh-pty-id'
 import {
   migrateUiHostScopeSshTargetId,
@@ -269,6 +277,18 @@ import {
 import { track } from './telemetry/client'
 import { getCohortAtEmit } from './telemetry/cohort-classifier'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
+
+function normalizeContextPressureThresholds(warnValue: unknown, criticalValue: unknown) {
+  const warnPercent = normalizeContextPressurePercent(
+    warnValue,
+    DEFAULT_CONTEXT_PRESSURE_WARN_PERCENT
+  )
+  const criticalPercent = Math.max(
+    warnPercent,
+    normalizeContextPressurePercent(criticalValue, DEFAULT_CONTEXT_PRESSURE_CRITICAL_PERCENT)
+  )
+  return { warnPercent, criticalPercent }
+}
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -3188,6 +3208,10 @@ export class Store {
         ) {
           this.loadNeedsSave = true
         }
+        const contextPressureThresholds = normalizeContextPressureThresholds(
+          parsed.settings?.contextPressureWarnPercent,
+          parsed.settings?.contextPressureCriticalPercent
+        )
         result = {
           ...defaults,
           ...parsed,
@@ -3212,6 +3236,11 @@ export class Store {
             ...stripLegacyTerminalScrollbackBytes(parsed.settings),
             prBotAuthorOverrides: normalizePRBotAuthorOverrides(
               parsed.settings?.prBotAuthorOverrides
+            ),
+            contextPressureWarnPercent: contextPressureThresholds.warnPercent,
+            contextPressureCriticalPercent: contextPressureThresholds.criticalPercent,
+            contextPressureSoftLimits: normalizeContextPressureSoftLimits(
+              parsed.settings?.contextPressureSoftLimits
             ),
             // Why: v1.3.42 renamed the sidekick setting to pet; carry the old flag forward once so enabled users don't lose it.
             experimentalPet:
@@ -3341,6 +3370,8 @@ export class Store {
               parsed.ui?._expandedWorktreeCardPropertiesDefaulted === true
             const jiraIssueCardPropDefaulted =
               parsed.ui?._jiraIssueWorktreeCardPropertyDefaulted === true
+            const contextPressureCardPropertyMigrated =
+              parsed.ui?._contextPressureWorktreeCardPropertyDefaulted === true
             const hadExperimentOn = readDeprecatedExperimentFlag(parsed)
             const deliberateUncheck =
               hadExperimentOn &&
@@ -3352,6 +3383,7 @@ export class Store {
               Array.isArray(rawCardProps) &&
               !rawCardProps.includes('inline-agents')
             const needsLegacyDefaultedCompactMigration =
+              !contextPressureCardPropertyMigrated &&
               loadedCompactWorktreeCards &&
               parsed.ui?._worktreeCardModeDefaulted === true &&
               isDefaultedCompactWorktreeCardProperties(rawCardProps)
@@ -3379,12 +3411,30 @@ export class Store {
                 }
                 return next
               })()
-              // Why: 'jira-issue' joined the defaults after the expansion migration already stamped upgraded profiles, so it needs its own one-shot backfill.
+              const legacyDefaultProperties = DEFAULT_WORKTREE_CARD_PROPERTIES.filter(
+                (property) => property !== 'context-pressure'
+              )
+              const preJiraDefaultProperties = legacyDefaultProperties.filter(
+                (property) => property !== 'jira-issue'
+              )
+              const matchesAutoIssuedDefault = (properties: WorktreeCardProperty[]) =>
+                properties.length === expandedCandidate.length &&
+                properties.every((property) => expandedCandidate.includes(property))
+              const isAutoIssuedDefault =
+                parsed.ui?._worktreeCardModeDefaulted === true &&
+                !loadedCompactWorktreeCards &&
+                (matchesAutoIssuedDefault(legacyDefaultProperties) ||
+                  matchesAutoIssuedDefault(preJiraDefaultProperties))
+              // Why: Jira joined the defaults after the expansion migration had stamped upgraded profiles.
               const jiraCandidate =
                 jiraIssueCardPropDefaulted || expandedCandidate.includes('jira-issue')
                   ? expandedCandidate
                   : [...expandedCandidate, 'jira-issue' as const]
-              const normalized = normalizeWorktreeCardProperties(jiraCandidate)
+              const contextPressureCandidate =
+                !contextPressureCardPropertyMigrated && isAutoIssuedDefault
+                  ? [...jiraCandidate, 'context-pressure' as const]
+                  : jiraCandidate
+              const normalized = normalizeWorktreeCardProperties(contextPressureCandidate)
               const changed =
                 normalized.length !== rawCardProps.length ||
                 normalized.some((property, index) => property !== rawCardProps[index])
@@ -3394,7 +3444,8 @@ export class Store {
               migratedCardProps !== undefined ||
               !inlineAgentsMigrated ||
               !expandedCardPropsMigrated ||
-              !jiraIssueCardPropDefaulted
+              !jiraIssueCardPropDefaulted ||
+              !contextPressureCardPropertyMigrated
             ) {
               this.loadNeedsSave = true
             }
@@ -3463,7 +3514,8 @@ export class Store {
               _inlineAgentsDefaultedForExperiment: true,
               _inlineAgentsDefaultedForAllUsers: true,
               _expandedWorktreeCardPropertiesDefaulted: true,
-              _jiraIssueWorktreeCardPropertyDefaulted: true
+              _jiraIssueWorktreeCardPropertyDefaulted: true,
+              _contextPressureWorktreeCardPropertyDefaulted: true
             }
           })(),
           // Why: volatile schema; zod-validate workspaceSession at read so a bad payload falls to defaults, not a renderer crash.
@@ -5584,6 +5636,20 @@ export class Store {
           mobilePairingCustomAddress
         )
       }
+    }
+    if ('contextPressureWarnPercent' in updates || 'contextPressureCriticalPercent' in updates) {
+      const thresholds = normalizeContextPressureThresholds(
+        updates.contextPressureWarnPercent ?? this.state.settings.contextPressureWarnPercent,
+        updates.contextPressureCriticalPercent ?? this.state.settings.contextPressureCriticalPercent
+      )
+      sanitizedUpdates.contextPressureWarnPercent = thresholds.warnPercent
+      sanitizedUpdates.contextPressureCriticalPercent = thresholds.criticalPercent
+    }
+    if ('contextPressureSoftLimits' in updates) {
+      // Why: caps ride IPC from any client; keep the persisted record bounded and integer-valued.
+      sanitizedUpdates.contextPressureSoftLimits = normalizeContextPressureSoftLimits(
+        updates.contextPressureSoftLimits
+      )
     }
     const historyWithPreviousLayout = buildWorkspaceDirHistoryForUpdate(
       this.state.settings,

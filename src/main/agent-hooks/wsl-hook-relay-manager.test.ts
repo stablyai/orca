@@ -17,7 +17,8 @@ import { FAILURE_COOLDOWN_BASE_MS, type WslHookRelayManagerDeps } from './wsl-ho
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
-  AGENT_HOOK_REQUEST_REPLAY_METHOD
+  AGENT_HOOK_REQUEST_REPLAY_METHOD,
+  AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD
 } from '../../shared/agent-hook-relay'
 
 type GuestHarness = {
@@ -144,9 +145,11 @@ describe('WslHookRelayManager', () => {
   const home = '/home/wsl-test-user'
   const opencodeOverlayDir = `${home}/.orca-relay/opencode-overlays/deadbeefcafe`
   let harnesses: GuestHarness[]
+  let contextPressureSettings: boolean[]
 
   beforeEach(() => {
     harnesses = []
+    contextPressureSettings = []
   })
 
   afterEach(() => {
@@ -185,6 +188,9 @@ describe('WslHookRelayManager', () => {
     harness.guestDispatcher.onRequest('preflight.detectAgents', async () => ({
       agents: detectedAgents
     }))
+    harness.guestDispatcher.onNotification(AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD, (params) => {
+      contextPressureSettings.push(params.enabled === true)
+    })
     // A guest bundle predating the plugin overlay omits this handler (-32601).
     if (registerInstallPlugins) {
       harness.guestDispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async () => ({
@@ -238,6 +244,9 @@ describe('WslHookRelayManager', () => {
     manager.ensureForDistro('Ubuntu')
     manager.ensureForDistro('Ubuntu')
     await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(contextPressureSettings).toEqual([false]))
+    manager.setContextPressureEnabled(true)
+    await vi.waitFor(() => expect(contextPressureSettings).toEqual([false, true]))
     expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
     // Codex is the one agent whose home Orca redirects for WSL sessions.
     expect(deps.installHooks).toHaveBeenCalledWith(expect.anything(), home, {

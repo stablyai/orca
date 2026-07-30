@@ -67,8 +67,13 @@ export default function AiVaultPanel(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const agentCmdOverrides = settings?.agentCmdOverrides
-  const { getOriginalPaneTarget, getSessionLiveState, jumpToOriginalPane, jumpToWorktree } =
-    useAiVaultOriginalPaneActions()
+  const {
+    getOriginalPaneTarget,
+    getSessionLiveState,
+    getSessionContextPressure,
+    jumpToOriginalPane,
+    jumpToWorktree
+  } = useAiVaultOriginalPaneActions()
   const [query, setQuery] = useState('')
   // Why: scope depends on current workspace/project availability, so only stable view options persist.
   const [scope, setScope] = useState<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
@@ -356,6 +361,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         getSessionResumeActions={getSessionResumeActions}
         getOriginalPaneTarget={getOriginalPaneTarget}
         getSessionLiveState={getSessionLiveState}
+        getSessionContextPressure={getSessionContextPressure}
         getWorktreeInfo={getSessionWorktreeInfo}
         onToggleGroup={toggleGroup}
         onJumpToOriginalPane={jumpToOriginalPane}

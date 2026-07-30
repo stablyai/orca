@@ -6,6 +6,11 @@ import type {
   AgentType
 } from './agent-status-types'
 import type {
+  AgentContextUsage,
+  ContextPressureLevel,
+  ContextPressureLimitSource
+} from './agent-context-pressure'
+import type {
   BaseRefSearchResult,
   BrowserCookieImportResult,
   BrowserCertificateFailure,
@@ -610,6 +615,8 @@ export type RuntimeTerminalAgentStatus = {
   handle: string
   isRunningAgent: boolean
   status: RuntimeTerminalAgentStatusState
+  /** Provider-reported context-window usage of the freshest explicit status row; absent when unknown. */
+  contextUsage?: AgentContextUsage | null
 }
 
 export type RuntimeTerminalPresentation = 'background' | 'focused'
@@ -713,6 +720,16 @@ export type RuntimeTerminalWait = {
   blockedReason?: RuntimeTerminalWaitBlockedReason
 }
 
+/** Context pressure for one agent row; absent when disabled or unknown. */
+export type RuntimeWorktreeAgentContextPressure = {
+  level: ContextPressureLevel
+  usedPercent: number
+  usedTokens?: number
+  limitTokens?: number
+  limitSource?: ContextPressureLimitSource
+  usedTokensSource?: AgentContextUsage['usedTokensSource']
+}
+
 /** One agent's live status as carried to mobile in a worktree.ps summary.
  *  Flat shape (parentPaneKey points to another row in the same worktree's list)
  *  so the client can rebuild the spawn-lineage tree desktop renders inline. */
@@ -735,6 +752,8 @@ export type RuntimeWorktreeAgentRow = {
   /** When the current `state` was first reported (ms). Drives "Xm ago". */
   stateStartedAt: number
   updatedAt: number
+  /** See RuntimeWorktreeAgentContextPressure — absent means "show nothing". */
+  contextPressure?: RuntimeWorktreeAgentContextPressure
 }
 
 export type RuntimeWorktreePsSummary = {

@@ -147,6 +147,59 @@ describe('buildDashboardSnapshot', () => {
     expect(card.unseen).toBe(true)
   })
 
+  it('carries exact context pressure at every known level with the flag on', () => {
+    const state = (usedTokens: number, flagOn = true): DashboardSnapshotState =>
+      baseState({
+        settings: { experimentalContextPressure: flagOn } as DashboardSnapshotState['settings'],
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({
+            model: 'claude-sonnet-4-5',
+            contextUsage: { usedTokens, maxTokens: 200_000 }
+          })
+        }
+      })
+
+    const critical = buildDashboardSnapshot(state(190_123), NOW).cards[0]
+    // Percent is pre-clamped to an integer so the pop-out's memo comparator
+    // doesn't churn on sub-percent drift.
+    expect(critical.contextPressure).toEqual({
+      level: 'critical',
+      usedPercent: 95,
+      usedTokens: 190_123,
+      limitTokens: 200_000,
+      limitSource: 'provider',
+      usedTokensSource: undefined
+    })
+
+    const warning = buildDashboardSnapshot(state(160_000), NOW).cards[0]
+    expect(warning.contextPressure).toMatchObject({
+      level: 'warning',
+      usedPercent: 80,
+      usedTokens: 160_000,
+      limitTokens: 200_000,
+      limitSource: 'provider'
+    })
+
+    expect(buildDashboardSnapshot(state(100_000), NOW).cards[0].contextPressure).toMatchObject({
+      level: 'ok',
+      usedPercent: 50
+    })
+    expect(
+      buildDashboardSnapshot(state(190_123, false), NOW).cards[0].contextPressure
+    ).toBeUndefined()
+  })
+
+  it('omits context pressure for sessions without provider-reported usage', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        settings: { experimentalContextPressure: true } as DashboardSnapshotState['settings'],
+        agentStatusByPaneKey: { [PANE_KEY]: entry({ model: 'claude-sonnet-4-5' }) }
+      }),
+      NOW
+    )
+    expect(snapshot.cards[0].contextPressure).toBeUndefined()
+  })
+
   it('carries the tab conversation name and drops status-only titles', () => {
     const named = buildDashboardSnapshot(
       baseState({

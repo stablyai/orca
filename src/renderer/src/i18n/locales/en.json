@@ -849,6 +849,19 @@
         "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
         "6133594b12": "Keep old account"
       },
+      "ContextPressureIndicator": {
+        "ariaLabel": "Context window {{value0}}% used",
+        "usageDetail": "Context window: {{value0}}{{value1}} of {{value2}} tokens ({{value3}}%)",
+        "usagePercent": "Context window: {{value0}}% used",
+        "limitSource": "Effective context limit: {{value0}}",
+        "sourceProvider": "provider-reported",
+        "sourceModel": "model maximum",
+        "sourceSoftCap": "soft cap",
+        "derivedUsage": "Token usage derived from a provider-reported percentage",
+        "levelOk": "healthy",
+        "levelWarning": "approaching limit",
+        "levelCritical": "near limit"
+      },
       "FirstLaunchBanner": {
         "b9e1b966c7": "Dismiss notice",
         "94cc673726": "Got it",
@@ -4408,7 +4421,8 @@
           "65a9820bd1": "Agent statuses",
           "219ebf1961": "Branch name",
           "folderPathIdentity": "Branch / folder path",
-          "cli": "Orca CLI"
+          "cli": "Orca CLI",
+          "contextPressure": "Context pressure"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Connecting...",
@@ -5791,6 +5805,27 @@
             "modeAriaLabel": "Agent Dashboard open mode",
             "modeInWindow": "In-window",
             "modePopout": "Pop-out"
+          },
+          "contextPressure": {
+            "title": "Context pressure",
+            "copy": "Shows a green/yellow/red context-window usage indicator on agent rows, cards, and tabs. Sessions without provider-reported usage show no indicator.",
+            "toggleLabel": "Toggle context pressure",
+            "warnLabel": "Warn at",
+            "warnDescription": "Percent of the effective context limit at which the indicator turns yellow.",
+            "criticalLabel": "Critical at",
+            "criticalDescription": "Percent of the effective context limit at which the indicator turns red.",
+            "softLimitsLabel": "Soft limits",
+            "softLimitsDescription": "Absolute token caps keyed by global, provider:<id>, agent:<type>, or model:<id>. Unprefixed model and agent keys remain supported. The most specific matching cap wins.",
+            "softLimitKeyPlaceholder": "global, provider:id, model:id, or agent:type",
+            "softLimitKeyAriaLabel": "Soft limit key: global, provider, model, or agent type",
+            "softLimitTokensPlaceholder": "Tokens",
+            "softLimitTokensAriaLabel": "Soft limit in tokens",
+            "softLimitTokensSuffix": "tokens",
+            "addLimit": "Add limit",
+            "confirmAddLimit": "Add",
+            "cancelAddLimit": "Cancel adding soft limit",
+            "removeLimit": "Remove soft limit for {{value0}}",
+            "duplicateLimit": "A soft limit with this key already exists."
           }
         },
         "FloatingWorkspacePane": {
@@ -8080,6 +8115,17 @@
             "agentDashboard": {
               "title": "Agent Dashboard",
               "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out."
+            },
+            "contextPressure": {
+              "title": "Context pressure",
+              "description": "Traffic-light indicator for agent context-window usage, with configurable thresholds and soft token limits.",
+              "context": "context",
+              "tokens": "tokens",
+              "usage": "usage",
+              "limit": "limit",
+              "window": "window",
+              "pressure": "pressure",
+              "compaction": "compaction"
             }
           }
         },

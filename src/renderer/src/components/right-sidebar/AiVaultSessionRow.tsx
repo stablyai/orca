@@ -26,10 +26,13 @@ import {
   SessionWorktreeLine
 } from './ai-vault-session-row-display'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { ContextPressureSnapshot } from '../../../../shared/agent-context-pressure'
+import { ContextPressureIndicator } from '@/components/ContextPressureIndicator'
 
 export function VaultSessionRow({
   session,
   liveState,
+  contextPressure,
   resumeStartup,
   realHomeResumeStartup,
   worktreeInfo,
@@ -55,6 +58,7 @@ export function VaultSessionRow({
 }: {
   session: AiVaultSession
   liveState: AgentStatusState | null
+  contextPressure: ContextPressureSnapshot | null
   resumeStartup: AiVaultResumeStartup
   realHomeResumeStartup: AiVaultResumeStartup
   worktreeInfo: AiVaultSessionWorktreeInfo | null
@@ -137,7 +141,7 @@ export function VaultSessionRow({
             window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
           }}
         >
-          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-1">
             <div
               className={cn(
                 'min-w-0 text-[13px] font-medium leading-5 text-foreground',
@@ -167,6 +171,17 @@ export function VaultSessionRow({
               onRevealLog={onRevealLog}
               onOpenCwd={onOpenCwd}
             />
+            {contextPressure ? (
+              <ContextPressureIndicator
+                level={contextPressure.level}
+                usedPercent={contextPressure.usedPercent}
+                usedTokens={contextPressure.usedTokens}
+                limitTokens={contextPressure.limitTokens}
+                limitSource={contextPressure.limitSource}
+                usedTokensSource={contextPressure.usedTokensSource}
+                tooltipSide="bottom"
+              />
+            ) : null}
           </div>
           {detailsExpanded && shouldShowAiVaultSessionWorktreeLine(worktreeInfo, { vaultScope }) ? (
             <div className="mt-1">
