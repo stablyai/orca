@@ -9,6 +9,7 @@ import {
 } from '@/runtime/runtime-rpc-client'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
+import { evictInstalledAgentSkillDiscoveryForRuntimeEnvironments } from '@/hooks/installed-agent-skill-discovery'
 import {
   dismissRuntimeDisconnectedToast,
   showRuntimeDisconnectedToast
@@ -174,6 +175,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     // Why: same-id re-pair publications belong to the retired peer just as surely as removed ids.
     const retiredEnvironmentIds = [...new Set([...removedIds, ...replacedEnvironmentIds])]
     if (retiredEnvironmentIds.length > 0) {
+      evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(retiredEnvironmentIds)
       get().purgeStaleRuntimeHostState?.(retiredEnvironmentIds)
       retiredEnvironmentIds.forEach(dismissRuntimeDisconnectedToast)
     }

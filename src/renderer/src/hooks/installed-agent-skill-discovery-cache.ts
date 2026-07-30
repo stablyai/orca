@@ -41,6 +41,10 @@ export function clearInstalledAgentSkillDiscoveryCache(): void {
   cachedDiscoveryByTarget.clear()
 }
 
+export function deleteInstalledAgentSkillDiscoveryCache(key: string): void {
+  cachedDiscoveryByTarget.delete(key)
+}
+
 export function getInstalledAgentSkillDiscoveryCacheSizeForTests(): number {
   return cachedDiscoveryByTarget.size
 }

@@ -4,6 +4,7 @@ import { discoverSkillsForRuntimeTarget } from '@/runtime/runtime-skills-client'
 import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
 import {
   clearInstalledAgentSkillDiscoveryCache,
+  deleteInstalledAgentSkillDiscoveryCache,
   peekInstalledAgentSkillDiscoveryCache,
   readInstalledAgentSkillDiscoveryCache,
   resetInstalledAgentSkillDiscoveryCacheForTests,
@@ -15,6 +16,7 @@ export const LOCAL_RUNTIME_TARGET: RuntimeClientTarget = { kind: 'local' }
 let discoveryGeneration = 0
 let pendingDiscoveryByTarget = new Map<string, Promise<SkillDiscoveryResult>>()
 let pendingDiscoverySatisfiesForcedRefreshByTarget = new Map<string, boolean>()
+let invalidatedPendingDiscoveries = new WeakSet<Promise<SkillDiscoveryResult>>()
 
 /** Last completed scan for a runtime-scoped key, for a synchronous first render. */
 export function getCachedSkillDiscovery(key: string): SkillDiscoveryResult | null {
@@ -38,11 +40,27 @@ export function invalidateInstalledAgentSkillDiscovery(): void {
   pendingDiscoverySatisfiesForcedRefreshByTarget.clear()
 }
 
+export function evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(
+  environmentIds: Iterable<string>
+): void {
+  for (const environmentId of environmentIds) {
+    const key = getRuntimeScopedSkillDiscoveryKey({ kind: 'environment', environmentId }, undefined)
+    deleteInstalledAgentSkillDiscoveryCache(key)
+    const pendingDiscovery = pendingDiscoveryByTarget.get(key)
+    if (pendingDiscovery) {
+      invalidatedPendingDiscoveries.add(pendingDiscovery)
+      pendingDiscoveryByTarget.delete(key)
+      pendingDiscoverySatisfiesForcedRefreshByTarget.delete(key)
+    }
+  }
+}
+
 export function resetSkillDiscoveryCacheForTests(): void {
   invalidateInstalledAgentSkillDiscovery()
   resetInstalledAgentSkillDiscoveryCacheForTests()
   pendingDiscoveryByTarget = new Map()
   pendingDiscoverySatisfiesForcedRefreshByTarget = new Map()
+  invalidatedPendingDiscoveries = new WeakSet()
 }
 
 function normalizeSkillDiscoveryTarget(
@@ -106,7 +124,7 @@ function startInstalledAgentSkillDiscovery(
   const normalizedTarget = normalizeSkillDiscoveryTarget(target)
   const discovery = discoverSkillsForRuntimeTarget(runtimeTarget, normalizedTarget)
     .then((result) => {
-      if (generation === discoveryGeneration) {
+      if (generation === discoveryGeneration && !invalidatedPendingDiscoveries.has(discovery)) {
         writeInstalledAgentSkillDiscoveryCache(key, result)
       }
       return result
