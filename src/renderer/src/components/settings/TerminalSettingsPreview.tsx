@@ -12,6 +12,10 @@ import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-cor
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
+import {
+  activateOrcaTerminalUnicodeProvider,
+  setTerminalEastAsianAmbiguousWidthMode
+} from '../../../../shared/terminal-unicode-provider'
 import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { SettingsSwitch } from './SettingsFormControls'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -130,7 +134,9 @@ export function TerminalSettingsPreview({
       cursorStyle: settings.terminalCursorStyle,
       cursorBlink: settings.terminalCursorBlink,
       fontSize: settings.terminalFontSize,
-      fontFamily: buildFontFamily(effectiveFontFamily),
+      fontFamily: buildFontFamily(effectiveFontFamily, {
+        eastAsianAmbiguousWide: settings.terminalEastAsianAmbiguousWidth === 'wide'
+      }),
       fontWeight: weights.fontWeight,
       fontWeightBold: weights.fontWeightBold,
       lineHeight: terminalLineHeight,
@@ -144,6 +150,10 @@ export function TerminalSettingsPreview({
 
     try {
       terminal.open(container)
+      // Why: bake ambiguous widths with Orca's provider before the sample write
+      // so wide mode is not stuck on xterm's default narrow tables (#9958).
+      setTerminalEastAsianAmbiguousWidthMode(settings.terminalEastAsianAmbiguousWidth)
+      activateOrcaTerminalUnicodeProvider(terminal)
       terminal.write(PREVIEW_BUFFER)
     } catch (err) {
       terminalRef.current = null
@@ -173,7 +183,11 @@ export function TerminalSettingsPreview({
     }
     const weights = resolveTerminalFontWeights(settings.terminalFontWeight)
     terminal.options.fontSize = settings.terminalFontSize
-    terminal.options.fontFamily = buildFontFamily(effectiveFontFamily)
+    // Why: keep shared measurement mode + CJK fallback stack in lockstep with live panes.
+    setTerminalEastAsianAmbiguousWidthMode(settings.terminalEastAsianAmbiguousWidth)
+    terminal.options.fontFamily = buildFontFamily(effectiveFontFamily, {
+      eastAsianAmbiguousWide: settings.terminalEastAsianAmbiguousWidth === 'wide'
+    })
     terminal.options.fontWeight = weights.fontWeight
     terminal.options.fontWeightBold = weights.fontWeightBold
     terminal.options.lineHeight = terminalLineHeight
@@ -185,6 +199,7 @@ export function TerminalSettingsPreview({
     settings.terminalFontSize,
     effectiveFontFamily,
     settings.terminalFontWeight,
+    settings.terminalEastAsianAmbiguousWidth,
     terminalLineHeight,
     settings.terminalCursorStyle,
     settings.terminalCursorBlink

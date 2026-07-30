@@ -6,6 +6,10 @@ const terminalWebViewSource = readFileSync(
   new URL('./TerminalWebView.tsx', import.meta.url),
   'utf8'
 )
+const terminalEawSource = readFileSync(
+  new URL('./terminal-webview-eaw-injected.ts', import.meta.url),
+  'utf8'
+)
 const terminalHtmlSource = readFileSync(
   new URL('./terminal-webview-html.ts', import.meta.url),
   'utf8'
@@ -139,15 +143,17 @@ describe('TerminalWebView text zoom', () => {
     )
   })
 
-  it('loads Unicode 11 before replaying mobile terminal bytes', () => {
+  it('loads Unicode 11 and Orca width provider before replaying mobile terminal bytes', () => {
     expect(terminalHtmlSource).toContain('XTERM_ENGINE_JS')
-    expect(terminalHtmlSource).toContain('window.Unicode11Addon.Unicode11Addon')
+    expect(terminalHtmlSource).toContain('activateOrcaUnicodeOnTerm(term)')
+    expect(terminalEawSource).toContain('window.Unicode11Addon.Unicode11Addon')
+    expect(terminalEawSource).toContain('window.OrcaTerminalUnicode.activate')
     const open = terminalHtmlSource.indexOf('term.open(surface)')
-    const unicode = terminalHtmlSource.indexOf("term.unicode.activeVersion = '11'")
+    const orca = terminalHtmlSource.indexOf('activateOrcaUnicodeOnTerm(term)')
     const replay = terminalHtmlSource.indexOf('enqueueWrite(replayData)')
     expect(open).toBeGreaterThanOrEqual(0)
-    expect(unicode).toBeGreaterThan(open)
-    expect(replay).toBeGreaterThan(unicode)
+    expect(orca).toBeGreaterThan(open)
+    expect(replay).toBeGreaterThan(orca)
   })
 
   it('uses the bundled WebGL-capable xterm stack and platform-safe font fallbacks', () => {

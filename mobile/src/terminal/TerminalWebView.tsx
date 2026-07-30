@@ -25,6 +25,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     style,
     terminalTheme,
     textScale = 1,
+    eastAsianAmbiguousWidth = 'narrow',
     onWebReady,
     onEngineError,
     onSelectionMode,
@@ -280,7 +281,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
           oscLinks,
           terminalTheme,
           fontScale: textScale,
-          preserveScroll
+          preserveScroll,
+          eastAsianAmbiguousWidth
         })
       },
       resize(cols: number, rows: number) {
@@ -360,7 +362,15 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         })
       }
     }),
-    [armWebReadyWatchdog, postMessage, sendToWebView, terminalTheme, textScale, writeCoalescer]
+    [
+      armWebReadyWatchdog,
+      eastAsianAmbiguousWidth,
+      postMessage,
+      sendToWebView,
+      terminalTheme,
+      textScale,
+      writeCoalescer
+    ]
   )
 
   return (

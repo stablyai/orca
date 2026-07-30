@@ -2,7 +2,10 @@ import './xterm-env-polyfill'
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
-import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
+import {
+  activateOrcaTerminalUnicodeProvider,
+  setTerminalEastAsianAmbiguousWidthMode
+} from '../../shared/terminal-unicode-provider'
 import {
   readSavedCursorRegister,
   serializeWithAbsoluteCursor
@@ -10,6 +13,10 @@ import {
 import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
+import type {
+  HeadlessEmulatorOptions,
+  HeadlessEmulatorWriteOptions
+} from './headless-emulator-options'
 import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'
 import { TerminalMouseModeMirror } from './terminal-mouse-mode-mirror'
 import { TerminalOscCwdTitleScanner } from './terminal-osc-cwd-title-scanner'
@@ -18,24 +25,13 @@ import {
   installTerminalViewAttributeResponder,
   type TerminalViewAttributeResponder
 } from './terminal-view-attribute-responder'
-import type { TerminalSnapshot, TerminalModes } from './types'
+import type { TerminalModes, TerminalSnapshot } from './types'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 
-export type HeadlessEmulatorOptions = {
-  cols: number
-  rows: number
-  scrollback?: number
-  /** Query reply sink (terminal-query-authority.md); only `forwardQueryReplies` writes emit here. The daemon Session must never pass this. */
-  onQueryReply?: (reply: string) => void
-  pathFlavor?: 'posix' | 'win32'
-  remotePosixFileUriAuthority?: boolean
-  wslDistro?: string
-}
-
-export type HeadlessEmulatorWriteOptions = {
-  /** Reply ownership for this exact chunk; default false so seed/hydration/snapshot writes never forward (main-side replay guard; twin of renderer replay-guard.ts). */
-  forwardQueryReplies?: boolean
-}
+export type {
+  HeadlessEmulatorOptions,
+  HeadlessEmulatorWriteOptions
+} from './headless-emulator-options'
 
 type TerminalWithSynchronousWrite = Terminal & {
   _core?: {
@@ -89,7 +85,10 @@ export class HeadlessEmulator {
     this.serializer = new SerializeAddon()
     this.terminal.loadAddon(this.serializer)
 
-    // Why Unicode 11: must match the renderer's char-width measurement, else emoji rows mismeasure and the mirror accumulates cell-shifted tears.
+    // Why: Unicode 11 + Orca EAW must match the renderer or SSH mirrors tear (#9958).
+    if (opts.eastAsianAmbiguousWidth !== undefined) {
+      setTerminalEastAsianAmbiguousWidthMode(opts.eastAsianAmbiguousWidth)
+    }
     this.terminal.loadAddon(new Unicode11Addon())
     activateOrcaTerminalUnicodeProvider(this.terminal)
 

@@ -11,6 +11,7 @@ import { TERMINAL_WEBVIEW_THEME_JS } from './terminal-webview-theme-injected'
 import { TERMINAL_QUERY_REPLY_JS } from './terminal-webview-query-reply-injected'
 import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
 import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-injected'
+import { TERMINAL_EAW_JS } from './terminal-webview-eaw-injected'
 import { TERMINAL_WHEEL_SCROLL_JS } from './terminal-webview-wheel-scroll-injected'
 
 const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
@@ -265,6 +266,7 @@ window.onerror = function(msg) {
   // fall to a non-monospace face; lead with the ui-monospace generic to avoid that.
   var TERMINAL_FONT_FALLBACKS = '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace';
   var terminalFontFamily = (isIOSWebView() ? 'ui-monospace, ' : '"SF Mono", ') + TERMINAL_FONT_FALLBACKS;
+${TERMINAL_EAW_JS}
   // Why: change the real font size, then resize the grid to fit the viewport at
   // the new cell metrics so the text shows at its true size immediately. RN's
   // refit (measure → updateViewport) then makes the server reflow the PTY to the
@@ -674,8 +676,10 @@ ${TERMINAL_WEBVIEW_THEME_JS}
 
 ${TERMINAL_WEBGL_RECOVERY_JS}
 
-  function init(cols, rows, initialData, nextTheme, nextFontScale, preserveScroll, nextOscLinks) {
+  function init(cols, rows, initialData, nextTheme, nextFontScale, preserveScroll, nextOscLinks, nextEastAsianAmbiguousWidth) {
     if (typeof nextFontScale === 'number' && nextFontScale > 0) currentTextScale = nextFontScale;
+    // Why: host Settings → Ambiguous Character Width must land before the first write (#9958).
+    applyEastAsianAmbiguousWidthMode(nextEastAsianAmbiguousWidth);
     // Why: a width-reflow re-stream rewraps the same content at new cols.
     // Distance-from-bottom (rows) is the only stable anchor across reflow,
     // since line counts and cell positions change. null = stay pinned to bottom.
@@ -720,6 +724,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     var nextSurface = surfaceSwap.nextSurface;
 
     applyTerminalTheme(nextTheme);
+    terminalFontFamily = buildTerminalFontFamily();
     term = new Terminal({
       cols: cols || 80,
       rows: rows || 24,
@@ -746,7 +751,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     pendingTerm = nextTerm;
     term.open(surface);
     attachWebglAddon(true);
-    if (window.Unicode11Addon && window.Unicode11Addon.Unicode11Addon) try { term.loadAddon(new window.Unicode11Addon.Unicode11Addon()); term.unicode.activeVersion = '11'; } catch (e) {}
+    activateOrcaUnicodeOnTerm(term);
     if (typeof replayData === 'string' && replayData.length > 0) {
       enqueueWrite(replayData);
     }
@@ -926,7 +931,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     if (msg.type === 'ping') {
       notify({ type: 'pong', pingId: msg.id });
     } else if (msg.type === 'init') {
-      init(msg.cols, msg.rows, msg.initialData, msg.terminalTheme, msg.fontScale, msg.preserveScroll, msg.oscLinks);
+      init(msg.cols, msg.rows, msg.initialData, msg.terminalTheme, msg.fontScale, msg.preserveScroll, msg.oscLinks, msg.eastAsianAmbiguousWidth);
     } else if (msg.type === 'set-font-scale') {
       // Why: ignore RN echoing back the value a pinch just set (msg.fontScale ===
       // currentTextScale) so the post-pinch state isn't reset; only apply changes.

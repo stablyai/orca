@@ -2561,6 +2561,9 @@ export type TaskViewPresetId = 'all' | 'issues' | 'review' | 'my-issues' | 'my-p
  *  - 'split-horizontal': split the initial terminal pane with a horizontal divider. */
 export type SetupScriptLaunchMode = 'split-vertical' | 'split-horizontal' | 'new-tab'
 
+/** Opt-in East Asian Ambiguous cell width for the terminal (iTerm2-style escape hatch). */
+export type TerminalEastAsianAmbiguousWidth = 'narrow' | 'wide'
+
 /** Direction used when the setup script launch mode is a split. */
 export type SetupSplitDirection = 'vertical' | 'horizontal'
 
@@ -2711,6 +2714,11 @@ export type GlobalSettings = {
   terminalFontSize: number
   terminalFontFamily: string
   terminalFontWeight: number
+  /**
+   * East Asian Ambiguous (① ■ ★ →) cell width. Default `narrow` matches modern
+   * CLI width tables; `wide` matches conhost/CJK locales (#9958).
+   */
+  terminalEastAsianAmbiguousWidth?: TerminalEastAsianAmbiguousWidth
   terminalLineHeight: number
   terminalScrollSensitivity: number
   terminalFastScrollSensitivity: number

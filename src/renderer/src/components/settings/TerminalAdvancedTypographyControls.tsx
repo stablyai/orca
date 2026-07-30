@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings, TerminalEastAsianAmbiguousWidth } from '../../../../shared/types'
 import {
   DEFAULT_TERMINAL_FONT_WEIGHT,
   TERMINAL_FONT_WEIGHT_MAX,
@@ -182,6 +182,71 @@ export function TerminalAdvancedTypographyControls({
               )}
           .
         </p>
+      </SearchableSetting>
+
+      <SearchableSetting
+        title={translate(
+          'auto.components.settings.TerminalAppearanceSection.eastAsianAmbiguous',
+          'Ambiguous Character Width'
+        )}
+        description={searchEntries[3]?.description}
+        keywords={
+          searchEntries[3]?.keywords ?? [
+            'terminal',
+            'typography',
+            'cjk',
+            'east asian',
+            'ambiguous',
+            'double width',
+            'wide',
+            'narrow',
+            'unicode'
+          ]
+        }
+      >
+        <SettingsRow
+          label={translate(
+            'auto.components.settings.TerminalAppearanceSection.eastAsianAmbiguous',
+            'Ambiguous Character Width'
+          )}
+          description={translate(
+            'auto.components.settings.TerminalAppearanceSection.eastAsianAmbiguousDesc',
+            'Treat East Asian Ambiguous characters (① ■ ★ →) as single- or double-width cells. Narrow matches modern CLIs; Wide matches conhost/CJK locales. New terminal output uses the selected width; open a new pane after changing for a full reflow.'
+          )}
+          control={
+            <SettingsSegmentedControl
+              ariaLabel={translate(
+                'auto.components.settings.TerminalAppearanceSection.eastAsianAmbiguous',
+                'Ambiguous Character Width'
+              )}
+              value={
+                (settings.terminalEastAsianAmbiguousWidth ??
+                  'narrow') satisfies TerminalEastAsianAmbiguousWidth
+              }
+              onChange={(option) =>
+                updateSettings({
+                  terminalEastAsianAmbiguousWidth: option
+                })
+              }
+              options={[
+                {
+                  value: 'narrow' as const,
+                  label: translate(
+                    'auto.components.settings.TerminalAppearanceSection.eastAsianNarrow',
+                    'Narrow'
+                  )
+                },
+                {
+                  value: 'wide' as const,
+                  label: translate(
+                    'auto.components.settings.TerminalAppearanceSection.eastAsianWide',
+                    'Wide'
+                  )
+                }
+              ]}
+            />
+          }
+        />
       </SearchableSetting>
     </div>
   )

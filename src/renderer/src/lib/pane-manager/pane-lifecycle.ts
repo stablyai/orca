@@ -6,7 +6,11 @@ import {
 } from './pane-fit-resize-observer'
 import { clearPendingSplitScrollRestore } from './pane-split-scroll'
 import { cancelDeferredScrollRestore } from './pane-scroll'
-import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal-unicode-provider'
+import {
+  activateOrcaTerminalUnicodeProvider,
+  setTerminalEastAsianAmbiguousWidthMode
+} from '../../../../shared/terminal-unicode-provider'
+import { useAppStore } from '@/store'
 import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
 import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent-dom-tracking'
 import { installTerminalLinkifierHoverResetOnMouseLeave } from './terminal-linkifier-hover-reset-on-mouseleave'
@@ -74,6 +78,11 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   // (replayTerminalLayout → splitPane/createInitialPane → openTerminal,
   // restoreScrollbackBuffers, handleReattachResult) run after openTerminal,
   // so the activation must stay at this position.
+  // Why: wide ambiguous mode must be applied before the first write so restore
+  // and live streams bake the same cell widths (#9958).
+  setTerminalEastAsianAmbiguousWidthMode(
+    useAppStore.getState().settings?.terminalEastAsianAmbiguousWidth
+  )
   activateOrcaTerminalUnicodeProvider(terminal)
 
   // Why: any xterm character joiner makes every repaint scan the whole grid.

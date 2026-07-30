@@ -9,6 +9,7 @@ import {
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
 import { buildFontFamily } from './layout-serialization'
+import { setTerminalEastAsianAmbiguousWidthMode } from '../../../shared/terminal-unicode-provider'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import {
   normalizeTerminalFastScrollSensitivity,
@@ -150,6 +151,12 @@ export function applyTerminalAppearance(
     settings.terminalLigatures,
     settings.terminalFontFamily
   )
+  // Why: process-wide unicode mode — set once before the pane loop, not per pane (#10078).
+  const eastAsianAmbiguousWide = settings.terminalEastAsianAmbiguousWidth === 'wide'
+  setTerminalEastAsianAmbiguousWidthMode(settings.terminalEastAsianAmbiguousWidth)
+  const terminalFontFamily = buildFontFamily(settings.terminalFontFamily, {
+    eastAsianAmbiguousWide
+  })
 
   for (const pane of manager.getPanes()) {
     // Why value-gated: writing options.theme rebuilds the palette, discarding TUI OSC 4/10/11/12 mutations; skip on no-op change.
@@ -175,7 +182,7 @@ export function applyTerminalAppearance(
     pane.terminal.options.cursorBlink = settings.terminalCursorBlink
     const paneSize = paneFontSizes.get(pane.id)
     pane.terminal.options.fontSize = paneSize ?? settings.terminalFontSize
-    pane.terminal.options.fontFamily = buildFontFamily(settings.terminalFontFamily)
+    pane.terminal.options.fontFamily = terminalFontFamily
     pane.terminal.options.fontWeight = terminalFontWeights.fontWeight
     pane.terminal.options.fontWeightBold = terminalFontWeights.fontWeightBold
     pane.terminal.options.scrollSensitivity = normalizeTerminalScrollSensitivity(

@@ -123,6 +123,14 @@ describe('buildFontFamily', () => {
       '"Orca Nerd Font Symbols", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
     )
   })
+
+  it('inserts CJK UI fonts ahead of Consolas when wide ambiguous mode is on', () => {
+    const result = buildFontFamily('Cascadia Mono', { eastAsianAmbiguousWide: true })
+    expect(result).toContain('"Malgun Gothic"')
+    expect(result).toContain('"Microsoft YaHei"')
+    expect(result.indexOf('"Malgun Gothic"')).toBeLessThan(result.indexOf('"Consolas"'))
+    expect(result.indexOf('"Cascadia Mono"')).toBeLessThan(result.indexOf('"Malgun Gothic"'))
+  })
 })
 
 // ---------------------------------------------------------------------------

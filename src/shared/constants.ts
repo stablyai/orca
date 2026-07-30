@@ -206,6 +206,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalFontSize: 14,
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
+    // Why narrow: modern CLIs (unicode-width / string-width) treat ambiguous as 1; wide is an opt-in CJK conhost escape hatch (#9958).
+    terminalEastAsianAmbiguousWidth: 'narrow',
     terminalLineHeight: 1,
     terminalScrollSensitivity: 1.15,
     terminalFastScrollSensitivity: 5,

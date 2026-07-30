@@ -30,6 +30,10 @@ async function buildEngineJs() {
         import { Terminal } from '@xterm/xterm'
         import { Unicode11Addon } from '@xterm/addon-unicode11'
         import { WebglAddon } from '@xterm/addon-webgl'
+        import {
+          activateOrcaTerminalUnicodeProvider,
+          setTerminalEastAsianAmbiguousWidthMode
+        } from '../src/shared/terminal-unicode-provider.ts'
 
         // Why: xterm reaches for these runtime APIs on the terminal-bringup path,
         // and esbuild lowers syntax but not runtime APIs. Guarded shims let the
@@ -62,6 +66,12 @@ async function buildEngineJs() {
         window.Terminal = Terminal
         window.Unicode11Addon = { Unicode11Addon }
         window.WebglAddon = { WebglAddon }
+        // Why: mobile previously loaded Unicode11 only and bypassed Orca's ZWJ + EAW
+        // width provider used by desktop/headless (#9958).
+        window.OrcaTerminalUnicode = {
+          activate: activateOrcaTerminalUnicodeProvider,
+          setEastAsianAmbiguousWidthMode: setTerminalEastAsianAmbiguousWidthMode
+        }
       `,
       resolveDir: mobileRoot,
       sourcefile: 'terminal-webview-engine-entry.js'

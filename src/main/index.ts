@@ -68,6 +68,7 @@ import {
 import { callRuntimeEnvironment } from './ipc/runtime-environment-transport-routing'
 import { resolveEnvironment } from '../shared/runtime-environment-store'
 import { getPreferredPairingOffer } from '../shared/runtime-environments'
+import { setTerminalEastAsianAmbiguousWidthMode } from '../shared/terminal-unicode-provider'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
 import {
   recordRuntimeRpcStartFailure,
@@ -2001,10 +2002,15 @@ void app.whenReady().then(async () => {
   logStartupMilestone('store-loaded')
   // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
+  // Why: headless emulators measure widths in this process; keep EAW mode aligned with Settings (#9958).
+  setTerminalEastAsianAmbiguousWidthMode(store.getSettings().terminalEastAsianAmbiguousWidth)
   store.onSettingsChanged((updates, settings) => {
     if ('terminalWindowsWslDistro' in updates) {
       // Why: synchronize fallback WSL distro updates to runner.
       setDefaultWslDistroOverride(settings.terminalWindowsWslDistro ?? null)
+    }
+    if ('terminalEastAsianAmbiguousWidth' in updates) {
+      setTerminalEastAsianAmbiguousWidthMode(settings.terminalEastAsianAmbiguousWidth)
     }
     if ('showMenuBarIcon' in updates) {
       // Why: Store is the mutation authority for all settings writes, so every macOS toggle updates the native item live.

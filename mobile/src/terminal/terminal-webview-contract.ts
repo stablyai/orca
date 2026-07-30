@@ -45,6 +45,8 @@ export type TerminalWebViewProps = {
   // Why: baseline zoom multiplier applied on top of fit-to-width scale; raw
   // xterm fontSize alone cannot drive apparent size because fitting cancels it.
   textScale?: number
+  /** Desktop Settings twin for East Asian Ambiguous width (#9958); default narrow. */
+  eastAsianAmbiguousWidth?: 'narrow' | 'wide'
   onWebReady?: () => void
   onEngineError?: (message: string) => void
 } & TerminalSelectionEvents
