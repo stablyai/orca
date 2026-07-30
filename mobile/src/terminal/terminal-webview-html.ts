@@ -61,10 +61,7 @@ window.onerror = function(msg) {
 </script>
 <style>${XTERM_ENGINE_CSS}</style>
 <style>
-  :root {
-    --terminal-fallback-bg: #1a1b26;
-    --terminal-scrollbar: #888888;
-  }
+  :root { --terminal-fallback-bg: #1a1b26; --terminal-scrollbar: #888888; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
     background: var(--terminal-fallback-bg);
