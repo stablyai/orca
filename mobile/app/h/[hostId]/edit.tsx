@@ -15,7 +15,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
-import { displayHostEndpoint, normalizeHostEndpoint } from '../../../src/transport/host-endpoint'
+import { displayHostEndpoint } from '../../../src/transport/host-endpoint'
 import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-edit'
 import { useForceReconnect, usePrimeHosts } from '../../../src/transport/client-context'
 import type { HostProfile } from '../../../src/transport/types'
@@ -65,30 +65,23 @@ export default function EditHostScreen() {
   }, [load])
 
   const endpointEdit = useMemo(
-    () =>
-      host
-        ? resolveHostEndpointEdit(host.endpoint, address)
-        : { addressChanged: false, normalizedEndpoint: normalizeHostEndpoint(address) },
+    () => (host ? resolveHostEndpointEdit(host.endpoint, address) : null),
     [address, host]
   )
-  const { normalizedEndpoint } = endpointEdit
 
   const nameTrimmed = name.trim()
   const nameChanged = host != null && nameTrimmed.length > 0 && nameTrimmed !== host.name
-  const endpointChanged =
-    host != null &&
-    endpointEdit.addressChanged &&
-    normalizedEndpoint.ok &&
-    normalizedEndpoint.endpoint !== host.endpoint
+  const endpointChanged = endpointEdit?.kind === 'changed'
   const canSave =
     host != null &&
+    endpointEdit != null &&
     nameTrimmed.length > 0 &&
-    (!endpointEdit.addressChanged || normalizedEndpoint.ok) &&
+    endpointEdit.kind !== 'invalid' &&
     (nameChanged || endpointChanged) &&
     !saving
 
   async function handleSave() {
-    if (!host || !hostId || savingRef.current) {
+    if (!host || !hostId || !endpointEdit || savingRef.current) {
       return
     }
     const nextName = name.trim()
@@ -96,18 +89,13 @@ export default function EditHostScreen() {
       setSaveError('Enter a name.')
       return
     }
-    if (endpointEdit.addressChanged && !normalizedEndpoint.ok) {
-      setSaveError(normalizedEndpoint.error)
+    if (endpointEdit.kind === 'invalid') {
+      setSaveError(endpointEdit.error)
       return
     }
 
     const willRename = nextName !== host.name
-    const nextEndpoint =
-      endpointEdit.addressChanged &&
-      normalizedEndpoint.ok &&
-      normalizedEndpoint.endpoint !== host.endpoint
-        ? normalizedEndpoint.endpoint
-        : undefined
+    const nextEndpoint = endpointEdit.kind === 'changed' ? endpointEdit.endpoint : undefined
     if (!willRename && nextEndpoint === undefined) {
       router.back()
       return
@@ -252,12 +240,12 @@ export default function EditHostScreen() {
               (or 6768).
             </Text>
 
-            {normalizedEndpoint.ok ? (
+            {endpointEdit == null ? null : endpointEdit.kind !== 'invalid' ? (
               <Text style={styles.preview} numberOfLines={2}>
-                Connects to {normalizedEndpoint.endpoint}
+                Connects to {endpointEdit.endpoint}
               </Text>
             ) : address.trim().length > 0 ? (
-              <Text style={styles.previewError}>{normalizedEndpoint.error}</Text>
+              <Text style={styles.previewError}>{endpointEdit.error}</Text>
             ) : null}
 
             {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}

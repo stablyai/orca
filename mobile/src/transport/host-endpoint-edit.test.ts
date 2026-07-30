@@ -4,9 +4,7 @@ import { resolveHostEndpointEdit } from './host-endpoint-edit'
 
 function persistedAfterEdit(stored: string, input = displayHostEndpoint(stored)) {
   const edit = resolveHostEndpointEdit(stored, input)
-  return edit.addressChanged && edit.normalizedEndpoint.ok
-    ? edit.normalizedEndpoint.endpoint
-    : stored
+  return edit.kind === 'changed' ? edit.endpoint : stored
 }
 
 describe('resolveHostEndpointEdit', () => {
@@ -27,7 +25,7 @@ describe('resolveHostEndpointEdit', () => {
   ])('preserves an untouched %s endpoint', (_label, stored) => {
     const edit = resolveHostEndpointEdit(stored, displayHostEndpoint(stored))
 
-    expect(edit.addressChanged).toBe(false)
+    expect(edit).toEqual({ kind: 'unchanged', endpoint: stored })
     expect(persistedAfterEdit(stored)).toBe(stored)
   })
 
@@ -40,9 +38,38 @@ describe('resolveHostEndpointEdit', () => {
   ])('uses the current endpoint semantics for an address edit', (stored, input, expected) => {
     const edit = resolveHostEndpointEdit(stored, input)
 
-    expect(edit).toEqual({
-      addressChanged: true,
-      normalizedEndpoint: { ok: true, endpoint: expected }
+    expect(edit).toEqual({ kind: 'changed', endpoint: expected })
+  })
+
+  it.each([
+    ['surrounding whitespace', '  desk.example.com  '],
+    ['hostname case', 'DESK.EXAMPLE.COM'],
+    ['explicit default port', 'desk.example.com:443'],
+    ['percent-encoded hostname', 'wss://%64esk.example.com:443']
+  ])('preserves routed endpoint bytes for equivalent %s', (_label, input) => {
+    const stored = 'wss://Desk.Example.com/%6Fruntime?route=%72ed'
+
+    expect(resolveHostEndpointEdit(stored, input)).toEqual({
+      kind: 'unchanged',
+      endpoint: stored
+    })
+  })
+
+  it('preserves the hidden route when the authority changes', () => {
+    expect(
+      resolveHostEndpointEdit('wss://old.example.com/%6Fruntime?route=%72ed', 'new.example.com')
+    ).toEqual({
+      kind: 'changed',
+      endpoint: 'wss://new.example.com:443/%6Fruntime?route=%72ed'
+    })
+  })
+
+  it('discriminates invalid input without a candidate endpoint', () => {
+    expect(
+      resolveHostEndpointEdit('wss://desk.example.com/orca', 'https://desk.example.com')
+    ).toEqual({
+      kind: 'invalid',
+      error: 'Use ws:// or wss:// (or host:port).'
     })
   })
 
