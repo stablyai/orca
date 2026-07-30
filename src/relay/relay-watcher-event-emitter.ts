@@ -9,6 +9,7 @@ export function emitRelayWatcherEvents(
   if (closed || events.length === 0) {
     return
   }
+  // Watcher floods stay on the bounded producer lane; its cap closes the stale generation.
   dispatcher.notify('fs.changed', {
     events: events.map((event) => ({
       kind: event.type,

@@ -152,6 +152,7 @@ export class DesktopScriptProviderClient {
       to_y: optionalNumberParam(params, 'toY'),
       click_count: optionalNumberParam(params, 'clickCount'),
       mouse_button: optionalStringParam(params, 'mouseButton'),
+      modifiers: optionalStringParam(params, 'modifiers'),
       action: optionalStringParam(params, 'action'),
       direction: optionalStringParam(params, 'direction'),
       pages: optionalNumberParam(params, 'pages'),

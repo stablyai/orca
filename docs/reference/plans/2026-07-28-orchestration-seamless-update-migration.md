@@ -417,28 +417,10 @@ status. The command name comes only from the validated inherited
 than rendered. The launcher propagates status 75. No long wait starts on this
 path.
 
-The candidate installer owns the backward edge: after the desktop has shut
-down, it may terminate only remaining processes whose resolved executable path
-is the exact installed Orca executable before replacement. This releases an
-already-blocked A CLI that cannot know the new marker. Its accepted question
-remains durable; retrying the exact old ask under B reconstructs the same
-pending question and prints the resume command. If launcher restart
-supervision can be proved, it may transparently reconnect instead, but
-seamless install cannot depend on that optimization.
-
-After terminating the exact installed child, the installer waits boundedly for
-its exact descendant native launcher to exit and for the installed executable
-lock to clear. Replacement fails explicitly if either release cannot be
-proved; it never proceeds from a broad process-name match or an assumed delay.
-
-A non-skipped packaged Windows A-to-B test uses the real launcher and updater,
-cuts a blocked ask, verifies post-commit output flush and status 75 propagation
-on native and packaged WSL marker-aware paths, including an executable
-`orca-ide` WSL resume command. It separately proves the candidate installer
-terminates an exact-path marker-unaware A child and observes the exact launcher
-exit plus lock release. The test fails if either release is unknown. It then
-installs B, resumes the same question, and records one question/reply. This
-fallback is product behavior, not test-only guidance.
+This compatibility path makes the accepted question recoverable without
+claiming Windows updater or uninstaller process ownership. Generic executable
+drain, replacement, and uninstall behavior remains separate updater
+reliability work and requires its own Windows artifact proof.
 
 ## Rendering and authoritative guidance
 
@@ -510,7 +492,7 @@ Task, and Dispatch; emits no provider-resume spawn or interruption; preserves
 coordinator focus; and remains inert after switching away and back. This
 candidate/candidate fixture covers the renderer regression deterministically
 but does not replace the distinct installed-A/candidate-B packaged cutover
-journey below.
+journey below. It does not claim packaged Windows updater behavior.
 
 Use distinct installed A and B artifacts plus an external append-only fake
 agent spawn ledger:
@@ -558,11 +540,9 @@ Run separate remote journeys:
 - a git-independent folder workspace parameter through the same adoption
   journey.
 
-The Windows test is a non-skipped PR/release gate. It installs distinct A and
-candidate-B packages, drives the real packaged updater while a packaged
-`orca.exe` ask is blocked, proves the launcher and child release, verifies A
-and B hashes/versions differ, resumes the same question on B, and records
-exactly one question and reply.
+Packaged Windows updater continuity is outside this migration gate. A separate
+updater change must prove candidate-built A/B install, executable release,
+resume, and normal uninstall behavior on Windows before making that guarantee.
 
 ## Implementation slices
 

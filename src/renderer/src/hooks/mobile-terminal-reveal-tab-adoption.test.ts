@@ -7,6 +7,10 @@ import {
 
 const WORKTREE_ID = 'wt-1'
 
+function revealIdentity(tabId: string) {
+  return { worktreeId: WORKTREE_ID, tabId, leafId: 'leaf-b', ptyId: 'pty-b' }
+}
+
 function revealSplitPaneFromMobile(harness: {
   createTerminal: (request: {
     requestId?: string
@@ -49,7 +53,8 @@ describe('mobile terminal reveal tab adoption', () => {
     expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'mobile-reveal',
       tabId: 'tab-split',
-      title: 'codex'
+      title: 'codex',
+      identity: revealIdentity('tab-split')
     })
   })
 
@@ -70,7 +75,8 @@ describe('mobile terminal reveal tab adoption', () => {
     expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'mobile-reveal',
       tabId: 'tab-split',
-      title: 'codex'
+      title: 'codex',
+      identity: revealIdentity('tab-split')
     })
   })
 
@@ -99,7 +105,8 @@ describe('mobile terminal reveal tab adoption', () => {
     expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'mobile-reveal',
       tabId: 'tab-detached',
-      title: 'codex'
+      title: 'codex',
+      identity: revealIdentity('tab-detached')
     })
   })
 
@@ -199,7 +206,8 @@ describe('mobile terminal reveal tab adoption', () => {
     expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'mobile-reveal',
       tabId: 'tab-detached',
-      title: 'codex'
+      title: 'codex',
+      identity: revealIdentity('tab-detached')
     })
   })
 

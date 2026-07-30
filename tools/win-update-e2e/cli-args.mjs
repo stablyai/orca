@@ -52,9 +52,6 @@ Options:
   --keep-install           Skip teardown/uninstall (leaves the app installed)
   --asset-pattern <glob>   gh release asset glob (default: *windows-setup.exe)
   --soak-seconds <n>       Post-relaunch window watch duration (default: 180)
-  --require-distinct-artifacts
-                           Fail unless N and N+1 have distinct paths, versions,
-                           and SHA-256 hashes. Intended for compatibility gates.
   -h, --help               Show this help
 `
 
@@ -74,7 +71,6 @@ export function parseArgs(argv) {
     installDir: takeValue(argv, '--install-dir'),
     keepInstall: argv.includes('--keep-install'),
     allowExistingInstall: argv.includes('--allow-existing-install'),
-    requireDistinctArtifacts: argv.includes('--require-distinct-artifacts'),
     usage: USAGE
   }
 

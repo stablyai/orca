@@ -148,7 +148,8 @@
         "mobileScopeRejected": "이 QR 코드는 제한된(모바일) 액세스 권한만 제공합니다. 전체 웹 앱을 사용하려면 설정 → 원격 Orca 서버 → 이 Orca 서버 공유 → 새 링크에서 브라우저 액세스 링크를 여세요."
       },
       "webPreloadApi": {
-        "aiVaultUnavailableForHost": "이 실행 호스트에서는 Agent 세션 기록을 사용할 수 없습니다."
+        "aiVaultUnavailableForHost": "이 실행 호스트에서는 Agent 세션 기록을 사용할 수 없습니다.",
+        "runtimeEnvironmentManuallyDisconnected": "런타임 환경이 수동으로 연결 해제되었습니다."
       },
       "web": {
         "preload": {
@@ -636,6 +637,20 @@
       },
       "pluginCommandKeybindings": {
         "group": "Plugins"
+      },
+      "feedback": {
+        "image": {
+          "attachments": {
+            "fallbackName": "Image attachment",
+            "unsupportedType": "{{fileName}} is not a supported image type.",
+            "empty": "{{fileName}} is empty.",
+            "tooLarge": "{{fileName}} is larger than {{maxSize}}.",
+            "tooMany": "You can attach up to {{maxCount}} images.",
+            "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
+            "invalidImage": "{{fileName}} is not a valid supported image.",
+            "additionalErrors": "{{count}} additional images could not be attached."
+          }
+        }
       }
     },
     "hooks": {
@@ -1835,7 +1850,8 @@
         "jiraToggleSortDirection": "{{value0}}으로 정렬",
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
         "noGithubSourceDetected": "No GitHub source detected for",
-        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved."
+        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
+        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again."
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -3764,17 +3780,17 @@
           "b088e0785d": "베타",
           "f43ad6edf3": "스킬",
           "7e828fb2c6": "뒤로",
-          "ea72d6185b": "로컬 스킬을 스캔할 수 없습니다.",
+          "ea72d6185b": "스킬을 스캔할 수 없습니다.",
           "dc4c3328ee": "파일 표시",
           "9963dff6d3": "설명을 찾을 수 없습니다.",
           "995fde8337": "스킬 파일을 공개할 수 없습니다.",
-          "ab5b777350": "로컬 홈, repos, 번들, 플러그인 스킬 폴더를 확인했습니다.",
+          "ab5b777350": "홈, repos, 번들, 플러그인 스킬 폴더를 확인했습니다.",
           "08a321a984": "검색 또는 필터를 조정합니다.",
-          "4acd6d68ec": "로컬 스킬을 찾을 수 없습니다.",
+          "4acd6d68ec": "스킬을 찾을 수 없습니다.",
           "6a62a0168c": "일치하는 항목 없음",
           "cd7893fbc1": "스킬 스캔 중",
           "35b9a724a0": "사용 가능",
-          "0c74e7ff34": "로컬"
+          "0c74e7ff34": "설치됨"
         },
         "SkillFreshnessNudge": {
           "titleOne": "설치된 Orca 스킬이 오래되었습니다",
@@ -3864,7 +3880,7 @@
           "upToDate": "최신 상태",
           "installed": "설치됨",
           "details": "Details",
-          "needsAttention": "Needs attention"
+          "needsAttention": "Review skill"
         },
         "SkillUpdateResultRows": {
           "stillOutdated": "Still out of date after the update ran."
@@ -4163,7 +4179,10 @@
           "7a46c228b8": "피드백을 보내주셔서 감사합니다.",
           "a2fd890d9e": "제출하기 전에 피드백을 입력해 주세요.",
           "f2e42e1307": "보내기",
-          "69969ba364": "전송 중…"
+          "69969ba364": "전송 중…",
+          "imageReadFailed": "Could not read the attached images. Try attaching them again.",
+          "attachWhileSending": "Wait for the current feedback to finish sending before attaching more images.",
+          "imagesNotDelivered": "Feedback sent, but image delivery could not be confirmed."
         },
         "SidebarFilter": {
           "e3b3898218": "프로젝트 추가",
@@ -4277,9 +4296,11 @@
           "26c71e536c": "메모",
           "b8dcc6f321": "PR/MR 링크",
           "ca4d3c522e": "Linear 이슈",
+          "jiraIssue": "Jira 이슈",
           "91dfc653e8": "GitHub 티켓",
           "bdd23b4e07": "GitHub 이슈",
           "44713a5d04": "Linear 이슈",
+          "jiraIssues": "Jira 이슈",
           "cc17bd443b": "상세한",
           "0f9b959b31": "PR",
           "e029a2d775": "상태",
@@ -4347,7 +4368,8 @@
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "비어 있음",
-          "3611d1ae7f": "워크스페이스 보드 열 크기 조정"
+          "3611d1ae7f": "워크스페이스 보드 열 크기 조정",
+          "2df01a03ff": "일치하는 항목 없음"
         },
         "WorkspaceStatusAppearancePopover": {
           "514be2f569": "{{value0}} 색상을 {{value1}}로 설정",
@@ -4428,7 +4450,10 @@
           "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
           "cliCreatedFromShell": "Created via `orca worktree create`",
           "cliStartupAgent": "Started with {{value0}}",
-          "cliCreated": "Created by Orca CLI"
+          "cliCreated": "Created by Orca CLI",
+          "jiraIssue": "Jira {{value0}}",
+          "viewOnJira": "Jira에서 보기",
+          "linkedJira": "연결된 Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "상태: 열림",
@@ -5002,6 +5027,19 @@
         "WorktreeDeveloperMenu": {
           "developer": "Developer",
           "parkTerminal": "Park terminal"
+        },
+        "SidebarFeedbackImageAttachments": {
+          "screenshotsHint": "Attach up to {count} screenshots",
+          "attachImages": "Attach",
+          "removeImage": "Remove {{fileName}}"
+        },
+        "WorkspaceKanbanSearchField": {
+          "bdb753c78d": "일치하는 워크스페이스가 없습니다",
+          "4d96c209d6": "워크스페이스 {{value1}}개 중 {{value0}}개 일치",
+          "c0cd6bdf6c": "워크스페이스 검색",
+          "3b7ea51793": "검색 지우기",
+          "7f1c2e94a5": "검색어가 너무 깁니다 — 보드가 필터링되지 않았습니다",
+          "9a4d0f6b21": "너무 김"
         }
       },
       "shared": {
@@ -11402,18 +11440,30 @@
             "switchTaskSourceTitle": "작업 소스를 전환할까요?",
             "differentTaskSource": ", 선택한 작업 소스와 다릅니다.",
             "currentTaskSource": "현재 작업 소스",
-            "placeholderNameOrLinearUrl": "이름 또는 Linear URL 입력",
+            "placeholderNameOrLinearUrl": "이름, Linear URL 또는 Jira URL 입력",
             "placeholderWorkspaceName": "워크스페이스 이름 입력",
-            "placeholderSmartWithBranchGitLabLinear": "이름, #1234, 브랜치, GitHub/GitLab 또는 Linear URL 입력",
-            "placeholderSmartGitLabLinear": "이름, #1234, GitHub/GitLab 또는 Linear URL 입력",
-            "placeholderSmartWithBranchGitLab": "이름, #1234, 브랜치, GitHub 또는 GitLab URL 입력",
-            "placeholderSmartGitLab": "이름, #1234, GitHub 또는 GitLab URL 입력",
+            "placeholderSmartWithBranchGitLabLinear": "이름, #1234, 브랜치, GitHub/GitLab, Linear 또는 Jira URL 입력",
+            "placeholderSmartGitLabLinear": "이름, #1234, GitHub/GitLab, Linear 또는 Jira URL 입력",
+            "placeholderSmartWithBranchGitLab": "이름, #1234, 브랜치, GitHub, GitLab 또는 Jira URL 입력",
+            "placeholderSmartGitLab": "이름, #1234, GitHub, GitLab 또는 Jira URL 입력",
             "unavailable": "사용할 수 없음",
             "searchGitHub": "GitHub PR 및 이슈 검색",
             "searchGitLab": "GitLab MR 및 이슈 검색",
             "searchBranches": "브랜치 검색",
             "searchLinear": "Linear 이슈 검색",
             "workspaceName": "워크스페이스 이름",
+            "loadingJira": "Jira 이슈 불러오는 중…",
+            "jiraDisconnected": "이 이슈를 연결하려면 설정에서 Jira를 연결하세요",
+            "jiraSiteNotConnected": "이 Jira 사이트는 연결되어 있지 않습니다",
+            "jiraRuntimeUpdate": "Jira를 연결하려면 원격 런타임을 업데이트하세요",
+            "jiraReadFailed": "이 Jira 이슈를 불러오지 못했습니다",
+            "chooseJiraAccount": "Jira 계정 선택",
+            "jiraLoaded": "Jira 이슈를 불러왔습니다",
+            "openSettings": "설정",
+            "retryJira": "다시 시도",
+            "searchJira": "Jira 이슈 검색 또는 이슈 URL 붙여넣기",
+            "jiraMode": "Jira",
+            "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
             "emoji": "Emoji"
           },
           "ProjectHostSetupCombobox": {

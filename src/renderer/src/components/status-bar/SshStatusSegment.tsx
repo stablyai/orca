@@ -21,6 +21,7 @@ import { RuntimeHostStatusRow, type RuntimeHostConnectionState } from './Runtime
 import { SshTargetStatusRow } from './SshTargetStatusRow'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
 import { connectRuntimeHostForNavigation } from './runtime-host-navigation-connect'
+import { connectRuntimeEnvironmentAndRecordStatus } from './runtime-environment-explicit-connect'
 
 function isConnecting(status: SshConnectionStatus): boolean {
   return ['connecting', 'deploying-relay', 'reconnecting'].includes(status)
@@ -162,7 +163,6 @@ export function SshStatusSegment({
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const setRuntimeEnvironmentStatus = useAppStore((s) => s.setRuntimeEnvironmentStatus)
   const hydrateRuntimeEnvironmentStatuses = useAppStore((s) => s.hydrateRuntimeEnvironmentStatuses)
-  const refreshRuntimeEnvironmentStatus = useAppStore((s) => s.refreshRuntimeEnvironmentStatus)
   const remoteWorkspaceSyncStatusByTargetId = useAppStore(
     (s) => s.remoteWorkspaceSyncStatusByTargetId
   )
@@ -217,7 +217,7 @@ export function SshStatusSegment({
       const store = useAppStore.getState()
       const reachable = await connectRuntimeHostForNavigation({
         environmentId,
-        refreshStatus: refreshRuntimeEnvironmentStatus,
+        refreshStatus: connectRuntimeEnvironmentAndRecordStatus,
         fetchRepos: store.fetchRuntimeEnvironmentRepos,
         fetchWorktrees: store.fetchWorktrees,
         fetchLineage: store.fetchWorktreeLineage
@@ -233,7 +233,7 @@ export function SshStatusSegment({
       }
       recordFeatureInteraction('ssh')
     },
-    [recordFeatureInteraction, refreshRuntimeEnvironmentStatus]
+    [recordFeatureInteraction]
   )
   const disconnectRuntimeHost = useCallback(
     async (environmentId: string): Promise<void> => {

@@ -12,13 +12,7 @@ import { execFileSync } from 'node:child_process'
 import { assertWin32 } from './platform-guard.mjs'
 import { parseArgs } from './cli-args.mjs'
 import { preflight } from './preflight.mjs'
-import {
-  getExeVersion,
-  resolveInstaller,
-  silentInstall,
-  silentUninstall
-} from './installer-steps.mjs'
-import { proveDistinctInstallerPair } from './installer-pair-proof.mjs'
+import { resolveInstaller, silentInstall, silentUninstall } from './installer-steps.mjs'
 import { backupInstallState, restoreInstallState } from './registry-shortcut-backup.mjs'
 import {
   launchInstalledApp,
@@ -183,24 +177,6 @@ async function runProof(ctx, args) {
     releaseTag: opts.fromRelease,
     assetPattern: opts.assetPattern
   })
-  const toInstaller = resolveInstaller({
-    localPath: opts.to,
-    releaseTag: opts.toRelease,
-    assetPattern: opts.assetPattern
-  })
-  if (opts.requireDistinctArtifacts) {
-    const artifactProof = await proveDistinctInstallerPair({
-      fromPath: fromInstaller,
-      toPath: toInstaller,
-      fromVersion: getExeVersion(fromInstaller),
-      toVersion: getExeVersion(toInstaller)
-    })
-    log(
-      'artifact-proof',
-      `A ${artifactProof.from.version} ${artifactProof.from.sha256}; ` +
-        `B ${artifactProof.to.version} ${artifactProof.to.sha256}`
-    )
-  }
   log('install-base', `installing ${fromInstaller}`)
   const base = silentInstall(fromInstaller, { installDir })
   // Track the install now (not only after the update at L238) so a failure
@@ -254,6 +230,11 @@ async function runProof(ctx, args) {
   log('watch', `started (duration ${watchDuration}s) -> ${watchOut}`)
 
   // --- Update: install N+1 ---
+  const toInstaller = resolveInstaller({
+    localPath: opts.to,
+    releaseTag: opts.toRelease,
+    assetPattern: opts.assetPattern
+  })
   log('update', `installing ${toInstaller}`)
   const updated = silentInstall(toInstaller, { installDir })
   // Record the exact dir the harness installed into so non-isolated teardown

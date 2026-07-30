@@ -1232,10 +1232,12 @@ function VerboseProviderUsage({
     return window !== null
   })
 
+  const meterWindow = p.session ?? p.weekly
+
   return (
     <>
-      {p.session && !compact ? (
-        <MiniBar usedPct={clampUsedPercent(p.session.usedPercent)} display={display} />
+      {meterWindow && !compact ? (
+        <MiniBar usedPct={clampUsedPercent(meterWindow.usedPercent)} display={display} />
       ) : null}
       {visibleWindows.map((window, index) => (
         <React.Fragment key={window.key}>

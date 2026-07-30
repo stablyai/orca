@@ -104,7 +104,7 @@ describe('cross-version isolation', () => {
     //
     // We feed enough exec results to walk through the deploy: platform,
     // $HOME, isRelayAlreadyInstalled probe, lock acquire, upload (no exec),
-    // npm install, finalize, socket probe, socket poll, then GC scan.
+    // npm install, finalize, socket probe, credential publication, socket poll, then GC scan.
     const responses: string[] = [
       '__ORCA_REMOTE_PLATFORM__ Linux x86_64', // tagged POSIX platform probe
       '/home/u', // echo $HOME
@@ -122,6 +122,7 @@ describe('cross-version isolation', () => {
       '', // rm -f probe-stderr (best-effort cleanup after probe resolved)
       '', // touch .install-complete (finalizeInstall)
       'DEAD', // launch socket probe
+      '', // publish the per-launch credential
       'READY', // socket poll
       '', // release .install-lock after relay liveness is observable
       // GC scan begins here

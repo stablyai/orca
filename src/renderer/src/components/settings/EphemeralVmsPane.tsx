@@ -46,20 +46,20 @@ export function EphemeralVmsPane(): React.JSX.Element {
   const mountedRef = useMountedRef()
   const refreshGenerationRef = useRef(0)
 
-  const installCommand =
-    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
-      ? buildSkillCommandForRuntime(
-          EPHEMERAL_VMS_SKILL_INSTALL_COMMAND,
-          activeSkillRuntime.agentRuntime
-        )
-      : EPHEMERAL_VMS_SKILL_INSTALL_COMMAND
-  const updateCommand =
-    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
-      ? buildSkillCommandForRuntime(
-          EPHEMERAL_VMS_SKILL_UPDATE_COMMAND,
-          activeSkillRuntime.agentRuntime
-        )
-      : EPHEMERAL_VMS_SKILL_UPDATE_COMMAND
+  // Why: an absent runtime still resolves to the local host, which is what the
+  // seven sibling panes rely on to reach the Windows npx preflight.
+  const installCommand = activeSkillRuntime.installDisabledReason
+    ? EPHEMERAL_VMS_SKILL_INSTALL_COMMAND
+    : buildSkillCommandForRuntime(
+        EPHEMERAL_VMS_SKILL_INSTALL_COMMAND,
+        activeSkillRuntime.agentRuntime
+      )
+  const updateCommand = activeSkillRuntime.installDisabledReason
+    ? EPHEMERAL_VMS_SKILL_UPDATE_COMMAND
+    : buildSkillCommandForRuntime(
+        EPHEMERAL_VMS_SKILL_UPDATE_COMMAND,
+        activeSkillRuntime.agentRuntime
+      )
 
   const {
     installed: skillDetected,

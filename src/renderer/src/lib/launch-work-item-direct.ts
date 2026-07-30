@@ -40,16 +40,7 @@ import {
 
 /** Creates, activates, and launches an agent for a work item, falling back to the composer when interactive input is required. */
 export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Promise<boolean> {
-  const {
-    item,
-    repoId,
-    openModalFallback,
-    baseBranch,
-    telemetrySource,
-    launchSource,
-    agentOverride,
-    agentArgs
-  } = args
+  const { item, repoId, openModalFallback } = args
   const store = useAppStore.getState()
   const repo = findRepoForHost(store.repos, repoId, {
     hostId: args.repoExecutionHostId,
@@ -88,7 +79,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   const { runtimeEnvironmentId, projectRuntime: repoProjectRuntime } = repoLaunchContext
   const preflightLaunchPlatform = repoLaunchContext.platform
   const shell = preflightLaunchPlatform === 'win32' ? 'powershell' : 'posix'
-  const agentArgsPlan = planAgentCliArgsSuffix(agentArgs, shell)
+  const agentArgsPlan = planAgentCliArgsSuffix(args.agentArgs, shell)
   if (!agentArgsPlan.ok) {
     // Why: direct launches may create a worktree before the agent startup plan
     // is built; reject malformed saved args before touching user workspaces.
@@ -96,7 +87,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     return false
   }
   // Why: overlap cold agent detection with setup resolution and worktree creation.
-  const detectedAgentsPromise = agentOverride
+  const detectedAgentsPromise = args.agentOverride
     ? null
     : ensureWorkItemHostAgents(store, {
         runtimeEnvironmentId,
@@ -139,7 +130,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     linkedIssueNumber: itemType === 'issue' ? (itemNumber ?? null) : null,
     linkedPR: itemType === 'pr' ? (itemNumber ?? null) : null
   })
-  let resolvedBaseBranch = baseBranch
+  let resolvedBaseBranch = args.baseBranch
   let resolvedPushTarget: GitPushTarget | undefined
   let resolvedBranchNameOverride: string | undefined
   let resolvedCompareBaseRef: string | undefined
@@ -179,7 +170,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       resolvedBaseBranch,
       finalSetupDecision,
       undefined,
-      telemetrySource,
+      args.telemetrySource,
       workspaceIntentName?.displayName ?? item.title,
       itemType === 'issue' && itemNumber ? itemNumber : undefined,
       itemType === 'pr' && itemNumber ? itemNumber : undefined,
@@ -216,15 +207,15 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       repoProjectRuntime,
       platformOverride: args.launchPlatform
     })
-    if (agentOverride) {
+    if (args.agentOverride) {
       const detectedAgents = await ensureWorkItemHostAgents(latestStore, {
         runtimeEnvironmentId,
         connectionId: launchConnectionId,
         localTarget: { worktreeId }
       })
       if (
-        !detectedAgents.includes(agentOverride) ||
-        !isTuiAgentEnabled(agentOverride, latestStore.settings?.disabledTuiAgents)
+        !detectedAgents.includes(args.agentOverride) ||
+        !isTuiAgentEnabled(args.agentOverride, latestStore.settings?.disabledTuiAgents)
       ) {
         activateAndRevealWorktree(worktreeId, {
           sidebarRevealBehavior: 'auto',
@@ -233,7 +224,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         toast.error(unavailableAgentErrorMessage())
         return false
       }
-      effectiveAgent = agentOverride
+      effectiveAgent = args.agentOverride
     } else {
       const detectedAgents = runtimeEnvironmentId
         ? await detectedAgentsPromise!
@@ -266,7 +257,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     ;({ startupPlan, draftLaunchedNatively, startupPlanFailed } =
       buildDirectWorkItemAgentStartupPlan({
         agent: effectiveAgent,
-        agentArgs,
+        agentArgs: args.agentArgs,
         draftContent,
         promptDelivery,
         settings,
@@ -280,7 +271,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       sidebarRevealBehavior: 'auto',
       setup: result.setup,
       defaultTabs: result.defaultTabs,
-      ...buildDirectWorkItemStartupOpts(effectiveAgent, startupPlan, launchSource)
+      ...buildDirectWorkItemStartupOpts(
+        effectiveAgent,
+        startupPlan,
+        args.launchSource,
+        promptDelivery === 'draft' ? draftContent : undefined
+      )
     })
     if (!activation) {
       // Worktree vanished between create and activate — extremely unlikely but

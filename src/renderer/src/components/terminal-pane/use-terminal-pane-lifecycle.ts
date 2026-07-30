@@ -41,6 +41,7 @@ import {
   installHttpLinkClickFallback,
   type TerminalLinkRoutingPreferenceRequester
 } from './terminal-url-link-hit-testing'
+import { installTerminalLinkifierClickPriming } from './terminal-linkifier-click-priming'
 import { resolveLocalhostHttpLinkDisplayUrl } from '@/lib/http-link-routing'
 import type {
   GlobalSettings,
@@ -650,6 +651,7 @@ export function useTerminalPaneLifecycle({
   const previousVisibleForReconcileRef = useRef<TerminalPaneVisibilitySnapshot | null>(null)
   const linkProviderDisposablesRef = useRef(new Map<number, IDisposable>())
   const terminalHandleLinkDisposablesRef = useRef(new Map<number, IDisposable>())
+  const linkifierClickPrimingDisposablesRef = useRef(new Map<number, IDisposable>())
   const fileLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
   const httpLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
   // Why: read settingsRef at fire time so toggling "copy on select" applies without recreating panes.
@@ -691,6 +693,7 @@ export function useTerminalPaneLifecycle({
     const panePtyBindings = panePtyBindingsRef.current
     const linkDisposables = linkProviderDisposablesRef.current
     const terminalHandleLinkDisposables = terminalHandleLinkDisposablesRef.current
+    const linkifierClickPrimingDisposables = linkifierClickPrimingDisposablesRef.current
     const fileLinkClickFallbackDisposables = fileLinkClickFallbackDisposablesRef.current
     const httpLinkClickFallbackDisposables = httpLinkClickFallbackDisposablesRef.current
     const selectionDisposables = selectionDisposablesRef.current
@@ -1047,6 +1050,8 @@ export function useTerminalPaneLifecycle({
           })
         )
         terminalHandleLinkDisposablesRef.current.set(pane.id, terminalHandleLinkDisposable)
+        const linkifierClickPrimingDisposable = installTerminalLinkifierClickPriming(pane.terminal)
+        linkifierClickPrimingDisposablesRef.current.set(pane.id, linkifierClickPrimingDisposable)
         const fileLinkClickFallbackDisposable = installFilePathLinkClickFallback(
           pane.id,
           pane.terminal,
@@ -1190,6 +1195,12 @@ export function useTerminalPaneLifecycle({
         if (terminalHandleLinkDisposable) {
           terminalHandleLinkDisposable.dispose()
           terminalHandleLinkDisposablesRef.current.delete(paneId)
+        }
+        const linkifierClickPrimingDisposable =
+          linkifierClickPrimingDisposablesRef.current.get(paneId)
+        if (linkifierClickPrimingDisposable) {
+          linkifierClickPrimingDisposable.dispose()
+          linkifierClickPrimingDisposablesRef.current.delete(paneId)
         }
         const fileLinkClickFallbackDisposable =
           fileLinkClickFallbackDisposablesRef.current.get(paneId)
@@ -1679,6 +1690,10 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       terminalHandleLinkDisposables.clear()
+      for (const disposable of linkifierClickPrimingDisposables.values()) {
+        disposable.dispose()
+      }
+      linkifierClickPrimingDisposables.clear()
       for (const disposable of fileLinkClickFallbackDisposables.values()) {
         disposable.dispose()
       }

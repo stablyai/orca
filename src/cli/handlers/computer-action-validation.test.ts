@@ -290,6 +290,43 @@ describe('orca computer action CLI validation', () => {
     process.exitCode = undefined
 
     await main(
+      [
+        'computer',
+        'click',
+        '--app',
+        'Finder',
+        '--element-index',
+        '1',
+        '--modifiers',
+        'CmdOrCtrl+A'
+      ],
+      '/tmp/repo/src'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
+      'Click modifiers accept modifier keys only'
+    )
+    expect(process.exitCode).toBe(1)
+
+    vi.mocked(console.error).mockClear()
+    process.exitCode = undefined
+
+    await main(
+      ['computer', 'click', '--app', 'Finder', '--element-index', '1', '--modifiers', ''],
+      '/tmp/repo/src'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
+      'Click modifiers accept modifier keys only'
+    )
+    expect(process.exitCode).toBe(1)
+
+    vi.mocked(console.error).mockClear()
+    process.exitCode = undefined
+
+    await main(
       ['computer', 'scroll', '--app', 'Finder', '--element-index', '1', '--direction', 'diagonal'],
       '/tmp/repo/src'
     )

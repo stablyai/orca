@@ -129,6 +129,10 @@ describe('UsageRow', () => {
     expect(mocks.useResetCountdownClock).toHaveBeenCalledOnce()
     expect(mocks.useResetCountdownClock).toHaveBeenCalledWith([sessionReset, weeklyReset])
     expect(markup).toContain('Resets in 2m')
+    expect(markup).toContain('5h')
+    expect(markup).toContain('25%')
+    expect(markup).toContain('wk')
+    expect(markup).toContain('10%')
   })
 })
 

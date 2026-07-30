@@ -25,6 +25,7 @@ import {
   normalizeHookPayload,
   parseFormEncodedBody,
   readRequestBody,
+  reapRestoredClaudeSubagentsForDeadPane,
   reconcileRemoteCodexState,
   resolveHookSource,
   preparePendingGrokResultDiscovery,
@@ -35,6 +36,11 @@ import {
   type AgentHookEventPayload,
   type HookListenerState
 } from '../../shared/agent-hook-listener'
+import {
+  claudeRosterHasRestoredSnapshotSubagent,
+  claudeRosterHasWorkingSubagent,
+  claudeRosterToSnapshots
+} from '../../shared/claude-subagent-roster'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import {
   CLAUDE_STATUSLINE_PATHNAME,
@@ -2169,6 +2175,91 @@ export class AgentHookServer {
       this.notifyStatusChangeListeners()
       this.onPaneStatusCleared?.({ paneKey: resolvedPaneKey })
     }
+  }
+
+  /** Second reap path for restored Claude subagent rows: drop the ones whose pane
+   *  has no live local agent process behind it any more. A PTY that dies while Orca
+   *  is down never runs the teardown that clears pane state, so hydrate rebuilds a
+   *  roster nothing can ever retire — the inventory reap needs the parent to emit a
+   *  complete `background_tasks` list and an idle parent never does. The row then
+   *  gates the pane 'working' for the rest of its life and hibernation, which
+   *  requires 'done', can never reclaim the agent's heap.
+   *
+   *  Both the execution host and relay binding must prove local ownership before
+   *  targeted PTY liveness is consulted. Panes that reported in this runtime are
+   *  also skipped. Returns the number of panes changed. */
+  async reapRestoredClaudeSubagentsWithoutLiveAgent(
+    isLocalExecutionHost: (worktreeId: string | undefined) => boolean,
+    isLocalPaneAgentLive: (paneKey: string) => Promise<boolean>,
+    isLocalPaneLivenessEvidenceCurrent: (paneKey: string) => boolean
+  ): Promise<number> {
+    const candidates: { paneKey: string; entry: EnrichedAgentHookEventPayload }[] = []
+    for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
+      const enriched = entry as EnrichedAgentHookEventPayload
+      if (
+        enriched.payload.agentType === 'claude' &&
+        enriched.connectionId === null &&
+        isLocalExecutionHost(enriched.worktreeId) &&
+        claudeRosterHasRestoredSnapshotSubagent(
+          this.state.claudeSubagentRosterByPaneKey.get(paneKey)
+        ) &&
+        !this.runtimeObservedStatusPaneKeys.has(paneKey)
+      ) {
+        candidates.push({ paneKey, entry: enriched })
+      }
+    }
+    const liveness = await Promise.all(
+      candidates.map(async (candidate) => {
+        try {
+          return await isLocalPaneAgentLive(candidate.paneKey)
+        } catch {
+          return true
+        }
+      })
+    )
+    let changedPanes = 0
+    for (const [index, candidate] of candidates.entries()) {
+      const { paneKey, entry: enriched } = candidate
+      if (
+        liveness[index] ||
+        !isLocalPaneLivenessEvidenceCurrent(paneKey) ||
+        this.state.lastStatusByPaneKey.get(paneKey) !== enriched ||
+        this.runtimeObservedStatusPaneKeys.has(paneKey) ||
+        !isLocalExecutionHost(enriched.worktreeId)
+      ) {
+        continue
+      }
+      if (!reapRestoredClaudeSubagentsForDeadPane(this.state, paneKey)) {
+        continue
+      }
+      changedPanes += 1
+      const roster = this.state.claudeSubagentRosterByPaneKey.get(paneKey)
+      const subagents = claudeRosterToSnapshots(roster)
+      // Why: the pane's persisted 'working' was the child gate holding a finished
+      // lead open (subagent events never set lead state). With the last working row
+      // gone and no process left to report, 'done' is the only truthful state — and
+      // the one hibernation needs once this pane's agent is restored.
+      const state =
+        enriched.payload.state === 'working' && !claudeRosterHasWorkingSubagent(roster)
+          ? 'done'
+          : enriched.payload.state
+      const stateChanged = state !== enriched.payload.state
+      const reconciledAt = stateChanged
+        ? Math.max(Date.now(), enriched.receivedAt + 1)
+        : enriched.receivedAt
+      const reconciled: EnrichedAgentHookEventPayload = {
+        ...enriched,
+        receivedAt: reconciledAt,
+        stateStartedAt: stateChanged ? reconciledAt : enriched.stateStartedAt,
+        payload: { ...enriched.payload, state, subagents }
+      }
+      this.state.lastStatusByPaneKey.set(paneKey, reconciled)
+    }
+    if (changedPanes > 0) {
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+    }
+    return changedPanes
   }
 
   buildPtyEnv(): Record<string, string> {

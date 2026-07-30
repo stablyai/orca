@@ -8,6 +8,7 @@ import { installTerminalLinkPtyMouseSuppression } from './terminal-link-pty-mous
 import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-position'
 import { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
 import { buildWrappedLogicalLine, rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
+import { isTerminalLinkifierHoverActive } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
 
 type UrlLinkHitTestDeps = {
   worktreeId: string
@@ -210,6 +211,9 @@ export function installHttpLinkClickFallback(
   deps: UrlLinkClickFallbackDeps
 ): IDisposable {
   const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(terminal, (event) => {
+    if (isTerminalLinkifierHoverActive(terminal)) {
+      return true
+    }
     const position = getTerminalBufferPositionForMouseEvent(terminal, event)
     return Boolean(
       position && findHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)

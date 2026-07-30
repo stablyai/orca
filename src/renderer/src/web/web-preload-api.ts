@@ -148,6 +148,14 @@ const SESSION_STORAGE_KEY = 'orca.web.workspaceSession.v1'
 const ONBOARDING_STORAGE_KEY = 'orca.web.onboarding.v1'
 const GITHUB_CACHE_STORAGE_KEY = 'orca.web.githubCache.v1'
 const KEYBINDINGS_STORAGE_KEY = 'orca.web.keybindings.v1'
+// Why: paired web clients lack Electron env/preload state; the E2E build gate keeps URL overrides out of releases.
+const webE2EExposeStore = String(import.meta.env.VITE_EXPOSE_STORE) === 'true'
+const webE2EQuery = webE2EExposeStore ? new URLSearchParams(window.location.search) : null
+const webE2EConfig = createE2EConfig({
+  exposeStore: webE2EExposeStore,
+  terminalParkingDelayMs: Number(webE2EQuery?.get('orcaE2ETerminalParkingDelayMs')) || null,
+  terminalRetentionLimit: Number(webE2EQuery?.get('orcaE2ETerminalRetentionLimit')) || null
+})
 // Why: paired clients need parity for large dev sessions; the runtime default stays capped for lower-level RPC callers.
 const WEB_RUNTIME_WORKTREE_LIST_LIMIT = 10_000
 const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = CLIPBOARD_IMAGE_MAX_BASE64_CHARS
@@ -160,6 +168,7 @@ const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
 let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntimeEnvironment()
 let activeClient: WebRuntimeClient | null = null
 let activeClientEnvironmentId: string | null = null
+const manuallyDisconnectedEnvironmentIds = new Set<string>()
 let cachedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
 let cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
 const runtimeCallQueuePool = new RuntimeRpcCallQueuePool()
@@ -648,7 +657,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       orgMemberRemove: async () => ({ status: 'unconfigured' })
     },
     e2e: {
-      getConfig: () => createE2EConfig({})
+      getConfig: () => webE2EConfig
     },
     settings: {
       get: async () => getRuntimeBackedStoredSettings(),
@@ -1348,6 +1357,7 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
       const previousEnvironment = activeEnvironment
       closeActiveRuntimeClients()
       activeEnvironment = createStoredWebRuntimeEnvironment({ name, offer, previousEnvironment })
+      manuallyDisconnectedEnvironmentIds.clear()
       saveStoredWebRuntimeEnvironment(activeEnvironment)
       return { environment: redactStoredWebRuntimeEnvironment(activeEnvironment) }
     },
@@ -1356,16 +1366,28 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
     remove: async ({ selector }) => {
       const environment = resolveEnvironment(selector)
       if (activeEnvironment?.id === environment.id) {
-        disconnectActiveRuntimeEnvironment()
+        removeActiveRuntimeEnvironment()
       }
+      manuallyDisconnectedEnvironmentIds.delete(environment.id)
       return { removed: redactStoredWebRuntimeEnvironment(environment) }
     },
     disconnect: async ({ selector }) => {
       const environment = resolveEnvironment(selector)
       if (activeEnvironment?.id === environment.id) {
+        manuallyDisconnectedEnvironmentIds.add(environment.id)
         disconnectActiveRuntimeEnvironment()
       }
       return { disconnected: redactStoredWebRuntimeEnvironment(environment) }
+    },
+    connect: ({ selector, timeoutMs }) => {
+      const environment = resolveEnvironment(selector)
+      manuallyDisconnectedEnvironmentIds.delete(environment.id)
+      return callEnvironmentEnvelope<RuntimeStatus>(
+        environment.id,
+        'status.get',
+        undefined,
+        timeoutMs
+      )
     },
     getStatus: ({ selector, timeoutMs }) =>
       callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
@@ -1374,7 +1396,12 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
     subscribe: async ({ selector, method, params, timeoutMs }, callbacks) => {
       const environment = resolveEnvironment(selector)
       const client = getClientForEnvironment(environment)
-      return client.subscribe(method, params, callbacks, { timeoutMs })
+      const subscription = await client.subscribe(method, params, callbacks, { timeoutMs })
+      if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+        subscription.unsubscribe()
+        throw new Error('runtime_manually_disconnected')
+      }
+      return subscription
     }
   }
 }
@@ -3139,9 +3166,18 @@ async function callRuntimeEnvelope<TResult = unknown>(
   timeoutMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   const environment = requireActiveEnvironment()
-  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () =>
-    getClientForEnvironment(environment).call(method, params, { timeoutMs })
-  )
+  if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+    return manuallyDisconnectedResponse(environment)
+  }
+  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
+    if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+      return Promise.resolve(manuallyDisconnectedResponse(environment))
+    }
+    return getClientForEnvironment(environment).call(method, params, { timeoutMs })
+  })
+  if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+    return manuallyDisconnectedResponse(environment)
+  }
   updateEnvironmentFromResponse(environment, response)
   return response as RuntimeRpcResponse<TResult>
 }
@@ -3153,9 +3189,18 @@ async function callEnvironmentEnvelope<TResult = unknown>(
   timeoutMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   const environment = resolveEnvironment(selector)
-  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () =>
-    getClientForEnvironment(environment).call(method, params, { timeoutMs })
-  )
+  if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+    return manuallyDisconnectedResponse(environment)
+  }
+  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
+    if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+      return Promise.resolve(manuallyDisconnectedResponse(environment))
+    }
+    return getClientForEnvironment(environment).call(method, params, { timeoutMs })
+  })
+  if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+    return manuallyDisconnectedResponse(environment)
+  }
   updateEnvironmentFromResponse(environment, response)
   return response as RuntimeRpcResponse<TResult>
 }
@@ -3332,6 +3377,9 @@ async function getRemoteRuntimeStatus(): Promise<RuntimeStatus> {
 }
 
 function getClientForEnvironment(environment: StoredWebRuntimeEnvironment): WebRuntimeClient {
+  if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+    throw new Error('runtime_manually_disconnected')
+  }
   if (!activeClient || activeClientEnvironmentId !== environment.id) {
     activeClient?.close()
     activeClient = new WebRuntimeClient(getPreferredWebPairingOffer(environment))
@@ -3349,8 +3397,29 @@ function closeActiveRuntimeClients(): void {
 
 function disconnectActiveRuntimeEnvironment(): void {
   closeActiveRuntimeClients()
+}
+
+function removeActiveRuntimeEnvironment(): void {
+  disconnectActiveRuntimeEnvironment()
   clearStoredWebRuntimeEnvironment()
   activeEnvironment = null
+}
+
+function manuallyDisconnectedResponse(
+  environment: StoredWebRuntimeEnvironment
+): RuntimeRpcResponse<never> {
+  return {
+    id: 'runtime.manualDisconnect',
+    ok: false,
+    error: {
+      code: 'runtime_manually_disconnected',
+      message: translate(
+        'auto.web.webPreloadApi.runtimeEnvironmentManuallyDisconnected',
+        'Runtime environment is manually disconnected.'
+      )
+    },
+    _meta: { runtimeId: environment.runtimeId }
+  }
 }
 
 function resolveEnvironment(selector: string): StoredWebRuntimeEnvironment {

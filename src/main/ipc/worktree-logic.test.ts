@@ -245,6 +245,16 @@ describe('computeValidatedBranchName', () => {
       )
     ).toThrow('contains characters git rejects')
   })
+
+  it('skips an invalid git-username prefix instead of blocking create', () => {
+    expect(
+      computeValidatedBranchName(
+        'feature',
+        { branchPrefix: 'git-username' },
+        '{\n"message": "API rate limit exceeded"}'
+      )
+    ).toBe('feature')
+  })
 })
 
 describe('computeWorktreePath', () => {
@@ -499,6 +509,8 @@ describe('mergeWorktree', () => {
       linkedBitbucketPR: null,
       linkedAzureDevOpsPR: null,
       linkedGiteaPR: null,
+      linkedWorkItem: null,
+      linkedTaskSourceContext: null,
       mobileDiffReview: undefined,
       projectId: 'github:stablyai/orca',
       hostId: 'ssh:openclaw-2',

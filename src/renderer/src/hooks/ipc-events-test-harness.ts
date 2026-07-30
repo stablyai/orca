@@ -30,7 +30,7 @@ export type HarnessStoreState = {
 export function createHarnessStoreState(
   overrides: Partial<HarnessStoreState> & Pick<HarnessStoreState, 'tabsByWorktree'>
 ): HarnessStoreState {
-  return {
+  const state: HarnessStoreState = {
     createTab: vi.fn(() => ({ id: 'tab-minted' })),
     setActiveView: vi.fn(),
     setActiveWorktree: vi.fn(),
@@ -87,6 +87,14 @@ export function createHarnessStoreState(
     },
     ...overrides
   }
+  if (overrides.setTabLayout === undefined) {
+    state.setTabLayout = vi.fn(
+      (tabId: string, layout: HarnessStoreState['terminalLayoutsByTabId'][string]) => {
+        state.terminalLayoutsByTabId[tabId] = layout
+      }
+    )
+  }
+  return state
 }
 
 /** Subscription no-ops for every listener useIpcEvents attaches beyond the ones under test. */

@@ -171,7 +171,8 @@
         "mobileScopeRejected": "This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link."
       },
       "webPreloadApi": {
-        "aiVaultUnavailableForHost": "Agent Session History is not available for this execution host."
+        "aiVaultUnavailableForHost": "Agent Session History is not available for this execution host.",
+        "runtimeEnvironmentManuallyDisconnected": "Runtime environment is manually disconnected."
       },
       "web": {
         "preload": {
@@ -659,6 +660,20 @@
       },
       "pluginCommandKeybindings": {
         "group": "Plugins"
+      },
+      "feedback": {
+        "image": {
+          "attachments": {
+            "fallbackName": "Image attachment",
+            "unsupportedType": "{{fileName}} is not a supported image type.",
+            "empty": "{{fileName}} is empty.",
+            "tooLarge": "{{fileName}} is larger than {{maxSize}}.",
+            "tooMany": "You can attach up to {{maxCount}} images.",
+            "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
+            "invalidImage": "{{fileName}} is not a valid supported image.",
+            "additionalErrors": "{{count}} additional images could not be attached."
+          }
+        }
       }
     },
     "hooks": {
@@ -1858,7 +1873,8 @@
         "jiraToggleSortDirection": "Sort {{value0}}",
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
         "noGithubSourceDetected": "No GitHub source detected for",
-        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved."
+        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
+        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again."
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -3715,7 +3731,10 @@
         },
         "UsageBreakdownSection": {
           "7765a4c3e1": "n/a",
-          "247c93ca92": "• inferred pricing"
+          "247c93ca92": "• inferred pricing",
+          "32176e1d44": "turns",
+          "79a69522a5": "events",
+          "02a046792e": "sessions •"
         },
         "UsageSessionsTable": {
           "1afc25eb06": "Turns",
@@ -3787,17 +3806,17 @@
           "b088e0785d": "Beta",
           "f43ad6edf3": "Skills",
           "7e828fb2c6": "Back",
-          "ea72d6185b": "Could not scan local skills",
+          "ea72d6185b": "Could not scan skills",
           "dc4c3328ee": "Reveal file",
           "9963dff6d3": "No description found.",
           "995fde8337": "Could not reveal skill file",
-          "ab5b777350": "Checked local home, repository, bundled, and plugin skill folders.",
+          "ab5b777350": "Checked home, repository, bundled, and plugin skill folders.",
           "08a321a984": "Adjust the search or filters.",
-          "4acd6d68ec": "No local skills found",
+          "4acd6d68ec": "No skills found",
           "6a62a0168c": "No matches",
           "cd7893fbc1": "Scanning skills",
           "35b9a724a0": "Available",
-          "0c74e7ff34": "Local"
+          "0c74e7ff34": "Installed"
         },
         "SkillFreshnessNudge": {
           "titleOne": "An installed Orca skill is out of date",
@@ -3894,7 +3913,7 @@
           "upToDate": "Up to date",
           "installed": "Installed",
           "details": "Details",
-          "needsAttention": "Needs attention"
+          "needsAttention": "Review skill"
         }
       },
       "sidebar": {
@@ -4043,7 +4062,8 @@
           "32a7256d85": "Clone",
           "69f5b5380d": "Cloning...",
           "cloneOnHostDescription": "Enter the Git URL and choose where to clone it on {{value0}}.",
-          "cloneParentFolder": "Parent folder"
+          "cloneParentFolder": "Parent folder",
+          "remoteCloneParentPlaceholder": "/home/user/projects"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Close",
@@ -4220,7 +4240,10 @@
           "7a46c228b8": "Thanks for the feedback.",
           "a2fd890d9e": "Please enter feedback before submitting.",
           "f2e42e1307": "Send",
-          "69969ba364": "Sending…"
+          "69969ba364": "Sending…",
+          "imageReadFailed": "Could not read the attached images. Try attaching them again.",
+          "attachWhileSending": "Wait for the current feedback to finish sending before attaching more images.",
+          "imagesNotDelivered": "Feedback sent, but image delivery could not be confirmed."
         },
         "SidebarFilter": {
           "e3b3898218": "Add project",
@@ -4350,9 +4373,11 @@
           "26c71e536c": "Notes",
           "b8dcc6f321": "PR/MR link",
           "ca4d3c522e": "Linear issue",
+          "jiraIssue": "Jira issue",
           "91dfc653e8": "GitHub ticket",
           "bdd23b4e07": "GitHub issues",
           "44713a5d04": "Linear issues",
+          "jiraIssues": "Jira issues",
           "cc17bd443b": "Detailed",
           "0f9b959b31": "PR",
           "e029a2d775": "Status",
@@ -4412,7 +4437,8 @@
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "Empty",
-          "3611d1ae7f": "Resize workspace board columns"
+          "3611d1ae7f": "Resize workspace board columns",
+          "2df01a03ff": "No matches"
         },
         "WorkspaceStatusAppearancePopover": {
           "514be2f569": "Set {{value0}} color to {{value1}}",
@@ -4493,7 +4519,10 @@
           "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
           "cliCreatedFromShell": "Created via `orca worktree create`",
           "cliStartupAgent": "Started with {{value0}}",
-          "cliCreated": "Created by Orca CLI"
+          "cliCreated": "Created by Orca CLI",
+          "jiraIssue": "Jira {{value0}}",
+          "viewOnJira": "View on Jira",
+          "linkedJira": "Linked Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "State: Open",
@@ -5025,6 +5054,19 @@
         "WorktreeDeveloperMenu": {
           "developer": "Developer",
           "parkTerminal": "Park terminal"
+        },
+        "SidebarFeedbackImageAttachments": {
+          "screenshotsHint": "Attach up to {count} screenshots",
+          "attachImages": "Attach",
+          "removeImage": "Remove {{fileName}}"
+        },
+        "WorkspaceKanbanSearchField": {
+          "bdb753c78d": "No workspaces match",
+          "4d96c209d6": "{{value0}} of {{value1}} workspaces match",
+          "c0cd6bdf6c": "Search workspaces",
+          "3b7ea51793": "Clear search",
+          "7f1c2e94a5": "Search text is too long — the board is unfiltered",
+          "9a4d0f6b21": "Too long"
         }
       },
       "shared": {
@@ -8651,6 +8693,7 @@
         "shortcuts": {
           "search": {
             "ca6a0c2df7": "shortcut",
+            "groupShortcut": "{{value0}} shortcut",
             "4811a8264a": "terminal first",
             "afda131738": "orca first",
             "0ecfc47434": "conflict",
@@ -10002,6 +10045,7 @@
             "2bfaf4379c": "More {{value0}} actions",
             "377269db6f": "{{value0}} reopened",
             "fa3ee9a515": "closed",
+            "closedToast": "{{value0}} closed",
             "78f5ff294c": "This will reopen the {{value0}}.",
             "a3d572a4de": "This will close the {{value0}}.",
             "e4aca40024": "Delete Workspace",
@@ -11425,18 +11469,30 @@
             "switchTaskSourceTitle": "Switch task source?",
             "differentTaskSource": ", which is different from the selected task source.",
             "currentTaskSource": "current task source",
-            "placeholderNameOrLinearUrl": "Type a name or Linear URL",
+            "placeholderNameOrLinearUrl": "Type a name, Linear URL, or Jira URL",
             "placeholderWorkspaceName": "Type a workspace name",
-            "placeholderSmartWithBranchGitLabLinear": "Type a name, #1234, branch, GitHub/GitLab or Linear URL",
-            "placeholderSmartGitLabLinear": "Type a name, #1234, GitHub/GitLab or Linear URL",
-            "placeholderSmartWithBranchGitLab": "Type a name, #1234, branch, GitHub or GitLab URL",
-            "placeholderSmartGitLab": "Type a name, #1234, GitHub or GitLab URL",
+            "placeholderSmartWithBranchGitLabLinear": "Type a name, #1234, branch, GitHub/GitLab, Linear, or Jira URL",
+            "placeholderSmartGitLabLinear": "Type a name, #1234, GitHub/GitLab, Linear, or Jira URL",
+            "placeholderSmartWithBranchGitLab": "Type a name, #1234, branch, GitHub, GitLab, or Jira URL",
+            "placeholderSmartGitLab": "Type a name, #1234, GitHub, GitLab, or Jira URL",
             "unavailable": "Unavailable",
             "searchGitHub": "Search GitHub PRs and issues",
             "searchGitLab": "Search GitLab MRs and issues",
             "searchBranches": "Search branches",
             "searchLinear": "Search Linear issues",
             "workspaceName": "Workspace name",
+            "loadingJira": "Loading Jira issue…",
+            "jiraDisconnected": "Connect Jira in Settings to link this issue",
+            "jiraSiteNotConnected": "This Jira site is not connected",
+            "jiraRuntimeUpdate": "Update the remote runtime to link Jira",
+            "jiraReadFailed": "Couldn’t load this Jira issue",
+            "chooseJiraAccount": "Choose a Jira account",
+            "jiraLoaded": "Jira issue loaded",
+            "openSettings": "Settings",
+            "retryJira": "Retry",
+            "searchJira": "Search Jira issues or paste an issue URL",
+            "jiraMode": "Jira",
+            "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
             "emoji": "Emoji"
           },
           "ProjectHostSetupCombobox": {
@@ -14186,7 +14242,9 @@
       },
       "tool": {
         "running": "Running…",
-        "result": "Result"
+        "result": "Result",
+        "countOne": "1 tool call",
+        "countN": "{{value0}} tool calls"
       },
       "status": {
         "responding": "Agent is responding"

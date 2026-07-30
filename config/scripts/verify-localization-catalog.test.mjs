@@ -33,7 +33,7 @@ function makeProject({ sourceText, enCatalog = {}, esCatalog = {} }) {
 }
 
 describe('verify-localization-catalog', () => {
-  it('bootstraps missing catalog entries from string fallbacks', async () => {
+  it('bootstraps English entries without fabricating target translations', async () => {
     const { root, localesDir } = makeProject({
       sourceText:
         "import { translate } from '@/i18n/i18n'\nexport const label = translate('auto.example.greeting', 'Hello {{name}}', { name: 'Orca' })\n"
@@ -45,12 +45,10 @@ describe('verify-localization-catalog', () => {
     expect(readJson(path.join(localesDir, 'en.json'))).toEqual({
       auto: { example: { greeting: 'Hello {{name}}' } }
     })
-    expect(readJson(path.join(localesDir, 'es.json'))).toEqual({
-      auto: { example: { greeting: 'Hello {{name}}' } }
-    })
+    expect(readJson(path.join(localesDir, 'es.json'))).toEqual({})
   })
 
-  it('repairs stale locale keys and interpolation mismatches', async () => {
+  it('never overwrites mismatched translations or removes target-only entries', async () => {
     const { root, localesDir } = makeProject({
       sourceText:
         "import { translate } from '@/i18n/i18n'\nexport const label = translate('auto.example.greeting', 'Hello {{name}}', { name: 'Orca' })\n",
@@ -63,11 +61,27 @@ describe('verify-localization-catalog', () => {
       }
     })
 
-    await expect(verifyLocalizationCatalog(root, { fix: true })).resolves.toBe(0)
+    await expect(verifyLocalizationCatalog(root, { fix: true })).resolves.toBe(1)
 
     expect(readJson(path.join(localesDir, 'es.json'))).toEqual({
-      auto: { example: { greeting: 'Hello {{name}}' } }
+      auto: {
+        example: { greeting: 'Hola' },
+        stale: { removed: 'Viejo' }
+      }
     })
+  })
+
+  it('accepts sparse target catalogs when existing placeholders match', async () => {
+    const { root } = makeProject({
+      sourceText:
+        "import { translate } from '@/i18n/i18n'\nexport const label = translate('auto.example.greeting', 'Hello {{name}}', { name: 'Orca' })\n",
+      enCatalog: {
+        auto: { example: { greeting: 'Hello {{name}}', untranslated: 'English only' } }
+      },
+      esCatalog: { auto: { example: { greeting: 'Hola {{name}}' } } }
+    })
+
+    await expect(verifyLocalizationCatalog(root, { fix: false })).resolves.toBe(0)
   })
 
   it('does not invent values for keys without string fallbacks', async () => {

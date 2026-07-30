@@ -35,15 +35,15 @@ describe('resolveCycledWorktreeId', () => {
     expect(
       resolveCycledWorktreeId({ worktreeIds, activeWorktreeId: 'hidden', direction: 'up' })
     ).toBe('c')
-    expect(resolveCycledWorktreeId({ worktreeIds, activeWorktreeId: null, direction: 'down' })).toBe(
-      'a'
-    )
+    expect(
+      resolveCycledWorktreeId({ worktreeIds, activeWorktreeId: null, direction: 'down' })
+    ).toBe('a')
   })
 
   it('has nothing to cycle to when every group is collapsed', () => {
-    expect(resolveCycledWorktreeId({ worktreeIds: [], activeWorktreeId: 'a', direction: 'down' })).toBe(
-      null
-    )
+    expect(
+      resolveCycledWorktreeId({ worktreeIds: [], activeWorktreeId: 'a', direction: 'down' })
+    ).toBe(null)
   })
 })
 
@@ -131,7 +131,10 @@ describe('getCyclableWorktreeIds', () => {
 
 describe('WorktreeList keyboard cycling', () => {
   it('cycles over the rendered rows instead of rebuilding a parallel layout', () => {
-    const source = readFileSync(fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)), 'utf8')
+    const source = readFileSync(
+      fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)),
+      'utf8'
+    )
     const navigateWorktree = source.slice(
       source.indexOf('const navigateWorktree = useCallback('),
       source.indexOf('const handleContainerKeyDown = useCallback(')

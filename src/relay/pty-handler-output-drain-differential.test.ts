@@ -9,7 +9,9 @@ const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(),
-    clear: vi.fn()
+    clear: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn()
   }
 }))
 

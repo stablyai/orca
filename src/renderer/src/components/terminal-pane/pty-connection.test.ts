@@ -165,6 +165,13 @@ type StoreState = {
     }[]
   >
   runtimeEnvironments?: { id: string }[]
+  runtimeStatusByEnvironmentId: Map<
+    string,
+    {
+      checkedAt: number
+      status: { capabilities?: string[] } | null
+    }
+  >
   runtimeEnvironmentCatalogHydrated?: boolean
   repos: {
     id: string
@@ -894,6 +901,7 @@ describe('connectPanePty', () => {
       worktreesByRepo: {
         repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/tmp/wt-1', displayName: 'feat/notis' }]
       },
+      runtimeStatusByEnvironmentId: new Map(),
       repos: [{ id: 'repo1', connectionId: null, displayName: 'orca' }],
       projects: [],
       sshConnectionStates: new Map(),
@@ -5054,8 +5062,12 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
     expect(terminalTarget.handlers.size).toBe(1)
-    expect(terminalTarget.target.addEventListener).toHaveBeenCalledTimes(2)
-    expect(terminalTarget.target.removeEventListener).toHaveBeenCalledTimes(1)
+    expect(
+      terminalTarget.target.addEventListener.mock.calls.filter(([type]) => type === 'keydown')
+    ).toHaveLength(2)
+    expect(
+      terminalTarget.target.removeEventListener.mock.calls.filter(([type]) => type === 'keydown')
+    ).toHaveLength(1)
   })
 
   it('clears the mobile-fit pane binding when the pane connection is disposed', async () => {
@@ -20041,6 +20053,54 @@ describe('connectPanePty', () => {
     expect(writes).toContain('restored-ssh-output')
     expect(writes).toContain(POST_REPLAY_REATTACH_RESET)
     expect(api.pty.signal).toHaveBeenCalledWith('leaf-session', 'SIGWINCH')
+  })
+
+  it('restores configured paired scrollback after an ordinary park reveal', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const remotePtyId = 'remote:env-1@@terminal-1'
+    const transport = createMockTransport(remotePtyId)
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      transport.getPtyId.mockReturnValue(remotePtyId)
+      callbacks.onReplayData?.('current screen from initial subscribe\r\n')
+      return { id: remotePtyId, isReattach: true, replay: '' }
+    })
+    transport.serializeBuffer = vi.fn().mockResolvedValue({
+      data: 'DEEP_PAIRED_SCROLLBACK\r\ncurrent screen\r\n',
+      cols: 100,
+      rows: 30,
+      seq: 4_096,
+      source: 'headless'
+    })
+    transportFactoryQueue.push(transport)
+    await parkTabForReveal('tab-1', remotePtyId)
+    mockStoreState = {
+      ...mockStoreState,
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'env-1',
+          {
+            checkedAt: Date.now(),
+            status: { capabilities: ['terminal.paired-parking.v1'] }
+          }
+        ]
+      ])
+    }
+
+    const pane = createPane(1)
+    const { parseCallbacks, writes } = captureCallbackTerminalWrites(pane)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    for (let step = 0; step < 30; step += 1) {
+      parseCallbacks.shift()?.()
+      await flushAsyncTicks(2)
+    }
+
+    expect(transport.serializeBuffer).toHaveBeenCalledWith({ scrollbackRows: 5000 })
+    expect(transport.attach).not.toHaveBeenCalled()
+    expect(writes.join('')).toContain('DEEP_PAIRED_SCROLLBACK')
+    expect(writes.join('')).toContain('current screen from initial subscribe')
+    expect(transport.getPtyId).toHaveReturnedWith(remotePtyId)
   })
 
   it('falls back to relay replay when the SSH model snapshot stalls', async () => {
