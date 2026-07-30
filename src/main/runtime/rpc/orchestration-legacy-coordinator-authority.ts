@@ -43,7 +43,18 @@ export class LegacyCoordinatorAuthority {
         ) {
           return undefined
         }
-        throw legacyCoordinatorReadOnly()
+        // Only fence callers previously known as the legacy coordinator; unknown fresh-run callers fall through.
+        if (
+          caller &&
+          db.isKnownLegacyCoordinatorIdentity(
+            adoption.adopted_run_id,
+            caller.terminalHandle,
+            caller.paneKey
+          )
+        ) {
+          throw legacyCoordinatorReadOnly()
+        }
+        return undefined
       }
       return undefined
     }
