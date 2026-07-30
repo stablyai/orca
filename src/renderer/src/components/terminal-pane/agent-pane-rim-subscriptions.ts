@@ -1,10 +1,11 @@
 import { useAppStore } from '@/store'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import { rimForAgentState } from '@/lib/agent-rim'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 // Drives the per-pane agent-state rim (see terminal.css `.pane[data-agent-rim]`),
 // mirroring terminal-pane-attention-subscriptions.ts but keyed off agent status.
+// Rim precedence lives in the shared rimForAgentState helper.
 
 type Listener = () => void
 type StoreState = ReturnType<typeof useAppStore.getState>
@@ -13,25 +14,6 @@ const listenersByTabId = new Map<string, Set<Listener>>()
 let unsubscribeStore: (() => void) | null = null
 let prevStatus: StoreState['agentStatusByPaneKey'] | null = null
 let prevCompletion: StoreState['unreadAgentCompletionPanes'] | null = null
-
-// Priority: needs-you (amber) > unviewed completion (green) > none.
-// `interrupted` is excluded from "needs you" to match the sidebar row, whose
-// getAgentDotState() reports interrupted rather than waiting/blocked.
-// The `working` guard keeps a not-yet-cleared completion marker from painting a
-// pane green once its agent has restarted a new task on the same pane.
-function rimFor(
-  state: AgentStatusState | undefined,
-  interrupted: boolean,
-  completionUnread: boolean
-): 'waiting' | 'done' | null {
-  if (!interrupted && (state === 'waiting' || state === 'blocked')) {
-    return 'waiting'
-  }
-  if (completionUnread && state !== 'working') {
-    return 'done'
-  }
-  return null
-}
 
 function tabIdFromPaneKey(paneKey: string): string | null {
   const delimiter = paneKey.indexOf(':')
@@ -56,12 +38,12 @@ function collectChangedTabs(
   for (const paneKey of paneKeys) {
     const prevEntry = prevStatusMap[paneKey]
     const nextEntry = nextStatusMap[paneKey]
-    const before = rimFor(
+    const before = rimForAgentState(
       prevEntry?.state,
       Boolean(prevEntry?.interrupted),
       Boolean(prevCompletionMap[paneKey])
     )
-    const after = rimFor(
+    const after = rimForAgentState(
       nextEntry?.state,
       Boolean(nextEntry?.interrupted),
       Boolean(nextCompletionMap[paneKey])
@@ -146,7 +128,7 @@ export function applyAgentPaneRimToManager(manager: PaneManager, tabId: string):
   for (const pane of manager.getPanes()) {
     const paneKey = makePaneKey(tabId, pane.leafId)
     const entry = statusByPaneKey[paneKey]
-    const rim = rimFor(
+    const rim = rimForAgentState(
       entry?.state,
       Boolean(entry?.interrupted),
       Boolean(completionByPaneKey[paneKey])

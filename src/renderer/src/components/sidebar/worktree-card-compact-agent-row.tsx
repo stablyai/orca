@@ -5,6 +5,7 @@ import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/da
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
+import { rimForAgentState } from '@/lib/agent-rim'
 import { useAppStore } from '@/store'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
@@ -121,9 +122,15 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   // "?" glyph. Nesting under the parent already conveys identity.
   const hideIcon = hideIdentityIcon || agent.rowSource === 'subagent'
   const dotState = getAgentDotState(agent)
-  // Green rim for a completed-but-unviewed agent; the store auto-acks it once the
-  // pane is viewed (useAutoAckViewedAgent), so old done rows never light up.
+  // Rim mirrors the terminal pane via the shared precedence helper. The store
+  // auto-acks the completion marker once the pane is viewed (useAutoAckViewedAgent),
+  // so old done rows never light up.
   const completionUnread = useAppStore((s) => Boolean(s.unreadAgentCompletionPanes[agent.paneKey]))
+  const rim = rimForAgentState(
+    agent.entry.state,
+    agent.entry.interrupted === true,
+    completionUnread
+  )
   const conversationName = useAgentRowConversationName(agent)
   const primary = getCompactAgentPrimary(agent, conversationName)
   const isLineageChild = agent.lineage?.depth === 1
@@ -265,16 +272,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         isLineageChild && 'worktree-agent-lineage-child-row',
         'flex h-6 items-center gap-1',
         isFocusedPane && 'bg-worktree-sidebar-accent',
-        (dotState === 'waiting' || dotState === 'blocked') &&
-          'ring-1 ring-inset ring-agent-rim-attention/60',
-        // Green only when there is no amber (otherwise tailwind-merge keeps the
-        // later ring color and flips amber > green) and the agent isn't working
-        // (a not-yet-cleared completion marker must not paint a restarted agent).
-        completionUnread &&
-          dotState !== 'waiting' &&
-          dotState !== 'blocked' &&
-          dotState !== 'working' &&
-          'ring-1 ring-inset ring-agent-rim-done/60',
+        rim === 'waiting' && 'ring-1 ring-inset ring-agent-rim-attention/60',
+        rim === 'done' && 'ring-1 ring-inset ring-agent-rim-done/60',
         sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
         sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
       )}
