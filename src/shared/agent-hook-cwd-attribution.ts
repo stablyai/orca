@@ -55,18 +55,18 @@ export function hookCwdContradictsWorktree(
   return !isPathInsideOrEqual(workspace, session) && !isPathInsideOrEqual(session, workspace)
 }
 
-/** Paths this host does not have stay raw, so foreign-host paths keep the string verdict.
- *  `null` means the path exists here but cannot be resolved (EPERM-style mounts, deleted
- *  mid-check) — with the alias question unanswerable on a local path, the caller keeps. */
-function realpathIfExists(path: string): string | null {
+/** `resolved: null` means the path exists here but cannot be resolved (EPERM-style mounts,
+ *  deleted mid-check) — with the alias question unanswerable on a local path, callers keep.
+ *  Nonexistent paths keep their raw spelling so foreign-host paths keep the string verdict. */
+function resolveLocalPath(path: string): { exists: boolean; resolved: string | null } {
   try {
-    if (existsSync(path)) {
-      return realpathSync.native(path)
+    if (!existsSync(path)) {
+      return { exists: false, resolved: path }
     }
+    return { exists: true, resolved: realpathSync.native(path) }
   } catch {
-    return null
+    return { exists: true, resolved: null }
   }
-  return path
 }
 
 const MACOS_DATA_VOLUME_PREFIX = '/System/Volumes/Data'
@@ -100,13 +100,20 @@ export function hookCwdContradictsWorktreeAfterLocalResolve(
   if (!parsed || !cwd) {
     return true
   }
-  const resolvedWorktreePath = realpathIfExists(parsed.worktreePath)
-  const resolvedCwd = realpathIfExists(cwd)
-  if (resolvedWorktreePath === null || resolvedCwd === null) {
+  const worktree = resolveLocalPath(parsed.worktreePath)
+  const session = resolveLocalPath(cwd)
+  if (worktree.resolved === null || session.resolved === null) {
+    return false
+  }
+  // Why: exactly one side stat-able means the other side's recorded spelling cannot be
+  // trusted on the host that owns it (renamed, deleted, or whitespace-mangled in transit) —
+  // unclear keeps. Both-nonexistent still drops on the raw strings: that is the foreign-host
+  // shape, where this process is not the judge of existence.
+  if (worktree.exists !== session.exists) {
     return false
   }
   return hookCwdContradictsWorktree(
-    `${parsed.repoId}${WORKTREE_ID_SEPARATOR}${foldMacOsDataVolumePrefix(resolvedWorktreePath)}`,
-    foldMacOsDataVolumePrefix(resolvedCwd)
+    `${parsed.repoId}${WORKTREE_ID_SEPARATOR}${foldMacOsDataVolumePrefix(worktree.resolved)}`,
+    foldMacOsDataVolumePrefix(session.resolved)
   )
 }
