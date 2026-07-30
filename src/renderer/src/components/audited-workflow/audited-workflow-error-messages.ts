@@ -8,6 +8,10 @@ import type {
   SelectTaskReasonCode,
   TriageReasonCode
 } from '../../../../shared/audited-workflow-types'
+import {
+  isRetryableProvisioningReasonCode,
+  type WorktreeReasonCode
+} from '../../../../shared/audited-worktree-types'
 
 export function getSelectTaskErrorMessage(reasonCode: SelectTaskReasonCode): string {
   switch (reasonCode) {
@@ -86,4 +90,22 @@ export function getStartTriageErrorMessage(reasonCode: TriageReasonCode): string
 // it is excluded even though the button text otherwise doesn't distinguish.
 export function isRetryableTriageReasonCode(reasonCode: TriageReasonCode): boolean {
   return reasonCode !== 'illegal_transition' && reasonCode !== 'lock_contended'
+}
+
+/**
+ * Whether to draw a Retry button for a worktree failure. Retry is safe ONLY for
+ * provisioning failures the main process persists exclusively when Git provably
+ * made no durable change — a failure that left partial evidence is recorded as
+ * provision_evidence_ambiguous instead, which is never retryable.
+ *
+ * This mirrors the server-side admission rules in audited-worktree-recovery.ts;
+ * the button only controls what is drawn, never enforcement.
+ */
+export function isRetryableWorktreeReasonCode(reasonCode: WorktreeReasonCode): boolean {
+  return isRetryableProvisioningReasonCode(reasonCode)
+}
+
+/** Legacy tasks that never got a worktree get an explicit provisioning action. */
+export function needsExplicitWorktreeProvisioning(reasonCode: WorktreeReasonCode): boolean {
+  return reasonCode === 'worktree_never_provisioned'
 }

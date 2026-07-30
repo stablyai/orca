@@ -16,6 +16,10 @@ import type {
   AuditedWorkflowStartTriageResult,
   AuditedWorkflowRetryTriageParams,
   AuditedWorkflowRetryTriageResult,
+  AuditedWorkflowProvisionWorktreeParams,
+  AuditedWorkflowProvisionWorktreeResult,
+  AuditedWorkflowVerifyWorktreeParams,
+  AuditedWorkflowVerifyWorktreeResult,
   AuditedWorkflowTriageProviderStatus,
   AuditedWorkflowSaveTriageApiKeyParams
 } from '../shared/audited-workflow-types'
@@ -2356,6 +2360,14 @@ const api = {
       params: AuditedWorkflowRetryTriageParams
     ): Promise<AuditedWorkflowRetryTriageResult> =>
       ipcRenderer.invoke('auditedWorkflow:retryTriage', params),
+    provisionWorktree: (
+      params: AuditedWorkflowProvisionWorktreeParams
+    ): Promise<AuditedWorkflowProvisionWorktreeResult> =>
+      ipcRenderer.invoke('auditedWorkflow:provisionWorktree', params),
+    verifyWorktree: (
+      params: AuditedWorkflowVerifyWorktreeParams
+    ): Promise<AuditedWorkflowVerifyWorktreeResult> =>
+      ipcRenderer.invoke('auditedWorkflow:verifyWorktree', params),
     getTriageProviderStatus: (): Promise<AuditedWorkflowTriageProviderStatus> =>
       ipcRenderer.invoke('auditedWorkflow:getTriageProviderStatus'),
     saveTriageApiKey: (

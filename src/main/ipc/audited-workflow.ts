@@ -9,6 +9,7 @@ import type { Store } from '../persistence'
 import { getGitRepoRoot } from '../git/repo'
 import { gitExecFileAsync } from '../git/runner'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { parseWslPath } from '../wsl'
 import {
   selectTask,
   getTaskProjection,
@@ -24,6 +25,13 @@ import {
   saveAuditedTriageApiKey,
   clearAuditedTriageApiKey
 } from '../audited-workflow/audited-triage-api-key-store'
+import {
+  ensureWorktreeForTask,
+  rebuildAuditedWorktreeRegistry,
+  reconcileAuditedWorktreesOnStartup,
+  recoverWorktreeForTask,
+  setAuditedWorktreeStore
+} from '../audited-workflow/audited-worktree-service'
 import { broadcastAuditedTaskChanged } from '../audited-workflow/audited-workflow-broadcast'
 import { RISK_LEVELS, TASK_SOURCES } from '../../shared/audited-workflow-types'
 import type {
@@ -35,16 +43,25 @@ import type {
   AuditedWorkflowStartTriageResult,
   AuditedWorkflowRetryTriageParams,
   AuditedWorkflowRetryTriageResult,
+  AuditedWorkflowProvisionWorktreeParams,
+  AuditedWorkflowProvisionWorktreeResult,
+  AuditedWorkflowVerifyWorktreeParams,
+  AuditedWorkflowVerifyWorktreeResult,
   AuditedWorkflowTriageProviderStatus,
   AuditedWorkflowSaveTriageApiKeyParams,
   AuditedTaskStatusProjection
 } from '../../shared/audited-workflow-types'
 
-const ListTasksParams = z.object({ repoId: z.string().optional() })
-const GetTaskParams = z.object({ taskId: z.string().min(1) })
-const StartTriageParams = z.object({ taskId: z.string().min(1) })
-const RetryTriageParams = z.object({ taskId: z.string().min(1) })
-const SaveTriageApiKeyParams = z.object({ apiKey: z.string().min(1) })
+// Why .strict(): an extra path/branch/commit/provenance/worktreeId key must be
+// REJECTED, not silently stripped — the renderer must never be able to influence
+// worktree identity, and a stripped key would hide a caller bug.
+const ListTasksParams = z.object({ repoId: z.string().optional() }).strict()
+const GetTaskParams = z.object({ taskId: z.string().min(1) }).strict()
+const StartTriageParams = z.object({ taskId: z.string().min(1) }).strict()
+const RetryTriageParams = z.object({ taskId: z.string().min(1) }).strict()
+const ProvisionWorktreeParams = z.object({ taskId: z.string().min(1) }).strict()
+const VerifyWorktreeParams = z.object({ taskId: z.string().min(1) }).strict()
+const SaveTriageApiKeyParams = z.object({ apiKey: z.string().min(1) }).strict()
 const SelectTaskParams = z.object({
   repoId: z.string().min(1),
   source: z.enum(TASK_SOURCES),
@@ -57,7 +74,7 @@ const SelectTaskParams = z.object({
     .refine((v) => !/[\r\n]/.test(v), 'Title must be a single line'),
   description: z.string().max(20_000, 'Description is too long'),
   risk: z.enum(RISK_LEVELS)
-})
+}).strict()
 
 async function resolveHeadCommit(repoPath: string): Promise<string> {
   const { stdout } = await gitExecFileAsync(['rev-parse', 'HEAD'], { cwd: repoPath })
@@ -71,20 +88,43 @@ async function resolveHeadCommit(repoPath: string): Promise<string> {
 // half-attempted). Both rejection kinds return the same closed
 // 'unsupported_host' reason code — the renderer doesn't need to distinguish
 // them, and neither reveals repo-specific detail.
+// WSL is refused too: provisioning is native-local only, and a WSL-hosted repo
+// would need a distro-scoped Git host the Phase 3 modules deliberately don't
+// implement. All three rejections share the same closed code.
 function isUnsupportedAuditedWorkflowHost(repo: {
   connectionId?: string | null
   kind?: 'git' | 'folder'
+  path?: string
 }): boolean {
-  return Boolean(repo.connectionId) || isFolderRepo(repo)
+  if (Boolean(repo.connectionId) || isFolderRepo(repo)) {
+    return true
+  }
+  return typeof repo.path === 'string' && parseWslPath(repo.path) !== null
 }
 
 export function registerAuditedWorkflowHandlers(store: Store): void {
+  setAuditedWorktreeStore(store)
+
+  // ORDERING IS LOAD-BEARING: the guard registry must be warm before any
+  // git-mutating channel exists. register-core-handlers.ts calls this function
+  // (line ~182) before registerFilesystemHandlers / registerRuntimeHandlers
+  // (~217/222), all synchronously in one invocation — so no mutation can be
+  // dispatched against a live attempt's worktree after a restart.
+  rebuildAuditedWorktreeRegistry()
+
   // Why: runs once per registration (i.e. once per app process lifetime —
   // registerAuditedWorkflowHandlers is called exactly once from
   // register-core-handlers.ts). Idempotent and CAS-safe, so calling it again
   // (e.g. in a test that re-registers handlers) is harmless — a second pass
   // finds nothing left in 'running' state to recover.
   recoverInterruptedTriageRunsOnStartup()
+
+  // Read-only, network-free, Git-mutation-free. Fire-and-forget so handler
+  // registration is never blocked on filesystem/Git probes; failures are logged
+  // locally and never surface a raw error.
+  void reconcileAuditedWorktreesOnStartup().catch((error) => {
+    console.error('[auditedWorkflow] Worktree reconciliation failed:', error)
+  })
 
   ipcMain.handle(
     'auditedWorkflow:listTasks',
@@ -181,7 +221,7 @@ export function registerAuditedWorkflowHandlers(store: Store): void {
         result = await startTriage(args.taskId)
       } catch (error) {
         console.error('[auditedWorkflow] startTriage failed unexpectedly:', error)
-        return { ok: false, reasonCode: 'provider_error' }
+        return { ok: false, kind: 'triage', reasonCode: 'provider_error' }
       }
 
       const projection = getTaskProjection(args.taskId)
@@ -208,7 +248,7 @@ export function registerAuditedWorkflowHandlers(store: Store): void {
         result = await retryTriage(args.taskId)
       } catch (error) {
         console.error('[auditedWorkflow] retryTriage failed unexpectedly:', error)
-        return { ok: false, reasonCode: 'provider_error' }
+        return { ok: false, kind: 'triage', reasonCode: 'provider_error' }
       }
 
       const projection = getTaskProjection(args.taskId)
@@ -217,6 +257,66 @@ export function registerAuditedWorkflowHandlers(store: Store): void {
       }
 
       return result
+    }
+  )
+
+  // Explicit, user-initiated worktree recovery. Admissible only for a blocked
+  // task in one of the two shapes in audited-worktree-recovery.ts. On success
+  // the task returns to its pre-block state; the provider is NOT invoked — the
+  // user must click Start Triage separately.
+  ipcMain.handle(
+    'auditedWorkflow:provisionWorktree',
+    async (_event, rawArgs: unknown): Promise<AuditedWorkflowProvisionWorktreeResult> => {
+      const args: AuditedWorkflowProvisionWorktreeParams = ProvisionWorktreeParams.parse(rawArgs)
+      let result: Awaited<ReturnType<typeof recoverWorktreeForTask>>
+      try {
+        result = await recoverWorktreeForTask(args.taskId)
+      } catch (error) {
+        console.error('[auditedWorkflow] provisionWorktree failed unexpectedly:', error)
+        return { ok: false, kind: 'worktree', reasonCode: 'git_worktree_add_failed' }
+      }
+
+      const projection = getTaskProjection(args.taskId)
+      if (projection) {
+        broadcastAuditedTaskChanged(projection)
+      }
+
+      if (result.ok) {
+        return { ok: true }
+      }
+      if ('contended' in result) {
+        return { ok: false, kind: 'contended' }
+      }
+      if ('notAdmissible' in result) {
+        // Recovery is not legal for this task's block shape (e.g. ambiguous or
+        // occupied evidence) — never coerced into a retry.
+        return { ok: false, kind: 'worktree', reasonCode: 'provision_evidence_ambiguous' }
+      }
+      return { ok: false, kind: 'worktree', reasonCode: result.reasonCode }
+    }
+  )
+
+  ipcMain.handle(
+    'auditedWorkflow:verifyWorktree',
+    async (_event, rawArgs: unknown): Promise<AuditedWorkflowVerifyWorktreeResult> => {
+      const args: AuditedWorkflowVerifyWorktreeParams = VerifyWorktreeParams.parse(rawArgs)
+      try {
+        const result = await ensureWorktreeForTask(args.taskId)
+        const projection = getTaskProjection(args.taskId)
+        if (projection) {
+          broadcastAuditedTaskChanged(projection)
+        }
+        if (result.ok) {
+          return { ok: true }
+        }
+        if ('contended' in result) {
+          return { ok: false, kind: 'contended' }
+        }
+        return { ok: false, kind: 'worktree', reasonCode: result.reasonCode }
+      } catch (error) {
+        console.error('[auditedWorkflow] verifyWorktree failed unexpectedly:', error)
+        return { ok: false, kind: 'worktree', reasonCode: 'worktree_unreadable' }
+      }
     }
   )
 

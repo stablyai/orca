@@ -6,6 +6,11 @@ import { randomUUID } from 'node:crypto'
 import { dirname, extname, join, resolve } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
+import {
+  assertGitMutationAllowed,
+  auditedWorktreeRefusalResult,
+  isAuditedWorktreeGitMutationRefused
+} from '../audited-workflow/audited-worktree-authority-guard'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { tryDeleteWslUncPath } from '../wsl-unc-delete'
 import type { Store } from '../persistence'
@@ -1206,6 +1211,7 @@ export function registerFilesystemHandlers(
   ipcMain.handle(
     'git:appendGitignore',
     async (_event, args: { worktreePath: string; folderName: string }): Promise<boolean> => {
+      assertGitMutationAllowed(args.worktreePath)
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return appendFolderToGitignore(worktreePath, args.folderName)
     }
@@ -1257,6 +1263,7 @@ export function registerFilesystemHandlers(
   ipcMain.handle(
     'git:abortMerge',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      assertGitMutationAllowed(args.worktreePath)
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -1277,6 +1284,7 @@ export function registerFilesystemHandlers(
   ipcMain.handle(
     'git:abortRebase',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      assertGitMutationAllowed(args.worktreePath)
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -1335,6 +1343,9 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; message: string; connectionId?: string }
     ): Promise<{ success: boolean; error?: string }> => {
+      if (isAuditedWorktreeGitMutationRefused(args.worktreePath)) {
+        return auditedWorktreeRefusalResult()
+      }
       // Why: validate at the IPC boundary so the renderer gets a clear error instead of an opaque execFile failure.
       if (typeof args.message !== 'string' || args.message.trim().length === 0) {
         throw new Error('Commit message is required')
@@ -1777,6 +1788,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
     ): Promise<void> => {
+      assertGitMutationAllowed(args.worktreePath)
       if (args.connectionId) {
         if (args.pushTarget) {
           assertGitPushTargetShape(args.pushTarget)
@@ -1810,6 +1822,7 @@ export function registerFilesystemHandlers(
         expectedUpstream: GitForkSyncExpectedUpstream
       }
     ): Promise<GitForkSyncResult> => {
+      assertGitMutationAllowed(args.worktreePath)
       const expectedUpstream = validateGitForkSyncExpectedUpstream(args.expectedUpstream, {
         required: true
       })
@@ -1842,6 +1855,7 @@ export function registerFilesystemHandlers(
         pushTarget?: GitPushTarget
       }
     ): Promise<void> => {
+      assertGitMutationAllowed(args.worktreePath)
       // Why: coerce to strict boolean so a malformed payload (e.g. string 'false') can't enable --set-upstream; mirror in src/relay/git-handler.ts.
       const publish = args.publish === true
       if (args.connectionId) {
@@ -1878,6 +1892,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
     ): Promise<void> => {
+      assertGitMutationAllowed(args.worktreePath)
       if (args.connectionId) {
         if (args.pushTarget) {
           assertGitPushTargetShape(args.pushTarget)
@@ -1907,6 +1922,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
     ): Promise<void> => {
+      assertGitMutationAllowed(args.worktreePath)
       if (args.connectionId) {
         if (args.pushTarget) {
           assertGitPushTargetShape(args.pushTarget)
@@ -1936,6 +1952,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; baseRef: string; connectionId?: string }
     ): Promise<void> => {
+      assertGitMutationAllowed(args.worktreePath)
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -2069,6 +2086,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; filePath: string; connectionId?: string }
     ): Promise<void> => {
+      assertGitMutationAllowed(args.worktreePath)
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -2093,6 +2111,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; filePath: string; connectionId?: string }
     ): Promise<void> => {
+      assertGitMutationAllowed(args.worktreePath)
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -2117,6 +2136,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; filePath: string; connectionId?: string }
     ): Promise<void> => {
+      assertGitMutationAllowed(args.worktreePath)
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -2141,6 +2161,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; filePaths: string[]; connectionId?: string }
     ): Promise<void> => {
+      assertGitMutationAllowed(args.worktreePath)
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -2165,6 +2186,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; filePaths: string[]; connectionId?: string }
     ): Promise<void> => {
+      assertGitMutationAllowed(args.worktreePath)
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -2189,6 +2211,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; filePaths: string[]; connectionId?: string }
     ): Promise<void> => {
+      assertGitMutationAllowed(args.worktreePath)
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {

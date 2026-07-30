@@ -11,14 +11,19 @@ import {
   TRIAGE_RUN_STATUSES,
   TRIAGE_REASON_CODES
 } from '../../shared/audited-workflow-types'
+import {
+  WORKTREE_ATTEMPT_STATUSES,
+  WORKTREE_PROVENANCE_KINDS,
+  WORKTREE_REASON_CODES
+} from '../../shared/audited-worktree-types'
 import type Database from '../sqlite/sync-database'
 
 // Schema versions: v1 initial (audited_tasks, audited_transitions). v2 (Phase 2)
-// adds audited_triage_runs plus triage status columns on audited_tasks. Later
-// phases add audited_candidates / audited_reviews / audited_approvals /
-// audited_commit_attempts / audited_phase_runs in their own numbered steps —
-// see plan §6.
-export const SCHEMA_VERSION = 2
+// adds audited_triage_runs plus triage status columns on audited_tasks. v3
+// (Phase 3) adds audited_worktree_attempts plus worktree identity/provenance
+// columns — FULLY ADDITIVE: Phase 3 introduces no new task state, so
+// audited_tasks' state CHECK is unchanged and no table rebuild is needed.
+export const SCHEMA_VERSION = 3
 
 export function createAuditedWorkflowTables(db: Database.Database): void {
   const stateList = AUDITED_TASK_STATES.map((s) => `'${s}'`).join(', ')
@@ -28,6 +33,9 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
   const triageDecisionList = TRIAGE_DECISIONS.map((d) => `'${d}'`).join(', ')
   const triageRunStatusList = TRIAGE_RUN_STATUSES.map((s) => `'${s}'`).join(', ')
   const triageReasonList = TRIAGE_REASON_CODES.map((r) => `'${r}'`).join(', ')
+  const attemptStatusList = WORKTREE_ATTEMPT_STATUSES.map((s) => `'${s}'`).join(', ')
+  const provenanceList = WORKTREE_PROVENANCE_KINDS.map((p) => `'${p}'`).join(', ')
+  const worktreeReasonList = WORKTREE_REASON_CODES.map((r) => `'${r}'`).join(', ')
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS audited_tasks (
@@ -61,6 +69,13 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
       triage_decision             TEXT CHECK(triage_decision IS NULL OR triage_decision IN (${triageDecisionList})),
       triage_run_status           TEXT CHECK(triage_run_status IS NULL OR triage_run_status IN (${triageRunStatusList})),
       triage_blocked_reason_code  TEXT CHECK(triage_blocked_reason_code IS NULL OR triage_blocked_reason_code IN (${triageReasonList})),
+      -- Phase 3. worktree_provenance is NULL until a worktree is actually
+      -- verified: it describes a real worktree, never migration history.
+      worktree_provenance         TEXT CHECK(worktree_provenance IS NULL OR worktree_provenance IN (${provenanceList})),
+      worktree_provisioned_at_ms  INTEGER,
+      source_repo_common_dir      TEXT,
+      worktree_reason_code        TEXT CHECK(worktree_reason_code IS NULL OR worktree_reason_code IN (${worktreeReasonList})),
+      worktree_verified_at_ms     INTEGER,
       created_at_ms                INTEGER NOT NULL,
       updated_at_ms                INTEGER NOT NULL
     );
@@ -104,8 +119,43 @@ export function createAuditedWorkflowTables(db: Database.Database): void {
     -- rather than a second concurrent provider call.
     CREATE UNIQUE INDEX IF NOT EXISTS idx_audited_triage_runs_running
       ON audited_triage_runs(task_id) WHERE status = 'running';
+
+    -- Phase 3: durable provisioning-attempt evidence. The intended_* columns are
+    -- written BEFORE any Git command runs, so a crash between "git worktree add"
+    -- and SQLite finalization is recoverable by matching on-disk/Git evidence
+    -- against exactly what this row says was intended.
+    CREATE TABLE IF NOT EXISTS audited_worktree_attempts (
+      id                   TEXT PRIMARY KEY,
+      task_id              TEXT NOT NULL,
+      status               TEXT NOT NULL CHECK(status IN (${attemptStatusList})),
+      intended_branch      TEXT NOT NULL,
+      intended_path        TEXT NOT NULL,
+      intended_base_commit TEXT NOT NULL,
+      intended_common_dir  TEXT NOT NULL,
+      provenance_id        TEXT NOT NULL,
+      reason_code          TEXT CHECK(reason_code IS NULL OR reason_code IN (${worktreeReasonList})),
+      claimed_at_ms        INTEGER NOT NULL,
+      created_at_ms        INTEGER,
+      finalized_at_ms      INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_audited_worktree_attempts_task
+      ON audited_worktree_attempts(task_id);
+    -- At most one live attempt per task: the concurrency primitive that makes a
+    -- duplicate Start Triage a CAS-detectable no-op rather than a second worktree.
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_audited_worktree_attempts_live
+      ON audited_worktree_attempts(task_id) WHERE status IN ('claimed','created','verified');
   `)
 }
+
+// Phase 3 columns added to a pre-existing audited_tasks table, with their
+// declared affinities.
+const PHASE_3_TASK_COLUMNS: readonly [string, string][] = [
+  ['worktree_provenance', 'TEXT'],
+  ['worktree_provisioned_at_ms', 'INTEGER'],
+  ['source_repo_common_dir', 'TEXT'],
+  ['worktree_reason_code', 'TEXT'],
+  ['worktree_verified_at_ms', 'INTEGER']
+]
 
 function columnExists(db: Database.Database, table: string, column: string): boolean {
   const rows = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
@@ -134,6 +184,19 @@ export function migrateAuditedWorkflowSchema(db: Database.Database): void {
       }
       if (!columnExists(db, 'audited_tasks', 'triage_blocked_reason_code')) {
         db.exec(`ALTER TABLE audited_tasks ADD COLUMN triage_blocked_reason_code TEXT`)
+      }
+    }
+    if (current < 3) {
+      // Why additive-only: Phase 3 adds no task state, so audited_tasks' state
+      // CHECK constraint is unchanged and no 12-step table rebuild is required.
+      // Every Phase 1/Phase 2 row keeps its rowid and column values untouched.
+      // ALTER TABLE ADD COLUMN cannot carry a CHECK constraint; the narrowing
+      // CHECKs live in createAuditedWorkflowTables for fresh DBs, and every
+      // write site uses typed literals from the closed vocabularies.
+      for (const [column, type] of PHASE_3_TASK_COLUMNS) {
+        if (!columnExists(db, 'audited_tasks', column)) {
+          db.exec(`ALTER TABLE audited_tasks ADD COLUMN ${column} ${type}`)
+        }
       }
     }
     db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)

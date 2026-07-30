@@ -244,6 +244,7 @@ import {
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import { clampLinearIssueListLimit } from '../../shared/linear-issue-read-limits'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { assertGitMutationAllowed } from '../audited-workflow/audited-worktree-authority-guard'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import {
   buildSetupRunnerCommand,
@@ -20711,6 +20712,7 @@ export class OrcaRuntimeService {
     ) {
       throw new Error(`No preserved branch cleanup is pending for "${branchName}".`)
     }
+    assertGitMutationAllowed(removalTarget.path)
 
     const repo = this.store.getRepo(removalTarget.repoId)
     if (!repo) {
@@ -20770,6 +20772,7 @@ export class OrcaRuntimeService {
     }
     const store = this.store
     const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector)
+    assertGitMutationAllowed(removalTarget.path)
     const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks)
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(removalTarget.id)
     if (inFlightRemoval) {

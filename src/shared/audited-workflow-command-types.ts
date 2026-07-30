@@ -14,6 +14,7 @@ import type {
   RiskLevel,
   TriageReasonCode
 } from './audited-workflow-types'
+import type { WorktreeReasonCode } from './audited-worktree-types'
 
 export type AuditedWorkflowListTasksParams = { repoId?: string }
 export type AuditedWorkflowGetTaskParams = { taskId: string }
@@ -47,15 +48,28 @@ export type AuditedWorkflowSelectTaskResult =
 export type AuditedWorkflowRunPhaseParams = { taskId: string; phase: AuditedPhase }
 export type AuditedWorkflowCommandResult = { accepted: boolean; reasonCode?: string }
 
-export type AuditedWorkflowStartTriageParams = { taskId: string }
-export type AuditedWorkflowStartTriageResult =
+// One discriminated result for every audited command. `reasonCode` is always the
+// property name; `kind` selects its vocabulary. Never two alternative property
+// names on the same result.
+export type AuditedCommandResult =
   | { ok: true }
-  | { ok: false; reasonCode: TriageReasonCode }
+  | { ok: false; kind: 'triage'; reasonCode: TriageReasonCode }
+  | { ok: false; kind: 'worktree'; reasonCode: WorktreeReasonCode }
+  // Contention is a command outcome only — it is never persisted as a blocked
+  // reason and has no reason code.
+  | { ok: false; kind: 'contended' }
+
+export type AuditedWorkflowStartTriageParams = { taskId: string }
+export type AuditedWorkflowStartTriageResult = AuditedCommandResult
 
 export type AuditedWorkflowRetryTriageParams = { taskId: string }
-export type AuditedWorkflowRetryTriageResult =
-  | { ok: true }
-  | { ok: false; reasonCode: TriageReasonCode }
+export type AuditedWorkflowRetryTriageResult = AuditedCommandResult
+
+export type AuditedWorkflowProvisionWorktreeParams = { taskId: string }
+export type AuditedWorkflowProvisionWorktreeResult = AuditedCommandResult
+
+export type AuditedWorkflowVerifyWorktreeParams = { taskId: string }
+export type AuditedWorkflowVerifyWorktreeResult = AuditedCommandResult
 
 // Triage-provider credential status/management. `configured` is the ONLY
 // fact ever exposed here — never the key itself, a masked form, encrypted

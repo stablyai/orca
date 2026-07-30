@@ -12,7 +12,13 @@ vi.mock('electron', () => ({
 }))
 
 import { AuditedTaskRepository } from './audited-task-repository'
-import { setAuditedTaskRepositoryForTests } from './audited-task-service'
+import {
+  getAuditedTaskRepository,
+  setAuditedTaskRepositoryForTests
+} from './audited-task-service'
+import { setAuditedWorktreeStore } from './audited-worktree-service'
+import { clearAuditedWorktreeRegistryForTests } from './audited-worktree-registry'
+import { createTestRepo, type TestRepo } from './audited-worktree-test-repo'
 import {
   startTriage,
   retryTriage,
@@ -24,6 +30,39 @@ import type { AuditedTaskState, TriageRunStatus } from '../../shared/audited-wor
 
 function fakeProvider(result: TriageProviderResult): TriageProvider {
   return { runTriage: async () => result }
+}
+
+// Phase 3: triage runs only after a real worktree is provisioned and verified,
+// so these tests need an actual repository rather than a synthetic path.
+const activeRepos: TestRepo[] = []
+
+function newTaskInRealRepo(): ReturnType<AuditedTaskRepository['createTask']> {
+  const testRepo = createTestRepo()
+  activeRepos.push(testRepo)
+  const repo = new AuditedTaskRepository(':memory:')
+  setAuditedTaskRepositoryForTests(repo)
+  setAuditedWorktreeStore({
+    getRepos: () => [{ id: 'repo1', path: testRepo.repoPath }],
+    getSettings: () => ({ workspaceDir: testRepo.workspaceRoot, nestWorkspaces: false })
+  } as never)
+  return repo.createTask({
+    repoId: 'repo1',
+    sourceRepoPath: testRepo.repoPath,
+    baseCommit: testRepo.headCommit,
+    hostId: 'local',
+    title: 'Fix the thing',
+    spec: { title: 'Fix the thing', description: 'Some details' },
+    source: 'custom',
+    risk: 'low'
+  })
+}
+
+function cleanupTestRepos(): void {
+  while (activeRepos.length > 0) {
+    activeRepos.pop()?.cleanup()
+  }
+  clearAuditedWorktreeRegistryForTests()
+  setAuditedWorktreeStore(undefined)
 }
 
 function fakeWindow() {
@@ -57,24 +96,14 @@ describe('startTriage', () => {
   })
 
   afterEach(() => {
+    cleanupTestRepos()
     setAuditedTaskRepositoryForTests(undefined)
     setTriageProviderForTests(undefined)
     vi.restoreAllMocks()
   })
 
-  function createSelectedTask() {
-    const repo = new AuditedTaskRepository(':memory:')
-    setAuditedTaskRepositoryForTests(repo)
-    return repo.createTask({
-      repoId: 'repo1',
-      sourceRepoPath: '/repos/repo1',
-      baseCommit: 'a'.repeat(40),
-      hostId: 'local',
-      title: 'Fix the thing',
-      spec: { title: 'Fix the thing', description: 'Some details' },
-      source: 'custom',
-      risk: 'low'
-    })
+  function createSelectedTask(): ReturnType<AuditedTaskRepository['createTask']> {
+    return newTaskInRealRepo()
   }
 
   it('moves selected -> planning when the provider decides plan', async () => {
@@ -123,7 +152,7 @@ describe('startTriage', () => {
 
     const result = await startTriage(task.id)
 
-    expect(result).toEqual({ ok: false, reasonCode: 'provider_unavailable' })
+    expect(result).toEqual({ ok: false, kind: 'triage', reasonCode: 'provider_unavailable' })
   })
 
   it('blocks the task with output_invalid when the provider returns unparseable output', async () => {
@@ -132,7 +161,7 @@ describe('startTriage', () => {
 
     const result = await startTriage(task.id)
 
-    expect(result).toEqual({ ok: false, reasonCode: 'output_invalid' })
+    expect(result).toEqual({ ok: false, kind: 'triage', reasonCode: 'output_invalid' })
   })
 
   it('blocks the task with provider_timeout when the provider times out', async () => {
@@ -141,7 +170,7 @@ describe('startTriage', () => {
 
     const result = await startTriage(task.id)
 
-    expect(result).toEqual({ ok: false, reasonCode: 'provider_timeout' })
+    expect(result).toEqual({ ok: false, kind: 'triage', reasonCode: 'provider_timeout' })
   })
 
   it('returns illegal_transition for a task that is not in selected state, and never invokes the provider', async () => {
@@ -184,7 +213,7 @@ describe('startTriage', () => {
 
     const result = await startTriage(task.id)
 
-    expect(result).toEqual({ ok: false, reasonCode: 'illegal_transition' })
+    expect(result).toEqual({ ok: false, kind: 'triage', reasonCode: 'illegal_transition' })
     expect(providerCalled).toBe(false)
   })
 
@@ -211,7 +240,7 @@ describe('startTriage', () => {
     const second = await startTriage(task.id)
 
     expect(first).toEqual({ ok: true })
-    expect(second).toEqual({ ok: false, reasonCode: 'illegal_transition' })
+    expect(second).toEqual({ ok: false, kind: 'triage', reasonCode: 'illegal_transition' })
     expect(providerCallCount).toBe(1)
   })
 
@@ -286,7 +315,7 @@ describe('startTriage', () => {
 
     const result = await startTriage(task.id)
 
-    expect(result).toEqual({ ok: false, reasonCode: 'provider_error' })
+    expect(result).toEqual({ ok: false, kind: 'triage', reasonCode: 'provider_error' })
     expect(consoleErrorSpy).toHaveBeenCalledWith(expect.any(String), sensitiveError)
     // Only the closed reason code crosses the boundary — never the raw error.
     expect(JSON.stringify(result)).not.toContain('ECONNRESET')
@@ -294,18 +323,8 @@ describe('startTriage', () => {
   })
 
   it('provider throw leaves the task blocked (not stuck triaging) and the run is no longer running', async () => {
-    const repo = new AuditedTaskRepository(':memory:')
-    setAuditedTaskRepositoryForTests(repo)
-    const task = repo.createTask({
-      repoId: 'repo1',
-      sourceRepoPath: '/repos/repo1',
-      baseCommit: 'a'.repeat(40),
-      hostId: 'local',
-      title: 'Throws',
-      spec: { title: 'Throws', description: '' },
-      source: 'custom',
-      risk: 'low'
-    })
+    const task = newTaskInRealRepo()
+    const repo = getAuditedTaskRepository()
     setTriageProviderForTests({
       runTriage: async () => {
         throw new Error('boom')
@@ -334,6 +353,7 @@ describe('retryTriage', () => {
   })
 
   afterEach(() => {
+    cleanupTestRepos()
     setAuditedTaskRepositoryForTests(undefined)
     setTriageProviderForTests(undefined)
     vi.restoreAllMocks()
@@ -347,18 +367,8 @@ describe('retryTriage', () => {
       | 'output_invalid'
       | 'interrupted' = 'provider_unavailable'
   ) {
-    const repo = new AuditedTaskRepository(':memory:')
-    setAuditedTaskRepositoryForTests(repo)
-    const task = repo.createTask({
-      repoId: 'repo1',
-      sourceRepoPath: '/repos/repo1',
-      baseCommit: 'a'.repeat(40),
-      hostId: 'local',
-      title: 'Retry me',
-      spec: { title: 'Retry me', description: 'Some details' },
-      source: 'custom',
-      risk: 'low'
-    })
+    const task = newTaskInRealRepo()
+    const repo = getAuditedTaskRepository()
     const started = repo.startTriageRun(task.id)
     if (!started.ok) {
       throw new Error('expected ok')
@@ -410,7 +420,7 @@ describe('retryTriage', () => {
 
     const result = await retryTriage(task.id)
 
-    expect(result).toEqual({ ok: false, reasonCode: 'illegal_transition' })
+    expect(result).toEqual({ ok: false, kind: 'triage', reasonCode: 'illegal_transition' })
   })
 
   it('refuses to retry a task blocked for a non-triage reason (unsupported_host)', async () => {
@@ -455,7 +465,7 @@ describe('retryTriage', () => {
 
     const result = await retryTriage(task.id)
 
-    expect(result).toEqual({ ok: false, reasonCode: 'illegal_transition' })
+    expect(result).toEqual({ ok: false, kind: 'triage', reasonCode: 'illegal_transition' })
     expect(providerCalled).toBe(false)
   })
 
@@ -503,7 +513,7 @@ describe('retryTriage', () => {
     const second = await retryTriage(task.id)
 
     expect(first).toEqual({ ok: true })
-    expect(second).toEqual({ ok: false, reasonCode: 'illegal_transition' })
+    expect(second).toEqual({ ok: false, kind: 'triage', reasonCode: 'illegal_transition' })
     expect(providerCallCount).toBe(1)
   })
 
@@ -517,7 +527,7 @@ describe('retryTriage', () => {
 
     const result = await retryTriage(task.id)
 
-    expect(result).toEqual({ ok: false, reasonCode: 'provider_error' })
+    expect(result).toEqual({ ok: false, kind: 'triage', reasonCode: 'provider_error' })
     const reloaded = repo.getTask(task.id)
     expect(reloaded?.state).toBe('blocked')
     expect(reloaded?.triageBlockedReasonCode).toBe('provider_error')
@@ -533,6 +543,7 @@ describe('recoverInterruptedTriageRunsOnStartup', () => {
   })
 
   afterEach(() => {
+    cleanupTestRepos()
     setAuditedTaskRepositoryForTests(undefined)
   })
 

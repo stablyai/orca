@@ -21,6 +21,7 @@ import type {
   AuditedAcceptanceCriterion,
   AuditedPhaseTiming
 } from './audited-workflow-types'
+import type { WorktreeReasonCode } from './audited-worktree-types'
 
 // Truncates a full identity value (tree OID / SHA) to a short, non-authorizing
 // display form. Never accepted back as input anywhere — see plan §5.
@@ -53,6 +54,12 @@ export type ProjectionSourceTask = {
   commitAttemptStatus: CommitAttemptStatus | null
   reconcileClass: ReconcileClass | null
   reconcileReasonCode: ReconcileReasonCode | null
+  // Phase 3 worktree state. Only the sanitized readiness boolean and the closed
+  // reason code are projected — never the path, branch, worktree id, provenance,
+  // or common dir.
+  worktreeProvenance: string | null
+  worktreeVerifiedAt: number | null
+  worktreeReasonCode: WorktreeReasonCode | null
   acceptanceCriteria: AuditedAcceptanceCriterion[]
   timings: AuditedPhaseTiming[]
   createdAt: number
@@ -84,6 +91,15 @@ export function buildAuditedTaskProjection(
     commitAttemptStatus: source.commitAttemptStatus,
     reconcileClass: source.reconcileClass,
     reconcileReasonCode: source.reconcileReasonCode,
+    // Ready requires ALL THREE: provenance (a worktree was finalized), a
+    // verification timestamp (it was actually verified), and no recorded
+    // failure. Provenance alone is insufficient — a task can carry provenance
+    // from an earlier finalization while a later verification has not run.
+    worktreeReady:
+      Boolean(source.worktreeProvenance) &&
+      source.worktreeVerifiedAt !== null &&
+      source.worktreeReasonCode === null,
+    worktreeReasonCode: source.worktreeReasonCode,
     acceptanceCriteria: source.acceptanceCriteria,
     timings: source.timings,
     createdAt: source.createdAt,
@@ -110,5 +126,12 @@ export const AUDITED_PROJECTION_FORBIDDEN_KEYS = [
   'committedSha', // full form; only committedShaShort is allowed
   'auditApprovedTreeOid',
   'exception',
-  'stack'
+  'stack',
+  // Phase 3 worktree identity — only worktreeReady/worktreeReasonCode may cross.
+  'branchName',
+  'worktreeId',
+  'worktreeProvenanceId',
+  'sourceRepoCommonDir',
+  'intendedPath',
+  'intendedBranch'
 ] as const

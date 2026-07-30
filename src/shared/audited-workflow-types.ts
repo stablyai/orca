@@ -1,6 +1,7 @@
 // Closed vocabularies and sanitized contracts for the Audited Workflow feature.
 // No free text crosses any IPC/renderer/notification boundary through these types —
 // see docs/audited-workflow.md for the trust-boundary rationale.
+import type { WorktreeReasonCode } from './audited-worktree-types'
 
 export const AUDITED_TASK_STATES = [
   'selected',
@@ -78,6 +79,11 @@ export const BLOCK_REASON_CODES = [
   'code_audit_unparseable',
   'code_audit_round_limit',
   'candidate_drift',
+  // Phase 3: the two generic worktree block codes. The detailed
+  // WorktreeReasonCode is persisted separately in worktree_reason_code —
+  // blockedReasonCode deliberately stays narrow (see audited-worktree-types.ts).
+  'worktree_provision_failed',
+  'worktree_drift_detected',
   'worktree_missing',
   'worktree_head_moved',
   'unexpected_commit_detected',
@@ -259,6 +265,10 @@ export type AuditedTaskStatusProjection = {
   commitAttemptStatus: CommitAttemptStatus | null
   reconcileClass: ReconcileClass | null
   reconcileReasonCode: ReconcileReasonCode | null
+  // Phase 3: the ONLY worktree facts that cross the boundary. Never a path,
+  // branch name, worktree id, provenance id, or common dir.
+  worktreeReady: boolean
+  worktreeReasonCode: WorktreeReasonCode | null
   acceptanceCriteria: AuditedAcceptanceCriterion[]
   timings: AuditedPhaseTiming[]
   createdAt: number

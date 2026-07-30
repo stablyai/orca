@@ -144,6 +144,14 @@ export class AuditedTaskRepository {
     return recoverInterruptedTriageRuns(this.db, nowMs())
   }
 
+  // Why exposed: Phase 3 worktree modules compose several statements per
+  // operation (attempt CAS + task write + registry publication) and are unit
+  // tested directly against a database handle, rather than through a widened
+  // repository surface that would duplicate each of their contracts here.
+  getDatabase(): Database.Database {
+    return this.db
+  }
+
   close(): void {
     this.db.close()
   }

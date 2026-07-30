@@ -1,18 +1,27 @@
-// Phase 2: "Start Triage" and "Retry Triage" — the real actions added this
-// phase. Invokes an injectable TriageProvider and CAS-transitions the task
-// based on the validated structured result. No worktree provisioning, no
-// Git mutation, no Claude/Codex invocation, no commit/land — those arrive in
-// later phases.
+// "Start Triage" and "Retry Triage". Invokes an injectable TriageProvider and
+// CAS-transitions the task based on the validated structured result.
+//
+// Phase 3: Start Triage is ONE high-level operation with two internal steps —
+// (1) ensure a provisioned, verified worktree while the task stays `selected`,
+// then (2) the existing `selected -> triaging` CAS and provider call. The
+// provider is never reached unless step 1 succeeded, so no model invocation can
+// precede worktree verification.
 import { getAuditedTaskRepository, getTaskProjection } from './audited-task-service'
 import { createOpenAiTriageProvider, type TriageProvider } from './triage-provider'
 import { readAuditedTriageApiKey } from './audited-triage-api-key-store'
 import { broadcastAuditedTaskChanged } from './audited-workflow-broadcast'
+import { ensureWorktreeForTask } from './audited-worktree-service'
 import type { AuditedTaskRepository } from './audited-task-repository'
 import type { TriageReasonCode } from '../../shared/audited-workflow-types'
+import type { WorktreeReasonCode } from '../../shared/audited-worktree-types'
 
-export type StartTriageResult = { ok: true } | { ok: false; reasonCode: TriageReasonCode }
+export type StartTriageResult =
+  | { ok: true }
+  | { ok: false; kind: 'triage'; reasonCode: TriageReasonCode }
+  | { ok: false; kind: 'worktree'; reasonCode: WorktreeReasonCode }
+  | { ok: false; kind: 'contended' }
 
-export type RetryTriageResult = { ok: true } | { ok: false; reasonCode: TriageReasonCode }
+export type RetryTriageResult = StartTriageResult
 
 let providerOverride: TriageProvider | undefined
 
@@ -73,9 +82,9 @@ async function runProviderAndFinalize(
     })
     broadcastIfProjectable(taskId)
     if (!finalized.ok) {
-      return { ok: false, reasonCode: 'lock_contended' }
+      return triageFailure('lock_contended')
     }
-    return { ok: false, reasonCode: 'provider_error' }
+    return triageFailure('provider_error')
   }
 
   if (!providerResult.ok) {
@@ -86,9 +95,9 @@ async function runProviderAndFinalize(
     })
     broadcastIfProjectable(taskId)
     if (!finalized.ok) {
-      return { ok: false, reasonCode: 'lock_contended' }
+      return triageFailure('lock_contended')
     }
-    return { ok: false, reasonCode: providerResult.reasonCode }
+    return triageFailure(providerResult.reasonCode)
   }
 
   const finalized = repo.finalizeTriageRunSucceeded({
@@ -102,7 +111,7 @@ async function runProviderAndFinalize(
   })
   broadcastIfProjectable(taskId)
   if (!finalized.ok) {
-    return { ok: false, reasonCode: 'lock_contended' }
+    return triageFailure('lock_contended')
   }
 
   return { ok: true }
@@ -112,6 +121,26 @@ type RepositoryFailureReasonCode = 'task_not_found' | 'illegal_transition' | 'lo
 
 function toTriageReasonCode(reasonCode: RepositoryFailureReasonCode): TriageReasonCode {
   return reasonCode === 'task_not_found' ? 'illegal_transition' : reasonCode
+}
+
+function triageFailure(reasonCode: TriageReasonCode): StartTriageResult {
+  return { ok: false, kind: 'triage', reasonCode }
+}
+
+/**
+ * Step 1 of Start Triage: provision and verify the worktree while the task
+ * stays `selected`. Returns null when the caller may proceed to the provider.
+ */
+async function ensureWorktreeBeforeProvider(taskId: string): Promise<StartTriageResult | null> {
+  const worktree = await ensureWorktreeForTask(taskId)
+  if (worktree.ok) {
+    return null
+  }
+  broadcastIfProjectable(taskId)
+  if ('contended' in worktree) {
+    return { ok: false, kind: 'contended' }
+  }
+  return { ok: false, kind: 'worktree', reasonCode: worktree.reasonCode }
 }
 
 /**
@@ -126,9 +155,29 @@ function toTriageReasonCode(reasonCode: RepositoryFailureReasonCode): TriageReas
  */
 export async function startTriage(taskId: string): Promise<StartTriageResult> {
   const repo = getAuditedTaskRepository()
+
+  // Why check state first: a task that can never legally start triage (already
+  // cancelled, already triaged, ...) must report `illegal_transition`, not a
+  // worktree error — and must not provision anything. The authoritative check is
+  // still the CAS in step 2; this only avoids pointless Git work and keeps the
+  // reported reason truthful.
+  const existing = repo.getTask(taskId)
+  if (!existing || existing.state !== 'selected') {
+    return triageFailure('illegal_transition')
+  }
+
+  // Step 1 — the task stays `selected` throughout. A crash after finalization
+  // but before step 2 leaves worktreeReady with no running triage and no model
+  // invocation on restart; the next Start Triage verifies and continues.
+  const worktreeFailure = await ensureWorktreeBeforeProvider(taskId)
+  if (worktreeFailure) {
+    return worktreeFailure
+  }
+
+  // Step 2 — the existing canonical `selected -> triaging` CAS, unchanged.
   const started = repo.startTriageRun(taskId)
   if (!started.ok) {
-    return { ok: false, reasonCode: toTriageReasonCode(started.reasonCode) }
+    return triageFailure(toTriageReasonCode(started.reasonCode))
   }
   broadcastIfProjectable(taskId)
 
@@ -153,9 +202,26 @@ export async function startTriage(taskId: string): Promise<StartTriageResult> {
  */
 export async function retryTriage(taskId: string): Promise<RetryTriageResult> {
   const repo = getAuditedTaskRepository()
+
+  // Retry is only ever for a task blocked BY TRIAGE with a retryable run. A
+  // provisioning-blocked task (pre_block_state 'selected', no triage run) is
+  // refused here and must use provisionWorktree instead — retryTriage can never
+  // be used to bypass the provisioning-recovery contract.
+  const existing = repo.getTask(taskId)
+  if (!existing || existing.state !== 'blocked' || existing.preBlockState !== 'triaging') {
+    return triageFailure('illegal_transition')
+  }
+
+  // C2: never re-enter triage without re-verifying the worktree — drift blocks
+  // the task instead of re-invoking the provider against a mutated tree.
+  const worktreeFailure = await ensureWorktreeBeforeProvider(taskId)
+  if (worktreeFailure) {
+    return worktreeFailure
+  }
+
   const retried = repo.retryTriageRun(taskId)
   if (!retried.ok) {
-    return { ok: false, reasonCode: toTriageReasonCode(retried.reasonCode) }
+    return triageFailure(toTriageReasonCode(retried.reasonCode))
   }
   broadcastIfProjectable(taskId)
 

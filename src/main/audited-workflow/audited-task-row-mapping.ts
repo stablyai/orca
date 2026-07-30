@@ -11,6 +11,10 @@ import type {
   TriageReasonCode,
   TriageRunStatus
 } from '../../shared/audited-workflow-types'
+import type {
+  WorktreeProvenanceKind,
+  WorktreeReasonCode
+} from '../../shared/audited-worktree-types'
 
 export type AuditedTaskRow = {
   id: string
@@ -51,6 +55,13 @@ export type AuditedTaskRow = {
   triageDecision: TriageDecision | null
   triageRunStatus: TriageRunStatus | null
   triageBlockedReasonCode: TriageReasonCode | null
+  // Phase 3. worktreeProvenance is non-null only for an actually verified
+  // worktree — never a migration marker.
+  worktreeProvenance: WorktreeProvenanceKind | null
+  worktreeProvisionedAt: number | null
+  sourceRepoCommonDir: string | null
+  worktreeReasonCode: WorktreeReasonCode | null
+  worktreeVerifiedAt: number | null
   createdAt: number
   updatedAt: number
 }
@@ -88,6 +99,11 @@ export function sqliteRowToTask(row: Record<string, unknown>): AuditedTaskRow {
     triageDecision: (row.triage_decision as TriageDecision | null) ?? null,
     triageRunStatus: (row.triage_run_status as TriageRunStatus | null) ?? null,
     triageBlockedReasonCode: (row.triage_blocked_reason_code as TriageReasonCode | null) ?? null,
+    worktreeProvenance: (row.worktree_provenance as WorktreeProvenanceKind | null) ?? null,
+    worktreeProvisionedAt: (row.worktree_provisioned_at_ms as number | null) ?? null,
+    sourceRepoCommonDir: (row.source_repo_common_dir as string | null) ?? null,
+    worktreeReasonCode: (row.worktree_reason_code as WorktreeReasonCode | null) ?? null,
+    worktreeVerifiedAt: (row.worktree_verified_at_ms as number | null) ?? null,
     createdAt: row.created_at_ms as number,
     updatedAt: row.updated_at_ms as number
   }

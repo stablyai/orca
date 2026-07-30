@@ -4,6 +4,7 @@ import { ipcMain } from 'electron'
 import { readFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
+import { assertGitMutationAllowed } from '../audited-workflow/audited-worktree-authority-guard'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { readBranchRenameFailureOutputForDisplay } from '../agent-hooks/branch-rename-failure-output'
 import {
@@ -1405,6 +1406,7 @@ export function registerWorktreeHandlers(
     'worktrees:remove',
     async (_event, args: RemoveWorktreeArgs): Promise<RemoveWorktreeResult> => {
       const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
+      assertGitMutationAllowed(worktreePath)
       const repo = getRepoForWorktreeRemoval(store, repoId, args.hostId)
       if (!repo) {
         throw new Error(`Repo not found: ${repoId}`)
@@ -1932,7 +1934,8 @@ export function registerWorktreeHandlers(
       _event,
       args: Pick<RemoveWorktreeArgs, 'worktreeId' | 'hostId'>
     ): Promise<RemoveWorktreeResult> => {
-      const { repoId } = parseWorktreeId(args.worktreeId)
+      const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
+      assertGitMutationAllowed(worktreePath)
       const repo = getRepoForWorktreeRemoval(store, repoId, args.hostId)
       if (!repo) {
         throw new Error(`Repo not found: ${repoId}`)
@@ -1990,7 +1993,8 @@ export function registerWorktreeHandlers(
       _event,
       args: { worktreeId: string; branchName: string; expectedHead: string }
     ): Promise<ForceDeleteWorktreeBranchResult> => {
-      const { repoId } = parseWorktreeId(args.worktreeId)
+      const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
+      assertGitMutationAllowed(worktreePath)
       const cleanupTarget = getPreservedBranchCleanupTarget(
         args.worktreeId,
         args.branchName,

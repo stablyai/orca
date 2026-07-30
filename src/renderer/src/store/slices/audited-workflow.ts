@@ -4,7 +4,8 @@ import type {
   AuditedWorkflowSelectTaskParams,
   AuditedWorkflowSelectTaskResult,
   AuditedWorkflowStartTriageResult,
-  AuditedWorkflowRetryTriageResult
+  AuditedWorkflowRetryTriageResult,
+  AuditedWorkflowProvisionWorktreeResult
 } from '../../../../shared/audited-workflow-types'
 import type { AppState } from '../types'
 import { getTaskListErrorMessage } from '../../components/audited-workflow/audited-workflow-error-messages'
@@ -22,6 +23,9 @@ export type AuditedWorkflowSlice = {
   ) => Promise<AuditedWorkflowSelectTaskResult>
   startAuditedTaskTriage: (taskId: string) => Promise<AuditedWorkflowStartTriageResult>
   retryAuditedTaskTriage: (taskId: string) => Promise<AuditedWorkflowRetryTriageResult>
+  provisionAuditedTaskWorktree: (
+    taskId: string
+  ) => Promise<AuditedWorkflowProvisionWorktreeResult>
   applyAuditedTaskChanged: (projection: AuditedTaskStatusProjection) => void
 }
 
@@ -90,6 +94,23 @@ export const createAuditedWorkflowSlice: StateCreator<AppState, [], [], AuditedW
     set({ auditedTriageStartingTaskId: taskId })
     try {
       const result = await window.api.auditedWorkflow.retryTriage({ taskId })
+      const projection = await window.api.auditedWorkflow.getTask({ taskId })
+      if (projection) {
+        set((state) => ({ auditedTasks: upsertTask(state.auditedTasks, projection) }))
+      }
+      return result
+    } finally {
+      set({ auditedTriageStartingTaskId: null })
+    }
+  },
+
+  // Why the same pending id as triage: the detail pane shows one combined
+  // pending state ("Preparing worktree…"), and recovery must never chain into
+  // Start Triage — the user clicks that separately after this resolves.
+  provisionAuditedTaskWorktree: async (taskId) => {
+    set({ auditedTriageStartingTaskId: taskId })
+    try {
+      const result = await window.api.auditedWorkflow.provisionWorktree({ taskId })
       const projection = await window.api.auditedWorkflow.getTask({ taskId })
       if (projection) {
         set((state) => ({ auditedTasks: upsertTask(state.auditedTasks, projection) }))

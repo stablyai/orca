@@ -66,6 +66,8 @@ function baseTask(
     commitAttemptStatus: null,
     reconcileClass: null,
     reconcileReasonCode: null,
+    worktreeReady: false,
+    worktreeReasonCode: null,
     acceptanceCriteria: [],
     timings: [],
     createdAt: 1,
@@ -102,9 +104,19 @@ describe('AuditedTaskDetail — Start Triage control', () => {
     expect(mocks.storeState.startAuditedTaskTriage).toHaveBeenCalledWith('audited_1')
   })
 
-  it('shows a disabled running state while triage is in flight for this task', () => {
+  // Phase 3: the task stays `selected` while its worktree is prepared, so the
+  // pending label distinguishes the two stages of the one Start Triage action.
+  it('shows worktree preparation while the task has no verified worktree yet', () => {
     mocks.storeState.auditedTriageStartingTaskId = 'audited_1'
-    render(<AuditedTaskDetail task={baseTask({ state: 'selected' })} />)
+    render(<AuditedTaskDetail task={baseTask({ state: 'selected', worktreeReady: false })} />)
+
+    const button = screen.getByRole('button', { name: 'Preparing worktree…' })
+    expect(button).toBeDisabled()
+  })
+
+  it('shows a disabled running state once the worktree is ready and triage is in flight', () => {
+    mocks.storeState.auditedTriageStartingTaskId = 'audited_1'
+    render(<AuditedTaskDetail task={baseTask({ state: 'selected', worktreeReady: true })} />)
 
     const button = screen.getByRole('button', { name: 'Triage running…' })
     expect(button).toBeDisabled()

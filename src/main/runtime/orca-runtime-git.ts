@@ -26,6 +26,7 @@ import {
 import { withLinkedIssueDraftContext } from '../../shared/source-control-ai-action-variables'
 import type { SourceControlAiOperation } from '../../shared/source-control-ai-types'
 import type { GitProviderStatusOptions } from '../providers/types'
+import { assertGitMutationAllowed } from '../audited-workflow/audited-worktree-authority-guard'
 import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
 import {
   abortMerge,
@@ -267,6 +268,7 @@ export class RuntimeGitCommands {
 
   async abortRuntimeGitMerge(worktreeSelector: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    assertGitMutationAllowed(target.worktree.path)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -281,6 +283,7 @@ export class RuntimeGitCommands {
 
   async abortRuntimeGitRebase(worktreeSelector: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    assertGitMutationAllowed(target.worktree.path)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -298,6 +301,7 @@ export class RuntimeGitCommands {
     branch: string
   ): Promise<RuntimeGitCheckoutResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    assertGitMutationAllowed(target.worktree.path)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -396,6 +400,7 @@ export class RuntimeGitCommands {
     pushTarget?: GitPushTarget
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    assertGitMutationAllowed(target.worktree.path)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -413,6 +418,7 @@ export class RuntimeGitCommands {
     expectedUpstream: GitForkSyncExpectedUpstream
   ): Promise<GitForkSyncResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    assertGitMutationAllowed(target.worktree.path)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -432,6 +438,7 @@ export class RuntimeGitCommands {
     pushTarget?: GitPushTarget
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    assertGitMutationAllowed(target.worktree.path)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -449,6 +456,7 @@ export class RuntimeGitCommands {
     pushTarget?: GitPushTarget
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    assertGitMutationAllowed(target.worktree.path)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -463,6 +471,7 @@ export class RuntimeGitCommands {
 
   async rebaseRuntimeGitFromBase(worktreeSelector: string, baseRef: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    assertGitMutationAllowed(target.worktree.path)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -482,6 +491,7 @@ export class RuntimeGitCommands {
     forceWithLease?: boolean
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    assertGitMutationAllowed(target.worktree.path)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -579,6 +589,7 @@ export class RuntimeGitCommands {
       throw new Error('Commit message is required')
     }
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    assertGitMutationAllowed(target.worktree.path)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -839,6 +850,7 @@ export class RuntimeGitCommands {
 
   async stageRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    assertGitMutationAllowed(target.worktree.path)
     const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
@@ -854,6 +866,7 @@ export class RuntimeGitCommands {
 
   async unstageRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    assertGitMutationAllowed(target.worktree.path)
     const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
@@ -872,6 +885,7 @@ export class RuntimeGitCommands {
     filePaths: string[]
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    assertGitMutationAllowed(target.worktree.path)
     const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
@@ -890,6 +904,7 @@ export class RuntimeGitCommands {
     filePaths: string[]
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    assertGitMutationAllowed(target.worktree.path)
     const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
@@ -908,6 +923,7 @@ export class RuntimeGitCommands {
     filePaths: string[]
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    assertGitMutationAllowed(target.worktree.path)
     const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
@@ -923,6 +939,7 @@ export class RuntimeGitCommands {
 
   async discardRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    assertGitMutationAllowed(target.worktree.path)
     const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {

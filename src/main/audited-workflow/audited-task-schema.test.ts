@@ -9,7 +9,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { migrateAuditedWorkflowSchema, createAuditedWorkflowTables } from './audited-task-schema'
+import {
+  migrateAuditedWorkflowSchema,
+  createAuditedWorkflowTables,
+  SCHEMA_VERSION
+} from './audited-task-schema'
 import { AuditedTaskRepository } from './audited-task-repository'
 
 function createV1Database(db: Database.Database): void {
@@ -165,16 +169,16 @@ describe('audited-task-schema v1 -> v2 migration', () => {
     expect(transitions[0].event_type).toBe('task_created')
   })
 
-  it('bumps user_version to 2 and is idempotent (safe to run again)', () => {
+  it('bumps user_version to the current schema version and is idempotent (safe to run again)', () => {
     db = new Database(':memory:')
     createV1Database(db)
 
     migrateAuditedWorkflowSchema(db)
-    expect(db.pragma('user_version', { simple: true })).toBe(2)
+    expect(db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
 
     // Running again must not throw or duplicate columns/tables.
     expect(() => migrateAuditedWorkflowSchema(db!)).not.toThrow()
-    expect(db.pragma('user_version', { simple: true })).toBe(2)
+    expect(db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
   })
 
   it('a v1 on-disk database opened via the real repository constructor migrates and remains fully usable', () => {

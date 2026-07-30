@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GitRunnerModuleNamespace from '../git/runner'
+
+type GitRunnerModule = typeof GitRunnerModuleNamespace
 
 const {
   handleMock,
@@ -29,9 +32,15 @@ vi.mock('../git/repo', () => ({
   getGitRepoRoot: getGitRepoRootMock
 }))
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock
-}))
+// Why partial: selectTask's HEAD probe is asserted on argv, but Phase 3
+// provisioning must run against a REAL repository — a fully mocked runner would
+// make "the provider only runs after a verified worktree" untestable here.
+// gitExecFileAsyncMock delegates to the real implementation unless a test
+// overrides it.
+vi.mock('../git/runner', async () => {
+  const actual = await vi.importActual<GitRunnerModule>('../git/runner')
+  return { ...actual, gitExecFileAsync: gitExecFileAsyncMock }
+})
 
 vi.mock('../audited-workflow/audited-triage-api-key-store', () => ({
   hasAuditedTriageApiKey: hasKeyMock,
@@ -43,6 +52,12 @@ import { registerAuditedWorkflowHandlers } from './audited-workflow'
 import { AuditedTaskRepository } from '../audited-workflow/audited-task-repository'
 import { setAuditedTaskRepositoryForTests } from '../audited-workflow/audited-task-service'
 import { setTriageProviderForTests } from '../audited-workflow/audited-triage-orchestration'
+import { setAuditedWorktreeStore } from '../audited-workflow/audited-worktree-service'
+import { clearAuditedWorktreeRegistryForTests } from '../audited-workflow/audited-worktree-registry'
+import {
+  createTestRepo,
+  type TestRepo
+} from '../audited-workflow/audited-worktree-test-repo'
 import type {
   AuditedWorkflowSelectTaskResult,
   AuditedWorkflowStartTriageResult,
@@ -59,7 +74,8 @@ describe('registerAuditedWorkflowHandlers', () => {
     kind: 'git' as 'git' | 'folder'
   }
   const store = {
-    getRepos: vi.fn(() => [gitRepo1])
+    getRepos: vi.fn(() => [gitRepo1]),
+    getSettings: vi.fn(() => ({ workspaceDir: '', nestWorkspaces: false }))
   }
 
   beforeEach(() => {
@@ -73,16 +89,48 @@ describe('registerAuditedWorkflowHandlers', () => {
     hasKeyMock.mockReturnValue(false)
     vi.spyOn(console, 'error').mockImplementation(consoleErrorSpy)
     store.getRepos.mockReturnValue([gitRepo1])
+    store.getSettings.mockReturnValue({ workspaceDir: '', nestWorkspaces: false })
     getGitRepoRootMock.mockReturnValue('C:\\repos\\repo1')
     gitExecFileAsyncMock.mockResolvedValue({ stdout: `${'a'.repeat(40)}\n`, stderr: '' })
     setAuditedTaskRepositoryForTests(new AuditedTaskRepository(':memory:'))
+    clearAuditedWorktreeRegistryForTests()
   })
 
   afterEach(() => {
     setAuditedTaskRepositoryForTests(undefined)
     setTriageProviderForTests(undefined)
+    setAuditedWorktreeStore(undefined)
+    clearAuditedWorktreeRegistryForTests()
+    while (activeRepos.length > 0) {
+      activeRepos.pop()?.cleanup()
+    }
     vi.restoreAllMocks()
   })
+
+  // Repoints the handlers at a REAL repository so provisioning genuinely runs.
+  // Returns the created task id, already provisioned-capable.
+  //
+  // getSettings must live on the SAME store object the handlers receive:
+  // registerAuditedWorkflowHandlers re-runs on every getHandler call and calls
+  // setAuditedWorktreeStore(store), so a separately-injected store would be
+  // overwritten on the next lookup.
+  const activeRepos: TestRepo[] = []
+  async function createProvisionableTask(): Promise<string> {
+    const testRepo = createTestRepo()
+    activeRepos.push(testRepo)
+    store.getRepos.mockReturnValue([{ ...gitRepo1, path: testRepo.repoPath }])
+    store.getSettings.mockReturnValue({
+      workspaceDir: testRepo.workspaceRoot,
+      nestWorkspaces: false
+    })
+    getGitRepoRootMock.mockReturnValue(testRepo.repoPath)
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: `${testRepo.headCommit}\n`, stderr: '' })
+    const taskId = await createSelectedTask()
+    // Real Git from here on, so worktree add / verification actually execute.
+    const realRunner = await vi.importActual<GitRunnerModule>('../git/runner')
+    gitExecFileAsyncMock.mockImplementation(realRunner.gitExecFileAsync)
+    return taskId
+  }
 
   function getHandler(channel: string) {
     registerAuditedWorkflowHandlers(store as never)
@@ -166,6 +214,41 @@ describe('registerAuditedWorkflowHandlers', () => {
     expect(result).toEqual({ ok: false, reasonCode: 'unsupported_host' })
     expect(getGitRepoRootMock).not.toHaveBeenCalled()
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('selectTask refuses a WSL-hosted repo with the same unsupported_host code and no Git command', async () => {
+    store.getRepos.mockReturnValue([
+      { ...gitRepo1, path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo' }
+    ])
+    const handler = getHandler('auditedWorkflow:selectTask')
+
+    const result = (await handler(null, selectTaskArgs())) as AuditedWorkflowSelectTaskResult
+
+    expect(result).toEqual({ ok: false, reasonCode: 'unsupported_host' })
+    expect(getGitRepoRootMock).not.toHaveBeenCalled()
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['auditedWorkflow:startTriage'],
+    ['auditedWorkflow:retryTriage'],
+    ['auditedWorkflow:provisionWorktree'],
+    ['auditedWorkflow:verifyWorktree']
+  ])('%s REJECTS extra identity keys rather than stripping them', async (channel) => {
+    const handler = getHandler(channel)
+
+    // A renderer must never be able to influence worktree identity.
+    await expect(
+      handler(null, { taskId: 'audited_1', worktreePath: '/evil', branch: 'x' })
+    ).rejects.toThrow()
+  })
+
+  it('selectTask rejects extra keys too', async () => {
+    const handler = getHandler('auditedWorkflow:selectTask')
+
+    await expect(
+      handler(null, selectTaskArgs({ baseCommit: 'a'.repeat(40) }))
+    ).rejects.toThrow()
   })
 
   it('selectTask refuses a folder repo with the SAME unsupported_host code and invokes no Git command', async () => {
@@ -260,7 +343,7 @@ describe('registerAuditedWorkflowHandlers', () => {
     })
 
     it('drives selected -> planning on a plan decision and broadcasts the sanitized projection', async () => {
-      const taskId = await createSelectedTask()
+      const taskId = await createProvisionableTask()
       setTriageProviderForTests({
         runTriage: async () => ({
           ok: true,
@@ -284,7 +367,7 @@ describe('registerAuditedWorkflowHandlers', () => {
     })
 
     it('returns lock_contended (as a structured result) for a duplicate concurrent-style start', async () => {
-      const taskId = await createSelectedTask()
+      const taskId = await createProvisionableTask()
       setTriageProviderForTests({
         runTriage: async () => ({
           ok: true,
@@ -303,23 +386,23 @@ describe('registerAuditedWorkflowHandlers', () => {
       const second = (await handler(null, { taskId })) as AuditedWorkflowStartTriageResult
 
       expect(first).toEqual({ ok: true })
-      expect(second).toEqual({ ok: false, reasonCode: 'illegal_transition' })
+      expect(second).toEqual({ ok: false, kind: 'triage', reasonCode: 'illegal_transition' })
     })
 
     it('returns provider_unavailable as a structured result when no provider is configured, never a raw error', async () => {
-      const taskId = await createSelectedTask()
+      const taskId = await createProvisionableTask()
       setTriageProviderForTests({
-        runTriage: async () => ({ ok: false, reasonCode: 'provider_unavailable' })
+        runTriage: async () => ({ ok: false, kind: 'triage', reasonCode: 'provider_unavailable' })
       })
       const handler = getHandler('auditedWorkflow:startTriage')
 
       const result = (await handler(null, { taskId })) as AuditedWorkflowStartTriageResult
 
-      expect(result).toEqual({ ok: false, reasonCode: 'provider_unavailable' })
+      expect(result).toEqual({ ok: false, kind: 'triage', reasonCode: 'provider_unavailable' })
     })
 
     it('redacts an unexpected thrown error from the provider to a closed reason code (caught inside orchestration, not the IPC catch-all)', async () => {
-      const taskId = await createSelectedTask()
+      const taskId = await createProvisionableTask()
       const sensitiveMessage =
         'ENOENT: no such file /Users/carfun/.orca/audited-workflow-triage-openai-token.enc'
       setTriageProviderForTests({
@@ -331,7 +414,7 @@ describe('registerAuditedWorkflowHandlers', () => {
 
       const result = (await handler(null, { taskId })) as AuditedWorkflowStartTriageResult
 
-      expect(result).toEqual({ ok: false, reasonCode: 'provider_error' })
+      expect(result).toEqual({ ok: false, kind: 'triage', reasonCode: 'provider_error' })
       const serialized = JSON.stringify(result)
       expect(serialized).not.toContain('/Users/carfun')
       expect(serialized).not.toContain('ENOENT')
@@ -342,35 +425,30 @@ describe('registerAuditedWorkflowHandlers', () => {
     })
 
     it('returns illegal_transition for a task not in selected state (e.g. already cancelled)', async () => {
-      const taskId = await createSelectedTask()
+      const taskId = await createProvisionableTask()
       const devTransitionModule = await import('../audited-workflow/audited-task-service')
       devTransitionModule.applyDevTransition(taskId, 'cancel')
       const handler = getHandler('auditedWorkflow:startTriage')
 
       const result = (await handler(null, { taskId })) as AuditedWorkflowStartTriageResult
 
-      expect(result).toEqual({ ok: false, reasonCode: 'illegal_transition' })
+      expect(result).toEqual({ ok: false, kind: 'triage', reasonCode: 'illegal_transition' })
     })
   })
 
   describe('retryTriage', () => {
+    // Blocked BY TRIAGE (pre_block_state 'triaging'), which is the only shape
+    // retryTriage accepts — provisioning must therefore succeed first.
     async function createBlockedTaskId(
       reasonCode: 'provider_unavailable' | 'output_invalid' = 'provider_unavailable'
     ): Promise<string> {
-      const selectHandler = getHandler('auditedWorkflow:selectTask')
-      const created = (await selectHandler(
-        null,
-        selectTaskArgs()
-      )) as AuditedWorkflowSelectTaskResult
-      if (!created.ok) {
-        throw new Error('expected ok result')
-      }
+      const taskId = await createProvisionableTask()
       setTriageProviderForTests({
         runTriage: async () => ({ ok: false, reasonCode })
       })
       const startHandler = getHandler('auditedWorkflow:startTriage')
-      await startHandler(null, { taskId: created.taskId })
-      return created.taskId
+      await startHandler(null, { taskId })
+      return taskId
     }
 
     it('rejects malformed params (missing taskId)', async () => {
@@ -403,16 +481,16 @@ describe('registerAuditedWorkflowHandlers', () => {
     })
 
     it('refuses retry for a task that is not blocked', async () => {
-      const taskId = await createSelectedTask()
+      const taskId = await createProvisionableTask()
       const handler = getHandler('auditedWorkflow:retryTriage')
 
       const result = (await handler(null, { taskId })) as AuditedWorkflowRetryTriageResult
 
-      expect(result).toEqual({ ok: false, reasonCode: 'illegal_transition' })
+      expect(result).toEqual({ ok: false, kind: 'triage', reasonCode: 'illegal_transition' })
     })
 
     it('refuses retry for a non-triage block (unsupported_host) with the same closed code', async () => {
-      const taskId = await createSelectedTask()
+      const taskId = await createProvisionableTask()
       const taskServiceModule = await import('../audited-workflow/audited-task-service')
       const repo = taskServiceModule.getAuditedTaskRepository()
       repo.applyTransition({
@@ -429,7 +507,7 @@ describe('registerAuditedWorkflowHandlers', () => {
 
       const result = (await handler(null, { taskId })) as AuditedWorkflowRetryTriageResult
 
-      expect(result).toEqual({ ok: false, reasonCode: 'illegal_transition' })
+      expect(result).toEqual({ ok: false, kind: 'triage', reasonCode: 'illegal_transition' })
     })
 
     it('redacts an unexpected thrown error to a closed reason code', async () => {
@@ -444,7 +522,7 @@ describe('registerAuditedWorkflowHandlers', () => {
 
       const result = (await handler(null, { taskId })) as AuditedWorkflowRetryTriageResult
 
-      expect(result).toEqual({ ok: false, reasonCode: 'provider_error' })
+      expect(result).toEqual({ ok: false, kind: 'triage', reasonCode: 'provider_error' })
       expect(JSON.stringify(result)).not.toContain('/Users/carfun')
     })
   })

@@ -16,8 +16,11 @@ import type { AuditedTaskStatusProjection } from '../../../../shared/audited-wor
 import { getAuditedTaskBadgeTone, getAuditedTaskStateLabel } from './audited-task-row-state'
 import {
   getStartTriageErrorMessage,
-  isRetryableTriageReasonCode
+  isRetryableTriageReasonCode,
+  isRetryableWorktreeReasonCode,
+  needsExplicitWorktreeProvisioning
 } from './audited-workflow-error-messages'
+import { getWorktreeErrorMessage } from './audited-worktree-error-messages'
 import { AuditedTriageApiKeyDialog } from './AuditedTriageApiKeyDialog'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -77,9 +80,14 @@ export function AuditedTaskDetail({ task }: AuditedTaskDetailProps): React.JSX.E
   const [applying, setApplying] = useState(false)
   const startAuditedTaskTriage = useAppStore((s) => s.startAuditedTaskTriage)
   const retryAuditedTaskTriage = useAppStore((s) => s.retryAuditedTaskTriage)
+  const provisionAuditedTaskWorktree = useAppStore((s) => s.provisionAuditedTaskWorktree)
   const triageStartingTaskId = useAppStore((s) => s.auditedTriageStartingTaskId)
   const isStartingTriage = triageStartingTaskId === task.taskId
   const isTriageRunning = task.state === 'triaging' || isStartingTriage
+  // Why a pending flag rather than task.state: the task deliberately stays
+  // `selected` while its worktree is provisioned (no new lifecycle state), so
+  // state alone cannot express "preparing".
+  const isPreparingWorktree = isStartingTriage && !task.worktreeReady
 
   const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false)
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false)
@@ -92,6 +100,12 @@ export function AuditedTaskDetail({ task }: AuditedTaskDetailProps): React.JSX.E
 
   const handleRetryTriage = async (): Promise<void> => {
     await retryAuditedTaskTriage(task.taskId)
+  }
+
+  // Recovery only prepares the worktree and restores the prior state. It never
+  // chains into Start Triage — the provider runs only on an explicit click.
+  const handleProvisionWorktree = async (): Promise<void> => {
+    await provisionAuditedTaskWorktree(task.taskId)
   }
 
   const openApiKeyDialog = async (): Promise<void> => {
@@ -202,15 +216,20 @@ export function AuditedTaskDetail({ task }: AuditedTaskDetailProps): React.JSX.E
       {task.state === 'selected' || task.state === 'triaging' ? (
         <div className="mt-4 flex items-center gap-3">
           <Button size="sm" onClick={handleStartTriage} disabled={isTriageRunning}>
-            {isTriageRunning
+            {isPreparingWorktree
               ? translate(
-                  'auto.components.auditedWorkflow.AuditedTaskDetail.triageRunning',
-                  'Triage running…'
+                  'auto.components.auditedWorkflow.AuditedTaskDetail.preparingWorktree',
+                  'Preparing worktree…'
                 )
-              : translate(
-                  'auto.components.auditedWorkflow.AuditedTaskDetail.startTriage',
-                  'Start Triage'
-                )}
+              : isTriageRunning
+                ? translate(
+                    'auto.components.auditedWorkflow.AuditedTaskDetail.triageRunning',
+                    'Triage running…'
+                  )
+                : translate(
+                    'auto.components.auditedWorkflow.AuditedTaskDetail.startTriage',
+                    'Start Triage'
+                  )}
           </Button>
         </div>
       ) : null}
@@ -225,7 +244,32 @@ export function AuditedTaskDetail({ task }: AuditedTaskDetailProps): React.JSX.E
         </div>
       ) : null}
 
-      {task.state === 'blocked' && task.triageBlockedReasonCode ? (
+      {task.state === 'blocked' && task.worktreeReasonCode ? (
+        <div className="mt-4 flex flex-col gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          <span>{getWorktreeErrorMessage(task.worktreeReasonCode)}</span>
+          {isRetryableWorktreeReasonCode(task.worktreeReasonCode) ||
+          needsExplicitWorktreeProvisioning(task.worktreeReasonCode) ? (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void handleProvisionWorktree()}
+                disabled={isStartingTriage}
+              >
+                {needsExplicitWorktreeProvisioning(task.worktreeReasonCode)
+                  ? translate(
+                      'auto.components.auditedWorkflow.AuditedTaskDetail.provisionWorktree',
+                      'Provision Worktree'
+                    )
+                  : translate(
+                      'auto.components.auditedWorkflow.AuditedTaskDetail.retryWorktree',
+                      'Retry'
+                    )}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : task.state === 'blocked' && task.triageBlockedReasonCode ? (
         <div className="mt-4 flex flex-col gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
           <span>{getStartTriageErrorMessage(task.triageBlockedReasonCode)}</span>
           <div className="flex items-center gap-2">
