@@ -63,32 +63,24 @@ body {
 
 #root {
   height: 100%;
-  /* Why: the island is flush with the window's top edge so its square top
-     corners merge with the screen top (notch). Side + bottom padding leave
-     room for the subtle shadow halo. */
+  /* Why: the window is opaque and exactly island-sized, so no padding — the
+     island fills the whole window. The native window shadow (hasShadow)
+     provides depth. */
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 0 18px 48px;
+  padding: 0;
   box-sizing: border-box;
 }
 
-/* ── The Dynamic Island (single morphing black shape) ─── */
+/* ── The Dynamic Island (the opaque black window = the island) ─── */
 .island {
   position: relative;
   background: var(--island-bg);
   color: var(--foreground);
-  /* Why: square top corners + rounded bottom = the island appears to grow out
-     of the screen top / notch (not a floating fully-rounded pill). */
-  border-radius: 0 0 22px 22px;
-  box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.6),
-    0 10px 30px var(--shadow-color);
-  /* Why: morph as one shape when expanding (Vibe Island). */
-  transition:
-    width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1),
-    border-radius 0.3s ease-out,
-    box-shadow 0.3s ease-out;
+  /* Why: the opaque window is a rectangle; rounded corners would just show the
+     black window bg, so keep it square (clean black bar). */
+  border-radius: 0;
   cursor: grab;
   overflow: hidden;
   font-variant-numeric: tabular-nums;
@@ -138,6 +130,12 @@ body {
   padding: 2px 6px;
   border-radius: 5px;
   color: rgba(255, 255, 255, 0.95);
+}
+
+.orca-logo {
+  flex-shrink: 0;
+  display: block;
+  border-radius: 4px;
 }
 
 /* ── Expanded content ───────────────────────────────── */

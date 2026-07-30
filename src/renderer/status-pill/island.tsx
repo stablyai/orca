@@ -5,12 +5,8 @@ import type {
   StatusPillSummary
 } from '../../shared/status-pill-preload-api'
 import { formatAgentLabel, formatRelativeTime } from './status-pill-formatters'
-import { PixelPet } from './pixel-pet'
 import { PendingQuestionCard } from './pending-question-card'
-
-function stateToPetState(state: string): string {
-  return state === 'done' ? 'done' : state
-}
+import orcaLogoUrl from '../../../resources/icon.png'
 
 /** A collapsed session row (colored dot + name + agent/worktree chips + time). */
 function SessionMini({
@@ -95,7 +91,6 @@ export function Island({
   const idleText = lead
     ? lead.prompt || lead.toolName || formatAgentLabel(lead.agentType)
     : summary.activityLabel || 'No agents'
-  const petState = lead ? stateToPetState(lead.state) : 'idle'
 
   return (
     <div
@@ -144,7 +139,7 @@ export function Island({
               </button>
             </div>
             <div className="session session-hero">
-              <PixelPet state={petState} size={18} />
+              <img className="orca-logo" src={orcaLogoUrl} alt="" width={18} height={18} />
               <div className="si">
                 <div className="srow">
                   <span className="sname">
@@ -169,7 +164,7 @@ export function Island({
           </div>
         ) : (
           <div className="island-compact">
-            <PixelPet state={petState} size={16} />
+            <img className="orca-logo" src={orcaLogoUrl} alt="" width={16} height={16} />
             <span className={`idle-text ${total === 0 ? 'idle-text-muted' : ''}`}>{idleText}</span>
             {total > 0 ? <span className="idle-count">{total}</span> : null}
           </div>

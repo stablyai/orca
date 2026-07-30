@@ -128,12 +128,13 @@ export function createStatusPillWindow(
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
-      hasShadow: false,
-      // Why: transparent keeps the pill visually floating on all platforms.
-      // Some Linux Wayland compositors lack alpha support; we recover at
-      // runtime via the backgroundColor round-trip below.
-      transparent: true,
-      backgroundColor: '#00000000',
+      hasShadow: true,
+      // Why: OPAQUE, not transparent. Transparent BrowserWindows fail to
+      // resize cleanly on macOS (the panel clipped) and mis-deliver clicks;
+      // an opaque black window resizes reliably and receives clicks like any
+      // normal window. The window IS the island (a black bar).
+      transparent: false,
+      backgroundColor: '#000000',
       alwaysOnTop: true,
       skipTaskbar: true,
       // Why: macOS-specific keys keep the pill out of Mission Control and the
@@ -175,14 +176,6 @@ export function createStatusPillWindow(
     } catch {
       // Headless / test environment.
     }
-  }
-
-  // Why: try to confirm the transparent background actually took; if the
-  // compositor rejected it the renderer will draw an opaque capsule fallback.
-  try {
-    window.setBackgroundColor('#00000000')
-  } catch {
-    // Best-effort; some Linux compositors reject this and Electron throws.
   }
 
   // Why: 'screen-saver' level on Windows is the only one that clears the
