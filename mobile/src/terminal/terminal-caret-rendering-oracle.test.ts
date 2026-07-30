@@ -162,14 +162,16 @@ describe('xterm caret rendering oracle', () => {
         rendered: container.querySelector('.xterm-cursor') !== null
       }).toEqual({ hidden: true, rendered: false })
     } finally {
+      // Why: teardown only — an assertion here would mask the body failure and strand the container.
       terminal.dispose()
-      expect(container.querySelector('.xterm')).toBeNull()
-      const cleanup = listenerCleanup()
-      expect(cleanup.added).toBeGreaterThan(0)
-      expect(cleanup.removed).toBe(cleanup.added)
-      expect(cleanup.unreleased).toEqual([])
       container.remove()
     }
+
+    expect(container.querySelector('.xterm')).toBeNull()
+    const cleanup = listenerCleanup()
+    expect(cleanup.added).toBeGreaterThan(0)
+    expect(cleanup.removed).toBe(cleanup.added)
+    expect(cleanup.unreleased).toEqual([])
   })
 
   it('releases listeners across 25 terminal lifecycles', () => {
