@@ -1,11 +1,41 @@
-import type { ProviderCheckSummary } from '../../../src/shared/types'
+import type { ProviderCheckSummary, PRMergeableState } from '../../../src/shared/types'
 
 export type MobileHostedReviewStatus = {
   checksSummary?: ProviderCheckSummary
   reviewDecision?: string | null
   reviewRequests?: readonly unknown[]
-  mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
+  reviewerCount?: number
+  mergeable?: PRMergeableState
   mergeStateStatus?: string | null
+}
+
+export function getHostedReviewLabel(item: MobileHostedReviewStatus): string {
+  if (item.reviewDecision === 'approved' || item.reviewDecision === 'APPROVED') {
+    return 'Approved'
+  }
+  if (item.reviewDecision === 'changes_requested' || item.reviewDecision === 'CHANGES_REQUESTED') {
+    return 'Changes requested'
+  }
+  if (item.reviewDecision === 'review_required' || item.reviewDecision === 'REVIEW_REQUIRED') {
+    return 'Review required'
+  }
+  const reviewerCount = item.reviewerCount ?? item.reviewRequests?.length
+  return reviewerCount
+    ? `${reviewerCount} reviewer${reviewerCount === 1 ? '' : 's'}`
+    : 'No reviewers'
+}
+
+export function getHostedMergeLabel(item: MobileHostedReviewStatus): string {
+  if (item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'BLOCKED') {
+    return 'Conflicts'
+  }
+  if (item.mergeStateStatus === 'BEHIND' || item.checksSummary?.state === 'pending') {
+    return 'Behind'
+  }
+  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
+    return 'Able to merge'
+  }
+  return 'Unknown'
 }
 
 export function getHostedChecksLabel(item: { checksSummary?: ProviderCheckSummary }): string {
@@ -32,13 +62,21 @@ export function getHostedReviewSignalTone(
   signal: 'review' | 'checks' | 'merge'
 ): 'neutral' | 'success' | 'warning' | 'danger' {
   if (signal === 'review') {
-    if (item.reviewDecision === 'APPROVED') {
+    if (item.reviewDecision === 'approved' || item.reviewDecision === 'APPROVED') {
       return 'success'
     }
-    if (item.reviewDecision === 'CHANGES_REQUESTED') {
+    if (
+      item.reviewDecision === 'changes_requested' ||
+      item.reviewDecision === 'CHANGES_REQUESTED'
+    ) {
       return 'danger'
     }
-    if (item.reviewRequests && item.reviewRequests.length > 0) {
+    if (
+      item.reviewDecision === 'review_required' ||
+      item.reviewDecision === 'REVIEW_REQUIRED' ||
+      item.reviewerCount !== undefined ||
+      item.reviewRequests?.length
+    ) {
       return 'warning'
     }
     return 'neutral'

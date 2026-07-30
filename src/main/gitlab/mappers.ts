@@ -210,6 +210,8 @@ type GitLabMRRawForWorkItem = {
    *  when the workspace flow can't safely resolve the head. */
   source_project_id?: number
   target_project_id?: number
+  has_conflicts?: boolean
+  detailed_merge_status?: string
 }
 
 export function mapMRToWorkItem(
@@ -238,6 +240,9 @@ export function mapMRToWorkItem(
       data.target_project_id !== undefined &&
       data.source_project_id !== data.target_project_id,
     repoId,
+    ...(data.has_conflicts !== undefined || data.detailed_merge_status !== undefined
+      ? { mergeable: deriveMergeable(data) }
+      : {}),
     ...(projectRef ? { projectRef } : {})
   }
 }

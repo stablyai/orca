@@ -62,6 +62,8 @@ import {
 import { buildGitHubCheckSummary } from '../../../src/tasks/github-check-summary'
 import { buildGitLabCheckSummary } from '../../../src/tasks/gitlab-check-summary'
 import {
+  getHostedMergeLabel,
+  getHostedReviewLabel,
   getHostedReviewSignalTone,
   getHostedChecksLabel
 } from '../../../src/tasks/mobile-hosted-check-status'
@@ -237,6 +239,9 @@ type GitLabWorkItem = {
   isCrossRepository?: boolean
   projectRef?: { host: string; path: string }
   checksSummary?: ProviderCheckSummary
+  mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
+  reviewDecision?: 'approved' | 'changes_requested' | 'review_required' | null
+  reviewerCount?: number
   repoId: string
   repoName: string
 }
@@ -4281,7 +4286,7 @@ export default function MobileTasksScreen() {
         const details = response.result as {
           body?: string
           comments?: DetailComment[]
-          item?: { labels?: string[] }
+          item?: { labels?: string[]; mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN' }
           assignees?: string[]
           pipelineJobs?: Array<{
             id?: number
@@ -4291,6 +4296,8 @@ export default function MobileTasksScreen() {
             webUrl?: string | null
             duration?: number | null
           }>
+          reviewers?: unknown[]
+          approvalState?: { approvalsRequired: number | null; approvalsLeft: number | null }
         } | null
         if (!details) {
           throw new Error('Details not found')
@@ -4305,15 +4312,40 @@ export default function MobileTasksScreen() {
             pipelineJobs: details.pipelineJobs ?? []
           })
           const checksSummary = buildGitLabCheckSummary(details.pipelineJobs ?? [])
+          const reviewDecision =
+            details.approvalState?.approvalsRequired && details.approvalState.approvalsLeft === 0
+              ? 'approved'
+              : details.approvalState?.approvalsLeft && details.approvalState.approvalsLeft > 0
+                ? 'review_required'
+                : undefined
+          const hydratedStatus = {
+            ...(details.item?.mergeable !== undefined ? { mergeable: details.item.mergeable } : {}),
+            ...(reviewDecision !== undefined ? { reviewDecision } : {}),
+            ...(details.reviewers !== undefined ? { reviewerCount: details.reviewers.length } : {})
+          }
           setActionItem((current) =>
             current?.provider === 'gitlab' && current.source.id === actionItem.source.id
-              ? { ...current, source: { ...current.source, checksSummary } }
+              ? {
+                  ...current,
+                  source: {
+                    ...current.source,
+                    checksSummary,
+                    ...hydratedStatus
+                  }
+                }
               : current
           )
           setItems((current) =>
             current.map((candidate) =>
               candidate.provider === 'gitlab' && candidate.source.id === actionItem.source.id
-                ? { ...candidate, source: { ...candidate.source, checksSummary } }
+                ? {
+                    ...candidate,
+                    source: {
+                      ...candidate.source,
+                      checksSummary,
+                      ...hydratedStatus
+                    }
+                  }
                 : candidate
             )
           )
@@ -9693,7 +9725,7 @@ export default function MobileTasksScreen() {
                           </Text>
                         </View>
                       ) : null}
-                      {isGitHubPr ? (
+                      {isGitHubPr || isGitLabMr ? (
                         <View
                           style={[
                             styles.prSignalChip,
@@ -9701,7 +9733,9 @@ export default function MobileTasksScreen() {
                           ]}
                         >
                           <Text style={styles.prSignalText} numberOfLines={1}>
-                            {getGitHubReviewSummary(item.source)}
+                            {isGitHubPr
+                              ? getGitHubReviewSummary(item.source)
+                              : getHostedReviewLabel(item.source)}
                           </Text>
                         </View>
                       ) : null}
@@ -9715,7 +9749,7 @@ export default function MobileTasksScreen() {
                           {getHostedChecksLabel(item.source)}
                         </Text>
                       </View>
-                      {isGitHubPr ? (
+                      {isGitHubPr || isGitLabMr ? (
                         <View
                           style={[
                             styles.prSignalChip,
@@ -9723,7 +9757,9 @@ export default function MobileTasksScreen() {
                           ]}
                         >
                           <Text style={styles.prSignalText} numberOfLines={1}>
-                            {getGitHubMergeLabel(item.source)}
+                            {isGitHubPr
+                              ? getGitHubMergeLabel(item.source)
+                              : getHostedMergeLabel(item.source)}
                           </Text>
                         </View>
                       ) : null}
