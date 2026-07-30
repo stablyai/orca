@@ -405,4 +405,19 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(provider.getCurrentDaemonSessionIds()).toEqual([])
     expect(provider.hasPty('legacy-session')).toBe(true)
   })
+
+  it('keeps an exited legacy daemon poisoning listProcesses after construction', async () => {
+    const current = createDaemonAdapter('daemon', ['current-session'])
+    const legacy = createDaemonAdapter('legacy', ['legacy-session'])
+    const fallback = createProvider('fallback', ['fallback-session'])
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+    await provider.discoverDaemonSessions()
+    vi.mocked(legacy.listProcesses).mockRejectedValue(new Error('legacy exited'))
+
+    await expect(provider.listProcesses()).rejects.toThrow('legacy exited')
+    await expect(provider.listProcesses()).rejects.toThrow('legacy exited')
+    expect(provider.getLegacyAdapters()).toEqual([legacy])
+    expect(current.listProcesses).toHaveBeenCalledTimes(3)
+    expect(fallback.listProcesses).toHaveBeenCalledTimes(2)
+  })
 })

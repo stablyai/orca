@@ -9,6 +9,7 @@ import type {
   HostedReviewProvider
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
+import type { BrowserFindSource } from '../shared/browser-find-source'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
@@ -3113,7 +3114,7 @@ export type PreloadApi = {
     replyTabClose: (reply: { requestId: string; error?: string }) => void
     onNewTerminalTab: (callback: () => void) => () => void
     onFocusBrowserAddressBar: (callback: () => void) => () => void
-    onFindInBrowserPage: (callback: () => void) => () => void
+    onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void
     onReloadBrowserPage: (callback: () => void) => () => void
     onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
@@ -3306,6 +3307,9 @@ export type PreloadApi = {
     ) => () => void
     onTerminalDriverChanged: (
       callback: (event: { ptyId: string; driver: RuntimeTerminalDriverState }) => void
+    ) => () => void
+    onNativeChatLaunchDraftResolved?: (
+      callback: (event: { tabId: string; text: string; createdAt: number }) => void
     ) => () => void
     onBrowserDriverChanged: (
       callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void

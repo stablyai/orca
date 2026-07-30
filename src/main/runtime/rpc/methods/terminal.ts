@@ -863,6 +863,12 @@ const TerminalSend = TerminalHandle.extend({
   text: OptionalString,
   enter: z.unknown().optional(),
   interrupt: z.unknown().optional(),
+  resolvedLaunchDraft: z
+    .object({
+      text: z.string(),
+      createdAt: z.number().finite()
+    })
+    .optional(),
   requireAgentStatus: z.enum(['sendable']).optional(),
   // Why: terminal-generated replies are valid input but must not transfer the shared terminal floor.
   inputKind: z.enum(['query-reply']).optional(),
@@ -1183,6 +1189,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalSend,
     handler: async (params, { runtime, clientId }) => {
       await assertTerminalSendTextWithinLimit(params.text)
+      await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
       const queryReplyClientId = clientId ?? params.client?.id
       if (
         params.inputKind === 'query-reply' &&
@@ -1360,6 +1367,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       }
       if (result.accepted !== true) {
         mobileFloorClaim.current?.rollback()
+      }
+      if (
+        result.accepted === true &&
+        params.enter === true &&
+        params.client?.type === 'mobile' &&
+        params.resolvedLaunchDraft
+      ) {
+        runtime.notifyNativeChatLaunchDraftResolved(params.terminal, params.resolvedLaunchDraft)
       }
       // Why: deliberate mobile input takes the floor (drives `* → mobile{clientId}`); clientless sends fall back to the current mobile driver.
       return { send: result }

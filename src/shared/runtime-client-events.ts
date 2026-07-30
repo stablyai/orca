@@ -6,10 +6,12 @@ import type {
 } from './types'
 import type { SshConnectionState } from './ssh-types'
 import type { TerminalSideEffectBatch } from './terminal-side-effect-facts'
+import type { RuntimeNativeChatLaunchDraftResolution } from './runtime-types'
 
 export type RuntimeClientEvent =
   | { type: 'reposChanged' }
   | { type: 'worktreesChanged'; repoId: string }
+  | ({ type: 'nativeChatLaunchDraftResolved' } & RuntimeNativeChatLaunchDraftResolution)
   | { type: 'terminalSideEffects'; batch: TerminalSideEffectBatch }
   // Why: SSH connections live on the runtime host; paired clients have no IPC
   // channel for ssh:state-changed, so without this event their reconnect

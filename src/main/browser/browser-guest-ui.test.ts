@@ -570,6 +570,36 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:browserHistoryNavigate', 'forward')
   })
 
+  it('forwards browser Find with its registered page and workspace owner', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      resolveWorkspaceId: () => 'workspace-1'
+    })
+
+    const preventDefault = triggerBeforeInput({ code: 'KeyF', key: 'f' })
+
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:findInBrowserPage', {
+      browserPageId: browserTabId,
+      browserWorkspaceId: 'workspace-1'
+    })
+  })
+
+  it('does not broadcast browser Find without a registered workspace owner', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const preventDefault = triggerBeforeInput({ code: 'KeyF', key: 'f' })
+
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(rendererSendMock).not.toHaveBeenCalled()
+  })
+
   it('forwards quick-command menu shortcuts from focused guest pages', () => {
     setupGuestShortcutForwarding({
       browserTabId,

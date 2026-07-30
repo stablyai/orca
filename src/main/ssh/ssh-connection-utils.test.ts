@@ -438,6 +438,44 @@ describe('buildConnectConfig', () => {
     expect(config.port).toBe(2022)
   })
 
+  it('uses fresh OpenSSH endpoint authority for imported config targets', () => {
+    const config = buildConnectConfig(
+      makeTarget({
+        source: 'ssh-config',
+        configHost: 'workbox',
+        host: 'stale.example.com',
+        port: 2022,
+        username: 'stale-user'
+      }),
+      makeResolved({
+        hostname: 'current.example.com',
+        port: 2202,
+        user: 'current-user'
+      })
+    )
+
+    expect(config.host).toBe('current.example.com')
+    expect(config.port).toBe(2202)
+    expect(config.username).toBe('current-user')
+  })
+
+  it('keeps imported endpoint fields as the fallback when ssh -G is unavailable', () => {
+    const config = buildConnectConfig(
+      makeTarget({
+        source: 'ssh-config',
+        configHost: 'workbox',
+        host: 'fallback.example.com',
+        port: 2022,
+        username: 'fallback-user'
+      }),
+      null
+    )
+
+    expect(config.host).toBe('fallback.example.com')
+    expect(config.port).toBe(2022)
+    expect(config.username).toBe('fallback-user')
+  })
+
   it('sets readyTimeout to CONNECT_TIMEOUT_MS', () => {
     const config = buildConnectConfig(makeTarget(), null)
     expect(config.readyTimeout).toBe(30_000)
@@ -581,6 +619,22 @@ describe('buildConnectConfig', () => {
     }
   })
 
+  it('uses fresh OpenSSH IdentityFile authority for imported config targets', () => {
+    mockReadFileSync.mockImplementation((path: unknown) => Buffer.from(String(path)))
+    const config = buildConnectConfig(
+      makeTarget({
+        source: 'ssh-config',
+        configHost: 'workbox',
+        identityFile: '/home/user/.ssh/stale'
+      }),
+      makeResolved({ identityFile: ['/home/user/.ssh/current'] }),
+      { includeAgent: false, includePrivateKey: true }
+    )
+
+    expect(config.privateKey).toEqual(Buffer.from('/home/user/.ssh/current'))
+    expect(mockReadFileSync).toHaveBeenCalledWith('/home/user/.ssh/current')
+  })
+
   it('expands Windows-style target.identityFile before reading private key', () => {
     mockReadFileSync.mockReturnValue(Buffer.from('key'))
     const config = buildConnectConfig(makeTarget({ identityFile: '~\\.ssh\\custom' }), null, {
@@ -661,6 +715,23 @@ describe('resolveEffectiveProxy', () => {
     expect(resolveEffectiveProxy(target, resolved)).toEqual({
       kind: 'proxy-command',
       command: 'cloudflared access ssh --hostname %h'
+    })
+  })
+
+  it('uses fresh OpenSSH proxy authority for imported config targets', () => {
+    const target = {
+      ...makeTarget(),
+      source: 'ssh-config' as const,
+      configHost: 'workbox',
+      proxyCommand: 'ssh -W %h:%p stale-bastion'
+    }
+
+    expect(resolveEffectiveProxy(target, makeResolved())).toBeUndefined()
+    expect(
+      resolveEffectiveProxy(target, makeResolved({ proxyCommand: 'ssh -W %h:%p current-bastion' }))
+    ).toEqual({
+      kind: 'proxy-command',
+      command: 'ssh -W %h:%p current-bastion'
     })
   })
 

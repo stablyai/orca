@@ -58,14 +58,16 @@ describe('createProductionLauncher', () => {
 
   it('returns a launcher function', () => {
     const launcher = createProductionLauncher({
-      getDaemonEntryPath: () => '/fake/path.js'
+      getDaemonEntryPath: () => '/fake/path.js',
+      getAppVersion: () => '1.2.3'
     })
     expect(typeof launcher).toBe('function')
   })
 
   it('rejects either ownership argument without its pair before forking', async () => {
     const launcher = createProductionLauncher({
-      getDaemonEntryPath: () => '/fake/path.js'
+      getDaemonEntryPath: () => '/fake/path.js',
+      getAppVersion: () => '1.2.3'
     })
 
     await expect(
@@ -126,12 +128,18 @@ describe('createProductionLauncher', () => {
     forkMock.mockReturnValueOnce(child)
 
     const launcher = createProductionLauncher({
-      getDaemonEntryPath: () => join(dir, 'daemon-entry.js')
+      getDaemonEntryPath: () => join(dir, 'daemon-entry.js'),
+      getAppVersion: () => '1.2.3'
     })
 
     const pidPath = join(dir, 'daemon.pid')
     const launch = launcher(socketPathFor(dir), tokenPathFor(dir), pidPath, 'launch-a')
-    handlers.message[0]?.({ type: 'ready', startedAtMs: 123_456 })
+    handlers.message[0]?.({
+      type: 'ready',
+      startedAtMs: 123_456,
+      linuxStartTicks: '4242',
+      bootId: 'boot-a'
+    })
     const handle = await launch
 
     expect(handle.shutdown).toEqual(expect.any(Function))
@@ -143,7 +151,10 @@ describe('createProductionLauncher', () => {
     expect(JSON.parse(readFileSync(pidPath, 'utf8'))).toEqual({
       pid: 12345,
       startedAtMs: 123_456,
+      linuxStartTicks: '4242',
+      bootId: 'boot-a',
       entryPath: join(dir, 'daemon-entry.js'),
+      appVersion: '1.2.3',
       launchNonce: 'launch-a'
     })
     expect(forkMock).toHaveBeenCalledWith(
@@ -194,7 +205,8 @@ describe('createProductionLauncher', () => {
     }
     forkMock.mockReturnValueOnce(child)
     const launcher = createProductionLauncher({
-      getDaemonEntryPath: () => join(dir, 'daemon-entry.js')
+      getDaemonEntryPath: () => join(dir, 'daemon-entry.js'),
+      getAppVersion: () => '1.2.3'
     })
     const launch = launcher(socketPathFor(dir), tokenPathFor(dir))
     handlers.message[0]?.({ type: 'ready', startedAtMs: 123_456 })
@@ -241,7 +253,8 @@ describe('createProductionLauncher', () => {
       forkMock.mockReturnValueOnce(child)
 
       const launcher = createProductionLauncher({
-        getDaemonEntryPath: () => join(dir, 'daemon-entry.js')
+        getDaemonEntryPath: () => join(dir, 'daemon-entry.js'),
+        getAppVersion: () => '1.2.3'
       })
 
       const launch = launcher(socketPathFor(dir), tokenPathFor(dir))
@@ -302,7 +315,8 @@ describe('createProductionLauncher', () => {
       forkMock.mockReturnValueOnce(child)
 
       const launcher = createProductionLauncher({
-        getDaemonEntryPath: () => join(dir, 'daemon-entry.js')
+        getDaemonEntryPath: () => join(dir, 'daemon-entry.js'),
+        getAppVersion: () => '1.2.3'
       })
       const launch = launcher(socketPathFor(dir), tokenPathFor(dir))
       handlers.message[0]?.({ type: 'ready' })
@@ -359,7 +373,8 @@ describe('createProductionLauncher', () => {
     const pidPath = join(dir, 'occupied.pid')
     writeFileSync(pidPath, 'occupied')
     const launcher = createProductionLauncher({
-      getDaemonEntryPath: () => join(dir, 'daemon-entry.js')
+      getDaemonEntryPath: () => join(dir, 'daemon-entry.js'),
+      getAppVersion: () => '1.2.3'
     })
 
     const launch = launcher(socketPathFor(dir), tokenPathFor(dir), pidPath, 'launch-b')

@@ -154,7 +154,16 @@ describe('electron-builder config', () => {
 
   it('unpacks the compiled CommonJS boundary with CLI runtime files', () => {
     expect(electronBuilderConfig.asarUnpack).toEqual(
-      expect.arrayContaining(['out/package.json', 'out/cli/**', 'out/shared/**'])
+      expect.arrayContaining([
+        'out/package.json',
+        'out/cli/**',
+        'out/shared/**',
+        'out/main/claude-accounts/keychain.js',
+        'out/main/codex-cli/command.js',
+        'out/main/ipc/local-agent-install-dir-detection.js',
+        'out/main/ipc/tui-agent-detection-commands.js',
+        'out/main/win32-utils.js'
+      ])
     )
   })
 

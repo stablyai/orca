@@ -16,7 +16,7 @@ import {
 } from '../ui/dropdown-menu'
 import { useAppStore } from '../../store'
 import { SearchableSetting } from './SearchableSetting'
-import { StepBadge } from './BrowserUseStepBadge'
+import { StepBadge } from './SetupStepBadge'
 import { getBrowserUsePaneSearchEntries } from './browser-use-search'
 import { translate } from '@/i18n/i18n'
 

@@ -161,19 +161,20 @@ export function derivePipelineStatus(
   }
   let hasFailure = false
   let hasPending = false
+  let hasUnknown = false
   for (const job of rollup) {
-    const s = job.status?.toLowerCase()
-    if (s === 'failed') {
-      hasFailure = true
-    } else if (
-      s === 'created' ||
-      s === 'pending' ||
-      s === 'running' ||
-      s === 'waiting_for_resource' ||
-      s === 'preparing' ||
-      s === 'scheduled'
+    const s = job.status?.toLowerCase() ?? ''
+    const conclusion = mapPipelineJobStatusToConclusion(s)
+    if (
+      conclusion === 'failure' ||
+      conclusion === 'cancelled' ||
+      conclusion === 'action_required'
     ) {
+      hasFailure = true
+    } else if (conclusion === 'pending') {
       hasPending = true
+    } else if (conclusion !== 'success' && conclusion !== 'skipped' && conclusion !== 'neutral') {
+      hasUnknown = true
     }
   }
   if (hasFailure) {
@@ -182,7 +183,7 @@ export function derivePipelineStatus(
   if (hasPending) {
     return 'pending'
   }
-  return 'success'
+  return hasUnknown ? 'neutral' : 'success'
 }
 
 // ── Raw → GitLabWorkItem mapping ────────────────────────────────────
@@ -209,6 +210,8 @@ type GitLabMRRawForWorkItem = {
    *  when the workspace flow can't safely resolve the head. */
   source_project_id?: number
   target_project_id?: number
+  has_conflicts?: boolean
+  detailed_merge_status?: string
 }
 
 export function mapMRToWorkItem(
@@ -237,6 +240,9 @@ export function mapMRToWorkItem(
       data.target_project_id !== undefined &&
       data.source_project_id !== data.target_project_id,
     repoId,
+    ...(data.has_conflicts !== undefined || data.detailed_merge_status !== undefined
+      ? { mergeable: deriveMergeable(data) }
+      : {}),
     ...(projectRef ? { projectRef } : {})
   }
 }
@@ -283,7 +289,7 @@ function classifyPipelineString(status: string): CheckStatus {
   if (s === 'success') {
     return 'success'
   }
-  if (s === 'failed') {
+  if (s === 'failed' || s === 'manual' || s === 'action_required') {
     return 'failure'
   }
   if (

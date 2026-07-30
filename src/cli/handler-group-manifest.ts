@@ -18,6 +18,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/core.js')).CORE_HANDLERS
   },
   {
+    name: 'account',
+    keys: ['account add', 'account list'],
+    load: async () => (await import('./handlers/account.js')).ACCOUNT_HANDLERS
+  },
+  {
     name: 'automations',
     keys: [
       'automations list',
@@ -218,7 +223,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'skills',
-    keys: ['skills list', 'skills get'],
+    keys: ['skills list', 'skills get', 'skills install', 'skills update'],
     load: async () => (await import('./handlers/skills.js')).SKILL_HANDLERS
   }
 ]

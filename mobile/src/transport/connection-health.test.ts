@@ -71,6 +71,45 @@ describe('classifyConnection Tailscale hint', () => {
   })
 })
 
+// Issue #10119: every redial re-enters 'connecting', which used to revert an
+// escalated verdict to "Connecting…" for the whole dial window — on a loop that
+// had already failed for minutes, the user mostly saw the reassuring label.
+describe('classifyConnection while dialing (issue #10119)', () => {
+  const base = { lastConnectedAt: null, nowMs: 1_000_000 }
+
+  it('keeps the warning verdict through a redial instead of reverting to Connecting…', () => {
+    for (const state of ['connecting', 'handshaking'] as const) {
+      const verdict = classifyConnection({ ...base, state, reconnectAttempts: 3 })
+      expect(verdict).toMatchObject({ kind: 'warning', label: "Can't connect" })
+    }
+  })
+
+  it('keeps the unreachable verdict through a trickle dial', () => {
+    const verdict = classifyConnection({ ...base, state: 'connecting', reconnectAttempts: 12 })
+    expect(verdict).toMatchObject({ kind: 'unreachable', reason: 'never-connected' })
+  })
+
+  it('applies the stale heuristic while dialing too', () => {
+    const verdict = classifyConnection({
+      state: 'handshaking',
+      reconnectAttempts: 12,
+      lastConnectedAt: 900_000,
+      nowMs: 1_000_000
+    })
+    expect(verdict).toMatchObject({ kind: 'unreachable', reason: 'stale' })
+  })
+
+  it('still shows Connecting… before any failures', () => {
+    const verdict = classifyConnection({ ...base, state: 'connecting', reconnectAttempts: 0 })
+    expect(verdict).toEqual({ kind: 'normal', label: 'Connecting…' })
+  })
+
+  it('still shows Connecting… below the warning gate', () => {
+    const verdict = classifyConnection({ ...base, state: 'handshaking', reconnectAttempts: 2 })
+    expect(verdict).toEqual({ kind: 'normal', label: 'Connecting…' })
+  })
+})
+
 describe('verdictDisplayLabel', () => {
   it('appends the hint to warning and unreachable labels', () => {
     expect(

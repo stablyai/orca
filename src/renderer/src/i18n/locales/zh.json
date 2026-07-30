@@ -616,7 +616,7 @@
             "readTicket": "Read the linked ticket",
             "postUpdate": "Post a progress update",
             "moveState": "Move the ticket forward",
-            "attachPr": "Attach the PR link",
+            "attachPr": "附加评审链接",
             "triageFollowups": "Triage and create follow-ups",
             "readTicketSummary": "Pull the linked Linear issue's full context before starting work.",
             "readTicketPrompt": "Use {{value0}} to read the linked Linear issue for this worktree, then summarize the goal and acceptance criteria before you start.",
@@ -624,8 +624,8 @@
             "postUpdatePrompt": "Use {{value0}} to post a completion update on the linked Linear issue with what changed and how it was verified.",
             "moveStateSummary": "Advance the Linear workflow state as the work progresses.",
             "moveStatePrompt": "Use {{value0}} to move the linked Linear issue to In Review now that the change is ready.",
-            "attachPrSummary": "Link the pull request to the Linear issue when you open it.",
-            "attachPrPrompt": "Use {{value0}} to attach this PR to the linked Linear issue with a PR link.",
+            "attachPrSummary": "创建拉取或合并请求时，将其关联到 Linear 议题。",
+            "attachPrPrompt": "使用 {{value0}} 将此拉取或合并请求附加到关联的 Linear 议题。",
             "triageFollowupsSummary": "Set assignee, priority, or estimate, and file parented follow-up tickets.",
             "triageFollowupsPrompt": "Use {{value0}} to triage the linked Linear issue — set priority and estimate — and create a parented follow-up ticket for the deferred cleanup."
           }
@@ -790,9 +790,10 @@
         "devSearchKeywordNotification": "notification",
         "projectHostsSummary": "{{value0}} 个主机",
         "linearTitle": "Linear",
-        "linearDescription": "Give agents the skill to read and update your linked Linear tickets.",
+        "linearDescription": "Linear 在 Orca 中的工作方式、设置清单、智能体技能和提示词示例。",
         "pluginsTitle": "插件",
-        "pluginsDescription": "安装和管理实验性 Orca 插件。"
+        "pluginsDescription": "安装和管理实验性 Orca 插件。",
+        "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "粘贴内容过大。"
@@ -5273,7 +5274,9 @@
           "copyCommandAria": "复制命令",
           "runCommandDescription": "按 Enter 运行命令。",
           "5f818f12ab": "正在准备...",
-          "4c05b9d7cb": "正在准备设置终端。"
+          "4c05b9d7cb": "正在准备设置终端。",
+          "installLabel": "安装",
+          "updateLabel": "更新"
         },
         "AgentsPane": {
           "d83834f5e6": "检测已安装的智能体...",
@@ -6824,7 +6827,8 @@
           "dev": "开发工具",
           "devDescription": "仅用于调试 UI 状态的开发工具。",
           "linearTitle": "Linear",
-          "linearDescription": "赋予智能体读取和更新您关联的 Linear 工单的能力。"
+          "linearDescription": "Linear 在 Orca 中的工作方式、设置清单、智能体技能和提示词示例。",
+          "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。"
         },
         "SettingsFormControls": {
           "42a4d15a30": "没有匹配的字体。",
@@ -7053,18 +7057,34 @@
           "53e9aabfc0": "可用时使用 OpenSSH 多路复用。对于有自定义 SSH 限制的主机，请关闭此项。"
         },
         "TasksPane": {
-          "3a72b9745e": "选择要在“任务”页面和侧边栏快捷键中显示的任务提供商。",
           "f71d8a9dd3": "任务提供者",
-          "71644aba56": "选择要在“任务”页面源选择器和侧边栏快捷键中显示的任务提供商。至少需保留一个可见提供商。",
-          "93e72ef659": "任务来源",
-          "8e1305fcc6": "在任务源选择器和侧边栏快捷方式中显示 Jira。",
           "6b23a34f6d": "Jira",
-          "e4170c9615": "在任务源选择器和侧边栏快捷方式中显示 Linear。",
           "09ae2d7c51": "Linear",
-          "dd67a1b6e1": "在任务源选择器和侧边栏快捷方式中显示 GitLab。",
           "7c5d7fdc20": "GitLab",
-          "1db47236cd": "在任务源选择器和侧边栏快捷方式中显示 GitHub。",
-          "e14063e727": "GitHub"
+          "e14063e727": "GitHub",
+          "connectProviderTitle": "连接 {{provider}}",
+          "connectCodeHostDescription": "在集成中安装并验证 CLI，以便 Orca 加载议题。",
+          "connectionCheckUnavailable": "Orca 无法检查此连接。请重试，或打开“集成”查看设置详情。",
+          "retryConnection": "重试",
+          "openIntegrations": "集成",
+          "connectInIntegrations": "在集成中设置",
+          "connectJiraTitle": "连接 Jira",
+          "connectJiraDescription": "使用 API Token 或 PAT 添加 Jira Cloud 站点或自托管实例。",
+          "manageJira": "管理密钥",
+          "addJira": "添加 Jira 访问权限",
+          "githubDescription": "浏览 GitHub 议题并从中启动工作区。",
+          "gitlabDescription": "浏览 GitLab 议题并从中启动工作区。",
+          "linearDescription": "连接 Linear、安装智能体技能并将其显示在任务中。",
+          "jiraDescription": "连接 Jira Cloud 或自托管 Jira 并将其显示在任务中。",
+          "setupTitle": "任务管理设置",
+          "setupDescription": "在一处完成每个提供商的连接和显示设置。Linear 还需要智能体技能，以便智能体读取和更新议题。必须至少保留一个可见提供商。",
+          "incompleteBannerTitle": "部分可见提供商仍需设置",
+          "incompleteBannerBody": "隐藏不使用的提供商，或展开卡片并完成其中的步骤。",
+          "providersDescription": "每张卡片都会引导你完成连接、任务显示设置；Linear 还包括技能设置。",
+          "integrationsHint": "所有提供商的凭据也可在此管理：",
+          "integrationsLink": "集成",
+          "skillHint": "。连接 Linear 后，可在设置 → Linear 中查看使用示例。",
+          "incompleteBannerBodyWithLinear": "隐藏不使用的提供商，或展开卡片并完成其中的步骤。Linear 需要 API 访问权限、智能体技能以及在任务中显示。"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "窗格分隔线的厚度。",
@@ -8709,8 +8729,12 @@
             "3d81c26d78": "来源",
             "cf0e3e0c2f": "提供者",
             "2ec54bee51": "任务",
-            "765f0c544d": "选择要在“任务”页面和侧边栏快捷键中显示的任务提供商。",
-            "5b8e4aace5": "任务提供者"
+            "5b8e4aace5": "任务提供者",
+            "providersDescription": "连接任务提供商、安装 Linear 智能体技能并选择要在任务中显示的内容。",
+            "setup": "设置",
+            "apiKey": "API 密钥",
+            "skill": "技能",
+            "connect": "连接"
           }
         },
         "terminal": {
@@ -9487,13 +9511,13 @@
                   "notInstalled": "未安装",
                   "recheck": "重新检查",
                   "installedDescription": "智能体技能已安装。要更新，请运行：",
-                  "description": "让您的智能体读取和编辑 Linear 任务。",
+                  "description": "让智能体读取和编辑 Linear 任务。完整引导设置（连接 + 技能 + 可见性）位于设置 → 任务来源。",
                   "copyCommand": "复制命令"
                 }
               },
               "search": {
                 "title": "Linear",
-                "description": "Give agents the skill to read and update your linked Linear tickets."
+                "description": "Linear 技能状态、使用示例和任务来源设置链接。"
               }
             }
           }
@@ -9582,15 +9606,14 @@
         },
         "LinearAgentSkillPane": {
           "title": "Linear",
-          "description": "Give agents the skill to read and update your linked Linear tickets.",
-          "skillTitle": "Linear skill",
-          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca.",
-          "howToUse": "How to use it",
-          "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
-          "terminalTitle": "Linear skill setup",
-          "terminalAriaLabel": "Linear skill install terminal",
-          "manageConnectionHint": "Review connected Linear workspaces and API keys in",
-          "manageConnectionLink": "Integrations settings"
+          "description": "在 Orca 中浏览 Linear 议题、启动关联工作区，并让智能体通过 /orca-linear 更新议题。",
+          "skillTitle": "Linear 技能",
+          "howToUse": "提示词示例",
+          "howToUseDescription": "点击卡片即可复制提示词。安装技能后，请在关联 Linear 的工作区中使用。",
+          "terminalTitle": "Linear 技能设置",
+          "terminalAriaLabel": "Linear 技能安装终端",
+          "manageConnectionHint": "可在此查看已连接的 Linear 工作区和 API 密钥：",
+          "manageConnectionLink": "集成"
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
@@ -9906,6 +9929,69 @@
             "logs": "插件日志",
             "development": "开发插件"
           }
+        },
+        "LinearAgentSkillGuide": {
+          "setupConnectTitle": "1. 连接 Linear",
+          "setupConnectBody": "用于让 Orca 列出议题并打开关联工作区的个人 API 密钥。",
+          "manageKeys": "管理密钥",
+          "addAccess": "添加访问权限",
+          "setupSkillTitle": "2. 安装智能体技能",
+          "setupSkillBody": "让智能体使用 /orca-linear 读取、更新、分类议题并附加拉取或合并请求。",
+          "setupVisibleTitle": "3. 在任务中显示 Linear",
+          "setupVisibleBody": "在任务来源选择器和侧边栏快捷方式中保留 Linear。",
+          "openTaskSources": "任务来源",
+          "setupTitle": "设置清单",
+          "setupBody": "完整的任务与智能体流程需要完成全部三个步骤。首次设置也可在任务来源中进行。",
+          "setupReady": "全部就绪",
+          "setupProgress": "已完成 {{done}}/{{total}}",
+          "notesTitle": "使用须知",
+          "notesIntro": "连接 Linear 并安装技能后的一些快速提示。",
+          "noteLinkedTitle": "从 Linear 议题开始",
+          "noteLinkedBody": "从任务创建的工作区会将议题保留为关联上下文，因此议题操作最顺畅。",
+          "noteSlashTitle": "提及 /orca-linear",
+          "noteSlashBody": "在聊天中使用 /orca-linear（或用自然语言提出请求），智能体会在该轮加载此技能。",
+          "noteKeysTitle": "密钥按运行环境保存",
+          "noteKeysBody": "API 密钥和工作区存储在当前运行环境中。",
+          "noteVisibilityTitle": "隐藏不等于断开连接",
+          "noteVisibilityBody": "在任务来源中隐藏 Linear 只会将其从选择器中移除，不会删除密钥或技能。",
+          "setupChecking": "检查中…"
+        },
+        "TaskSourceLinearSetup": {
+          "connectTitle": "连接 Linear",
+          "connectDescription": "添加个人 API 密钥，让 Orca 能够浏览议题并使用议题上下文打开工作区。",
+          "manageAccess": "管理密钥",
+          "addAccess": "添加 Linear 访问权限",
+          "connectedHint": "工作区和密钥存储在当前运行环境中。你可以随时添加更多访问权限。",
+          "recheck": "重新检查连接",
+          "skillTitle": "安装 Linear 智能体技能",
+          "skillDescription": "让智能体使用 /orca-linear 读取议题、发布更新、更改状态并附加拉取或合并请求。",
+          "skillBlocked": "请先连接 Linear，然后为智能体安装技能。",
+          "skillPanelTitle": "Linear 技能",
+          "terminalTitle": "Linear 技能设置",
+          "terminalAriaLabel": "Linear 技能安装终端",
+          "showDescription": "在任务来源选择器和侧边栏快捷方式中显示 Linear。"
+        },
+        "TaskSourceProviderCard": {
+          "statusChecking": "检查中…",
+          "statusReady": "已就绪",
+          "statusConnectRequired": "需要连接",
+          "statusSkillRequired": "需要技能",
+          "statusUnavailable": "状态不可用",
+          "statusHidden": "已从任务中隐藏",
+          "statusIncomplete": "需要设置",
+          "collapseSetup": "收起 {{provider}} 设置步骤",
+          "expandSetup": "显示 {{provider}} 设置步骤"
+        },
+        "TaskSourceShowInTasksStep": {
+          "shown": "已显示",
+          "show": "显示",
+          "hide": "隐藏",
+          "hideProviderAction": "从任务中隐藏 {{provider}}",
+          "showProviderAction": "在任务中显示 {{provider}}",
+          "lastProviderAction": "{{provider}} 已显示在任务中。必须至少保留一个可见提供商。",
+          "lastProviderHint": "任务中必须至少保留一个可见提供商。",
+          "title": "在任务中显示",
+          "description": "在任务来源选择器和侧边栏快捷方式中显示此提供商。"
         },
         "RuntimeHostAccessForm": {
           "getLink": "从另一台主机获取访问链接",

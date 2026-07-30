@@ -199,6 +199,11 @@ import {
   type AppliedSnapshotMarker
 } from '../../../../src/session/session-tab-snapshot-gate'
 import {
+  createInitialSessionAutoCreateState,
+  useInitialSessionTerminalAutoCreate,
+  useWorktreeSessionTabsLoaded
+} from '../../../../src/session/use-initial-session-terminal-autocreate'
+import {
   buildMarkdownDiskFallbackDoc,
   shouldReadMarkdownFromDiskAfterReadTabFailure
 } from '../../../../src/session/mobile-markdown-disk-fallback'
@@ -239,6 +244,7 @@ import {
   getActiveTabIdForHandle,
   isFileExistsErrorMessage,
   isGestureMouseTrackingMode,
+  isTerminalPhoneDisplayMode,
   MOBILE_SESSION_STATUS_LABELS,
   TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
   TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS,
@@ -890,7 +896,7 @@ export default function SessionScreen() {
   const appliedSessionTabsRevisionRef = useRef(0)
   // Why: after an optimistic close, suppress the tab (with expiry) until the publisher confirms, so an in-flight snapshot can't flash it back.
   const closedTabTombstonesRef = useRef<Map<string, number>>(new Map())
-  const [terminalsLoaded, setTerminalsLoaded] = useState(false)
+  const [terminalsLoaded, setTerminalsLoaded] = useWorktreeSessionTabsLoaded(worktreeId)
   const [input, setInput] = useState('')
   // Why: baseline terminal zoom reloaded on focus so a Settings → Terminal change applies in place (panes stay mounted).
   const [terminalTextScale, setTerminalTextScale] = useState(1)
@@ -1032,7 +1038,7 @@ export default function SessionScreen() {
   // Why: route the terminal URL tap through a ref so it runs the current handleCreateBrowser closure (the memoized one may hold a null-client render).
   const handleCreateBrowserRef = useRef<((rawUrl?: string) => Promise<boolean>) | null>(null)
 
-  const initialEmptySessionAutoCreateRef = useRef<string | null>(null)
+  const initialSessionAutoCreateRef = useRef(createInitialSessionAutoCreateState())
   const markdownSaveSeqRef = useRef<Map<string, number>>(new Map())
   const markdownSaveInFlightRef = useRef<Set<string>>(new Set())
   const subscribeSeqRef = useRef<Map<string, number>>(new Map())
@@ -1774,6 +1780,7 @@ export default function SessionScreen() {
         nextTabs = [...orphanedDraftTabs, ...nextTabs]
       }
       sessionTabsRef.current = nextTabs
+      initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0
       // Why: subscribe snapshots often repeat identical payloads; skip re-set to avoid a subscription teardown/replay loop.
       setSessionTabs((prev) => (mobileSessionTabsEqual(prev, nextTabs) ? prev : nextTabs))
       const terminalTabs = getTerminalRecordsFromSessionTabs(nextTabs)
@@ -2632,7 +2639,7 @@ export default function SessionScreen() {
     pendingActiveTerminalHandleRef.current = null
     pendingBrowserFocusPageIdRef.current = null
     pendingTerminalActivationAttemptRef.current = null
-    initialEmptySessionAutoCreateRef.current = null
+    initialSessionAutoCreateRef.current = createInitialSessionAutoCreateState()
     terminalDiagnosticsRef.current.resetRoute()
     appliedSnapshotMarkerRef.current = { epoch: null, version: -1 }
     closedTabTombstonesRef.current.clear()
@@ -3675,6 +3682,7 @@ export default function SessionScreen() {
     getActiveWorktreeConnectionId,
     beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
     nativeChatBaseSend: nativeChatController.handleNativeChatSendWithOutcome,
+    readSeededLaunchDraft: nativeChatController.readSeededLaunchDraft,
     showToast,
     onNativeChatSendError: nativeChatSendError.show,
     onSuccess: triggerSelection,
@@ -4160,14 +4168,6 @@ export default function SessionScreen() {
   })
   const closeWithBulkActions = createCloseWithBulkActions(handleCloseSessionTab, bulkCloseActions)
 
-  const isPhoneMode = (handle: string | null): boolean => {
-    if (!handle) {
-      return false
-    }
-    const mode = terminalModes.get(handle)
-    return mode === 'auto' || mode === 'phone' || mode === undefined
-  }
-
   const visibleTabs: MobileSessionTab[] = sessionTabs
   const activeMarkdownTab = activeSessionTab?.type === 'markdown' ? activeSessionTab : null
   const activeFileTab = activeSessionTab?.type === 'file' ? activeSessionTab : null
@@ -4227,22 +4227,20 @@ export default function SessionScreen() {
   const showEmptyState =
     connState === 'connected' && terminalsLoaded && visibleTabs.length === 0 && !activeHandle
 
-  useEffect(() => {
-    if (
-      !client ||
-      !showEmptyState ||
-      creating ||
-      creatingBrowser ||
-      creatingMarkdown ||
-      initialEmptySessionAutoCreateRef.current === worktreeId
-    ) {
-      return
-    }
-    // Why: a sleeping/new workspace can hydrate with zero tabs; create the first terminal once so mobile isn't blank.
-    initialEmptySessionAutoCreateRef.current = worktreeId
-    setCreateError('')
-    void handleCreateTerminal()
-  }, [client, creating, creatingBrowser, creatingMarkdown, showEmptyState, worktreeId])
+  // Why: a newly created workspace can hydrate with zero tabs before its first terminal exists.
+  useInitialSessionTerminalAutoCreate({
+    client,
+    newlyCreatedWorkspace: created === '1',
+    connState,
+    terminalsLoaded,
+    visibleTabCount: visibleTabs.length,
+    activeHandle,
+    createInFlight: creating || creatingBrowser || creatingMarkdown,
+    stateRef: initialSessionAutoCreateRef,
+    worktreeId,
+    consumeCreationRoute: () => router.setParams({ created: undefined }),
+    createTerminal: () => void handleCreateTerminal()
+  })
 
   // Why: reconnect trickles to 90s at its give-up cap; surface tap-to-retry so recovery needn't wait it out (issue #5049).
   const connectionVerdict = classifyConnection({
@@ -4827,12 +4825,12 @@ export default function SessionScreen() {
                         }
                       }}
                       accessibilityLabel={
-                        isPhoneMode(activeHandle)
+                        isTerminalPhoneDisplayMode(activeHandle, terminalModes)
                           ? 'Switch to desktop mode'
                           : 'Switch to phone mode'
                       }
                     >
-                      {isPhoneMode(activeHandle) ? (
+                      {isTerminalPhoneDisplayMode(activeHandle, terminalModes) ? (
                         <Monitor
                           size={14}
                           color={canSend ? colors.textSecondary : colors.textMuted}
@@ -5211,11 +5209,12 @@ export default function SessionScreen() {
           nativeChatTranscriptIsLocalReadable,
           onDismiss: () => setActionTarget(null),
           onToggleChat: toggleTabChatView,
-          isPhoneMode,
+          isPhoneMode: (handle) => isTerminalPhoneDisplayMode(handle, terminalModes),
           onToggleDisplayMode: (handle) => void toggleDisplayMode(handle),
           onRename: setRenameTarget,
           onClear: (target) => void handleClearTerminal(target),
           onClose: (target) => void handleCloseTerminal(target),
+          onCloseSessionTab: (tab) => void handleCloseSessionTab(tab),
           bulkCloseActions
         })}
         onClose={() => setActionTarget(null)}

@@ -2026,6 +2026,9 @@ function getChecksLabel(item: GitHubWorkItem): string {
   if (summary.pending > 0) {
     return `${summary.pending} pending`
   }
+  if (summary.neutral > 0) {
+    return `${summary.neutral} unresolved`
+  }
   return `${summary.passed}/${summary.total} passed`
 }
 

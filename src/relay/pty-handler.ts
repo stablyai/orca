@@ -39,6 +39,7 @@ import {
   mergeGitConfigEnvProtocol
 } from '../shared/git-credential-prompt-env'
 import { isTuiAgent } from '../shared/tui-agent-config'
+import type { TuiAgent } from '../shared/types'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
 import {
@@ -338,6 +339,7 @@ export type PtyEnvAugmenter = (ctx: {
   shell: string
   env: Record<string, string>
   command?: string
+  launchAgent?: TuiAgent
 }) => Record<string, string>
 
 export type RelayPtyWorktreeRemovalCoordinator = {
@@ -507,7 +509,13 @@ export class PtyHandler {
   /** Build augmented spawn env; augmenter values win over process.env/renderer env. Shared by spawn()/revive() so precedence can't drift. */
   private buildSpawnEnv(
     rendererEnv: Record<string, string> | undefined,
-    ctx: { id: string; paneKey?: string; shell: string; command?: string },
+    ctx: {
+      id: string
+      paneKey?: string
+      shell: string
+      command?: string
+      launchAgent?: TuiAgent
+    },
     envToDelete: readonly string[] = []
   ): Record<string, string> {
     const baseEnv = mergeGitConfigEnvProtocol(
@@ -1324,16 +1332,21 @@ export class PtyHandler {
     const terminalHandle =
       typeof env?.ORCA_TERMINAL_HANDLE === 'string' ? env.ORCA_TERMINAL_HANDLE : undefined
     const command = typeof params.command === 'string' ? params.command : undefined
+    const launchAgent = isTuiAgent(params.launchAgent) ? params.launchAgent : undefined
     const terminalWindowsWslDistro =
       typeof params.terminalWindowsWslDistro === 'string' ? params.terminalWindowsWslDistro : null
     const commandDelivery = params.commandDelivery === 'provider' ? 'provider' : 'renderer'
     const shouldProviderDeliverCommand = commandDelivery === 'provider' && command !== undefined
-    const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command }, envToDelete)
+    const spawnEnv = this.buildSpawnEnv(
+      env,
+      { id, paneKey, shell, command, launchAgent },
+      envToDelete
+    )
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
     // Why: SSH PTYs bypass main's host-env builder, so apply the guard after the relay merges its authoritative env.
     const gitCredentialPromptGuarded = applyTerminalGitCredentialPromptGuard(spawnEnv, {
       launchCommand: launchCommandHint,
-      isUnattended: isTuiAgent(params.launchAgent),
+      isUnattended: launchAgent !== undefined,
       platform: process.platform
     })
     const shouldEmitShellReadyMarker =

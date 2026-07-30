@@ -146,10 +146,17 @@ export type RuntimeSyncWindowGraph = {
   mobileSessionTabs?: RuntimeMobileSessionTabsSnapshot[]
 }
 
+export type RuntimeNativeChatLaunchDraftResolution = {
+  tabId: string
+  text: string
+  createdAt: number
+}
+
 export type RuntimeSyncWindowGraphResult = RuntimeStatus & {
   /** Main owns terminal handles/dispatches, so renderer graph sync returns the
    *  parent metadata needed by title-derived agent rows without name guessing. */
   agentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
+  nativeChatLaunchDraftResolutions?: RuntimeNativeChatLaunchDraftResolution[]
 }
 
 export type RuntimeMobileSessionTerminalTab = {
@@ -174,6 +181,8 @@ export type RuntimeMobileSessionTerminalTab = {
   /** Launch context delivered only into the TUI input as an unsent draft; the
    *  mobile chat composer adopts it so the context isn't invisible in chat. */
   launchDraft?: string
+  /** Identity of the launch draft text, used to retire only the adopted generation. */
+  launchDraftCreatedAt?: number
   isActive: boolean
 }
 

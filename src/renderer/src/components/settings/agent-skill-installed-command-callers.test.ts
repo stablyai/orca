@@ -24,10 +24,24 @@ const updateCapableCallers = new Map<string, readonly string[]>([
     ['COMPUTER_USE_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
   ],
   [
-    // Why: the Linear settings section shares the update-target resolver so
-    // legacy-only installs keep the command and freshness identity aligned.
+    // Shared hook owns update-target resolution for Linear settings + Task Sources.
+    'src/renderer/src/components/settings/use-linear-agent-skill-setup.ts',
+    [
+      'getLinearAgentSkillUpdateTarget',
+      'updateTarget.command',
+      // The builder also reads the focused runtime environment, so memoizing
+      // either command on the runtime alone serves a stale Windows host command.
+      'const installCommand = activeSkillRuntime.installDisabledReason',
+      'const updateCommand = activeSkillRuntime.installDisabledReason'
+    ]
+  ],
+  [
     'src/renderer/src/components/settings/LinearAgentSkillPane.tsx',
-    ['getLinearAgentSkillUpdateTarget', 'installedCommand={updateCommand}']
+    ['installedCommand={skillSetup.updateCommand}']
+  ],
+  [
+    'src/renderer/src/components/settings/TaskSourceLinearSetup.tsx',
+    ['installedCommand={skillSetup.updateCommand}']
   ],
   [
     'src/renderer/src/components/settings/EphemeralVmsPane.tsx',
@@ -94,10 +108,12 @@ const installOnlyCallers = new Map<string, readonly string[]>([
 const directPanelCallers = new Set([
   // BrowserUsePane and LinearAgentSkillSetupPrompt delegate through child setup
   // components that forward installedCommand and are validated separately above.
+  // use-linear-agent-skill-setup owns the update-target resolver but is not a panel host.
   ...[...updateCapableCallers.keys()].filter(
     (relativePath) =>
       relativePath !== 'src/renderer/src/components/settings/BrowserUsePane.tsx' &&
-      relativePath !== 'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx'
+      relativePath !== 'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx' &&
+      relativePath !== 'src/renderer/src/components/settings/use-linear-agent-skill-setup.ts'
   ),
   ...installOnlyCallers.keys()
 ])

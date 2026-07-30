@@ -1,4 +1,4 @@
-import type { GitHubPRCheckSummary, PRCheckDetail } from '../../../shared/types'
+import type { PRCheckDetail, ProviderCheckSummary } from '../../../shared/types'
 
 function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['conclusion']> {
   return check.conclusion ?? 'pending'
@@ -12,19 +12,22 @@ function isPendingCheck(check: PRCheckDetail): boolean {
   )
 }
 
-export function deriveTaskPagePRCheckSummary(checks: PRCheckDetail[]): GitHubPRCheckSummary {
+export function deriveTaskPagePRCheckSummary(checks: PRCheckDetail[]): ProviderCheckSummary {
   if (checks.length === 0) {
-    return { state: 'none', total: 0, passed: 0, failed: 0, pending: 0 }
+    return { state: 'none', total: 0, passed: 0, failed: 0, pending: 0, neutral: 0 }
   }
 
   let passed = 0
   let failed = 0
   let pending = 0
+  let neutral = 0
 
   for (const check of checks) {
     const conclusion = getCheckConclusion(check)
-    if (conclusion === 'success' || conclusion === 'neutral' || conclusion === 'skipped') {
+    if (conclusion === 'success' || conclusion === 'skipped') {
       passed += 1
+    } else if (conclusion === 'neutral') {
+      neutral += 1
     } else if (
       conclusion === 'failure' ||
       conclusion === 'timed_out' ||
@@ -37,15 +40,16 @@ export function deriveTaskPagePRCheckSummary(checks: PRCheckDetail[]): GitHubPRC
     } else if (isPendingCheck(check)) {
       pending += 1
     } else {
-      passed += 1
+      neutral += 1
     }
   }
 
   return {
-    state: failed > 0 ? 'failure' : pending > 0 ? 'pending' : 'success',
+    state: failed > 0 ? 'failure' : pending > 0 ? 'pending' : neutral > 0 ? 'neutral' : 'success',
     total: checks.length,
     passed,
     failed,
-    pending
+    pending,
+    neutral
   }
 }

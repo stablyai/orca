@@ -756,7 +756,7 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
     expect(seededDraftFor('tab-1')?.text).toBe(ISSUE_URL)
   })
 
-  it('leaves a multi-line draft in the terminal only', async () => {
+  it('mirrors a multi-line draft into chat', async () => {
     await submitFolderWorkspaceCreate({
       projectGroup: makeProjectGroup(),
       name: '',
@@ -770,8 +770,6 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
       onOpenChange: vi.fn()
     })
 
-    // Terminal still gets it; the chat mirror is withheld until multi-line send
-    // is safe, and decideInitialAgentTabViewMode keeps this launch in terminal.
     expect(mocks.ensureAgentStartupInTerminal).toHaveBeenCalledWith(
       expect.objectContaining({
         startup: expect.objectContaining({
@@ -779,7 +777,7 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
         })
       })
     )
-    expect(seededDraftFor('tab-1')).toBeUndefined()
+    expect(seededDraftFor('tab-1')?.text).toBe(`Reproduce on Windows first\n\n${ISSUE_URL}`)
   })
 
   it('does not mirror an unlinked note, which is submitted rather than drafted', async () => {
@@ -832,9 +830,9 @@ describe('folder-workspace draft: seeded set == chat-opening set', () => {
   // view-mode gate, and both must agree with what the composer actually holds.
   it.each([
     ['argv-prefill', 'claude' as const, '', true],
-    ['argv-prefill multi-line', 'claude' as const, 'Reproduce on Windows first', false],
+    ['argv-prefill multi-line', 'claude' as const, 'Reproduce on Windows first', true],
     ['startup-paste', 'codex' as const, '', true],
-    ['startup-paste multi-line', 'codex' as const, 'Reproduce on Windows first', false]
+    ['startup-paste multi-line', 'codex' as const, 'Reproduce on Windows first', true]
   ])('%s', async (_label, quickAgent, note, expectMirrored) => {
     await submitFolderWorkspaceCreate({
       projectGroup: makeProjectGroup(),

@@ -4,6 +4,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import { createIdentityFilteredAgent } from './ssh-agent-identity-filter'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+import { isOpenSshConfigBackedTarget } from './system-ssh-args'
 
 // Why: ssh2 only tries keys that are explicitly provided. Users with keys in
 // standard locations (e.g. ~/.ssh/id_ed25519) but no SSH agent running would
@@ -62,12 +63,12 @@ function resolveDefaultAgentSocket(): string | undefined {
 }
 
 export function resolveAgentSocket(
-  target: Pick<SshTarget, 'identityAgent' | 'configHost'>,
+  target: Pick<SshTarget, 'identityAgent' | 'configHost' | 'source' | 'host'>,
   resolved: Pick<SshResolvedConfig, 'identityAgent'> | null
 ): string | undefined {
   // Why: imported config-host targets may contain raw OpenSSH tokens like %d.
   // ssh -G resolves those tokens, so its value must win when available.
-  const configuredIdentityAgent = target.configHost
+  const configuredIdentityAgent = isOpenSshConfigBackedTarget(target)
     ? (resolved?.identityAgent ?? target.identityAgent)
     : (target.identityAgent ?? resolved?.identityAgent)
   if (configuredIdentityAgent != null) {
@@ -80,17 +81,30 @@ export function resolveAgentSocket(
   return resolveDefaultAgentSocket()
 }
 
-function resolveExplicitPrivateKeyPath(
+function resolveExplicitPrivateKeyPaths(
   target: SshTarget,
   resolved: SshResolvedConfig | null
-): string | undefined {
-  const resolvedIdentity = resolved?.identityFile?.[0]
-  return (
-    target.identityFile ||
-    (resolvedIdentity && !EXPANDED_DEFAULT_KEY_PATHS.includes(resolvedIdentity)
-      ? resolvedIdentity
-      : undefined)
+): string[] {
+  const resolvedIdentities = (resolved?.identityFile ?? []).filter(
+    (identityFile) => !EXPANDED_DEFAULT_KEY_PATHS.includes(identityFile)
   )
+  if (isOpenSshConfigBackedTarget(target) && resolved) {
+    return resolvedIdentities
+  }
+  if (target.identityFile) {
+    return [target.identityFile]
+  }
+  return resolvedIdentities
+}
+
+function resolvePrivateKeyPaths(target: SshTarget, resolved: SshResolvedConfig | null): string[] {
+  if (isOpenSshConfigBackedTarget(target) && resolved) {
+    return resolved.identityFile
+  }
+  if (target.identityFile) {
+    return [target.identityFile]
+  }
+  return resolved?.identityFile ?? []
 }
 
 function readPrivateKey(keyPath: string): PrivateKeyFile | undefined {
@@ -102,25 +116,34 @@ function readPrivateKey(keyPath: string): PrivateKeyFile | undefined {
   }
 }
 
-function resolveExplicitPrivateKey(
-  target: SshTarget,
-  resolved: SshResolvedConfig | null
-): PrivateKeyFile | undefined {
-  const explicitKey = resolveExplicitPrivateKeyPath(target, resolved)
-  if (explicitKey) {
-    return readPrivateKey(explicitKey)
+function readPrivateKeys(keyPaths: string[]): PrivateKeyFile[] {
+  const keys: PrivateKeyFile[] = []
+  for (const keyPath of keyPaths) {
+    const key = readPrivateKey(keyPath)
+    if (key) {
+      keys.push(key)
+    }
   }
-  return undefined
+  return keys
 }
 
-export function resolvePrivateKey(
+function resolveExplicitPrivateKeys(
   target: SshTarget,
   resolved: SshResolvedConfig | null
-): PrivateKeyFile | undefined {
-  if (resolveExplicitPrivateKeyPath(target, resolved)) {
-    return resolveExplicitPrivateKey(target, resolved)
+): PrivateKeyFile[] {
+  return readPrivateKeys(resolveExplicitPrivateKeyPaths(target, resolved))
+}
+
+export function resolvePrivateKeys(
+  target: SshTarget,
+  resolved: SshResolvedConfig | null
+): PrivateKeyFile[] {
+  const keyPaths = resolvePrivateKeyPaths(target, resolved)
+  if (keyPaths.length > 0 || resolved || target.identityFile) {
+    return readPrivateKeys(keyPaths)
   }
-  return findDefaultKeyFile()
+  const defaultKey = findDefaultKeyFile()
+  return defaultKey ? [defaultKey] : []
 }
 
 function isUnencryptedPrivateKey(contents: Buffer): boolean {
@@ -132,19 +155,27 @@ function isUnencryptedPrivateKey(contents: Buffer): boolean {
   return keys.some((key) => key && typeof key.isPrivateKey === 'function' && key.isPrivateKey())
 }
 
-export function resolveUnencryptedExplicitPrivateKey(
+export function resolveUnencryptedExplicitPrivateKeys(
   target: SshTarget,
   resolved: SshResolvedConfig | null
-): PrivateKeyFile | undefined {
-  const key = resolveExplicitPrivateKey(target, resolved)
-  if (!key) {
-    return undefined
+): PrivateKeyFile[] {
+  return resolveExplicitPrivateKeys(target, resolved).filter((key) =>
+    isUnencryptedPrivateKey(key.contents)
+  )
+}
+
+export function findEncryptedPrivateKeyPath(keys: PrivateKeyFile[]): string | undefined {
+  for (const key of keys) {
+    const parsed = utils.parseKey(key.contents) as ParsedKey | ParsedKey[] | Error
+    if (parsed instanceof Error && /passphrase|encrypted key|bad decrypt/i.test(parsed.message)) {
+      return key.path
+    }
   }
-  return isUnencryptedPrivateKey(key.contents) ? key : undefined
+  return undefined
 }
 
 function resolveIdentityFilePaths(target: SshTarget, resolved: SshResolvedConfig | null): string[] {
-  if (target.configHost && resolved?.identityFile?.length) {
+  if (isOpenSshConfigBackedTarget(target) && resolved) {
     return resolved.identityFile
   }
   if (target.identityFile) {

@@ -735,7 +735,7 @@ describe('staged background worktree creation', () => {
 
   it.each([
     ['mirrorable local Grok', 'grok', 'https://github.com/o/r/issues/12', 'chat'],
-    ['multi-line Claude', 'claude', 'note\nhttps://github.com/o/r/issues/12', 'terminal']
+    ['multi-line Claude', 'claude', 'note\nhttps://github.com/o/r/issues/12', 'chat']
   ] as const)('passes %s draft mode to backend startup', async (_label, agent, draft, viewMode) => {
     store.settings.experimentalNativeChat = true
     store.settings.openAgentTabsInChatByDefault = true

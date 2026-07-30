@@ -324,6 +324,7 @@ import {
   type RuntimeMobileSessionTabsRemovedResult,
   type RuntimeMobileSessionTabsResult,
   type RuntimeMobileSessionTabsSnapshot,
+  type RuntimeNativeChatLaunchDraftResolution,
   type RuntimeSessionTabCloseReason,
   type RuntimeBrowserDriverState,
   type RuntimeTerminalDriverState,
@@ -1789,6 +1790,10 @@ type RuntimeNotifier = {
   // and so a future write coordinator can use the same signal as scheduling
   // input. See docs/mobile-presence-lock.md.
   terminalDriverChanged(ptyId: string, driver: DriverState): void
+  nativeChatLaunchDraftResolved?(
+    tabId: string,
+    resolution: { text: string; createdAt: number }
+  ): void
   browserDriverChanged?(browserPageId: string, driver: RuntimeBrowserDriverState): void
 }
 
@@ -2594,6 +2599,12 @@ type LayoutQueueEntry = {
   }[]
 }
 
+type NativeChatLaunchDraftResolutionTombstone = RuntimeNativeChatLaunchDraftResolution & {
+  worktreeId: string
+}
+
+const MAX_NATIVE_CHAT_LAUNCH_DRAFT_RESOLUTION_TOMBSTONES = 200
+
 async function hasLocalWorktreeBaseRef(
   repoPath: string,
   baseRef: string,
@@ -2714,6 +2725,10 @@ export class OrcaRuntimeService {
   private ptyController: RuntimePtyController | null = null
   private notifier: RuntimeNotifier | null = null
   private clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
+  private nativeChatLaunchDraftResolutionByTabId = new Map<
+    string,
+    NativeChatLaunchDraftResolutionTombstone
+  >()
   private worktreeLifecycleListeners = new Set<(event: RuntimeWorktreeLifecycleEvent) => void>()
   private forkBackfillStarted = false
   private agentBrowserBridge: AgentBrowserBridge | null = null
@@ -4717,10 +4732,144 @@ export class OrcaRuntimeService {
     return events
   }
 
+  getNativeChatLaunchDraftResolutionClientEventSnapshot(): Extract<
+    RuntimeClientEvent,
+    { type: 'nativeChatLaunchDraftResolved' }
+  >[] {
+    return [...this.nativeChatLaunchDraftResolutionByTabId.values()]
+      .sort((a, b) => a.tabId.localeCompare(b.tabId))
+      .map(({ tabId, text, createdAt }) => ({
+        type: 'nativeChatLaunchDraftResolved',
+        tabId,
+        text,
+        createdAt
+      }))
+  }
+
   private emitClientEvent(event: RuntimeClientEvent): void {
     // Why: a throwing subscriber here once escaped acquireWorktreeTerminalSpawn after it took the
     // per-worktree terminal mutation, leaking it and wedging that worktree's sleep until restart.
     notifyRuntimeListeners(this.clientEventListeners, (listener) => listener(event), 'client-event')
+  }
+
+  notifyNativeChatLaunchDraftResolved(
+    handle: string,
+    resolution: { text: string; createdAt: number }
+  ): void {
+    const owner = this.resolveNativeChatLaunchDraftOwner(handle)
+    if (!owner) {
+      return
+    }
+    const tombstone = { ...owner, ...resolution }
+    this.nativeChatLaunchDraftResolutionByTabId.delete(owner.tabId)
+    this.nativeChatLaunchDraftResolutionByTabId.set(owner.tabId, tombstone)
+    while (
+      this.nativeChatLaunchDraftResolutionByTabId.size >
+      MAX_NATIVE_CHAT_LAUNCH_DRAFT_RESOLUTION_TOMBSTONES
+    ) {
+      const oldestTabId = this.nativeChatLaunchDraftResolutionByTabId.keys().next().value
+      if (typeof oldestTabId !== 'string') {
+        break
+      }
+      this.nativeChatLaunchDraftResolutionByTabId.delete(oldestTabId)
+    }
+    this.retireResolvedNativeChatLaunchDraftFromMobileSnapshot(tombstone)
+    this.notifier?.nativeChatLaunchDraftResolved?.(owner.tabId, resolution)
+    this.emitClientEvent({
+      type: 'nativeChatLaunchDraftResolved',
+      tabId: owner.tabId,
+      ...resolution
+    })
+  }
+
+  private resolveNativeChatLaunchDraftOwner(
+    handle: string
+  ): { tabId: string; worktreeId: string } | null {
+    const record = this.handles.get(handle)
+    if (!record) {
+      return null
+    }
+    if (!record.tabId.startsWith('pty:')) {
+      return { tabId: record.tabId, worktreeId: record.worktreeId }
+    }
+    const pty = record.ptyId ? this.ptysById.get(record.ptyId) : null
+    const tabId =
+      pty?.tabId && !pty.tabId.startsWith('pty:')
+        ? pty.tabId
+        : parsePaneKey(pty?.paneKey ?? '')?.tabId
+    if (!pty || !tabId || tabId.startsWith('pty:')) {
+      return null
+    }
+    return { tabId, worktreeId: pty.worktreeId }
+  }
+
+  private retireResolvedNativeChatLaunchDraftFromMobileSnapshot(
+    resolution: NativeChatLaunchDraftResolutionTombstone
+  ): void {
+    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
+      if (!runtimeWorktreeIdsEqual(worktreeId, resolution.worktreeId)) {
+        continue
+      }
+      const next = this.applyNativeChatLaunchDraftResolutionFence(snapshot)
+      if (next === snapshot) {
+        return
+      }
+      this.mobileSessionTabsByWorktree.set(worktreeId, {
+        ...next,
+        snapshotVersion: snapshot.snapshotVersion + 1
+      })
+      this.mobileSessionTabsNotifyCoalescer.schedule(worktreeId)
+      return
+    }
+  }
+
+  private applyNativeChatLaunchDraftResolutionFence(
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsSnapshot {
+    let changed = false
+    const tabs = snapshot.tabs.map((tab) => {
+      if (tab.type !== 'terminal') {
+        return tab
+      }
+      const resolution = this.nativeChatLaunchDraftResolutionByTabId.get(tab.parentTabId)
+      if (
+        !resolution ||
+        !runtimeWorktreeIdsEqual(snapshot.worktree, resolution.worktreeId) ||
+        tab.launchDraft !== resolution.text ||
+        tab.launchDraftCreatedAt !== resolution.createdAt
+      ) {
+        return tab
+      }
+      changed = true
+      const next = { ...tab }
+      delete next.launchDraft
+      delete next.launchDraftCreatedAt
+      return next
+    })
+    return changed ? { ...snapshot, tabs } : snapshot
+  }
+
+  private reconcileNativeChatLaunchDraftResolutionTombstones(
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): void {
+    for (const [tabId, resolution] of this.nativeChatLaunchDraftResolutionByTabId) {
+      if (!runtimeWorktreeIdsEqual(snapshot.worktree, resolution.worktreeId)) {
+        continue
+      }
+      const surfaces = snapshot.tabs.filter(
+        (tab): tab is RuntimeMobileSessionTerminalTab =>
+          tab.type === 'terminal' && tab.parentTabId === tabId
+      )
+      if (
+        surfaces.length === 0 ||
+        !surfaces.some(
+          (tab) =>
+            tab.launchDraft === resolution.text && tab.launchDraftCreatedAt === resolution.createdAt
+        )
+      ) {
+        this.nativeChatLaunchDraftResolutionByTabId.delete(tabId)
+      }
+    }
   }
 
   private notifyWorktreesChanged(repoId: string): void {
@@ -5186,9 +5335,14 @@ export class OrcaRuntimeService {
     }
 
     const agentOrchestrationByPaneKey = this.buildAgentOrchestrationByPaneKey()
+    const nativeChatLaunchDraftResolutions =
+      this.getNativeChatLaunchDraftResolutionClientEventSnapshot().map(
+        ({ tabId, text, createdAt }) => ({ tabId, text, createdAt })
+      )
     return {
       ...this.getStatus(),
-      ...(agentOrchestrationByPaneKey ? { agentOrchestrationByPaneKey } : {})
+      ...(agentOrchestrationByPaneKey ? { agentOrchestrationByPaneKey } : {}),
+      ...(nativeChatLaunchDraftResolutions.length > 0 ? { nativeChatLaunchDraftResolutions } : {})
     }
   }
 
@@ -12107,8 +12261,33 @@ export class OrcaRuntimeService {
     return this.requireAccountServices().claudeAccounts.removeAccount(accountId)
   }
 
+  // Why: register a managed Claude account from a CLAUDE_CONFIG_DIR the caller
+  // already logged into. Lets the `orca account add` CLI drive `claude login` in
+  // the user's terminal on a headless host, then capture the credentials here —
+  // the desktop GUI's interactive add flow is unreachable over a remote runtime.
+  addClaudeAccountFromConfigDir(
+    configDir: string,
+    options?: {
+      runtime?: 'host' | 'wsl'
+      wslDistro?: string | null
+      previousLegacyCredentialsSha256?: string | null
+    }
+  ): Promise<ClaudeRateLimitAccountsState> {
+    return this.requireAccountServices().claudeAccounts.addAccountFromConfigDir(configDir, options)
+  }
+
   removeCodexAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
     return this.requireAccountServices().codexAccounts.removeAccount(accountId)
+  }
+
+  // Why: Codex counterpart of addClaudeAccountFromConfigDir — register a managed
+  // Codex account from a CODEX_HOME the caller already logged into, so headless
+  // hosts can add accounts via `orca account add --agent codex`.
+  addCodexAccountFromHome(
+    sourceHome: string,
+    target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }
+  ): Promise<CodexRateLimitAccountsState> {
+    return this.requireAccountServices().codexAccounts.addAccountFromHome(sourceHome, target)
   }
 
   // Why: rate-limit polling fires every 5 minutes and on account switch.
@@ -27890,7 +28069,9 @@ export class OrcaRuntimeService {
       ) {
         continue
       }
-      const fencedSnapshot = this.applyMobileSessionRetirementFences(snapshot)
+      this.reconcileNativeChatLaunchDraftResolutionTombstones(snapshot)
+      const launchDraftFencedSnapshot = this.applyNativeChatLaunchDraftResolutionFence(snapshot)
+      const fencedSnapshot = this.applyMobileSessionRetirementFences(launchDraftFencedSnapshot)
       const nextSnapshot = this.mergePreservedHeadlessMobileSessionTabs(fencedSnapshot, existing)
       // Why: clients drop same-epoch frames whose version isn't strictly newer,
       // and main-local touches may already have emitted a higher version than
@@ -28505,6 +28686,9 @@ export class OrcaRuntimeService {
         ...(tab.isPinned ? { isPinned: true } : {}),
         ...(tab.viewMode ? { viewMode: tab.viewMode } : {}),
         ...(tab.launchDraft ? { launchDraft: tab.launchDraft } : {}),
+        ...(tab.launchDraftCreatedAt !== undefined
+          ? { launchDraftCreatedAt: tab.launchDraftCreatedAt }
+          : {}),
         isActive: tab.isActive,
         ...(terminalHandle
           ? { status: 'ready' as const, terminal: terminalHandle }

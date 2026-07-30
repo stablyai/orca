@@ -616,7 +616,7 @@
             "readTicket": "Read the linked ticket",
             "postUpdate": "Post a progress update",
             "moveState": "Move the ticket forward",
-            "attachPr": "Attach the PR link",
+            "attachPr": "レビューリンクを添付",
             "triageFollowups": "Triage and create follow-ups",
             "readTicketSummary": "Pull the linked Linear issue's full context before starting work.",
             "readTicketPrompt": "Use {{value0}} to read the linked Linear issue for this worktree, then summarize the goal and acceptance criteria before you start.",
@@ -624,8 +624,8 @@
             "postUpdatePrompt": "Use {{value0}} to post a completion update on the linked Linear issue with what changed and how it was verified.",
             "moveStateSummary": "Advance the Linear workflow state as the work progresses.",
             "moveStatePrompt": "Use {{value0}} to move the linked Linear issue to In Review now that the change is ready.",
-            "attachPrSummary": "Link the pull request to the Linear issue when you open it.",
-            "attachPrPrompt": "Use {{value0}} to attach this PR to the linked Linear issue with a PR link.",
+            "attachPrSummary": "プルリクエストまたはマージリクエストを作成したら Linear の課題にリンクします。",
+            "attachPrPrompt": "{{value0}} を使って、このプルリクエストまたはマージリクエストをリンク済みの Linear 課題に添付してください。",
             "triageFollowupsSummary": "Set assignee, priority, or estimate, and file parented follow-up tickets.",
             "triageFollowupsPrompt": "Use {{value0}} to triage the linked Linear issue — set priority and estimate — and create a parented follow-up ticket for the deferred cleanup."
           }
@@ -790,9 +790,10 @@
         "devSearchKeywordNotification": "notification",
         "projectHostsSummary": "{{value0}} 台のホスト",
         "linearTitle": "Linear",
-        "linearDescription": "Give agents the skill to read and update your linked Linear tickets.",
+        "linearDescription": "Orca での Linear の仕組み、セットアップチェックリスト、エージェントスキル、プロンプト例。",
         "pluginsTitle": "プラグイン",
-        "pluginsDescription": "試験的な Orca プラグインをインストールして管理します。"
+        "pluginsDescription": "試験的な Orca プラグインをインストールして管理します。",
+        "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
@@ -5273,7 +5274,9 @@
           "copyCommandAria": "コマンドをコピー",
           "runCommandDescription": "Enter を押してコマンドを実行します。",
           "5f818f12ab": "準備中...",
-          "4c05b9d7cb": "セットアップ用ターミナルを準備しています。"
+          "4c05b9d7cb": "セットアップ用ターミナルを準備しています。",
+          "installLabel": "インストール",
+          "updateLabel": "更新"
         },
         "AgentsPane": {
           "d83834f5e6": "インストールされている agents を検出しています…",
@@ -6861,7 +6864,8 @@
           "dev": "Dev Tools",
           "devDescription": "Dev-only tools for exercising UI states.",
           "linearTitle": "Linear",
-          "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
+          "linearDescription": "Orca での Linear の仕組み、セットアップチェックリスト、エージェントスキル、プロンプト例。",
+          "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。"
         },
         "SettingsFormControls": {
           "42a4d15a30": "一致するフォントがありません。",
@@ -7090,18 +7094,34 @@
           "53e9aabfc0": "利用可能な場合は OpenSSH の多重化を使用します。独自の SSH 制限があるホストではオフにしてください。"
         },
         "TasksPane": {
-          "3a72b9745e": "[タスク] ページとサイドバーのショートカットに表示するタスク プロバイダーを選択します。",
           "f71d8a9dd3": "タスクプロバイダー",
-          "71644aba56": "[タスク] ページのソース ピッカーとサイドバーのショートカットに表示するタスク プロバイダーを選択します。少なくとも 1 つのプロバイダーが表示されたままでなければなりません。",
-          "93e72ef659": "タスクソース",
-          "8e1305fcc6": "タスクのソース ピッカーとサイドバーのショートカットに Jira を表示します。",
           "6b23a34f6d": "Jira",
-          "e4170c9615": "タスクのソース ピッカーとサイドバーのショートカットに Linear を表示します。",
           "09ae2d7c51": "Linear",
-          "dd67a1b6e1": "タスクのソース ピッカーとサイドバーのショートカットに GitLab を表示します。",
           "7c5d7fdc20": "GitLab",
-          "1db47236cd": "タスクのソース ピッカーとサイドバーのショートカットに GitHub を表示します。",
-          "e14063e727": "GitHub"
+          "e14063e727": "GitHub",
+          "connectProviderTitle": "{{provider}} に接続",
+          "connectCodeHostDescription": "Orca が課題を読み込めるように、連携で CLI をインストールして認証します。",
+          "connectionCheckUnavailable": "Orca はこの接続を確認できませんでした。もう一度試すか、連携を開いてセットアップの詳細を確認してください。",
+          "retryConnection": "もう一度試す",
+          "openIntegrations": "連携",
+          "connectInIntegrations": "連携で設定",
+          "connectJiraTitle": "Jira に接続",
+          "connectJiraDescription": "API トークンまたは PAT を使って Jira Cloud サイトまたはセルフホスト環境を追加します。",
+          "manageJira": "キーを管理",
+          "addJira": "Jira アクセスを追加",
+          "githubDescription": "GitHub の Issue を参照し、そこからワークスペースを開始します。",
+          "gitlabDescription": "GitLab の Issue を参照し、そこからワークスペースを開始します。",
+          "linearDescription": "Linear に接続し、エージェントスキルをインストールして、タスクに表示します。",
+          "jiraDescription": "Jira Cloud またはセルフホスト版 Jira に接続し、タスクに表示します。",
+          "setupTitle": "タスク管理のセットアップ",
+          "setupDescription": "各プロバイダーの接続と表示設定を 1 か所で完了できます。Linear では、エージェントが課題を読み書きするためのスキルも必要です。少なくとも 1 つのプロバイダーを表示する必要があります。",
+          "incompleteBannerTitle": "表示中の一部のプロバイダーは設定が必要です",
+          "incompleteBannerBody": "使用しないプロバイダーを非表示にするか、カードを展開して手順を完了してください。",
+          "providersDescription": "各カードで接続、タスクへの表示、Linear の場合はスキル設定を進められます。",
+          "integrationsHint": "すべてのプロバイダーの認証情報は次の場所でも管理できます：",
+          "integrationsLink": "連携",
+          "skillHint": "。Linear の接続後、使用例は設定 → Linear で確認できます。",
+          "incompleteBannerBodyWithLinear": "使用しないプロバイダーを非表示にするか、カードを展開して手順を完了してください。Linear では API アクセス、エージェントスキル、タスクへの表示が必要です。"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "ペイン分割線の太さ。",
@@ -8746,8 +8766,12 @@
             "3d81c26d78": "ソース",
             "cf0e3e0c2f": "プロバイダー",
             "2ec54bee51": "タスク",
-            "765f0c544d": "[タスク] ページとサイドバーのショートカットに表示するタスク プロバイダーを選択します。",
-            "5b8e4aace5": "タスクプロバイダー"
+            "5b8e4aace5": "タスクプロバイダー",
+            "providersDescription": "タスクプロバイダーを接続し、Linear エージェントスキルをインストールして、タスクに表示する項目を選択します。",
+            "setup": "セットアップ",
+            "apiKey": "APIキー",
+            "skill": "スキル",
+            "connect": "接続"
           }
         },
         "terminal": {
@@ -9487,13 +9511,13 @@
                   "notInstalled": "未インストール",
                   "recheck": "再確認",
                   "installedDescription": "エージェントスキルがインストールされました。更新するには以下を実行してください：",
-                  "description": "エージェントにLinearタスクの読み取りと編集を許可します。",
+                  "description": "エージェントが Linear の課題を読み書きできるようにします。接続、スキル、表示設定を含むガイドは、設定 → タスクソースにあります。",
                   "copyCommand": "コマンドをコピー"
                 }
               },
               "search": {
                 "title": "Linear",
-                "description": "Give agents the skill to read and update your linked Linear tickets."
+                "description": "Linear スキルの状態、使用例、タスクソース設定へのリンク。"
               }
             }
           }
@@ -9582,15 +9606,14 @@
         },
         "LinearAgentSkillPane": {
           "title": "Linear",
-          "description": "Give agents the skill to read and update your linked Linear tickets.",
-          "skillTitle": "Linear skill",
-          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca.",
-          "howToUse": "How to use it",
-          "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
-          "terminalTitle": "Linear skill setup",
-          "terminalAriaLabel": "Linear skill install terminal",
-          "manageConnectionHint": "Review connected Linear workspaces and API keys in",
-          "manageConnectionLink": "Integrations settings"
+          "description": "Orca で Linear の課題を参照し、リンク済みワークスペースを開始して、/orca-linear でエージェントから更新できます。",
+          "skillTitle": "Linear スキル",
+          "howToUse": "プロンプト例",
+          "howToUseDescription": "カードをクリックするとプロンプトをコピーできます。スキルのインストール後、Linear にリンクしたワークスペースで使用してください。",
+          "terminalTitle": "Linear スキルのセットアップ",
+          "terminalAriaLabel": "Linear スキルのインストールターミナル",
+          "manageConnectionHint": "接続済みの Linear ワークスペースと API キーは次の場所で確認できます：",
+          "manageConnectionLink": "連携"
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
@@ -9906,6 +9929,69 @@
             "logs": "プラグインログ",
             "development": "開発プラグイン"
           }
+        },
+        "LinearAgentSkillGuide": {
+          "setupConnectTitle": "1. Linear に接続",
+          "setupConnectBody": "Orca が課題を一覧表示し、リンク済みワークスペースを開くための個人 API キー。",
+          "manageKeys": "キーを管理",
+          "addAccess": "アクセスを追加",
+          "setupSkillTitle": "2. エージェントスキルをインストール",
+          "setupSkillBody": "エージェントが /orca-linear で課題の参照、更新、トリアージ、プル／マージリクエストの添付を行えるようにします。",
+          "setupVisibleTitle": "3. タスクに Linear を表示",
+          "setupVisibleBody": "Linear をタスクのソース選択とサイドバーのショートカットに表示します。",
+          "openTaskSources": "タスクソース",
+          "setupTitle": "セットアップチェックリスト",
+          "setupBody": "タスクとエージェントの一連の流れには 3 つの手順が必要です。初回設定はタスクソースでも行えます。",
+          "setupReady": "設定完了",
+          "setupProgress": "{{total}} 件中 {{done}} 件が完了",
+          "notesTitle": "知っておくと便利",
+          "notesIntro": "Linear の接続とスキルのインストール後に役立つポイントです。",
+          "noteLinkedTitle": "Linear の課題から開始",
+          "noteLinkedBody": "タスクから作成したワークスペースでは課題がコンテキストとしてリンクされるため、課題操作が最もスムーズです。",
+          "noteSlashTitle": "/orca-linear を指定",
+          "noteSlashBody": "チャットで /orca-linear を使うか自然言語で依頼すると、そのターンでエージェントがスキルを読み込みます。",
+          "noteKeysTitle": "キーは実行環境ごとに保存",
+          "noteKeysBody": "API キーとワークスペースはアクティブな実行環境に保存されます。",
+          "noteVisibilityTitle": "非表示にしても接続は維持",
+          "noteVisibilityBody": "タスクソースで Linear を非表示にしても、選択肢から外れるだけで、キーやスキルは削除されません。",
+          "setupChecking": "確認中…"
+        },
+        "TaskSourceLinearSetup": {
+          "connectTitle": "Linear に接続",
+          "connectDescription": "Orca が課題を参照し、そのコンテキストでワークスペースを開けるように個人 API キーを追加します。",
+          "manageAccess": "キーを管理",
+          "addAccess": "Linear アクセスを追加",
+          "connectedHint": "ワークスペースとキーはアクティブな実行環境に保存されます。アクセスはいつでも追加できます。",
+          "recheck": "接続を再確認",
+          "skillTitle": "Linear エージェントスキルをインストール",
+          "skillDescription": "エージェントが /orca-linear で課題の参照、更新の投稿、状態変更、プル／マージリクエストの添付を行えるようにします。",
+          "skillBlocked": "先に Linear に接続してから、エージェント用スキルをインストールしてください。",
+          "skillPanelTitle": "Linear スキル",
+          "terminalTitle": "Linear スキルのセットアップ",
+          "terminalAriaLabel": "Linear スキルのインストールターミナル",
+          "showDescription": "Linear をタスクのソース選択とサイドバーのショートカットに表示します。"
+        },
+        "TaskSourceProviderCard": {
+          "statusChecking": "確認中…",
+          "statusReady": "準備完了",
+          "statusConnectRequired": "接続が必要",
+          "statusSkillRequired": "スキルが必要",
+          "statusUnavailable": "ステータスを確認できません",
+          "statusHidden": "タスクで非表示",
+          "statusIncomplete": "設定が必要",
+          "collapseSetup": "{{provider}} のセットアップ手順を折りたたむ",
+          "expandSetup": "{{provider}} のセットアップ手順を表示"
+        },
+        "TaskSourceShowInTasksStep": {
+          "shown": "表示中",
+          "show": "表示",
+          "hide": "非表示",
+          "hideProviderAction": "{{provider}} をタスクから非表示",
+          "showProviderAction": "{{provider}} をタスクに表示",
+          "lastProviderAction": "{{provider}} はタスクに表示されています。少なくとも 1 つのプロバイダーを表示する必要があります。",
+          "lastProviderHint": "タスクには少なくとも 1 つのプロバイダーを表示する必要があります。",
+          "title": "タスクに表示",
+          "description": "このプロバイダーをタスクのソース選択とサイドバーのショートカットに表示します。"
         },
         "RuntimeHostAccessForm": {
           "getLink": "もう一方のホストからアクセスリンクを取得",

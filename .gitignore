@@ -44,9 +44,15 @@ package-lock.json
 *~
 
 # OS
+# Keep these in step with isOsMetadataSkillEntryName (skill-package-identity.ts): both disk
+# walkers skip a plain file with one of these names, the git-tree producer does not, and
+# ignoring them here is what keeps `git add -A` from committing a stray one.
 *.stackdump
 .DS_Store
+._*
 Thumbs.db
+ehthumbs.db
+desktop.ini
 
 # Lint/cache
 .oxlintcache

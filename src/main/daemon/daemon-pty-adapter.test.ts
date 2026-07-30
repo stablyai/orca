@@ -1449,6 +1449,11 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(procs[0]).toHaveProperty('title')
       expect(procs[0].cwd).toBe('/repo/owned-before-osc7')
       expect(procs[0].worktreeId).toBe('repo::/repo/owned-before-osc7')
+      expect(adapter.getLastAuditObservation()).toMatchObject({
+        state: 'present',
+        reason: 'authenticated_inventory',
+        inventoryAuthority: 'authoritative'
+      })
     })
 
     it('reports the daemon session WSL owner', async () => {
@@ -1469,6 +1474,104 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           Object.defineProperty(process, 'platform', platform)
         }
       }
+    })
+
+    it('retains authenticated identity and reports replacement across a same-endpoint reconnect', async () => {
+      await adapter.listProcesses()
+      const firstIdentity = adapter.getLastAuthenticatedDaemonIdentity()
+      expect(firstIdentity).not.toBeNull()
+      const identityChanges: {
+        previous: NonNullable<typeof firstIdentity>
+        current: NonNullable<typeof firstIdentity>
+      }[] = []
+      adapter.onDaemonIdentityChanged(() => {
+        throw new Error('audit listener failed')
+      })
+      adapter.onDaemonIdentityChanged((event) => identityChanges.push(event))
+
+      await server.shutdown()
+      await waitFor(
+        () => !(adapter as unknown as { client: { isConnected(): boolean } }).client.isConnected()
+      )
+      expect(adapter.getLastAuthenticatedDaemonIdentity()).toEqual(firstIdentity)
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        launchNonce: 'replacement-launch',
+        startedAtMs: (firstIdentity?.startedAtMs ?? 0) + 10_000,
+        log: daemonLog,
+        spawnSubprocess: (opts) => {
+          lastSpawnOpts = opts
+          lastSubprocess = createMockSubprocess()
+          return lastSubprocess
+        }
+      })
+      await server.start()
+
+      await expect(adapter.listProcesses()).resolves.toEqual([])
+
+      expect(identityChanges).toEqual([
+        {
+          previous: firstIdentity,
+          current: {
+            pid: process.pid,
+            startedAtMs: (firstIdentity?.startedAtMs ?? 0) + 10_000,
+            launchNonce: 'replacement-launch'
+          }
+        }
+      ])
+      expect(adapter.getLastAuthenticatedDaemonIdentity()).toEqual(identityChanges[0]?.current)
+    })
+
+    it('isolates audit observation listeners from inventory and later listeners', async () => {
+      const laterListener = vi.fn()
+      adapter.onAuditEligibilityObservation(() => {
+        throw new Error('audit listener failed')
+      })
+      adapter.onAuditEligibilityObservation(laterListener)
+
+      await expect(adapter.listProcesses()).resolves.toEqual([])
+
+      expect(laterListener).toHaveBeenCalledOnce()
+      expect(laterListener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          state: 'present',
+          reason: 'authenticated_inventory'
+        })
+      )
+      expect(adapter.getLastAuditObservation()).toMatchObject({
+        state: 'present',
+        reason: 'authenticated_inventory'
+      })
+    })
+
+    it('audits token ENOENT only after an authenticated disconnect', async () => {
+      const observations: {
+        trigger: string
+        state: string
+        evidenceSources: readonly string[]
+      }[] = []
+      adapter.onAuditEligibilityObservation((observation) => observations.push(observation))
+      await adapter.listProcesses()
+
+      await server.shutdown()
+      await waitFor(
+        () => !(adapter as unknown as { client: { isConnected(): boolean } }).client.isConnected()
+      )
+      await expect(adapter.listProcesses()).rejects.toThrow()
+      await waitFor(() =>
+        observations.some(
+          (observation) => observation.trigger === 'token_missing_after_authenticated_disconnect'
+        )
+      )
+
+      expect(observations).toContainEqual(
+        expect.objectContaining({
+          trigger: 'token_missing_after_authenticated_disconnect',
+          state: 'unknown',
+          evidenceSources: expect.arrayContaining(['token_file'])
+        })
+      )
     })
   })
 
