@@ -176,11 +176,14 @@ function detectSkillsCliAgentKeys(): string[] {
 
 function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[] {
   const requested = flags.get('agent')
-  if (typeof requested === 'string' && requested.trim().length > 0) {
+  if (flags.has('agent') && typeof requested !== 'string') {
+    throw new RuntimeClientError('invalid_argument', 'Missing required --agent')
+  }
+  if (typeof requested === 'string') {
     // Why: one comma-separated value rather than a repeatable flag — `agent` is a
     // single-value flag on other commands and the repeatable set is process-wide,
     // so making it repeatable here would change how those parse a second --agent.
-    return [
+    const keys = [
       ...new Set(
         requested
           .split(',')
@@ -188,6 +191,12 @@ function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[]
           .filter(Boolean)
       )
     ]
+    // Why: a value like "," parses to nothing. Falling through to detection would
+    // be surprising, and emitting no --agent would restore the all-agents install.
+    if (keys.length === 0) {
+      throw new RuntimeClientError('invalid_argument', 'Missing required --agent')
+    }
+    return keys
   }
   const detected = detectSkillsCliAgentKeys()
   if (detected.length > 0) {
@@ -251,6 +260,18 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
       return
     }
 
+    // Why: this runs before target resolution because the answer belongs to the
+    // other machine — agents detected here would be the wrong host's, and a host
+    // that detects none would hide the forwarding problem behind that error.
+    if (process.env.ORCA_CLI_CWD) {
+      throw new RuntimeClientError(
+        'invalid_environment',
+        `orca skills ${verb} writes to the machine that runs it, but this shell forwards ` +
+          `orca to the Orca host. Run the same orca skills ${verb} command on the machine ` +
+          "you want it on, where it can detect that host's agents."
+      )
+    }
+
     const global = flags.get('local') !== true
     // Why: install scopes its targets; update only refreshes what is already placed.
     const agents = verb === 'install' ? resolveInstallAgentKeys(flags) : []
@@ -274,18 +295,6 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
         'invalid_argument',
         `orca skills ${verb} --json only supports --dry-run. Real ${verb}s stream ` +
           "npx's own output, which isn't JSON."
-      )
-    }
-
-    // Why: every other orca command RPCs into the app, so running on the host is
-    // right for them. This one writes skills to the caller's own disk, and the
-    // SSH relay and WSL bridge both forward argv to the Orca host — installing
-    // there instead would silently skip the machine the user is sitting on.
-    if (process.env.ORCA_CLI_CWD) {
-      throw new RuntimeClientError(
-        'invalid_environment',
-        `orca skills ${verb} writes to the machine that runs it, but this shell forwards ` +
-          `orca to the Orca host. Run this instead, on the machine you want it on:\n  ${command}`
       )
     }
 

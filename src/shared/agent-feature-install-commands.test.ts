@@ -52,14 +52,26 @@ describe('agent feature skill commands', () => {
     expect(ORCA_CLI_SKILL_UPDATE_COMMAND).not.toContain('-y')
   })
 
-  it('appends -y for an unattended run', () => {
-    expect(buildAgentFeatureSkillInstallCommand(['orca-cli'], { yes: true })).toBe(
-      'npx skills add https://github.com/stablyai/orca --skill orca-cli --global -y'
+  it('refuses to skip prompts without an install target', () => {
+    // Why: -y with no --agent is the one combination that makes `skills add`
+    // install into every agent it knows (~75). No caller may express it.
+    expect(() => buildAgentFeatureSkillInstallCommand(['orca-cli'], { yes: true })).toThrow(
+      'An install target is required when skipping prompts.'
+    )
+  })
+
+  it('appends -y and the targets for an unattended run', () => {
+    expect(
+      buildAgentFeatureSkillInstallCommand(['orca-cli'], { yes: true, agents: ['universal'] })
+    ).toBe(
+      'npx skills add https://github.com/stablyai/orca --skill orca-cli --global --agent universal -y'
     )
     expect(buildAgentFeatureSkillUpdateCommand(['orca-cli'], { global: false, yes: true })).toBe(
       'npx skills update orca-cli --project -y'
     )
-    expect(buildAgentFeatureSkillInstallArgs(['orca-cli'], { yes: true }).at(-1)).toBe('-y')
+    expect(
+      buildAgentFeatureSkillInstallArgs(['orca-cli'], { yes: true, agents: ['universal'] }).at(-1)
+    ).toBe('-y')
     expect(buildAgentFeatureSkillUpdateArgs(['orca-cli'], { yes: true }).at(-1)).toBe('-y')
   })
 

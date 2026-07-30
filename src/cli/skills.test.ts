@@ -641,15 +641,17 @@ describe('orca skills CLI', () => {
     expect(String(errorSpy.mock.calls[0]?.[0])).toContain('writes to the machine that runs it')
   })
 
-  it('still allows --dry-run through the host-forwarding shim', async () => {
+  it('refuses --dry-run through the host-forwarding shim too', async () => {
     vi.stubEnv('ORCA_CLI_CWD', '/home/alice/wt')
-    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     await main(['skills', 'install', '--skill', 'alpha', '--dry-run'], '/tmp/repo')
 
-    expect(stdoutText(stdoutSpy)).toContain('npx --yes skills add')
+    // Why: the targets are resolved from THIS host's agents, so a command printed
+    // here would name the wrong machine's agents. Point at the target instead.
     expect(spawnMock).not.toHaveBeenCalled()
-    expect(process.exitCode).toBeUndefined()
+    expect(process.exitCode).toBe(1)
+    expect(String(errorSpy.mock.calls[0]?.[0])).toContain('writes to the machine that runs it')
   })
 
   it('puts the resolved npx directory on the child PATH', async () => {
@@ -755,9 +757,12 @@ describe('orca skills CLI', () => {
     )
   })
 
-  it('never sends --agent for an update', async () => {
+  it('never sends --agent for an update, and never refuses on a bare host', async () => {
     const child = createFakeChild()
     spawnMock.mockReturnValue(child)
+    // Why: update refreshes what is already placed, so the no-agent refusal that
+    // guards install must not reach it.
+    detectCommandsMock.mockReturnValue(new Set<string>())
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
     const resultPromise = main(['skills', 'update', '--skill', 'alpha'], '/tmp/repo')
@@ -767,6 +772,32 @@ describe('orca skills CLI', () => {
 
     // Why: update refreshes what is already placed; it chooses no new targets.
     expect(spawnMock.mock.calls[0]?.[1]).not.toContain('--agent')
+  })
+
+  it.each([
+    ['a bare --agent', ['skills', 'install', '--skill', 'alpha', '--agent']],
+    ['an empty --agent', ['skills', 'install', '--skill', 'alpha', '--agent', '']],
+    ['a separator-only --agent', ['skills', 'install', '--skill', 'alpha', '--agent', ' , ,']]
+  ])('rejects %s instead of installing to every agent', async (_label, argv) => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(argv, '/tmp/repo')
+
+    // Why: an --agent that resolves to nothing must not fall back to detection or
+    // emit no --agent at all — the latter restores the ~75-agent install.
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+    expect(String(errorSpy.mock.calls[0]?.[0])).toContain('Missing required --agent')
+  })
+
+  it('documents --agent for skills install rather than the terminal-launch flag', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['skills', 'install', '--help'], '/tmp/repo')
+
+    const help = String(logSpy.mock.calls[0]?.[0])
+    expect(help).toContain('--agent <names>')
+    expect(help).not.toContain('Launch a known TUI agent')
   })
 
   it('accumulates a repeated --skill instead of keeping only the last one', async () => {

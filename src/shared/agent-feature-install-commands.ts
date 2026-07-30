@@ -25,6 +25,11 @@ export function buildAgentFeatureSkillInstallArgs(
     throw new Error('At least one skill name is required.')
   }
   const global = options.global ?? true
+  // Why: -y with no --agent is the one combination that makes `skills add` install
+  // into every agent it knows. Refuse it here so no caller can express it.
+  if (options.yes && (options.agents ?? []).length === 0) {
+    throw new Error('An install target is required when skipping prompts.')
+  }
   // Why: one flag per name remains compatible with both single-value and variadic parsers.
   const skillArgs = skillNames.flatMap((name) => ['--skill', name])
   return [

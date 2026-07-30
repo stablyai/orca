@@ -8,12 +8,14 @@ import type { TuiAgent } from './types'
  * rather than guessed. Orca ids and skills keys agree less often than they look
  * (`claude` is `claude-code`, `rovo` is `rovodev`, `aug` is `augment`), and some
  * near-matches are different products — Orca's `aider` CLI is not the CLI's
- * `aider-desk`, and Orca's `openclaude` is not its `openclaw`.
+ * `aider-desk`, and Orca's `openclaude` is its `openclaw` in name only, so it
+ * follows Orca's own rule that OpenClaude reads Claude-owned roots.
  */
 export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   claude: 'claude-code',
   'claude-agent-teams': 'claude-code',
-  openclaude: null,
+  // Why: Orca states OpenClaude reads Claude-owned roots (native-chat-agent-profiles).
+  openclaude: 'claude-code',
   codex: 'codex',
   autohand: 'autohand-code',
   opencode: 'opencode',
@@ -45,7 +47,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   grok: 'grok',
   devin: 'devin',
   ante: null,
-  trae: 'trae'
+  // Why: Orca detects trae by `traecli`, an alias only TRAE CN ships.
+  trae: 'trae-cn'
 } satisfies Record<TuiAgent, string | null>
 
 /**
