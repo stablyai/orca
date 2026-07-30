@@ -60,6 +60,18 @@ describe('agent feature skill commands', () => {
     )
   })
 
+  it('refuses a target the skills CLI would drop', () => {
+    // Why: defence in depth behind the CLI's own check — the skills CLI silently
+    // drops a `-`-leading --agent value, which empties its target list and
+    // installs into every agent it knows.
+    expect(() =>
+      buildAgentFeatureSkillInstallCommand(['orca-cli'], { yes: true, agents: ['-y'] })
+    ).toThrow('"-y" is not a usable install target.')
+    expect(() =>
+      buildAgentFeatureSkillInstallArgs(['orca-cli'], { yes: true, agents: ['universal', 'a b'] })
+    ).toThrow('"a b" is not a usable install target.')
+  })
+
   it('appends -y and the targets for an unattended run', () => {
     expect(
       buildAgentFeatureSkillInstallCommand(['orca-cli'], { yes: true, agents: ['universal'] })

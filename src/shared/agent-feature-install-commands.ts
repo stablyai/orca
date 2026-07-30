@@ -1,3 +1,5 @@
+import { isSkillsCliAgentKeyShaped } from './skills-cli-agent-keys'
+
 export const ORCA_SKILLS_REPOSITORY_URL = 'https://github.com/stablyai/orca'
 
 export const ORCA_CLI_SKILL_NAME = 'orca-cli'
@@ -27,8 +29,15 @@ export function buildAgentFeatureSkillInstallArgs(
   const global = options.global ?? true
   // Why: -y with no --agent is the one combination that makes `skills add` install
   // into every agent it knows. Refuse it here so no caller can express it.
-  if (options.yes && (options.agents ?? []).length === 0) {
+  const agents = options.agents ?? []
+  if (options.yes && agents.length === 0) {
     throw new Error('An install target is required when skipping prompts.')
+  }
+  // Why: a value the skills CLI would drop leaves it with no target at all, which
+  // is the same all-agents install as passing no --agent.
+  const unusable = agents.find((agent) => !isSkillsCliAgentKeyShaped(agent))
+  if (unusable !== undefined) {
+    throw new Error(`"${unusable}" is not a usable install target.`)
   }
   // Why: one flag per name remains compatible with both single-value and variadic parsers.
   const skillArgs = skillNames.flatMap((name) => ['--skill', name])
@@ -41,7 +50,7 @@ export function buildAgentFeatureSkillInstallArgs(
     // Why: an explicit --agent stops `skills add` calling its own detection, whose
     // zero-detected branch installs into all ~75 known agents and litters a bare
     // host with agent config directories it has no agent for.
-    ...(options.agents ?? []).flatMap((agent) => ['--agent', agent]),
+    ...agents.flatMap((agent) => ['--agent', agent]),
     // Why: without -y `skills add` opens an interactive agent picker and blocks
     // forever on any TTY, which is every ssh session.
     ...(options.yes ? ['-y'] : [])

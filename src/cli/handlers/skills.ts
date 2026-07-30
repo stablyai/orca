@@ -11,7 +11,7 @@ import {
   resolveDetectedTuiAgentIds
 } from '../../main/ipc/tui-agent-detection-commands'
 import { getSpawnArgsForWindows, UnsafeWindowsBatchArgumentsError } from '../../main/win32-utils'
-import { toSkillsCliAgentKeys } from '../../shared/skills-cli-agent-keys'
+import { isSkillsCliAgentKeyShaped, toSkillsCliAgentKeys } from '../../shared/skills-cli-agent-keys'
 import {
   buildAgentFeatureSkillInstallArgs,
   buildAgentFeatureSkillUpdateArgs
@@ -195,6 +195,16 @@ function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[]
     // be surprising, and emitting no --agent would restore the all-agents install.
     if (keys.length === 0) {
       throw new RuntimeClientError('invalid_argument', 'Missing required --agent')
+    }
+    const unusable = keys.find((key) => !isSkillsCliAgentKeyShaped(key))
+    if (unusable !== undefined) {
+      // Why: the skills CLI drops a value starting with `-`, which leaves it with
+      // no target and installs into every agent it knows.
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `Invalid --agent value "${unusable}". Pass agent names such as claude-code, ` +
+          'codex, or universal.'
+      )
     }
     return keys
   }

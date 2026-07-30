@@ -57,6 +57,20 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
  */
 export const SKILLS_CLI_UNIVERSAL_AGENT_KEY = 'universal'
 
+/**
+ * Whether a value is shaped like a `skills --agent` key, or its explicit all-agents
+ * wildcard.
+ *
+ * Why: the skills CLI silently DROPS a `--agent` value that starts with `-`, which
+ * empties its target list and drops it into the same all-agents branch an omitted
+ * --agent does. `--agent -y` is enough to trigger it, so shape is checked, not just
+ * emptiness. An unknown-but-plausible key is left to the CLI, which rejects it
+ * loudly with its own valid list before writing anything.
+ */
+export function isSkillsCliAgentKeyShaped(value: string): boolean {
+  return /^(?:\*|[a-z0-9][a-z0-9.-]*)$/i.test(value)
+}
+
 /** Map detected Orca agents onto `skills --agent` keys, plus the universal target. */
 export function toSkillsCliAgentKeys(detectedAgents: readonly TuiAgent[]): string[] {
   const keys = new Set<string>([SKILLS_CLI_UNIVERSAL_AGENT_KEY])

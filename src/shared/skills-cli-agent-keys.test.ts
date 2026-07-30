@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
   SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT,
+  isSkillsCliAgentKeyShaped,
   SKILLS_CLI_UNIVERSAL_AGENT_KEY,
   toSkillsCliAgentKeys
 } from './skills-cli-agent-keys'
@@ -103,6 +104,24 @@ describe('skills CLI agent keys', () => {
     expect(Object.keys(SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT).sort()).toEqual(
       Object.keys(TUI_AGENT_CONFIG).sort()
     )
+  })
+
+  it("follows Orca's own evidence for the two non-obvious mappings", () => {
+    // Why: src/shared/native-chat-agent-profiles.ts states OpenClaude reads
+    // Claude-owned roots, so it is not unmappable.
+    expect(SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT.openclaude).toBe('claude-code')
+    // Why: Orca detects trae via `traecli`, which tui-agent-config calls an alias
+    // only TRAE CN ships, so the CN directory is the right target.
+    expect(SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT.trae).toBe('trae-cn')
+  })
+
+  it('rejects values the skills CLI would drop, and allows the explicit wildcard', () => {
+    for (const bad of ['-y', '--copy', '', ' ', 'a b', 'a,b']) {
+      expect(isSkillsCliAgentKeyShaped(bad), bad).toBe(false)
+    }
+    for (const good of ['claude-code', 'universal', 'trae-cn', 'inference-sh', '*']) {
+      expect(isSkillsCliAgentKeyShaped(good), good).toBe(true)
+    }
   })
 
   it('always includes the shared directory and drops unmappable agents', () => {

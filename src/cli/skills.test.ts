@@ -790,6 +790,34 @@ describe('orca skills CLI', () => {
     expect(String(errorSpy.mock.calls[0]?.[0])).toContain('Missing required --agent')
   })
 
+  it.each([
+    ['a dash-leading value', ['skills', 'install', '--skill', 'alpha', '--agent', '-y']],
+    ['an inline dash value', ['skills', 'install', '--skill', 'alpha', '--agent=--copy']],
+    ['a value with a space', ['skills', 'install', '--skill', 'alpha', '--agent', 'a b']]
+  ])('rejects %s the skills CLI would silently drop', async (_label, argv) => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(argv, '/tmp/repo')
+
+    // Why: the skills CLI drops such a value, leaving it with no target — the same
+    // all-agents install as omitting --agent entirely.
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+    expect(String(errorSpy.mock.calls[0]?.[0])).toContain('Invalid --agent value')
+  })
+
+  it('reports forwarding, not missing agents, when a forwarded host detects none', async () => {
+    vi.stubEnv('ORCA_CLI_CWD', '/home/alice/wt')
+    detectCommandsMock.mockReturnValue(new Set<string>())
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['skills', 'install', '--skill', 'alpha'], '/tmp/repo')
+
+    // Why: resolving targets first would hide the forwarding problem behind a
+    // no-agent error about the wrong machine.
+    expect(String(errorSpy.mock.calls[0]?.[0])).toContain('writes to the machine that runs it')
+  })
+
   it('documents --agent for skills install rather than the terminal-launch flag', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
