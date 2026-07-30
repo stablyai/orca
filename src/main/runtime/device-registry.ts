@@ -22,6 +22,9 @@ export type DeviceEntry = {
   lastSeenAt: number
   relayBinding?: RelayDeviceBinding
   mobilePairingConnectionMode?: MobilePairingConnectionMode
+  // Why: peer scope has no terminal access until the host explicitly grants
+  // handles; absent/empty means no terminals are visible to that peer.
+  grantedTerminalHandles?: string[]
 }
 
 function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding | undefined {
@@ -149,6 +152,24 @@ export class DeviceRegistry {
     return true
   }
 
+  setGrantedTerminals(deviceId: string, terminals: string[]): boolean {
+    const device = this.devices.find((candidate) => candidate.deviceId === deviceId)
+    if (!device || device.scope !== 'peer') {
+      return false
+    }
+    device.grantedTerminalHandles = terminals
+    this.save()
+    return true
+  }
+
+  getGrantedTerminals(deviceId: string): string[] {
+    const device = this.devices.find((candidate) => candidate.deviceId === deviceId)
+    if (!device || device.scope !== 'peer') {
+      return []
+    }
+    return device.grantedTerminalHandles ?? []
+  }
+
   getMobilePairingConnectionMode(deviceId: string): MobilePairingConnectionMode | null {
     const device = this.devices.find((candidate) => candidate.deviceId === deviceId)
     if (!device || device.scope !== 'mobile') {
@@ -194,10 +215,15 @@ export class DeviceRegistry {
         ...device,
         // Why: older registries only existed for phone pairing. Treat missing
         // scope as mobile so legacy device tokens do not gain new CLI powers.
-        scope: device.scope === 'runtime' ? 'runtime' : 'mobile',
+        scope: device.scope === 'runtime' || device.scope === 'peer' ? device.scope : 'mobile',
         relayBinding: validRelayBinding(device.relayBinding, device.deviceId),
         mobilePairingConnectionMode:
-          device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic'
+          device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic',
+        grantedTerminalHandles: Array.isArray(device.grantedTerminalHandles)
+          ? device.grantedTerminalHandles.filter(
+              (handle): handle is string => typeof handle === 'string'
+            )
+          : []
       }))
     } catch {
       this.devices = []

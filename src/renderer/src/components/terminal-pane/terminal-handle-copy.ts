@@ -11,17 +11,29 @@ type CopyTerminalHandleDeps = {
   writeClipboardText: (text: string) => Promise<void>
 }
 
+type ResolveDeps = Pick<CopyTerminalHandleDeps, 'tabId' | 'leafId' | 'callRuntime'>
+
+// Why: single network round trip shared by both callers below, so paneKey
+// construction and the RPC shape live in one place.
+function fetchTerminalResolution({
+  tabId,
+  leafId,
+  callRuntime
+}: ResolveDeps): Promise<RuntimeRpcResponse<unknown>> {
+  const paneKey = makePaneKey(tabId, leafId)
+  return callRuntime({
+    method: 'terminal.resolvePane',
+    params: { paneKey }
+  })
+}
+
 export async function copyTerminalHandleForPane({
   tabId,
   leafId,
   callRuntime,
   writeClipboardText
 }: CopyTerminalHandleDeps): Promise<string> {
-  const paneKey = makePaneKey(tabId, leafId)
-  const response = await callRuntime({
-    method: 'terminal.resolvePane',
-    params: { paneKey }
-  })
+  const response = await fetchTerminalResolution({ tabId, leafId, callRuntime })
   if (!response.ok) {
     throw new Error(response.error.message)
   }
@@ -31,6 +43,18 @@ export async function copyTerminalHandleForPane({
   }
   await writeClipboardText(handle)
   return handle
+}
+
+// Why: shared by the peer-collab viewer badge, which needs a pane's terminal
+// handle to match against DeviceEntry.grantedTerminalHandles / subscribedTerminals
+// without surfacing a copy-to-clipboard side effect.
+export async function resolveTerminalHandleForPane({
+  tabId,
+  leafId,
+  callRuntime
+}: ResolveDeps): Promise<string | null> {
+  const response = await fetchTerminalResolution({ tabId, leafId, callRuntime })
+  return response.ok ? readResolvedTerminalHandle(response.result) : null
 }
 
 function readResolvedTerminalHandle(result: unknown): string | null {

@@ -968,6 +968,7 @@ import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { VoiceSettings } from '../../shared/speech-types'
+import type { PeerPresenceEvent } from '../../shared/peer-presence-event'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import { getCatalogModel, isLocalSpeechModel, SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import {
@@ -2807,6 +2808,14 @@ export class OrcaRuntimeService {
   // mobile client gets its own listener, and dispatchMobileNotification
   // iterates them all. Listeners are cleaned up via subscriptionCleanups.
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
+  // Why: presence fans out per-terminal, unlike notifications' global
+  // broadcast — each entry remembers the terminal it watches and the
+  // connection it belongs to so dispatch can skip the sender's own listener.
+  private peerPresenceListeners = new Set<{
+    connectionId: string
+    terminal: string
+    listener: (event: PeerPresenceEvent) => void
+  }>()
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
   private readonly pairedRendererSessionOwnedPtyIds = new Set<string>()
   private wslDistroByPtyId = new Map<string, string>()
@@ -2954,7 +2963,10 @@ export class OrcaRuntimeService {
   // `applyMobileDisplayMode` to pick the active phone-fit viewport. See
   // docs/mobile-presence-lock.md.
   private currentDriver = new Map<string, DriverState>()
-  private mobileInputFloorClaims = new Map<
+  // Why: one arbitration domain shared by both remote-driver kinds (mobile
+  // phones and peer desktops) — a PTY has exactly one input floor regardless
+  // of which kind of remote client is holding it.
+  private inputFloorClaims = new Map<
     string,
     {
       base: DriverState
@@ -2963,6 +2975,9 @@ export class OrcaRuntimeService {
       pending: Map<symbol, { clientId: string; generation: number }>
     }
   >()
+  // Why: default is free input for peers (plan default); the host can opt
+  // in to exclusive-driver blocking via peerCollab:setExclusiveInputFloor.
+  private peerInputFloorExclusive = false
   private currentBrowserDriver = new Map<string, RuntimeBrowserDriverState>()
 
   // Why: remote (relay/shared-control) desktop viewers of a PTY are keyed by
@@ -11923,6 +11938,12 @@ export class OrcaRuntimeService {
     }
   }
 
+  // Why: read-only lookup for connection introspection (e.g. peer-collab's
+  // connected-clients list); does not mutate subscription state.
+  getSubscriptionIdsForConnection(connectionId: string): string[] {
+    return Array.from(this.subscriptionsByConnection.get(connectionId) ?? [])
+  }
+
   cleanupSubscriptionsByPrefix(prefix: string): void {
     const ids = Array.from(this.subscriptionCleanups.keys()).filter((id) => id.startsWith(prefix))
     for (const id of ids) {
@@ -11966,6 +11987,40 @@ export class OrcaRuntimeService {
 
   getMobileNotificationListenerCount(): number {
     return this.notificationListeners.size
+  }
+
+  // Why: terminal.presence.subscribe registers one listener per (terminal,
+  // connection) pair; dispatchPeerPresence uses the connectionId to exclude
+  // the sender so a participant never echoes its own cursor/scroll/selection.
+  onPeerPresence(
+    terminal: string,
+    connectionId: string,
+    listener: (event: PeerPresenceEvent) => void
+  ): () => void {
+    const entry = { connectionId, terminal, listener }
+    this.peerPresenceListeners.add(entry)
+    return () => {
+      this.peerPresenceListeners.delete(entry)
+    }
+  }
+
+  // Why: fire-and-forget fan-out — a slow or disconnecting listener must
+  // never block or fail the sender's terminal.presence.send call.
+  dispatchPeerPresence(
+    terminal: string,
+    senderConnectionId: string | undefined,
+    event: PeerPresenceEvent
+  ): void {
+    for (const entry of this.peerPresenceListeners) {
+      if (entry.terminal !== terminal || entry.connectionId === senderConnectionId) {
+        continue
+      }
+      try {
+        entry.listener(event)
+      } catch (error) {
+        console.error('[runtime] peer presence listener failed:', error)
+      }
+    }
   }
 
   // Why: bounded replay buffer for the mobile reconnect catch-up (#8129).
@@ -13350,25 +13405,46 @@ export class OrcaRuntimeService {
     this.setDriver(ptyId, { kind: 'mobile', clientId })
   }
 
-  beginMobileInputFloor(
+  // Why: input-floor arbitration generalized to cover both remote-driver
+  // kinds. `source: 'mobile'` reproduces beginMobileInputFloor's exact prior
+  // behavior (subscriber/soft-leave eligibility gate, phone-fit take-back via
+  // mobileTookFloor). `source: 'peer'` is the LAN peer-collab counterpart —
+  // callers only invoke it while the peer's subscription is verifiably live,
+  // so it needs no separate eligibility bookkeeping, and it has no phone-fit
+  // side effect (a peer terminal is never resized to a "phone" layout).
+  beginInputFloor(
     ptyId: string,
-    clientId: string
+    clientId: string,
+    source: 'mobile' | 'peer'
   ): { commit: () => Promise<void>; rollback: () => void } | null {
-    // Why: admit a client still inside its soft-leave grace (mirrors
-    // mobileTookFloor) so a write landing in that window reserves the floor
-    // instead of being dropped; post-grace/orphaned writers stay rejected.
-    const softLeaver = this.pendingSoftLeavers.get(ptyId)
-    if (!this.mobileSubscribers.get(ptyId)?.has(clientId) && softLeaver?.clientId !== clientId) {
-      return null
+    if (source === 'mobile') {
+      // Why: admit a client still inside its soft-leave grace (mirrors
+      // mobileTookFloor) so a write landing in that window reserves the floor
+      // instead of being dropped; post-grace/orphaned writers stay rejected.
+      const softLeaver = this.pendingSoftLeavers.get(ptyId)
+      if (!this.mobileSubscribers.get(ptyId)?.has(clientId) && softLeaver?.clientId !== clientId) {
+        return null
+      }
+      return this.claimInputFloor(ptyId, clientId, (previousFloor, isCurrent) =>
+        this.mobileTookFloor(ptyId, clientId, previousFloor, isCurrent)
+      )
     }
-    const state = this.mobileInputFloorClaims.get(ptyId) ?? {
+    return this.claimInputFloor(ptyId, clientId)
+  }
+
+  private claimInputFloor(
+    ptyId: string,
+    clientId: string,
+    onCommit?: (previousFloor: DriverState, isCurrent: () => boolean) => Promise<void>
+  ): { commit: () => Promise<void>; rollback: () => void } {
+    const state = this.inputFloorClaims.get(ptyId) ?? {
       base: this.getDriver(ptyId),
       generation: 0,
       committedGeneration: 0,
       pending: new Map<symbol, { clientId: string; generation: number }>()
     }
-    this.mobileInputFloorClaims.set(ptyId, state)
-    const token = Symbol('mobile-input-floor')
+    this.inputFloorClaims.set(ptyId, state)
+    const token = Symbol('input-floor')
     const generation = ++state.generation
     state.pending.set(token, { clientId, generation })
     this.setDriver(ptyId, { kind: 'mobile', clientId })
@@ -13383,8 +13459,8 @@ export class OrcaRuntimeService {
         // Why: a newer accepted write owns the floor; an older claim that was
         // delayed before commit must not replace its rollback baseline or driver.
         if (generation < state.committedGeneration) {
-          if (state.pending.size === 0 && this.mobileInputFloorClaims.get(ptyId) === state) {
-            this.mobileInputFloorClaims.delete(ptyId)
+          if (state.pending.size === 0 && this.inputFloorClaims.get(ptyId) === state) {
+            this.inputFloorClaims.delete(ptyId)
           }
           return
         }
@@ -13393,16 +13469,15 @@ export class OrcaRuntimeService {
         // overlapping reservations that have not reached the PTY yet.
         state.committedGeneration = generation
         state.base = { kind: 'mobile', clientId }
-        await this.mobileTookFloor(
-          ptyId,
-          clientId,
-          previousFloor,
-          () =>
-            this.mobileInputFloorClaims.get(ptyId) === state &&
-            state.committedGeneration === generation
-        )
-        if (state.pending.size === 0 && this.mobileInputFloorClaims.get(ptyId) === state) {
-          this.mobileInputFloorClaims.delete(ptyId)
+        const isCurrent = (): boolean =>
+          this.inputFloorClaims.get(ptyId) === state && state.committedGeneration === generation
+        if (onCommit) {
+          await onCommit(previousFloor, isCurrent)
+        } else if (isCurrent()) {
+          this.setDriver(ptyId, { kind: 'mobile', clientId })
+        }
+        if (state.pending.size === 0 && this.inputFloorClaims.get(ptyId) === state) {
+          this.inputFloorClaims.delete(ptyId)
         }
       },
       rollback: () => {
@@ -13411,7 +13486,7 @@ export class OrcaRuntimeService {
         }
         settled = true
         state.pending.delete(token)
-        if (this.mobileInputFloorClaims.get(ptyId) !== state) {
+        if (this.inputFloorClaims.get(ptyId) !== state) {
           return
         }
         const current = this.getDriver(ptyId)
@@ -13423,10 +13498,41 @@ export class OrcaRuntimeService {
           )
         }
         if (state.pending.size === 0) {
-          this.mobileInputFloorClaims.delete(ptyId)
+          this.inputFloorClaims.delete(ptyId)
         }
       }
     }
+  }
+
+  // Why: releases a peer's held input floor on disconnect/unsubscribe — the
+  // peer path has no mobile-style subscriber lifecycle to detect staleness,
+  // so the caller must explicitly release when its stream tears down.
+  releaseInputFloorIfHeldBy(ptyId: string, clientId: string): void {
+    const driver = this.getDriver(ptyId)
+    if (driver.kind === 'mobile' && driver.clientId === clientId) {
+      this.setDriver(ptyId, { kind: 'idle' })
+    }
+    const state = this.inputFloorClaims.get(ptyId)
+    if (!state) {
+      return
+    }
+    // Why: the map entry is shared by every in-flight claim on this ptyId —
+    // only drop it when nothing in it belongs to another client, otherwise a
+    // disconnecting non-owner would erase another peer's live claim/rollback state.
+    const ownedByOthers =
+      Array.from(state.pending.values()).some((entry) => entry.clientId !== clientId) ||
+      (state.base.kind === 'mobile' && state.base.clientId !== clientId)
+    if (!ownedByOthers) {
+      this.inputFloorClaims.delete(ptyId)
+    }
+  }
+
+  setPeerInputFloorExclusive(enabled: boolean): void {
+    this.peerInputFloorExclusive = enabled
+  }
+
+  isPeerInputFloorExclusive(): boolean {
+    return this.peerInputFloorExclusive
   }
 
   // Why: invoked from mobile RPC method handlers (terminal.send / setDisplayMode /
@@ -14633,6 +14739,14 @@ export class OrcaRuntimeService {
         })
       })
     }
+  }
+
+  // Why: this.tabs' title is the renderer's resolveTerminalTabTitle output (customTitle >
+  // quickCommandLabel > meaningful live title > generatedTitle), synced via syncWindowGraph —
+  // unlike RuntimeTerminalSummary.title, which prioritizes live OSC/pane text for agent-status
+  // detection and so drifts from the tab's actual display name.
+  getSyncedTabTitle(tabId: string): string | null {
+    return this.tabs.get(tabId)?.title?.trim() || null
   }
 
   async listTerminals(

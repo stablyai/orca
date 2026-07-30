@@ -59,6 +59,16 @@ export function createMobileRelayPairingFixtures(now: number): PairingFixture[] 
       expected: null
     },
     {
+      name: 'legacy direct offer with peer scope',
+      payload: { ...directOffer, scope: 'peer' },
+      expected: { ...directOffer, scope: 'peer' }
+    },
+    {
+      name: 'peer relay is invalid',
+      payload: { ...directOffer, scope: 'peer', relay },
+      expected: null
+    },
+    {
       name: 'relay offer public key must be canonical 32-byte base64',
       payload: { ...directOffer, publicKeyB64: 'legacy-nonempty-key', relay },
       expected: null

@@ -71,7 +71,7 @@ function rankAddress(address: string): number {
   return address.includes(':') ? 2 : 1
 }
 
-function getDefaultPairingAddress(): string | null {
+export function getDefaultPairingAddress(): string | null {
   const ifaces = getNetworkInterfaces()
   return ifaces.length > 0 ? ifaces[0]!.address : null
 }

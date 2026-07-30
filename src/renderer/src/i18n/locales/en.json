@@ -825,7 +825,9 @@
         "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
         "pluginsTitle": "Plugins",
         "pluginsDescription": "Install and manage experimental Orca plugins.",
-        "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks."
+        "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
+        "peerCollabTitle": "Peer Collaboration",
+        "peerCollabDescription": "Share terminals with other Orca desktops over your local network."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -1053,7 +1055,12 @@
           "activity": "Activity",
           "noActivity": "No activity yet."
         },
-        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+        "d23bbb6416": "{{value0}} skipped",
+        "18f80e1329": "{{value0}} pending",
+        "b1ac991806": "{{value0}} failing",
+        "checksNeedActionChip": "{{value0}} action required",
+        "311d0cee55": "{{value0}} passing"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reopen",
@@ -1532,7 +1539,12 @@
         "8ff5ae8866": "Assignees",
         "82c87eceb9": "Edit assignees",
         "1ff5d979df": "No one assigned",
-        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+        "e6ad0a8d06": "{{value0}} skipped",
+        "88267924d5": "{{value0}} pending",
+        "ae2a34c7b8": "{{value0}} failing",
+        "checksNeedActionChip": "{{value0}} action required",
+        "7c5035931a": "{{value0}} passing"
       },
       "QuickOpen": {
         "1dbd3f59ff": "Move",
@@ -6922,7 +6934,9 @@
           "devDescription": "Dev-only tools for exercising UI states.",
           "linearTitle": "Linear",
           "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
-          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks."
+          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
+          "peerCollabTitle": "Peer Collaboration",
+          "peerCollabDescription": "Share terminals with other Orca desktops over your local network."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -7178,7 +7192,14 @@
           "integrationsHint": "Credentials for all providers also live under",
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
-          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
+          "3a72b9745e": "Choose which task providers appear in the Tasks page and sidebar shortcuts.",
+          "71644aba56": "Choose which task providers appear in the Tasks page source picker and sidebar shortcuts. At least one provider must stay visible.",
+          "93e72ef659": "Task Sources",
+          "8e1305fcc6": "Show Jira in the Tasks source picker and sidebar shortcuts.",
+          "e4170c9615": "Show Linear in the Tasks source picker and sidebar shortcuts.",
+          "dd67a1b6e1": "Show GitLab in the Tasks source picker and sidebar shortcuts.",
+          "1db47236cd": "Show GitHub in the Tasks source picker and sidebar shortcuts."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -8829,7 +8850,8 @@
             "setup": "setup",
             "apiKey": "api key",
             "skill": "skill",
-            "connect": "connect"
+            "connect": "connect",
+            "765f0c544d": "Choose which task providers appear in the Tasks page and sidebar shortcuts."
           }
         },
         "terminal": {
@@ -9502,7 +9524,8 @@
         "ephemeralVms": {
           "search": {
             "description": "Learn how repo-owned recipes give each workspace its own on-demand, disposable environment.",
-            "cloudVmTitle": "Cloud VM"
+            "cloudVmTitle": "Cloud VM",
+            "title": "Per-Workspace Environments"
           }
         },
         "EphemeralVmsPane": {
@@ -9523,11 +9546,14 @@
           "cloudVmSkillTitle": "Cloud VM setup skill",
           "cloudVmRefresh": "Refresh Cloud VM recipes",
           "cloudVmTerminalTitle": "Cloud VM setup",
-          "cloudVmTerminalAriaLabel": "Cloud VM skill install terminal"
+          "cloudVmTerminalAriaLabel": "Cloud VM skill install terminal",
+          "skillTitle": "Per-Workspace Environments skill",
+          "refresh": "Refresh ephemeral VM recipes"
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Shows setup controls and workspace run targets for repo-owned, on-demand environments.",
-          "cloudVmToggleLabel": "Toggle Cloud VM"
+          "cloudVmToggleLabel": "Toggle Cloud VM",
+          "toggleLabel": "Toggle per-workspace environments"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agent",
@@ -9657,7 +9683,8 @@
           "terminalTitle": "Linear skill setup",
           "terminalAriaLabel": "Linear skill install terminal",
           "manageConnectionHint": "Review connected Linear workspaces and API keys in",
-          "manageConnectionLink": "Integrations"
+          "manageConnectionLink": "Integrations",
+          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca."
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
@@ -10099,6 +10126,77 @@
           "webUnavailable": "Switching builds is only available in the desktop app.",
           "hourlyMacOnlyAria": "Hourly (macOS only)",
           "hourlyMacOnly": "Hourly builds are produced only for macOS. Linux and Windows stay on Stable or RC."
+        },
+        "peer-collab": {
+          "settings": {
+            "search": {
+              "title": "Peer Collaboration",
+              "description": "Share terminals with other Orca desktops over your local network.",
+              "clientTitle": "Connect to another Orca",
+              "clientDescription": "Connect to a host Orca as a client using a pairing code.",
+              "connect": "connect",
+              "pairingCode": "pairing code",
+              "clientRole": "client"
+            }
+          }
+        },
+        "PeerCollabSettingsPane": {
+          "noDevicesWithCode": "No devices paired yet. Enter the code on the other Orca desktop.",
+          "qrAlt": "QR Code for peer desktop pairing",
+          "scanDescription": "Enter this code on the other Orca desktop. Each code creates a unique device token.",
+          "pasteDescription": "Or paste this code on the other Orca desktop:",
+          "scanDialogTitle": "Scan to pair",
+          "clientConnecting": "Connecting",
+          "clientConnected": "Connected",
+          "clientReconnectWait": "Reconnecting",
+          "clientClosed": "Not connected",
+          "wsNotRunning": "WebSocket transport is not running",
+          "generateFailed": "Failed to generate pairing code",
+          "clientConnectFailed": "Failed to connect: {{reason}}",
+          "deviceRevoked": "Device revoked",
+          "revokeFailed": "Failed to revoke device",
+          "disconnectFailed": "Failed to disconnect client",
+          "startTitle": "Start peer sharing",
+          "startDescription": "Generate a code, then enter it on the other Orca desktop under Peer Collaboration. Connections stay on your local network only.",
+          "addressLabel": "This computer’s address",
+          "addressDescription": "The other desktop must be able to reach this address on Wi‑Fi, Ethernet, or Tailscale.",
+          "regenerate": "Regenerate code",
+          "generate": "Generate code",
+          "devicesTitle": "Peer Devices",
+          "devicesDescription": "Orca desktops that have paired with this computer.",
+          "connectedTitle": "Connected Clients",
+          "connectedDescription": "Orca desktops currently viewing your terminals.",
+          "noClients": "No peer desktops are connected right now.",
+          "connectedAt": "Connected",
+          "terminalCount": "{{count}} terminal(s)",
+          "disconnect": "Disconnect",
+          "disconnectAndBlock": "Disconnect and revoke device",
+          "clientCodeLabel": "Pairing code",
+          "clientCodePlaceholder": "Paste the code from the other Orca desktop",
+          "clientNameLabel": "Your display name",
+          "clientDisconnect": "Disconnect",
+          "clientConnect": "Connect",
+          "clientHostTerminalsTitle": "Host terminals",
+          "clientNoHostTerminals": "The host has no terminals to share right now.",
+          "clientUntitledTerminal": "Untitled terminal",
+          "clientOpenTerminal": "Open",
+          "exclusiveInputFloorLabel": "Block others while someone is typing",
+          "exclusiveInputFloorDescription": "By default everyone can type at once. Turn this on so the terminal locks to whoever typed most recently until they stop.",
+          "clientNoHostTerminalsShared": "The host has not shared a terminal with you yet.",
+          "grantTerminals": "Share terminals",
+          "grantTerminalsLabel": "Terminals shared with {{name}}",
+          "noHostTerminalsToGrant": "No terminals available to share.",
+          "untitledTerminal": "Untitled terminal",
+          "grantTerminalsFailed": "Failed to update shared terminals",
+          "clientDuplicateConnection": "This pairing code is already in use by another Orca. Generate a new code on the host.",
+          "clientSavedPairingInvalid": "This pairing is no longer valid — the host may have revoked it.",
+          "clientForgetHost": "Forget this host",
+          "clientSavedHost": "Saved host: {{endpoint}}",
+          "clientReconnectSaved": "Reconnect"
+        },
+        "MobilePairedDevicesSection": {
+          "connectedNow": "Connected now",
+          "lastSeen": "Last seen {{time}}"
         }
       },
       "right": {
@@ -11793,7 +11891,8 @@
           "pairingCodeReady": "Pairing code ready",
           "pairThisMac": "Pair this Mac.",
           "pairThisPc": "Pair this PC.",
-          "pairThisComputer": "Pair this computer."
+          "pairThisComputer": "Pair this computer.",
+          "901c98bb93": "Pair this"
         },
         "MobilePage": {
           "e17393c6a3": "Phone preview",
@@ -13704,7 +13803,10 @@
           "f0202f3a89": "Daily",
           "57e83307d0": "Weekdays",
           "837d902bba": "Weekly",
-          "ddba78647e": "Custom cron"
+          "ddba78647e": "Custom cron",
+          "b08ccb4d06": "hourly",
+          "8cc026fd73": "weekly",
+          "c3e39e17cf": "custom"
         },
         "AutomationSessionField": {
           "f3c76dce51": "Reuse",
@@ -14392,6 +14494,22 @@
         "pendingChip": "{{value0}} pending",
         "needsActionChip": "{{value0}} action required",
         "unresolvedChip": "{{value0}} unresolved"
+      },
+      "peer-collab": {
+        "RemoteTerminalDialog": {
+          "connected": "Connected",
+          "reconnecting": "Reconnecting",
+          "disconnected": "Disconnected",
+          "close": "Close"
+        },
+        "RemoteTerminalPanel": {
+          "error": "Could not open this terminal: {{reason}}",
+          "ended": "This terminal stream has ended.",
+          "otherSubscribers": "Also watching: {{names}}"
+        },
+        "RemoteTerminalPresenceOverlay": {
+          "scrolledUp": "scrolled up"
+        }
       }
     },
     "i18n": {
@@ -14596,6 +14714,14 @@
       "sent": "Session context sent to {{agent}} in a new session.",
       "deliveryFailed": "The new {{agent}} session started, but its context could not be sent.",
       "launchFailed": "Could not start a new {{agent}} session."
+    },
+    "terminalPaneViewerBadge": {
+      "viewerCount": "{{count}} viewing this terminal",
+      "disconnect": "Disconnect",
+      "disconnectFailed": "Failed to disconnect client",
+      "shareToggleFailed": "Failed to update shared terminal",
+      "connectedNotWatching": "{{count}} connected, not watching",
+      "shareToggle": "Share this terminal with {{name}}"
     }
   },
   "dashboardPopout": {

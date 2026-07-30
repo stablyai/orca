@@ -793,7 +793,9 @@
         "linearDescription": "Linear 在 Orca 中的工作方式、设置清单、智能体技能和提示词示例。",
         "pluginsTitle": "插件",
         "pluginsDescription": "安装和管理实验性 Orca 插件。",
-        "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。"
+        "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。",
+        "peerCollabTitle": "Peer Collaboration",
+        "peerCollabDescription": "Share terminals with other Orca desktops over your local network."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "粘贴内容过大。"
@@ -1017,7 +1019,12 @@
           "activity": "活动",
           "noActivity": "暂无活动。"
         },
-        "checkActionRequiredHint": "此检查需要在 GitHub 上执行手动操作（例如批准工作流运行）后才能解除合并阻止。"
+        "checkActionRequiredHint": "此检查需要在 GitHub 上执行手动操作（例如批准工作流运行）后才能解除合并阻止。",
+        "d23bbb6416": "{{value0}} 已跳过",
+        "18f80e1329": "{{value0}} 待处理",
+        "b1ac991806": "{{value0}} 失败",
+        "checksNeedActionChip": "{{value0}} 个需要操作",
+        "311d0cee55": "{{value0}} 通过"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "重新打开",
@@ -1496,7 +1503,12 @@
         "dd5d9a4f17": "{{value0}}更新",
         "71a3c0f9d2": "启动工作区",
         "filesUnavailable": "Couldn't load changed files.",
-        "filesRetry": "Retry"
+        "filesRetry": "Retry",
+        "e6ad0a8d06": "{{value0}} 已跳过",
+        "88267924d5": "{{value0}} 待处理",
+        "ae2a34c7b8": "{{value0}} 失败",
+        "checksNeedActionChip": "{{value0}} 个需要操作",
+        "7c5035931a": "{{value0}} 通过"
       },
       "QuickOpen": {
         "1dbd3f59ff": "移动",
@@ -6818,7 +6830,9 @@
           "devDescription": "仅用于调试 UI 状态的开发工具。",
           "linearTitle": "Linear",
           "linearDescription": "Linear 在 Orca 中的工作方式、设置清单、智能体技能和提示词示例。",
-          "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。"
+          "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。",
+          "peerCollabTitle": "Peer Collaboration",
+          "peerCollabDescription": "Share terminals with other Orca desktops over your local network."
         },
         "SettingsFormControls": {
           "42a4d15a30": "没有匹配的字体。",
@@ -7074,7 +7088,14 @@
           "integrationsHint": "所有提供商的凭据也可在此管理：",
           "integrationsLink": "集成",
           "skillHint": "。连接 Linear 后，可在设置 → Linear 中查看使用示例。",
-          "incompleteBannerBodyWithLinear": "隐藏不使用的提供商，或展开卡片并完成其中的步骤。Linear 需要 API 访问权限、智能体技能以及在任务中显示。"
+          "incompleteBannerBodyWithLinear": "隐藏不使用的提供商，或展开卡片并完成其中的步骤。Linear 需要 API 访问权限、智能体技能以及在任务中显示。",
+          "3a72b9745e": "选择要在“任务”页面和侧边栏快捷键中显示的任务提供商。",
+          "71644aba56": "选择要在“任务”页面源选择器和侧边栏快捷键中显示的任务提供商。至少需保留一个可见提供商。",
+          "93e72ef659": "任务来源",
+          "8e1305fcc6": "在任务源选择器和侧边栏快捷方式中显示 Jira。",
+          "e4170c9615": "在任务源选择器和侧边栏快捷方式中显示 Linear。",
+          "dd67a1b6e1": "在任务源选择器和侧边栏快捷方式中显示 GitLab。",
+          "1db47236cd": "在任务源选择器和侧边栏快捷方式中显示 GitHub。"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "窗格分隔线的厚度。",
@@ -8724,7 +8745,8 @@
             "setup": "设置",
             "apiKey": "API 密钥",
             "skill": "技能",
-            "connect": "连接"
+            "connect": "连接",
+            "765f0c544d": "选择要在“任务”页面和侧边栏快捷键中显示的任务提供商。"
           }
         },
         "terminal": {
@@ -9449,7 +9471,8 @@
         "ephemeralVms": {
           "search": {
             "description": "了解仓库自带的环境模板如何为每个工作区提供按需创建、可丢弃的独立环境。",
-            "cloudVmTitle": "云虚拟机"
+            "cloudVmTitle": "云虚拟机",
+            "title": "工作区专属环境"
           }
         },
         "EphemeralVmsPane": {
@@ -9470,11 +9493,14 @@
           "cloudVmSkillTitle": "云虚拟机设置技能",
           "cloudVmRefresh": "刷新云虚拟机环境模板",
           "cloudVmTerminalTitle": "云虚拟机设置",
-          "cloudVmTerminalAriaLabel": "云虚拟机技能安装终端"
+          "cloudVmTerminalAriaLabel": "云虚拟机技能安装终端",
+          "skillTitle": "工作区专属环境技能",
+          "refresh": "刷新临时 VM 环境模板"
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "显示仓库自带按需环境的设置控件和工作区运行目标。",
-          "cloudVmToggleLabel": "切换云虚拟机"
+          "cloudVmToggleLabel": "切换云虚拟机",
+          "toggleLabel": "切换工作区专属环境"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "智能体",
@@ -9603,7 +9629,8 @@
           "terminalTitle": "Linear 技能设置",
           "terminalAriaLabel": "Linear 技能安装终端",
           "manageConnectionHint": "可在此查看已连接的 Linear 工作区和 API 密钥：",
-          "manageConnectionLink": "集成"
+          "manageConnectionLink": "集成",
+          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca."
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
@@ -10026,6 +10053,77 @@
           "setupRecipe": "为你的云提供商设置环境模板。",
           "createWorkspace": "创建工作区，并在“运行于”中选择该模板。",
           "openSetup": "设置环境模板"
+        },
+        "peer-collab": {
+          "settings": {
+            "search": {
+              "title": "Peer Collaboration",
+              "description": "Share terminals with other Orca desktops over your local network.",
+              "clientTitle": "Connect to another Orca",
+              "clientDescription": "Connect to a host Orca as a client using a pairing code.",
+              "connect": "connect",
+              "pairingCode": "pairing code",
+              "clientRole": "client"
+            }
+          }
+        },
+        "PeerCollabSettingsPane": {
+          "noDevicesWithCode": "No devices paired yet. Enter the code on the other Orca desktop.",
+          "qrAlt": "QR Code for peer desktop pairing",
+          "scanDescription": "Enter this code on the other Orca desktop. Each code creates a unique device token.",
+          "pasteDescription": "Or paste this code on the other Orca desktop:",
+          "scanDialogTitle": "Scan to pair",
+          "clientConnecting": "Connecting",
+          "clientConnected": "Connected",
+          "clientReconnectWait": "Reconnecting",
+          "clientClosed": "Not connected",
+          "wsNotRunning": "WebSocket transport is not running",
+          "generateFailed": "Failed to generate pairing code",
+          "clientConnectFailed": "Failed to connect: {{reason}}",
+          "deviceRevoked": "Device revoked",
+          "revokeFailed": "Failed to revoke device",
+          "disconnectFailed": "Failed to disconnect client",
+          "startTitle": "Start peer sharing",
+          "startDescription": "Generate a code, then enter it on the other Orca desktop under Peer Collaboration. Connections stay on your local network only.",
+          "addressLabel": "This computer’s address",
+          "addressDescription": "The other desktop must be able to reach this address on Wi‑Fi, Ethernet, or Tailscale.",
+          "regenerate": "Regenerate code",
+          "generate": "Generate code",
+          "devicesTitle": "Peer Devices",
+          "devicesDescription": "Orca desktops that have paired with this computer.",
+          "connectedTitle": "Connected Clients",
+          "connectedDescription": "Orca desktops currently viewing your terminals.",
+          "noClients": "No peer desktops are connected right now.",
+          "connectedAt": "Connected",
+          "terminalCount": "{{count}} terminal(s)",
+          "disconnect": "Disconnect",
+          "disconnectAndBlock": "Disconnect and revoke device",
+          "clientCodeLabel": "Pairing code",
+          "clientCodePlaceholder": "Paste the code from the other Orca desktop",
+          "clientNameLabel": "Your display name",
+          "clientDisconnect": "Disconnect",
+          "clientConnect": "Connect",
+          "clientHostTerminalsTitle": "Host terminals",
+          "clientNoHostTerminals": "The host has no terminals to share right now.",
+          "clientUntitledTerminal": "Untitled terminal",
+          "clientOpenTerminal": "Open",
+          "exclusiveInputFloorLabel": "Block others while someone is typing",
+          "exclusiveInputFloorDescription": "By default everyone can type at once. Turn this on so the terminal locks to whoever typed most recently until they stop.",
+          "clientNoHostTerminalsShared": "The host has not shared a terminal with you yet.",
+          "grantTerminals": "Share terminals",
+          "grantTerminalsLabel": "Terminals shared with {{name}}",
+          "noHostTerminalsToGrant": "No terminals available to share.",
+          "untitledTerminal": "Untitled terminal",
+          "grantTerminalsFailed": "Failed to update shared terminals",
+          "clientDuplicateConnection": "This pairing code is already in use by another Orca. Generate a new code on the host.",
+          "clientSavedPairingInvalid": "This pairing is no longer valid — the host may have revoked it.",
+          "clientForgetHost": "Forget this host",
+          "clientSavedHost": "Saved host: {{endpoint}}",
+          "clientReconnectSaved": "Reconnect"
+        },
+        "MobilePairedDevicesSection": {
+          "connectedNow": "Connected now",
+          "lastSeen": "Last seen {{time}}"
         }
       },
       "right": {
@@ -11708,7 +11806,8 @@
             "stable": "稳定版"
           },
           "relayDegradedNotice": "无法连接 Relay — 此二维码仅在局域网或 Tailscale 内可用。",
-          "pairingQrError": "无法将此配对码呈现为二维码。请改为将其复制到 Orca Mobile。"
+          "pairingQrError": "无法将此配对码呈现为二维码。请改为将其复制到 Orca Mobile。",
+          "901c98bb93": "配对这个"
         },
         "MobilePage": {
           "e17393c6a3": "手机预览",
@@ -13603,7 +13702,10 @@
           "f0202f3a89": "每天",
           "57e83307d0": "工作日",
           "837d902bba": "每周",
-          "ddba78647e": "自定义 cron"
+          "ddba78647e": "自定义 cron",
+          "b08ccb4d06": "每小时",
+          "8cc026fd73": "每周",
+          "c3e39e17cf": "风俗"
         },
         "AutomationSessionField": {
           "f3c76dce51": "重复利用",
@@ -14286,6 +14388,22 @@
         "pendingChip": "{{value0}} 待处理",
         "needsActionChip": "{{value0}} 个需要操作",
         "unresolvedChip": "{{value0}} 个未解决"
+      },
+      "peer-collab": {
+        "RemoteTerminalDialog": {
+          "connected": "Connected",
+          "reconnecting": "Reconnecting",
+          "disconnected": "Disconnected",
+          "close": "Close"
+        },
+        "RemoteTerminalPanel": {
+          "error": "Could not open this terminal: {{reason}}",
+          "ended": "This terminal stream has ended.",
+          "otherSubscribers": "Also watching: {{names}}"
+        },
+        "RemoteTerminalPresenceOverlay": {
+          "scrolledUp": "scrolled up"
+        }
       }
     },
     "i18n": {
@@ -14488,6 +14606,14 @@
       "sent": "已将会话上下文发送到新的 {{agent}} 会话。",
       "deliveryFailed": "新的 {{agent}} 会话已启动，但无法发送上下文。",
       "launchFailed": "无法启动新的 {{agent}} 会话。"
+    },
+    "terminalPaneViewerBadge": {
+      "viewerCount": "{{count}} viewing this terminal",
+      "disconnect": "Disconnect",
+      "disconnectFailed": "Failed to disconnect client",
+      "shareToggleFailed": "Failed to update shared terminal",
+      "connectedNotWatching": "{{count}} connected, not watching",
+      "shareToggle": "Share this terminal with {{name}}"
     }
   },
   "dashboardPopout": {

@@ -201,8 +201,8 @@ describe('mobile presence lock — driver state machine', () => {
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
     await runtime.reclaimTerminalForDesktop('pty-1')
 
-    const first = runtime.beginMobileInputFloor('pty-1', 'phone-A')!
-    const second = runtime.beginMobileInputFloor('pty-1', 'phone-A')!
+    const first = runtime.beginInputFloor('pty-1', 'phone-A', 'mobile')!
+    const second = runtime.beginInputFloor('pty-1', 'phone-A', 'mobile')!
     first.rollback()
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
 
@@ -215,8 +215,8 @@ describe('mobile presence lock — driver state machine', () => {
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
     await runtime.reclaimTerminalForDesktop('pty-1')
 
-    const successful = runtime.beginMobileInputFloor('pty-1', 'phone-A')!
-    const rejected = runtime.beginMobileInputFloor('pty-1', 'phone-A')!
+    const successful = runtime.beginInputFloor('pty-1', 'phone-A', 'mobile')!
+    const rejected = runtime.beginInputFloor('pty-1', 'phone-A', 'mobile')!
     await successful.commit()
     rejected.rollback()
 
@@ -237,11 +237,11 @@ describe('mobile presence lock — driver state machine', () => {
           releaseFirstLayout = () => resolve(true)
         })
     )
-    const first = runtime.beginMobileInputFloor('pty-1', 'phone-A')!
+    const first = runtime.beginInputFloor('pty-1', 'phone-A', 'mobile')!
     const firstCommit = first.commit()
     await vi.waitFor(() => expect(releaseFirstLayout).toBeTypeOf('function'))
 
-    const second = runtime.beginMobileInputFloor('pty-1', 'phone-B')!
+    const second = runtime.beginInputFloor('pty-1', 'phone-B', 'mobile')!
     await second.commit()
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-B' })
 
@@ -267,14 +267,14 @@ describe('mobile presence lock — driver state machine', () => {
     runtime.handleMobileUnsubscribe('pty-1', 'phone-A')
 
     // Inside the soft-leave grace a late write still reserves and commits the floor.
-    const claim = runtime.beginMobileInputFloor('pty-1', 'phone-A')
+    const claim = runtime.beginInputFloor('pty-1', 'phone-A', 'mobile')
     expect(claim).not.toBeNull()
     await claim!.commit()
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
 
     // Past the grace the client is fully gone and is rejected.
     await vi.advanceTimersByTimeAsync(250)
-    expect(runtime.beginMobileInputFloor('pty-1', 'phone-A')).toBeNull()
+    expect(runtime.beginInputFloor('pty-1', 'phone-A', 'mobile')).toBeNull()
   })
 
   it('handleMobileUnsubscribe last leaver flips driver to idle after soft-leave grace', async () => {
@@ -810,5 +810,82 @@ describe('mobile presence lock — issue #7588 held-modal restore convergence', 
       cols: 0,
       rows: 0
     })
+  })
+})
+
+describe('peer input-floor arbitration (Phase 5)', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('setPeerInputFloorExclusive toggles isPeerInputFloorExclusive', () => {
+    const { runtime } = createRuntime()
+    expect(runtime.isPeerInputFloorExclusive()).toBe(false)
+    runtime.setPeerInputFloorExclusive(true)
+    expect(runtime.isPeerInputFloorExclusive()).toBe(true)
+    runtime.setPeerInputFloorExclusive(false)
+    expect(runtime.isPeerInputFloorExclusive()).toBe(false)
+  })
+
+  it('a peer claim commits the floor to that peer, with no phone-fit side effect', async () => {
+    const { runtime, ptySizes } = createRuntime()
+    const before = ptySizes.get('pty-1')
+
+    const claim = runtime.beginInputFloor('pty-1', 'peer-A', 'peer')!
+    await claim.commit()
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'peer-A' })
+    expect(ptySizes.get('pty-1')).toEqual(before)
+  })
+
+  it('releaseInputFloorIfHeldBy clears the driver and claim state when called by the actual holder', async () => {
+    const { runtime } = createRuntime()
+    const claim = runtime.beginInputFloor('pty-1', 'peer-A', 'peer')!
+    await claim.commit()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'peer-A' })
+
+    runtime.releaseInputFloorIfHeldBy('pty-1', 'peer-A')
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
+    // A later rollback for a stale claim (map already gone) must stay a no-op, not throw.
+    expect(() => claim.rollback()).not.toThrow()
+  })
+
+  it("releaseInputFloorIfHeldBy called by a non-holding client does not clear another client's in-flight claim", async () => {
+    const { runtime } = createRuntime()
+    // Peer B's commit is in flight (its onCommit-equivalent await never settles here because
+    // the peer branch has no onCommit callback — the claim itself is enough to model the race:
+    // the pending entry must survive an unrelated release call).
+    const pendingB = runtime.beginInputFloor('pty-1', 'peer-B', 'peer')!
+
+    // An unrelated peer A (never claimed anything on this ptyId) disconnects.
+    runtime.releaseInputFloorIfHeldBy('pty-1', 'peer-A')
+
+    // Peer B's claim must still be able to commit correctly afterwards.
+    await pendingB.commit()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'peer-B' })
+  })
+
+  it("releaseInputFloorIfHeldBy by a non-holder leaves another client's still-pending (uncommitted) claim rollback-able", async () => {
+    const { runtime } = createRuntime()
+    const pendingB = runtime.beginInputFloor('pty-1', 'peer-B', 'peer')!
+
+    runtime.releaseInputFloorIfHeldBy('pty-1', 'peer-A')
+
+    // Peer B's own rollback (e.g. its write failed) must still find its claim state
+    // and correctly restore the pre-claim driver, not silently no-op.
+    pendingB.rollback()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
+  })
+
+  it('releaseInputFloorIfHeldBy for a non-driving peer leaves the current driving peer intact', async () => {
+    const { runtime } = createRuntime()
+    const claimA = runtime.beginInputFloor('pty-1', 'peer-A', 'peer')!
+    await claimA.commit()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'peer-A' })
+
+    // peer-B never claimed the floor; its disconnect must not touch peer-A's driver.
+    runtime.releaseInputFloorIfHeldBy('pty-1', 'peer-B')
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'peer-A' })
   })
 })

@@ -38,6 +38,7 @@ export type AuthenticatedMobileSocket = {
   connectionId: string
   device: E2EEAuthenticatedDevice
   clientCapabilities: readonly RuntimeCapability[]
+  displayName: string | null
   transport: MobileSocketTransportMetadata
 }
 
@@ -166,6 +167,7 @@ export class MobileSocketWiring {
             connectionId,
             device,
             clientCapabilities: channel.clientCapabilities,
+            displayName: channel.displayName,
             transport: metadata
           }
           this.authenticatedSockets.set(ws, socket)

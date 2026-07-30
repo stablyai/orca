@@ -4,6 +4,7 @@ import { isPtyIncarnationId, type PtyIncarnationId } from '../../../../shared/pt
 import { defineMethod, type RpcAnyMethod } from '../core'
 import { OptionalString, requiredString } from '../schemas'
 import { TerminalPaneLayoutNodeSchema } from './session-tabs-schemas'
+import { assertPeerTerminalGranted } from '../peer-terminal-grant-guard'
 
 function parseOrphanGroupLayout(value: unknown): TabGroupLayoutNode | null {
   const stack: { value: unknown; depth: number }[] = [{ value, depth: 0 }]
@@ -108,6 +109,12 @@ export const TERMINAL_ORPHAN_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.adoptOrphans',
     params: TerminalAdoptOrphans,
-    handler: async (params, { runtime }) => runtime.adoptTerminalOrphans(params)
+    handler: async (params, ctx) => {
+      // Why: each claim names a distinct terminal handle a peer could adopt without ever subscribing to it.
+      for (const claim of params.claims) {
+        assertPeerTerminalGranted(ctx, claim.terminal)
+      }
+      return ctx.runtime.adoptTerminalOrphans(params)
+    }
   })
 ]

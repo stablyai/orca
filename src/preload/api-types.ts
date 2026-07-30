@@ -51,6 +51,9 @@ import type { MobileRelayStatus } from '../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../shared/mobile-relay-mint-failure'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../shared/remote-pairing-verification'
+import type { PeerClientStatus, SavedPeerPairing } from '../shared/peer-client-status'
+import type { PeerTerminalStreamEvent } from '../shared/peer-terminal-stream-event'
+import type { PeerPresenceEvent, PeerPresenceState } from '../shared/peer-presence-event'
 import type {
   SshMutationExpectation,
   SshConnectionState,
@@ -3641,6 +3644,96 @@ export type PreloadApi = {
     consumePendingUnpairedDeviceAuthFailure?: () => Promise<boolean>
     /** Fires (throttled, once per session) when an unpaired phone repeatedly fails direct-transport auth. */
     onUnpairedDeviceAuthFailure?: (callback: () => void) => () => void
+  }
+  peerCollab: {
+    getPairingOffer: (args?: { address?: string; rotate?: boolean }) => Promise<
+      | { available: false }
+      | {
+          available: true
+          qrDataUrl: string
+          pairingUrl: string
+          endpoint: string
+          deviceId: string
+        }
+    >
+    listDevices: () => Promise<{
+      devices: { deviceId: string; name: string; pairedAt: number; lastSeenAt: number }[]
+    }>
+    listConnectedClients: () => Promise<{
+      clients: {
+        connectionId: string
+        deviceId: string
+        name: string
+        connectedAt: number
+        subscribedTerminals: string[]
+        grantedTerminals: string[]
+      }[]
+    }>
+    disconnectClient: (args: {
+      deviceId: string
+      revokeDevice?: boolean
+    }) => Promise<{ disconnected: boolean; revoked: boolean }>
+    /** Whether a driver holding the input floor blocks other peers' input; default false (free input). */
+    getExclusiveInputFloor: () => Promise<{ enabled: boolean }>
+    setExclusiveInputFloor: (args: { enabled: boolean }) => Promise<{ enabled: boolean }>
+    /** Host's own terminals, for the grant picker (direct runtime.listTerminals call, not the RPC path). */
+    listHostTerminals: () => Promise<{
+      terminals: { handle: string; title: string | null; tabId: string }[]
+    }>
+    setGrantedTerminals: (args: { deviceId: string; handles: string[] }) => Promise<{ ok: boolean }>
+  }
+  // Why: the client side of peer collaboration — connecting to another Orca
+  // desktop's peerCollab pairing offer. Kept as a separate namespace from
+  // peerCollab (the host side) because a desktop can act as either or both.
+  peerClient: {
+    getDefaultDisplayName: () => Promise<{ name: string }>
+    connect: (args: {
+      pairingCode: string
+      displayName: string
+    }) => Promise<{ ok: true } | { ok: false; reason: string }>
+    disconnect: () => Promise<{ ok: true }>
+    /** Endpoint of the last successfully-authenticated pairing, persisted across restarts; null if none is saved. */
+    getSavedPairing: () => Promise<SavedPeerPairing | null>
+    /** Clears the saved pairing without touching a live connection; disconnect() alone never clears it. */
+    forgetSavedPairing: () => Promise<{ ok: true }>
+    connectSaved: () => Promise<{ ok: true } | { ok: false; reason: string }>
+    getStatus: () => Promise<PeerClientStatus>
+    onStatusChanged: (callback: (status: PeerClientStatus) => void) => () => void
+    listHostTerminals: () => Promise<
+      { ok: true; terminals: unknown } | { ok: false; reason: string }
+    >
+    subscribeTerminal: (args: {
+      terminal: string
+      cols: number
+      rows: number
+    }) => Promise<{ ok: true; requestId: string } | { ok: false; reason: string }>
+    unsubscribeTerminal: (args: { requestId: string }) => Promise<{ ok: true }>
+    sendTerminalInput: (args: { requestId: string; data: string }) => Promise<{ ok: boolean }>
+    resizeTerminalStream: (args: {
+      requestId: string
+      cols: number
+      rows: number
+    }) => Promise<{ ok: boolean }>
+    /** Names of other peers currently subscribed to this host terminal (participant display, Phase 5). */
+    listTerminalSubscribers: (args: {
+      terminal: string
+    }) => Promise<{ ok: true; subscribers: { name: string }[] } | { ok: false; reason: string }>
+    onTerminalStreamEvent: (
+      callback: (payload: { requestId: string; event: PeerTerminalStreamEvent }) => void
+    ) => () => void
+    getClientId: () => Promise<{ clientId: string | null }>
+    /** Cursor/scroll/selection fan-out for the same terminal, separate from the terminal I/O stream above. */
+    subscribePresence: (args: {
+      terminal: string
+    }) => Promise<{ ok: true; requestId: string } | { ok: false; reason: string }>
+    unsubscribePresence: (args: { requestId: string }) => Promise<{ ok: true }>
+    sendPresenceState: (args: {
+      terminal: string
+      state: PeerPresenceState
+    }) => Promise<{ ok: true }>
+    onPresenceEvent: (
+      callback: (payload: { requestId: string; event: PeerPresenceEvent }) => void
+    ) => () => void
   }
   speech: {
     getCatalog: () => Promise<SpeechModelManifest[]>

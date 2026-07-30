@@ -35,7 +35,7 @@ export type E2EEChannelOptions = {
 export type E2EEAuthenticatedDevice = {
   deviceId: string
   deviceToken: string
-  scope: 'mobile' | 'runtime'
+  scope: 'mobile' | 'runtime' | 'peer'
 }
 
 export class E2EEChannel {
@@ -65,6 +65,7 @@ export class E2EEChannel {
   deviceToken: string | null = null
   authenticatedDevice: E2EEAuthenticatedDevice | null = null
   clientCapabilities: readonly RuntimeCapability[] = []
+  displayName: string | null = null
 
   constructor(ws: WebSocket, options: E2EEChannelOptions) {
     this.ws = ws
@@ -250,6 +251,10 @@ export class E2EEChannel {
     const authenticatedDevice = authentication.device
 
     this.clientCapabilities = parseRuntimeClientCapabilities(authentication.auth.clientCapabilities)
+    this.displayName =
+      typeof authentication.auth.displayName === 'string'
+        ? authentication.auth.displayName.trim() || null
+        : null
     this.deviceToken = authenticatedDevice.deviceToken
     this.authenticatedDevice = authenticatedDevice
     this.state = 'ready'

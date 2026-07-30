@@ -1750,7 +1750,7 @@ describe('terminal multiplex RPC', () => {
     const restreamResolves: ((value: { data: string; cols: number; rows: number }) => void)[] = []
     const write = vi.fn()
     const commit = vi.fn().mockResolvedValue(undefined)
-    const beginMobileInputFloor = vi.fn(() => ({ commit, rollback: vi.fn() }))
+    const beginInputFloor = vi.fn(() => ({ commit, rollback: vi.fn() }))
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -1788,7 +1788,7 @@ describe('terminal multiplex RPC', () => {
         await options.afterWrite('pty-1')
         return { accepted: true }
       }),
-      beginMobileInputFloor,
+      beginInputFloor,
       updateMobileViewport: vi.fn().mockResolvedValue({ updated: false, applied: false })
     })
     const dispatcher = new RpcDispatcher({
@@ -1858,7 +1858,7 @@ describe('terminal multiplex RPC', () => {
         { reserveWrite: expect.any(Function), afterWrite: expect.any(Function) }
       )
     )
-    expect(beginMobileInputFloor.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(beginInputFloor.mock.invocationCallOrder[0]).toBeLessThan(
       write.mock.invocationCallOrder[0]!
     )
     expect(write.mock.invocationCallOrder[0]).toBeLessThan(commit.mock.invocationCallOrder[0]!)

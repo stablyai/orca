@@ -54,7 +54,8 @@ export const HEADLESS_RUNTIME_WINDOW_ID = 0
 
 // Why: the access scope a paired device token grants. Lives in shared so
 // pairing offers, status.get, and the device registry use one vocabulary.
-export type DeviceScope = 'mobile' | 'runtime'
+// 'peer' is another Orca desktop pairing in as a LAN client, distinct from 'mobile' and 'runtime'.
+export type DeviceScope = 'mobile' | 'runtime' | 'peer'
 
 // Why: presence-lock driver state crosses main/preload/renderer IPC. Keep one
 // checked source so future variants cannot drift silently across layers.

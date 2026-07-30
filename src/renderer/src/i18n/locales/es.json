@@ -793,7 +793,9 @@
         "linearDescription": "Cómo funciona Linear en Orca, lista de configuración, habilidad del agente y ejemplos de prompts.",
         "pluginsTitle": "Plugins",
         "pluginsDescription": "Instala y administra plugins experimentales de Orca.",
-        "tasksDescription": "Conecta proveedores, instala la habilidad de Linear y elige qué aparece en Tareas."
+        "tasksDescription": "Conecta proveedores, instala la habilidad de Linear y elige qué aparece en Tareas.",
+        "peerCollabTitle": "Peer Collaboration",
+        "peerCollabDescription": "Share terminals with other Orca desktops over your local network."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."
@@ -1017,7 +1019,12 @@
           "activity": "Actividad",
           "noActivity": "Sin actividad aún."
         },
-        "checkActionRequiredHint": "Esta verificación necesita una acción manual en GitHub (por ejemplo, aprobar la ejecución del workflow) antes de que se desbloquee la fusión."
+        "checkActionRequiredHint": "Esta verificación necesita una acción manual en GitHub (por ejemplo, aprobar la ejecución del workflow) antes de que se desbloquee la fusión.",
+        "d23bbb6416": "{{value0}} omitido",
+        "18f80e1329": "{{value0}} pendiente",
+        "b1ac991806": "{{value0}} fallando",
+        "checksNeedActionChip": "{{value0}} requiere acción",
+        "311d0cee55": "{{value0}} pasando"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reabrir",
@@ -1496,7 +1503,12 @@
         "dd5d9a4f17": "actualizado {{value0}}",
         "71a3c0f9d2": "Iniciar espacio de trabajo",
         "filesUnavailable": "Couldn't load changed files.",
-        "filesRetry": "Retry"
+        "filesRetry": "Retry",
+        "e6ad0a8d06": "{{value0}} omitido",
+        "88267924d5": "{{value0}} pendiente",
+        "ae2a34c7b8": "{{value0}} fallando",
+        "checksNeedActionChip": "{{value0}} requiere acción",
+        "7c5035931a": "{{value0}} pasando"
       },
       "QuickOpen": {
         "1dbd3f59ff": "Mover",
@@ -6833,7 +6845,9 @@
           "devDescription": "Herramientas solo de desarrollo para probar estados de la UI.",
           "linearTitle": "Linear",
           "linearDescription": "Cómo funciona Linear en Orca, lista de configuración, habilidad del agente y ejemplos de prompts.",
-          "tasksDescription": "Conecta proveedores, instala la habilidad de Linear y elige qué aparece en Tareas."
+          "tasksDescription": "Conecta proveedores, instala la habilidad de Linear y elige qué aparece en Tareas.",
+          "peerCollabTitle": "Peer Collaboration",
+          "peerCollabDescription": "Share terminals with other Orca desktops over your local network."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No hay fuentes coincidentes.",
@@ -7089,7 +7103,14 @@
           "integrationsHint": "Las credenciales de todos los proveedores también están en",
           "integrationsLink": "Integraciones",
           "skillHint": ". Después de conectar Linear, los ejemplos de uso están en Ajustes → Linear.",
-          "incompleteBannerBodyWithLinear": "Oculta los proveedores que no uses o expande una tarjeta y completa sus pasos. Para Linear: acceso a la API, la habilidad del agente y Mostrar en Tareas."
+          "incompleteBannerBodyWithLinear": "Oculta los proveedores que no uses o expande una tarjeta y completa sus pasos. Para Linear: acceso a la API, la habilidad del agente y Mostrar en Tareas.",
+          "3a72b9745e": "Elige qué proveedores de tareas aparecen en la página Tareas y en los accesos directos de la barra lateral.",
+          "71644aba56": "Elige qué proveedores de tareas aparecen en el selector de fuentes de la página Tareas y en los accesos directos de la barra lateral. Al menos un proveedor debe permanecer visible.",
+          "93e72ef659": "Fuentes de tareas",
+          "8e1305fcc6": "Muestra Jira en el selector de fuentes de Tareas y en los accesos directos de la barra lateral.",
+          "e4170c9615": "Muestra Linear en el selector de fuentes de Tareas y en los accesos directos de la barra lateral.",
+          "dd67a1b6e1": "Muestra GitLab en el selector de fuentes de Tareas y en los accesos directos de la barra lateral.",
+          "1db47236cd": "Muestra GitHub en el selector de fuentes de Tareas y en los accesos directos de la barra lateral."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Grosor de la línea divisoria del panel.",
@@ -8739,7 +8760,8 @@
             "setup": "configuración",
             "apiKey": "clave de API",
             "skill": "habilidad",
-            "connect": "conectar"
+            "connect": "conectar",
+            "765f0c544d": "Elige qué proveedores de tareas aparecen en la página Tareas y en los accesos directos de la barra lateral."
           }
         },
         "terminal": {
@@ -9449,7 +9471,8 @@
         "ephemeralVms": {
           "search": {
             "description": "Aprende cómo las recetas del repositorio dan a cada espacio de trabajo su propio entorno desechable bajo demanda.",
-            "cloudVmTitle": "VM en la nube"
+            "cloudVmTitle": "VM en la nube",
+            "title": "Entornos por espacio de trabajo"
           }
         },
         "EphemeralVmsPane": {
@@ -9470,11 +9493,14 @@
           "cloudVmSkillTitle": "Skill de configuración de VM en la nube",
           "cloudVmRefresh": "Actualizar recetas de VM en la nube",
           "cloudVmTerminalTitle": "Configuración de VM en la nube",
-          "cloudVmTerminalAriaLabel": "Terminal de instalación de la skill de VM en la nube"
+          "cloudVmTerminalAriaLabel": "Terminal de instalación de la skill de VM en la nube",
+          "skillTitle": "Skill de entornos por espacio de trabajo",
+          "refresh": "Actualizar recetas de VMs efímeras"
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Muestra controles de configuración y destinos de ejecución de espacios de trabajo para entornos bajo demanda del repositorio.",
-          "cloudVmToggleLabel": "Activar o desactivar VM en la nube"
+          "cloudVmToggleLabel": "Activar o desactivar VM en la nube",
+          "toggleLabel": "Activar o desactivar entornos por espacio de trabajo"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agente",
@@ -9603,7 +9629,8 @@
           "terminalTitle": "Configuración de la habilidad de Linear",
           "terminalAriaLabel": "Terminal de instalación de la habilidad de Linear",
           "manageConnectionHint": "Revisa los espacios de trabajo de Linear conectados y las claves de API en",
-          "manageConnectionLink": "Integraciones"
+          "manageConnectionLink": "Integraciones",
+          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca."
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
@@ -10026,6 +10053,77 @@
           "setupRecipe": "Configura una receta de entorno para tu proveedor de nube.",
           "createWorkspace": "Crea un espacio de trabajo y selecciona esa receta en Ejecutar en.",
           "openSetup": "Configurar recetas de entorno"
+        },
+        "peer-collab": {
+          "settings": {
+            "search": {
+              "title": "Peer Collaboration",
+              "description": "Share terminals with other Orca desktops over your local network.",
+              "clientTitle": "Connect to another Orca",
+              "clientDescription": "Connect to a host Orca as a client using a pairing code.",
+              "connect": "connect",
+              "pairingCode": "pairing code",
+              "clientRole": "client"
+            }
+          }
+        },
+        "PeerCollabSettingsPane": {
+          "noDevicesWithCode": "No devices paired yet. Enter the code on the other Orca desktop.",
+          "qrAlt": "QR Code for peer desktop pairing",
+          "scanDescription": "Enter this code on the other Orca desktop. Each code creates a unique device token.",
+          "pasteDescription": "Or paste this code on the other Orca desktop:",
+          "scanDialogTitle": "Scan to pair",
+          "clientConnecting": "Connecting",
+          "clientConnected": "Connected",
+          "clientReconnectWait": "Reconnecting",
+          "clientClosed": "Not connected",
+          "wsNotRunning": "WebSocket transport is not running",
+          "generateFailed": "Failed to generate pairing code",
+          "clientConnectFailed": "Failed to connect: {{reason}}",
+          "deviceRevoked": "Device revoked",
+          "revokeFailed": "Failed to revoke device",
+          "disconnectFailed": "Failed to disconnect client",
+          "startTitle": "Start peer sharing",
+          "startDescription": "Generate a code, then enter it on the other Orca desktop under Peer Collaboration. Connections stay on your local network only.",
+          "addressLabel": "This computer’s address",
+          "addressDescription": "The other desktop must be able to reach this address on Wi‑Fi, Ethernet, or Tailscale.",
+          "regenerate": "Regenerate code",
+          "generate": "Generate code",
+          "devicesTitle": "Peer Devices",
+          "devicesDescription": "Orca desktops that have paired with this computer.",
+          "connectedTitle": "Connected Clients",
+          "connectedDescription": "Orca desktops currently viewing your terminals.",
+          "noClients": "No peer desktops are connected right now.",
+          "connectedAt": "Connected",
+          "terminalCount": "{{count}} terminal(s)",
+          "disconnect": "Disconnect",
+          "disconnectAndBlock": "Disconnect and revoke device",
+          "clientCodeLabel": "Pairing code",
+          "clientCodePlaceholder": "Paste the code from the other Orca desktop",
+          "clientNameLabel": "Your display name",
+          "clientDisconnect": "Disconnect",
+          "clientConnect": "Connect",
+          "clientHostTerminalsTitle": "Host terminals",
+          "clientNoHostTerminals": "The host has no terminals to share right now.",
+          "clientUntitledTerminal": "Untitled terminal",
+          "clientOpenTerminal": "Open",
+          "exclusiveInputFloorLabel": "Block others while someone is typing",
+          "exclusiveInputFloorDescription": "By default everyone can type at once. Turn this on so the terminal locks to whoever typed most recently until they stop.",
+          "clientNoHostTerminalsShared": "The host has not shared a terminal with you yet.",
+          "grantTerminals": "Share terminals",
+          "grantTerminalsLabel": "Terminals shared with {{name}}",
+          "noHostTerminalsToGrant": "No terminals available to share.",
+          "untitledTerminal": "Untitled terminal",
+          "grantTerminalsFailed": "Failed to update shared terminals",
+          "clientDuplicateConnection": "This pairing code is already in use by another Orca. Generate a new code on the host.",
+          "clientSavedPairingInvalid": "This pairing is no longer valid — the host may have revoked it.",
+          "clientForgetHost": "Forget this host",
+          "clientSavedHost": "Saved host: {{endpoint}}",
+          "clientReconnectSaved": "Reconnect"
+        },
+        "MobilePairedDevicesSection": {
+          "connectedNow": "Connected now",
+          "lastSeen": "Last seen {{time}}"
         }
       },
       "right": {
@@ -11708,7 +11806,8 @@
             "stable": "Estable"
           },
           "relayDegradedNotice": "No se pudo contactar con Relay: este código solo funciona en tu LAN o Tailscale.",
-          "pairingQrError": "Este código de emparejamiento no se pudo representar como código QR. Cópialo en Orca Mobile."
+          "pairingQrError": "Este código de emparejamiento no se pudo representar como código QR. Cópialo en Orca Mobile.",
+          "901c98bb93": "Empareja este"
         },
         "MobilePage": {
           "e17393c6a3": "Vista previa del teléfono",
@@ -13603,7 +13702,10 @@
           "f0202f3a89": "Diario",
           "57e83307d0": "Días laborables",
           "837d902bba": "Semanal",
-          "ddba78647e": "Cron personalizado"
+          "ddba78647e": "Cron personalizado",
+          "b08ccb4d06": "cada hora",
+          "8cc026fd73": "semanalmente",
+          "c3e39e17cf": "costumbre"
         },
         "AutomationSessionField": {
           "f3c76dce51": "Reutilizar",
@@ -14286,6 +14388,22 @@
         "pendingChip": "{{value0}} pendiente",
         "needsActionChip": "{{value0}} requiere acción",
         "unresolvedChip": "{{value0}} sin resolver"
+      },
+      "peer-collab": {
+        "RemoteTerminalDialog": {
+          "connected": "Connected",
+          "reconnecting": "Reconnecting",
+          "disconnected": "Disconnected",
+          "close": "Close"
+        },
+        "RemoteTerminalPanel": {
+          "error": "Could not open this terminal: {{reason}}",
+          "ended": "This terminal stream has ended.",
+          "otherSubscribers": "Also watching: {{names}}"
+        },
+        "RemoteTerminalPresenceOverlay": {
+          "scrolledUp": "scrolled up"
+        }
       }
     },
     "i18n": {
@@ -14488,6 +14606,14 @@
       "sent": "El contexto de la sesión se envió a {{agent}} en una sesión nueva.",
       "deliveryFailed": "La nueva sesión de {{agent}} se inició, pero no se pudo enviar su contexto.",
       "launchFailed": "No se pudo iniciar una sesión nueva de {{agent}}."
+    },
+    "terminalPaneViewerBadge": {
+      "viewerCount": "{{count}} viewing this terminal",
+      "disconnect": "Disconnect",
+      "disconnectFailed": "Failed to disconnect client",
+      "shareToggleFailed": "Failed to update shared terminal",
+      "connectedNotWatching": "{{count}} connected, not watching",
+      "shareToggle": "Share this terminal with {{name}}"
     }
   },
   "dashboardPopout": {

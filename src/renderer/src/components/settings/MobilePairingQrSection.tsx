@@ -15,6 +15,8 @@ type MobilePairingQrSectionProps = {
   onQrEnlargedChange: (open: boolean) => void
   onCodeCopiedChange: (copied: boolean) => void
   onClearCodeCopiedTimer: () => void
+  // Peer-collab pairs two Orca desktops, not a phone, so the copy must not say "mobile app".
+  variant?: 'mobile' | 'peer'
 }
 
 export function MobilePairingQrSection({
@@ -26,7 +28,8 @@ export function MobilePairingQrSection({
   codeCopied,
   onQrEnlargedChange,
   onCodeCopiedChange,
-  onClearCodeCopiedTimer
+  onClearCodeCopiedTimer,
+  variant = 'mobile'
 }: MobilePairingQrSectionProps): React.JSX.Element | null {
   const pairingCodeButtonMountedRef = useRef(false)
   const pairingCodeButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -98,10 +101,17 @@ export function MobilePairingQrSection({
           >
             <img
               src={qrDataUrl}
-              alt={translate(
-                'auto.components.settings.MobilePane.6436e56546',
-                'QR Code for mobile pairing'
-              )}
+              alt={
+                variant === 'peer'
+                  ? translate(
+                      'auto.components.settings.PeerCollabSettingsPane.qrAlt',
+                      'QR Code for peer desktop pairing'
+                    )
+                  : translate(
+                      'auto.components.settings.MobilePane.6436e56546',
+                      'QR Code for mobile pairing'
+                    )
+              }
               className="size-48"
             />
             <Maximize2 className="absolute top-1.5 right-1.5 size-3 text-black/30 can-hover:opacity-0 transition-opacity group-hover:opacity-100" />
@@ -120,19 +130,29 @@ export function MobilePairingQrSection({
           </p>
         ) : (
           <p className="text-muted-foreground max-w-xs text-center text-xs">
-            {translate(
-              'auto.components.settings.MobilePane.310924ad2c',
-              'Scan this code with the Orca mobile app. Each code creates a unique device token.'
-            )}
+            {variant === 'peer'
+              ? translate(
+                  'auto.components.settings.PeerCollabSettingsPane.scanDescription',
+                  'Enter this code on the other Orca desktop. Each code creates a unique device token.'
+                )
+              : translate(
+                  'auto.components.settings.MobilePane.310924ad2c',
+                  'Scan this code with the Orca mobile app. Each code creates a unique device token.'
+                )}
           </p>
         )}
         {pairingUrl && (
           <div className="flex w-full max-w-lg flex-col gap-1.5 px-4">
             <div className="text-muted-foreground text-center text-xs">
-              {translate(
-                'auto.components.settings.MobilePane.e778ecb209',
-                'Or paste this code in the mobile app:'
-              )}
+              {variant === 'peer'
+                ? translate(
+                    'auto.components.settings.PeerCollabSettingsPane.pasteDescription',
+                    'Or paste this code on the other Orca desktop:'
+                  )
+                : translate(
+                    'auto.components.settings.MobilePane.e778ecb209',
+                    'Or paste this code in the mobile app:'
+                  )}
             </div>
             <Button
               ref={setPairingCodeButtonRef}
@@ -161,20 +181,32 @@ export function MobilePairingQrSection({
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>
               <DialogTitle>
-                {translate(
-                  'auto.components.settings.MobilePane.dd3cd78d04',
-                  'Scan with Orca Mobile'
-                )}
+                {variant === 'peer'
+                  ? translate(
+                      'auto.components.settings.PeerCollabSettingsPane.scanDialogTitle',
+                      'Scan to pair'
+                    )
+                  : translate(
+                      'auto.components.settings.MobilePane.dd3cd78d04',
+                      'Scan with Orca Mobile'
+                    )}
               </DialogTitle>
             </DialogHeader>
             <div className="flex flex-col items-center gap-3">
               <div className="rounded-lg bg-white p-4">
                 <img
                   src={qrDataUrl}
-                  alt={translate(
-                    'auto.components.settings.MobilePane.6436e56546',
-                    'QR Code for mobile pairing'
-                  )}
+                  alt={
+                    variant === 'peer'
+                      ? translate(
+                          'auto.components.settings.PeerCollabSettingsPane.qrAlt',
+                          'QR Code for peer desktop pairing'
+                        )
+                      : translate(
+                          'auto.components.settings.MobilePane.6436e56546',
+                          'QR Code for mobile pairing'
+                        )
+                  }
                   className="size-72"
                 />
               </div>

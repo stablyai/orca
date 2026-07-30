@@ -27,6 +27,8 @@ import {
   type AuthenticatedMobileSocket,
   type MobileSocketTransportMetadata
 } from './rpc/mobile-socket-wiring'
+import { PeerConnectionRegistry } from './peer-connection-registry'
+import { PEER_DUPLICATE_CONNECTION_CLOSE_CODE } from '../../shared/peer-connection-close-codes'
 import type { PairingRelay } from '../../shared/mobile-relay-pairing-offer'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import {
@@ -400,7 +402,11 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'terminal.getAutoRestoreFit',
   'terminal.isRunningAgent',
   'terminal.list',
+  'terminal.listSubscribers',
   'terminal.multiplex',
+  'terminal.presence.subscribe',
+  'terminal.presence.send',
+  'terminal.presence.unsubscribe',
   'terminal.read',
   'terminal.rename',
   'terminal.send',
@@ -479,6 +485,7 @@ export class OrcaRuntimeRpcServer {
   private readonly metadataOwnershipPollMs: number
   private readonly askLongPollCap: number
   private readonly relayRevokeOutbox: RelayRevokeOutbox
+  private readonly peerConnections = new PeerConnectionRegistry()
   private deviceRegistry: DeviceRegistry | null = null
   private e2eeKeypair: E2EEKeypair | null = null
   private pairingInitializationFailure: PairingOfferUnavailable | null = null
@@ -626,6 +633,79 @@ export class OrcaRuntimeRpcServer {
     this.runtime.forgetClientNavigationState(deviceId)
     this.mobileSocketWiring?.terminateDeviceConnections(device.token)
     return true
+  }
+
+  revokePeerDevice(deviceId: string): boolean {
+    const device = this.deviceRegistry?.getDevice(deviceId)
+    if (device?.scope !== 'peer' || !this.deviceRegistry?.removeDevice(deviceId)) {
+      return false
+    }
+    this.runtime.forgetClientNavigationState(deviceId)
+    this.mobileSocketWiring?.terminateDeviceConnections(device.token)
+    return true
+  }
+
+  // Why: the WS close (and its onReady/onClose pair above) is the source of
+  // truth for peerConnections; closing the socket here lets that same path
+  // clean up the registry entry instead of duplicating removal logic.
+  disconnectPeerClient(deviceId: string): boolean {
+    const device = this.deviceRegistry?.getDevice(deviceId)
+    if (device?.scope !== 'peer') {
+      return false
+    }
+    return (this.mobileSocketWiring?.terminateDeviceConnections(device.token) ?? 0) > 0
+  }
+
+  listConnectedPeerClients(): {
+    connectionId: string
+    deviceId: string
+    name: string
+    connectedAt: number
+    subscribedTerminals: string[]
+    grantedTerminals: string[]
+  }[] {
+    return this.peerConnections.list().map((entry) => ({
+      ...entry,
+      subscribedTerminals: this.runtime
+        .getSubscriptionIdsForConnection(entry.connectionId)
+        // Why: peer connections share the mobile RPC allowlist, which also grants
+        // accounts.subscribe/notifications.subscribe/runtime.clientEvents.subscribe/
+        // nativeChat.subscribe; their subscriptionIds are not terminal handles, so
+        // resolve against the live handle table instead of denying known prefixes,
+        // which would keep missing new non-terminal subscription types.
+        .filter((id) => this.runtime.resolveLiveLeafForHandle(id) !== null),
+      grantedTerminals: this.deviceRegistry?.getGrantedTerminals(entry.deviceId) ?? []
+    }))
+  }
+
+  // Why: host-side control surface for Phase 1 grant enforcement — the UI
+  // calls this to change which terminals a paired peer device may see/use.
+  setGrantedTerminals(deviceId: string, terminals: string[]): boolean {
+    return this.deviceRegistry?.setGrantedTerminals(deviceId, terminals) ?? false
+  }
+
+  // Why: reverse-index of listConnectedPeerClients — given a terminal handle,
+  // which connected peers' subscriptions include it. Used by
+  // terminal.listSubscribers so a client can show who else is watching.
+  // excludeConnectionId omits the caller's own connection from the result.
+  listPeerNamesForTerminal(terminal: string, excludeConnectionId?: string): { name: string }[] {
+    return this.peerConnections
+      .list()
+      .filter((entry) => entry.connectionId !== excludeConnectionId)
+      .filter((entry) =>
+        this.runtime
+          .getSubscriptionIdsForConnection(entry.connectionId)
+          .some((id) => id === terminal || id.startsWith(`${terminal}:`))
+      )
+      .map((entry) => ({ name: entry.name }))
+  }
+
+  setPeerInputFloorExclusive(enabled: boolean): void {
+    this.runtime.setPeerInputFloorExclusive(enabled)
+  }
+
+  isPeerInputFloorExclusive(): boolean {
+    return this.runtime.isPeerInputFloorExclusive()
   }
 
   getWebSocketEndpoint(): string | null {
@@ -1163,7 +1243,20 @@ export class OrcaRuntimeRpcServer {
               )
             },
             onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket.ws),
-            onReady: () => {
+            onReady: (socket) => {
+              // Why: a pairing code pasted into a second client reuses the same
+              // deviceId (see PeerConnectionRegistry.findLiveConnectionByDevice);
+              // reject the duplicate here so one deviceId never backs two live
+              // connections, which would make grant/disconnect controls (keyed
+              // by deviceId) affect both at once. Mobile scope keeps its
+              // existing same-device multi-connection behavior untouched.
+              if (
+                socket.device.scope === 'peer' &&
+                this.peerConnections.findLiveConnectionByDevice(socket.device.deviceId)
+              ) {
+                socket.ws.close(PEER_DUPLICATE_CONNECTION_CLOSE_CODE, 'Pairing code already in use')
+                return
+              }
               // Why: first authenticated mobile/remote client (direct WS and
               // cloud relay both attach here) starts path-candidate tracking.
               // Activation is a local-host concern: candidate buffers live on the
@@ -1171,6 +1264,21 @@ export class OrcaRuntimeRpcServer {
               // legitimately lack this method (its own server activates it).
               this.runtime.activateRecentPtyPathCandidateTracking?.()
               this.mobileRelayPairingProvider?.onDemandStateChanged?.()
+              if (socket.device.scope === 'peer') {
+                this.peerConnections.add(
+                  {
+                    connectionId: socket.connectionId,
+                    deviceId: socket.device.deviceId,
+                    // Why: handshake-carried display name (Phase 3) wins over the pairing-offer name.
+                    name:
+                      socket.displayName ??
+                      this.deviceRegistry?.getDevice(socket.device.deviceId)?.name ??
+                      'Peer',
+                    connectedAt: Date.now()
+                  },
+                  socket.ws
+                )
+              }
             },
             onClose: (socket, hasOtherConnections) => {
               if (!socket) {
@@ -1181,6 +1289,17 @@ export class OrcaRuntimeRpcServer {
               this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
               this.runtime.cancelMobileDictationForConnection(socket.connectionId)
               this.binaryStreamHandlers.delete(socket.connectionId)
+              const wasLivePeerConnection = this.peerConnections.remove(socket.connectionId)
+              // Why: peer lastSeenAt must reflect when the connection actually died,
+              // not just when it authenticated, so the host can tell a long session
+              // that just ended from one abandoned hours ago. Mobile scope is
+              // untouched — its lastSeenAt semantics predate this and are unrelated.
+              // Guarded on wasLivePeerConnection so a duplicate-pairing-code socket
+              // (rejected in onReady before ever being added) can't overwrite the
+              // real session's lastSeenAt when its async close event lands here.
+              if (socket.device.scope === 'peer' && wasLivePeerConnection) {
+                this.deviceRegistry?.updateLastSeen(socket.device.deviceId)
+              }
               if (!hasOtherConnections) {
                 this.runtime.onClientDisconnected(socket.device.deviceToken)
               }
@@ -1401,13 +1520,19 @@ export class OrcaRuntimeRpcServer {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Invalid device token')))
       return
     }
-    if (device.scope === 'mobile' && !MOBILE_RPC_METHOD_ALLOWLIST.has(request.method)) {
+    // Why: peer desktops get the same restricted RPC surface as mobile, not the
+    // unrestricted 'runtime' scope — a LAN peer must not gain broader access
+    // than the terminal-sharing feature it was paired for.
+    if (
+      (device.scope === 'mobile' || device.scope === 'peer') &&
+      !MOBILE_RPC_METHOD_ALLOWLIST.has(request.method)
+    ) {
       reply(
         JSON.stringify(
           this.buildError(
             request.id,
             'forbidden',
-            `Method '${request.method}' is not available to mobile clients`
+            `Method '${request.method}' is not available to ${device.scope} clients`
           )
         )
       )
@@ -1464,8 +1589,12 @@ export class OrcaRuntimeRpcServer {
         connectionId,
         clientId: token,
         pairedDeviceId: device.deviceId,
-        // Why: gates the mobile-only payload diet so full-screen web/desktop clients aren't truncated.
-        clientKind: device.scope,
+        // Why: gates the mobile-only payload diet so full-screen web/desktop
+        // clients aren't truncated; a peer is a full desktop viewer too.
+        clientKind: device.scope === 'mobile' ? 'mobile' : 'runtime',
+        isPeerDevice: device.scope === 'peer',
+        listPeerSubscribers: (terminal) => this.listPeerNamesForTerminal(terminal, connectionId),
+        getGrantedTerminals: () => this.deviceRegistry?.getGrantedTerminals(device.deviceId) ?? [],
         clientCapabilities: authenticatedSocket?.clientCapabilities,
         pairing: pairingContext,
         signal: abortRegistration?.signal,

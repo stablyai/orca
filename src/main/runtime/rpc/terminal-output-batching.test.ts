@@ -286,8 +286,8 @@ describe('terminal output batching', () => {
     const write = vi.fn()
     const commit = vi.fn().mockResolvedValue(undefined)
     const rollback = vi.fn()
-    const beginMobileInputFloor = vi.fn(
-      (): ReturnType<OrcaRuntimeService['beginMobileInputFloor']> => ({ commit, rollback })
+    const beginInputFloor = vi.fn(
+      (): ReturnType<OrcaRuntimeService['beginInputFloor']> => ({ commit, rollback })
     )
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
@@ -318,7 +318,7 @@ describe('terminal output batching', () => {
         await options.afterWrite('pty-1')
         return { accepted: true }
       }),
-      beginMobileInputFloor,
+      beginInputFloor,
       updateMobileViewport: vi.fn().mockResolvedValue(false)
     })
     const dispatcher = new RpcDispatcher({
@@ -367,8 +367,8 @@ describe('terminal output batching', () => {
         { reserveWrite: expect.any(Function), afterWrite: expect.any(Function) }
       )
     )
-    expect(beginMobileInputFloor).toHaveBeenCalledWith('pty-1', 'mobile-1')
-    expect(beginMobileInputFloor.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(beginInputFloor).toHaveBeenCalledWith('pty-1', 'mobile-1', 'mobile')
+    expect(beginInputFloor.mock.invocationCallOrder[0]).toBeLessThan(
       write.mock.invocationCallOrder[0]!
     )
     expect(write.mock.invocationCallOrder[0]).toBeLessThan(commit.mock.invocationCallOrder[0]!)

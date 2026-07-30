@@ -47,6 +47,9 @@ import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-direct
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { initObservability, shutdownObservability } from './observability'
 import { registerMobileHandlers } from './ipc/mobile'
+import { registerPeerCollabHandlers } from './ipc/peer-collab'
+import { registerPeerClientHandlers } from './ipc/peer-client'
+import { PeerClientService } from './runtime/peer-client-service'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce, track } from './telemetry/client'
 import { classifyError } from './telemetry/classify-error'
 import { recordManagedHookInstallFailure } from './agent-hooks/install-telemetry'
@@ -322,6 +325,9 @@ let claudeRuntimeAuth: ClaudeRuntimeAuthService | null = null
 let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
+// Why: holds no profile-specific state until connect() is called, so unlike
+// runtimeRpc it doesn't need to be recreated across profile switches.
+const peerClientService = new PeerClientService()
 const serveReadinessPublisher = new ServeReadinessPublisher()
 let desktopRelayService: DesktopRelayService | null = null
 let desktopRelayStatus: RelayBrokerStatus = 'offline'
@@ -2766,6 +2772,8 @@ void app.whenReady().then(async () => {
       return true
     }
   })
+  registerPeerCollabHandlers(runtimeRpc, runtime)
+  registerPeerClientHandlers(peerClientService, store)
   // Why: repeated direct auth failures otherwise look like a client that never connects; point users to re-pairing.
   runtimeRpc.setOnUnpairedDeviceAuthFailure(() => {
     // Why: runtime startup races renderer mount; retain the one-shot until the listener consumes it.
@@ -2924,6 +2932,7 @@ app.on('before-quit', () => {
   isQuitting = true
   desktopRelayService?.fenceAndCloseNow()
   runtimeRpc?.setMobileRelayPairingProvider(null)
+  peerClientService.destroy()
   unsubscribeSystemResumeBroadcast?.()
   unsubscribeSystemResumeBroadcast = null
   unsubscribeAgentAwakeStatusChanges?.()

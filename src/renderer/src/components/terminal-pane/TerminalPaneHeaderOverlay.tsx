@@ -14,6 +14,8 @@ import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/works
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import type { PtyTransport } from './pty-transport'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
+import { TerminalPaneViewerBadge } from './TerminalPaneViewerBadge'
+import { usePeerCollabConnectedClients } from './use-peer-collab-connected-clients'
 
 export type PaneTitleOverlayRect = {
   left: number
@@ -106,6 +108,8 @@ export default function TerminalPaneHeaderOverlay({
     'auto.components.terminal.pane.TerminalContextMenu.20e565d865',
     'Split Terminal Right'
   )
+  const { clients: connectedPeerClients, refresh: refreshConnectedPeerClients } =
+    usePeerCollabConnectedClients()
 
   return (
     <div
@@ -244,6 +248,12 @@ export default function TerminalPaneHeaderOverlay({
                   </button>
                 ) : null}
                 <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
+                  <TerminalPaneViewerBadge
+                    tabId={tabId}
+                    leafId={pane.leafId}
+                    connectedClients={connectedPeerClients}
+                    onConnectedClientsChanged={refreshConnectedPeerClients}
+                  />
                   {canContinueAgentSessionInNewSession && isActivePane ? (
                     <Tooltip>
                       <TooltipTrigger asChild>

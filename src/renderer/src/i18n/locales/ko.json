@@ -793,7 +793,9 @@
         "linearDescription": "Orca에서 Linear가 작동하는 방식, 설정 체크리스트, 에이전트 스킬, 프롬프트 예시입니다.",
         "pluginsTitle": "플러그인",
         "pluginsDescription": "실험적인 Orca 플러그인을 설치하고 관리합니다.",
-        "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요."
+        "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요.",
+        "peerCollabTitle": "Peer Collaboration",
+        "peerCollabDescription": "Share terminals with other Orca desktops over your local network."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
@@ -1017,7 +1019,12 @@
           "activity": "활동",
           "noActivity": "아직 활동이 없습니다."
         },
-        "checkActionRequiredHint": "머지가 해제되려면 이 검사에 대해 GitHub에서 수동 작업(예: 워크플로우 실행 승인)이 필요합니다."
+        "checkActionRequiredHint": "머지가 해제되려면 이 검사에 대해 GitHub에서 수동 작업(예: 워크플로우 실행 승인)이 필요합니다.",
+        "d23bbb6416": "{{value0}} 건너뜀",
+        "18f80e1329": "{{value0}} 보류 중",
+        "b1ac991806": "{{value0}} 실패",
+        "checksNeedActionChip": "{{value0}}개 조치 필요",
+        "311d0cee55": "{{value0}} 통과"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "다시 열기",
@@ -1496,7 +1503,12 @@
         "dd5d9a4f17": "{{value0}}에 업데이트됨",
         "71a3c0f9d2": "워크스페이스 시작",
         "filesUnavailable": "변경된 파일을 불러오지 못했습니다.",
-        "filesRetry": "Retry"
+        "filesRetry": "Retry",
+        "e6ad0a8d06": "{{value0}} 건너뛰었습니다",
+        "88267924d5": "{{value0}} 보류 중",
+        "ae2a34c7b8": "{{value0}} 실패",
+        "checksNeedActionChip": "{{value0}}개 조치 필요",
+        "7c5035931a": "{{value0}} 통과"
       },
       "QuickOpen": {
         "1dbd3f59ff": "이동",
@@ -6818,7 +6830,9 @@
           "devDescription": "UI 상태를 시험해 보기 위한 개발 전용 도구입니다.",
           "linearTitle": "Linear",
           "linearDescription": "Orca에서 Linear가 작동하는 방식, 설정 체크리스트, 에이전트 스킬, 프롬프트 예시입니다.",
-          "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요."
+          "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요.",
+          "peerCollabTitle": "Peer Collaboration",
+          "peerCollabDescription": "Share terminals with other Orca desktops over your local network."
         },
         "SettingsFormControls": {
           "42a4d15a30": "일치하는 글꼴이 없습니다.",
@@ -7074,7 +7088,14 @@
           "integrationsHint": "모든 제공업체의 자격 증명은 다음에서도 관리할 수 있습니다:",
           "integrationsLink": "연동",
           "skillHint": ". Linear를 연결한 후 사용 예시는 설정 → Linear에서 확인할 수 있습니다.",
-          "incompleteBannerBodyWithLinear": "사용하지 않는 제공업체를 숨기거나 카드를 펼쳐 단계를 완료하세요. Linear에는 API 액세스, 에이전트 스킬, 작업에 표시가 필요합니다."
+          "incompleteBannerBodyWithLinear": "사용하지 않는 제공업체를 숨기거나 카드를 펼쳐 단계를 완료하세요. Linear에는 API 액세스, 에이전트 스킬, 작업에 표시가 필요합니다.",
+          "3a72b9745e": "작업 페이지와 사이드바 바로가기에 표시할 작업 제공자를 선택합니다.",
+          "71644aba56": "작업 페이지 소스 선택기 및 사이드바 바로가기에 표시할 작업 제공자를 선택합니다. 하나 이상의 제공업체가 계속 표시되어야 합니다.",
+          "93e72ef659": "작업 소스",
+          "8e1305fcc6": "작업 소스 선택기 및 사이드바 바로가기에 Jira를 표시합니다.",
+          "e4170c9615": "작업 소스 선택기 및 사이드바 바로가기에 Linear를 표시합니다.",
+          "dd67a1b6e1": "작업 소스 선택기 및 사이드바 바로가기에 GitLab을 표시합니다.",
+          "1db47236cd": "작업 소스 선택기 및 사이드바 바로가기에 GitHub를 표시합니다."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "창 구분선의 두께입니다.",
@@ -8724,7 +8745,8 @@
             "setup": "설정",
             "apiKey": "API 키",
             "skill": "스킬",
-            "connect": "연결"
+            "connect": "연결",
+            "765f0c544d": "작업 페이지와 사이드바 바로가기에 표시할 작업 제공자를 선택합니다."
           }
         },
         "terminal": {
@@ -9449,7 +9471,8 @@
         "ephemeralVms": {
           "search": {
             "description": "repo 소유 레시피가 각 워크스페이스에 고유한 주문형 일회용 환경을 제공하는 방법을 알아보세요.",
-            "cloudVmTitle": "클라우드 VM"
+            "cloudVmTitle": "클라우드 VM",
+            "title": "워크스페이스별 환경"
           }
         },
         "EphemeralVmsPane": {
@@ -9470,11 +9493,14 @@
           "cloudVmSkillTitle": "클라우드 VM 설정 스킬",
           "cloudVmRefresh": "클라우드 VM 레시피 새로 고침",
           "cloudVmTerminalTitle": "클라우드 VM 설정",
-          "cloudVmTerminalAriaLabel": "클라우드 VM 스킬 설치 터미널"
+          "cloudVmTerminalAriaLabel": "클라우드 VM 스킬 설치 터미널",
+          "skillTitle": "워크스페이스별 환경 기술",
+          "refresh": "임시 VM 레시피 새로 고침"
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "repo 소유 온디맨드 환경에 대한 설정 제어 및 워크스페이스 실행 대상을 표시합니다.",
-          "cloudVmToggleLabel": "클라우드 VM 전환"
+          "cloudVmToggleLabel": "클라우드 VM 전환",
+          "toggleLabel": "워크스페이스별 환경 전환"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "에이전트",
@@ -9603,7 +9629,8 @@
           "terminalTitle": "Linear 스킬 설정",
           "terminalAriaLabel": "Linear 스킬 설치 터미널",
           "manageConnectionHint": "연결된 Linear 워크스페이스와 API 키는 다음에서 확인할 수 있습니다.",
-          "manageConnectionLink": "연동"
+          "manageConnectionLink": "연동",
+          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca."
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
@@ -10026,6 +10053,77 @@
           "setupRecipe": "클라우드 공급자를 위한 환경 레시피를 설정하세요.",
           "createWorkspace": "워크스페이스를 만들고 실행 위치에서 해당 레시피를 선택하세요.",
           "openSetup": "환경 레시피 설정"
+        },
+        "peer-collab": {
+          "settings": {
+            "search": {
+              "title": "Peer Collaboration",
+              "description": "Share terminals with other Orca desktops over your local network.",
+              "clientTitle": "Connect to another Orca",
+              "clientDescription": "Connect to a host Orca as a client using a pairing code.",
+              "connect": "connect",
+              "pairingCode": "pairing code",
+              "clientRole": "client"
+            }
+          }
+        },
+        "PeerCollabSettingsPane": {
+          "noDevicesWithCode": "No devices paired yet. Enter the code on the other Orca desktop.",
+          "qrAlt": "QR Code for peer desktop pairing",
+          "scanDescription": "Enter this code on the other Orca desktop. Each code creates a unique device token.",
+          "pasteDescription": "Or paste this code on the other Orca desktop:",
+          "scanDialogTitle": "Scan to pair",
+          "clientConnecting": "Connecting",
+          "clientConnected": "Connected",
+          "clientReconnectWait": "Reconnecting",
+          "clientClosed": "Not connected",
+          "wsNotRunning": "WebSocket transport is not running",
+          "generateFailed": "Failed to generate pairing code",
+          "clientConnectFailed": "Failed to connect: {{reason}}",
+          "deviceRevoked": "Device revoked",
+          "revokeFailed": "Failed to revoke device",
+          "disconnectFailed": "Failed to disconnect client",
+          "startTitle": "Start peer sharing",
+          "startDescription": "Generate a code, then enter it on the other Orca desktop under Peer Collaboration. Connections stay on your local network only.",
+          "addressLabel": "This computer’s address",
+          "addressDescription": "The other desktop must be able to reach this address on Wi‑Fi, Ethernet, or Tailscale.",
+          "regenerate": "Regenerate code",
+          "generate": "Generate code",
+          "devicesTitle": "Peer Devices",
+          "devicesDescription": "Orca desktops that have paired with this computer.",
+          "connectedTitle": "Connected Clients",
+          "connectedDescription": "Orca desktops currently viewing your terminals.",
+          "noClients": "No peer desktops are connected right now.",
+          "connectedAt": "Connected",
+          "terminalCount": "{{count}} terminal(s)",
+          "disconnect": "Disconnect",
+          "disconnectAndBlock": "Disconnect and revoke device",
+          "clientCodeLabel": "Pairing code",
+          "clientCodePlaceholder": "Paste the code from the other Orca desktop",
+          "clientNameLabel": "Your display name",
+          "clientDisconnect": "Disconnect",
+          "clientConnect": "Connect",
+          "clientHostTerminalsTitle": "Host terminals",
+          "clientNoHostTerminals": "The host has no terminals to share right now.",
+          "clientUntitledTerminal": "Untitled terminal",
+          "clientOpenTerminal": "Open",
+          "exclusiveInputFloorLabel": "Block others while someone is typing",
+          "exclusiveInputFloorDescription": "By default everyone can type at once. Turn this on so the terminal locks to whoever typed most recently until they stop.",
+          "clientNoHostTerminalsShared": "The host has not shared a terminal with you yet.",
+          "grantTerminals": "Share terminals",
+          "grantTerminalsLabel": "Terminals shared with {{name}}",
+          "noHostTerminalsToGrant": "No terminals available to share.",
+          "untitledTerminal": "Untitled terminal",
+          "grantTerminalsFailed": "Failed to update shared terminals",
+          "clientDuplicateConnection": "This pairing code is already in use by another Orca. Generate a new code on the host.",
+          "clientSavedPairingInvalid": "This pairing is no longer valid — the host may have revoked it.",
+          "clientForgetHost": "Forget this host",
+          "clientSavedHost": "Saved host: {{endpoint}}",
+          "clientReconnectSaved": "Reconnect"
+        },
+        "MobilePairedDevicesSection": {
+          "connectedNow": "Connected now",
+          "lastSeen": "Last seen {{time}}"
         }
       },
       "right": {
@@ -11708,7 +11806,8 @@
             "stable": "안정 버전"
           },
           "relayDegradedNotice": "Relay에 연결할 수 없습니다 — 이 코드는 LAN 또는 Tailscale에서만 작동합니다.",
-          "pairingQrError": "이 페어링 코드를 QR 코드로 표시할 수 없습니다. 대신 Orca Mobile에 복사하세요."
+          "pairingQrError": "이 페어링 코드를 QR 코드로 표시할 수 없습니다. 대신 Orca Mobile에 복사하세요.",
+          "901c98bb93": "페어링"
         },
         "MobilePage": {
           "e17393c6a3": "휴대폰 미리보기",
@@ -13603,7 +13702,10 @@
           "f0202f3a89": "매일",
           "57e83307d0": "평일",
           "837d902bba": "매주",
-          "ddba78647e": "사용자 지정 cron"
+          "ddba78647e": "사용자 지정 cron",
+          "b08ccb4d06": "매시간",
+          "8cc026fd73": "주간",
+          "c3e39e17cf": "custom"
         },
         "AutomationSessionField": {
           "f3c76dce51": "재사용",
@@ -14286,6 +14388,22 @@
         "pendingChip": "{{value0}} 보류 중",
         "needsActionChip": "{{value0}}개 조치 필요",
         "unresolvedChip": "{{value0}}개 미해결"
+      },
+      "peer-collab": {
+        "RemoteTerminalDialog": {
+          "connected": "Connected",
+          "reconnecting": "Reconnecting",
+          "disconnected": "Disconnected",
+          "close": "Close"
+        },
+        "RemoteTerminalPanel": {
+          "error": "Could not open this terminal: {{reason}}",
+          "ended": "This terminal stream has ended.",
+          "otherSubscribers": "Also watching: {{names}}"
+        },
+        "RemoteTerminalPresenceOverlay": {
+          "scrolledUp": "scrolled up"
+        }
       }
     },
     "i18n": {
@@ -14488,6 +14606,14 @@
       "sent": "세션 컨텍스트를 새 {{agent}} 세션으로 보냈습니다.",
       "deliveryFailed": "새 {{agent}} 세션은 시작되었지만 컨텍스트를 보내지 못했습니다.",
       "launchFailed": "새 {{agent}} 세션을 시작할 수 없습니다."
+    },
+    "terminalPaneViewerBadge": {
+      "viewerCount": "{{count}} viewing this terminal",
+      "disconnect": "Disconnect",
+      "disconnectFailed": "Failed to disconnect client",
+      "shareToggleFailed": "Failed to update shared terminal",
+      "connectedNotWatching": "{{count}} connected, not watching",
+      "shareToggle": "Share this terminal with {{name}}"
     }
   },
   "dashboardPopout": {

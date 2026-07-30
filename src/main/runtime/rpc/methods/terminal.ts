@@ -8,6 +8,7 @@ import {
   type RpcAnyMethod
 } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { assertPeerTerminalGranted } from '../peer-terminal-grant-guard'
 import type { DriverState, OrcaRuntimeService } from '../../orca-runtime'
 import {
   TerminalStreamOpcode,
@@ -285,7 +286,14 @@ function isTerminalInputLockedForClient(
   if (!client) {
     return false
   }
-  return runtime.getDriver(ptyId).kind === 'mobile'
+  const driver = runtime.getDriver(ptyId)
+  if (driver.kind !== 'mobile') {
+    return false
+  }
+  // Why: a peer that itself holds the input floor (peerInputFloorExclusive)
+  // must not be locked out by its own claim; every other non-mobile client
+  // (including other peers) is locked while someone else drives.
+  return driver.clientId !== client.id
 }
 
 async function assertTerminalSendTextWithinLimit(text: string | undefined): Promise<void> {
@@ -311,32 +319,36 @@ function resolveMobileFloorClientId(
   return null
 }
 
+// Why: floorClientId/floorSource are resolved by the caller (mobile: always
+// claims when a clientId is present; peer: only when the host has turned on
+// exclusive-driver blocking) so this function stays a plain conduit and
+// doesn't need to know either policy.
 async function sendTerminalStreamInput(
   runtime: OrcaRuntimeService,
   args: {
     terminal: string
     text: string
-    client: TerminalViewportClient | undefined
-    isMobile: boolean
+    floorClientId: string | null
+    floorSource: 'mobile' | 'peer'
   }
 ): Promise<void> {
   const action = { text: args.text, enter: false, interrupt: false }
-  const clientId = args.isMobile ? args.client?.id : undefined
-  const floorClaim: MobileInputFloorClaimHolder = { current: null }
+  const floorClaim: InputFloorClaimHolder = { current: null }
   try {
-    if (!clientId) {
+    if (!args.floorClientId) {
       await runtime.sendTerminal(args.terminal, action)
       return
     }
+    const clientId = args.floorClientId
     const result = await runtime.sendTerminal(args.terminal, action, {
       reserveWrite: (writePtyId) => {
-        const claim = runtime.beginMobileInputFloor(writePtyId, clientId)
+        const claim = runtime.beginInputFloor(writePtyId, clientId, args.floorSource)
         if (!claim) {
-          throw new Error('mobile_input_floor_unavailable')
+          throw new Error('input_floor_unavailable')
         }
         floorClaim.current = claim
       },
-      afterWrite: () => commitMobileInputFloorClaim(floorClaim)
+      afterWrite: () => commitInputFloorClaim(floorClaim)
     })
     if (!result.accepted) {
       floorClaim.current?.rollback()
@@ -346,11 +358,11 @@ async function sendTerminalStreamInput(
   }
 }
 
-type MobileInputFloorClaimHolder = {
-  current: ReturnType<OrcaRuntimeService['beginMobileInputFloor']>
+type InputFloorClaimHolder = {
+  current: ReturnType<OrcaRuntimeService['beginInputFloor']>
 }
 
-async function commitMobileInputFloorClaim(claim: MobileInputFloorClaimHolder): Promise<void> {
+async function commitInputFloorClaim(claim: InputFloorClaimHolder): Promise<void> {
   const current = claim.current
   if (!current) {
     return
@@ -1104,11 +1116,45 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.list',
     params: TerminalListParams,
-    handler: async (params, { runtime }) =>
-      runtime.listTerminals(params.worktree, params.limit, {
+    handler: async (params, { runtime, isPeerDevice, getGrantedTerminals }) => {
+      const result = await runtime.listTerminals(params.worktree, params.limit, {
         handles: params.handles,
         requireFreshPtyLiveness: params.requireFreshPtyLiveness
       })
+      if (!isPeerDevice) {
+        return result
+      }
+      // Why: a peer only sees terminals the host granted it — filter here
+      // (not by blocking the method) so the existing client polling code
+      // needs no change. visualLayouts/topologyRevisions carry titles and
+      // worktree paths for every terminal in the tree, including ungranted
+      // ones, so peers never receive them.
+      const granted = new Set(getGrantedTerminals?.() ?? [])
+      const terminals = result.terminals
+        .filter((terminal) => granted.has(terminal.handle))
+        .map((terminal) => ({
+          // Why: a peer client can't resolve the tab's display name itself
+          // (no access to the host's renderer store), so send it resolved.
+          ...terminal,
+          title: runtime.getSyncedTabTitle(terminal.tabId) ?? terminal.title
+        }))
+      return {
+        terminals,
+        totalCount: terminals.length,
+        truncated: result.truncated
+      }
+    }
+  }),
+  defineMethod({
+    // Why: lets a peer client show who else is watching the terminal it has
+    // open (Phase 5 participant display); backed by runtime-rpc's connected-
+    // peer display names, keyed by which of their subscriptions matches.
+    name: 'terminal.listSubscribers',
+    params: TerminalHandle,
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { subscribers: ctx.listPeerSubscribers?.(params.terminal) ?? [] }
+    }
   }),
   defineMethod({
     name: 'terminal.resolveActive',
@@ -1138,59 +1184,70 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.show',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      terminal: await runtime.showTerminal(params.terminal)
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { terminal: await ctx.runtime.showTerminal(params.terminal) }
+    }
   }),
   defineMethod({
     name: 'terminal.read',
     params: TerminalRead,
-    handler: async (params, { runtime }) => ({
-      terminal: await runtime.readTerminal(params.terminal, {
-        cursor: params.cursor,
-        limit: params.limit
-      })
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return {
+        terminal: await ctx.runtime.readTerminal(params.terminal, {
+          cursor: params.cursor,
+          limit: params.limit
+        })
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.inspectProcess',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      process: await runtime.inspectTerminalProcess(params.terminal)
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { process: await ctx.runtime.inspectTerminalProcess(params.terminal) }
+    }
   }),
   defineMethod({
     name: 'terminal.isRunningAgent',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      isRunningAgent: await runtime.isTerminalRunningAgent(params.terminal)
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { isRunningAgent: await ctx.runtime.isTerminalRunningAgent(params.terminal) }
+    }
   }),
   defineMethod({
     name: 'terminal.agentStatus',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      agentStatus: await runtime.getTerminalAgentStatus(params.terminal)
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { agentStatus: await ctx.runtime.getTerminalAgentStatus(params.terminal) }
+    }
   }),
   defineMethod({
     name: 'terminal.rename',
     params: TerminalRename,
-    handler: async (params, { runtime }) => ({
-      rename: await runtime.renameTerminal(params.terminal, params.title || null)
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { rename: await ctx.runtime.renameTerminal(params.terminal, params.title || null) }
+    }
   }),
   defineMethod({
     name: 'terminal.clearBuffer',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      clear: await runtime.clearTerminalBuffer(params.terminal)
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { clear: await ctx.runtime.clearTerminalBuffer(params.terminal) }
+    }
   }),
   defineMethod({
     name: 'terminal.send',
     params: TerminalSend,
-    handler: async (params, { runtime, clientId }) => {
+    handler: async (params, ctx) => {
+      const { runtime, clientId } = ctx
+      assertPeerTerminalGranted(ctx, params.terminal)
       await assertTerminalSendTextWithinLimit(params.text)
       await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
       const queryReplyClientId = clientId ?? params.client?.id
@@ -1315,12 +1372,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         }
       }
       const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
-      const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
+      const mobileFloorClaim: InputFloorClaimHolder = { current: null }
       const beforeWrite = assertSendPreconditions
       const reserveWrite =
         params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId
           ? (ptyId: string): void => {
-              const claim = runtime.beginMobileInputFloor(ptyId, mobileFloorClientId)
+              const claim = runtime.beginInputFloor(ptyId, mobileFloorClientId, 'mobile')
               if (!claim) {
                 throw new Error('mobile_input_floor_unavailable')
               }
@@ -1340,7 +1397,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             beforeWrite,
             ...(reserveWrite ? { reserveWrite } : {}),
             ...(params.inputKind !== 'query-reply' && mobileFloorClientId
-              ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
+              ? { afterWrite: () => commitInputFloorClaim(mobileFloorClaim) }
               : {})
           }
         )
@@ -1386,13 +1443,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.wait',
     params: TerminalWait,
-    handler: async (params, { runtime, signal }) => ({
-      wait: await runtime.waitForTerminal(params.terminal, {
-        condition: params.for,
-        timeoutMs: params.timeoutMs,
-        signal
-      })
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return {
+        wait: await ctx.runtime.waitForTerminal(params.terminal, {
+          condition: params.for,
+          timeoutMs: params.timeoutMs,
+          signal: ctx.signal
+        })
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.create',
@@ -1433,14 +1493,17 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.split',
     params: TerminalSplit,
-    handler: async (params, { runtime }) => ({
-      split: await runtime.splitTerminal(params.terminal, {
-        direction: params.direction,
-        command: params.command,
-        env: params.env,
-        telemetrySource: params.telemetrySource
-      })
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return {
+        split: await ctx.runtime.splitTerminal(params.terminal, {
+          direction: params.direction,
+          command: params.command,
+          env: params.env,
+          telemetrySource: params.telemetrySource
+        })
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.stop',
@@ -1464,7 +1527,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.resizeForClient',
     params: TerminalResizeForClient,
-    handler: async (params, { runtime }) => {
+    handler: async (params, ctx) => {
+      const { runtime } = ctx
+      assertPeerTerminalGranted(ctx, params.terminal)
       // Why: a stale handle must fail with terminal_handle_stale, not resize the wrong PTY (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
@@ -1488,27 +1553,35 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.focus',
     params: TerminalFocus,
-    handler: async (params, { runtime, clientKind }) => ({
-      focus: await runtime.focusTerminal(params.terminal, {
-        navigateHost: navigationTargetsHost(
-          resolveRuntimeNavigationTarget({ navigation: params.navigation, clientKind })
-        )
-      })
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return {
+        focus: await ctx.runtime.focusTerminal(params.terminal, {
+          navigateHost: navigationTargetsHost(
+            resolveRuntimeNavigationTarget({
+              navigation: params.navigation,
+              clientKind: ctx.clientKind
+            })
+          )
+        })
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.close',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      close: await runtime.closeTerminal(params.terminal)
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { close: await ctx.runtime.closeTerminal(params.terminal) }
+    }
   }),
   defineMethod({
     name: 'terminal.closeTab',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      close: await runtime.closeTerminalTab(params.terminal)
-    })
+    handler: async (params, ctx) => {
+      assertPeerTerminalGranted(ctx, params.terminal)
+      return { close: await ctx.runtime.closeTerminalTab(params.terminal) }
+    }
   }),
   defineMethod({
     name: 'agentTeams.tmuxCompat',
@@ -1530,7 +1603,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.setDisplayMode',
     params: TerminalSetDisplayMode,
-    handler: async (params, { runtime }) => {
+    handler: async (params, ctx) => {
+      const { runtime } = ctx
+      assertPeerTerminalGranted(ctx, params.terminal)
       // Why: a stale handle must fail with terminal_handle_stale, not mutate the wrong PTY's display mode/viewport (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
@@ -1551,7 +1626,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.restoreFit',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => {
+    handler: async (params, ctx) => {
+      const { runtime } = ctx
+      assertPeerTerminalGranted(ctx, params.terminal)
       // Why: a stale handle must fail with terminal_handle_stale, not reclaim the wrong PTY to desktop dims (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
@@ -1563,7 +1640,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.getDisplayMode',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => {
+    handler: async (params, ctx) => {
+      const { runtime } = ctx
+      assertPeerTerminalGranted(ctx, params.terminal)
       const leaf = runtime.resolveLeafForHandle(params.terminal)
       const mode = leaf?.ptyId ? runtime.getMobileDisplayMode(leaf.ptyId) : 'auto'
       const isPhoneFitted = leaf?.ptyId ? runtime.isMobileSubscriberActive(leaf.ptyId) : false
@@ -1573,7 +1652,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.updateViewport',
     params: TerminalUpdateViewport,
-    handler: async (params, { runtime }) => {
+    handler: async (params, ctx) => {
+      const { runtime } = ctx
+      assertPeerTerminalGranted(ctx, params.terminal)
       // Why: a stale handle must fail with terminal_handle_stale, not write viewport state to the wrong PTY (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
@@ -1599,7 +1680,15 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalMultiplex,
     handler: async (
       _params,
-      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal },
+      {
+        runtime,
+        connectionId,
+        sendBinary,
+        registerBinaryStreamHandler,
+        signal,
+        isPeerDevice,
+        getGrantedTerminals
+      },
       emit
     ) => {
       if (!sendBinary || !registerBinaryStreamHandler || !connectionId) {
@@ -2113,8 +2202,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             return sendTerminalStreamInput(runtime, {
               terminal: stream.terminal,
               text,
-              client: stream.client,
-              isMobile: stream.isMobile
+              floorClientId: stream.isMobile ? (stream.client?.id ?? null) : null,
+              floorSource: 'mobile'
             })
           })
           return
@@ -2341,6 +2430,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           return
         }
         const request = parsed.data
+        try {
+          assertPeerTerminalGranted({ isPeerDevice, getGrantedTerminals }, request.terminal)
+        } catch {
+          sendStreamError(request.streamId, 'peer_terminal_not_granted')
+          emit({ type: 'end', streamId: request.streamId })
+          return
+        }
         detachStream(request.streamId, false)
         cancelPendingPtyWaits(request.streamId)
 
@@ -2806,13 +2902,23 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'terminal.subscribe',
     params: TerminalSubscribe,
-    handler: async (
-      params,
-      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal },
-      emit
-    ) => {
+    handler: async (params, ctx, emit) => {
+      const {
+        runtime,
+        connectionId,
+        sendBinary,
+        registerBinaryStreamHandler,
+        signal,
+        isPeerDevice
+      } = ctx
+      assertPeerTerminalGranted(ctx, params.terminal)
       let leaf = runtime.resolveLeafForHandle(params.terminal)
       const isMobile = params.client?.type === 'mobile'
+      // Why: client.type === 'desktop' is shared by peer-collab, the CLI, and
+      // the remote-runtime desktop transport — only device.scope === 'peer'
+      // (authenticated at the socket, not caller-declared) tells them apart.
+      const isPeer =
+        Boolean(isPeerDevice) && params.client?.type === 'desktop' && Boolean(params.client?.id)
       const serializerGenerationBeforeAnyMount = isMobile
         ? (runtime.getRendererTerminalSerializerGenerationForHandle?.(params.terminal) ?? 0)
         : 0
@@ -3064,6 +3170,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           } else if (registeredRemoteDesktopDriver && clientId) {
             runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
           }
+          if (isPeer && clientId) {
+            runtime.releaseInputFloorIfHeldBy(ptyId, clientId)
+          }
           emit({ type: 'end' })
           resolveStream()
         },
@@ -3113,11 +3222,15 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               if (!claimed || isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
                 return
               }
+              // Why: peers only claim the floor when the host has turned on
+              // exclusive-driver blocking (default is free input for peers).
+              const peerFloorClientId =
+                isPeer && clientId && runtime.isPeerInputFloorExclusive() ? clientId : null
               await sendTerminalStreamInput(runtime, {
                 terminal: params.terminal,
                 text,
-                client: params.client,
-                isMobile
+                floorClientId: isMobile ? (clientId ?? null) : peerFloorClientId,
+                floorSource: isMobile ? 'mobile' : 'peer'
               })
             })
             return
