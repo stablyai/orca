@@ -8,10 +8,10 @@ import type {
   PtySpawnOptions,
   PtySpawnResult
 } from '../providers/types'
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { probePtyOwners } from './daemon-pty-liveness-probe'
 import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
+import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -206,15 +206,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.current.getProfiles()
   }
 
-  onData(
-    callback: (payload: {
-      id: string
-      data: string
-      sequenceChars?: number
-      transformed?: boolean
-      seq?: number
-    }) => void
-  ): () => void {
+  onData(callback: (payload: DaemonPtyRouterDataEvent) => void): () => void {
     return this.subscriptions.onData(callback)
   }
 
@@ -230,9 +222,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.subscriptions.onReplay(callback)
   }
 
-  onExit(
-    callback: (payload: { id: string; code: number; incarnationId?: PtyIncarnationId }) => void
-  ): () => void {
+  onExit(callback: (payload: DaemonPtyRouterExitEvent) => void): () => void {
     return this.subscriptions.onExit(callback)
   }
 

@@ -149,7 +149,10 @@
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "이 실행 호스트에서는 Agent 세션 기록을 사용할 수 없습니다.",
-        "runtimeEnvironmentManuallyDisconnected": "런타임 환경이 수동으로 연결 해제되었습니다."
+        "runtimeEnvironmentManuallyDisconnected": "런타임 환경이 수동으로 연결 해제되었습니다.",
+        "loopbackPairingBlocked": "이 액세스 링크는 이 기기 자체를 가리킵니다.",
+        "remotePairingUnreachable": "{{endpoint}}의 Orca에 연결할 수 없습니다.",
+        "remotePairingInvalidDetails": "이 액세스 링크에 잘못된 연결 정보가 포함되어 있습니다."
       },
       "web": {
         "preload": {
@@ -350,6 +353,18 @@
             }
           }
         }
+      },
+      "remotePairingCopy": {
+        "invalidInput": "Orca 액세스 링크 또는 페어링 코드를 입력하세요.",
+        "mobileOnly": "이 링크는 모바일 전용 액세스를 허용합니다. 다른 Orca 클라이언트용 링크를 생성하세요.",
+        "invalidDestination": "이 액세스 링크에 잘못된 대상이 포함되어 있습니다.",
+        "unsupportedDestination": "이 액세스 링크에 지원되지 않는 대상이 포함되어 있습니다.",
+        "nonConnectableDestination": "이 액세스 링크에 연결할 수 없는 대상이 포함되어 있습니다.",
+        "loopback": "루프백",
+        "tailscale": "Tailscale 주소",
+        "lan": "사설 LAN 주소",
+        "public": "공용 주소",
+        "custom": "사용자 지정 호스트 이름"
       },
       "ensure": {
         "simulator": {
@@ -5006,7 +5021,11 @@
           "importing": "가져오는 중...",
           "importSshConfig": "~/.ssh/config 가져오기",
           "sshPersistenceDefault": "이 호스트의 원격 터미널은 종료하거나 릴레이를 재설정할 때까지 계속 실행됩니다.",
-          "advanced": "Advanced"
+          "advanced": "고급",
+          "linkDestination": "링크 대상",
+          "sshTunnel": "SSH 터널을 사용하고 있습니다",
+          "sshTunnelHelp": "그렇지 않으면 이 링크는 이 기기 자체를 가리키므로 다른 컴퓨터를 식별할 수 없습니다.",
+          "loopbackBlocked": "SSH 터널 재정의를 활성화하거나 다른 호스트의 Tailscale 또는 LAN 주소를 사용해 새 링크를 만드세요."
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "재연결 실패",
@@ -6661,7 +6680,22 @@
           "orcaVersion": "Orca v{{value0}}",
           "removeActiveServerBlocked": "Choose another Active Server in Advanced before removing this server.",
           "removeActiveServerDescription": "Choose another Active Server in Advanced before removing this server. Existing host sessions are left alone.",
-          "updatingServers": "Updating servers…"
+          "updatingServers": "Updating servers…",
+          "workflow": "원격 서버 워크플로",
+          "connectWorkflow": "호스트에 연결",
+          "connectWorkflowHelp": "이 앱을 다른 머신에 연결합니다",
+          "shareWorkflow": "이 호스트 공유",
+          "shareWorkflowHelp": "다른 기기를 이 머신에 연결합니다",
+          "troubleshootWorkflow": "연결 문제 해결",
+          "sshTunnelRequired": "SSH 터널 필요",
+          "troubleshootTitle": "다른 호스트에서 새 링크 만들기",
+          "troubleshootDescription": "127.0.0.1을 사용하는 링크는 링크를 만든 컴퓨터가 아니라 링크를 여는 기기 자체를 가리킵니다.",
+          "troubleshootStepShare": "다른 컴퓨터에서 ‘이 호스트 공유’를 엽니다.",
+          "troubleshootStepAddress": "‘다른 기기’를 선택하고 Tailscale 또는 LAN 주소를 선택합니다.",
+          "troubleshootStepRegenerate": "새 액세스 링크를 생성하고 여기에서는 가장 최신 링크만 사용합니다.",
+          "troubleshootTunnel": "SSH 로컬 포워딩을 사용하나요? ‘호스트에 연결’로 돌아가 루프백 링크를 붙여 넣은 다음 ‘고급’에서 ‘SSH 터널을 사용하고 있습니다’를 활성화하세요.",
+          "cloudVmWorkflow": "클라우드 VM",
+          "cloudVmWorkflowHelp": "레시피로 생성한 클라우드 머신 관리"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "{{value0}} 복사"
@@ -6700,7 +6734,20 @@
           "custom-description": "다른 기기가 연결할 수 있는 주소를 알립니다. LAN 또는 Tailscale 호스트, 또는 전체 ws(s):// URL입니다.",
           "custom-hint": "호스트, host:port 또는 ws(s):// URL을 입력하세요.",
           "custom-cancel": "취소",
-          "custom-use": "주소 사용"
+          "custom-use": "주소 사용",
+          "intentQuestion": "이 링크를 어디에서 열 예정인가요?",
+          "anotherDevice": "다른 기기",
+          "anotherDeviceHelp": "Tailscale, LAN 또는 연결 가능한 다른 주소",
+          "localOnly": "이 컴퓨터만",
+          "localOnlyHelp": "이 컴퓨터의 브라우저 또는 Orca 클라이언트",
+          "customAddress": "사용자 지정 주소",
+          "customAddressHelp": "SSH 터널, 리버스 프록시 또는 사용자 지정 호스트 이름",
+          "recommended": "권장",
+          "localLink": "로컬 전용 링크",
+          "localLinkHelp": "이 링크는 이 컴퓨터에서 실행 중인 브라우저 또는 Orca 클라이언트에서만 작동합니다.",
+          "noExternalAddress": "다른 기기용 주소를 찾지 못했습니다. 이 컴퓨터를 LAN 또는 Tailscale에 연결한 후 새로 고치거나 사용자 지정 주소를 선택하세요.",
+          "staleAddress": "연결 주소가 변경되었습니다. {{address}}용 새 링크를 생성하세요.",
+          "customInvalid": "올바른 호스트, 호스트:포트, IPv6 주소 또는 ws(s):// URL을 입력하세요."
         },
         "Settings": {
           "3bf149e873": "프로젝트 설정 > {{value0}}",
@@ -9375,7 +9422,15 @@
           "empty": "임시 VM 런타임은 정리가 필요하지 않습니다.",
           "copyCleanup": "복사 명령",
           "retry": "정리 다시 시도",
-          "cleanup": "대청소"
+          "cleanup": "정리",
+          "cloudVmLoadFailed": "클라우드 VM 런타임을 불러올 수 없습니다.",
+          "cloudVmCleanupFailedToast": "클라우드 VM 런타임을 정리할 수 없습니다.",
+          "cloudVmMarkedCleaned": "클라우드 VM 런타임을 정리됨으로 표시했습니다.",
+          "cloudVmCleaned": "클라우드 VM 런타임을 정리했습니다.",
+          "cloudVmTitle": "클라우드 VM 런타임",
+          "cloudVmRefresh": "클라우드 VM 런타임 새로 고침",
+          "cloudVmLoading": "클라우드 VM 런타임 확인 중…",
+          "cloudVmEmpty": "정리가 필요한 클라우드 VM 런타임이 없습니다."
         },
         "ephemeralVms": {
           "search": {
@@ -9849,6 +9904,43 @@
             "logs": "플러그인 로그",
             "development": "개발 플러그인"
           }
+        },
+        "RuntimeHostAccessForm": {
+          "getLink": "다른 호스트에서 액세스 링크 가져오기",
+          "stepOpenShare": "설정 → 원격 Orca 서버 → 이 호스트 공유를 엽니다.",
+          "stepChooseAddress": "‘다른 기기’를 선택하고 연결 가능한 주소를 선택합니다.",
+          "stepCopyLink": "링크를 생성한 다음 “다른 Orca 클라이언트 페어링” 링크를 복사하세요.",
+          "name": "Orca에서 사용할 이름",
+          "namePlaceholder": "Linux 워크스테이션",
+          "nameHelp": "Orca에서 이 컴퓨터가 표시되는 이름만 변경합니다.",
+          "accessLink": "액세스 링크",
+          "accessLinkPlaceholder": "orca://pair?code=...",
+          "accessLinkHelp": "Orca는 연결하기 전에 대상을 표시하며 자격 증명은 숨겨 둡니다.",
+          "destination": "링크 대상",
+          "loopbackTitle": "이 링크는 이 기기 자체를 가리킵니다",
+          "loopbackDescription": "{{endpoint}}는 링크를 연 기기 자체를 가리키며, 링크를 만든 다른 컴퓨터에는 연결되지 않습니다.",
+          "loopbackRecovery": "다른 컴퓨터에서 ‘다른 기기’를 사용해 새 링크를 만들고 Tailscale 또는 LAN 주소를 선택하세요.",
+          "identityMismatch": "연결된 Orca 호스트가 이 액세스 링크와 일치하지 않습니다",
+          "identityMismatchHelp": "{{endpoint}}의 Orca에 연결했지만 해당 호스트가 이 링크와 일치하지 않습니다. 다른 호스트에서 새 링크를 생성하세요.",
+          "invalidLink": "이 액세스 링크는 더 이상 유효하지 않습니다",
+          "invalidLinkHelp": "다른 호스트에서 새 액세스 링크를 생성한 후 다시 시도하세요.",
+          "incompatible": "Orca 버전이 호환되지 않습니다",
+          "incompatibleHelp": "이 기기와 다른 호스트의 Orca를 업데이트한 후 다시 시도하세요.",
+          "interrupted": "연결이 중단되었습니다",
+          "interruptedHelp": "확인 중 연결이 중단되었습니다. 네트워크 또는 SSH 터널을 확인한 후 다시 시도하세요.",
+          "unavailable": "호스트를 사용할 수 없습니다",
+          "unavailableHelp": "다른 호스트에서 Orca가 실행 중이고 네트워크 또는 SSH 터널을 통해 {{endpoint}}에 연결할 수 있는지 확인하세요.",
+          "advanced": "고급",
+          "sshTunnel": "이 로컬 주소에 SSH 터널을 사용하고 있습니다",
+          "sshTunnelHelp": "이 연결을 사용하는 동안 터널을 유지하세요.",
+          "headlessHelp": "헤드리스 orca serve를 사용하나요? 다른 컴퓨터에서 orca serve --pairing-address <reachable-host>를 실행하세요.",
+          "cancel": "취소",
+          "addWithTunnel": "터널을 사용해 호스트 추가",
+          "addHost": "호스트 추가",
+          "connectionDetails": "연결 세부 정보",
+          "endpointKind": "대상 유형",
+          "networkConnection": "네트워크 연결",
+          "notAttempted": "시도하지 않음"
         }
       },
       "right": {

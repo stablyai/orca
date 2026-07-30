@@ -172,7 +172,11 @@
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "Agent Session History is not available for this execution host.",
-        "runtimeEnvironmentManuallyDisconnected": "Runtime environment is manually disconnected."
+        "runtimeEnvironmentManuallyDisconnected": "Runtime environment is manually disconnected.",
+        "loopbackPairingBlocked": "This access link points back to this device.",
+        "remotePairingUnreachable": "Cannot reach Orca at {{endpoint}}.",
+        "remotePairingInvalidDetails": "This access link contains invalid connection details.",
+        "remotePairingSaveFailed": "Orca verified the host but could not save it. Check browser storage and try again."
       },
       "web": {
         "preload": {
@@ -373,6 +377,18 @@
             }
           }
         }
+      },
+      "remotePairingCopy": {
+        "invalidInput": "Enter an Orca access link or bare pairing code.",
+        "mobileOnly": "This link grants mobile-only access. Generate a link for another Orca client.",
+        "invalidDestination": "This access link contains an invalid destination.",
+        "unsupportedDestination": "This access link contains an unsupported destination.",
+        "nonConnectableDestination": "This access link contains a non-connectable destination.",
+        "loopback": "Loopback",
+        "tailscale": "Tailscale address",
+        "lan": "Private LAN address",
+        "public": "Public address",
+        "custom": "Custom hostname"
       },
       "ensure": {
         "simulator": {
@@ -5033,7 +5049,11 @@
           "sshImportFailed": "Failed to import SSH config.",
           "importing": "Importing...",
           "importSshConfig": "Import ~/.ssh/config",
-          "advanced": "Advanced"
+          "advanced": "Advanced",
+          "linkDestination": "Link destination",
+          "sshTunnel": "I am using an SSH tunnel",
+          "sshTunnelHelp": "Otherwise, this link points back to this device and cannot identify the other computer.",
+          "loopbackBlocked": "Enable the SSH tunnel override or create a new link using the other host’s Tailscale or LAN address."
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "Reconnection failed",
@@ -6740,7 +6760,22 @@
           "updatingServers": "Updating servers…",
           "orcaVersion": "Orca v{{value0}}",
           "removeActiveServerBlocked": "Choose another Active Server in Advanced before removing this server.",
-          "removeActiveServerDescription": "Choose another Active Server in Advanced before removing this server. Existing host sessions are left alone."
+          "removeActiveServerDescription": "Choose another Active Server in Advanced before removing this server. Existing host sessions are left alone.",
+          "workflow": "Remote server workflow",
+          "connectWorkflow": "Connect to a host",
+          "connectWorkflowHelp": "This app joins another machine",
+          "shareWorkflow": "Share this host",
+          "shareWorkflowHelp": "Other devices join this machine",
+          "troubleshootWorkflow": "Connection troubleshooting",
+          "sshTunnelRequired": "SSH tunnel required",
+          "troubleshootTitle": "Create a new link on the other host",
+          "troubleshootDescription": "A link that uses 127.0.0.1 points back to the device opening it, not the computer that created it.",
+          "troubleshootStepShare": "On the other computer, open Share this host.",
+          "troubleshootStepAddress": "Choose Another device and select its Tailscale or LAN address.",
+          "troubleshootStepRegenerate": "Generate a new access link and use only the newest link here.",
+          "troubleshootTunnel": "Using an SSH local forward? Return to Connect to a host, paste the loopback link, then enable “I am using an SSH tunnel” under Advanced.",
+          "cloudVmWorkflow": "Cloud VM",
+          "cloudVmWorkflowHelp": "Manage recipe-created cloud machines"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "Copy {{value0}}"
@@ -6779,7 +6814,20 @@
           "custom-description": "Advertise an address another device can reach — a LAN or Tailscale host, or a full ws(s):// URL.",
           "custom-hint": "Enter a host, host:port, or a ws(s):// URL.",
           "custom-cancel": "Cancel",
-          "custom-use": "Use address"
+          "custom-use": "Use address",
+          "intentQuestion": "Where will this link be opened?",
+          "anotherDevice": "Another device",
+          "anotherDeviceHelp": "Tailscale, LAN, or another reachable address",
+          "localOnly": "This computer only",
+          "localOnlyHelp": "A browser or Orca client on this computer",
+          "customAddress": "Custom address",
+          "customAddressHelp": "SSH tunnel, reverse proxy, or custom hostname",
+          "recommended": "Recommended",
+          "localLink": "Local-only link",
+          "localLinkHelp": "This link only works in a browser or Orca client running on this computer.",
+          "noExternalAddress": "No address for another device was found. Connect this computer to a LAN or Tailscale, refresh, or choose Custom address.",
+          "staleAddress": "The connection address changed. Generate a new link for {{address}}.",
+          "customInvalid": "Enter a valid host, host:port, IPv6 address, or ws(s):// URL."
         },
         "Settings": {
           "3bf149e873": "Project Settings > {{value0}}",
@@ -9403,7 +9451,15 @@
           "empty": "No temporary VM runtimes need cleanup.",
           "copyCleanup": "Copy command",
           "retry": "Retry cleanup",
-          "cleanup": "Cleanup"
+          "cleanup": "Cleanup",
+          "cloudVmLoadFailed": "Couldn’t load Cloud VM runtimes.",
+          "cloudVmCleanupFailedToast": "Couldn’t clean up Cloud VM runtime.",
+          "cloudVmMarkedCleaned": "Marked Cloud VM runtime as cleaned.",
+          "cloudVmCleaned": "Cleaned up Cloud VM runtime.",
+          "cloudVmTitle": "Cloud VM runtimes",
+          "cloudVmRefresh": "Refresh Cloud VM runtimes",
+          "cloudVmLoading": "Checking Cloud VM runtimes…",
+          "cloudVmEmpty": "No Cloud VM runtimes need cleanup."
         },
         "ephemeralVms": {
           "search": {
@@ -9877,6 +9933,45 @@
             "logs": "plugin logs",
             "development": "development plugins"
           }
+        },
+        "RuntimeHostAccessForm": {
+          "getLink": "Get an access link from the other host",
+          "stepOpenShare": "Open Settings → Remote Orca Servers → Share this host.",
+          "stepChooseAddress": "Choose Another device and select a reachable address.",
+          "stepCopyLink": "Generate the link, then copy the “Pair another Orca client” link.",
+          "name": "Name in Orca",
+          "namePlaceholder": "Linux workstation",
+          "nameHelp": "This only changes how the computer appears in Orca.",
+          "accessLink": "Access link",
+          "accessLinkPlaceholder": "orca://pair?code=...",
+          "accessLinkHelp": "Orca shows the destination before connecting. Credentials stay hidden.",
+          "destination": "Link destination",
+          "loopbackTitle": "This link points back to this device",
+          "loopbackDescription": "It uses {{endpoint}}, which points back to the device opening the link—not the other computer that created it.",
+          "loopbackRecovery": "On the other computer, create a new link using Another device and choose its Tailscale or LAN address.",
+          "identityMismatch": "The reached Orca host does not match this access link",
+          "identityMismatchHelp": "Orca reached {{endpoint}}, but that host does not match this link. Generate a new link on the other host.",
+          "invalidLink": "This access link is no longer valid",
+          "invalidLinkHelp": "Generate a new access link on the other host and try again.",
+          "incompatible": "Orca versions are not compatible",
+          "incompatibleHelp": "Update Orca on this device and the other host, then try again.",
+          "interrupted": "Connection interrupted",
+          "interruptedHelp": "The connection stopped during verification. Check the network or SSH tunnel and try again.",
+          "unavailable": "Host unavailable",
+          "unavailableHelp": "Make sure Orca is running on the other host and that the network or SSH tunnel can reach {{endpoint}}.",
+          "advanced": "Advanced",
+          "sshTunnel": "I am using an SSH tunnel to this local address",
+          "sshTunnelHelp": "Keep the tunnel active while using this connection.",
+          "headlessHelp": "Using headless orca serve? Run orca serve --pairing-address <reachable-host> on the other computer.",
+          "cancel": "Cancel",
+          "addWithTunnel": "Add host using tunnel",
+          "addHost": "Add host",
+          "connectionDetails": "Connection details",
+          "endpointKind": "Endpoint kind",
+          "networkConnection": "Network connection",
+          "notAttempted": "Not attempted",
+          "saveFailed": "Could not save the host",
+          "saveFailedHelp": "The host was verified, but Orca could not save it. Check the name and local settings storage, then try again."
         }
       },
       "right": {

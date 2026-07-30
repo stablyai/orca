@@ -1,26 +1,12 @@
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyBackgroundStreamEvent } from '../providers/types'
 import { combineUnsubscribes } from './combine-unsubscribes'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-
-type DataPayload = {
-  id: string
-  data: string
-  sequenceChars?: number
-  transformed?: boolean
-  seq?: number
-}
-
-type ExitPayload = {
-  id: string
-  code: number
-  incarnationId?: PtyIncarnationId
-}
+import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 
 export class DaemonPtyAdapterSubscriptionFanout {
   private unsubscribers: (() => void)[] = []
-  private dataListeners: ((payload: DataPayload) => void)[] = []
-  private exitListeners: ((payload: ExitPayload) => void)[] = []
+  private dataListeners: ((payload: DaemonPtyRouterDataEvent) => void)[] = []
+  private exitListeners: ((payload: DaemonPtyRouterExitEvent) => void)[] = []
 
   constructor(
     private readonly adapters: readonly DaemonPtyAdapter[],
@@ -43,7 +29,7 @@ export class DaemonPtyAdapterSubscriptionFanout {
     }
   }
 
-  onData(callback: (payload: DataPayload) => void): () => void {
+  onData(callback: (payload: DaemonPtyRouterDataEvent) => void): () => void {
     this.dataListeners.push(callback)
     return () => {
       const index = this.dataListeners.indexOf(callback)
@@ -69,7 +55,7 @@ export class DaemonPtyAdapterSubscriptionFanout {
     return () => {}
   }
 
-  onExit(callback: (payload: ExitPayload) => void): () => void {
+  onExit(callback: (payload: DaemonPtyRouterExitEvent) => void): () => void {
     this.exitListeners.push(callback)
     return () => {
       const index = this.exitListeners.indexOf(callback)

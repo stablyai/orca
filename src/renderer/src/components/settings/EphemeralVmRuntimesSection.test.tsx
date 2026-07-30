@@ -113,7 +113,7 @@ describe('EphemeralVmRuntimesSection', () => {
     document.body.replaceChildren()
   })
 
-  it('renders active temporary VM runtimes and cleans one up', async () => {
+  it('renders active Cloud VM runtimes and cleans one up', async () => {
     const container = await renderSection()
 
     await vi.waitFor(() => expect(container.textContent).toContain('Fix Login Race'))
@@ -139,7 +139,7 @@ describe('EphemeralVmRuntimesSection', () => {
     const container = await renderSection()
 
     await vi.waitFor(() =>
-      expect(container.textContent).toContain('No temporary VM runtimes need cleanup.')
+      expect(container.textContent).toContain('No Cloud VM runtimes need cleanup.')
     )
   })
 
