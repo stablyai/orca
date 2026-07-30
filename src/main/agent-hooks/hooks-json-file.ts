@@ -111,7 +111,6 @@ export function writeHooksJson(
 ): boolean {
   const writePath = resolveHooksJsonWritePath(configPath)
   const dir = dirname(writePath)
-  mkdirSync(dir, { recursive: true })
 
   // Why: write to a temp file then rename so a crash or disk-full mid-write
   // leaves the original untouched. This is the only safe way to update a
@@ -143,6 +142,7 @@ export function writeHooksJson(
     }
   }
 
+  mkdirSync(dir, { recursive: true })
   try {
     writeFileSync(tmpPath, serialized, { encoding: 'utf-8', mode: existingMode })
     // Why: compare-and-retry guard for concurrent writers (the agent CLI
@@ -150,7 +150,15 @@ export function writeHooksJson(
     // the content diverged from what the caller read, abort so the caller
     // can re-merge instead of clobbering the concurrent change.
     if (options.expectedDiskContent !== undefined) {
-      if (readRawHooksFile(writePath) !== options.expectedDiskContent) {
+      let currentDiskContent: string | null = null
+      if (existsSync(writePath)) {
+        try {
+          currentDiskContent = readFileSync(writePath, 'utf-8')
+        } catch {
+          currentDiskContent = null
+        }
+      }
+      if (currentDiskContent !== options.expectedDiskContent) {
         return false
       }
     }
