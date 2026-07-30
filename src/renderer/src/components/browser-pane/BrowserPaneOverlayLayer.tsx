@@ -128,6 +128,13 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
     }))
   )
   const focusGroup = useAppStore((state) => state.focusGroup)
+  const knownFocusedGroupId = useMemo(
+    () =>
+      focusedGroupId !== undefined && groups.some((group) => group.id === focusedGroupId)
+        ? focusedGroupId
+        : undefined,
+    [focusedGroupId, groups]
+  )
 
   // Why: stable identity so BrowserOverlaySlot's memo holds; groupId is passed at call time so one callback serves every slot.
   const focusOwningGroup = useCallback(
@@ -166,9 +173,9 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
         const isActive = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
         const findShortcutScope: BrowserFindShortcutScope = !isActive
           ? 'inactive'
-          : focusedGroupId === undefined
+          : knownFocusedGroupId === undefined
             ? 'owned-target'
-            : assignment?.groupId === focusedGroupId
+            : assignment?.groupId === knownFocusedGroupId
               ? 'focused'
               : 'inactive'
         return (

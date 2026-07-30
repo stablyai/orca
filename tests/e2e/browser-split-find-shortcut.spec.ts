@@ -149,4 +149,30 @@ test.describe('browser split Find shortcut', () => {
     await expect(browserFindInput(orcaPage)).toBeFocused()
     await expect(terminalFindInput(orcaPage)).toBeHidden()
   })
+
+  test('keeps browser Find available when the focused split ID is stale', async ({ orcaPage }) => {
+    const fixture = await createTerminalBrowserSplit(orcaPage)
+    const addressBar = browserAddressBar(orcaPage, fixture.browserTabId)
+    await addressBar.click()
+    await expect(addressBar).toBeFocused()
+
+    await orcaPage.evaluate(() => {
+      const store = window.__store
+      const worktreeId = store?.getState().activeWorktreeId
+      if (!store || !worktreeId) {
+        throw new Error('Active worktree unavailable')
+      }
+      store.setState((state) => ({
+        activeGroupIdByWorktree: {
+          ...state.activeGroupIdByWorktree,
+          [worktreeId]: 'removed-group'
+        }
+      }))
+    })
+    await expect(addressBar).toBeFocused()
+
+    await orcaPage.keyboard.press(`${modifier}+f`)
+    await expect(browserFindInput(orcaPage)).toBeFocused()
+    await expect(terminalFindInput(orcaPage)).toBeHidden()
+  })
 })

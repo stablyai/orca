@@ -83,9 +83,18 @@ describe('BrowserPaneOverlayLayer', () => {
   })
 
   it('keeps an active browser pane unfocused when another split holds focus (#11348)', () => {
-    // Terminal split (group-2) holds keyboard focus; the browser stays the active
-    // tab within its own group-1 but must not claim the focused-split Find shortcut.
     mocks.state = createState()
+    mocks.state.groupsByWorktree = {
+      'wt-1': [
+        ...mocks.state.groupsByWorktree['wt-1'],
+        {
+          id: 'group-2',
+          worktreeId: 'wt-1',
+          activeTabId: null,
+          tabOrder: []
+        }
+      ]
+    }
     mocks.state.activeGroupIdByWorktree = { 'wt-1': 'group-2' }
 
     const markup = renderOverlay({ isWorktreeActive: true })
@@ -98,6 +107,17 @@ describe('BrowserPaneOverlayLayer', () => {
   it('limits Find to the owning target while focused-group state is unavailable', () => {
     mocks.state = createState()
     mocks.state.activeGroupIdByWorktree = {}
+
+    const markup = renderOverlay({ isWorktreeActive: true })
+
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="owned-target"'
+    )
+  })
+
+  it('limits Find to the owning target when the focused-group ID is stale', () => {
+    mocks.state = createState()
+    mocks.state.activeGroupIdByWorktree = { 'wt-1': 'removed-group' }
 
     const markup = renderOverlay({ isWorktreeActive: true })
 
