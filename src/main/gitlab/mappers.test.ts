@@ -245,4 +245,12 @@ describe('derivePipelineStatus', () => {
   it('handles a single object with status', () => {
     expect(derivePipelineStatus({ status: 'success' })).toBe('success')
   })
+
+  it('keeps malformed and unknown array jobs neutral', () => {
+    expect(derivePipelineStatus([{ status: 'future_status' }])).toBe('neutral')
+    expect(derivePipelineStatus([{}])).toBe('neutral')
+    expect(derivePipelineStatus([{ status: 'success' }, { status: 'future_status' }])).toBe(
+      'neutral'
+    )
+  })
 })

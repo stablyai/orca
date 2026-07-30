@@ -161,19 +161,20 @@ export function derivePipelineStatus(
   }
   let hasFailure = false
   let hasPending = false
+  let hasUnknown = false
   for (const job of rollup) {
-    const s = job.status?.toLowerCase()
-    if (s === 'failed' || s === 'manual' || s === 'action_required') {
-      hasFailure = true
-    } else if (
-      s === 'created' ||
-      s === 'pending' ||
-      s === 'running' ||
-      s === 'waiting_for_resource' ||
-      s === 'preparing' ||
-      s === 'scheduled'
+    const s = job.status?.toLowerCase() ?? ''
+    const conclusion = mapPipelineJobStatusToConclusion(s)
+    if (
+      conclusion === 'failure' ||
+      conclusion === 'cancelled' ||
+      conclusion === 'action_required'
     ) {
+      hasFailure = true
+    } else if (conclusion === 'pending') {
       hasPending = true
+    } else if (conclusion !== 'success' && conclusion !== 'skipped' && conclusion !== 'neutral') {
+      hasUnknown = true
     }
   }
   if (hasFailure) {
@@ -182,7 +183,7 @@ export function derivePipelineStatus(
   if (hasPending) {
     return 'pending'
   }
-  return 'success'
+  return hasUnknown ? 'neutral' : 'success'
 }
 
 // ── Raw → GitLabWorkItem mapping ────────────────────────────────────

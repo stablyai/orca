@@ -185,27 +185,23 @@ type GitHubWorkItem = {
   mergeable?: GitHubPRMergeableState
   mergeStateStatus?: string | null
 }
-
 type GitHubAssignableUser = {
   login: string
   name?: string | null
   avatarUrl?: string | null
 }
-
 type GitHubPRReviewSummary = {
   login: string
   state?: string | null
   avatarUrl?: string | null
 }
-
 type GitHubPRCheckSummary = {
-  state: 'success' | 'failure' | 'pending' | 'none'
+  state: 'success' | 'failure' | 'pending' | 'neutral' | 'none'
   total: number
   passed: number
   failed: number
   pending: number
 }
-
 type GitHubPRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
 
 type GitHubPRReviewerRow = {
@@ -214,13 +210,11 @@ type GitHubPRReviewerRow = {
   avatarUrl?: string | null
   stateLabel: string
 }
-
 type GitHubRepoSources = {
   issues: GitHubOwnerRepo | null
   prs: GitHubOwnerRepo | null
   upstreamCandidate: GitHubOwnerRepo | null
 }
-
 type TaskRuntimeStatus = {
   capabilities?: string[]
 }
@@ -229,7 +223,6 @@ type TasksSupportState =
   | { kind: 'unknown'; client: RpcClient | null }
   | { kind: 'supported'; client: RpcClient }
   | { kind: 'unsupported'; client: RpcClient }
-
 type GitLabWorkItem = {
   id: string
   type: 'issue' | 'mr'
@@ -1276,7 +1269,9 @@ function getGitHubChecksLabel(item: GitHubWorkItem): string {
   if (summary.pending > 0) {
     return `${summary.pending} pending`
   }
-  return `${summary.passed}/${summary.total} passed`
+  return summary.state === 'neutral'
+    ? 'Unresolved checks'
+    : `${summary.passed}/${summary.total} passed`
 }
 
 function getGitHubMergeLabel(item: GitHubWorkItem): string {
