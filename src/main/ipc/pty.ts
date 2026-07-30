@@ -3314,13 +3314,8 @@ export function registerPtyHandlers(
     // Why: a daemon death takes down every session at once. The provider signals
     // each affected pane here so background panes remount + re-attach too, not
     // just the pane whose write happened to detect the dead endpoint (STA-2373).
-    // Typed at the call site (not on the capped IPtyProvider): only respawnable
-    // endpoints like the daemon adapter implement it.
-    const writeUnavailableSource = localProvider as {
-      onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
-    }
     localWriteUnavailableUnsub =
-      writeUnavailableSource.onWriteUnavailable?.((payload) => {
+      localProvider.onWriteUnavailable?.((payload) => {
         if (
           mainWindow.isDestroyed() ||
           (typeof mainWindow.webContents.isDestroyed === 'function' &&

@@ -244,6 +244,7 @@ import {
   getActiveTabIdForHandle,
   isFileExistsErrorMessage,
   isGestureMouseTrackingMode,
+  isTerminalPhoneDisplayMode,
   MOBILE_SESSION_STATUS_LABELS,
   TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
   TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS,
@@ -4167,14 +4168,6 @@ export default function SessionScreen() {
   })
   const closeWithBulkActions = createCloseWithBulkActions(handleCloseSessionTab, bulkCloseActions)
 
-  const isPhoneMode = (handle: string | null): boolean => {
-    if (!handle) {
-      return false
-    }
-    const mode = terminalModes.get(handle)
-    return mode === 'auto' || mode === 'phone' || mode === undefined
-  }
-
   const visibleTabs: MobileSessionTab[] = sessionTabs
   const activeMarkdownTab = activeSessionTab?.type === 'markdown' ? activeSessionTab : null
   const activeFileTab = activeSessionTab?.type === 'file' ? activeSessionTab : null
@@ -4832,12 +4825,12 @@ export default function SessionScreen() {
                         }
                       }}
                       accessibilityLabel={
-                        isPhoneMode(activeHandle)
+                        isTerminalPhoneDisplayMode(activeHandle, terminalModes)
                           ? 'Switch to desktop mode'
                           : 'Switch to phone mode'
                       }
                     >
-                      {isPhoneMode(activeHandle) ? (
+                      {isTerminalPhoneDisplayMode(activeHandle, terminalModes) ? (
                         <Monitor
                           size={14}
                           color={canSend ? colors.textSecondary : colors.textMuted}
@@ -5216,11 +5209,12 @@ export default function SessionScreen() {
           nativeChatTranscriptIsLocalReadable,
           onDismiss: () => setActionTarget(null),
           onToggleChat: toggleTabChatView,
-          isPhoneMode,
+          isPhoneMode: (handle) => isTerminalPhoneDisplayMode(handle, terminalModes),
           onToggleDisplayMode: (handle) => void toggleDisplayMode(handle),
           onRename: setRenameTarget,
           onClear: (target) => void handleClearTerminal(target),
           onClose: (target) => void handleCloseTerminal(target),
+          onCloseSessionTab: (tab) => void handleCloseSessionTab(tab),
           bulkCloseActions
         })}
         onClose={() => setActionTarget(null)}

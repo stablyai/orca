@@ -77,7 +77,9 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
   }
 
   const host = target.configHost || target.host
-  const userHost = target.username ? `${target.username}@${host}` : host
+  // Why: OpenSSH owns User for config-backed aliases; imported fallback values
+  // must not override a fresh wildcard, Include, or Match result.
+  const userHost = useConfigHost ? host : target.username ? `${target.username}@${host}` : host
   args.push('--', userHost)
 
   return args
@@ -166,7 +168,9 @@ function shouldUseOpenSshConfigHost(target: SshTarget): boolean {
   return isOpenSshConfigBackedTarget(target)
 }
 
-export function isOpenSshConfigBackedTarget(target: SshTarget): boolean {
+export function isOpenSshConfigBackedTarget(
+  target: Pick<SshTarget, 'source' | 'configHost' | 'host'>
+): boolean {
   if (target.source === 'ssh-config') {
     return true
   }
