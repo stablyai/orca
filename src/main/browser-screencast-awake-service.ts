@@ -1,6 +1,9 @@
 import { LinuxLidSleepAssertion } from './linux-lid-sleep-assertion'
 import { MacosSystemSleepAssertion } from './macos-system-sleep-assertion'
 
+// Why: match AGENT_AWAKE_STATUS_STALE_AFTER_MS so abandoned power assertions cannot linger forever.
+export const BROWSER_SCREENCAST_AWAKE_TOKEN_STALE_AFTER_MS = 2 * 60 * 60 * 1000
+
 type PowerSaveBlocker = {
   start: (type: 'prevent-app-suspension' | 'prevent-display-sleep') => number
   stop: (id: number) => void
@@ -22,10 +25,13 @@ type Logger = Pick<Console, 'debug' | 'warn'>
 
 type BrowserScreencastAwakeServiceOptions = {
   blocker?: PowerSaveBlocker
+  getLiveTokens?: () => Iterable<string>
   linuxAssertion?: PlatformAwakeAssertion
   logger?: Logger
   macosAssertion?: PlatformAwakeAssertion
+  now?: () => number
   powerMonitor?: PowerMonitorEventSource | null
+  staleAfterMs?: number
 }
 
 type ElectronPowerApis = {
@@ -40,16 +46,23 @@ function loadElectronPowerApis(): ElectronPowerApis {
 
 /** Keeps display/compositor awake while browser.screencast streams need CDP frames. */
 export class BrowserScreencastAwakeService {
-  private readonly activeTokens = new Set<string>()
+  private readonly tokens = new Map<string, number>()
   private blockerId: number | null = null
+  private staleTimer: ReturnType<typeof setTimeout> | null = null
+  private getLiveTokens: (() => Iterable<string>) | null
   private readonly blocker: PowerSaveBlocker
   private readonly linuxAssertion: PlatformAwakeAssertion
   private readonly logger: Logger
   private readonly macosAssertion: PlatformAwakeAssertion
+  private readonly now: () => number
+  private readonly staleAfterMs: number
   private readonly unsubscribeResume: (() => void) | null
 
   constructor(options: BrowserScreencastAwakeServiceOptions = {}) {
     this.logger = options.logger ?? console
+    this.now = options.now ?? Date.now
+    this.staleAfterMs = options.staleAfterMs ?? BROWSER_SCREENCAST_AWAKE_TOKEN_STALE_AFTER_MS
+    this.getLiveTokens = options.getLiveTokens ?? null
     const electronApis =
       options.blocker !== undefined && options.powerMonitor !== undefined
         ? null
@@ -61,12 +74,14 @@ export class BrowserScreencastAwakeService {
       options.linuxAssertion ??
       new LinuxLidSleepAssertion({
         logger: this.logger,
+        now: this.now,
         onUnexpectedFailure: (reason) => this.refresh(reason)
       })
     this.macosAssertion =
       options.macosAssertion ??
       new MacosSystemSleepAssertion({
         logger: this.logger,
+        now: this.now,
         onUnexpectedFailure: (reason) => this.refresh(reason)
       })
     const resumeSource =
@@ -80,44 +95,136 @@ export class BrowserScreencastAwakeService {
     }
   }
 
+  // Why: RuntimeBrowserCommands owns live pages; sync drops leaks and renews long sessions.
+  setLiveTokenSource(getLiveTokens: (() => Iterable<string>) | null): void {
+    this.getLiveTokens = getLiveTokens
+    this.refresh('live-token-source-change')
+  }
+
   acquire(token: string): void {
-    if (!token || this.activeTokens.has(token)) {
+    if (!token) {
       return
     }
-    this.activeTokens.add(token)
+    this.tokens.set(token, this.now())
     this.refresh('screencast-acquire')
   }
 
   release(token: string): void {
-    if (!token || !this.activeTokens.delete(token)) {
+    if (!token || !this.tokens.delete(token)) {
       return
     }
     this.refresh('screencast-release')
   }
 
   getActiveCount(): number {
-    return this.activeTokens.size
+    return this.getEligibleTokenCount(this.now())
   }
 
   dispose(): void {
+    this.clearStaleTimer()
     this.unsubscribeResume?.()
-    this.activeTokens.clear()
+    this.getLiveTokens = null
+    this.tokens.clear()
     this.stopBlocker('dispose')
     this.macosAssertion.dispose()
     this.linuxAssertion.dispose()
   }
 
   private refresh(reason: string): void {
-    const activeCount = this.activeTokens.size
+    this.reconcileWithLiveSource()
+    this.scheduleStaleTimer()
+    const activeCount = this.getEligibleTokenCount(this.now())
     if (activeCount > 0) {
       this.startBlocker(reason, activeCount)
-      this.startMacosAssertion(reason)
-      this.startLinuxAssertion(reason)
+      this.runAssertion('start', this.macosAssertion, reason, 'macOS system sleep assertion')
+      this.runAssertion('start', this.linuxAssertion, reason, 'Linux lid sleep assertion')
     } else {
       this.stopBlocker(reason, activeCount)
-      this.stopMacosAssertion(reason)
-      this.stopLinuxAssertion(reason)
+      this.runAssertion('stop', this.macosAssertion, reason, 'macOS system sleep assertion')
+      this.runAssertion('stop', this.linuxAssertion, reason, 'Linux lid sleep assertion')
     }
+  }
+
+  private reconcileWithLiveSource(): void {
+    if (!this.getLiveTokens) {
+      return
+    }
+    const live = new Set<string>()
+    for (const token of this.getLiveTokens()) {
+      if (token) {
+        live.add(token)
+      }
+    }
+    for (const token of this.tokens.keys()) {
+      if (!live.has(token)) {
+        this.tokens.delete(token)
+      }
+    }
+    const now = this.now()
+    for (const token of live) {
+      this.tokens.set(token, now)
+    }
+  }
+
+  private getEligibleTokenCount(now: number): number {
+    let count = 0
+    for (const seenAt of this.tokens.values()) {
+      if (this.isWakeEligible(seenAt, now)) {
+        count += 1
+      }
+    }
+    return count
+  }
+
+  private isWakeEligible(seenAt: number, now: number): boolean {
+    return Number.isFinite(seenAt) && now - seenAt <= this.staleAfterMs
+  }
+
+  private scheduleStaleTimer(): void {
+    this.clearStaleTimer()
+    const now = this.now()
+    let earliestExpiry: number | null = null
+    for (const seenAt of this.tokens.values()) {
+      if (!Number.isFinite(seenAt)) {
+        continue
+      }
+      const expiry = seenAt + this.staleAfterMs
+      if (expiry <= now) {
+        continue
+      }
+      earliestExpiry = earliestExpiry === null ? expiry : Math.min(earliestExpiry, expiry)
+    }
+    // Why: with a live-token source, renewals keep timestamps fresh; still poll so a
+    // leaked token without a matching live page is pruned even when no expiry is due.
+    if (earliestExpiry === null && !(this.getLiveTokens && this.tokens.size > 0)) {
+      return
+    }
+    const delay = earliestExpiry === null ? this.staleAfterMs : Math.max(0, earliestExpiry - now)
+    this.staleTimer = setTimeout(() => {
+      this.staleTimer = null
+      this.pruneExpiredTokens()
+      this.refresh('stale-expiry')
+    }, delay)
+    if (typeof this.staleTimer.unref === 'function') {
+      this.staleTimer.unref()
+    }
+  }
+
+  private pruneExpiredTokens(): void {
+    const now = this.now()
+    for (const [token, seenAt] of this.tokens) {
+      if (!this.isWakeEligible(seenAt, now)) {
+        this.tokens.delete(token)
+      }
+    }
+  }
+
+  private clearStaleTimer(): void {
+    if (!this.staleTimer) {
+      return
+    }
+    clearTimeout(this.staleTimer)
+    this.staleTimer = null
   }
 
   private startBlocker(reason: string, activeCount: number): void {
@@ -139,44 +246,16 @@ export class BrowserScreencastAwakeService {
     }
   }
 
-  private startMacosAssertion(reason: string): void {
+  private runAssertion(
+    action: 'start' | 'stop',
+    assertion: PlatformAwakeAssertion,
+    reason: string,
+    label: string
+  ): void {
     try {
-      this.macosAssertion.start(reason)
+      assertion[action](reason)
     } catch (err) {
-      this.logger.warn('[browser-screencast-awake] failed to start macOS system sleep assertion', {
-        reason,
-        error: err
-      })
-    }
-  }
-
-  private startLinuxAssertion(reason: string): void {
-    try {
-      this.linuxAssertion.start(reason)
-    } catch (err) {
-      this.logger.warn('[browser-screencast-awake] failed to start Linux lid sleep assertion', {
-        reason,
-        error: err
-      })
-    }
-  }
-
-  private stopMacosAssertion(reason: string): void {
-    try {
-      this.macosAssertion.stop(reason)
-    } catch (err) {
-      this.logger.warn('[browser-screencast-awake] failed to stop macOS system sleep assertion', {
-        reason,
-        error: err
-      })
-    }
-  }
-
-  private stopLinuxAssertion(reason: string): void {
-    try {
-      this.linuxAssertion.stop(reason)
-    } catch (err) {
-      this.logger.warn('[browser-screencast-awake] failed to stop Linux lid sleep assertion', {
+      this.logger.warn(`[browser-screencast-awake] failed to ${action} ${label}`, {
         reason,
         error: err
       })

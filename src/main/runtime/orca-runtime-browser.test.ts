@@ -63,6 +63,7 @@ vi.mock('../browser-screencast-awake-service', () => ({
   getBrowserScreencastAwakeService: () => ({
     acquire: browserScreencastAwakeAcquireMock,
     release: browserScreencastAwakeReleaseMock,
+    setLiveTokenSource: vi.fn(),
     dispose: vi.fn(),
     getActiveCount: vi.fn(() => 0)
   }),

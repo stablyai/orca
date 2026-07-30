@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { BrowserScreencastAwakeService } from './browser-screencast-awake-service'
+import {
+  BrowserScreencastAwakeService,
+  BROWSER_SCREENCAST_AWAKE_TOKEN_STALE_AFTER_MS
+} from './browser-screencast-awake-service'
 
 vi.mock('electron', () => ({
   powerMonitor: {
@@ -56,15 +59,19 @@ function createPowerMonitor() {
 }
 
 function createService(
+  now: () => number,
   blocker = createBlocker(),
   macosAssertion = createPlatformAssertion(),
   linuxAssertion = createPlatformAssertion(),
-  powerMonitor: ReturnType<typeof createPowerMonitor> | null = null
+  powerMonitor: ReturnType<typeof createPowerMonitor> | null = null,
+  getLiveTokens?: () => Iterable<string>
 ): BrowserScreencastAwakeService {
   return new BrowserScreencastAwakeService({
     blocker,
+    getLiveTokens,
     linuxAssertion,
     macosAssertion,
+    now,
     powerMonitor,
     logger: {
       debug: vi.fn(),
@@ -80,7 +87,7 @@ describe('BrowserScreencastAwakeService', () => {
 
   it('does not start until a screencast token is acquired', () => {
     const blocker = createBlocker()
-    createService(blocker)
+    createService(() => 1_000, blocker)
 
     expect(blocker.start).not.toHaveBeenCalled()
   })
@@ -89,7 +96,7 @@ describe('BrowserScreencastAwakeService', () => {
     const blocker = createBlocker()
     const macosAssertion = createPlatformAssertion()
     const linuxAssertion = createPlatformAssertion()
-    const service = createService(blocker, macosAssertion, linuxAssertion)
+    const service = createService(() => 1_000, blocker, macosAssertion, linuxAssertion)
 
     service.acquire('stream-1')
 
@@ -104,7 +111,7 @@ describe('BrowserScreencastAwakeService', () => {
     const blocker = createBlocker()
     const macosAssertion = createPlatformAssertion()
     const linuxAssertion = createPlatformAssertion()
-    const service = createService(blocker, macosAssertion, linuxAssertion)
+    const service = createService(() => 1_000, blocker, macosAssertion, linuxAssertion)
 
     service.acquire('stream-1')
     service.acquire('stream-2')
@@ -122,12 +129,12 @@ describe('BrowserScreencastAwakeService', () => {
     expect(service.getActiveCount()).toBe(0)
   })
 
-  it('ignores duplicate acquire and unknown release', () => {
+  it('ignores empty acquire and unknown release', () => {
     const blocker = createBlocker()
-    const service = createService(blocker)
+    const service = createService(() => 1_000, blocker)
 
     service.acquire('stream-1')
-    service.acquire('stream-1')
+    service.acquire('')
     service.release('missing')
 
     expect(blocker.start).toHaveBeenCalledTimes(1)
@@ -139,6 +146,7 @@ describe('BrowserScreencastAwakeService', () => {
     const blocker = createBlocker()
     const powerMonitor = createPowerMonitor()
     const service = createService(
+      () => 1_000,
       blocker,
       createPlatformAssertion(),
       createPlatformAssertion(),
@@ -155,11 +163,69 @@ describe('BrowserScreencastAwakeService', () => {
     expect(blocker.start).toHaveBeenLastCalledWith('prevent-display-sleep')
   })
 
+  it('stops the blocker after the agent-awake stale window without a live-token renew', () => {
+    vi.useFakeTimers()
+    const blocker = createBlocker()
+    let now = 1_000
+    const service = createService(() => now, blocker)
+
+    service.acquire('stream-1')
+    expect(blocker.start).toHaveBeenCalledTimes(1)
+
+    now = 1_000 + BROWSER_SCREENCAST_AWAKE_TOKEN_STALE_AFTER_MS + 1
+    vi.advanceTimersByTime(BROWSER_SCREENCAST_AWAKE_TOKEN_STALE_AFTER_MS + 1)
+
+    expect(blocker.stop).toHaveBeenCalledWith(1)
+    expect(service.getActiveCount()).toBe(0)
+  })
+
+  it('renews live tokens from the authoritative source so long sessions stay awake', () => {
+    vi.useFakeTimers()
+    const blocker = createBlocker()
+    let now = 1_000
+    const live = new Set<string>(['stream-1'])
+    const service = createService(
+      () => now,
+      blocker,
+      createPlatformAssertion(),
+      createPlatformAssertion(),
+      null,
+      () => live
+    )
+
+    service.acquire('stream-1')
+    now = 1_000 + BROWSER_SCREENCAST_AWAKE_TOKEN_STALE_AFTER_MS + 1
+    vi.advanceTimersByTime(BROWSER_SCREENCAST_AWAKE_TOKEN_STALE_AFTER_MS + 1)
+
+    expect(blocker.stop).not.toHaveBeenCalled()
+    expect(service.getActiveCount()).toBe(1)
+  })
+
+  it('drops leaked tokens that the live source no longer reports', () => {
+    const blocker = createBlocker()
+    const live = new Set<string>(['stream-1'])
+    const service = createService(
+      () => 1_000,
+      blocker,
+      createPlatformAssertion(),
+      createPlatformAssertion(),
+      null,
+      () => live
+    )
+
+    service.acquire('stream-1')
+    live.delete('stream-1')
+    service.setLiveTokenSource(() => live)
+
+    expect(blocker.stop).toHaveBeenCalledWith(1)
+    expect(service.getActiveCount()).toBe(0)
+  })
+
   it('dispose clears tokens and stops assertions', () => {
     const blocker = createBlocker()
     const macosAssertion = createPlatformAssertion()
     const linuxAssertion = createPlatformAssertion()
-    const service = createService(blocker, macosAssertion, linuxAssertion)
+    const service = createService(() => 1_000, blocker, macosAssertion, linuxAssertion)
 
     service.acquire('stream-1')
     service.dispose()

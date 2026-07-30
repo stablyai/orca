@@ -177,7 +177,12 @@ export class RuntimeBrowserCommands {
   private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
   private readonly stoppingScreencastPageIds = new Map<string, Promise<void>>()
 
-  constructor(private readonly host: RuntimeBrowserCommandHost) {}
+  constructor(private readonly host: RuntimeBrowserCommandHost) {
+    // Why: authoritative live pages renew/prune awake tokens on the agent-awake stale cadence.
+    getBrowserScreencastAwakeService().setLiveTokenSource(() =>
+      [...this.activeScreencastsByPageId.keys()].map((pageId) => this.screencastAwakeToken(pageId))
+    )
+  }
 
   private screencastAwakeToken(browserPageId: string): string {
     return `browser-screencast:${browserPageId}`
