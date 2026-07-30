@@ -174,19 +174,10 @@ export type StatusPillPreloadApi = {
   /** Move the pill window to a screen origin. Called on each pointermove
    *  during a drag; main debounces the persisted write. */
   setWindowPosition: (position: { x: number; y: number }) => void
-  /** Report the renderer's interactive content rect (the pill/panel bounding
-   *  box, relative to the window top-left) so the main process can hit-test
-   *  the global cursor against it and toggle click-through. Sent whenever the
-   *  pill-stack resizes (dot -> bar -> panel). */
-  setContentRect: (rect: { left: number; top: number; width: number; height: number }) => void
-  /** Lock the window into "capturing" mode (setIgnoreMouseEvents(false)) for
-   *  the duration of a pointer press, so a drag never gets cut by the
-   *  click-through poll when the cursor briefly leaves the content rect. */
-  setCapturing: (capturing: boolean) => void
-  /** Tell main the island is expanded. While expanded, main forces full click
-   *  capture (no click-through) so clicks on the panel/rows always land — the
-   *  compact poll is only used when collapsed. */
-  setExpanded: (expanded: boolean) => void
+  /** Ask main to resize the content-sized pill window so the renderer content
+   *  (which just expanded/collapsed) fits without clipping. Main keeps the
+   *  window centered on the same display. */
+  resize: (size: { width: number; height: number }) => void
   /** Send raw bytes (option number, label text, Escape, …) to the agent PTY
    *  that asked the currently-pending question. Returns whether the write
    *  reached a live terminal. Main resolves the paneKey → terminal handle →

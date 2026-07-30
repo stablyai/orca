@@ -27,13 +27,9 @@ export type StatusPillIpcArgs = {
   getWindowPosition: () => { x: number; y: number }
   /** Move the pill window to a screen origin and (debounced) persist it. */
   setWindowPosition: (position: { x: number; y: number }) => void
-  /** Receive the renderer's interactive content rect (relative to the window
-   *  top-left) so main can hit-test the global cursor and toggle click-through. */
-  onContentRect: (rect: { left: number; top: number; width: number; height: number }) => void
-  /** Lock/unlock capture for the duration of a pointer press (drag safety). */
-  onSetCapturing: (capturing: boolean) => void
-  /** Tell main the island is expanded (forces full capture while expanded). */
-  onSetExpanded: (expanded: boolean) => void
+  /** Resize the content-sized pill window so the expanded panel never clips.
+   *  Main keeps the center-x anchored and the top y stable. */
+  resize: (size: { width: number; height: number }) => void
   warn: (message: string, error?: unknown) => void
 }
 
@@ -92,36 +88,18 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
     }
     args.setWindowPosition({ x, y })
   }
-  // Why: the renderer reports its interactive content rect (relative to the
-  // window top-left) whenever it resizes. Main offsets it by the live window
-  // origin and hit-tests the global cursor against it to toggle click-through
-  // (see createStatusPillWindow). This is how the tall transparent overlay
-  // stays click-through everywhere except over the actual pill/panel.
-  const contentRectHandler = (payload: unknown): void => {
+  // Why: content-sized window — when the island expands/collapses the renderer
+  // measures its size and asks main to resize the BrowserWindow so the panel
+  // never clips. Main keeps the center-x anchored and the top y stable.
+  const resizeHandler = (payload: unknown): void => {
     if (!payload || typeof payload !== 'object') {
       return
     }
-    const { left, top, width, height } = payload as {
-      left?: unknown
-      top?: unknown
-      width?: unknown
-      height?: unknown
-    }
-    if (
-      typeof left !== 'number' ||
-      typeof top !== 'number' ||
-      typeof width !== 'number' ||
-      typeof height !== 'number'
-    ) {
+    const { width, height } = payload as { width?: unknown; height?: unknown }
+    if (typeof width !== 'number' || typeof height !== 'number') {
       return
     }
-    args.onContentRect({ left, top, width, height })
-  }
-  const setCapturingHandler = (payload: unknown): void => {
-    args.onSetCapturing(payload === true)
-  }
-  const setExpandedHandler = (payload: unknown): void => {
-    args.onSetExpanded(payload === true)
+    args.resize({ width, height })
   }
   const answerHandler = async (payload: unknown): Promise<StatusPillAnswerResult> =>
     answerAgentFromPill(payload, args)
@@ -150,9 +128,7 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
   ipcMain.on('statusPill:contextMenu', contextMenuHandler)
   ipcMain.on('statusPill:focusPane', focusPaneHandler)
   ipcMain.on('statusPill:setWindowPosition', setWindowPositionHandler)
-  ipcMain.on('statusPill:contentRect', contentRectHandler)
-  ipcMain.on('statusPill:setCapturing', setCapturingHandler)
-  ipcMain.on('statusPill:setExpanded', setExpandedHandler)
+  ipcMain.on('statusPill:resize', resizeHandler)
   ipcMain.handle('statusPill:getSnapshot', snapshotHandler)
   ipcMain.handle('statusPill:getAgentRows', rowsHandler)
   ipcMain.handle('statusPill:getInitialPreferences', prefsHandler)
@@ -164,9 +140,7 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
     ipcMain.removeListener('statusPill:contextMenu', contextMenuHandler)
     ipcMain.removeListener('statusPill:focusPane', focusPaneHandler)
     ipcMain.removeListener('statusPill:setWindowPosition', setWindowPositionHandler)
-    ipcMain.removeListener('statusPill:contentRect', contentRectHandler)
-    ipcMain.removeListener('statusPill:setCapturing', setCapturingHandler)
-    ipcMain.removeListener('statusPill:setExpanded', setExpandedHandler)
+    ipcMain.removeListener('statusPill:resize', resizeHandler)
     ipcMain.removeHandler('statusPill:getSnapshot')
     ipcMain.removeHandler('statusPill:getAgentRows')
     ipcMain.removeHandler('statusPill:getInitialPreferences')

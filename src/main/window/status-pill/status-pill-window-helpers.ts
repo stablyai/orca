@@ -1,59 +1,7 @@
-import { screen, type BrowserWindow } from 'electron'
+import { screen } from 'electron'
+import type { BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
-
-/** Start the click-through poll for the pill overlay. The window stays
- *  click-through (setIgnoreMouseEvents true) everywhere except when the global
- *  cursor is inside the interactive content rect (window-origin + the rect the
- *  renderer reports), or while a pointer is pressed (a drag), in which case it
- *  captures. Returns a stop() that clears the interval. */
-export function startClickThroughPoll(
-  window: BrowserWindow,
-  state: {
-    getContentRect: () => {
-      left: number
-      top: number
-      width: number
-      height: number
-    } | null
-    isCapturing: () => boolean
-    isExpanded: () => boolean
-  }
-): () => void {
-  window.setIgnoreMouseEvents(true)
-  const timer = setInterval(() => {
-    if (window.isDestroyed()) {
-      return
-    }
-    // Why: expanded island and an active press both force full capture so
-    // panel clicks and drags never get dropped to the app behind.
-    let overContent = state.isExpanded() || state.isCapturing()
-    if (!overContent) {
-      const rect = state.getContentRect()
-      if (rect) {
-        try {
-          const cursor = screen.getCursorScreenPoint()
-          const wb = window.getBounds()
-          const x = wb.x + rect.left
-          const y = wb.y + rect.top
-          overContent =
-            cursor.x >= x &&
-            cursor.x <= x + rect.width &&
-            cursor.y >= y &&
-            cursor.y <= y + rect.height
-        } catch {
-          // Best-effort; screen API unavailable in tests.
-        }
-      }
-    }
-    try {
-      window.setIgnoreMouseEvents(!overContent)
-    } catch {
-      // Best-effort.
-    }
-  }, 80)
-  return () => clearInterval(timer)
-}
 
 /** Load the pill HTML entry. Dev uses electron-vite's URL; prod uses the
  *  packaged file with a single retry to absorb a fresh-build flush race. */

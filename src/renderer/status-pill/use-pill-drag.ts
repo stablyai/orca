@@ -54,10 +54,6 @@ export function usePillDrag(): UsePillDrag {
       moved: false
     }
     dragState.current = state
-    // Why: lock the overlay into capturing mode for the whole press so the
-    // click-through poll can't sever a drag when the cursor briefly leaves the
-    // content rect (window-lag during fast moves).
-    api.setCapturing(true)
     void api.getWindowPosition().then((pos) => {
       // Why: only adopt the start origin if this pointer is still the active
       // one — a later pointer down must not be overwritten by a stale resolve.
@@ -90,7 +86,6 @@ export function usePillDrag(): UsePillDrag {
       window.removeEventListener('mouseup', onUp)
       dragState.current = null
       setDragging(false)
-      window.api?.setCapturing(false)
     }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)

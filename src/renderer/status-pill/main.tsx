@@ -12,7 +12,7 @@ import type {
 import { EMPTY_STATUS_PILL_SUMMARY } from '../../shared/status-pill-preload-api'
 import { Island } from './island'
 import { usePillDrag } from './use-pill-drag'
-import { usePillContentRect } from './use-pill-content-rect'
+import { usePillResize } from './use-pill-resize'
 
 declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
@@ -42,7 +42,7 @@ function StatusPill(): React.JSX.Element {
   const prefersReducedMotionRef = useRef(false)
 
   const drag = usePillDrag()
-  usePillContentRect(window.api, stackRef)
+  usePillResize(window.api, stackRef)
 
   useEffect(() => {
     if (!api) {
@@ -177,9 +177,6 @@ function StatusPill(): React.JSX.Element {
   // Why: Vibe Island model — compact island always visible, expands on hover or
   //  when a question is pending, or stays open while pinned (to move it).
   const showExpanded = hovered || expanded || pinned
-  useEffect(() => {
-    window.api?.setExpanded(showExpanded)
-  }, [showExpanded])
 
   return (
     <Island

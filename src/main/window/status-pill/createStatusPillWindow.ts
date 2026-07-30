@@ -11,8 +11,7 @@ import { attachStatusPillIpcListeners } from './status-pill-ipc'
 import {
   attachDisplayListeners,
   defaultStatusPillWarn,
-  loadPillEntry,
-  startClickThroughPoll
+  loadPillEntry
 } from './status-pill-window-helpers'
 import type {
   StatusPillAgentRow,
@@ -125,7 +124,7 @@ export function createStatusPillWindow(
       width: PILL_WINDOW_WIDTH,
       height: PILL_WINDOW_HEIGHT,
       frame: false,
-      resizable: false,
+      resizable: true,
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
@@ -247,19 +246,6 @@ export function createStatusPillWindow(
   })
 
   const detachDisplayListeners = attachDisplayListeners(refreshPlacement)
-  // Why: the renderer's interactive content rect (relative to the window). The
-  // click-through poll below offsets it by the live window origin and toggles
-  // setIgnoreMouseEvents so the tall transparent overlay only captures the
-  // cursor over the actual pill/panel.
-  let contentRect: { left: number; top: number; width: number; height: number } | null = null
-  // Why: while a pointer is pressed (a drag in progress) the window must stay
-  // capturing even if the cursor briefly leaves the content rect — otherwise
-  // the poll would flip back to click-through mid-drag and sever the drag.
-  let capturing = false
-  // Why: while the island is expanded, force full capture so clicks on the
-  // panel/rows always land (the compact cursor poll is only reliable for the
-  // small resting island).
-  let expanded = false
   const detachIpc = attachStatusPillIpcListeners({
     window,
     onFocusMainWindow: options.onFocusMainWindow,
@@ -268,15 +254,6 @@ export function createStatusPillWindow(
     getRows,
     runtime: options.runtime,
     onHidePill: options.onHidePill,
-    onContentRect: (rect) => {
-      contentRect = rect
-    },
-    onSetCapturing: (value) => {
-      capturing = value
-    },
-    onSetExpanded: (value) => {
-      expanded = value
-    },
     warn,
     // Why: the renderer drives manual dragging (mousedown → mousemove). It
     // reads the window's screen origin on pointer down and pushes the new
@@ -299,17 +276,33 @@ export function createStatusPillWindow(
       } catch (error) {
         warn('[status-pill] failed to set window position', error)
       }
+    },
+    // Why: the window is content-sized (NOT a tall click-through overlay), so
+    // it receives clicks like any normal window — no setIgnoreMouseEvents.
+    // When the island expands/collapses, the renderer measures its size and
+    // asks main to resize the window so the panel never clips.
+    resize: (size) => {
+      if (window.isDestroyed()) {
+        return
+      }
+      try {
+        const current = window.getBounds()
+        const nextWidth = Math.round(size.width)
+        const nextHeight = Math.round(size.height)
+        const currentCenterX = current.x + Math.round(current.width / 2)
+        window.setBounds(
+          {
+            x: currentCenterX - Math.round(nextWidth / 2),
+            y: current.y,
+            width: nextWidth,
+            height: nextHeight
+          },
+          false
+        )
+      } catch (error) {
+        warn('[status-pill] resize failed', error)
+      }
     }
-  })
-
-  // Why: drive click-through from the MAIN process via screen.getCursorScreenPoint.
-  // The setIgnoreMouseEvents({forward:true}) + renderer mousemove pattern dropped
-  // clicks on macOS, so we poll the cursor and toggle capture over the content
-  // rect (or while a pointer is pressed). Reliable across platforms, no forwarding.
-  const stopClickThroughPoll = startClickThroughPoll(window, {
-    getContentRect: () => contentRect,
-    isCapturing: () => capturing,
-    isExpanded: () => expanded
   })
 
   // Why: push the initial snapshot as soon as the renderer signals it is
@@ -354,7 +347,6 @@ export function createStatusPillWindow(
       clearTimeout(persistTimer)
       persistTimer = null
     }
-    stopClickThroughPoll()
     detachDisplayListeners()
     detachIpc()
     broadcaster.destroy()
@@ -391,21 +383,16 @@ export function createStatusPillWindow(
     if (!display) {
       return null
     }
-    // Why: the window spans the full work-area height so the expanded panel
-    // can grow downward without ever needing a dynamic resize (which clipped
-    // on macOS). X is centered (or the user's pinned X); the bar renders at
-    // the window's top via the renderer's #root padding. The transparent
-    // area is click-through (see the cursor poll below), so covering the
-    // work-area height does not block the apps behind.
-    const base = computeStatusPillPlacement({
+    // Why: window = capsule + padding, sized to the resting island. The
+    // renderer grows it via statusPill:resize when the panel unfolds.
+    // pinnedXOffset carries the user's dragged X (clamped into the work area).
+    return computeStatusPillPlacement({
       pillWidth: PILL_WIDTH,
       pillHeight: PILL_HEIGHT,
       display,
       platform: process.platform,
       pinnedXOffset: persisted?.x
     })
-    const workArea = display.workArea
-    return { x: base.x, y: workArea.y, width: base.width, height: workArea.height }
   }
 }
 
