@@ -4,9 +4,9 @@ import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   activateAndRevealWorktree,
   ensureWorktreeHasInitialTerminal,
-  type ActivateAndRevealResult,
-  type WorktreeStartupPayload
+  type ActivateAndRevealResult
 } from '@/lib/worktree-activation'
+import { buildStartupOpt } from '@/lib/worktree-creation-startup-payload'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -31,36 +31,6 @@ import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mo
 
 type ContinueBackgroundWorktreeCreationOptions = {
   revealCreationSurface?: boolean
-}
-
-// Why: mirrors the startup-opt the composer used to build inline. The renderer
-// only seeds the first terminal when the backend did not already spawn it.
-function buildStartupOpt(
-  request: WorktreeCreationRequest,
-  backendSpawned: boolean
-): WorktreeStartupPayload | undefined {
-  const plan = request.startupPlan
-  if (!plan || backendSpawned) {
-    return undefined
-  }
-  return {
-    command: plan.launchCommand,
-    ...(plan.env ? { env: plan.env } : {}),
-    launchConfig: plan.launchConfig,
-    ...(plan.launchToken ? { launchToken: plan.launchToken } : {}),
-    ...(request.agent ? { launchAgent: request.agent } : {}),
-    ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
-    // Why: view-mode only. An argv-prefill plan sets no draftPrompt, so this is
-    // the sole signal that this launch starts with unsent context in the TUI.
-    ...(request.launchDraftPrompt ? { launchDraftText: request.launchDraftPrompt } : {}),
-    ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
-    // Why: command-code shows its prompt in the tab status before the first
-    // hook fires, so the prompt is threaded through here.
-    ...(request.agent === 'command-code' && request.quickPrompt.trim().length > 0
-      ? { initialAgentStatus: { agent: request.agent, prompt: request.quickPrompt.trim() } }
-      : {}),
-    ...(request.quickTelemetry ? { telemetry: request.quickTelemetry } : {})
-  }
 }
 
 function getWorktreeCreationIndeterminate(request: WorktreeCreationRequest): boolean {
