@@ -3084,6 +3084,60 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('passes repeated --env KEY=VALUE flags through terminal.create as an env record', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_create', {
+        terminal: { handle: 'term_1', worktreeId: 'repo-1::/tmp/repo', title: null }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'terminal',
+        'create',
+        '--worktree',
+        'path:/tmp/repo/feature',
+        '--command',
+        'codex',
+        '--env',
+        'CALLER_TOKEN=abc123',
+        '--env',
+        'CALLER_ID=42',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.create',
+      expect.objectContaining({
+        command: 'codex',
+        env: { CALLER_TOKEN: 'abc123', CALLER_ID: '42' }
+      })
+    )
+  })
+
+  it('rejects a malformed --env value that is not KEY=VALUE', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['terminal', 'create', '--worktree', 'path:/tmp/repo/feature', '--env', 'NOEQUALS', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument', message: '--env must be KEY=VALUE, got: NOEQUALS' }
+    })
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('prints terminal.read fallback screen lines in json mode', async () => {
     queueFixtures(
       callMock,

@@ -55,7 +55,7 @@ export const BOOLEAN_FLAGS = new Set([
 ])
 
 export const REPEATED_FLAG_SEPARATOR = '\u0000'
-const REPEATABLE_STRING_FLAGS = new Set(['label'])
+const REPEATABLE_STRING_FLAGS = new Set(['label', 'env'])
 
 function setFlagValue(flags: Map<string, string | boolean>, name: string, value: string): void {
   const existing = flags.get(name)

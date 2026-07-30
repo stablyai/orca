@@ -12584,6 +12584,33 @@ describe('OrcaRuntimeService', () => {
     expect(spawnCall?.envToDelete).toEqual(['CODEX_HOME', 'ORCA_CODEX_HOME'])
   })
 
+  it('passes arbitrary caller env (the `terminal create --env` case) through to the spawned pty', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-env-passthrough' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      env: { CALLER_TOKEN: 'abc123', CALLER_ID: '42' }
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined
+    expect(spawnCall?.env).toEqual(
+      expect.objectContaining({
+        CALLER_TOKEN: 'abc123',
+        CALLER_ID: '42'
+      })
+    )
+    // The command is untouched by env injection, so agent launch-preset detection
+    // (YOLO) still applies.
+    expect(spawnCall).toEqual(expect.objectContaining({ command: 'codex' }))
+  })
+
   it.each([
     { label: 'canonical folder workspace selector', selector: TEST_FOLDER_WORKSPACE_KEY },
     { label: 'id-prefixed folder workspace selector', selector: `id:${TEST_FOLDER_WORKSPACE_KEY}` }

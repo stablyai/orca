@@ -28,6 +28,7 @@ import {
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
+  getRepeatedStringFlag,
   getRequiredStringFlag
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
@@ -42,6 +43,24 @@ import {
 // timeout. Even without an explicit server timeout, the client must allow
 // long waits instead of failing at the generic 15s transport cap.
 const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
+
+// Parse repeated `--env KEY=VALUE` flags into an env record. Returns undefined
+// when none were passed so the RPC payload stays unchanged. The value may itself
+// contain `=` (e.g. base64/URLs); only the first `=` splits key from value.
+function parseEnvFlags(pairs: string[]): Record<string, string> | undefined {
+  if (pairs.length === 0) {
+    return undefined
+  }
+  const env: Record<string, string> = {}
+  for (const pair of pairs) {
+    const eq = pair.indexOf('=')
+    if (eq <= 0) {
+      throw new RuntimeClientError('invalid_argument', `--env must be KEY=VALUE, got: ${pair}`)
+    }
+    env[pair.slice(0, eq)] = pair.slice(eq + 1)
+  }
+  return env
+}
 
 const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
   const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
@@ -135,6 +154,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     const useRendererBackedInteractiveTerminal =
       !client.isRemote && shouldUseRendererBackedInteractiveTerminal(command)
     const focus = flags.get('focus') === true
+    const env = parseEnvFlags(getRepeatedStringFlag(flags, 'env'))
     const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
       worktree: await getBrowserWorktreeSelector(flags, cwd, client),
       command,
@@ -143,6 +163,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       // path for browser-side features, but CLI creates must stay backgrounded
       // unless the caller explicitly asks for focus.
       focus,
+      ...(env ? { env } : {}),
       ...(focus ? { presentation: 'focused' } : {}),
       ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
     })
