@@ -161,6 +161,22 @@ describe('OpenCode native title tab identity', () => {
     }
   })
 
+  it.each([false, true])(
+    'keeps completed Claude ownership over an SSH/tmux restored title when observed=%s',
+    (hasObservedAgentSignal) => {
+      expect(
+        resolveTabAgentFromSignals({
+          hasObservedAgentSignal,
+          isRemote: true,
+          title: 'tmux | OC | Previous task',
+          hookAgent: null,
+          focusedCompletedHookAgent: 'claude',
+          launchAgent: 'claude'
+        })
+      ).toBe('claude')
+    }
+  )
+
   it('keeps matching sleeping ownership and preserves the no-signal fallback', () => {
     expect(
       resolveTabAgentFromSignals({

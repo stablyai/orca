@@ -87,7 +87,7 @@ export function resolveTabAgentFromSignals(args: {
     sleepingSessionAgent: args.sleepingSessionAgent
   }) as TuiAgent | null
 
-  // The live/idle split governs title override: a LIVE hook is never title-overridden; an IDLE record can be reclaimed by a cross-group title. Siblings normalize vs launchAgent only.
+  // The live/idle split governs title override; siblings normalize against launch intent only.
   const liveFocusedIdentity = resolveSignalAgentForLaunchOwner(args.hookAgent, owner)
   const liveSiblingIdentity = resolveSignalAgentForLaunchOwner(args.siblingHookAgent, launchAgent)
   // Why: OSC 133;D proves this local pane returned to shell, so the idle identity is stale; remote titles lag runtime, so keep it there.
@@ -112,15 +112,18 @@ export function resolveTabAgentFromSignals(args: {
     owner
   )
   const priorIdentity = idleFocusedIdentity ?? launchAgent
-  // Why: completed hooks and OpenCode's native OSC title are direct runtime evidence, even without a live hook signal.
+  const nativeOpenCodeTitle = explicitTitleAgent === 'opencode' && isOpenCodeNativeTitle(args.title)
+  // Why: native OpenCode titles can reclaim stale launch intent before any observed hook signal.
   const titleReclaimsReusedPane =
     priorIdentity !== null &&
     explicitTitleAgent !== null &&
     explicitTitleAgent !== priorIdentity &&
-    (args.hasObservedAgentSignal || hasCompletedHook || isOpenCodeNativeTitle(args.title))
-  // Why: titles have no PTY/provider generation, so they cannot displace a current provider-session owner.
+    (args.hasObservedAgentSignal || hasCompletedHook || nativeOpenCodeTitle)
+  // Why: native OpenCode titles lack a provider generation and cannot displace durable ownership.
   const titleAgent =
-    processProvesShell || sleepingSessionAgent
+    processProvesShell ||
+    sleepingSessionAgent ||
+    (nativeOpenCodeTitle && idleFocusedIdentity !== null)
       ? null
       : titleReclaimsReusedPane
         ? explicitTitleAgent
@@ -142,7 +145,7 @@ export function resolveTabAgentFromSignals(args: {
   const activeLaunchAgent = launchedAgentExited ? null : launchAgent
   // Why: re-own the foreground process within its title-identity group so OMP's nested pi (shell → omp → pi) can't flip an OMP-owned tab's icon.
   const processAgent = resolveSignalAgentForLaunchOwner(args.processAgent, owner)
-  // Identity-first precedence (see JSDoc): live hook > process > title > idle > sleeping > launch > sibling.
+  // Identity-first precedence (see JSDoc): live hook > process > title > completed > sleeping > launch > sibling.
   return (
     liveFocusedIdentity ??
     processAgent ??
@@ -163,9 +166,9 @@ export function resolveTabAgentFromSignals(args: {
  *
  * 1. Live focused hook — ground truth while the agent works; never title-overridden.
  * 2. Process identity — recognized foreground process (local only); re-owned within its title-identity group so OMP's nested `pi` (shell → omp → pi) can't flip the icon.
- * 3. Title — only a reuse override (names a DIFFERENT-group agent) or a legacy standalone identity when the pane has no sleeping session.
- * 4. Idle focused identity — the pane's own hook record after it went idle; suppressed locally once OSC 133;D proves exit.
- * 5. Sleeping session identity — current provider-session ownership; also vetoes an unversioned title.
+ * 3. Title — only a reuse override or legacy standalone identity; native OpenCode titles cannot displace durable ownership.
+ * 4. Idle focused identity — the pane's own completed hook; suppressed locally once OSC 133;D proves exit.
+ * 5. Sleeping session identity — current provider-session ownership.
  * 6. launchAgent — bootstrap before any hook/process signal; cleared once exit evidence shows it left.
  * 7. Sibling-pane identity (live, then idle) — split-tab fallback.
  */
