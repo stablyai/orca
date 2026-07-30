@@ -266,6 +266,12 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       reconcileWorktreeBaseStatus: vi.fn(),
       clearOptimisticReconcileToken: vi.fn(),
       closeFileWatchersForRemoval: vi.fn().mockResolvedValue(undefined),
+      listRepoWorktreesForDetection: vi.fn(async (repoArg: { path: string }) => ({
+        kind: 'success',
+        origin: 'scan',
+        worktrees: await listWorktreesMock(repoArg.path)
+      })),
+      invalidateRepoWorktreeScan: vi.fn(),
       acquireFileWatcherRemoval: vi.fn().mockResolvedValue({
         finish: vi.fn().mockResolvedValue(undefined)
       })

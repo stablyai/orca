@@ -64,7 +64,6 @@ import {
   OrcaRuntimeService,
   recentTerminalPathCandidatesIncludePath,
   recentTerminalOutputIncludesPath,
-  resolveWorktreeScanCacheTtlMs,
   type RuntimeTerminalAgentStatusEvent
 } from './orca-runtime'
 import { RecentPtyOutputBuffer } from './recent-pty-output-buffer'
@@ -282,7 +281,8 @@ const {
   getGitLabWorkItemDetailsMock,
   updateGitLabMRReviewersMock,
   getIssueMock,
-  deleteWorktreeHistoryDirMock
+  deleteWorktreeHistoryDirMock,
+  listWorktreesMock
 } = vi.hoisted(() => {
   // Why: SSH runtime tests register providers via the public dispatcher API, so the mock needs the same registry semantics as the real module.
   const sshGitProviders = new Map<string, unknown>()
@@ -388,13 +388,16 @@ const {
     getGitLabWorkItemDetailsMock: vi.fn(),
     updateGitLabMRReviewersMock: vi.fn(),
     getIssueMock: vi.fn(),
-    deleteWorktreeHistoryDirMock: vi.fn()
+    deleteWorktreeHistoryDirMock: vi.fn(),
+    listWorktreesMock: vi.fn()
   }
 })
 
 vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
-  listWorktreesStrict: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
+  listWorktrees: listWorktreesMock,
+  listWorktreesStrict: vi.fn((...args: unknown[]) => listWorktreesMock(...args)),
+  isNotGitRepositoryError: (error: unknown) =>
+    /not a git repository/i.test(error instanceof Error ? error.message : String(error)),
   assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
   addWorktree: addWorktreeMock,
   removeWorktree: removeWorktreeMock,
@@ -633,7 +636,11 @@ function resetRuntimeTestMocks(): void {
   forgetLocalWatcherRemovalSnapshotMock.mockReset()
   forgetRemoteWatcherRemovalSnapshotMock.mockReset()
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
-  vi.mocked(listWorktreesStrict).mockResolvedValue(MOCK_GIT_WORKTREES)
+  vi.mocked(listWorktreesStrict)
+    .mockReset()
+    .mockImplementation((...args: Parameters<typeof listWorktreesStrict>) =>
+      vi.mocked(listWorktrees)(...args)
+    )
   vi.mocked(addWorktree).mockReset()
   vi.mocked(assertWorktreeCleanForRemoval).mockReset()
   vi.mocked(assertWorktreeCleanForRemoval).mockResolvedValue(undefined)
@@ -34389,7 +34396,9 @@ describe('OrcaRuntimeService', () => {
     await runtime.listDetectedManagedWorktrees('id:repo-a')
 
     expect(listWorktrees).toHaveBeenCalledTimes(3)
-    expect(listWorktrees).toHaveBeenNthCalledWith(3, '/tmp/repo-a')
+    expect(listWorktrees).toHaveBeenNthCalledWith(3, '/tmp/repo-a', {
+      signal: expect.any(AbortSignal)
+    })
   })
 
   it('worktree scan cache: metadata invalidation preserves raw scans', async () => {
@@ -34435,13 +34444,15 @@ describe('OrcaRuntimeService', () => {
       await runtime.listDetectedManagedWorktrees('id:repo-b')
 
       expect(listWorktrees).toHaveBeenCalledTimes(3)
-      expect(listWorktrees).toHaveBeenNthCalledWith(3, '/tmp/repo-a')
+      expect(listWorktrees).toHaveBeenNthCalledWith(3, '/tmp/repo-a', {
+        signal: expect.any(AbortSignal)
+      })
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('worktree scan cache: does not cache non-authoritative scan failures', async () => {
+  it('worktree scan cache: backs off failed scans until invalidated', async () => {
     vi.mocked(listWorktrees).mockClear()
     const runtime = createRuntime()
     vi.mocked(listWorktrees)
@@ -34453,6 +34464,14 @@ describe('OrcaRuntimeService', () => {
         authoritative: false
       }
     )
+    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
+      {
+        authoritative: false
+      }
+    )
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
+
+    runtime.notifyBranchRenamed(TEST_REPO_ID)
     await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
       {
         authoritative: true
@@ -39467,6 +39486,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(listWorktreesStrict)
       .mockResolvedValueOnce(MOCK_GIT_WORKTREES)
       .mockResolvedValueOnce(MOCK_GIT_WORKTREES)
+      .mockResolvedValueOnce(MOCK_GIT_WORKTREES)
       .mockResolvedValue([])
 
     try {
@@ -39551,7 +39571,10 @@ describe('OrcaRuntimeService', () => {
       stderr: ''
     })
     vi.mocked(listWorktrees).mockResolvedValue(registeredWorktrees)
-    vi.mocked(listWorktreesStrict).mockResolvedValueOnce(registeredWorktrees).mockResolvedValue([])
+    vi.mocked(listWorktreesStrict)
+      .mockResolvedValueOnce(registeredWorktrees)
+      .mockResolvedValueOnce(registeredWorktrees)
+      .mockResolvedValue([])
     vi.mocked(getEffectiveHooks).mockReturnValue({
       scripts: {
         archive: 'pnpm worktree:archive'
@@ -39706,7 +39729,10 @@ describe('OrcaRuntimeService', () => {
 
     await runtime.removeManagedWorktree(requestedWorktreeId)
 
-    expect(listWorktrees).toHaveBeenCalledWith(repo.path, { wslDistro: 'Ubuntu' })
+    expect(listWorktreesStrict).toHaveBeenCalledWith(repo.path, {
+      signal: expect.any(AbortSignal),
+      wslDistro: 'Ubuntu'
+    })
     expect(listWorktreesStrict).toHaveBeenCalledWith(repo.path, { wslDistro: 'Ubuntu' })
     expect(assertWorktreeCleanForRemoval).toHaveBeenCalledWith(registeredWorktree.path, false, {
       wslDistro: 'Ubuntu'
@@ -40394,6 +40420,7 @@ describe('OrcaRuntimeService', () => {
     })
     vi.mocked(runHook).mockResolvedValue({ success: true, output: '' })
     vi.mocked(listWorktreesStrict)
+      .mockResolvedValueOnce(MOCK_GIT_WORKTREES)
       .mockResolvedValueOnce(MOCK_GIT_WORKTREES)
       .mockResolvedValueOnce([
         {
@@ -41422,85 +41449,5 @@ describe('OrcaRuntimeService', () => {
         vi.useRealTimers()
       }
     })
-  })
-})
-
-describe('resolveWorktreeScanCacheTtlMs', () => {
-  const BASE_TTL_MS = 30_000
-  const SCRATCH_TTL_MS = 5 * 60_000
-
-  it('keeps the base TTL for ordinary local repos', () => {
-    expect(
-      resolveWorktreeScanCacheTtlMs({ path: '/Users/dev/projects/app', connectionId: '' })
-    ).toBe(BASE_TTL_MS)
-  })
-
-  it('extends the TTL for agent-scratch repo roots', () => {
-    expect(
-      resolveWorktreeScanCacheTtlMs({
-        path: '/Users/dev/.codex-tmp/foragent-capsule-b1-repo-zP9Az6',
-        connectionId: ''
-      })
-    ).toBe(SCRATCH_TTL_MS)
-    expect(
-      resolveWorktreeScanCacheTtlMs({
-        path: '/Users/dev/.claude/skills/obsidian-second-brain',
-        connectionId: ''
-      })
-    ).toBe(SCRATCH_TTL_MS)
-  })
-
-  it('never extends the TTL for SSH repos', () => {
-    // Why: scratch classification reads local path conventions; a remote path
-    // that merely looks similar must keep normal freshness.
-    expect(
-      resolveWorktreeScanCacheTtlMs({
-        path: '/home/dev/.codex-tmp/capsule',
-        connectionId: 'ssh-1'
-      })
-    ).toBe(BASE_TTL_MS)
-  })
-
-  it('keeps a scratch repo scan cached past the base TTL while normal repos rescan', async () => {
-    // Why: the whole fix lives in the cache-stamp call site; pin the wiring so
-    // a revert to the flat TTL fails CI, not just the pure-function tests.
-    vi.useFakeTimers()
-    // Why: the shared listWorktrees stub keeps call history across this file's
-    // tests; absolute counts need a clean baseline.
-    vi.mocked(listWorktrees).mockClear()
-    try {
-      const scratchPath = '/tmp/.codex-tmp/capsule-a'
-      const runtime = new OrcaRuntimeService({
-        ...store,
-        getRepos: () => [
-          { id: 'repo-1', path: '/tmp/repo', displayName: 'repo', badgeColor: 'blue', addedAt: 1 },
-          {
-            id: 'repo-scratch',
-            path: scratchPath,
-            displayName: 'capsule',
-            badgeColor: 'blue',
-            addedAt: 1
-          }
-        ]
-      } as never)
-      const internals = runtime as unknown as { listResolvedWorktrees: () => Promise<unknown> }
-      const scanCallsFor = (path: string): number =>
-        vi.mocked(listWorktrees).mock.calls.filter((call) => call[0] === path).length
-
-      await internals.listResolvedWorktrees()
-      expect(scanCallsFor('/tmp/repo')).toBe(1)
-      expect(scanCallsFor(scratchPath)).toBe(1)
-
-      vi.advanceTimersByTime(BASE_TTL_MS + 1_000)
-      await internals.listResolvedWorktrees()
-      expect(scanCallsFor('/tmp/repo')).toBe(2)
-      expect(scanCallsFor(scratchPath)).toBe(1)
-
-      vi.advanceTimersByTime(SCRATCH_TTL_MS)
-      await internals.listResolvedWorktrees()
-      expect(scanCallsFor(scratchPath)).toBe(2)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

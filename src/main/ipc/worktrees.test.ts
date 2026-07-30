@@ -264,6 +264,8 @@ import {
   reviewHeadRemoteRefComponent,
   REVIEW_HEAD_FETCH_TIMEOUT_MS
 } from '../../shared/review-head-tracking-ref'
+import { listRepoWorktrees } from '../repo-worktrees'
+import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 
 // Why: durable review-head refs are scoped by remote identity (name + URL hash).
 const ORIGIN_REMOTE_URL = 'git@github.com:org/repo.git'
@@ -271,8 +273,6 @@ const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMO
 import {
   DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS,
   LINEAGE_HYDRATION_TIMEOUT_MS,
-  __getDetectedWorktreeScanCacheStatsForTests,
-  __resetDetectedWorktreeScanCacheForTests,
   registerWorktreeHandlers
 } from './worktrees'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktree-shared-directories'
@@ -327,13 +327,14 @@ describe('registerWorktreeHandlers', () => {
     closeFileWatchersForRemoval: ReturnType<typeof vi.fn>
     acquireFileWatcherRemoval: ReturnType<typeof vi.fn>
     hydrateInferredWorktreeLineage: ReturnType<typeof vi.fn>
+    listRepoWorktreesForDetection: ReturnType<typeof vi.fn>
+    invalidateRepoWorktreeScan: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
     setPlatform(ORIGINAL_PLATFORM)
     clearConfiguredWorktreeSharedDirectoriesCacheForTests()
     __resetSshWorktreeCreateFetchCacheForTests()
-    __resetDetectedWorktreeScanCacheForTests()
     resetSshProviderAuthorities()
     invalidateAuthorizedRootsCache()
     for (const m of [
@@ -548,7 +549,16 @@ describe('registerWorktreeHandlers', () => {
       notifyWorktreesChangedForRemoteClients: vi.fn(),
       closeFileWatchersForRemoval: vi.fn().mockResolvedValue(undefined),
       acquireFileWatcherRemoval: vi.fn(),
-      hydrateInferredWorktreeLineage: vi.fn().mockResolvedValue(undefined)
+      hydrateInferredWorktreeLineage: vi.fn().mockResolvedValue(undefined),
+      listRepoWorktreesForDetection: vi.fn(async (repoArg: Repo) => ({
+        kind: 'success',
+        origin: 'scan',
+        worktrees: await listRepoWorktrees(
+          repoArg,
+          getLocalProjectWorktreeGitOptions(store as never, repoArg)
+        )
+      })),
+      invalidateRepoWorktreeScan: vi.fn()
     }
     runtimeStub.acquireFileWatcherRemoval.mockImplementation(
       async (worktreePath: string, connectionId?: string) => {
@@ -3593,8 +3603,8 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it('reuses a recent authoritative detected worktree scan', async () => {
-    listWorktreesMock.mockResolvedValue([
+  it('accepts cached successful scans from the runtime', async () => {
+    const worktrees = [
       {
         path: '/workspace/repo',
         head: 'main-head',
@@ -3602,40 +3612,48 @@ describe('registerWorktreeHandlers', () => {
         isBare: false,
         isMainWorktree: true
       }
-    ])
+    ]
+    runtimeStub.listRepoWorktreesForDetection
+      .mockResolvedValueOnce({ kind: 'success', origin: 'scan', worktrees })
+      .mockResolvedValueOnce({ kind: 'success', origin: 'cache', worktrees })
 
     const first = await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
     const second = await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
 
     expect(first).toEqual(second)
-    expect(listWorktreesMock).toHaveBeenCalledTimes(1)
+    expect(runtimeStub.listRepoWorktreesForDetection).toHaveBeenCalledTimes(2)
   })
 
-  it('coalesces concurrent authoritative detected worktree scans', async () => {
-    listWorktreesMock.mockImplementation(async () => {
-      await Promise.resolve()
-      return [
-        {
-          path: '/workspace/repo',
-          head: 'main-head',
-          branch: 'refs/heads/main',
-          isBare: false,
-          isMainWorktree: true
-        }
-      ]
+  it('does not let runtime scan fallbacks confirm removals', async () => {
+    const staleWorktree = {
+      path: '/workspace/repo',
+      head: 'stale-head',
+      branch: 'refs/heads/main',
+      isBare: false,
+      isMainWorktree: true
+    }
+    runtimeStub.listRepoWorktreesForDetection.mockResolvedValue({
+      kind: 'failure',
+      reason: 'backoff',
+      fallbackWorktrees: [staleWorktree]
     })
 
-    await Promise.all([
-      handlers['worktrees:listDetected'](null, { repoId: 'repo-1' }),
-      handlers['worktrees:listDetected'](null, { repoId: 'repo-1' }),
-      handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
-    ])
+    const first = await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    const second = await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
 
-    expect(listWorktreesMock).toHaveBeenCalledTimes(1)
+    expect(first).toMatchObject({
+      authoritative: false,
+      source: 'metadata-fallback',
+      worktrees: [expect.objectContaining({ path: staleWorktree.path })]
+    })
+    expect(second).toEqual(first)
+    expect(runtimeStub.listRepoWorktreesForDetection).toHaveBeenCalledTimes(2)
+    expect(listWorktreesMock).not.toHaveBeenCalled()
+    expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
   })
 
-  it('rechecks detected worktree metadata while reusing a cached raw scan', async () => {
-    listWorktreesMock.mockResolvedValue([
+  it('rechecks metadata when the runtime returns a cached scan', async () => {
+    const worktrees = [
       {
         path: '/workspace/repo',
         head: 'main-head',
@@ -3643,7 +3661,21 @@ describe('registerWorktreeHandlers', () => {
         isBare: false,
         isMainWorktree: true
       }
-    ])
+    ]
+    runtimeStub.listRepoWorktreesForDetection
+      .mockResolvedValueOnce({ kind: 'success', origin: 'scan', worktrees })
+      .mockResolvedValueOnce({ kind: 'success', origin: 'cache', worktrees })
+    store.getAllWorktreeLineage.mockReturnValue({
+      'repo-1::/workspace/missing': {
+        worktreeId: 'repo-1::/workspace/missing',
+        worktreeInstanceId: 'missing-instance',
+        parentWorktreeId: 'repo-1::/workspace/repo',
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 0
+      }
+    })
 
     let currentMeta = makeWorktreeMeta({ isPinned: false })
     store.getWorktreeMeta.mockImplementation(() => currentMeta)
@@ -3658,109 +3690,11 @@ describe('registerWorktreeHandlers', () => {
 
     expect(first.worktrees[0].isPinned).toBe(false)
     expect(second.worktrees[0].isPinned).toBe(true)
-    expect(listWorktreesMock).toHaveBeenCalledTimes(1)
+    expect(runtimeStub.listRepoWorktreesForDetection).toHaveBeenCalledTimes(2)
+    expect(store.removeWorktreeLineage).toHaveBeenCalledTimes(1)
   })
 
-  it('rescans detected worktrees after the scan cache TTL expires', async () => {
-    vi.useFakeTimers()
-    try {
-      listWorktreesMock
-        .mockResolvedValueOnce([
-          {
-            path: '/workspace/repo',
-            head: 'main-head',
-            branch: 'refs/heads/main',
-            isBare: false,
-            isMainWorktree: true
-          }
-        ])
-        .mockResolvedValueOnce([
-          {
-            path: '/workspace/repo',
-            head: 'main-head',
-            branch: 'refs/heads/main',
-            isBare: false,
-            isMainWorktree: true
-          },
-          {
-            path: '/workspace/new-worktree',
-            head: 'feature-head',
-            branch: 'refs/heads/feature',
-            isBare: false,
-            isMainWorktree: false
-          }
-        ])
-
-      await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
-      await vi.advanceTimersByTimeAsync(5_001)
-      const second = (await handlers['worktrees:listDetected'](null, {
-        repoId: 'repo-1'
-      })) as { worktrees: Worktree[] }
-
-      expect(second.worktrees.map((worktree) => worktree.path)).toEqual([
-        '/workspace/repo',
-        '/workspace/new-worktree'
-      ])
-      expect(listWorktreesMock).toHaveBeenCalledTimes(2)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('starts the detected scan cache TTL after a slow scan completes', async () => {
-    vi.useFakeTimers()
-    try {
-      listWorktreesMock
-        .mockImplementationOnce(
-          () =>
-            new Promise((resolve) => {
-              setTimeout(
-                () =>
-                  resolve([
-                    {
-                      path: '/workspace/repo',
-                      head: 'main-head',
-                      branch: 'refs/heads/main',
-                      isBare: false,
-                      isMainWorktree: true
-                    }
-                  ]),
-                6_000
-              )
-            })
-        )
-        .mockResolvedValueOnce([
-          {
-            path: '/workspace/repo',
-            head: 'main-head',
-            branch: 'refs/heads/main',
-            isBare: false,
-            isMainWorktree: true
-          },
-          {
-            path: '/workspace/new-worktree',
-            head: 'feature-head',
-            branch: 'refs/heads/feature',
-            isBare: false,
-            isMainWorktree: false
-          }
-        ])
-
-      const first = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
-      await vi.advanceTimersByTimeAsync(6_000)
-      await first
-      const second = (await handlers['worktrees:listDetected'](null, {
-        repoId: 'repo-1'
-      })) as { worktrees: Worktree[] }
-
-      expect(second.worktrees.map((worktree) => worktree.path)).toEqual(['/workspace/repo'])
-      expect(listWorktreesMock).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('invalidates the detected scan cache before worktree change notifications', async () => {
+  it('invalidates runtime scan state before worktree change notifications', async () => {
     listWorktreesMock
       .mockResolvedValueOnce([
         {
@@ -3795,6 +3729,7 @@ describe('registerWorktreeHandlers', () => {
     })) as { worktrees: Worktree[] }
 
     expect(second.worktrees).toHaveLength(2)
+    expect(runtimeStub.invalidateRepoWorktreeScan).toHaveBeenCalledWith('repo-1')
     expect(listWorktreesMock).toHaveBeenCalledTimes(2)
   })
 
@@ -3858,12 +3793,25 @@ describe('registerWorktreeHandlers', () => {
     expect(listWorktreesMock).toHaveBeenCalledTimes(3)
   })
 
-  it('does not run fresh-scan side effects from a detected scan invalidated while in flight', async () => {
-    let resolveScan: (worktrees: GitWorktreeInfo[]) => void = () => {}
-    listWorktreesMock.mockImplementation(
+  it('does not run scan side effects for an invalidated runtime result', async () => {
+    let resolveScan: () => void = () => {}
+    runtimeStub.listRepoWorktreesForDetection.mockImplementation(
       () =>
         new Promise((resolve) => {
-          resolveScan = resolve as (worktrees: GitWorktreeInfo[]) => void
+          resolveScan = () =>
+            resolve({
+              kind: 'failure',
+              reason: 'invalidated',
+              fallbackWorktrees: [
+                {
+                  path: '/workspace/repo',
+                  head: 'main-head',
+                  branch: 'refs/heads/main',
+                  isBare: false,
+                  isMainWorktree: true
+                }
+              ]
+            })
         })
     )
     store.getAllWorktreeLineage.mockReturnValue({
@@ -3884,215 +3832,12 @@ describe('registerWorktreeHandlers', () => {
     const pendingList = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
     await Promise.resolve()
     notifyWorktreesChanged(mainWindow as never, 'repo-1')
-    resolveScan([
-      {
-        path: '/workspace/repo',
-        head: 'main-head',
-        branch: 'refs/heads/main',
-        isBare: false,
-        isMainWorktree: true
-      }
-    ])
+    resolveScan()
 
     await pendingList
 
     expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
-    expect(listWorktreesMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not retain invalidated detected scans after they settle', async () => {
-    let resolveScan: (worktrees: GitWorktreeInfo[]) => void = () => {}
-    listWorktreesMock.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveScan = resolve as (worktrees: GitWorktreeInfo[]) => void
-        })
-    )
-
-    const pendingList = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
-    await Promise.resolve()
-
-    expect(__getDetectedWorktreeScanCacheStatsForTests()).toMatchObject({
-      cacheSize: 0,
-      inFlightSize: 1
-    })
-
-    notifyWorktreesChanged(mainWindow as never, 'repo-1')
-
-    expect(__getDetectedWorktreeScanCacheStatsForTests()).toMatchObject({
-      cacheSize: 0,
-      inFlightSize: 0
-    })
-
-    resolveScan([
-      {
-        path: '/workspace/repo',
-        head: 'main-head',
-        branch: 'refs/heads/main',
-        isBare: false,
-        isMainWorktree: true
-      }
-    ])
-    await pendingList
-
-    expect(__getDetectedWorktreeScanCacheStatsForTests()).toMatchObject({
-      cacheSize: 0,
-      inFlightSize: 0
-    })
-  })
-
-  it('does not accumulate scan bookkeeping across prolonged repository churn', async () => {
-    listWorktreesMock.mockImplementation(async (repoPath: string) => [
-      {
-        path: repoPath,
-        head: 'main-head',
-        branch: 'refs/heads/main',
-        isBare: false,
-        isMainWorktree: true
-      }
-    ])
-
-    for (let index = 0; index < 128; index += 1) {
-      const repoId = `repo-${index}`
-      store.getRepos.mockReturnValue([
-        {
-          id: repoId,
-          path: `/workspace/${repoId}`,
-          displayName: repoId,
-          badgeColor: '#000',
-          addedAt: 0,
-          worktreeBaseRef: null
-        }
-      ])
-      await handlers['worktrees:listDetected'](null, { repoId })
-      notifyWorktreesChanged(mainWindow as never, repoId)
-    }
-
-    expect(__getDetectedWorktreeScanCacheStatsForTests()).toEqual({
-      cacheSize: 0,
-      inFlightSize: 0
-    })
-    expect(listWorktreesMock).toHaveBeenCalledTimes(128)
-  })
-
-  it('keeps a replacement scan current after an older scan settles first', async () => {
-    const resolvers: ((worktrees: GitWorktreeInfo[]) => void)[] = []
-    listWorktreesMock.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolvers.push(resolve as (worktrees: GitWorktreeInfo[]) => void)
-        })
-    )
-    const result = [
-      {
-        path: '/workspace/repo',
-        head: 'main-head',
-        branch: 'refs/heads/main',
-        isBare: false,
-        isMainWorktree: true
-      }
-    ]
-
-    const staleList = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
-    await Promise.resolve()
-    notifyWorktreesChanged(mainWindow as never, 'repo-1')
-    const replacementList = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
-    await Promise.resolve()
-
-    resolvers[0](result)
-    await staleList
-    expect(__getDetectedWorktreeScanCacheStatsForTests()).toEqual({
-      cacheSize: 0,
-      inFlightSize: 1
-    })
-
-    resolvers[1](result)
-    await replacementList
-    expect(__getDetectedWorktreeScanCacheStatsForTests()).toEqual({
-      cacheSize: 1,
-      inFlightSize: 0
-    })
-  })
-
-  it('does not let an older scan overwrite a replacement that settles first', async () => {
-    const resolvers: ((worktrees: GitWorktreeInfo[]) => void)[] = []
-    listWorktreesMock.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolvers.push(resolve as (worktrees: GitWorktreeInfo[]) => void)
-        })
-    )
-    store.getAllWorktreeLineage.mockReturnValue({
-      'repo-1::/workspace/fresh-worktree': {
-        worktreeId: 'repo-1::/workspace/fresh-worktree',
-        worktreeInstanceId: 'child-instance',
-        parentWorktreeId: 'repo-1::/workspace/repo',
-        parentWorktreeInstanceId: 'parent-instance',
-        origin: 'manual',
-        capture: {
-          source: 'manual-action',
-          confidence: 'explicit'
-        },
-        createdAt: 0
-      }
-    })
-    const mainWorktree: GitWorktreeInfo = {
-      path: '/workspace/repo',
-      head: 'main-head',
-      branch: 'refs/heads/main',
-      isBare: false,
-      isMainWorktree: true
-    }
-
-    const staleList = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
-    await Promise.resolve()
-    notifyWorktreesChanged(mainWindow as never, 'repo-1')
-    const replacementList = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
-    await Promise.resolve()
-
-    resolvers[1]([
-      mainWorktree,
-      {
-        path: '/workspace/fresh-worktree',
-        head: 'fresh-head',
-        branch: 'refs/heads/fresh-worktree',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-    await replacementList
-
-    resolvers[0]([
-      mainWorktree,
-      {
-        path: '/workspace/stale-worktree',
-        head: 'stale-head',
-        branch: 'refs/heads/stale-worktree',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-    await staleList
-
-    const cached = (await handlers['worktrees:listDetected'](null, {
-      repoId: 'repo-1'
-    })) as { worktrees: Worktree[] }
-    expect(cached.worktrees.map((worktree) => worktree.path)).toEqual([
-      '/workspace/repo',
-      '/workspace/fresh-worktree'
-    ])
-    expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
-    await expect(
-      resolveRegisteredWorktreePath('/workspace/fresh-worktree', store as never)
-    ).resolves.toBe(resolve('/workspace/fresh-worktree'))
-    await expect(
-      resolveRegisteredWorktreePath('/workspace/stale-worktree', store as never)
-    ).rejects.toThrow('Access denied: unknown repository or worktree path')
-    expect(listWorktreesMock).toHaveBeenCalledTimes(2)
-    expect(__getDetectedWorktreeScanCacheStatsForTests()).toEqual({
-      cacheSize: 1,
-      inFlightSize: 0
-    })
+    expect(runtimeStub.invalidateRepoWorktreeScan).toHaveBeenCalledWith('repo-1')
   })
 
   it('fetches the same-repo PR head via the SSH tracking-ref RPC, not git.exec', async () => {
@@ -7442,6 +7187,7 @@ describe('registerWorktreeHandlers', () => {
     await Promise.resolve()
 
     expect(listWorktreesMock).toHaveBeenCalledTimes(8)
+    expect(runtimeStub.listRepoWorktreesForDetection).toHaveBeenCalledTimes(8)
     expect(maxActiveScans).toBe(8)
 
     for (const resolve of pendingScans.splice(0)) {
@@ -7450,6 +7196,7 @@ describe('registerWorktreeHandlers', () => {
     await waitForScanCount(10)
 
     expect(listWorktreesMock).toHaveBeenCalledTimes(10)
+    expect(runtimeStub.listRepoWorktreesForDetection).toHaveBeenCalledTimes(10)
 
     for (const resolve of pendingScans.splice(0)) {
       resolve()

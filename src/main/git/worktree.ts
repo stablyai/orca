@@ -123,7 +123,7 @@ function getErrorText(error: unknown): string {
   return String(error)
 }
 
-function isNotGitRepositoryError(error: unknown): boolean {
+export function isNotGitRepositoryError(error: unknown): boolean {
   return /not a git repository/i.test(getErrorText(error))
 }
 
