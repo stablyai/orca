@@ -19,19 +19,7 @@ import {
   resetSharedControlSupport,
   subscribeRuntimeEnvironment
 } from './runtime-environment-transport-routing'
-
-const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
-  'runtimeEnvironments:list',
-  'runtimeEnvironments:addFromPairingCode',
-  'runtimeEnvironments:resolve',
-  'runtimeEnvironments:remove',
-  'runtimeEnvironments:disconnect',
-  'runtimeEnvironments:connect',
-  'runtimeEnvironments:getStatus',
-  'runtimeEnvironments:call',
-  'runtimeEnvironments:subscribe',
-  'runtimeEnvironments:unsubscribe'
-] as const
+import { RUNTIME_ENVIRONMENT_HANDLER_CHANNELS } from './runtime-environment-handler-channels'
 
 type RetainedRemoteRuntimeSubscription = RemoteRuntimeSubscription & {
   environmentId: string

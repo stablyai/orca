@@ -172,7 +172,11 @@
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "Agent Session History is not available for this execution host.",
-        "runtimeEnvironmentManuallyDisconnected": "Runtime environment is manually disconnected."
+        "runtimeEnvironmentManuallyDisconnected": "Runtime environment is manually disconnected.",
+        "loopbackPairingBlocked": "This access link points back to this device.",
+        "remotePairingUnreachable": "Cannot reach Orca at {{endpoint}}.",
+        "remotePairingInvalidDetails": "This access link contains invalid connection details.",
+        "remotePairingSaveFailed": "Orca verified the host but could not save it. Check browser storage and try again."
       },
       "web": {
         "preload": {
@@ -373,6 +377,18 @@
             }
           }
         }
+      },
+      "remotePairingCopy": {
+        "invalidInput": "Enter an Orca access link or bare pairing code.",
+        "mobileOnly": "This link grants mobile-only access. Generate a link for another Orca client.",
+        "invalidDestination": "This access link contains an invalid destination.",
+        "unsupportedDestination": "This access link contains an unsupported destination.",
+        "nonConnectableDestination": "This access link contains a non-connectable destination.",
+        "loopback": "Loopback",
+        "tailscale": "Tailscale address",
+        "lan": "Private LAN address",
+        "public": "Public address",
+        "custom": "Custom hostname"
       },
       "ensure": {
         "simulator": {
@@ -5033,7 +5049,11 @@
           "sshImportFailed": "Failed to import SSH config.",
           "importing": "Importing...",
           "importSshConfig": "Import ~/.ssh/config",
-          "advanced": "Advanced"
+          "advanced": "Advanced",
+          "linkDestination": "Link destination",
+          "sshTunnel": "I am using an SSH tunnel",
+          "sshTunnelHelp": "Otherwise, this link points back to this device and cannot identify the other computer.",
+          "loopbackBlocked": "Enable the SSH tunnel override or create a new link using the other host’s Tailscale or LAN address."
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "Reconnection failed",
@@ -6248,7 +6268,11 @@
           "1b1b70279a": "No devices paired yet.",
           "1592afcc7a": "No devices paired yet. Scan the QR code with the Orca mobile app.",
           "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale. Regenerate to try again.",
-          "pairingQrError": "This pairing code couldn’t be rendered as a QR code. Copy it into Orca Mobile instead."
+          "pairingQrError": "This pairing code couldn’t be rendered as a QR code. Copy it into Orca Mobile instead.",
+          "pairingCodeReady": "Pairing code ready",
+          "copyPairingCode": "Copy pairing code",
+          "diagnosticsCopied": "Diagnostics copied",
+          "diagnosticsCopyFailed": "Failed to copy diagnostics"
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub Releases",
@@ -6740,7 +6764,22 @@
           "updatingServers": "Updating servers…",
           "orcaVersion": "Orca v{{value0}}",
           "removeActiveServerBlocked": "Choose another Active Server in Advanced before removing this server.",
-          "removeActiveServerDescription": "Choose another Active Server in Advanced before removing this server. Existing host sessions are left alone."
+          "removeActiveServerDescription": "Choose another Active Server in Advanced before removing this server. Existing host sessions are left alone.",
+          "workflow": "Remote server workflow",
+          "connectWorkflow": "Connect to a host",
+          "connectWorkflowHelp": "This app joins another machine",
+          "shareWorkflow": "Share this host",
+          "shareWorkflowHelp": "Other devices join this machine",
+          "troubleshootWorkflow": "Connection troubleshooting",
+          "sshTunnelRequired": "SSH tunnel required",
+          "troubleshootTitle": "Create a new link on the other host",
+          "troubleshootDescription": "A link that uses 127.0.0.1 points back to the device opening it, not the computer that created it.",
+          "troubleshootStepShare": "On the other computer, open Share this host.",
+          "troubleshootStepAddress": "Choose Another device and select its Tailscale or LAN address.",
+          "troubleshootStepRegenerate": "Generate a new access link and use only the newest link here.",
+          "troubleshootTunnel": "Using an SSH local forward? Return to Connect to a host, paste the loopback link, then enable “I am using an SSH tunnel” under Advanced.",
+          "cloudVmWorkflow": "Cloud VM",
+          "cloudVmWorkflowHelp": "Manage recipe-created cloud machines"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "Copy {{value0}}"
@@ -6779,7 +6818,20 @@
           "custom-description": "Advertise an address another device can reach — a LAN or Tailscale host, or a full ws(s):// URL.",
           "custom-hint": "Enter a host, host:port, or a ws(s):// URL.",
           "custom-cancel": "Cancel",
-          "custom-use": "Use address"
+          "custom-use": "Use address",
+          "intentQuestion": "Where will this link be opened?",
+          "anotherDevice": "Another device",
+          "anotherDeviceHelp": "Tailscale, LAN, or another reachable address",
+          "localOnly": "This computer only",
+          "localOnlyHelp": "A browser or Orca client on this computer",
+          "customAddress": "Custom address",
+          "customAddressHelp": "SSH tunnel, reverse proxy, or custom hostname",
+          "recommended": "Recommended",
+          "localLink": "Local-only link",
+          "localLinkHelp": "This link only works in a browser or Orca client running on this computer.",
+          "noExternalAddress": "No address for another device was found. Connect this computer to a LAN or Tailscale, refresh, or choose Custom address.",
+          "staleAddress": "The connection address changed. Generate a new link for {{address}}.",
+          "customInvalid": "Enter a valid host, host:port, IPv6 address, or ws(s):// URL."
         },
         "Settings": {
           "3bf149e873": "Project Settings > {{value0}}",
@@ -9403,18 +9455,25 @@
           "empty": "No temporary VM runtimes need cleanup.",
           "copyCleanup": "Copy command",
           "retry": "Retry cleanup",
-          "cleanup": "Cleanup"
+          "cleanup": "Cleanup",
+          "cloudVmLoadFailed": "Couldn’t load Cloud VM runtimes.",
+          "cloudVmCleanupFailedToast": "Couldn’t clean up Cloud VM runtime.",
+          "cloudVmMarkedCleaned": "Marked Cloud VM runtime as cleaned.",
+          "cloudVmCleaned": "Cleaned up Cloud VM runtime.",
+          "cloudVmTitle": "Cloud VM runtimes",
+          "cloudVmRefresh": "Refresh Cloud VM runtimes",
+          "cloudVmLoading": "Checking Cloud VM runtimes…",
+          "cloudVmEmptyWithSetup": "No Cloud VM runtimes yet. Create one from a workspace using an environment recipe."
         },
         "ephemeralVms": {
           "search": {
-            "title": "Per-Workspace Environments",
-            "description": "Learn how repo-owned recipes give each workspace its own on-demand, disposable environment."
+            "description": "Learn how repo-owned recipes give each workspace its own on-demand, disposable environment.",
+            "cloudVmTitle": "Cloud VM"
           }
         },
         "EphemeralVmsPane": {
           "loadError": "Could not load recipes.",
           "copyError": "Could not copy the prompt.",
-          "skillTitle": "Per-Workspace Environments skill",
           "skillDescription": "Sets up, builds, authenticates, and validates repo-owned environment recipes.",
           "whatTitle": "What the skill does, with you",
           "whatScaffold": "Writes the recipe & scripts for your provider — connected over an Orca server or SSH.",
@@ -9425,13 +9484,16 @@
           "copied": "Copied",
           "recipes": "Recipes",
           "recipesHelp": "Recipes from orca.yaml and enabled plugins show up here, ready to launch a workspace on.",
-          "refresh": "Refresh ephemeral VM recipes",
           "checking": "Checking recipes...",
-          "none": "No recipes found yet."
+          "none": "No recipes found yet.",
+          "cloudVmSkillTitle": "Cloud VM setup skill",
+          "cloudVmRefresh": "Refresh Cloud VM recipes",
+          "cloudVmTerminalTitle": "Cloud VM setup",
+          "cloudVmTerminalAriaLabel": "Cloud VM skill install terminal"
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Shows setup controls and workspace run targets for repo-owned, on-demand environments.",
-          "toggleLabel": "Toggle per-workspace environments"
+          "cloudVmToggleLabel": "Toggle Cloud VM"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agent",
@@ -9524,7 +9586,8 @@
           "signIn": "Sign in",
           "signInAgain": "Sign in again",
           "localTitle": "LAN",
-          "localDescription": "Phone must be on this Wi‑Fi or your Tailscale. No sign-in."
+          "localDescription": "Phone must be on this Wi‑Fi or connected through Tailscale. No sign-in required.",
+          "retrying": "Retrying"
         },
         "MobilePairingSetupSection": {
           "title": "Pair a phone",
@@ -9877,6 +9940,52 @@
             "logs": "plugin logs",
             "development": "development plugins"
           }
+        },
+        "RuntimeHostAccessForm": {
+          "getLink": "Get an access link from the other host",
+          "stepOpenShare": "Open Settings → Remote Orca Servers → Share this host.",
+          "stepChooseAddress": "Choose Another device and select a reachable address.",
+          "stepCopyLink": "Generate the link, then copy the “Pair another Orca client” link.",
+          "name": "Name in Orca",
+          "namePlaceholder": "Linux workstation",
+          "nameHelp": "This only changes how the computer appears in Orca.",
+          "accessLink": "Access link",
+          "accessLinkPlaceholder": "orca://pair?code=...",
+          "accessLinkHelp": "Orca shows the destination before connecting. Credentials stay hidden.",
+          "destination": "Link destination",
+          "loopbackTitle": "This link points back to this device",
+          "loopbackDescription": "It uses {{endpoint}}, which points back to the device opening the link—not the other computer that created it.",
+          "loopbackRecovery": "On the other computer, create a new link using Another device and choose its Tailscale or LAN address.",
+          "identityMismatch": "The reached Orca host does not match this access link",
+          "identityMismatchHelp": "Orca reached {{endpoint}}, but that host does not match this link. Generate a new link on the other host.",
+          "invalidLink": "This access link is no longer valid",
+          "invalidLinkHelp": "Generate a new access link on the other host and try again.",
+          "incompatible": "Orca versions are not compatible",
+          "incompatibleHelp": "Update Orca on this device and the other host, then try again.",
+          "interrupted": "Connection interrupted",
+          "interruptedHelp": "The connection stopped during verification. Check the network or SSH tunnel and try again.",
+          "unavailable": "Host unavailable",
+          "unavailableHelp": "Make sure Orca is running on the other host and that the network or SSH tunnel can reach {{endpoint}}.",
+          "advanced": "Advanced",
+          "sshTunnel": "I am using an SSH tunnel to this local address",
+          "sshTunnelHelp": "Keep the tunnel active while using this connection.",
+          "headlessHelp": "Using headless orca serve? Run orca serve --pairing-address <reachable-host> on the other computer.",
+          "cancel": "Cancel",
+          "addWithTunnel": "Add host using tunnel",
+          "addHost": "Add host",
+          "connectionDetails": "Connection details",
+          "endpointKind": "Endpoint kind",
+          "networkConnection": "Network connection",
+          "notAttempted": "Not attempted",
+          "saveFailed": "Could not save the host",
+          "saveFailedHelp": "The host was verified, but Orca could not save it. Check the name and local settings storage, then try again."
+        },
+        "CloudVmSetupGuide": {
+          "title": "Create a Cloud VM",
+          "description": "Cloud VMs are created from environment recipes when you create a workspace.",
+          "setupRecipe": "Set up an environment recipe for your cloud provider.",
+          "createWorkspace": "Create a workspace and select that recipe under Run on.",
+          "openSetup": "Set up environment recipes"
         }
       },
       "right": {
@@ -11530,7 +11639,6 @@
           "2f077ef4eb": ", and scan the code.",
           "3aa7bb2d8b": "Pair Desktop",
           "d1495e5e64": "Open Orca Mobile, tap",
-          "901c98bb93": "Pair this",
           "3960f5c339": "Step 2 of 2",
           "3241f3c26a": "Install QR",
           "7af266b80d": "Install QR code",
@@ -11561,7 +11669,16 @@
             "stable": "Stable"
           },
           "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale.",
-          "pairingQrError": "This pairing code couldn’t be rendered as a QR code. Copy it into Orca Mobile instead."
+          "pairingQrError": "This pairing code couldn’t be rendered as a QR code. Copy it into Orca Mobile instead.",
+          "noRelayCode": "No pairing code available",
+          "noPairingCode": "No pairing code available",
+          "qrSignInRequired": "Sign in to create a Relay pairing code",
+          "qrRenderFailed": "QR couldn’t be rendered — copy the code below",
+          "qrGeneratePrompt": "Generate a pairing code to continue",
+          "pairingCodeReady": "Pairing code ready",
+          "pairThisMac": "Pair this Mac.",
+          "pairThisPc": "Pair this PC.",
+          "pairThisComputer": "Pair this computer."
         },
         "MobilePage": {
           "e17393c6a3": "Phone preview",
@@ -11574,7 +11691,9 @@
           "4e1eb5d55c": "Failed to revoke device",
           "255372e6e8": "Device revoked",
           "1b4509a8a1": "paired",
-          "c5909374cf": "intro"
+          "c5909374cf": "intro",
+          "diagnosticsCopied": "Diagnostics copied",
+          "diagnosticsCopyFailed": "Failed to copy diagnostics"
         },
         "MobilePageToolbar": {
           "ad2284a9e2": "Close · Esc",
@@ -11705,6 +11824,18 @@
           "blocked-title": "Windows may be blocking Orca Mobile",
           "blocked-description": "An existing inbound Block rule can override the pairing exception. Repair removes conflicting TCP rules for this Orca app, then allows port {{port}} on Private networks.",
           "repair": "Repair firewall access"
+        },
+        "MobileRelayMintFailureNotice": {
+          "retryingTitle": "Retrying Orca Relay…",
+          "unavailableTitle": "Orca Relay isn’t available on this desktop.",
+          "title": "Couldn’t create a Relay pairing code.",
+          "retryingBody": "Creating a new pairing code. This can take a moment over a remote connection.",
+          "unavailableBody": "Use LAN to pair over Tailscale or the same Wi‑Fi.",
+          "body": "Retry, or use LAN to pair over Tailscale or the same Wi‑Fi.",
+          "useLan": "Use LAN",
+          "retrying": "Retrying…",
+          "retry": "Retry Relay",
+          "copyDiagnostics": "Copy diagnostics"
         }
       },
       "gitlab": {

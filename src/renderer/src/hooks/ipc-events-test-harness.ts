@@ -8,10 +8,22 @@ export type CreateTerminalRequest = {
   command?: string
   title?: string
   ptyId?: string
+  activate?: boolean
   presentation?: 'background' | 'focused'
+  surfaceOwner?: boolean
   tabId?: string
   leafId?: string
   splitFromLeafId?: string
+}
+
+export type RequestTerminalCreateRequest = {
+  requestId: string
+  worktreeId?: string
+  command?: string
+  title?: string
+  activate?: boolean
+  presentation?: 'background' | 'focused'
+  surfaceOwner?: boolean
 }
 
 export type HarnessTab = { id: string; ptyId?: string | null; title?: string }
@@ -108,6 +120,7 @@ export type IpcEventsHarness = {
   /** Call inside the test body: useIpcEvents runs its effects eagerly here. */
   useIpcEvents: () => void
   createTerminal: (request: CreateTerminalRequest) => void
+  requestTerminalCreate: (request: RequestTerminalCreateRequest) => void
   replyTerminalCreate: ReturnType<typeof vi.fn>
 }
 
@@ -120,6 +133,7 @@ export async function loadIpcEventsHarness(
 ): Promise<IpcEventsHarness> {
   const replyTerminalCreate = vi.fn()
   let createTerminalListener: ((request: CreateTerminalRequest) => void) | null = null
+  let requestTerminalCreateListener: ((request: RequestTerminalCreateRequest) => void) | null = null
 
   vi.resetModules()
   vi.unstubAllGlobals()
@@ -170,6 +184,10 @@ export async function loadIpcEventsHarness(
           onCreateTerminal: (listener: (request: CreateTerminalRequest) => void) => {
             createTerminalListener = listener
             return () => {}
+          },
+          onRequestTerminalCreate: (listener: (request: RequestTerminalCreateRequest) => void) => {
+            requestTerminalCreateListener = listener
+            return () => {}
           }
         }),
         rateLimits: {
@@ -218,6 +236,12 @@ export async function loadIpcEventsHarness(
         throw new Error('Expected the create-terminal listener to be registered')
       }
       createTerminalListener(request)
+    },
+    requestTerminalCreate: (request) => {
+      if (typeof requestTerminalCreateListener !== 'function') {
+        throw new Error('Expected the request-terminal-create listener to be registered')
+      }
+      requestTerminalCreateListener(request)
     },
     replyTerminalCreate
   }

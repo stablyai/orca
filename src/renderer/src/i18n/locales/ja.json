@@ -149,7 +149,10 @@
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "この実行ホストでは Agent セッション履歴を使用できません。",
-        "runtimeEnvironmentManuallyDisconnected": "ランタイム環境は手動で切断されています。"
+        "runtimeEnvironmentManuallyDisconnected": "ランタイム環境は手動で切断されています。",
+        "loopbackPairingBlocked": "このアクセスリンクはこのデバイス自身を指しています。",
+        "remotePairingUnreachable": "{{endpoint}} の Orca に接続できません。",
+        "remotePairingInvalidDetails": "このアクセスリンクには無効な接続情報が含まれています。"
       },
       "web": {
         "preload": {
@@ -350,6 +353,18 @@
             }
           }
         }
+      },
+      "remotePairingCopy": {
+        "invalidInput": "Orca のアクセスリンクまたはペアリングコードを入力してください。",
+        "mobileOnly": "このリンクはモバイル専用アクセスを許可します。別の Orca クライアント用のリンクを生成してください。",
+        "invalidDestination": "このアクセスリンクには無効な接続先が含まれています。",
+        "unsupportedDestination": "このアクセスリンクには未対応の接続先が含まれています。",
+        "nonConnectableDestination": "このアクセスリンクには接続できない接続先が含まれています。",
+        "loopback": "ループバック",
+        "tailscale": "Tailscale アドレス",
+        "lan": "プライベート LAN アドレス",
+        "public": "パブリックアドレス",
+        "custom": "カスタムホスト名"
       },
       "ensure": {
         "simulator": {
@@ -5006,7 +5021,11 @@
           "importing": "インポート中...",
           "importSshConfig": "~/.ssh/config をインポートします",
           "sshPersistenceDefault": "このホスト上のリモートターミナルは、終了するかリレーをリセットするまで動作し続けます。",
-          "advanced": "Advanced"
+          "advanced": "詳細",
+          "linkDestination": "リンク先",
+          "sshTunnel": "SSH トンネルを使用しています",
+          "sshTunnelHelp": "それ以外の場合、このリンクはこのデバイス自身を指すため、もう一方のコンピューターを識別できません。",
+          "loopbackBlocked": "SSH トンネルの上書きを有効にするか、もう一方のホストの Tailscale または LAN アドレスを使って新しいリンクを作成してください。"
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "再接続に失敗しました",
@@ -6698,7 +6717,22 @@
           "orcaVersion": "Orca v{{value0}}",
           "removeActiveServerBlocked": "Choose another Active Server in Advanced before removing this server.",
           "removeActiveServerDescription": "Choose another Active Server in Advanced before removing this server. Existing host sessions are left alone.",
-          "updatingServers": "Updating servers…"
+          "updatingServers": "Updating servers…",
+          "workflow": "リモートサーバーワークフロー",
+          "connectWorkflow": "ホストに接続",
+          "connectWorkflowHelp": "このアプリを別のマシンに接続します",
+          "shareWorkflow": "このホストを共有",
+          "shareWorkflowHelp": "他のデバイスをこのマシンに接続します",
+          "troubleshootWorkflow": "接続のトラブルシューティング",
+          "sshTunnelRequired": "SSH トンネルが必要です",
+          "troubleshootTitle": "もう一方のホストで新しいリンクを作成",
+          "troubleshootDescription": "127.0.0.1 を使うリンクは、作成したコンピューターではなく、リンクを開いたデバイス自身を指します。",
+          "troubleshootStepShare": "もう一方のコンピューターで「このホストを共有」を開きます。",
+          "troubleshootStepAddress": "「別のデバイス」を選び、Tailscale または LAN アドレスを選択します。",
+          "troubleshootStepRegenerate": "新しいアクセスリンクを生成し、ここでは最新のリンクだけを使います。",
+          "troubleshootTunnel": "SSH ローカルフォワードを使う場合は、「ホストに接続」に戻ってループバックリンクを貼り付け、「詳細」で「SSH トンネルを使用しています」を有効にします。",
+          "cloudVmWorkflow": "クラウド VM",
+          "cloudVmWorkflowHelp": "レシピで作成したクラウドマシンを管理"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "{{value0}}をコピー"
@@ -6737,7 +6771,20 @@
           "custom-description": "他のデバイスから到達できるアドレスを指定します。LAN や Tailscale のホスト、または完全な ws(s):// URL です。",
           "custom-hint": "ホスト、host:port、または ws(s):// URL を入力してください。",
           "custom-cancel": "キャンセル",
-          "custom-use": "アドレスを使用"
+          "custom-use": "アドレスを使用",
+          "intentQuestion": "このリンクはどこで開きますか？",
+          "anotherDevice": "別のデバイス",
+          "anotherDeviceHelp": "Tailscale、LAN、または到達可能な別のアドレス",
+          "localOnly": "このコンピューターのみ",
+          "localOnlyHelp": "このコンピューター上のブラウザーまたは Orca クライアント",
+          "customAddress": "カスタムアドレス",
+          "customAddressHelp": "SSH トンネル、リバースプロキシ、またはカスタムホスト名",
+          "recommended": "推奨",
+          "localLink": "ローカル専用リンク",
+          "localLinkHelp": "このリンクは、このコンピューターで実行中のブラウザーまたは Orca クライアントでのみ使えます。",
+          "noExternalAddress": "別のデバイス用のアドレスが見つかりません。このコンピューターを LAN または Tailscale に接続して更新するか、カスタムアドレスを選んでください。",
+          "staleAddress": "接続アドレスが変更されました。{{address}} 用の新しいリンクを生成してください。",
+          "customInvalid": "有効なホスト、ホスト:ポート、IPv6 アドレス、または ws(s):// URL を入力してください。"
         },
         "Settings": {
           "3bf149e873": "プロジェクト設定 > {{value0}}",
@@ -9375,18 +9422,25 @@
           "empty": "一時的な VM ランタイムにはクリーンアップが必要ありません。",
           "copyCleanup": "コピーコマンド",
           "retry": "クリーンアップを再試行します",
-          "cleanup": "掃除"
+          "cleanup": "クリーンアップ",
+          "cloudVmLoadFailed": "クラウド VM ランタイムを読み込めませんでした。",
+          "cloudVmCleanupFailedToast": "クラウド VM ランタイムをクリーンアップできませんでした。",
+          "cloudVmMarkedCleaned": "クラウド VM ランタイムをクリーンアップ済みとして記録しました。",
+          "cloudVmCleaned": "クラウド VM ランタイムをクリーンアップしました。",
+          "cloudVmTitle": "クラウド VM ランタイム",
+          "cloudVmRefresh": "クラウド VM ランタイムを更新",
+          "cloudVmLoading": "クラウド VM ランタイムを確認中…",
+          "cloudVmEmptyWithSetup": "クラウド VM ランタイムはまだありません。環境レシピを使用してワークスペースから作成してください。"
         },
         "ephemeralVms": {
           "search": {
-            "title": "ワークスペースごとの環境",
-            "description": "repo 所有のレシピが各ワークスペースに独自のオンデマンドの使い捨て環境を与える方法を学びましょう。"
+            "description": "repo 所有のレシピが各ワークスペースに独自のオンデマンドの使い捨て環境を与える方法を学びましょう。",
+            "cloudVmTitle": "クラウド VM"
           }
         },
         "EphemeralVmsPane": {
           "loadError": "レシピを読み込めませんでした。",
           "copyError": "プロンプトをコピーできませんでした。",
-          "skillTitle": "ワークスペースごとの環境スキル",
           "skillDescription": "repo が所有する環境レシピをセットアップ、構築、認証、および検証します。",
           "whatTitle": "スキルが何をするのか、あなたと一緒に",
           "whatScaffold": "Orca サーバーまたは SSH 経由で接続されているプロバイダーのレシピとスクリプトを作成します。",
@@ -9397,13 +9451,16 @@
           "copied": "コピーされました",
           "recipes": "レシピ",
           "recipesHelp": "orca.yaml と有効なプラグインのレシピがここに表示され、ワークスペースを起動できます。",
-          "refresh": "一時的な VM レシピを更新する",
           "checking": "レシピを確認中...",
-          "none": "レシピはまだ見つかりません。"
+          "none": "レシピはまだ見つかりません。",
+          "cloudVmSkillTitle": "クラウド VM セットアップスキル",
+          "cloudVmRefresh": "クラウド VM レシピを更新",
+          "cloudVmTerminalTitle": "クラウド VM のセットアップ",
+          "cloudVmTerminalAriaLabel": "クラウド VM スキルインストールターミナル"
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "repo が所有するオンデマンド環境のセットアップ コントロールとワークスペース実行ターゲットを示します。",
-          "toggleLabel": "ワークスペースごとの環境を切り替える"
+          "cloudVmToggleLabel": "クラウド VM を切り替える"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "エージェント",
@@ -9849,6 +9906,50 @@
             "logs": "プラグインログ",
             "development": "開発プラグイン"
           }
+        },
+        "RuntimeHostAccessForm": {
+          "getLink": "もう一方のホストからアクセスリンクを取得",
+          "stepOpenShare": "設定 → リモート Orca サーバー → このホストを共有 を開きます。",
+          "stepChooseAddress": "「別のデバイス」を選び、到達可能なアドレスを選択します。",
+          "stepCopyLink": "リンクを生成し、「別の Orca クライアントをペアリング」リンクをコピーします。",
+          "name": "Orca での名前",
+          "namePlaceholder": "Linux ワークステーション",
+          "nameHelp": "これは Orca でのコンピューターの表示名だけを変更します。",
+          "accessLink": "アクセスリンク",
+          "accessLinkPlaceholder": "orca://pair?code=...",
+          "accessLinkHelp": "Orca は接続前に接続先を表示します。認証情報は非表示のままです。",
+          "destination": "リンク先",
+          "loopbackTitle": "このリンクはこのデバイス自身を指しています",
+          "loopbackDescription": "{{endpoint}} はリンクを開いたデバイス自身を指し、リンクを作成したもう一方のコンピューターには接続しません。",
+          "loopbackRecovery": "もう一方のコンピューターで「別のデバイス」を使って新しいリンクを作成し、Tailscale または LAN アドレスを選んでください。",
+          "identityMismatch": "接続した Orca ホストがこのアクセスリンクと一致しません",
+          "identityMismatchHelp": "{{endpoint}} の Orca に接続しましたが、そのホストはこのリンクと一致しません。もう一方のホストで新しいリンクを生成してください。",
+          "invalidLink": "このアクセスリンクは無効になっています",
+          "invalidLinkHelp": "もう一方のホストで新しいアクセスリンクを生成し、もう一度お試しください。",
+          "incompatible": "Orca のバージョンに互換性がありません",
+          "incompatibleHelp": "このデバイスともう一方のホストの Orca を更新し、もう一度お試しください。",
+          "interrupted": "接続が中断されました",
+          "interruptedHelp": "検証中に接続が停止しました。ネットワークまたは SSH トンネルを確認して、もう一度お試しください。",
+          "unavailable": "ホストを利用できません",
+          "unavailableHelp": "もう一方のホストで Orca が実行中であり、ネットワークまたは SSH トンネルから {{endpoint}} に到達できることを確認してください。",
+          "advanced": "詳細",
+          "sshTunnel": "このローカルアドレスへの SSH トンネルを使用しています",
+          "sshTunnelHelp": "この接続を使用している間はトンネルを維持してください。",
+          "headlessHelp": "ヘッドレスの orca serve を使う場合は、もう一方のコンピューターで orca serve --pairing-address <reachable-host> を実行してください。",
+          "cancel": "キャンセル",
+          "addWithTunnel": "トンネルを使ってホストを追加",
+          "addHost": "ホストを追加",
+          "connectionDetails": "接続の詳細",
+          "endpointKind": "接続先の種類",
+          "networkConnection": "ネットワーク接続",
+          "notAttempted": "未試行"
+        },
+        "CloudVmSetupGuide": {
+          "title": "クラウド VM を作成",
+          "description": "クラウド VM は、ワークスペースの作成時に環境レシピから作成されます。",
+          "setupRecipe": "クラウドプロバイダー用の環境レシピをセットアップします。",
+          "createWorkspace": "ワークスペースを作成し、「実行先」でそのレシピを選択します。",
+          "openSetup": "環境レシピをセットアップ"
         }
       },
       "right": {
@@ -11501,7 +11602,6 @@
           "2f077ef4eb": "をクリックしてコードをスキャンします。",
           "3aa7bb2d8b": "デスクトップのペアリング",
           "d1495e5e64": "Orca モバイルを開き、 をタップします",
-          "901c98bb93": "これをペアリングします",
           "3960f5c339": "ステップ 2/2",
           "3241f3c26a": "QRをインストールする",
           "7af266b80d": "QRコードをインストールする",
