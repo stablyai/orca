@@ -471,13 +471,6 @@ export class DaemonPtyAdapter implements IPtyProvider {
           }
         }
         if (this.protocolVersion < HISTORY_SEED_TRANSFER_PROTOCOL_VERSION) {
-          console.warn('[daemon] cold-restore history seed unavailable for legacy protocol', {
-            sessionId,
-            daemonProtocolVersion: this.protocolVersion,
-            requiredProtocolVersion: HISTORY_SEED_TRANSFER_PROTOCOL_VERSION,
-            seedCodeUnits: metrics.codeUnits,
-            seedChunkCount: metrics.chunkCount
-          })
           historySeedUnavailable = true
           return requestCreateOrAttach(undefined, undefined)
         }
