@@ -227,13 +227,8 @@ export function assignNativeChatPendingOccurrence<T extends NativeChatPendingOcc
 }
 
 /**
- * Renumber occurrences so each match key counts from 1 again.
- *
- * `assignNativeChatPendingOccurrence` numbers a repeat send past its predecessors
- * on purpose: pruning an earlier echo means a real turn consumed that occurrence,
- * so the later send must not reuse it. Dropping an echo because its *conversation*
- * was replaced is the opposite — no turn will ever arrive for it — and a survivor
- * left demanding occurrence 2 can then never retire.
+ * Renumber occurrences so each match key counts from 1 again — for a replaced
+ * conversation, where no dropped echo's turn will ever arrive to consume a slot.
  */
 export function renumberNativeChatPendingOccurrences<T extends NativeChatPendingOccurrence>(
   pending: readonly T[]
@@ -251,13 +246,8 @@ export function renumberNativeChatPendingOccurrences<T extends NativeChatPending
 
 /**
  * Remove `removedIndex` and pull its later same-key siblings down one occurrence.
- *
- * For a cancelled send the transcript is unchanged, so — unlike a conversation
- * swap — absolute renumbering would be wrong: it also erases the elevation a
- * pruned or capped-out predecessor legitimately left behind (`PENDING_SEND_LIMIT`
- * drops the oldest echo while its send still lands, so its turn still arrives and
- * still consumes an occurrence). Only the cancelled send consumes nothing, so
- * only the entries queued after it move, and only by one.
+ * Only the removed send consumes no transcript turn, so renumbering from 1 would
+ * also erase the elevation a pruned or capped-out predecessor still owns.
  */
 export function withoutNativeChatPendingOccurrence<T extends NativeChatPendingOccurrence>(
   pending: readonly T[],

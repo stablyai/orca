@@ -81,9 +81,8 @@ describe('useNativeChatPendingEchoes', () => {
   })
 
   it('does not judge a pane with the previous pane markers when the chat view moves', () => {
-    // The chat surface is one portal per tab, so moving it to another leaf changes
-    // paneKey in place: both scopes change in the same commit while the marker
-    // state still describes the leaf we came from.
+    // One portal per tab, so a leaf move changes paneKey in place — both scopes
+    // change while the marker state still describes the leaf we came from.
     const { result, rerender } = renderEchoProps({
       sessionId: 'session-2',
       messages: NO_MESSAGES,
@@ -117,14 +116,12 @@ describe('useNativeChatPendingEchoes', () => {
   })
 
   it('keeps the occurrence a capped-out echo still owns when a later send is cancelled', () => {
-    // The oldest echo is trimmed at PENDING_SEND_LIMIT while its send still
-    // lands, so its transcript turn still arrives and still consumes an
-    // occurrence. Cancelling a later send must not renumber that away.
+    // The echo trimmed at PENDING_SEND_LIMIT still landed, so its turn still
+    // consumes an occurrence that a later cancellation must not renumber away.
     const { result } = renderEchoes('session-1')
-    const ids: string[] = []
     for (let index = 0; index < 9; index += 1) {
       act(() => {
-        ids.push(result.current.recordSend('ping'))
+        result.current.recordSend('ping')
       })
     }
     expect(result.current.pending).toHaveLength(8)
@@ -134,8 +131,7 @@ describe('useNativeChatPendingEchoes', () => {
       result.current.cancelSend(result.current.pending[0]?.id ?? '')
     })
     expect(result.current.pending[0]?.id).toBe(survivorId)
-    // Was occurrence 3 behind the trimmed echo and the cancelled one; only the
-    // cancelled one released its slot.
+    // Was 3 (behind the trimmed and the cancelled echo); only one slot released.
     expect(result.current.pending[0]?.matchingOccurrence).toBe(2)
   })
 })

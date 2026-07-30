@@ -70,8 +70,7 @@ export function useNativeChatPendingEchoes(args: {
   )
   // Slash commands aren't chat turns, so they get a small local "Ran /clear"
   // system line instead of a user bubble. Capped + cached per conversation.
-  // The scope travels with the markers: the retain effect below must be able to
-  // tell that a value still describes the conversation it was read for.
+  // The scope travels along so the retain effect can reject a stale value.
   const [markerState, setMarkerState] = useState<{
     scope: NativeChatCommandMarkerScope
     markers: NativeChatCommandMarker[]
@@ -101,11 +100,8 @@ export function useNativeChatPendingEchoes(args: {
   // Drop echoes the pane's current conversation can never match, so a replaced
   // conversation cannot strand an old prompt as its newest bubble.
   useEffect(() => {
-    // Why: moving the chat view to another leaf changes both scopes in one
-    // commit, so this would otherwise run against the new pane's echoes while
-    // still holding the previous pane's `/clear` — and the drop it writes to the
-    // pane cache is permanent. Wait for the markers that describe this
-    // conversation; the effect above delivers them in that same commit.
+    // Why: a chat-view move changes both scopes in one commit, and judging the
+    // new pane's echoes by the old pane's `/clear` writes a permanent drop.
     if (markerState.scope !== commandMarkerScope) {
       return
     }
@@ -139,10 +135,8 @@ export function useNativeChatPendingEchoes(args: {
   const cancelSend = useCallback(
     (pendingId: string) => {
       // Why: detach/interrupt cancels the delayed Enter, so its optimistic echo
-      // must not come back from the pane cache as a prompt that was delivered.
-      // A cancelled send also consumes no transcript occurrence, so a repeat of
-      // the same text queued after it must stop waiting on the slot this echo
-      // would have taken.
+      // must not come back from the pane cache as a prompt that was delivered,
+      // and a later repeat must stop waiting on the slot it would have taken.
       const cached = readPendingSendCache(pendingScope)
       const removedIndex = cached.findIndex((entry) => entry.id === pendingId)
       const next =
