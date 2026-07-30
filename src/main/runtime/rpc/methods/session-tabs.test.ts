@@ -651,7 +651,7 @@ describe('session tab RPC methods', () => {
     expect(
       runtimeClosePolicy.evaluate(runtimeClient, {
         kind: 'session-tab',
-        worktree: 'id:wt-3',
+        worktree: 'wt-3',
         tabId: 'tab-3'
       })
     ).toMatchObject({ recentlyAttached: true })

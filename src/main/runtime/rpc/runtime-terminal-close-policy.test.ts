@@ -294,10 +294,11 @@ describe('runtime terminal close policy', () => {
   })
 
   it('spends the per-device rate budget on owned rollbacks', async () => {
-    const now = 1_000_000
+    let now = 1_000_000
     const policy = new RuntimeClosePolicy({
       now: () => now,
-      maxClosesPerWindow: 1
+      maxClosesPerWindow: 1,
+      rateWindowMs: 100
     })
     policy.recordTerminalCreated(RUNTIME_CLIENT, 'terminal-owned')
     policy.recordTerminalCreated(RUNTIME_CLIENT, 'terminal-owned-2')
@@ -325,6 +326,15 @@ describe('runtime terminal close policy', () => {
         rollbackIntent('terminal-owned-2', 'rollback-second')
       )
     ).toMatchObject({ allowed: false, reason: 'close_rate_limited' })
+
+    now += 101
+    expect(
+      policy.evaluate(
+        RUNTIME_CLIENT,
+        { kind: 'terminal', terminal: 'terminal-owned-2' },
+        rollbackIntent('terminal-owned-2', 'rollback-second')
+      )
+    ).toMatchObject({ allowed: true, reason: 'owned-rollback' })
   })
 
   it('rate-limits explicit destructive requests per runtime connection', async () => {
@@ -406,7 +416,7 @@ describe('runtime terminal close policy', () => {
     })
     expect(
       policy.evaluate(RUNTIME_CLIENT, target, userCloseIntent({ requestId: 'at-capacity' }))
-    ).toMatchObject({ allowed: false, reason: 'close_rate_limited' })
+    ).toMatchObject({ allowed: false, reason: 'close_tracking_capacity_exceeded' })
     expect(
       policy.evaluate(otherRuntime, target, userCloseIntent({ requestId: 'other-actor' }))
     ).toMatchObject({ allowed: true })
@@ -417,6 +427,28 @@ describe('runtime terminal close policy', () => {
       reason: 'close_intent_duplicate',
       recentlyAttached: false
     })
+  })
+
+  it('allows a rate-limited request id to retry after the window clears', () => {
+    let now = 1_000_000
+    const policy = new RuntimeClosePolicy({
+      now: () => now,
+      maxClosesPerWindow: 1,
+      rateWindowMs: 100
+    })
+    const target = { kind: 'terminal' as const, terminal: 'terminal-1' }
+
+    expect(
+      policy.evaluate(RUNTIME_CLIENT, target, userCloseIntent({ requestId: 'budget-spent' }))
+    ).toMatchObject({ allowed: true })
+    expect(
+      policy.evaluate(RUNTIME_CLIENT, target, userCloseIntent({ requestId: 'retry-after-window' }))
+    ).toMatchObject({ allowed: false, reason: 'close_rate_limited' })
+
+    now += 101
+    expect(
+      policy.evaluate(RUNTIME_CLIENT, target, userCloseIntent({ requestId: 'retry-after-window' }))
+    ).toMatchObject({ allowed: true })
   })
 
   it('keeps unexpired rollback ownership when the same actor reaches capacity', () => {

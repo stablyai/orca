@@ -23,6 +23,7 @@ export type RuntimeCloseBlockedReason =
   | 'close_source_not_allowed'
   | 'close_rollback_not_owned'
   | 'close_rate_limited'
+  | 'close_tracking_capacity_exceeded'
 
 export type RuntimeCloseDecision =
   | {
@@ -72,7 +73,7 @@ function connectionActorKey(ctx: RuntimeCloseClientContext): string {
 
 function targetKey(target: RuntimeCloseTarget): string {
   return target.kind === 'session-tab'
-    ? `session:${target.worktree}`
+    ? `session:${target.worktree.startsWith('id:') ? target.worktree.slice(3) : target.worktree}`
     : `terminal:${target.terminal}`
 }
 
@@ -164,7 +165,7 @@ export class RuntimeClosePolicy {
       return { allowed: false, reason: 'close_intent_duplicate', recentlyAttached }
     }
     if (!this.recordTimedEntry(this.seenRequestIds, actor, intent.requestId, now)) {
-      return { allowed: false, reason: 'close_rate_limited', recentlyAttached }
+      return { allowed: false, reason: 'close_tracking_capacity_exceeded', recentlyAttached }
     }
 
     // Why: occurredAt is diagnostic only. SSH/WSL/Windows hosts can have clock
@@ -174,6 +175,7 @@ export class RuntimeClosePolicy {
         return { allowed: false, reason: 'close_intent_mismatch', recentlyAttached }
       }
       if (!this.consumeRateSlot(actor, now)) {
+        this.releaseSeenRequestId(actor, intent.requestId)
         return { allowed: false, reason: 'close_rate_limited', recentlyAttached }
       }
       return { allowed: true, reason: 'explicit-user', recentlyAttached }
@@ -191,6 +193,7 @@ export class RuntimeClosePolicy {
         // Why: a rollback is still a destructive close, so it spends the same
         // per-device rate budget as an explicit user close.
         if (!this.consumeRateSlot(actor, now)) {
+          this.releaseSeenRequestId(actor, intent.requestId)
           return { allowed: false, reason: 'close_rate_limited', recentlyAttached }
         }
         createdRecords?.delete(target.terminal)
@@ -225,6 +228,14 @@ export class RuntimeClosePolicy {
     records.set(key, recordedAt)
     recordsByActor.set(actor, records)
     return true
+  }
+
+  private releaseSeenRequestId(actor: string, requestId: string): void {
+    const records = this.seenRequestIds.get(actor)
+    records?.delete(requestId)
+    if (records?.size === 0) {
+      this.seenRequestIds.delete(actor)
+    }
   }
 
   private consumeRateSlot(actor: string, now: number): boolean {
