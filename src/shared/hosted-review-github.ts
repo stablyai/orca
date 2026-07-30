@@ -1,5 +1,6 @@
 import type { PRCheckDetail, PRComment, PRInfo } from './types'
 import type { HostedReviewInfo, HostedReviewQueueSummary } from './hosted-review'
+import { derivePRCheckStatus } from './pr-check-status'
 
 export type HostedReviewFromGitHubPRInfoArgs = {
   pr: PRInfo
@@ -32,33 +33,10 @@ function deriveChecksStatus(
   prChecksStatus: PRInfo['checksStatus'],
   checks?: PRCheckDetail[]
 ): PRInfo['checksStatus'] {
-  if (!checks || checks.length === 0) {
+  if (!checks) {
     return prChecksStatus
   }
-  const hasFailure = checks.some(
-    (check) =>
-      check.conclusion === 'failure' ||
-      check.conclusion === 'timed_out' ||
-      check.conclusion === 'cancelled' ||
-      // Why: action_required (e.g. a workflow awaiting approval) blocks merge;
-      // treat it as failure so the review queue doesn't report a clean PR.
-      check.conclusion === 'action_required'
-  )
-  if (hasFailure) {
-    return 'failure'
-  }
-  const hasPending = checks.some(
-    (check) =>
-      check.status !== 'completed' || check.conclusion === null || check.conclusion === 'pending'
-  )
-  if (hasPending) {
-    return 'pending'
-  }
-  const hasSuccess = checks.some((check) => check.conclusion === 'success')
-  if (hasSuccess) {
-    return 'success'
-  }
-  return 'neutral'
+  return derivePRCheckStatus(checks)
 }
 
 export function hostedReviewSummaryFromGitHubPRInfo(

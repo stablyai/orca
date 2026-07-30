@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PRCheckDetail } from './types'
 import { getCheckSeverityRank, sortChecksBySeverity } from './pr-check-severity-order'
+import { mapGitLabPipelineJobStatusToConclusion } from './gitlab-pipeline-checks'
 
 const check = (name: string, conclusion: string | null) =>
   ({ name, conclusion }) as Pick<PRCheckDetail, 'name' | 'conclusion'>
@@ -104,5 +105,22 @@ describe('PR check severity order', () => {
     const checks = [check('success', 'success'), check('failure', 'failure')]
     sortChecksBySeverity(checks)
     expect(checks.map((c) => c.name)).toEqual(['success', 'failure'])
+  })
+
+  it('orders normalized provider states with stable ties', () => {
+    const checks = [
+      // Preserve an unrecognized provider value so it remains visibly unknown.
+      check('future', 'future_state'),
+      check('manual', mapGitLabPipelineJobStatusToConclusion('manual')),
+      check('pass-a', 'success'),
+      check('pass-b', 'success')
+    ]
+
+    expect(sortChecksBySeverity(checks).map((item) => item.name)).toEqual([
+      'manual',
+      'pass-a',
+      'pass-b',
+      'future'
+    ])
   })
 })

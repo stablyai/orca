@@ -38,8 +38,9 @@ describe('mapPipelineJobStatusToConclusion', () => {
     expect(mapPipelineJobStatusToConclusion('skipped')).toBe('skipped')
   })
 
-  it("maps 'manual' to neutral so it doesn't stall pending forever", () => {
-    expect(mapPipelineJobStatusToConclusion('manual')).toBe('neutral')
+  it('maps manual and action-required jobs to an actionable conclusion', () => {
+    expect(mapPipelineJobStatusToConclusion('manual')).toBe('action_required')
+    expect(mapPipelineJobStatusToConclusion('action_required')).toBe('action_required')
   })
 
   it('maps active lifecycle states to pending', () => {
