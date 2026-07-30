@@ -1158,6 +1158,28 @@ function parseHookBodyPayloadRecord(body: unknown): Record<string, unknown> | nu
     : null
 }
 
+/** Pre-normalization read of the fields the cwd attribution guard needs, so ingest can
+ *  refuse a foreign event before `normalizeHookPayload` seeds per-pane listener state
+ *  (subagent rosters, lead-turn records) that later legitimate events would re-emit. */
+export function readHookBodyCwdAttribution(body: unknown): {
+  paneKey: string
+  worktreeId?: string
+  sourceCwd?: string
+} {
+  if (typeof body !== 'object' || body === null) {
+    return { paneKey: '' }
+  }
+  const record = body as Record<string, unknown>
+  const hookPayload = parseHookBodyPayloadRecord(body)
+  return {
+    paneKey: typeof record.paneKey === 'string' ? record.paneKey.trim() : '',
+    worktreeId: readStringField(record, 'worktreeId'),
+    sourceCwd: hookPayload
+      ? readBoundedString(hookPayload, HOOK_CWD_KEYS, HOOK_CWD_MAX_LENGTH)?.trim() || undefined
+      : undefined
+  }
+}
+
 function readBoundedString(
   record: Record<string, unknown>,
   keys: readonly string[],

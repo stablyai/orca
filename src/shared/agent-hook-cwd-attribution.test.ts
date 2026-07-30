@@ -1,5 +1,11 @@
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { hookCwdContradictsWorktree } from './agent-hook-cwd-attribution'
+import {
+  hookCwdContradictsWorktree,
+  hookCwdContradictsWorktreeAfterLocalResolve
+} from './agent-hook-cwd-attribution'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from './worktree-id'
 
 const REPO = 'repo-1'
@@ -109,5 +115,60 @@ describe('hookCwdContradictsWorktree', () => {
     const folderWorkspace = `${REPO}::/Users/dev/notes${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}${instanceId}`
     expect(hookCwdContradictsWorktree(folderWorkspace, '/Users/dev/notes/inbox')).toBe(false)
     expect(hookCwdContradictsWorktree(folderWorkspace, '/Users/dev/projects/api')).toBe(true)
+  })
+})
+
+describe('hookCwdContradictsWorktreeAfterLocalResolve', () => {
+  it('clears a contradiction that is only symlink aliasing of the same directory', () => {
+    // Why: Orca stores the path as picked while agents report physical getcwd — macOS /tmp
+    // is /private/tmp, project roots sit behind symlinks — so raw strings can be fully
+    // disjoint for one directory and the guard must not read that as a foreign session.
+    const base = mkdtempSync(join(tmpdir(), 'orca-cwd-attr-'))
+    try {
+      const real = join(base, 'real-workspace')
+      mkdirSync(join(real, 'src'), { recursive: true })
+      const link = join(base, 'linked-workspace')
+      try {
+        symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir')
+      } catch {
+        return // Restricted hosts that cannot create links have nothing to verify here.
+      }
+      const physicalSessionCwd = join(realpathSync(real), 'src')
+      expect(hookCwdContradictsWorktree(`${REPO}::${link}`, physicalSessionCwd)).toBe(true)
+      expect(
+        hookCwdContradictsWorktreeAfterLocalResolve(`${REPO}::${link}`, physicalSessionCwd)
+      ).toBe(false)
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  it('still refuses genuinely disjoint real directories', () => {
+    const base = mkdtempSync(join(tmpdir(), 'orca-cwd-attr-'))
+    try {
+      const workspace = join(base, 'workspace-a')
+      const session = join(base, 'session-b')
+      mkdirSync(workspace)
+      mkdirSync(session)
+      expect(hookCwdContradictsWorktreeAfterLocalResolve(`${REPO}::${workspace}`, session)).toBe(
+        true
+      )
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps the raw verdict for paths that do not exist on this host', () => {
+    // Why: remote (SSH/WSL) paths fail existsSync here, so the string verdict must stand —
+    // the relay that owns those paths runs its own resolved check before forwarding.
+    expect(
+      hookCwdContradictsWorktreeAfterLocalResolve(
+        `${REPO}::/nonexistent-orca-guard-test/worktree-a`,
+        '/nonexistent-orca-guard-test/session-b'
+      )
+    ).toBe(true)
+    expect(
+      hookCwdContradictsWorktreeAfterLocalResolve(WORKTREE, '/Users/dev/projects/api/src')
+    ).toBe(false)
   })
 })

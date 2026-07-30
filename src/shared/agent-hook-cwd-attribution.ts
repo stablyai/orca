@@ -1,10 +1,11 @@
+import { existsSync, realpathSync } from 'node:fs'
 import {
   isPathInsideOrEqual,
   isRuntimePathAbsolute,
   isWindowsAbsolutePathLike,
   resolveRuntimePath
 } from './cross-platform-path'
-import { splitWorktreeIdForFilesystem } from './worktree-id'
+import { splitWorktreeIdForFilesystem, WORKTREE_ID_SEPARATOR } from './worktree-id'
 
 const UNC_NOTATION = /^(?:\/\/|\\\\)/
 
@@ -52,4 +53,40 @@ export function hookCwdContradictsWorktree(
   // Why: a session started in a subdirectory is normal, and so is a workspace nested
   // under the session root (folder workspaces); only fully disjoint paths are proof.
   return !isPathInsideOrEqual(workspace, session) && !isPathInsideOrEqual(session, workspace)
+}
+
+/** Paths this host does not have stay raw, so foreign-host paths keep the string verdict. */
+function realpathIfExists(path: string): string {
+  try {
+    if (existsSync(path)) {
+      return realpathSync.native(path)
+    }
+  } catch {
+    // Fall through to the raw spelling.
+  }
+  return path
+}
+
+/**
+ * `hookCwdContradictsWorktree`, re-judged on locally resolved paths before trusting a drop.
+ *
+ * Why: one directory can spell two fully disjoint strings — macOS /tmp is /private/tmp,
+ * symlinked project roots, subst drives — and agents report physical getcwd while Orca
+ * stores the path as picked, so a raw contradiction is only proof once symlink aliasing
+ * is ruled out. Call this only where the current process runs on the host that owns both
+ * paths (Orca's local HTTP ingest, the relay's own hook server).
+ */
+export function hookCwdContradictsWorktreeAfterLocalResolve(
+  worktreeId: string | undefined,
+  cwd: string | undefined
+): boolean {
+  if (!hookCwdContradictsWorktree(worktreeId, cwd)) {
+    return false
+  }
+  const parsed = worktreeId ? splitWorktreeIdForFilesystem(worktreeId) : undefined
+  if (!parsed || !cwd) {
+    return true
+  }
+  const resolvedWorktreeId = `${parsed.repoId}${WORKTREE_ID_SEPARATOR}${realpathIfExists(parsed.worktreePath)}`
+  return hookCwdContradictsWorktree(resolvedWorktreeId, realpathIfExists(cwd))
 }

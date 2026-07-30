@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
@@ -72,6 +72,88 @@ describe('RelayAgentHookServer', () => {
       // protocol diagnostics and remote-location marker survive the wire.
       expect(envelope.env).toBe('remote')
       expect(envelope.version).toBe('1')
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('refuses a hook whose cwd disproves the reported worktree before caching or forwarding', async () => {
+    // Why: this host owns the session's paths, so the relay is the authoritative place to
+    // refuse a daemon-inherited pane identity — before it can seed listener state, occupy
+    // the one-slot replay cache, or reach Orca at all.
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const res = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/nonexistent-orca-relay/worktree-a',
+          env: 'remote',
+          version: '1',
+          payload: {
+            hook_event_name: 'UserPromptSubmit',
+            prompt: 'foreign session',
+            cwd: '/nonexistent-orca-relay/session-b'
+          }
+        })
+      })
+      expect(res.status).toBe(204)
+      expect(forward).not.toHaveBeenCalled()
+      expect(server.replayCachedPayloadsForPanes()).toBe(0)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('strips sourceCwd when the contradiction is only symlink aliasing of the worktree', async () => {
+    // Why: raw disjoint but resolved nested means the same directory spelled two ways.
+    // Orca's re-guard cannot resolve this host's paths, so forwarding the cwd would make
+    // it re-drop a proven-legitimate row.
+    const real = join(dir, 'real-workspace')
+    mkdirSync(real, { recursive: true })
+    const link = join(dir, 'linked-workspace')
+    try {
+      symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir')
+    } catch {
+      return // Restricted hosts that cannot create links have nothing to verify here.
+    }
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const res = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: `repo-1::${link}`,
+          env: 'remote',
+          version: '1',
+          payload: {
+            hook_event_name: 'UserPromptSubmit',
+            prompt: 'aliased session',
+            cwd: realpathSync(real)
+          }
+        })
+      })
+      expect(res.status).toBe(204)
+      expect(forward).toHaveBeenCalledTimes(1)
+      const envelope = forward.mock.calls[0][0]
+      expect(envelope.payload.prompt).toBe('aliased session')
+      expect(envelope.sourceCwd).toBeUndefined()
     } finally {
       server.stop()
     }

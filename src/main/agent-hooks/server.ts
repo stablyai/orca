@@ -9,7 +9,10 @@ import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { AGENT_KIND_VALUES, type AgentKind } from '../../shared/telemetry-events'
 import { ORCA_HOOK_PROTOCOL_VERSION } from '../../shared/agent-hook-types'
-import { hookCwdContradictsWorktree } from '../../shared/agent-hook-cwd-attribution'
+import {
+  hookCwdContradictsWorktree,
+  hookCwdContradictsWorktreeAfterLocalResolve
+} from '../../shared/agent-hook-cwd-attribution'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
@@ -26,6 +29,7 @@ import {
   movePaneCacheState,
   normalizeHookPayload,
   parseFormEncodedBody,
+  readHookBodyCwdAttribution,
   readRequestBody,
   reapRestoredClaudeSubagentsForDeadPane,
   reconcileRemoteCodexState,
@@ -89,7 +93,7 @@ type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
 
 type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,
-  'launchToken' | 'promptInteractionKey'
+  'launchToken' | 'promptInteractionKey' | 'sourceCwd'
 > & {
   launchTokenHash?: string
 }
@@ -158,6 +162,9 @@ const AGENT_PROMPT_SENT_AGENT_KINDS = new Set<AgentKind>(AGENT_KIND_VALUES)
 
 // Why: bound file growth from PTYs that never re-attach; 7 days is the "still relevant?" horizon beyond which entries shouldn't resurrect on hydrate.
 const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+// Why: paneKey in the warn set is attacker-influenced pre-validation input; cap membership so it can't grow unboundedly.
+const FOREIGN_CWD_WARN_PANE_CAP = 64
 
 // Why: a long-closed tab can't receive status events; bound the set so it can't grow one entry per close for the whole session.
 export const CLOSED_AGENT_STATUS_TAB_IDS_MAX = 1024
@@ -592,9 +599,11 @@ export class AgentHookServer {
   private closedAgentStatusTabIds = new Set<string>()
   private closedAgentStatusPaneKeys = new Set<string>()
   private connectionTimestampWatermarkById = new Map<string, number>()
-  // Why: one warn and one telemetry event per runtime — a mis-attributing daemon fires on every
-  // hook of every session it hosts, and the per-session telemetry ceiling never refills.
-  private reportedForeignCwdStatus = false
+  // Why: telemetry once per runtime — a mis-attributing daemon fires on every hook of every
+  // session it hosts, and the per-session telemetry ceiling never refills. The warn is per
+  // pane (bounded) so a second workspace going dark is still diagnosable from the log.
+  private reportedForeignCwdTelemetry = false
+  private warnedForeignCwdPaneKeys = new Set<string>()
   // Why: skip disk writes when the JSON exactly matches the last write; guards against re-firing trailing timers when nothing changed.
   private lastWrittenJson: string | null = null
 
@@ -924,14 +933,28 @@ export class AgentHookServer {
     return this.closedAgentStatusTabIds.has(tabId)
   }
 
-  /** Refuse a hook whose reported worktree is disproven by the session cwd it carries. */
-  private shouldSuppressForeignCwdStatus(event: AgentHookEventPayload): boolean {
-    if (!hookCwdContradictsWorktree(event.worktreeId, event.sourceCwd)) {
+  /** Refuse a hook whose reported worktree is disproven by the session cwd it carries.
+   *  `resolveLocalAliases` is true only where this host owns both paths (local HTTP ingest);
+   *  remote events were already alias-resolved by the relay that owns them. */
+  private shouldSuppressForeignCwdStatus(
+    event: Pick<AgentHookEventPayload, 'paneKey' | 'worktreeId' | 'sourceCwd'>,
+    resolveLocalAliases: boolean
+  ): boolean {
+    const contradicts = resolveLocalAliases
+      ? hookCwdContradictsWorktreeAfterLocalResolve(event.worktreeId, event.sourceCwd)
+      : hookCwdContradictsWorktree(event.worktreeId, event.sourceCwd)
+    if (!contradicts) {
       return false
     }
-    if (!this.reportedForeignCwdStatus) {
-      this.reportedForeignCwdStatus = true
+    if (!this.reportedForeignCwdTelemetry) {
+      this.reportedForeignCwdTelemetry = true
       track('agent_hook_unattributed', { reason: 'cwd_worktree_mismatch' })
+    }
+    if (
+      !this.warnedForeignCwdPaneKeys.has(event.paneKey) &&
+      this.warnedForeignCwdPaneKeys.size < FOREIGN_CWD_WARN_PANE_CAP
+    ) {
+      this.warnedForeignCwdPaneKeys.add(event.paneKey)
       console.warn(
         '[agent-hooks] dropping status: reported worktree does not own the reporting session',
         { paneKey: event.paneKey, worktreeId: event.worktreeId, sourceCwd: event.sourceCwd }
@@ -1855,7 +1878,7 @@ export class AgentHookServer {
           : undefined,
       payload: normalizedPayload
     }
-    if (this.shouldSuppressForeignCwdStatus(event)) {
+    if (this.shouldSuppressForeignCwdStatus(event, false)) {
       return
     }
     this.recordCurrentAuthorityObservation(event)
@@ -1929,11 +1952,20 @@ export class AgentHookServer {
 
         trackEmptyPaneKeyHook(body)
         const aliasedBody = this.normalizeHookBodyPaneKeyAlias(body)
+        // Why: refuse before normalization — a foreign event must not seed per-pane listener
+        // state (subagent rosters, lead-turn records) that later legitimate events re-emit.
+        if (this.shouldSuppressForeignCwdStatus(readHookBodyCwdAttribution(aliasedBody), true)) {
+          res.writeHead(204)
+          res.end()
+          return
+        }
         const normalized = normalizeHookPayload(this.state, source, aliasedBody, this.env)
         if (
           normalized &&
           !this.shouldSuppressClosedTabStatus(normalized.paneKey) &&
-          !this.shouldSuppressForeignCwdStatus(normalized)
+          // Why: redundant with the pre-normalization refusal by construction; kept as drift
+          // armor should the raw-body read and the normalizer ever disagree on a field.
+          !this.shouldSuppressForeignCwdStatus(normalized, true)
         ) {
           this.recordCurrentAuthorityObservation(normalized)
           const enriched = this.applyNormalizedStatus(normalized)
@@ -2002,7 +2034,8 @@ export class AgentHookServer {
     this.lastStatusFilePath = null
     this.lastWrittenJson = null
     this.runtimeObservedStatusPaneKeys.clear()
-    this.reportedForeignCwdStatus = false
+    this.reportedForeignCwdTelemetry = false
+    this.warnedForeignCwdPaneKeys.clear()
     this.hydratedAuthorityCommitments = Object.freeze([])
     this.hydratedLaunchTokenHashByPaneKey.clear()
     this.persistedAuthorityCommitmentsByPaneKey.clear()

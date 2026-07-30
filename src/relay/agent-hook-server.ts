@@ -10,6 +10,10 @@ import { homedir } from 'node:os'
 
 import { ORCA_HOOK_PROTOCOL_VERSION } from '../shared/agent-hook-types'
 import {
+  hookCwdContradictsWorktree,
+  hookCwdContradictsWorktreeAfterLocalResolve
+} from '../shared/agent-hook-cwd-attribution'
+import {
   clearAllListenerCaches,
   clearPaneCacheState,
   createHookListenerState,
@@ -19,6 +23,7 @@ import {
   HOOK_REQUEST_SLOWLORIS_MS,
   normalizeHookPayload,
   preparePendingGrokResultDiscovery,
+  readHookBodyCwdAttribution,
   readRequestBody,
   resolveHookSource,
   writeEndpointFile,
@@ -42,6 +47,7 @@ const CODEX_SUBAGENT_POLL_MS = 1_000
 
 // Why: cap env/version at 64 chars so a misbehaving agent CLI can't grow the meta cache unboundedly; canonical values are short.
 const MAX_HOOK_META_LEN = 64
+const FOREIGN_CWD_WARN_PANE_CAP = 64
 
 // Why: WSL relay has no per-pane teardown (PTYs live on the Windows host), so the replay cache would grow forever without a recency cap.
 const MAX_CACHED_PANES = 256
@@ -108,6 +114,9 @@ export class RelayAgentHookServer {
   private fixedToken: string | undefined
   private preferredPort: number
   private portFallbackApplied = false
+  // Why: one stderr line per pane — a mis-attributing daemon fires on every hook it hosts.
+  // Bounded because paneKey here is pre-validation input.
+  private warnedForeignCwdPaneKeys = new Set<string>()
 
   constructor(options: RelayHookServerOptions) {
     this.env = options.env ?? REMOTE_AGENT_HOOK_ENV
@@ -202,6 +211,20 @@ export class RelayAgentHookServer {
     this.codexSubagentPollTimers.clear()
     clearAllListenerCaches(this.state)
     this.lastEnvelopeMetaByPaneKey.clear()
+    this.warnedForeignCwdPaneKeys.clear()
+  }
+
+  private warnForeignCwdOnce(paneKey: string, worktreeId?: string, sourceCwd?: string): void {
+    if (
+      this.warnedForeignCwdPaneKeys.has(paneKey) ||
+      this.warnedForeignCwdPaneKeys.size >= FOREIGN_CWD_WARN_PANE_CAP
+    ) {
+      return
+    }
+    this.warnedForeignCwdPaneKeys.add(paneKey)
+    process.stderr.write(
+      `[relay-hook-server] dropping status: reported worktree does not own the reporting session (paneKey=${paneKey} worktreeId=${worktreeId ?? ''} sourceCwd=${sourceCwd ?? ''})\n`
+    )
   }
 
   /** Request-driven replay: re-forwards each cached paneKey payload as a fresh notification. Forwards are
@@ -275,8 +298,31 @@ export class RelayAgentHookServer {
         res.end()
         return
       }
+      // Why: same refusal as Orca's local ingest, run on the host that owns the session's
+      // paths — before normalization, so a foreign daemon-hosted session cannot seed
+      // per-pane listener state (subagent rosters, lead-turn records) or the replay cache.
+      const attribution = readHookBodyCwdAttribution(body)
+      const rawCwdContradiction = hookCwdContradictsWorktree(
+        attribution.worktreeId,
+        attribution.sourceCwd
+      )
+      if (
+        rawCwdContradiction &&
+        hookCwdContradictsWorktreeAfterLocalResolve(attribution.worktreeId, attribution.sourceCwd)
+      ) {
+        this.warnForeignCwdOnce(attribution.paneKey, attribution.worktreeId, attribution.sourceCwd)
+        res.writeHead(204)
+        res.end()
+        return
+      }
       const event = normalizeHookPayload(this.state, source, body, this.env)
       if (event) {
+        if (rawCwdContradiction) {
+          // Why: this host proved the contradiction is symlink aliasing (raw disjoint, resolved
+          // nested). Orca's re-guard cannot resolve remote paths, so forwarding the cwd would
+          // make it re-drop a proven-legitimate row.
+          event.sourceCwd = undefined
+        }
         // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
         const env = this.bodyEnv(body)
         const version = this.bodyVersion(body)
