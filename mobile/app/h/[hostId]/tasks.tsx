@@ -151,6 +151,7 @@ import type {
   TuiAgent
 } from '../../../../src/shared/types'
 import type { SshConnectionState } from '../../../../src/shared/ssh-types'
+import type { HostedReviewDecision } from '../../../../src/shared/hosted-review'
 import {
   githubProjectHost,
   githubProjectIdentityKey as githubProjectKey
@@ -240,7 +241,7 @@ type GitLabWorkItem = {
   projectRef?: { host: string; path: string }
   checksSummary?: ProviderCheckSummary
   mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
-  reviewDecision?: 'approved' | 'changes_requested' | 'review_required' | null
+  reviewDecision?: HostedReviewDecision
   reviewerCount?: number
   repoId: string
   repoName: string
@@ -4312,7 +4313,7 @@ export default function MobileTasksScreen() {
             pipelineJobs: details.pipelineJobs ?? []
           })
           const checksSummary = buildGitLabCheckSummary(details.pipelineJobs ?? [])
-          const reviewDecision =
+          const reviewDecision: Exclude<HostedReviewDecision, null> | undefined =
             details.approvalState?.approvalsRequired && details.approvalState.approvalsLeft === 0
               ? 'approved'
               : details.approvalState?.approvalsLeft && details.approvalState.approvalsLeft > 0

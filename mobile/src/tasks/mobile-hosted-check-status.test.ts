@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { HostedReviewDecision } from '../../../src/shared/hosted-review'
 import {
   getHostedChecksLabel,
   getHostedReviewLabel,
@@ -53,6 +54,13 @@ describe('mobile hosted check status', () => {
     expect(getHostedReviewSignalTone({ mergeable: 'MERGEABLE' }, 'merge')).toBe('success')
     expect(getHostedReviewSignalTone({ reviewDecision: 'approved' }, 'review')).toBe('success')
     expect(getHostedReviewSignalTone({ mergeable: 'CONFLICTING' }, 'merge')).toBe('danger')
+  })
+
+  it('renders a shared typed GitLab review decision', () => {
+    const reviewDecision: HostedReviewDecision = 'changes_requested'
+
+    expect(getHostedReviewLabel({ reviewDecision })).toBe('Changes requested')
+    expect(getHostedReviewSignalTone({ reviewDecision }, 'review')).toBe('danger')
   })
 
   it('keeps missing GitLab enrichment neutral', () => {
