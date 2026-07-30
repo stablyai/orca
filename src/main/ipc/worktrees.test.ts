@@ -2298,6 +2298,76 @@ describe('registerWorktreeHandlers', () => {
     ).rejects.toThrow(/Remote connection dropped/i)
   })
 
+  it('fails closed when duplicate repo ids create without an execution host', async () => {
+    const localRepo = {
+      id: 'repo-shared',
+      path: '/workspace/local-repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = { ...localRepo, path: '/workspace/ssh-repo', connectionId: 'connection-1' }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+    store.getRepo.mockReturnValue(localRepo)
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-shared',
+        name: 'issue-workspace'
+      })
+    ).rejects.toThrow('Repo not found: repo-shared')
+
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+    expect(getSshGitProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects contradictory repository host provenance for desktop creation', async () => {
+    const repo = {
+      id: 'repo-1',
+      path: '/workspace/ssh-repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'target-a',
+      executionHostId: toSshExecutionHostId('target-b')
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        executionHostId: toSshExecutionHostId('target-b'),
+        name: 'issue-workspace'
+      })
+    ).rejects.toThrow('Repo not found: repo-1')
+
+    expect(getSshGitProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects runtime repository owners before desktop creation', async () => {
+    const repo = {
+      id: 'repo-1',
+      path: '/runtime/repo',
+      displayName: 'runtime',
+      badgeColor: '#000',
+      addedAt: 0,
+      executionHostId: 'runtime:environment-1' as const
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        executionHostId: 'runtime:environment-1',
+        name: 'issue-workspace'
+      })
+    ).rejects.toThrow('Repo not found: repo-1')
+
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+  })
+
   it('routes local worktree creation through the selected WSL project runtime', async () => {
     mockSelectedWslProjectRuntime()
     listWorktreesMock.mockResolvedValue([
@@ -8935,6 +9005,44 @@ describe('registerWorktreeHandlers', () => {
     ).rejects.toThrow('Repo not found: repo-shared')
 
     expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(getSshGitProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects contradictory and runtime repository owners before desktop deletion', async () => {
+    const baseRepo = {
+      id: 'repo-shared',
+      path: '/remote/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const contradictoryRepo = {
+      ...baseRepo,
+      connectionId: 'target-a',
+      executionHostId: toSshExecutionHostId('target-b')
+    }
+    store.getRepos.mockReturnValue([contradictoryRepo])
+    store.getRepo.mockReturnValue(contradictoryRepo)
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-shared::/remote/feature-wt',
+        hostId: toSshExecutionHostId('target-b')
+      })
+    ).rejects.toThrow('Repo not found: repo-shared')
+
+    const runtimeRepo = { ...baseRepo, executionHostId: 'runtime:environment-1' as const }
+    store.getRepos.mockReturnValue([runtimeRepo])
+    store.getRepo.mockReturnValue(runtimeRepo)
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-shared::/remote/feature-wt',
+        hostId: 'runtime:environment-1'
+      })
+    ).rejects.toThrow('Repo not found: repo-shared')
+
+    expect(listWorktreesMock).not.toHaveBeenCalled()
     expect(getSshGitProviderMock).not.toHaveBeenCalled()
   })
 

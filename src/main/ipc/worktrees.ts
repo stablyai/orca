@@ -179,31 +179,39 @@ async function stopPtysForDestructiveWorktreeRemoval(
   }
 }
 
-function getRepoForWorktreeRemoval(
+function findDesktopRepoOwner(
   store: Store,
   repoId: string,
   hostId?: ExecutionHostId
 ): Repo | undefined {
-  const matches = store
-    .getRepos()
-    .filter((repo) => repo.id === repoId && (!hostId || getRepoExecutionHostId(repo) === hostId))
-  // Why: deletion must never guess between host owners; legacy unscoped calls work only while the repo id has one unique owner.
+  const candidates = store.getRepos().filter((repo) => repo.id === repoId)
+  const ownerHost = (repo: Repo): ExecutionHostId | null => {
+    const owner = resolveRepoOwnershipEvidence(repo)
+    if (owner.status !== 'owned' || parseExecutionHostId(owner.hostId)?.kind === 'runtime') {
+      return null
+    }
+    return owner.hostId
+  }
+  const candidateHosts = candidates.map(ownerHost)
+  if (candidateHosts.some((owner) => owner === null)) {
+    return undefined
+  }
+  const matches = candidates.filter((_, index) => !hostId || candidateHosts[index] === hostId)
+  // Why: desktop IPC must never guess between host owners; legacy unscoped calls work only while the repo id has one unique owner.
   if (matches.length === 1) {
     const match = matches[0]
+    const matchHost = ownerHost(match)
     const legacyMatch = store.getRepo(repoId)
-    return legacyMatch &&
-      legacyMatch.path === match.path &&
-      getRepoExecutionHostId(legacyMatch) === getRepoExecutionHostId(match)
+    return legacyMatch && legacyMatch.path === match.path && ownerHost(legacyMatch) === matchHost
       ? legacyMatch
       : match
   }
-  if (matches.length > 1) {
+  if (candidates.length > 0) {
     return undefined
   }
   const legacyMatch = store.getRepo(repoId)
-  return legacyMatch && (!hostId || getRepoExecutionHostId(legacyMatch) === hostId)
-    ? legacyMatch
-    : undefined
+  const legacyHost = legacyMatch ? ownerHost(legacyMatch) : null
+  return legacyMatch && legacyHost && (!hostId || legacyHost === hostId) ? legacyMatch : undefined
 }
 import { classifyWorkspaceCreateError } from './workspace-create-error-classifier'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
@@ -2046,7 +2054,7 @@ export function registerWorktreeHandlers(
       _event,
       args: { repoId: string; executionHostId?: ExecutionHostId; baseBranch?: string }
     ): Promise<void> => {
-      const repo = getRepoForWorktreeRemoval(store, args.repoId, args.executionHostId)
+      const repo = findDesktopRepoOwner(store, args.repoId, args.executionHostId)
       if (!repo) {
         return
       }
@@ -2064,9 +2072,7 @@ export function registerWorktreeHandlers(
       const args = normalizeLinkedWorkItemFields(rawArgs)
       // Why span here: parent the child git spans for the trace tree; don't attach branch name/remote URL (user content) — repo ID is the safer correlator.
       return withWorktreeSpan({ stage: 'create' }, async () => {
-        const repo = args.executionHostId
-          ? getRepoForWorktreeRemoval(store, args.repoId, args.executionHostId)
-          : store.getRepo(args.repoId)
+        const repo = findDesktopRepoOwner(store, args.repoId, args.executionHostId)
         if (!repo) {
           throw new Error(`Repo not found: ${args.repoId}`)
         }
@@ -2143,7 +2149,7 @@ export function registerWorktreeHandlers(
         isCrossRepository?: boolean
       }
     ): Promise<GitHubPrStartPoint | { error: string }> => {
-      const repo = getRepoForWorktreeRemoval(store, args.repoId, args.executionHostId)
+      const repo = findDesktopRepoOwner(store, args.repoId, args.executionHostId)
       if (!repo) {
         return { error: 'Repo not found' }
       }
@@ -2238,7 +2244,7 @@ export function registerWorktreeHandlers(
     'worktrees:remove',
     async (_event, args: RemoveWorktreeArgs): Promise<RemoveWorktreeResult> => {
       const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
-      const repo = getRepoForWorktreeRemoval(store, repoId, args.hostId)
+      const repo = findDesktopRepoOwner(store, repoId, args.hostId)
       if (!repo) {
         throw new Error(`Repo not found: ${repoId}`)
       }
@@ -2823,7 +2829,7 @@ export function registerWorktreeHandlers(
       args: Pick<RemoveWorktreeArgs, 'worktreeId' | 'hostId'>
     ): Promise<RemoveWorktreeResult> => {
       const { repoId } = parseWorktreeId(args.worktreeId)
-      const repo = getRepoForWorktreeRemoval(store, repoId, args.hostId)
+      const repo = findDesktopRepoOwner(store, repoId, args.hostId)
       if (!repo) {
         throw new Error(`Repo not found: ${repoId}`)
       }
@@ -3020,7 +3026,7 @@ export function registerWorktreeHandlers(
   ipcMain.handle(
     'hooks:check',
     async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
-      const repo = getRepoForWorktreeRemoval(store, args.repoId, args.hostId)
+      const repo = findDesktopRepoOwner(store, args.repoId, args.hostId)
       if (!repo) {
         const repoIdExists = store.getRepos().some((candidate) => candidate.id === args.repoId)
         // Why: callers treat inspection errors as "skip", so a requested/ambiguous host must report error (fail closed), not hook-free.
@@ -3091,7 +3097,7 @@ export function registerWorktreeHandlers(
   ipcMain.handle(
     'hooks:inspectSetupScriptImports',
     async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
-      const repo = getRepoForWorktreeRemoval(store, args.repoId, args.hostId)
+      const repo = findDesktopRepoOwner(store, args.repoId, args.hostId)
       if (!repo || isFolderRepo(repo)) {
         return []
       }
@@ -3155,7 +3161,7 @@ export function registerWorktreeHandlers(
   ipcMain.handle(
     'hooks:readIssueCommand',
     async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
-      const repo = getRepoForWorktreeRemoval(store, args.repoId, args.hostId)
+      const repo = findDesktopRepoOwner(store, args.repoId, args.hostId)
       if (!repo || isFolderRepo(repo)) {
         return {
           status: 'ok',
@@ -3222,7 +3228,7 @@ export function registerWorktreeHandlers(
   ipcMain.handle(
     'hooks:writeIssueCommand',
     async (_event, args: { repoId: string; content: string; hostId?: ExecutionHostId }) => {
-      const repo = getRepoForWorktreeRemoval(store, args.repoId, args.hostId)
+      const repo = findDesktopRepoOwner(store, args.repoId, args.hostId)
       if (!repo || isFolderRepo(repo)) {
         return
       }
