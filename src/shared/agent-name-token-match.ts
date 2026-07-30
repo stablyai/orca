@@ -26,7 +26,11 @@ export const AGENT_NAMES = [
   'openclaw',
   'aider',
   'grok',
-  'devin'
+  'devin',
+  // Why: Kiro CLI prefixes its OSC titles with "kiro: <session title>" when its
+  // `chat.terminalTitle` setting is on; token-matching attributes those panes
+  // (and their notifications) to Kiro without claiming cwd titles like ~/kiro.
+  'kiro'
 ]
 
 // Why: Windows agent titles can surface launcher process names such as

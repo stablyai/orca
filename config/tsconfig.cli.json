@@ -68,6 +68,7 @@
     "../src/main/hermes/hook-service.ts",
     "../src/main/kimi/hook-service.ts",
     "../src/main/kimi/kimi-hook-config-toml.ts",
+    "../src/main/kiro/hook-service.ts",
     "../src/main/openclaude/hook-service.ts",
     "../src/main/rolling-file-backup.ts",
     "../src/main/startup/hydrate-shell-path.ts",
