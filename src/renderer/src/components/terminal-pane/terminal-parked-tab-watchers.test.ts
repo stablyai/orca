@@ -80,8 +80,13 @@ type MockStoreState = {
   >
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   settings: { terminalSshViewParking?: boolean } | null
+  runtimeStatusByEnvironmentId: Map<
+    string,
+    { status: { capabilities?: string[] } | null; checkedAt: number }
+  >
   clearTabLaunchAgent: ReturnType<typeof vi.fn>
   clearRuntimePaneTitle: ReturnType<typeof vi.fn>
+  setRuntimePaneTitle: ReturnType<typeof vi.fn>
   setTabLayout: ReturnType<typeof vi.fn>
   updateTabTitle: ReturnType<typeof vi.fn>
 }
@@ -141,8 +146,10 @@ describe('terminal-parked-tab-watchers', () => {
       terminalLayoutsByTabId: {},
       runtimePaneTitlesByTabId: {},
       settings: null,
+      runtimeStatusByEnvironmentId: new Map(),
       clearTabLaunchAgent: vi.fn(),
       clearRuntimePaneTitle: vi.fn(),
+      setRuntimePaneTitle: vi.fn(),
       setTabLayout: vi.fn(),
       updateTabTitle: vi.fn()
     }
@@ -222,6 +229,24 @@ describe('terminal-parked-tab-watchers', () => {
     expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
   })
 
+  it('starts a fact watcher for snapshot-capable paired PTYs', () => {
+    mockStoreState.runtimeStatusByEnvironmentId.set('env-1', {
+      status: { capabilities: ['terminal.paired-parking.v1'] },
+      checkedAt: Date.now()
+    })
+    capturePanes([
+      { ptyId: 'remote:env-1@@terminal-1', paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }
+    ])
+    syncParked({ tabs: [{ id: TAB_ID, ptyId: 'remote:env-1@@terminal-1' }] })
+
+    expect(startParkedTerminalByteWatcher).toHaveBeenCalledTimes(1)
+    expect(startedWatchers[0].options).toMatchObject({
+      ptyId: 'remote:env-1@@terminal-1'
+    })
+    expect(subscribeToPtyExit).not.toHaveBeenCalled()
+    expect(exitSubscriptions).toEqual([])
+  })
+
   it('starts watchers for SSH PTYs (C1 SSH parking, default on)', () => {
     capturePanes([{ ptyId: 'ssh:conn-1@@pty-1', paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
     syncParked({ tabs: [{ id: TAB_ID, ptyId: 'ssh:conn-1@@pty-1' }] })
@@ -263,6 +288,7 @@ describe('terminal-parked-tab-watchers', () => {
     syncParked({ tabs: [], parkedTabIds: [TAB_ID] })
 
     expect(startedWatchers[0].dispose).toHaveBeenCalledTimes(1)
+    expect(mockStoreState.clearRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, 1)
     expect(getParkedTerminalWatcherTabIds()).toEqual([])
   })
 

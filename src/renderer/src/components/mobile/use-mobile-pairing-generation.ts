@@ -5,13 +5,15 @@ import {
   canMintMobilePairingOffer,
   type MobilePairingConnectionMode
 } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 
 type MutableRef<T> = { current: T }
 
 /**
  * Mints (or rotates) a pairing QR. Every caller must go through this path so
  * signed-out Anywhere is refused rather than silently degraded to a local-only
- * code under the Relay label.
+ * code under the Relay label. Anywhere mint failures surface relayFailure and
+ * clear any QR.
  */
 export function useMobilePairingGeneration(params: {
   connectionMode: MobilePairingConnectionMode
@@ -24,9 +26,7 @@ export function useMobilePairingGeneration(params: {
   setPairingUrl: (value: string | null) => void
   setPairingQrError: (value: boolean) => void
   setPairLoading: (value: boolean) => void
-  /** Mode the minted QR actually encodes (degraded Relay mints report
-   *  'local-only'); null while no QR is shown. */
-  setEncodedConnectionMode: (value: MobilePairingConnectionMode | null) => void
+  setRelayMintFailure: (value: MobileRelayMintFailure | null) => void
 }): {
   generatePairing: (
     rotate: boolean,
@@ -45,7 +45,7 @@ export function useMobilePairingGeneration(params: {
     setPairingUrl,
     setPairingQrError,
     setPairLoading,
-    setEncodedConnectionMode
+    setRelayMintFailure
   } = params
 
   const generatePairing = useCallback(
@@ -55,22 +55,16 @@ export function useMobilePairingGeneration(params: {
       connectionModeOverride?: MobilePairingConnectionMode
     ) => {
       const preferredMode = connectionModeOverride ?? connectionMode
-      // Why: every mint path (auto-generate, regenerate, address change, path
-      // invalidation) must refuse signed-out Anywhere rather than degrade to a
-      // local-only QR under the Relay label.
       if (!canMintMobilePairingOffer({ connectionMode: preferredMode, signedIn })) {
         return
       }
       const requestId = ++pairingRequestIdRef.current
-      // Mark the request synchronously so state changes cannot make the
-      // Step 2 auto-generate effect start a second offer in parallel.
       hasGeneratedRef.current = true
       if (mountedRef.current) {
         setPairLoading(true)
       }
       try {
         const address = addressOverride ?? selectedAddress
-        // canMint already requires sign-in for Anywhere, so preferred is honest.
         const result = await window.api.mobile.getPairingQR({
           ...(address ? { address } : {}),
           connectionMode: preferredMode,
@@ -84,21 +78,28 @@ export function useMobilePairingGeneration(params: {
             setPairQrDataUrl(result.qrDataUrl)
             setPairingUrl(result.pairingUrl)
             setPairingQrError(result.qrDataUrl === null)
-            setEncodedConnectionMode(result.connectionMode)
+            setRelayMintFailure(null)
           }
         } else {
-          hasGeneratedRef.current = false
+          // Why: keep hasGenerated so step-2 auto-mint does not loop on failure.
           if (mountedRef.current) {
             setPairQrDataUrl(null)
             setPairingUrl(null)
             setPairingQrError(false)
-            setEncodedConnectionMode(null)
-            toast.error(
-              translate(
-                'auto.components.mobile.MobilePage.b353e18de1',
-                'WebSocket transport is not running'
+            if (result.reason === 'relay_mint_failed' && result.relayFailure) {
+              setRelayMintFailure(result.relayFailure)
+            } else {
+              setRelayMintFailure(null)
+              // Why: IPC now forwards reason/guidance for all unavailability paths;
+              // prefer that copy over a hard-coded WebSocket-only message.
+              toast.error(
+                result.guidance ??
+                  translate(
+                    'auto.components.mobile.MobilePage.b353e18de1',
+                    'WebSocket transport is not running'
+                  )
               )
-            )
+            }
           }
         }
       } catch {
@@ -107,7 +108,7 @@ export function useMobilePairingGeneration(params: {
           setPairQrDataUrl(null)
           setPairingUrl(null)
           setPairingQrError(false)
-          setEncodedConnectionMode(null)
+          setRelayMintFailure(null)
           toast.error(
             translate(
               'auto.components.mobile.MobilePage.4c8bd11c1a',
@@ -127,11 +128,11 @@ export function useMobilePairingGeneration(params: {
       mountedRef,
       pairingRequestIdRef,
       selectedAddress,
-      setEncodedConnectionMode,
       setPairLoading,
       setPairQrDataUrl,
       setPairingUrl,
       setPairingQrError,
+      setRelayMintFailure,
       signedIn
     ]
   )

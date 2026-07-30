@@ -1,5 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../transport/types'
@@ -69,6 +70,7 @@ function baseArgs(overrides: Partial<HookArgs> & Pick<HookArgs, 'client'>): Hook
     showToast: vi.fn(),
     onSendError: vi.fn(),
     baseSend: vi.fn().mockResolvedValue('accepted'),
+    readSeededLaunchDraft: () => null,
     sleep: async () => {},
     ...overrides
   }
@@ -199,6 +201,40 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(baseSend).toHaveBeenCalledWith('look at this', ['file:///a.jpg'], expect.any(Number))
     // Chips clear once the send is accepted.
     expect(hook!.attachments).toEqual([])
+  })
+
+  it('leads the image paste with a clear sized to a parked multi-line launch draft', async () => {
+    // A single Ctrl+U kills only the last line, so the draft's earlier lines
+    // would survive the clear and ride along with the image as prompt body.
+    pick.mockResolvedValue({ base64: 'AAAA', uri: 'file:///a.jpg' })
+    const client = makeClient([
+      methodNotFound('start'),
+      ok('save', '/tmp/a.png'),
+      sendResult(true),
+      sendResult(true)
+    ])
+    const draft = 'Linked Linear issue: ABC-123\nhttps://linear.app/x/issue/ABC-123'
+    mount(
+      baseArgs({
+        client: client as unknown as RpcClient,
+        deviceTokenRef: { current: 'device-1' },
+        readSeededLaunchDraft: () => draft
+      })
+    )
+
+    await act(async () => {
+      await hook!.attachImage('library')
+    })
+    await act(async () => {
+      await hook!.sendNativeChat('look at this')
+    })
+
+    const firstSend = client.calls.find((c) => c.method === 'terminal.send')
+    expect(firstSend?.params).toMatchObject({
+      text: buildAgentTuiClearInputForText(draft),
+      enter: false
+    })
+    expect(firstSend?.params.text).not.toBe('\x15')
   })
 
   it('spends one budget across the image paste and the text body that follows', async () => {

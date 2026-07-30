@@ -285,6 +285,19 @@ export class CodexAccountService {
     return this.serializeMutation(() => this.doAddAccount(target))
   }
 
+  /**
+   * Registers a managed Codex account from an already-authenticated `CODEX_HOME`
+   * instead of driving `codex login` here. Lets the `orca account add --agent codex`
+   * CLI run the login in the user's own terminal on a headless host and then import
+   * the captured `auth.json` into managed storage.
+   */
+  async addAccountFromHome(
+    sourceHome: string,
+    target?: CodexAccountAddTarget
+  ): Promise<CodexRateLimitAccountsState> {
+    return this.serializeMutation(() => this.doAddAccountFromHome(sourceHome, target))
+  }
+
   async reauthenticateAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
     return this.serializeMutation(() => this.doReauthenticateAccount(accountId))
   }
@@ -708,58 +721,131 @@ export class CodexAccountService {
     const accountId = randomUUID()
     const managedHome = this.createManagedHome(accountId, target)
     const { managedHomePath } = managedHome
-
     try {
       const canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath)
       this.assertOAuthAccountAddAllowed(canonicalConfig)
       this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath, canonicalConfig, accountId)
       await this.runCodexLogin(managedHomePath)
-      const identity = this.readIdentityFromHome(managedHomePath, accountId)
-      if (!identity.email) {
-        throw new Error('Codex login completed, but Orca could not resolve the account email.')
-      }
-
-      const now = Date.now()
-      const account: CodexManagedAccount = {
-        id: accountId,
-        email: identity.email,
-        managedHomePath,
-        managedHomeRuntime: managedHome.managedHomeRuntime,
-        wslDistro: managedHome.wslDistro,
-        wslLinuxHomePath: managedHome.wslLinuxHomePath,
-        providerAccountId: identity.providerAccountId,
-        workspaceLabel: identity.workspaceLabel,
-        workspaceAccountId: identity.workspaceAccountId,
-        createdAt: now,
-        updatedAt: now,
-        lastAuthenticatedAt: now
-      }
-
-      const settings = this.store.getSettings()
-      const selection = normalizeCodexRuntimeSelection(settings)
-      const targetSelection = getCodexSelectionTargetForAccount(account)
-      this.store.updateSettings({
-        codexManagedAccounts: [...settings.codexManagedAccounts, account],
-        activeCodexManagedAccountId:
-          targetSelection.runtime === 'host' ? account.id : selection.host,
-        activeCodexManagedAccountIdsByRuntime: setSelectedCodexAccountIdForTarget(
-          selection,
-          account.id,
-          targetSelection
-        )
-      })
-      this.safeSyncCanonicalConfigToManagedHomes()
-      this.runtimeHome.clearLastWrittenAuthJson(account.id)
-      this.runtimeHome.syncForCurrentSelection()
-
-      // Why: switching activates the new account, so cache the outgoing account's usage for the switcher.
-      const outgoingAccountId = getSelectedCodexAccountIdForTarget(settings, targetSelection)
-      this.startQuotaRefreshInBackground(outgoingAccountId, targetSelection)
-      return this.getSnapshot()
+      return await this.persistCapturedCodexAccount(accountId, managedHome)
     } catch (error) {
       this.safeRemoveManagedHome(managedHomePath, accountId)
       throw error
     }
+  }
+
+  private async doAddAccountFromHome(
+    sourceHome: string,
+    target?: CodexAccountAddTarget
+  ): Promise<CodexRateLimitAccountsState> {
+    const accountId = randomUUID()
+    const managedHome = this.createManagedHome(accountId, target)
+    const { managedHomePath } = managedHome
+    try {
+      const canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath)
+      this.assertOAuthAccountAddAllowed(canonicalConfig)
+      this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath, canonicalConfig, accountId)
+      this.importCodexAuthFromHome(sourceHome, managedHomePath, accountId)
+      return await this.persistCapturedCodexAccount(accountId, managedHome)
+    } catch (error) {
+      this.safeRemoveManagedHome(managedHomePath, accountId)
+      throw error
+    }
+  }
+
+  // Why: copy the auth.json from an already-authenticated CODEX_HOME (e.g. a temp
+  // dir the CLI ran `codex login` into) into the managed home. Mirrors the login
+  // step of doAddAccount without spawning an interactive browser flow.
+  private importCodexAuthFromHome(
+    sourceHome: string,
+    managedHomePath: string,
+    accountId: string
+  ): void {
+    const trimmed = sourceHome.trim()
+    if (!trimmed) {
+      throw new Error('A Codex home directory path is required.')
+    }
+    const authPath = join(resolve(trimmed), 'auth.json')
+    if (!existsSync(authPath)) {
+      throw new Error(
+        `No Codex credentials found in ${resolve(trimmed)}. Run \`codex login\` into this directory first.`
+      )
+    }
+    const trustedHome = this.assertManagedHomePath(managedHomePath, accountId)
+    writeFileAtomically(join(trustedHome, 'auth.json'), readFileSync(authPath, 'utf-8'), {
+      mode: 0o600
+    })
+  }
+
+  private async persistCapturedCodexAccount(
+    accountId: string,
+    managedHome: ManagedHomeLocation
+  ): Promise<CodexRateLimitAccountsState> {
+    const identity = this.readIdentityFromHome(managedHome.managedHomePath, accountId)
+    if (!identity.email) {
+      throw new Error('Codex login completed, but Orca could not resolve the account email.')
+    }
+
+    const now = Date.now()
+    const account: CodexManagedAccount = {
+      id: accountId,
+      email: identity.email,
+      managedHomePath: managedHome.managedHomePath,
+      managedHomeRuntime: managedHome.managedHomeRuntime,
+      wslDistro: managedHome.wslDistro,
+      wslLinuxHomePath: managedHome.wslLinuxHomePath,
+      providerAccountId: identity.providerAccountId,
+      workspaceLabel: identity.workspaceLabel,
+      workspaceAccountId: identity.workspaceAccountId,
+      createdAt: now,
+      updatedAt: now,
+      lastAuthenticatedAt: now
+    }
+
+    const settings = this.store.getSettings()
+    const selection = normalizeCodexRuntimeSelection(settings)
+    const targetSelection = getCodexSelectionTargetForAccount(account)
+    this.store.updateSettings({
+      codexManagedAccounts: [...settings.codexManagedAccounts, account],
+      activeCodexManagedAccountId: targetSelection.runtime === 'host' ? account.id : selection.host,
+      activeCodexManagedAccountIdsByRuntime: setSelectedCodexAccountIdForTarget(
+        selection,
+        account.id,
+        targetSelection
+      )
+    })
+    try {
+      this.safeSyncCanonicalConfigToManagedHomes()
+      this.runtimeHome.clearLastWrittenAuthJson(account.id)
+      // Why: pass the account's selection target so a WSL account syncs the WSL
+      // runtime home instead of the default host target.
+      this.runtimeHome.syncForCurrentSelection(targetSelection)
+    } catch (error) {
+      // Why: settings were already written; if a post-write step fails, restore the
+      // previous account/selection so the caller's managed-home cleanup cannot leave
+      // a dangling, broken managed account behind in settings.
+      this.store.updateSettings({
+        codexManagedAccounts: settings.codexManagedAccounts,
+        activeCodexManagedAccountId: settings.activeCodexManagedAccountId,
+        activeCodexManagedAccountIdsByRuntime: settings.activeCodexManagedAccountIdsByRuntime
+      })
+      // Why: a failed post-write step must restore both persisted selection and
+      // the runtime home it drives before the new managed home is removed.
+      try {
+        this.runtimeHome.syncForCurrentSelection(targetSelection)
+      } catch (rollbackError) {
+        console.warn(
+          '[codex-accounts] Failed to restore runtime home during rollback:',
+          rollbackError
+        )
+      }
+      throw error
+    }
+
+    // Why: switching activates the new account, so cache the outgoing account's usage for the
+    // switcher — in the background, since the probe must never block or fail a durable add.
+    const outgoingAccountId = getSelectedCodexAccountIdForTarget(settings, targetSelection)
+    this.startQuotaRefreshInBackground(outgoingAccountId, targetSelection)
+    return this.getSnapshot()
   }
 
   private async doReauthenticateAccount(accountId: string): Promise<CodexRateLimitAccountsState> {

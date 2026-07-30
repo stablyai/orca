@@ -177,29 +177,46 @@ const HANDOFF_FACT_BUFFER_TTL_MS = 15_000
 const MAX_HANDOFF_FACT_BATCHES = 64
 const MAX_HANDOFF_FACT_PTYS = 32
 
-type HandoffFactBuffer = { batches: TerminalSideEffectBatch[]; expiresAtMs: number }
+type HandoffFactBuffer = {
+  batches: TerminalSideEffectBatch[]
+  expiresAtMs: number
+  expiryTimer: ReturnType<typeof setTimeout>
+}
 const handoffFactBuffersByPtyId = new Map<string, HandoffFactBuffer>()
+
+function deleteHandoffFactBuffer(ptyId: string): void {
+  const buffer = handoffFactBuffersByPtyId.get(ptyId)
+  if (buffer) {
+    clearTimeout(buffer.expiryTimer)
+    handoffFactBuffersByPtyId.delete(ptyId)
+  }
+}
 
 function openHandoffFactBuffer(ptyId: string): void {
   const nowMs = Date.now()
   for (const [bufferedPtyId, buffer] of handoffFactBuffersByPtyId) {
     if (buffer.expiresAtMs <= nowMs) {
-      handoffFactBuffersByPtyId.delete(bufferedPtyId)
+      deleteHandoffFactBuffer(bufferedPtyId)
     }
   }
-  if (
-    !handoffFactBuffersByPtyId.has(ptyId) &&
-    handoffFactBuffersByPtyId.size >= MAX_HANDOFF_FACT_PTYS
-  ) {
+  deleteHandoffFactBuffer(ptyId)
+  if (handoffFactBuffersByPtyId.size >= MAX_HANDOFF_FACT_PTYS) {
     const oldestPtyId = handoffFactBuffersByPtyId.keys().next().value
     if (typeof oldestPtyId === 'string') {
-      handoffFactBuffersByPtyId.delete(oldestPtyId)
+      deleteHandoffFactBuffer(oldestPtyId)
     }
   }
-  handoffFactBuffersByPtyId.set(ptyId, {
+  const buffer: HandoffFactBuffer = {
     batches: [],
-    expiresAtMs: nowMs + HANDOFF_FACT_BUFFER_TTL_MS
-  })
+    expiresAtMs: nowMs + HANDOFF_FACT_BUFFER_TTL_MS,
+    expiryTimer: setTimeout(() => {
+      if (handoffFactBuffersByPtyId.get(ptyId) === buffer) {
+        handoffFactBuffersByPtyId.delete(ptyId)
+      }
+    }, HANDOFF_FACT_BUFFER_TTL_MS)
+  }
+  buffer.expiryTimer.unref?.()
+  handoffFactBuffersByPtyId.set(ptyId, buffer)
 }
 
 function bufferHandoffFactBatch(batch: TerminalSideEffectBatch): void {
@@ -208,7 +225,7 @@ function bufferHandoffFactBatch(batch: TerminalSideEffectBatch): void {
     return
   }
   if (buffer.expiresAtMs <= Date.now()) {
-    handoffFactBuffersByPtyId.delete(batch.ptyId)
+    deleteHandoffFactBuffer(batch.ptyId)
     return
   }
   // Why: replay batches are snapshots the next consumer requests for itself.
@@ -226,7 +243,7 @@ function drainHandoffFactBuffer(ptyId: string, entry: ConsumerEntry): void {
   if (!buffer) {
     return
   }
-  handoffFactBuffersByPtyId.delete(ptyId)
+  deleteHandoffFactBuffer(ptyId)
   if (buffer.expiresAtMs <= Date.now()) {
     return
   }
@@ -235,7 +252,7 @@ function drainHandoffFactBuffer(ptyId: string, entry: ConsumerEntry): void {
   }
 }
 
-function handleSideEffectBatch(batch: TerminalSideEffectBatch): void {
+export function dispatchTerminalSideEffectBatch(batch: TerminalSideEffectBatch): void {
   const entry = consumersByPtyId.get(batch.ptyId)
   if (!entry) {
     bufferHandoffFactBatch(batch)
@@ -254,7 +271,7 @@ function ensureSideEffectChannelSubscription(): void {
   if (typeof onSideEffect !== 'function') {
     return
   }
-  channelUnsubscribe = onSideEffect(handleSideEffectBatch)
+  channelUnsubscribe = onSideEffect(dispatchTerminalSideEffectBatch)
 }
 
 export type TerminalSideEffectFactConsumerOptions = {
@@ -310,13 +327,15 @@ export function registerTerminalSideEffectFactConsumer(
 
 /** Test seam: deliver a batch as if it arrived on the channel. */
 export function _dispatchTerminalSideEffectBatchForTest(batch: TerminalSideEffectBatch): void {
-  handleSideEffectBatch(batch)
+  dispatchTerminalSideEffectBatch(batch)
 }
 
 /** Test seam: reset module state between tests. */
 export function _resetTerminalSideEffectFactConsumersForTest(): void {
   consumersByPtyId.clear()
-  handoffFactBuffersByPtyId.clear()
+  for (const ptyId of Array.from(handoffFactBuffersByPtyId.keys())) {
+    deleteHandoffFactBuffer(ptyId)
+  }
   channelUnsubscribe?.()
   channelUnsubscribe = null
   persistedAuthorityFlagCache = undefined

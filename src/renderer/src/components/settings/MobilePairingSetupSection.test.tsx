@@ -64,9 +64,17 @@ describe('MobilePairingSetupSection', () => {
     expect(screen.getByText(/must be able to reach this address/i)).toBeVisible()
   })
 
-  it('describes address role when Anywhere is selected', () => {
+  it('explains the direct address when Orca Relay is selected', () => {
     renderSection({ connectionMode: 'automatic' })
+    expect(screen.getByText('This computer’s address')).toBeVisible()
+    expect(screen.getByRole('combobox')).toBeVisible()
     expect(screen.getByText(/faster direct path when nearby/i)).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Generate QR code' })).toBeEnabled()
+  })
+
+  it('can move retry recovery into the persistent failure notice', () => {
+    renderSection({ showGenerateAction: false })
+    expect(screen.queryByRole('button', { name: 'Generate QR code' })).toBeNull()
   })
 
   it('disables generate when sign-in is required', () => {

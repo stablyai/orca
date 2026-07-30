@@ -40,6 +40,7 @@ import {
 } from '../components/tab-bar/group-tab-order'
 import { resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
 import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { applyNativeChatLaunchDraftResolved } from './native-chat-launch-draft-runtime-resolution'
 
 type RegisteredTerminalTab = {
   tabId: string
@@ -734,9 +735,16 @@ async function syncRuntimeGraph(): Promise<void> {
 
   try {
     const result = await window.api.runtime.syncWindowGraph(graph)
-    getStoreState()?.setRuntimeAgentOrchestrationByPaneKey?.(
-      result?.agentOrchestrationByPaneKey ?? {}
-    )
+    const currentState = getStoreState()
+    currentState?.setRuntimeAgentOrchestrationByPaneKey?.(result?.agentOrchestrationByPaneKey ?? {})
+    for (const resolution of result?.nativeChatLaunchDraftResolutions ?? []) {
+      if (currentState) {
+        applyNativeChatLaunchDraftResolved(currentState, {
+          type: 'nativeChatLaunchDraftResolved',
+          ...resolution
+        })
+      }
+    }
   } catch (error) {
     console.error('[runtime] Failed to sync renderer graph:', error)
   }
@@ -1371,8 +1379,12 @@ function buildMobileTerminalSurfaceTabs(
   // tab id, so an unmatched seed would prefill the new agent's chat with stale text.
   const seededLaunchDraft = state.nativeChatLaunchDraftByTabId?.[terminal.id]
   const launchDraftEntry =
-    seededLaunchDraft && seededLaunchDraft.agent === terminal.launchAgent ? seededLaunchDraft : null
-  const launchDraftText = launchDraftEntry?.text.trim() ? launchDraftEntry.text : null
+    seededLaunchDraft &&
+    !seededLaunchDraft.resolved &&
+    seededLaunchDraft.agent === terminal.launchAgent
+      ? seededLaunchDraft
+      : null
+  const publishedLaunchDraft = launchDraftEntry?.text.trim() ? launchDraftEntry : null
   const container = registered?.getContainer()
   const firstChild = container?.firstElementChild
   const liveLayoutRoot = serializePaneTree(
@@ -1435,7 +1447,12 @@ function buildMobileTerminalSurfaceTabs(
       ...(terminal.launchAgent ? { launchAgent: terminal.launchAgent } : {}),
       // Launch context that exists only as an unsent TUI-input draft; mobile
       // prefills its chat composer from it (desktop keeps its own seed store).
-      ...(launchDraftText ? { launchDraft: launchDraftText } : {}),
+      ...(publishedLaunchDraft
+        ? {
+            launchDraft: publishedLaunchDraft.text,
+            launchDraftCreatedAt: publishedLaunchDraft.createdAt
+          }
+        : {}),
       parentLayout,
       isActive: isDesktopTabActive && leafId === activeLeafId
     }

@@ -47,10 +47,7 @@ import {
   buildAddProjectFromFolderModalData,
   canShowAddAsProjectAction
 } from './file-explorer-add-project-action'
-import {
-  isRenameHotspotTarget,
-  resolveDirToggleTiming
-} from './file-explorer-dir-toggle-timing'
+import { isRenameHotspotTarget, resolveDirToggleTiming } from './file-explorer-dir-toggle-timing'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRowProjection'

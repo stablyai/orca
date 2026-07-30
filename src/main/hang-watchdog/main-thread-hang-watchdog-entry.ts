@@ -1,12 +1,20 @@
-import { isMainThread, parentPort, workerData } from 'node:worker_threads'
-import { createHangWatchdogDetectionLoop } from './hang-watchdog-detection-loop'
+// Forked with ELECTRON_RUN_AS_NODE from the main process. Watches heartbeats from the main
+// thread; if they stop (e.g. the macOS 26 AppKit scene-update deadlock) it records a marker so
+// the next launch can report the stall, and rewrites it if the heartbeats come back.
+//
+// Why no kill: a deadlocked main thread has already lost whatever sat in the persistence debounce
+// window, so killing it recovers nothing the user could not recover by force-quitting. A false
+// positive, though, would SIGKILL a live main thread that was merely blocked — most plausibly on
+// I/O, i.e. exactly when writes are in flight. All of the downside sits in the misfire, so this
+// measures first: `selfRecovered` counts the stalls a killer would have gotten wrong.
+//
+// Must never import electron.
+import { createHangWatchdogChildLoop } from './hang-watchdog-child-loop'
 import { writeHangDetectionMarker } from './hang-detection-marker'
-import type {
-  HangWatchdogWorkerData,
-  MainToHangWatchdogWorkerMessage
-} from './hang-watchdog-worker-protocol'
 
-// Observation only: a false positive must never kill a live main thread mid-write.
+const DEFAULT_TIMEOUT_MS = 45_000
+const DEFAULT_CHECK_INTERVAL_MS = 5_000
+
 export function recordHangObservation(options: {
   parentPid: number
   markerPath: string
@@ -28,63 +36,37 @@ export function recordHangObservation(options: {
   }
 }
 
-function runWatchdog(config: HangWatchdogWorkerData): void {
-  const port = parentPort
-  if (!port) {
-    return
-  }
-  const loop = createHangWatchdogDetectionLoop({
-    timeoutMs: config.timeoutMs,
-    checkIntervalMs: config.checkIntervalMs,
+function runWatchdog(parentPid: number): void {
+  const markerPath = process.env.ORCA_HANG_WATCHDOG_MARKER_PATH ?? ''
+  const timeoutMs = Number(process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS
+  const checkIntervalMs =
+    Number(process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS) || DEFAULT_CHECK_INTERVAL_MS
+
+  const loop = createHangWatchdogChildLoop({
+    timeoutMs,
+    checkIntervalMs,
     now: () => Date.now(),
     onHangDetected: (unresponsiveMs) =>
-      recordHangObservation({
-        parentPid: config.parentPid,
-        markerPath: config.markerPath,
-        unresponsiveMs,
-        selfRecovered: false
-      }),
+      recordHangObservation({ parentPid, markerPath, unresponsiveMs, selfRecovered: false }),
     // Why: rewriting the marker keeps one observation per stall rather than two rows to reconcile.
     onHangResolved: (unresponsiveMs) =>
-      recordHangObservation({
-        parentPid: config.parentPid,
-        markerPath: config.markerPath,
-        unresponsiveMs,
-        selfRecovered: true
-      })
+      recordHangObservation({ parentPid, markerPath, unresponsiveMs, selfRecovered: true })
   })
 
-  let checkTimer: ReturnType<typeof setInterval> | null = setInterval(
-    () => loop.tick(),
-    config.checkIntervalMs
-  )
-  port.on('message', (message: MainToHangWatchdogWorkerMessage) => {
-    if (message.type === 'heartbeat') {
+  process.on('message', (message) => {
+    const type = (message as { type?: string } | null)?.type
+    if (type === 'heartbeat') {
       loop.recordHeartbeat()
-    } else if (message.type === 'shutdown') {
-      if (checkTimer) {
-        clearInterval(checkTimer)
-        checkTimer = null
-      }
-      port.close()
+    } else if (type === 'shutdown') {
+      process.exit(0)
     }
   })
+  // Why: a normal parent exit closes the IPC channel; the watchdog must not outlive it and misfire.
+  process.on('disconnect', () => process.exit(0))
+  setInterval(() => loop.tick(), checkIntervalMs)
 }
 
-function isHangWatchdogWorkerData(value: unknown): value is HangWatchdogWorkerData {
-  const data = value as Partial<HangWatchdogWorkerData> | null
-  return (
-    !!data &&
-    Number.isInteger(data.parentPid) &&
-    (data.parentPid ?? 0) > 0 &&
-    typeof data.markerPath === 'string' &&
-    Number.isFinite(data.timeoutMs) &&
-    (data.timeoutMs ?? 0) > 0 &&
-    Number.isFinite(data.checkIntervalMs) &&
-    (data.checkIntervalMs ?? 0) > 0
-  )
-}
-
-if (!isMainThread && isHangWatchdogWorkerData(workerData)) {
-  runWatchdog(workerData)
+const configuredParentPid = Number(process.env.ORCA_HANG_WATCHDOG_PARENT_PID)
+if (Number.isInteger(configuredParentPid) && configuredParentPid > 0) {
+  runWatchdog(configuredParentPid)
 }

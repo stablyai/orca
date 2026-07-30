@@ -164,7 +164,7 @@ describe('orchestration RPC methods', () => {
       await expect(
         call('orchestration.runCreate', { objective: 'No pane', from: 'term_stale' })
       ).rejects.toMatchObject({ code: 'stable_pane_required' })
-      expect(db.listRuns().filter((run) => run.legacy === 0)).toHaveLength(0)
+      expect(db.listRuns().runs.filter((run) => run.legacy === 0)).toHaveLength(0)
     })
 
     it('rebinds explicitly, lists Runs, and keeps the legacy Run inspect-only', async () => {
@@ -2176,9 +2176,12 @@ describe('orchestration RPC methods', () => {
       )
       expect(db.getTask(task.id)?.status).toBe('dispatched')
       expect(db.getWorkerDispatch(result.dispatchId)?.state).toBe('ready')
+      // Why: dispatching a worker is background work — surfaceOwner:false adopts
+      // the tab without scrolling the sidebar to the worker's workspace.
       expect(runtime.createTerminal).toHaveBeenCalledWith('id:repo::worktree', {
         command: 'codex',
-        title: `worker-${task.id}`
+        title: `worker-${task.id}`,
+        surfaceOwner: false
       })
       expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
         'term_worker',
@@ -2277,7 +2280,9 @@ describe('orchestration RPC methods', () => {
       )
       expect(runtime.createTerminal).toHaveBeenCalledWith(
         'id:repo::other',
-        expect.objectContaining({ command: 'codex' })
+        // Why: starting a worker in an existing worktree must not pull the sidebar
+        // away from whatever the user is looking at.
+        expect.objectContaining({ command: 'codex', surfaceOwner: false })
       )
       expect(createWorktree).not.toHaveBeenCalled()
     })

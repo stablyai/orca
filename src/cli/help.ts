@@ -18,9 +18,15 @@ Diagnostics:
 Agent Discovery:
   agent-context             Print the machine-readable command schema for agents
 
+Accounts:
+  account add               Add a managed Claude or Codex account on this Orca host
+  account list              List managed Claude and Codex accounts on this Orca host
+
 Skills:
   skills list               List version-matched skill guides bundled with this Orca CLI
   skills get                Print a version-matched skill guide as Markdown
+  skills install            Install bundled Orca skills globally via the community skills CLI
+  skills update             Update already-installed Orca skills via the community skills CLI
 
 Environments:
   environment add           Save a remote Orca runtime from a pairing code
@@ -212,6 +218,8 @@ Common Commands:
   orca status [--json]
   orca diagnostics memory [--json]
   orca agent-context [--json]
+  orca account add [--agent claude|codex] [--json]
+  orca account list [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]
   orca environment show --environment <selector> [--json]
@@ -412,6 +420,9 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
+  if (command === 'skills install' && flag === 'agent') {
+    return '--agent <names>        Comma-separated install targets; default is detected agents'
+  }
   if (command === 'terminal close' && flag === 'tab') {
     return '--tab                  Close the whole tab and wait for durable persistence'
   }
@@ -481,6 +492,11 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'orchestration task-create' && flag === 'display-name') {
     return '--display-name <text> UI label shown for dispatched worker rows'
   }
+  // Why: the shared --agent help describes launching a TUI agent in a terminal,
+  // which is the wrong meaning here — this selects the account provider.
+  if (command === 'account add' && flag === 'agent') {
+    return '--agent <id>           Account provider: claude or codex (default claude)'
+  }
   if (flag === 'key' && command === 'computer hotkey') {
     return '--key <key-combo>      Modifier chord with one key, e.g. CmdOrCtrl+A'
   }
@@ -521,6 +537,8 @@ export function formatFlagHelp(flag: string): string {
     json: '--json                 Emit machine-readable JSON',
     key: '--key <key>            Key argument for this command',
     limit: '--limit <n>            Maximum number of rows to return',
+    local: '--local                Target the current project instead of the global install',
+    skill: '--skill <name>         Bundled skill to act on; repeat for several',
     mode: '--mode <mode>          Mode such as edit, diff, or both',
     'mouse-button': '--mouse-button <btn>   Mouse button: left, right, or middle',
     modifiers: '--modifiers <chord>  Modifier keys held only for this click',

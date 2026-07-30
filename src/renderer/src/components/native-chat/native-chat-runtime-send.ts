@@ -8,6 +8,7 @@ import {
 } from '@/runtime/runtime-terminal-inspection'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AskAnswerKeyGroup } from './native-chat-interactive-prompt'
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-tui-input-clear'
 import {
   NATIVE_CHAT_ADVANCE_BUFFER_MS,
   NATIVE_CHAT_QUESTION_STEP_MS,
@@ -34,7 +35,27 @@ export const NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS = 300
 // start from an empty line so a prior cancelled paste cannot glue onto the next
 // prompt. Not used on verified option commands — model-switch confirmation
 // observes the PTY and Ctrl+U can miss confirmation markers.
+//
+// One Ctrl+U only ever clears ONE logical line. When the line may hold an
+// injected multi-line launch draft, callers pass `clearInput` built by
+// buildAgentTuiClearInputForText — see agent-tui-input-clear.ts for the measured
+// 2N-1 law and the sequences that do NOT work.
 export const NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT = '\x15'
+
+/** Gap before re-reading the agent's input line to confirm a clear landed. */
+export const NATIVE_CHAT_CLEAR_CONFIRM_MS = 140
+
+export type NativeChatSendOptions = {
+  /** Bytes that empty the agent's input line. Defaults to a single Ctrl+U. */
+  clearInput?: string
+  /**
+   * Observed check that the input line is now empty.
+   * Supplied only for launch-draft replacement; when it reports "not cleared"
+   * the send widens to a maximal burst before writing the body rather than
+   * pasting on top of residue.
+   */
+  confirmCleared?: () => boolean
+}
 
 /** Cancels an in-flight send's pending pty writes (the delayed Enter, and any
  *  later question bodies/Enters). Safe to call after the send completes. */
@@ -42,12 +63,58 @@ export type NativeChatSendHandle = {
   cancel: () => void
   /** Time after which every scheduled write has fired and the handle can drop. */
   settleAfterMs: number
+  /** Actual completion, which can outlive the nominal schedule if the renderer stalls. */
+  settled?: Promise<void>
 }
 
 type RuntimeSettings = ReturnType<typeof getSettingsForAgentTabRuntimeOwner>
 
-function clearUnsubmittedAgentInput(settings: RuntimeSettings, ptyId: string): void {
-  sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT)
+function clearUnsubmittedAgentInput(
+  settings: RuntimeSettings,
+  ptyId: string,
+  options?: NativeChatSendOptions
+): void {
+  sendRuntimePtyInput(settings, ptyId, options?.clearInput ?? NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT)
+}
+
+/**
+ * Run `writeBody` once the input line is clear. With no `confirmCleared` the
+ * clear is a plain in-order write on the same byte stream, so the TUI consumes
+ * it before the body and the body follows immediately. With one, we pause to
+ * actually look at the agent's input line, and widen to a maximal burst when the
+ * draft is still visible — the injected line count is only a lower bound on what
+ * the buffer holds, since the user can type into the TUI directly.
+ */
+function clearThenWrite(
+  settings: RuntimeSettings,
+  ptyId: string,
+  options: NativeChatSendOptions | undefined,
+  delay: (ms: number, fn: () => void) => void,
+  writeBody: () => void
+): void {
+  clearUnsubmittedAgentInput(settings, ptyId, options)
+  const confirmCleared = options?.confirmCleared
+  if (!confirmCleared) {
+    writeBody()
+    return
+  }
+  delay(NATIVE_CHAT_CLEAR_CONFIRM_MS, () => {
+    let cleared = false
+    try {
+      cleared = confirmCleared()
+    } catch {
+      // An unreadable terminal is unconfirmed; the maximal clear remains safe.
+    }
+    if (!cleared) {
+      sendRuntimePtyInput(settings, ptyId, AGENT_TUI_CLEAR_INPUT_MAX)
+    }
+    writeBody()
+  })
+}
+
+/** Extra time a send needs when it stops to confirm the clear before the body. */
+function clearConfirmDurationMs(options?: NativeChatSendOptions): number {
+  return options?.confirmCleared ? NATIVE_CHAT_CLEAR_CONFIRM_MS : 0
 }
 
 /**
@@ -61,27 +128,31 @@ function clearUnsubmittedAgentInput(settings: RuntimeSettings, ptyId: string): v
 export function sendNativeChatMessage(
   settings: RuntimeSettings,
   ptyId: string,
-  text: string
+  text: string,
+  options?: NativeChatSendOptions
 ): NativeChatSendHandle {
   return enqueueNativeChatPtySend(
     ptyId,
-    NATIVE_CHAT_SUBMIT_DELAY_MS,
+    NATIVE_CHAT_SUBMIT_DELAY_MS + clearConfirmDurationMs(options),
     ({ isCancelled, delay, markSubmitted }) => {
       if (isCancelled()) {
         return
       }
-      clearUnsubmittedAgentInput(settings, ptyId)
-      if (isCancelled()) {
-        return
-      }
-      sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text))
-      delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-        sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
-        markSubmitted()
+      clearThenWrite(settings, ptyId, options, delay, () => {
+        if (isCancelled()) {
+          return
+        }
+        sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text))
+        // Schedule from the actual body write: an overdue clear-confirm callback
+        // must not collapse the required body-to-Enter gap after a renderer stall.
+        delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
+          sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
+          markSubmitted()
+        })
       })
     },
     {
-      onCancelUnsubmitted: () => clearUnsubmittedAgentInput(settings, ptyId)
+      onCancelUnsubmitted: () => clearUnsubmittedAgentInput(settings, ptyId, options)
     }
   )
 }
@@ -146,16 +217,17 @@ export function sendNativeChatMessageWithImageAttachments(
   settings: RuntimeSettings,
   ptyId: string,
   text: string,
-  imagePaths: readonly string[]
+  imagePaths: readonly string[],
+  options?: NativeChatSendOptions
 ): NativeChatSendHandle {
   if (imagePaths.length === 0) {
-    return sendNativeChatMessage(settings, ptyId, text)
+    return sendNativeChatMessage(settings, ptyId, text, options)
   }
   const trimmedText = text.trim()
   const durationMs =
-    trimmedText.length > 0
+    (trimmedText.length > 0
       ? NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
-      : NATIVE_CHAT_SUBMIT_DELAY_MS
+      : NATIVE_CHAT_SUBMIT_DELAY_MS) + clearConfirmDurationMs(options)
   return enqueueNativeChatPtySend(
     ptyId,
     durationMs,
@@ -163,30 +235,31 @@ export function sendNativeChatMessageWithImageAttachments(
       if (isCancelled()) {
         return
       }
-      clearUnsubmittedAgentInput(settings, ptyId)
-      if (isCancelled()) {
-        return
-      }
-      for (const imagePath of imagePaths) {
-        sendRuntimePtyInput(settings, ptyId, buildNativeChatImagePasteBytes(imagePath))
-      }
-      if (trimmedText.length > 0) {
-        delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
-          sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text))
-        })
-        delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
+      clearThenWrite(settings, ptyId, options, delay, () => {
+        if (isCancelled()) {
+          return
+        }
+        for (const imagePath of imagePaths) {
+          sendRuntimePtyInput(settings, ptyId, buildNativeChatImagePasteBytes(imagePath))
+        }
+        if (trimmedText.length > 0) {
+          delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
+            sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text))
+            delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
+              sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
+              markSubmitted()
+            })
+          })
+          return
+        }
+        delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
           sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
           markSubmitted()
         })
-        return
-      }
-      delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-        sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
-        markSubmitted()
       })
     },
     {
-      onCancelUnsubmitted: () => clearUnsubmittedAgentInput(settings, ptyId)
+      onCancelUnsubmitted: () => clearUnsubmittedAgentInput(settings, ptyId, options)
     }
   )
 }

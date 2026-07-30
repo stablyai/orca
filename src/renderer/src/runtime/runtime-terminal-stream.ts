@@ -11,6 +11,14 @@ export type RemoteRuntimePtyIdParts = {
   handle: string
 }
 
+export type RuntimeTerminalDataSubscriptionOptions = {
+  startAtLiveTail?: boolean
+  onSnapshot?: (data: string, meta?: { pendingEscapeTailAnsi?: string }) => void
+  onEnd?: () => void
+  onError?: (message: string) => void
+  onTransportClose?: (event: { recoverable: boolean; retryWithBackoff?: boolean }) => void
+}
+
 export function toRemoteRuntimePtyId(handle: string, environmentId?: string | null): string {
   const owner = environmentId?.trim()
   if (!owner) {
@@ -58,7 +66,7 @@ export async function subscribeToRuntimeTerminalData(
   ptyId: string,
   clientId: string,
   watcher: (data: string) => void,
-  options?: { startAtLiveTail?: boolean }
+  options?: RuntimeTerminalDataSubscriptionOptions
 ): Promise<() => void> {
   const terminal = getRemoteRuntimeTerminalHandle(ptyId)
   const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
@@ -88,9 +96,12 @@ export async function subscribeToRuntimeTerminalData(
     client: { id: clientId, type: 'desktop' },
     callbacks: {
       onData: (data) => watcher(data),
-      onSnapshot: (data) => {
+      onSnapshot: (data, meta) => {
+        options?.onSnapshot?.(data, meta)
         if (!options?.startAtLiveTail) {
-          watcher(data)
+          if (!options?.onSnapshot) {
+            watcher(data)
+          }
         }
       },
       onSubscribed: () => {
@@ -98,10 +109,18 @@ export async function subscribeToRuntimeTerminalData(
         resolveLiveTail = null
         rejectLiveTail = null
       },
-      onEnd: () => rejectPendingLiveTail('Remote terminal ended before live output was ready.'),
-      onError: (message) => rejectPendingLiveTail(message),
-      onTransportClose: () =>
+      onEnd: () => {
+        rejectPendingLiveTail('Remote terminal ended before live output was ready.')
+        options?.onEnd?.()
+      },
+      onError: (message) => {
+        rejectPendingLiveTail(message)
+        options?.onError?.(message)
+      },
+      onTransportClose: (event) => {
         rejectPendingLiveTail('Remote terminal closed before live output was ready.')
+        options?.onTransportClose?.(event)
+      }
     }
   })
 

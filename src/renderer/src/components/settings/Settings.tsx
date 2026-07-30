@@ -121,6 +121,7 @@ import {
   buildRepoIdToRepresentative,
   buildSettingsProjectList,
   getSettingsProjectHostRepo,
+  getSettingsTargetHostSelection,
   removeSettingsProjectFromAllHosts,
   resolveSettingsTargetRepoId
 } from './settings-project-list'
@@ -642,9 +643,21 @@ function Settings(): React.JSX.Element {
       repoIdToHostSelection.keys()
     )
     if (targetRepoId) {
-      const hostSelection = repoIdToHostSelection.get(targetRepoId)
+      const hostSelection = settingsNavigationTarget.hostId
+        ? getSettingsTargetHostSelection(
+            settingsProjectList,
+            targetRepoId,
+            settingsNavigationTarget.hostId
+          )
+        : repoIdToHostSelection.get(targetRepoId)
       if (hostSelection) {
-        setSettingsProjectHostSelection(hostSelection.projectId, hostSelection.hostId)
+        setSettingsProjectHostSelection(
+          hostSelection.projectId,
+          hostSelection.hostId,
+          'setupId' in hostSelection && typeof hostSelection.setupId === 'string'
+            ? hostSelection.setupId
+            : undefined
+        )
       }
     }
     pendingNavSectionRef.current = paneSectionId
@@ -678,6 +691,7 @@ function Settings(): React.JSX.Element {
     repoIdToRepresentative,
     setSettingsProjectHostSelection,
     settings,
+    settingsProjectList,
     settingsNavigationTarget
   ])
 

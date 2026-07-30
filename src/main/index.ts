@@ -43,7 +43,7 @@ import { initObservability, shutdownObservability } from './observability'
 import { registerMobileHandlers } from './ipc/mobile'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce, track } from './telemetry/client'
 import { classifyError } from './telemetry/classify-error'
-import { runManagedHookInstallers } from './agent-hooks/install-telemetry'
+import { recordManagedHookInstallFailure } from './agent-hooks/install-telemetry'
 import {
   indexPersistedPaneKeyPtyIds,
   isLocalExecutionHost,
@@ -51,8 +51,8 @@ import {
   sweepRestoredSubagentsWithoutLiveAgent
 } from './agent-hooks/restored-subagent-liveness-sweep'
 import {
+  applyAgentStatusHooksEnabled,
   isAgentStatusHooksEnabled,
-  MANAGED_AGENT_HOOK_INSTALLERS,
   removeManagedAgentHooks
 } from './agent-hooks/managed-agent-hook-controls'
 import { initCohortClassifier } from './telemetry/cohort-classifier'
@@ -1997,6 +1997,7 @@ void app.whenReady().then(async () => {
 
   const activeOrcaProfile = ensureActiveOrcaProfile()
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
+  wslHookRelayManager.setManagedHookSettingsResolver(() => store?.getSettings() ?? null)
   logStartupMilestone('store-loaded')
   // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
@@ -2557,7 +2558,17 @@ void app.whenReady().then(async () => {
   if (shouldInstallManagedHooks(is.dev)) {
     // Why: check the persisted off switch before any auto-install so removed hooks don't silently reappear on launch.
     if (isAgentStatusHooksEnabled(store.getSettings())) {
-      runManagedHookInstallers(MANAGED_AGENT_HOOK_INSTALLERS)
+      const managedHookStore = store
+      void applyAgentStatusHooksEnabled(true, managedHookStore.getSettings(), {
+        shouldHydrateShellPath: app.isPackaged && process.platform !== 'win32',
+        onInstallError: recordManagedHookInstallFailure,
+        shouldContinue: (agent) => {
+          const settings = managedHookStore.getSettings()
+          return isAgentStatusHooksEnabled(settings) && !settings.disabledTuiAgents.includes(agent)
+        }
+      }).catch((error) => {
+        console.warn('[agent-hooks] failed to reconcile managed hooks on startup:', error)
+      })
     } else {
       removeManagedAgentHooks()
     }
