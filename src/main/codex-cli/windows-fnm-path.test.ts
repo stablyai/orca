@@ -4,7 +4,7 @@ import { join, win32 } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import { normalizeSingleWindowsPathEntry } from '../../shared/windows-path-entry'
-import { getVersionManagerBinPaths } from './command'
+import { getVersionManagerBinPaths, resolveCliCommand } from './command'
 
 const describeWindows = describe.runIf(process.platform === 'win32')
 const testRoots: string[] = []
@@ -29,6 +29,9 @@ const invalidWindowsDirectories: [string, string | undefined][] = [
   ['control-character-containing', 'D:\\invalid\u0001directory'],
   ['trailing-dot component', 'D:\\invalid.\\directory'],
   ['trailing-space component', 'D:\\invalid \\directory'],
+  ['reserved DOS component', 'D:\\NUL.txt\\directory'],
+  ['named pipe namespace', '\\\\.\\pipe\\orca-fnm'],
+  ['GLOBALROOT namespace', '\\\\?\\GLOBALROOT\\Device\\HarddiskVolume1\\fnm'],
   ['incomplete extended UNC', '\\\\?\\UNC\\server'],
   ['noncanonical extended UNC', '\\\\?\\UNC/server/share']
 ]
@@ -144,9 +147,40 @@ describe('Windows fnm directory selection', () => {
 
     expect(paths.indexOf(voltaBin)).toBeLessThan(paths.indexOf(fnmDefault))
   })
+
+  it('keeps the bare Node fallback when no safe installation exists', () => {
+    expect(
+      resolveCliCommand('node', {
+        platform: 'win32',
+        pathEnv: '',
+        homePath: windowsHome,
+        env: { FNM_DIR: 'C:\\NUL.txt', APPDATA: '\\\\.\\pipe\\orca-fnm' }
+      })
+    ).toBe('node')
+  })
 })
 
 describeWindows('Windows fnm Node process launch', () => {
+  it.each([
+    ['reserved DOS component', 'NUL.txt'],
+    ['named pipe namespace', '\\\\.\\pipe\\orca-fnm'],
+    ['GLOBALROOT namespace', '\\\\?\\GLOBALROOT\\Device\\HarddiskVolume1\\fnm']
+  ])('rejects a %s before launching a child from PATH', (_label, configuredFnmDir) => {
+    const root = createTestRoot()
+    const appData = join(root, 'AppData', 'Roaming')
+    const expectedNodePath = installNode(join(appData, 'fnm', 'aliases', 'default'))
+    const fnmDir = configuredFnmDir === 'NUL.txt' ? join(root, configuredFnmDir) : configuredFnmDir
+
+    const paths = getVersionManagerBinPaths({
+      platform: 'win32',
+      homePath: root,
+      env: { APPDATA: appData, FNM_DIR: fnmDir }
+    })
+
+    expect(paths).not.toContain(win32.join(fnmDir, 'aliases', 'default'))
+    expectNodeLaunch(paths, expectedNodePath)
+  })
+
   it('rejects an FNM_DIR that injects a second PATH entry', () => {
     const root = createTestRoot()
     const escaped = join(root, 'escaped')
