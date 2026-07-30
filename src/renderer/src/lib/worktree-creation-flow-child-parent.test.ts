@@ -130,7 +130,12 @@ beforeEach(() => {
 })
 
 describe('child workspace parent at create time', () => {
-  const CREATE_OPTIONS_ARG = 25
+  // Why: read the options bag off the end rather than by index — createWorktree
+  // takes 26 positional parameters, so a fixed index silently drifts.
+  function createCallParts(): { baseBranch: unknown; options: unknown } {
+    const args = store.createWorktree.mock.calls[0] as unknown[]
+    return { baseBranch: args[2], options: args.at(-1) }
+  }
 
   it('threads the parent branch and lineage option into the create call', async () => {
     const started = continueBackgroundWorktreeCreation(
@@ -141,9 +146,9 @@ describe('child workspace parent at create time', () => {
 
     expect(started).toBe(true)
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
-    const createCall = store.createWorktree.mock.calls[0] as unknown[]
-    expect(createCall[2]).toBe('feat/parent')
-    expect(createCall[CREATE_OPTIONS_ARG]).toMatchObject({ parentWorktreeId: 'parent-1' })
+    const { baseBranch, options } = createCallParts()
+    expect(baseBranch).toBe('feat/parent')
+    expect(options).toMatchObject({ parentWorktreeId: 'parent-1' })
   })
 
   it('lets an explicit Start-from base win over the parent branch', async () => {
@@ -154,9 +159,9 @@ describe('child workspace parent at create time', () => {
     )
 
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
-    const createCall = store.createWorktree.mock.calls[0] as unknown[]
-    expect(createCall[2]).toBe('release/1.0')
-    expect(createCall[CREATE_OPTIONS_ARG]).toMatchObject({ parentWorktreeId: 'parent-1' })
+    const { baseBranch, options } = createCallParts()
+    expect(baseBranch).toBe('release/1.0')
+    expect(options).toMatchObject({ parentWorktreeId: 'parent-1' })
   })
 
   it('drops the parent when it was deleted before submit', async () => {
@@ -169,9 +174,9 @@ describe('child workspace parent at create time', () => {
     )
 
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
-    const createCall = store.createWorktree.mock.calls[0] as unknown[]
-    expect(createCall[2]).toBeUndefined()
-    expect(createCall[CREATE_OPTIONS_ARG]).not.toHaveProperty('parentWorktreeId')
+    const { baseBranch, options } = createCallParts()
+    expect(baseBranch).toBeUndefined()
+    expect(options).not.toHaveProperty('parentWorktreeId')
   })
 
   it('drops the parent when the composer switched to another repo', async () => {
@@ -190,8 +195,8 @@ describe('child workspace parent at create time', () => {
     )
 
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
-    const createCall = store.createWorktree.mock.calls[0] as unknown[]
-    expect(createCall[2]).toBeUndefined()
-    expect(createCall[CREATE_OPTIONS_ARG]).not.toHaveProperty('parentWorktreeId')
+    const { baseBranch, options } = createCallParts()
+    expect(baseBranch).toBeUndefined()
+    expect(options).not.toHaveProperty('parentWorktreeId')
   })
 })
