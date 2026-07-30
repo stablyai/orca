@@ -58,7 +58,27 @@ export function dashboardSnapshotInputsChanged(
     state.settings !== previousState.settings ||
     state.workspaceStatuses !== previousState.workspaceStatuses ||
     // Why: freshness can change a bucket without replacing any backing map.
-    state.agentStatusEpoch !== previousState.agentStatusEpoch
+    state.agentStatusEpoch !== previousState.agentStatusEpoch ||
+    // Why: each card carries the host-input profile its preview terminal keys
+    // against, and the pop-out cannot re-derive it. Every slice that resolves
+    // an execution host must republish or the preview keeps encoding bytes for
+    // the host the pty used to run on — a quiet board has no later publish to
+    // heal from. All are low-frequency except the foreground agent, whose churn
+    // the publish throttle already absorbs.
+    state.sshConnectionStates !== previousState.sshConnectionStates ||
+    state.sshStateByEnvironment !== previousState.sshStateByEnvironment ||
+    state.runtimeStatusByEnvironmentId !== previousState.runtimeStatusByEnvironmentId ||
+    state.paneForegroundAgentByPaneKey !== previousState.paneForegroundAgentByPaneKey ||
+    state.detectedWorktreesByRepo !== previousState.detectedWorktreesByRepo ||
+    // Why: a folder workspace is not a git worktree — its host resolves through
+    // these two instead of worktreesByRepo.
+    state.folderWorkspaces !== previousState.folderWorkspaces ||
+    state.projectGroups !== previousState.projectGroups ||
+    state.restoredRuntimeHostIdByWorkspaceSessionKey !==
+      previousState.restoredRuntimeHostIdByWorkspaceSessionKey ||
+    state.runtimeEnvironments !== previousState.runtimeEnvironments ||
+    state.runtimeEnvironmentCatalogHydrated !== previousState.runtimeEnvironmentCatalogHydrated ||
+    state.removedRuntimeEnvironmentIds !== previousState.removedRuntimeEnvironmentIds
   )
 }
 

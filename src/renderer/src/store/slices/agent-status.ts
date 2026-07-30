@@ -140,7 +140,10 @@ export type AgentStatusSlice = {
   /** Exact pane authorities retired while sibling panes in the tab stay live. */
   recentlyRetiredAgentStatusPaneKeys: Record<string, true>
 
-  retireAgentPaneAuthority: (paneKey: string) => void
+  retireAgentPaneAuthority: (
+    paneKey: string,
+    options?: { preserveSleepingAgentSession?: boolean }
+  ) => void
   transferAgentPaneAuthority: (args: {
     fromPaneKey: string
     toPaneKey: string
@@ -233,6 +236,7 @@ export type AgentStatusSlice = {
   captureAllSleepingAgentSessions: (mode: AllAgentSessionCaptureMode) => void
   clearSleepingAgentSession: (paneKey: string) => void
   clearSleepingAgentSessionsByPaneKey: (paneKeys: readonly string[]) => void
+  setSleepingAgentAutomaticResumeBlocked: (paneKey: string, blocked: boolean) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void
 
@@ -1223,7 +1227,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     recentlyRetiredAgentStatusPaneKeys: {},
     scheduleAgentStatusFreshness: () => freshness.schedule(),
 
-    retireAgentPaneAuthority: (paneKey) => {
+    retireAgentPaneAuthority: (paneKey, options) => {
       const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
       const retiredPaneKeys = retireAgentPaneAuthorityAliases(paneKey)
       const retiredPaneKeySet = new Set(retiredPaneKeys)
@@ -1251,10 +1255,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             retiredPaneKeySet
           ),
           retainedAgentsByPaneKey: removePaneKeys(s.retainedAgentsByPaneKey, retiredPaneKeySet),
-          sleepingAgentSessionsByPaneKey: removePaneKeys(
-            s.sleepingAgentSessionsByPaneKey,
-            retiredPaneKeySet
-          ),
+          sleepingAgentSessionsByPaneKey: options?.preserveSleepingAgentSession
+            ? s.sleepingAgentSessionsByPaneKey
+            : removePaneKeys(s.sleepingAgentSessionsByPaneKey, retiredPaneKeySet),
           agentLaunchConfigByPaneKey: removePaneKeys(
             s.agentLaunchConfigByPaneKey,
             retiredPaneKeySet
@@ -1303,69 +1306,55 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       const to = transfer.ownerPaneKey
       const targetTabId = getTabIdFromPaneKey(to) ?? undefined
       const targetLeafId = getLeafIdFromPaneKey(to) ?? undefined
-      set((s) => {
-        // Plant a one-shot suppressor on the source key so useRetainedAgentsSync —
-        // which only sees `from` vanish, not the migration — can't resurrect a ghost row.
-        const movedSuppressors = movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
-        // Guard on fromWasLive: a suppressor is consumed only on a live→gone transition, else it leaks.
-        const fromWasLive = from in s.agentStatusByPaneKey
-        const retentionSuppressedPaneKeys: Record<string, true> =
-          fromWasLive && !(from in movedSuppressors)
-            ? { ...movedSuppressors, [from]: true }
-            : movedSuppressors
-        return {
-          agentStatusByPaneKey: movePaneKeyedRecord(s.agentStatusByPaneKey, from, to, (entry) => ({
+      set((s) => ({
+        agentStatusByPaneKey: movePaneKeyedRecord(s.agentStatusByPaneKey, from, to, (entry) => ({
+          ...entry,
+          paneKey: to,
+          tabId: targetTabId
+        })),
+        // Why: retention/sidebar consumers gate on the epoch; a moved live row is a
+        // pane-key change they must observe, not a silent remap.
+        ...(from in s.agentStatusByPaneKey
+          ? { agentStatusEpoch: s.agentStatusEpoch + 1, sortEpoch: s.sortEpoch + 1 }
+          : {}),
+        runtimeAgentOrchestrationByPaneKey: movePaneKeyedRecord(
+          s.runtimeAgentOrchestrationByPaneKey,
+          from,
+          to
+        ),
+        retainedAgentsByPaneKey: movePaneKeyedRecord(
+          s.retainedAgentsByPaneKey,
+          from,
+          to,
+          (retained) => ({
+            ...retained,
+            entry: { ...retained.entry, paneKey: to, tabId: targetTabId },
+            tab: targetTabId ? { ...retained.tab, id: targetTabId } : retained.tab
+          })
+        ),
+        sleepingAgentSessionsByPaneKey: movePaneKeyedRecord(
+          s.sleepingAgentSessionsByPaneKey,
+          from,
+          to,
+          (record) => ({ ...record, paneKey: to, tabId: targetTabId })
+        ),
+        agentLaunchConfigByPaneKey: movePaneKeyedRecord(
+          s.agentLaunchConfigByPaneKey,
+          from,
+          to,
+          (entry) => ({
             ...entry,
-            paneKey: to,
-            tabId: targetTabId
-          })),
-          runtimeAgentOrchestrationByPaneKey: movePaneKeyedRecord(
-            s.runtimeAgentOrchestrationByPaneKey,
-            from,
-            to
-          ),
-          retainedAgentsByPaneKey: movePaneKeyedRecord(
-            s.retainedAgentsByPaneKey,
-            from,
-            to,
-            (retained) => ({
-              ...retained,
-              entry: { ...retained.entry, paneKey: to, tabId: targetTabId },
-              tab: targetTabId ? { ...retained.tab, id: targetTabId } : retained.tab
-            })
-          ),
-          sleepingAgentSessionsByPaneKey: movePaneKeyedRecord(
-            s.sleepingAgentSessionsByPaneKey,
-            from,
-            to,
-            (record) => ({ ...record, paneKey: to, tabId: targetTabId })
-          ),
-          agentLaunchConfigByPaneKey: movePaneKeyedRecord(
-            s.agentLaunchConfigByPaneKey,
-            from,
-            to,
-            (entry) => ({
-              ...entry,
-              identity: { ...entry.identity, tabId: targetTabId, leafId: targetLeafId }
-            })
-          ),
-          acknowledgedAgentsByPaneKey: movePaneKeyedRecord(s.acknowledgedAgentsByPaneKey, from, to),
-          paneForegroundAgentByPaneKey: movePaneKeyedRecord(
-            s.paneForegroundAgentByPaneKey,
-            from,
-            to
-          ),
-          unreadTerminalPanes: movePaneKeyedRecord(s.unreadTerminalPanes, from, to),
-          unreadAgentCompletionPanes: movePaneKeyedRecord(s.unreadAgentCompletionPanes, from, to),
-          lastTerminalInputAtByPaneKey: movePaneKeyedRecord(
-            s.lastTerminalInputAtByPaneKey,
-            from,
-            to
-          ),
-          cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
-          retentionSuppressedPaneKeys
-        }
-      })
+            identity: { ...entry.identity, tabId: targetTabId, leafId: targetLeafId }
+          })
+        ),
+        acknowledgedAgentsByPaneKey: movePaneKeyedRecord(s.acknowledgedAgentsByPaneKey, from, to),
+        paneForegroundAgentByPaneKey: movePaneKeyedRecord(s.paneForegroundAgentByPaneKey, from, to),
+        unreadTerminalPanes: movePaneKeyedRecord(s.unreadTerminalPanes, from, to),
+        unreadAgentCompletionPanes: movePaneKeyedRecord(s.unreadAgentCompletionPanes, from, to),
+        lastTerminalInputAtByPaneKey: movePaneKeyedRecord(s.lastTerminalInputAtByPaneKey, from, to),
+        cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
+        retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
+      }))
       if (typeof window !== 'undefined') {
         window.api?.agentStatus?.transferPaneAuthority?.({
           fromPaneKey: from,
@@ -1584,12 +1573,12 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           existingProviderSession: existingRecord?.providerSession,
           providerSessionChanged: false
         })
+        const existingRecordMatchesProviderSession =
+          existingRecord?.agent === agent &&
+          agentProviderSessionsEqual(agent, existingRecord.providerSession, providerSession)
         const launchConfig =
           (registryMatches ? registryEntry?.launchConfig : undefined) ??
-          (existingRecord?.agent === agent &&
-          agentProviderSessionsEqual(agent, existingRecord.providerSession, providerSession)
-            ? existingRecord.launchConfig
-            : undefined)
+          (existingRecordMatchesProviderSession ? existingRecord.launchConfig : undefined)
         const record: SleepingAgentSessionRecord = {
           paneKey,
           ...(tabId ? { tabId } : {}),
@@ -1612,6 +1601,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
               ? { connectionId: existingRecord.connectionId }
               : {}),
           ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
+          ...(existingRecordMatchesProviderSession &&
+          existingRecord.automaticResumeBlockedBy === 'legacy-orchestration-worker'
+            ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' }
+            : {}),
           origin: 'live'
         }
         removedLiveStatus = existingStatus !== undefined
@@ -1776,10 +1769,15 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const orchestration =
           payloadMergedOrchestration ?? runtimeMergedOrchestration ?? completedFallbackOrchestration
         // Why: waiting/blocked are still the same resumable turn; child permission hooks omit the root session id.
+        // Completing a turn does not end the provider session either — the TUI stays alive and resumable at its
+        // prompt — so `done` must carry the id through, including done→done (OSC 9999 repaints and reconnect
+        // snapshot replays both re-deliver a metadata-less `done` onto an already-done row). Without that, every
+        // surface keyed on the id — mobile Chat UI transcripts, the resumable recovery anchor below — loses the
+        // session while the agent sits idle, which is precisely when it is read (#10630). Only a new turn
+        // (done→working) still drops it, so a reused pane cannot inherit a finished session.
         const canReuseExistingProviderSession =
           existing?.agentType === identity.agentType &&
-          existing.state !== 'done' &&
-          payload.state !== 'done'
+          (existing.state !== 'done' || payload.state === 'done')
         const providerSession =
           metadata?.providerSession ??
           (canReuseExistingProviderSession ? existing.providerSession : undefined)
@@ -2814,6 +2812,31 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
 
     clearSleepingAgentSession: (paneKey) => clearSleepingAgentSessionsByPaneKey([paneKey]),
     clearSleepingAgentSessionsByPaneKey,
+    setSleepingAgentAutomaticResumeBlocked: (paneKey, blocked) => {
+      set((s) => {
+        const current = s.sleepingAgentSessionsByPaneKey[paneKey]
+        if (
+          !current ||
+          (blocked
+            ? current.automaticResumeBlockedBy === 'legacy-orchestration-worker'
+            : current.automaticResumeBlockedBy === undefined)
+        ) {
+          return s
+        }
+        const next = { ...current }
+        if (blocked) {
+          next.automaticResumeBlockedBy = 'legacy-orchestration-worker'
+        } else {
+          delete next.automaticResumeBlockedBy
+        }
+        return {
+          sleepingAgentSessionsByPaneKey: {
+            ...s.sleepingAgentSessionsByPaneKey,
+            [paneKey]: next
+          }
+        }
+      })
+    },
 
     clearSleepingAgentSessionsByWorktree: (worktreeId) => {
       set((s) => {

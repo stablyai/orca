@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
-import { OptionalString, requiredString } from '../schemas'
+import { OptionalBoolean, OptionalString, requiredString } from '../schemas'
+import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../../shared/orchestration-run-pagination'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 
@@ -11,11 +12,15 @@ const RunCreateParams = z.object({
 
 const RunUseParams = z.object({
   id: requiredString('Missing --id'),
-  from: requiredString('Missing coordinator terminal')
+  from: requiredString('Missing coordinator terminal'),
+  takeoverLegacy: OptionalBoolean
 })
 
 const RunCurrentParams = z.object({ from: requiredString('Missing coordinator terminal') })
-const RunListParams = z.object({})
+const RunListParams = z.object({
+  limit: z.number().int().min(1).max(ORCHESTRATION_RUN_PAGE_LIMIT).optional(),
+  cursor: z.string().min(1).optional()
+})
 const RunShowParams = z.object({ id: requiredString('Missing --id'), from: OptionalString })
 
 function requireCallerPane(runtime: OrcaRuntimeService, handle: string): string {
@@ -51,14 +56,33 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.runUse',
     params: RunUseParams,
-    handler: (params, { runtime }) => {
+    handler: (
+      params,
+      {
+        runtime,
+        legacyCoordinatorAuthority,
+        orchestrationCompatibilityCallerAuthority: callerAuthority
+      }
+    ) => {
       const paneKey = requireCallerPane(runtime, params.from)
+      if (
+        params.takeoverLegacy &&
+        (callerAuthority?.terminalHandle !== params.from || callerAuthority.paneKey !== paneKey)
+      ) {
+        throw new OrchestrationError(
+          'legacy_read_only',
+          'Legacy takeover must be invoked by the live coordinator agent terminal it will bind. No effects were applied.',
+          { effectsApplied: false }
+        )
+      }
       const db = runtime.getOrchestrationDb()
       const priorRun = db.getCurrentRunForPane(paneKey)
       const run = db.bindRun({
         runId: params.id,
         coordinatorHandle: params.from,
-        coordinatorPaneKey: paneKey
+        coordinatorPaneKey: paneKey,
+        takeoverLegacy: params.takeoverLegacy,
+        legacyCoordinatorAuthority
       })
       if (!run) {
         throw new OrchestrationError(
@@ -84,7 +108,7 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.runList',
     params: RunListParams,
-    handler: (_params, { runtime }) => ({ runs: runtime.getOrchestrationDb().listRuns() })
+    handler: (params, { runtime }) => runtime.getOrchestrationDb().listRuns(params)
   }),
   defineMethod({
     name: 'orchestration.runShow',

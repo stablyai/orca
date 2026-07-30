@@ -21,7 +21,9 @@ export function useMobilePairingQrInvalidation(params: {
   pairingRequestIdRef: MutableRef<number>
   setPairQrDataUrl: (value: string | null) => void
   setPairingUrl: (value: string | null) => void
+  setPairingQrError: (value: boolean) => void
   setPairLoading: (value: boolean) => void
+  setRelayMintFailure?: (value: null) => void
   regenerate: (mode: MobilePairingConnectionMode, opts: { rotate: boolean }) => void
 }): void {
   const {
@@ -32,7 +34,9 @@ export function useMobilePairingQrInvalidation(params: {
     pairingRequestIdRef,
     setPairQrDataUrl,
     setPairingUrl,
+    setPairingQrError,
     setPairLoading,
+    setRelayMintFailure,
     regenerate
   } = params
   const wasSignedInRef = useRef(signedIn)
@@ -53,7 +57,9 @@ export function useMobilePairingQrInvalidation(params: {
     pairingRequestIdRef.current += 1
     hasGeneratedRef.current = false
     setPairingUrl(null)
+    setPairingQrError(false)
     setPairQrDataUrl(null)
+    setRelayMintFailure?.(null)
     if (signedIn && canMintMobilePairingOffer({ connectionMode, signedIn })) {
       // Why: rotate on the sign-in edge — the token behind the QR cleared at
       // sign-out may have been exposed, so the fresh session mints fresh.
@@ -68,7 +74,9 @@ export function useMobilePairingQrInvalidation(params: {
     pairingRequestIdRef,
     setPairQrDataUrl,
     setPairingUrl,
+    setPairingQrError,
     setPairLoading,
+    setRelayMintFailure,
     regenerate
   ])
 
@@ -87,7 +95,9 @@ export function useMobilePairingQrInvalidation(params: {
     const shouldRegenerate = hasGeneratedRef.current || pairLoading
     hasGeneratedRef.current = false
     setPairingUrl(null)
+    setPairingQrError(false)
     setPairQrDataUrl(null)
+    setRelayMintFailure?.(null)
     if (shouldRegenerate && canMintMobilePairingOffer({ connectionMode, signedIn })) {
       // Why: no rotate here — the main process rotates exactly once when the
       // requested mode differs from the pending token's minted mode, so the
@@ -106,7 +116,9 @@ export function useMobilePairingQrInvalidation(params: {
     pairingRequestIdRef,
     setPairQrDataUrl,
     setPairingUrl,
+    setPairingQrError,
     setPairLoading,
+    setRelayMintFailure,
     regenerate
   ])
 }

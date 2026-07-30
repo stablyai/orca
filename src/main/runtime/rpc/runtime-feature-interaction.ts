@@ -1,5 +1,6 @@
 import type { FeatureInteractionId } from '../../../shared/feature-interactions'
 import { isBrowserPaneUiRuntimeRpcParams } from '../../../shared/runtime-rpc-feature-interaction-source'
+import type { OrcaRuntimeService } from '../orca-runtime'
 
 export function getRuntimeFeatureInteractionId(
   method: string,
@@ -35,6 +36,25 @@ export function getRuntimeFeatureInteractionId(
     return 'computer-use'
   }
   return method.startsWith('orchestration.') ? 'agent-orchestration' : null
+}
+
+export function recordRuntimeFeatureInteraction(
+  runtime: OrcaRuntimeService,
+  method: string,
+  result: unknown,
+  alreadyRecorded?: Set<FeatureInteractionId>,
+  rawParams?: unknown
+): void {
+  const id = getRuntimeFeatureInteractionId(method, result, rawParams)
+  if (!id || alreadyRecorded?.has(id)) {
+    return
+  }
+  try {
+    runtime.recordFeatureInteraction(id)
+    alreadyRecorded?.add(id)
+  } catch {
+    // Best-effort education state must not break runtime tools.
+  }
 }
 
 function hasBooleanResult(value: unknown, key: string): boolean {

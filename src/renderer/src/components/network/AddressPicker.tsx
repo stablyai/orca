@@ -27,6 +27,7 @@ export type AddressPickerProps = {
   options: readonly AddressOption[]
   value: string | undefined
   onValueChange: (value: string) => void
+  beforeCustomConfirm?: (value: string) => boolean | Promise<boolean>
   // Why: a value that isn't one of `options` is a custom entry; this renders
   // its display label (e.g. `${value} (custom)`) so the Select can show it —
   // Radix Select only displays values that have a matching item.
@@ -50,6 +51,7 @@ export function AddressPicker({
   options,
   value,
   onValueChange,
+  beforeCustomConfirm,
   formatCustomLabel,
   addCustomLabel,
   customDialogCopy,
@@ -72,6 +74,14 @@ export function AddressPicker({
       return
     }
     onValueChange(next)
+  }
+
+  const handleCustomConfirm = async (next: string): Promise<boolean> => {
+    if (beforeCustomConfirm && !(await beforeCustomConfirm(next))) {
+      return false
+    }
+    onValueChange(next)
+    return true
   }
 
   return (
@@ -106,7 +116,7 @@ export function AddressPicker({
         validate={validateCustom}
         copy={customDialogCopy}
         inputId={customInputId}
-        onConfirm={onValueChange}
+        onConfirm={handleCustomConfirm}
       />
     </>
   )

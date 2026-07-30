@@ -47,6 +47,7 @@ describe('computer-use e2e workflow', () => {
     expect(triggerPaths).toEqual(
       expect.arrayContaining([
         'config/scripts/computer-e2e-workflow.test.mjs',
+        'config/scripts/computer-use-modifier-safety.test.mjs',
         'config/scripts/computer-use-skill-guidance.test.mjs',
         'config/scripts/computer-use-smoke.mjs',
         'config/scripts/computer-use-smoke.test.mjs',
@@ -72,6 +73,7 @@ describe('computer-use e2e workflow', () => {
     const regressionRun = nativeSmokeRuns.find((run) => run.includes('pnpm vitest run'))
     const expectedRegressionFiles = [
       'config/scripts/computer-e2e-workflow.test.mjs',
+      'config/scripts/computer-use-modifier-safety.test.mjs',
       'config/scripts/computer-use-skill-guidance.test.mjs',
       'config/scripts/computer-use-smoke.test.mjs',
       'src/main/computer/computer-provider-lifecycle.test.ts',

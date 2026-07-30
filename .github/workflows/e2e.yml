@@ -184,7 +184,9 @@ jobs:
     name: ssh docker watcher isolation
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Why 35: the terminal parking + retention specs below add two more
+    # docker-rig tests capped at 240s each on top of the watcher isolation pair.
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -226,6 +228,13 @@ jobs:
       # its PTY and explorer live across a real watcher SIGSEGV.
       - name: Run Docker SSH watcher isolation E2E
         run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-watcher-isolation
+
+      # Why always(): these specs gate the C1 terminal parking/retention budget
+      # over a real SSH host and run in no other lane, so a watcher-isolation
+      # failure above must not silently skip them.
+      - name: Run Docker SSH terminal parking + retention E2E
+        if: always()
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-terminal-parking
 
       - name: Upload watcher isolation traces
         if: failure()

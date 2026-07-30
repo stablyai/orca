@@ -48,12 +48,14 @@ export function buildWorktreeMetaUpdates(args: {
   const finalLinkedPR =
     trimmedPR === '' ? null : linkedPRNumber !== null ? linkedPRNumber : undefined
 
+  // Why: blanking the field means "fall back to the branch/folder name", and the
+  // empty string is how that intent is persisted. Emitting `undefined` instead
+  // put a present-but-undefined key into the store spread, wiping the live name
+  // and crashing the worktree palette (crash a1f81ea1).
   const trimmedDisplayName = args.displayNameInput.trim()
   const updates: Partial<WorktreeMeta> = {
     comment: args.commentInput.trim(),
-    ...(trimmedDisplayName !== args.currentDisplayName && {
-      displayName: trimmedDisplayName || undefined
-    })
+    ...(trimmedDisplayName !== args.currentDisplayName && { displayName: trimmedDisplayName })
   }
   if (finalLinkedIssue !== undefined) {
     updates.linkedIssue = finalLinkedIssue

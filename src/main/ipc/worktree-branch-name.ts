@@ -1,5 +1,6 @@
 import {
   assertBranchPrefixValid,
+  getBranchPrefixIssue,
   normalizeBranchPrefix,
   selectBranchPrefixInput,
   type BranchPrefixSettings
@@ -49,6 +50,13 @@ export function computeValidatedBranchName(
   if (prefix === null) {
     return sanitizedName
   }
-  assertBranchPrefixValid(prefix)
+  if (getBranchPrefixIssue(prefix) !== null) {
+    // Why: git-username can resolve to garbage (e.g. a rate-limited `gh api` JSON body).
+    // Skip the prefix rather than blocking every worktree create; custom prefixes still fail loudly.
+    if (settings.branchPrefix === 'git-username') {
+      return sanitizedName
+    }
+    assertBranchPrefixValid(prefix)
+  }
   return `${prefix}/${sanitizedName}`
 }

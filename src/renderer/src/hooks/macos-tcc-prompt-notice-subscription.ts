@@ -22,7 +22,7 @@ export async function dismissMacosTccPromptNotice(
 
 export function subscribeToMacosTccPromptNotice(
   api: MacosTccPromptNoticeApi | undefined,
-  onNotice: (payload: TccPromptNoticePayload) => void
+  onNotice: (payload: TccPromptNoticePayload, acknowledge: () => void) => void
 ): () => void {
   const pullPending = (): Promise<TccPromptNoticeClaim | null> => {
     if (!api?.consumePending) {
@@ -58,9 +58,9 @@ export function subscribeToMacosTccPromptNotice(
       void releaseClaim(claimId)
     }
   }
-  const showNotice = (payload: TccPromptNoticePayload): boolean => {
+  const showNotice = (payload: TccPromptNoticePayload, acknowledge: () => void): boolean => {
     try {
-      onNotice(payload)
+      onNotice(payload, acknowledge)
       return true
     } catch (error) {
       console.error('[macos-tcc-prompts] Failed to show notice:', error)
@@ -72,7 +72,7 @@ export function subscribeToMacosTccPromptNotice(
   const consume = (fallback?: TccPromptNoticePayload): void => {
     if (!api?.consumePending) {
       if (fallback) {
-        showNotice(fallback)
+        showNotice(fallback, () => {})
       }
       return
     }
@@ -80,7 +80,15 @@ export function subscribeToMacosTccPromptNotice(
       (pending) => {
         if (pending) {
           const claimId = pending.claimId
-          if (!showNotice({ promptCount: pending.promptCount })) {
+          let acknowledged = false
+          const acknowledge = (): void => {
+            if (acknowledged || typeof claimId !== 'number') {
+              return
+            }
+            acknowledged = true
+            acknowledgeClaim(claimId)
+          }
+          if (!showNotice({ promptCount: pending.promptCount }, acknowledge)) {
             if (typeof claimId === 'number') {
               const shouldRetry = displayRetryAvailable
               displayRetryAvailable = false
@@ -90,16 +98,12 @@ export function subscribeToMacosTccPromptNotice(
                 }
               })
             }
-            return
-          }
-          if (typeof claimId === 'number') {
-            acknowledgeClaim(claimId)
           }
         }
       },
       () => {
         if (fallback) {
-          showNotice(fallback)
+          showNotice(fallback, () => {})
         }
       }
     )

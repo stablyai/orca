@@ -331,4 +331,54 @@ describe('browser-palette-search', () => {
   it('rejects oversized whitespace before trimming', () => {
     expect(searchBrowserPages([], ' '.repeat(BROWSER_PALETTE_QUERY_MAX_BYTES + 1))).toEqual([])
   })
+
+  it('falls back to the branch label when a cleared display name left it undefined', () => {
+    // Why: Cmd+J runs this search over the same worktree objects as searchWorktrees,
+    // so the store-level display-name corruption reaches here too.
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: 'refs/heads/feature/browser-search'
+    })
+    const entries: SearchableBrowserPage[] = [
+      {
+        page: makePage(),
+        workspace: makeWorkspace(),
+        worktree: cleared,
+        repoName: 'orca',
+        worktreeSortIndex: 0,
+        isCurrentPage: false,
+        isCurrentWorktree: false
+      }
+    ]
+
+    const results = searchBrowserPages(entries, 'browser-search')
+    expect(results[0]).toMatchObject({
+      worktreeName: 'feature/browser-search',
+      worktreeRange: { start: 'feature/'.length, end: 'feature/browser-search'.length }
+    })
+  })
+
+  it('lists a branch-less row on the empty query without throwing', () => {
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: undefined as unknown as string,
+      path: '/repos/design-review'
+    })
+    const entries: SearchableBrowserPage[] = [
+      {
+        page: makePage(),
+        workspace: makeWorkspace(),
+        worktree: cleared,
+        repoName: 'orca',
+        worktreeSortIndex: 0,
+        isCurrentPage: false,
+        isCurrentWorktree: false
+      }
+    ]
+
+    expect(searchBrowserPages(entries, '')[0]).toMatchObject({
+      worktreeName: 'design-review',
+      worktreeRange: null
+    })
+  })
 })

@@ -4,6 +4,10 @@ import type {
   Worktree,
   WorktreeMeta
 } from '../../../../shared/types'
+import {
+  parseWorkspaceLaneFullIds,
+  resolveFullLaneDropIndex
+} from './workspace-kanban-filtered-drop-index'
 import { getWorkspaceStatus } from './workspace-status'
 import {
   buildManualOrderUpdatesForGroupDrop,
@@ -44,6 +48,30 @@ export function isWorkspaceKanbanSidebarDropPointInBoard(x: number, y: number): 
   return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
 }
 
+function getLaneCardIds(lane: HTMLElement): HTMLElement[] {
+  return Array.from(lane.querySelectorAll<HTMLElement>(CARD_SELECTOR))
+}
+
+// Mirrors getCardDropTarget's card scan so both sides share one index space.
+// The offsetParent read forces layout, so callers pass the card list they
+// already collected rather than re-querying.
+function toRenderedCardIds(cards: readonly HTMLElement[]): string[] {
+  return cards
+    .filter((card) => card.offsetParent !== null)
+    .flatMap((card) => card.dataset.workspaceBoardCardId ?? [])
+}
+
+// Why: board search hides non-matching cards, so the rendered card scan is a
+// filtered lane. Lanes publish their full membership for exactly this reader.
+// The fallback is the unfiltered card list — a lane member the browser is not
+// laying out is still a member for manual-order purposes.
+function toLaneFullWorktreeIds(lane: HTMLElement, cards: readonly HTMLElement[]): string[] {
+  return (
+    parseWorkspaceLaneFullIds(lane.dataset.workspaceLaneFullIds) ??
+    cards.flatMap((card) => card.dataset.workspaceBoardCardId ?? [])
+  )
+}
+
 function getStatusDropTargetElement(
   board: HTMLElement,
   status: WorkspaceStatus
@@ -80,14 +108,7 @@ export function getWorkspaceKanbanSidebarDropGroups(): WorktreeDragGroup[] {
     if (!status) {
       return []
     }
-    return [
-      {
-        key: status,
-        worktreeIds: Array.from(lane.querySelectorAll<HTMLElement>(CARD_SELECTOR)).flatMap(
-          (card) => card.dataset.workspaceBoardCardId ?? []
-        )
-      }
-    ]
+    return [{ key: status, worktreeIds: toLaneFullWorktreeIds(lane, getLaneCardIds(lane)) }]
   })
 }
 
@@ -100,6 +121,30 @@ export function getWorkspaceKanbanSidebarDropTarget(
     return { status: null, isPinDrop: false, dropIndex: 0 }
   }
   return getCardDropTarget(board, x, y)
+}
+
+/**
+ * Translates a tracked drop index — which counts *rendered* cards, matching the
+ * drop indicator — onto the full lane that `getWorkspaceKanbanSidebarDropGroups`
+ * reports. Call this once, at the commit boundary: a tracked target can be
+ * committed after the pointer has left the lane, so translating earlier would
+ * miss that path.
+ */
+export function resolveWorkspaceKanbanSidebarFullLaneDropIndex(
+  status: WorkspaceStatus,
+  renderedDropIndex: number
+): number {
+  const board = getWorkspaceKanbanBoardElement()
+  const lane = board ? getStatusDropTargetElement(board, status) : null
+  if (!lane) {
+    return renderedDropIndex
+  }
+  const cards = getLaneCardIds(lane)
+  return resolveFullLaneDropIndex({
+    fullLaneIds: toLaneFullWorktreeIds(lane, cards),
+    renderedIds: toRenderedCardIds(cards),
+    filteredDropIndex: renderedDropIndex
+  })
 }
 
 export function updateWorkspaceKanbanSidebarDropTargetVisual(args: {

@@ -2,6 +2,11 @@ import { useAppStore } from '@/store'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
+import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mode'
+import { getConnectionIdFromState } from '@/lib/connection-context'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { toWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { TuiAgent } from '../../../shared/types'
 
@@ -26,18 +31,69 @@ function resolveLaunchAgentTabId(
     backendSpawned: boolean
   }
 ): string | null {
+  const worktreeTabs = state.tabsByWorktree[args.worktreeId] ?? []
   // Main spawned the agent itself, so its startup tab is authoritative.
   if (args.backendSpawned && args.startupTerminalTabId) {
-    return args.startupTerminalTabId
+    return getRuntimeEnvironmentIdForWorktree(state, args.worktreeId)
+      ? toWebTerminalSurfaceTabId(args.startupTerminalTabId)
+      : args.startupTerminalTabId
   }
-  const worktreeTabs = state.tabsByWorktree[args.worktreeId] ?? []
   const stamped = worktreeTabs.find((tab) => tab.launchAgent === args.agent)?.id
   // Why: when the renderer owns startup, `ensureAgentStartupInTerminal` queues it
   // on primaryTabId, so that tab is the agent's tab by construction.
   return stamped ?? args.primaryTabId ?? args.startupTerminalTabId ?? null
 }
 
-function applyAgentTabSeeds(request: SeedRequest, agent: TuiAgent, tabId: string): void {
+function applyBackendSpawnedDraftViewMode(args: {
+  state: AppStoreSnapshot
+  request: SeedRequest
+  agent: TuiAgent
+  tabId: string
+  worktreeId: string
+  backendSpawned: boolean
+}): void {
+  const { state, request, agent, tabId, worktreeId, backendSpawned } = args
+  if (!backendSpawned || !request.launchDraftPrompt) {
+    return
+  }
+  const desiredViewMode =
+    decideInitialAgentTabViewMode({
+      experimentalNativeChat: state.settings?.experimentalNativeChat,
+      openAgentTabsInChatByDefault: state.settings?.openAgentTabsInChatByDefault,
+      agent,
+      promptDelivery: 'draft',
+      launchDraftText: request.launchDraftPrompt,
+      ...(agent === 'grok'
+        ? {
+            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+              getConnectionIdFromState(state, worktreeId)
+            )
+          }
+        : {})
+    }) ?? 'terminal'
+  const tab = state.unifiedTabsByWorktree?.[worktreeId]?.find((tab) => tab.id === tabId)
+  if (!tab && getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {
+    void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
+      setWebRuntimeTabProps({ worktreeId, tabId, viewMode: desiredViewMode })
+    )
+    return
+  }
+  const currentViewMode = tab?.viewMode ?? 'terminal'
+  if (currentViewMode !== desiredViewMode) {
+    state.setTabViewMode(tabId, desiredViewMode)
+  }
+}
+
+function applyAgentTabSeeds(args: {
+  state: AppStoreSnapshot
+  request: SeedRequest
+  agent: TuiAgent
+  tabId: string
+  worktreeId: string
+  backendSpawned: boolean
+}): void {
+  const { request, agent, tabId } = args
+  applyBackendSpawnedDraftViewMode(args)
   seedNativeChatAppliedSessionOptions(tabId, agent, request.startupPlan?.sessionOptions)
   // Why: draft launch context reaches only the TUI input; seed the
   // chat-composer copy so it isn't invisible in the chat view.
@@ -57,7 +113,7 @@ export function seedAgentTabStateAfterWorktreeCreate(args: {
   startupTerminalTabId: string | null | undefined
   backendSpawned: boolean
 }): void {
-  const { request, worktreeId } = args
+  const { request, worktreeId, backendSpawned } = args
   const agent = request.agent
   if (!request.startupPlan || !agent) {
     return
@@ -65,7 +121,7 @@ export function seedAgentTabStateAfterWorktreeCreate(args: {
   const state = useAppStore.getState()
   const tabId = resolveLaunchAgentTabId(state, { ...args, agent })
   if (tabId) {
-    applyAgentTabSeeds(request, agent, tabId)
+    applyAgentTabSeeds({ state, request, agent, tabId, worktreeId, backendSpawned })
     return
   }
   if ((state.tabsByWorktree[worktreeId] ?? []).length > 0) {
@@ -81,7 +137,14 @@ export function seedAgentTabStateAfterWorktreeCreate(args: {
     deliver: (state, firstTerminalTabId) => {
       const mirroredTabId = resolveLaunchAgentTabId(state, { ...args, agent })
       if (mirroredTabId) {
-        applyAgentTabSeeds(request, agent, mirroredTabId)
+        applyAgentTabSeeds({
+          state,
+          request,
+          agent,
+          tabId: mirroredTabId,
+          worktreeId,
+          backendSpawned
+        })
         return
       }
       // Why: same invariant as the synchronous branch — never seed a tab that
@@ -89,7 +152,14 @@ export function seedAgentTabStateAfterWorktreeCreate(args: {
       // so accept the first mirrored tab only when it is the worktree's only
       // one and therefore unambiguously the agent's.
       if ((state.tabsByWorktree[worktreeId] ?? []).length === 1) {
-        applyAgentTabSeeds(request, agent, firstTerminalTabId)
+        applyAgentTabSeeds({
+          state,
+          request,
+          agent,
+          tabId: firstTerminalTabId,
+          worktreeId,
+          backendSpawned
+        })
       }
     }
   })

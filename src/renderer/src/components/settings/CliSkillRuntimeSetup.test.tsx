@@ -6,9 +6,11 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
 import { buildWslLoginShellCommand } from '../../../../shared/wsl-login-shell-command'
+import { useAppStore } from '@/store'
 import {
   buildSkillCommandForRuntime,
   buildSkillInstallCommandForRuntime,
+  getAgentSkillTerminalShellOverride,
   getSelectedAgentRuntime,
   getSkillDiscoveryTargetForRuntime
 } from './CliSkillRuntimeSetup'
@@ -29,6 +31,10 @@ function getWslOuterShellScript(command: string): string {
 }
 
 describe('CliSkillRuntimeSetup runtime helpers', () => {
+  const windowsNpxPreflightPrefix = 'cmd.exe /d /s /c "where.exe npx >nul 2>nul & if errorlevel 1 ('
+  const windowsNpxGuidance =
+    'echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx. & echo Then close this terminal and start skill setup again - a new terminal picks up the updated PATH. & exit /b 1'
+
   it('wraps WSL skill installs as a directly runnable selected-distro command', () => {
     const skillCommand = 'npx skills add orchestration --global'
     const command = buildSkillInstallCommandForRuntime(skillCommand, {
@@ -41,6 +47,25 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     expect(command).toBe(
       `& { $PSNativeCommandArgumentPassing = 'Legacy'; wsl.exe -d 'Ubuntu' -- sh -c 'eval \\"\`printf %s ${encoded} | base64 -d\`\\"' } # Runs: ${skillCommand}`
     )
+    expect(decodeWslLoginShellScript(command)).toContain(
+      'exec "$_orca_wsl_shell" -ilc \'npx skills add orchestration --global\''
+    )
+  })
+
+  it('keeps a Windows-selected WSL install inside WSL without the host preflight', () => {
+    const skillCommand = 'npx skills add orchestration --global'
+    const command = buildSkillCommandForRuntime(
+      skillCommand,
+      {
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu',
+        label: 'WSL Ubuntu'
+      },
+      'win32'
+    )
+
+    expect(command).toContain("wsl.exe -d 'Ubuntu'")
+    expect(command).not.toContain('where.exe npx')
     expect(decodeWslLoginShellScript(command)).toContain(
       'exec "$_orca_wsl_shell" -ilc \'npx skills add orchestration --global\''
     )
@@ -118,7 +143,32 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     }
   )
 
-  it('reinstalls Windows-host skill updates through the add path', () => {
+  it('preflights npx before Windows-host skill installs', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orca-cli', 'orchestration'])
+
+    expect(
+      buildSkillCommandForRuntime(
+        installCommand,
+        {
+          runtime: 'host',
+          label: 'Windows'
+        },
+        'win32'
+      )
+    ).toBe(`${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`)
+  })
+
+  it('treats missing runtime as a preflighted Windows host fallback for skill installs', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orca-cli', 'orchestration'])
+
+    expect(buildSkillCommandForRuntime(installCommand, undefined, 'win32')).toBe(
+      `${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`
+    )
+  })
+
+  it('reinstalls Windows-host skill updates after the npx preflight', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+
     expect(
       buildSkillCommandForRuntime(
         'npx skills update orchestration --global',
@@ -128,13 +178,30 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
         },
         'win32'
       )
-    ).toBe(buildAgentFeatureSkillInstallCommand(['orchestration']))
+    ).toBe(`${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`)
   })
 
-  it('treats missing runtime as a Windows host fallback for skill updates', () => {
+  it('treats missing runtime as a preflighted Windows host fallback for skill updates', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orca-cli'])
+
     expect(
       buildSkillCommandForRuntime('npx skills update orca-cli --global', undefined, 'win32')
-    ).toBe(buildAgentFeatureSkillInstallCommand(['orca-cli']))
+    ).toBe(`${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`)
+  })
+
+  it('keeps non-Windows host skill installs on the direct npx path', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+
+    expect(
+      buildSkillCommandForRuntime(
+        installCommand,
+        {
+          runtime: 'host',
+          label: 'This device'
+        },
+        'linux'
+      )
+    ).toBe(installCommand)
   })
 
   it('keeps non-Windows host skill updates on the update path', () => {
@@ -148,6 +215,78 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
         'linux'
       )
     ).toBe('npx skills update orchestration --global')
+  })
+
+  it('skips the Windows preflight while a remote runtime environment is focused', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+    const windowsHost = { runtime: 'host', label: 'Windows' } as const
+    const previous = useAppStore.getState()
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'remote-linux' },
+      runtimeEnvironments: [{ id: 'remote-linux' }] as never
+    })
+
+    try {
+      // Setup terminals can spawn on the focused runtime, so cmd.exe may not exist there.
+      expect(buildSkillCommandForRuntime(installCommand, windowsHost, 'win32')).toBe(installCommand)
+
+      // Extra saved environments must not reintroduce the wrapper either.
+      useAppStore.setState({
+        runtimeEnvironments: [{ id: 'remote-linux' }, { id: 'other' }] as never
+      })
+      expect(buildSkillCommandForRuntime(installCommand, windowsHost, 'win32')).toBe(installCommand)
+    } finally {
+      useAppStore.setState({
+        settings: previous.settings,
+        runtimeEnvironments: previous.runtimeEnvironments
+      })
+    }
+  })
+
+  it('does not wrap unrelated Windows host commands', () => {
+    expect(
+      buildSkillCommandForRuntime(
+        'orca skills list',
+        {
+          runtime: 'host',
+          label: 'Windows'
+        },
+        'win32'
+      )
+    ).toBe('orca skills list')
+  })
+
+  it('emits a cmd.exe payload that cannot break its own if/else block', () => {
+    const wrapped = buildSkillCommandForRuntime(
+      buildAgentFeatureSkillInstallCommand(['orca-cli', 'orchestration']),
+      { runtime: 'host', label: 'Windows' },
+      'win32'
+    )
+
+    // cmd.exe /s strips only the first and last quote and passes the rest verbatim.
+    expect(wrapped.match(/"/g)).toHaveLength(2)
+    const blocks = /if errorlevel 1 \((.*)\) else \((.*)\)"$/.exec(wrapped)
+    expect(blocks).not.toBeNull()
+    for (const block of [blocks![1], blocks![2]]) {
+      // Any of these would close the block early or redirect inside cmd.exe.
+      expect(block).not.toMatch(/[()"%!^|<>]/)
+    }
+  })
+
+  it('forces PowerShell for the skill terminal when Windows runs a POSIX-family shell', () => {
+    const hostRuntime = { runtime: 'host', label: 'Windows' } as const
+    const overrideFor = (terminalWindowsShell: string): string | undefined =>
+      getAgentSkillTerminalShellOverride(
+        'win32',
+        { ...getDefaultSettings('/tmp'), terminalWindowsShell },
+        hostRuntime
+      )
+
+    // Git Bash rewrites the leading /d /s /c arguments as MSYS paths.
+    expect(overrideFor('git-bash')).toBe('powershell.exe')
+    expect(overrideFor('wsl.exe')).toBe('powershell.exe')
+    expect(overrideFor('cmd.exe')).toBeUndefined()
+    expect(overrideFor('powershell.exe')).toBeUndefined()
   })
 
   it('preserves the selected WSL distro for skill discovery', () => {

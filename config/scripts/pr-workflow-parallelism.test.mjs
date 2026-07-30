@@ -37,13 +37,19 @@ describe('PR workflow parallelism', () => {
     expect(workflow.permissions).toEqual({ contents: 'read' })
   })
 
-  it('shards the general test suite across sixteen runners', () => {
+  it('shards the general test suite across Node 24 and Node 26', () => {
+    expect(workflow.jobs.test.strategy.matrix.node).toEqual(['24', '26'])
     expect(workflow.jobs.test.strategy.matrix.shard).toEqual(
       Array.from({ length: 16 }, (_, index) => index + 1)
     )
+    expect(workflow.jobs.test.strategy.matrix.shard_total).toEqual([16])
     const testStep = workflow.jobs.test.steps.find((step) => step.name === 'Test shard')
+    const installStep = workflow.jobs.test.steps.find(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
 
-    expect(testStep.run).toContain('--shard=${{ matrix.shard }}/${{ strategy.job-total }}')
+    expect(installStep.with['node-version']).toBe('${{ matrix.node }}')
+    expect(testStep.run).toContain('--shard=${{ matrix.shard }}/${{ matrix.shard_total }}')
     for (const testFile of nativeShellContractFiles) {
       expect(testStep.run).toContain(`--exclude=${testFile}`)
     }
@@ -95,9 +101,15 @@ describe('PR workflow parallelism', () => {
     const steps = dependencyAction.runs.steps
     const pnpmIndex = steps.findIndex((step) => step.name === 'Setup pnpm')
     const nodeIndex = steps.findIndex((step) => step.name === 'Setup Node.js')
+    const requestedNodeIndex = steps.findIndex((step) => step.name === 'Setup requested Node.js')
 
     expect(pnpmIndex).toBeLessThan(nodeIndex)
+    expect(pnpmIndex).toBeLessThan(requestedNodeIndex)
     expect(steps[nodeIndex].with.cache).toBe('pnpm')
+    expect(steps[nodeIndex].if).toBe("inputs.node-version == ''")
+    expect(steps[requestedNodeIndex].if).toBe("inputs.node-version != ''")
+    expect(steps[requestedNodeIndex].with['node-version']).toBe('${{ inputs.node-version }}')
+    expect(steps[requestedNodeIndex].with.cache).toBe('pnpm')
   })
 
   it('restores Electron downloads before preparing the package runtime', () => {

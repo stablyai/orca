@@ -501,7 +501,12 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
   })
 
-  it('keeps draft startup payloads in terminal mode even when native chat is configured', () => {
+  // A draft opens in chat only when the composer can actually show it; the
+  // multi-line case would otherwise be an empty composer beside a filled TUI.
+  it.each([
+    ['mirrorable', 'https://github.com/o/r/issues/12', { viewMode: 'chat' }],
+    ['multi-line', 'Review this\n\nhttps://github.com/o/r/issues/12', {}]
+  ])('opens a %s draft startup payload accordingly', (_label, draftPrompt, expectedViewMode) => {
     const store = createMockStore({
       settings: {
         experimentalNativeChat: true,
@@ -515,7 +520,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       {
         command: 'claude',
         launchAgent: 'claude',
-        draftPrompt: 'Review before sending'
+        draftPrompt
       },
       undefined,
       undefined
@@ -523,9 +528,46 @@ describe('ensureWorktreeHasInitialTerminal', () => {
 
     expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
       pendingActivationSpawn: true,
-      launchAgent: 'claude'
+      launchAgent: 'claude',
+      ...expectedViewMode
     })
   })
+
+  // An argv-prefill launch carries the draft inside `command` and sets NO
+  // draftPrompt, so gating on draftPrompt alone lets it open in chat with
+  // nothing mirrored — an empty composer beside a filled TUI input.
+  it.each([
+    ['mirrorable', 'https://github.com/o/r/issues/12', { viewMode: 'chat' }],
+    ['multi-line', 'Review this\n\nhttps://github.com/o/r/issues/12', {}]
+  ])(
+    'gates a %s argv-prefill draft on launchDraftText alone',
+    (_label, launchDraftText, expectedViewMode) => {
+      const store = createMockStore({
+        settings: {
+          experimentalNativeChat: true,
+          openAgentTabsInChatByDefault: true
+        }
+      })
+
+      ensureWorktreeHasInitialTerminal(
+        store,
+        'wt-1',
+        {
+          command: `claude --prefill '${launchDraftText}'`,
+          launchAgent: 'claude',
+          launchDraftText
+        },
+        undefined,
+        undefined
+      )
+
+      expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+        pendingActivationSpawn: true,
+        launchAgent: 'claude',
+        ...expectedViewMode
+      })
+    }
+  )
 
   it('opens the startup default tab in native chat when configured', () => {
     let createdIndex = 0
@@ -555,32 +597,39 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
   })
 
-  it('keeps a draft startup default tab in terminal mode even when native chat is configured', () => {
-    let createdIndex = 0
-    const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
-    const store = createMockStore({
-      createTab,
-      settings: {
-        experimentalNativeChat: true,
-        openAgentTabsInChatByDefault: true
-      }
-    })
+  it.each([
+    ['mirrorable', 'https://github.com/o/r/issues/12', { viewMode: 'chat' }],
+    ['multi-line', 'Review this\n\nhttps://github.com/o/r/issues/12', {}]
+  ])(
+    'opens a %s draft startup default tab accordingly',
+    (_label, draftPrompt, expectedViewMode) => {
+      let createdIndex = 0
+      const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+      const store = createMockStore({
+        createTab,
+        settings: {
+          experimentalNativeChat: true,
+          openAgentTabsInChatByDefault: true
+        }
+      })
 
-    ensureWorktreeHasInitialTerminal(
-      store,
-      'wt-1',
-      { command: 'claude', launchAgent: 'claude', draftPrompt: 'Review before sending' },
-      undefined,
-      undefined,
-      { runCommands: true, tabs: [{ title: 'Claude', command: 'claude' }] }
-    )
+      ensureWorktreeHasInitialTerminal(
+        store,
+        'wt-1',
+        { command: 'claude', launchAgent: 'claude', draftPrompt },
+        undefined,
+        undefined,
+        { runCommands: true, tabs: [{ title: 'Claude', command: 'claude' }] }
+      )
 
-    expect(createTab).toHaveBeenNthCalledWith(1, 'wt-1', undefined, undefined, {
-      pendingActivationSpawn: true,
-      recordInteraction: false,
-      launchAgent: 'claude'
-    })
-  })
+      expect(createTab).toHaveBeenNthCalledWith(1, 'wt-1', undefined, undefined, {
+        pendingActivationSpawn: true,
+        recordInteraction: false,
+        launchAgent: 'claude',
+        ...expectedViewMode
+      })
+    }
+  )
 
   it('gates startup behind setup completion when both are provided in new-tab mode', () => {
     setSetupScriptLaunchMode('new-tab')

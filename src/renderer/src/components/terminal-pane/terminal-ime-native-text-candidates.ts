@@ -41,6 +41,9 @@ const CJK_DIRECT_PUNCTUATION_KEYS = new Set<string>([
   '『',
   '』',
   '￥',
+  // Korean sources put ₩ on Backquote; its committed text can differ from
+  // `key` when DefaultKeyBinding.dict rewrites it (typically back to `).
+  '₩',
   '～',
   '·',
   '…'

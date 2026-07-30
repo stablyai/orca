@@ -4,25 +4,34 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { SetupScriptPromptInspection } from '@/lib/setup-script-prompt'
 import type { Repo } from '../../../../shared/types'
 import { useSetupScriptPromptRevalidation } from './useSetupScriptPromptRevalidation'
+import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
+import { getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
 
 const GIT_REPO = { id: 'repo-1', kind: 'git' } as unknown as Repo
+type OkSetupScriptPromptState = Extract<SetupScriptPromptState, { status: 'ok' }>
 
-function missingSetup(repoId: string): SetupScriptPromptInspection {
-  return { status: 'ok', repoId, hasEffectiveSetup: false, hasSharedHooks: true, candidate: null }
+function missingSetup(repoId: string, hostId = 'local'): OkSetupScriptPromptState {
+  return {
+    status: 'ok',
+    repoId,
+    repoHostIdentity: getRepoHostIdentityForParts(repoId, hostId),
+    hasEffectiveSetup: false,
+    hasSharedHooks: true,
+    candidate: null
+  }
 }
 
-function effectiveSetup(repoId: string): SetupScriptPromptInspection {
-  return { status: 'ok', repoId, hasEffectiveSetup: true, hasSharedHooks: true, candidate: null }
+function effectiveSetup(repoId: string): OkSetupScriptPromptState {
+  return { ...missingSetup(repoId), hasEffectiveSetup: true }
 }
 
 type HarnessProps = {
   activeRepo: Repo | null
   isDismissed: boolean
   sidebarOpen: boolean
-  promptState: SetupScriptPromptInspection | null
+  promptState: SetupScriptPromptState | null
   requestRevalidation: () => void
 }
 
@@ -113,6 +122,22 @@ describe('useSetupScriptPromptRevalidation', () => {
     })
 
     await dispatchWindowFocus()
+
+    expect(requestRevalidation).not.toHaveBeenCalled()
+  })
+
+  it('does not re-inspect when prompt state belongs to another host with the same repo id', async () => {
+    const requestRevalidation = vi.fn()
+    await render({
+      activeRepo: GIT_REPO,
+      isDismissed: false,
+      sidebarOpen: true,
+      promptState: missingSetup('repo-1', 'runtime:windows'),
+      requestRevalidation
+    })
+
+    await dispatchWindowFocus()
+    await setActiveWorktree('worktree-2')
 
     expect(requestRevalidation).not.toHaveBeenCalled()
   })

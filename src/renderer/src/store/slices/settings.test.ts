@@ -22,6 +22,8 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentGetStatus = vi.fn()
 const settingsSet = vi.fn().mockResolvedValue(undefined)
+const settingsGet = vi.fn()
+const runtimeEnvironmentList = vi.fn()
 const setActiveRuntimeEnvironmentPreference = vi.fn().mockResolvedValue(undefined)
 const worktreesListDetected = vi.fn()
 
@@ -50,6 +52,8 @@ beforeEach(() => {
     },
     _meta: { runtimeId: 'runtime-2' }
   })
+  settingsGet.mockResolvedValue({ notifications: {} })
+  runtimeEnvironmentList.mockResolvedValue([])
   runtimeEnvironmentCall.mockImplementation(
     ({ method, params }: { method: string; params?: { repo?: string } }) => {
       const detectedRepoId = params?.repo ?? 'repo-env-2'
@@ -133,8 +137,12 @@ beforeEach(() => {
   })
   vi.stubGlobal('window', {
     api: {
-      settings: { set: settingsSet, setActiveRuntimeEnvironmentPreference },
-      runtimeEnvironments: { call: runtimeEnvironmentCall, getStatus: runtimeEnvironmentGetStatus },
+      settings: { get: settingsGet, set: settingsSet, setActiveRuntimeEnvironmentPreference },
+      runtimeEnvironments: {
+        call: runtimeEnvironmentCall,
+        getStatus: runtimeEnvironmentGetStatus,
+        list: runtimeEnvironmentList
+      },
       worktrees: { listDetected: worktreesListDetected }
     }
   })
@@ -646,5 +654,31 @@ describe('createSettingsSlice runtime switching', () => {
     expect(toast.error).toHaveBeenCalledWith('Failed to switch servers', {
       description: expect.stringContaining('server is too old')
     })
+  })
+})
+
+describe('fetchSettings runtime catalog probe', () => {
+  // Why: skill discovery waits for the runtime catalog to settle. If a rejected
+  // settings read skipped the probe, every skill badge would sit on a spinner
+  // for the whole session with no retry affordance.
+  it('still probes the runtime catalog when the settings read fails', async () => {
+    settingsGet.mockRejectedValueOnce(new Error('unreadable settings.json'))
+    const store = createTestStore()
+
+    await store.getState().fetchSettings()
+    await vi.waitFor(() => expect(runtimeEnvironmentList).toHaveBeenCalled())
+
+    expect(store.getState().settings).toBeNull()
+    expect(store.getState().runtimeEnvironmentCatalogSettled).toBe(true)
+  })
+
+  it('probes the runtime catalog after a successful settings read', async () => {
+    const store = createTestStore()
+
+    await store.getState().fetchSettings()
+    await vi.waitFor(() => expect(runtimeEnvironmentList).toHaveBeenCalled())
+
+    expect(store.getState().settings).not.toBeNull()
+    expect(store.getState().runtimeEnvironmentCatalogSettled).toBe(true)
   })
 })

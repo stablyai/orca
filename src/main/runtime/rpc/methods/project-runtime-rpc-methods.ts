@@ -3,8 +3,16 @@ import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalString, requiredString } from '../schemas'
 
+const ProjectProviderIdentity = z.object({
+  provider: z.literal('github'),
+  owner: requiredString('Missing project owner'),
+  repo: requiredString('Missing project repository'),
+  host: OptionalString
+})
+
 const ProjectHostSetupExistingFolder = z.object({
   projectId: requiredString('Missing project ID'),
+  projectProviderIdentity: ProjectProviderIdentity.optional(),
   hostId: requiredString('Missing host ID').transform((value, ctx) => {
     const hostId = normalizeExecutionHostId(value)
     if (!hostId) {
@@ -21,6 +29,7 @@ const ProjectHostSetupExistingFolder = z.object({
 
 const ProjectHostSetupClone = z.object({
   projectId: requiredString('Missing project ID'),
+  projectProviderIdentity: ProjectProviderIdentity.optional(),
   hostId: requiredString('Missing host ID').transform((value, ctx) => {
     const hostId = normalizeExecutionHostId(value)
     if (!hostId) {

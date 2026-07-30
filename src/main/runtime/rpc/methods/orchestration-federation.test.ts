@@ -211,19 +211,19 @@ describe('orchestration federation', () => {
       remote_worktree_id: 'repo::windows-worktree',
       remote_terminal_handle: 'term_windows_worker'
     })
-    expect(workerDb.getRemoteDispatchAttachment(dispatch.id)).toMatchObject({
+    const attachment = workerDb.getRemoteDispatchAttachment(dispatch.id)
+    expect(attachment).toMatchObject({
       task_id: task.id,
       protocol_version: 2,
       state: 'ready',
       worktree_id: 'repo::windows-worktree',
       terminal_handle: 'term_windows_worker'
     })
-    expect(JSON.parse(workerDb.getRemoteDispatchAttachment(dispatch.id)?.effects ?? '[]')).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
-      ])
-    )
+    const fx = JSON.parse(attachment?.effects ?? '[]') as { kind?: string; state?: string }[]
+    expect(fx.some((x) => x.kind === 'dispatch_input' && x.state === 'accepted')).toBe(true)
     expect(workerDb.listTasks()).toHaveLength(0)
+    const create = vi.mocked(workerRuntime.createManagedWorktree).mock.calls[0]?.[0]
+    expect([create.activate, create.runHooks]).toEqual([false, false])
     expect(workerRuntime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
       'term_windows_worker',
       expect.stringContaining(`Your task ID is: ${task.id}`)

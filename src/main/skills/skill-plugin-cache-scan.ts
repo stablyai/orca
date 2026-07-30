@@ -8,16 +8,24 @@ import {
 } from '../../shared/skill-freshness'
 import { declaredPluginSkillRoots, isWithinRoot } from './skill-plugin-manifest-roots'
 
-const MAXIMUM_PLUGIN_SCAN_DEPTH = 9
+export const MAXIMUM_PLUGIN_SCAN_DEPTH = 9
 const MAXIMUM_DECLARED_SKILL_SCAN_DEPTH = 6
 // Why: a skill package's own payload (templates, fixtures, sample apps) is not a skill
 // tree, and it is what drives ordinary caches past the depth and entry bounds. Descend
 // far enough to still find a skill grouped under a package, then stop.
+//
+// Changing this is a real tradeoff, not a tuning knob. Raising it spends the entry budget
+// on vendor payload — the cost that made ordinary caches collapse to a poison sentinel and
+// pin every skill amber (#10865). Lowering it, or leaving it, means a skill buried deeper
+// is never seen; that costs only a Details row, because a plugin-cache placement is not
+// convergeable by any update command. So the failure direction here is silence, which is
+// the safe one. Both sides of the boundary are pinned by test (#11454) — if you move this,
+// that test will fail, and it is meant to.
 const MAXIMUM_NESTED_SKILL_DEPTH = 2
 // Why: sized against a real multi-vendor cache, which reads ~7k entries once payload is
 // pruned. The bound still exists to stop a hostile or runaway tree; it is not a budget
 // ordinary installs are meant to exhaust.
-const MAXIMUM_PLUGIN_SCAN_ENTRIES = 16_384
+export const MAXIMUM_PLUGIN_SCAN_ENTRIES = 16_384
 export const MAXIMUM_PLUGIN_SKILL_CANDIDATES = 64
 export const MAXIMUM_PLUGIN_SCAN_ISSUES = 16
 // Why: an attention issue outranks the display budget, so nothing else bounds how many a
@@ -49,11 +57,21 @@ function errorCode(error: unknown): string | null {
     : null
 }
 
+// Why: overriding a bound is how its truncation path stays executable — reaching the real
+// entry budget costs a 16k-dirent fixture per case, and the declared-root guard below it
+// needs the running count parked just under that budget. Production passes neither.
+export type PluginSkillScanBounds = {
+  maximumCandidates?: number
+  maximumEntries?: number
+}
+
 export async function scanKnownPluginSkillCandidates(
   rootPath: string,
   knownNames: ReadonlySet<string>,
-  maximumCandidates = MAXIMUM_PLUGIN_SKILL_CANDIDATES
+  bounds: PluginSkillScanBounds = {}
 ): Promise<KnownPluginSkillScan> {
+  const maximumCandidates = bounds.maximumCandidates ?? MAXIMUM_PLUGIN_SKILL_CANDIDATES
+  const maximumEntries = bounds.maximumEntries ?? MAXIMUM_PLUGIN_SCAN_ENTRIES
   const candidates: KnownPluginSkillCandidate[] = []
   const issues: KnownPluginSkillScanIssue[] = []
   const issueKeys = new Set<string>()
@@ -197,7 +215,7 @@ export async function scanKnownPluginSkillCandidates(
           break
         }
         entryCount += 1
-        if (entryCount > MAXIMUM_PLUGIN_SCAN_ENTRIES) {
+        if (entryCount > maximumEntries) {
           limitReached = true
           recordIssue(rootPath, 'entry-limit')
           break
@@ -233,7 +251,7 @@ export async function scanKnownPluginSkillCandidates(
       const skillRootDepth = withinDeclaredSkillRoot ? depth + 1 : 0
       for (const skillRoot of skillRoots.sort()) {
         entryCount += 1
-        if (entryCount > MAXIMUM_PLUGIN_SCAN_ENTRIES) {
+        if (entryCount > maximumEntries) {
           limitReached = true
           recordIssue(rootPath, 'entry-limit')
           return

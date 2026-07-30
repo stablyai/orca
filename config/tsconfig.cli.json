@@ -9,7 +9,9 @@
     "../src/main/agent-hooks/hooks-json-read.ts",
     "../src/main/agent-hooks/installer-utils.ts",
     "../src/main/agent-hooks/installer-utils-remote.ts",
+    "../src/main/agent-hooks/local-agent-cli-presence.ts",
     "../src/main/agent-hooks/managed-agent-hook-controls.ts",
+    "../src/main/agent-hooks/managed-agent-hook-registry.ts",
     "../src/main/amp/hook-service.ts",
     "../src/main/antigravity/hook-service.ts",
     "../src/main/claude/hook-settings.ts",
@@ -68,6 +70,7 @@
     "../src/main/kimi/kimi-hook-config-toml.ts",
     "../src/main/openclaude/hook-service.ts",
     "../src/main/rolling-file-backup.ts",
+    "../src/main/startup/hydrate-shell-path.ts",
     "../src/main/runtime/runtime-metadata.ts",
     "../src/main/win32-utils.ts"
   ],
