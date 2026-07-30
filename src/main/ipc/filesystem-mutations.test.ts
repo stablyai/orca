@@ -171,6 +171,36 @@ describe('registerFilesystemMutationHandlers', () => {
     expect(renameMock).toHaveBeenCalledWith(oldPath, newPath)
   })
 
+  it('serializes concurrent local renames targeting the same destination', async () => {
+    const firstPath = path.resolve('/workspace/repo/first.ts')
+    const secondPath = path.resolve('/workspace/repo/second.ts')
+    const destinationPath = path.resolve('/workspace/repo/destination.ts')
+    let destinationExists = false
+    lstatMock.mockImplementation(async (filePath: string) => {
+      if (filePath === destinationPath && destinationExists) {
+        return mockStats(1, 30)
+      }
+      if (filePath === firstPath) {
+        return mockStats(1, 10)
+      }
+      if (filePath === secondPath) {
+        return mockStats(1, 20)
+      }
+      throw enoent()
+    })
+    renameMock.mockImplementation(async () => {
+      destinationExists = true
+    })
+
+    const results = await Promise.allSettled([
+      handlers.get('fs:rename')!(null, { oldPath: firstPath, newPath: destinationPath }),
+      handlers.get('fs:rename')!(null, { oldPath: secondPath, newPath: destinationPath })
+    ])
+
+    expect(results.map(({ status }) => status).sort()).toEqual(['fulfilled', 'rejected'])
+    expect(renameMock).toHaveBeenCalledTimes(1)
+  })
+
   it('rejects rename when destination already exists as a true collision', async () => {
     const oldPath = path.resolve('/workspace/repo/old.ts')
     const resolvedNewPath = path.resolve('/workspace/repo/new.ts')
