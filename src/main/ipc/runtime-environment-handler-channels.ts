@@ -3,6 +3,8 @@ export const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
   'runtimeEnvironments:addFromPairingCode',
   'runtimeEnvironments:verifyAndAddFromPairingCode',
   'runtimeEnvironments:resolve',
+  'runtimeEnvironments:rename',
+  'runtimeEnvironments:updateFromPairingCode',
   'runtimeEnvironments:remove',
   'runtimeEnvironments:disconnect',
   'runtimeEnvironments:connect',

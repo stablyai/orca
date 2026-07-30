@@ -150,6 +150,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:addFromPairingCode',
       'runtimeEnvironments:verifyAndAddFromPairingCode',
       'runtimeEnvironments:resolve',
+      'runtimeEnvironments:rename',
+      'runtimeEnvironments:updateFromPairingCode',
       'runtimeEnvironments:remove',
       'runtimeEnvironments:disconnect',
       'runtimeEnvironments:connect',
@@ -172,6 +174,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:addFromPairingCode',
       'runtimeEnvironments:verifyAndAddFromPairingCode',
       'runtimeEnvironments:resolve',
+      'runtimeEnvironments:rename',
+      'runtimeEnvironments:updateFromPairingCode',
       'runtimeEnvironments:remove',
       'runtimeEnvironments:disconnect',
       'runtimeEnvironments:connect',
@@ -227,6 +231,48 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
     expect(JSON.stringify(removed)).not.toContain('device-token')
     expect(await list(null, undefined)).toEqual([])
+  })
+
+
+  it('renames a saved environment without changing its id', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+    const rename = handler<{ selector: string; name: string }, { id: string; name: string }>(
+      'runtimeEnvironments:rename'
+    )
+    expect(rename(null, { selector: added.environment.id, name: 'lab' })).toMatchObject({
+      id: added.environment.id,
+      name: 'lab'
+    })
+    const list = handler<undefined, { id: string; name: string }[]>('runtimeEnvironments:list')
+    expect(await list(null, undefined)).toMatchObject([{ id: added.environment.id, name: 'lab' }])
+  })
+
+  it('re-pairs a saved environment and invalidates its transport', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string; endpoint?: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, {
+      name: 'desk',
+      pairingCode: pairingCode('ws://192.168.1.10:6768')
+    })
+    const update = handler<
+      { selector: string; pairingCode: string },
+      { id: string; name: string }
+    >('runtimeEnvironments:updateFromPairingCode')
+    expect(
+      update(null, {
+        selector: added.environment.id,
+        pairingCode: pairingCode('ws://100.64.0.5:6768')
+      })
+    ).toMatchObject({ id: added.environment.id, name: 'desk' })
+    expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
   })
 
   it('blocks loopback before verification unless an SSH tunnel is declared', async () => {

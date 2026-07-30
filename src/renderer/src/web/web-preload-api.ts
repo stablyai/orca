@@ -1465,6 +1465,57 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
         runtimeStatus
       }
     },
+    rename: async ({ selector, name }) => {
+      const environment = resolveEnvironment(selector)
+      const trimmed = name.trim()
+      if (!trimmed) {
+        throw new Error('Server name is required.')
+      }
+      const next = {
+        ...environment,
+        name: trimmed,
+        updatedAt: Date.now()
+      }
+      if (activeEnvironment?.id === environment.id) {
+        activeEnvironment = next
+        saveStoredWebRuntimeEnvironment(next)
+      }
+      return redactStoredWebRuntimeEnvironment(next)
+    },
+    updateFromPairingCode: async ({ selector, pairingCode }) => {
+      const environment = resolveEnvironment(selector)
+      const offer = parseWebPairingInput(pairingCode)
+      if (!offer) {
+        throw new Error('Invalid Orca pairing code.')
+      }
+      // Why: web clients only keep one active env; re-pair must drop the live
+      // socket so the next call uses the newly stored endpoint/token.
+      if (activeEnvironment?.id === environment.id) {
+        closeActiveRuntimeClients()
+      }
+      const now = Date.now()
+      const endpointId = environment.preferredEndpointId || `ws-${environment.id}`
+      const next = {
+        ...environment,
+        updatedAt: now,
+        preferredEndpointId: endpointId,
+        endpoints: [
+          {
+            id: endpointId,
+            kind: 'websocket' as const,
+            label: environment.endpoints[0]?.label ?? 'WebSocket',
+            endpoint: offer.endpoint,
+            deviceToken: offer.deviceToken,
+            publicKeyB64: offer.publicKeyB64
+          }
+        ]
+      }
+      if (activeEnvironment?.id === environment.id) {
+        activeEnvironment = next
+        saveStoredWebRuntimeEnvironment(next)
+      }
+      return redactStoredWebRuntimeEnvironment(next)
+    },
     resolve: async ({ selector }) =>
       redactStoredWebRuntimeEnvironment(resolveEnvironment(selector)),
     remove: async ({ selector }) => {

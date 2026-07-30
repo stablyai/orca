@@ -10,6 +10,7 @@ import {
   listEnvironments,
   MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES,
   markEnvironmentUsed,
+  renameEnvironment,
   updateEnvironmentFromPairingCode
 } from './runtime-environment-store'
 
@@ -177,4 +178,42 @@ describe('runtime environment store', () => {
     ).toThrow(RuntimeEnvironmentStoreError)
     expect(listEnvironments(userDataPath)).toEqual([first])
   })
+
+  it('renames a saved server while keeping its id and endpoint', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+    const env = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'dev box',
+      pairingCode: pairingCode('ws://127.0.0.1:6768')
+    })
+
+    const renamed = renameEnvironment(userDataPath, env.id, { name: 'lab box', now: 9_000 })
+    expect(renamed).toMatchObject({
+      id: env.id,
+      name: 'lab box',
+      preferredEndpointId: env.preferredEndpointId
+    })
+    expect(renamed.endpoints).toEqual(env.endpoints)
+    expect(listEnvironments(userDataPath).map((entry) => entry.name)).toEqual(['lab box'])
+  })
+
+  it('rejects rename to an existing server name', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+    addEnvironmentFromPairingCode(userDataPath, {
+      name: 'alpha',
+      pairingCode: pairingCode('ws://127.0.0.1:6768')
+    })
+    const beta = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'beta',
+      pairingCode: pairingCode('ws://127.0.0.1:6769')
+    })
+
+    expect(() => renameEnvironment(userDataPath, beta.id, { name: 'Alpha' })).toThrow(
+      /already exists/i
+    )
+  })
+
 })
+
+

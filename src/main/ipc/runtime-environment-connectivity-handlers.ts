@@ -3,6 +3,8 @@ import {
   addEnvironmentFromPairingCode,
   listEnvironments,
   removeEnvironment,
+  renameEnvironment,
+  updateEnvironmentFromPairingCode,
   resolveEnvironment
 } from '../../shared/runtime-environment-store'
 import {
@@ -77,6 +79,23 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   )
   ipcMain.handle('runtimeEnvironments:resolve', (_event, args: { selector: string }) =>
     redactRuntimeEnvironment(resolveEnvironment(getUserDataPath(), args.selector))
+  )
+  ipcMain.handle(
+    'runtimeEnvironments:rename',
+    (_event, args: { selector: string; name: string }) =>
+      redactRuntimeEnvironment(renameEnvironment(getUserDataPath(), args.selector, { name: args.name }))
+  )
+  ipcMain.handle(
+    'runtimeEnvironments:updateFromPairingCode',
+    (_event, args: { selector: string; pairingCode: string }) => {
+      // Why: re-pair replaces the endpoint/token; drop live sockets so the next
+      // connect uses the new peer rather than a stale transport generation.
+      const environment = updateEnvironmentFromPairingCode(getUserDataPath(), args.selector, {
+        pairingCode: args.pairingCode
+      })
+      invalidateTransport(environment.id)
+      return redactRuntimeEnvironment(environment)
+    }
   )
   ipcMain.handle(
     'runtimeEnvironments:remove',

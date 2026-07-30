@@ -3323,6 +3323,11 @@ export type PreloadApi = {
       allowLoopback?: boolean
     }) => Promise<VerifyAndAddRuntimeEnvironmentResult>
     resolve: (args: { selector: string }) => Promise<PublicKnownRuntimeEnvironment>
+    rename: (args: { selector: string; name: string }) => Promise<PublicKnownRuntimeEnvironment>
+    updateFromPairingCode: (args: {
+      selector: string
+      pairingCode: string
+    }) => Promise<PublicKnownRuntimeEnvironment>
     remove: (args: { selector: string }) => Promise<{ removed: PublicKnownRuntimeEnvironment }>
     disconnect: (args: {
       selector: string

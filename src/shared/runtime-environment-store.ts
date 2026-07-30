@@ -154,6 +154,45 @@ function getPairingConnectionDependency(
   }
 }
 
+export function renameEnvironment(
+  userDataPath: string,
+  selector: string,
+  args: { name: string; now?: number }
+): KnownRuntimeEnvironment {
+  const name = args.name.trim()
+  if (!name) {
+    throw new RuntimeEnvironmentStoreError('invalid_argument', 'Server name is required.')
+  }
+  const store = readEnvironmentStore(userDataPath)
+  const existing = resolveEnvironmentFromStore(store, selector)
+  if (existing.name === name) {
+    return existing
+  }
+  // Why: names are the human selector in CLI/UI; duplicates make resolve-by-name ambiguous.
+  const duplicate = store.environments.find(
+    (entry) => entry.id !== existing.id && entry.name.toLowerCase() === name.toLowerCase()
+  )
+  if (duplicate) {
+    throw new RuntimeEnvironmentStoreError(
+      'invalid_argument',
+      `A server named "${duplicate.name}" already exists.`
+    )
+  }
+  const now = args.now ?? Date.now()
+  const next: KnownRuntimeEnvironment = {
+    ...existing,
+    name,
+    updatedAt: now
+  }
+  writeEnvironmentStore(userDataPath, {
+    version: 1,
+    environments: store.environments
+      .map((entry) => (entry.id === existing.id ? next : entry))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  })
+  return next
+}
+
 export function resolveEnvironment(
   userDataPath: string,
   selector: string
