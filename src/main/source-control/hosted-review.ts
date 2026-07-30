@@ -6,6 +6,21 @@ import {
 } from './forge-provider'
 import type { HostedReviewExecutionOptions } from './hosted-review-git-options'
 
+const NETWORK_ERROR_CODES = new Set([
+  'ABORT_ERR',
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'ENETDOWN',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'ETIMEDOUT',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_SOCKET'
+])
+
 function classifyHostedReviewProviderError(
   error: unknown
 ): HostedReviewLookupError['errorType'] | null {
@@ -42,13 +57,15 @@ function classifyHostedReviewProviderError(
   if (lower.includes('rate limit') || lower.includes('http 429')) {
     return 'rate_limited'
   }
+  if (/http 5\d\d/.test(lower)) {
+    return 'server_error'
+  }
   if (
     lower.includes('timeout') ||
     lower.includes('network') ||
     lower.includes('no such host') ||
     lower.includes('could not resolve host') ||
     lower.includes('connection reset') ||
-    /http 5\d\d/.test(lower) ||
     names.has('ABORTERROR') ||
     [...codes].some((code) => NETWORK_ERROR_CODES.has(code))
   ) {
@@ -68,21 +85,6 @@ function classifyHostedReviewProviderError(
   }
   return null
 }
-
-const NETWORK_ERROR_CODES = new Set([
-  'ABORT_ERR',
-  'EAI_AGAIN',
-  'ECONNREFUSED',
-  'ECONNRESET',
-  'EHOSTUNREACH',
-  'ENETDOWN',
-  'ENETUNREACH',
-  'ENOTFOUND',
-  'ETIMEDOUT',
-  'UND_ERR_CONNECT_TIMEOUT',
-  'UND_ERR_HEADERS_TIMEOUT',
-  'UND_ERR_SOCKET'
-])
 
 function readErrorProperty(
   error: object,

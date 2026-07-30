@@ -218,6 +218,14 @@ describe('getHostedReviewForBranch', () => {
     }
   )
 
+  it('classifies provider HTTP 5xx responses as server errors', () => {
+    expect(hostedReviewLookupFailure(new Error('HTTP 503: Service Unavailable'), 'gitea')).toEqual({
+      kind: 'upstream-error',
+      provider: 'gitea',
+      errorType: 'server_error'
+    })
+  })
+
   it.each([
     ['top-level', Object.assign(new Error('request cancelled'), { name: 'AbortError' })],
     [
