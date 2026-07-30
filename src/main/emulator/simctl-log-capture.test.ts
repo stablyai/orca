@@ -7,7 +7,10 @@ vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 
 import { captureSimulatorLog } from './simctl-log-capture'
 
-/** Creates a controllable child-process double for streaming tests. */
+/**
+ * Creates a controllable child-process double for streaming tests.
+ * @returns An event emitter with writable output streams and a kill spy.
+ */
 function mockChild(): EventEmitter & {
   stdout: PassThrough
   stderr: PassThrough

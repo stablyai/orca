@@ -6,7 +6,12 @@ import { parseSimulatorLogLine, simctlLogShowArgs, type SimulatorLogEntry } from
 const SIMULATOR_LOG_TIMEOUT_MS = 20_000
 const SIMULATOR_LOG_STDERR_LIMIT = 64 * 1024
 
-/** Streams simulator logs while retaining only the newest requested entries. */
+/**
+ * Streams simulator logs while retaining only the newest requested entries.
+ * @param udid Simulator device identifier.
+ * @param options Line limit, predicates, and query window.
+ * @returns Normalized entries ordered from oldest to newest.
+ */
 export function captureSimulatorLog(
   udid: string,
   options?: { lines?: number; filters?: readonly string[]; window?: string }

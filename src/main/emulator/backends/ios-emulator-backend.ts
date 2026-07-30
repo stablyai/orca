@@ -192,7 +192,12 @@ export class IosEmulatorBackend implements EmulatorBackend {
     return requestServeSimAccessibilityTree(axUrl)
   }
 
-  /** Returns a bounded, app-filtered snapshot of recent iOS Unified Logs. */
+  /**
+   * Returns a bounded, app-filtered snapshot of recent iOS Unified Logs.
+   * @param deviceId Simulator identifier or name.
+   * @param options Line limit and required application filters.
+   * @returns Normalized entries ordered from oldest to newest.
+   */
   async logcat(
     deviceId: string,
     options?: { lines?: number; filters?: readonly string[] }
