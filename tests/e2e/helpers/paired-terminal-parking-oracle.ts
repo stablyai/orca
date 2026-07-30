@@ -1,7 +1,10 @@
 import type { Page } from '@stablyai/playwright-test'
 import type { RuntimeTerminalRead } from '../../../src/shared/runtime-types'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
-import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-id'
+import {
+  toHostSessionTabId,
+  toWebTerminalSurfaceTabId
+} from '../../../src/shared/terminal-surface-id'
 import {
   readPairedRetentionSample,
   startRendererLagProbe
@@ -15,11 +18,6 @@ const MIN_STAGED_BUFFER_CELLS = 1_000_000
 const MAX_RETAINED_CELL_FRACTION = 0.45
 const MAX_EVICTION_LAG_MS = 500
 const MAX_HEAP_GROWTH_BYTES = 16 * 1024 * 1024
-
-type PairedTerminalParkingSeed = {
-  fallbackWorktreeId: string
-  repoId: string
-}
 
 type RemoteTab = {
   marker: string
@@ -44,7 +42,8 @@ async function callRuntime<TResult>(page: Page, method: string, params: unknown)
 
 export async function runPairedTerminalParkingOracle(
   page: Page,
-  seed: PairedTerminalParkingSeed
+  seed: { fallbackWorktreeId: string; repoId: string },
+  options: { hostPage?: Page } = {}
 ): Promise<void> {
   const fixture = createPairedTerminalParkingFixture()
   const createdWorktreeIds: string[] = []
@@ -132,6 +131,7 @@ export async function runPairedTerminalParkingOracle(
         .toContain(`FILLED:${created.marker}`)
       remoteTabs.push({ ...created, originalPtyId })
     }
+    await expectHostTerminalsUnmounted(options.hostPage, seed.fallbackWorktreeId, remoteTabs)
 
     await page.evaluate(() => window.__store?.getState().setActiveView('tasks'))
     await expect
@@ -263,6 +263,7 @@ export async function runPairedTerminalParkingOracle(
     await expect
       .poll(() => getTerminalContent(page), { timeout: 30_000 })
       .toContain(`LIVE:${liveMarker}`)
+    await expectHostTerminalsUnmounted(options.hostPage, seed.fallbackWorktreeId, remoteTabs)
   } finally {
     for (const tab of remoteTabs) {
       await callRuntime(page, 'terminal.closeTab', { terminal: tab.terminal }).catch(
@@ -281,4 +282,27 @@ export async function runPairedTerminalParkingOracle(
     }
     fixture.dispose()
   }
+}
+
+async function expectHostTerminalsUnmounted(
+  hostPage: Page | undefined,
+  activeWorktreeId: string,
+  remoteTabs: RemoteTab[]
+): Promise<void> {
+  if (!hostPage) {
+    return
+  }
+  await expect
+    .poll(
+      () =>
+        hostPage.evaluate(
+          (tabIds) => ({
+            activeWorktreeId: window.__store?.getState().activeWorktreeId,
+            mountedCount: tabIds.filter((tabId) => window.__paneManagers?.has(tabId)).length
+          }),
+          remoteTabs.map(({ tabId }) => toHostSessionTabId(tabId))
+        ),
+      { timeout: 30_000 }
+    )
+    .toEqual({ activeWorktreeId, mountedCount: 0 })
 }
