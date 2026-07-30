@@ -1,5 +1,5 @@
 /* GitLab-specific shared types, split from `./types` to avoid merge conflicts on upstream syncs; re-exported from `./types` for import stability. */
-import type { CheckStatus, ClassifiedError, PRConflictSummary } from './types'
+import type { CheckStatus, ClassifiedError, PRConflictSummary, ProviderCheckSummary } from './types'
 
 // Why: flat owner/repo is inadequate — projects nest (`group/subgroup/project`) and self-hosted hosts must travel with the path for URL/glab targeting.
 export type GitLabProjectRef = { host: string; path: string }
@@ -172,6 +172,7 @@ export type GitLabWorkItem = {
   repoId: string
   /** Exact GitLab project that produced this row — mutations/details use it instead of re-resolving the repo preference. */
   projectRef?: GitLabProjectRef
+  checksSummary?: ProviderCheckSummary
 }
 
 export type GitLabMRFile = {

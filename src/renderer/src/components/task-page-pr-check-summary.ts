@@ -1,4 +1,4 @@
-import type { GitHubPRCheckSummary, PRCheckDetail } from '../../../shared/types'
+import type { PRCheckDetail, ProviderCheckSummary } from '../../../shared/types'
 
 function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['conclusion']> {
   return check.conclusion ?? 'pending'
@@ -12,7 +12,7 @@ function isPendingCheck(check: PRCheckDetail): boolean {
   )
 }
 
-export function deriveTaskPagePRCheckSummary(checks: PRCheckDetail[]): GitHubPRCheckSummary {
+export function deriveTaskPagePRCheckSummary(checks: PRCheckDetail[]): ProviderCheckSummary {
   if (checks.length === 0) {
     return { state: 'none', total: 0, passed: 0, failed: 0, pending: 0, neutral: 0 }
   }

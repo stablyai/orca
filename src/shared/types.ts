@@ -1542,7 +1542,7 @@ export type GitHubAssignableUser = {
   avatarUrl: string
 }
 
-export type GitHubPRCheckSummary = {
+export type ProviderCheckSummary = {
   state: 'success' | 'failure' | 'pending' | 'neutral' | 'none'
   total: number
   passed: number
@@ -1587,7 +1587,7 @@ export type GitHubWorkItem = {
   reviewRequests?: GitHubAssignableUser[]
   latestReviews?: GitHubPRReviewSummary[]
   assignees?: GitHubAssignableUser[]
-  checksSummary?: GitHubPRCheckSummary
+  checksSummary?: ProviderCheckSummary
   mergeable?: PRMergeableState
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null

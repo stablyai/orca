@@ -61,6 +61,10 @@ import {
 } from '../../../src/session/mobile-file-syntax'
 import { buildGitHubCheckSummary } from '../../../src/tasks/github-check-summary'
 import { buildGitLabCheckSummary } from '../../../src/tasks/gitlab-check-summary'
+import {
+  getGitHubPRSignalTone,
+  getHostedChecksLabel
+} from '../../../src/tasks/mobile-hosted-check-status'
 import { buildTaskWorkspaceCreateParams } from '../../../src/tasks/workspace-create-params'
 import { MOBILE_TASKS_CAPABILITY } from '../../../src/tasks/mobile-tasks-capability'
 import {
@@ -139,7 +143,7 @@ import {
 import type {
   BaseRefSearchResult,
   GitHubOwnerRepo,
-  GitHubPRCheckSummary,
+  ProviderCheckSummary,
   PersistedTrustedOrcaHooks,
   SparsePreset,
   TuiAgent
@@ -183,7 +187,7 @@ type GitHubWorkItem = {
   reviewDecision?: string | null
   reviewRequests?: GitHubAssignableUser[]
   latestReviews?: GitHubPRReviewSummary[]
-  checksSummary?: GitHubPRCheckSummary
+  checksSummary?: ProviderCheckSummary
   mergeable?: GitHubPRMergeableState
   mergeStateStatus?: string | null
 }
@@ -232,7 +236,7 @@ type GitLabWorkItem = {
   baseRefName?: string
   isCrossRepository?: boolean
   projectRef?: { host: string; path: string }
-  checksSummary?: GitHubPRCheckSummary
+  checksSummary?: ProviderCheckSummary
   repoId: string
   repoName: string
 }
@@ -1251,25 +1255,6 @@ function hostedBranchSummary(item: TaskItem): { head: string; base: string } | n
   return null
 }
 
-function getGitHubChecksLabel(item: GitHubWorkItem): string {
-  const summary = item.checksSummary
-  if (!summary) {
-    return 'Checks'
-  }
-  if (summary.total === 0) {
-    return 'No checks'
-  }
-  if (summary.failed > 0) {
-    return `${summary.failed} failing`
-  }
-  if (summary.pending > 0) {
-    return `${summary.pending} pending`
-  }
-  return summary.state === 'neutral'
-    ? 'Unresolved checks'
-    : `${summary.passed}/${summary.total} passed`
-}
-
 function getGitHubMergeLabel(item: GitHubWorkItem): string {
   if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
     return 'Merge'
@@ -1371,46 +1356,6 @@ function getHostedStateConfirmMessage(pending: PendingHostedStateChange): string
 function getHostedStateConfirmLabel(pending: PendingHostedStateChange): string {
   const target = hostedStateChangeTarget(pending)
   return `${hostedStateChangeAction(pending.nextState)} ${target.labelTarget}`
-}
-
-function getGitHubPRSignalTone(
-  item: GitHubWorkItem,
-  signal: 'review' | 'checks' | 'merge'
-): 'neutral' | 'success' | 'warning' | 'danger' {
-  if (signal === 'review') {
-    if (item.reviewDecision === 'APPROVED') {
-      return 'success'
-    }
-    if (item.reviewDecision === 'CHANGES_REQUESTED') {
-      return 'danger'
-    }
-    if (item.reviewRequests && item.reviewRequests.length > 0) {
-      return 'warning'
-    }
-    return 'neutral'
-  }
-  if (signal === 'checks') {
-    if (item.checksSummary?.state === 'success') {
-      return 'success'
-    }
-    if (item.checksSummary?.state === 'failure') {
-      return 'danger'
-    }
-    if (item.checksSummary?.state === 'pending') {
-      return 'warning'
-    }
-    return 'neutral'
-  }
-  if (item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'BLOCKED') {
-    return 'danger'
-  }
-  if (item.mergeStateStatus === 'BEHIND' || item.checksSummary?.state === 'pending') {
-    return 'warning'
-  }
-  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
-    return 'success'
-  }
-  return 'neutral'
 }
 
 function mergeGitHubAssignableUsers(
@@ -9693,6 +9638,7 @@ export default function MobileTasksScreen() {
             const item = entry.item
             const repo = taskRepositoryMeta(item, reposById)
             const isGitHubPr = item.provider === 'github' && item.source.type === 'pr'
+            const isGitLabMr = item.provider === 'gitlab' && item.source.type === 'mr'
             const githubPrDelta = isGitHubPr ? formatGitHubPRDelta(item.source) : null
             const branchSummary = hostedBranchSummary(item)
             return (
@@ -9738,25 +9684,27 @@ export default function MobileTasksScreen() {
                       </Text>
                     </View>
                   ) : null}
-                  {isGitHubPr ? (
+                  {isGitHubPr || isGitLabMr ? (
                     <View style={styles.prSignalRow}>
-                      {githubPrDelta ? (
+                      {isGitHubPr && githubPrDelta ? (
                         <View style={styles.prSignalChip}>
                           <Text style={styles.prSignalText} numberOfLines={1}>
                             {githubPrDelta}
                           </Text>
                         </View>
                       ) : null}
-                      <View
-                        style={[
-                          styles.prSignalChip,
-                          getPrSignalToneStyle(getGitHubPRSignalTone(item.source, 'review'))
-                        ]}
-                      >
-                        <Text style={styles.prSignalText} numberOfLines={1}>
-                          {getGitHubReviewSummary(item.source)}
-                        </Text>
-                      </View>
+                      {isGitHubPr ? (
+                        <View
+                          style={[
+                            styles.prSignalChip,
+                            getPrSignalToneStyle(getGitHubPRSignalTone(item.source, 'review'))
+                          ]}
+                        >
+                          <Text style={styles.prSignalText} numberOfLines={1}>
+                            {getGitHubReviewSummary(item.source)}
+                          </Text>
+                        </View>
+                      ) : null}
                       <View
                         style={[
                           styles.prSignalChip,
@@ -9764,19 +9712,21 @@ export default function MobileTasksScreen() {
                         ]}
                       >
                         <Text style={styles.prSignalText} numberOfLines={1}>
-                          {getGitHubChecksLabel(item.source)}
+                          {getHostedChecksLabel(item.source)}
                         </Text>
                       </View>
-                      <View
-                        style={[
-                          styles.prSignalChip,
-                          getPrSignalToneStyle(getGitHubPRSignalTone(item.source, 'merge'))
-                        ]}
-                      >
-                        <Text style={styles.prSignalText} numberOfLines={1}>
-                          {getGitHubMergeLabel(item.source)}
-                        </Text>
-                      </View>
+                      {isGitHubPr ? (
+                        <View
+                          style={[
+                            styles.prSignalChip,
+                            getPrSignalToneStyle(getGitHubPRSignalTone(item.source, 'merge'))
+                          ]}
+                        >
+                          <Text style={styles.prSignalText} numberOfLines={1}>
+                            {getGitHubMergeLabel(item.source)}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
                   ) : null}
                 </View>

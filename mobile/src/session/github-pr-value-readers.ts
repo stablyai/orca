@@ -1,7 +1,7 @@
 import type {
   CheckStatus,
   GitHubAssignableUser,
-  GitHubPRCheckSummary,
+  ProviderCheckSummary,
   GitHubPRMergeMethod,
   GitHubPRMergeMethodSettings,
   GitHubPRReviewSummary,
@@ -182,7 +182,7 @@ export function readMergeMethodSettings(value: unknown): GitHubPRMergeMethodSett
   }
 }
 
-export function readCheckSummary(value: unknown): GitHubPRCheckSummary | undefined {
+export function readCheckSummary(value: unknown): ProviderCheckSummary | undefined {
   if (!isRecord(value)) {
     return undefined
   }
