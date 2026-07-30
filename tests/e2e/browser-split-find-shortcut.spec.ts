@@ -162,6 +162,17 @@ async function waitForFocusedGroup(page: Page, groupId: string): Promise<void> {
   )
 }
 
+async function focusBrowserGroup(page: Page, groupId: string): Promise<void> {
+  await page.evaluate((targetGroupId) => {
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    if (state && worktreeId) {
+      state.focusGroup(worktreeId, targetGroupId)
+    }
+  }, groupId)
+  await waitForFocusedGroup(page, groupId)
+}
+
 test.describe('browser split Find shortcut', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
@@ -188,10 +199,10 @@ test.describe('browser split Find shortcut', () => {
     await expect(browserFindInput(orcaPage)).toBeHidden()
     await orcaPage.keyboard.press('Escape')
 
+    await focusBrowserGroup(orcaPage, fixture.browserGroupId)
     const browserAddress = browserAddressBar(orcaPage, fixture.browserTabId)
     await expect(browserAddress).toBeVisible()
     await browserAddress.click()
-    await waitForFocusedGroup(orcaPage, fixture.browserGroupId)
     await orcaPage.keyboard.press(`${modifier}+f`)
     await expect(browserFindInput(orcaPage)).toBeFocused()
     await expect(terminalFindInput(orcaPage)).toBeHidden()
@@ -230,6 +241,7 @@ test.describe('browser split Find shortcut', () => {
     orcaPage
   }) => {
     const fixture = await createTerminalBrowserSplit(orcaPage)
+    await focusBrowserGroup(orcaPage, fixture.browserGroupId)
     const addressBar = browserAddressBar(orcaPage, fixture.browserTabId)
     await expect(addressBar).toBeVisible()
     await addressBar.click()
@@ -256,6 +268,7 @@ test.describe('browser split Find shortcut', () => {
 
   test('keeps browser Find available when the focused split ID is stale', async ({ orcaPage }) => {
     const fixture = await createTerminalBrowserSplit(orcaPage)
+    await focusBrowserGroup(orcaPage, fixture.browserGroupId)
     const addressBar = browserAddressBar(orcaPage, fixture.browserTabId)
     await expect(addressBar).toBeVisible()
     await addressBar.click()
