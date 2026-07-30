@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import type { PRCheckDetail } from './types'
 import { getCheckSeverityRank, sortChecksBySeverity } from './pr-check-severity-order'
 
 const check = (name: string, conclusion: string | null) =>
-  ({ name, conclusion }) as { name: string; conclusion: never }
+  ({ name, conclusion }) as Pick<PRCheckDetail, 'name' | 'conclusion'>
 
 describe('PR check severity order', () => {
   it('keeps passing checks above the skipped and neutral noise', () => {
@@ -38,6 +39,36 @@ describe('PR check severity order', () => {
       'pending',
       'success',
       'skipped'
+    ])
+  })
+
+  it('covers every known conclusion and preserves input order within equal ranks', () => {
+    const sorted = sortChecksBySeverity([
+      check('success-a', 'success'),
+      check('unknown', 'future_state'),
+      check('skipped', 'skipped'),
+      check('action-required', 'action_required'),
+      check('pending', 'pending'),
+      check('timed-out', 'timed_out'),
+      check('neutral', 'neutral'),
+      check('cancelled', 'cancelled'),
+      check('failure', 'failure'),
+      check('success-b', 'success'),
+      check('failure-b', 'failure-b')
+    ])
+
+    expect(sorted.map((c) => c.name)).toEqual([
+      'action-required',
+      'timed-out',
+      'failure',
+      'cancelled',
+      'pending',
+      'success-a',
+      'success-b',
+      'neutral',
+      'skipped',
+      'unknown',
+      'failure-b'
     ])
   })
 
