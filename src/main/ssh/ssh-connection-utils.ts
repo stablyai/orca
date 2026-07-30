@@ -5,11 +5,13 @@ import type { ConnectConfig } from 'ssh2'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import {
+  findEncryptedPrivateKeyPath,
   resolveAgentConfigValue,
   resolveAgentSocket,
-  resolvePrivateKey,
-  resolveUnencryptedExplicitPrivateKey
+  resolvePrivateKeys,
+  resolveUnencryptedExplicitPrivateKeys
 } from './ssh-auth-resolution'
+import { configurePrivateKeyAuthentication } from './ssh-private-key-authentication'
 import { isOpenSshConfigBackedTarget } from './system-ssh-args'
 
 export { findDefaultKeyFile, resolveAgentSocket } from './ssh-auth-resolution'
@@ -206,13 +208,15 @@ export function buildConnectConfig(
     config.agentForward = true
   }
 
-  const key =
+  const keys =
     (options.includePrivateKey ?? !agent)
-      ? resolvePrivateKey(target, resolved)
-      : resolveUnencryptedExplicitPrivateKey(target, resolved)
-  if (key) {
-    config.privateKey = key.contents
-  }
+      ? resolvePrivateKeys(target, resolved)
+      : resolveUnencryptedExplicitPrivateKeys(target, resolved)
+  configurePrivateKeyAuthentication(
+    config as ConnectConfig,
+    keys,
+    findEncryptedPrivateKeyPath(keys)
+  )
 
   return config as ConnectConfig
 }

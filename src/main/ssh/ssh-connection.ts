@@ -40,6 +40,7 @@ import {
   type SshExecOptions,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
+import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import {
   resolveSftpTransferPathIfMapped,
@@ -728,14 +729,19 @@ export class SshConnection {
               throw keyErr
             }
             authError = keyErr
+            const passphraseKeyPath = getPassphrasePrivateKeyPath(keyConfig)
             // Why: with GSSAPI enabled, let the reactive system-ssh probe try a Kerberos ticket before prompting for the passphrase; the prompt still runs if it fails.
             if (
-              isPassphraseError(authError) &&
+              (isPassphraseError(authError) || passphraseKeyPath) &&
               !this.cachedPassphrase &&
               !isGssapiSystemSshFallbackCandidate(authError, this.target, resolved)
             ) {
               passphrasePromptHandled = true
-              const detail = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
+              const detail =
+                passphraseKeyPath ||
+                this.target.identityFile ||
+                resolved?.identityFile?.[0] ||
+                '(unknown)'
               const val = await this.callbacks.onCredentialRequest?.(
                 this.target.id,
                 'passphrase',
@@ -779,8 +785,17 @@ export class SshConnection {
       }
 
       // Why: prompt for passphrase on encrypted-key error, then retry with a fresh proxy socket (ssh2 may have destroyed the original).
-      if (isPassphraseError(authError) && !this.cachedPassphrase && !passphrasePromptHandled) {
-        const detail = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
+      const passphraseKeyPath = getPassphrasePrivateKeyPath(credentialRetryConfig)
+      if (
+        (isPassphraseError(authError) || passphraseKeyPath) &&
+        !this.cachedPassphrase &&
+        !passphrasePromptHandled
+      ) {
+        const detail =
+          passphraseKeyPath ||
+          this.target.identityFile ||
+          resolved?.identityFile?.[0] ||
+          '(unknown)'
         const val = await this.callbacks.onCredentialRequest(this.target.id, 'passphrase', detail)
         if (val) {
           this.cachedPassphrase = val
