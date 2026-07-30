@@ -9,26 +9,7 @@ import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/ty
 import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
-import {
-  toRuntimeExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID
-} from '../../../../shared/execution-host'
-
-function ownerFetchOptions(runtimeEnvironmentId: string | null | undefined): {
-  requireAuthoritative: true
-  executionHostId?: ReturnType<typeof toRuntimeExecutionHostId> | typeof LOCAL_EXECUTION_HOST_ID
-} {
-  return {
-    requireAuthoritative: true,
-    ...(runtimeEnvironmentId !== undefined
-      ? {
-          executionHostId: runtimeEnvironmentId
-            ? toRuntimeExecutionHostId(runtimeEnvironmentId)
-            : LOCAL_EXECUTION_HOST_ID
-        }
-      : {})
-  }
-}
+import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 
 type DefaultCheckoutHandoffReason = EventProps<'add_repo_default_checkout_handoff'>['reason']
 
@@ -80,7 +61,7 @@ async function revealDetectedHiddenLinkedExternalWorktrees(
   }
   const refreshed = await useAppStore
     .getState()
-    .fetchWorktrees(repoId, ownerFetchOptions(runtimeEnvironmentId))
+    .fetchWorktrees(repoId, worktreeRefreshOptions(runtimeEnvironmentId))
   return refreshed ? null : 'linked_external_refresh_failed'
 }
 
@@ -111,7 +92,7 @@ async function findDetectedDefaultCheckout(
   }
   const refreshed = await useAppStore
     .getState()
-    .fetchWorktrees(repoId, ownerFetchOptions(runtimeEnvironmentId))
+    .fetchWorktrees(repoId, worktreeRefreshOptions(runtimeEnvironmentId))
   if (!refreshed) {
     return { worktree: null, reason: 'authoritative_refresh_failed' }
   }

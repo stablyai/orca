@@ -111,7 +111,8 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
 
   it('keeps runtime folder opens on the runtime that produced the scan', async () => {
     const { handleOpenNestedRootFolder } = useTestAddRepoNestedImportFlow({
-      activeRuntimeEnvironmentId: 'env-1'
+      activeRuntimeEnvironmentId: 'env-1',
+      nestedRuntimeEnvironmentId: 'env-1'
     })
 
     await handleOpenNestedRootFolder()

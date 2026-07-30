@@ -9,8 +9,10 @@ import {
 } from '../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
+import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
+import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 
 type ShowNestedRepoReview = (args: {
   scan: NestedRepoScanResult
@@ -49,7 +51,7 @@ export function useAddRepoLocalFolderFlow({
   activeRuntimeEnvironmentId: string | null | undefined
   addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
   closeModal: () => void
-  fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
+  fetchWorktrees: (repoId: string, options?: WorktreeFetchOptions) => Promise<unknown>
   scanNestedRepos: (
     path: string,
     connectionId?: string,
@@ -62,7 +64,11 @@ export function useAddRepoLocalFolderFlow({
   setActiveNestedScanId: (scanId: string | null) => void
   setNestedScanInProgress: (inProgress: boolean) => void
   showNestedRepoReview: ShowNestedRepoReview
-  onGitRepoReady: (repoId: string, source: AddRepoExistingWorkspaceSource, runtimeEnvironmentId?: string | null) => Promise<void>
+  onGitRepoReady: (
+    repoId: string,
+    source: AddRepoExistingWorkspaceSource,
+    runtimeEnvironmentId?: string | null
+  ) => Promise<void>
   setIsAdding: (isAdding: boolean) => void
   setAddProjectBusyLabel: (label: string | null) => void
 }): {
@@ -170,18 +176,14 @@ export function useAddRepoLocalFolderFlow({
         if (isGitRepoKind(repo)) {
           // Why: once the repo exists, a transient non-authoritative refresh
           // should fall through to project reveal instead of leaving the add flow open.
-          await fetchWorktrees(repo.id, { requireAuthoritative: true })
+          await fetchWorktrees(repo.id, worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null))
           if (gen !== localAddGenRef.current) {
             return { status: 'cancelled' }
           }
           if (mode === 'batch') {
             return { status: 'completed', repo }
           }
-          await onGitRepoReady(
-            repo.id,
-            source,
-            ...(activeRuntimeEnvironmentId ? [activeRuntimeEnvironmentId] : [])
-          )
+          await onGitRepoReady(repo.id, source, activeRuntimeEnvironmentId ?? null)
         } else {
           // Why: folder repos skip the Git default-checkout handoff and activate
           // their synthetic root workspace in the folder add flow.
@@ -271,11 +273,7 @@ export function useAddRepoLocalFolderFlow({
         )
       }
       if (shouldDeferGitRepoReady && gitRepoIds.length > 0) {
-        await onGitRepoReady(
-          gitRepoIds[0],
-          source,
-          ...(activeRuntimeEnvironmentId ? [activeRuntimeEnvironmentId] : [])
-        )
+        await onGitRepoReady(gitRepoIds[0], source, activeRuntimeEnvironmentId ?? null)
       }
     },
     [activeRuntimeEnvironmentId, addLocalPathForGeneration, onGitRepoReady]

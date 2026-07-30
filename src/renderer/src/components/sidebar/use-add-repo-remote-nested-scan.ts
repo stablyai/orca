@@ -16,6 +16,7 @@ export function useAddRepoRemoteNestedScan({
     runtimeKind: 'ssh'
     inProgress: boolean
     scanId: string | null
+    runtimeEnvironmentId?: string | null
   }) => void
 }) {
   const showRemoteNestedRepoReview = useCallback(
@@ -35,7 +36,8 @@ export function useAddRepoRemoteNestedScan({
         attemptId,
         runtimeKind: 'ssh',
         inProgress,
-        scanId
+        scanId,
+        runtimeEnvironmentId: null
       })
     },
     [setActiveNestedScanId, showNestedRepoReview]

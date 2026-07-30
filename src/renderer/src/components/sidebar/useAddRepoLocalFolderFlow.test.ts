@@ -108,10 +108,16 @@ describe('useAddRepoLocalFolderFlow', () => {
     expect(addRepoPath).toHaveBeenCalledTimes(2)
     expect(addRepoPath).toHaveBeenNthCalledWith(1, '/projects/alpha')
     expect(addRepoPath).toHaveBeenNthCalledWith(2, '/projects/beta')
-    expect(fetchWorktrees).toHaveBeenCalledWith('alpha', { requireAuthoritative: true })
-    expect(fetchWorktrees).toHaveBeenCalledWith('beta', { requireAuthoritative: true })
+    expect(fetchWorktrees).toHaveBeenCalledWith('alpha', {
+      requireAuthoritative: true,
+      executionHostId: 'local'
+    })
+    expect(fetchWorktrees).toHaveBeenCalledWith('beta', {
+      requireAuthoritative: true,
+      executionHostId: 'local'
+    })
     expect(onGitRepoReady).toHaveBeenCalledTimes(1)
-    expect(onGitRepoReady).toHaveBeenCalledWith('alpha', 'local_folder_picker')
+    expect(onGitRepoReady).toHaveBeenCalledWith('alpha', 'local_folder_picker', null)
   })
 
   it('skips nested-review folders in a multi-folder add and continues with git folders', async () => {
@@ -148,7 +154,7 @@ describe('useAddRepoLocalFolderFlow', () => {
     expect(addRepoPath).toHaveBeenCalledTimes(1)
     expect(addRepoPath).toHaveBeenCalledWith('/projects/later')
     expect(scanNestedRepos).toHaveBeenCalledTimes(2)
-    expect(onGitRepoReady).toHaveBeenCalledWith('later', 'local_folder_picker')
+    expect(onGitRepoReady).toHaveBeenCalledWith('later', 'local_folder_picker', null)
   })
 
   it('still completes handoff when a later selected folder is skipped', async () => {
@@ -182,6 +188,6 @@ describe('useAddRepoLocalFolderFlow', () => {
     expect(showNestedRepoReview).not.toHaveBeenCalled()
     expect(addRepoPath).toHaveBeenCalledTimes(1)
     expect(addRepoPath).toHaveBeenCalledWith('/projects/git')
-    expect(onGitRepoReady).toHaveBeenCalledWith('git', 'local_folder_picker')
+    expect(onGitRepoReady).toHaveBeenCalledWith('git', 'local_folder_picker', null)
   })
 })

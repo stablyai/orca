@@ -32,7 +32,7 @@ export function useAddRepoNestedReviewState({
   nestedScanInProgress: boolean
   nestedScanId: string | null
   nestedImportScanId: string | null
-  nestedRuntimeEnvironmentId: string | null
+  nestedRuntimeEnvironmentId: string | null | undefined
   setNestedSelectedPaths: Dispatch<SetStateAction<Set<string>>>
   setNestedGroupName: Dispatch<SetStateAction<string>>
   setNestedScanInProgress: Dispatch<SetStateAction<boolean>>
@@ -53,7 +53,9 @@ export function useAddRepoNestedReviewState({
   const [nestedScanInProgress, setNestedScanInProgress] = useState(false)
   const [nestedScanId, setNestedScanId] = useState<string | null>(null)
   const [nestedImportScanId, setNestedImportScanId] = useState<string | null>(null)
-  const [nestedRuntimeEnvironmentId, setNestedRuntimeEnvironmentId] = useState<string | null>(null)
+  const [nestedRuntimeEnvironmentId, setNestedRuntimeEnvironmentId] = useState<
+    string | null | undefined
+  >(undefined)
   const nestedScanIdRef = useRef<string | null>(null)
 
   const getNestedRepoRuntimeKind = useCallback(

@@ -133,6 +133,9 @@ describe('useAddRepoServerPathFlow', () => {
     expect(mocks.addRepoPath).toHaveBeenCalledWith('/server/docs', 'git', {
       runtimeEnvironmentId: 'box1-environment-id'
     })
-    expect(mocks.fetchWorktrees).toHaveBeenCalledWith('server-git', { requireAuthoritative: true })
+    expect(mocks.fetchWorktrees).toHaveBeenCalledWith('server-git', {
+      requireAuthoritative: true,
+      executionHostId: 'runtime:box1-environment-id'
+    })
   })
 })
