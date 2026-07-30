@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/types'
+import { serializeWorkspaceLaneFullIds } from './workspace-kanban-filtered-drop-index'
 import {
   buildWorkspaceKanbanSidebarDropUpdates,
   clearWorkspaceKanbanSidebarDropTargetVisual,
   getWorkspaceKanbanSidebarDropGroups,
   getWorkspaceKanbanSidebarDropTarget,
   isWorkspaceKanbanSidebarDropPointInBoard,
+  resolveWorkspaceKanbanSidebarFullLaneDropIndex,
   updateWorkspaceKanbanSidebarDropTargetVisual
 } from './workspace-kanban-sidebar-drop'
 
@@ -245,6 +247,48 @@ describe('workspace kanban sidebar drop DOM bridge', () => {
     expect(getWorkspaceKanbanSidebarDropGroups()).toEqual([
       { key: 'doing', worktreeIds: ['doing-a', 'doing-b'] }
     ])
+  })
+
+  it('prefers the published full lane membership over the rendered card scan', () => {
+    const { lane } = appendBoard()
+    lane.dataset.workspaceLaneFullIds =
+      serializeWorkspaceLaneFullIds(['doing-x', 'doing-a', 'doing-y', 'doing-b']) ?? ''
+    setElementFromPoint(lane)
+
+    expect(getWorkspaceKanbanSidebarDropGroups()).toEqual([
+      { key: 'doing', worktreeIds: ['doing-x', 'doing-a', 'doing-y', 'doing-b'] }
+    ])
+  })
+
+  it('keeps the tracked drop target in the rendered index space of the indicator', () => {
+    const { lane } = appendBoard()
+    lane.dataset.workspaceLaneFullIds =
+      serializeWorkspaceLaneFullIds(['doing-x', 'doing-a', 'doing-y', 'doing-b']) ?? ''
+    setElementFromPoint(lane)
+
+    expect(getWorkspaceKanbanSidebarDropTarget(24, 60)).toMatchObject({
+      status: 'doing',
+      dropIndex: 1
+    })
+  })
+
+  it('translates a rendered drop index onto the full lane at the commit boundary', () => {
+    const { lane } = appendBoard()
+    lane.dataset.workspaceLaneFullIds =
+      serializeWorkspaceLaneFullIds(['doing-x', 'doing-a', 'doing-y', 'doing-b']) ?? ''
+    setElementFromPoint(lane)
+
+    // Rendered index 1 means "before doing-b", which is index 3 in the full lane.
+    expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('doing', 1)).toBe(3)
+    // Why: a tracked target can be committed after the pointer left the lane,
+    // so the translation must not depend on the current pointer position.
+    expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('doing', 2)).toBe(4)
+  })
+
+  it('passes the drop index through for a lane it cannot find', () => {
+    appendBoard()
+
+    expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('todo', 2)).toBe(2)
   })
 
   it('marks and clears the external board hover target', () => {

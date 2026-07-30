@@ -12,6 +12,7 @@ import {
 } from './tab-agent'
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
 import { resolveCompatibleAgentTypeForOwner } from '../../../shared/agent-title-owner'
+import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
 import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
 import type { TerminalTab, TuiAgent } from '../../../shared/types'
 
@@ -86,7 +87,7 @@ export function resolveTabAgentFromSignals(args: {
     sleepingSessionAgent: args.sleepingSessionAgent
   }) as TuiAgent | null
 
-  // The live/idle split governs title override: a LIVE hook is never title-overridden; an IDLE record can be reclaimed by a cross-group title. Siblings normalize vs launchAgent only.
+  // The live/idle split governs title override; siblings normalize against launch intent only.
   const liveFocusedIdentity = resolveSignalAgentForLaunchOwner(args.hookAgent, owner)
   const liveSiblingIdentity = resolveSignalAgentForLaunchOwner(args.siblingHookAgent, launchAgent)
   // Why: OSC 133;D proves this local pane returned to shell, so the idle identity is stale; remote titles lag runtime, so keep it there.
@@ -103,6 +104,7 @@ export function resolveTabAgentFromSignals(args: {
     args.siblingCompletedHookAgent,
     launchAgent
   )
+  const sleepingSessionAgent = args.sleepingSessionAgent ?? null
 
   // Title carries identity only as a reuse override (names a DIFFERENT-group agent) or a legacy standalone id when no hook — same-group titles say nothing (OMP wraps Pi), so the record wins.
   const explicitTitleAgent = resolveSignalAgentForLaunchOwner(
@@ -110,19 +112,24 @@ export function resolveTabAgentFromSignals(args: {
     owner
   )
   const priorIdentity = idleFocusedIdentity ?? launchAgent
-  // Why: a completed hook already proves activity, so it arms the reuse override without waiting for hasObservedAgentSignal (false for one mount commit).
+  const nativeOpenCodeTitle = explicitTitleAgent === 'opencode' && isOpenCodeNativeTitle(args.title)
+  // Why: native OpenCode titles can reclaim stale launch intent before any observed hook signal.
   const titleReclaimsReusedPane =
     priorIdentity !== null &&
     explicitTitleAgent !== null &&
     explicitTitleAgent !== priorIdentity &&
-    (args.hasObservedAgentSignal || hasCompletedHook)
-  const titleAgent = processProvesShell
-    ? null
-    : titleReclaimsReusedPane
-      ? explicitTitleAgent
-      : priorIdentity
-        ? null
-        : explicitTitleAgent
+    (args.hasObservedAgentSignal || hasCompletedHook || nativeOpenCodeTitle)
+  // Why: native OpenCode titles lack a provider generation and cannot displace durable ownership.
+  const titleAgent =
+    processProvesShell ||
+    sleepingSessionAgent ||
+    (nativeOpenCodeTitle && idleFocusedIdentity !== null)
+      ? null
+      : titleReclaimsReusedPane
+        ? explicitTitleAgent
+        : priorIdentity
+          ? null
+          : explicitTitleAgent
 
   const launchedAgentExited = resolveLaunchedAgentExitEvidence({
     title: args.title,
@@ -138,8 +145,7 @@ export function resolveTabAgentFromSignals(args: {
   const activeLaunchAgent = launchedAgentExited ? null : launchAgent
   // Why: re-own the foreground process within its title-identity group so OMP's nested pi (shell → omp → pi) can't flip an OMP-owned tab's icon.
   const processAgent = resolveSignalAgentForLaunchOwner(args.processAgent, owner)
-  const sleepingSessionAgent = args.sleepingSessionAgent ?? null
-  // Identity-first precedence (see JSDoc): live hook > process > title > idle > sleeping > launch > sibling.
+  // Identity-first precedence (see JSDoc): live hook > process > title > completed > sleeping > launch > sibling.
   return (
     liveFocusedIdentity ??
     processAgent ??
@@ -160,9 +166,9 @@ export function resolveTabAgentFromSignals(args: {
  *
  * 1. Live focused hook — ground truth while the agent works; never title-overridden.
  * 2. Process identity — recognized foreground process (local only); re-owned within its title-identity group so OMP's nested `pi` (shell → omp → pi) can't flip the icon.
- * 3. Title — only a reuse override (names a DIFFERENT-group agent) or a legacy standalone identity when the pane has no hook.
- * 4. Idle focused identity — the pane's own hook record after it went idle; suppressed locally once OSC 133;D proves exit.
- * 5. Sleeping session identity — a hibernated pane's captured session record.
+ * 3. Title — only a reuse override or legacy standalone identity; native OpenCode titles cannot displace durable ownership.
+ * 4. Idle focused identity — the pane's own completed hook; suppressed locally once OSC 133;D proves exit.
+ * 5. Sleeping session identity — current provider-session ownership.
  * 6. launchAgent — bootstrap before any hook/process signal; cleared once exit evidence shows it left.
  * 7. Sibling-pane identity (live, then idle) — split-tab fallback.
  */

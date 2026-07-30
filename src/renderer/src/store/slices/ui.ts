@@ -104,7 +104,10 @@ import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-pane
 import { clampCombinedDiffFileTreeWidth } from '../../../../shared/combined-diff-file-tree-width'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
-import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
+import {
+  isSettingsNavigationTarget,
+  type SettingsNavigationTarget
+} from '@/lib/settings-navigation-types'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   getSetupScriptPromptDismissalKey,
@@ -128,6 +131,7 @@ import {
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
+import { getRepoHostIdentity } from './repo-host-identity'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -691,15 +695,19 @@ export type UISlice = {
     note: string
     attachments: string[]
     linkedWorkItem: {
+      provider?: 'github' | 'gitlab' | 'linear' | 'jira'
       type: 'issue' | 'pr' | 'mr'
       number: number
       title: string
       url: string
       linearIdentifier?: string
       linearBranchName?: string
+      jiraIdentifier?: string
+      repoId?: string
     } | null
     /** Preserve where provider data came from, separately from the host chosen to run the workspace. */
     taskSourceContext?: TaskSourceContext | null
+    linkedTaskSourceContext?: TaskSourceContext | null
     agent: TuiAgent
     linkedIssue: string
     linkedPR: number | null
@@ -740,12 +748,7 @@ export type UISlice = {
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
   closeSettingsPage: () => void
-  settingsNavigationTarget: {
-    pane: SettingsNavTarget
-    repoId: string | null
-    sectionId?: string
-    intent?: 'add-quick-command' | 'add-remote-orca-server' | 'add-ssh-host'
-  } | null
+  settingsNavigationTarget: SettingsNavigationTarget | null
   openSettingsTarget: (target: NonNullable<UISlice['settingsNavigationTarget']>) => void
   clearSettingsTarget: () => void
   /** Which host the Projects Settings pane shows per project (keyed by projectId). Ephemeral on purpose — never persisted, so reload reopens on the effective host. */
@@ -828,7 +831,7 @@ export type UISlice = {
   markOrcaHookRepoAlwaysTrusted: (repoId: string) => void
   clearOrcaHookTrustForRepo: (repoId: string) => void
   setupScriptPromptDismissedRepoIds: string[]
-  dismissSetupScriptPrompt: (repoId: string) => void
+  dismissSetupScriptPrompt: (repoHostIdentity: string) => void
   setupGuideSidebarDismissed: boolean
   setSetupGuideSidebarDismissed: (dismissed: boolean) => void
   setupGuideBrowserMilestoneMigrated: boolean
@@ -1503,7 +1506,15 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       return { activeView: previousView }
     }),
   settingsNavigationTarget: null,
-  openSettingsTarget: (target) => set({ settingsNavigationTarget: target }),
+  openSettingsTarget: (target) => {
+    if (!isSettingsNavigationTarget(target)) {
+      if (import.meta.env.DEV) {
+        throw new TypeError('openSettingsTarget received an invalid navigation target')
+      }
+      return
+    }
+    set({ settingsNavigationTarget: target })
+  },
   clearSettingsTarget: () => set({ settingsNavigationTarget: null }),
   settingsProjectHostSelection: {},
   settingsProjectSetupSelection: {},
@@ -1885,10 +1896,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       return { trustedOrcaHooks: next }
     }),
   setupScriptPromptDismissedRepoIds: [],
-  dismissSetupScriptPrompt: (repoId) =>
+  dismissSetupScriptPrompt: (repoHostIdentity) =>
     set((s) => {
-      const dismissalKey = getSetupScriptPromptDismissalKey(repoId)
-      if (!repoId || s.setupScriptPromptDismissedRepoIds.includes(dismissalKey)) {
+      const dismissalKey = getSetupScriptPromptDismissalKey(repoHostIdentity)
+      if (!repoHostIdentity || s.setupScriptPromptDismissedRepoIds.includes(dismissalKey)) {
         return s
       }
       const next = [...s.setupScriptPromptDismissedRepoIds, dismissalKey]
@@ -2346,6 +2357,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       const manualRepoOrder = normalizeManualRepoOrder(ui.manualRepoOrder)
       const orderedRepos = applyManualRepoOrder(s.repos, manualRepoOrder)
       const validRepoIds = new Set(s.repos.map((repo) => repo.id))
+      const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
       const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
       // Why: pre-rename builds used sidekick* keys; read as fallback only so new pet* writes win after upgrade.
       const customPets = Array.isArray(ui.customPets)
@@ -2498,11 +2510,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
             : null,
         trustedOrcaHooks: hydrateTrustedOrcaHooks(ui.trustedOrcaHooks, validRepoIds),
         setupScriptPromptDismissedRepoIds:
-          validRepoIds.size === 0
+          validRepoHostIdentities.size === 0
             ? sanitizeSetupScriptPromptDismissals(ui.setupScriptPromptDismissedRepoIds)
             : filterSetupScriptPromptDismissalsToValidRepos(
                 ui.setupScriptPromptDismissedRepoIds,
-                validRepoIds
+                validRepoHostIdentities
               ),
         setupGuideSidebarDismissed: ui.setupGuideSidebarDismissed === true,
         setupGuideBrowserMilestoneMigrated: ui.setupGuideBrowserMilestoneMigrated === true,

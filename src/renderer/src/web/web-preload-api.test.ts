@@ -1268,7 +1268,10 @@ describe('web UI preload API', () => {
     installWebPreloadApi()
 
     await expect(globals.window.api.ui.writeClipboardText('copy me')).resolves.toBeUndefined()
-    expect(writeText).toHaveBeenCalledWith('copy me')
+    await expect(
+      globals.window.api.ui.writeTerminalClipboardText('terminal copy')
+    ).resolves.toBeUndefined()
+    expect(writeText.mock.calls).toEqual([['copy me'], ['terminal copy']])
   })
 
   it('copies through execCommand when navigator.clipboard is unavailable (insecure context)', async () => {
@@ -1304,6 +1307,9 @@ describe('web UI preload API', () => {
     installWebPreloadApi()
 
     await expect(globals.window.api.ui.writeClipboardText('copy me')).rejects.toThrow(
+      'Clipboard write is unavailable in this browser context'
+    )
+    await expect(globals.window.api.ui.writeTerminalClipboardText('copy me')).rejects.toThrow(
       'Clipboard write is unavailable in this browser context'
     )
   })
@@ -1387,6 +1393,9 @@ describe('web UI preload API', () => {
 
     await expect(
       globals.window.api.ui.writeClipboardText('copied-secret-token-value'.repeat(900_000))
+    ).rejects.toThrow('Clipboard text is too large to copy safely.')
+    await expect(
+      globals.window.api.ui.writeTerminalClipboardText('copied-secret-token-value'.repeat(900_000))
     ).rejects.toThrow('Clipboard text is too large to copy safely.')
     expect(writeText).not.toHaveBeenCalled()
   })

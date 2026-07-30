@@ -385,6 +385,53 @@ describe('fetchCodexRateLimits', () => {
     })
   })
 
+  it('fills a restored backend 5-hour window when RPC only reports weekly usage', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    respondToRpcRateLimitRead(rpcChild, {
+      primary: { usedPercent: 22, windowDurationMins: 10080 },
+      secondary: null
+    })
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        tokens: { access_token: 'access-token', account_id: 'account-id' }
+      })
+    )
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        plan_type: 'plus',
+        rate_limit: {
+          primary_window: {
+            used_percent: 7,
+            limit_window_seconds: 5 * 60 * 60,
+            reset_at: 1_800_000_000
+          },
+          secondary_window: {
+            used_percent: 23,
+            limit_window_seconds: 7 * 24 * 60 * 60,
+            reset_at: 1_800_100_000
+          }
+        },
+        rate_limit_reset_credits: {
+          available_count: 1,
+          credits: [{ status: 'available', expires_at: '2027-01-15T12:00:00Z' }]
+        }
+      })
+    } as Response)
+
+    const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      session: { usedPercent: 7, windowMinutes: 300, resetsAt: 1_800_000_000_000 },
+      weekly: { usedPercent: 23, windowMinutes: 10080, resetsAt: 1_800_100_000_000 },
+      status: 'ok'
+    })
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
   it('does not map a duplicate session-duration window into the weekly slot', async () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)

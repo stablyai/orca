@@ -117,7 +117,7 @@ describe('SkillFreshnessStatusPill', () => {
 
     const rendered = await renderPill('orca-cli')
     // Why: a green pill over a copy the update cannot reach hides real drift.
-    expect(pillText(rendered)).toBe('Needs attention')
+    expect(pillText(rendered)).toBe('Review skill')
     expect(detailsButton(rendered)?.textContent).toBe('Details')
   })
 

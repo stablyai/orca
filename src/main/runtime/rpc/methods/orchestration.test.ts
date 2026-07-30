@@ -40,9 +40,12 @@ describe('orchestration RPC methods', () => {
         coordinatorHandle: 'term_coord',
         coordinatorPaneKey
       }).id
+      // Why: default direct fixtures to current-contract state; legacy behavior has dedicated tests.
       const createTask = db.createTask.bind(db)
-      // Why: legacy tests exercise the RPC behavior under test; default their direct fixture rows to the bound Run.
       db.createTask = (task) => createTask({ ...task, runId: task.runId ?? activeRunId })
+      const insertMessage = db.insertMessage.bind(db)
+      db.insertMessage = (message) =>
+        insertMessage({ ...message, runId: message.runId ?? activeRunId })
     } else {
       activeRunId = undefined
     }
@@ -1548,22 +1551,23 @@ describe('orchestration RPC methods', () => {
       expect(db.getUnreadMessages('b')).toHaveLength(1)
     })
 
-    it('keeps waiting for requested types when an unrelated heartbeat arrives', async () => {
+    it('keeps waiting for requested types when an unrelated status arrives', async () => {
       setup()
 
       const waitPromise = call('orchestration.check', {
         terminal: 'coord',
         wait: true,
         timeoutMs: 5000,
-        types: 'worker_done,escalation'
+        types: 'escalation,question'
       }) as Promise<{ count: number; messages: { type: string }[] }>
       await Promise.resolve()
 
       await call('orchestration.send', {
         from: 'worker',
         to: 'coord',
-        subject: 'alive',
-        type: 'heartbeat'
+        subject: 'still working',
+        type: 'status',
+        run: activeRunId
       })
 
       const early = await Promise.race([
@@ -1575,13 +1579,14 @@ describe('orchestration RPC methods', () => {
       await call('orchestration.send', {
         from: 'worker',
         to: 'coord',
-        subject: 'done',
-        type: 'worker_done'
+        subject: 'needs attention',
+        type: 'escalation',
+        run: activeRunId
       })
 
       const result = await waitPromise
       expect(result.count).toBe(1)
-      expect(result.messages[0].type).toBe('worker_done')
+      expect(result.messages[0].type).toBe('escalation')
     })
 
     it('does not mark existing messages read when the check starts aborted', async () => {
@@ -1913,6 +1918,30 @@ describe('orchestration RPC methods', () => {
       expect(db.getDispatchContextById(result.dispatch.id)?.assignee_pane_key).toBe('tab_w:leaf_w')
     })
 
+    it('commits the target process launch token on a manual dispatch', async () => {
+      setup()
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+        runtimeId: runtime.getRuntimeId(),
+        terminalHandle: 'term_a',
+        ptyId: 'pty_a',
+        worktreeId: 'repo::worktree',
+        paneKey: 'tab_w:leaf_w',
+        processIncarnation: 'runtime_test:term_a:1',
+        launchTokenHash: 'launch-token-hash',
+        hostScope: { kind: 'local', hostId: 'local' }
+      })
+      const task = db.createTask({ spec: 'work' })
+
+      const result = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a'
+      })) as { dispatch: { id: string } }
+
+      expect(db.getDispatchContextById(result.dispatch.id)?.launch_token_hash).toBe(
+        'launch-token-hash'
+      )
+    })
+
     it('rejects dispatch for a pending task', async () => {
       setup()
       const parent = db.createTask({ spec: 'parent' })
@@ -2154,6 +2183,32 @@ describe('orchestration RPC methods', () => {
       expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
         'term_worker',
         expect.stringContaining('--dispatch-capability dcap_')
+      )
+    })
+
+    it('commits the launched worker token with its durable authority', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+        runtimeId: runtime.getRuntimeId(),
+        terminalHandle: 'term_worker',
+        ptyId: 'pty_worker',
+        worktreeId: 'repo::worktree',
+        paneKey: 'tab_worker:leaf_worker',
+        processIncarnation: 'runtime_test:term_worker:1',
+        launchTokenHash: 'worker-launch-token-hash',
+        hostScope: { kind: 'local', hostId: 'local' }
+      })
+      const task = db.createTask({ spec: 'persist worker identity' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as { dispatchId: string }
+
+      expect(db.getDispatchContextById(result.dispatchId)?.launch_token_hash).toBe(
+        'worker-launch-token-hash'
       )
     })
 
@@ -2403,9 +2458,10 @@ describe('orchestration RPC methods', () => {
         expect.objectContaining({
           repoSelector: 'repo',
           name: 'child-worker',
-          runHooks: true,
+          runHooks: false,
           setupDecision: 'run',
           startupAgent: 'codex',
+          activate: false,
           lineage: expect.objectContaining({ parentWorktree: 'repo::parent', noParent: false })
         })
       )

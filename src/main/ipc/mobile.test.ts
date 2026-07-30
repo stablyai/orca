@@ -183,6 +183,32 @@ describe('registerMobileHandlers', () => {
     )
   })
 
+  it('preserves a copyable pairing URL when QR encoding fails', async () => {
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
+      available: true,
+      pairingUrl: 'orca://pair?code=copy-me',
+      endpoint: 'wss://pair.example/oversized',
+      deviceId: 'mobile-large',
+      connectionMode: 'local-only'
+    })
+
+    registerMobileHandlers({ createMobilePairingOffer } as never, {
+      encodePairingQr: vi.fn().mockResolvedValue({ ok: false, reason: 'encoding_failed' })
+    })
+
+    await expect(
+      handlers.get('mobile:getPairingQR')?.(null, { address: 'pair.example' })
+    ).resolves.toEqual({
+      available: true,
+      qrDataUrl: null,
+      qrError: 'encoding_failed',
+      pairingUrl: 'orca://pair?code=copy-me',
+      endpoint: 'wss://pair.example/oversized',
+      deviceId: 'mobile-large',
+      connectionMode: 'local-only'
+    })
+  })
+
   it('lists only paired mobile-scoped devices', () => {
     const rpcServer = {
       getDeviceRegistry: () => ({

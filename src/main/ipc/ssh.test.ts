@@ -11,6 +11,8 @@ const {
   mockConnectionManager,
   mockDeployAndLaunchRelay,
   mockForceStopRelayForTarget,
+  mockAcceptSshPtyOutputData,
+  mockAcceptSshPtyOutputExit,
   mockMux,
   mockPtyProvider,
   mockFsProvider,
@@ -49,10 +51,13 @@ const {
   },
   mockDeployAndLaunchRelay: vi.fn(),
   mockForceStopRelayForTarget: vi.fn(),
+  mockAcceptSshPtyOutputData: vi.fn().mockResolvedValue({}),
+  mockAcceptSshPtyOutputExit: vi.fn().mockResolvedValue(undefined),
   mockMux: {
     dispose: vi.fn(),
     isDisposed: vi.fn().mockReturnValue(false),
     onNotification: vi.fn(),
+    onNotificationByMethod: vi.fn().mockReturnValue(() => {}),
     onRequest: vi.fn().mockReturnValue(() => {}),
     onDispose: vi.fn().mockReturnValue(() => {}),
     request: vi.fn().mockResolvedValue({}),
@@ -65,7 +70,8 @@ const {
     onReplay: vi.fn(),
     attach: vi.fn(),
     attachForReconnect: vi.fn().mockResolvedValue({}),
-    shutdown: vi.fn()
+    shutdown: vi.fn(),
+    providerGeneration: 0
   },
   mockFsProvider: {},
   mockGitProvider: {},
@@ -98,6 +104,25 @@ vi.mock('electron', () => ({
     on: powerMonitorOnMock,
     off: powerMonitorOffMock
   }
+}))
+
+vi.mock('./ssh-pty-output-intake-registry', () => ({
+  acceptSshPtyOutputData: mockAcceptSshPtyOutputData,
+  acceptSshPtyOutputExit: mockAcceptSshPtyOutputExit,
+  allocateSshPtyProviderGeneration: (() => {
+    let generation = 0
+    return () => ++generation
+  })(),
+  beginSshPtyOutputGenerationMigration: vi.fn(() => ({
+    byPty: new Map(),
+    completion: Promise.resolve()
+  })),
+  applySshPtySourceCancellationProof: vi.fn().mockReturnValue(false),
+  applySshPtySourceRecoveryCancellationProof: vi.fn().mockReturnValue(false),
+  closeSshPtyOutputGeneration: vi.fn(),
+  getSshPtyAcceptedSourceCheckpoints: vi.fn().mockReturnValue([]),
+  installSshPtySourceAckPublisher: vi.fn().mockReturnValue(() => {}),
+  installSshPtySourceCancellationPublisher: vi.fn().mockReturnValue(() => {})
 }))
 
 vi.mock('../ssh/ssh-connection-store', () => ({
@@ -142,7 +167,8 @@ vi.mock('../providers/ssh-pty-provider', () => ({
   isSshPtyNotFoundError: (err: unknown) =>
     (err instanceof Error ? err.message : String(err)).includes('not found'),
   SshPtyProvider: class MockSshPtyProvider {
-    constructor() {
+    constructor(_targetId: unknown, _mux: unknown, _env: unknown, providerGeneration: number) {
+      mockPtyProvider.providerGeneration = providerGeneration
       return mockPtyProvider
     }
   }
@@ -222,6 +248,9 @@ import {
   type SshConnectionState,
   type SshTarget
 } from '../../shared/ssh-types'
+import { PTY_CONSUMER_SESSION_PROTOCOL_VERSION } from '../../shared/pty-consumer-session'
+import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
+import type { SshPtyDataCallback } from '../providers/ssh-pty-provider-contract'
 import {
   clearProviderPtyState,
   deletePtyOwnership,
@@ -231,6 +260,16 @@ import {
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 
 describe('SSH IPC handlers', () => {
+  const relayBuildId = '0.1.0+ipc-test'
+  const ipcTestSource = {
+    relayPtyId: 'remote-pty',
+    spanId: 'ipc-test-delivery:0:5',
+    clientGeneration: 1,
+    ownerGeneration: 1,
+    deliveryToken: 'ipc-test-delivery',
+    sourceStartSu: 0,
+    sourceEndSu: 5
+  } as const
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
   const mockStore = {
     getRepos: () => [],
@@ -272,7 +311,8 @@ describe('SSH IPC handlers', () => {
   const relayLostStabilizedMs = 5_000
   const createRelayLaunchResult = () => ({
     transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
-    platform: 'linux-x64'
+    platform: 'linux-x64',
+    serverBuildId: relayBuildId
   })
   const getLatestRelayDisposeCallback = (): RelayDisposeCallback => {
     const calls = mockMux.onDispose.mock.calls
@@ -322,21 +362,43 @@ describe('SSH IPC handlers', () => {
     mockConnectionManager.setCallbacks.mockReset()
     mockConnectionManager.callbacksRef.current = null
     mockForceStopRelayForTarget.mockReset().mockResolvedValue(undefined)
+    mockAcceptSshPtyOutputData.mockReset().mockResolvedValue({})
+    mockAcceptSshPtyOutputExit.mockReset().mockResolvedValue(undefined)
 
     mockDeployAndLaunchRelay.mockReset().mockResolvedValue({
       transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
-      platform: 'linux-x64'
+      platform: 'linux-x64',
+      serverBuildId: relayBuildId
     })
     mockMux.dispose.mockReset()
     mockMux.isDisposed.mockReset().mockReturnValue(false)
     mockMux.onNotification.mockReset()
+    mockMux.onNotificationByMethod.mockReset().mockReturnValue(() => {})
     mockMux.onDispose.mockReset().mockReturnValue(() => {})
+    mockMux.request.mockReset().mockImplementation((method: string) =>
+      Promise.resolve(
+        method === 'pty.openClient'
+          ? {
+              protocolVersion: PTY_CONSUMER_SESSION_PROTOCOL_VERSION,
+              serverBuildId: relayBuildId,
+              clientGeneration: 1,
+              role: 'session-owner',
+              ownerGeneration: 1,
+              ownerLease: 'ipc-test-owner',
+              capabilities: {
+                outputFlowControl: { version: 1, windowSu: DEFAULT_PTY_SOURCE_WINDOW_SU }
+              }
+            }
+          : {}
+      )
+    )
     mockMux.probeLiveness.mockReset().mockResolvedValue(false)
     mockPtyProvider.onData.mockReset()
     mockPtyProvider.onExit.mockReset()
     mockPtyProvider.onReplay.mockReset()
     mockPtyProvider.attachForReconnect.mockReset().mockResolvedValue({})
     mockPtyProvider.shutdown.mockReset()
+    mockPtyProvider.providerGeneration = 0
     mockRegisterSshGitProvider.mockReset()
     mockPortForwardManager.addForward.mockReset()
     mockPortForwardManager.updateForward.mockReset()
@@ -565,6 +627,7 @@ describe('SSH IPC handlers', () => {
     }
     mockDeployAndLaunchRelay.mockResolvedValueOnce({
       transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
+      serverBuildId: relayBuildId,
       hostPlatform
     })
     mockSshStore.getTarget.mockReturnValue(target)
@@ -1050,7 +1113,7 @@ describe('SSH IPC handlers', () => {
     }
   })
 
-  it('forwards remote PTY events into the runtime', async () => {
+  it('forwards remote PTY events through the output intake authority', async () => {
     const runtime = {
       onPtyData: vi.fn(),
       onPtyExit: vi.fn()
@@ -1073,24 +1136,47 @@ describe('SSH IPC handlers', () => {
     })
 
     await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
-    const onData = mockPtyProvider.onData.mock.calls[0]?.[0] as
-      | ((payload: { id: string; data: string }) => void)
-      | undefined
+    const onData = mockPtyProvider.onData.mock.calls[0]?.[0] as SshPtyDataCallback | undefined
     const onExit = mockPtyProvider.onExit.mock.calls[0]?.[0] as
-      | ((payload: { id: string; code: number }) => void)
+      | ((payload: {
+          id: string
+          code: number
+          providerGeneration: number
+          ptyIncarnation: string
+        }) => void)
       | undefined
 
-    onData?.({ id: 'remote-pty', data: 'hello' })
-    onExit?.({ id: 'remote-pty', code: 7 })
+    onData?.({
+      id: 'remote-pty',
+      data: 'hello',
+      providerGeneration: mockPtyProvider.providerGeneration,
+      ptyIncarnation: 'ipc-test-pty',
+      source: ipcTestSource
+    })
+    onExit?.({
+      id: 'remote-pty',
+      code: 7,
+      providerGeneration: mockPtyProvider.providerGeneration,
+      ptyIncarnation: 'ipc-test-pty'
+    })
 
-    expect(runtime.onPtyData).toHaveBeenCalledWith(
-      'remote-pty',
-      'hello',
-      expect.any(Number),
-      'hello'.length,
-      undefined
-    )
-    expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', 7, undefined)
+    expect(mockAcceptSshPtyOutputData).toHaveBeenCalledWith({
+      id: 'remote-pty',
+      data: 'hello',
+      providerGeneration: mockPtyProvider.providerGeneration,
+      ptyIncarnation: 'ipc-test-pty',
+      rawLength: 'hello'.length,
+      transformed: false,
+      source: ipcTestSource
+    })
+    expect(mockAcceptSshPtyOutputExit).toHaveBeenCalledWith({
+      id: 'remote-pty',
+      code: 7,
+      providerGeneration: mockPtyProvider.providerGeneration,
+      ptyIncarnation: 'ipc-test-pty'
+    })
+    expect(runtime.onPtyData).not.toHaveBeenCalled()
+    expect(runtime.onPtyExit).not.toHaveBeenCalled()
   })
 
   it('mirrors SSH state broadcasts onto the runtime client-event stream', async () => {
@@ -1380,7 +1466,7 @@ describe('SSH IPC handlers', () => {
     expect(replacementConnectionManager.disconnect).not.toHaveBeenCalled()
   })
 
-  it('refreshes live session callbacks to the newest window, store, and runtime', async () => {
+  it('refreshes live session callbacks to the newest window and output authorities', async () => {
     const firstWindow = createMockWindow()
     const secondWindow = createMockWindow()
     const firstRuntime = {
@@ -1411,11 +1497,14 @@ describe('SSH IPC handlers', () => {
     })
 
     await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
-    const onData = mockPtyProvider.onData.mock.calls[0]?.[0] as
-      | ((payload: { id: string; data: string }) => void)
-      | undefined
+    const onData = mockPtyProvider.onData.mock.calls[0]?.[0] as SshPtyDataCallback | undefined
     const onExit = mockPtyProvider.onExit.mock.calls[0]?.[0] as
-      | ((payload: { id: string; code: number }) => void)
+      | ((payload: {
+          id: string
+          code: number
+          providerGeneration: number
+          ptyIncarnation: string
+        }) => void)
       | undefined
     const onDetectedPorts = mockPortScannerCallbacks.get('ssh-1') as
       | ((targetId: string, ports: unknown[], platform: string) => void)
@@ -1434,8 +1523,19 @@ describe('SSH IPC handlers', () => {
       error: 'network down',
       reconnectAttempt: 0
     })
-    onData?.({ id: 'remote-pty', data: 'hello' })
-    onExit?.({ id: 'remote-pty', code: 9 })
+    onData?.({
+      id: 'remote-pty',
+      data: 'hello',
+      providerGeneration: mockPtyProvider.providerGeneration,
+      ptyIncarnation: 'ipc-test-pty',
+      source: ipcTestSource
+    })
+    onExit?.({
+      id: 'remote-pty',
+      code: 9,
+      providerGeneration: mockPtyProvider.providerGeneration,
+      ptyIncarnation: 'ipc-test-pty'
+    })
     onDetectedPorts?.(
       'ssh-1',
       [{ host: '127.0.0.1', port: 3000, pid: 12, processName: 'node' }],
@@ -1454,33 +1554,20 @@ describe('SSH IPC handlers', () => {
         connectionGeneration: 1
       }
     })
-    expect(secondWindow.webContents.send).toHaveBeenCalledWith(
-      'pty:data',
+    expect(mockAcceptSshPtyOutputData).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'remote-pty', data: 'hello' })
     )
-    expect(secondWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
-      id: 'remote-pty',
-      code: 9
-    })
+    expect(mockAcceptSshPtyOutputExit).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'remote-pty', code: 9 })
+    )
     expect(secondWindow.webContents.send).toHaveBeenCalledWith('ssh:detected-ports-changed', {
       targetId: 'ssh-1',
       ports: expect.arrayContaining([expect.objectContaining({ port: 3000 })])
     })
-    expect(secondRuntime.onPtyData).toHaveBeenCalledWith(
-      'remote-pty',
-      'hello',
-      expect.any(Number),
-      'hello'.length,
-      undefined
-    )
-    expect(secondRuntime.onPtyExit).toHaveBeenCalledWith('remote-pty', 9, undefined)
+    expect(secondRuntime.onPtyData).not.toHaveBeenCalled()
+    expect(secondRuntime.onPtyExit).not.toHaveBeenCalled()
     expect(firstRuntime.onPtyData).not.toHaveBeenCalled()
     expect(firstRuntime.onPtyExit).not.toHaveBeenCalled()
-    expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
-      'ssh-1',
-      'remote-pty',
-      'terminated'
-    )
   })
 
   it('re-registers without replacing managers when no targets are connected', () => {

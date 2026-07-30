@@ -47,8 +47,9 @@ export const PROJECT_HEADER_DRAG_THRESHOLD_PX = 4
 
 const REPO_HEADER_DRAG_HANDLE_SELECTOR = '[data-repo-header-drag-handle]'
 
-const REPO_HEADER_ACTION_SELECTOR =
-  '[data-repo-header-action], [data-repo-header-collapse-affordance], button, a, input, textarea, select, [contenteditable=""], [contenteditable="true"]'
+// Shared with project-group headers: both reuse ProjectHeaderActions markup.
+export const REPO_HEADER_ACTION_SELECTOR =
+  '[data-repo-header-actions], [data-repo-header-action], [data-repo-header-collapse-affordance], button, a, input, textarea, select, [contenteditable=""], [contenteditable="true"]'
 
 export function isProjectHeaderDragHandleTarget(
   target: EventTarget | null,

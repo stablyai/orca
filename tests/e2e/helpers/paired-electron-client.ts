@@ -198,7 +198,9 @@ export async function launchPairedElectronClient(
         if (!(await store.getState().refreshRuntimeEnvironmentStatus(result.environment.id))) {
           throw new Error('Paired desktop could not reach the HUB runtime')
         }
-        if (!(await store.getState().switchRuntimeEnvironment(result.environment.id))) {
+        if (
+          !(await store.getState().setActiveRuntimeEnvironmentPreference(result.environment.id))
+        ) {
           throw new Error('Paired desktop could not select the HUB runtime')
         }
         return result.environment.id
@@ -263,7 +265,7 @@ export async function rePairPairedElectronClient(
       if (!(await store.getState().refreshRuntimeEnvironmentStatus(result.environment.id))) {
         throw new Error('Re-paired desktop could not reach the HUB runtime')
       }
-      if (!(await store.getState().switchRuntimeEnvironment(result.environment.id))) {
+      if (!(await store.getState().setActiveRuntimeEnvironmentPreference(result.environment.id))) {
         throw new Error('Re-paired desktop could not select the HUB runtime')
       }
       return result.environment.id
@@ -291,7 +293,7 @@ export async function rePairPairedElectronClient(
     if (!(await store.getState().refreshRuntimeEnvironmentStatus(nextEnvironmentId))) {
       return false
     }
-    return store.getState().switchRuntimeEnvironment(nextEnvironmentId)
+    return store.getState().setActiveRuntimeEnvironmentPreference(nextEnvironmentId)
   }, environmentId)
   if (!reachable) {
     throw new Error('Re-paired desktop could not reach the HUB after reload')

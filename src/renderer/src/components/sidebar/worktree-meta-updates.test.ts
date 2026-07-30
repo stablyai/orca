@@ -49,6 +49,19 @@ describe('buildWorktreeMetaUpdates', () => {
     })
   })
 
+  it('clears a display name with empty string, never a present-undefined key', () => {
+    const updates = buildWorktreeMetaUpdates({
+      displayNameInput: '   ',
+      currentDisplayName: 'Custom Name',
+      issueInput: '',
+      prInput: '',
+      commentInput: ''
+    })
+
+    expect(updates.displayName).toBe('')
+    expect(Object.values(updates).every((value) => value !== undefined)).toBe(true)
+  })
+
   it('rejects PR URLs in the issue input', () => {
     expect(
       buildWorktreeMetaUpdates({

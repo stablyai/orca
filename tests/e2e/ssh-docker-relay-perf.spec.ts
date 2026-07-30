@@ -217,12 +217,14 @@ test.describe('Docker SSH relay perf', () => {
         `node -e ${shellQuote(remoteTypingLoadScript(activeRunId))}`
       )
       await waitForTerminalOutput(orcaPage, `REMOTE_TUI_READY_${activeRunId}`, 30_000, 80_000)
-      await expect
-        .poll(async () => (await readSshPtyAckGate(orcaPage))?.heldAckChars ?? 0, {
+      const heldAckPressure = expect.poll(
+        async () => (await readSshPtyAckGate(orcaPage))?.heldAckChars ?? 0,
+        {
           timeout: 30_000,
           message: 'remote background SSH PTY stream did not build held ACK pressure'
-        })
-        .toBeGreaterThan(MIN_HELD_SSH_ACK_CHARS)
+        }
+      )
+      await heldAckPressure.toBe(MIN_HELD_SSH_ACK_CHARS)
 
       const measurement = await measureRemoteTyping(orcaPage, activePtyId, activeRunId)
       const ackGate = await readSshPtyAckGate(orcaPage)
@@ -238,7 +240,7 @@ test.describe('Docker SSH relay perf', () => {
         type: 'docker-ssh-relay-pty-ack-pressure',
         description: summary
       })
-      expect(ackGate?.heldAckChars ?? 0).toBeGreaterThan(MIN_HELD_SSH_ACK_CHARS)
+      expect(ackGate?.heldAckChars ?? 0).toBe(MIN_HELD_SSH_ACK_CHARS)
       expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
       expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
 
@@ -368,11 +370,26 @@ test.describe('Docker SSH relay perf', () => {
       const beforeMarker = `SSH_RECONNECT_BEFORE_${Date.now()}`
       await execInTerminal(orcaPage, beforePtyId, `printf ${shellQuote(beforeMarker)}`)
       await waitForTerminalOutput(orcaPage, beforeMarker, 20_000, 60_000)
+      const recoveryStartedMarker = `SSH_RECONNECT_RECOVERY_STARTED_${Date.now()}`
+      const recoveryMarker = `SSH_RECONNECT_RECOVERY_${Date.now()}`
+      const recoveryScript = [
+        'let frame = 0',
+        "const chunk = 'Q'.repeat(4096)",
+        `process.stdout.write('${recoveryStartedMarker}\\n')`,
+        'const timer = setInterval(() => {',
+        'frame += 1',
+        "process.stdout.write('RECOVERY_FRAME_' + frame + '_' + chunk + '\\n')",
+        `if (frame === 256) { clearInterval(timer); process.stdout.write('${recoveryMarker}\\n') }`,
+        '}, 10)'
+      ].join(';')
+      await execInTerminal(orcaPage, beforePtyId, `node -e ${shellQuote(recoveryScript)}`)
+      await waitForTerminalOutput(orcaPage, recoveryStartedMarker, 30_000, 80_000)
 
       await reconnectDockerSshRelayTarget(orcaPage, remote.targetId)
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const afterPtyId = await waitForActivePanePtyId(orcaPage, 60_000)
+      await waitForTerminalOutput(orcaPage, recoveryMarker, 30_000, 80_000)
       const afterMarker = `SSH_RECONNECT_AFTER_${Date.now()}`
       const remoteProofPath = `/tmp/${afterMarker}`
       await execInTerminal(

@@ -12,12 +12,18 @@ import { i18n } from '@/i18n/i18n'
 import { MacosTccPromptNoticeHost } from './MacosTccPromptNoticeHost'
 import { useMacosTccPromptNotice } from './useMacosTccPromptNotice'
 
-const subscribeToMacosTccPromptNotice = vi.hoisted(() => vi.fn(() => vi.fn()))
+type NoticeCallback = (payload: { promptCount: number }, acknowledge: () => void) => void
+
+const subscribeToMacosTccPromptNotice = vi.hoisted(() =>
+  vi.fn<(_: unknown, onNotice: NoticeCallback) => () => void>(() => vi.fn())
+)
+const toastWarning = vi.hoisted(() => vi.fn())
 
 vi.mock('./macos-tcc-prompt-notice-subscription', () => ({
   dismissMacosTccPromptNotice: vi.fn(),
   subscribeToMacosTccPromptNotice
 }))
+vi.mock('sonner', () => ({ toast: { warning: toastWarning } }))
 
 const initialAppState = useAppStore.getInitialState()
 const initialPluginLanguagePackState = usePluginLanguagePackStore.getInitialState()
@@ -32,6 +38,7 @@ beforeEach(async () => {
   useAppStore.setState(initialAppState, true)
   usePluginLanguagePackStore.setState(initialPluginLanguagePackState, true)
   subscribeToMacosTccPromptNotice.mockClear()
+  toastWarning.mockClear()
   await i18n.changeLanguage('en')
 })
 
@@ -86,4 +93,52 @@ it('isolates plugin language-pack discovery from its parent render path', async 
 
   expect(parentRenderCount).toBe(1)
   expect(subscribeToMacosTccPromptNotice).toHaveBeenCalledOnce()
+})
+
+it('keeps the notice open until the user closes it', async () => {
+  useAppStore.setState({
+    settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'en' }
+  })
+  const container = document.createElement('div')
+  root = createRoot(container)
+  await act(async () => {
+    root?.render(createElement(I18nextProvider, { i18n }, createElement(NoticeProbe)))
+  })
+  const showNotice = subscribeToMacosTccPromptNotice.mock.calls[0]?.[1] as
+    | NoticeCallback
+    | undefined
+  const acknowledge = vi.fn()
+
+  showNotice?.({ promptCount: 1 }, acknowledge)
+
+  const options = toastWarning.mock.calls[0]?.[1] as
+    | { duration?: number; onDismiss?: () => void }
+    | undefined
+  expect(options?.duration).toBe(Infinity)
+  expect(acknowledge).not.toHaveBeenCalled()
+  options?.onDismiss?.()
+  expect(acknowledge).toHaveBeenCalledOnce()
+})
+
+it('acknowledges when opening Settings closes the notice', async () => {
+  useAppStore.setState({
+    settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'en' }
+  })
+  const container = document.createElement('div')
+  root = createRoot(container)
+  await act(async () => {
+    root?.render(createElement(I18nextProvider, { i18n }, createElement(NoticeProbe)))
+  })
+  const showNotice = subscribeToMacosTccPromptNotice.mock.calls[0]?.[1] as
+    | NoticeCallback
+    | undefined
+  const acknowledge = vi.fn()
+
+  showNotice?.({ promptCount: 1 }, acknowledge)
+
+  const options = toastWarning.mock.calls[0]?.[1] as
+    | { action?: { onClick: () => void } }
+    | undefined
+  options?.action?.onClick()
+  expect(acknowledge).toHaveBeenCalledOnce()
 })

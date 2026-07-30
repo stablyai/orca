@@ -32,6 +32,7 @@ export function MobilePane(): React.JSX.Element {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
+  const [qrError, setQrError] = useState(false)
   // Mode the displayed QR actually encodes; can be 'local-only' under an
   // Anywhere selection when Relay provisioning degraded server-side.
   const [qrEncodedMode, setQrEncodedMode] = useState<MobilePairingConnectionMode | null>(null)
@@ -85,6 +86,7 @@ export function MobilePane(): React.JSX.Element {
     const hadPending = qrDisplayedRef.current || loadingRef.current
     setQrDataUrl(null)
     setPairingUrl(null)
+    setQrError(false)
     setQrEncodedMode(null)
     setEndpoint(null)
     // Why: a superseded in-flight generate no longer clears loading in its
@@ -173,6 +175,7 @@ export function MobilePane(): React.JSX.Element {
       }
       const requestId = ++pairingRequestIdRef.current
       setLoading(true)
+      setQrError(false)
       try {
         const result = await window.api.mobile.getPairingQR({
           ...(selectedAddress ? { address: selectedAddress } : {}),
@@ -192,6 +195,7 @@ export function MobilePane(): React.JSX.Element {
           if (mountedRef.current) {
             setQrDataUrl(result.qrDataUrl)
             setPairingUrl(result.pairingUrl)
+            setQrError(result.qrDataUrl === null)
             setQrEncodedMode(result.connectionMode)
             setEndpoint(result.endpoint)
             setDeviceCountAtQr(getPairedMobileDevicesSnapshot().length)
@@ -359,6 +363,7 @@ export function MobilePane(): React.JSX.Element {
 
       <MobilePairingQrSection
         qrDataUrl={qrDataUrl}
+        qrError={qrError}
         pairingUrl={pairingUrl}
         endpoint={endpoint}
         qrEnlarged={qrEnlarged}
@@ -368,7 +373,7 @@ export function MobilePane(): React.JSX.Element {
         onClearCodeCopiedTimer={clearCodeCopiedResetTimer}
       />
 
-      <WindowsFirewallNotice pairingReady={qrDataUrl != null} address={selectedAddress} />
+      <WindowsFirewallNotice pairingReady={pairingUrl != null} address={selectedAddress} />
 
       <MobilePairedDevicesSection
         devices={devices}

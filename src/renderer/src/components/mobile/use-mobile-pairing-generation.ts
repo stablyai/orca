@@ -22,6 +22,7 @@ export function useMobilePairingGeneration(params: {
   pairingRequestIdRef: MutableRef<number>
   setPairQrDataUrl: (value: string | null) => void
   setPairingUrl: (value: string | null) => void
+  setPairingQrError: (value: boolean) => void
   setPairLoading: (value: boolean) => void
   /** Mode the minted QR actually encodes (degraded Relay mints report
    *  'local-only'); null while no QR is shown. */
@@ -42,6 +43,7 @@ export function useMobilePairingGeneration(params: {
     pairingRequestIdRef,
     setPairQrDataUrl,
     setPairingUrl,
+    setPairingQrError,
     setPairLoading,
     setEncodedConnectionMode
   } = params
@@ -81,6 +83,7 @@ export function useMobilePairingGeneration(params: {
           if (mountedRef.current) {
             setPairQrDataUrl(result.qrDataUrl)
             setPairingUrl(result.pairingUrl)
+            setPairingQrError(result.qrDataUrl === null)
             setEncodedConnectionMode(result.connectionMode)
           }
         } else {
@@ -88,6 +91,7 @@ export function useMobilePairingGeneration(params: {
           if (mountedRef.current) {
             setPairQrDataUrl(null)
             setPairingUrl(null)
+            setPairingQrError(false)
             setEncodedConnectionMode(null)
             toast.error(
               translate(
@@ -102,6 +106,7 @@ export function useMobilePairingGeneration(params: {
           hasGeneratedRef.current = false
           setPairQrDataUrl(null)
           setPairingUrl(null)
+          setPairingQrError(false)
           setEncodedConnectionMode(null)
           toast.error(
             translate(
@@ -126,6 +131,7 @@ export function useMobilePairingGeneration(params: {
       setPairLoading,
       setPairQrDataUrl,
       setPairingUrl,
+      setPairingQrError,
       signedIn
     ]
   )

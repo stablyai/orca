@@ -1,0 +1,5 @@
+# Product source remains owned by its normal reviewers; localization inputs need focused review.
+/src/renderer/src/i18n/locales/ @brennanb2025
+/config/scripts/*localization*.mjs @brennanb2025
+/config/scripts/*locale*.mjs @brennanb2025
+/i18next.config.ts @brennanb2025

@@ -97,25 +97,45 @@ export function ignoresSharedSetupScripts(repo: Pick<Repo, 'hookSettings'>): boo
   )
 }
 
-export function getSetupScriptPromptDismissalKey(repoId: string): string {
-  return `${SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX}${repoId}`
+export function getSetupScriptPromptDismissalKey(repoHostIdentity: string): string {
+  return `${SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX}${repoHostIdentity}`
 }
 
 export function isSetupScriptPromptDismissed(
-  repoId: string,
+  repoHostIdentity: string,
   dismissedEntries: readonly string[]
 ): boolean {
-  return dismissedEntries.includes(getSetupScriptPromptDismissalKey(repoId))
+  return dismissedEntries.includes(getSetupScriptPromptDismissalKey(repoHostIdentity))
 }
 
 export function filterSetupScriptPromptDismissalsToValidRepos(
   value: unknown,
-  validRepoIds: Set<string>
+  validRepoHostIdentities: Set<string>
 ): string[] {
-  return sanitizeSetupScriptPromptDismissals(value).filter((entry) => {
-    const repoId = entry.slice(SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX.length)
-    return validRepoIds.has(repoId)
-  })
+  const unambiguousIdentityByRepoId = new Map<string, string | null>()
+  for (const identity of validRepoHostIdentities) {
+    const separatorIndex = identity.indexOf('\0')
+    const repoId = separatorIndex >= 0 ? identity.slice(separatorIndex + 1) : identity
+    unambiguousIdentityByRepoId.set(
+      repoId,
+      unambiguousIdentityByRepoId.has(repoId) ? null : identity
+    )
+  }
+
+  const next: string[] = []
+  for (const entry of sanitizeSetupScriptPromptDismissals(value)) {
+    const repoHostIdentity = entry.slice(SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX.length)
+    const validIdentity = validRepoHostIdentities.has(repoHostIdentity)
+      ? repoHostIdentity
+      : unambiguousIdentityByRepoId.get(repoHostIdentity)
+    if (validIdentity) {
+      const validEntry = getSetupScriptPromptDismissalKey(validIdentity)
+      if (!next.includes(validEntry)) {
+        next.push(validEntry)
+      }
+    }
+  }
+  return next
 }
 
 export function sanitizeSetupScriptPromptDismissals(value: unknown): string[] {

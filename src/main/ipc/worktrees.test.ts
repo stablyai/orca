@@ -217,7 +217,7 @@ const { deleteWorktreeHistoryDirMock } = vi.hoisted(() => ({
   deleteWorktreeHistoryDirMock: vi.fn()
 }))
 
-vi.mock('../terminal-history', () => ({
+vi.mock('../terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
@@ -258,6 +258,8 @@ import {
   notifyWorktreesChanged
 } from './worktree-remote'
 import { invalidateAuthorizedRootsCache, resolveRegisteredWorktreePath } from './filesystem-auth'
+import { _resetTracerForTests, setActiveSink } from '../observability/tracer'
+import type { RedactableSpan } from '../observability/redactor'
 import {
   reviewHeadRemoteRefComponent,
   REVIEW_HEAD_FETCH_TIMEOUT_MS
@@ -1136,6 +1138,7 @@ describe('registerWorktreeHandlers', () => {
       startup: {
         command: 'claude --prefill test',
         env: { ORCA_AGENT_MODE: 'direct' },
+        viewMode: 'chat',
         telemetry: {
           agent_kind: 'claude',
           launch_source: 'new_workspace_composer',
@@ -1156,6 +1159,7 @@ describe('registerWorktreeHandlers', () => {
         command: 'claude --prefill test',
         env: { ORCA_AGENT_MODE: 'direct' },
         launchAgent: 'claude',
+        viewMode: 'chat',
         startupCommandDelivery: undefined,
         telemetry: {
           agent_kind: 'claude',
@@ -7858,6 +7862,73 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('traces the removal as worktree.remove with a stage sub-span tree', async () => {
+    const records: RedactableSpan[] = []
+    setActiveSink({
+      push: (record) => records.push(record as RedactableSpan),
+      flush: () => {},
+      close: () => {}
+    })
+    try {
+      mockKnownFeatureWorktree()
+      getEffectiveHooksMock.mockReturnValue(null)
+      removeWorktreeMock.mockResolvedValue({})
+
+      await handlers['worktrees:remove'](null, { worktreeId: 'repo-1::/workspace/feature-wt' })
+
+      const parent = records.find((record) => record.name === 'worktree.remove')
+      expect(parent).toBeDefined()
+      expect(parent?.attributes).toMatchObject({
+        kind: 'worktree',
+        'worktree.stage': 'remove',
+        'worktree.path': '/workspace/feature-wt'
+      })
+      const stages = records.filter((record) => record.name.startsWith('worktree.remove.'))
+      expect(stages.map((record) => record.name)).toEqual(
+        expect.arrayContaining([
+          'worktree.remove.watcher_gate',
+          'worktree.remove.pty_sweep',
+          'worktree.remove.git_remove',
+          'worktree.remove.metadata_purge',
+          'worktree.remove.cache_invalidation'
+        ])
+      )
+      // Stages must hang off the removal span, not float as roots, or a freeze can't be attributed.
+      for (const stage of stages) {
+        expect(stage.parentSpanId).toBe(parent?.spanId)
+        expect(stage.attributes).toMatchObject({ kind: 'worktree', 'worktree.flow': 'local' })
+      }
+    } finally {
+      _resetTracerForTests()
+    }
+  })
+
+  it('traces a local archive hook as flow local, not remote', async () => {
+    const records: RedactableSpan[] = []
+    setActiveSink({
+      push: (record) => records.push(record as RedactableSpan),
+      flush: () => {},
+      close: () => {}
+    })
+    try {
+      mockKnownFeatureWorktree()
+      // The archive hook block is shared by both flows, so a local repo must not land under 'remote'.
+      getEffectiveHooksMock.mockReturnValue({ scripts: { archive: 'pnpm worktree:archive' } })
+      runHookMock.mockResolvedValue({ success: true, output: '' })
+      removeWorktreeMock.mockResolvedValue({})
+
+      await handlers['worktrees:remove'](null, { worktreeId: 'repo-1::/workspace/feature-wt' })
+
+      const archiveStage = records.find((record) => record.name === 'worktree.remove.archive_hook')
+      expect(archiveStage?.attributes).toMatchObject({
+        kind: 'worktree',
+        'worktree.flow': 'local'
+      })
+    } finally {
+      _resetTracerForTests()
+    }
+  })
+
   it('prunes git worktree tracking when removing an orphaned worktree', async () => {
     mockKnownFeatureWorktree()
     const orphanError = Object.assign(new Error('git worktree remove failed'), {
@@ -8174,6 +8245,13 @@ describe('registerWorktreeHandlers', () => {
     expect(removeWorktreeLinkedPathsMock).toHaveBeenCalledWith('/workspace/feature-wt', [
       'node_modules'
     ])
+    // Why order matters: linked-path deletion is destructive, so PTYs must release every handle
+    // before Windows or WSL filesystem cleanup starts (mirrors the runtime removal path).
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalled()
+    // Latest PTY sweep vs earliest deletion: a later sweep would mean handles were still open.
+    expect(Math.max(...killAllProcessesForWorktreeMock.mock.invocationCallOrder)).toBeLessThan(
+      Math.min(...removeWorktreeLinkedPathsMock.mock.invocationCallOrder)
+    )
   })
 
   it('does not remove a worktree when watcher teardown cannot release it', async () => {
@@ -8810,6 +8888,42 @@ describe('registerWorktreeHandlers', () => {
     })
     expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
     expect(hasHooksFileMock).not.toHaveBeenCalled()
+  })
+
+  it('inspects setup-script imports on the requested host when repo ids collide', async () => {
+    const localRepo = {
+      id: 'repo-shared',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = { ...localRepo, path: '/remote/repo', connectionId: 'conn-1' }
+    const fsProvider = {
+      readFile: vi.fn(async (filePath: string) => {
+        if (filePath === '/remote/repo/.superset/config.json') {
+          return { content: '{"setup":"remote setup"}', isBinary: false }
+        }
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      }),
+      stat: vi.fn().mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+    store.getRepo.mockReturnValue(localRepo)
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+
+    await expect(
+      handlers['hooks:inspectSetupScriptImports'](null, {
+        repoId: 'repo-shared',
+        hostId: 'ssh:conn-1'
+      })
+    ).resolves.toContainEqual(
+      expect.objectContaining({
+        provider: 'superset',
+        setup: 'remote setup'
+      })
+    )
+    expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/.superset/config.json')
   })
 
   it('does not coalesce forget requests for the same id on different hosts', async () => {

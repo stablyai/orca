@@ -1,11 +1,10 @@
 /* eslint-disable max-lines -- Why: OpenCode usage analytics need to normalize multiple local DB schema generations, attribute worktrees, and build persisted projections in one auditable pipeline. */
-import { existsSync } from 'node:fs'
 import { readdir, realpath, stat } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { basename, isAbsolute, join, posix, win32 } from 'node:path'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
+import { resolveOpenCodeDataDirectory } from '../opencode/opencode-data-directory'
 import Database from '../sqlite/sync-database'
 import { columnExists, tableExists } from './schema-helpers'
 import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
@@ -80,42 +79,44 @@ function looksLikeWindowsPath(pathValue: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
 }
 
-function getXdgDataHome(): string {
-  if (process.env.XDG_DATA_HOME?.trim()) {
-    return process.env.XDG_DATA_HOME.trim()
-  }
-  if (process.platform === 'win32') {
-    return process.env.LOCALAPPDATA || process.env.APPDATA || join(homedir(), 'AppData', 'Local')
-  }
-  return join(homedir(), '.local', 'share')
+type OpenCodeDatabaseOverride = {
+  isConfigured: boolean
+  path: string | null
 }
 
-function getOpenCodeDataDirectory(): string {
-  return join(getXdgDataHome(), 'opencode')
-}
-
-function getOpenCodeDatabasePathFromEnv(): string | null {
+function getOpenCodeDatabaseOverride(dataDirectory: string): OpenCodeDatabaseOverride {
   const raw = process.env.OPENCODE_DB?.trim()
   if (!raw) {
-    return null
+    return { isConfigured: false, path: null }
   }
   if (raw === ':memory:') {
-    return null
+    return { isConfigured: true, path: null }
   }
-  return isAbsolute(raw) ? raw : join(getOpenCodeDataDirectory(), raw)
+  return {
+    isConfigured: true,
+    path: isAbsolute(raw) ? raw : join(dataDirectory, raw)
+  }
 }
 
 export async function listOpenCodeDatabases(): Promise<string[]> {
-  const envPath = getOpenCodeDatabasePathFromEnv()
-  if (envPath) {
-    return existsSync(envPath) ? [envPath] : []
+  const dataDirectory = resolveOpenCodeDataDirectory()
+  const databaseOverride = getOpenCodeDatabaseOverride(dataDirectory)
+  if (databaseOverride.isConfigured) {
+    if (!databaseOverride.path) {
+      return []
+    }
+    try {
+      return (await stat(databaseOverride.path)).isFile() ? [databaseOverride.path] : []
+    } catch {
+      return []
+    }
   }
 
   try {
-    const entries = await readdir(getOpenCodeDataDirectory(), { withFileTypes: true })
+    const entries = await readdir(dataDirectory, { withFileTypes: true })
     return entries
       .filter((entry) => entry.isFile() && /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/.test(entry.name))
-      .map((entry) => join(getOpenCodeDataDirectory(), entry.name))
+      .map((entry) => join(dataDirectory, entry.name))
       .sort()
   } catch {
     return []

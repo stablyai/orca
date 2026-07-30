@@ -47,6 +47,7 @@ import { PaneIdentityRegistry } from './pane-identity-registry'
 import {
   closeManagedPane,
   detachManagedPaneForExternalMove,
+  retireManagedPanePreservingPty,
   splitManagedPane
 } from './pane-split-close'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
@@ -176,6 +177,22 @@ export class PaneManager {
 
   detachPaneForExternalMove(paneId: number): boolean {
     return detachManagedPaneForExternalMove({
+      paneId,
+      activePaneId: this.activePaneId,
+      panes: this.panes,
+      root: this.root,
+      styleOptions: this.styleOptions,
+      managerOptions: this.options,
+      getDragCallbacks: () => this.getDragCallbacks(),
+      releasePaneIdentity: (numericPaneId) => this.identities.release(numericPaneId),
+      setActivePaneId: (id) => {
+        this.activePaneId = id
+      }
+    })
+  }
+
+  retirePanePreservingPty(paneId: number): boolean {
+    return retireManagedPanePreservingPty({
       paneId,
       activePaneId: this.activePaneId,
       panes: this.panes,

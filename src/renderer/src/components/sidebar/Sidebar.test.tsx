@@ -134,6 +134,17 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('Sidebar', () => {
+  it('anchors the setup script popup to the bottom toolbar', () => {
+    setSidebarState(getDefaultSettings(tmpdir()))
+    const view = render(sidebarElement())
+    const prompt = view.getByTestId('setup-script-prompt-card')
+    const toolbar = view.getByTestId('sidebar-toolbar')
+
+    expect(prompt.parentElement).toBe(toolbar.parentElement)
+    expect(prompt.parentElement?.classList.contains('relative')).toBe(true)
+    expect(prompt.parentElement?.classList.contains('shrink-0')).toBe(true)
+  })
+
   it('applies left sidebar appearance variables to the workspace sidebar surface', () => {
     setSidebarState({
       ...getDefaultSettings(tmpdir()),
