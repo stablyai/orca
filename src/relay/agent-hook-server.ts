@@ -379,9 +379,10 @@ export class RelayAgentHookServer {
     ) {
       // Why: every leg that caches/forwards funnels here — live ingest, the assistant-message
       // retry, and the codex subagent poll re-normalize the raw body and re-attach the cwd.
-      // An event only reaches this point after the pre-normalize refusal, so a surviving raw
-      // contradiction is proven symlink aliasing; forwarding the cwd would make Orca's raw
-      // re-guard re-drop the row, and caching it would poison replay after reconnect.
+      // An event only reaches this point after the pre-normalize refusal, so this host already
+      // judged a surviving raw contradiction keep-worthy (symlink aliasing, or an unresolvable
+      // or one-side-stat-able spelling); forwarding the cwd would make Orca's raw re-guard
+      // re-drop the proven-keep row, and caching it would poison replay after reconnect.
       event.sourceCwd = undefined
     }
     if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
