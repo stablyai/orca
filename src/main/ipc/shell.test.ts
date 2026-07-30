@@ -693,4 +693,64 @@ describe('registerShellHandlers', () => {
       expect(openPathMock).toHaveBeenCalledWith(normalize(filePath))
     })
   })
+
+  describe('multi-select pickers', () => {
+    it('picks multiple attachments at once', async () => {
+      showOpenDialogMock.mockResolvedValue({
+        canceled: false,
+        filePaths: ['/a.txt', '/b.txt', '/c.pdf']
+      })
+      const handler = getHandler('shell:pickAttachments')
+      await expect(handler({})).resolves.toEqual(['/a.txt', '/b.txt', '/c.pdf'])
+      expect(showOpenDialogMock).toHaveBeenCalledWith({
+        properties: ['openFile', 'multiSelections']
+      })
+    })
+
+    it('returns empty array when multi-attachment picking is canceled', async () => {
+      showOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
+      const handler = getHandler('shell:pickAttachments')
+      await expect(handler({})).resolves.toEqual([])
+    })
+
+    it('picks multiple images at once', async () => {
+      showOpenDialogMock.mockResolvedValue({
+        canceled: false,
+        filePaths: ['/photos/a.jpg', '/photos/b.png']
+      })
+      const handler = getHandler('shell:pickImages')
+      await expect(handler({})).resolves.toEqual(['/photos/a.jpg', '/photos/b.png'])
+      expect(showOpenDialogMock).toHaveBeenCalledWith({
+        properties: ['openFile', 'multiSelections'],
+        filters: [
+          { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'] }
+        ]
+      })
+    })
+
+    it('returns empty array when multi-image picking is canceled', async () => {
+      showOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
+      const handler = getHandler('shell:pickImages')
+      await expect(handler({})).resolves.toEqual([])
+    })
+
+    it('picks multiple audio files at once', async () => {
+      showOpenDialogMock.mockResolvedValue({
+        canceled: false,
+        filePaths: ['/music/a.mp3', '/music/b.ogg']
+      })
+      const handler = getHandler('shell:pickAudios')
+      await expect(handler({})).resolves.toEqual(['/music/a.mp3', '/music/b.ogg'])
+      expect(showOpenDialogMock).toHaveBeenCalledWith({
+        properties: ['openFile', 'multiSelections'],
+        filters: [{ name: 'Audio', extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac'] }]
+      })
+    })
+
+    it('returns empty array when multi-audio picking is canceled', async () => {
+      showOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
+      const handler = getHandler('shell:pickAudios')
+      await expect(handler({})).resolves.toEqual([])
+    })
+  })
 })

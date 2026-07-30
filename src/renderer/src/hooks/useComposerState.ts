@@ -2455,17 +2455,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleAddAttachment = useCallback(async (): Promise<void> => {
     try {
-      const selectedPath = await window.api.shell.pickAttachment()
-      if (!selectedPath) {
+      const selectedPaths = await window.api.shell.pickAttachments()
+      if (selectedPaths.length === 0) {
         return
       }
-      const uploaded = await uploadComposerPaths([selectedPath])
+      const uploaded = await uploadComposerPaths(selectedPaths)
       if (uploaded) {
         addComposerAttachments(uploaded.filePaths)
         insertComposerFolderPaths(uploaded.folderPaths)
         return
       }
-      addComposerAttachments([selectedPath])
+      addComposerAttachments(selectedPaths)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to add attachment.'
       toast.error(message)

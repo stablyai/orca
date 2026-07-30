@@ -153,11 +153,10 @@ export function useGlobalFileDrop(): void {
         return
       }
 
-      // Why: the relay payload now sends all paths in one gesture-scoped event.
-      // Loop over every dropped file so multi-file editor drops still open
-      // each file, matching the prior per-path behavior.
-      for (const filePath of data.paths) {
-        void (async () => {
+      // Why: process each dropped file sequentially in a single async context
+      // so that concurrent store.openFile() calls never race on Zustand set().
+      void (async () => {
+        for (const filePath of data.paths) {
           try {
             const isRemoteRuntimePath = isRemoteRuntimeFileOperation(fileContext, filePath)
             // Why: remote paths don't need local auth — the relay/runtime is the security boundary.
@@ -166,7 +165,7 @@ export function useGlobalFileDrop(): void {
             }
             const stat = await statRuntimePath(fileContext, filePath)
             if (stat.isDirectory) {
-              return
+              continue
             }
 
             let relativePath = filePath
@@ -192,8 +191,8 @@ export function useGlobalFileDrop(): void {
           } catch {
             // Ignore files that cannot be authorized or stat'd.
           }
-        })()
-      }
+        }
+      })()
     })
   }, [])
 }
