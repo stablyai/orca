@@ -8,6 +8,8 @@ type CursorCoreService = {
   isCursorInitialized: boolean
 }
 
+type ListenerOwner = Pick<EventTarget, 'addEventListener' | 'removeEventListener'>
+
 function cursorCoreService(terminal: Terminal): CursorCoreService {
   const core = (terminal as unknown as { _core?: { coreService?: CursorCoreService } })._core
   expect(core, 'xterm private _core compatibility').toBeDefined()
@@ -17,7 +19,35 @@ function cursorCoreService(terminal: Terminal): CursorCoreService {
   return core!.coreService!
 }
 
-function trackEventListenerCleanup(): () => string[] {
+function listenerOwner(target: EventTarget): ListenerOwner {
+  let owner = target as ListenerOwner | null
+  while (owner) {
+    if (Object.hasOwn(owner, 'addEventListener') && Object.hasOwn(owner, 'removeEventListener')) {
+      return owner
+    }
+    owner = Object.getPrototypeOf(owner) as ListenerOwner | null
+  }
+  throw new Error(`No event-listener owner for ${target.constructor.name}`)
+}
+
+function eventListenerOwners(): ListenerOwner[] {
+  const targets: EventTarget[] = [
+    document,
+    document.defaultView!,
+    document.documentElement,
+    document.body,
+    document.createElement('div'),
+    document.createElement('textarea'),
+    document.createElement('canvas')
+  ]
+  return [...new Set(targets.map(listenerOwner))]
+}
+
+function trackEventListenerCleanup(): () => {
+  added: number
+  removed: number
+  unreleased: string[]
+} {
   const registrations: Array<{
     capture: boolean
     listener: EventListenerOrEventListenerObject
@@ -25,45 +55,64 @@ function trackEventListenerCleanup(): () => string[] {
     target: EventTarget
     type: string
   }> = []
-  const prototype = window.EventTarget.prototype
-  const addEventListener = prototype.addEventListener
-  const removeEventListener = prototype.removeEventListener
   const capture = (options?: boolean | AddEventListenerOptions | EventListenerOptions): boolean =>
     typeof options === 'boolean' ? options : (options?.capture ?? false)
-
-  vi.spyOn(prototype, 'addEventListener').mockImplementation(function (
-    this: EventTarget,
+  const activeRegistration = (
+    target: EventTarget,
     type: string,
     listener: EventListenerOrEventListenerObject,
-    options?: boolean | AddEventListenerOptions
-  ) {
-    registrations.push({ capture: capture(options), listener, removed: false, target: this, type })
-    addEventListener.call(this, type, listener, options)
-  })
-  vi.spyOn(prototype, 'removeEventListener').mockImplementation(function (
-    this: EventTarget,
-    type: string,
-    listener: EventListenerOrEventListenerObject,
-    options?: boolean | EventListenerOptions
-  ) {
-    const registration = registrations.find(
+    options?: boolean | AddEventListenerOptions | EventListenerOptions
+  ) =>
+    registrations.find(
       (entry) =>
         !entry.removed &&
-        entry.target === this &&
+        entry.target === target &&
         entry.type === type &&
         entry.listener === listener &&
         entry.capture === capture(options)
     )
-    if (registration) {
-      registration.removed = true
-    }
-    removeEventListener.call(this, type, listener, options)
-  })
 
-  return () =>
-    registrations
+  for (const owner of eventListenerOwners()) {
+    const addEventListener = owner.addEventListener
+    const removeEventListener = owner.removeEventListener
+    vi.spyOn(owner, 'addEventListener').mockImplementation(function (
+      this: EventTarget,
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions
+    ) {
+      addEventListener.call(this, type, listener, options)
+      if (!activeRegistration(this, type, listener, options)) {
+        registrations.push({
+          capture: capture(options),
+          listener,
+          removed: false,
+          target: this,
+          type
+        })
+      }
+    })
+    vi.spyOn(owner, 'removeEventListener').mockImplementation(function (
+      this: EventTarget,
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | EventListenerOptions
+    ) {
+      removeEventListener.call(this, type, listener, options)
+      const registration = activeRegistration(this, type, listener, options)
+      if (registration) {
+        registration.removed = true
+      }
+    })
+  }
+
+  return () => ({
+    added: registrations.length,
+    removed: registrations.filter((registration) => registration.removed).length,
+    unreleased: registrations
       .filter((registration) => !registration.removed)
       .map((registration) => registration.type)
+  })
 }
 
 function write(terminal: Terminal, data: string): Promise<void> {
@@ -88,10 +137,10 @@ describe('xterm caret rendering oracle', () => {
   })
 
   it('renders and hides an unfocused main-buffer caret', async () => {
+    const listenerCleanup = trackEventListenerCleanup()
     const options: ITerminalOptions & ITerminalInitOnlyOptions = MOBILE_TERMINAL_CARET_OPTIONS
     const terminal = new Terminal(options)
     const container = document.createElement('div')
-    const unreleasedListeners = trackEventListenerCleanup()
     document.body.append(container)
 
     try {
@@ -115,8 +164,29 @@ describe('xterm caret rendering oracle', () => {
     } finally {
       terminal.dispose()
       expect(container.querySelector('.xterm')).toBeNull()
-      expect(unreleasedListeners()).toEqual([])
+      const cleanup = listenerCleanup()
+      expect(cleanup.added).toBeGreaterThan(0)
+      expect(cleanup.removed).toBe(cleanup.added)
+      expect(cleanup.unreleased).toEqual([])
       container.remove()
     }
+  })
+
+  it('releases listeners across 25 terminal lifecycles', () => {
+    const listenerCleanup = trackEventListenerCleanup()
+    for (let cycle = 0; cycle < 25; cycle += 1) {
+      const terminal = new Terminal(MOBILE_TERMINAL_CARET_OPTIONS)
+      const container = document.createElement('div')
+      document.body.append(container)
+      terminal.open(container)
+      terminal.dispose()
+      expect(container.querySelector('.xterm')).toBeNull()
+      container.remove()
+    }
+
+    const cleanup = listenerCleanup()
+    expect(cleanup.added).toBeGreaterThan(0)
+    expect(cleanup.removed).toBe(cleanup.added)
+    expect(cleanup.unreleased).toEqual([])
   })
 })
