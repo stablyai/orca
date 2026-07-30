@@ -12,7 +12,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  diagnostics memory        Collect a memory snapshot for Orca and managed terminals',
   '',
   'Agent Discovery:',
-  '  agent-context             Print the machine-readable command schema for agents',
+  '  agent-context             Discover Orca commands with bounded machine-readable queries',
   '',
   'Agent Sessions:',
   '  search                    Search the full text of agent sessions on one Orca host',
