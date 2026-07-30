@@ -1,5 +1,7 @@
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
+import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { TerminalTab } from '../../../../shared/types'
 
@@ -56,6 +58,13 @@ function getPendingActivationSpawnCount(value: boolean | number | undefined): nu
   return typeof value === 'number' && value > 0 ? value : 0
 }
 
+function hasPendingActivationSpawn(tab: ColdParkableTerminalTab): boolean {
+  return (
+    getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0 &&
+    (!tab.ptyId || !isRemoteRuntimePtyId(tab.ptyId))
+  )
+}
+
 // Why: snapshot-backed = local daemon session owned by this worktree (foreign
 // ids reattach through a path parking cannot replay). SSH is restorable too,
 // via isParkRestorableTerminalPty + main's headless model; only remote-runtime
@@ -77,12 +86,24 @@ export function isSnapshotBackedTerminalPty(ptyId: string | null, worktreeId: st
 export type TerminalParkRestorePolicy = {
   /** settings.terminalSshViewParking !== false — the C1 SSH-parking kill switch. */
   sshParkingEnabled?: boolean
+  /** Exact paired environments whose host advertises bounded snapshot restore. */
+  pairedRuntimeParkingEnvironmentIds?: ReadonlySet<string>
 }
 
-// Why: SSH bytes transit local main, so main's headless model (served over
-// pty:getMainBufferSnapshot) can re-hydrate a parked SSH reveal, with the
-// relay's replay buffer as fallback — fact-mode watchers cover side effects
-// either way. Remote-runtime ptys never transit main; they stay un-parkable.
+export function selectPairedRuntimeParkingEnvironmentIds(
+  statuses: ReadonlyMap<string, { status: { capabilities?: readonly string[] } | null | undefined }>
+): Set<string> {
+  const capable = new Set<string>()
+  for (const [environmentId, entry] of statuses) {
+    if (entry.status?.capabilities?.includes(TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY)) {
+      capable.add(environmentId)
+    }
+  }
+  return capable
+}
+
+// Why: SSH uses local main's model; paired PTYs are eligible only when their
+// exact host advertises authoritative bounded restore.
 export function isParkRestorableTerminalPty(
   ptyId: string | null,
   worktreeId: string,
@@ -90,6 +111,13 @@ export function isParkRestorableTerminalPty(
 ): boolean {
   if (isSnapshotBackedTerminalPty(ptyId, worktreeId)) {
     return true
+  }
+  if (ptyId && isRemoteRuntimePtyId(ptyId)) {
+    const environmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+    return (
+      environmentId !== null &&
+      policy?.pairedRuntimeParkingEnvironmentIds?.has(environmentId) === true
+    )
   }
   return policy?.sshParkingEnabled === true && ptyId !== null && parseAppSshPtyId(ptyId) !== null
 }
@@ -130,7 +158,7 @@ export function canParkTerminalWorktreeRenderers(args: {
     if (args.pendingStartupByTabId[tab.id] !== undefined) {
       return false
     }
-    if (getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0) {
+    if (hasPendingActivationSpawn(tab)) {
       return false
     }
     return isParkRestorableTerminalPty(tab.ptyId, args.worktreeId, args.restorePolicy)
@@ -164,7 +192,7 @@ export function canParkTerminalTabRenderer(args: {
   if (args.pendingStartupByTabId[tab.id] !== undefined) {
     return false
   }
-  if (getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0) {
+  if (hasPendingActivationSpawn(tab)) {
     return false
   }
   return isParkRestorableTerminalPty(tab.ptyId, args.worktreeId, args.restorePolicy)

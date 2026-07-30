@@ -235,6 +235,7 @@ describe('web runtime environment identity', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
   })
 
   it('does not resolve an old server selector through a differently keyed server', async () => {
@@ -359,6 +360,177 @@ describe('web runtime environment identity', () => {
       globals.window.api.runtimeEnvironments.resolve({ selector: 'web-server-old' })
     ).rejects.toThrow('Unknown Orca runtime environment: web-server-old')
   })
+
+  it('keeps pairing while manual disconnect fences passive reconnects', async () => {
+    const calls: string[] = []
+    const close = vi.fn()
+    let clientCount = 0
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        constructor() {
+          clientCount += 1
+        }
+
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          calls.push(method)
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: { runtimeId: 'runtime-1' },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {
+          close()
+        }
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.runtimeEnvironments.getStatus({ selector: 'web-server-a' })
+    ).resolves.toMatchObject({ ok: true })
+    await globals.window.api.runtimeEnvironments.disconnect({ selector: 'web-server-a' })
+
+    await expect(globals.window.api.runtimeEnvironments.list()).resolves.toMatchObject([
+      { id: 'web-server-a' }
+    ])
+    await expect(
+      globals.window.api.runtimeEnvironments.getStatus({ selector: 'web-server-a' })
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'runtime_manually_disconnected' }
+    })
+    await expect(
+      globals.window.api.runtimeEnvironments.call({
+        selector: 'web-server-a',
+        method: 'repos.list'
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'runtime_manually_disconnected' }
+    })
+    await expect(
+      globals.window.api.runtimeEnvironments.subscribe(
+        { selector: 'web-server-a', method: 'terminal.subscribe' },
+        { onResponse: vi.fn() }
+      )
+    ).rejects.toThrow('runtime_manually_disconnected')
+    expect(clientCount).toBe(1)
+    expect(calls).toEqual(['status.get'])
+    expect(close).toHaveBeenCalledOnce()
+
+    await expect(
+      globals.window.api.runtimeEnvironments.connect({ selector: 'web-server-a' })
+    ).resolves.toMatchObject({ ok: true })
+    expect(clientCount).toBe(2)
+    expect(calls).toEqual(['status.get', 'status.get'])
+  })
+
+  it('fences a web runtime response that completes after manual disconnect', async () => {
+    let resolveCall!: (response: RuntimeRpcResponse<unknown>) => void
+    const pendingCall = new Promise<RuntimeRpcResponse<unknown>>((resolve) => {
+      resolveCall = resolve
+    })
+    const call = vi.fn(() => pendingCall)
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call = call
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const status = globals.window.api.runtimeEnvironments.getStatus({
+      selector: 'web-server-a'
+    })
+    await vi.waitFor(() => expect(call).toHaveBeenCalledOnce())
+    await globals.window.api.runtimeEnvironments.disconnect({ selector: 'web-server-a' })
+    resolveCall({
+      id: 'status.get',
+      ok: true,
+      result: { runtimeId: 'runtime-1' },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+
+    await expect(status).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'runtime_manually_disconnected' }
+    })
+  })
+
+  it.each(['active runtime', 'selected environment'] as const)(
+    'returns a disconnect envelope when a queued %s call disconnects',
+    async (route) => {
+      const pending: ((response: RuntimeRpcResponse<unknown>) => void)[] = []
+      const call = vi.fn(
+        (method: string) =>
+          new Promise<RuntimeRpcResponse<unknown>>((resolve) => {
+            pending.push((response) => resolve({ ...response, id: method }))
+          })
+      )
+      vi.doMock('./web-runtime-client', () => ({
+        WebRuntimeClient: class {
+          call = call
+          close(): void {}
+        }
+      }))
+      const globals = installBrowserGlobals('Linux')
+      writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+      const { installWebPreloadApi } = await import('./web-preload-api')
+      installWebPreloadApi()
+      const invoke = (): Promise<RuntimeRpcResponse<unknown>> =>
+        route === 'active runtime'
+          ? globals.window.api.runtime.call({ method: 'repos.list' })
+          : globals.window.api.runtimeEnvironments.call({
+              selector: 'web-server-a',
+              method: 'repos.list'
+            })
+
+      const activeCalls = Array.from({ length: 8 }, invoke)
+      await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(8))
+      const queuedCall = invoke()
+      expect(call).toHaveBeenCalledTimes(8)
+
+      await globals.window.api.runtimeEnvironments.disconnect({ selector: 'web-server-a' })
+      pending[0]?.({
+        id: 'repos.list',
+        ok: true,
+        result: {},
+        _meta: { runtimeId: 'runtime-1' }
+      })
+
+      await expect(queuedCall).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'runtime_manually_disconnected' }
+      })
+      expect(call).toHaveBeenCalledTimes(8)
+
+      for (const resolve of pending.slice(1)) {
+        resolve({
+          id: 'repos.list',
+          ok: true,
+          result: {},
+          _meta: { runtimeId: 'runtime-1' }
+        })
+      }
+      await expect(Promise.all(activeCalls)).resolves.toEqual(
+        Array.from({ length: 8 }, () =>
+          expect.objectContaining({
+            ok: false,
+            error: expect.objectContaining({ code: 'runtime_manually_disconnected' })
+          })
+        )
+      )
+    }
+  )
 })
 
 describe('web browser-local port capability', () => {

@@ -14,7 +14,6 @@ import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
 import { useSidebarProjectDrop } from './useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
-import { createSingleFlightCoalescer, type SingleFlightCoalescer } from './single-flight-coalescer'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
@@ -86,45 +85,6 @@ function Sidebar({
       void fetchAllWorktrees()
     }
   }, [repoCount, startupWorktreeRefreshCompleted, fetchAllWorktrees])
-
-  // Why: a runtime host coming online/offline must refresh the sidebar so its
-  // worktrees appear/drop, the same way SSH state changes already refetch. Only
-  // the manual connect button refetched before, so the list went stale until the
-  // user forced a refetch (e.g. via Add Project). React to the set of online
-  // runtime envs (a host has a status entry once it is connected).
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
-  const fetchWorktreeLineage = useAppStore((s) => s.fetchWorktreeLineage)
-  const onlineRuntimeEnvKey = React.useMemo(
-    () =>
-      // Why: tolerate an absent map — a partial/hydrating store can leave this
-      // undefined, and a thrown selector would crash the whole sidebar render.
-      [...(runtimeStatusByEnvironmentId?.entries() ?? [])]
-        .filter(([, entry]) => Boolean(entry?.status))
-        .map(([id]) => id)
-        .sort()
-        .join(','),
-    [runtimeStatusByEnvironmentId]
-  )
-  const previousOnlineRuntimeEnvKeyRef = React.useRef<string | null>(null)
-  // Coalesce staggered wake reconnects so K hosts can't fire K sidebar remounts and freeze (#8539).
-  const reconnectRefreshRef = React.useRef<SingleFlightCoalescer | null>(null)
-  if (reconnectRefreshRef.current === null) {
-    reconnectRefreshRef.current = createSingleFlightCoalescer(() =>
-      fetchAllWorktrees().then(() => fetchWorktreeLineage())
-    )
-  }
-  useEffect(() => {
-    const previousOnlineRuntimeEnvKey = previousOnlineRuntimeEnvKeyRef.current
-    previousOnlineRuntimeEnvKeyRef.current = onlineRuntimeEnvKey
-    if (
-      previousOnlineRuntimeEnvKey === null ||
-      previousOnlineRuntimeEnvKey === onlineRuntimeEnvKey ||
-      !startupWorktreeRefreshCompleted
-    ) {
-      return
-    }
-    reconnectRefreshRef.current?.request()
-  }, [onlineRuntimeEnvKey, startupWorktreeRefreshCompleted])
 
   useEffect(() => {
     if (!sidebarOpen && workspaceBoardRenderedOpen) {

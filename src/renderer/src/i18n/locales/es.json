@@ -148,7 +148,8 @@
         "mobileScopeRejected": "Este código QR solo da acceso limitado para móvil. Para usar la app web completa, abre el enlace para navegador desde Ajustes → Servidores remotos de Orca → Comparte este servidor Orca → Nuevo enlace."
       },
       "webPreloadApi": {
-        "aiVaultUnavailableForHost": "El historial de sesiones de Agents no está disponible para este host de ejecución."
+        "aiVaultUnavailableForHost": "El historial de sesiones de Agents no está disponible para este host de ejecución.",
+        "runtimeEnvironmentManuallyDisconnected": "El entorno de ejecución se ha desconectado manualmente."
       },
       "web": {
         "preload": {
@@ -635,6 +636,20 @@
       },
       "pluginCommandKeybindings": {
         "group": "Plugins"
+      },
+      "feedback": {
+        "image": {
+          "attachments": {
+            "fallbackName": "Image attachment",
+            "unsupportedType": "{{fileName}} is not a supported image type.",
+            "empty": "{{fileName}} is empty.",
+            "tooLarge": "{{fileName}} is larger than {{maxSize}}.",
+            "tooMany": "You can attach up to {{maxCount}} images.",
+            "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
+            "invalidImage": "{{fileName}} is not a valid supported image.",
+            "additionalErrors": "{{count}} additional images could not be attached."
+          }
+        }
       }
     },
     "hooks": {
@@ -1834,7 +1849,8 @@
         "jiraToggleSortDirection": "Ordenar de forma {{value0}}",
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
         "noGithubSourceDetected": "No GitHub source detected for",
-        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved."
+        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
+        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again."
       },
       "Terminal": {
         "73768427cf": "Cerrar",
@@ -4181,7 +4197,10 @@
           "7a46c228b8": "Gracias por el feedback.",
           "a2fd890d9e": "Introduce feedback antes de enviarlo.",
           "f2e42e1307": "Enviar",
-          "69969ba364": "Envío…"
+          "69969ba364": "Envío…",
+          "imageReadFailed": "Could not read the attached images. Try attaching them again.",
+          "attachWhileSending": "Wait for the current feedback to finish sending before attaching more images.",
+          "imagesNotDelivered": "Feedback sent, but image delivery could not be confirmed."
         },
         "SidebarFilter": {
           "e3b3898218": "Agregar proyecto",
@@ -4295,9 +4314,11 @@
           "26c71e536c": "Notas",
           "b8dcc6f321": "Enlace PR/MR",
           "ca4d3c522e": "Issue de Linear",
+          "jiraIssue": "Issue de Jira",
           "91dfc653e8": "Ticket de GitHub",
           "bdd23b4e07": "Issues de GitHub",
           "44713a5d04": "Issues de Linear",
+          "jiraIssues": "Issues de Jira",
           "cc17bd443b": "Detallado",
           "0f9b959b31": "PR",
           "e029a2d775": "Estado",
@@ -4447,7 +4468,10 @@
           "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
           "cliCreatedFromShell": "Created via `orca worktree create`",
           "cliStartupAgent": "Started with {{value0}}",
-          "cliCreated": "Created by Orca CLI"
+          "cliCreated": "Created by Orca CLI",
+          "jiraIssue": "Jira {{value0}}",
+          "viewOnJira": "Ver en Jira",
+          "linkedJira": "Jira {{value0}} vinculado"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "Estado: Abierto",
@@ -5002,6 +5026,11 @@
         "WorktreeDeveloperMenu": {
           "developer": "Developer",
           "parkTerminal": "Park terminal"
+        },
+        "SidebarFeedbackImageAttachments": {
+          "screenshotsHint": "Attach up to {count} screenshots",
+          "attachImages": "Attach",
+          "removeImage": "Remove {{fileName}}"
         },
         "WorkspaceKanbanSearchField": {
           "bdb753c78d": "Ningún espacio de trabajo coincide",
@@ -11410,18 +11439,30 @@
             "switchTaskSourceTitle": "¿Cambiar el origen de tareas?",
             "differentTaskSource": ", que es diferente del origen de tareas seleccionado.",
             "currentTaskSource": "origen de tareas actual",
-            "placeholderNameOrLinearUrl": "Escribe un nombre o una URL de Linear",
+            "placeholderNameOrLinearUrl": "Escribe un nombre o una URL de Linear o Jira",
             "placeholderWorkspaceName": "Escribe un nombre de espacio de trabajo",
-            "placeholderSmartWithBranchGitLabLinear": "Escribe un nombre, #1234, rama, GitHub/GitLab o URL de Linear",
-            "placeholderSmartGitLabLinear": "Escribe un nombre, #1234, GitHub/GitLab o URL de Linear",
-            "placeholderSmartWithBranchGitLab": "Escribe un nombre, #1234, rama, GitHub o URL de GitLab",
-            "placeholderSmartGitLab": "Escribe un nombre, #1234, GitHub o URL de GitLab",
+            "placeholderSmartWithBranchGitLabLinear": "Escribe un nombre, #1234, rama, GitHub/GitLab, Linear o una URL de Jira",
+            "placeholderSmartGitLabLinear": "Escribe un nombre, #1234, GitHub/GitLab, Linear o una URL de Jira",
+            "placeholderSmartWithBranchGitLab": "Escribe un nombre, #1234, rama, GitHub, GitLab o una URL de Jira",
+            "placeholderSmartGitLab": "Escribe un nombre, #1234, GitHub, GitLab o una URL de Jira",
             "unavailable": "No disponible",
             "searchGitHub": "Buscar PRs e issues de GitHub",
             "searchGitLab": "Buscar MRs e issues de GitLab",
             "searchBranches": "Buscar ramas",
             "searchLinear": "Buscar issues de Linear",
             "workspaceName": "Nombre del espacio de trabajo",
+            "loadingJira": "Cargando issue de Jira…",
+            "jiraDisconnected": "Conecta Jira en Configuración para vincular este issue",
+            "jiraSiteNotConnected": "Este sitio de Jira no está conectado",
+            "jiraRuntimeUpdate": "Actualiza el entorno de ejecución remoto para vincular Jira",
+            "jiraReadFailed": "No se pudo cargar este issue de Jira",
+            "chooseJiraAccount": "Elige una cuenta de Jira",
+            "jiraLoaded": "Issue de Jira cargado",
+            "openSettings": "Configuración",
+            "retryJira": "Reintentar",
+            "searchJira": "Busca issues de Jira o pega la URL de un issue",
+            "jiraMode": "Jira",
+            "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
             "emoji": "Emoji"
           },
           "ProjectHostSetupCombobox": {

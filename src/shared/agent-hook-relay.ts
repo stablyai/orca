@@ -24,6 +24,7 @@
 
 import type { ParsedAgentStatusPayload } from './agent-status-types'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentHookTarget } from './agent-hook-types'
 
 // Why: the local hook server knows the discriminator from URL pathname routing
 // (`/hook/<source>`); the relay equally must tag each forwarded notification
@@ -115,6 +116,8 @@ export const AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD = 'agent_hook.installManage
 export type AgentHookInstallManagedHooksParams = {
   /** SHA-256 fingerprint of the server key negotiated by Orca's SSH transport. */
   hostKeyFingerprint?: string
+  /** Positively detected and enabled agents allowed to mutate remote config. */
+  agents: readonly AgentHookTarget[]
 }
 
 /** Feature-flag env var. Read once at process start by Orca and the relay.

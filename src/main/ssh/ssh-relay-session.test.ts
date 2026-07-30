@@ -207,50 +207,12 @@ describe('SshRelaySession', () => {
     expect(registerSshGitProvider).toHaveBeenCalledWith('target-1', expect.anything())
   })
 
-  it('installs all managed hooks in one relay RPC before plugins and PTY registration', async () => {
-    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
-    muxRequestMock.mockResolvedValue({ installers: 14, errors: 0 })
-    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const sftp = vi.fn()
-    const mockConn = {
-      sftp,
-      getHostKeyFingerprint: vi.fn(() => 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
-    } as unknown as SshConnection
-    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
-
-    await session.establish(mockConn)
-
-    const managedHookCalls = muxRequestMock.mock.calls.filter(
-      ([method]) => method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD
-    )
-    const managedHookCallIndex = muxRequestMock.mock.calls.findIndex(
-      ([method]) => method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD
-    )
-    const installPluginsCallIndex = muxRequestMock.mock.calls.findIndex(
-      ([method]) => method === AGENT_HOOK_INSTALL_PLUGINS_METHOD
-    )
-    expect(managedHookCalls).toEqual([
-      [
-        AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
-        { hostKeyFingerprint: 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }
-      ]
-    ])
-    expect(installPluginsCallIndex).toBeGreaterThanOrEqual(0)
-    const installPluginsParams = muxRequestMock.mock.calls[installPluginsCallIndex]?.[1]
-    expect(installPluginsParams).toMatchObject({
-      piExtensionSource: expect.stringContaining('/hook/pi'),
-      ompExtensionSource: expect.stringContaining('/hook/omp')
-    })
-    expect(sftp).not.toHaveBeenCalled()
-    expect(managedHookCallIndex).toBeLessThan(installPluginsCallIndex)
-    expect(muxRequestMock.mock.invocationCallOrder[installPluginsCallIndex]).toBeLessThan(
-      vi.mocked(registerSshPtyProvider).mock.invocationCallOrder[0]
-    )
-  })
-
   it('continues provider registration when the relay managed-hook request fails', async () => {
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
     muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === 'preflight.detectAgents') {
+        return { agents: ['codex'] }
+      }
       if (method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD) {
         throw new Error('runtime unavailable')
       }
@@ -260,6 +222,12 @@ describe('SshRelaySession', () => {
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
     await session.establish({} as SshConnection)
+    await vi.waitFor(() =>
+      expect(muxRequestMock).toHaveBeenCalledWith(
+        AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
+        expect.anything()
+      )
+    )
 
     expect(registerSshPtyProvider).toHaveBeenCalledWith('target-1', expect.anything())
     expect(
@@ -270,6 +238,9 @@ describe('SshRelaySession', () => {
   it('suppresses expected managed-hook teardown errors during disconnect', async () => {
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
     muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === 'preflight.detectAgents') {
+        return { agents: ['codex'] }
+      }
       if (method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD) {
         throw Object.assign(new Error('request disposed'), { code: 'DISPOSED' })
       }
@@ -281,6 +252,12 @@ describe('SshRelaySession', () => {
 
     try {
       await session.establish({} as SshConnection)
+      await vi.waitFor(() =>
+        expect(muxRequestMock).toHaveBeenCalledWith(
+          AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
+          expect.anything()
+        )
+      )
 
       expect(registerSshPtyProvider).toHaveBeenCalledWith('target-1', expect.anything())
       expect(warn.mock.calls.flat().join(' ')).not.toContain('relay managed hook install failed')

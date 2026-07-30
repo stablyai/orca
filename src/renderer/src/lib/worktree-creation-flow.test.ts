@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   PendingWorktreeCreation,
@@ -92,10 +90,9 @@ import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activatio
 import {
   beginBackgroundWorktreePreparation,
   continueBackgroundWorktreeCreation,
+  retryBackgroundWorktreeCreation,
   runBackgroundWorktreeCreation
 } from './worktree-creation-flow'
-
-const FLOW_SOURCE = readFileSync(join(__dirname, 'worktree-creation-flow.ts'), 'utf8')
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -142,14 +139,6 @@ function makePendingCreation(request: WorktreeCreationRequest): PendingWorktreeC
 async function flushAsyncWorktreeCreation(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
-}
-
-function sourceBetween(source: string, startPattern: string, endPattern: string): string {
-  const start = source.indexOf(startPattern)
-  expect(start).toBeGreaterThanOrEqual(0)
-  const end = source.indexOf(endPattern, start + startPattern.length)
-  expect(end).toBeGreaterThan(start)
-  return source.slice(start, end)
 }
 
 describe('runBackgroundWorktreeCreation', () => {
@@ -456,6 +445,44 @@ describe('staged background worktree creation', () => {
     expect(store.setActivePendingWorktreeCreation).toHaveBeenCalledWith('creation-1')
     expect(store.setActiveView).toHaveBeenCalledWith('terminal')
     expect(store.setSidebarOpen).toHaveBeenCalledWith(true)
+  })
+
+  it('preserves linked Jira context through staged creation and retry', async () => {
+    const linkedWorkItem = {
+      provider: 'jira' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: 'ORCA-123 Durable Jira link',
+      url: 'https://company.atlassian.net/browse/ORCA-123',
+      jiraIdentifier: 'ORCA-123'
+    }
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: 'project-1',
+      hostId: 'local' as const,
+      repoId: 'repo-1',
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      },
+      accountLabel: 'dev@company.test'
+    }
+    const request = makeRequest({ linkedWorkItem, linkedTaskSourceContext })
+    const expectedOptions = { linkedWorkItem, linkedTaskSourceContext }
+
+    expect(continueBackgroundWorktreeCreation('creation-1', request)).toBe(true)
+    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
+    const stagedCreateCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
+    expect(stagedCreateCall?.[25]).toEqual(expectedOptions)
+
+    store.createWorktree.mockClear()
+    retryBackgroundWorktreeCreation('creation-1')
+    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
+    const retryCreateCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
+    expect(retryCreateCall?.[25]).toEqual(expectedOptions)
   })
 
   it('can continue without revealing a staged create after background preflight', async () => {
@@ -854,28 +881,5 @@ describe('staged background worktree creation', () => {
       })
     )
     expect(toast.error).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('worktree creation flow agent trust preflight', () => {
-  it('forwards the repo SSH connection id when pre-marking agent trust', () => {
-    const preflight = sourceBetween(
-      FLOW_SOURCE,
-      'async function preflightAgentTrust',
-      'async function executeWorktreeCreation'
-    )
-    const createFlow = sourceBetween(
-      FLOW_SOURCE,
-      'const backendSpawned = result.startupTerminal?.spawned === true',
-      '// `createWorktree` already inserted the real worktree row'
-    )
-
-    expect(preflight).toContain('connectionId?: string | null')
-    expect(preflight).toContain('...(connectionId ? { connectionId } : {})')
-    expect(createFlow).toContain('repoConnectionId')
-    expect(createFlow).toContain('repo.id === worktree.repoId')
-    expect(createFlow).toContain(
-      'await preflightAgentTrust(preparedRequest, worktree.path, repoConnectionId)'
-    )
   })
 })

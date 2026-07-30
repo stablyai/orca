@@ -208,8 +208,9 @@ export const electronViteConfig: UserConfig = {
           // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
           // can't take down the main process (issue #7547).
           'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),
-          // Why: a worker thread survives the macOS 26 AppKit main-thread deadlock
-          // without paying for another Electron process.
+          // Why: forked with ELECTRON_RUN_AS_NODE so it survives a deadlocked
+          // main thread (macOS 26 AppKit scene-update deadlock) and can record
+          // the stall for the next launch to report.
           'main-thread-hang-watchdog-entry': resolve(
             'src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts'
           ),

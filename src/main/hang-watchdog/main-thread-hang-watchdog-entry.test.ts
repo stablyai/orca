@@ -67,6 +67,9 @@ describe('recordHangObservation', () => {
     })
   })
 
+  // Why: this is the safety contract of the whole PR. Observing a hang must never kill, relaunch,
+  // or exit — a false positive would SIGKILL a live main thread mid-write. If a future change
+  // reintroduces recovery, this test must fail loudly rather than ship silently.
   it('never spawns, signals, or exits', () => {
     recordHangObservation({
       parentPid: 4242,

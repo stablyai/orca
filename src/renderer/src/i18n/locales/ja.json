@@ -148,7 +148,8 @@
         "mobileScopeRejected": "この QR コードは制限付き（モバイル）アクセスを許可します。完全な Web アプリを使うには、設定 → リモート Orca サーバー → この Orca サーバーを共有する → 新規リンク からブラウザー用アクセスリンクを開いてください。"
       },
       "webPreloadApi": {
-        "aiVaultUnavailableForHost": "この実行ホストでは Agent セッション履歴を使用できません。"
+        "aiVaultUnavailableForHost": "この実行ホストでは Agent セッション履歴を使用できません。",
+        "runtimeEnvironmentManuallyDisconnected": "ランタイム環境は手動で切断されています。"
       },
       "web": {
         "preload": {
@@ -635,6 +636,20 @@
       },
       "pluginCommandKeybindings": {
         "group": "Plugins"
+      },
+      "feedback": {
+        "image": {
+          "attachments": {
+            "fallbackName": "Image attachment",
+            "unsupportedType": "{{fileName}} is not a supported image type.",
+            "empty": "{{fileName}} is empty.",
+            "tooLarge": "{{fileName}} is larger than {{maxSize}}.",
+            "tooMany": "You can attach up to {{maxCount}} images.",
+            "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
+            "invalidImage": "{{fileName}} is not a valid supported image.",
+            "additionalErrors": "{{count}} additional images could not be attached."
+          }
+        }
       }
     },
     "hooks": {
@@ -1834,7 +1849,8 @@
         "jiraToggleSortDirection": "{{value0}}に並べ替え",
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
         "noGithubSourceDetected": "No GitHub source detected for",
-        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved."
+        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
+        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again."
       },
       "Terminal": {
         "73768427cf": "閉じる",
@@ -4162,7 +4178,10 @@
           "7a46c228b8": "フィードバックありがとうございます。",
           "a2fd890d9e": "送信する前にフィードバックを入力。",
           "f2e42e1307": "送信",
-          "69969ba364": "送信中…"
+          "69969ba364": "送信中…",
+          "imageReadFailed": "Could not read the attached images. Try attaching them again.",
+          "attachWhileSending": "Wait for the current feedback to finish sending before attaching more images.",
+          "imagesNotDelivered": "Feedback sent, but image delivery could not be confirmed."
         },
         "SidebarFilter": {
           "e3b3898218": "プロジェクトの追加",
@@ -4276,9 +4295,11 @@
           "26c71e536c": "注意事項",
           "b8dcc6f321": "PR/MR リンク",
           "ca4d3c522e": "Linear Issue",
+          "jiraIssue": "Jira イシュー",
           "91dfc653e8": "GitHub チケット",
           "bdd23b4e07": "GitHub イシュー",
           "44713a5d04": "Linear イシュー",
+          "jiraIssues": "Jira イシュー",
           "cc17bd443b": "詳細",
           "0f9b959b31": "PR",
           "e029a2d775": "状態",
@@ -4428,7 +4449,10 @@
           "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
           "cliCreatedFromShell": "Created via `orca worktree create`",
           "cliStartupAgent": "Started with {{value0}}",
-          "cliCreated": "Created by Orca CLI"
+          "cliCreated": "Created by Orca CLI",
+          "jiraIssue": "Jira {{value0}}",
+          "viewOnJira": "Jira で表示",
+          "linkedJira": "リンク済み Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状態: オープン",
@@ -5002,6 +5026,11 @@
         "WorktreeDeveloperMenu": {
           "developer": "Developer",
           "parkTerminal": "Park terminal"
+        },
+        "SidebarFeedbackImageAttachments": {
+          "screenshotsHint": "Attach up to {count} screenshots",
+          "attachImages": "Attach",
+          "removeImage": "Remove {{fileName}}"
         },
         "WorkspaceKanbanSearchField": {
           "bdb753c78d": "一致するワークスペースはありません",
@@ -11410,18 +11439,30 @@
             "switchTaskSourceTitle": "タスクソースを切り替えますか？",
             "differentTaskSource": "、選択中のタスクソースとは異なります。",
             "currentTaskSource": "現在のタスクソース",
-            "placeholderNameOrLinearUrl": "名前または Linear URL を入力",
+            "placeholderNameOrLinearUrl": "名前、Linear URL、または Jira URL を入力",
             "placeholderWorkspaceName": "ワークスペース名を入力",
-            "placeholderSmartWithBranchGitLabLinear": "名前、#1234、ブランチ、GitHub/GitLab または Linear URL を入力",
-            "placeholderSmartGitLabLinear": "名前、#1234、GitHub/GitLab または Linear URL を入力",
-            "placeholderSmartWithBranchGitLab": "名前、#1234、ブランチ、GitHub または GitLab URL を入力",
-            "placeholderSmartGitLab": "名前、#1234、GitHub または GitLab URL を入力",
+            "placeholderSmartWithBranchGitLabLinear": "名前、#1234、ブランチ、GitHub/GitLab、Linear、または Jira URL を入力",
+            "placeholderSmartGitLabLinear": "名前、#1234、GitHub/GitLab、Linear、または Jira URL を入力",
+            "placeholderSmartWithBranchGitLab": "名前、#1234、ブランチ、GitHub、GitLab、または Jira URL を入力",
+            "placeholderSmartGitLab": "名前、#1234、GitHub、GitLab、または Jira URL を入力",
             "unavailable": "利用できません",
             "searchGitHub": "GitHub PR と Issue を検索",
             "searchGitLab": "GitLab MR と Issue を検索",
             "searchBranches": "ブランチを検索",
             "searchLinear": "Linear Issue を検索",
             "workspaceName": "ワークスペース名",
+            "loadingJira": "Jira イシューを読み込み中…",
+            "jiraDisconnected": "このイシューをリンクするには、設定で Jira に接続してください",
+            "jiraSiteNotConnected": "この Jira サイトは接続されていません",
+            "jiraRuntimeUpdate": "Jira をリンクするには、リモートランタイムを更新してください",
+            "jiraReadFailed": "この Jira イシューを読み込めませんでした",
+            "chooseJiraAccount": "Jira アカウントを選択",
+            "jiraLoaded": "Jira イシューを読み込みました",
+            "openSettings": "設定",
+            "retryJira": "再試行",
+            "searchJira": "Jira Issue を検索するか、Issue URL を貼り付け",
+            "jiraMode": "Jira",
+            "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
             "emoji": "Emoji"
           },
           "ProjectHostSetupCombobox": {

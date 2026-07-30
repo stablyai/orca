@@ -600,7 +600,7 @@ export function RuntimeEnvironmentsPane({
     setConnectingId(environment.id)
     setSwitchError(null)
     try {
-      const response = await window.api.runtimeEnvironments.getStatus({
+      const response = await window.api.runtimeEnvironments.connect({
         selector: environment.id,
         timeoutMs: 15_000
       })

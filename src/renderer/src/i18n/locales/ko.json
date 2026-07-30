@@ -148,7 +148,8 @@
         "mobileScopeRejected": "이 QR 코드는 제한된(모바일) 액세스 권한만 제공합니다. 전체 웹 앱을 사용하려면 설정 → 원격 Orca 서버 → 이 Orca 서버 공유 → 새 링크에서 브라우저 액세스 링크를 여세요."
       },
       "webPreloadApi": {
-        "aiVaultUnavailableForHost": "이 실행 호스트에서는 Agent 세션 기록을 사용할 수 없습니다."
+        "aiVaultUnavailableForHost": "이 실행 호스트에서는 Agent 세션 기록을 사용할 수 없습니다.",
+        "runtimeEnvironmentManuallyDisconnected": "런타임 환경이 수동으로 연결 해제되었습니다."
       },
       "web": {
         "preload": {
@@ -635,6 +636,20 @@
       },
       "pluginCommandKeybindings": {
         "group": "Plugins"
+      },
+      "feedback": {
+        "image": {
+          "attachments": {
+            "fallbackName": "Image attachment",
+            "unsupportedType": "{{fileName}} is not a supported image type.",
+            "empty": "{{fileName}} is empty.",
+            "tooLarge": "{{fileName}} is larger than {{maxSize}}.",
+            "tooMany": "You can attach up to {{maxCount}} images.",
+            "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
+            "invalidImage": "{{fileName}} is not a valid supported image.",
+            "additionalErrors": "{{count}} additional images could not be attached."
+          }
+        }
       }
     },
     "hooks": {
@@ -1834,7 +1849,8 @@
         "jiraToggleSortDirection": "{{value0}}으로 정렬",
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
         "noGithubSourceDetected": "No GitHub source detected for",
-        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved."
+        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
+        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again."
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -4162,7 +4178,10 @@
           "7a46c228b8": "피드백을 보내주셔서 감사합니다.",
           "a2fd890d9e": "제출하기 전에 피드백을 입력해 주세요.",
           "f2e42e1307": "보내기",
-          "69969ba364": "전송 중…"
+          "69969ba364": "전송 중…",
+          "imageReadFailed": "Could not read the attached images. Try attaching them again.",
+          "attachWhileSending": "Wait for the current feedback to finish sending before attaching more images.",
+          "imagesNotDelivered": "Feedback sent, but image delivery could not be confirmed."
         },
         "SidebarFilter": {
           "e3b3898218": "프로젝트 추가",
@@ -4276,9 +4295,11 @@
           "26c71e536c": "메모",
           "b8dcc6f321": "PR/MR 링크",
           "ca4d3c522e": "Linear 이슈",
+          "jiraIssue": "Jira 이슈",
           "91dfc653e8": "GitHub 티켓",
           "bdd23b4e07": "GitHub 이슈",
           "44713a5d04": "Linear 이슈",
+          "jiraIssues": "Jira 이슈",
           "cc17bd443b": "상세한",
           "0f9b959b31": "PR",
           "e029a2d775": "상태",
@@ -4428,7 +4449,10 @@
           "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
           "cliCreatedFromShell": "Created via `orca worktree create`",
           "cliStartupAgent": "Started with {{value0}}",
-          "cliCreated": "Created by Orca CLI"
+          "cliCreated": "Created by Orca CLI",
+          "jiraIssue": "Jira {{value0}}",
+          "viewOnJira": "Jira에서 보기",
+          "linkedJira": "연결된 Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "상태: 열림",
@@ -5002,6 +5026,11 @@
         "WorktreeDeveloperMenu": {
           "developer": "Developer",
           "parkTerminal": "Park terminal"
+        },
+        "SidebarFeedbackImageAttachments": {
+          "screenshotsHint": "Attach up to {count} screenshots",
+          "attachImages": "Attach",
+          "removeImage": "Remove {{fileName}}"
         },
         "WorkspaceKanbanSearchField": {
           "bdb753c78d": "일치하는 워크스페이스가 없습니다",
@@ -11410,18 +11439,30 @@
             "switchTaskSourceTitle": "작업 소스를 전환할까요?",
             "differentTaskSource": ", 선택한 작업 소스와 다릅니다.",
             "currentTaskSource": "현재 작업 소스",
-            "placeholderNameOrLinearUrl": "이름 또는 Linear URL 입력",
+            "placeholderNameOrLinearUrl": "이름, Linear URL 또는 Jira URL 입력",
             "placeholderWorkspaceName": "워크스페이스 이름 입력",
-            "placeholderSmartWithBranchGitLabLinear": "이름, #1234, 브랜치, GitHub/GitLab 또는 Linear URL 입력",
-            "placeholderSmartGitLabLinear": "이름, #1234, GitHub/GitLab 또는 Linear URL 입력",
-            "placeholderSmartWithBranchGitLab": "이름, #1234, 브랜치, GitHub 또는 GitLab URL 입력",
-            "placeholderSmartGitLab": "이름, #1234, GitHub 또는 GitLab URL 입력",
+            "placeholderSmartWithBranchGitLabLinear": "이름, #1234, 브랜치, GitHub/GitLab, Linear 또는 Jira URL 입력",
+            "placeholderSmartGitLabLinear": "이름, #1234, GitHub/GitLab, Linear 또는 Jira URL 입력",
+            "placeholderSmartWithBranchGitLab": "이름, #1234, 브랜치, GitHub, GitLab 또는 Jira URL 입력",
+            "placeholderSmartGitLab": "이름, #1234, GitHub, GitLab 또는 Jira URL 입력",
             "unavailable": "사용할 수 없음",
             "searchGitHub": "GitHub PR 및 이슈 검색",
             "searchGitLab": "GitLab MR 및 이슈 검색",
             "searchBranches": "브랜치 검색",
             "searchLinear": "Linear 이슈 검색",
             "workspaceName": "워크스페이스 이름",
+            "loadingJira": "Jira 이슈 불러오는 중…",
+            "jiraDisconnected": "이 이슈를 연결하려면 설정에서 Jira를 연결하세요",
+            "jiraSiteNotConnected": "이 Jira 사이트는 연결되어 있지 않습니다",
+            "jiraRuntimeUpdate": "Jira를 연결하려면 원격 런타임을 업데이트하세요",
+            "jiraReadFailed": "이 Jira 이슈를 불러오지 못했습니다",
+            "chooseJiraAccount": "Jira 계정 선택",
+            "jiraLoaded": "Jira 이슈를 불러왔습니다",
+            "openSettings": "설정",
+            "retryJira": "다시 시도",
+            "searchJira": "Jira 이슈 검색 또는 이슈 URL 붙여넣기",
+            "jiraMode": "Jira",
+            "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
             "emoji": "Emoji"
           },
           "ProjectHostSetupCombobox": {

@@ -148,7 +148,8 @@
         "mobileScopeRejected": "此二维码仅授予受限（移动端）访问权限。若要使用完整 Web 应用，请从设置 → 远程 Orca 服务器 → 分享此 Orca 服务器 → 新链接打开浏览器访问链接。"
       },
       "webPreloadApi": {
-        "aiVaultUnavailableForHost": "此执行主机不支持 Agent 会话历史记录。"
+        "aiVaultUnavailableForHost": "此执行主机不支持 Agent 会话历史记录。",
+        "runtimeEnvironmentManuallyDisconnected": "运行时环境已手动断开连接。"
       },
       "web": {
         "preload": {
@@ -635,6 +636,20 @@
       },
       "pluginCommandKeybindings": {
         "group": "Plugins"
+      },
+      "feedback": {
+        "image": {
+          "attachments": {
+            "fallbackName": "Image attachment",
+            "unsupportedType": "{{fileName}} is not a supported image type.",
+            "empty": "{{fileName}} is empty.",
+            "tooLarge": "{{fileName}} is larger than {{maxSize}}.",
+            "tooMany": "You can attach up to {{maxCount}} images.",
+            "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
+            "invalidImage": "{{fileName}} is not a valid supported image.",
+            "additionalErrors": "{{count}} additional images could not be attached."
+          }
+        }
       }
     },
     "hooks": {
@@ -1834,7 +1849,8 @@
         "jiraToggleSortDirection": "按{{value0}}排序",
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
         "noGithubSourceDetected": "No GitHub source detected for",
-        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved."
+        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
+        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again."
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -4162,7 +4178,10 @@
           "7a46c228b8": "感谢您的反馈。",
           "a2fd890d9e": "请在提交前输入反馈。",
           "f2e42e1307": "发送",
-          "69969ba364": "正在发送..."
+          "69969ba364": "正在发送...",
+          "imageReadFailed": "Could not read the attached images. Try attaching them again.",
+          "attachWhileSending": "Wait for the current feedback to finish sending before attaching more images.",
+          "imagesNotDelivered": "Feedback sent, but image delivery could not be confirmed."
         },
         "SidebarFilter": {
           "e3b3898218": "添加项目",
@@ -4276,9 +4295,11 @@
           "26c71e536c": "笔记",
           "b8dcc6f321": "PR/MR链接",
           "ca4d3c522e": "Linear 议题",
+          "jiraIssue": "Jira 议题",
           "91dfc653e8": "GitHub 票证",
           "bdd23b4e07": "GitHub 议题",
           "44713a5d04": "Linear 议题",
+          "jiraIssues": "Jira 议题",
           "cc17bd443b": "详细的",
           "0f9b959b31": "PR",
           "e029a2d775": "状态",
@@ -4428,7 +4449,10 @@
           "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
           "cliCreatedFromShell": "Created via `orca worktree create`",
           "cliStartupAgent": "Started with {{value0}}",
-          "cliCreated": "Created by Orca CLI"
+          "cliCreated": "Created by Orca CLI",
+          "jiraIssue": "Jira {{value0}}",
+          "viewOnJira": "在 Jira 中查看",
+          "linkedJira": "已关联 Jira {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状态：开放",
@@ -5002,6 +5026,11 @@
         "WorktreeDeveloperMenu": {
           "developer": "Developer",
           "parkTerminal": "Park terminal"
+        },
+        "SidebarFeedbackImageAttachments": {
+          "screenshotsHint": "Attach up to {count} screenshots",
+          "attachImages": "Attach",
+          "removeImage": "Remove {{fileName}}"
         },
         "WorkspaceKanbanSearchField": {
           "bdb753c78d": "没有匹配的工作区",
@@ -11410,18 +11439,30 @@
             "switchTaskSourceTitle": "切换任务来源？",
             "differentTaskSource": "，与所选任务来源不同。",
             "currentTaskSource": "当前任务来源",
-            "placeholderNameOrLinearUrl": "输入名称或 Linear URL",
+            "placeholderNameOrLinearUrl": "输入名称、Linear URL 或 Jira URL",
             "placeholderWorkspaceName": "输入工作区名称",
-            "placeholderSmartWithBranchGitLabLinear": "输入名称、#1234、分支、GitHub/GitLab 或 Linear URL",
-            "placeholderSmartGitLabLinear": "输入名称、#1234、GitHub/GitLab 或 Linear URL",
-            "placeholderSmartWithBranchGitLab": "输入名称、#1234、分支、GitHub 或 GitLab URL",
-            "placeholderSmartGitLab": "输入名称、#1234、GitHub 或 GitLab URL",
+            "placeholderSmartWithBranchGitLabLinear": "输入名称、#1234、分支、GitHub/GitLab、Linear 或 Jira URL",
+            "placeholderSmartGitLabLinear": "输入名称、#1234、GitHub/GitLab、Linear 或 Jira URL",
+            "placeholderSmartWithBranchGitLab": "输入名称、#1234、分支、GitHub、GitLab 或 Jira URL",
+            "placeholderSmartGitLab": "输入名称、#1234、GitHub、GitLab 或 Jira URL",
             "unavailable": "不可用",
             "searchGitHub": "搜索 GitHub PR 和议题",
             "searchGitLab": "搜索 GitLab MR 和议题",
             "searchBranches": "搜索分支",
             "searchLinear": "搜索 Linear 议题",
             "workspaceName": "工作区名称",
+            "loadingJira": "正在加载 Jira 议题…",
+            "jiraDisconnected": "请在“设置”中连接 Jira 以关联此议题",
+            "jiraSiteNotConnected": "此 Jira 站点尚未连接",
+            "jiraRuntimeUpdate": "请更新远程运行时以关联 Jira",
+            "jiraReadFailed": "无法加载此 Jira 议题",
+            "chooseJiraAccount": "选择 Jira 帐户",
+            "jiraLoaded": "Jira 议题已加载",
+            "openSettings": "设置",
+            "retryJira": "重试",
+            "searchJira": "搜索 Jira 议题或粘贴议题 URL",
+            "jiraMode": "Jira",
+            "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
             "emoji": "Emoji"
           },
           "ProjectHostSetupCombobox": {

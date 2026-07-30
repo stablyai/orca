@@ -32,6 +32,8 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import { resolveWorktreeCreateBaseBranch } from '@/runtime/worktree-create-base'
 import {
   buildTaskSourceContextFromRepo,
+  getTaskSourceRuntimeSettings,
+  normalizeTaskSourceContext,
   type TaskSourceContext
 } from '../../../shared/task-source-context'
 import type {
@@ -40,6 +42,7 @@ import type {
   GitHubPrStartPoint,
   GitPushTarget,
   GitLabWorkItem,
+  JiraIssue,
   LinearIssue,
   OrcaHooks,
   RepoHookSettings,
@@ -59,6 +62,7 @@ import {
   CLIENT_PLATFORM,
   DEFAULT_ISSUE_COMMAND_TEMPLATE,
   buildAgentPromptWithContext,
+  canUseIssueCommandForLinkedItemProvider,
   ensureAgentStartupInTerminal,
   getAttachmentLabel,
   getLinkedWorkItemProvider,
@@ -132,6 +136,7 @@ import {
   getFolderSourceRepos,
   getLinkedItemDisplayName,
   getSmartNameSelection as getFolderSmartNameSelection,
+  toFolderWorkspaceLinkedTask,
   toGitHubLinkedWorkItem,
   toGitLabLinkedWorkItem,
   toLinearLinkedWorkItem
@@ -150,9 +155,13 @@ import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activatio
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
-import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
+import {
+  isBlockingJiraUrlIntent,
+  type SmartNameMode
+} from '@/components/new-workspace/smart-workspace-source-results'
 import { getForkPushWarning } from './fork-push-warning'
 import {
+  buildJiraWorkspaceSource,
   buildWorkspaceSourceSelection,
   shouldApplyWorkspaceSourceAutoName,
   shouldPreserveWorkspaceSourceOnRepoChange
@@ -186,6 +195,8 @@ import {
   shouldReportComposerDropUploadFailure
 } from './composer-drop-upload-result'
 import { translate } from '@/i18n/i18n'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
+import { resolveJiraSourceHostId } from '@/lib/jira-source-host'
 
 export function canResolveFolderSmartGitHubSubmit({
   hasFolderSourceRepos
@@ -265,7 +276,10 @@ export type ComposerCardProps = {
   onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartNameModeChange?: (mode: SmartNameMode) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
+  onSmartJiraIssueSelect: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  onOpenJiraSettings: () => void
   smartNameGitHubSourceContext?: TaskSourceContext | null
+  smartNameJiraSourceContext?: TaskSourceContext | null
   /** GitLab parallel of onBaseBranchPrSelect. */
   onBaseBranchMrSelect?: (
     baseBranch: string,
@@ -498,6 +512,13 @@ function normalizeGitHubLinkedWorkItem(
   return { ...item, type: identity.type, number: identity.number }
 }
 
+export function getMatchingLinkedTaskSourceContext(
+  item: LinkedWorkItemSummary | null | undefined,
+  context: TaskSourceContext | null | undefined
+): TaskSourceContext | null {
+  return isWorkspaceLinkedItemSourceContextMatch(item, context) ? (context ?? null) : null
+}
+
 export function getInitialAutoManagedWorkspaceName({
   draftName,
   draftLinkedWorkItem,
@@ -539,7 +560,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     initialProjectGroupId
   } = options
 
-  // Why: fold stable actions into one useShallow subscription so a store mutation runs one equality check instead of 11.
+  // Why: fold stable actions into one subscription so store mutations run one equality check.
   const actions = useAppStore(
     useShallow((s) => ({
       setNewWorkspaceDraft: s.setNewWorkspaceDraft,
@@ -552,6 +573,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       closeModal: s.closeModal,
       openSettingsPage: s.openSettingsPage,
       openSettingsTarget: s.openSettingsTarget,
+      setActiveRuntimeEnvironmentPreference: s.setActiveRuntimeEnvironmentPreference,
       prefetchWorktreeCreateBase: s.prefetchWorktreeCreateBase,
       prefetchWorkItems: s.prefetchWorkItems,
       fetchSparsePresets: s.fetchSparsePresets
@@ -568,6 +590,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     closeModal,
     openSettingsPage,
     openSettingsTarget,
+    setActiveRuntimeEnvironmentPreference,
     prefetchWorktreeCreateBase,
     prefetchWorkItems,
     fetchSparsePresets
@@ -863,10 +886,32 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [attachmentPaths, setAttachmentPaths] = useState<string[]>(
     persistDraft ? (newWorkspaceDraft?.attachments ?? []) : []
   )
-  const initialLinkedWorkItemSeed = normalizeGitHubLinkedWorkItem(initialLinkedWorkItem)
-  const draftLinkedWorkItemSeed = persistDraft
+  const normalizedInitialLinkedWorkItem = normalizeGitHubLinkedWorkItem(initialLinkedWorkItem)
+  const normalizedDraftLinkedWorkItem = persistDraft
     ? normalizeGitHubLinkedWorkItem(newWorkspaceDraft?.linkedWorkItem)
     : null
+  const draftLinkedTaskSourceContext = persistDraft
+    ? getMatchingLinkedTaskSourceContext(
+        normalizedDraftLinkedWorkItem,
+        newWorkspaceDraft?.linkedTaskSourceContext ?? newWorkspaceDraft?.taskSourceContext
+      )
+    : null
+  const initialLinkedTaskSourceContext = getMatchingLinkedTaskSourceContext(
+    normalizedInitialLinkedWorkItem,
+    initialTaskSourceContext
+  )
+  const initialLinkedWorkItemSeed =
+    normalizedInitialLinkedWorkItem &&
+    getLinkedWorkItemProvider(normalizedInitialLinkedWorkItem) === 'jira' &&
+    !initialLinkedTaskSourceContext
+      ? null
+      : normalizedInitialLinkedWorkItem
+  const draftLinkedWorkItemSeed =
+    normalizedDraftLinkedWorkItem &&
+    getLinkedWorkItemProvider(normalizedDraftLinkedWorkItem) === 'jira' &&
+    !draftLinkedTaskSourceContext
+      ? null
+      : normalizedDraftLinkedWorkItem
   const linkedWorkItemSeed = persistDraft
     ? (draftLinkedWorkItemSeed ?? initialLinkedWorkItemSeed)
     : initialLinkedWorkItemSeed
@@ -875,17 +920,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     () => linkedWorkItemSeed
   )
   const initialLinearBranchName = getLinearLinkedWorkItemBranchName(linkedWorkItemSeed)
-  const taskSourceContext = useMemo(() => {
-    if (
-      persistDraft &&
-      newWorkspaceDraft?.taskSourceContext &&
-      newWorkspaceDraft.linkedWorkItem?.url === linkedWorkItem?.url
-    ) {
-      return newWorkspaceDraft.taskSourceContext
-    }
-    if (initialTaskSourceContext && initialLinkedWorkItem?.url === linkedWorkItem?.url) {
-      return initialTaskSourceContext
-    }
+  const [linkedTaskSourceContext, setLinkedTaskSourceContext] = useState<TaskSourceContext | null>(
+    () => draftLinkedTaskSourceContext ?? initialLinkedTaskSourceContext
+  )
+  const derivedGitHubTaskSourceContext = useMemo(() => {
     if (
       !linkedWorkItem ||
       getLinkedWorkItemProvider(linkedWorkItem) !== 'github' ||
@@ -907,17 +945,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       projectHostSetupId: selectedWorkspaceTarget.target.projectHostSetupId,
       providerIdentity: selectedProject.providerIdentity
     })
-  }, [
-    initialLinkedWorkItem,
-    initialTaskSourceContext,
-    linkedWorkItem,
-    newWorkspaceDraft?.linkedWorkItem?.url,
-    newWorkspaceDraft?.taskSourceContext,
-    persistDraft,
-    projects,
-    selectedRepo,
-    selectedWorkspaceTarget
-  ])
+  }, [linkedWorkItem, projects, selectedRepo, selectedWorkspaceTarget])
+  const taskSourceContext = linkedTaskSourceContext ?? derivedGitHubTaskSourceContext
   const selectedRepoGitHubSourceContext = useMemo(() => {
     if (!selectedRepo || !selectedRepoIsGit) {
       return null
@@ -946,6 +975,37 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       repo: selectedRepo
     })
   }, [projects, selectedRepo, selectedRepoIsGit, selectedWorkspaceTarget, taskSourceContext])
+  const smartNameJiraSourceContext = useMemo(() => {
+    if (!selectedProjectId) {
+      return null
+    }
+    const sourceRepo = isProjectGroupTarget
+      ? (folderSourceRepos.find((repo) => repo.id === repoId) ?? null)
+      : selectedRepo
+    return normalizeTaskSourceContext({
+      provider: 'jira',
+      projectId: selectedProjectGroup?.id ?? selectedProjectId,
+      hostId: resolveJiraSourceHostId({
+        workspaceHostId:
+          selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.hostId : null,
+        groupExecutionHostId: selectedProjectGroup?.executionHostId,
+        groupConnectionId: selectedProjectGroup?.connectionId
+      }),
+      projectHostSetupId: selectedProjectGroup ? null : selectedProjectHostSetupId,
+      repoId: sourceRepo?.id ?? null,
+      providerIdentity: null,
+      accountLabel: null
+    })
+  }, [
+    folderSourceRepos,
+    isProjectGroupTarget,
+    repoId,
+    selectedProjectGroup,
+    selectedProjectHostSetupId,
+    selectedProjectId,
+    selectedRepo,
+    selectedWorkspaceTarget
+  ])
   const [linkedIssue, setLinkedIssue] = useState<string>(() => {
     if (linkedWorkItemSeedIdentity?.type === 'issue') {
       return String(linkedWorkItemSeedIdentity.number)
@@ -1001,6 +1061,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     Boolean(initialLinearBranchName)
   )
   const [smartNameMode, setSmartNameMode] = useState<SmartNameMode>('smart')
+  // Why: a pasted Jira URL is not a workspace name yet — block create until it resolves to an issue.
+  const sourceIntentBlocksCreate = !linkedWorkItem && isBlockingJiraUrlIntent(smartNameMode, name)
   // Why (#5181): reuseEligibleBranch = local branch name eligible for checkout-reuse (null if none); reuseSelectedBranch = the checkbox that enacts it.
   const [reuseEligibleBranch, setReuseEligibleBranch] = useState<string | null>(null)
   const [reuseSelectedBranch, setReuseSelectedBranch] = useState(false)
@@ -1383,12 +1445,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
   const setupPolicy: SetupRunPolicy = selectedRepo?.hookSettings?.setupRunPolicy ?? 'run-by-default'
   const linkedWorkItemProvider = linkedWorkItem ? getLinkedWorkItemProvider(linkedWorkItem) : null
-  // Why: the no-prompt+linked-item path rehydrates the issueCommand template into the prompt, but Linear starts never use it, so they must not wait.
+  // Why: sentinel-based Jira/Linear items must bypass repository issue templates.
   const willApplyIssueCommandAsPrompt =
     enableIssueAutomation &&
     !agentPrompt.trim() &&
     Boolean(linkedWorkItem) &&
-    linkedWorkItemProvider !== 'linear'
+    canUseIssueCommandForLinkedItemProvider(linkedWorkItemProvider)
   const shouldWaitForIssueAutomationCheck =
     enableIssueAutomation &&
     (parsedLinkedIssueNumber !== null || willApplyIssueCommandAsPrompt) &&
@@ -1420,13 +1482,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }),
     [agentPrompt, fallbackCreatureName, linkedPR, name, parsedLinkedIssueNumber]
   )
-  // Why: exclude Linear — its starts may carry only a neutral issue ref, whereas repo issue-command templates are product-authored workflow direction.
+  // Why: Jira/Linear use sentinel numbers that are invalid in legacy {{issue}} templates.
   const shouldApplyLinkedOnlyTemplate =
     enableIssueAutomation &&
     !agentPrompt.trim() &&
     Boolean(linkedWorkItem) &&
     hasLoadedIssueCommand &&
-    linkedWorkItemProvider !== 'linear'
+    canUseIssueCommandForLinkedItemProvider(linkedWorkItemProvider)
   const linkedOnlyTemplatePrompt = useMemo(() => {
     if (!shouldApplyLinkedOnlyTemplate || !linkedWorkItem) {
       return ''
@@ -1508,7 +1570,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       note,
       attachments: attachmentPaths,
       linkedWorkItem,
-      taskSourceContext,
+      linkedTaskSourceContext: taskSourceContext,
       agent: tuiAgent,
       linkedIssue,
       linkedPR,
@@ -1918,6 +1980,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         title: item.title,
         url: item.url
       })
+      setLinkedTaskSourceContext(selectedRepoGitHubSourceContext)
       const suggestedName =
         getLinkedWorkItemWorkspaceName(normalizedItem)?.seedName ??
         getLinkedWorkItemSuggestedName(normalizedItem)
@@ -1938,7 +2001,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         branchAutoNameRef.current = ''
       }
     },
-    [name]
+    [name, selectedRepoGitHubSourceContext]
   )
 
   const resolvePendingSmartGitHubSubmit =
@@ -2091,6 +2154,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
       setLinkedWorkItem(resolution.linkedWorkItem)
+      setLinkedTaskSourceContext(selectedRepoGitHubSourceContext)
       setName(resolution.workspaceName)
       lastAutoNameRef.current = resolution.workspaceName
       if (prStartPoint) {
@@ -2136,6 +2200,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       setLinkedIssue('')
       setLinkedPR(null)
+      setLinkedTaskSourceContext(null)
       setLinkedWorkItem({
         type: item.type,
         provider: 'gitlab',
@@ -2199,6 +2264,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     smartGitHubPrStartPointSelectionRef.current = null
     const removedLinearItem = isLinearLinkedWorkItem(linkedWorkItem)
     setLinkedWorkItem(null)
+    setLinkedTaskSourceContext(null)
     setLinkedIssue('')
     setLinkedPR(null)
     setForkPushWarning(null)
@@ -2521,6 +2587,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         // implementation project — not just Linear.
         if (linkedWorkItem && !shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)) {
           setLinkedWorkItem(null)
+          setLinkedTaskSourceContext(null)
         }
       }
       setSparseEnabled(false)
@@ -2555,12 +2622,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setLinkedWorkItem((current) =>
         current && !shouldPreserveWorkspaceSourceOnRepoChange(current) ? null : current
       )
+      if (linkedWorkItem && !shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)) {
+        setLinkedTaskSourceContext(null)
+      }
       setLinkedIssue('')
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
     },
-    [folderSourceRepos, setRepoId]
+    [folderSourceRepos, linkedWorkItem, setRepoId]
   )
   const handleProjectHostSetupChange = useCallback(
     (setupId: string): void => {
@@ -2601,6 +2671,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setLinkedGitLabMR(null)
         if (linkedWorkItem && !shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)) {
           setLinkedWorkItem(null)
+          setLinkedTaskSourceContext(null)
         }
         setSparseEnabled(false)
         setSparseDirectories('')
@@ -2769,6 +2840,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setLinkedGitLabIssue(null)
         setLinkedGitLabMR(null)
         setLinkedWorkItem(linkedItem)
+        setLinkedTaskSourceContext(selectedRepoGitHubSourceContext)
         const nextName = getLinkedItemDisplayName(linkedItem)
         if (
           nextName &&
@@ -2856,6 +2928,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       isProjectGroupTarget,
       name,
       selectedRepo,
+      selectedRepoGitHubSourceContext,
       settings
     ]
   )
@@ -2869,6 +2942,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setLinkedGitLabMR(item.type === 'mr' ? item.number : null)
         setLinkedIssue('')
         setLinkedPR(null)
+        setLinkedTaskSourceContext(null)
         setLinkedWorkItem(linkedItem)
         const nextName = getLinkedItemDisplayName(linkedItem)
         if (
@@ -3026,6 +3100,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setLinkedPR(null)
         setLinkedGitLabIssue(null)
         setLinkedGitLabMR(null)
+        setLinkedTaskSourceContext(null)
         setLinkedWorkItem(linkedItem)
         const suggestedName =
           getLinkedItemDisplayName(linkedItem) ?? getLinearIssueWorkspaceName(issue)
@@ -3045,6 +3120,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
+      setLinkedTaskSourceContext(null)
       const linkedLinearIssue = buildLinearIssueLinkedWorkItem(issue)
       setLinkedWorkItem(linkedLinearIssue)
       const suggestedName = getLinearIssueWorkspaceName(issue)
@@ -3069,6 +3145,40 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [isProjectGroupTarget, name]
   )
 
+  const handleSmartJiraIssueSelect = useCallback(
+    (issue: JiraIssue, sourceContext: TaskSourceContext): void => {
+      const linkedItem: LinkedWorkItemSummary = buildJiraWorkspaceSource(issue)
+      setLinkedIssue('')
+      setLinkedPR(null)
+      setLinkedGitLabIssue(null)
+      setLinkedGitLabMR(null)
+      setBaseBranch(undefined)
+      setCompareBaseRef(undefined)
+      setPushTarget(undefined)
+      setBranchNameOverride(undefined)
+      setBranchNameOverridePreservesNameEdits(false)
+      setForkPushWarning(null)
+      branchAutoNameRef.current = ''
+      setLinkedWorkItem(linkedItem)
+      setLinkedTaskSourceContext(sourceContext)
+      const suggestedName =
+        getLinkedWorkItemWorkspaceName(linkedItem)?.seedName ??
+        getLinkedWorkItemSuggestedName(linkedItem)
+      // Why: the Jira lookup is async, so a name the user typed while it resolved must survive.
+      if (
+        suggestedName &&
+        shouldApplyWorkspaceSourceAutoName({
+          currentName: name,
+          lastAutoName: lastAutoNameRef.current
+        })
+      ) {
+        setName(suggestedName)
+        lastAutoNameRef.current = suggestedName
+      }
+    },
+    [name]
+  )
+
   const handleClearSmartNameSelection = useCallback((): void => {
     smartGitHubPrStartPointSelectionRef.current = null
     setLinkedIssue('')
@@ -3076,6 +3186,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setLinkedGitLabIssue(null)
     setLinkedGitLabMR(null)
     setLinkedWorkItem(null)
+    setLinkedTaskSourceContext(null)
     setBaseBranch(undefined)
     setCompareBaseRef(undefined)
     setPushTarget(undefined)
@@ -3112,6 +3223,27 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     closeModal()
   }, [closeModal, openSettingsPage, openSettingsTarget])
 
+  const handleOpenJiraSettings = useCallback((): void => {
+    const runtimeEnvironmentId = getTaskSourceRuntimeSettings(
+      smartNameJiraSourceContext
+    ).activeRuntimeEnvironmentId
+    const targetRuntimeEnvironmentId = runtimeEnvironmentId ?? null
+    void setActiveRuntimeEnvironmentPreference(targetRuntimeEnvironmentId).then((selected) => {
+      if (!selected) {
+        return
+      }
+      openSettingsTarget({ pane: 'integrations', repoId: null })
+      openSettingsPage()
+      closeModal()
+    })
+  }, [
+    closeModal,
+    openSettingsPage,
+    openSettingsTarget,
+    setActiveRuntimeEnvironmentPreference,
+    smartNameJiraSourceContext
+  ])
+
   const applyWorktreeMeta = useCallback(
     async (worktreeId: string, meta: Partial<WorktreeMeta>): Promise<void> => {
       if (Object.keys(meta).length === 0) {
@@ -3128,6 +3260,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const folderCreateDisabled =
     creating ||
+    sourceIntentBlocksCreate ||
     !selectedProjectGroup?.parentPath ||
     folderPathStatusBlocksCreate ||
     folderTargetRequiresConnection
@@ -3157,6 +3290,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           name: smartGitHubMetadata?.workspaceName ?? name,
           lastAutoName: lastAutoNameRef.current,
           linkedWorkItem: smartGitHubMetadata?.linkedWorkItem ?? linkedWorkItem,
+          linkedTaskSourceContext: taskSourceContext,
           note,
           quickAgent: agent,
           autoRenameBranchFromWork: settings?.autoRenameBranchFromWork,
@@ -3226,6 +3360,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       settings?.autoRenameBranchFromWork,
       settings?.nativeChatSessionOptions,
       settings?.terminalWindowsShell,
+      taskSourceContext,
       telemetrySource
     ]
   )
@@ -3244,6 +3379,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       selectedRepoRequiresConnection ||
       shouldWaitForSetupCheck ||
       shouldWaitForIssueAutomationCheck ||
+      sourceIntentBlocksCreate ||
       (requiresExplicitSetupChoice && !setupDecision) ||
       sparseError !== null
     ) {
@@ -3333,7 +3469,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         !agentPrompt.trim() &&
         Boolean(submitLinkedWorkItem) &&
         hasLoadedIssueCommand &&
-        submitLinkedWorkItemProvider !== 'linear'
+        canUseIssueCommandForLinkedItemProvider(submitLinkedWorkItemProvider)
       const submitLinkedOnlyTemplatePrompt =
         submitShouldApplyLinkedOnlyTemplate && submitLinkedWorkItem
           ? renderIssueCommandTemplate(
@@ -3361,7 +3497,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           )
       const submitShouldRunIssueAutomation =
         enableIssueAutomation &&
-        submitLinkedWorkItemProvider !== 'linear' &&
+        canUseIssueCommandForLinkedItemProvider(submitLinkedWorkItemProvider) &&
         submitLinkedIssueNumber !== null &&
         issueCommandTemplate.length > 0 &&
         !submitShouldApplyLinkedOnlyTemplate
@@ -3491,7 +3627,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         undefined,
         undefined,
         undefined,
-        submitCompareBaseRef
+        submitCompareBaseRef,
+        {
+          linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem),
+          linkedTaskSourceContext: taskSourceContext
+        }
       )
       const worktree = result.worktree
 
@@ -3624,6 +3764,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     tuiAgent,
     shouldWaitForIssueAutomationCheck,
     shouldWaitForSetupCheck,
+    sourceIntentBlocksCreate,
+    taskSourceContext,
     workspaceSeedName,
     isProjectGroupTarget,
     submitFolderTarget
@@ -3637,6 +3779,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setNote('')
     setAttachmentPaths([])
     setLinkedWorkItem(null)
+    setLinkedTaskSourceContext(null)
     setLinkedIssue('')
     setLinkedPR(null)
     setLinkedGitLabIssue(null)
@@ -3672,6 +3815,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       if (
         !workspaceNameSeed ||
+        sourceIntentBlocksCreate ||
         selectedRepoRequiresConnection ||
         (requiresExplicitSetupChoice && !setupDecision) ||
         sparseError !== null
@@ -3954,6 +4098,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               ? 'indeterminate'
               : 'stepped',
           ...(taskSourceContext ? { taskSourceContext } : {}),
+          linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem),
+          linkedTaskSourceContext: taskSourceContext,
           ...(creationWorkspaceRunContext
             ? { workspaceRunContext: creationWorkspaceRunContext }
             : {}),
@@ -4065,6 +4211,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       settings?.autoRenameBranchFromWork,
       settings?.nativeChatSessionOptions,
       smartNameMode,
+      sourceIntentBlocksCreate,
       disabledTuiAgents,
       setupDecision,
       sparseEnabled,
@@ -4090,6 +4237,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     creating,
     shouldWaitForSetupCheck,
     shouldWaitForIssueAutomationCheck,
+    sourceIntentBlocksCreate,
     requiresExplicitSetupChoice,
     hasSetupDecision: Boolean(setupDecision),
     selectedRepoRequiresConnection,
@@ -4130,7 +4278,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     onSmartBranchSelect: isProjectGroupTarget ? () => {} : handleSmartBranchSelect,
     onSmartNameModeChange: setSmartNameMode,
     onSmartLinearIssueSelect: handleSmartLinearIssueSelect,
+    onSmartJiraIssueSelect: handleSmartJiraIssueSelect,
+    onOpenJiraSettings: handleOpenJiraSettings,
     smartNameGitHubSourceContext: selectedRepoGitHubSourceContext,
+    smartNameJiraSourceContext,
     smartNameSelection,
     onClearSmartNameSelection: handleClearSmartNameSelection,
     canReuseSelectedBranch:

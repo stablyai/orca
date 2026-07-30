@@ -21,6 +21,7 @@ type OutputChunk = Rollup.OutputChunk
 const PLAIN_NODE_ENTRY_NAMES = [
   'daemon-entry',
   'parcel-watcher-process-entry',
+  'main-thread-hang-watchdog-entry',
   'computer-sidecar',
   'agent-hooks/managed-agent-hook-controls',
   'codex/codex-app-server-grant-entry'

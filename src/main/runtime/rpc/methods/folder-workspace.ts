@@ -2,48 +2,65 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { TaskSourceContextSchema } from '../../../../shared/task-source-context-schema'
+import { WorkspaceLinkedItemSchema } from '../../../../shared/workspace-linked-item-schema'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
 
-const FolderWorkspaceLinkedTask = z
+const FolderWorkspaceLinkedTask = WorkspaceLinkedItemSchema.nullable()
+
+function assertLinkedTaskSourceContextMatch(
+  value: {
+    linkedTask?: z.infer<typeof FolderWorkspaceLinkedTask>
+    linkedTaskSourceContext?: z.infer<typeof TaskSourceContextSchema> | null
+  },
+  ctx: z.RefinementCtx
+): void {
+  if (
+    value.linkedTask &&
+    value.linkedTaskSourceContext &&
+    !isWorkspaceLinkedItemSourceContextMatch(value.linkedTask, value.linkedTaskSourceContext)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Linked task and source context identities must match'
+    })
+  }
+}
+
+const FolderWorkspaceCreate = z
   .object({
-    provider: z.enum(['github', 'gitlab', 'linear', 'jira']),
-    type: z.enum(['issue', 'pr', 'mr']),
-    number: z.number().finite(),
-    title: requiredString('Missing linked task title'),
-    url: requiredString('Missing linked task URL'),
-    linearIdentifier: OptionalString,
-    jiraIdentifier: OptionalString,
-    repoId: OptionalString
+    projectGroupId: requiredString('Missing project group id'),
+    name: OptionalString,
+    folderPath: OptionalString.nullable().optional(),
+    connectionId: OptionalString.nullable().optional(),
+    linkedTask: FolderWorkspaceLinkedTask.optional(),
+    linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
+    createdWithAgent: z.string().refine(isTuiAgent).optional(),
+    pendingFirstAgentMessageRename: z.boolean().optional()
   })
-  .nullable()
-
-const FolderWorkspaceCreate = z.object({
-  projectGroupId: requiredString('Missing project group id'),
-  name: OptionalString,
-  folderPath: OptionalString.nullable().optional(),
-  connectionId: OptionalString.nullable().optional(),
-  linkedTask: FolderWorkspaceLinkedTask.optional(),
-  createdWithAgent: z.string().refine(isTuiAgent).optional(),
-  pendingFirstAgentMessageRename: z.boolean().optional()
-})
+  .superRefine(assertLinkedTaskSourceContextMatch)
 
 const FolderWorkspaceUpdate = z.object({
   folderWorkspaceId: requiredString('Missing folder workspace id'),
-  updates: z.object({
-    name: OptionalString,
-    folderPath: OptionalString,
-    linkedTask: FolderWorkspaceLinkedTask.optional(),
-    comment: z.string().optional(),
-    isArchived: z.boolean().optional(),
-    isUnread: z.boolean().optional(),
-    isPinned: z.boolean().optional(),
-    sortOrder: OptionalFiniteNumber,
-    manualOrder: OptionalFiniteNumber,
-    workspaceStatus: OptionalString,
-    createdWithAgent: z.string().refine(isTuiAgent).optional(),
-    pendingFirstAgentMessageRename: z.boolean().optional(),
-    firstAgentMessageRenameError: z.string().nullable().optional(),
-    lastActivityAt: OptionalFiniteNumber
-  })
+  updates: z
+    .object({
+      name: OptionalString,
+      folderPath: OptionalString,
+      linkedTask: FolderWorkspaceLinkedTask.optional(),
+      linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
+      comment: z.string().optional(),
+      isArchived: z.boolean().optional(),
+      isUnread: z.boolean().optional(),
+      isPinned: z.boolean().optional(),
+      sortOrder: OptionalFiniteNumber,
+      manualOrder: OptionalFiniteNumber,
+      workspaceStatus: OptionalString,
+      createdWithAgent: z.string().refine(isTuiAgent).optional(),
+      pendingFirstAgentMessageRename: z.boolean().optional(),
+      firstAgentMessageRenameError: z.string().nullable().optional(),
+      lastActivityAt: OptionalFiniteNumber
+    })
+    .superRefine(assertLinkedTaskSourceContextMatch)
 })
 
 const FolderWorkspaceSelector = z.object({

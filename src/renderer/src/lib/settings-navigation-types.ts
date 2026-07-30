@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import type { LucideProps } from 'lucide-react'
 import type { SettingsSearchEntry } from '@/components/settings/settings-search'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 
 export type SettingsNavIcon = ComponentType<LucideProps>
 export type SettingsNavInstallStatus =
@@ -58,6 +59,7 @@ export type SettingsNavTarget = (typeof SETTINGS_NAV_TARGETS)[number]
 export type SettingsNavigationTarget = {
   pane: SettingsNavTarget
   repoId: string | null
+  hostId?: ExecutionHostId
   sectionId?: string
   intent?: (typeof SETTINGS_NAV_INTENTS)[number]
 }
@@ -71,6 +73,8 @@ export function isSettingsNavigationTarget(value: unknown): value is SettingsNav
     typeof target.pane === 'string' &&
     SETTINGS_NAV_TARGET_SET.has(target.pane) &&
     (typeof target.repoId === 'string' || target.repoId === null) &&
+    (target.hostId === undefined ||
+      (typeof target.hostId === 'string' && parseExecutionHostId(target.hostId) !== null)) &&
     (target.sectionId === undefined || typeof target.sectionId === 'string') &&
     (target.intent === undefined ||
       (typeof target.intent === 'string' && SETTINGS_NAV_INTENT_SET.has(target.intent)))
