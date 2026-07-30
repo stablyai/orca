@@ -176,6 +176,7 @@ function MessageRow({
               <CommentMarkdown
                 content={markdown}
                 variant="document"
+                enableMath
                 className="text-sm"
                 onLinkClick={onLinkClick}
                 allowFileUriLinks={allowFileUriLinks}
@@ -223,6 +224,7 @@ function MessageRow({
         <CommentMarkdown
           content={markdown}
           variant="document"
+          enableMath
           className="text-sm"
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}
