@@ -84,10 +84,13 @@ function requireQueryValue(
   flag: 'command' | 'prefix' | 'search'
 ): string {
   const value = flags.get(flag)
-  if (typeof value !== 'string' || normalizeAgentContextQueryText(value).length === 0) {
+  if (typeof value !== 'string') {
     throw new RuntimeClientError('invalid_argument', `Flag --${flag} requires a value.`)
   }
   const normalized = normalizeAgentContextQueryText(value)
+  if (normalized.length === 0) {
+    throw new RuntimeClientError('invalid_argument', `Flag --${flag} requires a value.`)
+  }
   if (normalized.length > MAX_AGENT_CONTEXT_QUERY_LENGTH) {
     throw new RuntimeClientError(
       'invalid_argument',
