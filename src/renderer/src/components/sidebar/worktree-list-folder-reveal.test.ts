@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FolderWorkspace, ProjectGroup, Worktree } from '../../../../shared/types'
+import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   getFolderWorkspaceRevealGroupKeys,
@@ -114,6 +115,81 @@ describe('worktree list folder reveal', () => {
         [folderWorkspace],
         [child, root]
       )
-    ).toEqual([getProjectGroupHeaderKey(root.id), getProjectGroupHeaderKey(child.id)])
+    ).toEqual(['host:local', getProjectGroupHeaderKey(root.id), getProjectGroupHeaderKey(child.id)])
+  })
+
+  it('returns the Pinned section key for pinned folder workspaces in single-location mode', () => {
+    const group = makeProjectGroup({})
+    const pinnedFolderWorkspace = makeFolderWorkspace({
+      projectGroupId: group.id,
+      isPinned: true
+    })
+
+    expect(
+      getFolderWorkspaceRevealGroupKeys(
+        folderWorkspaceKey(pinnedFolderWorkspace.id),
+        [pinnedFolderWorkspace],
+        [group],
+        'none',
+        cloneDefaultWorkspaceStatuses()
+      )
+    ).toEqual(['host:local', 'pinned'])
+  })
+
+  it('targets the natural lane for pinned folder workspaces under duplicate-in-groups', () => {
+    const group = makeProjectGroup({})
+    const pinnedFolderWorkspace = makeFolderWorkspace({
+      projectGroupId: group.id,
+      isPinned: true
+    })
+
+    expect(
+      getFolderWorkspaceRevealGroupKeys(
+        folderWorkspaceKey(pinnedFolderWorkspace.id),
+        [pinnedFolderWorkspace],
+        [group],
+        'none',
+        cloneDefaultWorkspaceStatuses(),
+        'local',
+        'duplicate-in-groups'
+      )
+    ).toEqual(['host:local', 'all'])
+  })
+
+  it('returns the flat lane key instead of project group keys in non-repo groupings', () => {
+    const group = makeProjectGroup({})
+    const folderWorkspace = makeFolderWorkspace({
+      projectGroupId: group.id,
+      workspaceStatus: 'in-review'
+    })
+    const statuses = cloneDefaultWorkspaceStatuses()
+
+    expect(
+      getFolderWorkspaceRevealGroupKeys(
+        folderWorkspaceKey(folderWorkspace.id),
+        [folderWorkspace],
+        [group],
+        'none',
+        statuses
+      )
+    ).toEqual(['host:local', 'all'])
+    expect(
+      getFolderWorkspaceRevealGroupKeys(
+        folderWorkspaceKey(folderWorkspace.id),
+        [folderWorkspace],
+        [group],
+        'workspace-status',
+        statuses
+      )
+    ).toEqual(['host:local', 'workspace-status:in-review'])
+    expect(
+      getFolderWorkspaceRevealGroupKeys(
+        folderWorkspaceKey(folderWorkspace.id),
+        [folderWorkspace],
+        [group],
+        'pr-status',
+        statuses
+      )
+    ).toEqual(['host:local', 'pr:in-progress'])
   })
 })

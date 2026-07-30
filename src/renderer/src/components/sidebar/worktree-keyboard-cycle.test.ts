@@ -35,15 +35,15 @@ describe('resolveCycledWorktreeId', () => {
     expect(
       resolveCycledWorktreeId({ worktreeIds, activeWorktreeId: 'hidden', direction: 'up' })
     ).toBe('c')
-    expect(resolveCycledWorktreeId({ worktreeIds, activeWorktreeId: null, direction: 'down' })).toBe(
-      'a'
-    )
+    expect(
+      resolveCycledWorktreeId({ worktreeIds, activeWorktreeId: null, direction: 'down' })
+    ).toBe('a')
   })
 
   it('has nothing to cycle to when every group is collapsed', () => {
-    expect(resolveCycledWorktreeId({ worktreeIds: [], activeWorktreeId: 'a', direction: 'down' })).toBe(
-      null
-    )
+    expect(
+      resolveCycledWorktreeId({ worktreeIds: [], activeWorktreeId: 'a', direction: 'down' })
+    ).toBe(null)
   })
 })
 
@@ -89,13 +89,14 @@ describe('getCyclableWorktreeIds', () => {
     expect(getCyclableWorktreeIds(rows, 'duplicate-in-groups')).toEqual(['dup', 'plain-b'])
   })
 
-  it('leaves folder workspaces out of the rotation', () => {
-    // Why: their synthetic `folder:` id is not activatable through
-    // activateAndRevealWorktree, so arrowing onto one would be a dead keypress.
+  it('keeps folder workspaces in the rotation', () => {
+    // Why: they are rendered cards that Cmd+1–9 already numbers, and their
+    // synthetic `folder:` id activates through activateAndRevealWorkspace.
     const rows: HostSectionRow[] = [
       {
         type: 'folder-workspace',
         key: 'folder-workspace:folder-1',
+        sectionKey: 'group:group-1',
         folderWorkspace: { id: 'folder-1', projectGroupId: 'group-1' } as never,
         projectGroup: { id: 'group-1' } as never,
         depth: 0,
@@ -104,7 +105,7 @@ describe('getCyclableWorktreeIds', () => {
       worktree('plain-b')
     ]
 
-    expect(getCyclableWorktreeIds(rows, 'single-location')).toEqual(['plain-b'])
+    expect(getCyclableWorktreeIds(rows, 'single-location')).toEqual(['folder:folder-1', 'plain-b'])
   })
 
   it('drops worktrees the sidebar elided inside a collapsed host section', () => {
@@ -131,7 +132,10 @@ describe('getCyclableWorktreeIds', () => {
 
 describe('WorktreeList keyboard cycling', () => {
   it('cycles over the rendered rows instead of rebuilding a parallel layout', () => {
-    const source = readFileSync(fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)), 'utf8')
+    const source = readFileSync(
+      fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)),
+      'utf8'
+    )
     const navigateWorktree = source.slice(
       source.indexOf('const navigateWorktree = useCallback('),
       source.indexOf('const handleContainerKeyDown = useCallback(')

@@ -1,4 +1,4 @@
-import type { Worktree, Repo, TerminalTab, WorktreeLineage } from '../../../../shared/types'
+import type { Repo, TerminalTab, Worktree, WorktreeLineage } from '../../../../shared/types'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'

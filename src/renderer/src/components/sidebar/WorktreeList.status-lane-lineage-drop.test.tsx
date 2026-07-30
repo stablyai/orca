@@ -123,7 +123,8 @@ vi.mock('@/lib/sidebar-worktree-activation', () => ({
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: vi.fn()
+  activateAndRevealWorktree: vi.fn(),
+  activateAndRevealWorkspace: vi.fn()
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({

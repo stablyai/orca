@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../../shared/types'
 import type { HostSectionRow } from './host-section-rows'
-import { getRenderedWorktreesInSidebarOrder } from './worktree-sidebar-row-preference'
+import {
+  getRenderedWorktreesInSidebarOrder,
+  isWorkspaceRowIdentityRendered
+} from './worktree-sidebar-row-preference'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -86,6 +89,7 @@ describe('getRenderedWorktreesInSidebarOrder', () => {
       {
         type: 'folder-workspace',
         key: 'folder-workspace:folder-1',
+        sectionKey: 'all',
         folderWorkspace,
         projectGroup,
         depth: 0,
@@ -98,5 +102,66 @@ describe('getRenderedWorktreesInSidebarOrder', () => {
     expect(
       getRenderedWorktreesInSidebarOrder(rows, 'duplicate-in-groups').map(({ id }) => id)
     ).toEqual(['folder:folder-1', 'pinned', 'after-folder'])
+  })
+
+  it('dedupes a duplicated pinned folder workspace, keeping the natural copy', () => {
+    const other = worktree('other')
+    const rows: HostSectionRow[] = [
+      {
+        type: 'folder-workspace',
+        key: 'pinned:folder-workspace:folder-1',
+        sectionKey: 'pinned',
+        folderWorkspace,
+        projectGroup,
+        depth: 0,
+        groupDepth: 0
+      },
+      item(other, 'repo:repo-1'),
+      {
+        type: 'folder-workspace',
+        key: 'folder-workspace:folder-1',
+        sectionKey: 'all',
+        folderWorkspace,
+        projectGroup,
+        depth: 0,
+        groupDepth: 0
+      }
+    ]
+
+    // Why: the pinned and natural copies are one workspace; it must appear once,
+    // and at the natural copy's position (after `other`), matching git rules.
+    expect(
+      getRenderedWorktreesInSidebarOrder(rows, 'duplicate-in-groups').map(({ id }) => id)
+    ).toEqual(['other', 'folder:folder-1'])
+  })
+})
+
+describe('isWorkspaceRowIdentityRendered', () => {
+  const pinnedFolderRow: HostSectionRow = {
+    type: 'folder-workspace',
+    key: 'pinned:folder-workspace:folder-1',
+    sectionKey: 'pinned',
+    folderWorkspace,
+    projectGroup,
+    depth: 0,
+    groupDepth: 0
+  }
+
+  it('retains the selected duplicate folder row by its rendered row key', () => {
+    expect(
+      isWorkspaceRowIdentityRendered([pinnedFolderRow], {
+        worktreeId: 'folder:folder-1',
+        rowKey: pinnedFolderRow.key
+      })
+    ).toBe(true)
+  })
+
+  it('does not transfer folder row identity to another rendered copy', () => {
+    expect(
+      isWorkspaceRowIdentityRendered([pinnedFolderRow], {
+        worktreeId: 'folder:folder-1',
+        rowKey: 'folder-workspace:folder-1'
+      })
+    ).toBe(false)
   })
 })

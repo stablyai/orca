@@ -1,24 +1,24 @@
 import type { HostSectionRow } from './host-section-rows'
-import type { PinnedWorktreeDisplayPolicy, WorktreeRow } from './worktree-list-groups'
-import { getPreferredWorktreeRows } from './worktree-sidebar-row-preference'
+import type { PinnedWorktreeDisplayPolicy } from './worktree-list-groups'
+import { getRenderedWorktreesInSidebarOrder } from './worktree-sidebar-row-preference'
 
-/** Worktree ids in sidebar order, taken from the rows the sidebar actually
+/** Workspace ids in sidebar order, taken from the rows the sidebar actually
  *  rendered, so collapsed groups and collapsed host sections drop out on their own. */
 export function getCyclableWorktreeIds(
   rows: readonly HostSectionRow[],
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 ): string[] {
-  // Why item-only: folder workspaces render as their own row type and are not
-  // activatable through activateAndRevealWorktree, so cycling has never included them.
-  const itemRows = rows.filter((row): row is WorktreeRow => row.type === 'item')
+  // Why folder rows too: they are real sidebar cards reachable by Cmd+1–9, so
+  // arrowing past them would make the two orders disagree; `folder:` keys route
+  // through activateAndRevealWorkspace.
   const ids: string[] = []
   const seen = new Set<string>()
-  for (const row of getPreferredWorktreeRows(itemRows, pinnedDisplayPolicy)) {
-    if (seen.has(row.worktree.id)) {
+  for (const workspace of getRenderedWorktreesInSidebarOrder(rows, pinnedDisplayPolicy)) {
+    if (seen.has(workspace.id)) {
       continue
     }
-    seen.add(row.worktree.id)
-    ids.push(row.worktree.id)
+    seen.add(workspace.id)
+    ids.push(workspace.id)
   }
   return ids
 }

@@ -1,7 +1,20 @@
-import type { FolderWorkspace, ProjectGroup, Worktree } from '../../../../shared/types'
+import type {
+  FolderWorkspace,
+  ProjectGroup,
+  Worktree,
+  WorkspaceStatusDefinition
+} from '../../../../shared/types'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { getProjectGroupHeaderKey } from './worktree-list-groups'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getFolderWorkspaceSidebarGroupKey,
+  getProjectGroupHeaderKey,
+  PINNED_GROUP_KEY,
+  type PinnedWorktreeDisplayPolicy,
+  type WorktreeGroupBy
+} from './worktree-list-groups'
+import { getFolderWorkspaceExecutionHostIdForRows } from './worktree-list-host-filtering'
 
 function findFolderWorkspaceByKey(
   worktreeId: string,
@@ -41,7 +54,11 @@ export function sidebarWorkspaceStillExists(
 export function getFolderWorkspaceRevealGroupKeys(
   worktreeId: string,
   folderWorkspaces: readonly FolderWorkspace[],
-  projectGroups: readonly ProjectGroup[]
+  projectGroups: readonly ProjectGroup[],
+  groupBy: WorktreeGroupBy = 'repo',
+  workspaceStatuses: readonly WorkspaceStatusDefinition[] = [],
+  defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID,
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = 'single-location'
 ): string[] {
   const folderWorkspace = findFolderWorkspaceByKey(worktreeId, folderWorkspaces)
   if (!folderWorkspace) {
@@ -49,7 +66,32 @@ export function getFolderWorkspaceRevealGroupKeys(
   }
 
   const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
-  const keys: string[] = []
+  const owningGroup = groupsById.get(folderWorkspace.projectGroupId)
+  // Why: folder reveal resolves all ancestors here, including its host section.
+  const keys: string[] = [
+    `host:${getFolderWorkspaceExecutionHostIdForRows({
+      folderWorkspace,
+      projectGroup: owningGroup,
+      defaultHostId
+    })}`
+  ]
+
+  // Why: single-location has no natural copy to reveal for pinned folders.
+  if (folderWorkspace.isPinned && pinnedDisplayPolicy === 'single-location') {
+    keys.push(PINNED_GROUP_KEY)
+    return keys
+  }
+
+  // Why: non-repo grouping owns folder rows through its flat lane header.
+  if (groupBy !== 'repo') {
+    const laneKey = getFolderWorkspaceSidebarGroupKey(groupBy, folderWorkspace, workspaceStatuses)
+    if (laneKey) {
+      keys.push(laneKey)
+    }
+    return keys
+  }
+
+  const groupKeys: string[] = []
   const seen = new Set<string>()
   let groupId: string | null = folderWorkspace.projectGroupId
   while (groupId && !seen.has(groupId)) {
@@ -58,8 +100,9 @@ export function getFolderWorkspaceRevealGroupKeys(
     if (!group) {
       break
     }
-    keys.unshift(getProjectGroupHeaderKey(group.id))
+    groupKeys.unshift(getProjectGroupHeaderKey(group.id))
     groupId = group.parentGroupId
   }
+  keys.push(...groupKeys)
   return keys
 }
