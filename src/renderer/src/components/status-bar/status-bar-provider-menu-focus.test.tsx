@@ -29,17 +29,21 @@ vi.mock('../../store', () => ({
     })
 }))
 
-vi.mock('./tooltip', () => ({
-  ProviderIcon: function ProviderIcon(props: Record<string, unknown>) {
-    return { type: 'ProviderIcon', props }
-  },
-  ProviderPanel: function ProviderPanel(props: Record<string, unknown>) {
-    return { type: 'ProviderPanel', props }
-  },
-  barColor: () => 'bg-green-500',
-  clampUsedPercent: (n: number) => Math.max(0, Math.min(100, Math.round(n))),
-  getProviderUsageStatusLabel: () => 'Codex'
-}))
+vi.mock('./tooltip', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./tooltip')>() // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  return {
+    ...actual,
+    ProviderIcon: function ProviderIcon(props: Record<string, unknown>) {
+      return { type: 'ProviderIcon', props }
+    },
+    ProviderPanel: function ProviderPanel(props: Record<string, unknown>) {
+      return { type: 'ProviderPanel', props }
+    },
+    barColor: () => 'bg-green-500',
+    clampUsedPercent: (n: number) => Math.max(0, Math.min(100, Math.round(n))),
+    getProviderUsageStatusLabel: () => 'Codex'
+  }
+})
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: function DropdownMenu(props: Record<string, unknown>) {
@@ -202,9 +206,11 @@ describe('ProviderDetailsMenu focus handoff', () => {
     })
     const segment = findChildByType(menu, 'ProviderSegment')
     const rendered = (segment.type as (props: Record<string, unknown>) => unknown)(segment.props)
+    const usage = findChildByType(rendered, 'VerboseProviderUsage')
+    const usageRendered = (usage.type as (props: Record<string, unknown>) => unknown)(usage.props)
 
     expect(
-      findChildrenByType(rendered, 'WindowLabel')
+      findChildrenByType(usageRendered, 'WindowLabel')
         .map((element) => element.props.label)
         .sort()
     ).toEqual(['5h', 'wk'])

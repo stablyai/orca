@@ -2,12 +2,12 @@ import {
   classifyCodexRateLimitWindows,
   CODEX_SESSION_WINDOW_MINUTES,
   CODEX_WEEKLY_WINDOW_MINUTES,
-  type CodexRpcRateWindow,
-  type CodexRpcRateLimits
+  type CodexRateLimitWindowsSnapshot,
+  type CodexRateWindowSnapshot
 } from './codex-rate-limit-window-classification'
 import type { RateLimitBucket, RateLimitWindow } from '../../shared/rate-limit-types'
 
-type CodexRpcRateLimitSnapshot = CodexRpcRateLimits & {
+type CodexRpcRateLimitSnapshot = CodexRateLimitWindowsSnapshot & {
   limitId?: string
   limitName?: string
 }
@@ -19,7 +19,7 @@ export type CodexRpcRateLimitsPayload = {
 }
 
 type WindowMapper = (
-  raw: CodexRpcRateWindow | undefined,
+  raw: CodexRateWindowSnapshot | undefined,
   windowMinutes: number
 ) => RateLimitWindow | null
 
