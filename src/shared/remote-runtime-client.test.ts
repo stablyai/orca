@@ -117,6 +117,34 @@ describe('subscribeRemoteRuntimeRequest', () => {
     }
   })
 
+  it('does not close the socket again after the remote end already closed it', async () => {
+    const closeSpy = vi.spyOn(WebSocketClient.prototype, 'close')
+    try {
+      const server = await createSubscriptionServer()
+      const onResponse = vi.fn()
+      const onClose = vi.fn()
+      const subscription = await subscribeRemoteRuntimeRequest(
+        server.pairing,
+        'terminal.subscribe',
+        { terminal: 't1' },
+        1000,
+        { onResponse, onError: vi.fn(), onClose }
+      )
+
+      await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
+      server.closeClient()
+      await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce())
+      const closeCallsAfterRemoteClose = closeSpy.mock.calls.length
+
+      subscription.close()
+
+      expect(closeSpy).toHaveBeenCalledTimes(closeCallsAfterRemoteClose)
+      expect(subscription.sendBinary(new Uint8Array([9]))).toBe(false)
+    } finally {
+      closeSpy.mockRestore()
+    }
+  })
+
   it('closes a half-open subscription socket via client liveness so callers can resubscribe', async () => {
     // Why: dedicated stream sockets (terminal.multiplex, browser.screencast)
     // must not hang forever when a tunnel goes half-open — no close frame, no
@@ -335,6 +363,7 @@ async function createSubscriptionServer(
   pairing: PairingOffer
   nextBinary: Promise<Uint8Array>
   nextAuth: Promise<unknown>
+  closeClient: () => void
 }> {
   const serverKeyPair = generateKeyPair()
   let resolveBinary: (bytes: Uint8Array) => void = () => {}
@@ -347,8 +376,10 @@ async function createSubscriptionServer(
   })
   const wss = new WebSocketServer({ port: 0, autoPong: options.disableAutoPong !== true })
   servers.push(wss)
+  let activeSocket: WebSocket | null = null
 
   wss.on('connection', (ws) => {
+    activeSocket = ws
     let sharedKey: Uint8Array | null = null
     let authenticated = false
 
@@ -419,7 +450,14 @@ async function createSubscriptionServer(
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
-  return { pairing, nextBinary, nextAuth }
+  return {
+    pairing,
+    nextBinary,
+    nextAuth,
+    closeClient: () => {
+      activeSocket?.close()
+    }
+  }
 }
 
 function sendEncrypted(ws: WebSocket, sharedKey: Uint8Array, message: unknown): void {

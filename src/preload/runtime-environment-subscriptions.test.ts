@@ -136,6 +136,44 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     expect(onResponse).not.toHaveBeenCalled()
   })
 
+  it('delivers a tombstone close before the pending subscribe handle settles', async () => {
+    const subscription = deferred<{ ok: true; subscriptionId: string; requestId: string }>()
+    const ipc = createIpc()
+    ipc.invoke.mockImplementation((channel: string) =>
+      channel === 'runtimeEnvironments:subscribe'
+        ? (subscription.promise as Promise<unknown>)
+        : (Promise.resolve({}) as Promise<unknown>)
+    )
+    const order: string[] = []
+
+    const handlePromise = subscribeRuntimeEnvironmentFromPreload(
+      ipc,
+      { selector: 'desk', method: 'terminal.subscribe' },
+      {
+        onResponse: vi.fn(),
+        onClose: () => {
+          order.push('close')
+        }
+      },
+      () => 'sub-tombstone'
+    ).then((handle) => {
+      order.push('settled')
+      return handle
+    })
+
+    dispatch(ipc, { subscriptionId: 'sub-tombstone', type: 'close' })
+    expect(order).toEqual(['close'])
+    expect(ipc.listenerCount()).toBe(0)
+
+    subscription.resolve({
+      ok: true,
+      subscriptionId: 'sub-tombstone',
+      requestId: 'rpc-tombstone'
+    })
+    await handlePromise
+    expect(order).toEqual(['close', 'settled'])
+  })
+
   it('shares a single channel listener across many subscriptions on one ipc', async () => {
     const ipc = createIpc()
     ipc.invoke.mockImplementation((channel: string, args: unknown) =>
