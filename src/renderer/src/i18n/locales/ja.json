@@ -8175,8 +8175,8 @@
             "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
             "e61157e926": "エディターのワードラップ",
             "005be5c699": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。",
-            "editorFontFamily": "Editor Font Family",
-            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
+            "editorFontFamily": "エディターフォント",
+            "editorFontFamilyDesc": "ファイルエディターと差分ビューで使用されるフォント。空の場合は端末フォントに従います。"
           }
         },
         "git": {
@@ -9596,9 +9596,9 @@
           "notice": "Orca Relay is in beta."
         },
         "EditorFontFamilySetting": {
-          "title": "Editor Font Family",
-          "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
-          "placeholder": "Same as terminal font"
+          "title": "エディターフォント",
+          "description": "ファイルエディターと差分ビューで使用されるフォント。空の場合は端末フォントに従います。",
+          "placeholder": "端末フォントと同じ"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
