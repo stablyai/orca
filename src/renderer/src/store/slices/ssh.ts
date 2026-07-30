@@ -24,8 +24,11 @@ export type RemoteWorkspaceSyncStatus = {
 export type SshCredentialRequest = {
   requestId: string
   targetId: string
-  kind: 'passphrase' | 'password'
+  kind: 'passphrase' | 'password' | 'keyboard-interactive'
   detail: string
+  /** RFC 4256 echo flag for keyboard-interactive prompts: when true the
+   * server allows the typed response to be shown. */
+  echo?: boolean
 }
 
 export type SshSlice = {

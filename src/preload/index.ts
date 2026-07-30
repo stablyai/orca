@@ -4486,8 +4486,9 @@ const api = {
       callback: (data: {
         requestId: string
         targetId: string
-        kind: 'passphrase' | 'password'
+        kind: 'passphrase' | 'password' | 'keyboard-interactive'
         detail: string
+        echo?: boolean
       }) => void
     ): (() => void) => {
       const listener = (
@@ -4495,8 +4496,9 @@ const api = {
         data: {
           requestId: string
           targetId: string
-          kind: 'passphrase' | 'password'
+          kind: 'passphrase' | 'password' | 'keyboard-interactive'
           detail: string
+          echo?: boolean
         }
       ) => callback(data)
       ipcRenderer.on('ssh:credential-request', listener)
