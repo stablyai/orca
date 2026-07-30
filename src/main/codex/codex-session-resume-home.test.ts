@@ -68,6 +68,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
       '\\\\?\\GLOBALROOT\\Device\\HarddiskVolumeShadowCopy1\\sessions\\2026\\07\\20\\rollout-a.jsonl',
       '\\\\?\\Volume{00000000-0000-0000-0000-000000000000}\\sessions\\2026\\07\\20\\rollout-a.jsonl',
       '\\\\.\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-a.jsonl',
+      '\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-a:stream.jsonl',
       '\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\..\\rollout-a.jsonl'
     ]
 
