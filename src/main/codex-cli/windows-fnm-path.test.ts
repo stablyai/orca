@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join, win32 } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
+import { normalizeSingleWindowsPathEntry } from '../../shared/windows-path-entry'
 import { getVersionManagerBinPaths } from './command'
 
 const describeWindows = describe.runIf(process.platform === 'win32')
@@ -18,7 +19,28 @@ const invalidWindowsDirectories: [string, string | undefined][] = [
   ['root-relative', '\\root-relative\\directory'],
   ['unexpanded', '%APPDATA%\\directory'],
   ['quoted', '"D:\\quoted"'],
-  ['NUL-containing', 'D:\\malformed\0directory']
+  ['NUL-containing', 'D:\\malformed\0directory'],
+  ['PATH-delimited', 'D:\\escaped;D:\\suffix'],
+  ['pipe-containing', 'D:\\invalid|directory'],
+  ['stream-colon-containing', 'D:\\invalid:directory'],
+  ['wildcard-containing', 'D:\\invalid*directory'],
+  ['question-mark-containing', 'D:\\invalid?directory'],
+  ['angle-bracket-containing', 'D:\\invalid<directory'],
+  ['control-character-containing', 'D:\\invalid\u0001directory'],
+  ['trailing-dot component', 'D:\\invalid.\\directory'],
+  ['trailing-space component', 'D:\\invalid \\directory'],
+  ['incomplete extended UNC', '\\\\?\\UNC\\server'],
+  ['noncanonical extended UNC', '\\\\?\\UNC/server/share']
+]
+const validWindowsDirectories: [string, string][] = [
+  ['drive', 'C:\\fnm'],
+  ['spaces', 'C:\\Program Files\\fnm data'],
+  ['Unicode', 'C:\\用户\\fnm-λ'],
+  ['UNC', '\\\\server\\share\\fnm'],
+  ['extended drive', '\\\\?\\C:\\very long\\fnm'],
+  ['extended UNC', '\\\\?\\UNC\\server\\share\\fnm'],
+  ['device', '\\\\.\\Volume{01234567-89ab-cdef-0123-456789abcdef}\\fnm'],
+  ['trailing separator', 'C:\\fnm\\']
 ]
 
 function createTestRoot(): string {
@@ -62,6 +84,17 @@ afterEach(() => {
 })
 
 describe('Windows fnm directory selection', () => {
+  it.each(validWindowsDirectories)('accepts a valid %s directory', (_label, directory) => {
+    expect(normalizeSingleWindowsPathEntry(directory)).toBe(directory)
+    expect(
+      getVersionManagerBinPaths({
+        platform: 'win32',
+        homePath: windowsHome,
+        env: { FNM_DIR: directory }
+      })
+    ).toContain(win32.join(directory, 'aliases', 'default'))
+  })
+
   it('prefers FNM_DIR over APPDATA without a POSIX bin suffix', () => {
     const paths = getVersionManagerBinPaths({
       platform: 'win32',
@@ -114,6 +147,40 @@ describe('Windows fnm directory selection', () => {
 })
 
 describeWindows('Windows fnm Node process launch', () => {
+  it('rejects an FNM_DIR that injects a second PATH entry', () => {
+    const root = createTestRoot()
+    const escaped = join(root, 'escaped')
+    const appData = join(root, 'AppData', 'Roaming')
+    const expectedNodePath = installNode(join(appData, 'fnm', 'aliases', 'default'))
+    installNode(escaped)
+
+    const paths = getVersionManagerBinPaths({
+      platform: 'win32',
+      homePath: root,
+      env: { APPDATA: appData, FNM_DIR: `${escaped};${join(root, 'suffix')}` }
+    })
+
+    expectNodeLaunch(paths, expectedNodePath)
+    expect(paths).toContain(join(appData, 'fnm', 'aliases', 'default'))
+  })
+
+  it('rejects an APPDATA value that injects a second PATH entry', () => {
+    const root = createTestRoot()
+    const escaped = join(root, 'escaped')
+    const expectedDefault = join(root, 'AppData', 'Roaming', 'fnm', 'aliases', 'default')
+    const expectedNodePath = installNode(expectedDefault)
+    installNode(escaped)
+
+    const paths = getVersionManagerBinPaths({
+      platform: 'win32',
+      homePath: root,
+      env: { APPDATA: `${escaped};${join(root, 'suffix')}` }
+    })
+
+    expectNodeLaunch(paths, expectedNodePath)
+    expect(paths).toContain(expectedDefault)
+  })
+
   it('launches Node from FNM_DIR instead of APPDATA', () => {
     const root = createTestRoot()
     const fnmDefault = join(root, 'configured-fnm', 'aliases', 'default')

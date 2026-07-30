@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { normalizeSingleWindowsPathEntry } from '../../shared/windows-path-entry'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 
@@ -124,11 +125,18 @@ export function patchPackagedProcessPath(): void {
   // Why: version-manager CLIs use env-node shebangs, so node must be on PATH or spawns fail (also seeds Windows user-local dirs).
   extraPaths.push(...getVersionManagerBinPaths())
 
+  const safeExtraPaths =
+    process.platform === 'win32'
+      ? extraPaths
+          .map((path) => normalizeSingleWindowsPathEntry(path))
+          .filter((path): path is string => path !== null)
+      : extraPaths
+
   const pathKey = process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
   const currentPath = process.env[pathKey] ?? ''
   const pathDelimiter = getProcessPathDelimiter()
   const existing = new Set(currentPath.split(pathDelimiter))
-  const missing = extraPaths.filter((path) => !existing.has(path))
+  const missing = safeExtraPaths.filter((path) => !existing.has(path))
 
   if (missing.length > 0) {
     process.env[pathKey] = [...missing, ...currentPath.split(pathDelimiter).filter(Boolean)].join(

@@ -3,6 +3,8 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const itWindows = it.runIf(process.platform === 'win32')
+
 vi.mock('electron', () => {
   const paths = new Map<string, string>([['appData', '/tmp/app-data']])
   return {
@@ -91,7 +93,7 @@ describe('patchPackagedProcessPath', () => {
     expect(process.env.PATH).toBe('/usr/bin:/bin')
   })
 
-  it('prepends Windows user-local CLI dirs for packaged Start Menu launches', async () => {
+  itWindows('prepends Windows user-local CLI dirs for packaged Start Menu launches', async () => {
     const { app } = await import('electron')
     const { patchPackagedProcessPath } = await import('./configure-process')
 
