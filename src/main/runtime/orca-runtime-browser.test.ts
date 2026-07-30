@@ -60,12 +60,13 @@ vi.mock('../browser/browser-screencast-stream', () => ({
 }))
 
 vi.mock('../browser-screencast-awake-service', () => ({
-  browserScreencastAwakeService: {
+  getBrowserScreencastAwakeService: () => ({
     acquire: browserScreencastAwakeAcquireMock,
     release: browserScreencastAwakeReleaseMock,
     dispose: vi.fn(),
     getActiveCount: vi.fn(() => 0)
-  }
+  }),
+  disposeBrowserScreencastAwakeService: vi.fn()
 }))
 
 vi.mock('../ipc/browser', () => ({

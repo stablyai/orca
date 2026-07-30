@@ -1,4 +1,3 @@
-import { powerMonitor, powerSaveBlocker } from 'electron'
 import { LinuxLidSleepAssertion } from './linux-lid-sleep-assertion'
 import { MacosSystemSleepAssertion } from './macos-system-sleep-assertion'
 
@@ -29,6 +28,18 @@ type BrowserScreencastAwakeServiceOptions = {
   powerMonitor?: PowerMonitorEventSource | null
 }
 
+type ElectronPowerApis = {
+  powerMonitor: PowerMonitorEventSource
+  powerSaveBlocker: PowerSaveBlocker
+}
+
+// Why: keep this module importable under incomplete `vi.mock('electron')` fixtures
+// used by orca-runtime tests. Resolve Electron power APIs only when constructing.
+function loadElectronPowerApis(): ElectronPowerApis {
+  // Why: lazy CJS resolve avoids static electron named-import mock breakage in orca-runtime tests.
+  return require('electron') as ElectronPowerApis
+}
+
 /**
  * Keeps the display/compositor awake while any browser.screencast stream is live.
  *
@@ -48,8 +59,12 @@ export class BrowserScreencastAwakeService {
   private readonly unsubscribeResume: (() => void) | null
 
   constructor(options: BrowserScreencastAwakeServiceOptions = {}) {
-    this.blocker = options.blocker ?? powerSaveBlocker
     this.logger = options.logger ?? console
+    const electronApis =
+      options.blocker !== undefined && options.powerMonitor !== undefined
+        ? null
+        : loadElectronPowerApis()
+    this.blocker = options.blocker ?? electronApis!.powerSaveBlocker
     // Windows lid close is intentionally not modeled as an assertion here:
     // keeping it awake requires mutating the user's global power plan.
     this.linuxAssertion =
@@ -64,7 +79,8 @@ export class BrowserScreencastAwakeService {
         logger: this.logger,
         onUnexpectedFailure: (reason) => this.refresh(reason)
       })
-    const resumeSource = options.powerMonitor === undefined ? powerMonitor : options.powerMonitor
+    const resumeSource =
+      options.powerMonitor !== undefined ? options.powerMonitor : electronApis!.powerMonitor
     if (resumeSource) {
       const onResume = () => this.refresh('power-resume')
       resumeSource.on('resume', onResume)
@@ -217,4 +233,14 @@ export class BrowserScreencastAwakeService {
   }
 }
 
-export const browserScreencastAwakeService = new BrowserScreencastAwakeService()
+let sharedBrowserScreencastAwakeService: BrowserScreencastAwakeService | null = null
+
+export function getBrowserScreencastAwakeService(): BrowserScreencastAwakeService {
+  sharedBrowserScreencastAwakeService ??= new BrowserScreencastAwakeService()
+  return sharedBrowserScreencastAwakeService
+}
+
+export function disposeBrowserScreencastAwakeService(): void {
+  sharedBrowserScreencastAwakeService?.dispose()
+  sharedBrowserScreencastAwakeService = null
+}

@@ -64,7 +64,7 @@ import {
   importCookiesFromBrowser,
   selectBrowserProfile
 } from '../browser/browser-cookie-import'
-import { browserScreencastAwakeService } from '../browser-screencast-awake-service'
+import { getBrowserScreencastAwakeService } from '../browser-screencast-awake-service'
 import { waitForTabRegistration, waitForWorktreeTabRegistration } from '../ipc/browser'
 
 export type BrowserCommandTargetParams = {
@@ -188,9 +188,9 @@ export class RuntimeBrowserCommands {
     }
     this.screencastAwakeActive = shouldKeepAwake
     if (shouldKeepAwake) {
-      browserScreencastAwakeService.acquire('runtime-browser-screencast')
+      getBrowserScreencastAwakeService().acquire('runtime-browser-screencast')
     } else {
-      browserScreencastAwakeService.release('runtime-browser-screencast')
+      getBrowserScreencastAwakeService().release('runtime-browser-screencast')
     }
     syncMainWindowBackgroundThrottlingForScreencast(this.host, shouldKeepAwake)
   }

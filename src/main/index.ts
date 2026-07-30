@@ -240,7 +240,7 @@ import { AutomationService } from './automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headless-workspace-create'
 import { AgentAwakeService } from './agent-awake-service'
-import { browserScreencastAwakeService } from './browser-screencast-awake-service'
+import { disposeBrowserScreencastAwakeService } from './browser-screencast-awake-service'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
 import { PluginService } from './plugins/plugin-service'
@@ -2887,7 +2887,7 @@ app.on('before-quit', () => {
   unsubscribeAgentAwakeStatusChanges = null
   agentAwakeService?.dispose()
   agentAwakeService = null
-  browserScreencastAwakeService.dispose()
+  disposeBrowserScreencastAwakeService()
   // Why: defer PTY cleanup to will-quit so the renderer captures scrollback before PTY-exit events unmount TerminalPane (dropping its capture callbacks).
   rateLimits?.stop()
 })
