@@ -12,6 +12,7 @@ import {
   buildSkillInstallCommandForRuntime,
   getAgentSkillTerminalShellOverride,
   getSelectedAgentRuntime,
+  getSkillCommandForClipboard,
   getSkillDiscoveryTargetForRuntime
 } from './CliSkillRuntimeSetup'
 
@@ -156,6 +157,19 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
         'win32'
       )
     ).toBe(`${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`)
+  })
+
+  it('unwraps a forced-PowerShell Windows command only at the clipboard boundary', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orca-cli', 'orchestration'])
+    const terminalCommand = buildSkillCommandForRuntime(
+      installCommand,
+      { runtime: 'host', label: 'Windows' },
+      'win32'
+    )
+
+    expect(getSkillCommandForClipboard(terminalCommand, 'powershell.exe')).toBe(installCommand)
+    expect(getSkillCommandForClipboard(terminalCommand)).toBe(terminalCommand)
+    expect(getSkillCommandForClipboard(terminalCommand, 'cmd.exe')).toBe(terminalCommand)
   })
 
   it('treats missing runtime as a preflighted Windows host fallback for skill installs', () => {

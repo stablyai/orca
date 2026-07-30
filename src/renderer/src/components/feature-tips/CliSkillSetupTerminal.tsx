@@ -3,7 +3,10 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { OnboardingInlineCommandTerminal } from '@/components/onboarding/OnboardingInlineCommandTerminal'
-import { buildSkillCommandForRuntime } from '@/components/settings/CliSkillRuntimeSetup'
+import {
+  buildSkillCommandForRuntime,
+  getSkillCommandForClipboard
+} from '@/components/settings/CliSkillRuntimeSetup'
 import { ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'
@@ -18,10 +21,14 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
     ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND,
     activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime
   )
+  const clipboardCommand = getSkillCommandForClipboard(
+    skillCommand,
+    activeSkillRuntime.terminalShellOverride
+  )
 
   const handleCopySkillCommand = async (): Promise<void> => {
     try {
-      await window.api.ui.writeClipboardText(skillCommand)
+      await window.api.ui.writeClipboardText(clipboardCommand)
       toast.success(
         translate(
           'auto.components.feature.tips.CliSkillSetupTerminal.b8ad063571',
@@ -44,7 +51,7 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
     <div className="min-w-0">
       <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-muted/35 px-3 py-2">
         <code className="scrollbar-sleek min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs text-muted-foreground">
-          {skillCommand}
+          {clipboardCommand}
         </code>
         <Tooltip>
           <TooltipTrigger asChild>

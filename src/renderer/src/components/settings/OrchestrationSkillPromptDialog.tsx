@@ -10,17 +10,20 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
+import { getSkillCommandForClipboard } from './CliSkillRuntimeSetup'
 
 export function OrchestrationSkillPromptDialog(props: {
   command: string
+  terminalShellOverride?: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }): React.JSX.Element {
-  const { command, open, onOpenChange } = props
+  const { command, terminalShellOverride, open, onOpenChange } = props
+  const clipboardCommand = getSkillCommandForClipboard(command, terminalShellOverride)
 
   const copyCommand = async (): Promise<void> => {
     try {
-      await window.api.ui.writeClipboardText(command)
+      await window.api.ui.writeClipboardText(clipboardCommand)
       toast.success(
         translate(
           'auto.components.settings.OrchestrationSkillPromptDialog.239bf9132b',
@@ -62,7 +65,7 @@ export function OrchestrationSkillPromptDialog(props: {
         <div className="px-6 py-5">
           <div className="group relative rounded-md border border-border/70 bg-editor-surface shadow-xs">
             <p className="px-3 py-3 pr-11 font-mono text-[12px] leading-relaxed break-all text-foreground">
-              {command}
+              {clipboardCommand}
             </p>
             <Button
               type="button"

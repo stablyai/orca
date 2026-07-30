@@ -27,7 +27,8 @@ vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
 }))
 
 vi.mock('./CliSkillRuntimeSetup', () => ({
-  buildSkillCommandForRuntime: (command: string) => command
+  buildSkillCommandForRuntime: (command: string) => command,
+  getSkillCommandForClipboard: (command: string) => command
 }))
 
 vi.mock('sonner', () => ({

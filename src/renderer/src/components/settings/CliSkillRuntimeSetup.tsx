@@ -30,6 +30,13 @@ const LOCAL_HOST_AGENT_RUNTIME: LocalAgentRuntime = {
   label: ''
 }
 
+const WINDOWS_NPX_PREREQUISITE_PREFIX =
+  'cmd.exe /d /s /c "where.exe npx >nul 2>nul & if errorlevel 1 ('
+const WINDOWS_NPX_PREREQUISITE_GUIDANCE =
+  'echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx. & echo Then close this terminal and start skill setup again - a new terminal picks up the updated PATH. & exit /b 1'
+const WINDOWS_NPX_COMMAND_PREFIX = `${WINDOWS_NPX_PREREQUISITE_PREFIX}${WINDOWS_NPX_PREREQUISITE_GUIDANCE}) else (`
+const WINDOWS_NPX_COMMAND_SUFFIX = ')"'
+
 export function getHostRuntimeLabel(): string {
   return navigator.userAgent.includes('Windows') ? 'Windows' : 'This device'
 }
@@ -141,12 +148,27 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
     return command
   }
 
-  const missingNpxGuidance =
-    'echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx. & echo Then close this terminal and start skill setup again - a new terminal picks up the updated PATH. & exit /b 1'
   // Why: cmd.exe is one shell-neutral boundary for PowerShell and Command
   // Prompt, and it resolves the bare name through PATHEXT for both the
   // preflight and the executed command, so shims such as npx.exe still count.
-  return `cmd.exe /d /s /c "where.exe npx >nul 2>nul & if errorlevel 1 (${missingNpxGuidance}) else (${trimmedCommand})"`
+  return `${WINDOWS_NPX_COMMAND_PREFIX}${trimmedCommand}${WINDOWS_NPX_COMMAND_SUFFIX}`
+}
+
+export function getSkillCommandForClipboard(
+  command: string,
+  terminalShellOverride?: string
+): string {
+  // Why: a forced PowerShell terminal signals a POSIX-configured user shell;
+  // unwrap only the exact native-host command that Git Bash cannot paste safely.
+  if (
+    terminalShellOverride !== 'powershell.exe' ||
+    !command.startsWith(WINDOWS_NPX_COMMAND_PREFIX) ||
+    !command.endsWith(WINDOWS_NPX_COMMAND_SUFFIX)
+  ) {
+    return command
+  }
+
+  return command.slice(WINDOWS_NPX_COMMAND_PREFIX.length, -WINDOWS_NPX_COMMAND_SUFFIX.length)
 }
 
 function isRemoteRuntimeEnvironmentFocused(): boolean {

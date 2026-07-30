@@ -11,6 +11,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { getSkillCommandForClipboard } from './CliSkillRuntimeSetup'
 
 type AgentSkillSetupPanelVariant = 'card' | 'inline'
 type SkillPrerequisiteStatus = Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>
@@ -106,6 +107,7 @@ export function AgentSkillSetupPanel({
   // Why: the inline terminal auto-inserts when its command changes, so keep an
   // already-open terminal pinned to the command selected by the user's click.
   const openTerminalCommand = terminalCommand ?? activeCommand
+  const clipboardCommand = getSkillCommandForClipboard(openTerminalCommand, terminalShellOverride)
 
   useEffect(() => {
     if (!preInstallNotice) {
@@ -153,7 +155,7 @@ export function AgentSkillSetupPanel({
 
   const copyActiveCommand = async (): Promise<void> => {
     try {
-      await window.api.ui.writeClipboardText(openTerminalCommand)
+      await window.api.ui.writeClipboardText(clipboardCommand)
       toast.success(
         translate('auto.components.settings.AgentSkillSetupPanel.copiedCommand', 'Copied command.')
       )
@@ -329,7 +331,7 @@ export function AgentSkillSetupPanel({
         >
           <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md border border-border bg-muted/35 px-3 py-2">
             <code className="scrollbar-sleek min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs text-muted-foreground">
-              {openTerminalCommand}
+              {clipboardCommand}
             </code>
             <Tooltip>
               <TooltipTrigger asChild>

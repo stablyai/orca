@@ -165,6 +165,7 @@ export function OrchestrationPane(): React.JSX.Element {
 
       <OrchestrationSkillPromptDialog
         command={orchestrationInstallCommand}
+        terminalShellOverride={activeSkillRuntime.terminalShellOverride}
         open={skillPromptOpen}
         onOpenChange={setSkillPromptOpen}
       />

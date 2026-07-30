@@ -91,6 +91,13 @@ const installOnlyCallers = new Map<string, readonly string[]>([
   ]
 ])
 
+const clipboardCallers = [
+  'src/renderer/src/components/settings/AgentSkillSetupPanel.tsx',
+  'src/renderer/src/components/feature-tips/CliSkillSetupTerminal.tsx',
+  'src/renderer/src/components/settings/OrchestrationSkillPromptDialog.tsx',
+  'src/renderer/src/components/settings/linear-agent-skill-install-cta.tsx'
+] as const
+
 const directPanelCallers = new Set([
   // BrowserUsePane and LinearAgentSkillSetupPrompt delegate through child setup
   // components that forward installedCommand and are validated separately above.
@@ -161,6 +168,15 @@ describe('AgentSkillSetupPanel installed-command call sites', () => {
     // must fall back to the host rather than skip the Windows npx preflight.
     expect(source).toContain(
       'activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime'
+    )
+  })
+
+  it('keeps every skill-command clipboard boundary Git Bash safe', () => {
+    for (const relativePath of clipboardCallers) {
+      expect(readRepoFile(relativePath), relativePath).toContain('getSkillCommandForClipboard(')
+    }
+    expect(readRepoFile('src/renderer/src/components/settings/OrchestrationPane.tsx')).toContain(
+      'terminalShellOverride={activeSkillRuntime.terminalShellOverride}'
     )
   })
 

@@ -9,6 +9,7 @@ import { TooltipProvider } from '../ui/tooltip'
 
 const INSTALL_COMMAND = 'npx skills add https://github.com/stablyai/orca --skill orca-cli --global'
 const UPDATE_COMMAND = 'npx skills update orca-cli --global'
+const WINDOWS_INSTALL_COMMAND = `cmd.exe /d /s /c "where.exe npx >nul 2>nul & if errorlevel 1 (echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx. & echo Then close this terminal and start skill setup again - a new terminal picks up the updated PATH. & exit /b 1) else (${INSTALL_COMMAND})"`
 
 const mocks = vi.hoisted(() => ({
   clipboardWrite: vi.fn(),
@@ -236,6 +237,26 @@ describe('AgentSkillSetupPanel', () => {
 
     expect(mocks.clipboardWrite).toHaveBeenCalledWith(INSTALL_COMMAND)
     expect(mocks.toastSuccess).toHaveBeenCalledWith('Copied command.')
+  })
+
+  it('copies the bare command for Git Bash while keeping the Windows terminal preflight', async () => {
+    await renderInteractivePanel({
+      command: WINDOWS_INSTALL_COMMAND,
+      terminalShellOverride: 'powershell.exe'
+    })
+
+    await clickButton('Install')
+
+    expect(container?.querySelector('code')?.textContent).toBe(INSTALL_COMMAND)
+    expect(mocks.terminalProps.at(-1)).toMatchObject({ command: WINDOWS_INSTALL_COMMAND })
+
+    await act(async () => {
+      container
+        ?.querySelector<HTMLButtonElement>('button[aria-label="Copy command"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mocks.clipboardWrite).toHaveBeenCalledWith(INSTALL_COMMAND)
   })
 
   it('shows a visible pending state while CLI setup preflight is running', async () => {

@@ -20,9 +20,10 @@ import {
   getCurrentPlatform,
   getLinearPromptAgentRuntime,
   getLinearPromptSkillDiscoveryTarget,
+  getLinearPromptTerminalShellOverride,
   type LinearAgentSkillPromptSettings
 } from '../sidebar/linear-agent-skill-runtime'
-import { buildSkillCommandForRuntime } from './CliSkillRuntimeSetup'
+import { buildSkillCommandForRuntime, getSkillCommandForClipboard } from './CliSkillRuntimeSetup'
 import {
   useIntegrationCommandRowClass,
   useIntegrationSubordinateRowClass
@@ -42,9 +43,10 @@ export function LinearAgentSkillInstallCta({
   // Why: mirror the sidebar setup prompt's runtime resolution so both surfaces
   // agree on which machine (host vs. WSL distro) is scanned and installed to.
   const remote = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
+  const currentPlatform = getCurrentPlatform()
   const agentRuntime = useMemo(
-    () => getLinearPromptAgentRuntime(settings, getCurrentPlatform(), remote),
-    [remote, settings]
+    () => getLinearPromptAgentRuntime(settings, currentPlatform, remote),
+    [currentPlatform, remote, settings]
   )
   const skillDiscoveryTarget = useMemo(
     () => getLinearPromptSkillDiscoveryTarget(agentRuntime),
@@ -64,12 +66,16 @@ export function LinearAgentSkillInstallCta({
       ),
     [agentRuntime, skill.installed, skill.skills]
   )
+  const clipboardCommand = getSkillCommandForClipboard(
+    command,
+    getLinearPromptTerminalShellOverride(currentPlatform, settings, agentRuntime)
+  )
   const subordinateRowClass = useIntegrationSubordinateRowClass('space-y-1.5')
   const commandRowClass = useIntegrationCommandRowClass()
 
   const copyCommand = async (): Promise<void> => {
     try {
-      await window.api.ui.writeClipboardText(command)
+      await window.api.ui.writeClipboardText(clipboardCommand)
       toast.success(
         translate(
           'auto.components.settings.linear.agent.skill.install.cta.copiedCommand',
@@ -148,7 +154,7 @@ export function LinearAgentSkillInstallCta({
           </p>
           <div className={commandRowClass}>
             <code className="scrollbar-sleek min-w-0 flex-1 overflow-x-auto whitespace-nowrap">
-              {command}
+              {clipboardCommand}
             </code>
             <Tooltip>
               <TooltipTrigger asChild>
