@@ -6,6 +6,7 @@ import {
   type MobileSpeechModel,
   type MobileSpeechSetup
 } from '../dictation/mobile-dictation-setup'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   setup: MobileSpeechSetup
@@ -67,20 +68,22 @@ export function VoiceModelList({
                   <Text style={styles.modelLabel} numberOfLines={1}>
                     {model.label}
                   </Text>
-                  {model.recommended ? <Text style={styles.recommended}>Recommended</Text> : null}
+                  {model.recommended ? (
+                    <Text style={styles.recommended}>{t('m.B45mQIQ')}</Text>
+                  ) : null}
                 </View>
                 <Text style={styles.modelMeta}>{modelMeta(model)}</Text>
               </View>
               {model.provider === 'openai' ? (
                 <Text style={styles.modelStateText}>
-                  {model.status === 'ready' ? 'API key set' : 'Set up on desktop'}
+                  {model.status === 'ready' ? t('m.JnTRemk') : t('m.j2yOGiA')}
                 </Text>
               ) : model.status === 'ready' ? (
                 <View style={styles.readyActions}>
                   {isSelected ? (
                     <View style={styles.selectedTag}>
                       <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
-                      <Text style={styles.selectedText}>In use</Text>
+                      <Text style={styles.selectedText}>{t('m.kg-vs7o')}</Text>
                     </View>
                   ) : (
                     <Pressable
@@ -94,7 +97,7 @@ export function VoiceModelList({
                       {selectBusy ? (
                         <ActivityIndicator size="small" color={colors.textSecondary} />
                       ) : (
-                        <Text style={styles.actionText}>Use</Text>
+                        <Text style={styles.actionText}>{t('m.EorN5mI')}</Text>
                       )}
                     </Pressable>
                   )}
@@ -102,7 +105,7 @@ export function VoiceModelList({
                     style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
                     disabled={anyBusy}
                     onPress={() => onDelete(model)}
-                    accessibilityLabel={'Delete ' + model.label}
+                    accessibilityLabel={t('m.jCov6Mc') + model.label}
                   >
                     {deleteBusy ? (
                       <ActivityIndicator size="small" color={colors.statusRed} />
@@ -118,7 +121,7 @@ export function VoiceModelList({
                   style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
                   disabled={anyBusy}
                   onPress={() => onDownload(model)}
-                  accessibilityLabel={'Download ' + model.label}
+                  accessibilityLabel={t('m.8Zue0js') + model.label}
                 >
                   {downloadBusy ? (
                     <ActivityIndicator size="small" color={colors.textSecondary} />

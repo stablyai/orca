@@ -5,6 +5,7 @@ import type {
 import { supportsHostedReviewCreation } from '../../../src/shared/hosted-review-creation-providers'
 import { hostedReviewCopy } from './hosted-review-copy'
 import { getMobilePrCreateBlockMessage } from './mobile-pr-create'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobileCreatePrEligibilityState =
   | { kind: 'idle' }
@@ -41,7 +42,7 @@ const BUSY_ACTIONS = new Set(['create-pr', 'push-create-pr'])
 function hiddenAction(onPress: () => void): MobileCreatePrAction {
   return {
     visible: false,
-    label: 'Create Pull Request',
+    label: t('m.6N6POoY'),
     disabled: true,
     loading: false,
     pushFirst: false,
@@ -70,7 +71,7 @@ export function buildMobileCreatePrAction({
     return hiddenAction(noop)
   }
   const copy = hostedReviewCopy(eligibility.provider)
-  const label = `Create ${copy.titleLabel}`
+  const label = t('m.aDtTv18', { value0: copy.titleLabel })
   // Any in-flight git work blocks the action: runGitWorkflow no-ops while
   // busyActionRef is set, so an enabled-looking button would silently do nothing.
   const busy = busyAction !== null
@@ -108,7 +109,7 @@ export function buildMobileCreatePrAction({
       canCreate: false,
       blockedReason: eligibility.blockedReason,
       nextAction: eligibility.nextAction
-    }) ?? `This branch is not ready for a ${copy.reviewLabel} yet.`
+    }) ?? t('m.-CpqM4g', { value0: copy.reviewLabel })
 
   return {
     visible: true,

@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   disabled: boolean
@@ -9,8 +10,8 @@ type Props = {
 }
 
 const VIEW_MODES: { id: MobileBrowserViewMode; label: string }[] = [
-  { id: 'web', label: 'Web' },
-  { id: 'mobile', label: 'Mobile' }
+  { id: 'web', label: t('m.3TuUR-s') },
+  { id: 'mobile', label: t('m.eJJUzYE') }
 ]
 
 export function MobileBrowserViewModeSwitch({
@@ -56,7 +57,7 @@ function ViewModeButton({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected, disabled }}
-      accessibilityLabel={`Show ${label.toLowerCase()} website view`}
+      accessibilityLabel={t('m.lV607bI', { value0: label.toLowerCase() })}
     >
       <Text style={[styles.buttonText, selected && styles.buttonTextSelected]}>{label}</Text>
     </Pressable>

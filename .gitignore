@@ -124,6 +124,7 @@ src/renderer/src/i18n/locales/.zh-catalog-cache.json
 src/renderer/src/i18n/locales/.ko-catalog-cache.json
 src/renderer/src/i18n/locales/.ja-catalog-cache.json
 src/renderer/src/i18n/locales/.es-catalog-cache.json
+mobile/src/i18n/locales/.*-catalog-cache.json
 
 # Bench result JSONs are working artifacts
 tools/benchmarks/results/terminal-pipeline-*.json

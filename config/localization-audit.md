@@ -46,6 +46,26 @@ Run the maintained coverage gate:
 pnpm run verify:localization-coverage
 ```
 
+The gate scans the desktop renderer plus both mobile source roots. Mobile uses
+`config/mobile-localization-coverage-allowlist.json`, which is also committed
+empty.
+
+Verify mobile catalog references, conditional keys, interpolation options, and
+locale parity:
+
+```sh
+pnpm run verify:mobile-localization-catalog
+```
+
+Refresh a mobile translation catalog after changing English copy:
+
+```sh
+pnpm run bootstrap:mobile:es-catalog
+pnpm run bootstrap:mobile:ja-catalog
+pnpm run bootstrap:mobile:ko-catalog
+pnpm run bootstrap:mobile:zh-catalog
+```
+
 Sync catalog keys after adding or removing `translate(...)` calls:
 
 ```sh
@@ -79,10 +99,11 @@ The coverage gate compares current candidates against
 new candidates fail the check and must be localized or added with a reviewed
 reason in the same change.
 
-The script scans `src/renderer/src` by default. That is the primary UI surface.
-Use `--source-root src` for a wider audit when checking renderer-adjacent shared
-copy, then classify non-renderer findings carefully because many are diagnostics
-or external tool text.
+The script scans `src/renderer/src` by default. Use `--source-root mobile/app`
+or `--source-root mobile/src` for either mobile surface. Use `--source-root src`
+for a wider audit when checking renderer-adjacent shared copy, then classify
+non-renderer findings carefully because many are diagnostics or external tool
+text.
 
 ## Migration States
 

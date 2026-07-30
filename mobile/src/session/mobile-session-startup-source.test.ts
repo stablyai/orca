@@ -55,7 +55,7 @@ describe('mobile session startup', () => {
   it('loads session tabs without waiting for desktop activation', () => {
     const startupEffect = sliceBetween(
       'void (async () => {',
-      'return () => {\n      disposed = true'
+      'return () => {\n      lifecycle.disposed = true'
     )
 
     expect(startupEffect).toContain("void client\n          .sendRequest('worktree.activate'")
@@ -68,7 +68,7 @@ describe('mobile session startup', () => {
       startupEffect.indexOf('await ensureSessionTabs()')
     )
     expect(startupEffect).toContain('headlessActivationNeedsHostRenderer(response.result)')
-    expect(startupEffect).toContain("showToast('Open Orca on the host to wake sleeping agents.'")
+    expect(startupEffect).toContain("showToast(t('m.RJlcmtM'), 3000)")
   })
 
   it('fails runtime capability gates closed before probing a replacement client', () => {
@@ -139,16 +139,19 @@ describe('mobile session startup', () => {
   })
 
   it('keeps dynamic agent rows above fixed New Tab actions', () => {
-    const newTabActions = sliceBetween('title="New Tab"', 'onClose={() => setShowCreateTabDrawer')
+    const newTabActions = sliceBetween(
+      "title={t('m.-95LQlw')}",
+      'onClose={() => setShowCreateTabDrawer'
+    )
 
     expect(newTabActions.indexOf('...createTabAgentActions')).toBeLessThan(
-      newTabActions.indexOf("label: 'Terminal'")
+      newTabActions.indexOf("label: t('m.1ELofI0')")
     )
-    expect(newTabActions.indexOf("label: 'Terminal'")).toBeLessThan(
-      newTabActions.indexOf("label: 'Browser'")
+    expect(newTabActions.indexOf("label: t('m.1ELofI0')")).toBeLessThan(
+      newTabActions.indexOf("label: t('m.vL8HgZo')")
     )
-    expect(newTabActions.indexOf("label: 'Browser'")).toBeLessThan(
-      newTabActions.indexOf("label: 'Markdown Note'")
+    expect(newTabActions.indexOf("label: t('m.vL8HgZo')")).toBeLessThan(
+      newTabActions.indexOf("label: t('m.c_XP7YM')")
     )
   })
 })

@@ -10,6 +10,7 @@ import { getPRReviewerRows } from './pr-checks-presentation'
 import { ReviewerPickerDrawer } from './ReviewerPickerDrawer'
 import { PRSection } from './PRSection'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   details: GitHubWorkItemDetails | null
@@ -61,23 +62,23 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
       style={styles.iconButton}
       onPress={() => setPickerOpen(true)}
       accessibilityRole="button"
-      accessibilityLabel="Add or remove reviewers"
+      accessibilityLabel={t('m.E5rQqRQ')}
     >
       <UserPlus size={16} color={colors.textSecondary} strokeWidth={2.2} />
     </Pressable>
   )
 
   return (
-    <PRSection title="Reviewers" trailing={addButton}>
+    <PRSection title={t('m.fX2uAEU')} trailing={addButton}>
       {loadingDetails ? (
         <View style={styles.reviewersStatus}>
           <ActivityIndicator color={colors.textSecondary} />
-          <Text style={styles.emptyText}>Loading reviewers…</Text>
+          <Text style={styles.emptyText}>{t('m.Ryr3DCQ')}</Text>
         </View>
       ) : detailsFailed ? (
-        <Text style={styles.emptyText}>Could not load reviewers. Tap refresh to try again.</Text>
+        <Text style={styles.emptyText}>{t('m.T5Uc4Ao')}</Text>
       ) : rows.length === 0 ? (
-        <Text style={styles.emptyText}>No reviewers requested</Text>
+        <Text style={styles.emptyText}>{t('m.jBToX-I')}</Text>
       ) : (
         rows.map((row) => {
           const busy = actions.isBusy({ kind: 'reviewer', login: row.login })
@@ -98,7 +99,7 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
                 onPress={() => actions.removeReviewer(row.login)}
                 disabled={busy}
                 accessibilityRole="button"
-                accessibilityLabel={`Remove ${row.login}`}
+                accessibilityLabel={t('m.8Est-xI', { value0: row.login })}
               >
                 {busy ? (
                   <ActivityIndicator color={colors.textSecondary} />

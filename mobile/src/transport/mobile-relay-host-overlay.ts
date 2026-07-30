@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { MobileRelayEndpointSchema } from '../../../src/shared/mobile-relay-credential-contract'
+import { t } from '@/i18n/mobile-i18n'
 
 export const MobileAccessEndpointSchema = z
   .object({
@@ -23,14 +24,14 @@ export const MobileRelayHostOverlaySchema = z
   .strict()
   .superRefine((overlay, context) => {
     if ((overlay.relayHostId === undefined) !== (overlay.relay === undefined)) {
-      context.addIssue({ code: 'custom', message: 'Relay identity and endpoint must coexist' })
+      context.addIssue({ code: 'custom', message: t('m.CjbcG3A') })
       return
     }
     if (overlay.relay && overlay.relay.relayHostId !== overlay.relayHostId) {
       context.addIssue({
         code: 'custom',
         path: ['relayHostId'],
-        message: 'Relay host identity mismatch'
+        message: t('m.e-zCiAo')
       })
     }
     const relayEndpointCount = overlay.endpoints.filter(({ kind }) => kind === 'relay').length
@@ -38,7 +39,7 @@ export const MobileRelayHostOverlaySchema = z
       context.addIssue({
         code: 'custom',
         path: ['endpoints'],
-        message: 'Expected exactly one endpoint for configured relay metadata'
+        message: t('m.lxKZMMw')
       })
     }
   })

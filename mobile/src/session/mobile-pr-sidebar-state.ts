@@ -1,6 +1,7 @@
 import type { GitHubWorkItemDetails, PRCheckDetail, PRInfo } from '../../../src/shared/types'
 import type { GitHubPrReadOutcome, GitHubPrRepoSlug } from './github-pr-rpc'
 import { resolveLinkedPrNumber } from './mobile-pr-sidebar-resolve'
+import { t } from '@/i18n/mobile-i18n'
 
 // Pure state machine for the mobile PR sidebar. Kept free of React/native imports
 // so the transitions are unit-testable under the node Vitest config (KTD5).
@@ -119,7 +120,7 @@ export async function loadPrSidebarData(
   } catch (err) {
     // Why: a dep that rejects (instead of returning `{ ok:false }`) must still
     // resolve to an error state, not escape as an unhandled rejection.
-    return failureState(err instanceof Error ? err.message : 'Unable to load pull request')
+    return failureState(err instanceof Error ? err.message : t('m.-D7_HMY'))
   }
 }
 

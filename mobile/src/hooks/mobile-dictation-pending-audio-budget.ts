@@ -1,3 +1,4 @@
+import { t } from '@/i18n/mobile-i18n'
 export const MOBILE_DICTATION_PCM_SAMPLE_RATE = 16000
 
 const PCM_BYTES_PER_SAMPLE = 2
@@ -8,8 +9,7 @@ const MAX_PENDING_AUDIO_SECONDS = 5
 export const MOBILE_DICTATION_MAX_PENDING_AUDIO_BYTES =
   MOBILE_DICTATION_PCM_SAMPLE_RATE * PCM_BYTES_PER_SAMPLE * MAX_PENDING_AUDIO_SECONDS
 
-export const MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE =
-  'Connection is too slow for voice dictation. Try again when the connection improves.'
+export const MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE = t('m.ueRRwRg')
 
 export class MobileDictationPendingAudioBudget {
   private pendingBytes = 0

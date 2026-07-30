@@ -1,3 +1,4 @@
+import { t } from '@/i18n/mobile-i18n'
 export type LinearMobileIssue = {
   id: string
   workspaceId?: string
@@ -35,5 +36,5 @@ export function extractLinearIssueReadItems(result: unknown): LinearMobileIssue[
     return (result as { items: LinearMobileIssue[] }).items
   }
 
-  throw new Error('Unexpected Linear tasks response')
+  throw new Error(t('m.AX4IXS0'))
 }

@@ -1,3 +1,4 @@
+import { t } from '@/i18n/mobile-i18n'
 const WINDOWS_DRIVE_PATH_PATTERN = /^[A-Za-z]:/
 
 export type SparsePresetDirectoryParseResult = {
@@ -40,7 +41,7 @@ export function parseSparsePresetDirectories(value: string): SparsePresetDirecto
   if (rawEntries.some(isAbsoluteSparseDirectoryPath)) {
     return {
       directories: [],
-      error: 'Use repo-relative directories, not root, absolute paths, or parent segments.'
+      error: t('m.TgLMnDc')
     }
   }
 
@@ -49,14 +50,14 @@ export function parseSparsePresetDirectories(value: string): SparsePresetDirecto
   if (directories.length === 0) {
     return {
       directories,
-      error: 'Add at least one directory.'
+      error: t('m.M0WKvoE')
     }
   }
 
   if (directories.some((entry) => entry === '.' || entry.split('/').includes('..'))) {
     return {
       directories: [],
-      error: 'Use repo-relative directories, not root, absolute paths, or parent segments.'
+      error: t('m.TgLMnDc')
     }
   }
 

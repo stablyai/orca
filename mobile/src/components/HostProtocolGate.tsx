@@ -4,6 +4,7 @@ import { useHostClient } from '../transport/client-context'
 import { useHostStatusGates, type HostStatusGates } from '../transport/host-status-gates'
 import { colors } from '../theme/mobile-theme'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   hostId: string | undefined
@@ -15,7 +16,8 @@ const HostStatusGatesContext = createContext<HostStatusGates | null>(null)
 export function useHostProtocolGates(): HostStatusGates {
   const gates = useContext(HostStatusGatesContext)
   if (!gates) {
-    throw new Error('useHostProtocolGates must be used inside <HostProtocolGate>')
+    const invariantViolation = new Error(t('m.3cWf_os'))
+    throw invariantViolation
   }
   return gates
 }
@@ -35,10 +37,7 @@ export function HostProtocolGate({ hostId, children }: Props) {
     // Why: child routes may call newer RPCs on mount, so wait until compatibility is known.
     return (
       <View style={styles.pending}>
-        <ActivityIndicator
-          color={colors.textSecondary}
-          accessibilityLabel="Checking host compatibility"
-        />
+        <ActivityIndicator color={colors.textSecondary} accessibilityLabel={t('m.qvnQ47I')} />
       </View>
     )
   }

@@ -7,6 +7,7 @@ import {
   type MobileGitUpstreamStatus
 } from './mobile-git-status'
 import type { GitCommitResult, GitRequestError } from './mobile-source-control-screen-state'
+import { t } from '@/i18n/mobile-i18n'
 
 type Params = {
   client: RpcClient | null
@@ -20,16 +21,14 @@ export function useMobileGitRequests({ client, connState, worktreeId }: Params) 
   const sendGitRequest = useCallback(
     async <T>(method: string, params?: Record<string, unknown>): Promise<T> => {
       if (!client || connState !== 'connected') {
-        throw new Error('Waiting for desktop...')
+        throw new Error(t('m.1yTzUoY'))
       }
       const response = await client.sendRequest(method, {
         worktree: `id:${worktreeId}`,
         ...params
       })
       if (!response.ok) {
-        const error = new Error(
-          response.error?.message || 'Source control action failed'
-        ) as GitRequestError
+        const error = new Error(response.error?.message || t('m.D2XJD5Q')) as GitRequestError
         error.code = response.error?.code
         throw error
       }
@@ -42,7 +41,7 @@ export function useMobileGitRequests({ client, connState, worktreeId }: Params) 
     async (message: string): Promise<GitCommitResult> => {
       const result = await sendGitRequest<GitCommitResult>('git.commit', { message })
       if (!result || result.success !== true) {
-        throw new Error(result?.error || 'Commit failed')
+        throw new Error(result?.error || t('m.9AhI4NI'))
       }
       return result
     },
@@ -60,7 +59,7 @@ export function useMobileGitRequests({ client, connState, worktreeId }: Params) 
       }
       const status = await sendGitRequest<MobileGitStatusResult>('git.status')
       if (!status.upstreamStatus) {
-        throw new Error('Branch status unavailable')
+        throw new Error(t('m.O6Amqhs'))
       }
       return status.upstreamStatus
     }

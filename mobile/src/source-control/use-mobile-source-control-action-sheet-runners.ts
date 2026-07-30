@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { resolveMobileBranchCompareBaseRef } from './mobile-branch-base-ref'
+import { t } from '@/i18n/mobile-i18n'
 
 type GitStep = { method: string; params?: Record<string, unknown> }
 type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
@@ -69,11 +70,11 @@ export function useMobileSourceControlActionSheetRunners(params: Params) {
   const runActionSheetRebase = useCallback(async () => {
     await runGitWorkflow('rebase', async () => {
       if (!client) {
-        throw new Error('Waiting for desktop...')
+        throw new Error(t('m.rF-O-TA'))
       }
       const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
       if (!baseRef) {
-        throw new Error('No base branch to rebase onto')
+        throw new Error(t('m.aNYrFtc'))
       }
       await sendGitRequest<unknown>('git.rebaseFromBase', { baseRef })
     })

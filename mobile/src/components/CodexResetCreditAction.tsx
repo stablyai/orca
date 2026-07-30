@@ -2,6 +2,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { RotateCcw } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { CodexResetCreditSummary } from './codex-reset-credit'
+import { t } from '@/i18n/mobile-i18n'
 
 export function CodexResetCreditAction({
   summary,
@@ -23,8 +24,7 @@ export function CodexResetCreditAction({
         <View style={styles.copy}>
           <Text style={styles.title}>{summary.availabilityLabel}</Text>
           <Text style={styles.subtitle}>
-            {[summary.expiryLabel, scopeLabel].filter(Boolean).join(' · ') ||
-              'Earned Codex rate-limit reset'}
+            {[summary.expiryLabel, scopeLabel].filter(Boolean).join(' · ') || t('m.wA_0d2E')}
           </Text>
         </View>
         <Pressable
@@ -36,12 +36,8 @@ export function CodexResetCreditAction({
           onPress={onPress}
           disabled={disabled}
           accessibilityRole="button"
-          accessibilityLabel={busy ? 'Resetting Codex rate limits' : 'Use Codex rate-limit reset'}
-          accessibilityHint={
-            scopeLabel
-              ? `Uses one earned reset for ${scopeLabel}`
-              : 'Uses one earned reset for the active Codex account'
-          }
+          accessibilityLabel={busy ? t('m.fNZPjTQ') : t('m.7uEIrNQ')}
+          accessibilityHint={scopeLabel ? t('m.Y2o7mgc', { value0: scopeLabel }) : t('m.8CLIWuE')}
           accessibilityState={{ busy, disabled }}
           hitSlop={8}
         >
@@ -50,7 +46,7 @@ export function CodexResetCreditAction({
           ) : (
             <RotateCcw size={14} color={colors.textPrimary} />
           )}
-          <Text style={styles.buttonText}>{busy ? 'Resetting…' : 'Use reset'}</Text>
+          <Text style={styles.buttonText}>{busy ? t('m.LN50bQ0') : t('m.2LrOLw8')}</Text>
         </Pressable>
       </View>
     </>

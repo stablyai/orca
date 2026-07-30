@@ -2,6 +2,7 @@ import { Pressable, Text, View } from 'react-native'
 import { ChevronLeft, ExternalLink, RefreshCw, X } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-source-control-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   embedded: boolean
@@ -30,7 +31,7 @@ export function MobileSourceControlHeader({
         style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
         onPress={onBack}
         hitSlop={8}
-        accessibilityLabel={embedded ? 'Close source control' : 'Back to session'}
+        accessibilityLabel={embedded ? t('m.MDlHRa0') : t('m.OtpFc0w')}
       >
         {embedded ? (
           <X size={22} color={colors.textSecondary} strokeWidth={2.2} />
@@ -40,7 +41,7 @@ export function MobileSourceControlHeader({
       </Pressable>
       <View style={styles.titleBlock}>
         <Text style={styles.title} numberOfLines={1}>
-          Source Control
+          {t('m.PjA8ztc')}
         </Text>
         <Text style={styles.meta} numberOfLines={1}>
           {worktreeLabel}
@@ -53,9 +54,7 @@ export function MobileSourceControlHeader({
           hitSlop={8}
           accessibilityRole="link"
           accessibilityLabel={
-            prNumber != null
-              ? `Open pull request #${prNumber} on the web`
-              : 'Open pull request on the web'
+            prNumber != null ? t('m.HUC1SZA', { value0: prNumber }) : t('m.5lXW9sQ')
           }
         >
           <ExternalLink size={18} color={colors.textSecondary} strokeWidth={2.1} />
@@ -70,7 +69,7 @@ export function MobileSourceControlHeader({
         onPress={onRefresh}
         disabled={ioBusy}
         hitSlop={8}
-        accessibilityLabel="Refresh source control"
+        accessibilityLabel={t('m.Pt1enm0')}
       >
         <RefreshCw size={18} color={colors.textSecondary} strokeWidth={2.1} />
       </Pressable>

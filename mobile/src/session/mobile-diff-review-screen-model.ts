@@ -10,6 +10,7 @@ import type {
 import type { MobileDiffReviewFileDescriptor } from './mobile-diff-review-state'
 import type { MobileHighlightedDiffLine } from './mobile-file-syntax'
 import type { MobileReviewTerminalTab } from './mobile-diff-review-rpc'
+import { t } from '@/i18n/mobile-i18n'
 
 export type ReviewScreenState =
   | { kind: 'loading' }
@@ -109,11 +110,32 @@ export function nextReviewIndexAfterMarkReviewed({
 
 export function mobileReviewScopeLabel(item: MobileDiffReviewQueueItem): string {
   if (item.scope === 'branch') {
-    return 'Branch'
+    return t('m.ZnNoGOU')
   }
-  return item.scope === 'staged' ? 'Staged' : 'Unstaged'
+  return item.scope === 'staged' ? t('m.YcfLGog') : t('m.EiCMRDA')
 }
 
-export function mobileReviewCountLabel(count: number, singular: string, plural: string): string {
-  return `${count} ${count === 1 ? singular : plural}`
+export function mobileReviewFilterLabel(filter: MobileDiffReviewQueueFilter): string {
+  switch (filter) {
+    case 'all':
+      return t('m.r-agX-k')
+    case 'unreviewed':
+      return t('m.ZGxcUL4')
+    case 'notes':
+      return t('m.08Yk1Go')
+    case 'unstaged':
+      return t('m.EiCMRDA')
+    case 'staged':
+      return t('m.YcfLGog')
+    case 'branch':
+      return t('m.ZnNoGOU')
+  }
+}
+
+export function mobileReviewUnsentNoteCountLabel(count: number): string {
+  return count === 1 ? t('m.VuvuQv0', { value0: count }) : t('m.5Rc0T-w', { value0: count })
+}
+
+export function mobileReviewNoteCountLabel(count: number): string {
+  return count === 1 ? t('m.2KfV5_M', { value0: count }) : t('m.87GezVA', { value0: count })
 }

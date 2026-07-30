@@ -6,6 +6,7 @@ import Svg, { Path } from 'react-native-svg'
 import Constants from 'expo-constants'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { colors, spacing, typography } from '../src/theme/mobile-theme'
+import { t } from '@/i18n/mobile-i18n'
 
 // Why: read version + native build identifier from expo-constants at
 // runtime so the About screen never drifts out of sync with app.json.
@@ -46,13 +47,13 @@ export default function AboutScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>About</Text>
+        <Text style={styles.heading}>{t('m.qBqOdtg')}</Text>
       </View>
 
       <View style={styles.brand}>
         <OrcaLogo size={28} />
-        <Text style={styles.brandName}>Orca</Text>
-        <Text style={styles.brandSub}>Open-source agent IDE for 100x builders</Text>
+        <Text style={styles.brandName}>{t('m.o1zkACA')}</Text>
+        <Text style={styles.brandSub}>{t('m.wRf8z4A')}</Text>
       </View>
 
       <View style={styles.section}>
@@ -61,7 +62,7 @@ export default function AboutScreen() {
           onPress={() => void Linking.openURL('https://onOrca.dev')}
         >
           <Globe size={16} color={colors.textSecondary} />
-          <Text style={styles.rowValue}>onOrca.dev</Text>
+          <Text style={styles.rowValue}>{t('m.1sjQKuE')}</Text>
         </Pressable>
         <View style={styles.separator} />
         <Pressable
@@ -69,7 +70,7 @@ export default function AboutScreen() {
           onPress={() => void Linking.openURL('https://github.com/stablyai/orca')}
         >
           <GithubIcon />
-          <Text style={styles.rowValue}>stablyai/orca</Text>
+          <Text style={styles.rowValue}>{t('m.qfIlnqY')}</Text>
         </Pressable>
         <View style={styles.separator} />
         <Pressable
@@ -77,7 +78,7 @@ export default function AboutScreen() {
           onPress={() => void Linking.openURL('https://x.com/orca_build')}
         >
           <XIcon />
-          <Text style={styles.rowValue}>@orca_build</Text>
+          <Text style={styles.rowValue}>{t('m.pBOdX2k')}</Text>
         </Pressable>
       </View>
 

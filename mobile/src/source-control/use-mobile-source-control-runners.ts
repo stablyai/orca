@@ -13,6 +13,7 @@ import type {
   MobileCommitFailureRecovery,
   RecordMobileCommitFailure
 } from './mobile-commit-failure-recovery'
+import { t } from '@/i18n/mobile-i18n'
 
 type GitStep = { method: string; params?: Record<string, unknown> }
 type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
@@ -113,7 +114,7 @@ export function useMobileSourceControlRunners(params: Params) {
           return false
         }
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Source control action failed')
+        setActionError(err instanceof Error ? err.message : t('m.iO0cooo'))
         return false
       } finally {
         if (busyActionRef.current === actionId) {

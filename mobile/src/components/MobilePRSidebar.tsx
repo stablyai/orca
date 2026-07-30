@@ -26,6 +26,7 @@ import { PRReviewersSection } from './pr-sidebar/PRReviewersSection'
 import { PRChecksSection } from './pr-sidebar/PRChecksSection'
 import { PRCommentsSection } from './pr-sidebar/PRCommentsSection'
 import { PrSidebarCreateEmptyState } from './pr-sidebar/PrSidebarCreateEmptyState'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   state: PrSidebarState
@@ -166,12 +167,12 @@ function PrSidebarContent({
     return (
       <View style={styles.stateArea}>
         <ActivityIndicator color={colors.textSecondary} />
-        <Text style={styles.stateText}>Loading pull request…</Text>
+        <Text style={styles.stateText}>{t('m.-ZCN2f0')}</Text>
       </View>
     )
   }
   if (branch === 'error') {
-    const message = state.kind === 'error' ? state.message : 'Something went wrong.'
+    const message = state.kind === 'error' ? state.message : t('m.nfDKqg4')
     return (
       <View style={styles.stateArea}>
         <Text style={styles.stateText}>{message}</Text>
@@ -179,10 +180,10 @@ function PrSidebarContent({
           style={styles.retryButton}
           onPress={onRetry}
           accessibilityRole="button"
-          accessibilityLabel="Retry loading pull request"
+          accessibilityLabel={t('m.Re9yZkw')}
         >
           <RotateCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
-          <Text style={styles.retryText}>Retry</Text>
+          <Text style={styles.retryText}>{t('m.viizK3M')}</Text>
         </Pressable>
       </View>
     )
@@ -190,11 +191,7 @@ function PrSidebarContent({
   if (branch === 'blocked' || actions.blocked) {
     // Permanent failure (R9): explanatory, no retry-encouragement styling. A
     // mutation-time block (actions.blocked) routes here even from a ready state.
-    const message =
-      actions.blocked ??
-      (state.kind === 'blocked'
-        ? state.message
-        : 'Not permitted — your GitHub account is not connected.')
+    const message = actions.blocked ?? (state.kind === 'blocked' ? state.message : t('m.UL6zDWw'))
     return (
       <View style={styles.stateArea}>
         <Text style={styles.blockedText}>{message}</Text>

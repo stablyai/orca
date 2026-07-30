@@ -28,6 +28,7 @@ import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
 import { useInsideBottomDrawerModalHost } from './bottom-drawer-modal-host'
 import { useResponsiveLayout } from '../layout/responsive-layout'
+import { t } from '@/i18n/mobile-i18n'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
@@ -294,7 +295,7 @@ export function MountedBottomDrawer({
       <Animated.View
         style={styles.handleHitArea}
         accessibilityRole="button"
-        accessibilityLabel="Dismiss drawer"
+        accessibilityLabel={t('m.V9XaZZ8')}
       >
         <View style={styles.handle} />
       </Animated.View>

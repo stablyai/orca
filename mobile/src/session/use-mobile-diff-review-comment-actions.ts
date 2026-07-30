@@ -19,6 +19,7 @@ import {
   nextReviewIndexAfterMarkReviewed,
   reviewDescriptorFromItem
 } from './mobile-diff-review-screen-model'
+import { t } from '@/i18n/mobile-i18n'
 
 type CommentActionsInput = {
   client: RpcClient | null
@@ -64,7 +65,7 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
   const persistMetadata = useCallback(
     async (comments: readonly DiffComment[], reviewState: MobileDiffReviewState) => {
       if (!client || connState !== 'connected') {
-        throw new Error('Waiting for desktop...')
+        throw new Error(t('m.a3rNaLA'))
       }
       const response = await client.sendRequest('worktree.set', {
         worktree: `id:${worktreeId}`,
@@ -72,7 +73,7 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
         mobileDiffReview: reviewState
       })
       if (!response.ok) {
-        throw new Error(response.error?.message || 'Failed to save review state')
+        throw new Error(response.error?.message || t('m.dzoAXdg'))
       }
     },
     [client, connState, worktreeId]
@@ -97,7 +98,7 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
           setScreenState(previous)
         }
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Failed to save review')
+        setActionError(err instanceof Error ? err.message : t('m.kOr-gVg'))
         throw err
       }
     },

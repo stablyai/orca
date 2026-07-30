@@ -10,17 +10,18 @@ import {
   type MobileTerminalLinkOpenMode
 } from '../src/storage/preferences'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
+import { t } from '@/i18n/mobile-i18n'
 
 const LINK_MODE_OPTIONS: PickerOption<MobileTerminalLinkOpenMode>[] = [
   {
     value: 'orca-browser',
-    label: 'Orca browser on desktop',
-    subtitle: 'Open in the streamed browser from your paired desktop.'
+    label: t('m.OcnHGtE'),
+    subtitle: t('m.Z49nZqQ')
   },
   {
     value: 'phone-browser',
-    label: 'Phone browser',
-    subtitle: 'Open in Safari, Chrome, or another browser on this phone.'
+    label: t('m.hIo6XgE'),
+    subtitle: t('m.Wj6QRnE')
   }
 ]
 
@@ -51,14 +52,12 @@ export default function BrowserSettingsScreen(): React.JSX.Element {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Browser</Text>
+        <Text style={styles.heading}>{t('m.GJwMNak')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.groupHeading}>LINKS</Text>
-        <Text style={styles.groupDescription}>
-          Choose where HTTP(S) links tapped in terminal output open.
-        </Text>
+        <Text style={styles.groupHeading}>{t('m.gh7VaTc')}</Text>
+        <Text style={styles.groupDescription}>{t('m.K6VU-6c')}</Text>
         <View style={[styles.section, styles.sectionTopGap]}>
           <Pressable
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -66,7 +65,7 @@ export default function BrowserSettingsScreen(): React.JSX.Element {
           >
             <Globe size={16} color={colors.textSecondary} />
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Open terminal links</Text>
+              <Text style={styles.rowLabel}>{t('m.wdyLCXU')}</Text>
               <Text style={styles.rowSublabel}>{linkModeLabel(linkMode)}</Text>
             </View>
             <ChevronRight size={16} color={colors.textMuted} />
@@ -76,7 +75,7 @@ export default function BrowserSettingsScreen(): React.JSX.Element {
 
       <PickerModal<MobileTerminalLinkOpenMode>
         visible={pickerOpen}
-        title="Open terminal links"
+        title={t('m.wdyLCXU')}
         options={LINK_MODE_OPTIONS}
         selected={linkMode}
         onSelect={selectLinkMode}

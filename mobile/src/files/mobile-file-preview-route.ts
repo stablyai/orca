@@ -1,3 +1,4 @@
+import { t } from '@/i18n/mobile-i18n'
 export type MobileFilePreviewParamValue = string | string[] | undefined
 
 export type MobileFilePreviewRouteParams = {
@@ -59,11 +60,11 @@ export function normalizeMobileFilePreviewRouteParams(
   const absolutePath = singleParam(params.absolutePath)
   const grantId = singleParam(params.grantId)
   if (!hostId || !worktreeId) {
-    return { ok: false, message: 'Unable to load preview' }
+    return { ok: false, message: t('m.2t0lh6U') }
   }
   if (source === 'terminalArtifact') {
     if (!absolutePath || !grantId) {
-      return { ok: false, message: 'Unable to load preview' }
+      return { ok: false, message: t('m.2t0lh6U') }
     }
     return {
       ok: true,
@@ -84,7 +85,7 @@ export function normalizeMobileFilePreviewRouteParams(
     }
   }
   if (!relativePath) {
-    return { ok: false, message: 'Unable to load preview' }
+    return { ok: false, message: t('m.2t0lh6U') }
   }
   return {
     ok: true,

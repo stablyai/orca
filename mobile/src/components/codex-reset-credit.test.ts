@@ -9,6 +9,7 @@ const asyncStorage = vi.hoisted(() => ({
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
 
 import { resetCodexResetAttemptJournalForTests } from '../storage/codex-reset-attempt-journal'
+import { mobileI18n } from '../i18n/mobile-i18n'
 import type { AccountsSnapshot, ProviderRateLimits } from './accounts-snapshot'
 import {
   getActiveCodexAccountIdForRateLimitTarget,
@@ -95,6 +96,20 @@ describe('getCodexResetCreditSummary', () => {
       availabilityLabel: '2 resets available',
       expiryLabel: 'Next expires in 1h 30m'
     })
+  })
+
+  it('formats complete translated availability and expiry messages', async () => {
+    const initialLocale = mobileI18n.language
+    await mobileI18n.changeLanguage('es')
+    try {
+      expect(getCodexResetCreditSummary(makeLimits(2, now + 90 * 60_000), now)).toEqual({
+        availableCount: 2,
+        availabilityLabel: '2 restablecimientos disponibles',
+        expiryLabel: 'El próximo caduca en 1h 30m'
+      })
+    } finally {
+      await mobileI18n.changeLanguage(initialLocale)
+    }
   })
 })
 

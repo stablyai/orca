@@ -8,6 +8,7 @@ import {
   parseNormalizedTerminalQuickCommands,
   type TerminalQuickCommandMutation
 } from '../terminal/quick-commands'
+import { t } from '@/i18n/mobile-i18n'
 
 type Args = {
   client: RpcClient | null
@@ -130,12 +131,12 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
           return
         }
         if (!response.ok) {
-          setError((response as RpcFailure).error.message || 'Failed to load quick commands')
+          setError((response as RpcFailure).error.message || t('m.e1BO4eM'))
           return
         }
         const next = readQuickCommands((response as RpcSuccess).result)
         if (!next) {
-          setError('Failed to load quick commands')
+          setError(t('m.e1BO4eM'))
           return
         }
         mutationContext.confirmed = next
@@ -148,7 +149,7 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
           operationId === operationIdRef.current &&
           mutationContextRef.current === mutationContext
         ) {
-          setError(err instanceof Error ? err.message : 'Failed to load quick commands')
+          setError(err instanceof Error ? err.message : t('m.e1BO4eM'))
         }
       } finally {
         if (
@@ -193,21 +194,19 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
             mutation: commandMutation
           })
           if (!response.ok) {
-            throw new Error(
-              (response as RpcFailure).error.message || 'Failed to save quick command'
-            )
+            throw new Error((response as RpcFailure).error.message || t('m.qYK5Ouo'))
           }
           const confirmed = readQuickCommands((response as RpcSuccess).result)
           if (!confirmed) {
             // Why: treating an invalid success payload as [] would let the next
             // full-list mutation erase commands that still exist on the host.
-            throw new Error('Failed to save quick command')
+            throw new Error(t('m.qYK5Ouo'))
           }
           mutationContext.confirmed = confirmed
           succeeded = true
           return true
         } catch (err) {
-          failureMessage = err instanceof Error ? err.message : 'Failed to save quick command'
+          failureMessage = err instanceof Error ? err.message : t('m.qYK5Ouo')
           return false
         } finally {
           mutationContext.pending = mutationContext.pending.filter(

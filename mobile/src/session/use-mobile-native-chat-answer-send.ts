@@ -18,6 +18,7 @@ import {
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
 } from '../../../src/shared/native-chat-agent-support'
+import { t } from '@/i18n/mobile-i18n'
 
 /** Sends an ask-user answer to the active chat pane. Claude and Codex selectors
  *  use their agent-specific keystrokes; other agents get pasted label text.
@@ -97,7 +98,7 @@ export function useMobileNativeChatAnswerSend(args: {
     async (prompt: AskPrompt, selections: AskAnswerSelection[]): Promise<boolean> => {
       const handle = handleRef.current
       if (!client || !handle || !enabled) {
-        onSendError('Answer not sent (disconnected)')
+        onSendError(t('m.O2gcQk0'))
         return false
       }
       if (!hasAskAnswer(prompt, selections)) {
@@ -162,11 +163,7 @@ export function useMobileNativeChatAnswerSend(args: {
           // mid-sequence left the remote selector half-stepped, and telling the
           // user nothing was sent invites a retry on top of the advanced state.
           onSendError(
-            sawAcceptedGroup
-              ? 'Answer partly sent — check chat before retrying'
-              : sawUnknownOutcome
-                ? 'Answer unconfirmed — check chat before retrying'
-                : 'Answer not sent'
+            sawAcceptedGroup ? t('m.UnHHxag') : sawUnknownOutcome ? t('m.ukuLb_A') : t('m.eOcfBcE')
           )
         }
         return false
@@ -191,7 +188,7 @@ export function useMobileNativeChatAnswerSend(args: {
           }))
         ) {
           if (generationRef.current === generation) {
-            onSendError('Answer not sent')
+            onSendError(t('m.eOcfBcE'))
           }
           return false
         }

@@ -4,6 +4,7 @@ import {
 } from './mobile-dictation-session-state'
 import type { MobileDictationKeepAwakeOwner } from './mobile-dictation-keep-awake'
 import type { RpcClient } from '../transport/rpc-client'
+import { t } from '@/i18n/mobile-i18n'
 
 type StartMobileDictationDesktopSessionOptions = {
   client: RpcClient
@@ -115,7 +116,7 @@ export async function startMobileDictationDesktopSession(
     // Commit in the same continuation as the final stale check; returning first
     // would let a queued cancel resurrect microphone recording after cleanup.
     if (!options.commitRecordingStart()) {
-      throw new Error('Failed to start microphone recording')
+      throw new Error(t('m.LuqBIhs'))
     }
   } catch (err) {
     const wasCurrent = isCurrentStart(options)

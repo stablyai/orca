@@ -3,6 +3,7 @@ import { SquareChevronRight } from 'lucide-react-native'
 
 import { colors } from '../../../../src/theme/mobile-theme'
 import { styles } from './mobile-session-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   disabled: boolean
@@ -21,7 +22,7 @@ export function QuickCommandsTabButton({ disabled, onPress }: Props) {
         ]}
         disabled={disabled}
         onPress={onPress}
-        accessibilityLabel="Quick commands"
+        accessibilityLabel={t('m.Y1upIE8')}
       >
         <SquareChevronRight size={16} color={colors.textSecondary} strokeWidth={2.2} />
       </Pressable>

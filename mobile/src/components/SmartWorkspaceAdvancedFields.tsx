@@ -1,6 +1,7 @@
 import { Platform, StyleSheet, Switch, Text, TextInput, View } from 'react-native'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   composer: MobileComposerSource
@@ -17,12 +18,12 @@ export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Pr
     <>
       {selection ? (
         <View style={styles.field}>
-          <Text style={styles.label}>Name</Text>
+          <Text style={styles.label}>{t('m.jueQw6Q')}</Text>
           <TextInput
             style={styles.input}
             value={composer.name}
             onChangeText={composer.setName}
-            placeholder="Workspace name"
+            placeholder={t('m.MJ_zXUU')}
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
@@ -32,12 +33,12 @@ export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Pr
 
       {showBranchOverride ? (
         <View style={styles.field}>
-          <Text style={styles.label}>Branch name</Text>
+          <Text style={styles.label}>{t('m.CATZTEM')}</Text>
           <TextInput
             style={styles.input}
             value={composer.branchNameOverride ?? ''}
             onChangeText={composer.handleBranchNameOverrideChange}
-            placeholder="Derived from name"
+            placeholder={t('m.Lkm1Ms4')}
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
@@ -49,7 +50,7 @@ export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Pr
         <View style={styles.field}>
           <View style={styles.reuseRow}>
             <Text style={styles.reuseLabel} numberOfLines={1}>
-              Reuse branch “{composer.reuseEligibleBranch}”
+              {t('m.Yz166iM', { value0: composer.reuseEligibleBranch })}
             </Text>
             <Switch
               value={composer.reuseSelectedBranch}

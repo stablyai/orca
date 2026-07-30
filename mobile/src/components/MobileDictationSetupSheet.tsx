@@ -14,6 +14,7 @@ import {
   type MobileSpeechModel,
   type MobileSpeechSetup
 } from '../dictation/mobile-dictation-setup'
+import { t } from '@/i18n/mobile-i18n'
 
 const POLL_INTERVAL_MS = 1500
 
@@ -48,7 +49,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
       setError(null)
       return next.models.some(isModelInFlight)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load')
+      setError(err instanceof Error ? err.message : t('m.lUsptPY'))
       return undefined
     }
   }, [client])
@@ -79,7 +80,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
         await refreshSetup()
       } catch (err) {
         triggerError()
-        setError(err instanceof Error ? err.message : 'Download failed')
+        setError(err instanceof Error ? err.message : t('m.0rsS1Dw'))
       } finally {
         setBusy(null)
       }
@@ -101,7 +102,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
         onReady?.()
       } catch (err) {
         triggerError()
-        setError(err instanceof Error ? err.message : 'Could not select model')
+        setError(err instanceof Error ? err.message : t('m.jX7Yn3E'))
       } finally {
         setBusy(null)
       }
@@ -118,7 +119,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
       try {
         setSetup(await setDictationConfig(client, { enabled }))
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not update')
+        setError(err instanceof Error ? err.message : t('m.kocNlo8'))
       }
     },
     [client]
@@ -129,10 +130,8 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
       {/* Why: BottomDrawer already scrolls its children in a keyboard-aware container;
           a nested capped ScrollView cut off the lower controls. */}
       <View>
-        <Text style={styles.heading}>Set up voice dictation</Text>
-        <Text style={styles.subtitle}>
-          Download a model and enable dictation on your desktop — all from here.
-        </Text>
+        <Text style={styles.heading}>{t('m.13hFHO4')}</Text>
+        <Text style={styles.subtitle}>{t('m.D5YFHLU')}</Text>
 
         {setup === null ? (
           <View style={styles.loading}>
@@ -141,7 +140,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
         ) : (
           <>
             <View style={styles.enableRow}>
-              <Text style={styles.enableLabel}>Dictation enabled</Text>
+              <Text style={styles.enableLabel}>{t('m.6WwF0_8')}</Text>
               <Switch value={setup.enabled} onValueChange={(v) => void handleToggleEnabled(v)} />
             </View>
 
@@ -155,27 +154,27 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
                     <View style={styles.modelTitleRow}>
                       <Text style={styles.modelLabel}>{model.label}</Text>
                       {model.recommended ? (
-                        <Text style={styles.recommended}>Recommended</Text>
+                        <Text style={styles.recommended}>{t('m.TJd8_nE')}</Text>
                       ) : null}
                     </View>
                     <Text style={styles.modelMeta}>
-                      {model.provider === 'openai' ? 'OpenAI API' : formatSize(model.sizeBytes)}
+                      {model.provider === 'openai' ? t('m.bh_QQps') : formatSize(model.sizeBytes)}
                       {inFlight && model.progress != null
                         ? ` · ${Math.round(model.progress * 100)}%`
                         : model.status === 'extracting'
-                          ? ' · extracting…'
+                          ? t('m.PG_Pfbo')
                           : ''}
                     </Text>
                   </View>
                   {model.provider === 'openai' ? (
                     <Text style={styles.modelStateText}>
-                      {model.status === 'ready' ? 'API key set' : 'Set up on desktop'}
+                      {model.status === 'ready' ? t('m.D90AZhs') : t('m.qf7IWvA')}
                     </Text>
                   ) : model.status === 'ready' ? (
                     isSelected ? (
                       <View style={styles.selectedTag}>
                         <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
-                        <Text style={styles.selectedText}>In use</Text>
+                        <Text style={styles.selectedText}>{t('m.ri8swSc')}</Text>
                       </View>
                     ) : (
                       <Pressable
@@ -186,7 +185,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
                         disabled={rowBusy}
                         onPress={() => void handleUseModel(model)}
                       >
-                        <Text style={styles.actionText}>Use</Text>
+                        <Text style={styles.actionText}>{t('m.N18umz0')}</Text>
                       </Pressable>
                     )
                   ) : inFlight ? (
@@ -205,7 +204,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
                       ) : (
                         <>
                           <Download size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                          <Text style={styles.actionText}>Download</Text>
+                          <Text style={styles.actionText}>{t('m.oJ3sUM4')}</Text>
                         </>
                       )}
                     </Pressable>

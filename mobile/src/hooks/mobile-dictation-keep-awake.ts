@@ -1,4 +1,5 @@
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
+import { t } from '@/i18n/mobile-i18n'
 
 const MOBILE_DICTATION_KEEP_AWAKE_TAG_PREFIX = 'orca-mobile-dictation'
 
@@ -34,7 +35,7 @@ function isNativeCallTimeout(err: unknown): boolean {
 function withNativeCallTimeout(nativeCall: Promise<void>): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => {
-      const timeoutError = new Error('Keep-awake native call timed out')
+      const timeoutError = new Error(t('m.oQrz0NI'))
       timeoutError.name = KEEP_AWAKE_TIMEOUT_ERROR_NAME
       reject(timeoutError)
     }, MOBILE_DICTATION_KEEP_AWAKE_NATIVE_TIMEOUT_MS)

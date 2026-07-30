@@ -5,6 +5,7 @@ import type {
   MobileCommitFailureRecovery,
   RecordMobileCommitFailure
 } from './mobile-commit-failure-recovery'
+import { t } from '@/i18n/mobile-i18n'
 
 type GitStep = { method: string; params?: Record<string, unknown> }
 type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
@@ -61,7 +62,7 @@ export function useMobileSourceControlCommitRunners(params: Params) {
           await sendCommitRequest(message)
         } catch (err) {
           recordCommitFailure({
-            error: err instanceof Error ? err.message : 'Commit failed',
+            error: err instanceof Error ? err.message : t('m.cBrXr-8'),
             commitMessage: message,
             stagedEntries
           })
@@ -102,7 +103,7 @@ export function useMobileSourceControlCommitRunners(params: Params) {
           return false
         }
         triggerError()
-        const errorMessage = err instanceof Error ? err.message : 'Source control action failed'
+        const errorMessage = err instanceof Error ? err.message : t('m.Pej4iSQ')
         if (!didCommit) {
           recordCommitFailure({ error: errorMessage, commitMessage: message, stagedEntries })
         }

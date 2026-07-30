@@ -31,6 +31,7 @@ import {
   formatBranchLabel,
   type MobileBranchEntryView
 } from './mobile-source-control-screen-state'
+import { t } from '@/i18n/mobile-i18n'
 
 type MobileGitLocalBranches = RuntimeGitLocalBranches
 
@@ -165,9 +166,9 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const upstreamKnown = upstream !== undefined
   const syncLabel =
     upstream && upstream.hasUpstream
-      ? `${upstream.ahead} ahead, ${upstream.behind} behind`
+      ? t('m.1YRKLD4', { value0: upstream.ahead, value1: upstream.behind })
       : upstream && !upstream.hasUpstream
-        ? 'No upstream'
+        ? t('m.GXYBPqk')
         : null
 
   const { sendGitRequest, sendCommitRequest, runGitSyncSteps } = useMobileGitRequests({

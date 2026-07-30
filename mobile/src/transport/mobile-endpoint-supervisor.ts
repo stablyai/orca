@@ -192,7 +192,8 @@ export class MobileEndpointSupervisor {
   }): Promise<{ ok: true } | { ok: false; error: Error }> {
     // Why: director resolution and grace fallback can finish after background/stop.
     if (this.stopped || !this.foreground || !this.host.relay || !this.bundle) {
-      return { ok: false, error: new Error('relay state missing') }
+      const cause = new Error('relay state missing')
+      return { ok: false, error: cause }
     }
     const session = this.dependencies.openRelay(
       this.host.relay,

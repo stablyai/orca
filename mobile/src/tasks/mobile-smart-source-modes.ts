@@ -1,4 +1,5 @@
 import type { MrStateFilter, SmartNameMode } from './mobile-composer-source-types'
+import { t } from '@/i18n/mobile-i18n'
 
 // Icon each tab renders: lucide glyphs for the neutral modes, the inline brand
 // SVGs (TaskProviderLogo) for the provider modes since lucide dropped its brand
@@ -16,12 +17,12 @@ export type SmartModeOption = {
 // Order + labels + icons mirror desktop getSmartWorkspaceNameModes():
 // Smart · GitHub · Linear · GitLab · Branch · Name.
 export const SMART_MODE_OPTIONS: readonly SmartModeOption[] = [
-  { id: 'smart', label: 'Smart', icon: { type: 'lucide', name: 'sparkles' } },
-  { id: 'github', label: 'GitHub', icon: { type: 'provider', provider: 'github' } },
-  { id: 'linear', label: 'Linear', icon: { type: 'provider', provider: 'linear' } },
-  { id: 'gitlab', label: 'GitLab', icon: { type: 'provider', provider: 'gitlab' } },
-  { id: 'branches', label: 'Branch', icon: { type: 'lucide', name: 'git-branch' } },
-  { id: 'text', label: 'Name', icon: { type: 'lucide', name: 'case-sensitive' } }
+  { id: 'smart', label: t('m.0GQcyjg'), icon: { type: 'lucide', name: 'sparkles' } },
+  { id: 'github', label: t('m.fLijFJI'), icon: { type: 'provider', provider: 'github' } },
+  { id: 'linear', label: t('m.j6H-ZB8'), icon: { type: 'provider', provider: 'linear' } },
+  { id: 'gitlab', label: t('m.JEQaLyM'), icon: { type: 'provider', provider: 'gitlab' } },
+  { id: 'branches', label: t('m.efmLHxE'), icon: { type: 'lucide', name: 'git-branch' } },
+  { id: 'text', label: t('m._NhxpRw'), icon: { type: 'lucide', name: 'case-sensitive' } }
 ]
 
 export type SmartModeAvailabilityInput = {
@@ -84,10 +85,10 @@ export type MrStateFilterOption = { id: MrStateFilter; label: string }
 
 // Desktop getMrStateFilters(): Open · Merged · Closed · All, default 'opened'.
 export const MR_STATE_FILTER_OPTIONS: readonly MrStateFilterOption[] = [
-  { id: 'opened', label: 'Open' },
-  { id: 'merged', label: 'Merged' },
-  { id: 'closed', label: 'Closed' },
-  { id: 'all', label: 'All' }
+  { id: 'opened', label: t('m.dGRdl38') },
+  { id: 'merged', label: t('m.sKFSmrM') },
+  { id: 'closed', label: t('m.J54idHw') },
+  { id: 'all', label: t('m.IwMISoQ') }
 ]
 
 export const DEFAULT_MR_STATE_FILTER: MrStateFilter = 'opened'

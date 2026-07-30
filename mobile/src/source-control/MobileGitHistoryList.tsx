@@ -12,6 +12,7 @@ import {
 } from './mobile-git-history'
 import { resolveMobileHistoryScreenView } from './mobile-history-screen-state'
 import type { GitBranchChangeEntry } from '../../../src/shared/types'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   client: RpcClient | null
@@ -73,7 +74,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
         }
       } catch (err) {
         if (active) {
-          setError(err instanceof Error ? err.message : 'Failed to load history')
+          setError(err instanceof Error ? err.message : t('m.c_4jbTI'))
         }
       }
     })()
@@ -164,7 +165,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
               {files === 'loading' || files === undefined ? (
                 <ActivityIndicator size="small" color={colors.textSecondary} />
               ) : files.length === 0 ? (
-                <Text style={styles.empty}>No file changes</Text>
+                <Text style={styles.empty}>{t('m.y0bB4-s')}</Text>
               ) : (
                 files.map((file) => (
                   <View key={file.path} style={styles.fileRow}>
@@ -196,10 +197,10 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
     return (
       <View style={styles.state}>
         <Text style={styles.stateText}>
-          {view.kind === 'waiting' ? 'Waiting for desktop...' : view.message}
+          {view.kind === 'waiting' ? t('m.kylGvPU') : view.message}
         </Text>
-        <Pressable style={styles.retryButton} onPress={retry} accessibilityLabel="Retry">
-          <Text style={styles.retryText}>Retry</Text>
+        <Pressable style={styles.retryButton} onPress={retry} accessibilityLabel={t('m.Qb3CogY')}>
+          <Text style={styles.retryText}>{t('m.Qb3CogY')}</Text>
         </Pressable>
       </View>
     )
@@ -214,7 +215,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   if (view.kind === 'empty') {
     return (
       <View style={styles.state}>
-        <Text style={styles.stateText}>No commits.</Text>
+        <Text style={styles.stateText}>{t('m.fcDHZ1U')}</Text>
       </View>
     )
   }

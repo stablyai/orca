@@ -30,6 +30,7 @@ import type {
 } from './mobile-diff-review-screen-model'
 import { useMobileDiffReviewInteractions } from './use-mobile-diff-review-interactions'
 import { useMobilePrSidebarController } from './use-mobile-pr-sidebar-controller'
+import { t } from '@/i18n/mobile-i18n'
 
 type ControllerInput = {
   client: RpcClient | null
@@ -79,11 +80,11 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     loadGenerationRef.current = generation
     const isCurrent = () => generation === loadGenerationRef.current
     if (!worktreeId) {
-      setScreenState({ kind: 'error', message: 'Missing worktree' })
+      setScreenState({ kind: 'error', message: t('m.HkX9h2s') })
       return
     }
     if (!client || connState !== 'connected') {
-      setScreenState({ kind: 'error', message: 'Waiting for desktop...' })
+      setScreenState({ kind: 'error', message: t('m.AtE6oQA') })
       return
     }
     setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
@@ -98,7 +99,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
       if (isCurrent()) {
         setScreenState({
           kind: 'error',
-          message: err instanceof Error ? err.message : 'Unable to load review'
+          message: err instanceof Error ? err.message : t('m.1ymIBpg')
         })
       }
     }
@@ -167,7 +168,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
       return
     }
     if (!client || connState !== 'connected') {
-      setDiffState({ kind: 'error', itemKey: currentItem.key, message: 'Waiting for desktop...' })
+      setDiffState({ kind: 'error', itemKey: currentItem.key, message: t('m.AtE6oQA') })
       return
     }
     let stale = false
@@ -188,7 +189,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
           setDiffState({
             kind: 'error',
             itemKey: currentItem.key,
-            message: err instanceof Error ? err.message : 'Unable to load diff'
+            message: err instanceof Error ? err.message : t('m.MOOmRCc')
           })
         }
       })

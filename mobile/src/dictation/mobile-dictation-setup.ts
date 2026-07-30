@@ -2,6 +2,7 @@ import type { RuntimeSpeechSetupState } from '../../../src/shared/runtime-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { RpcSuccess } from '../transport/types'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobileSpeechSetup = RuntimeSpeechSetupState
 export type MobileSpeechModel = RuntimeSpeechSetupState['models'][number]
@@ -10,8 +11,7 @@ export type MobileSpeechModel = RuntimeSpeechSetupState['models'][number]
 // configured. Mapping them lets the mic entry point open the setup sheet
 // instead of dead-ending on a toast.
 const SETUP_REQUIRED_CODES = new Set(['voice_dictation_disabled', 'voice_model_not_selected'])
-const LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE =
-  'Update the paired desktop Orca app to use mobile voice settings.'
+const LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE = t('m.XOHYcMw')
 
 // Why: mobile can pair with older desktop runtimes that predate speech.models.list;
 // show upgrade guidance instead of leaking the raw denial or not-found error.
@@ -37,7 +37,7 @@ export async function fetchDictationSetup(
     if (isLegacyDesktopSpeechSetupError(response.error)) {
       throw new Error(LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE)
     }
-    throw new Error(response.error?.message || 'Failed to load dictation models')
+    throw new Error(response.error?.message || t('m.jcVunZ4'))
   }
   return (response as RpcSuccess).result as MobileSpeechSetup
 }
@@ -61,7 +61,7 @@ export async function downloadDictationModel(
 ): Promise<void> {
   const response = await client.sendRequest('speech.models.download', { modelId })
   if (!response.ok) {
-    throw new Error(response.error?.message || 'Failed to start download')
+    throw new Error(response.error?.message || t('m.hkwxfd0'))
   }
 }
 
@@ -71,7 +71,7 @@ export async function deleteDictationModel(
 ): Promise<MobileSpeechSetup> {
   const response = await client.sendRequest('speech.models.delete', { modelId })
   if (!response.ok) {
-    throw new Error(response.error?.message || 'Failed to delete model')
+    throw new Error(response.error?.message || t('m.9VJGb2s'))
   }
   return (response as RpcSuccess).result as MobileSpeechSetup
 }
@@ -82,7 +82,7 @@ export async function setDictationConfig(
 ): Promise<MobileSpeechSetup> {
   const response = await client.sendRequest('speech.dictation.setup', params)
   if (!response.ok) {
-    throw new Error(response.error?.message || 'Failed to update dictation settings')
+    throw new Error(response.error?.message || t('m.CdTon5s'))
   }
   return (response as RpcSuccess).result as MobileSpeechSetup
 }

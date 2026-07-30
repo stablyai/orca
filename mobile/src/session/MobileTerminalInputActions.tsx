@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, type StyleProp, type ViewStyle } from 'react-native'
 import { ImagePlus, Mic } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { t } from '@/i18n/mobile-i18n'
 
 type DictationState = {
   readonly isStarting: boolean
@@ -52,8 +53,8 @@ export function MobileTerminalInputActions({
         onPress={onAttachImage}
         onLongPress={onAttachFile}
         delayLongPress={350}
-        accessibilityLabel={isAttaching ? 'Sending image' : 'Attach a photo'}
-        accessibilityHint="Long press to attach a file instead"
+        accessibilityLabel={isAttaching ? t('m.Vl7Dj48') : t('m.THy0254')}
+        accessibilityHint={t('m.diKZlw8')}
       >
         {isAttaching ? (
           <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -78,12 +79,12 @@ export function MobileTerminalInputActions({
         }
         accessibilityLabel={
           dictation.isRecording
-            ? 'Stop voice dictation'
+            ? t('m.lmt1VYs')
             : dictation.isProcessing
-              ? 'Cancel voice dictation'
+              ? t('m.467WHFs')
               : dictation.isStarting
-                ? 'Starting voice dictation'
-                : 'Start voice dictation'
+                ? t('m.4Bofttg')
+                : t('m.a4FTXPM')
         }
       >
         {dictation.isProcessing ? (

@@ -7,6 +7,7 @@ import type { MobileConnectionPath } from '../transport/stable-logical-rpc-clien
 import type { ConnectionState, HostProfile } from '../transport/types'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { StatusDot } from './StatusDot'
+import { t } from '@/i18n/mobile-i18n'
 
 export function MobileHostCard(props: {
   host: HostProfile
@@ -20,7 +21,16 @@ export function MobileHostCard(props: {
   const connected = props.state === 'connected'
   const isError = ['warning', 'unreachable', 'auth-failed'].includes(props.verdict.kind)
   const worktreeSummary = props.worktreeCounts
-    ? `${props.worktreeCounts.total} worktree${props.worktreeCounts.total === 1 ? '' : 's'}${props.worktreeCounts.active > 0 ? ` · ${props.worktreeCounts.active} active` : ''}`
+    ? [
+        t(props.worktreeCounts.total === 1 ? 'm.Id8zorY' : 'm.t4PccRo', {
+          value0: props.worktreeCounts.total
+        }),
+        props.worktreeCounts.active > 0
+          ? t('m.AYqemqw', { value0: props.worktreeCounts.active })
+          : null
+      ]
+        .filter(Boolean)
+        .join(' · ')
     : null
   return (
     <Pressable
@@ -53,7 +63,7 @@ export function MobileHostCard(props: {
         ) : null}
         {props.verdict.kind === 'unreachable' && !props.host.relay ? (
           <Text style={styles.discoveryHint} numberOfLines={2}>
-            Update desktop Orca and sign in to connect from anywhere
+            {t('m.4bPe4Ao')}
           </Text>
         ) : null}
       </View>

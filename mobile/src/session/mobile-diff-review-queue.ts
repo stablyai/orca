@@ -12,6 +12,7 @@ import {
   didMobileDiffReviewFileChangeSinceReview,
   isMobileDiffReviewFileReviewed
 } from './mobile-diff-review-state'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobileDiffReviewQueueFilter =
   | 'all'
@@ -179,7 +180,7 @@ function statusEntryToQueueItem(
     oldPath: entry.oldPath,
     status: entry.status,
     title: entry.path,
-    subtitle: scope === 'staged' ? 'Staged' : 'Unstaged',
+    subtitle: scope === 'staged' ? t('m.senOKG4') : t('m.FJnzL9Y'),
     added: entry.added,
     removed: entry.removed,
     canStage: isMobileGitStageableEntry(entry),
@@ -214,7 +215,7 @@ function branchEntryToQueueItem(
     oldPath: entry.oldPath,
     status: entry.status,
     title: entry.path,
-    subtitle: 'Committed on branch',
+    subtitle: t('m.hKX4q6A'),
     added: entry.added,
     removed: entry.removed,
     canStage: false,

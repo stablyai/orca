@@ -2,6 +2,7 @@ import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import { isMarkdownPath } from './file-tree'
 import { isTerminalArtifactGrantError } from './terminal-artifact-grant-error'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobileFilePreviewTextKind = 'html' | 'markdown' | 'text'
 
@@ -57,13 +58,13 @@ export function normalizeMobileFilePreviewResponse(
 export function previewError(message: string): MobileFilePreviewResult {
   const normalized = message.toLowerCase()
   if (normalized === 'binary_file' || normalized.includes('binary_file')) {
-    return { status: 'error', message: 'Binary preview unavailable', reconnect: false }
+    return { status: 'error', message: t('m.UfU4CAU'), reconnect: false }
   }
   if (normalized === 'file_too_large' || normalized.includes('file_too_large')) {
-    return { status: 'error', message: 'File too large for mobile preview', reconnect: false }
+    return { status: 'error', message: t('m.UFAFIP0'), reconnect: false }
   }
   if (isTerminalArtifactGrantError(normalized)) {
-    return { status: 'error', message: 'Reload preview before saving', reconnect: false }
+    return { status: 'error', message: t('m.ktGDvZE'), reconnect: false }
   }
   if (
     normalized.includes('remote connection dropped') ||
@@ -71,7 +72,7 @@ export function previewError(message: string): MobileFilePreviewResult {
     normalized.includes('disconnected') ||
     normalized.includes('reconnect the ssh target')
   ) {
-    return { status: 'error', message: 'Unable to reach the desktop filesystem', reconnect: true }
+    return { status: 'error', message: t('m.X-whfMo'), reconnect: true }
   }
   if (
     normalized.includes('enoent') ||
@@ -79,9 +80,9 @@ export function previewError(message: string): MobileFilePreviewResult {
     normalized.includes('not found') ||
     normalized.includes('does not exist')
   ) {
-    return { status: 'error', message: 'File not found', reconnect: false }
+    return { status: 'error', message: t('m.Jj_IDwY'), reconnect: false }
   }
-  return { status: 'error', message: 'Unable to load preview', reconnect: false }
+  return { status: 'error', message: t('m.nbgr4H0'), reconnect: false }
 }
 
 export function formatPreviewByteLength(byteLength: number): string {
@@ -129,7 +130,7 @@ function normalizeTextPreviewResult(
   result: unknown
 ): MobileFilePreviewResult {
   if (!result || typeof result !== 'object') {
-    return previewError('Unable to load preview')
+    return previewError(t('m.nbgr4H0'))
   }
   const preview = result as {
     content?: unknown
@@ -141,7 +142,7 @@ function normalizeTextPreviewResult(
     return previewError('binary_file')
   }
   if (typeof preview.content !== 'string') {
-    return previewError('Unable to load preview')
+    return previewError(t('m.nbgr4H0'))
   }
   const kind = textKindForPreviewPath(relativePath)
   if (preview.content.length === 0) {

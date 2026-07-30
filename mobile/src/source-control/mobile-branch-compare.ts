@@ -3,6 +3,7 @@ import type {
   GitBranchCompareResult,
   GitBranchCompareSummary
 } from '../../../src/shared/types'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobileGitBranchChangeEntry = GitBranchChangeEntry
 export type MobileGitBranchCompareSummary = GitBranchCompareSummary
@@ -11,7 +12,7 @@ export type MobileGitBranchCompareResult = GitBranchCompareResult
 export type MobileBranchCompareSection<
   TEntry extends MobileGitBranchChangeEntry = MobileGitBranchChangeEntry
 > = {
-  title: 'Committed on Branch'
+  title: string
   data: TEntry[]
 }
 
@@ -29,7 +30,7 @@ export function buildMobileBranchCompareSection<TEntry extends MobileGitBranchCh
     return null
   }
   return {
-    title: 'Committed on Branch',
+    title: t('m.jrzi7yY'),
     data: [...entries].sort(compareBranchEntries)
   }
 }
@@ -40,11 +41,19 @@ export function formatMobileBranchCompareSummary(
   if (summary.status !== 'ready') {
     return summary.errorMessage ?? null
   }
-  const parts = [`${summary.changedFiles} ${summary.changedFiles === 1 ? 'file' : 'files'}`]
+  const parts = [
+    t(summary.changedFiles === 1 ? 'm.SM7vigo' : 'm.Dwq_r1o', {
+      value0: summary.changedFiles
+    })
+  ]
   if (summary.commitsAhead !== undefined) {
-    parts.push(`${summary.commitsAhead} ${summary.commitsAhead === 1 ? 'commit' : 'commits'}`)
+    parts.push(
+      t(summary.commitsAhead === 1 ? 'm.mLbULQw' : 'm.TWTFkY0', {
+        value0: summary.commitsAhead
+      })
+    )
   }
-  parts.push(`vs ${summary.baseRef}`)
+  parts.push(t('m.t2Awy1s', { value0: summary.baseRef }))
   return parts.join(' - ')
 }
 

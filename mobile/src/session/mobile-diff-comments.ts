@@ -1,4 +1,5 @@
 import type { DiffComment, DiffReviewScope } from '../../../src/shared/types'
+import { t } from '@/i18n/mobile-i18n'
 
 export type CreateMobileDiffCommentInput = {
   worktreeId: string
@@ -35,10 +36,10 @@ export function formatDiffComment(c: DiffComment): string {
     .replace(/\n/g, '\\n')
   const locationLabel =
     c.lineNumber === 0
-      ? 'Scope: file'
+      ? t('m.hLNcWyo')
       : c.startLine !== undefined && c.startLine !== c.lineNumber
-        ? `Lines: ${c.startLine}-${c.lineNumber}`
-        : `Line: ${c.lineNumber}`
+        ? t('m.ZueS87g', { value0: c.startLine, value1: c.lineNumber })
+        : t('m.0dIGtV8', { value0: c.lineNumber })
   if (!isMarkdownComment(c)) {
     return [`File: ${c.filePath}`, locationLabel, `User comment: "${escaped}"`].join('\n')
   }

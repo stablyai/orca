@@ -1,13 +1,14 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { t } from '@/i18n/mobile-i18n'
 
 export type BrowserPointerModifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
 
 const BROWSER_POINTER_MODIFIERS: { id: BrowserPointerModifier; label: string }[] = [
-  { id: 'cmd', label: 'Cmd' },
-  { id: 'ctrl', label: 'Ctrl' },
-  { id: 'alt', label: 'Alt' },
-  { id: 'shift', label: 'Shift' }
+  { id: 'cmd', label: t('m.IW8xp4k') },
+  { id: 'ctrl', label: t('m.EqW8StQ') },
+  { id: 'alt', label: t('m.fP87QIY') },
+  { id: 'shift', label: t('m.GTbLYFM') }
 ]
 
 type Props = {
@@ -38,7 +39,7 @@ export function MobileBrowserPointerModifiers({
             onPress={() => onToggle(modifier.id)}
             accessibilityRole="button"
             accessibilityState={{ selected, disabled }}
-            accessibilityLabel={`${modifier.label} click modifier`}
+            accessibilityLabel={t('m.gZUBadw', { value0: modifier.label })}
           >
             <Text
               style={[

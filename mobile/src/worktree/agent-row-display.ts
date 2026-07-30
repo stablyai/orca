@@ -1,4 +1,5 @@
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import { t } from '@/i18n/mobile-i18n'
 
 // Mirrors the desktop AGENT_STATUS_STALE_AFTER_MS (src/shared/agent-status-types.ts:
 // 30 min). Defined locally rather than imported because a runtime-value import
@@ -36,17 +37,17 @@ export function agentDotState(
 export function agentStateLabel(state: AgentDotState): string {
   switch (state) {
     case 'working':
-      return 'Working'
+      return t('m.xLtCpIk')
     case 'blocked':
-      return 'Blocked'
+      return t('m.CeMk5QY')
     case 'waiting':
-      return 'Waiting for input'
+      return t('m.clLXJRk')
     case 'interrupted':
-      return 'Interrupted'
+      return t('m.eSniHCo')
     case 'done':
-      return 'Done'
+      return t('m.cfFE9JM')
     case 'idle':
-      return 'Idle'
+      return t('m.cuSNE9k')
   }
 }
 
@@ -90,7 +91,7 @@ export function agentIdentityLabel(agentType: string | null): string {
 export function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
   if (delta < 60_000) {
-    return 'just now'
+    return t('m.3OzvpCE')
   }
   const minutes = Math.floor(delta / 60_000)
   if (minutes < 60) {

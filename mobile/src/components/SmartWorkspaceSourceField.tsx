@@ -11,6 +11,7 @@ import type { SmartNameSelection } from '../tasks/mobile-composer-source-types'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { TaskProviderLogo } from './TaskProviderLogo'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   composer: MobileComposerSource
@@ -61,7 +62,7 @@ export function SmartWorkspaceSourceField({
   return (
     <View style={styles.field}>
       <Text style={styles.label}>
-        {label} <Text style={styles.labelHint}>[Optional]</Text>
+        {label} <Text style={styles.labelHint}>{t('m.eMl2uLM')}</Text>
       </Text>
       {selection ? (
         <View style={styles.pill}>
@@ -91,7 +92,7 @@ export function SmartWorkspaceSourceField({
           onChangeText={composer.setName}
           onFocus={openDrawer}
           editable={!disabled && interactive}
-          placeholder="Type a name or search a source"
+          placeholder={t('m.HHq8Y80')}
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           autoCorrect={false}

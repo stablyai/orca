@@ -24,6 +24,7 @@ import {
   buildMobileRichMarkdownEditorHtml,
   escapeInjectedJavaScriptString
 } from './mobile-rich-markdown-editor-html'
+import { t } from '@/i18n/mobile-i18n'
 
 const EDITOR_DOCUMENT_ORIGIN = 'https://orca-mobile-editor.invalid'
 const EDITOR_DOCUMENT_URL = `${EDITOR_DOCUMENT_ORIGIN}/rich-markdown-editor`
@@ -90,21 +91,21 @@ type ToolbarItem = {
 }
 
 const TOOLBAR_ITEMS: ToolbarItem[] = [
-  { command: 'paragraph', label: 'Body', icon: Pilcrow },
-  { command: 'heading1', label: 'H1', icon: Heading1 },
-  { command: 'heading2', label: 'H2', icon: Heading2 },
-  { command: 'heading3', label: 'H3', icon: Heading3 },
-  { command: 'bold', label: 'Bold', icon: Bold },
-  { command: 'italic', label: 'Italic', icon: Italic },
-  { command: 'strike', label: 'Strike', icon: Strikethrough },
-  { command: 'bulletList', label: 'Bullet list', icon: List },
-  { command: 'orderedList', label: 'Numbered list', icon: ListOrdered },
-  { command: 'taskList', label: 'Checklist', icon: ListTodo },
-  { command: 'quote', label: 'Quote', icon: Quote },
-  { command: 'link', label: 'Link', icon: Link },
-  { command: 'image', label: 'Image', icon: ImageIcon },
-  { command: 'inlineCode', label: 'Inline code', icon: Code2 },
-  { command: 'codeBlock', label: 'Code block', icon: FileCode2 }
+  { command: 'paragraph', label: t('m.3Ph2vuM'), icon: Pilcrow },
+  { command: 'heading1', label: t('m.Tkw-XG4'), icon: Heading1 },
+  { command: 'heading2', label: t('m.T0-0mLw'), icon: Heading2 },
+  { command: 'heading3', label: t('m.qpILEoE'), icon: Heading3 },
+  { command: 'bold', label: t('m.TcUIfHg'), icon: Bold },
+  { command: 'italic', label: t('m.zwoUjcU'), icon: Italic },
+  { command: 'strike', label: t('m.wwdkeIc'), icon: Strikethrough },
+  { command: 'bulletList', label: t('m.hKyID9A'), icon: List },
+  { command: 'orderedList', label: t('m._79TK6I'), icon: ListOrdered },
+  { command: 'taskList', label: t('m.jPlQhig'), icon: ListTodo },
+  { command: 'quote', label: t('m.dQOT7tM'), icon: Quote },
+  { command: 'link', label: t('m.eLAtZAk'), icon: Link },
+  { command: 'image', label: t('m.fT3N_UQ'), icon: ImageIcon },
+  { command: 'inlineCode', label: t('m.h1ikg-I'), icon: Code2 },
+  { command: 'codeBlock', label: t('m.sLMnsJA'), icon: FileCode2 }
 ]
 
 function MobileRichMarkdownEditorInner({

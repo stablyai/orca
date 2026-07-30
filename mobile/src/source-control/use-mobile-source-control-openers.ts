@@ -23,6 +23,7 @@ import type {
   MobileBranchCompareState,
   MobileBranchDiffPreviewState
 } from './mobile-source-control-screen-state'
+import { t } from '@/i18n/mobile-i18n'
 
 type Params = {
   client: RpcClient | null
@@ -86,7 +87,7 @@ export function useMobileSourceControlOpeners(params: Params) {
         if (!mountedRef.current) {
           return
         }
-        setActionError('Waiting for desktop...')
+        setActionError(t('m.xLlZko0'))
         return
       }
       openingPathRef.current = entry.path
@@ -122,7 +123,7 @@ export function useMobileSourceControlOpeners(params: Params) {
           })
         }
         if (!response.ok) {
-          throw new Error(response.error?.message || 'Unable to open diff')
+          throw new Error(response.error?.message || t('m.0MDy3xU'))
         }
         if (!mountedRef.current) {
           return
@@ -145,7 +146,7 @@ export function useMobileSourceControlOpeners(params: Params) {
           return
         }
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Unable to open diff')
+        setActionError(err instanceof Error ? err.message : t('m.0MDy3xU'))
       } finally {
         if (openingPathRef.current === entry.path) {
           openingPathRef.current = null
@@ -182,7 +183,7 @@ export function useMobileSourceControlOpeners(params: Params) {
         if (!mountedRef.current) {
           return
         }
-        setActionError('Waiting for desktop...')
+        setActionError(t('m.xLlZko0'))
         return
       }
       if (branchCompareState.kind !== 'ready') {
@@ -226,11 +227,11 @@ export function useMobileSourceControlOpeners(params: Params) {
           }
         })
         if (!response.ok) {
-          throw new Error(response.error?.message || 'Unable to load committed diff')
+          throw new Error(response.error?.message || t('m.zniLwck'))
         }
         const result = (response as RpcSuccess).result as GitDiffTextResult | { kind: 'binary' }
         if (result.kind !== 'text') {
-          throw new Error('Binary branch diff preview unavailable on mobile')
+          throw new Error(t('m.q53ZKds'))
         }
         const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent)
         const syntaxLanguage = resolveMobileSyntaxLanguage(entry.path)
@@ -253,7 +254,7 @@ export function useMobileSourceControlOpeners(params: Params) {
         setBranchDiffPreview({
           kind: 'error',
           entry,
-          message: err instanceof Error ? err.message : 'Unable to load committed diff'
+          message: err instanceof Error ? err.message : t('m.zniLwck')
         })
       } finally {
         if (openingBranchPathRef.current === entry.path) {

@@ -1,8 +1,9 @@
+import { t } from '@/i18n/mobile-i18n'
 // Mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/constants.ts — the desktop
 // Floating Workspace's synthetic id (no backing repo/worktree; always local runtime).
 export const FLOATING_WORKSPACE_WORKTREE_ID = 'global-floating-terminal'
 
-export const FLOATING_WORKSPACE_TITLE = 'Floating Workspace'
+export const FLOATING_WORKSPACE_TITLE = t('m.m4LECc4')
 
 export function isFloatingWorkspaceWorktreeId(worktreeId: string | null | undefined): boolean {
   return worktreeId === FLOATING_WORKSPACE_WORKTREE_ID

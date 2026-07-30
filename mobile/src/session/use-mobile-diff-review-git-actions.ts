@@ -4,7 +4,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { GitMutationMethod } from './mobile-diff-review-screen-model'
-import { mobileReviewCountLabel } from './mobile-diff-review-screen-model'
+import { t } from '@/i18n/mobile-i18n'
 
 type GitActionsInput = {
   client: RpcClient | null
@@ -23,7 +23,7 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
   const runGitMutation = useCallback(
     async (method: GitMutationMethod, item: MobileDiffReviewQueueItem) => {
       if (!client || connState !== 'connected') {
-        setActionError('Waiting for desktop...')
+        setActionError(t('m.L-xz6vw'))
         return
       }
       setBusyAction(`${method}:${item.filePath}`)
@@ -34,13 +34,13 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
           filePath: item.filePath
         })
         if (!response.ok) {
-          throw new Error(response.error?.message || 'Source control action failed')
+          throw new Error(response.error?.message || t('m.MOtwYRI'))
         }
         triggerSuccess()
         await loadReviewData()
       } catch (err) {
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Source control action failed')
+        setActionError(err instanceof Error ? err.message : t('m.MOtwYRI'))
       } finally {
         setBusyAction(null)
       }
@@ -50,7 +50,7 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
 
   const stageReviewedFiles = useCallback(async () => {
     if (!client || connState !== 'connected') {
-      setActionError('Waiting for desktop...')
+      setActionError(t('m.L-xz6vw'))
       return
     }
     const files = queue.filter(
@@ -78,8 +78,8 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
     triggerSuccess()
     setActionError(
       failed > 0
-        ? `${staged} staged, ${failed} failed`
-        : `${mobileReviewCountLabel(staged, 'reviewed file', 'reviewed files')} staged`
+        ? t('m.tyXkf4g', { value0: staged, value1: failed })
+        : t(staged === 1 ? 'm.S-avV-Y' : 'm.IPu47z8', { value0: staged })
     )
     await loadReviewData()
   }, [client, connState, loadReviewData, queue, setActionError, setBusyAction, worktreeId])

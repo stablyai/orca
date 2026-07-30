@@ -4,6 +4,7 @@ import { PickerModal } from '../components/PickerModal'
 import { openMobilePrUrl } from '../components/MobilePrComposeSheet'
 import { MobileBranchDiffPreviewDrawer } from './MobileBranchDiffPreviewDrawer'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   state: MobileSourceControlState
@@ -39,7 +40,7 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
 
       <ActionSheetModal
         visible={showActionSheet}
-        title="Source Control"
+        title={t('m.7p6X0C0')}
         message={branchLabel}
         actions={actionSheetActions}
         onClose={() => setShowActionSheet(false)}
@@ -47,13 +48,9 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
 
       <ConfirmModal
         visible={discardTarget !== null}
-        title="Discard Change"
-        message={
-          discardTarget
-            ? `Discard changes to "${discardTarget.path}"? This cannot be undone.`
-            : undefined
-        }
-        confirmLabel="Discard"
+        title={t('m.7IMotMA')}
+        message={discardTarget ? t('m.Oh7cEhY', { value0: discardTarget.path }) : undefined}
+        confirmLabel={t('m.aalP-X8')}
         destructive
         onConfirm={() => {
           if (discardTarget) {
@@ -69,11 +66,11 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
 
       <PickerModal
         visible={showBranchPicker}
-        title="Switch Branch"
+        title={t('m.n9UDFoo')}
         options={(localBranches?.branches ?? []).map((b) => ({
           value: b,
           label: b,
-          subtitle: b === localBranches?.current ? 'current' : undefined
+          subtitle: b === localBranches?.current ? t('m.2t3siE4') : undefined
         }))}
         selected={localBranches?.current ?? ''}
         onSelect={(branch) => {
@@ -88,13 +85,9 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
 
       <ConfirmModal
         visible={createdPrUrl !== null}
-        title="Pull Request Created"
-        message={
-          createdPrWarning
-            ? `Open it in your browser?\n\n${createdPrWarning}`
-            : 'Open it in your browser?'
-        }
-        confirmLabel="Open"
+        title={t('m.4E80Be4')}
+        message={createdPrWarning ? t('m.671hHtA', { value0: createdPrWarning }) : t('m.84pwQsY')}
+        confirmLabel={t('m._c5oKe0')}
         onConfirm={() => {
           if (createdPrUrl) {
             openMobilePrUrl(createdPrUrl)

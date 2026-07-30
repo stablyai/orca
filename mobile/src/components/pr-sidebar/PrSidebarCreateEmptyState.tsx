@@ -21,6 +21,7 @@ import { fetchWorktreeLinkedPR } from '../../source-control/mobile-pr-link'
 import { openMobilePrUrl } from '../MobilePrComposeSheet'
 import { MobileLinkPrForm } from './MobileLinkPrForm'
 import { prCreateEmptyStateStyles as styles } from './pr-create-empty-state-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   client: RpcClient | null
@@ -97,7 +98,7 @@ export function PrSidebarCreateEmptyState({
     setLoading(true)
     try {
       if (!gitBranch) {
-        setCreateWarning('Check out a branch before creating a pull request.')
+        setCreateWarning(t('m.EMFMGnw'))
         return
       }
       // Why: mobile skips the local compose step here and runs the hosted create
@@ -131,7 +132,7 @@ export function PrSidebarCreateEmptyState({
       openMobilePrUrl(outcome.url)
       onCreated()
     } catch (err) {
-      setCreateWarning(err instanceof Error ? err.message : 'Failed to create pull request.')
+      setCreateWarning(err instanceof Error ? err.message : t('m.tca0V2E'))
     } finally {
       setLoading(false)
     }
@@ -160,14 +161,14 @@ export function PrSidebarCreateEmptyState({
       <View style={styles.header}>
         <View style={styles.headerTitle}>
           <GitPullRequestArrow size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.headerLabel}>Pull request</Text>
+          <Text style={styles.headerLabel}>{t('m.TSDVcKU')}</Text>
         </View>
         <View style={styles.headerActions}>
           <Pressable
             style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
             onPress={refreshPrState}
             accessibilityRole="button"
-            accessibilityLabel="Refresh pull request"
+            accessibilityLabel={t('m.YZFe3Qg')}
             hitSlop={6}
           >
             <RefreshCw size={16} color={colors.textSecondary} strokeWidth={2.2} />
@@ -177,27 +178,27 @@ export function PrSidebarCreateEmptyState({
             onPress={() => void openComposer()}
             disabled={!canCreate || loading}
             accessibilityRole="button"
-            accessibilityLabel="Create pull request"
+            accessibilityLabel={t('m.Y_NnJ9M')}
           >
             {loading ? (
               <ActivityIndicator color={colors.bgBase} />
             ) : (
               <GitPullRequestArrow size={14} color={colors.bgBase} strokeWidth={2.2} />
             )}
-            <Text style={styles.createButtonText}>Create PR</Text>
+            <Text style={styles.createButtonText}>{t('m.5kE-iVM')}</Text>
           </Pressable>
         </View>
       </View>
       <View style={styles.body}>
         <Text style={styles.bodyTitle}>
-          {orphanLinkedPR ? `Linked PR #${orphanLinkedPR} unavailable` : 'No open pull request'}
+          {orphanLinkedPR ? t('m.I3xSuPA', { value0: orphanLinkedPR }) : t('m.G2BaE-Y')}
         </Text>
         <Text style={styles.bodyText}>
           {orphanLinkedPR
-            ? 'Refresh to check again, or create a new PR for this branch.'
+            ? t('m.maf-eds')
             : gitBranch
-              ? `${gitBranch} is not linked to an open PR.`
-              : 'The current branch is not linked to an open PR.'}
+              ? t('m.CmpszXU', { value0: gitBranch })
+              : t('m.SRr0o4U')}
         </Text>
         {commitFailureRecovery ? (
           <MobileCommitFailurePanel
@@ -216,7 +217,7 @@ export function PrSidebarCreateEmptyState({
           onPress={() => setMode('link')}
           disabled={!client}
           accessibilityRole="button"
-          accessibilityLabel="Link an existing pull request"
+          accessibilityLabel={t('m._mT5R7M')}
           accessibilityState={{ disabled: !client }}
           hitSlop={6}
         >
@@ -225,7 +226,7 @@ export function PrSidebarCreateEmptyState({
             color={client ? colors.textSecondary : colors.textMuted}
             strokeWidth={2.2}
           />
-          <Text style={styles.linkButtonText}>Link an existing PR</Text>
+          <Text style={styles.linkButtonText}>{t('m.eNX9Nmo')}</Text>
         </Pressable>
       </View>
     </View>

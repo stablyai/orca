@@ -1,3 +1,4 @@
+import { t } from '@/i18n/mobile-i18n'
 export type GitHubProjectSortDirection = 'ASC' | 'DESC'
 
 export type GitHubProjectFieldValue =
@@ -56,7 +57,7 @@ const EMPTY_GROUP_KEY = '__empty__'
 const UNKNOWN_INDEX_SENTINEL = Number.MAX_SAFE_INTEGER
 
 function labelForEmpty(field: GitHubProjectField): string {
-  return `No ${field.name}`
+  return t('m.QNvTsRo', { value0: field.name })
 }
 
 function deriveStringValue(value: GitHubProjectFieldValue): string {
@@ -97,7 +98,7 @@ function getFieldValueForGrouping(
     const meta = iterations.find((it) => it.id === value.iterationId)
     return {
       key: value.iterationId,
-      label: value.title || meta?.title || 'Iteration',
+      label: value.title || meta?.title || t('m.AXVCL9g'),
       orderHint: idx === -1 ? UNKNOWN_INDEX_SENTINEL - 1 : idx,
       iteration: meta
         ? { startDate: meta.startDate, duration: meta.duration, completed: meta.completed }

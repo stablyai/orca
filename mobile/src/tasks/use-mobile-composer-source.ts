@@ -26,6 +26,7 @@ import type {
   MobileLinkedWorkItem,
   SmartNameSelection
 } from './mobile-composer-source-types'
+import { t } from '@/i18n/mobile-i18n'
 const EMPTY_BASE: ComposerBaseState = {}
 
 export type UseMobileComposerSourceArgs = {
@@ -98,7 +99,7 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
             return
           }
           setBase(EMPTY_BASE)
-          onError?.(error instanceof Error ? error.message : 'Failed to resolve base branch.')
+          onError?.(error instanceof Error ? error.message : t('m.x04i9ik'))
         })
         .finally(() => {
           if (resolveTokenRef.current === token) {

@@ -25,6 +25,7 @@ import {
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale
 } from './mobile-native-chat-stale-input'
+import { t } from '@/i18n/mobile-i18n'
 
 type CurrentRef<T> = { readonly current: T }
 type ShowToast = (message: string, durationMs?: number) => void
@@ -160,18 +161,18 @@ export function useMobileNativeChatImageAttachments({
       } catch (error) {
         onError?.()
         if (connStateRef.current !== 'connected') {
-          showToast('Attach failed (disconnected)', 1500)
+          showToast(t('m.Kc1O9hE'), 1500)
           return
         }
         if (error instanceof ImageLibraryPermissionError) {
-          showToast('Photo permission denied', 1500)
+          showToast(t('m.jdkmIaw'), 1500)
           return
         }
         if (getErrorMessage(error) === CLIPBOARD_IMAGE_TOO_LARGE_ERROR) {
-          showToast('Image too large to attach', 1500)
+          showToast(t('m.-YjNIcU'), 1500)
           return
         }
-        showToast('Attach failed', 1500)
+        showToast(t('m.JlNqDLA'), 1500)
       } finally {
         if (started) {
           attachingCount.current -= 1
@@ -216,7 +217,7 @@ export function useMobileNativeChatImageAttachments({
       const operationTerminal = activeHandleRef.current
       if (operationTerminal && sendInFlightTerminalsRef.current.has(operationTerminal)) {
         onError?.()
-        onSendError('Message not sent')
+        onSendError(t('m.c6Kd_Ps'))
         return false
       }
       if (operationTerminal) {
@@ -241,7 +242,7 @@ export function useMobileNativeChatImageAttachments({
             // image path; the heal retries once the lease is back.
             if (!client || !enabled || connState !== 'connected') {
               onError?.()
-              onSendError('Message not sent (disconnected)')
+              onSendError(t('m.4Xgw97k'))
               return false
             }
             const healed = await healMobileNativeChatStaleInput({
@@ -254,7 +255,7 @@ export function useMobileNativeChatImageAttachments({
             // clear never touched, so abort rather than reroute it.
             if (!healed || activeHandleRef.current !== staleTerminal) {
               onError?.()
-              onSendError('Message not sent')
+              onSendError(t('m.c6Kd_Ps'))
               return false
             }
           }
@@ -265,7 +266,7 @@ export function useMobileNativeChatImageAttachments({
         if (!client || !handle || !enabled || connState !== 'connected') {
           onError?.()
           // Mirror the text path's failure surface (the base send is never reached).
-          onSendError('Message not sent (disconnected)')
+          onSendError(t('m.4Xgw97k'))
           return false
         }
         try {
@@ -280,7 +281,7 @@ export function useMobileNativeChatImageAttachments({
             // Keep the chips so the user can retry; the failed paste never submitted.
             markMobileNativeChatInputStale(handle)
             onError?.()
-            onSendError('Message not sent')
+            onSendError(t('m.c6Kd_Ps'))
             return false
           }
           // The paste's leading Ctrl+U cleared any earlier stale input in `handle`.
@@ -298,7 +299,7 @@ export function useMobileNativeChatImageAttachments({
           if (activeHandleRef.current !== handle) {
             markMobileNativeChatInputStale(handle)
             onError?.()
-            onSendError('Message not sent')
+            onSendError(t('m.c6Kd_Ps'))
             return false
           }
           const outcome = await baseSend(
@@ -332,7 +333,7 @@ export function useMobileNativeChatImageAttachments({
           // attempt's leading Ctrl+U clears whatever fraction of the paste landed.
           markMobileNativeChatInputStale(handle)
           onError?.()
-          onSendError('Message not sent')
+          onSendError(t('m.c6Kd_Ps'))
           return false
         }
       } finally {

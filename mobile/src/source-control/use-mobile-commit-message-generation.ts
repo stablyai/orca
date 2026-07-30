@@ -2,6 +2,7 @@ import { useCallback, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { cancelMobileCommitMessage, requestMobileCommitMessage } from './mobile-commit-message-ai'
+import { t } from '@/i18n/mobile-i18n'
 
 type Params = {
   client: RpcClient | null
@@ -53,7 +54,7 @@ export function useMobileCommitMessageGeneration(params: Params) {
       // message are skipped and the rejection escapes the void-called handler.
       if (mountedRef.current) {
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Failed to generate commit message')
+        setActionError(err instanceof Error ? err.message : t('m.h4RNhQ0'))
       }
     } finally {
       if (mountedRef.current) {

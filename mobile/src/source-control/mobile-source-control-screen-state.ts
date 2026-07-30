@@ -27,6 +27,7 @@ import {
   type MobileGitStatusEntry,
   type MobileGitStatusResult
 } from './mobile-git-status'
+import { t } from '@/i18n/mobile-i18n'
 
 export type ScreenState =
   | { kind: 'loading' }
@@ -131,7 +132,7 @@ export function formatBranchLabel(branch: string | undefined, head: string | und
   if (branch?.startsWith('refs/heads/')) {
     return branch.slice('refs/heads/'.length)
   }
-  return branch || head?.slice(0, 7) || 'No branch'
+  return branch || head?.slice(0, 7) || t('m.wL23gbE')
 }
 
 export function statusColor(status: MobileGitFileStatus): string {

@@ -5,6 +5,7 @@ import { colors } from '../theme/mobile-theme'
 import type { MobileCommitFailureRecovery } from './mobile-commit-failure-recovery'
 import type { MobileCommitFailureRecoveryAction } from './use-mobile-commit-failure-recovery'
 import { styles } from './mobile-source-control-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   failure: MobileCommitFailureRecovery
@@ -20,9 +21,9 @@ export function MobileCommitFailurePanel({ failure, action }: Props) {
     <View style={styles.commitFailurePanel}>
       <View style={styles.commitFailureHeader}>
         <View style={styles.commitFailureTextBlock}>
-          <Text style={styles.commitFailureTitle}>Commit failed</Text>
+          <Text style={styles.commitFailureTitle}>{t('m.Hol4rtI')}</Text>
           <Text style={styles.commitFailureSummary} numberOfLines={2}>
-            {action.summary ?? 'Commit failed.'}
+            {action.summary ?? t('m.qrdoHLM')}
           </Text>
         </View>
         <Pressable
@@ -34,14 +35,14 @@ export function MobileCommitFailurePanel({ failure, action }: Props) {
           onPress={() => void action.launch()}
           disabled={action.launching}
           accessibilityRole="button"
-          accessibilityLabel="Fix commit failure with AI"
+          accessibilityLabel={t('m.3iqxoCY')}
         >
           {action.launching ? (
             <ActivityIndicator color={colors.bgBase} />
           ) : (
             <Sparkles size={14} color={colors.bgBase} strokeWidth={2.2} />
           )}
-          <Text style={styles.commitFailureFixButtonText}>Fix</Text>
+          <Text style={styles.commitFailureFixButtonText}>{t('m.-RbEI6M')}</Text>
         </Pressable>
       </View>
       {action.hasDetails && detailsText ? (
@@ -53,13 +54,11 @@ export function MobileCommitFailurePanel({ failure, action }: Props) {
             ]}
             onPress={() => setExpanded((current) => !current)}
             accessibilityRole="button"
-            accessibilityLabel={
-              expanded ? 'Hide commit failure details' : 'Show commit failure details'
-            }
+            accessibilityLabel={expanded ? t('m.7eT5oiE') : t('m.6Pb0W84')}
           >
             <Chevron size={14} color={colors.textSecondary} strokeWidth={2.2} />
             <Text style={styles.commitFailureDetailsButtonText}>
-              {expanded ? 'Hide details' : 'Show details'}
+              {expanded ? t('m.eysP-fI') : t('m.P2fbbug')}
             </Text>
           </Pressable>
           {expanded ? <Text style={styles.commitFailureDetailsText}>{detailsText}</Text> : null}

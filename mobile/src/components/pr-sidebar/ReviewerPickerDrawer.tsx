@@ -7,6 +7,7 @@ import type { RpcClient } from '../../transport/rpc-client'
 import { fetchAssignableUsers } from '../../session/github-pr-rpc'
 import { BottomDrawer } from '../BottomDrawer'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   visible: boolean
@@ -61,7 +62,7 @@ export function ReviewerPickerDrawer({
       })
       .catch(() => {
         if (!cancelled) {
-          setLoad({ status: 'error', message: 'Failed to load people' })
+          setLoad({ status: 'error', message: t('m.dVs-M9I') })
         }
       })
     return () => {
@@ -91,12 +92,12 @@ export function ReviewerPickerDrawer({
 
   return (
     <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss={false}>
-      <Text style={styles.pickerTitle}>Reviewers</Text>
+      <Text style={styles.pickerTitle}>{t('m.K34xo24')}</Text>
       <TextInput
         style={styles.pickerSearch}
         value={query}
         onChangeText={setQuery}
-        placeholder="Search people"
+        placeholder={t('m.Ne-d-yA')}
         placeholderTextColor={colors.textMuted}
         autoCapitalize="none"
         autoCorrect={false}
@@ -111,7 +112,7 @@ export function ReviewerPickerDrawer({
         </View>
       ) : ordered.length === 0 ? (
         <View style={styles.pickerStateArea}>
-          <Text style={styles.emptyText}>No matching people</Text>
+          <Text style={styles.emptyText}>{t('m.6OYLM7w')}</Text>
         </View>
       ) : (
         <View style={styles.pickerList}>

@@ -17,6 +17,7 @@ import {
   rankSuggestions
 } from './mobile-native-chat-autocomplete'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import { t } from '@/i18n/mobile-i18n'
 
 // Common agent slash commands offered as autocomplete; sending them is just text
 // to the agent's terminal, so the set is intentionally provider-agnostic.
@@ -71,7 +72,7 @@ export function MobileNativeChatComposer({
   onMicPressIn,
   onMicPressOut,
   disabled = false,
-  placeholder = 'Message, @files, /commands',
+  placeholder = t('m.DAVoau0'),
   filePaths = NO_FILE_PATHS,
   onNeedFiles
 }: Props): React.JSX.Element {
@@ -174,7 +175,7 @@ export function MobileNativeChatComposer({
               />
               {onRemoveAttachment ? (
                 <Pressable
-                  accessibilityLabel="Remove image"
+                  accessibilityLabel={t('m.8VDRuNk')}
                   style={styles.attachmentRemove}
                   onPress={() => onRemoveAttachment(attachment.id)}
                   hitSlop={8}
@@ -189,7 +190,7 @@ export function MobileNativeChatComposer({
       <View style={styles.bar}>
         {onAttachImage ? (
           <Pressable
-            accessibilityLabel="Attach image"
+            accessibilityLabel={t('m.o_uvOaw')}
             style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
             onPress={onAttachImage}
             disabled={isAttaching || disabled}
@@ -222,7 +223,7 @@ export function MobileNativeChatComposer({
         />
         {onMicPress ? (
           <Pressable
-            accessibilityLabel={micActive ? 'Stop dictation' : 'Dictate'}
+            accessibilityLabel={micActive ? t('m.r9MfglU') : t('m.0JFch-U')}
             style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
             // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
             onPress={dictationMode === 'hold' ? undefined : onMicPress}
@@ -243,7 +244,7 @@ export function MobileNativeChatComposer({
           </Pressable>
         ) : null}
         <Pressable
-          accessibilityLabel="Send message"
+          accessibilityLabel={t('m.imHMT2Y')}
           style={({ pressed }) => [
             styles.sendButton,
             !canSend && styles.sendButtonDisabled,

@@ -10,6 +10,7 @@ import type {
 import type { Worktree } from '../worktree/workspace-list-types'
 import { deriveMobileAiVaultScopePaths } from './agent-history-scope-paths'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
+import { t } from '@/i18n/mobile-i18n'
 
 export { MOBILE_AI_VAULT_CAPABILITY }
 
@@ -78,7 +79,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
           // (connState flips re-run the load effect) instead of tearing it
           // down to a full-screen error, matching the host list screen.
           setScreenState((prev) =>
-            prev.kind === 'ready' ? prev : { kind: 'error', message: 'Waiting for host…' }
+            prev.kind === 'ready' ? prev : { kind: 'error', message: t('m.nSh69OQ') }
           )
         }
         return
@@ -93,7 +94,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
           return
         }
         if (!statusResponse.ok) {
-          throw new Error(statusResponse.error?.message || 'Unable to reach host')
+          throw new Error(statusResponse.error?.message || t('m.THbZzp4'))
         }
         const status = (statusResponse as RpcSuccess).result as StatusWithCapabilities
         setHostStatusResult(status)
@@ -123,7 +124,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
           return
         }
         if (!response.ok) {
-          throw new Error(response.error?.message || 'Unable to load agent sessions')
+          throw new Error(response.error?.message || t('m.ukxwfJ8'))
         }
         const result = (response as RpcSuccess).result as AiVaultListResult
         setScreenState({ kind: 'ready', sessions: result.sessions, issues: result.issues })
@@ -131,7 +132,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         if (!isCurrent()) {
           return
         }
-        const message = err instanceof Error ? err.message : 'Unable to load agent sessions'
+        const message = err instanceof Error ? err.message : t('m.ukxwfJ8')
         setHostStatusResult(null)
         setScreenState({ kind: 'error', message })
       }

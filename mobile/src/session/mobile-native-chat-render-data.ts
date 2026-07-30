@@ -8,6 +8,7 @@ import { foldToolMessages } from './mobile-native-chat-blocks'
 import { normalizeImageTranscriptMessages } from './mobile-native-chat-image-transcript-markers'
 import { stripNoiseMessages } from './mobile-native-chat-noise'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import { t } from '@/i18n/mobile-i18n'
 
 /** The centered empty-state copy for a chat with no messages, mirroring the
  *  desktop `NativeChatEmptyState` (shared copy + agent label) so the two surfaces
@@ -18,7 +19,7 @@ export function mobileNativeChatEmptyState(
   agent: string | null,
   error?: string
 ): NativeChatEmptyStateCopy | null {
-  const agentLabel = agent ? formatAgentTypeLabel(agent) : 'the agent'
+  const agentLabel = agent ? formatAgentTypeLabel(agent) : t('m.57DUHqU')
   switch (status) {
     // A live agent with no transcript yet — and a loaded-but-empty transcript —
     // are both "start a chat"; invite the first message instead of implying the

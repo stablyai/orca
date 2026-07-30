@@ -11,6 +11,7 @@ import {
   saveMobileClipboardImageAsTempFile,
   type MobileClipboardImageResizer
 } from './mobile-clipboard-image'
+import { t } from '@/i18n/mobile-i18n'
 
 const CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE = /^data:image\/[a-z0-9.+-]+;base64,/i
 
@@ -36,7 +37,7 @@ const resizeMobileClipboardImage: MobileClipboardImageResizer = async (source, t
     // Why: empty base64 would pass the downstream base64 check and upload a corrupt
     // image, so fail loudly here instead of silently sending an invalid payload.
     if (!result.base64) {
-      throw new Error('Failed to encode resized clipboard image')
+      throw new Error(t('m.eH92OqQ'))
     }
     return { data: result.base64, width: result.width, height: result.height }
   } finally {
@@ -138,7 +139,7 @@ export function useMobileTerminalPaste({
         onError()
         // eslint-disable-next-line no-console
         console.warn('[mobile-clip] paste oversized', { wrappedBytes })
-        showToast('Paste too large (max 256 KiB)', 1500)
+        showToast(t('m.Ezj8Uog'), 1500)
         return
       }
       // Why: paste lives in the accessory row and must not overtake pending IME text.
@@ -172,11 +173,11 @@ export function useMobileTerminalPaste({
       // eslint-disable-next-line no-console
       console.warn('[mobile-clip] paste failed', { name: err.name, message: err.message })
       if (isDisconnected) {
-        showToast('Paste failed (disconnected)', 1500)
+        showToast(t('m.gG0saX0'), 1500)
       } else if (err.message === 'Clipboard image is too large') {
-        showToast('Image too large to paste', 1500)
+        showToast(t('m.5dhlsXo'), 1500)
       } else {
-        showToast('Paste failed', 1500)
+        showToast(t('m.weTQMew'), 1500)
       }
     }
   }, [

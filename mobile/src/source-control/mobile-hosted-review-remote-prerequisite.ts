@@ -3,6 +3,7 @@ import type { MobileGitStatusResult } from './mobile-git-status'
 import type { MobileHostedReviewCreateIntentProgress } from './mobile-hosted-review-create-intent'
 import type { MobilePrPrefill } from './mobile-pr-create'
 import { sendMobileHostedReviewGitMutation } from './mobile-hosted-review-git-preparation'
+import { t } from '@/i18n/mobile-i18n'
 
 type RemotePrerequisiteInput = {
   status: MobileGitStatusResult | null
@@ -22,7 +23,7 @@ export async function applyMobileHostedReviewRemotePrerequisite(
         client,
         'git.push',
         { worktree: `id:${worktreeId}`, publish: true },
-        'Failed to publish branch'
+        t('m.HtBxXOI')
       )
       return result.ok ? { ok: true, ran: true } : result
     }
@@ -32,7 +33,7 @@ export async function applyMobileHostedReviewRemotePrerequisite(
         client,
         'git.push',
         { worktree: `id:${worktreeId}` },
-        'Failed to push commits'
+        t('m.I8tYYd4')
       )
       return result.ok ? { ok: true, ran: true } : result
     }
@@ -45,7 +46,7 @@ export async function applyMobileHostedReviewRemotePrerequisite(
         client,
         'git.push',
         { worktree: `id:${worktreeId}`, forceWithLease: true },
-        'Failed to force push with lease'
+        t('m.2m5o9w0')
       )
       return result.ok ? { ok: true, ran: true } : result
     }

@@ -1,5 +1,6 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { applyAppend, replaceList, type NativeChatMerger } from './mobile-native-chat-merge'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobileNativeChatStreamFrame = {
   type?: string
@@ -31,7 +32,7 @@ export function applyMobileNativeChatStreamFrame(args: {
 }): AppliedMobileNativeChatFrame {
   const { merger, frame, limit, replaceSnapshot } = args
   if (frame.type === 'error') {
-    return { kind: 'error', error: frame.message ?? frame.error ?? 'Transcript stream failed' }
+    return { kind: 'error', error: frame.message ?? frame.error ?? t('m.tod-ra0') }
   }
   if (frame.type !== 'snapshot' && frame.type !== 'replacement' && frame.type !== 'appended') {
     return { kind: 'ignored' }

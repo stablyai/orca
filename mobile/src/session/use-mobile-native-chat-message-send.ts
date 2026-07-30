@@ -7,6 +7,7 @@ import {
 } from './mobile-native-chat-send'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobileNativeChatMessageSend = {
   /** Composer send that syncs the draft (clear on send, restore on rejection). */
@@ -68,7 +69,7 @@ export function useMobileNativeChatMessageSend(args: {
       // answer (which reaches this send directly) would otherwise burn the whole
       // 15s heal+send budget waiting on a socket that is already gone.
       if (!client || !handle || !origin || !enabled) {
-        onSendError('Message not sent (disconnected)')
+        onSendError(t('m.t_qfHRA'))
         return 'rejected'
       }
       // The agent's input may still hold an orphaned image paste from an earlier
@@ -86,7 +87,7 @@ export function useMobileNativeChatMessageSend(args: {
         deadline
       }
       if (!(await healMobileNativeChatStaleInput(healArgs))) {
-        onSendError('Message not sent')
+        onSendError(t('m.ZkABdzg'))
         return 'rejected'
       }
       // Why: empty the composer at send time, not on the ack — over relay the
@@ -114,16 +115,14 @@ export function useMobileNativeChatMessageSend(args: {
       if (outcome === 'unknown') {
         // Why: an ack-lost send usually WAS delivered (issue seen on cellular
         // relay) — verify via the transcript echo instead of a false "not sent".
-        holdUnconfirmedSend(origin, text, () =>
-          onSendError('Delivery unconfirmed — check chat before retrying')
-        )
+        holdUnconfirmedSend(origin, text, () => onSendError(t('m.klTsRAk')))
         return 'unknown'
       }
       if (outcome === 'rejected') {
         if (syncComposer) {
           restoreRejectedDraft(origin, text)
         }
-        onSendError('Message not sent')
+        onSendError(t('m.ZkABdzg'))
         return 'rejected'
       }
       // `images` are local preview URIs for the optimistic echo only — the actual

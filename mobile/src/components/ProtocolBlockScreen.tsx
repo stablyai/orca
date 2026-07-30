@@ -2,6 +2,7 @@ import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-nati
 import { router } from 'expo-router'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { CompatVerdict } from '../transport/protocol-compat'
+import { t } from '@/i18n/mobile-i18n'
 
 const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
 const IOS_APP_STORE_URL = 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'
@@ -15,13 +16,13 @@ export function ProtocolBlockScreen({ verdict }: Props) {
   // Why: Android APKs ship through GitHub Releases until a Play Store listing exists.
   const mobileUpdateTarget =
     Platform.OS === 'ios'
-      ? { label: 'Open App Store', url: IOS_APP_STORE_URL, storeName: 'the App Store' }
-      : { label: 'Open GitHub Releases', url: RELEASES_URL, storeName: 'GitHub Releases' }
+      ? { label: t('m.oxg5VTs'), url: IOS_APP_STORE_URL, storeName: 'the App Store' }
+      : { label: t('m.h3ZwGv0'), url: RELEASES_URL, storeName: 'GitHub Releases' }
   const primaryAction = isMobileTooOld
     ? { label: mobileUpdateTarget.label, url: mobileUpdateTarget.url }
-    : { label: 'Open GitHub Releases', url: RELEASES_URL }
+    : { label: t('m.h3ZwGv0'), url: RELEASES_URL }
 
-  const title = isMobileTooOld ? 'Update Orca Mobile' : 'Update Orca on your computer'
+  const title = isMobileTooOld ? t('m.NkNSfjQ') : t('m.amP19yQ')
   const body = isMobileTooOld
     ? `This desktop needs a newer Orca Mobile app. Update Orca Mobile from ${mobileUpdateTarget.storeName}, then try this host again.`
     : 'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
@@ -49,7 +50,7 @@ export function ProtocolBlockScreen({ verdict }: Props) {
             router.replace('/')
           }}
         >
-          <Text style={styles.secondaryButtonText}>Back to hosts</Text>
+          <Text style={styles.secondaryButtonText}>{t('m.kA_OuTE')}</Text>
         </Pressable>
         <Text style={styles.recoveryNote}>{recoveryNote}</Text>
       </View>

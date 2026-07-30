@@ -1,6 +1,7 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import type { HostedReviewProvider } from '../../../src/shared/hosted-review'
+import { t } from '@/i18n/mobile-i18n'
 
 // Link / unlink review metadata via worktree.set (the same path desktop uses).
 // GitHub's existing manual link flow writes linkedPR; hosted-review creation maps
@@ -55,7 +56,7 @@ async function setLinkedPr(
       buildWorktreeSetLinkParams(worktreeId, linkedPR)
     )
     if (!response.ok) {
-      return { ok: false, error: response.error?.message || 'Failed to update linked pull request' }
+      return { ok: false, error: response.error?.message || t('m.D8-XyhU') }
     }
     return { ok: true }
   } catch (err) {
@@ -63,7 +64,7 @@ async function setLinkedPr(
     // to the `{ ok:false, error }` outcome the link flow surfaces.
     return {
       ok: false,
-      error: err instanceof Error ? err.message : 'Failed to update linked pull request'
+      error: err instanceof Error ? err.message : t('m.D8-XyhU')
     }
   }
 }
@@ -90,7 +91,7 @@ export async function linkMobileHostedReview(
   try {
     const response = await client.sendRequest('worktree.set', params)
     if (!response.ok) {
-      return { ok: false, error: response.error?.message || 'Failed to update linked review' }
+      return { ok: false, error: response.error?.message || t('m.DIh5pvA') }
     }
     return { ok: true }
   } catch (err) {
@@ -98,7 +99,7 @@ export async function linkMobileHostedReview(
     // surface a non-fatal refresh problem instead of losing the created URL.
     return {
       ok: false,
-      error: err instanceof Error ? err.message : 'Failed to update linked review'
+      error: err instanceof Error ? err.message : t('m.DIh5pvA')
     }
   }
 }

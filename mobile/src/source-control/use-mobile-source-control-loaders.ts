@@ -18,6 +18,7 @@ import {
   type ScreenState,
   type StatusLoadInFlight
 } from './mobile-source-control-screen-state'
+import { t } from '@/i18n/mobile-i18n'
 
 type Params = {
   client: RpcClient | null
@@ -112,7 +113,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
             }
             return {
               kind: 'error',
-              message: 'Unable to resolve the base branch for comparison.'
+              message: t('m.v0PMFRE')
             }
           })
           return false
@@ -134,7 +135,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
             })
             return false
           }
-          throw new Error(response.error?.message || 'Unable to load committed changes')
+          throw new Error(response.error?.message || t('m.Z4IRqv4'))
         }
         setBranchCompareState({
           kind: 'ready',
@@ -145,7 +146,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         if (!isCurrentLoad()) {
           return false
         }
-        const message = err instanceof Error ? err.message : 'Unable to load committed changes'
+        const message = err instanceof Error ? err.message : t('m.Z4IRqv4')
         setBranchCompareState((prev) => {
           if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
             return prev
@@ -183,8 +184,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
           if (isCurrentLoad()) {
             setScreenState({
               kind: 'error',
-              message:
-                connState === 'connected' ? 'Connecting to desktop...' : 'Waiting for desktop...'
+              message: connState === 'connected' ? t('m.cIZvHNg') : t('m.5jVDzOo')
             })
           }
           return false
@@ -216,7 +216,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
             if (isMobileGitUnavailable(response.error?.code, response.error?.message)) {
               setScreenState({
                 kind: 'unavailable',
-                message: 'Update Orca desktop to use Source Control on mobile.'
+                message: t('m.8lyq50g')
               })
               return false
             }
@@ -230,13 +230,13 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
               }
               continue
             }
-            throw new Error(response.error?.message || 'Unable to load source control')
+            throw new Error(response.error?.message || t('m.67FHeO0'))
           }
         } catch (err) {
           if (!isCurrentLoad()) {
             return false
           }
-          const message = err instanceof Error ? err.message : 'Unable to load source control'
+          const message = err instanceof Error ? err.message : t('m.67FHeO0')
           setScreenState((prev) => {
             // Why: git mutations can succeed while the immediate status refresh
             // races a desktop abort; keep the last good screen instead of flashing

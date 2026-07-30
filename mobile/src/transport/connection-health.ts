@@ -1,5 +1,6 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
 import type { ConnectionState } from './types'
+import { t } from '@/i18n/mobile-i18n'
 
 // Why: thresholds for escalating connection UX from neutral
 // "Reconnecting…" to alarming "host appears unreachable, re-pair?".
@@ -26,7 +27,7 @@ const STALE_SINCE_LAST_CONNECT_MS = 60_000
 // the phone's Tailscale tunnel is down or wedged (a known iOS failure mode
 // that only a manual toggle fixes) — not that the desktop moved. Say so
 // instead of leaving the user staring at a generic "Can't connect".
-const TAILSCALE_HINT = 'check Tailscale'
+const TAILSCALE_HINT = t('m.TxG95wU')
 
 export type ConnectionVerdict =
   | { kind: 'normal'; label: string }
@@ -58,19 +59,19 @@ export function classifyConnection(args: {
   // Why: auth-failed means the desktop no longer recognizes this pairing (e.g. it
   // lost its device registry) — retrying can't fix it, only re-pairing can, so say so.
   if (state === 'auth-failed') {
-    return { kind: 'auth-failed', label: 'Pairing invalid — re-pair with your desktop' }
+    return { kind: 'auth-failed', label: t('m.0BvjSKA') }
   }
 
   // Connected / connecting / handshaking are normal.
   if (state === 'connected') {
-    return { kind: 'normal', label: 'Connected' }
+    return { kind: 'normal', label: t('m.jgGsba4') }
   }
   if (state === 'connecting' || state === 'handshaking') {
-    return { kind: 'normal', label: 'Connecting…' }
+    return { kind: 'normal', label: t('m.I-waJyg') }
   }
 
   if (state === 'disconnected') {
-    return { kind: 'normal', label: 'Disconnected' }
+    return { kind: 'normal', label: t('m.G6a1Jqk') }
   }
 
   // state === 'reconnecting' from here.
@@ -78,7 +79,7 @@ export function classifyConnection(args: {
     if (lastConnectedAt == null) {
       return {
         kind: 'unreachable',
-        label: "Can't reach desktop",
+        label: t('m.YAPgxBM'),
         reason: 'never-connected',
         hint
       }
@@ -86,7 +87,7 @@ export function classifyConnection(args: {
     if (now - lastConnectedAt >= STALE_SINCE_LAST_CONNECT_MS) {
       return {
         kind: 'unreachable',
-        label: "Can't reach desktop",
+        label: t('m.YAPgxBM'),
         reason: 'stale',
         hint
       }
@@ -94,10 +95,10 @@ export function classifyConnection(args: {
   }
 
   if (reconnectAttempts >= WARNING_ATTEMPTS) {
-    return { kind: 'warning', label: "Can't connect", hint }
+    return { kind: 'warning', label: t('m.6_SeqME'), hint }
   }
 
-  return { kind: 'normal', label: 'Reconnecting…' }
+  return { kind: 'normal', label: t('m.KbmpcZs') }
 }
 
 // Why: single place that turns a verdict into display text so every screen

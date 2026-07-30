@@ -1,6 +1,7 @@
 import type { GitHubPRMergeMethod } from '../../../src/shared/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { buildGithubPrParams, githubPrRepoSlugParam, type GitHubPrRepoSlug } from './github-pr-rpc'
+import { t } from '@/i18n/mobile-i18n'
 
 // Mutation wrappers for the github.* PR surface, split out so github-pr-rpc.ts
 // stays under the max-lines budget. They mirror the read wrappers' shape but
@@ -22,11 +23,14 @@ async function sendRaw(
   try {
     const response = await client.sendRequest(method, params)
     if (!response.ok) {
-      return { ok: false, error: response.error?.message || `Request failed: ${method}` }
+      return { ok: false, error: response.error?.message || t('m.o-JIJFg', { value0: method }) }
     }
     return { ok: true, result: response.result }
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : `Request failed: ${method}` }
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : t('m.o-JIJFg', { value0: method })
+    }
   }
 }
 
@@ -43,7 +47,7 @@ function extractMutationError(error: unknown, method: string): string {
       return message
     }
   }
-  return `Request failed: ${method}`
+  return t('m.63siVQ8', { value0: method })
 }
 
 // The host returns the success/failure shape inside `result`; a transport-level
@@ -57,7 +61,7 @@ async function sendGithubPrMutation(
   try {
     const response = await client.sendRequest(method, params)
     if (!response.ok) {
-      return { ok: false, error: response.error?.message || `Request failed: ${method}` }
+      return { ok: false, error: response.error?.message || t('m.o-JIJFg', { value0: method }) }
     }
     const result = response.result
     if (result && typeof result === 'object' && 'ok' in result) {
@@ -72,7 +76,10 @@ async function sendGithubPrMutation(
   } catch (err) {
     // Why: a transport drop must not escape as an unhandled rejection — normalize
     // to the `{ ok:false, error }` outcome the action engine routes on.
-    return { ok: false, error: err instanceof Error ? err.message : `Request failed: ${method}` }
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : t('m.o-JIJFg', { value0: method })
+    }
   }
 }
 
@@ -107,12 +114,12 @@ export async function fetchUpdatePRTitle(
     buildGithubPrParams('github.updatePRTitle', worktreeId, params, { prRepo: args.prRepo })
   )
   if (!response.ok) {
-    return { ok: false, error: response.error || 'Request failed: github.updatePRTitle' }
+    return { ok: false, error: response.error || t('m.xWj8WHk') }
   }
   // Why: the host returns a bare `true` on success; a missing/undefined result is
   // not a confirmed success, so require an explicit `=== true` rather than `!== false`.
   if (response.result !== true) {
-    return { ok: false, error: 'Failed to update title.' }
+    return { ok: false, error: t('m.ssoDq0g') }
   }
   return { ok: true }
 }
@@ -267,13 +274,13 @@ export async function fetchResolveReviewThread(
   if (!response.ok) {
     return {
       ok: false,
-      error: response.error || 'Request failed: github.resolveReviewThread'
+      error: response.error || t('m.NJJe3ZA')
     }
   }
   // Why: the host returns a bare `true` on success; a missing/undefined result is
   // not a confirmed success, so require an explicit `=== true` rather than `!== false`.
   if (response.result !== true) {
-    return { ok: false, error: 'Failed to update review thread.' }
+    return { ok: false, error: t('m.gz_v97k') }
   }
   return { ok: true }
 }

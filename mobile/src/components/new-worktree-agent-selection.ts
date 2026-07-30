@@ -2,6 +2,7 @@ import type { TuiAgent } from '../../../src/shared/types'
 import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
 import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
 import { pickWorkspaceAgent } from '../tasks/workspace-agent-selection'
+import { t } from '@/i18n/mobile-i18n'
 
 export type NewWorktreeRuntimeSettings = {
   defaultTuiAgent?: TuiAgent | 'blank' | null
@@ -18,7 +19,7 @@ export const NEW_WORKTREE_AGENT_OPTIONS: NewWorktreeAgentOption[] = MOBILE_AGENT
 
 export const NEW_WORKTREE_BLANK_AGENT: NewWorktreeAgentOption = {
   id: '__blank__',
-  label: 'Blank Terminal'
+  label: t('m.84CVutM')
 }
 
 export function newWorktreeAgentOptionFor(id: string | null | undefined): NewWorktreeAgentOption {

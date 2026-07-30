@@ -23,6 +23,7 @@ import {
   saveTerminalAutocompleteEnabled,
   saveTerminalTextScale
 } from '../src/storage/preferences'
+import { t } from '@/i18n/mobile-i18n'
 
 type RestoreValue = 'indefinite' | '60s' | '5m' | '30m'
 
@@ -31,12 +32,12 @@ type TextSizeValue = 'smallest' | 'smaller' | 'default' | 'large' | 'larger' | '
 // scale = baseline zoom the terminal WebView applies on top of fit-to-width.
 // Keep in sync with TERMINAL_TEXT_SCALES; pinch-to-zoom snaps to these values.
 const TEXT_SIZE_OPTIONS: (PickerOption<TextSizeValue> & { scale: number })[] = [
-  { value: 'smallest', label: 'Smallest (50%)', scale: 0.5 },
-  { value: 'smaller', label: 'Smaller (75%)', scale: 0.75 },
-  { value: 'default', label: 'Default (100%)', scale: 1 },
-  { value: 'large', label: 'Large (125%)', scale: 1.25 },
-  { value: 'larger', label: 'Larger (150%)', scale: 1.5 },
-  { value: 'largest', label: 'Largest (200%)', scale: 2 }
+  { value: 'smallest', label: t('m.hiouM1M'), scale: 0.5 },
+  { value: 'smaller', label: t('m.CAs8oUM'), scale: 0.75 },
+  { value: 'default', label: t('m.0OKOsKY'), scale: 1 },
+  { value: 'large', label: t('m.HqP6IBw'), scale: 1.25 },
+  { value: 'larger', label: t('m.tAn81tY'), scale: 1.5 },
+  { value: 'largest', label: t('m.75Kr_24'), scale: 2 }
 ]
 
 function textSizeValueFromScale(scale: number): TextSizeValue {
@@ -48,10 +49,10 @@ function textSizeSummary(scale: number): string {
 }
 
 const AUTO_RESTORE_FIT_OPTIONS: (PickerOption<RestoreValue> & { ms: number | null })[] = [
-  { value: 'indefinite', label: 'Keep at phone size (default)', ms: null },
-  { value: '60s', label: 'After 1 minute', ms: 60_000 },
-  { value: '5m', label: 'After 5 minutes', ms: 5 * 60_000 },
-  { value: '30m', label: 'After 30 minutes', ms: 30 * 60_000 }
+  { value: 'indefinite', label: t('m.q6VQcZE'), ms: null },
+  { value: '60s', label: t('m.gBGOsCI'), ms: 60_000 },
+  { value: '5m', label: t('m.p2EWmRg'), ms: 5 * 60_000 },
+  { value: '30m', label: t('m.rU9qdt0'), ms: 30 * 60_000 }
 ]
 
 function valueFromMs(ms: number | null | undefined): RestoreValue {
@@ -89,7 +90,7 @@ function autoRestoreSummary(ms: number | null | undefined): string {
     return AUTO_RESTORE_FIT_OPTIONS[0]!.label
   }
   const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
-  return exact ? exact.label : `After ${Math.round(ms / 1000)}s`
+  return exact ? exact.label : t('m.WVNYnak', { value0: Math.round(ms / 1000) })
 }
 
 function HostFitRow({
@@ -259,7 +260,7 @@ export default function TerminalSettingsScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Terminal</Text>
+        <Text style={styles.heading}>{t('m.kJj5Z2g')}</Text>
       </View>
 
       <Animated.ScrollView
@@ -272,19 +273,12 @@ export default function TerminalSettingsScreen() {
           scrollContentHeight.value = height
         }}
       >
-        <Text style={styles.groupHeading}>WHEN YOU LEAVE THE APP</Text>
-        <Text style={styles.groupDescription}>
-          While you&apos;re using a terminal on your phone, Orca shrinks it to fit your screen. When
-          you close the app or switch away, this controls whether it stays at phone size (so
-          interactive CLI tools don&apos;t reflow) or resizes back to your desktop. You can always
-          use Restore this terminal or Restore all terminals on the banner to resize manually.
-        </Text>
+        <Text style={styles.groupHeading}>{t('m.f9vgUHc')}</Text>
+        <Text style={styles.groupDescription}>{t('m.-fV3Ce8')}</Text>
 
         {hosts.length === 0 ? (
           <View style={[styles.section, styles.sectionTopGap]}>
-            <Text style={styles.emptyText}>
-              No paired desktops yet. Pair one to control terminal behavior.
-            </Text>
+            <Text style={styles.emptyText}>{t('m.U2mtyZg')}</Text>
           </View>
         ) : (
           <View style={[styles.section, styles.sectionTopGap]}>
@@ -305,13 +299,8 @@ export default function TerminalSettingsScreen() {
           </View>
         )}
 
-        <Text style={[styles.groupHeading, styles.inputGroupGap]}>TEXT SIZE</Text>
-        <Text style={styles.groupDescription}>
-          Scale the terminal text. Smaller sizes fit more columns with side margins; larger sizes
-          show fewer columns — drag sideways to pan. You can also pinch to zoom in the terminal
-          itself, which updates this setting. Per-device display only; doesn&apos;t change the
-          desktop terminal.
-        </Text>
+        <Text style={[styles.groupHeading, styles.inputGroupGap]}>{t('m.OS-rNTI')}</Text>
+        <Text style={styles.groupDescription}>{t('m.nzfG92c')}</Text>
         <View style={[styles.section, styles.sectionTopGap]}>
           <Pressable
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -319,25 +308,22 @@ export default function TerminalSettingsScreen() {
           >
             <Type size={16} color={colors.textSecondary} />
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Text size</Text>
+              <Text style={styles.rowLabel}>{t('m.QcL6LT4')}</Text>
               <Text style={styles.rowSublabel}>{textSizeSummary(textScale)}</Text>
             </View>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
         </View>
 
-        <Text style={[styles.groupHeading, styles.inputGroupGap]}>KEYBOARD INPUT</Text>
-        <Text style={styles.groupDescription}>
-          Enable phone-style autocomplete, autocorrect, and spelling suggestions in the terminal
-          command bar. Off by default so the keyboard never rewrites commands, flags, or paths.
-          Direct keyboard input (when keys go straight to the terminal) always sends raw keystrokes,
-          so suggestions don&apos;t apply there.
-        </Text>
+        <Text style={[styles.groupHeading, styles.inputGroupGap]}>{t('m.18J3yr0')}</Text>
+        <Text style={styles.groupDescription}>{t('m.mK_kCfI')}</Text>
         <View style={[styles.section, styles.sectionTopGap]}>
           <View style={styles.row}>
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Autocomplete &amp; autocorrect</Text>
-              <Text style={styles.rowSublabel}>{autocompleteEnabled ? 'On' : 'Off'}</Text>
+              <Text style={styles.rowLabel}>{t('m.AsTLd6A')}</Text>
+              <Text style={styles.rowSublabel}>
+                {autocompleteEnabled ? t('m.qR5mpHo') : t('m.rE4IiF8')}
+              </Text>
             </View>
             <Switch
               value={autocompleteEnabled}
@@ -358,7 +344,7 @@ export default function TerminalSettingsScreen() {
 
       <PickerModal<RestoreValue>
         visible={pickerHost != null}
-        title={pickerHost ? `Restore ${pickerHost.name}` : ''}
+        title={pickerHost ? t('m.nN25Xmo', { value0: pickerHost.name }) : ''}
         options={AUTO_RESTORE_FIT_OPTIONS}
         selected={valueFromMs(pickerHost ? hostMs[pickerHost.id] : null)}
         onSelect={(v) => {
@@ -371,7 +357,7 @@ export default function TerminalSettingsScreen() {
 
       <PickerModal<TextSizeValue>
         visible={textSizePickerOpen}
-        title="Terminal text size"
+        title={t('m.lfAeAOI')}
         options={TEXT_SIZE_OPTIONS}
         selected={textSizeValueFromScale(textScale)}
         onSelect={selectTextSize}

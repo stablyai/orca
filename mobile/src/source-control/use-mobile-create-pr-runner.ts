@@ -17,6 +17,7 @@ import {
   runMobileHostedReviewCreateIntent,
   type MobileHostedReviewCreateIntentRunOutcome
 } from './mobile-hosted-review-create-intent-runner'
+import { t } from '@/i18n/mobile-i18n'
 
 type RunGitWorkflow = (actionId: string, runner: () => Promise<void>) => Promise<boolean>
 type LoadStatus = (options?: LoadStatusOptions) => Promise<boolean>
@@ -62,7 +63,7 @@ export function useMobileCreatePrRunner({
       const branch = status?.branch
       if (!client || !branch) {
         triggerError()
-        setActionError('Check out a branch before creating a pull request.')
+        setActionError(t('m.IhhRQcI'))
         return
       }
       const created: { current: MobileHostedReviewCreateIntentRunOutcome | null } = {

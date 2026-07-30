@@ -3,6 +3,7 @@ import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { createTerminalAndSendPrompt } from './pr-ai-triage-launch'
+import { t } from '@/i18n/mobile-i18n'
 
 // Launches an agent for the PR triage actions ("Fix checks with AI" / "Resolve
 // conflicts with AI") via createTerminalAndSendPrompt; see pr-ai-triage-launch.ts.
@@ -31,7 +32,7 @@ export function useMobilePrAiTriage(input: Input) {
         return false
       }
       if (!client || connState !== 'connected') {
-        setError('Waiting for desktop…')
+        setError(t('m.WXv-mcQ'))
         triggerError()
         return false
       }
@@ -44,7 +45,7 @@ export function useMobilePrAiTriage(input: Input) {
         return true
       } catch (err) {
         triggerError()
-        setError(err instanceof Error ? err.message : 'Failed to launch agent')
+        setError(err instanceof Error ? err.message : t('m.62Wqvcg'))
         return false
       } finally {
         inFlightRef.current = false

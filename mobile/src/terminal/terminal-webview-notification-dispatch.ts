@@ -1,4 +1,5 @@
 import type { TerminalSelectionEvents } from './terminal-webview-contract'
+import { t } from '@/i18n/mobile-i18n'
 
 export type TerminalWebViewNotificationHandlers = Omit<
   TerminalSelectionEvents,
@@ -19,7 +20,7 @@ export function dispatchTerminalWebViewNotification(
     // eslint-disable-next-line no-console
     console.log(tag, msg.payload)
   } else if (msg.type === 'error') {
-    const message = typeof msg.message === 'string' ? msg.message : 'Unknown terminal error'
+    const message = typeof msg.message === 'string' ? msg.message : t('m.TI9qKn0')
     handlers.reportEngineError(message, msg.fatal !== false)
   } else if (msg.type === 'set-select-mode') {
     handlers.onSelectionMode?.(!!msg.enabled)

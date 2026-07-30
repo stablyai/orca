@@ -10,6 +10,7 @@ import {
 } from 'react-native'
 import { Search, X } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { t } from '@/i18n/mobile-i18n'
 
 // Why: toolbar/list chrome paints and settles after the open tap; native
 // autoFocus alone often fails to raise the soft keyboard on iOS/Android.
@@ -43,7 +44,7 @@ export function MobileSearchField({
   placeholder,
   onClear,
   showClear,
-  clearAccessibilityLabel = 'Clear search',
+  clearAccessibilityLabel = t('m.5GRCze0'),
   autoFocus = false,
   focusKey,
   returnKeyType = 'search',

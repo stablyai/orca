@@ -1,3 +1,4 @@
+import { t } from '@/i18n/mobile-i18n'
 // The three lenses of the mobile Source Control hub. Kept as a pure module (no
 // React/native imports) so tab parsing is unit-testable and the deep-link `tab`
 // query param and the segmented control share one source of truth.
@@ -11,9 +12,9 @@ export const SOURCE_CONTROL_HUB_TABS: readonly SourceControlHubTab[] = [
 ] as const
 
 export const SOURCE_CONTROL_HUB_TAB_LABELS: Record<SourceControlHubTab, string> = {
-  changes: 'Changes',
-  pr: 'Pull Request',
-  history: 'Commits'
+  changes: t('m.TMv0RaY'),
+  pr: t('m.Xawq6ME'),
+  history: t('m.r9Wy-Q8')
 }
 
 // Normalize a route param (possibly an array from expo-router, possibly unknown)

@@ -10,6 +10,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { hostedReviewCopy } from './hosted-review-copy'
 import { linkMobileHostedReview } from './mobile-pr-link'
+import { t } from '@/i18n/mobile-i18n'
 
 // The mobile worktree id is `${repoId}::${path}`; hosted-review RPCs expect the
 // repo selector separately, matching the desktop/runtime hosted-review service.
@@ -179,11 +180,11 @@ async function pushMobileBranchBeforeCreate(
   try {
     const response = await client.sendRequest('git.push', { worktree: `id:${worktreeId}` })
     if (!response.ok) {
-      return { ok: false, error: 'Push failed. Resolve the push error, then try again.' }
+      return { ok: false, error: t('m.QeyCTxE') }
     }
     return { ok: true }
   } catch {
-    return { ok: false, error: 'Push failed. Resolve the push error, then try again.' }
+    return { ok: false, error: t('m.QeyCTxE') }
   }
 }
 
@@ -199,7 +200,7 @@ function formatMobileHostedReviewCreateError(
     return result.error
   }
   const prefix = new RegExp(`^Create ${shortLabel} failed:\\s*`, 'i')
-  return `Push succeeded, but ${shortLabel} creation failed: ${result.error.replace(prefix, '')}`
+  return t('m.VtNQIUo', { value0: shortLabel, value1: result.error.replace(prefix, '') })
 }
 
 async function finishMobileHostedReviewCreateSuccess(
@@ -243,7 +244,7 @@ export async function createMobileHostedReview(
       buildMobileHostedReviewCreateParams(worktreeId, input)
     )
     if (!response.ok) {
-      return { ok: false, error: response.error?.message || 'Failed to create pull request' }
+      return { ok: false, error: response.error?.message || t('m.8Tx_eZw') }
     }
     const result = (response as RpcSuccess).result as CreateHostedReviewResult
     if (result.ok) {
@@ -273,14 +274,14 @@ export async function createMobileHostedReview(
           result,
           pushed,
           hostedReviewCopy(input.provider).shortLabel
-        ) || 'Failed to create pull request'
+        ) || t('m.8Tx_eZw')
     }
   } catch (err) {
     // Why: create review runs from an inline form; transport drops should surface
     // as form errors instead of escaping as unhandled promise rejections.
     return {
       ok: false,
-      error: err instanceof Error ? err.message : 'Failed to create pull request'
+      error: err instanceof Error ? err.message : t('m.8Tx_eZw')
     }
   }
 }

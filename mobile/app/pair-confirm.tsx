@@ -16,6 +16,7 @@ import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
 } from '../src/onboarding/mobile-onboarding-plan'
+import { t } from '@/i18n/mobile-i18n'
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'
 
@@ -135,8 +136,8 @@ export default function PairConfirmScreen() {
       setStatus('error')
       setErrorMessage(
         timedOut
-          ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
-          : `Pairing failed: ${err instanceof Error ? err.message : String(err)}`
+          ? t('m.uZiEDJ8', { value0: PAIRING_OVERALL_TIMEOUT_MS / 1000 })
+          : t('m.AHFOidY', { value0: err instanceof Error ? err.message : String(err) })
       )
     }
   }
@@ -152,16 +153,14 @@ export default function PairConfirmScreen() {
       <View style={styles.content}>
         {offer && resolvedStatus === 'awaiting-confirm' && (
           <>
-            <Text style={styles.title}>Pair with this desktop?</Text>
-            <Text style={styles.subtitle}>
-              You opened a pairing link from your desktop. Confirm to add it to your hosts.
-            </Text>
+            <Text style={styles.title}>{t('m.ymuJ-Uc')}</Text>
+            <Text style={styles.subtitle}>{t('m.3LfZ8xU')}</Text>
             <View style={styles.actionStack}>
               <Pressable style={styles.primaryButton} onPress={() => void confirm()}>
-                <Text style={styles.primaryButtonText}>Pair</Text>
+                <Text style={styles.primaryButtonText}>{t('m.V-NORJA')}</Text>
               </Pressable>
               <Pressable style={styles.secondaryButton} onPress={cancel}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
+                <Text style={styles.secondaryButtonText}>{t('m.gZ1SfD8')}</Text>
               </Pressable>
             </View>
           </>
@@ -170,9 +169,9 @@ export default function PairConfirmScreen() {
         {resolvedStatus === 'connecting' && (
           <>
             <ActivityIndicator size="large" color={colors.textSecondary} />
-            <Text style={styles.connectingText}>Connecting…</Text>
+            <Text style={styles.connectingText}>{t('m.zDZEMlw')}</Text>
             <View style={styles.logSlot}>
-              <ConnectionLog entries={logs} title="Pairing log" />
+              <ConnectionLog entries={logs} title={t('m.2r4Wqzo')} />
             </View>
           </>
         )}
@@ -182,12 +181,12 @@ export default function PairConfirmScreen() {
             <Text style={styles.errorText}>{resolvedErrorMessage}</Text>
             {logs.length > 0 && (
               <View style={styles.logSlot}>
-                <ConnectionLog entries={logs} title="Pairing log" />
+                <ConnectionLog entries={logs} title={t('m.2r4Wqzo')} />
               </View>
             )}
             <View style={styles.actionStack}>
               <Pressable style={styles.primaryButton} onPress={cancel}>
-                <Text style={styles.primaryButtonText}>Back to home</Text>
+                <Text style={styles.primaryButtonText}>{t('m.sKiKFEI')}</Text>
               </Pressable>
             </View>
           </>

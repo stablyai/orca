@@ -4,6 +4,7 @@ import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
 import { openMobileNativeChatSendBudget } from './mobile-native-chat-send'
+import { t } from '@/i18n/mobile-i18n'
 
 export function useMobileNativeChatStop(args: {
   client: RpcClient | null
@@ -43,7 +44,7 @@ export function useMobileNativeChatStop(args: {
   return useCallback(() => {
     const handle = handleRef.current
     if (!client || !handle || !enabled) {
-      onSendError('Stop not sent (terminal not ready)')
+      onSendError(t('m.ZhefrDE'))
       return
     }
     cancelPending()
@@ -73,7 +74,7 @@ export function useMobileNativeChatStop(args: {
       // Why: an ack lost after the frame was written (or a logical cutover) may
       // still have stopped the agent — a definite "not sent" would invite a second
       // Escape into changed state. Mirrors the cancel/answer wording.
-      onSendError(sawUnknown ? 'Stop unconfirmed — check chat before retrying' : 'Stop not sent')
+      onSendError(sawUnknown ? t('m.i8UxPTM') : t('m.S9MYUPk'))
     }
     const sendEscape = (): void => {
       const activeRoute = activeRouteRef.current

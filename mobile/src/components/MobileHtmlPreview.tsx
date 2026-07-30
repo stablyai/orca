@@ -3,6 +3,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { Code, Eye } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   html: string
@@ -23,18 +24,18 @@ export function MobileHtmlPreview({ html, renderSource }: Props) {
         <Pressable
           style={[styles.toggle, mode === 'preview' && styles.toggleActive]}
           onPress={() => setMode('preview')}
-          accessibilityLabel="Preview rendered HTML"
+          accessibilityLabel={t('m.-FhPMsI')}
         >
           <Eye size={13} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.toggleText}>Preview</Text>
+          <Text style={styles.toggleText}>{t('m.bvUfBWI')}</Text>
         </Pressable>
         <Pressable
           style={[styles.toggle, mode === 'source' && styles.toggleActive]}
           onPress={() => setMode('source')}
-          accessibilityLabel="View HTML source"
+          accessibilityLabel={t('m.BE93iOI')}
         >
           <Code size={13} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.toggleText}>Source</Text>
+          <Text style={styles.toggleText}>{t('m.HdJ9GVY')}</Text>
         </Pressable>
       </View>
       {mode === 'preview' ? (

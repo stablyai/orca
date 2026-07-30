@@ -2,6 +2,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { readMobileGitStatusResult } from '../session/mobile-diff-review-rpc'
 import type { MobileGitStatusResult } from './mobile-git-status'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobileHostedReviewStatusReadResult =
   | { ok: true; status: MobileGitStatusResult | null }
@@ -13,7 +14,7 @@ export async function readMobileHostedReviewGitStatus(
 ): Promise<MobileHostedReviewStatusReadResult> {
   const response = await client.sendRequest('git.status', { worktree: `id:${worktreeId}` })
   if (!response.ok) {
-    return { ok: false, error: response.error?.message || 'Unable to refresh source control' }
+    return { ok: false, error: response.error?.message || t('m.Cqqzv8U') }
   }
   return { ok: true, status: readMobileGitStatusResult((response as RpcSuccess).result) }
 }
@@ -54,14 +55,14 @@ export async function commitMobileHostedReviewStagedChanges(
       message
     })
     if (!response.ok) {
-      return { ok: false, error: response.error?.message || 'Commit failed' }
+      return { ok: false, error: response.error?.message || t('m.X4spS84') }
     }
     const result = (response as RpcSuccess).result as { success?: boolean; error?: string }
     if (result?.success !== true) {
-      return { ok: false, error: result?.error || 'Commit failed' }
+      return { ok: false, error: result?.error || t('m.X4spS84') }
     }
     return { ok: true }
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'Commit failed' }
+    return { ok: false, error: err instanceof Error ? err.message : t('m.X4spS84') }
   }
 }

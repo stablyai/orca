@@ -28,6 +28,7 @@ import {
 } from './pr-comment-groups'
 import { prCommentsStyles as styles } from './pr-comments-styles'
 import { mobilePrSidebarStyles as shared } from './mobile-pr-sidebar-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   details: GitHubWorkItemDetails | null
@@ -118,22 +119,20 @@ export function PRCommentsSection({
 
   return (
     <>
-      <PRSection title="Description">
+      <PRSection title={t('m.6VkqcQk')}>
         {loadingDetails ? (
           <ActivityIndicator color={colors.textSecondary} />
         ) : detailsFailed ? (
-          <Text style={styles.noDescription}>
-            Could not load description. Tap refresh to try again.
-          </Text>
+          <Text style={styles.noDescription}>{t('m.hO2eecI')}</Text>
         ) : body.trim() ? (
           <CommentMarkdown content={body} variant="document" />
         ) : (
-          <Text style={styles.noDescription}>No description provided.</Text>
+          <Text style={styles.noDescription}>{t('m.vdfQtbs')}</Text>
         )}
       </PRSection>
 
       <PRSection
-        title="Comments"
+        title={t('m._l0TaO0')}
         trailing={
           comments.length > 0 ? (
             <View style={styles.countChip}>
@@ -145,11 +144,11 @@ export function PRCommentsSection({
         {loadingDetails ? (
           <ActivityIndicator color={colors.textSecondary} />
         ) : detailsFailed ? (
-          <Text style={styles.empty}>Could not load comments. Tap refresh to try again.</Text>
+          <Text style={styles.empty}>{t('m.FVdefgc')}</Text>
         ) : (
           <View style={styles.list}>
             {comments.length === 0 ? (
-              <Text style={styles.empty}>No comments yet.</Text>
+              <Text style={styles.empty}>{t('m.xX8eZhc')}</Text>
             ) : (
               <>
                 {isPr ? (
@@ -197,8 +196,12 @@ export function PRCommentsSection({
                         accessibilityRole="button"
                       >
                         <Text style={styles.showMoreText}>
-                          Show {Math.min(remaining, COMMENT_PAGE)} more
-                          {remaining > COMMENT_PAGE ? ` of ${remaining}` : ''}
+                          {remaining > COMMENT_PAGE
+                            ? t('m.vV46Tns', {
+                                value0: COMMENT_PAGE,
+                                value1: remaining
+                              })
+                            : t('m.cHoCGwY', { value0: remaining })}
                         </Text>
                       </Pressable>
                     ) : null}
@@ -210,8 +213,8 @@ export function PRCommentsSection({
             {canComment && actions ? (
               <View style={styles.rootComposer}>
                 <PRCommentComposer
-                  placeholder="Add a comment…"
-                  submitLabel="Comment"
+                  placeholder={t('m.2Mrfqx0')}
+                  submitLabel={t('m.eVLkMyE')}
                   submitting={actions.isRootBusy}
                   onSubmit={actions.addRootComment}
                 />
@@ -259,8 +262,14 @@ function CommentGroupView({
       >
         <Chevron size={14} color={colors.textSecondary} strokeWidth={2.2} />
         <Text style={styles.resolvedHeaderText} numberOfLines={1}>
-          Resolved {group.kind === 'thread' ? 'thread' : 'comment'} by {root.author}
-          {count > 1 ? ` (${count})` : ''}
+          {count > 1
+            ? t(group.kind === 'thread' ? 'm.lXnGpvs' : 'm.tQONwOQ', {
+                value0: root.author,
+                value1: count
+              })
+            : t(group.kind === 'thread' ? 'm.dG4O1e4' : 'm.njd-pFg', {
+                value0: root.author
+              })}
         </Text>
       </Pressable>
       {expanded ? <View style={shared.sectionBody}>{cards}</View> : null}

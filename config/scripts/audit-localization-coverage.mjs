@@ -6,6 +6,8 @@ import process from 'node:process'
 // TypeScript 7 is a native CLI; AST consumers still need the legacy JavaScript API.
 import ts from 'typescript-api'
 
+import { classifyMobileStringNode } from './mobile-localization-candidate-rules.mjs'
+
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
 const LOCALIZATION_CALL_NAMES = new Set(['t', 'translate'])
@@ -108,6 +110,9 @@ function hasHumanLanguageText(text) {
     return false
   }
   if (/^[\d\s!-/:-@[-`{-~]+$/.test(trimmed)) {
+    return false
+  }
+  if (/^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(trimmed)) {
     return false
   }
   return /[A-Za-z\u00C0-\u024F\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(trimmed)
@@ -393,6 +398,13 @@ export function collectLocalizationCandidates(filePath, sourceText, root = proce
   )
   const reports = []
   const relativePath = normalizePath(root, filePath)
+  const mobileSource =
+    relativePath.startsWith('mobile/app/') || relativePath.startsWith('mobile/src/')
+  const userVisibleErrorSource =
+    relativePath.startsWith('mobile/app/') ||
+    /^mobile\/src\/(?:agent-history|browser|components|dictation|files|hooks|session|source-control|tasks)\//.test(
+      relativePath
+    )
 
   function pushReport(node, kind, text, dynamic = false) {
     const value = compactText(text)
@@ -419,7 +431,9 @@ export function collectLocalizationCandidates(filePath, sourceText, root = proce
       return
     }
 
-    const kind = classifyStringNode(node)
+    const kind = mobileSource
+      ? classifyMobileStringNode(node, userVisibleErrorSource)
+      : classifyStringNode(node)
     if (kind) {
       for (const part of stringParts(node)) {
         pushReport(node, kind, part.text, part.dynamic)
@@ -583,7 +597,7 @@ export async function main(root = process.cwd(), argv = process.argv.slice(2)) {
     const allowlist = await readAllowlist(root, options.allowlistPath)
     const newCandidates = findNewCandidates(reports, allowlist)
     if (newCandidates.length > 0) {
-      console.error('New unlocalized renderer strings were found.')
+      console.error('New unlocalized UI strings were found.')
       console.error('Localize them or add a reviewed exclusion to the localization allowlist.')
       console.error('')
       console.error(formatReports(root, newCandidates))

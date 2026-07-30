@@ -4,6 +4,7 @@ import type {
   PRCheckRunDetails,
   PRCheckStep
 } from '../../../../src/shared/types'
+import { t } from '@/i18n/mobile-i18n'
 
 // Pure mapping from the github.prCheckDetails payload to the rows the mobile
 // expanded check detail renders. No React/native imports so it stays unit-testable
@@ -45,8 +46,8 @@ export type CheckDetailContent = {
   annotations: CheckDetailAnnotation[]
   // True when the host returned more annotations than we render.
   annotationsTruncated: boolean
-  // "Failed jobs" when only failing jobs are shown, else "Jobs" (matches desktop label).
-  jobsLabel: 'Failed jobs' | 'Jobs'
+  // Localized to "Failed jobs" when only failing jobs are shown, else "Jobs".
+  jobsLabel: string
   jobs: CheckDetailJob[]
   jobsTruncated: boolean
 }
@@ -90,7 +91,7 @@ export function presentCheckDetail(details: PRCheckRunDetails): CheckDetailConte
     summaryLines,
     annotations: details.annotations.slice(0, MAX_ANNOTATIONS).map(mapAnnotation),
     annotationsTruncated: details.annotations.length > MAX_ANNOTATIONS,
-    jobsLabel: failedJobs.length > 0 ? 'Failed jobs' : 'Jobs',
+    jobsLabel: failedJobs.length > 0 ? t('m.OJSrr6g') : t('m.g0JLO88'),
     jobs: visibleJobs.slice(0, MAX_JOBS).map(mapJob),
     jobsTruncated: details.jobs.length > MAX_JOBS
   }

@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
 import type { MobileSessionTab } from '../../app/h/[hostId]/session/mobile-session-route-types'
 import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'
+import { t } from '@/i18n/mobile-i18n'
 
 type BrowserTab = Extract<MobileSessionTab, { type: 'browser' }>
 export type MobileBrowserNavigationMethod = 'browser.back' | 'browser.forward' | 'browser.reload'
@@ -21,12 +22,12 @@ export function MobileBrowserTabActionSheet(props: {
   return (
     <ActionSheetModal
       visible={target != null}
-      title={target ? getMobileSessionTabTitle(target) : 'Browser'}
+      title={target ? getMobileSessionTabTitle(target) : t('m.GZwtZCE')}
       actions={[
         ...(target?.canGoBack
           ? [
               {
-                label: 'Back',
+                label: t('m.SKku3yE'),
                 icon: ChevronLeft,
                 onPress: () => {
                   const current = target
@@ -41,7 +42,7 @@ export function MobileBrowserTabActionSheet(props: {
         ...(target?.canGoForward
           ? [
               {
-                label: 'Forward',
+                label: t('m.m4hO2RY'),
                 icon: ChevronRight,
                 onPress: () => {
                   const current = target
@@ -54,7 +55,7 @@ export function MobileBrowserTabActionSheet(props: {
             ]
           : []),
         {
-          label: 'Reload',
+          label: t('m.8xevGic'),
           icon: RefreshCw,
           onPress: () => {
             const current = target
@@ -65,7 +66,7 @@ export function MobileBrowserTabActionSheet(props: {
           }
         },
         {
-          label: 'Close',
+          label: t('m.vCnFzKQ'),
           destructive: true,
           onPress: () => {
             const current = target

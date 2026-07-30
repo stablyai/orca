@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { TextInput, type TextInputProps } from 'react-native'
+import { t } from '@/i18n/mobile-i18n'
 
 const MOBILE_WORKSPACE_NAME_FOCUS_DELAY_MS = 220
 
@@ -32,7 +33,7 @@ export function MobileWorkspaceNameInput({
   return (
     <TextInput
       ref={inputRef}
-      placeholder="Workspace name"
+      placeholder={t('m.UIMZetU')}
       autoCapitalize="none"
       autoCorrect={false}
       showSoftInputOnFocus

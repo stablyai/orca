@@ -25,6 +25,7 @@ import {
 } from '../../source-control/pr-compose-validation'
 import { MobilePrBasePicker } from '../MobilePrBasePicker'
 import { mobilePrComposeFormStyles as styles } from './mobile-pr-compose-form-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 export type PrComposePrefill = MobilePrPrefill
 
@@ -77,7 +78,7 @@ export function MobilePrComposeForm({
         draft
       })
       if (!response.ok) {
-        setError(response.error?.message || 'Failed to generate PR fields')
+        setError(response.error?.message || t('m.Tf6JzYM'))
         return
       }
       const result = (response as RpcSuccess).result as {
@@ -95,7 +96,7 @@ export function MobilePrComposeForm({
       }
     } catch (err) {
       triggerError()
-      setError(err instanceof Error ? err.message : 'Failed to generate PR fields')
+      setError(err instanceof Error ? err.message : t('m.Tf6JzYM'))
     } finally {
       setGenerating(false)
     }
@@ -166,7 +167,7 @@ export function MobilePrComposeForm({
       <View style={styles.headingRow}>
         <View style={styles.headingTitle}>
           <ReviewIcon size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.heading}>New {copy.reviewLabel}</Text>
+          <Text style={styles.heading}>{t('m.gTT3Qik', { value0: copy.reviewLabel })}</Text>
         </View>
         <View style={styles.headingActions}>
           <Pressable
@@ -174,21 +175,21 @@ export function MobilePrComposeForm({
             disabled={generating || submitting}
             onPress={() => void generate()}
             accessibilityRole="button"
-            accessibilityLabel={`Generate ${copy.reviewLabel} details with AI`}
+            accessibilityLabel={t('m.h8LEFjY', { value0: copy.reviewLabel })}
           >
             {generating ? (
               <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : (
               <Sparkles size={13} color={colors.textSecondary} strokeWidth={2.1} />
             )}
-            <Text style={styles.genButtonText}>{generating ? 'Generating…' : 'Generate'}</Text>
+            <Text style={styles.genButtonText}>{generating ? t('m.E5u75yA') : t('m.w4jN8ic')}</Text>
           </Pressable>
           <Pressable
             style={styles.iconButton}
             onPress={onCancel}
             disabled={submitting}
             accessibilityRole="button"
-            accessibilityLabel="Cancel"
+            accessibilityLabel={t('m.56ar5ss')}
             hitSlop={8}
           >
             <X size={16} color={colors.textSecondary} strokeWidth={2.2} />
@@ -206,7 +207,7 @@ export function MobilePrComposeForm({
             style={[styles.branchToken, baseConflict && styles.branchTokenError]}
             numberOfLines={1}
           >
-            {base || 'base'}
+            {base || t('m.RIaVSo8')}
           </Text>
         </View>
       ) : null}
@@ -216,32 +217,32 @@ export function MobilePrComposeForm({
           style={styles.titleInput}
           value={title}
           onChangeText={setTitle}
-          placeholder="Title"
+          placeholder={t('m.JnixruY')}
           placeholderTextColor={colors.textMuted}
           editable={!fieldsLocked}
-          accessibilityLabel={`${copy.titleLabel} title`}
+          accessibilityLabel={t('m.CYW43ss', { value0: copy.titleLabel })}
         />
         <TextInput
           style={styles.bodyInput}
           value={body}
           onChangeText={setBody}
-          placeholder="Description (optional)"
+          placeholder={t('m.-uhp5Eo')}
           placeholderTextColor={colors.textMuted}
           multiline
           editable={!fieldsLocked}
-          accessibilityLabel={`${copy.titleLabel} description`}
+          accessibilityLabel={t('m.-QF2aQc', { value0: copy.titleLabel })}
         />
       </View>
 
       {generating ? (
         <View style={styles.notice}>
           <Sparkles size={13} color={colors.textSecondary} strokeWidth={2.1} />
-          <Text style={styles.noticeText}>Generating title and description…</Text>
+          <Text style={styles.noticeText}>{t('m.UsM_A3E')}</Text>
         </View>
       ) : null}
 
       <View style={styles.baseRow}>
-        <Text style={styles.baseLabel}>Base</Text>
+        <Text style={styles.baseLabel}>{t('m.oPjbjuk')}</Text>
         <View style={styles.baseControl}>
           <MobilePrBasePicker
             client={client}
@@ -254,7 +255,7 @@ export function MobilePrComposeForm({
       </View>
 
       <View style={styles.draftRow}>
-        <Text style={styles.draftText}>Create as draft</Text>
+        <Text style={styles.draftText}>{t('m.3Yb2tD4')}</Text>
         <Switch value={draft} onValueChange={setDraft} disabled={fieldsLocked} />
       </View>
       {error || submitDisabledReason ? (
@@ -281,11 +282,11 @@ export function MobilePrComposeForm({
         <Text style={styles.submitText}>
           {pushBeforeCreate
             ? draft
-              ? `Push & create draft ${copy.shortLabel}`
-              : `Push & create ${copy.shortLabel}`
+              ? t('m.aUTTsqg', { value0: copy.shortLabel })
+              : t('m.YpkfCr0', { value0: copy.shortLabel })
             : draft
-              ? `Create draft ${copy.shortLabel}`
-              : `Create ${copy.shortLabel}`}
+              ? t('m.zouGGt0', { value0: copy.shortLabel })
+              : t('m.T0kbQLc', { value0: copy.shortLabel })}
         </Text>
       </Pressable>
     </View>

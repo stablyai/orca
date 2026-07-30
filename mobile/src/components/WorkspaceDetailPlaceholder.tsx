@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet } from 'react-native'
 import { SquareTerminal } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { t } from '@/i18n/mobile-i18n'
 
 // Empty detail pane shown beside the worktree-list sidebar on wide
 // tablet/foldable layouts until the user opens a workspace.
@@ -10,8 +11,8 @@ export function WorkspaceDetailPlaceholder() {
       <View style={styles.icon}>
         <SquareTerminal size={28} color={colors.textMuted} />
       </View>
-      <Text style={styles.title}>No workspace open</Text>
-      <Text style={styles.body}>Pick a workspace from the sidebar to open its terminal here.</Text>
+      <Text style={styles.title}>{t('m.qe5Mx6E')}</Text>
+      <Text style={styles.body}>{t('m.6qylM4Q')}</Text>
     </View>
   )
 }

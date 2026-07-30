@@ -10,6 +10,7 @@ import type {
   MobileGitStatusResult,
   MobileGitUpstreamStatus
 } from '../source-control/mobile-git-status'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobileReviewGitDiffResult =
   | {
@@ -242,7 +243,7 @@ export function readMobileReviewTerminalTabs(value: unknown): MobileReviewTermin
       {
         id,
         terminal,
-        title: readString(candidate.title) ?? 'Terminal'
+        title: readString(candidate.title) ?? t('m.OtjVKog')
       }
     ]
   })

@@ -7,6 +7,7 @@ import {
   pickMobileImage,
   type MobileImageSource
 } from './mobile-image-source-picker'
+import { t } from '@/i18n/mobile-i18n'
 
 type CurrentRef<T> = {
   readonly current: T
@@ -73,18 +74,18 @@ export function useMobileImageAttachment({
       } catch (error) {
         onError()
         if (connState !== 'connected') {
-          showToast('Attach failed (disconnected)', 1500)
+          showToast(t('m.tu-qlN0'), 1500)
           return
         }
         if (error instanceof ImageLibraryPermissionError) {
-          showToast('Photo permission denied', 1500)
+          showToast(t('m.JdGd1Ic'), 1500)
           return
         }
         if (getErrorMessage(error) === 'Clipboard image is too large') {
-          showToast('Image too large to attach', 1500)
+          showToast(t('m.hJYA7AQ'), 1500)
           return
         }
-        showToast('Attach failed', 1500)
+        showToast(t('m.NSS4Or0'), 1500)
       } finally {
         setIsAttaching(false)
       }

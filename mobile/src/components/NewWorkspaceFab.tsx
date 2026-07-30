@@ -2,6 +2,7 @@ import { Pressable, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Plus } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { t } from '@/i18n/mobile-i18n'
 
 // Diameter of the phone "new workspace" floating action button. Exported so the
 // worktree list can reserve matching bottom padding and keep the last row tappable.
@@ -27,7 +28,7 @@ export function NewWorkspaceFab({ onPress, disabled }: NewWorkspaceFabProps): Re
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel="New workspace"
+      accessibilityLabel={t('m.ybPEhxk')}
       hitSlop={8}
     >
       <Plus size={24} color={colors.bgBase} strokeWidth={2.75} />

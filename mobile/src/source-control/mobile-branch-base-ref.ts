@@ -1,5 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import { isMobileGitUnavailable } from './mobile-git-status'
+import { t } from '@/i18n/mobile-i18n'
 
 type RuntimeRepoSummary = {
   id: string
@@ -86,7 +87,7 @@ export async function resolveMobileBranchCompareBaseRef(
     if (isMobileGitUnavailable(defaultResponse.error?.code, defaultResponse.error?.message)) {
       return null
     }
-    throw new Error(defaultResponse.error?.message || 'Unable to resolve branch base')
+    throw new Error(defaultResponse.error?.message || t('m.SX56B0U'))
   }
   return readDefaultBaseRef(defaultResponse.result)
 }

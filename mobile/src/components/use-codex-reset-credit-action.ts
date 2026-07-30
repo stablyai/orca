@@ -10,14 +10,15 @@ import {
   requestCodexResetCredit
 } from './codex-reset-credit'
 import { useCodexResetCreditCapability } from './codex-reset-credit-capability'
+import { t } from '@/i18n/mobile-i18n'
 
 function describeScope(snapshot: AccountsSnapshot, scope: CodexResetCreditExpectedScope): string {
   const account = snapshot.codex.accounts.find((candidate) => candidate.id === scope.accountId)
   const identity = account?.email ?? 'the selected managed account'
   if (scope.target.runtime === 'host') {
-    return `${identity} on the host`
+    return t('m.TUCQXxI', { value0: identity })
   }
-  return `${identity} on WSL ${scope.target.wslDistro}`
+  return t('m.sDDLSuM', { value0: identity, value1: scope.target.wslDistro })
 }
 
 export function useCodexResetCreditAction({
@@ -68,25 +69,15 @@ export function useCodexResetCreditAction({
         })
         onSnapshot(result.snapshot)
         if ('status' in result) {
-          const cleanupWarning = result.attemptJournalRetained
-            ? '\n\nThis phone could not clear the discarded retry record. Retrying it is safe, but the record must be cleared before a new reset can be confirmed for this account.'
-            : ''
-          Alert.alert(
-            'Reset details changed',
-            `The account or reset offer changed before the host contacted Codex. Review the updated details, then confirm again.${cleanupWarning}`
-          )
+          const cleanupWarning = result.attemptJournalRetained ? t('m.d5V00qM') : ''
+          Alert.alert(t('m.4DQGAog'), t('m.rii7ZAs', { value0: cleanupWarning }))
           return
         }
         const copy = getCodexResetCreditOutcomeCopy(result.outcome)
-        const cleanupWarning = result.attemptJournalRetained
-          ? '\n\nThe host confirmed this attempt, but this phone could not clear its retry record. A later retry will reuse the same safe operation ID.'
-          : ''
+        const cleanupWarning = result.attemptJournalRetained ? t('m.rXScUPU') : ''
         Alert.alert(copy.title, `${copy.message}${cleanupWarning}`)
       } catch (error) {
-        Alert.alert(
-          'Could not reset rate limits',
-          error instanceof Error ? error.message : String(error)
-        )
+        Alert.alert(t('m.TKIeXbw'), error instanceof Error ? error.message : String(error))
       } finally {
         inFlightRef.current = false
         setResetting(false)
@@ -101,14 +92,10 @@ export function useCodexResetCreditAction({
     }
     const confirmedScope = resetScope
     const confirmedLabel = describeScope(snapshot, confirmedScope)
-    Alert.alert(
-      'Use a rate-limit reset?',
-      `This spends one earned reset for ${confirmedLabel} and immediately resets eligible rate-limit windows.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Use reset', onPress: () => void consume(confirmedScope) }
-      ]
-    )
+    Alert.alert(t('m.EzPa9ek'), t('m.5hDxS58', { value0: confirmedLabel }), [
+      { text: t('m._nuDzHY'), style: 'cancel' },
+      { text: t('m.VWnR13E'), onPress: () => void consume(confirmedScope) }
+    ])
   }, [accountMutationBusy, connected, consume, resetScope, resetting, snapshot, supported])
 
   return { supported, resetting, resetScope, scopeLabel, confirmReset }

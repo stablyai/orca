@@ -18,6 +18,7 @@ import type {
 import { useMobileDiffReviewCommentActions } from './use-mobile-diff-review-comment-actions'
 import { useMobileDiffReviewGitActions } from './use-mobile-diff-review-git-actions'
 import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
+import { t } from '@/i18n/mobile-i18n'
 
 type InteractionInput = {
   client: RpcClient | null
@@ -188,7 +189,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
         staged: currentItem.scope === 'staged'
       })
       if (!response.ok) {
-        setActionError(response.error?.message || 'Unable to open in session')
+        setActionError(response.error?.message || t('m.0hhZYns'))
         return
       }
       onOpenSession()

@@ -1,3 +1,4 @@
+import { t } from '@/i18n/mobile-i18n'
 // Why: mobile host profiles store a single websocket endpoint fixed at pair
 // time. Edit-host lets the user rewrite host/port without re-pairing; this
 // helper accepts phone-friendly input (bare IP, host:port, or full ws URL)
@@ -107,7 +108,7 @@ export function normalizeHostEndpoint(
 ): NormalizeHostEndpointResult {
   const trimmed = input.trim()
   if (!trimmed) {
-    return { ok: false, error: 'Enter a host address.' }
+    return { ok: false, error: t('m.z85IfPo') }
   }
 
   const fallbackPort = resolveFallbackPort(options?.fallbackPort)
@@ -134,56 +135,56 @@ function resolveFallbackPort(value: string | number | undefined): string {
 function normalizeSchemeUrl(input: string, fallbackPort: string): NormalizeHostEndpointResult {
   const explicitPort = resolveWebsocketUrlPort(input)
   if (explicitPort.kind === 'invalid') {
-    return { ok: false, error: 'Port must be 1–65535.' }
+    return { ok: false, error: t('m.HguWCpQ') }
   }
   const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//.exec(input)?.[1]?.toLowerCase()
   if (scheme !== 'ws' && scheme !== 'wss') {
-    return { ok: false, error: 'Use ws:// or wss:// (or host:port).' }
+    return { ok: false, error: t('m.HQMAFdE') }
   }
 
   const rawAuthority = parseRawSchemeAuthority(input)
   if (rawAuthority.hasUserInfo) {
-    return { ok: false, error: 'Not a valid address.' }
+    return { ok: false, error: t('m.CshxztM') }
   }
   if (rawAuthority.hasPathOrQuery) {
-    return { ok: false, error: 'Host must not include a path or query.' }
+    return { ok: false, error: t('m.fX92Peg') }
   }
   if (
     rawAuthority.hostname &&
     validateNumericIpv4Candidate(normalizeRawNumericIpv4Candidate(rawAuthority.hostname))
   ) {
-    return { ok: false, error: 'Not a valid hostname.' }
+    return { ok: false, error: t('m.6lctDfQ') }
   }
 
   let url: URL
   try {
     url = new URL(input)
   } catch {
-    return { ok: false, error: 'Not a valid address.' }
+    return { ok: false, error: t('m.CshxztM') }
   }
 
   if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
-    return { ok: false, error: 'Use ws:// or wss:// (or host:port).' }
+    return { ok: false, error: t('m.HQMAFdE') }
   }
   if (!url.hostname) {
-    return { ok: false, error: 'Missing hostname.' }
+    return { ok: false, error: t('m.dRmw4EQ') }
   }
 
   // Why: edit-host persists a bare host:port WebSocket endpoint. Path/query/
   // userinfo are not part of the pairing contract — reject rather than strip
   // so typos like desk/path or desk?route cannot be saved silently.
   if (url.username || url.password) {
-    return { ok: false, error: 'Not a valid address.' }
+    return { ok: false, error: t('m.CshxztM') }
   }
   if ((url.pathname && url.pathname !== '/') || url.search || url.hash) {
-    return { ok: false, error: 'Host must not include a path or query.' }
+    return { ok: false, error: t('m.fX92Peg') }
   }
 
   const hostname = unwrapHostname(url.hostname)
   // Why: WHATWG URL accepts legacy aliases and rewrites them to a different
   // IPv4 address. Only an already-canonical raw dotted quad may become IPv4.
   if (rawAuthority.hostname && isCanonicalIpv4(hostname) && rawAuthority.hostname !== hostname) {
-    return { ok: false, error: 'Not a valid hostname.' }
+    return { ok: false, error: t('m.6lctDfQ') }
   }
   const hostError = validateHostname(hostname)
   if (hostError) {
@@ -194,7 +195,7 @@ function normalizeSchemeUrl(input: string, fallbackPort: string): NormalizeHostE
   // of rewriting them to fallbackPort (usually 6768).
   const resolvedPort = resolveWebsocketUrlPort(input, url)
   if (resolvedPort.kind === 'invalid') {
-    return { ok: false, error: 'Port must be 1–65535.' }
+    return { ok: false, error: t('m.HguWCpQ') }
   }
   const port = resolvedPort.kind === 'valid' ? resolvedPort.port : fallbackPort
 
@@ -240,14 +241,14 @@ function normalizeHostPort(
   if (input.startsWith('[')) {
     const close = input.indexOf(']')
     if (close <= 1) {
-      return { ok: false, error: 'Not a valid address.' }
+      return { ok: false, error: t('m.CshxztM') }
     }
     host = input.slice(1, close)
     const rest = input.slice(close + 1)
     if (rest.startsWith(':')) {
       port = rest.slice(1)
     } else if (rest.length > 0) {
-      return { ok: false, error: 'Not a valid address.' }
+      return { ok: false, error: t('m.CshxztM') }
     }
   } else {
     const firstColon = input.indexOf(':')
@@ -263,7 +264,7 @@ function normalizeHostPort(
 
   host = host.trim()
   if (!host) {
-    return { ok: false, error: 'Missing hostname.' }
+    return { ok: false, error: t('m.dRmw4EQ') }
   }
 
   // Why: bare input is not a URL, so characters that only make sense in a URL
@@ -276,7 +277,7 @@ function normalizeHostPort(
   if (port !== undefined) {
     port = port.trim()
     if (!isValidPort(port)) {
-      return { ok: false, error: 'Port must be 1–65535.' }
+      return { ok: false, error: t('m.HguWCpQ') }
     }
   }
 

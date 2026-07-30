@@ -9,6 +9,7 @@ import { CommentMarkdown } from './CommentMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
 import { formatPrCommentRelativeTime } from './pr-comment-time'
 import { prCommentsStyles as styles } from './pr-comments-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 export type PRCommentRepoSlug = { owner: string; repo: string; host?: string }
 
@@ -71,7 +72,7 @@ export const PRCommentCard = memo(function PRCommentCard({
   const [replyOpen, setReplyOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const fileLabel = comment.path
+  const fileLocation = comment.path
     ? `${comment.path.split('/').pop()}${comment.line ? `:L${comment.line}` : ''}`
     : null
   const canResolve = actions ? isResolvableComment(comment) : false
@@ -123,14 +124,14 @@ export const PRCommentCard = memo(function PRCommentCard({
         <Text style={styles.time}>
           · {formatPrCommentRelativeTime(comment.createdAt, Date.now())}
         </Text>
-        {fileLabel ? (
+        {fileLocation ? (
           <Text style={styles.path} numberOfLines={1}>
-            {fileLabel}
+            {fileLocation}
           </Text>
         ) : null}
         {comment.isResolved ? (
           <View style={styles.resolvedChip}>
-            <Text style={styles.resolvedChipText}>resolved</Text>
+            <Text style={styles.resolvedChipText}>{t('m.C_gXfCo')}</Text>
           </View>
         ) : null}
         {comment.url ? (
@@ -139,7 +140,7 @@ export const PRCommentCard = memo(function PRCommentCard({
             onPress={() => void Linking.openURL(comment.url).catch(() => {})}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Open comment on GitHub"
+            accessibilityLabel={t('m.FKCKtAo')}
           >
             <ExternalLink size={14} color={colors.textSecondary} strokeWidth={2.2} />
           </Pressable>
@@ -148,8 +149,8 @@ export const PRCommentCard = memo(function PRCommentCard({
       {editOpen && actions ? (
         <View style={styles.composer}>
           <PRCommentComposer
-            placeholder="Edit comment…"
-            submitLabel="Save"
+            placeholder={t('m.Bnwan2Q')}
+            submitLabel={t('m.pZ3OPxE')}
             submitting={editBusy}
             initialBody={comment.body}
             onSubmit={submitEdit}
@@ -171,10 +172,10 @@ export const PRCommentCard = memo(function PRCommentCard({
             disabled={replyBusy}
             hitSlop={6}
             accessibilityRole="button"
-            accessibilityLabel="Reply to comment"
+            accessibilityLabel={t('m.s3o5DeE')}
           >
             <CornerDownRight size={13} color={colors.textSecondary} strokeWidth={2.2} />
-            <Text style={styles.actionButtonText}>Reply</Text>
+            <Text style={styles.actionButtonText}>{t('m.Ragn9hY')}</Text>
           </Pressable>
           {canMutate ? (
             <Pressable
@@ -187,10 +188,10 @@ export const PRCommentCard = memo(function PRCommentCard({
               disabled={editBusy}
               hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel="Edit comment"
+              accessibilityLabel={t('m.Fs36PXM')}
             >
               <Pencil size={13} color={colors.textSecondary} strokeWidth={2.2} />
-              <Text style={styles.actionButtonText}>Edit</Text>
+              <Text style={styles.actionButtonText}>{t('m.wS1VT0I')}</Text>
             </Pressable>
           ) : null}
           {canMutate ? (
@@ -200,10 +201,10 @@ export const PRCommentCard = memo(function PRCommentCard({
               disabled={deleteBusy}
               hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel="Delete comment"
+              accessibilityLabel={t('m.u9hUgiY')}
             >
               <Trash2 size={13} color={colors.textSecondary} strokeWidth={2.2} />
-              <Text style={styles.actionButtonText}>{deleteBusy ? '…' : 'Delete'}</Text>
+              <Text style={styles.actionButtonText}>{deleteBusy ? '…' : t('m.4idOoK8')}</Text>
             </Pressable>
           ) : null}
           {canResolve ? (
@@ -213,7 +214,7 @@ export const PRCommentCard = memo(function PRCommentCard({
               disabled={resolveBusy}
               hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel={comment.isResolved ? 'Unresolve thread' : 'Resolve thread'}
+              accessibilityLabel={comment.isResolved ? t('m.mkEkYMY') : t('m.2PITe20')}
             >
               {comment.isResolved ? (
                 <Undo2 size={13} color={colors.textSecondary} strokeWidth={2.2} />
@@ -221,7 +222,7 @@ export const PRCommentCard = memo(function PRCommentCard({
                 <Check size={13} color={colors.textSecondary} strokeWidth={2.2} />
               )}
               <Text style={styles.actionButtonText}>
-                {resolveBusy ? '…' : comment.isResolved ? 'Unresolve' : 'Resolve'}
+                {resolveBusy ? '…' : comment.isResolved ? t('m.A6XXe-4') : t('m.7oybC2M')}
               </Text>
             </Pressable>
           ) : null}
@@ -230,8 +231,8 @@ export const PRCommentCard = memo(function PRCommentCard({
       {replyOpen && !editOpen && actions ? (
         <View style={styles.composer}>
           <PRCommentComposer
-            placeholder="Write a reply…"
-            submitLabel="Reply"
+            placeholder={t('m.p4p6sek')}
+            submitLabel={t('m.Ragn9hY')}
             submitting={replyBusy}
             onSubmit={submitReply}
             onCancel={() => setReplyOpen(false)}
@@ -242,9 +243,9 @@ export const PRCommentCard = memo(function PRCommentCard({
       {actions ? (
         <ConfirmModal
           visible={confirmDelete}
-          title="Delete comment?"
-          message="This permanently deletes the comment on GitHub."
-          confirmLabel="Delete"
+          title={t('m.xGeFr98')}
+          message={t('m.W8A4HvA')}
+          confirmLabel={t('m.4idOoK8')}
           destructive
           onConfirm={() => void actions.deleteComment(comment.id)}
           onCancel={() => setConfirmDelete(false)}

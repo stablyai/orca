@@ -12,6 +12,7 @@ import {
 } from '../../src/storage/preferences'
 import { HostProtocolGate } from '../../src/components/HostProtocolGate'
 import { HostScreen } from './[hostId]/index'
+import { t } from '@/i18n/mobile-i18n'
 
 // Keep at least this much room for the detail pane when resizing the sidebar.
 const MIN_DETAIL_WIDTH = 320
@@ -39,21 +40,21 @@ function HostStack({ animation }: { animation: 'none' | 'default' }) {
         animation
       }}
     >
-      <Stack.Screen name="[hostId]/index" options={{ title: 'Host' }} />
-      <Stack.Screen name="[hostId]/edit" options={{ title: 'Edit host' }} />
-      <Stack.Screen name="[hostId]/accounts" options={{ title: 'Accounts' }} />
-      <Stack.Screen name="[hostId]/tasks" options={{ title: 'Tasks' }} />
-      <Stack.Screen name="[hostId]/session/[worktreeId]" options={{ title: 'Terminal' }} />
+      <Stack.Screen name="[hostId]/index" options={{ title: t('m.esqB5TM') }} />
+      <Stack.Screen name="[hostId]/edit" options={{ title: t('m.0zcPPW8') }} />
+      <Stack.Screen name="[hostId]/accounts" options={{ title: t('m.KVY3pfk') }} />
+      <Stack.Screen name="[hostId]/tasks" options={{ title: t('m.YTfV9-o') }} />
+      <Stack.Screen name="[hostId]/session/[worktreeId]" options={{ title: t('m.wtxV_i4') }} />
       <Stack.Screen
         name="[hostId]/source-control/[worktreeId]"
-        options={{ title: 'Source Control' }}
+        options={{ title: t('m.MZqxT8s') }}
       />
       <Stack.Screen
         name="[hostId]/agent-history/[worktreeId]"
-        options={{ title: 'Agent Session History' }}
+        options={{ title: t('m.atubgYk') }}
       />
-      <Stack.Screen name="[hostId]/review/[worktreeId]" options={{ title: 'Changes' }} />
-      <Stack.Screen name="[hostId]/pr/[worktreeId]" options={{ title: 'Pull Request' }} />
+      <Stack.Screen name="[hostId]/review/[worktreeId]" options={{ title: t('m.AcEIxcI') }} />
+      <Stack.Screen name="[hostId]/pr/[worktreeId]" options={{ title: t('m.fO2nz88') }} />
     </Stack>
   )
 }

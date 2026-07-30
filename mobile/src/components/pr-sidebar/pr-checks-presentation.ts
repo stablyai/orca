@@ -1,5 +1,6 @@
 import type { PRCheckDetail, PRState } from '../../../../src/shared/types'
 import { prStateToken } from '../pr-state-token'
+import { t } from '@/i18n/mobile-i18n'
 
 // Pure presentation logic for the PR sidebar's checks + state badge. No React /
 // native imports so it is unit-testable under the node Vitest config (KTD5).
@@ -73,7 +74,7 @@ export type PRChecksSummary = {
 
 export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSummary {
   if (checks.length === 0) {
-    return { total: 0, passed: 0, pending: 0, failed: 0, outcome: 'none', label: 'No checks' }
+    return { total: 0, passed: 0, pending: 0, failed: 0, outcome: 'none', label: t('m.hCKjn9A') }
   }
   let passed = 0
   let pending = 0
@@ -130,23 +131,23 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
 // outcome is readable without expanding the row. Mirrors getCheckStatusLabel.
 export function checkStatusLabel(check: PRCheckDetail): string {
   if (check.status !== 'completed') {
-    return check.status === 'in_progress' ? 'In progress' : 'Pending'
+    return check.status === 'in_progress' ? t('m.9XDJxdU') : t('m.NEg29tM')
   }
   switch (check.conclusion) {
     case 'success':
-      return 'Successful'
+      return t('m.6lXfNVk')
     case 'failure':
-      return 'Failed'
+      return t('m.NO0ZjtQ')
     case 'cancelled':
-      return 'Cancelled'
+      return t('m.thrHxG4')
     case 'timed_out':
-      return 'Timed out'
+      return t('m.lyHptRM')
     case 'neutral':
-      return 'Neutral'
+      return t('m.Ba1jOdE')
     case 'skipped':
-      return 'Skipped'
+      return t('m.8I2nZuQ')
     default:
-      return 'Pending'
+      return t('m.NEg29tM')
   }
 }
 
@@ -194,10 +195,10 @@ export type PRStateBadge = {
 }
 
 const PR_STATE_LABELS: Record<PRState, string> = {
-  open: 'Open',
-  merged: 'Merged',
-  draft: 'Draft',
-  closed: 'Closed'
+  open: t('m.sbQ_yBw'),
+  merged: t('m.AF7gJFU'),
+  draft: t('m.QYCFjQw'),
+  closed: t('m.tNw1xEA')
 }
 
 // State-badge color comes from the shared prStateToken so the sidebar badge and
@@ -221,20 +222,20 @@ function reviewStateLabel(state: string | null | undefined): {
 } {
   switch (state) {
     case 'APPROVED':
-      return { label: 'Approved', token: 'statusGreen' }
+      return { label: t('m.IloG18k'), token: 'statusGreen' }
     case 'CHANGES_REQUESTED':
-      return { label: 'Changes requested', token: 'statusRed' }
+      return { label: t('m.rjj84-Y'), token: 'statusRed' }
     case 'COMMENTED':
-      return { label: 'Commented', token: 'textSecondary' }
+      return { label: t('m.bF0aphw'), token: 'textSecondary' }
     case 'DISMISSED':
-      return { label: 'Dismissed', token: 'textSecondary' }
+      return { label: t('m.dmAcep8'), token: 'textSecondary' }
     case 'PENDING':
-      return { label: 'Pending', token: 'statusAmber' }
+      return { label: t('m.NEg29tM'), token: 'statusAmber' }
     case null:
     case undefined:
-      return { label: 'Reviewed', token: 'textSecondary' }
+      return { label: t('m._IeDTL8'), token: 'textSecondary' }
     default:
-      return { label: 'Reviewed', token: 'textSecondary' }
+      return { label: t('m._IeDTL8'), token: 'textSecondary' }
   }
 }
 
@@ -256,7 +257,7 @@ export function getPRReviewerRows(item: ReviewDisplayItem): ReviewerRow[] {
       login,
       name: user.name,
       avatarUrl: user.avatarUrl,
-      stateLabel: 'Requested',
+      stateLabel: t('m.RfH2kOg'),
       token: 'statusAmber'
     })
   }

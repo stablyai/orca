@@ -1,3 +1,4 @@
+import { t } from '@/i18n/mobile-i18n'
 // Heuristic detection of an agent's "pick an option" prompt from its status /
 // assistant text. Agents (Claude et al.) render these as a TUI choice list; we
 // have no structured signal, so we parse the text conservatively and only treat
@@ -119,7 +120,7 @@ export function parseAgentQuestion(text: string): MobileChatQuestion | null {
   const multiSelect = MULTI_SELECT_HINT.test(text) && options.length > 1
 
   return {
-    question: question.length > 0 ? cleanQuestionText(question) : 'Choose an option',
+    question: question.length > 0 ? cleanQuestionText(question) : t('m.sxVCOxI'),
     options,
     multiSelect,
     optionTokens

@@ -6,6 +6,7 @@ import {
 } from './mobile-source-control-primary-action-decision'
 import type { MobileGitBranchCompareResult } from './mobile-branch-compare'
 import type { MobileGitStatusResult } from './mobile-git-status'
+import { t } from '@/i18n/mobile-i18n'
 
 type GitStep = { method: string; params?: Record<string, unknown> }
 
@@ -126,59 +127,66 @@ function getMobileBranchCommitsAhead(
 
 function getMobilePrimaryActionLabel(decision: MobileSourceControlPrimaryActionDecision): string {
   if (decision.requiresForceWithLease) {
-    return 'Force Push'
+    return t('m.koj5rtA')
   }
   switch (decision.kind) {
     case 'commit':
-      return 'Commit'
+      return t('m.7HjRY3c')
     case 'stage':
-      return 'Stage All'
+      return t('m.AvE0E2k')
     case 'push':
-      return 'Push'
+      return t('m.qgmf_L8')
     case 'pull':
-      return 'Pull'
+      return t('m.0OsPYDw')
     case 'sync':
-      return 'Sync'
+      return t('m.gqhNZGI')
     case 'publish':
-      return 'Publish Branch'
+      return t('m.6Z1Zr78')
   }
 }
 
 function getMobilePrimaryActionHint(decision: MobileSourceControlPrimaryActionDecision): string {
   switch (decision.titleIntent) {
     case 'commit_in_progress':
-      return 'Commit in progress.'
+      return t('m.GqPiXjg')
     case 'force_push_in_progress':
-      return 'Force push in progress.'
+      return t('m.cOOTv9E')
     case 'action_in_progress':
     case 'remote_operation_in_progress':
-      return 'Remote operation in progress.'
+      return t('m.YkxQqGg')
     case 'remote_operation_blocks_commit':
-      return 'Try again once the remote operation finishes.'
+      return t('m.aIqyvoY')
     case 'resolve_conflicts_before_commit':
-      return 'Resolve conflicts before committing.'
+      return t('m.lBQzq_8')
     case 'commit_staged_changes':
-      return 'Commit staged changes.'
+      return t('m.sJ8R-8c')
     case 'enter_commit_message':
-      return 'Enter a commit message to commit.'
+      return t('m.YnDfQwA')
     case 'stage_all_changes':
-      return 'Stage all changes.'
+      return t('m.MM3ixxY')
     case 'stage_file_to_commit':
-      return 'Stage at least one file to commit.'
+      return t('m.eSJfk9k')
     case 'checkout_branch_before_publish':
-      return 'Check out a branch before publishing commits.'
+      return t('m.5OKMsK4')
     case 'publish_branch':
-      return 'Publish this branch to origin.'
+      return t('m.5MUJYGA')
     case 'force_push_with_lease':
-      return 'Force push with lease to update the remote branch.'
+      return t('m.gSinyKw')
     case 'sync_counts':
-      return `Pull ${decision.behind ?? 0}, push ${decision.ahead ?? 0}.`
+      return t('m.al8M9-M', {
+        value0: decision.behind ?? 0,
+        value1: decision.ahead ?? 0
+      })
     case 'pull_count':
-      return `Pull ${decision.count ?? 0} commit${decision.count === 1 ? '' : 's'}.`
+      return t(decision.count === 1 ? 'm.UIMnif0' : 'm.35baKac', {
+        value0: decision.count ?? 0
+      })
     case 'push_count':
-      return `Push ${decision.count ?? 0} commit${decision.count === 1 ? '' : 's'}.`
+      return t(decision.count === 1 ? 'm.y7z5WcU' : 'm.0yFIngw', {
+        value0: decision.count ?? 0
+      })
     case 'nothing_to_commit_up_to_date':
-      return 'Nothing to commit. Branch is up to date.'
+      return t('m.G0fuKJo')
   }
 }
 

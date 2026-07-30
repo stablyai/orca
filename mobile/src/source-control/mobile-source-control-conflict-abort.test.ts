@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { mobileI18n } from '../i18n/mobile-i18n'
 import {
   isMobileConflictAborting,
   mobileConflictAbortLabel
@@ -24,5 +25,16 @@ describe('mobileConflictAbortLabel', () => {
     expect(mobileConflictAbortLabel('merge', true)).toBe('Aborting…')
     expect(mobileConflictAbortLabel('merge', false)).toBe('Abort merge')
     expect(mobileConflictAbortLabel('rebase', false)).toBe('Abort rebase')
+  })
+
+  it('uses complete translated operation labels', async () => {
+    const initialLocale = mobileI18n.language
+    await mobileI18n.changeLanguage('es')
+    try {
+      expect(mobileConflictAbortLabel('merge', false)).toBe('Abortar fusión')
+      expect(mobileConflictAbortLabel('rebase', false)).toBe('Abortar rebase')
+    } finally {
+      await mobileI18n.changeLanguage(initialLocale)
+    }
   })
 })

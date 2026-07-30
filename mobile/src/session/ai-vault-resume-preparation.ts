@@ -6,6 +6,7 @@ import {
 } from '../../../src/shared/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host'
 import type { RpcClient } from '../transport/rpc-client'
+import { t } from '@/i18n/mobile-i18n'
 
 // Why: without an explicit timeout, a socket drop mid-resume parks the request
 // on the reconnect waiter for the full reconnect budget, pinning the spinner.
@@ -41,9 +42,7 @@ export async function prepareMobileAiVaultSessionResume(
       // Why: older hosts cannot prepare, but their shared home still supports the legacy resume path.
       return session
     }
-    throw new Error(
-      response.error?.message || 'Could not prepare this legacy Codex session. Retry resume.'
-    )
+    throw new Error(response.error?.message || t('m.KEeLFyA'))
   }
   const result = response.result as {
     useRealCodexHome?: unknown

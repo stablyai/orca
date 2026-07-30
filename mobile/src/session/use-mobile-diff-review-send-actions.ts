@@ -13,6 +13,7 @@ import {
 } from './mobile-diff-review-rpc'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import type { ReviewScreenState, SendSheetState } from './mobile-diff-review-screen-model'
+import { t } from '@/i18n/mobile-i18n'
 
 type SendActionsInput = {
   client: RpcClient | null
@@ -44,7 +45,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
     }
     await Clipboard.setStringAsync(formatDiffComments(screenState.comments))
     triggerSuccess()
-    setActionError('Review notes copied')
+    setActionError(t('m.LtedJAM'))
   }, [screenState, setActionError])
 
   const clearSentNotes = useCallback(async () => {
@@ -73,12 +74,12 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
   const sendPromptToTerminal = useCallback(
     async (terminal: string, comments: readonly DiffComment[]) => {
       if (!client || connState !== 'connected') {
-        throw new Error('Waiting for desktop...')
+        throw new Error(t('m.x0Dr_H8'))
       }
       // Marked by terminal handle, not by surface, so a paste orphaned here by native
       // chat would ride along with these notes (#10228). Diff review carries no device token.
       if (!(await healMobileNativeChatStaleInput({ client, terminal, deviceToken: null }))) {
-        throw new Error('Failed to send notes')
+        throw new Error(t('m.tpf9SfA'))
       }
       const response = await client.sendRequest('terminal.send', {
         terminal,
@@ -86,14 +87,14 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
         enter: true
       })
       if (!response.ok) {
-        throw new Error(response.error?.message || 'Failed to send notes')
+        throw new Error(response.error?.message || t('m.tpf9SfA'))
       }
       if (!readMobileReviewTerminalSendAccepted(response.result)) {
-        throw new Error('Terminal input is locked')
+        throw new Error(t('m.-NMYOgc'))
       }
       await markNotesSent(comments)
       triggerSuccess()
-      setActionError('Review notes sent')
+      setActionError(t('m.U2LqmGk'))
       setSendSheet(null)
     },
     [client, connState, markNotesSent, setActionError, setSendSheet]
@@ -102,7 +103,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
   const createTerminalAndSend = useCallback(
     async (comments: readonly DiffComment[]) => {
       if (!client || connState !== 'connected') {
-        throw new Error('Waiting for desktop...')
+        throw new Error(t('m.x0Dr_H8'))
       }
       const response = await client.sendRequest('session.tabs.createTerminal', {
         worktree: `id:${worktreeId}`,
@@ -111,11 +112,11 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
         navigation: 'caller'
       })
       if (!response.ok) {
-        throw new Error(response.error?.message || 'Failed to create terminal')
+        throw new Error(response.error?.message || t('m.NhC30K0'))
       }
       const created = readMobileReviewCreatedTerminal(response.result)
       if (!created) {
-        throw new Error('Created terminal response was invalid')
+        throw new Error(t('m.LYAe0FE'))
       }
       await sendPromptToTerminal(created.terminal, comments)
     },
@@ -124,7 +125,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
 
   const openSendSheet = useCallback(async () => {
     if (!client || connState !== 'connected') {
-      setActionError('Waiting for desktop...')
+      setActionError(t('m.x0Dr_H8'))
       return
     }
     setSendSheet({ kind: 'loading' })
@@ -133,13 +134,13 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
         worktree: `id:${worktreeId}`
       })
       if (!response.ok) {
-        throw new Error(response.error?.message || 'Unable to load agent sessions')
+        throw new Error(response.error?.message || t('m.vMHt0l8'))
       }
       setSendSheet({ kind: 'ready', terminals: readMobileReviewTerminalTabs(response.result) })
     } catch (err) {
       setSendSheet({
         kind: 'error',
-        message: err instanceof Error ? err.message : 'Unable to load agent sessions',
+        message: err instanceof Error ? err.message : t('m.vMHt0l8'),
         terminals: []
       })
     }

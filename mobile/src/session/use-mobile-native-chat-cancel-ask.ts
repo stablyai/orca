@@ -1,6 +1,7 @@
 import { useCallback, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { sendMobileNativeChatMessageWithOutcome } from './mobile-native-chat-send'
+import { t } from '@/i18n/mobile-i18n'
 
 /** Sends the Escape that dismisses an ask/question card. Its own module for the
  *  same reason stop/permission/answer are: the controller owns composition, not
@@ -18,7 +19,7 @@ export function useMobileNativeChatCancelAsk(args: {
   return useCallback(async (): Promise<boolean> => {
     const handle = handleRef.current
     if (!client || !handle || !enabled) {
-      onSendError('Cancel not sent (disconnected)')
+      onSendError(t('m.Z_x_TcE'))
       return false
     }
     cancelPending()
@@ -36,9 +37,9 @@ export function useMobileNativeChatCancelAsk(args: {
     if (outcome === 'unknown') {
       // Why: the Escape may have landed (ack lost / path cutover) — a definite
       // "not sent" would invite a second Escape into a changed prompt state.
-      onSendError('Cancel unconfirmed — check chat before retrying')
+      onSendError(t('m.chT2Z44'))
     } else if (outcome === 'rejected') {
-      onSendError('Cancel not sent')
+      onSendError(t('m.htcCRsA'))
     }
     return outcome === 'accepted'
   }, [cancelPending, client, deviceTokenRef, enabled, handleRef, onSendError])

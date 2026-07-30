@@ -7,6 +7,7 @@ import {
   isRetryableWorktreeCreateConflict
 } from '../../../src/shared/new-workspace/worktree-create-retry-policy'
 import { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
+import { t } from '@/i18n/mobile-i18n'
 
 // Why: server-side collision checks (branch already exists locally / on a remote
 // / already has PR #N) can fire even after a pre-flight basename dedupe —
@@ -71,7 +72,7 @@ export async function createWorktreeWithNameRetry(
       break
     }
   }
-  return { error: lastError ?? 'Failed to create workspace' }
+  return { error: lastError ?? t('m.G_aoVj8') }
 }
 
 // Sends worktree.create, re-issuing on a connection-migration cutover only. The

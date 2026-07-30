@@ -10,6 +10,7 @@ import {
   sendMobileHostedReviewGitMutation
 } from './mobile-hosted-review-git-preparation'
 import { applyMobileHostedReviewRemotePrerequisite } from './mobile-hosted-review-remote-prerequisite'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobileHostedReviewCreateIntentProgress =
   | 'staging'
@@ -50,19 +51,19 @@ export function mobileHostedReviewCreateIntentProgressMessage(
 ): string {
   switch (progress) {
     case 'staging':
-      return 'Staging changes...'
+      return t('m.eCa7Me8')
     case 'generating_commit_message':
-      return 'Generating commit message...'
+      return t('m.us6yszU')
     case 'committing':
-      return 'Committing changes...'
+      return t('m.uN9IaYI')
     case 'publishing':
-      return 'Publishing branch...'
+      return t('m.PnL-W2o')
     case 'pushing':
-      return 'Pushing commits...'
+      return t('m.0BMXLfE')
     case 'force_pushing':
-      return 'Force pushing with lease...'
+      return t('m.JokOS5o')
     case 'creating_review':
-      return 'Creating review...'
+      return t('m.qE1-68U')
   }
 }
 
@@ -99,7 +100,7 @@ async function ensureLocalChangesCommitted(
   if (hasUnresolvedConflicts(currentStatus)) {
     return {
       ok: false,
-      error: 'Resolve conflicts before creating a pull request.',
+      error: t('m.695pbL4'),
       committed: false,
       status: currentStatus
     }
@@ -112,7 +113,7 @@ async function ensureLocalChangesCommitted(
       client,
       'git.bulkStage',
       { worktree: `id:${worktreeId}`, filePaths: stagePaths },
-      'Failed to stage changes'
+      t('m.knjcZG0')
     )
     if (!staged.ok) {
       return staged
@@ -130,7 +131,7 @@ async function ensureLocalChangesCommitted(
     if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
       return {
         ok: false,
-        error: 'Branch changed while preparing the pull request.',
+        error: t('m.8fhgeQQ'),
         committed: false,
         status: currentStatus
       }
@@ -141,7 +142,7 @@ async function ensureLocalChangesCommitted(
   if (!hasStagedChanges) {
     return {
       ok: false,
-      error: 'Resolve or stage changes before creating a pull request.',
+      error: t('m.x1skfkY'),
       committed: false,
       status: currentStatus
     }
@@ -154,7 +155,7 @@ async function ensureLocalChangesCommitted(
     if (!generated.success) {
       return {
         ok: false,
-        error: 'Could not generate a commit message. Add one in Source Control, then retry.',
+        error: t('m.zAg6hUc'),
         committed: false,
         status: currentStatus
       }
@@ -180,7 +181,7 @@ async function ensureLocalChangesCommitted(
   if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
     return {
       ok: false,
-      error: 'Branch changed while preparing the pull request.',
+      error: t('m.8fhgeQQ'),
       committed: true,
       status: currentStatus
     }
@@ -198,9 +199,7 @@ export async function prepareMobileHostedReviewCreateIntent(
   if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
     return {
       ok: false,
-      error: initialStatus.ok
-        ? 'Branch changed while preparing the pull request.'
-        : initialStatus.error,
+      error: initialStatus.ok ? t('m.8fhgeQQ') : initialStatus.error,
       status: currentStatus
     }
   }
@@ -242,7 +241,7 @@ export async function prepareMobileHostedReviewCreateIntent(
     if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
       return {
         ok: false,
-        error: 'Branch changed while preparing the pull request.',
+        error: t('m.8fhgeQQ'),
         committed: committed.committed,
         status: currentStatus
       }

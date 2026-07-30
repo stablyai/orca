@@ -8,6 +8,7 @@ import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import type { MobileAgentHistorySection } from './agent-history-sections'
 import type { MobileAgentHistoryCard } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
+import { t } from '@/i18n/mobile-i18n'
 
 // Lazy-render at most this many preview turns when a card is tapped — the
 // scanner already bounds preview text, but rendering them only on tap keeps the
@@ -129,11 +130,11 @@ function AgentHistoryCardRow({
       <View style={styles.cardMetaRow}>
         <Text style={styles.cardMetaText}>{card.agentLabel}</Text>
         <Text style={styles.cardMetaText}>
-          {card.messageCount} {card.messageCount === 1 ? 'message' : 'messages'}
+          {card.messageCount} {card.messageCount === 1 ? t('m.fZXkGhQ') : t('m.tL7Cy3c')}
         </Text>
         {showCurrentWorktreeBadge && card.isCurrentWorktree ? (
           <View style={styles.currentBadge}>
-            <Text style={styles.currentBadgeText}>current worktree</Text>
+            <Text style={styles.currentBadgeText}>{t('m.f1-v-HM')}</Text>
           </View>
         ) : null}
         {session && onResume ? (
@@ -152,7 +153,7 @@ function AgentHistoryCardRow({
             disabled={resumeActionState?.disabled}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Resume agent session"
+            accessibilityLabel={t('m.p7fz5tw')}
           >
             {resumeActionState?.loading ? (
               <ActivityIndicator size="small" color={colors.textPrimary} />

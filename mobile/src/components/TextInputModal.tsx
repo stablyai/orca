@@ -10,6 +10,7 @@ import {
 } from 'react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   visible: boolean
@@ -31,7 +32,7 @@ export function TextInputModal({
   message,
   defaultValue = '',
   placeholder,
-  submitLabel = 'Save',
+  submitLabel = t('m.GbS1Gw0'),
   selectTextOnFocus = false,
   allowEmpty = false,
   keyboardType,
@@ -90,7 +91,7 @@ export function TextInputModal({
           style={({ pressed }) => [styles.cancelButton, pressed && styles.buttonPressed]}
           onPress={onCancel}
         >
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>{t('m.NOYO7QE')}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [

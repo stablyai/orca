@@ -63,6 +63,7 @@ import { SmartWorkspaceSourceField } from './SmartWorkspaceSourceField'
 import { SmartWorkspaceSourceDrawer } from './SmartWorkspaceSourceDrawer'
 import { SmartWorkspaceAdvancedFields } from './SmartWorkspaceAdvancedFields'
 import { SetupHookTrustDrawer, type SetupTrustPrompt } from './SetupHookTrustDrawer'
+import { t } from '@/i18n/mobile-i18n'
 
 type Repo = {
   id: string
@@ -429,7 +430,7 @@ function NewWorktreeModalContent({
           setSshState({
             targetId: selectedRepoConnectionId,
             status: 'error',
-            error: err instanceof Error ? err.message : 'Failed to read SSH connection state.',
+            error: err instanceof Error ? err.message : t('m.Gli-J-E'),
             reconnectAttempt: 0
           })
         }
@@ -553,7 +554,7 @@ function NewWorktreeModalContent({
       setSshState({
         targetId: selectedRepoConnectionId,
         status: 'error',
-        error: err instanceof Error ? err.message : 'Failed to connect to SSH repository.',
+        error: err instanceof Error ? err.message : t('m.FYj9qCM'),
         reconnectAttempt: 0
       })
     } finally {
@@ -571,7 +572,7 @@ function NewWorktreeModalContent({
 
     try {
       if (sshGate.requiresConnection) {
-        setError(`Connect ${selectedRepo.displayName} before creating a workspace.`)
+        setError(t('m.9ZRI2cs', { value0: selectedRepo.displayName }))
         return
       }
       let latestRuntimeSettings = runtimeSettings
@@ -591,7 +592,7 @@ function NewWorktreeModalContent({
       ) {
         setSelectedAgent(pickPreferredNewWorktreeAgent(latestRuntimeSettings, detectedAgentIds))
         setAgentOverridden(false)
-        setError('Selected agent is disabled. Choose an enabled agent before creating.')
+        setError(t('m.F1iAV4A'))
         return
       }
 
@@ -611,7 +612,7 @@ function NewWorktreeModalContent({
           setupDecision = options.setupOverride
         } else if (setupRunPolicy === 'ask') {
           if (!setupDecisionChoice) {
-            setError('Choose whether to run the setup script.')
+            setError(t('m.rwQDraY'))
             return
           }
           setupDecision = setupDecisionChoice
@@ -669,7 +670,7 @@ function NewWorktreeModalContent({
       onClose()
       onCreated(result.worktreeId, result.name)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create workspace')
+      setError(e instanceof Error ? e.message : t('m.jSxyaws'))
     } finally {
       createInFlightRef.current = false
       setCreating(false)
@@ -742,7 +743,7 @@ function NewWorktreeModalContent({
       transitionDrawer('form')
       await handleCreate({ setupOverride: 'run', approvedSetupContentHash: approvedHash })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to trust setup script.')
+      setError(err instanceof Error ? err.message : t('m.C8UjQk0'))
     } finally {
       setupTrustActionInFlightRef.current = false
       if (!createInFlightRef.current) {
@@ -787,10 +788,8 @@ function NewWorktreeModalContent({
     >
       <BottomDrawer visible={formSheetVisible} interactive={formSheetInteractive} onClose={onClose}>
         <View style={styles.header}>
-          <Text style={styles.title}>Create Workspace</Text>
-          <Text style={styles.subtitle}>
-            Pick a repository and agent to spin up a new workspace.
-          </Text>
+          <Text style={styles.title}>{t('m.ZK7Il8w')}</Text>
+          <Text style={styles.subtitle}>{t('m.sMWTBAA')}</Text>
         </View>
 
         {loading ? (
@@ -799,12 +798,12 @@ function NewWorktreeModalContent({
           </View>
         ) : repos.length === 0 ? (
           <View style={styles.loadingContainer}>
-            <Text style={styles.emptyText}>No repositories found</Text>
+            <Text style={styles.emptyText}>{t('m.osrkufA')}</Text>
           </View>
         ) : (
           <>
             <View style={styles.field}>
-              <Text style={styles.label}>Repository</Text>
+              <Text style={styles.label}>{t('m.38lAWJQ')}</Text>
               <Pressable
                 style={styles.fieldButton}
                 onPress={() => {
@@ -821,7 +820,7 @@ function NewWorktreeModalContent({
                   style={[styles.fieldButtonText, !selectedRepo && styles.fieldButtonPlaceholder]}
                   numberOfLines={1}
                 >
-                  {selectedRepo?.displayName ?? 'Select a repository'}
+                  {selectedRepo?.displayName ?? t('m.2Kl8BY4')}
                 </Text>
                 <ChevronDown size={14} color={colors.textMuted} />
               </Pressable>
@@ -829,7 +828,7 @@ function NewWorktreeModalContent({
 
             <SmartWorkspaceSourceField
               composer={composer}
-              label={selectedRepoIsGit ? "Name or 'Create From'" : 'Workspace name'}
+              label={selectedRepoIsGit ? t('m.yymZMiQ') : t('m.EFTSrpI')}
               disabled={sshGate.requiresConnection}
               interactive={formSheetInteractive}
               onBeforeOpen={() => setError('')}
@@ -842,7 +841,7 @@ function NewWorktreeModalContent({
 
             {selectedRepoConnectionId ? (
               <View style={styles.field}>
-                <Text style={styles.label}>SSH Connection</Text>
+                <Text style={styles.label}>{t('m.JNDDz3c')}</Text>
                 <View style={styles.sshBox}>
                   <View style={styles.sshRow}>
                     <View
@@ -857,7 +856,7 @@ function NewWorktreeModalContent({
                     />
                     <View style={styles.sshCopy}>
                       <Text style={styles.sshTitle} numberOfLines={1}>
-                        {selectedRepo?.displayName ?? 'Remote repository'}
+                        {selectedRepo?.displayName ?? t('m.AmkPWYA')}
                       </Text>
                       <Text style={styles.sshSubtitle}>
                         {workspaceSshStatusLabel(sshGate.status)}
@@ -873,7 +872,7 @@ function NewWorktreeModalContent({
                         onPress={() => void connectSelectedSshRepo()}
                       >
                         <Text style={styles.sshConnectText}>
-                          {sshGate.connectInProgress ? 'Connecting...' : 'Connect'}
+                          {sshGate.connectInProgress ? t('m.oroOvnM') : t('m.O93svfk')}
                         </Text>
                       </Pressable>
                     )}
@@ -884,7 +883,7 @@ function NewWorktreeModalContent({
             ) : null}
 
             <View style={styles.field}>
-              <Text style={styles.label}>Agent</Text>
+              <Text style={styles.label}>{t('m.VEK8Z7E')}</Text>
               <Pressable
                 style={[styles.fieldButton, sshGate.requiresConnection && styles.disabled]}
                 disabled={sshGate.requiresConnection}
@@ -895,14 +894,14 @@ function NewWorktreeModalContent({
               >
                 <MobileAgentIcon agentId={selectedAgent.id} size={16} />
                 <Text style={styles.fieldButtonText} numberOfLines={1}>
-                  {sshGate.requiresConnection ? 'Connect repository first' : selectedAgent.label}
+                  {sshGate.requiresConnection ? t('m.M2A4pJA') : selectedAgent.label}
                 </Text>
                 <ChevronDown size={14} color={colors.textMuted} />
               </Pressable>
             </View>
 
             <Pressable style={styles.advancedToggle} onPress={() => setShowAdvanced(!showAdvanced)}>
-              <Text style={styles.advancedText}>Advanced</Text>
+              <Text style={styles.advancedText}>{t('m.ATo76K0')}</Text>
               {showAdvanced ? (
                 <ChevronUp size={14} color={colors.textSecondary} />
               ) : (
@@ -918,12 +917,12 @@ function NewWorktreeModalContent({
                 />
 
                 <View style={styles.field}>
-                  <Text style={styles.label}>Note</Text>
+                  <Text style={styles.label}>{t('m.LMAqKNQ')}</Text>
                   <TextInput
                     style={styles.input}
                     value={note}
                     onChangeText={setNote}
-                    placeholder="Write a note"
+                    placeholder={t('m.by8gktU')}
                     placeholderTextColor={colors.textMuted}
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -933,11 +932,11 @@ function NewWorktreeModalContent({
                 {setupCommand ? (
                   <View style={styles.field}>
                     <View style={styles.setupHeader}>
-                      <Text style={styles.label}>Setup script</Text>
+                      <Text style={styles.label}>{t('m.0cbkbTE')}</Text>
                       {setupSource && (
                         <View style={styles.sourceBadge}>
                           <Text style={styles.sourceBadgeText}>
-                            {setupSource === 'orca.yaml' ? 'ORCA.YAML' : 'HOOKS'}
+                            {setupSource === 'orca.yaml' ? t('m.hiRz7rE') : t('m.8ckUTUg')}
                           </Text>
                         </View>
                       )}
@@ -952,7 +951,7 @@ function NewWorktreeModalContent({
                             ]}
                             onPress={() => setSetupDecisionChoice('run')}
                           >
-                            <Text style={styles.setupChoiceText}>Run</Text>
+                            <Text style={styles.setupChoiceText}>{t('m.0qYyICI')}</Text>
                           </Pressable>
                           <Pressable
                             style={[
@@ -961,12 +960,12 @@ function NewWorktreeModalContent({
                             ]}
                             onPress={() => setSetupDecisionChoice('skip')}
                           >
-                            <Text style={styles.setupChoiceText}>Skip</Text>
+                            <Text style={styles.setupChoiceText}>{t('m.sZHa-TU')}</Text>
                           </Pressable>
                         </View>
                       ) : (
                         <View style={styles.setupToggleRow}>
-                          <Text style={styles.setupToggleLabel}>Run setup command</Text>
+                          <Text style={styles.setupToggleLabel}>{t('m.obLmzkw')}</Text>
                           <Switch
                             value={runSetup}
                             onValueChange={setRunSetup}
@@ -997,7 +996,7 @@ function NewWorktreeModalContent({
                   <ActivityIndicator size="small" color={colors.bgBase} />
                 ) : (
                   <Text style={styles.createText}>
-                    {sshGate.requiresConnection ? 'Connect Repository' : 'Create Workspace'}
+                    {sshGate.requiresConnection ? t('m.g5YUeP0') : t('m.ZK7Il8w')}
                   </Text>
                 )}
               </Pressable>
@@ -1027,7 +1026,7 @@ function NewWorktreeModalContent({
 
       <PickerListDrawer
         visible={visible && drawerView === 'repo'}
-        title="Repository"
+        title={t('m.38lAWJQ')}
         items={repoPickerItems}
         selectedId={selectedRepo?.id ?? ''}
         onSelect={(item) => handleRepoSelected(item.repo)}
@@ -1039,7 +1038,7 @@ function NewWorktreeModalContent({
 
       <PickerListDrawer
         visible={visible && drawerView === 'agent'}
-        title="Agent"
+        title={t('m.VEK8Z7E')}
         items={pickerAgentOptions}
         selectedId={selectedAgent.id}
         onSelect={(agent) => {

@@ -1,0 +1,12 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "Orca",
+    "NSCameraUsageDescription": "QRコードをスキャンするためにOrcaがカメラを使用することを許可します。",
+    "NSLocalNetworkUsageDescription": "Orcaはローカルネットワーク上のデスクトップアプリに接続します。",
+    "NSMicrophoneUsageDescription": "音声入力を録音し、ペアリング済みのデスクトップで文字起こしするために、Orcaにマイクの使用を許可します。",
+    "NSPhotoLibraryUsageDescription": "ペアリング済みのデスクトップのターミナルセッションに写真を添付するために、Orcaにフォトライブラリへのアクセスを許可します。"
+  },
+  "android": {
+    "app_name": "Orca"
+  }
+}

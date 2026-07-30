@@ -4,6 +4,7 @@ import { Check, ChevronDown } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { RpcClient } from '../transport/rpc-client'
 import { searchBaseRefs } from '../source-control/mobile-base-ref-search'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   client: RpcClient | null
@@ -86,7 +87,7 @@ export function MobilePrBasePicker({
           }}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder="main"
+          placeholder={t('m.O3OecWo')}
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           autoCorrect={false}

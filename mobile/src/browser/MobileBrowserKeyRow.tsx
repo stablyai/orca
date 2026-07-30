@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { t } from '@/i18n/mobile-i18n'
 
 const BROWSER_KEYS = ['Enter', 'Backspace', 'Tab', 'Escape'] as const
 
@@ -23,7 +24,7 @@ export function MobileBrowserKeyRow({ disabled, onKeypress }: Props): React.JSX.
           onPress={() => onKeypress(key)}
         >
           <Text style={[styles.keyButtonText, disabled && styles.disabledText]}>
-            {key === 'Backspace' ? '⌫' : key === 'Escape' ? 'Esc' : key}
+            {key === 'Backspace' ? '⌫' : key === 'Escape' ? t('m.u8NH0Xk') : key}
           </Text>
         </Pressable>
       ))}

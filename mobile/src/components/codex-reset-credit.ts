@@ -1,4 +1,4 @@
-import { formatResetCountdown } from '../../../src/shared/rate-limit-reset-format'
+import { formatResetDuration } from '../../../src/shared/rate-limit-reset-format'
 import {
   buildCodexResetCreditExpectedScope,
   type CodexResetCreditExpectedScope
@@ -15,6 +15,7 @@ import {
   type AccountsSnapshot,
   type ProviderRateLimits
 } from './accounts-snapshot'
+import { t } from '@/i18n/mobile-i18n'
 
 export type CodexResetCreditOutcome = 'reset' | 'nothingToReset' | 'noCredit' | 'alreadyRedeemed'
 
@@ -69,16 +70,22 @@ export function getCodexResetCreditSummary(
     return null
   }
   const expiry = credits?.nextExpiresAt
-  const expiryLabel =
-    typeof expiry === 'number' && Number.isFinite(expiry)
-      ? formatResetCountdown(expiry - now).replace(
-          /^Resets/,
-          count === 1 ? 'Expires' : 'Next expires'
-        )
-      : null
+  let expiryLabel: string | null = null
+  if (typeof expiry === 'number' && Number.isFinite(expiry)) {
+    const duration = formatResetDuration(expiry - now)
+    expiryLabel =
+      count === 1
+        ? duration === 'now'
+          ? t('m.aaZ_2qE')
+          : t('m.1neVPtc', { value0: duration })
+        : duration === 'now'
+          ? t('m.nH5aDJ4')
+          : t('m.fA_ezvI', { value0: duration })
+  }
   return {
     availableCount: count,
-    availabilityLabel: `${count} ${count === 1 ? 'reset' : 'resets'} available`,
+    availabilityLabel:
+      count === 1 ? t('m.CfvCAaE', { value0: count }) : t('m.myZTLv0', { value0: count }),
     expiryLabel
   }
 }
@@ -89,18 +96,18 @@ export function getCodexResetCreditOutcomeCopy(outcome: CodexResetCreditOutcome)
 } {
   switch (outcome) {
     case 'reset':
-      return { title: 'Rate limits reset', message: 'Codex usage has been refreshed.' }
+      return { title: t('m.QiJiFeQ'), message: t('m.3qHVa1w') }
     case 'alreadyRedeemed':
-      return { title: 'Reset already applied', message: 'Codex usage has been refreshed.' }
+      return { title: t('m.9b3h0Pg'), message: t('m.3qHVa1w') }
     case 'nothingToReset':
       return {
-        title: 'Nothing to reset',
-        message: 'No eligible Codex rate-limit window is exhausted.'
+        title: t('m.JMEauuw'),
+        message: t('m.Um-XfOo')
       }
     case 'noCredit':
       return {
-        title: 'No reset available',
-        message: 'This account has no earned reset credits available.'
+        title: t('m._-grAdc'),
+        message: t('m.zFyydp8')
       }
   }
 }
@@ -157,12 +164,12 @@ function decodeResetResult(
   expectedScope: CodexResetCreditExpectedScope
 ): CodexResetCreditRpcResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('Invalid reset response from host')
+    throw new Error(t('m.dWotxRU'))
   }
   const result = value as Record<string, unknown>
   const scope = CodexResetCreditExpectedScopeSchema.safeParse(result.scope)
   if (!scope.success || !scopesEqual(scope.data, expectedScope)) {
-    throw new Error('Invalid reset response from host')
+    throw new Error(t('m.dWotxRU'))
   }
   const snapshot = decodeAccountsSnapshot(result.snapshot)
   if (result.status === 'rejectedBeforeProvider') {
@@ -177,7 +184,7 @@ function decodeResetResult(
         reason !== 'offerUnavailable' &&
         reason !== 'offerChanged')
     ) {
-      throw new Error('Invalid reset response from host')
+      throw new Error(t('m.dWotxRU'))
     }
     return {
       status: 'rejectedBeforeProvider',
@@ -196,7 +203,7 @@ function decodeResetResult(
       outcome !== 'noCredit' &&
       outcome !== 'alreadyRedeemed')
   ) {
-    throw new Error('Invalid reset response from host')
+    throw new Error(t('m.dWotxRU'))
   }
   const snapshotAccount = snapshot.codex.accounts.find(
     (account) => account.id === scope.data.accountId
@@ -207,7 +214,7 @@ function decodeResetResult(
     getActiveCodexAccountIdForRateLimitTarget(snapshot) !== scope.data.accountId ||
     snapshotAccount?.updatedAt !== scope.data.accountRevision
   ) {
-    throw new Error('Invalid reset response from host')
+    throw new Error(t('m.dWotxRU'))
   }
   return {
     outcome,

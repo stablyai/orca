@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { mobileI18n } from '../i18n/mobile-i18n'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
-import { nextReviewIndexAfterMarkReviewed } from './mobile-diff-review-screen-model'
+import {
+  mobileReviewFilterLabel,
+  mobileReviewNoteCountLabel,
+  mobileReviewUnsentNoteCountLabel,
+  nextReviewIndexAfterMarkReviewed
+} from './mobile-diff-review-screen-model'
 
 function item(filePath: string): MobileDiffReviewQueueItem {
   return {
@@ -49,5 +55,20 @@ describe('mobile diff review screen model', () => {
         filteredQueue: queue
       })
     ).toBe(1)
+  })
+
+  it('localizes review filters and count variants without English fragments', async () => {
+    const initialLocale = mobileI18n.language
+    await mobileI18n.changeLanguage('es')
+    try {
+      expect(mobileReviewFilterLabel('unreviewed')).toBe('Sin revisar')
+      expect(mobileReviewFilterLabel('unstaged')).toBe('Sin preparar')
+      expect(mobileReviewFilterLabel('staged')).toBe('Preparado')
+      expect(mobileReviewNoteCountLabel(1)).toBe('1 nota')
+      expect(mobileReviewNoteCountLabel(2)).toBe('2 notas')
+      expect(mobileReviewUnsentNoteCountLabel(1)).toBe('1 nota no enviada')
+    } finally {
+      await mobileI18n.changeLanguage(initialLocale)
+    }
   })
 })

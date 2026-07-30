@@ -1,5 +1,6 @@
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import { t } from '@/i18n/mobile-i18n'
 
 export type TerminalRecord = {
   handle: string
@@ -165,7 +166,7 @@ export function getTerminalRecordsFromSessionTabs(
     return [
       {
         handle: tab.terminal,
-        title: tab.title || 'Terminal',
+        title: tab.title || t('m.BGT_JFw'),
         terminalTheme: tab.terminalTheme,
         isActive: tab.isActive === true
       }

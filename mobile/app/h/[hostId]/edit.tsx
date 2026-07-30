@@ -19,6 +19,7 @@ import { displayHostEndpoint } from '../../../src/transport/host-endpoint'
 import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-edit'
 import { useForceReconnect, usePrimeHosts } from '../../../src/transport/client-context'
 import type { HostProfile } from '../../../src/transport/types'
+import { t } from '@/i18n/mobile-i18n'
 
 export default function EditHostScreen() {
   const router = useRouter()
@@ -39,14 +40,14 @@ export default function EditHostScreen() {
 
   const load = useCallback(async () => {
     if (!hostId) {
-      setLoadError('Missing host.')
+      setLoadError(t('m.yLNjPPk'))
       return
     }
     try {
       const hosts = await loadHosts()
       const found = hosts.find((h) => h.id === hostId) ?? null
       if (!found) {
-        setLoadError('This host was removed from this phone.')
+        setLoadError(t('m.T_ULLfI'))
         setHost(null)
         return
       }
@@ -55,7 +56,7 @@ export default function EditHostScreen() {
       setAddress(displayHostEndpoint(found.endpoint))
       setLoadError(null)
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Failed to load host.')
+      setLoadError(err instanceof Error ? err.message : t('m.koyS6Oc'))
       setHost(null)
     }
   }, [hostId])
@@ -86,7 +87,7 @@ export default function EditHostScreen() {
     }
     const nextName = name.trim()
     if (!nextName) {
-      setSaveError('Enter a name.')
+      setSaveError(t('m.7UECNUc'))
       return
     }
     if (endpointEdit.kind === 'invalid') {
@@ -113,7 +114,7 @@ export default function EditHostScreen() {
         ...(nextEndpoint !== undefined ? { endpoint: nextEndpoint } : {})
       })
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save host.')
+      setSaveError(err instanceof Error ? err.message : t('m.sI26LXo'))
       savingRef.current = false
       setSaving(false)
       return
@@ -148,11 +149,11 @@ export default function EditHostScreen() {
           style={styles.backButton}
           onPress={() => router.back()}
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('m.K8w9o8U')}
         >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Edit host</Text>
+        <Text style={styles.heading}>{t('m.NKISHlY')}</Text>
         <Pressable
           style={({ pressed }) => [
             styles.saveButton,
@@ -161,12 +162,12 @@ export default function EditHostScreen() {
           onPress={() => void handleSave()}
           disabled={!canSave}
           accessibilityRole="button"
-          accessibilityLabel="Save host"
+          accessibilityLabel={t('m.ugYhCr4')}
         >
           {saving ? (
             <ActivityIndicator size="small" color={colors.bgBase} />
           ) : (
-            <Text style={styles.saveButtonText}>Save</Text>
+            <Text style={styles.saveButtonText}>{t('m.OOhGw28')}</Text>
           )}
         </Pressable>
       </View>
@@ -175,7 +176,7 @@ export default function EditHostScreen() {
         <View style={styles.errorState}>
           <Text style={styles.errorText}>{loadError}</Text>
           <Pressable style={styles.secondaryButton} onPress={() => router.back()}>
-            <Text style={styles.secondaryButtonText}>Go back</Text>
+            <Text style={styles.secondaryButtonText}>{t('m.LS3NecQ')}</Text>
           </Pressable>
         </View>
       ) : !host ? (
@@ -191,32 +192,28 @@ export default function EditHostScreen() {
             contentContainerStyle={[styles.form, { paddingBottom: insets.bottom + spacing.xl }]}
             keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.help}>
-              Change the display name or connection address. Address edits only switch where this
-              phone connects — they do not re-pair. Use this when the same desktop is reachable at a
-              different IP (for example home LAN vs Tailscale).
-            </Text>
+            <Text style={styles.help}>{t('m.KytWtss')}</Text>
 
-            <Text style={styles.label}>Name</Text>
+            <Text style={styles.label}>{t('m.wLjwLQg')}</Text>
             <TextInput
               style={styles.input}
-              accessibilityLabel="Name"
+              accessibilityLabel={t('m.wLjwLQg')}
               value={name}
               onChangeText={(value) => {
                 setName(value)
                 setSaveError(null)
               }}
-              placeholder="Host name"
+              placeholder={t('m.jHccG1s')}
               placeholderTextColor={colors.textMuted}
               autoCapitalize="words"
               autoCorrect={false}
               returnKeyType="next"
             />
 
-            <Text style={styles.label}>Address</Text>
+            <Text style={styles.label}>{t('m.kMmtf5E')}</Text>
             <TextInput
               style={styles.input}
-              accessibilityLabel="Address"
+              accessibilityLabel={t('m.kMmtf5E')}
               value={address}
               onChangeText={(value) => {
                 setAddress(value)
@@ -235,14 +232,11 @@ export default function EditHostScreen() {
                 }
               }}
             />
-            <Text style={styles.hint}>
-              Accepts IP, host:port, or ws:// / wss://. Missing port defaults to the current port
-              (or 6768).
-            </Text>
+            <Text style={styles.hint}>{t('m.dYplni8')}</Text>
 
             {endpointEdit == null ? null : endpointEdit.kind !== 'invalid' ? (
               <Text style={styles.preview} numberOfLines={2}>
-                Connects to {endpointEdit.endpoint}
+                {t('m.eB5hKE4', { value0: endpointEdit.endpoint })}
               </Text>
             ) : address.trim().length > 0 ? (
               <Text style={styles.previewError}>{endpointEdit.error}</Text>

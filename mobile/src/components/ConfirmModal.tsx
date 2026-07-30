@@ -1,6 +1,7 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   visible: boolean
@@ -17,8 +18,8 @@ export function ConfirmModal({
   visible,
   title,
   message,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel = t('m.OxB9eF0'),
+  cancelLabel = t('m.QVUePYc'),
   destructive = false,
   onConfirm,
   onCancel

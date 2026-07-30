@@ -30,7 +30,7 @@ function findQuickCommandsTabButtons(): ts.JsxSelfClosingElement[] {
 }
 
 function getQuickCommandsTabSource(): string {
-  const start = source.indexOf('accessibilityLabel="New tab"')
+  const start = source.indexOf("accessibilityLabel={t('m.7IGdkR0')}")
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf('{/* Content-row host', start)
   expect(end).toBeGreaterThan(start)
@@ -56,8 +56,8 @@ describe('quick-commands tab stability', () => {
     expect(style?.initializer?.getText(sourceFile)).toBe('{styles.tabBar}')
     expect(tabSource).toContain('if (quickCommandsSupported === true)')
     expect(tabSource).toContain('setShowQuickCommands(true)')
-    expect(tabSource).toContain('Desktop update required for quick commands')
-    expect(tabSource).toContain('Checking desktop capabilities — try again in a moment')
+    expect(tabSource).toContain("t('m.UoNS0D4')")
+    expect(tabSource).toContain("t('m.5g1_I7Y')")
   })
 
   it('only presents the sheet after support is confirmed', () => {

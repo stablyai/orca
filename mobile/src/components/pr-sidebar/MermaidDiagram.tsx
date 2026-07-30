@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { t } from '@/i18n/mobile-i18n'
 
 type Props = {
   source: string
@@ -25,7 +26,7 @@ export function MermaidDiagram({ source, base }: Props) {
   return (
     <View style={styles.frame}>
       <View style={styles.label}>
-        <Text style={styles.labelText}>mermaid</Text>
+        <Text style={styles.labelText}>{t('m.W6bmrY4')}</Text>
       </View>
       <WebView
         style={[styles.webview, { height: height || 120 }]}
@@ -64,7 +65,7 @@ function MermaidFallback({ source, base }: Props) {
   return (
     <View style={styles.frame}>
       <View style={styles.label}>
-        <Text style={styles.labelText}>mermaid</Text>
+        <Text style={styles.labelText}>{t('m.W6bmrY4')}</Text>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.fallbackScroll}>
         <Text style={[styles.fallbackText, { fontSize: base - 1 }]}>{source}</Text>

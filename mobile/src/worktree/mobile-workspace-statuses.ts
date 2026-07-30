@@ -1,17 +1,18 @@
 import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
+import { t } from '@/i18n/mobile-i18n'
 
 export const DEFAULT_MOBILE_WORKSPACE_STATUS_ID = 'in-progress'
 
 export const DEFAULT_MOBILE_WORKSPACE_STATUSES = [
-  { id: 'completed', label: 'Done', color: 'conductor-done', icon: 'conductor-done' },
-  { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
+  { id: 'completed', label: t('m.EleEi2Q'), color: 'conductor-done', icon: 'conductor-done' },
+  { id: 'in-review', label: t('m.mg8ozqs'), color: 'conductor-review', icon: 'conductor-review' },
   {
     id: DEFAULT_MOBILE_WORKSPACE_STATUS_ID,
-    label: 'In progress',
+    label: t('m.hWeTdOM'),
     color: 'conductor-progress',
     icon: 'conductor-progress'
   },
-  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
+  { id: 'todo', label: t('m.zWwi3-o'), color: 'neutral', icon: 'circle' }
 ] as const satisfies readonly WorkspaceStatusDefinition[]
 
 export function coerceMobileWorkspaceStatuses(

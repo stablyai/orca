@@ -21,6 +21,7 @@ import type {
   UseMobileDictationOptions,
   UseMobileDictationResult
 } from './mobile-dictation-session-state'
+import { t } from '@/i18n/mobile-i18n'
 
 export type { UseMobileDictationResult } from './mobile-dictation-session-state'
 
@@ -129,7 +130,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     }
     if (!permission.granted) {
       setStatus('idle')
-      throw new Error('Microphone permission denied')
+      throw new Error(t('m.InUuqhA'))
     }
 
     const initialized = await initialize()
@@ -142,7 +143,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     }
     if (!initialized) {
       setStatus('idle')
-      throw new Error('Failed to initialize microphone')
+      throw new Error(t('m.Pwq6G9w'))
     }
 
     const dictationId = createMobileDictationId()
@@ -240,7 +241,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       if (text) {
         onTranscriptRef.current(text)
       } else {
-        reportError(new Error('No speech detected.'))
+        reportError(new Error(t('m.qiXFVWc')))
       }
     } catch (err) {
       failActiveDictation(dictationId, err)

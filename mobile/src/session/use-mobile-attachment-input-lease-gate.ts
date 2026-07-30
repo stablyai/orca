@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { t } from '@/i18n/mobile-i18n'
 
 type CurrentRef<T> = { readonly current: T }
 
@@ -60,7 +61,7 @@ export function useMobileAttachmentInputLeaseGate({
       if (nativeChatInputLeaseReadyRef.current) {
         return true
       }
-      showToast('Attach failed (reconnecting)', 1500)
+      showToast(t('m.Lq5nqds'), 1500)
       return false
     },
     [

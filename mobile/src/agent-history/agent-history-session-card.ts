@@ -3,6 +3,7 @@ import { latestSessionConversationTurn } from '../../../src/shared/ai-vault-sess
 import { aiVaultAgentLabel } from '../../../src/shared/ai-vault-types'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import { formatTimeAgo } from '../worktree/agent-row-display'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobileAgentHistoryCard = {
   id: string
@@ -44,7 +45,7 @@ export function buildMobileAgentHistoryCard(
     id: session.id,
     agent: session.agent,
     agentLabel: aiVaultAgentLabel(session.agent),
-    title: session.title || 'Untitled session',
+    title: session.title || t('m.VgO3m0E'),
     lastMessage: latestTurn?.text.trim() ?? '',
     messageCount: session.messageCount,
     timeAgo: Number.isFinite(updatedAtMs) ? formatTimeAgo(updatedAtMs, now) : '',

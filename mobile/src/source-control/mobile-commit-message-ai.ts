@@ -1,5 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
+import { t } from '@/i18n/mobile-i18n'
 
 // Mirrors the host GenerateCommitMessageResult (src/main/text-generation/
 // commit-message-text-generation.ts) — a single resolved result, not a stream.
@@ -18,11 +19,11 @@ export async function requestMobileCommitMessage(
     worktree: `id:${worktreeId}`
   })
   if (!response.ok) {
-    return { success: false, error: response.error?.message || 'Failed to generate commit message' }
+    return { success: false, error: response.error?.message || t('m.cU7VGGA') }
   }
   const result = (response as RpcSuccess).result as MobileGenerateCommitMessageResult | undefined
   if (!result || typeof result !== 'object') {
-    return { success: false, error: 'Failed to generate commit message' }
+    return { success: false, error: t('m.cU7VGGA') }
   }
   if (result.success === true && typeof result.message === 'string' && result.message.length > 0) {
     return { success: true, message: result.message }
@@ -32,7 +33,7 @@ export async function requestMobileCommitMessage(
   const hostError =
     result.success === false && typeof result.error === 'string' && result.error.length > 0
       ? result.error
-      : 'No commit message generated'
+      : t('m.R0VwXOs')
   return {
     success: false,
     error: hostError,

@@ -4,10 +4,10 @@ import type { RuntimeStatus } from '../../../src/shared/runtime-types'
 import type { SshConnectionState, SshMutationExpectation } from '../../../src/shared/ssh-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
+import { t } from '@/i18n/mobile-i18n'
 
 const FILE_MUTATION_TIMEOUT_MS = 15_000
-const SSH_OWNER_CHANGED_MESSAGE =
-  "Couldn't verify the SSH connection. Reconnect the host and try again."
+const SSH_OWNER_CHANGED_MESSAGE = t('m.hf0yXVE')
 
 export type MobileFileMutationOwnership = SshMutationExpectation & {
   expectedExecutionHostId: 'local' | `ssh:${string}`

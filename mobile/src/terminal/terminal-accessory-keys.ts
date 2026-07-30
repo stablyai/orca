@@ -1,3 +1,5 @@
+import { t } from '@/i18n/mobile-i18n'
+export { TERMINAL_ACCESSORY_KEYS } from './terminal-accessory-key-catalog'
 export type TerminalAccessoryKey = {
   id: string
   label: string
@@ -28,9 +30,9 @@ export type TerminalShortcutSpecialKey = {
 const ESC = '\x1b'
 
 const MODIFIER_LABELS: Record<TerminalShortcutModifier, string> = {
-  ctrl: 'Ctrl',
-  alt: 'Alt',
-  shift: 'Shift'
+  ctrl: t('m.mthhwXw'),
+  alt: t('m.zN_6g9g'),
+  shift: t('m.lCZrWn4')
 }
 
 const MODIFIER_ORDER: TerminalShortcutModifier[] = ['ctrl', 'alt', 'shift']
@@ -76,63 +78,63 @@ const CTRL_PRINTABLE_BYTES: Record<string, string> = {
 }
 
 const SPECIAL_KEY_LABELS: Record<string, string> = {
-  escape: 'Esc',
-  tab: 'Tab',
-  enter: 'Enter',
+  escape: t('m.bNejRmQ'),
+  tab: t('m.hM5KUAw'),
+  enter: t('m.9KFo5zM'),
   backspace: '⌫',
-  delete: 'Del',
-  insert: 'Ins',
+  delete: t('m.gmy3A7M'),
+  insert: t('m.bh9E9Gk'),
   arrowUp: '↑',
   arrowDown: '↓',
   arrowLeft: '←',
   arrowRight: '→',
-  home: 'Home',
-  end: 'End',
-  pageUp: 'PgUp',
-  pageDown: 'PgDn',
-  space: 'Space',
-  f1: 'F1',
-  f2: 'F2',
-  f3: 'F3',
-  f4: 'F4',
-  f5: 'F5',
-  f6: 'F6',
-  f7: 'F7',
-  f8: 'F8',
-  f9: 'F9',
-  f10: 'F10',
-  f11: 'F11',
-  f12: 'F12'
+  home: t('m.r2L-IvQ'),
+  end: t('m.6UajMWQ'),
+  pageUp: t('m.1qkhXPI'),
+  pageDown: t('m.Wt9qvqo'),
+  space: t('m.l6KJT3M'),
+  f1: t('m.wPNSaMQ'),
+  f2: t('m.5OQeDMc'),
+  f3: t('m.fNbslzw'),
+  f4: t('m.dMpOhHI'),
+  f5: t('m.MmdqLFU'),
+  f6: t('m.xOj4ngY'),
+  f7: t('m.EbNp-x4'),
+  f8: t('m.DR9i7SU'),
+  f9: t('m.rI3MEx0'),
+  f10: t('m.d6orzBg'),
+  f11: t('m.T7RTOC4'),
+  f12: t('m._dDm4ic')
 }
 
 const SPECIAL_KEY_ACCESSIBILITY_LABELS: Record<string, string> = {
-  escape: 'Escape',
-  tab: 'Tab',
-  enter: 'Enter',
-  backspace: 'Backspace',
-  delete: 'Forward delete',
-  insert: 'Insert',
-  arrowUp: 'Arrow up',
-  arrowDown: 'Arrow down',
-  arrowLeft: 'Arrow left',
-  arrowRight: 'Arrow right',
-  home: 'Home',
-  end: 'End',
-  pageUp: 'Page up',
-  pageDown: 'Page down',
-  space: 'Space',
-  f1: 'F1',
-  f2: 'F2',
-  f3: 'F3',
-  f4: 'F4',
-  f5: 'F5',
-  f6: 'F6',
-  f7: 'F7',
-  f8: 'F8',
-  f9: 'F9',
-  f10: 'F10',
-  f11: 'F11',
-  f12: 'F12'
+  escape: t('m.jHe6UUU'),
+  tab: t('m.hM5KUAw'),
+  enter: t('m.9KFo5zM'),
+  backspace: t('m.6TRPiic'),
+  delete: t('m.fNgDk9o'),
+  insert: t('m.JAhWIZE'),
+  arrowUp: t('m.S_D2PxQ'),
+  arrowDown: t('m.jB50jh8'),
+  arrowLeft: t('m.1TJf6c4'),
+  arrowRight: t('m.EvEE7WE'),
+  home: t('m.r2L-IvQ'),
+  end: t('m.6UajMWQ'),
+  pageUp: t('m.1n1QZYk'),
+  pageDown: t('m.Z-W6Rzg'),
+  space: t('m.l6KJT3M'),
+  f1: t('m.wPNSaMQ'),
+  f2: t('m.5OQeDMc'),
+  f3: t('m.fNbslzw'),
+  f4: t('m.dMpOhHI'),
+  f5: t('m.MmdqLFU'),
+  f6: t('m.xOj4ngY'),
+  f7: t('m.EbNp-x4'),
+  f8: t('m.DR9i7SU'),
+  f9: t('m.rI3MEx0'),
+  f10: t('m.d6orzBg'),
+  f11: t('m.T7RTOC4'),
+  f12: t('m._dDm4ic')
 }
 
 const CSI_FINAL_SPECIAL_KEYS: Record<string, string> = {
@@ -198,54 +200,6 @@ export const TERMINAL_SHORTCUT_SPECIAL_KEYS: TerminalShortcutSpecialKey[] = [
   label: SPECIAL_KEY_LABELS[id]!,
   accessibilityLabel: SPECIAL_KEY_ACCESSIBILITY_LABELS[id]!
 }))
-
-export const TERMINAL_ACCESSORY_KEYS: TerminalAccessoryKey[] = [
-  { id: 'escape', label: 'Esc', bytes: '\x1b', accessibilityLabel: 'Escape' },
-  { id: 'tab', label: 'Tab', bytes: '\t', accessibilityLabel: 'Tab' },
-  { id: 'enter', label: 'Enter', bytes: '\r', accessibilityLabel: 'Enter' },
-  // Why: terminal apps recognize ESC [ Z as the reverse-tab sequence.
-  { id: 'shiftTab', label: 'Shift+Tab', bytes: '\x1b[Z', accessibilityLabel: 'Shift Tab' },
-  { id: 'space', label: 'Space', bytes: ' ', accessibilityLabel: 'Space' },
-  { id: 'backspace', label: '⌫', bytes: '\x7f', accessibilityLabel: 'Backspace', repeatable: true },
-  {
-    id: 'delete',
-    label: 'Del',
-    bytes: '\x1b[3~',
-    accessibilityLabel: 'Forward delete',
-    repeatable: true
-  },
-  { id: 'arrowUp', label: '↑', bytes: '\x1b[A', accessibilityLabel: 'Arrow Up', repeatable: true },
-  {
-    id: 'arrowDown',
-    label: '↓',
-    bytes: '\x1b[B',
-    accessibilityLabel: 'Arrow Down',
-    repeatable: true
-  },
-  {
-    id: 'arrowLeft',
-    label: '←',
-    bytes: '\x1b[D',
-    accessibilityLabel: 'Arrow Left',
-    repeatable: true
-  },
-  {
-    id: 'arrowRight',
-    label: '→',
-    bytes: '\x1b[C',
-    accessibilityLabel: 'Arrow Right',
-    repeatable: true
-  },
-  { id: 'ctrlC', label: 'Ctrl+C', bytes: '\x03', accessibilityLabel: 'Interrupt terminal' },
-  { id: 'ctrlD', label: 'Ctrl+D', bytes: '\x04', accessibilityLabel: 'Send EOF' },
-  { id: 'ctrlL', label: 'Ctrl+L', bytes: '\x0c', accessibilityLabel: 'Clear screen' },
-  { id: 'ctrlZ', label: 'Ctrl+Z', bytes: '\x1a', accessibilityLabel: 'Suspend process' },
-  { id: 'ctrlR', label: 'Ctrl+R', bytes: '\x12', accessibilityLabel: 'Reverse search' },
-  { id: 'ctrlA', label: 'Ctrl+A', bytes: '\x01', accessibilityLabel: 'Start of line' },
-  { id: 'ctrlE', label: 'Ctrl+E', bytes: '\x05', accessibilityLabel: 'End of line' },
-  { id: 'ctrlW', label: 'Ctrl+W', bytes: '\x17', accessibilityLabel: 'Delete word backward' },
-  { id: 'ctrlU', label: 'Ctrl+U', bytes: '\x15', accessibilityLabel: 'Clear line before cursor' }
-]
 
 export function buildTerminalShortcutKey(
   binding: TerminalShortcutBinding
@@ -405,7 +359,7 @@ function displayKeyLabel(key: string): string {
     return SPECIAL_KEY_LABELS[key]
   }
   if (key === ' ') {
-    return 'Space'
+    return t('m.l6KJT3M')
   }
   return key.length === 1 && key >= 'a' && key <= 'z' ? key.toUpperCase() : key
 }

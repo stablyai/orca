@@ -1,3 +1,4 @@
+import { t } from '@/i18n/mobile-i18n'
 // Pure helpers for the branch-card conflict Abort control. Kept free of React so
 // the busy-label rule (abort-in-flight only) is unit-testable.
 
@@ -14,5 +15,8 @@ export function isMobileConflictAborting(
 
 /** Label for the Abort control — never says "Aborting…" for unrelated busy work. */
 export function mobileConflictAbortLabel(conflictOperation: string, aborting: boolean): string {
-  return aborting ? 'Aborting…' : `Abort ${conflictOperation}`
+  if (aborting) {
+    return t('m.wFxT3pM')
+  }
+  return conflictOperation === 'rebase' ? t('m.S5cNB0c') : t('m.3fVn1VI')
 }

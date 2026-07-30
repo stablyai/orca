@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
+import { t } from '@/i18n/mobile-i18n'
 
 export type SetupTrustPrompt = {
   repoId: string
@@ -40,18 +41,15 @@ export function SetupHookTrustDrawer({
           <View style={styles.trustHeader}>
             <Text style={styles.title}>
               {prompt.previouslyApproved
-                ? `${prompt.repoName}'s setup script changed`
-                : `Run setup from ${prompt.repoName}?`}
+                ? t('m.egQ-qgQ', { value0: prompt.repoName })
+                : t('m.SSMlLr8', { value0: prompt.repoName })}
             </Text>
-            <Text style={styles.subtitle}>
-              This repository's orca.yaml runs before the workspace starts. Only run it if you trust
-              this repository.
-            </Text>
+            <Text style={styles.subtitle}>{t('m.JU7DVfY')}</Text>
           </View>
 
           <View style={styles.trustScriptBox}>
             <Text style={styles.trustScriptLabel}>
-              {prompt.previouslyApproved ? 'New setup script' : 'Setup script'}
+              {prompt.previouslyApproved ? t('m.gxXtGpI') : t('m.m7jxYm8')}
             </Text>
             <Text style={styles.trustScriptText}>{prompt.scriptContent}</Text>
           </View>
@@ -59,16 +57,16 @@ export function SetupHookTrustDrawer({
           <View style={styles.trustActionGroup}>
             <Pressable style={styles.trustActionRow} disabled={busy} onPress={onRunOnce}>
               <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.trustActionText}>Run hooks</Text>
+              <Text style={styles.trustActionText}>{t('m.wOCs5LA')}</Text>
             </Pressable>
             <View style={styles.trustActionSeparator} />
             <Pressable style={styles.trustActionRow} disabled={busy} onPress={onAlwaysTrust}>
               <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.trustActionText}>Always trust and run</Text>
+              <Text style={styles.trustActionText}>{t('m.hUSRq7I')}</Text>
             </Pressable>
             <View style={styles.trustActionSeparator} />
             <Pressable style={styles.trustActionRow} disabled={busy} onPress={onDontRun}>
-              <Text style={styles.trustActionText}>Don't run</Text>
+              <Text style={styles.trustActionText}>{t('m.Pe9Dmhc')}</Text>
             </Pressable>
           </View>
         </View>

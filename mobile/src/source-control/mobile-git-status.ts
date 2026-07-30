@@ -5,6 +5,7 @@ import type {
   GitStatusResult,
   GitUpstreamStatus
 } from '../../../src/shared/git-status-types'
+import { t } from '@/i18n/mobile-i18n'
 
 export type MobileGitFileStatus = GitFileStatus
 export type MobileGitStagingArea = GitStagingArea
@@ -22,9 +23,9 @@ export type MobileSourceControlSection<TEntry extends MobileGitStatusEntry = Mob
 const AREA_ORDER: MobileGitStagingArea[] = ['unstaged', 'untracked', 'staged']
 
 const AREA_TITLES: Record<MobileGitStagingArea, string> = {
-  unstaged: 'Changes',
-  untracked: 'Untracked Files',
-  staged: 'Staged Changes'
+  unstaged: t('m.cbaJlCE'),
+  untracked: t('m.cdicUlU'),
+  staged: t('m.-DRFeFw')
 }
 
 export const MOBILE_GIT_STATUS_LABELS: Record<MobileGitFileStatus, string> = {

@@ -1,3 +1,4 @@
+import { t } from '@/i18n/mobile-i18n'
 // Agent permission asks (e.g. Claude/Codex "Do you want to proceed?") surface
 // as plain TUI text in the agent's last assistant message — there is no
 // structured permission event on mobile. We detect them heuristically so the
@@ -48,11 +49,11 @@ export function parseApprovalFromStatus(
   }
   const summary = (approval as { summary?: unknown }).summary
   return {
-    title: `Allow ${tool}?`,
+    title: t('m.rOYT-0U', { value0: tool }),
     detail: typeof summary === 'string' && summary.length > 0 ? summary : undefined,
     options: [
-      { label: 'Allow', send: '1' },
-      { label: 'Deny', send: ESCAPE }
+      { label: t('m.sjphObI'), send: '1' },
+      { label: t('m.3EBdICM'), send: ESCAPE }
     ]
   }
 }
@@ -125,7 +126,7 @@ function buildNumberedPermission(
   detail: string | undefined
 ): MobileChatPermission {
   return {
-    title: 'Permission requested',
+    title: t('m.LHMnD5o'),
     detail,
     options: options.map((opt) => ({ label: shortLabel(opt.text), send: opt.num }))
   }
@@ -168,12 +169,12 @@ export function detectAgentPermission(input: PermissionInput): MobileChatPermiss
   // text actually offers a persistent option, to avoid sending a token the agent
   // doesn't understand.
   const options: MobileChatPermission['options'] = [
-    { label: 'Allow', send: 'y' },
-    { label: 'Deny', send: 'n' }
+    { label: t('m.sjphObI'), send: 'y' },
+    { label: t('m.3EBdICM'), send: 'n' }
   ]
   if (isAlwaysLabel(text)) {
-    options.splice(1, 0, { label: 'Allow always', send: 'a' })
+    options.splice(1, 0, { label: t('m.zqu69ik'), send: 'a' })
   }
 
-  return { title: 'Permission requested', detail, options }
+  return { title: t('m.LHMnD5o'), detail, options }
 }

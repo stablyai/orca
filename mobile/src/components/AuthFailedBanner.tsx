@@ -1,5 +1,6 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { t } from '@/i18n/mobile-i18n'
 
 // Why: auth-failed is no longer necessarily terminal (issue #5200) — a
 // transient rejection can latch it even though the desktop still lists this
@@ -18,20 +19,18 @@ export function AuthFailedBanner({
 }) {
   return (
     <View style={styles.banner}>
-      <Text style={styles.text}>
-        Authentication failed — try reconnecting first; if it keeps failing, re-pair from desktop.
-      </Text>
+      <Text style={styles.text}>{t('m.IrfKQh8')}</Text>
       <View style={styles.actions}>
         {canRetry && (
           <Pressable style={styles.action} onPress={onRetry}>
-            <Text style={styles.actionText}>Retry</Text>
+            <Text style={styles.actionText}>{t('m.ujiecek')}</Text>
           </Pressable>
         )}
         <Pressable style={styles.action} onPress={onRepair}>
-          <Text style={styles.actionText}>Re-pair</Text>
+          <Text style={styles.actionText}>{t('m.KuqR8FY')}</Text>
         </Pressable>
         <Pressable style={styles.action} onPress={onRemove}>
-          <Text style={[styles.actionText, { color: colors.statusRed }]}>Remove</Text>
+          <Text style={[styles.actionText, { color: colors.statusRed }]}>{t('m.q-MNnd4')}</Text>
         </Pressable>
       </View>
     </View>

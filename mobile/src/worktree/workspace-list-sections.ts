@@ -1,4 +1,5 @@
 import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
+import { t } from '@/i18n/mobile-i18n'
 import {
   DEFAULT_MOBILE_WORKSPACE_STATUSES,
   coerceMobileWorkspaceStatuses,
@@ -14,6 +15,8 @@ import { sortWorktrees } from './workspace-list-ordering'
 export type { FilterState, Section, Worktree } from './workspace-list-types'
 export { CREATE_GRACE_MS, getWorktreeStatus, sortWorktrees } from './workspace-list-ordering'
 
+const MISSING_REPO_IDENTITY = Symbol('missing-repo')
+const MISSING_REPO_SECTION_KEY = 'missing-repo'
 function makeSection(
   key: string,
   title: string,
@@ -125,17 +128,19 @@ export function buildSections(
 
   const sections: Section[] = []
   if (pinned.length > 0) {
-    sections.push(makeSection('pinned', 'Pinned', pinned, 'pin'))
+    sections.push(makeSection('pinned', t('m.Rn74bFA'), pinned, 'pin'))
   }
 
   if (groupMode === 'none') {
     if (canonicalGroupWorktrees.length > 0) {
-      sections.push(makeSection('all', 'All', canonicalGroupWorktrees, undefined, collapsedGroups))
+      sections.push(
+        makeSection('all', t('m.IwMISoQ'), canonicalGroupWorktrees, undefined, collapsedGroups)
+      )
     }
   } else if (groupMode === 'repo') {
-    const byRepo = new Map<string, Worktree[]>()
+    const byRepo = new Map<string | typeof MISSING_REPO_IDENTITY, Worktree[]>()
     for (const w of canonicalGroupWorktrees) {
-      const key = w.repo || 'Unknown'
+      const key = w.repo || MISSING_REPO_IDENTITY
       const list = byRepo.get(key)
       if (list) {
         list.push(w)
@@ -159,10 +164,14 @@ export function buildSections(
         byRepo.set(displayName, [])
       }
     }
-    for (const [repo, items] of byRepo) {
-      const key = `repo:${repoIdsByName.get(repo) ?? repo}`
+    for (const [repoIdentity, items] of byRepo) {
+      const title = repoIdentity === MISSING_REPO_IDENTITY ? t('m.6MEByr4') : repoIdentity
+      const key =
+        repoIdentity === MISSING_REPO_IDENTITY
+          ? MISSING_REPO_SECTION_KEY
+          : `repo:${repoIdsByName.get(repoIdentity) ?? repoIdentity}`
       sections.push(
-        makeSection(key, repo, orderMainWorktreeFirst(items), undefined, collapsedGroups)
+        makeSection(key, title, orderMainWorktreeFirst(items), undefined, collapsedGroups)
       )
     }
   } else if (groupMode === 'workspaceStatus') {
