@@ -163,7 +163,7 @@ export function derivePipelineStatus(
   let hasPending = false
   for (const job of rollup) {
     const s = job.status?.toLowerCase()
-    if (s === 'failed') {
+    if (s === 'failed' || s === 'manual' || s === 'action_required') {
       hasFailure = true
     } else if (
       s === 'created' ||
@@ -283,7 +283,7 @@ function classifyPipelineString(status: string): CheckStatus {
   if (s === 'success') {
     return 'success'
   }
-  if (s === 'failed') {
+  if (s === 'failed' || s === 'manual' || s === 'action_required') {
     return 'failure'
   }
   if (

@@ -228,7 +228,7 @@ describe('derivePipelineStatus', () => {
     expect(derivePipelineStatus('success')).toBe('success')
     expect(derivePipelineStatus('failed')).toBe('failure')
     expect(derivePipelineStatus('running')).toBe('pending')
-    expect(derivePipelineStatus('manual')).toBe('neutral')
+    expect(derivePipelineStatus('manual')).toBe('failure')
   })
 
   it('rolls up an array of jobs', () => {
@@ -239,6 +239,7 @@ describe('derivePipelineStatus', () => {
 
   it('failure beats pending in the rollup', () => {
     expect(derivePipelineStatus([{ status: 'failed' }, { status: 'running' }])).toBe('failure')
+    expect(derivePipelineStatus([{ status: 'manual' }, { status: 'success' }])).toBe('failure')
   })
 
   it('handles a single object with status', () => {

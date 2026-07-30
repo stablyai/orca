@@ -25,7 +25,12 @@ export function getCheckSeverityRank(conclusion: string | null | undefined): num
 export function sortChecksBySeverity<T extends Pick<PRCheckDetail, 'conclusion'>>(
   checks: readonly T[]
 ): T[] {
-  return [...checks].sort(
-    (a, b) => getCheckSeverityRank(a.conclusion) - getCheckSeverityRank(b.conclusion)
-  )
+  return checks
+    .map((check, index) => ({ check, index }))
+    .sort(
+      (a, b) =>
+        getCheckSeverityRank(a.check.conclusion) - getCheckSeverityRank(b.check.conclusion) ||
+        a.index - b.index
+    )
+    .map(({ check }) => check)
 }
