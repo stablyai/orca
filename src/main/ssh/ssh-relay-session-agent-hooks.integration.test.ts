@@ -478,6 +478,8 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
         toolUseId: 'toolu-1',
         toolAgentId: 'agent-subagent-a',
         toolAgentType: 'Review',
+        // Why: the cwd attribution guard is inert for every SSH event if this hop drops sourceCwd.
+        sourceCwd: '/srv/remote-session',
         providerSessionOnly: true,
         providerSession: {
           key: 'session_id',
@@ -500,6 +502,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
           toolUseId: 'toolu-1',
           toolAgentId: 'agent-subagent-a',
           toolAgentType: 'Review',
+          sourceCwd: '/srv/remote-session',
           providerSessionOnly: true,
           providerSession: {
             key: 'session_id',

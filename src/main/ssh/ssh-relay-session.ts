@@ -1159,6 +1159,7 @@ export class SshRelaySession {
         isReplay?: unknown
         providerSession?: unknown
         providerSessionOnly?: unknown
+        sourceCwd?: unknown
         payload?: unknown
       }
       if (typeof envelope.paneKey !== 'string') {
@@ -1187,6 +1188,9 @@ export class SshRelaySession {
           isReplay: envelope.isReplay === true ? true : undefined,
           providerSession: envelope.providerSession,
           providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
+          // Why: without this pass-through the cwd attribution guard in ingestRemote sees no
+          // cwd and stays inert for every SSH event; ingestRemote re-bounds and trims it.
+          sourceCwd: typeof envelope.sourceCwd === 'string' ? envelope.sourceCwd : undefined,
           payload: envelope.payload
         },
         this.targetId
