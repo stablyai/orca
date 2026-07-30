@@ -18,10 +18,12 @@ function resolveTerminalImeDeletionKey(
   return event.key === 'Backspace' || event.key === 'Delete' ? event.key : undefined
 }
 
+/** Creates one-shot ownership for a Windows IME deletion's paired keyup. */
 export function createTerminalImeDeletionReleaseGuard(): TerminalImeDeletionReleaseGuard {
   return { expiresAt: 0 }
 }
 
+/** Arms the guard from a tracked composition deletion keydown. */
 export function armTerminalImeDeletionReleaseGuard(
   guard: TerminalImeDeletionReleaseGuard,
   event: XtermBypassEvent,
@@ -35,6 +37,7 @@ export function armTerminalImeDeletionReleaseGuard(
   }
 }
 
+/** Consumes only the ordinary keyup paired with the tracked IME deletion. */
 export function consumeTerminalImeDeletionRelease(
   guard: TerminalImeDeletionReleaseGuard,
   event: XtermBypassEvent,

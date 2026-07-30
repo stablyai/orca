@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs'
 import type { CDPSession } from '@stablyai/playwright-test'
 
+/** Returns the number of raw PTY input chunks captured by the IME harness. */
 export function readPtyInputCount(inputLogPath: string): number {
   return readFileSync(inputLogPath, 'utf8').split(/\r?\n/).filter(Boolean).length
 }
 
+/** Reads raw PTY input chunks captured by the IME harness. */
 export function readPtyInputs(inputLogPath: string): string[] {
   return readFileSync(inputLogPath, 'utf8')
     .split(/\r?\n/)
@@ -12,6 +14,7 @@ export function readPtyInputs(inputLogPath: string): string[] {
     .map((line) => JSON.parse(line) as string)
 }
 
+/** Dispatches Chromium's native Microsoft Pinyin Backspace sequence. */
 export async function dispatchWindowsImeBackspace(session: CDPSession): Promise<void> {
   await session.send('Input.dispatchKeyEvent', {
     type: 'rawKeyDown',
@@ -44,6 +47,7 @@ export async function dispatchWindowsImeBackspace(session: CDPSession): Promise<
   })
 }
 
+/** Dispatches Chromium's native Microsoft Pinyin Shift-toggle sequence. */
 export async function dispatchWindowsImeShiftToggle(session: CDPSession): Promise<void> {
   await session.send('Input.dispatchKeyEvent', {
     type: 'rawKeyDown',
