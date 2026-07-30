@@ -26,6 +26,8 @@ import { routeSshFilesystemWatchNotification } from './ssh-filesystem-watch-noti
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 
+const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
+
 export class SshFilesystemProvider implements IFilesystemProvider {
   private connectionId: string
   private mux: SshChannelMultiplexer
@@ -250,9 +252,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     return (await this.mux.request(
       'fs.workspaceSpaceScan',
       { rootPath },
-      // Why: accurate remote du scans can legitimately outlive the default
-      // request deadline; explicit cancellation still sends rpc.cancel.
-      { signal: options?.signal, timeoutMs: null }
+      { signal: options?.signal, timeoutMs: WORKSPACE_SPACE_SCAN_TIMEOUT_MS }
     )) as WorkspaceSpaceDirectoryScanResult
   }
 

@@ -28,6 +28,8 @@ import {
 import {
   collectWorkspaceSpaceDirectoryEntries,
   createWorkspaceSpaceScanBudget,
+  retainWorkspaceSpaceScanEntry,
+  type WorkspaceSpaceScanBudget,
   WorkspaceSpaceScanCapacityError
 } from '../shared/workspace-space-scan-budget'
 import type { IFilesystemProvider } from './providers/types'
@@ -46,6 +48,7 @@ const LOCAL_WORKTREE_SCAN_CONCURRENCY = 1
 const REMOTE_FALLBACK_SCAN_CONCURRENCY = 2
 const LOCAL_FS_CONCURRENCY = 48
 const REMOTE_FS_CONCURRENCY = 10
+const DU_TIMEOUT_MS = 120_000
 const DU_STDERR_MAX_CHARS = 64 * 1024
 
 type AsyncLimiter = <T>(task: () => Promise<T>) => Promise<T>
@@ -78,6 +81,13 @@ export class WorkspaceSpaceScanCancelledError extends Error {
   constructor() {
     super('Workspace space scan cancelled')
     this.name = 'WorkspaceSpaceScanCancelledError'
+  }
+}
+
+class WorkspaceSpaceDuTimeoutError extends Error {
+  constructor() {
+    super(`du timed out after ${DU_TIMEOUT_MS}ms`)
+    this.name = 'WorkspaceSpaceDuTimeoutError'
   }
 }
 
@@ -189,6 +199,7 @@ function parseDuDepthOneLine(line: string): [string, number] | null {
 
 function consumeDuOutputChunk(
   sizes: Map<string, number>,
+  budget: WorkspaceSpaceScanBudget,
   bufferedLine: string,
   chunkText: string
 ): string {
@@ -197,6 +208,9 @@ function consumeDuOutputChunk(
   for (const line of lines) {
     const parsed = parseDuDepthOneLine(line)
     if (parsed) {
+      if (!sizes.has(parsed[0])) {
+        retainWorkspaceSpaceScanEntry(budget, parsed[0], sizes.size)
+      }
       sizes.set(parsed[0], parsed[1])
     }
   }
@@ -211,11 +225,13 @@ async function readLocalDuDepthOne(
     let settled = false
     let child: ChildProcessByStdio<null, Readable, Readable> | undefined
     let onAbort: (() => void) | null = null
+    let timer: ReturnType<typeof setTimeout> | null = null
     let bufferedLine = ''
     let stderr = ''
     const stdoutDecoder = new StringDecoder('utf8')
     const stderrDecoder = new StringDecoder('utf8')
     const sizes = new Map<string, number>()
+    const budget = createWorkspaceSpaceScanBudget()
     const appendStderr = (chunkText: string): void => {
       if (stderr.length < DU_STDERR_MAX_CHARS) {
         stderr = `${stderr}${chunkText}`.slice(0, DU_STDERR_MAX_CHARS)
@@ -226,6 +242,9 @@ async function readLocalDuDepthOne(
         return
       }
       settled = true
+      if (timer) {
+        clearTimeout(timer)
+      }
       if (onAbort) {
         signal?.removeEventListener('abort', onAbort)
       }
@@ -244,15 +263,30 @@ async function readLocalDuDepthOne(
     }
 
     try {
-      // Why: large worktrees can produce more top-level du rows than
-      // execFile's fixed buffer allows; stream rows so accuracy has no cap.
+      // Why: stream beyond execFile's fixed buffer while bounding retained rows.
       child = spawn('du', ['-k', '-d', '1', rootPath], { stdio: ['ignore', 'pipe', 'pipe'] })
     } catch (error) {
       settle(() => reject(error))
       return
     }
+    timer = setTimeout(() => {
+      settle(() => {
+        child?.kill()
+        reject(new WorkspaceSpaceDuTimeoutError())
+      })
+    }, DU_TIMEOUT_MS)
     child.stdout.on('data', (chunk) => {
-      bufferedLine = consumeDuOutputChunk(sizes, bufferedLine, stdoutDecoder.write(chunk))
+      if (settled) {
+        return
+      }
+      try {
+        bufferedLine = consumeDuOutputChunk(sizes, budget, bufferedLine, stdoutDecoder.write(chunk))
+      } catch (error) {
+        settle(() => {
+          child?.kill()
+          reject(error)
+        })
+      }
     })
     child.stderr.on('data', (chunk) => {
       appendStderr(stderrDecoder.write(chunk))
@@ -261,16 +295,27 @@ async function readLocalDuDepthOne(
       settle(() => reject(error))
     })
     child.once('close', (code) => {
-      settle(() => {
+      if (settled) {
+        return
+      }
+      try {
         const decodedTail = stdoutDecoder.end()
         if (decodedTail) {
-          bufferedLine = consumeDuOutputChunk(sizes, bufferedLine, decodedTail)
+          bufferedLine = consumeDuOutputChunk(sizes, budget, bufferedLine, decodedTail)
         }
         appendStderr(stderrDecoder.end())
         const parsed = parseDuDepthOneLine(bufferedLine)
         if (parsed) {
+          if (!sizes.has(parsed[0])) {
+            retainWorkspaceSpaceScanEntry(budget, parsed[0], sizes.size)
+          }
           sizes.set(parsed[0], parsed[1])
         }
+      } catch (error) {
+        settle(() => reject(error))
+        return
+      }
+      settle(() => {
         if (code === 0) {
           resolve(sizes)
           return
@@ -294,6 +339,9 @@ function classifyError(error: unknown): {
   // Why: a workspace over the scan budget is intact and readable, just too big
   // to size safely, so it reads as unavailable rather than a filesystem error.
   if (error instanceof WorkspaceSpaceScanCapacityError) {
+    return { status: 'unavailable', message }
+  }
+  if (error instanceof WorkspaceSpaceDuTimeoutError) {
     return { status: 'unavailable', message }
   }
   if (code === 'ENOENT' || code === 'ENOTDIR') {
@@ -509,19 +557,16 @@ async function scanLocalWorktreeWithDu(
     }
   }
 
-  const [entries, duSizes] = await Promise.all([
-    opendir(worktree.path).then(async (directory) => {
-      const admission = await collectWorkspaceSpaceDirectoryEntries(
-        directory,
-        worktree.path,
-        (entry) => entry.name,
-        createWorkspaceSpaceScanBudget(),
-        () => throwIfAborted(signal)
-      )
-      return admission.entries
-    }),
-    readLocalDuDepthOne(worktree.path, signal)
-  ])
+  const directory = await opendir(worktree.path)
+  const admission = await collectWorkspaceSpaceDirectoryEntries(
+    directory,
+    worktree.path,
+    (entry) => entry.name,
+    createWorkspaceSpaceScanBudget(),
+    () => throwIfAborted(signal)
+  )
+  const entries = admission.entries
+  const duSizes = await readLocalDuDepthOne(worktree.path, signal)
   throwIfAborted(signal)
   const childStats = await mapWithConcurrency(
     entries,
@@ -610,7 +655,10 @@ async function scanLocalWorktree(
       if (error instanceof WorkspaceSpaceScanCancelledError) {
         throw error
       }
-      if (error instanceof WorkspaceSpaceScanCapacityError) {
+      if (
+        error instanceof WorkspaceSpaceScanCapacityError ||
+        error instanceof WorkspaceSpaceDuTimeoutError
+      ) {
         const classified = classifyError(error)
         return createUnavailableWorktreeRow(
           repo,

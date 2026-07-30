@@ -20,11 +20,14 @@ import {
 import {
   collectWorkspaceSpaceDirectoryEntries,
   createWorkspaceSpaceScanBudget,
+  retainWorkspaceSpaceScanEntry,
+  type WorkspaceSpaceScanBudget,
   WorkspaceSpaceScanCapacityError
 } from '../shared/workspace-space-scan-budget'
 import type { RequestContext } from './dispatcher'
 
 const RELAY_FS_CONCURRENCY = 48
+const DU_TIMEOUT_MS = 120_000
 const DU_STDERR_MAX_CHARS = 64 * 1024
 
 type ScanStats = WorkspaceSpaceEntryScan
@@ -33,6 +36,13 @@ class RelayWorkspaceSpaceScanCancelledError extends Error {
   constructor() {
     super('Workspace space scan cancelled')
     this.name = 'RelayWorkspaceSpaceScanCancelledError'
+  }
+}
+
+class RelayWorkspaceSpaceDuTimeoutError extends Error {
+  constructor() {
+    super(`du timed out after ${DU_TIMEOUT_MS}ms`)
+    this.name = 'RelayWorkspaceSpaceDuTimeoutError'
   }
 }
 
@@ -61,6 +71,7 @@ function parseDuDepthOneLine(line: string): [string, number] | null {
 
 function consumeDuOutputChunk(
   sizes: Map<string, number>,
+  budget: WorkspaceSpaceScanBudget,
   bufferedLine: string,
   chunkText: string
 ): string {
@@ -69,6 +80,9 @@ function consumeDuOutputChunk(
   for (const line of lines) {
     const parsed = parseDuDepthOneLine(line)
     if (parsed) {
+      if (!sizes.has(parsed[0])) {
+        retainWorkspaceSpaceScanEntry(budget, parsed[0], sizes.size)
+      }
       sizes.set(parsed[0], parsed[1])
     }
   }
@@ -84,11 +98,13 @@ async function readDuDepthOne(
     let settled = false
     let child: ChildProcessByStdio<null, Readable, Readable> | undefined
     let onAbort: (() => void) | null = null
+    let timer: ReturnType<typeof setTimeout> | null = null
     let bufferedLine = ''
     let stderr = ''
     const stdoutDecoder = new StringDecoder('utf8')
     const stderrDecoder = new StringDecoder('utf8')
     const sizes = new Map<string, number>()
+    const budget = createWorkspaceSpaceScanBudget()
     const appendStderr = (chunkText: string): void => {
       if (stderr.length < DU_STDERR_MAX_CHARS) {
         stderr = `${stderr}${chunkText}`.slice(0, DU_STDERR_MAX_CHARS)
@@ -99,6 +115,9 @@ async function readDuDepthOne(
         return
       }
       settled = true
+      if (timer) {
+        clearTimeout(timer)
+      }
       if (onAbort) {
         context.signal?.removeEventListener('abort', onAbort)
       }
@@ -117,15 +136,30 @@ async function readDuDepthOne(
     }
 
     try {
-      // Why: relay scans may run on huge remote worktrees; streaming avoids
-      // execFile buffering while keeping native du as the exact source.
+      // Why: stream beyond execFile's fixed buffer while bounding retained rows.
       child = spawn('du', ['-k', '-d', '1', rootPath], { stdio: ['ignore', 'pipe', 'pipe'] })
     } catch (error) {
       settle(() => reject(error))
       return
     }
+    timer = setTimeout(() => {
+      settle(() => {
+        child?.kill()
+        reject(new RelayWorkspaceSpaceDuTimeoutError())
+      })
+    }, DU_TIMEOUT_MS)
     child.stdout.on('data', (chunk) => {
-      bufferedLine = consumeDuOutputChunk(sizes, bufferedLine, stdoutDecoder.write(chunk))
+      if (settled) {
+        return
+      }
+      try {
+        bufferedLine = consumeDuOutputChunk(sizes, budget, bufferedLine, stdoutDecoder.write(chunk))
+      } catch (error) {
+        settle(() => {
+          child?.kill()
+          reject(error)
+        })
+      }
     })
     child.stderr.on('data', (chunk) => {
       appendStderr(stderrDecoder.write(chunk))
@@ -134,16 +168,27 @@ async function readDuDepthOne(
       settle(() => reject(error))
     })
     child.once('close', (code) => {
-      settle(() => {
+      if (settled) {
+        return
+      }
+      try {
         const decodedTail = stdoutDecoder.end()
         if (decodedTail) {
-          bufferedLine = consumeDuOutputChunk(sizes, bufferedLine, decodedTail)
+          bufferedLine = consumeDuOutputChunk(sizes, budget, bufferedLine, decodedTail)
         }
         appendStderr(stderrDecoder.end())
         const parsed = parseDuDepthOneLine(bufferedLine)
         if (parsed) {
+          if (!sizes.has(parsed[0])) {
+            retainWorkspaceSpaceScanEntry(budget, parsed[0], sizes.size)
+          }
           sizes.set(parsed[0], parsed[1])
         }
+      } catch (error) {
+        settle(() => reject(error))
+        return
+      }
+      settle(() => {
         if (code === 0) {
           resolve(sizes)
           return
@@ -242,19 +287,16 @@ async function scanDirectoryWithDu(
     return scanDirectoryWithNode(rootPath, context)
   }
 
-  const [entries, duSizes] = await Promise.all([
-    opendir(rootPath).then(async (directory) => {
-      const admission = await collectWorkspaceSpaceDirectoryEntries(
-        directory,
-        rootPath,
-        (entry) => entry.name,
-        createWorkspaceSpaceScanBudget(),
-        () => throwIfCancelled(context)
-      )
-      return admission.entries
-    }),
-    readDuDepthOne(rootPath, context)
-  ])
+  const directory = await opendir(rootPath)
+  const admission = await collectWorkspaceSpaceDirectoryEntries(
+    directory,
+    rootPath,
+    (entry) => entry.name,
+    createWorkspaceSpaceScanBudget(),
+    () => throwIfCancelled(context)
+  )
+  const entries = admission.entries
+  const duSizes = await readDuDepthOne(rootPath, context)
   throwIfCancelled(context)
   const childStats = await mapWithConcurrency(
     entries,
@@ -312,6 +354,7 @@ export async function scanWorkspaceSpaceDirectory(
     } catch (error) {
       if (
         error instanceof RelayWorkspaceSpaceScanCancelledError ||
+        error instanceof RelayWorkspaceSpaceDuTimeoutError ||
         error instanceof WorkspaceSpaceScanCapacityError
       ) {
         throw error

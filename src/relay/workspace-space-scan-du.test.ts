@@ -117,7 +117,7 @@ describe('relay workspace space scan du handling', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
-    'keeps native du running past the old timeout and kills it on cancellation',
+    'bounds native du with a deadline while preserving cancellation',
     async () => {
       await writeFile(join(tempDir!, 'app.ts'), 'console.log("ok")\n')
       const controller = new AbortController()
@@ -125,29 +125,21 @@ describe('relay workspace space scan du handling', () => {
       spawnMock.mockReturnValue(child)
 
       vi.useFakeTimers()
-      let settled = false
       const scanPromise = scanWorkspaceSpaceDirectory(tempDir!, createContext(controller.signal))
-        .then((scan) => {
-          settled = true
-          return scan
-        })
-        .catch((error: unknown) => {
-          settled = true
-          throw error
-        })
 
       await vi.waitFor(() =>
         expect(spawnMock).toHaveBeenCalledWith('du', ['-k', '-d', '1', tempDir], {
           stdio: ['ignore', 'pipe', 'pipe']
         })
       )
+      const rejection = expect(scanPromise).rejects.toMatchObject({
+        name: 'RelayWorkspaceSpaceDuTimeoutError',
+        message: 'du timed out after 120000ms'
+      })
       await vi.advanceTimersByTimeAsync(120_000)
 
-      expect(settled).toBe(false)
       controller.abort()
-      await expect(scanPromise).rejects.toMatchObject({
-        name: 'RelayWorkspaceSpaceScanCancelledError'
-      })
+      await rejection
       expect(child.kill).toHaveBeenCalled()
     }
   )

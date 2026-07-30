@@ -6,8 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeProcess from 'node:process'
 import type { Repo } from '../shared/types'
 import type { Store } from './persistence'
+import type * as WorkspaceSpaceScanBudgetModule from '../shared/workspace-space-scan-budget'
 
-const { execFileMock, spawnMock, listRepoWorktreesMock } = vi.hoisted(() => ({
+const { budgetState, execFileMock, spawnMock, listRepoWorktreesMock } = vi.hoisted(() => ({
+  budgetState: { created: 0, duMaxEntries: null as number | null },
   execFileMock: vi.fn(),
   spawnMock: vi.fn(),
   listRepoWorktreesMock: vi.fn()
@@ -42,6 +44,23 @@ vi.mock('./providers/ssh-git-dispatch', () => ({
   getSshGitProvider: vi.fn()
 }))
 
+vi.mock('../shared/workspace-space-scan-budget', async () => {
+  const actual = await vi.importActual<typeof WorkspaceSpaceScanBudgetModule>(
+    '../shared/workspace-space-scan-budget'
+  )
+  return {
+    ...actual,
+    createWorkspaceSpaceScanBudget: () => {
+      budgetState.created += 1
+      return actual.createWorkspaceSpaceScanBudget(
+        budgetState.created === 2 && budgetState.duMaxEntries
+          ? { maxEntries: budgetState.duMaxEntries }
+          : undefined
+      )
+    }
+  }
+})
+
 import { analyzeWorkspaceSpace } from './workspace-space-analysis'
 
 function createStore(repos: Repo[]): Store {
@@ -59,6 +78,8 @@ describe('analyzeWorkspaceSpace local du timeout', () => {
     execFileMock.mockReset()
     spawnMock.mockReset()
     listRepoWorktreesMock.mockReset()
+    budgetState.created = 0
+    budgetState.duMaxEntries = null
   })
 
   afterEach(async () => {
@@ -173,7 +194,7 @@ describe('analyzeWorkspaceSpace local du timeout', () => {
     })
   })
 
-  it('keeps native du running past the old timeout and kills it on cancellation', async () => {
+  it('bounds native du with a deadline before releasing the local scan slot', async () => {
     const repoPath = join(tempDir!, 'repo')
     await mkdir(repoPath, { recursive: true })
     await writeFile(join(repoPath, 'app.ts'), 'console.log("ok")\n')
@@ -183,16 +204,7 @@ describe('analyzeWorkspaceSpace local du timeout', () => {
     spawnMock.mockReturnValue(child)
 
     vi.useFakeTimers()
-    let settled = false
     const scanPromise = analyzeWorkspaceSpace(createStore([repo]), { signal: controller.signal })
-      .then((scan) => {
-        settled = true
-        return scan
-      })
-      .catch((error: unknown) => {
-        settled = true
-        throw error
-      })
 
     await vi.waitFor(() =>
       expect(spawnMock).toHaveBeenCalledWith('du', ['-k', '-d', '1', repoPath], {
@@ -201,10 +213,39 @@ describe('analyzeWorkspaceSpace local du timeout', () => {
     )
     await vi.advanceTimersByTimeAsync(120_000)
 
-    expect(settled).toBe(false)
     controller.abort()
-    await expect(scanPromise).rejects.toMatchObject({
-      name: 'WorkspaceSpaceScanCancelledError'
+    await expect(scanPromise).resolves.toMatchObject({
+      unavailableWorktreeCount: 1,
+      worktrees: [
+        expect.objectContaining({
+          status: 'unavailable',
+          error: 'du timed out after 120000ms'
+        })
+      ]
+    })
+    expect(child.kill).toHaveBeenCalled()
+  })
+
+  it('fails closed when streamed du rows exceed the retained entry budget', async () => {
+    const repoPath = join(tempDir!, 'repo')
+    await mkdir(repoPath, { recursive: true })
+    await writeFile(join(repoPath, 'app.ts'), 'console.log("ok")\n')
+    const repo = mockRepo(repoPath)
+    const child = createSpawnedDu()
+    spawnMock.mockReturnValue(child)
+    budgetState.duMaxEntries = 2
+
+    const scanPromise = analyzeWorkspaceSpace(createStore([repo]))
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+    child.stdout.emit('data', Buffer.from(`1\t${join(repoPath, 'one')}\n`))
+    child.stdout.emit('data', Buffer.from(`1\t${join(repoPath, 'two')}\n`))
+    child.stdout.emit('data', Buffer.from(`1\t${join(repoPath, 'three')}\n`))
+    child.emit('close', 0)
+
+    await expect(scanPromise).resolves.toMatchObject({
+      unavailableWorktreeCount: 1,
+      worktrees: [expect.objectContaining({ status: 'unavailable' })]
     })
     expect(child.kill).toHaveBeenCalled()
   })
