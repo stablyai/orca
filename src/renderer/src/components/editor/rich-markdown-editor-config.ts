@@ -36,8 +36,6 @@ import {
   getRichMarkdownSelectionLinkBubble,
   openSelectedHtmlSuperscriptLink
 } from './rich-markdown-selected-link-actions'
-import { flushPendingEditorChange } from './editor-pending-flush'
-import { requestEditorFileSave } from './editor-autosave'
 
 export type EditorConfigParams = {
   codec: RichMarkdownEditorCodec
@@ -79,7 +77,6 @@ export type EditorConfigParams = {
   markdownCommentsRef: MutableRefObject<DiffComment[]>
   markdownSourceLineOffsetRef: MutableRefObject<number>
   flushPendingSerialization: () => void
-  flushAndSavePreview?: () => void
   openSearchRef: MutableRefObject<() => void>
   openAnnotationPopoverRef: MutableRefObject<(requireLiveSelection?: boolean) => boolean>
   syncAnnotationTarget: (editor: Editor) => void
@@ -91,21 +88,6 @@ export type EditorConfigParams = {
   setSelectedDocLinkIndex: Dispatch<SetStateAction<number>>
   setSlashMenu: Dispatch<SetStateAction<SlashMenuState | null>>
   setDocLinkMenu: Dispatch<SetStateAction<DocLinkMenuState | null>>
-}
-
-export function flushAndSaveRichMarkdownPreview(
-  fileId: string,
-  isDirty: boolean,
-  flush: (fileId: string) => void = flushPendingEditorChange,
-  save: (target: { fileId: string }) => Promise<void> = requestEditorFileSave
-): void {
-  if (!isDirty) {
-    return
-  }
-  flush(fileId)
-  void save({ fileId }).catch((error) => {
-    console.error('[editor] rich markdown preview save failed', error)
-  })
 }
 
 export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseEditorOptions {
@@ -222,7 +204,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     onBlur: () => {
       window.api.ui.setMarkdownEditorFocused(false)
       clearAnnotationTarget()
-      params.flushAndSavePreview?.()
+      params.flushPendingSerialization()
     },
     onCreate: ({ editor: nextEditor }) => {
       // Why: normalizeEmptyListItems (not normalizeSoftBreaks) so hard-wrapped
