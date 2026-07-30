@@ -24,6 +24,10 @@ export const CLAUDE_CONFIG_DIR_MARKERS = [
 // double-install into the same settings.json.
 const MANAGED_CONFIG_DIR_NAMES: ReadonlySet<string> = new Set(['.claude', '.openclaude'])
 
+// Why: each candidate costs up to three synchronous local or sequential
+// remote probes; cap both paths so a huge home cannot delay startup arbitrarily.
+const CLAUDE_CONFIG_DIR_DISCOVERY_MAX_CANDIDATES = 16
+
 export function isClaudeFlavorConfigDirName(name: string): boolean {
   if (MANAGED_CONFIG_DIR_NAMES.has(name) || name.includes('/') || name.includes('\\')) {
     return false
@@ -62,6 +66,7 @@ export function discoverLocalClaudeConfigDirNames(
   return names
     .filter(isClaudeFlavorConfigDirName)
     .sort()
+    .slice(0, CLAUDE_CONFIG_DIR_DISCOVERY_MAX_CANDIDATES)
     .filter((name) => hasLocalConfigDirMarker(homeDir, name, fs))
 }
 
@@ -115,10 +120,8 @@ function isRemoteRegularFile(
 // callback must degrade discovery to "no extra dirs", not hang remote startup.
 const REMOTE_DISCOVERY_OPERATION_TIMEOUT_MS = 10_000
 
-// Why: readdir can return an unbounded candidate list and each candidate costs
-// up to three sequential SFTP probes — without these caps a huge or wedged
-// remote home could delay startup arbitrarily.
-const REMOTE_DISCOVERY_MAX_CANDIDATES = 16
+// Why: a wedged SFTP probe still needs an overall deadline in addition to the
+// shared candidate cap.
 const REMOTE_DISCOVERY_DEADLINE_MS = 15_000
 
 function remoteOperation<T>(
@@ -174,7 +177,7 @@ export async function discoverRemoteClaudeConfigDirNames(
     .map((entry) => entry.filename)
     .filter(isClaudeFlavorConfigDirName)
     .sort()
-    .slice(0, REMOTE_DISCOVERY_MAX_CANDIDATES)
+    .slice(0, CLAUDE_CONFIG_DIR_DISCOVERY_MAX_CANDIDATES)
   const deadline = Date.now() + REMOTE_DISCOVERY_DEADLINE_MS
   const markerProbe = sftp.lstat ?? sftp.stat
   const discovered: string[] = []

@@ -159,16 +159,18 @@ export async function installRemoteManagedAgentHooks(
     }
   }
   options?.signal?.throwIfAborted()
-  try {
-    results.push(
-      ...(await installRemoteDiscoveredClaudeConfigDirHooks(sftp, remoteHome, options?.signal))
-    )
-  } catch (error) {
-    options?.signal?.throwIfAborted()
-    // Why: same fail-open contract as the static loop — discovery problems
-    // degrade status reporting only, never SSH/WSL workspace startup.
-    const detail = error instanceof Error ? error.message : String(error)
-    console.warn(`[agent-hooks] Remote claude config-dir hook install threw: ${detail}`)
+  if (!allowedAgents || allowedAgents.has('claude')) {
+    try {
+      results.push(
+        ...(await installRemoteDiscoveredClaudeConfigDirHooks(sftp, remoteHome, options?.signal))
+      )
+    } catch (error) {
+      options?.signal?.throwIfAborted()
+      // Why: same fail-open contract as the static loop — discovery problems
+      // degrade status reporting only, never SSH/WSL workspace startup.
+      const detail = error instanceof Error ? error.message : String(error)
+      console.warn(`[agent-hooks] Remote claude config-dir hook install threw: ${detail}`)
+    }
   }
   return results
 }

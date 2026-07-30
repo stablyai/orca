@@ -726,13 +726,17 @@ describe('remote hook service installers', () => {
   })
 
   it('installs only positively detected remote agents', async () => {
-    const { sftp, fs } = createFakeSftp()
+    const flavorSettings = JSON.stringify({ hooks: {} })
+    const { sftp, fs } = createFakeSftp({
+      '/home/dev/.claude-grok/settings.json': flavorSettings
+    })
 
     const results = await installRemoteManagedAgentHooks(sftp, '/home/dev', {
       agents: ['codex']
     })
 
     expect(results.map((result) => result.agent)).toEqual(['codex'])
+    expect(fs.files.get('/home/dev/.claude-grok/settings.json')).toBe(flavorSettings)
     const paths = [...fs.files.keys(), ...fs.dirs]
     for (const unusedHome of ['.factory', '.gemini', '.grok', '.hermes', '.commandcode']) {
       expect(paths.some((path) => path.includes(`/home/dev/${unusedHome}`))).toBe(false)

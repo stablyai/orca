@@ -120,6 +120,17 @@ describe('discoverLocalClaudeConfigDirNames', () => {
     }
     expect(discoverLocalClaudeConfigDirNames(HOME, fs)).toEqual([])
   })
+
+  it('caps candidate probes so a huge local home cannot block the main process', () => {
+    const names = Array.from({ length: 24 }, (_, i) => `.claude-${String(i).padStart(2, '0')}`)
+    const home = createFakeHome(
+      names,
+      names.map((name) => join(HOME, name, 'settings.json'))
+    )
+
+    expect(discoverLocalClaudeConfigDirNames(HOME, home.fs)).toEqual(names.slice(0, 16))
+    expect(home.probedPaths).toHaveLength(16)
+  })
 })
 
 describe('discoverRemoteClaudeConfigDirNames', () => {
