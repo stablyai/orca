@@ -6,8 +6,10 @@ import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import {
   resolveFocusedCompletedTabAgent,
+  resolveFocusedRetainedTabAgent,
   resolveFocusedTabAgent,
   resolveSiblingCompletedTabAgent,
+  resolveSiblingRetainedTabAgent,
   resolveSiblingTabAgent
 } from './tab-agent'
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
@@ -167,10 +169,10 @@ export function resolveTabAgentFromSignals(args: {
  * 1. Live focused hook — ground truth while the agent works; never title-overridden.
  * 2. Process identity — recognized foreground process (local only); re-owned within its title-identity group so OMP's nested `pi` (shell → omp → pi) can't flip the icon.
  * 3. Title — only a reuse override or legacy standalone identity; native OpenCode titles cannot displace durable ownership.
- * 4. Idle focused identity — the pane's own completed hook; suppressed locally once OSC 133;D proves exit.
+ * 4. Idle focused identity — the pane's completed hook or sidebar-retained completion; suppressed locally once OSC 133;D proves exit.
  * 5. Sleeping session identity — current provider-session ownership.
  * 6. launchAgent — bootstrap before any hook/process signal; cleared once exit evidence shows it left.
- * 7. Sibling-pane identity (live, then idle) — split-tab fallback.
+ * 7. Sibling-pane identity (live, then completed/retained) — split-tab fallback.
  */
 export function useTabAgent(tab: TerminalTab): TuiAgent | null {
   const focusedHookAgent = useAppStore((s) =>
@@ -179,19 +181,31 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
   const siblingHookAgent = useAppStore((s) =>
     resolveSiblingTabAgent(s.agentStatusByPaneKey, s.terminalLayoutsByTabId[tab.id], tab.id)
   )
-  const focusedCompletedHookAgent = useAppStore((s) =>
-    resolveFocusedCompletedTabAgent(
-      s.agentStatusByPaneKey,
-      s.terminalLayoutsByTabId[tab.id],
-      tab.id
-    )
+  const focusedCompletedHookAgent = useAppStore(
+    (s) =>
+      resolveFocusedCompletedTabAgent(
+        s.agentStatusByPaneKey,
+        s.terminalLayoutsByTabId[tab.id],
+        tab.id
+      ) ??
+      resolveFocusedRetainedTabAgent(
+        s.retainedAgentsByPaneKey,
+        s.terminalLayoutsByTabId[tab.id],
+        tab.id
+      )
   )
-  const siblingCompletedHookAgent = useAppStore((s) =>
-    resolveSiblingCompletedTabAgent(
-      s.agentStatusByPaneKey,
-      s.terminalLayoutsByTabId[tab.id],
-      tab.id
-    )
+  const siblingCompletedHookAgent = useAppStore(
+    (s) =>
+      resolveSiblingCompletedTabAgent(
+        s.agentStatusByPaneKey,
+        s.terminalLayoutsByTabId[tab.id],
+        tab.id
+      ) ??
+      resolveSiblingRetainedTabAgent(
+        s.retainedAgentsByPaneKey,
+        s.terminalLayoutsByTabId[tab.id],
+        tab.id
+      )
   )
   const hasCompletedHook = focusedCompletedHookAgent !== null
   const clearTabLaunchAgent = useAppStore((s) => s.clearTabLaunchAgent)

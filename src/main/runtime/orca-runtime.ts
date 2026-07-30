@@ -386,7 +386,11 @@ import {
   isExpectedAgentProcess,
   recognizeAgentProcess
 } from '../../shared/agent-process-recognition'
-import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
+import {
+  haveSameDisabledTuiAgents,
+  isTuiAgentEnabled,
+  pickTuiAgent
+} from '../../shared/tui-agent-selection'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -406,6 +410,7 @@ import {
 } from '../agent-trust-presets'
 import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import {
   isWindowsAbsolutePathLike,
   isPathInsideOrEqual,
@@ -448,6 +453,7 @@ import {
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
+  TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../shared/protocol-version'
 import {
@@ -532,7 +538,7 @@ import {
 } from '../../shared/claude-agent-teams-tmux-compat'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { collectMemorySnapshot } from '../memory/collector'
-import { BrowserWindow, ipcMain, Notification } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification } from 'electron'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
 import { BrowserError } from '../browser/cdp-bridge'
@@ -1472,6 +1478,21 @@ type ProviderBufferAcquisition = {
   generation: number
   scrollbackRows: number
   promise: Promise<PtyProviderBufferSnapshot | null>
+  timedOut: boolean
+}
+
+type RuntimeTerminalBufferSnapshot = {
+  data: string
+  cols: number
+  rows: number
+  seq?: number
+  cwd?: string | null
+  lastTitle?: string
+  source?: 'headless' | 'renderer'
+  oscLinks?: TerminalOscLinkRange[]
+  alternateScreen?: boolean
+  scrollbackAnsi?: string
+  pendingEscapeTailAnsi?: string
 }
 
 type HeadlessSeedMetadata = {
@@ -2585,6 +2606,8 @@ export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
   private readonly startedAt = Date.now()
   private readonly store: RuntimeStore | null
+  private managedHookReconciliationGeneration = 0
+  private managedHookReconciliationTail: Promise<void> = Promise.resolve()
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
   private readonly orchestrationFederationTimers = new Map<string, ReturnType<typeof setInterval>>()
   private readonly orchestrationFederationSyncs = new Map<string, Promise<void>>()
@@ -3056,6 +3079,7 @@ export class OrcaRuntimeService {
   private readonly onPtyStopped: ((ptyId: string) => void) | null
   private readonly onTerminalAgentStatus: ((event: RuntimeTerminalAgentStatusEvent) => void) | null
   private readonly onTerminalSideEffects: ((batch: TerminalSideEffectBatch) => void) | null
+  private terminalSideEffectLocalConsumerAvailable = false
   private terminalSideEffectConsumerAvailable = false
   private readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   private readonly getAgentProviderSessionSnapshotFn: (() => AgentStatusIpcPayload[]) | null
@@ -3329,7 +3353,34 @@ export class OrcaRuntimeService {
     }
   }
 
-  updateClientSettings(
+  private reconcileManagedAgentHooks(): Promise<void> {
+    const generation = ++this.managedHookReconciliationGeneration
+    const reconciliation = this.managedHookReconciliationTail.then(async () => {
+      if (generation !== this.managedHookReconciliationGeneration) {
+        return
+      }
+      const settings = this.store?.getSettings()
+      if (!settings) {
+        return
+      }
+      await applyAgentStatusHooksEnabled(settings.agentStatusHooksEnabled !== false, settings, {
+        shouldHydrateShellPath: app.isPackaged && process.platform !== 'win32',
+        onInstallError: recordManagedHookInstallFailure,
+        shouldContinue: (agent) => {
+          const current = this.store?.getSettings()
+          return (
+            current !== undefined &&
+            current.agentStatusHooksEnabled !== false &&
+            !current.disabledTuiAgents?.includes(agent)
+          )
+        }
+      })
+    })
+    this.managedHookReconciliationTail = reconciliation.catch(() => {})
+    return reconciliation
+  }
+
+  async updateClientSettings(
     updates: Pick<
       Partial<GlobalSettings>,
       | 'agentStatusHooksEnabled'
@@ -3349,36 +3400,42 @@ export class OrcaRuntimeService {
       | 'minimaxUsageModels'
       | 'prBotAuthorOverrides'
     >
-  ): Pick<
-    GlobalSettings,
-    | 'defaultTuiAgent'
-    | 'disabledTuiAgents'
-    | 'agentCmdOverrides'
-    | 'agentDefaultArgs'
-    | 'agentDefaultEnv'
-    | 'agentStatusHooksEnabled'
-    | 'defaultTaskSource'
-    | 'defaultTaskViewPreset'
-    | 'visibleTaskProviders'
-    | 'defaultRepoSelection'
-    | 'defaultLinearTeamSelection'
-    | 'githubProjects'
-    | 'experimentalNewWorktreeCardStyle'
-    | 'compactWorktreeCards'
-    | 'minimaxGroupId'
-    | 'minimaxUsageModels'
-    | 'prBotAuthorOverrides'
+  ): Promise<
+    Pick<
+      GlobalSettings,
+      | 'defaultTuiAgent'
+      | 'disabledTuiAgents'
+      | 'agentCmdOverrides'
+      | 'agentDefaultArgs'
+      | 'agentDefaultEnv'
+      | 'agentStatusHooksEnabled'
+      | 'defaultTaskSource'
+      | 'defaultTaskViewPreset'
+      | 'visibleTaskProviders'
+      | 'defaultRepoSelection'
+      | 'defaultLinearTeamSelection'
+      | 'githubProjects'
+      | 'experimentalNewWorktreeCardStyle'
+      | 'compactWorktreeCards'
+      | 'minimaxGroupId'
+      | 'minimaxUsageModels'
+      | 'prBotAuthorOverrides'
+    >
   > {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('runtime_unavailable')
     }
-    const before = this.store.getSettings().agentStatusHooksEnabled !== false
+    const beforeSettings = this.store.getSettings()
+    const before = beforeSettings.agentStatusHooksEnabled !== false
     this.store.updateSettings(updates, { notifyListeners: true })
+    const settings = this.store.getSettings()
     if (
-      typeof updates.agentStatusHooksEnabled === 'boolean' &&
-      before !== updates.agentStatusHooksEnabled
+      (typeof updates.agentStatusHooksEnabled === 'boolean' &&
+        before !== updates.agentStatusHooksEnabled) ||
+      (updates.disabledTuiAgents !== undefined &&
+        !haveSameDisabledTuiAgents(beforeSettings.disabledTuiAgents, settings.disabledTuiAgents))
     ) {
-      applyAgentStatusHooksEnabled(updates.agentStatusHooksEnabled)
+      await this.reconcileManagedAgentHooks()
     }
     return this.getClientSettings()
   }
@@ -4531,7 +4588,9 @@ export class OrcaRuntimeService {
         (capability !== 'browser.screencast.v1' || canBrowse) &&
         // Why: the nested-runtime E2E needs a real legacy transport without maintaining an old binary fixture.
         (process.env.ORCA_E2E_DISABLE_RUNTIME_SHARED_CONTROL !== '1' ||
-          capability !== REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY)
+          capability !== REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY) &&
+        (process.env.ORCA_E2E_DISABLE_PAIRED_TERMINAL_PARKING !== '1' ||
+          capability !== TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY)
     )
     if (hasOffscreen) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
@@ -4597,8 +4656,10 @@ export class OrcaRuntimeService {
 
   onClientEvent(listener: (event: RuntimeClientEvent) => void): () => void {
     this.clientEventListeners.add(listener)
+    this.refreshTerminalSideEffectConsumerAvailability()
     return () => {
       this.clientEventListeners.delete(listener)
+      this.refreshTerminalSideEffectConsumerAvailability()
     }
   }
 
@@ -9157,7 +9218,7 @@ export class OrcaRuntimeService {
   /** Record one derived side-effect fact: batched per chunk while applying
    *  bytes, emitted immediately for between-chunk facts (stale-title timer). */
   private recordTerminalSideEffectFact(ptyId: string, fact: TerminalSideEffectFact): void {
-    if (!this.onTerminalSideEffects || !this.terminalSideEffectConsumerAvailable) {
+    if (!this.terminalSideEffectConsumerAvailable) {
       return
     }
     const entry = this.ptyTitleTrackersByPtyId.get(ptyId)
@@ -9173,11 +9234,7 @@ export class OrcaRuntimeService {
     facts: TerminalSideEffectFact[],
     options: { replay?: boolean } = {}
   ): void {
-    if (
-      !this.onTerminalSideEffects ||
-      !this.terminalSideEffectConsumerAvailable ||
-      facts.length === 0
-    ) {
+    if (!this.terminalSideEffectConsumerAvailable || facts.length === 0) {
       return
     }
     const batch: TerminalSideEffectBatch = {
@@ -9187,10 +9244,15 @@ export class OrcaRuntimeService {
       ...(options.replay ? { replay: true } : {}),
       ...this.resolveTerminalSideEffectAttribution(ptyId)
     }
-    try {
-      this.onTerminalSideEffects(batch)
-    } catch (err) {
-      console.error('[runtime] terminal side-effect listener threw', { ptyId, err })
+    if (this.terminalSideEffectLocalConsumerAvailable) {
+      try {
+        this.onTerminalSideEffects?.(batch)
+      } catch (err) {
+        console.error('[runtime] terminal side-effect listener threw', { ptyId, err })
+      }
+    }
+    if (this.clientEventListeners.size > 0) {
+      this.emitClientEvent({ type: 'terminalSideEffects', batch })
     }
   }
 
@@ -9518,7 +9580,13 @@ export class OrcaRuntimeService {
   }
 
   private setTerminalSideEffectConsumerAvailable(available: boolean): void {
-    const nextAvailable = available && this.onTerminalSideEffects !== null
+    this.terminalSideEffectLocalConsumerAvailable = available && this.onTerminalSideEffects !== null
+    this.refreshTerminalSideEffectConsumerAvailability()
+  }
+
+  private refreshTerminalSideEffectConsumerAvailability(): void {
+    const nextAvailable =
+      this.terminalSideEffectLocalConsumerAvailable || this.clientEventListeners.size > 0
     if (nextAvailable === this.terminalSideEffectConsumerAvailable) {
       return
     }
@@ -10013,19 +10081,21 @@ export class OrcaRuntimeService {
   serializeTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {}
-  ): Promise<{
-    data: string
-    cols: number
-    rows: number
-    seq?: number
-    cwd?: string | null
-    lastTitle?: string
-    source?: 'headless' | 'renderer'
-    oscLinks?: TerminalOscLinkRange[]
-    alternateScreen?: boolean
-    scrollbackAnsi?: string
-    pendingEscapeTailAnsi?: string
-  } | null> {
+  ): Promise<RuntimeTerminalBufferSnapshot | null> {
+    return this.serializeTerminalBufferFromAvailableState(ptyId, opts)
+  }
+
+  async serializeAuthoritativeTerminalBuffer(
+    ptyId: string,
+    opts: { scrollbackRows?: number } = {}
+  ): Promise<RuntimeTerminalBufferSnapshot | null> {
+    const providerSnapshot = await this.serializeProviderTerminalBuffer(ptyId, opts, {
+      timeoutMs: AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+      retireOnTimeout: true
+    })
+    if (providerSnapshot) {
+      return providerSnapshot
+    }
     return this.serializeTerminalBufferFromAvailableState(ptyId, opts)
   }
 
@@ -10589,7 +10659,7 @@ export class OrcaRuntimeService {
   private async serializeProviderTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {},
-    wait: { timeoutMs?: number } = {}
+    wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
   ): Promise<PtyProviderBufferSnapshot | null> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const scrollbackRows = Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
@@ -10600,7 +10670,7 @@ export class OrcaRuntimeService {
       acquisition.scrollbackRows < scrollbackRows
     ) {
       const promise = this.captureProviderTerminalBuffer(ptyId, opts, generation)
-      acquisition = { generation, scrollbackRows, promise }
+      acquisition = { generation, scrollbackRows, promise, timedOut: false }
       this.providerBufferAcquisitionsByPtyId.set(ptyId, acquisition)
       void promise.finally(() => {
         if (this.providerBufferAcquisitionsByPtyId.get(ptyId) === acquisition) {
@@ -10608,9 +10678,26 @@ export class OrcaRuntimeService {
         }
       })
     }
-    return typeof wait.timeoutMs === 'number'
-      ? withTimeout(acquisition.promise, wait.timeoutMs, null)
-      : acquisition.promise
+    if (acquisition.timedOut) {
+      return null
+    }
+    if (typeof wait.timeoutMs !== 'number') {
+      return acquisition.promise
+    }
+    const result = await withTimeout<
+      { settled: true; value: PtyProviderBufferSnapshot | null } | { settled: false }
+    >(
+      acquisition.promise.then((value) => ({ settled: true as const, value })),
+      wait.timeoutMs,
+      { settled: false as const }
+    )
+    if (!result.settled) {
+      if (wait.retireOnTimeout) {
+        acquisition.timedOut = true
+      }
+      return null
+    }
+    return result.value
   }
 
   private async captureProviderTerminalBuffer(
@@ -32593,6 +32680,7 @@ const MAX_TAIL_PENDING_ANSI_CHARS = 4096
 const DEFAULT_TERMINAL_READ_LIMIT = 120
 const MAX_TERMINAL_READ_LIMIT = 2000
 const MAX_TERMINAL_PREVIEW_CHARS = 32 * 1024
+export const AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS = 8_000
 const VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS = 750
 const VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS = 1_000
 const MAX_PREVIEW_LINES = 6

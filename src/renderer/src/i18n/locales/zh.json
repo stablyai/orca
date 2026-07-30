@@ -148,7 +148,8 @@
         "mobileScopeRejected": "此二维码仅授予受限（移动端）访问权限。若要使用完整 Web 应用，请从设置 → 远程 Orca 服务器 → 分享此 Orca 服务器 → 新链接打开浏览器访问链接。"
       },
       "webPreloadApi": {
-        "aiVaultUnavailableForHost": "此执行主机不支持 Agent 会话历史记录。"
+        "aiVaultUnavailableForHost": "此执行主机不支持 Agent 会话历史记录。",
+        "runtimeEnvironmentManuallyDisconnected": "运行时环境已手动断开连接。"
       },
       "web": {
         "preload": {

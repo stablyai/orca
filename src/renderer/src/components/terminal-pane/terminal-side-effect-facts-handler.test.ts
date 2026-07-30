@@ -547,8 +547,10 @@ describe('registerTerminalSideEffectFactConsumer', () => {
       })
       dispose()
       _dispatchTerminalSideEffectBatchForTest(batch([{ kind: 'bell' }]))
+      expect(vi.getTimerCount()).toBe(1)
 
       vi.advanceTimersByTime(15_001)
+      expect(vi.getTimerCount()).toBe(0)
 
       const { callbacks, events } = createCallbackRecorder()
       registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })

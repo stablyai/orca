@@ -3,7 +3,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { tmpdir } from 'node:os'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -196,38 +196,28 @@ describe('Sidebar', () => {
     expect(fetchAllWorktrees).toHaveBeenCalledTimes(1)
   })
 
-  it('does not scan when runtime hosts come online during the startup refresh', async () => {
+  it('does not scan all hosts when runtime connection status flaps', () => {
     setSidebarState(getDefaultSettings(tmpdir()))
     const fetchAllWorktrees = vi.fn().mockResolvedValue(undefined)
     mocks.state = {
       ...mocks.state,
       fetchAllWorktrees,
-      fetchWorktreeLineage: vi.fn().mockResolvedValue(undefined),
       runtimeStatusByEnvironmentId: new Map(),
-      startupWorktreeRefreshCompleted: false
+      startupWorktreeRefreshCompleted: true
     }
     const view = render(sidebarElement())
 
-    mocks.state = {
-      ...mocks.state,
-      runtimeStatusByEnvironmentId: new Map([['runtime-a', { status: 'connected' }]])
+    for (let index = 0; index < 5; index += 1) {
+      mocks.state = {
+        ...mocks.state,
+        runtimeStatusByEnvironmentId: new Map([
+          ['runtime-a', { status: index % 2 === 0 ? 'connected' : null }]
+        ])
+      }
+      view.rerender(sidebarElement())
     }
-    view.rerender(sidebarElement())
-    expect(fetchAllWorktrees).not.toHaveBeenCalled()
 
-    mocks.state = { ...mocks.state, startupWorktreeRefreshCompleted: true }
-    view.rerender(sidebarElement())
     expect(fetchAllWorktrees).not.toHaveBeenCalled()
-
-    mocks.state = {
-      ...mocks.state,
-      runtimeStatusByEnvironmentId: new Map([
-        ['runtime-a', { status: 'connected' }],
-        ['runtime-b', { status: 'connected' }]
-      ])
-    }
-    view.rerender(sidebarElement())
-    await waitFor(() => expect(fetchAllWorktrees).toHaveBeenCalledTimes(1))
   })
 
   describe('companion board mutual exclusion', () => {

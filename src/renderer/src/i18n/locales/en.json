@@ -171,7 +171,8 @@
         "mobileScopeRejected": "This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link."
       },
       "webPreloadApi": {
-        "aiVaultUnavailableForHost": "Agent Session History is not available for this execution host."
+        "aiVaultUnavailableForHost": "Agent Session History is not available for this execution host.",
+        "runtimeEnvironmentManuallyDisconnected": "Runtime environment is manually disconnected."
       },
       "web": {
         "preload": {

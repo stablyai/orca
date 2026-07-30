@@ -88,6 +88,8 @@ import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
 import { createWorktreeChangeRefreshQueue } from './worktree-change-refresh-queue'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
+import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { subscribeToUnpairedDeviceAuthNotification } from './unpaired-device-auth-notification'
 import {
   applyRuntimeEnvironmentSshStateChanged,
@@ -925,6 +927,13 @@ export function useIpcEvents(): void {
     ): void => {
       if (event.type === 'worktreeTerminalSleepState') {
         applyHostWorktreeTerminalSleepState(environmentId, event)
+        return
+      }
+      if (event.type === 'terminalSideEffects') {
+        dispatchTerminalSideEffectBatch({
+          ...event.batch,
+          ptyId: toRemoteRuntimePtyId(event.batch.ptyId, environmentId)
+        })
         return
       }
       if (event.type === 'reposChanged') {

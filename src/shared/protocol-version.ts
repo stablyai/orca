@@ -54,6 +54,9 @@ export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate
 // floor-taking input. Mobile must not forward replies unless advertised.
 export const TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY =
   'terminal.query-reply-input.v1' as const
+// Why: paired clients may unmount xterm only when the host can return a
+// bounded, sequenced scrollback snapshot for lossless reveal.
+export const TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY = 'terminal.paired-parking.v1' as const
 // Why: older hosts lack the targeted settings RPCs and strip agentPrompt from
 // terminal creation, so mobile must hide Quick Commands unless both are present.
 export const TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY = 'terminal.quick-commands.v1' as const
@@ -96,6 +99,7 @@ export const RUNTIME_CAPABILITIES = [
   LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,
   AI_VAULT_RUNTIME_CAPABILITY,
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,
+  TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,

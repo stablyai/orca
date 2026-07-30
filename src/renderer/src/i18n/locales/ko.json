@@ -148,7 +148,8 @@
         "mobileScopeRejected": "이 QR 코드는 제한된(모바일) 액세스 권한만 제공합니다. 전체 웹 앱을 사용하려면 설정 → 원격 Orca 서버 → 이 Orca 서버 공유 → 새 링크에서 브라우저 액세스 링크를 여세요."
       },
       "webPreloadApi": {
-        "aiVaultUnavailableForHost": "이 실행 호스트에서는 Agent 세션 기록을 사용할 수 없습니다."
+        "aiVaultUnavailableForHost": "이 실행 호스트에서는 Agent 세션 기록을 사용할 수 없습니다.",
+        "runtimeEnvironmentManuallyDisconnected": "런타임 환경이 수동으로 연결 해제되었습니다."
       },
       "web": {
         "preload": {

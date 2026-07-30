@@ -148,7 +148,8 @@
         "mobileScopeRejected": "Este código QR solo da acceso limitado para móvil. Para usar la app web completa, abre el enlace para navegador desde Ajustes → Servidores remotos de Orca → Comparte este servidor Orca → Nuevo enlace."
       },
       "webPreloadApi": {
-        "aiVaultUnavailableForHost": "El historial de sesiones de Agents no está disponible para este host de ejecución."
+        "aiVaultUnavailableForHost": "El historial de sesiones de Agents no está disponible para este host de ejecución.",
+        "runtimeEnvironmentManuallyDisconnected": "El entorno de ejecución se ha desconectado manualmente."
       },
       "web": {
         "preload": {

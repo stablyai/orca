@@ -3319,6 +3319,10 @@ export type PreloadApi = {
     disconnect: (args: {
       selector: string
     }) => Promise<{ disconnected: PublicKnownRuntimeEnvironment }>
+    connect: (args: {
+      selector: string
+      timeoutMs?: number
+    }) => Promise<RuntimeRpcResponse<RuntimeStatus>>
     getStatus: (args: {
       selector: string
       timeoutMs?: number
