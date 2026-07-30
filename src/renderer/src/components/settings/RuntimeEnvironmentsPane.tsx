@@ -53,7 +53,7 @@ import {
 } from '../../../../shared/runtime-environment-endpoint-display'
 import {
   getRuntimeEndpointTransportLabel,
-  getRuntimeServerEndpointDisplay
+  getRuntimeServerListEndpointDisplay
 } from './runtime-server-endpoint-labels'
 import { RuntimeServerEditDialog, type RuntimeServerEditSaveArgs } from './RuntimeServerEditDialog'
 import { EphemeralVmRuntimesSection } from './EphemeralVmRuntimesSection'
@@ -1097,7 +1097,7 @@ export function RuntimeEnvironmentsPane({
                           </div>
                           {(() => {
                             const endpoint = getPreferredPublicRuntimeEndpoint(environment)
-                            const display = getRuntimeServerEndpointDisplay(endpoint)
+                            const display = getRuntimeServerListEndpointDisplay(endpoint)
                             return display ? (
                               <p className="truncate font-mono text-[11px] text-muted-foreground">
                                 {display}
@@ -1696,7 +1696,7 @@ export function RuntimeEnvironmentsPane({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    
+
       <RuntimeServerEditDialog
         // Why: a fresh editor instance prevents draft values from leaking between servers.
         key={pendingEdit?.id ?? 'closed'}
@@ -1712,6 +1712,6 @@ export function RuntimeEnvironmentsPane({
         }}
         onSave={saveEditedEnvironment}
       />
-</SearchableSetting>
+    </SearchableSetting>
   )
 }

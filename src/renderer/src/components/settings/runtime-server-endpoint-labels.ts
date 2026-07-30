@@ -19,3 +19,7 @@ export function getRuntimeServerEndpointDisplay(endpoint: string | null): string
     translate('auto.components.settings.RuntimeEnvironmentsPane.6ef71985da', 'No endpoint')
   )
 }
+
+export function getRuntimeServerListEndpointDisplay(endpoint: string | null): string | null {
+  return endpoint ? getRuntimeServerEndpointDisplay(endpoint) : null
+}
