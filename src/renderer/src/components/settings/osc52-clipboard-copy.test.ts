@@ -3,13 +3,14 @@ import en from '@/i18n/locales/en.json'
 import es from '@/i18n/locales/es.json'
 import ja from '@/i18n/locales/ja.json'
 import ko from '@/i18n/locales/ko.json'
+import tr from '@/i18n/locales/tr.json'
 import zh from '@/i18n/locales/zh.json'
 
 // Why assert the catalog rather than the component: en.json is bundled as the `en`
 // resource, so a catalog value wins over translate()'s code fallback. Editing a fallback
 // alone renders nothing, and nothing else in CI compares the two.
 describe('OSC 52 setting copy', () => {
-  const locales = { en, es, ja, ko, zh }
+  const locales = { en, es, ja, ko, tr, zh }
 
   for (const [name, locale] of Object.entries(locales)) {
     it(`names Zellij and Grok in both ${name} OSC 52 setting descriptions`, () => {
@@ -32,7 +33,7 @@ describe('OSC 52 setting copy', () => {
     expect(notice.action).toBe('Open Setting')
   })
 
-  for (const [name, locale] of Object.entries({ es, ja, ko, zh })) {
+  for (const [name, locale] of Object.entries({ es, ja, ko, tr, zh })) {
     it(`translates the ${name} migration notice rather than leaving English placeholders`, () => {
       const notice = locale.auto.components.terminal.pane.osc52.clipboard.default.on.notice
       const english = en.auto.components.terminal.pane.osc52.clipboard.default.on.notice

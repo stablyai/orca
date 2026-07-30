@@ -15,7 +15,8 @@ import {
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
-  UI_LANGUAGE_SPANISH
+  UI_LANGUAGE_SPANISH,
+  UI_LANGUAGE_TURKISH
 } from '../../shared/ui-language'
 import {
   ensureMainI18n,
@@ -56,6 +57,9 @@ describe('main-i18n lazy locale loading', () => {
 
     await setMainUiLanguage(UI_LANGUAGE_CHINESE)
     expect(translateMain('menu.file', 'File')).not.toBe('File')
+
+    await setMainUiLanguage(UI_LANGUAGE_TURKISH)
+    expect(translateMain('menu.file', 'File')).toBe('Dosya')
   })
 
   it('uses caller English when a target catalog omits a key', async () => {
