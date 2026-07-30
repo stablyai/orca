@@ -122,7 +122,7 @@ export function parseTranslationPayload(payload) {
   return payload[0].map((part) => part[0]).join('')
 }
 
-async function translateText(text, targetLanguage) {
+export async function translateText(text, targetLanguage) {
   const url = new URL('https://translate.googleapis.com/translate_a/single')
   url.searchParams.set('client', 'gtx')
   url.searchParams.set('sl', 'en')
@@ -143,9 +143,11 @@ async function translateText(text, targetLanguage) {
       return parseTranslationPayload(payload)
     } catch (error) {
       lastError = error
-      await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)))
     } finally {
       clearTimeout(timeout)
+    }
+    if (attempt < 4) {
+      await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)))
     }
   }
   throw lastError
