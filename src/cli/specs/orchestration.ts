@@ -32,8 +32,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'run-list'],
     summary: 'List lightweight orchestration Runs',
-    usage: 'orca orchestration run-list [--json]',
-    allowedFlags: [...GLOBAL_FLAGS]
+    usage: 'orca orchestration run-list [--limit <n>] [--cursor <cursor>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'cursor']
   },
   {
     path: ['orchestration', 'run-show'],

@@ -31,6 +31,7 @@ export const KnownRuntimeEnvironmentSchema = z.object({
   lastUsedAt: z.number().finite().nullable(),
   runtimeId: z.string().min(1).nullable(),
   source: RuntimeEnvironmentSourceSchema.optional(),
+  connectionDependency: z.literal('ssh-tunnel').optional(),
   endpoints: z.array(RuntimeAccessEndpointSchema).min(1),
   preferredEndpointId: z.string().min(1)
 })
@@ -66,6 +67,7 @@ export function createEnvironmentFromPairingOffer(args: {
   offer: PairingOffer
   runtimeId?: string | null
   source?: RuntimeEnvironmentSource
+  connectionDependency?: 'ssh-tunnel'
 }): KnownRuntimeEnvironment {
   const endpointId = `ws-${args.id}`
   return KnownRuntimeEnvironmentSchema.parse({
@@ -77,6 +79,7 @@ export function createEnvironmentFromPairingOffer(args: {
     lastUsedAt: null,
     runtimeId: args.runtimeId ?? null,
     ...(args.source ? { source: args.source } : {}),
+    ...(args.connectionDependency ? { connectionDependency: args.connectionDependency } : {}),
     endpoints: [
       {
         id: endpointId,

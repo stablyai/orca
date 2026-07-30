@@ -164,7 +164,7 @@ describe('orchestration RPC methods', () => {
       await expect(
         call('orchestration.runCreate', { objective: 'No pane', from: 'term_stale' })
       ).rejects.toMatchObject({ code: 'stable_pane_required' })
-      expect(db.listRuns().filter((run) => run.legacy === 0)).toHaveLength(0)
+      expect(db.listRuns().runs.filter((run) => run.legacy === 0)).toHaveLength(0)
     })
 
     it('rebinds explicitly, lists Runs, and keeps the legacy Run inspect-only', async () => {
