@@ -226,6 +226,29 @@ export function assignNativeChatPendingOccurrence<T extends NativeChatPendingOcc
   }
 }
 
+/**
+ * Renumber occurrences so each match key counts from 1 again.
+ *
+ * `assignNativeChatPendingOccurrence` numbers a repeat send past its predecessors
+ * on purpose: pruning an earlier echo means a real turn consumed that occurrence,
+ * so the later send must not reuse it. Dropping an echo because its *conversation*
+ * was replaced is the opposite — no turn will ever arrive for it — and a survivor
+ * left demanding occurrence 2 can then never retire.
+ */
+export function renumberNativeChatPendingOccurrences<T extends NativeChatPendingOccurrence>(
+  pending: readonly T[]
+): T[] {
+  const counted = new Map<string, number>()
+  return pending.map((entry) => {
+    const key = nativeChatPendingMatchKey(entry)
+    const occurrence = (counted.get(key) ?? 0) + 1
+    counted.set(key, occurrence)
+    return entry.matchingOccurrence === occurrence
+      ? entry
+      : { ...entry, matchingOccurrence: occurrence }
+  })
+}
+
 export function nativeChatPendingMatchingAfter(pending: NativeChatPendingOccurrence): number {
   return pending.matchingAfterTimestamp ?? pending.afterMessageTimestamp ?? pending.sentAt
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { retainPendingSendsForConversation } from './native-chat-pending-conversation'
-import { pendingSendsAsMessages } from './native-chat-pending'
+import { pendingSendsAsMessages, prunePendingSends } from './native-chat-pending'
 import type { NativeChatCommandMarker, NativeChatPendingSend } from './native-chat-pending'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 
@@ -103,5 +103,62 @@ describe('retainPendingSendsForConversation', () => {
       markers: noMarkers
     })
     expect(pendingSendsAsMessages(retained, replacedTranscript)).toEqual([])
+  })
+
+  it('renumbers survivors so a dropped echo does not strand the one after it', () => {
+    // `assignNativeChatPendingOccurrence` numbers a repeat send past its
+    // predecessors, which is right when a real turn consumed the earlier one. A
+    // conversation swap consumes nothing, so the survivor has to count from 1 or
+    // it waits forever for a second identical turn that will never arrive.
+    const pending = [
+      pendingOf('p1', { sentAt: 100, sessionId: 's1', text: 'continue' }),
+      pendingOf('p2', {
+        sentAt: 200,
+        sessionId: 's1',
+        text: 'continue',
+        matchingOccurrence: 2
+      })
+    ]
+    const markers = [clearMarker(150)]
+    const next = retainPendingSendsForConversation(pending, { sessionId: 's1', markers })
+    expect(next.map((entry) => entry.id)).toEqual(['p2'])
+    expect(next[0]?.matchingOccurrence).toBe(1)
+
+    // The replacement conversation answers "continue" exactly once, which is all
+    // the survivor is owed.
+    const replaced: NativeChatMessage[] = [
+      {
+        id: 'm1',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'continue' }],
+        timestamp: 500,
+        source: 'transcript'
+      },
+      {
+        id: 'm2',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'ok' }],
+        timestamp: 600,
+        source: 'transcript'
+      }
+    ]
+    expect(prunePendingSends(next, replaced)).toEqual([])
+    expect(pendingSendsAsMessages(next, replaced)).toEqual([])
+  })
+
+  it('keeps distinct texts independent when renumbering', () => {
+    const pending = [
+      pendingOf('p1', { sentAt: 100, sessionId: 's1', text: 'alpha' }),
+      pendingOf('p2', { sentAt: 200, sessionId: 's1', text: 'beta' }),
+      pendingOf('p3', { sentAt: 300, sessionId: 's1', text: 'alpha', matchingOccurrence: 2 })
+    ]
+    const next = retainPendingSendsForConversation(pending, {
+      sessionId: 's1',
+      markers: [clearMarker(150)]
+    })
+    expect(next.map((entry) => [entry.id, entry.matchingOccurrence])).toEqual([
+      ['p2', 1],
+      ['p3', 1]
+    ])
   })
 })

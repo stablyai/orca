@@ -3,6 +3,7 @@ import {
   type NativeChatCommandMarker,
   type NativeChatPendingSend
 } from './native-chat-pending'
+import { renumberNativeChatPendingOccurrences } from './native-chat-pending-occurrence'
 
 export type NativeChatPendingConversation = {
   /** Provider session currently resolved for the pane; null while unknown. */
@@ -47,5 +48,7 @@ export function retainPendingSendsForConversation(
     }
     changed = true
   }
-  return changed ? next : pending
+  // Why: a dropped echo's turn will never arrive, so leaving a survivor numbered
+  // past it would keep demanding a transcript occurrence that cannot exist.
+  return changed ? renumberNativeChatPendingOccurrences(next) : pending
 }
