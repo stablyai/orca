@@ -274,6 +274,25 @@ describe('registerFilesystemMutationHandlers', () => {
     expect(renameMock).not.toHaveBeenCalled()
   })
 
+  it('fails closed when same-entry realpath encounters a permission error', async () => {
+    const oldPath = path.resolve('/workspace/repo/README.md')
+    const newPath = path.resolve('/workspace/repo/readme.md')
+    lstatMock.mockImplementation(async (p: string) => {
+      if (p === oldPath || p === newPath) {
+        return mockStats(3, 30)
+      }
+      throw enoent()
+    })
+    realpathMock.mockRejectedValue(
+      Object.assign(new Error('permission denied'), { code: 'EACCES' })
+    )
+
+    await expect(handlers.get('fs:rename')!(null, { oldPath, newPath })).rejects.toMatchObject({
+      code: 'EACCES'
+    })
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
   it('rejects cross-parent case-only rename collisions even when dev and ino match', async () => {
     const oldPath = path.resolve('/workspace/repo/src/README.md')
     const newPath = path.resolve('/workspace/repo/docs/readme.md')

@@ -35,8 +35,11 @@ async function isSameDirectoryEntryRename(
   try {
     const [oldRealPath, newRealPath] = await Promise.all([realpath(oldPath), realpath(newPath)])
     return oldRealPath === newRealPath
-  } catch {
+  } catch (error) {
     // Preserve case-only renames for dangling symlinks, which realpath cannot resolve.
+    if (!isENOENT(error)) {
+      throw error
+    }
     return (
       oldBasename !== newBasename &&
       caseFoldFileExplorerBasename(oldBasename) === caseFoldFileExplorerBasename(newBasename)

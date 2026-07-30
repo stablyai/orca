@@ -187,6 +187,40 @@ describe('renameLocalPathSerializedByDestination', () => {
     await expect(Promise.all([firstRename, secondRename])).resolves.toEqual([undefined, undefined])
   })
 
+  it('serializes symlink aliases of one destination parent', async () => {
+    const firstRenameGate = createGate()
+    renameMock.mockImplementation(async () => {
+      if (renameMock.mock.calls.length === 1) {
+        await firstRenameGate.promise
+      }
+    })
+    const firstParent = path.join(REPO_PATH, 'parent-link-a')
+    const secondParent = path.join(REPO_PATH, 'parent-link-b')
+    const canonicalParent = path.join(REPO_PATH, 'canonical-parent')
+    realpathMock.mockImplementation(async (filePath: string) => {
+      if (filePath === firstParent || filePath === secondParent) {
+        return canonicalParent
+      }
+      return filePath
+    })
+
+    const firstRename = renameLocalPathSerializedByDestination(
+      path.join(firstParent, 'source.md'),
+      path.join(firstParent, 'alpha.md')
+    )
+    await vi.waitFor(() => expect(renameMock).toHaveBeenCalledTimes(1))
+    const secondRename = renameLocalPathSerializedByDestination(
+      path.join(secondParent, 'source.md'),
+      path.join(secondParent, 'beta.md')
+    )
+    await reachNextMacrotask()
+    expect(renameMock).toHaveBeenCalledTimes(1)
+
+    firstRenameGate.release()
+    await expect(Promise.all([firstRename, secondRename])).resolves.toEqual([undefined, undefined])
+    expect(renameMock).toHaveBeenCalledTimes(2)
+  })
+
   it('scopes conservative serialization to one destination parent', async () => {
     const firstRenameGate = createGate()
     renameMock.mockImplementation(async () => {
