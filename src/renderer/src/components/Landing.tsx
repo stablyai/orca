@@ -14,11 +14,8 @@ import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/use
 import { useMountedRef } from '@/hooks/useMountedRef'
 import logo from '../../../../resources/logo.svg'
 import { translate } from '@/i18n/i18n'
-import {
-  getLandingPreflightIssues,
-  hasGitHubBackedProject,
-  type PreflightIssue
-} from './landing-preflight-issues'
+import { hasGitHubBackedProject, type PreflightIssue } from './landing-preflight-issues'
+import { useLandingPreflightRuntime } from './landing-preflight-runtime'
 
 type ShortcutItem = {
   id: string
@@ -243,71 +240,7 @@ export default function Landing(): React.JSX.Element {
   // runtime is active. Calling the local preflight IPC directly here would
   // always scan the client machine, so a remote runtime's landing banner
   // reported the wrong host's git/gh state.
-  const preflightStatus = useAppStore((s) => s.preflightStatus)
-  const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
-  const invalidatePreflightStatus = useAppStore((s) => s.invalidatePreflightStatus)
-  const activeRuntimeIdentity = useAppStore((s) => {
-    const environmentId = s.settings?.activeRuntimeEnvironmentId?.trim() ?? 'local'
-    const runtimeStatus =
-      environmentId === 'local' ? undefined : s.runtimeStatusByEnvironmentId.get(environmentId)
-    const reachability = runtimeStatus
-      ? runtimeStatus.status === null
-        ? 'unreachable'
-        : 'reachable'
-      : 'unknown'
-    return `${environmentId}:${runtimeStatus?.connectionGeneration ?? 0}:${reachability}`
-  })
-
-  const preflightIssues = useMemo(
-    () =>
-      preflightStatus
-        ? getLandingPreflightIssues(preflightStatus, {
-            hasGitHubBackedProject: hasGitHubProject
-          })
-        : [],
-    [preflightStatus, hasGitHubProject]
-  )
-
-  useEffect(() => {
-    if (activeRuntimeIdentity.endsWith(':unreachable')) {
-      invalidatePreflightStatus()
-      return
-    }
-
-    void refreshPreflightStatus()
-
-    // Why: users often install/authenticate gh outside Orca. Re-check when the
-    // window becomes active again so the landing warning clears without relaunch.
-    const handleWindowActive = (): void => {
-      if (document.visibilityState === 'visible') {
-        void refreshPreflightStatus({ force: true })
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleWindowActive)
-    window.addEventListener('focus', handleWindowActive)
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleWindowActive)
-      window.removeEventListener('focus', handleWindowActive)
-    }
-  }, [activeRuntimeIdentity, invalidatePreflightStatus, refreshPreflightStatus])
-
-  useEffect(() => {
-    if (preflightIssues.length === 0) {
-      return
-    }
-
-    // Why: some users complete `gh auth login` without ever leaving the Orca
-    // window. Poll only while a warning is visible so the banner self-clears.
-    const intervalId = window.setInterval(() => {
-      void refreshPreflightStatus({ force: true })
-    }, 30000)
-
-    return () => {
-      window.clearInterval(intervalId)
-    }
-  }, [preflightIssues.length, refreshPreflightStatus])
+  const { preflightIssues } = useLandingPreflightRuntime()
 
   const createWorktreeShortcut = useShortcutKeyDetails('workspace.create')
   const previousWorktreeShortcut = useShortcutKeyDetails('worktree.navigateUp')

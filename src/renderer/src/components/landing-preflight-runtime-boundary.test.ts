@@ -1,39 +1,128 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+import { act, cleanup, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { PreflightStatus } from '../../../preload/api-types'
+import type { Repo } from '../../../shared/types'
+import { useAppStore } from '../store'
+import { useLandingPreflightRuntime } from './landing-preflight-runtime'
 
-const root = process.cwd()
+const refresh = vi.fn().mockResolvedValue(undefined)
+const invalidate = vi.fn()
 
-function source(path: string): string {
-  return readFileSync(join(root, path), 'utf8')
+const status = (overrides: Partial<PreflightStatus> = {}): PreflightStatus => ({
+  git: { installed: true },
+  gh: { installed: false, authenticated: false },
+  ...overrides
+})
+
+const githubRepo: Repo = {
+  id: 'github',
+  path: '/repos/github',
+  displayName: 'github',
+  badgeColor: '#000000',
+  addedAt: 0,
+  kind: 'git',
+  upstream: { owner: 'orca', repo: 'orca' }
 }
 
-describe('landing preflight runtime ownership boundary', () => {
-  it('routes the landing preflight banner through the preflight slice', () => {
-    const text = source('src/renderer/src/components/Landing.tsx')
+beforeEach(() => {
+  vi.useFakeTimers()
+  refresh.mockClear()
+  invalidate.mockClear()
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.setState({ refreshPreflightStatus: refresh, invalidatePreflightStatus: invalidate })
+})
 
-    expect(text).toContain('refreshPreflightStatus')
-    expect(text).toContain('s.preflightStatus')
-    expect(text).toContain('activeRuntimeIdentity')
-    expect(text).toContain('invalidatePreflightStatus')
-    expect(text).toContain('runtimeStatusByEnvironmentId')
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+  useAppStore.setState(useAppStore.getInitialState(), true)
+})
+
+describe('landing preflight runtime boundary', () => {
+  it('refreshes after an active runtime A to B switch without manual action', () => {
+    const view = renderHook(() => useLandingPreflightRuntime())
+    expect(refresh).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      useAppStore.setState({
+        settings: { activeRuntimeEnvironmentId: 'runtime-a' },
+        runtimeStatusByEnvironmentId: new Map([
+          ['runtime-a', { status: { runtimeId: 'a' }, connectionGeneration: 1 }]
+        ])
+      } as never)
+    })
+    act(() => {
+      useAppStore.setState({
+        settings: { activeRuntimeEnvironmentId: 'runtime-b' },
+        runtimeStatusByEnvironmentId: new Map([
+          ['runtime-b', { status: { runtimeId: 'b' }, connectionGeneration: 1 }]
+        ])
+      } as never)
+    })
+
+    expect(refresh).toHaveBeenCalledTimes(3)
+    view.unmount()
   })
 
-  // Why: window.api.preflight.check always probes the local client. The
-  // preflight slice is the only caller that consults getActiveRuntimeTarget and
-  // forwards to `preflight.check` on the active runtime environment, so a
-  // direct IPC call here would silently report the client's git/gh state while
-  // the user is connected to a remote runtime.
-  it('never calls the local preflight IPC directly', () => {
-    const text = source('src/renderer/src/components/Landing.tsx')
+  it('invalidates on disconnect and refreshes exactly once on reconnect', () => {
+    const view = renderHook(() => useLandingPreflightRuntime())
+    act(() => {
+      useAppStore.setState({
+        settings: { activeRuntimeEnvironmentId: 'runtime-a' },
+        runtimeStatusByEnvironmentId: new Map([
+          ['runtime-a', { status: { runtimeId: 'a' }, connectionGeneration: 1 }]
+        ])
+      } as never)
+    })
+    refresh.mockClear()
 
-    expect(text).not.toContain('window.api.preflight')
+    act(() => {
+      useAppStore.setState({
+        runtimeStatusByEnvironmentId: new Map([
+          ['runtime-a', { status: null, connectionGeneration: 2 }]
+        ])
+      } as never)
+    })
+    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(refresh).not.toHaveBeenCalled()
+
+    act(() => {
+      useAppStore.setState({
+        runtimeStatusByEnvironmentId: new Map([
+          ['runtime-a', { status: { runtimeId: 'a-reconnected' }, connectionGeneration: 3 }]
+        ])
+      } as never)
+    })
+    expect(refresh).toHaveBeenCalledTimes(1)
+    view.unmount()
   })
 
-  it('keeps the preflight slice as the runtime-aware routing point', () => {
-    const text = source('src/renderer/src/store/slices/preflight.ts')
+  it('keeps one active interval and removes listeners and polling on cleanup', () => {
+    useAppStore.setState({ repos: [githubRepo], preflightStatus: status() })
+    const addEventListener = vi.spyOn(document, 'addEventListener')
+    const removeEventListener = vi.spyOn(document, 'removeEventListener')
+    const addWindowListener = vi.spyOn(window, 'addEventListener')
+    const removeWindowListener = vi.spyOn(window, 'removeEventListener')
+    const view = renderHook(() => useLandingPreflightRuntime())
 
-    expect(text).toContain('getActiveRuntimeTarget')
-    expect(text).toContain("'preflight.check'")
+    expect(vi.getTimerCount()).toBe(1)
+    act(() => {
+      useAppStore.setState({ repos: [...useAppStore.getState().repos] })
+    })
+    expect(vi.getTimerCount()).toBe(1)
+    act(() => vi.advanceTimersByTime(30_000))
+    expect(refresh).toHaveBeenCalledWith({ force: true })
+
+    view.unmount()
+    expect(vi.getTimerCount()).toBe(0)
+    expect(removeEventListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function))
+    expect(removeWindowListener).toHaveBeenCalledWith('focus', expect.any(Function))
+    expect(addEventListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function))
+    expect(addWindowListener).toHaveBeenCalledWith('focus', expect.any(Function))
+    addEventListener.mockRestore()
+    removeEventListener.mockRestore()
+    addWindowListener.mockRestore()
+    removeWindowListener.mockRestore()
   })
 })
