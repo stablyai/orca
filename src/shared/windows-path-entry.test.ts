@@ -8,8 +8,6 @@ const validPaths = [
   'C:\\用户\\fnm-λ',
   '\\\\server\\share\\fnm',
   '//server/share/fnm',
-  '\\\\?\\C:\\very long\\fnm',
-  '\\\\?\\UNC\\server\\share\\fnm',
   '\\\\.\\Volume{01234567-89ab-cdef-0123-456789abcdef}\\fnm'
 ]
 
@@ -29,6 +27,9 @@ const invalidPaths = [
   'C:\\fnm\\LPT9.log',
   '\\\\.\\pipe\\orca-fnm',
   '\\\\?\\pipe\\orca-fnm',
+  '\\\\?\\C:\\very long\\fnm',
+  '\\\\?\\UNC\\server\\share\\fnm',
+  '\\\\?\\Volume{01234567-89ab-cdef-0123-456789abcdef}\\fnm',
   '\\\\?\\GLOBALROOT\\Device\\HarddiskVolume1\\fnm',
   '\\\\.\\PhysicalDrive0',
   '\\\\server\\pipe\\orca-fnm',

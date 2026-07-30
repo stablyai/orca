@@ -1,10 +1,9 @@
 const WINDOWS_DRIVE_PATH = /^[A-Za-z]:[\\/](.*)$/s
 const WINDOWS_UNC_PATH = /^(?:\\\\|\/\/)([^\\/]+)[\\/]([^\\/]+)(?:[\\/](.*))?$/s
-const WINDOWS_EXTENDED_DRIVE_PATH = /^\\\\\?\\[A-Za-z]:\\(.*)$/s
-const WINDOWS_EXTENDED_UNC_PATH = /^\\\\\?\\UNC\\([^\\]+)\\([^\\]+)(?:\\(.*))?$/is
 const WINDOWS_VOLUME_PATH =
-  /^\\\\[?.]\\(Volume\{[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\})\\(.*)$/is
+  /^\\\\\.\\(Volume\{[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\})\\(.*)$/is
 const WINDOWS_DEVICE_PATH_PREFIX = /^\\\\[?.]\\/
+const WINDOWS_EXTENDED_PATH_PREFIX = /^\\\\\?\\/
 const INVALID_WINDOWS_COMPONENT_CHARACTERS = '<>"|?*;:'
 const RESERVED_WINDOWS_COMPONENT =
   /^(?:CON|PRN|AUX|NUL|CLOCK\$|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])$/i
@@ -27,24 +26,15 @@ export function normalizeSingleWindowsPathEntry(value: string | undefined): stri
 }
 
 function parseWindowsFilesystemPath(value: string): ParsedWindowsPath | null {
+  // Why: cmd rejects extended PATH entries, and extended volumes can poison later child lookup.
+  if (WINDOWS_EXTENDED_PATH_PREFIX.test(value)) {
+    return null
+  }
   if (WINDOWS_DEVICE_PATH_PREFIX.test(value) && value.includes('/')) {
     return null
   }
 
-  let match = WINDOWS_EXTENDED_DRIVE_PATH.exec(value)
-  if (match) {
-    return { components: splitWindowsComponents(match[1]) }
-  }
-
-  match = WINDOWS_EXTENDED_UNC_PATH.exec(value)
-  if (match) {
-    return {
-      components: [match[1], match[2], ...splitWindowsComponents(match[3])],
-      uncShare: match[2]
-    }
-  }
-
-  match = WINDOWS_VOLUME_PATH.exec(value)
+  let match = WINDOWS_VOLUME_PATH.exec(value)
   if (match) {
     return { components: [match[1], ...splitWindowsComponents(match[2])] }
   }

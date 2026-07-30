@@ -46,19 +46,22 @@ afterEach(() => {
 })
 
 describe('packaged process PATH mutation', () => {
-  it.each(['C:\\escaped;C:\\suffix', 'C:\\invalid|component'])(
-    'rejects an unsafe Windows candidate before PATH mutation: %s',
-    async (candidate) => {
-      setPlatform('win32')
-      process.env.Path = 'C:\\Windows\\System32'
-      getVersionManagerBinPathsMock.mockReturnValue([candidate])
-      const { patchPackagedProcessPath } = await import('./configure-process')
+  it.each([
+    'C:\\escaped;C:\\suffix',
+    'C:\\invalid|component',
+    '\\\\?\\C:\\fnm',
+    '\\\\?\\UNC\\server\\share\\fnm',
+    '\\\\?\\Volume{01234567-89ab-cdef-0123-456789abcdef}\\fnm'
+  ])('rejects an unsafe Windows candidate before PATH mutation: %s', async (candidate) => {
+    setPlatform('win32')
+    process.env.Path = 'C:\\Windows\\System32'
+    getVersionManagerBinPathsMock.mockReturnValue([candidate])
+    const { patchPackagedProcessPath } = await import('./configure-process')
 
-      patchPackagedProcessPath()
+    patchPackagedProcessPath()
 
-      expect(process.env.Path).toBe('C:\\Windows\\System32')
-    }
-  )
+    expect(process.env.Path).toBe('C:\\Windows\\System32')
+  })
 
   it('preserves the non-Windows path route used by Linux and WSL', async () => {
     setPlatform('linux')
