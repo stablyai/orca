@@ -1,4 +1,4 @@
-export type HangWatchdogDetectionLoopConfig = {
+export type HangWatchdogChildLoopConfig = {
   timeoutMs: number
   checkIntervalMs: number
   now: () => number
@@ -7,14 +7,14 @@ export type HangWatchdogDetectionLoopConfig = {
   onHangResolved: (unresponsiveMs: number) => void
 }
 
-export type HangWatchdogDetectionLoop = {
+export type HangWatchdogChildLoop = {
   recordHeartbeat: () => void
   tick: () => void
 }
 
-export function createHangWatchdogDetectionLoop(
-  config: HangWatchdogDetectionLoopConfig
-): HangWatchdogDetectionLoop {
+export function createHangWatchdogChildLoop(
+  config: HangWatchdogChildLoopConfig
+): HangWatchdogChildLoop {
   let lastHeartbeatAt = config.now()
   let lastTickAt = config.now()
   let detected = false

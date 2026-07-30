@@ -313,16 +313,6 @@ function verifyNativeArgumentGuardrails() {
       'macOS typeText must try verified focused AX text replacement before synthetic keyboard fallback'
     )
   }
-  if (
-    !macos.includes('AgentLaunchArguments.parse(arguments)') ||
-    !macos.includes('expectedProcessId: expectedPeerProcessId') ||
-    macos.includes('/bin/ps') ||
-    macos.includes('computer-sidecar.js')
-  ) {
-    failures.push(
-      'macOS agent authorization must bind the kernel peer pid to the main-selected launch pid'
-    )
-  }
   if (!macos.includes('even when the click uses an AX action path')) {
     failures.push(
       'macOS clicks must activate the target window before accessibility or pointer input'

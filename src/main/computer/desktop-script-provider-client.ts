@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type {
   ComputerActionResult,
   ComputerListAppsResult,
@@ -24,7 +27,8 @@ import {
 } from './desktop-script-provider-params'
 import {
   desktopScriptPlatform,
-  resolveDesktopScriptProviderPath
+  resolveDesktopScriptProviderPath,
+  type DesktopScriptPlatform
 } from './desktop-script-provider-paths'
 import type {
   BridgeRequest,
@@ -44,6 +48,11 @@ export class DesktopScriptProviderClient {
   private readonly snapshotStore = new DesktopScriptSnapshotStore()
   readonly snapshots = this.snapshotStore.snapshots
   private providerCapabilities: ComputerProviderCapabilities | null = null
+
+  constructor(
+    private readonly platform: DesktopScriptPlatform = requiredPlatform(),
+    private readonly scriptPath: string = requiredScriptPath()
+  ) {}
 
   shutdown(): void {
     this.snapshotStore.clear()
@@ -194,20 +203,27 @@ export class DesktopScriptProviderClient {
   }
 
   private async callBridge(request: BridgeRequest): Promise<BridgeResponse> {
-    const { stdout, stderr } = await execBridge(request)
-    let response: BridgeResponse
+    const operationDirectory = await mkdtemp(join(tmpdir(), 'orca-computer-use-'))
+    const operationPath = join(operationDirectory, 'operation.json')
     try {
-      response = JSON.parse(stdout) as BridgeResponse
-    } catch (error) {
-      throw new RuntimeClientError(
-        'accessibility_error',
-        `desktop provider returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`
-      )
+      await writeFile(operationPath, JSON.stringify(request), { encoding: 'utf8', mode: 0o600 })
+      const { stdout, stderr } = await execBridge(this.platform, this.scriptPath, operationPath)
+      let response: BridgeResponse
+      try {
+        response = JSON.parse(stdout) as BridgeResponse
+      } catch (error) {
+        throw new RuntimeClientError(
+          'accessibility_error',
+          `desktop provider returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+      if (!response.ok) {
+        throw mapBridgeError(response.error ?? stderr)
+      }
+      return response
+    } finally {
+      await rm(operationDirectory, { force: true, recursive: true })
     }
-    if (!response.ok) {
-      throw mapBridgeError(response.error ?? stderr)
-    }
-    return response
   }
 
   private async readCapabilities(): Promise<ComputerProviderCapabilities> {
@@ -237,4 +253,23 @@ export class DesktopScriptProviderClient {
     this.snapshotStore.remember(app, response.snapshot, params)
     return renderSnapshot(response.snapshot, noScreenshot)
   }
+}
+
+function requiredPlatform(): DesktopScriptPlatform {
+  const platform = desktopScriptPlatform()
+  if (!platform) {
+    throw new RuntimeClientError('accessibility_error', 'desktop script provider is not available')
+  }
+  return platform
+}
+
+function requiredScriptPath(): string {
+  const scriptPath = resolveDesktopScriptProviderPath()
+  if (!scriptPath) {
+    throw new RuntimeClientError(
+      'accessibility_error',
+      'desktop script provider script was not found'
+    )
+  }
+  return scriptPath
 }

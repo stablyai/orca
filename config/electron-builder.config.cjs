@@ -153,6 +153,7 @@ module.exports = {
     'out/main/plugin-host-entry.js',
     'out/main/computer-sidecar.js',
     'out/main/parcel-watcher-process-entry.js',
+    'out/main/main-thread-hang-watchdog-entry.js',
     'out/main/chunks/**',
     'resources/**',
     'node_modules/ws/**',

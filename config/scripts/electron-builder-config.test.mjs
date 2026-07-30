@@ -166,9 +166,11 @@ describe('electron-builder config', () => {
     )
   })
 
-  it('keeps the worker-thread hang watchdog inside app.asar', () => {
-    expect(electronBuilderConfig.asarUnpack).not.toContain(
-      'out/main/main-thread-hang-watchdog-entry.js'
+  // Why: the watchdog only arms in packaged builds, and its ELECTRON_RUN_AS_NODE
+  // fork resolves the entry from app.asar.unpacked — inside the asar it never runs.
+  it('unpacks the forked main-thread hang-watchdog entry', () => {
+    expect(electronBuilderConfig.asarUnpack).toEqual(
+      expect.arrayContaining(['out/main/main-thread-hang-watchdog-entry.js'])
     )
   })
 
