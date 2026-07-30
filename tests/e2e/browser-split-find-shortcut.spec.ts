@@ -188,7 +188,9 @@ test.describe('browser split Find shortcut', () => {
     await expect(browserFindInput(orcaPage)).toBeHidden()
     await orcaPage.keyboard.press('Escape')
 
-    await browserAddressBar(orcaPage, fixture.browserTabId).click()
+    const browserAddress = browserAddressBar(orcaPage, fixture.browserTabId)
+    await expect(browserAddress).toBeVisible()
+    await browserAddress.click()
     await waitForFocusedGroup(orcaPage, fixture.browserGroupId)
     await orcaPage.keyboard.press(`${modifier}+f`)
     await expect(browserFindInput(orcaPage)).toBeFocused()
@@ -229,6 +231,7 @@ test.describe('browser split Find shortcut', () => {
   }) => {
     const fixture = await createTerminalBrowserSplit(orcaPage)
     const addressBar = browserAddressBar(orcaPage, fixture.browserTabId)
+    await expect(addressBar).toBeVisible()
     await addressBar.click()
     await expect(addressBar).toBeFocused()
 
@@ -254,6 +257,7 @@ test.describe('browser split Find shortcut', () => {
   test('keeps browser Find available when the focused split ID is stale', async ({ orcaPage }) => {
     const fixture = await createTerminalBrowserSplit(orcaPage)
     const addressBar = browserAddressBar(orcaPage, fixture.browserTabId)
+    await expect(addressBar).toBeVisible()
     await addressBar.click()
     await expect(addressBar).toBeFocused()
 
