@@ -4,13 +4,17 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { TerminalTab, TuiAgent } from '../../../shared/types'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import { makePaneKey } from '../../../shared/stable-pane-id'
+import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../shared/types'
 import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
 import { resolveTabAgentFromSignals, useTabAgent } from './use-tab-agent'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const initialAppState = useAppStore.getInitialState()
+const FOCUSED_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const SIBLING_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 let latestAgent: TuiAgent | null | undefined
 let root: Root | null = null
 const identityScenarios: [
@@ -25,6 +29,33 @@ const identityScenarios: [
 function HookProbe({ tab }: { tab: TerminalTab }): null {
   latestAgent = useTabAgent(tab)
   return null
+}
+
+function splitLayout(): TerminalLayoutSnapshot {
+  return {
+    root: null,
+    activeLeafId: FOCUSED_LEAF_ID,
+    expandedLeafId: null,
+    ptyIdsByLeafId: {
+      [FOCUSED_LEAF_ID]: 'pty-opencode',
+      [SIBLING_LEAF_ID]: 'pty-sibling'
+    }
+  }
+}
+
+function sleepingClaudeRecord(paneKey: string): SleepingAgentSessionRecord {
+  return {
+    paneKey,
+    tabId: 'opencode-tab',
+    worktreeId: 'worktree-1',
+    agent: 'claude',
+    providerSession: { key: 'session_id', id: 'claude-session' },
+    prompt: '',
+    state: 'working',
+    capturedAt: 1,
+    updatedAt: 1,
+    origin: 'live'
+  }
 }
 
 describe('OpenCode native title tab identity', () => {
@@ -115,6 +146,73 @@ describe('OpenCode native title tab identity', () => {
     ).toBe('opencode')
   })
 
+  it('keeps current sleeping Claude ownership over a replayed OpenCode title', () => {
+    for (const hasObservedAgentSignal of [false, true]) {
+      expect(
+        resolveTabAgentFromSignals({
+          hasObservedAgentSignal,
+          isRemote: true,
+          title: 'tmux | OC | Previous task',
+          hookAgent: null,
+          sleepingSessionAgent: 'claude',
+          launchAgent: 'claude'
+        })
+      ).toBe('claude')
+    }
+  })
+
+  it('keeps matching sleeping ownership and preserves the no-signal fallback', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: false,
+        isRemote: true,
+        title: 'tmux | OC | Current task',
+        hookAgent: null,
+        sleepingSessionAgent: 'opencode',
+        launchAgent: 'opencode'
+      })
+    ).toBe('opencode')
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: false,
+        isRemote: true,
+        title: 'Terminal 1',
+        hookAgent: null
+      })
+    ).toBeNull()
+  })
+
+  it('keeps restored split-pane ownership over an SSH/tmux title replay', () => {
+    const paneKey = makePaneKey('opencode-tab', FOCUSED_LEAF_ID)
+    const parsed = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'worktree-1',
+      activeTabId: 'opencode-tab',
+      tabsByWorktree: {
+        'worktree-1': [{ ...staleClaudeTab, title: 'tmux | OC | Previous task' }]
+      },
+      terminalLayoutsByTabId: { 'opencode-tab': splitLayout() },
+      sleepingAgentSessionsByPaneKey: { [paneKey]: sleepingClaudeRecord(paneKey) }
+    })
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) {
+      return
+    }
+    const restoredTab = parsed.value.tabsByWorktree['worktree-1']![0]!
+    const restoredSleeping = parsed.value.sleepingAgentSessionsByPaneKey?.[paneKey]
+
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: false,
+        isRemote: true,
+        title: restoredTab.title,
+        hookAgent: null,
+        sleepingSessionAgent: restoredSleeping?.agent,
+        launchAgent: restoredTab.launchAgent
+      })
+    ).toBe('claude')
+  })
+
   it('keeps stronger live identity and rejects non-native OpenCode lookalikes', () => {
     expect(
       resolveTabAgentFromSignals({
@@ -122,6 +220,7 @@ describe('OpenCode native title tab identity', () => {
         isRemote: false,
         title: 'OC | Greeting',
         hookAgent: 'claude',
+        sleepingSessionAgent: 'claude',
         launchAgent: 'claude'
       })
     ).toBe('claude')
@@ -132,6 +231,7 @@ describe('OpenCode native title tab identity', () => {
         title: 'OC | Greeting',
         hookAgent: null,
         processAgent: 'codex',
+        sleepingSessionAgent: 'claude',
         launchAgent: 'claude'
       })
     ).toBe('codex')
@@ -158,7 +258,7 @@ describe('OpenCode native title tab identity', () => {
     }
   })
 
-  it('updates a mounted inactive tab without clearing metadata or probing providers', async () => {
+  it('updates a mounted inactive/restored split without provider probes', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -169,6 +269,25 @@ describe('OpenCode native title tab identity', () => {
     })
 
     expect(latestAgent).toBe('opencode')
+    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
+    expect(getForegroundProcess).not.toHaveBeenCalled()
+    const paneKey = makePaneKey('opencode-tab', FOCUSED_LEAF_ID)
+
+    await act(async () => {
+      useAppStore.setState({
+        ptyIdsByTabId: { 'opencode-tab': ['pty-opencode', 'pty-sibling'] },
+        terminalLayoutsByTabId: { 'opencode-tab': splitLayout() },
+        sleepingAgentSessionsByPaneKey: { [paneKey]: sleepingClaudeRecord(paneKey) }
+      })
+      root?.render(
+        createElement(HookProbe, {
+          tab: { ...staleClaudeTab, title: 'tmux | OC | Previous task' }
+        })
+      )
+      await Promise.resolve()
+    })
+
+    expect(latestAgent).toBe('claude')
     expect(clearTabLaunchAgent).not.toHaveBeenCalled()
     expect(getForegroundProcess).not.toHaveBeenCalled()
   })

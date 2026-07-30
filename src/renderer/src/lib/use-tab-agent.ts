@@ -104,6 +104,7 @@ export function resolveTabAgentFromSignals(args: {
     args.siblingCompletedHookAgent,
     launchAgent
   )
+  const sleepingSessionAgent = args.sleepingSessionAgent ?? null
 
   // Title carries identity only as a reuse override (names a DIFFERENT-group agent) or a legacy standalone id when no hook — same-group titles say nothing (OMP wraps Pi), so the record wins.
   const explicitTitleAgent = resolveSignalAgentForLaunchOwner(
@@ -117,13 +118,15 @@ export function resolveTabAgentFromSignals(args: {
     explicitTitleAgent !== null &&
     explicitTitleAgent !== priorIdentity &&
     (args.hasObservedAgentSignal || hasCompletedHook || isOpenCodeNativeTitle(args.title))
-  const titleAgent = processProvesShell
-    ? null
-    : titleReclaimsReusedPane
-      ? explicitTitleAgent
-      : priorIdentity
-        ? null
-        : explicitTitleAgent
+  // Why: titles have no PTY/provider generation, so they cannot displace a current provider-session owner.
+  const titleAgent =
+    processProvesShell || sleepingSessionAgent
+      ? null
+      : titleReclaimsReusedPane
+        ? explicitTitleAgent
+        : priorIdentity
+          ? null
+          : explicitTitleAgent
 
   const launchedAgentExited = resolveLaunchedAgentExitEvidence({
     title: args.title,
@@ -139,7 +142,6 @@ export function resolveTabAgentFromSignals(args: {
   const activeLaunchAgent = launchedAgentExited ? null : launchAgent
   // Why: re-own the foreground process within its title-identity group so OMP's nested pi (shell → omp → pi) can't flip an OMP-owned tab's icon.
   const processAgent = resolveSignalAgentForLaunchOwner(args.processAgent, owner)
-  const sleepingSessionAgent = args.sleepingSessionAgent ?? null
   // Identity-first precedence (see JSDoc): live hook > process > title > idle > sleeping > launch > sibling.
   return (
     liveFocusedIdentity ??
@@ -161,9 +163,9 @@ export function resolveTabAgentFromSignals(args: {
  *
  * 1. Live focused hook — ground truth while the agent works; never title-overridden.
  * 2. Process identity — recognized foreground process (local only); re-owned within its title-identity group so OMP's nested `pi` (shell → omp → pi) can't flip the icon.
- * 3. Title — only a reuse override (names a DIFFERENT-group agent) or a legacy standalone identity when the pane has no hook.
+ * 3. Title — only a reuse override (names a DIFFERENT-group agent) or a legacy standalone identity when the pane has no sleeping session.
  * 4. Idle focused identity — the pane's own hook record after it went idle; suppressed locally once OSC 133;D proves exit.
- * 5. Sleeping session identity — a hibernated pane's captured session record.
+ * 5. Sleeping session identity — current provider-session ownership; also vetoes an unversioned title.
  * 6. launchAgent — bootstrap before any hook/process signal; cleared once exit evidence shows it left.
  * 7. Sibling-pane identity (live, then idle) — split-tab fallback.
  */
