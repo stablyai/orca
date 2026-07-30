@@ -19,6 +19,7 @@ type MobilePairingSetupSectionProps = {
   onRefreshNetworkInterfaces: () => void
   loading: boolean
   hasQrCode: boolean
+  showGenerateAction?: boolean
   onGenerateQr: () => void
 }
 
@@ -33,6 +34,7 @@ export function MobilePairingSetupSection({
   onRefreshNetworkInterfaces,
   loading,
   hasQrCode,
+  showGenerateAction = true,
   onGenerateQr
 }: MobilePairingSetupSectionProps): React.JSX.Element {
   const usingRelay = connectionMode === 'automatic'
@@ -106,31 +108,33 @@ export function MobilePairingSetupSection({
               )
             : translate(
                 'auto.components.settings.MobilePairingSetupSection.step2LocalDescription',
-                'The phone must be able to reach this address on Wi‑Fi or Tailscale.'
+                'The phone must be able to reach this address on Tailscale or Wi‑Fi.'
               )}
         </p>
       </div>
 
-      <div className="space-y-2">
-        <Button onClick={onGenerateQr} disabled={generateDisabled} size="sm" className="gap-1.5">
-          {loading ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : hasQrCode ? (
-            <RefreshCw className="size-3.5" />
-          ) : (
-            <QrCode className="size-3.5" />
-          )}
-          {hasQrCode
-            ? translate(
-                'auto.components.settings.MobilePairingSetupSection.regenerate',
-                'Regenerate QR code'
-              )
-            : translate(
-                'auto.components.settings.MobilePairingSetupSection.generate',
-                'Generate QR code'
-              )}
-        </Button>
-      </div>
+      {showGenerateAction ? (
+        <div className="space-y-2">
+          <Button onClick={onGenerateQr} disabled={generateDisabled} size="sm" className="gap-1.5">
+            {loading ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : hasQrCode ? (
+              <RefreshCw className="size-3.5" />
+            ) : (
+              <QrCode className="size-3.5" />
+            )}
+            {hasQrCode
+              ? translate(
+                  'auto.components.settings.MobilePairingSetupSection.regenerate',
+                  'Regenerate QR code'
+                )
+              : translate(
+                  'auto.components.settings.MobilePairingSetupSection.generate',
+                  'Generate QR code'
+                )}
+          </Button>
+        </div>
+      ) : null}
     </section>
   )
 }

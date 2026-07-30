@@ -172,6 +172,10 @@ type DetectedWorktreeRefreshOptions = BackgroundRuntimeRefreshOptions & {
   executionHostId: ExecutionHostId
   requireAuthoritative?: boolean
   directSshAuthority?: DirectSshAuthority
+  // Why (#10562): the caller's own view of what it is about to purge. Teardown is
+  // requested per caller, so this must never be shared with a coalesced scan.
+  connectionId?: string | null
+  knownWorktreeIds?: readonly string[]
 }
 
 type AdmittedDetectedWorktreeRefresh = {
@@ -705,6 +709,64 @@ function toLegacyDetectedWorktreeResult(
 
 function isRuntimeMethodNotFoundError(error: unknown): boolean {
   return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
+}
+
+// Why: teardown cannot ride the scan's coalescing (each caller has its own known-id
+// snapshot), so dedupe on the request it actually produces — identical fan-out
+// requests share one host sweep instead of re-scanning per caller.
+const missingWorktreeTeardownsInFlight = new Map<string, Promise<void>>()
+
+async function teardownMissingWorktreeTerminalsBestEffort(
+  settings: AppState['settings'],
+  repoId: string,
+  connectionId: string | null | undefined,
+  // Why: refreshes that never purge omit this; an absent snapshot means
+  // "nothing to reconcile", never "purge everything".
+  knownWorktreeIds: readonly string[] | undefined,
+  detected: DetectedWorktreeListResult
+): Promise<void> {
+  if (!detected.authoritative || !knownWorktreeIds || knownWorktreeIds.length === 0) {
+    return
+  }
+  const detectedIds = new Set(detected.worktrees.map((worktree) => worktree.id))
+  const missingIds = knownWorktreeIds.filter((worktreeId) => !detectedIds.has(worktreeId))
+  if (missingIds.length === 0) {
+    return
+  }
+  const target = getActiveRuntimeTarget(settings)
+  const normalizedConnectionId = connectionId ?? null
+  const key = [
+    target.kind === 'local' ? 'local' : `runtime:${target.environmentId}`,
+    repoId,
+    normalizedConnectionId ?? '',
+    [...missingIds].sort().join('\n')
+  ].join('\0')
+  const existing = missingWorktreeTeardownsInFlight.get(key)
+  if (existing) {
+    return existing
+  }
+  const teardown = (async () => {
+    try {
+      await callRuntimeRpc(
+        target,
+        'worktree.teardownMissingTerminals',
+        { repo: repoId, worktreeIds: missingIds, connectionId: normalizedConnectionId },
+        { timeoutMs: 30_000 }
+      )
+    } catch (error) {
+      if (!isRuntimeMethodNotFoundError(error)) {
+        console.warn(`Failed to stop terminals for missing worktrees in repo ${repoId}:`, error)
+      }
+    }
+  })()
+  missingWorktreeTeardownsInFlight.set(key, teardown)
+  try {
+    await teardown
+  } finally {
+    if (missingWorktreeTeardownsInFlight.get(key) === teardown) {
+      missingWorktreeTeardownsInFlight.delete(key)
+    }
+  }
 }
 
 // Why: a mobile-scope web pairing is denied worktree/repo RPCs (else silently empty workspaces); surface one deduped toast (stable id) instead of spamming per-repo.
@@ -1276,6 +1338,16 @@ async function listDetectedWorktreesForRepoCoalesced(
       ) {
         throw new Error('runtime_environment_generation_changed')
       }
+      // Why (#10562): the scan coalesces, but teardown must not — each caller carries
+      // its own known-id snapshot and purges its own state, so a caller that joined
+      // an in-flight scan would otherwise purge without ever stopping those terminals.
+      await teardownMissingWorktreeTerminalsBestEffort(
+        settings,
+        repoId,
+        options.connectionId,
+        options.knownWorktreeIds,
+        result
+      )
       return {
         status: 'admitted',
         result,
@@ -1323,6 +1395,13 @@ async function listDetectedWorktreesForRepoCoalesced(
       directSshAuthority: options.directSshAuthority
     }
   }
+  await teardownMissingWorktreeTerminalsBestEffort(
+    settings,
+    repoId,
+    options.connectionId,
+    options.knownWorktreeIds,
+    providerResult.result
+  )
   return {
     status: 'admitted',
     result: providerResult.result,
@@ -2984,6 +3063,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const hostId = repoHostId(ownerState, repoId)
       const ownerWasMissingAtStart = !ownerState.repos.some((repo) => repo.id === repoId)
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
+      const repoOwner = findRepoForHost(ownerState.repos, repoId, {
+        hostId,
+        settings: ownerState.settings
+      })
       const parsedHost = parseExecutionHostId(hostId)
       const directSshAuthority =
         parsedHost?.kind === 'ssh'
@@ -2995,7 +3078,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const refresh = await listDetectedWorktreesForRepoCoalesced(
         settingsForRepoOwner(ownerState, repoId, hostId),
         repoId,
-        { executionHostId: hostId, directSshAuthority }
+        {
+          executionHostId: hostId,
+          directSshAuthority,
+          connectionId: repoOwner?.connectionId,
+          knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId)
+        }
       )
       if (refresh.status !== 'admitted') {
         return null
@@ -3066,6 +3154,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         return false
       }
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
+      const repoOwner = findRepoForHost(ownerState.repos, repoId, {
+        hostId,
+        settings: ownerState.settings
+      })
       const ownerSettings = settingsForRepoOwner(ownerState, repoId, hostId)
       const settings =
         useLocalOwner && ownerSettings?.activeRuntimeEnvironmentId
@@ -3082,7 +3174,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const refresh = await listDetectedWorktreesForRepoCoalesced(settings, repoId, {
         executionHostId: hostId,
         requireAuthoritative: options?.requireAuthoritative,
-        directSshAuthority
+        directSshAuthority,
+        connectionId: repoOwner?.connectionId,
+        knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId)
       })
       if (refresh.status !== 'admitted') {
         return directCallerAuthority ? refresh.providerResult : false
@@ -3140,7 +3234,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           const refresh = await listDetectedWorktreesForRepoCoalesced(settings, r.id, {
             executionHostId: hostId,
             reuseRecentCompatibilityFailure: true,
-            directSshAuthority
+            directSshAuthority,
+            connectionId: r.connectionId,
+            knownWorktreeIds: getKnownWorktreeIdsForPurge(requestStartedState, r.id, hostId)
           })
           if (refresh.status !== 'admitted') {
             return
@@ -3192,7 +3288,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             {
               executionHostId: hostId,
               reuseRecentCompatibilityFailure: true,
-              directSshAuthority
+              directSshAuthority,
+              connectionId: r.connectionId,
+              knownWorktreeIds: getKnownWorktreeIdsForPurge(requestStartedState, r.id, hostId)
             }
           )
           if (refresh.status !== 'admitted') {

@@ -13,6 +13,7 @@ import type { MobilePageStage } from './mobile-page-stage'
 import { MobilePageToolbar } from './MobilePageToolbar'
 import { PhoneCarousel } from './PhoneCarousel'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 
 type MobilePageContentProps = {
   closeMobilePage: () => void
@@ -39,7 +40,10 @@ type MobilePageContentProps = {
   pairQrDataUrl: string | null
   pairingUrl: string | null
   pairingQrError: boolean
-  relayDegraded: boolean
+  relayMintFailure: MobileRelayMintFailure | null
+  onUseLan: () => void
+  onRetryRelay: () => void
+  onCopyRelayDiagnostics: () => void
   platform: Platform
   refreshingNetworkInterfaces: boolean
   revokeDevice: (id: string) => void
@@ -78,7 +82,10 @@ export function MobilePageContent({
   pairQrDataUrl,
   pairingUrl,
   pairingQrError,
-  relayDegraded,
+  relayMintFailure,
+  onUseLan,
+  onRetryRelay,
+  onCopyRelayDiagnostics,
   platform,
   refreshingNetworkInterfaces,
   revokeDevice,
@@ -92,7 +99,7 @@ export function MobilePageContent({
   toggleMobileSidebarButton
 }: MobilePageContentProps): React.JSX.Element {
   return (
-    <div className="mobile-page-root">
+    <div className="mobile-page-root scrollbar-sleek">
       <MobilePageToolbar
         showMobileButton={showMobileButton}
         onClose={closeMobilePage}
@@ -123,7 +130,10 @@ export function MobilePageContent({
               pairQrDataUrl={pairQrDataUrl}
               pairingUrl={pairingUrl}
               pairingQrError={pairingQrError}
-              relayDegraded={relayDegraded}
+              relayMintFailure={relayMintFailure}
+              onUseLan={onUseLan}
+              onRetryRelay={onRetryRelay}
+              onCopyRelayDiagnostics={onCopyRelayDiagnostics}
               pairLoading={pairLoading}
               connectionMode={connectionMode}
               onConnectionModeChange={handleConnectionModeChange}
