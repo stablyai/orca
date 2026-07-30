@@ -840,11 +840,8 @@ export function getUserAgentForBrowser(
       const v = readBrowserVersion('/Applications/Helium.app')
       return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
     }
-    case 'vivaldi': {
-      // Why: Vivaldi is Chromium-based; use Chrome's UA shape so Google-bound auth cookies survive import.
-      const v = readBrowserVersion('/Applications/Vivaldi.app')
-      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
-    }
+    // Why: Vivaldi's bundle exposes only its product version (8.x), so Chrome/8.x would name a Chromium release that never existed; the cleaned Electron UA already matches its real Chrome major.
+    case 'vivaldi':
     case 'firefox':
     case 'safari':
     case 'manual':

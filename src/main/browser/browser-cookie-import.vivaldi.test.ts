@@ -225,14 +225,15 @@ describe('getUserAgentForBrowser — Vivaldi', () => {
     vi.restoreAllMocks()
   })
 
-  it('returns a Chrome-shaped UA string when Vivaldi plist version reads successfully', async () => {
+  // Why: the product version must never reach the Chrome/ token, even when the plist reads fine.
+  it('returns null on darwin instead of spoofing a UA from the product version', async () => {
     vi.doMock('node:child_process', async () => {
       const actual = await vi.importActual<typeof childProcessModule>('node:child_process')
       return {
         ...actual,
         execFileSync: (cmd: string, args: readonly string[]) => {
           if (cmd === 'defaults' && args[1]?.includes('/Applications/Vivaldi.app/Contents/Info')) {
-            return '120.0.6099.71\n'
+            return '8.1.4087.58\n'
           }
           return actual.execFileSync(cmd, args as never)
         }
@@ -240,29 +241,19 @@ describe('getUserAgentForBrowser — Vivaldi', () => {
     })
 
     const { getUserAgentForBrowser } = await import('./browser-cookie-import')
-    const ua = getUserAgentForBrowser('vivaldi')
-
-    expect(ua).not.toBeNull()
-    expect(ua).toContain('Macintosh; Intel Mac OS X 10_15_7')
-    expect(ua).toContain('AppleWebKit/537.36')
-    expect(ua).toContain('Chrome/120.0.6099.71')
-    expect(ua).toContain('Safari/537.36')
+    expect(getUserAgentForBrowser('vivaldi')).toBeNull()
   })
 
-  it('returns null when reading the Vivaldi plist version throws', async () => {
+  it('does not read the Vivaldi plist at all', async () => {
+    const execFileSync = vi.fn(() => '8.1.4087.58\n')
     vi.doMock('node:child_process', async () => {
       const actual = await vi.importActual<typeof childProcessModule>('node:child_process')
-      return {
-        ...actual,
-        execFileSync: () => {
-          throw new Error('defaults: domain not found')
-        }
-      }
+      return { ...actual, execFileSync }
     })
 
     const { getUserAgentForBrowser } = await import('./browser-cookie-import')
-    const ua = getUserAgentForBrowser('vivaldi')
-    expect(ua).toBeNull()
+    expect(getUserAgentForBrowser('vivaldi')).toBeNull()
+    expect(execFileSync).not.toHaveBeenCalled()
   })
 
   it('returns null on Windows and Linux, where the default Electron UA is used', async () => {
