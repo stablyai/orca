@@ -17,7 +17,7 @@ describe('simctlLogShowArgs', () => {
       '--style',
       'ndjson',
       '--last',
-      '1m'
+      '10m'
     ])
   })
 

@@ -41,7 +41,7 @@ describe('captureSimulatorLog', () => {
     ])
     expect(spawnMock).toHaveBeenCalledWith(
       'xcrun',
-      expect.arrayContaining(['simctl', 'spawn', 'device-1', '--style', 'ndjson']),
+      expect.arrayContaining(['simctl', 'spawn', 'device-1', 'log', 'show', '--style', 'ndjson']),
       { stdio: ['ignore', 'pipe', 'pipe'] }
     )
   })

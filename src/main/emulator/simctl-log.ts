@@ -30,7 +30,7 @@ export function simctlLogShowArgs(
     '--style',
     'ndjson',
     '--last',
-    options?.window ?? '1m'
+    options?.window ?? '10m'
   ]
   const predicate = buildSimulatorLogPredicate(options?.filters)
   if (predicate) {
