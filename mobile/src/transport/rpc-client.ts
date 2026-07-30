@@ -161,6 +161,7 @@ export function connect(
   let connectTimer: ReturnType<typeof setTimeout> | null = null
   let handshakeTimer: ReturnType<typeof setTimeout> | null = null
   let activityProbeTimer: ReturnType<typeof setInterval> | null = null
+  let activityProbeInFlight = false
   let intentionallyClosed = false
   // Consecutive auth rejections; tolerate up to AUTH_RETRY_BUDGET (issue #5200) before latching to avoid a needless re-pair.
   let authRejectionCount = 0
@@ -764,15 +765,17 @@ export function connect(
 
   // Why: app-level liveness probe (see ACTIVITY_PROBE_INTERVAL_MS) — force-closes the WS on failure so onclose reconnects.
   function runActivityProbe() {
-    if (state !== 'connected' || !ws) {
+    if (state !== 'connected' || !ws || activityProbeInFlight) {
       return
     }
+    activityProbeInFlight = true
     const probeWs = ws
     const id = nextId()
     const probeInboundSequence = inboundSequence
     let timedOut = false
     const timeout = setTimeout(() => {
       timedOut = true
+      activityProbeInFlight = false
       pending.delete(id)
       if (inboundSequence > probeInboundSequence) {
         return
@@ -792,16 +795,19 @@ export function connect(
         if (timedOut) {
           return
         }
+        activityProbeInFlight = false
         clearTimeout(timeout)
       },
       reject: () => {
         if (timedOut) {
           return
         }
+        activityProbeInFlight = false
         clearTimeout(timeout)
       }
     })
     if (!sendEncrypted({ id, deviceToken, method: 'status.get' })) {
+      activityProbeInFlight = false
       clearTimeout(timeout)
       pending.delete(id)
     }

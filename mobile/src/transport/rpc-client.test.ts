@@ -718,6 +718,8 @@ describe('mobile rpc-client connection timeout', () => {
 
       expect(socket.close).toHaveBeenCalledTimes(1)
       expect(client.getState()).toBe('reconnecting')
+      socket.onclose?.()
+      expect(client.getState()).toBe('reconnecting')
 
       await vi.advanceTimersByTimeAsync(500)
       expect(mockSockets).toHaveLength(2)
@@ -731,6 +733,21 @@ describe('mobile rpc-client connection timeout', () => {
       client.close()
     })
 
+    it('coalesces repeated foreground probes while one probe is pending', async () => {
+      const client = connectAuthenticated().client
+      const socket = mockSockets[0]!
+      client.notifyForeground()
+      client.notifyForeground()
+      client.notifyForeground()
+      expect(sentRequests(socket, 'status.get')).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(socket.close).toHaveBeenCalledTimes(1)
+      expect(client.getState()).toBe('reconnecting')
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(mockSockets).toHaveLength(2)
+      client.close()
+    })
     it('keeps a healthy connection when the foreground probe is answered', async () => {
       const { client, socket } = connectAuthenticated()
 
