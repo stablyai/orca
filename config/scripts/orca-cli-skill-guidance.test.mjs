@@ -26,6 +26,19 @@ describe('orca CLI skill guidance', () => {
     expect(skill).toContain('Never base it on the current feature branch')
   })
 
+  it('uses bounded command discovery before the full agent context registry', () => {
+    const skill = readSkill()
+
+    expect(skill).toContain('ORCA agent-context --roots --json')
+    expect(skill).toContain('ORCA agent-context --search "<terms>" --limit 10 --json')
+    expect(skill).toContain('ORCA agent-context --command "<exact command>" --json')
+    expect(skill).toContain('not the default discovery path')
+    expect(skill).toContain('does not require a running Orca app')
+    expect(skill).toContain('destructive: true')
+    expect(skill).toContain('never as permission')
+    expect(skill).toContain('instead of calling `agent-context` before every operation')
+  })
+
   it('documents non-lifecycle full handoffs and custom Codex model fallback', () => {
     const skill = readSkill()
 

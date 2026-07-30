@@ -16,7 +16,7 @@ Diagnostics:
   diagnostics memory        Collect a memory snapshot for Orca and managed terminals
 
 Agent Discovery:
-  agent-context             Print the machine-readable command schema for agents
+  agent-context             Discover Orca commands with bounded machine-readable queries
 
 Accounts:
   account add               Add a managed Claude or Codex account on this Orca host
@@ -222,7 +222,7 @@ Common Commands:
   orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]
   orca status [--json]
   orca diagnostics memory [--json]
-  orca agent-context [--json]
+  orca agent-context [--roots|--command <path>|--prefix <path>|--search <terms>] [--limit <n>] [--full] [--compact] [--json]
   orca account add [--agent claude|codex] [--json]
   orca account list [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
@@ -431,6 +431,20 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
   if (command === 'skills install' && flag === 'agent') {
     return '--agent <names>        Comma-separated install targets; default is detected agents'
+  }
+  if (command === 'agent-context') {
+    const helpByFlag: Record<string, string> = {
+      command: '--command <path>      Return one exact canonical command or alias',
+      compact: '--compact             Emit single-line JSON',
+      full: '--full                Expand --prefix/--search matches to full definitions',
+      limit: '--limit <n>            Limit --search results (default 20, max 50)',
+      prefix: '--prefix <path>       Match canonical or alias path tokens',
+      roots: '--roots               List canonical command roots and counts',
+      search: '--search <terms>      Search command metadata using AND terms'
+    }
+    if (helpByFlag[flag]) {
+      return helpByFlag[flag]
+    }
   }
   if (command === 'terminal close' && flag === 'tab') {
     return '--tab                  Close the whole tab and wait for durable persistence'

@@ -55,6 +55,28 @@ ORCA status --json
 
 Prefer `--json` for agent-driven calls. If the CLI is missing, say so explicitly instead of inspecting source files first.
 
+### Discover commands progressively
+
+When this guide does not name the exact operation you need, query the live command registry without
+loading the entire surface:
+
+```text
+ORCA agent-context --roots --json
+ORCA agent-context --search "<terms>" --limit 10 --json
+ORCA agent-context --prefix "<command path>" --json
+ORCA agent-context --command "<exact command>" --json
+```
+
+Start with `--roots`, `--search`, or `--prefix`; those return bounded summaries. Use `--command`
+for one complete definition, or add `--full` to `--search`/`--prefix` only when multiple complete
+definitions are necessary. `ORCA agent-context --json` remains the full registry for compatibility
+and offline audits, not the default discovery path. Add `--compact` when JSON whitespace matters.
+
+`agent-context` reads the binary's command registry locally and does not require a running Orca app.
+Selector responses use schema v2; the unfiltered compatibility response remains schema v1. Treat
+`destructive: true` as warning metadata, never as permission to run the command. Reuse discovery
+results for the current task instead of calling `agent-context` before every operation.
+
 ## Full Handoffs
 
 A full handoff transfers ownership to another agent or worktree, then the original agent stops. Treat requests phrased as "hand off", "handoff", "handover", "give this to another agent", "give this to another worktree", "another agent", or "another worktree" as full handoffs unless the user explicitly asks to supervise, monitor, wait for results, track completion, coordinate a DAG, use decision gates, or manage ask/reply.
