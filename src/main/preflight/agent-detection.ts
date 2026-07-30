@@ -46,6 +46,7 @@ import {
   resolveDetectedTuiAgentIds
 } from '../ipc/tui-agent-detection-commands'
 import {
+  _resetDetectedTuiAgentExecutables,
   setDetectedTuiAgentExecutables,
   type DetectedAgentExecutables
 } from '../../shared/detected-agent-executables'
@@ -121,6 +122,7 @@ export function _resetPreflightCache(): void {
   cached = null
   detectedAgentExecutables = {}
   hasDetectedAgentExecutables = false
+  _resetDetectedTuiAgentExecutables()
   cachedByWslDistro.clear()
   preflightInFlight.clear()
   latestPreflightRun.clear()

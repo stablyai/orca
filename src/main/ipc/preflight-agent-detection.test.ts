@@ -89,11 +89,13 @@ vi.mock('../gitea/client', () => ({
 }))
 
 import {
+  _resetPreflightCache,
   detectInstalledAgentExecutables,
   detectInstalledAgents,
   detectInstalledAgentsWithShellPathHydration,
   registerPreflightHandlers
 } from './preflight'
+import { getDetectedTuiAgentExecutable } from '../../shared/detected-agent-executables'
 import { resetPreflightMocks, type HandlerMap } from './preflight-test-harness'
 
 describe('preflight', () => {
@@ -425,6 +427,25 @@ describe('preflight', () => {
     })
 
     await expect(detectInstalledAgentExecutables({ wslDistro: 'Ubuntu' })).resolves.toBeNull()
+  })
+
+  it('clears published executable aliases when resetting the preflight cache', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'cursor') {
+        return { stdout: '/Users/test/.local/bin/cursor\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['cursor'])
+    expect(getDetectedTuiAgentExecutable('cursor')).toBe('cursor')
+
+    _resetPreflightCache()
+
+    expect(getDetectedTuiAgentExecutable('cursor')).toBeUndefined()
   })
 
   it('does not report Claude Agent Teams from WSL agent detection', async () => {
