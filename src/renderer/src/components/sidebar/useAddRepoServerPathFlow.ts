@@ -19,6 +19,7 @@ type ShowNestedRepoReview = (args: {
   runtimeKind: NestedRepoTelemetryRuntimeKind
   inProgress: boolean
   scanId: string | null
+  runtimeEnvironmentId?: string | null
 }) => void
 
 export function useAddRepoServerPathFlow({
@@ -113,7 +114,8 @@ export function useAddRepoServerPathFlow({
                       attemptId,
                       runtimeKind,
                       inProgress: true,
-                      scanId
+                      scanId,
+                      runtimeEnvironmentId: activeRuntimeEnvironmentId
                     })
                   }
                 }
@@ -141,7 +143,8 @@ export function useAddRepoServerPathFlow({
               attemptId,
               runtimeKind,
               inProgress: false,
-              scanId
+              scanId,
+              runtimeEnvironmentId: activeRuntimeEnvironmentId
             })
             return
           }

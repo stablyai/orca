@@ -1575,6 +1575,7 @@ export type RepoSlice = {
     projectPaths: string[]
     connectionId?: string
     scanId?: string
+    runtimeEnvironmentId?: string | null
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
   createProjectGroup: (name: string) => Promise<ProjectGroup | null>
@@ -2162,7 +2163,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   importNestedRepos: async (args) => {
     try {
-      const target = getActiveRuntimeTarget(get().settings)
+      const target = getActiveRuntimeTarget(
+        settingsForRuntimeOwner(get().settings, args.runtimeEnvironmentId)
+      )
       const result =
         target.kind === 'local'
           ? await window.api.projectGroups.importNested(args)

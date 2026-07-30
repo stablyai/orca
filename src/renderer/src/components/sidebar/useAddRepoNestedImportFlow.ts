@@ -21,6 +21,7 @@ export function useAddRepoNestedImportFlow({
   nestedConnectionId,
   nestedGroupName,
   nestedImportScanId,
+  nestedRuntimeEnvironmentId,
   activeRuntimeEnvironmentId,
   closeModal,
   fetchWorktrees,
@@ -36,9 +37,8 @@ export function useAddRepoNestedImportFlow({
   nestedConnectionId: string | null
   nestedGroupName: string
   nestedImportScanId: string | null
+  nestedRuntimeEnvironmentId?: string | null
   activeRuntimeEnvironmentId: string | null | undefined
-  /** Why: hosted (composer-nested) mode routes this to closing only the
-   *  nested dialog; store-modal mode routes it to the activeModal slot. */
   closeModal: () => void
   fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
   importNestedRepos: (args: {
@@ -47,6 +47,7 @@ export function useAddRepoNestedImportFlow({
     projectPaths: string[]
     connectionId?: string
     scanId?: string
+    runtimeEnvironmentId?: string | null
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
   getNestedRepoRuntimeKind: (connectionId: string | null) => NestedRepoTelemetryRuntimeKind
@@ -59,11 +60,9 @@ export function useAddRepoNestedImportFlow({
   trackNestedBackAction: () => void
 } {
   const nestedImportGenRef = useRef(0)
-
   const resetNestedImportFlow = useCallback((): void => {
     nestedImportGenRef.current++
   }, [])
-
   const trackNestedBackAction = useCallback((): void => {
     if (!nestedScan || !nestedAttemptId) {
       return
@@ -126,11 +125,10 @@ export function useAddRepoNestedImportFlow({
         const result = await importNestedRepos({
           parentPath: nestedScan.selectedPath,
           groupName: nestedGroupName,
-          // Why: Set insertion order can drift after deselect/reselect; import
-          // ordering should match the visible scan order users reviewed.
           projectPaths: selectedProjectPaths,
           ...(nestedConnectionId ? { connectionId: nestedConnectionId } : {}),
           ...(nestedImportScanId ? { scanId: nestedImportScanId } : {}),
+          runtimeEnvironmentId: nestedRuntimeEnvironmentId,
           mode
         })
         track(
@@ -169,8 +167,6 @@ export function useAddRepoNestedImportFlow({
           return
         }
         for (const projectId of importedRepoIds) {
-          // Why: imported repos are already persisted; non-authoritative SSH
-          // refreshes should not block revealing the first imported project.
           await fetchWorktrees(projectId, { requireAuthoritative: true })
         }
         if (gen !== nestedImportGenRef.current) {
@@ -232,6 +228,7 @@ export function useAddRepoNestedImportFlow({
       nestedConnectionId,
       nestedGroupName,
       nestedImportScanId,
+      nestedRuntimeEnvironmentId,
       nestedRuntimeKind,
       nestedScan,
       nestedSelectedPaths,
@@ -264,9 +261,6 @@ export function useAddRepoNestedImportFlow({
     try {
       const state = useAppStore.getState()
       if (nestedConnectionId) {
-        // Why: the non-git confirm dialog is a store-modal handoff that ends
-        // in folder-workspace activation; close this add flow (nested dialog
-        // or store modal) before handing over.
         closeModal()
         state.openModal('confirm-non-git-folder', {
           folderPath: path,

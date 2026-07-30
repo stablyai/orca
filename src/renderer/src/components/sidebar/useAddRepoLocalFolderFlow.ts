@@ -20,6 +20,7 @@ type ShowNestedRepoReview = (args: {
   runtimeKind: NestedRepoTelemetryRuntimeKind
   inProgress: boolean
   scanId: string | null
+  runtimeEnvironmentId?: string | null
 }) => void
 
 type LocalPathAddResult =
@@ -52,7 +53,11 @@ export function useAddRepoLocalFolderFlow({
   scanNestedRepos: (
     path: string,
     connectionId?: string,
-    controls?: { scanId?: string; onProgress?: (scan: NestedRepoScanResult) => void }
+    controls?: {
+      scanId?: string
+      onProgress?: (scan: NestedRepoScanResult) => void
+      runtimeEnvironmentId?: string | null
+    }
   ) => Promise<NestedRepoScanResult | null>
   setActiveNestedScanId: (scanId: string | null) => void
   setNestedScanInProgress: (inProgress: boolean) => void
@@ -118,7 +123,8 @@ export function useAddRepoLocalFolderFlow({
               attemptId,
               runtimeKind: 'local',
               inProgress: true,
-              scanId
+              scanId,
+              runtimeEnvironmentId: activeRuntimeEnvironmentId
             })
           }
         })
@@ -148,7 +154,8 @@ export function useAddRepoLocalFolderFlow({
             attemptId,
             runtimeKind: 'local',
             inProgress: false,
-            scanId
+            scanId,
+            runtimeEnvironmentId: activeRuntimeEnvironmentId
           })
           return { status: 'paused' }
         }

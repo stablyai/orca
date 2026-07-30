@@ -61,6 +61,7 @@ export default React.memo(function AddRepoDialog({
     nestedScanInProgress,
     nestedScanId,
     nestedImportScanId,
+    nestedRuntimeEnvironmentId,
     setNestedSelectedPaths,
     setNestedGroupName,
     setNestedScanInProgress,
@@ -121,7 +122,6 @@ export default React.memo(function AddRepoDialog({
     handleCreate
   } = useCreateRepo(
     fetchWorktrees,
-    // Why: useCreateRepo closes only after a folder (non-git) create.
     closeForFolderHandoff,
     (repoId) => completeGitRepoAdd(repoId, 'create_project'),
     {
@@ -218,9 +218,8 @@ export default React.memo(function AddRepoDialog({
     nestedConnectionId,
     nestedGroupName,
     nestedImportScanId,
+    nestedRuntimeEnvironmentId,
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
-    // Why: open-as-folder outcomes navigate; git imports finish via
-    // completeGitRepoAdd instead.
     closeModal: closeForFolderHandoff,
     fetchWorktrees,
     importNestedRepos,
