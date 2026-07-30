@@ -59,7 +59,12 @@ const ConsumeCodexResetCreditParams = z
 const AddClaudeFromConfigDirParams = z.object({
   configDir: z.string().min(1, 'Missing configDir'),
   runtime: z.enum(['host', 'wsl']).optional(),
-  wslDistro: z.string().nullish()
+  wslDistro: z.string().nullish(),
+  previousLegacyCredentialsSha256: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/, 'Invalid legacy credential digest')
+    .nullable()
+    .optional()
 })
 
 const AddCodexFromHomeParams = z.object({
@@ -150,7 +155,8 @@ export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
       }
       return runtime.addClaudeAccountFromConfigDir(params.configDir, {
         runtime: params.runtime,
-        wslDistro: params.wslDistro ?? null
+        wslDistro: params.wslDistro ?? null,
+        previousLegacyCredentialsSha256: params.previousLegacyCredentialsSha256
       })
     }
   }),

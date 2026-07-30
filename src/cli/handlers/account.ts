@@ -1,7 +1,8 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
@@ -11,9 +12,15 @@ import {
   readActiveClaudeKeychainCredentialsStrict,
   writeActiveClaudeKeychainCredentials
 } from '../../main/claude-accounts/keychain'
-import { resolveCliCommand } from '../../main/codex-cli/command'
+import { getVersionManagerBinPaths, resolveCliCommand } from '../../main/codex-cli/command'
 import { getSpawnArgsForWindows } from '../../main/win32-utils'
+import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '../../shared/types'
+import {
+  type InteractiveLoginSession,
+  withInteractiveLoginCleanup
+} from './interactive-login-interruption'
 
 // Why: add returns just that provider's state; list returns the full snapshot.
 type AccountsListSnapshot = {
@@ -48,65 +55,18 @@ function formatAccountsBlock(label: string, block: AccountsBlock): string {
   return `Managed ${label} accounts (${block.accounts.length}):\n${lines.join('\n')}`
 }
 
-// Why: `child` lets an interrupt stop the login; `registering` marks the window
-// where the runtime already owns the captured credentials.
-type LoginSession = { child: ChildProcess | null; registering: boolean }
-
-// Why: SIGHUP is the interrupt that matters most here — this flow exists for
-// headless/SSH hosts, where a dropped connection hangs up the login's terminal.
-const INTERRUPT_EXIT_CODES: Record<string, number> = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 }
-const INTERRUPT_SIGNALS = Object.keys(INTERRUPT_EXIT_CODES) as NodeJS.Signals[]
-
-/**
- * Runs `add` with `cleanup` guaranteed to run exactly once, including on Ctrl-C.
- * Node's default signal handling terminates without unwinding `finally`, which
- * would strand the temp dir's OAuth credentials on disk and, on macOS, leave the
- * swapped Keychain item in place — an interactive login is interrupted often.
- */
-async function withInterruptCleanup(
-  session: LoginSession,
-  cleanup: () => Promise<void>,
-  add: () => Promise<void>
-): Promise<void> {
-  // Why: memoize rather than latch a boolean — a second signal must await the
-  // in-flight cleanup, not skip it and `process.exit` out of a pending Keychain
-  // call (each up to 3s) that has not restored the user's credentials yet.
-  let cleanupPromise: Promise<void> | null = null
-  const cleanupOnce = (): Promise<void> => (cleanupPromise ??= cleanup())
-  const onSignal = (signal: NodeJS.Signals): void => {
-    session.child?.kill(signal)
-    if (session.registering) {
-      // Why: sign-in already succeeded and the runtime registers independently of
-      // this process, so an interrupt here cannot be reported as "not added".
-      console.warn(
-        '[account] Interrupted after sign-in completed; the account may still have been registered. Run `orca account list` to check.'
-      )
-    }
-    void cleanupOnce().finally(() => process.exit(INTERRUPT_EXIT_CODES[signal] ?? 1))
+function addAgentNodePaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const pathKey =
+    process.platform === 'win32' && env.Path !== undefined && env.PATH === undefined
+      ? 'Path'
+      : 'PATH'
+  const currentEntries = (env[pathKey] ?? '').split(delimiter).filter(Boolean)
+  const existing = new Set(currentEntries)
+  const missing = getVersionManagerBinPaths().filter((entry) => !existing.has(entry))
+  if (missing.length > 0) {
+    env[pathKey] = [...missing, ...currentEntries].join(delimiter)
   }
-  // Why: `on`, not `once` — with `once` a second Ctrl-C reverts to Node's
-  // terminate-immediately default and kills the process mid-cleanup.
-  for (const signal of INTERRUPT_SIGNALS) {
-    process.on(signal, onSignal)
-  }
-  try {
-    await add()
-  } finally {
-    try {
-      await cleanupOnce()
-    } catch (error) {
-      // Why: a cleanup failure (Windows EBUSY on the temp dir) must not replace the
-      // error that actually explains why the add failed.
-      console.warn('[account] Failed to clean up the temporary login directory:', error)
-    } finally {
-      // Why: stay armed until cleanup settles — detaching first leaves the
-      // multi-second Keychain calls below covered only by Node's default handling,
-      // which kills the process mid-cleanup.
-      for (const signal of INTERRUPT_SIGNALS) {
-        process.off(signal, onSignal)
-      }
-    }
-  }
+  return env
 }
 
 /**
@@ -119,12 +79,12 @@ async function runAgentLoginInTerminal(
   args: string[],
   extraEnv: Record<string, string>,
   json: boolean,
-  session: LoginSession
+  session: InteractiveLoginSession
 ): Promise<void> {
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const resolvedCommand = resolveCliCommand(command)
     const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedCommand, args)
-    const env = { ...stripElectronRunAsNode(process.env), ...extraEnv }
+    const env = addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
     const child = spawn(spawnCmd, spawnArgs, {
       // Why: JSON mode reserves stdout for the response envelope while keeping
       // the interactive login attached to the user's terminal via stderr.
@@ -158,42 +118,52 @@ async function runAgentLoginInTerminal(
   })
 }
 
-async function cleanupClaudeLoginKeychain(
+async function cleanupClaudeLoginArtifacts(
   configDir: string,
   legacyCredentials: string | null,
   restoreLegacyCredentials: boolean
 ): Promise<void> {
-  if (process.platform !== 'darwin') {
-    return
+  const errors: unknown[] = []
+  if (process.platform === 'darwin') {
+    try {
+      await deleteActiveClaudeKeychainCredentialsStrict(configDir)
+    } catch (error) {
+      errors.push(error)
+    }
+    if (restoreLegacyCredentials) {
+      try {
+        await (legacyCredentials
+          ? writeActiveClaudeKeychainCredentials(legacyCredentials)
+          : deleteActiveClaudeKeychainCredentialsStrict())
+      } catch (error) {
+        errors.push(error)
+      }
+    }
   }
   try {
-    await deleteActiveClaudeKeychainCredentialsStrict(configDir)
+    rmSync(configDir, { recursive: true, force: true })
   } catch (error) {
-    console.warn('[account] Failed to remove temporary Claude Keychain credentials:', error)
+    errors.push(error)
   }
-  if (!restoreLegacyCredentials) {
-    return
-  }
-  try {
-    await (legacyCredentials
-      ? writeActiveClaudeKeychainCredentials(legacyCredentials)
-      : deleteActiveClaudeKeychainCredentialsStrict())
-  } catch (error) {
-    console.warn('[account] Failed to restore Claude Keychain credentials:', error)
+  if (errors.length > 0) {
+    throw new AggregateError(errors, 'Failed to clean up Claude login artifacts.')
   }
 }
 
 /** Logs into a Claude account in a temp config dir, then registers it with the local runtime. */
 async function addClaudeAccount({ client, json }: HandlerContext): Promise<void> {
   const configDir = mkdtempSync(join(tmpdir(), 'orca-account-add-claude-'))
-  const session: LoginSession = { child: null, registering: false }
+  const session: InteractiveLoginSession = {
+    child: null,
+    registering: false,
+    terminationPromise: null
+  }
   let legacyCredentials: string | null = null
   let restoreLegacyCredentials = false
-  await withInterruptCleanup(
+  const result = await withInteractiveLoginCleanup(
     session,
     async () => {
-      await cleanupClaudeLoginKeychain(configDir, legacyCredentials, restoreLegacyCredentials)
-      rmSync(configDir, { recursive: true, force: true })
+      await cleanupClaudeLoginArtifacts(configDir, legacyCredentials, restoreLegacyCredentials)
     },
     async () => {
       if (process.platform === 'darwin') {
@@ -210,20 +180,30 @@ async function addClaudeAccount({ client, json }: HandlerContext): Promise<void>
         session
       )
       session.registering = true
-      const result = await client.call<ClaudeRateLimitAccountsState>(
-        'accounts.addClaudeFromConfigDir',
-        { configDir }
-      )
-      printResult(result, json, (state) => formatAccountsBlock('Claude', state))
+      return client.call<ClaudeRateLimitAccountsState>('accounts.addClaudeFromConfigDir', {
+        configDir,
+        ...(process.platform === 'darwin'
+          ? {
+              previousLegacyCredentialsSha256: legacyCredentials
+                ? createHash('sha256').update(legacyCredentials).digest('hex')
+                : null
+            }
+          : {})
+      })
     }
   )
+  printResult(result, json, (state) => formatAccountsBlock('Claude', state))
 }
 
 /** Logs into a Codex account in a temp CODEX_HOME, then registers it with the local runtime. */
 async function addCodexAccount({ client, json }: HandlerContext): Promise<void> {
   const codexHome = mkdtempSync(join(tmpdir(), 'orca-account-add-codex-'))
-  const session: LoginSession = { child: null, registering: false }
-  await withInterruptCleanup(
+  const session: InteractiveLoginSession = {
+    child: null,
+    registering: false,
+    terminationPromise: null
+  }
+  const result = await withInteractiveLoginCleanup(
     session,
     async () => {
       rmSync(codexHome, { recursive: true, force: true })
@@ -239,12 +219,12 @@ async function addCodexAccount({ client, json }: HandlerContext): Promise<void> 
         session
       )
       session.registering = true
-      const result = await client.call<CodexRateLimitAccountsState>('accounts.addCodexFromHome', {
+      return client.call<CodexRateLimitAccountsState>('accounts.addCodexFromHome', {
         sourceHome: codexHome
       })
-      printResult(result, json, (state) => formatAccountsBlock('Codex', state))
     }
   )
+  printResult(result, json, (state) => formatAccountsBlock('Codex', state))
 }
 
 /**
@@ -262,6 +242,16 @@ function rejectRemoteSelectionFlags(ctx: HandlerContext, command: string): void 
         `\`--${flag}\` does not retarget \`${command}\`. Run it on the host whose accounts you want to manage.`
       )
     }
+  }
+}
+
+async function assertAccountImportSupported({ client }: HandlerContext): Promise<void> {
+  const status = await client.call<RuntimeStatus>('status.get')
+  if (!status.result.capabilities?.includes(ACCOUNT_IMPORT_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'The running Orca runtime is too old to add accounts from the CLI. Update or restart Orca and try again.'
+    )
   }
 }
 
@@ -285,8 +275,8 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
       )
     }
     rejectRemoteSelectionFlags(ctx, 'orca account add')
-    // Why: the login is a full interactive OAuth round trip. Fail before burning it
-    // if the runtime that has to register the account is not reachable.
+    // Why: fail on runtime version skew before burning a full OAuth round trip.
+    await assertAccountImportSupported(ctx)
     await ctx.client.call('accounts.list', { refreshUsage: false })
     await (agent === 'claude' ? addClaudeAccount(ctx) : addCodexAccount(ctx))
   },

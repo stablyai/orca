@@ -12008,9 +12008,13 @@ export class OrcaRuntimeService {
   // the desktop GUI's interactive add flow is unreachable over a remote runtime.
   addClaudeAccountFromConfigDir(
     configDir: string,
-    target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }
+    options?: {
+      runtime?: 'host' | 'wsl'
+      wslDistro?: string | null
+      previousLegacyCredentialsSha256?: string | null
+    }
   ): Promise<ClaudeRateLimitAccountsState> {
-    return this.requireAccountServices().claudeAccounts.addAccountFromConfigDir(configDir, target)
+    return this.requireAccountServices().claudeAccounts.addAccountFromConfigDir(configDir, options)
   }
 
   removeCodexAccount(accountId: string): Promise<CodexRateLimitAccountsState> {

@@ -1,10 +1,13 @@
 import { EventEmitter } from 'node:events'
+import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
+import { delimiter } from 'node:path'
 import type * as NodeFs from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   deleteKeychainMock,
+  getVersionManagerBinPathsMock,
   readKeychainMock,
   resolveCliCommandMock,
   rmSyncMock,
@@ -12,6 +15,7 @@ const {
   writeKeychainMock
 } = vi.hoisted(() => ({
   deleteKeychainMock: vi.fn(),
+  getVersionManagerBinPathsMock: vi.fn(),
   readKeychainMock: vi.fn(),
   resolveCliCommandMock: vi.fn(),
   rmSyncMock: vi.fn(),
@@ -19,9 +23,8 @@ const {
   writeKeychainMock: vi.fn()
 }))
 
-// Why: rmSync is the only step of cleanup that can actually reject (Windows
-// EBUSY on the temp dir); the Keychain steps swallow their own errors. Keep the
-// real implementation by default so the temp-dir assertions stay honest.
+// Why: keep real temp-dir cleanup by default so leak assertions stay honest,
+// while allowing deterministic Windows EBUSY coverage.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   rmSyncMock.mockImplementation(actual.rmSync)
@@ -38,12 +41,16 @@ vi.mock('../../main/claude-accounts/keychain', () => ({
   readActiveClaudeKeychainCredentialsStrict: readKeychainMock,
   writeActiveClaudeKeychainCredentials: writeKeychainMock
 }))
-vi.mock('../../main/codex-cli/command', () => ({ resolveCliCommand: resolveCliCommandMock }))
+vi.mock('../../main/codex-cli/command', () => ({
+  getVersionManagerBinPaths: getVersionManagerBinPathsMock,
+  resolveCliCommand: resolveCliCommandMock
+}))
 
 import { ACCOUNT_HANDLERS } from './account'
 import type { HandlerContext } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'
 import { getCmdExePath } from '../../main/win32-utils'
+import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 
 function successfulChild(): EventEmitter {
   const child = new EventEmitter()
@@ -76,6 +83,7 @@ function accountState(email: string) {
 describe('account CLI handlers', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
   const originalElectronRunAsNode = process.env.ELECTRON_RUN_AS_NODE
+  const originalPathAlias = process.env.Path
   const callMock = vi.fn()
   const client = { call: callMock } as unknown as RuntimeClient
   let logSpy: ReturnType<typeof vi.spyOn>
@@ -94,6 +102,7 @@ describe('account CLI handlers', () => {
     Object.defineProperty(process, 'platform', originalPlatform)
     spawnMock.mockReset().mockImplementation(() => successfulChild())
     resolveCliCommandMock.mockReset().mockImplementation((command: string) => command)
+    getVersionManagerBinPathsMock.mockReset().mockReturnValue([])
     readKeychainMock.mockReset().mockResolvedValue(null)
     deleteKeychainMock.mockReset().mockResolvedValue(undefined)
     writeKeychainMock.mockReset().mockResolvedValue(undefined)
@@ -101,9 +110,10 @@ describe('account CLI handlers', () => {
       Promise.resolve({
         id: 'test',
         ok: true,
-        result: accountState(
-          method.includes('Claude') ? 'claude@example.com' : 'codex@example.com'
-        ),
+        result:
+          method === 'status.get'
+            ? { capabilities: [ACCOUNT_IMPORT_RUNTIME_CAPABILITY] }
+            : accountState(method.includes('Claude') ? 'claude@example.com' : 'codex@example.com'),
         _meta: { runtimeId: 'test-runtime' }
       })
     )
@@ -118,6 +128,11 @@ describe('account CLI handlers', () => {
       delete process.env.ELECTRON_RUN_AS_NODE
     } else {
       process.env.ELECTRON_RUN_AS_NODE = originalElectronRunAsNode
+    }
+    if (originalPathAlias === undefined) {
+      delete process.env.Path
+    } else {
+      process.env.Path = originalPathAlias
     }
   })
 
@@ -153,6 +168,29 @@ describe('account CLI handlers', () => {
     )
   })
 
+  it('adds version-manager Node paths to the login child environment', async () => {
+    const nodeBin = '/home/test/.nvm/versions/node/v22.0.0/bin'
+    getVersionManagerBinPathsMock.mockReturnValue([nodeBin])
+
+    await ACCOUNT_HANDLERS['account add'](context('codex'))
+
+    const path = spawnMock.mock.calls[0]?.[2].env.PATH as string
+    expect(path.split(delimiter)[0]).toBe(nodeBin)
+  })
+
+  it('updates the effective Windows PATH when both casing aliases exist', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    process.env.Path = 'C:\\stale'
+    const nodeBin = 'C:\\Users\\test\\.volta\\bin'
+    getVersionManagerBinPathsMock.mockReturnValue([nodeBin])
+
+    await ACCOUNT_HANDLERS['account add'](context('codex'))
+
+    const env = spawnMock.mock.calls[0]?.[2].env as NodeJS.ProcessEnv
+    expect(env.PATH).toBe(`${nodeBin}${delimiter}${process.env.PATH}`)
+    expect(env.Path).toBe('C:\\stale')
+  })
+
   it('removes scoped Claude credentials and restores the legacy Keychain item', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     readKeychainMock.mockResolvedValue('legacy-credentials')
@@ -162,12 +200,17 @@ describe('account CLI handlers', () => {
     const configDir = spawnMock.mock.calls[0]?.[2].env.CLAUDE_CONFIG_DIR
     expect(deleteKeychainMock).toHaveBeenCalledWith(configDir)
     expect(writeKeychainMock).toHaveBeenCalledWith('legacy-credentials')
+    expect(callMock).toHaveBeenCalledWith('accounts.addClaudeFromConfigDir', {
+      configDir,
+      previousLegacyCredentialsSha256: createHash('sha256')
+        .update('legacy-credentials')
+        .digest('hex')
+    })
     expect(existsSync(configDir)).toBe(false)
   })
 
-  it('removes the temp login dir and stops the child when interrupted mid-login', async () => {
-    // Why: Node terminates on SIGINT without unwinding `finally`, so without the
-    // signal guard an interrupted login strands OAuth credentials in the temp dir.
+  it('waits for physical child close before removing interrupted login credentials', async () => {
+    // Why: deleting first lets the still-live login recreate credentials afterward.
     const kill = vi.fn()
     const child = Object.assign(new EventEmitter(), { kill })
     let codexHome = ''
@@ -184,12 +227,16 @@ describe('account CLI handlers', () => {
 
     newSignalListener('SIGINT', listenersBefore)('SIGINT')
 
-    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(130))
-    expect(existsSync(codexHome)).toBe(false)
-    expect(kill).toHaveBeenCalledWith('SIGINT')
-    expect(callMock).not.toHaveBeenCalledWith('accounts.addCodexFromHome', expect.anything())
+    await vi.waitFor(() => expect(kill).toHaveBeenCalledWith('SIGINT'))
+    expect(exitSpy).not.toHaveBeenCalled()
+    expect(existsSync(codexHome)).toBe(true)
 
     child.emit('exit', 1)
+    child.emit('close', 1)
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(130))
+    expect(existsSync(codexHome)).toBe(false)
+    expect(callMock).not.toHaveBeenCalledWith('accounts.addCodexFromHome', expect.anything())
+
     await pending
     exitSpy.mockRestore()
   })
@@ -211,10 +258,15 @@ describe('account CLI handlers', () => {
 
     newSignalListener('SIGHUP', listenersBefore)('SIGHUP')
 
+    await vi.waitFor(() => expect(child.kill).toHaveBeenCalledWith('SIGHUP'))
+    expect(exitSpy).not.toHaveBeenCalled()
+    expect(existsSync(codexHome)).toBe(true)
+
+    child.emit('exit', 1)
+    child.emit('close', 1)
     await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(129))
     expect(existsSync(codexHome)).toBe(false)
 
-    child.emit('exit', 1)
     await pending
     exitSpy.mockRestore()
   })
@@ -252,9 +304,14 @@ describe('account CLI handlers', () => {
     expect(process.rawListeners('SIGINT')).toContain(onSigint)
 
     onSigint('SIGINT')
+    await vi.waitFor(() => expect(child.kill).toHaveBeenCalledWith('SIGINT'))
+    child.emit('exit', 1)
+    child.emit('close', 1)
     await vi.waitFor(() => expect(deleteKeychainMock).toHaveBeenCalledWith(configDir))
     onSigterm('SIGTERM')
-    await new Promise((resolvePromise) => setImmediate(resolvePromise))
+    await new Promise<void>((resolvePromise) => {
+      setImmediate(resolvePromise)
+    })
 
     expect(exitSpy).not.toHaveBeenCalled()
     expect(writeKeychainMock).not.toHaveBeenCalled()
@@ -264,8 +321,8 @@ describe('account CLI handlers', () => {
     await vi.waitFor(() => expect(exitSpy).toHaveBeenCalled())
     expect(writeKeychainMock).toHaveBeenCalledWith('legacy-credentials')
     expect(existsSync(configDir)).toBe(false)
+    expect(child.kill).toHaveBeenCalledOnce()
 
-    child.emit('exit', 1)
     await pending
     exitSpy.mockRestore()
   })
@@ -280,14 +337,21 @@ describe('account CLI handlers', () => {
     })
     // Why: only the registration RPC hangs — the preflight must still resolve.
     callMock.mockImplementation((method: string) =>
-      method === 'accounts.list'
+      method === 'status.get'
         ? Promise.resolve({
             id: 'test',
             ok: true,
-            result: { claude: accountState('c@e.com'), codex: accountState('x@e.com') },
+            result: { capabilities: [ACCOUNT_IMPORT_RUNTIME_CAPABILITY] },
             _meta: { runtimeId: 'test-runtime' }
           })
-        : new Promise(() => {})
+        : method === 'accounts.list'
+          ? Promise.resolve({
+              id: 'test',
+              ok: true,
+              result: { claude: accountState('c@e.com'), codex: accountState('x@e.com') },
+              _meta: { runtimeId: 'test-runtime' }
+            })
+          : new Promise(() => {})
     )
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
@@ -339,7 +403,23 @@ describe('account CLI handlers', () => {
     await expect(ACCOUNT_HANDLERS['account add'](context('codex'))).rejects.toThrow(
       'runtime not running'
     )
-    expect(callMock).toHaveBeenCalledWith('accounts.list', { refreshUsage: false })
+    expect(callMock).toHaveBeenCalledWith('status.get')
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('fails before login when the running runtime predates account imports', async () => {
+    callMock.mockResolvedValue({
+      id: 'test',
+      ok: true,
+      result: { capabilities: [] },
+      _meta: { runtimeId: 'test-runtime' }
+    })
+
+    await expect(ACCOUNT_HANDLERS['account add'](context('codex'))).rejects.toThrow(
+      'runtime is too old'
+    )
+    expect(callMock).toHaveBeenCalledOnce()
+    expect(callMock).toHaveBeenCalledWith('status.get')
     expect(spawnMock).not.toHaveBeenCalled()
   })
 
@@ -384,14 +464,21 @@ describe('account CLI handlers', () => {
       throw new Error('EBUSY: resource busy or locked')
     })
     callMock.mockImplementation((method: string) =>
-      method === 'accounts.list'
+      method === 'status.get'
         ? Promise.resolve({
             id: 'test',
             ok: true,
-            result: { claude: accountState('c@e.com'), codex: accountState('x@e.com') },
+            result: { capabilities: [ACCOUNT_IMPORT_RUNTIME_CAPABILITY] },
             _meta: { runtimeId: 'test-runtime' }
           })
-        : Promise.reject(new Error('registration rejected by runtime'))
+        : method === 'accounts.list'
+          ? Promise.resolve({
+              id: 'test',
+              ok: true,
+              result: { claude: accountState('c@e.com'), codex: accountState('x@e.com') },
+              _meta: { runtimeId: 'test-runtime' }
+            })
+          : Promise.reject(new Error('registration rejected by runtime'))
     )
 
     await expect(ACCOUNT_HANDLERS['account add'](context('codex'))).rejects.toThrow(
@@ -402,6 +489,26 @@ describe('account CLI handlers', () => {
       expect.any(Error)
     )
     warnSpy.mockRestore()
+  })
+
+  it('fails a successful add when the temporary credentials cannot be removed', async () => {
+    rmSyncMock.mockImplementationOnce(() => {
+      throw new Error('EBUSY: resource busy or locked')
+    })
+
+    await expect(ACCOUNT_HANDLERS['account add'](context('codex', true))).rejects.toThrow('EBUSY')
+    expect(logSpy).not.toHaveBeenCalled()
+  })
+
+  it('fails a successful Claude add when Keychain cleanup fails', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    readKeychainMock.mockResolvedValue('legacy-credentials')
+    deleteKeychainMock.mockRejectedValueOnce(new Error('Keychain denied cleanup'))
+
+    await expect(ACCOUNT_HANDLERS['account add'](context('claude'))).rejects.toThrow(
+      'Failed to clean up Claude login artifacts'
+    )
+    expect(writeKeychainMock).toHaveBeenCalledWith('legacy-credentials')
   })
 
   it('rejects `--agent` with no value instead of defaulting to Claude', async () => {

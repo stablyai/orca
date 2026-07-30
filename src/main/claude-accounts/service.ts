@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: Claude managed accounts need one audited owner
 for login, credential capture, Keychain storage, selection, and rate-limit refresh. */
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -76,6 +76,10 @@ export type ClaudeAccountAddTarget = {
   wslDistro?: string | null
 }
 
+export type ClaudeAccountImportOptions = ClaudeAccountAddTarget & {
+  previousLegacyCredentialsSha256?: string | null
+}
+
 type ManagedClaudeAuthLocation = {
   managedAuthPath: string
   managedAuthRuntime: 'host' | 'wsl'
@@ -116,9 +120,9 @@ export class ClaudeAccountService {
    */
   async addAccountFromConfigDir(
     configDir: string,
-    target?: ClaudeAccountAddTarget
+    options?: ClaudeAccountImportOptions
   ): Promise<ClaudeRateLimitAccountsState> {
-    return this.serializeMutation(() => this.doAddAccountFromConfigDir(configDir, target))
+    return this.serializeMutation(() => this.doAddAccountFromConfigDir(configDir, options))
   }
 
   async reauthenticateAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
@@ -172,13 +176,16 @@ export class ClaudeAccountService {
 
   private async doAddAccountFromConfigDir(
     configDir: string,
-    target?: ClaudeAccountAddTarget
+    options?: ClaudeAccountImportOptions
   ): Promise<ClaudeRateLimitAccountsState> {
     const accountId = randomUUID()
-    const managedAuth = this.createManagedAuthDir(accountId, target)
+    const managedAuth = this.createManagedAuthDir(accountId, options)
     const previousSettings = this.store.getSettings()
     try {
-      const captured = await this.captureFromExistingConfigDir(configDir)
+      const captured = await this.captureFromExistingConfigDir(
+        configDir,
+        options?.previousLegacyCredentialsSha256
+      )
       return await this.persistCapturedClaudeAccount(
         accountId,
         managedAuth,
@@ -195,7 +202,10 @@ export class ClaudeAccountService {
   // authenticated (e.g. a temp dir the CLI ran `claude login` into), mirroring
   // runClaudeLoginAndCapture's capture step but without spawning the interactive
   // login. On Linux/Windows the credentials live in a plaintext `.credentials.json`.
-  private async captureFromExistingConfigDir(configDir: string): Promise<CapturedClaudeAuth> {
+  private async captureFromExistingConfigDir(
+    configDir: string,
+    previousLegacyCredentialsSha256?: string | null
+  ): Promise<CapturedClaudeAuth> {
     const trimmed = configDir.trim()
     if (!trimmed) {
       throw new Error('A Claude config directory path is required.')
@@ -225,9 +235,14 @@ export class ClaudeAccountService {
       console.warn('[claude-accounts] Could not read `claude auth status`:', error)
     }
     // Why: this post-login RPC did not observe the legacy Keychain value before
-    // login, so only a config-scoped credential can be attributed to this flow.
+    // login unless the CLI supplied its one-way pre-login credential baseline.
     const currentLegacyKeychain = await readActiveClaudeKeychainCredentialsStrict()
-    return this.captureAuthFromConfigDir(resolvedDir, status, currentLegacyKeychain)
+    return this.captureAuthFromConfigDir(
+      resolvedDir,
+      status,
+      currentLegacyKeychain,
+      previousLegacyCredentialsSha256
+    )
   }
 
   private async persistCapturedClaudeAccount(
@@ -697,9 +712,14 @@ export class ClaudeAccountService {
   private async captureAuthFromConfigDir(
     configDir: string,
     statusOutput: string,
-    previousLegacyKeychain: string | null
+    previousLegacyKeychain: string | null,
+    previousLegacyCredentialsSha256?: string | null
   ): Promise<CapturedClaudeAuth> {
-    const credentialsJson = await this.readCapturedCredentials(configDir, previousLegacyKeychain)
+    const credentialsJson = await this.readCapturedCredentials(
+      configDir,
+      previousLegacyKeychain,
+      previousLegacyCredentialsSha256
+    )
     if (!credentialsJson) {
       throw new Error('Claude login completed, but no OAuth credentials were captured.')
     }
@@ -710,7 +730,8 @@ export class ClaudeAccountService {
 
   private async readCapturedCredentials(
     configDir: string,
-    previousLegacyKeychain: string | null
+    previousLegacyKeychain: string | null,
+    previousLegacyCredentialsSha256?: string | null
   ): Promise<string | null> {
     if (process.platform === 'darwin') {
       const scopedCredentialsJson = await readActiveClaudeKeychainCredentialsStrict(configDir)
@@ -718,7 +739,13 @@ export class ClaudeAccountService {
         return scopedCredentialsJson
       }
       const legacyCredentialsJson = await readActiveClaudeKeychainCredentialsStrict()
-      if (legacyCredentialsJson && legacyCredentialsJson !== previousLegacyKeychain) {
+      const legacyChanged =
+        previousLegacyCredentialsSha256 === undefined
+          ? legacyCredentialsJson !== previousLegacyKeychain
+          : legacyCredentialsJson !== null &&
+            createHash('sha256').update(legacyCredentialsJson).digest('hex') !==
+              previousLegacyCredentialsSha256
+      if (legacyCredentialsJson && legacyChanged) {
         return legacyCredentialsJson
       }
     }

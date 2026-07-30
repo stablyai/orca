@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- test suite covers Claude capture and rollback edge cases */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -1944,6 +1945,38 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
       'no OAuth credentials were captured'
     )
     expect(deps.getSettings().claudeManagedAccounts).toHaveLength(0)
+  })
+
+  it('captures a legacy Keychain credential that changed after login began', async () => {
+    setPlatform('darwin')
+    sourceDir = mkdtempSync(join(tmpdir(), 'orca-claude-source-keychain-legacy-'))
+    const previousCredentials = '{"claudeAiOauth":{"accessToken":"previous"}}'
+    const newCredentials = '{"claudeAiOauth":{"accessToken":"new","email":"new@example.com"}}'
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockImplementation(async (configDir) =>
+      configDir ? null : newCredentials
+    )
+    const deps = makeDeps()
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      deps.store as never,
+      deps.rateLimits as never,
+      deps.runtimeAuth as never
+    )
+    ;(service as unknown as { runClaudeCommand: () => Promise<string> }).runClaudeCommand = vi.fn(
+      async () => '{"email":"new@example.com"}'
+    )
+
+    await service.addAccountFromConfigDir(sourceDir, {
+      previousLegacyCredentialsSha256: createHash('sha256')
+        .update(previousCredentials)
+        .digest('hex')
+    })
+
+    expect(writeManagedClaudeKeychainCredentials).toHaveBeenCalledWith(
+      expect.any(String),
+      newCredentials
+    )
+    expect(deps.getSettings().claudeManagedAccounts[0]?.email).toBe('new@example.com')
   })
 
   it('still registers when the daemon cannot spawn `claude auth status`', async () => {

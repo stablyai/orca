@@ -306,6 +306,20 @@ describe('orca root help', () => {
     logSpy.mockRestore()
   })
 
+  it('advertises host-local account management', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main([], '/tmp/repo')
+
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'account add               Add a managed Claude or Codex account on this Orca host'
+    )
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'account list              List managed Claude and Codex accounts on this Orca host'
+    )
+    logSpy.mockRestore()
+  })
+
   it('advertises computer-use capabilities discovery', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 

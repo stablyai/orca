@@ -17,15 +17,24 @@ describe('account RPC methods', () => {
   it.each([
     {
       methodName: 'accounts.addClaudeFromConfigDir',
-      params: { configDir: join(tmpdir(), 'claude-login') },
+      params: {
+        configDir: join(tmpdir(), 'claude-login'),
+        previousLegacyCredentialsSha256: 'a'.repeat(64)
+      },
       runtimeMethod: 'addClaudeAccountFromConfigDir',
-      expectedSource: join(tmpdir(), 'claude-login')
+      expectedSource: join(tmpdir(), 'claude-login'),
+      expectedOptions: {
+        runtime: undefined,
+        wslDistro: null,
+        previousLegacyCredentialsSha256: 'a'.repeat(64)
+      }
     },
     {
       methodName: 'accounts.addCodexFromHome',
       params: { sourceHome: join(tmpdir(), 'codex-login') },
       runtimeMethod: 'addCodexAccountFromHome',
-      expectedSource: join(tmpdir(), 'codex-login')
+      expectedSource: join(tmpdir(), 'codex-login'),
+      expectedOptions: { runtime: undefined, wslDistro: null }
     }
   ])('allows local-socket $methodName calls', async (testCase) => {
     const add = vi.fn().mockResolvedValue({ accounts: [] })
@@ -37,10 +46,7 @@ describe('account RPC methods', () => {
 
     await addMethod.handler(testCase.params, { runtime })
 
-    expect(add).toHaveBeenCalledWith(testCase.expectedSource, {
-      runtime: undefined,
-      wslDistro: null
-    })
+    expect(add).toHaveBeenCalledWith(testCase.expectedSource, testCase.expectedOptions)
   })
 
   it.each([
