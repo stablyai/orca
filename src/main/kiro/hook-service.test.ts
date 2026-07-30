@@ -180,6 +180,15 @@ describe('KiroHookService', () => {
     expect(() => service.remove()).not.toThrow()
   })
 
+  it('ignores a malformed backup with an array previous instead of crashing remove', () => {
+    const service = new KiroHookService()
+    service.install()
+    // Arrays are also `typeof === 'object'`; readBackup() must reject them.
+    writeFileSync(backupPath(), JSON.stringify({ previous: [] }))
+
+    expect(() => service.remove()).not.toThrow()
+  })
+
   it('reports error on an unparseable cli.json without writing to it', () => {
     mkdirSync(join(home, '.kiro', 'settings'), { recursive: true })
     writeFileSync(settingsPath(), '{not json')

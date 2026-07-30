@@ -190,13 +190,9 @@ export class KiroHookService {
         detail: 'Could not read Kiro CLI settings (cli.json)'
       }
     }
-    // Why: snapshot the user's pre-Orca values once, BEFORE any early return.
-    // Even when the user already has every managed value set, we must record a
-    // backup - otherwise a later remove() finds none and blind-deletes keys the
-    // user configured themselves. Snapshot every managed key (not just the ones
-    // changing) so remove() can tell "user already had this value" apart from
-    // "Orca introduced this key". Re-installs never overwrite an existing
-    // backup, keeping the true pre-Orca state.
+    // Snapshot the user's pre-Orca values once, BEFORE any early return, so
+    // remove() can always restore them instead of blind-deleting keys. A
+    // re-install never overwrites an existing backup.
     if (!readBackup()) {
       const previous: Record<string, unknown> = {}
       for (const key of MANAGED_KEYS) {
