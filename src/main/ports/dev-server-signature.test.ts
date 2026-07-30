@@ -36,7 +36,6 @@ describe('identifyDevServer', () => {
     ['django', 'python3 manage.py runserver 0.0.0.0:8000', 'Django'],
     ['uvicorn', '/usr/bin/python3 /usr/local/bin/uvicorn main:app --reload', 'Uvicorn'],
     ['flask', '/usr/bin/python3 -m flask run --debug', 'Flask'],
-    ['rails via puma', 'puma 6.4.2 (tcp://0.0.0.0:3000) [app]', 'Rails'],
     ['rails server', '/usr/bin/ruby bin/rails server -p 3000', 'Rails'],
     ['laravel', 'php artisan serve --port=8000', 'Laravel'],
     ['phoenix', '/usr/bin/elixir -S mix phx.server', 'Phoenix'],
@@ -62,6 +61,17 @@ describe('identifyDevServer', () => {
     expect(identifyDevServer({ commandLine })?.label).toBe(label)
   })
 
+  it('reports the server, not a framework, when only puma is visible', () => {
+    // Sinatra, Hanami, Roda and bare `bundle exec puma` are indistinguishable
+    // here, so naming this "Rails" would be wrong for every one of them.
+    expect(identifyDevServer({ commandLine: 'puma 6.4.2 (tcp://0.0.0.0:3000) [app]' })?.label).toBe(
+      'Puma'
+    )
+    expect(
+      identifyDevServer({ commandLine: '/usr/bin/ruby bin/rails server -p 3000' })?.label
+    ).toBe('Rails')
+  })
+
   it('identifies next.js from the rewritten process title alone', () => {
     // Next renames its process once booted, so argv0 no longer mentions `next`.
     expect(identifyDevServer({ processName: 'next-server (v15.0.0)' })?.label).toBe('Next.js')
@@ -77,6 +87,12 @@ describe('identifyDevServer', () => {
 
   it('prefers the framework over the package manager that launched it', () => {
     expect(identifyDevServer({ commandLine: 'pnpm exec vite dev' })?.label).toBe('Vite')
+  })
+
+  it('does not pair a process name with a script token from elsewhere in argv', () => {
+    // `npm` + `dev` are both present, but only across the two fields. Joining
+    // them would invent an `npm dev` script this process is not running.
+    expect(identifyDevServer({ processName: 'npm', commandLine: 'node dev.js' })).toBeUndefined()
   })
 
   it('returns undefined for a plain node process so callers keep the process name', () => {

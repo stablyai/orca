@@ -42,7 +42,17 @@ const DEV_SERVER_SIGNATURES: readonly DevServerSignature[] = [
   { id: 'electron-vite', label: 'electron-vite', clauses: [['electron-vite']] },
   { id: 'vite', label: 'Vite', clauses: [['vite']] },
 
-  { id: 'rails', label: 'Rails', clauses: [['puma'], ['rails', 'server'], ['rails', 's']] },
+  {
+    id: 'rails',
+    label: 'Rails',
+    clauses: [
+      ['rails', 'server'],
+      ['rails', 's']
+    ]
+  },
+  // Reported as Puma, not Rails: Sinatra, Hanami, Roda and bare `bundle exec
+  // puma` all boot the same server, and Rails renames its process to `puma …`.
+  { id: 'puma', label: 'Puma', clauses: [['puma']] },
   { id: 'django', label: 'Django', clauses: [['runserver']] },
   { id: 'uvicorn', label: 'Uvicorn', clauses: [['uvicorn']] },
   { id: 'gunicorn', label: 'Gunicorn', clauses: [['gunicorn']] },
@@ -73,7 +83,12 @@ export type DevServerSource = {
  * nothing matches, so callers keep showing the raw process name.
  */
 export function identifyDevServer(source: DevServerSource): DevServerIdentity | undefined {
-  const tokens = tokenizeProcess(source)
+  // Signatures read both fields, because a rewritten title such as
+  // `next-server (v15.0.0)` is sometimes the only evidence left. The script
+  // fallback reads argv alone: a process merely *named* `npm` next to an
+  // unrelated `dev.js` would otherwise be reported as `npm dev`.
+  const argumentTokens = tokenize(source.commandLine)
+  const tokens = new Set([...argumentTokens, ...tokenize(source.processName)])
   if (tokens.size === 0) {
     return undefined
   }
@@ -84,7 +99,7 @@ export function identifyDevServer(source: DevServerSource): DevServerIdentity | 
     }
   }
 
-  return identifyPackageScript(tokens)
+  return identifyPackageScript(argumentTokens)
 }
 
 /**
@@ -114,17 +129,14 @@ function identifyPackageScript(tokens: Set<string>): DevServerIdentity | undefin
  * removed. Taking the basename is what keeps a project directory named
  * `vite-playground` from being mistaken for Vite itself.
  */
-function tokenizeProcess(source: DevServerSource): Set<string> {
+function tokenize(field: string | undefined): Set<string> {
   const tokens = new Set<string>()
-  // The process name is split the same way as the command line: a rewritten
-  // process title such as `next-server (v15.0.0)` carries its own whitespace,
-  // and the identifying token is only the first field.
-  for (const field of [source.commandLine, source.processName]) {
-    for (const argument of splitArguments(field ?? '')) {
-      const token = toToken(argument)
-      if (token) {
-        tokens.add(token)
-      }
+  // A process name is split like a command line: a rewritten title such as
+  // `next-server (v15.0.0)` carries its own whitespace.
+  for (const argument of splitArguments(field ?? '')) {
+    const token = toToken(argument)
+    if (token) {
+      tokens.add(token)
     }
   }
   return tokens

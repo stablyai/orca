@@ -1,16 +1,8 @@
 import type { WorkspacePort } from '../../../shared/workspace-ports'
 
-/**
- * What a port row shows for the process behind the listener.
- *
- * A recognized dev server takes the primary slot, because "Vite" answers the
- * question a row of `node` never could. The raw process name is not discarded:
- * it moves to `detail` so it stays reachable for debugging.
- */
+/** A recognized dev server takes `label` and demotes the raw process name to `detail`. */
 export type WorkspacePortProcessLabel = {
-  /** Primary text: the dev server when recognized, otherwise the process. */
   label: string
-  /** Raw process name, set only when a dev server label displaced it. */
   detail?: string
 }
 
