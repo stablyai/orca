@@ -101,6 +101,27 @@ function restorePlaceholders(text, tokens) {
   return result
 }
 
+const TRANSLATION_REQUEST_TIMEOUT_MS = 10_000
+
+export function parseTranslationPayload(payload) {
+  if (!Array.isArray(payload)) {
+    throw new Error('Invalid translation response: expected a top-level array')
+  }
+  if (!Array.isArray(payload[0]) || payload[0].length === 0) {
+    throw new Error(
+      'Invalid translation response: expected a non-empty segment array at payload[0]'
+    )
+  }
+  for (const [index, segment] of payload[0].entries()) {
+    if (!Array.isArray(segment) || typeof segment[0] !== 'string') {
+      throw new Error(
+        `Invalid translation response: segment ${index} must have a string first item`
+      )
+    }
+  }
+  return payload[0].map((part) => part[0]).join('')
+}
+
 async function translateText(text, targetLanguage) {
   const url = new URL('https://translate.googleapis.com/translate_a/single')
   url.searchParams.set('client', 'gtx')
@@ -111,16 +132,20 @@ async function translateText(text, targetLanguage) {
 
   let lastError
   for (let attempt = 0; attempt < 5; attempt += 1) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), TRANSLATION_REQUEST_TIMEOUT_MS)
     try {
-      const response = await fetch(url)
+      const response = await fetch(url, { signal: controller.signal })
       if (!response.ok) {
         throw new Error(`Translation request failed with status ${response.status}`)
       }
       const payload = await response.json()
-      return payload[0].map((part) => part[0]).join('')
+      return parseTranslationPayload(payload)
     } catch (error) {
       lastError = error
       await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)))
+    } finally {
+      clearTimeout(timeout)
     }
   }
   throw lastError
