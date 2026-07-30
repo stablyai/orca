@@ -1685,8 +1685,31 @@ export class OrchestrationDb {
 
   isLegacyCoordinatorHandle(runId: string, terminalHandle: string): boolean {
     const principal = this.getLegacyCoordinatorPrincipal(runId)
-    if (principal) {
+    if (principal?.status === 'committed') {
       return principal.terminal_handle === terminalHandle
+    }
+    // After takeover the revoked principal and the current binding are both valid targets.
+    if (principal?.terminal_handle === terminalHandle) {
+      return true
+    }
+    const run = this.getRunRaw(runId)
+    if (run?.coordinator_handle === terminalHandle && run.coordinator_pane_key) {
+      return true
+    }
+    return this.getUniqueLegacyCoordinatorHandle(runId) === terminalHandle
+  }
+
+  isKnownLegacyCoordinatorIdentity(
+    runId: string,
+    terminalHandle: string,
+    paneKey?: string
+  ): boolean {
+    const principal = this.getLegacyCoordinatorPrincipal(runId)
+    if (principal) {
+      return (
+        principal.terminal_handle === terminalHandle ||
+        (paneKey ? isEquivalentPaneKey(principal.pane_key, paneKey) : false)
+      )
     }
     return this.getUniqueLegacyCoordinatorHandle(runId) === terminalHandle
   }
