@@ -16,6 +16,7 @@ type RawSimulatorLogEntry = {
   eventMessage?: unknown
 }
 
+/** Builds the simctl arguments for a bounded Unified Log query. */
 export function simctlLogShowArgs(
   udid: string,
   options?: { window?: string; filters?: readonly string[] }
@@ -38,6 +39,7 @@ export function simctlLogShowArgs(
   return args
 }
 
+/** Converts user filters into a safely escaped Unified Log predicate. */
 export function buildSimulatorLogPredicate(filters?: readonly string[]): string | undefined {
   const values = filters?.map((filter) => filter.trim()).filter(Boolean)
   if (!values || values.length === 0) {
@@ -54,6 +56,7 @@ export function buildSimulatorLogPredicate(filters?: readonly string[]): string 
     .join(' OR ')
 }
 
+/** Normalizes one simctl NDJSON record for the emulator logcat response. */
 export function parseSimulatorLogLine(line: string): SimulatorLogEntry | undefined {
   const trimmed = line.trim().replace(/,\s*$/, '')
   if (!trimmed || trimmed === '[' || trimmed === ']') {
