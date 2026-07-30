@@ -120,7 +120,11 @@ export function Island({
     >
       <div className="island-stack">
         {expanded && rows.length > 0 ? (
-          <div className="island-expanded">
+          <div
+            className="island-expanded"
+            onClick={(event) => event.stopPropagation()}
+            role="presentation"
+          >
             <div className="island-head">
               <span className="island-head-title">
                 {total} session{total === 1 ? '' : 's'}
@@ -171,7 +175,11 @@ export function Island({
           </div>
         )}
         {expanded && pending ? (
-          <div style={{ padding: '0 4px 4px' }}>
+          <div
+            style={{ padding: '0 4px 4px' }}
+            onClick={(event) => event.stopPropagation()}
+            role="presentation"
+          >
             <PendingQuestionCard
               pending={pending}
               onAnswer={onAnswer}
