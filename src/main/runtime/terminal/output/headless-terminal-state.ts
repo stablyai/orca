@@ -48,6 +48,8 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
       wslDistro: this.ptysById.get(ptyId)?.connectionId
         ? undefined
         : (this.wslDistroByPtyId.get(ptyId) ?? this.ptysById.get(ptyId)?.wslDistro ?? undefined),
+      // Why: mirror renderer East Asian Ambiguous width so SSH/headless buffers do not tear (#9958).
+      eastAsianAmbiguousWidth: this.store?.getSettings?.()?.terminalEastAsianAmbiguousWidth,
       windowsPty: windowsPtyForOwnerBackend(this.ownerBackendForHeadlessPty(ptyId), release()),
       // Use provider input for query replies to retain shell-ready/SSH routing without interactive echo metering.
       onQueryReply: (reply) => {

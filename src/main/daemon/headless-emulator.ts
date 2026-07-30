@@ -2,7 +2,11 @@ import './xterm-env-polyfill'
 import { Terminal, type ITerminalOptions } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
-import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
+import {
+  activateOrcaTerminalUnicodeProvider,
+  setTerminalEastAsianAmbiguousWidthMode
+} from '../../shared/terminal-unicode-provider'
+import type { TerminalEastAsianAmbiguousWidth } from '../../shared/east-asian-ambiguous-width'
 import {
   readSavedCursorRegister,
   serializeWithAbsoluteCursor
@@ -43,6 +47,12 @@ export type HeadlessEmulatorOptions = Pick<ITerminalOptions, 'windowsPty'> & {
   pathFlavor?: 'posix' | 'win32'
   remotePosixFileUriAuthority?: boolean
   wslDistro?: string
+  /**
+   * East Asian Ambiguous cell width for this process's Orca unicode provider.
+   * Must match the renderer setting so headless mirrors do not tear under SSH (#9958).
+   * When omitted, the process-wide mode is left unchanged (default `narrow`).
+   */
+  eastAsianAmbiguousWidth?: TerminalEastAsianAmbiguousWidth
 }
 
 export type HeadlessEmulatorWriteOptions = {
@@ -99,6 +109,10 @@ export class HeadlessEmulator {
     trackModifyOtherKeys(this.terminal)
 
     // Match renderer cell widths to prevent shifted snapshot rows.
+    // Why: wide ambiguous mode must match Settings or SSH/headless mirrors tear (#9958).
+    if (opts.eastAsianAmbiguousWidth !== undefined) {
+      setTerminalEastAsianAmbiguousWidthMode(opts.eastAsianAmbiguousWidth)
+    }
     this.terminal.loadAddon(new Unicode11Addon())
     activateOrcaTerminalUnicodeProvider(this.terminal)
 
