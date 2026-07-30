@@ -89,7 +89,7 @@ await writeStdout('LONG_TABLE_SCROLL_RESTORE_${runId}\\n')
 
 export function emojiFixtureMarkdownTableScript(table: string, runId: string): string {
   const marker = `EMOJI_FIXTURE_TABLE_RESTORE_${runId}`
-  const widthMarker = `EMOJI_FIXTURE_TABLE_WIDTH_${runId}`
+  const widthMarker = `${marker} WIDTH`
   return `
 const table = ${JSON.stringify(table)}
 const minimumWidths = [2, 5, 4, 7, 7, 4, 3, 4]
@@ -215,12 +215,11 @@ for (const line of rendered) {
 }
 await writeStdout('\\x1b[?2026l')
 await writeStdout('${widthMarker}:' + generatedTableWidth + '\\r\\n')
-await writeStdout('${marker}\\r\\n')
 `
 }
 
 export function emojiFixtureTableWidthMarker(runId: string): string {
-  return `EMOJI_FIXTURE_TABLE_WIDTH_${runId}:`
+  return `EMOJI_FIXTURE_TABLE_RESTORE_${runId} WIDTH:`
 }
 
 export function narrowSignerMarkdownTableScript(runId: string): string {

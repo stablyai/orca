@@ -1,12 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { join } from 'node:path'
 
-const { workerState, appMock } = vi.hoisted(() => ({
-  workerState: {
-    calls: [] as unknown[][],
-    instance: null as object | null,
-    error: null as Error | null
-  },
+const { forkMock, appMock } = vi.hoisted(() => ({
+  forkMock: vi.fn(),
   appMock: {
     isPackaged: true,
     getAppPath: vi.fn(() => '/apps/orca/app.asar'),
@@ -14,16 +9,8 @@ const { workerState, appMock } = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('node:worker_threads', () => ({
-  Worker: class WorkerMock {
-    constructor(...args: unknown[]) {
-      workerState.calls.push(args)
-      if (workerState.error) {
-        throw workerState.error
-      }
-      return workerState.instance as WorkerMock
-    }
-  }
+vi.mock('node:child_process', () => ({
+  fork: forkMock
 }))
 
 vi.mock('electron', () => ({
@@ -42,33 +29,28 @@ function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   }
 }
 
-function fakeWorker() {
+function fakeChild() {
   return {
-    postMessage: vi.fn(),
-    unref: vi.fn(),
+    connected: true,
+    stderr: { on: vi.fn() },
     on: vi.fn(),
-    once: vi.fn()
+    send: vi.fn(),
+    disconnect: vi.fn(),
+    kill: vi.fn()
   }
 }
 
 describe('installMainThreadHangWatchdog', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    workerState.calls = []
-    workerState.instance = null
-    workerState.error = null
+    forkMock.mockReset()
     appMock.on.mockReset()
     appMock.isPackaged = true
     delete process.env.ORCA_HANG_WATCHDOG_FORCE
-    delete process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS
-    delete process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS
   })
 
   afterEach(() => {
     vi.useRealTimers()
-    delete process.env.ORCA_HANG_WATCHDOG_FORCE
-    delete process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS
-    delete process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS
   })
 
   it('is a no-op off macOS', () => {
@@ -78,7 +60,7 @@ describe('installMainThreadHangWatchdog', () => {
     expect(
       withPlatform('linux', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
     ).toBeNull()
-    expect(workerState.calls).toHaveLength(0)
+    expect(forkMock).not.toHaveBeenCalled()
   })
 
   it('is a no-op in unpackaged builds unless forced', () => {
@@ -87,98 +69,62 @@ describe('installMainThreadHangWatchdog', () => {
       withPlatform('darwin', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
     ).toBeNull()
     process.env.ORCA_HANG_WATCHDOG_FORCE = '1'
-    const worker = fakeWorker()
-    workerState.instance = worker
+    const child = fakeChild()
+    forkMock.mockReturnValue(child)
     expect(
       withPlatform('darwin', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
     ).not.toBeNull()
     delete process.env.ORCA_HANG_WATCHDOG_FORCE
   })
 
-  it('starts a worker with pid, marker, and timing config', () => {
-    const worker = fakeWorker()
-    workerState.instance = worker
+  it('forks the watchdog as plain Node with pid, bundle, and marker config', () => {
+    const child = fakeChild()
+    forkMock.mockReturnValue(child)
     const handle = withPlatform('darwin', () =>
       installMainThreadHangWatchdog({ userDataPath: '/ud' })
     )
     expect(handle).not.toBeNull()
-    const [workerPath, rawOptions] = workerState.calls[0]
-    const options = rawOptions as {
-      name: string
-      workerData: {
-        parentPid: number
-        markerPath: string
-        timeoutMs: number
-        checkIntervalMs: number
-      }
-    }
-    expect(workerPath).toBe(
-      join('/apps/orca/app.asar', 'out', 'main', 'main-thread-hang-watchdog-entry.js')
-    )
-    expect(options.name).toBe('orca-main-thread-hang-watchdog')
-    expect(options.workerData).toMatchObject({
-      parentPid: process.pid,
-      markerPath: join('/ud', 'main-thread-hang.json'),
-      timeoutMs: 45_000,
-      checkIntervalMs: 5_000
-    })
-    expect(worker.unref).toHaveBeenCalled()
+    const [, , options] = forkMock.mock.calls[0]
+    expect(options.env.ELECTRON_RUN_AS_NODE).toBe('1')
+    expect(options.env.ORCA_HANG_WATCHDOG_PARENT_PID).toBe(String(process.pid))
+    expect(options.env.ORCA_HANG_WATCHDOG_MARKER_PATH).toContain('/ud')
   })
 
-  it('sends heartbeats on an interval and shutdown on stop', () => {
-    const worker = fakeWorker()
-    workerState.instance = worker
+  it('sends heartbeats on an interval and shutdown+disconnect on stop', () => {
+    const child = fakeChild()
+    forkMock.mockReturnValue(child)
     const handle = withPlatform('darwin', () =>
       installMainThreadHangWatchdog({ userDataPath: '/ud' })
     )
     vi.advanceTimersByTime(6_000)
-    const heartbeats = worker.postMessage.mock.calls.filter(([m]) => m.type === 'heartbeat')
+    const heartbeats = child.send.mock.calls.filter(([m]) => m.type === 'heartbeat')
     expect(heartbeats.length).toBe(3)
 
     handle?.stop()
-    expect(worker.postMessage.mock.calls.some(([m]) => m.type === 'shutdown')).toBe(true)
+    expect(child.send.mock.calls.some(([m]) => m.type === 'shutdown')).toBe(true)
+    expect(child.disconnect).toHaveBeenCalled()
 
+    // Why: quit fires will-quit twice; a second stop must not resend or throw.
     handle?.stop()
-    const shutdowns = worker.postMessage.mock.calls.filter(([m]) => m.type === 'shutdown')
+    const shutdowns = child.send.mock.calls.filter(([m]) => m.type === 'shutdown')
     expect(shutdowns.length).toBe(1)
 
     vi.advanceTimersByTime(10_000)
-    const heartbeatsAfterStop = worker.postMessage.mock.calls.filter(
-      ([m]) => m.type === 'heartbeat'
-    )
+    const heartbeatsAfterStop = child.send.mock.calls.filter(([m]) => m.type === 'heartbeat')
     expect(heartbeatsAfterStop.length).toBe(3)
   })
 
-  it('passes test timing overrides to the worker', () => {
-    process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS = '900'
-    process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS = '100'
-    workerState.instance = fakeWorker()
-    withPlatform('darwin', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
-    const options = workerState.calls[0][1] as {
-      workerData: { timeoutMs: number; checkIntervalMs: number }
-    }
-    expect(options.workerData).toMatchObject({ timeoutMs: 900, checkIntervalMs: 100 })
-  })
-
   it('registers stop on will-quit', () => {
-    workerState.instance = fakeWorker()
+    const child = fakeChild()
+    forkMock.mockReturnValue(child)
     withPlatform('darwin', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
     expect(appMock.on).toHaveBeenCalledWith('will-quit', expect.any(Function))
   })
 
-  it('stops heartbeat work when the worker exits', () => {
-    const worker = fakeWorker()
-    workerState.instance = worker
-    withPlatform('darwin', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
-    const exitListener = worker.once.mock.calls.find(([event]) => event === 'exit')?.[1]
-    expect(exitListener).toEqual(expect.any(Function))
-    exitListener()
-    vi.advanceTimersByTime(6_000)
-    expect(worker.postMessage).not.toHaveBeenCalled()
-  })
-
-  it('returns null and stays inert when worker construction fails', () => {
-    workerState.error = new Error('worker failure')
+  it('returns null and stays inert when the fork itself fails', () => {
+    forkMock.mockImplementation(() => {
+      throw new Error('spawn failure')
+    })
     expect(
       withPlatform('darwin', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
     ).toBeNull()

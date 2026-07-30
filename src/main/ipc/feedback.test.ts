@@ -16,6 +16,7 @@ vi.mock('electron', () => ({
   net: { fetch: (...args: unknown[]) => fetchMock(...args) }
 }))
 
+import { MAX_FEEDBACK_IMAGE_RESPONSE_BYTES } from './feedback-image-attachments'
 import { registerFeedbackHandlers, submitFeedback } from './feedback'
 
 function okResponse(): Response {
@@ -390,6 +391,221 @@ describe('submitFeedback', () => {
       submissionType: 'feedback',
       githubLogin: 'trusted-user',
       githubEmail: null
+    })
+  })
+
+  describe('image attachments', () => {
+    function pngImage(bytes = 8): { contentType: string; data: Uint8Array } {
+      return { contentType: 'image/png', data: new Uint8Array(bytes).fill(1) }
+    }
+
+    function imageSubmitArgs(
+      images: { contentType: string; data: Uint8Array }[]
+    ): Parameters<typeof submitFeedback>[0] {
+      return {
+        feedback: 'images attached',
+        submissionType: 'feedback',
+        githubLogin: 'someone',
+        githubEmail: null,
+        images
+      }
+    }
+
+    function jsonResponse(body: unknown): Response {
+      return Response.json(body, { status: 202 })
+    }
+
+    it('sends attached images as multipart form parts', async () => {
+      await submitFeedback(imageSubmitArgs([pngImage(), pngImage()]))
+
+      const body = requestInit().body as FormData
+      expect(body).toBeInstanceOf(FormData)
+      expect(body.getAll('feedbackImage')).toHaveLength(2)
+      expect(body.get('feedback')).toBe('images attached')
+      // Why: multipart must not lose the enrichment fields the JSON lane sends.
+      expect(body.get('submissionType')).toBe('feedback')
+      expect(body.get('appVersion')).toBe('1.2.3-test')
+    })
+
+    it('keeps the JSON lane when nothing is attached', async () => {
+      await submitFeedback(imageSubmitArgs([]))
+
+      expect(requestInit().body).not.toBeInstanceOf(FormData)
+      expect(postedBody().feedback).toBe('images attached')
+    })
+
+    it('reports partial delivery when the server could not attach the images', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true, imagesDelivered: false }))
+
+      await expect(submitFeedback(imageSubmitArgs([pngImage()]))).resolves.toEqual({
+        ok: true,
+        imagesDelivered: false
+      })
+    })
+
+    it('accepts the production atomic-success response when it omits the image result', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true }))
+
+      await expect(submitFeedback(imageSubmitArgs([pngImage()]))).resolves.toEqual({
+        ok: true,
+        imagesDelivered: true
+      })
+    })
+
+    it('reports unconfirmed delivery for a settled non-JSON 2xx', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 202,
+        json: async () => {
+          throw new SyntaxError('Unexpected token')
+        }
+      } as unknown as Response)
+
+      await expect(submitFeedback(imageSubmitArgs([pngImage()]))).resolves.toEqual({
+        ok: true,
+        imagesDelivered: false
+      })
+    })
+
+    it('reports unconfirmed delivery when the response body aborts before the deadline', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 202,
+        json: async () => {
+          throw new TypeError('terminated')
+        }
+      } as unknown as Response)
+
+      await expect(submitFeedback(imageSubmitArgs([pngImage()]))).resolves.toEqual({
+        ok: true,
+        imagesDelivered: false
+      })
+      expect(requestInit().signal).toMatchObject({ aborted: false })
+    })
+
+    it('bounds the image-delivery response body', async () => {
+      fetchMock.mockResolvedValue(
+        new Response('x'.repeat(MAX_FEEDBACK_IMAGE_RESPONSE_BYTES + 1), { status: 202 })
+      )
+
+      await expect(submitFeedback(imageSubmitArgs([pngImage()]))).resolves.toEqual({
+        ok: true,
+        imagesDelivered: false
+      })
+    })
+
+    it('fails a stalled delivery response body at the attachment timeout', async () => {
+      vi.useFakeTimers()
+      fetchMock.mockImplementation((_url: string, init?: RequestInit) =>
+        Promise.resolve({
+          ok: true,
+          status: 202,
+          json: () =>
+            new Promise((_resolve, reject) => {
+              init?.signal?.addEventListener('abort', () => reject(new Error('body aborted')))
+            })
+        } as unknown as Response)
+      )
+
+      const result = submitFeedback(imageSubmitArgs([pngImage()]))
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      await expect(result).resolves.toEqual({
+        ok: false,
+        status: null,
+        error: 'request timed out after 60 seconds'
+      })
+      expect(requestInit().signal).toMatchObject({ aborted: true })
+    })
+
+    it('rejects unsupported image types before any request is made', async () => {
+      const result = await submitFeedback(
+        imageSubmitArgs([{ contentType: 'application/pdf', data: new Uint8Array(4) }])
+      )
+
+      expect(result.ok).toBe(false)
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    // Why: the renderer screens types first, so this lane only matters for a
+    // renderer invoking the channel directly — the case the handler guards.
+    it('rejects a prototype member posing as a content type over IPC', async () => {
+      registerFeedbackHandlers()
+      const result = (await handlers.get('feedback:submit')?.(null, {
+        feedback: 'images attached',
+        githubLogin: null,
+        githubEmail: null,
+        images: [{ contentType: 'constructor', data: new Uint8Array(4).fill(1) }]
+      })) as { ok: boolean; error?: string }
+
+      expect(result).toMatchObject({ ok: false, error: 'Unsupported image type.' })
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('rejects malformed IPC bytes before typed-array normalization', async () => {
+      registerFeedbackHandlers()
+      const result = (await handlers.get('feedback:submit')?.(null, {
+        feedback: 'images attached',
+        githubLogin: null,
+        githubEmail: null,
+        images: [{ contentType: 'image/png', data: '8388608' }]
+      })) as { ok: boolean; error?: string }
+
+      expect(result).toMatchObject({ ok: false, error: 'Invalid image attachment bytes.' })
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('rejects oversized IPC batches before normalizing their entries', async () => {
+      registerFeedbackHandlers()
+      const result = (await handlers.get('feedback:submit')?.(null, {
+        feedback: 'images attached',
+        githubLogin: null,
+        githubEmail: null,
+        images: Array.from({ length: 5 }, () => ({
+          contentType: 'image/png',
+          data: '8388608'
+        }))
+      })) as { ok: boolean; error?: string }
+
+      expect(result).toMatchObject({ ok: false, error: 'Attach 4 images or fewer.' })
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('rejects more images than the supported count', async () => {
+      const result = await submitFeedback(
+        imageSubmitArgs(Array.from({ length: 5 }, () => pngImage()))
+      )
+
+      expect(result.ok).toBe(false)
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('does not fail a crash report over images it was never going to send', async () => {
+      // Why: the crash lane discards images, so validating them there would
+      // abort a crash report the user needs delivered.
+      await submitFeedback({
+        ...diagnosticSubmitArgs(),
+        images: Array.from({ length: 9 }, () => ({
+          contentType: 'application/pdf',
+          data: new Uint8Array(0)
+        }))
+      } as Parameters<typeof submitFeedback>[0])
+
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const body = requestInit().body as FormData
+      expect(body.getAll('feedbackImage')).toHaveLength(0)
+      expect(body.get('submissionType')).toBe('crash')
+    })
+
+    it('drops images from crash submissions', async () => {
+      await submitFeedback({
+        ...diagnosticSubmitArgs(),
+        images: [pngImage()]
+      } as Parameters<typeof submitFeedback>[0])
+
+      const body = requestInit().body as FormData
+      expect(body.getAll('feedbackImage')).toHaveLength(0)
+      expect(body.get('diagnosticBundleSubmissionId')).toBe('bundleabcdefghijklmnop')
     })
   })
 })

@@ -60,7 +60,10 @@ export async function createExistingWorktreeWorkerTerminal(args: {
 }): Promise<{ handle: string; warning?: string }> {
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
     command: args.agent,
-    title: `worker-${args.taskId}`
+    title: `worker-${args.taskId}`,
+    // Why: dispatching a worker is background work; it must not pull the sidebar
+    // to the worker's workspace while the user is reading somewhere else.
+    surfaceOwner: false
   })
   args.effects.push({
     kind: 'terminal',

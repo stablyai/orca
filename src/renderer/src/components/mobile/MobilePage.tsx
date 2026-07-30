@@ -21,6 +21,7 @@ import { useMobilePairingGeneration } from './use-mobile-pairing-generation'
 import { useMobilePairingQrInvalidation } from './use-mobile-pairing-qr-invalidation'
 import { useMobileInstallActions } from './use-mobile-install-actions'
 import { useMobilePagePairedDevices } from './use-mobile-page-paired-devices'
+import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 
 export default function MobilePage(): React.JSX.Element {
   const [stepIdx, setStepIdx] = useState<StepIndex>(0)
@@ -33,10 +34,7 @@ export default function MobilePage(): React.JSX.Element {
   const [pairQrDataUrl, setPairQrDataUrl] = useState<string | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
   const [pairingQrError, setPairingQrError] = useState(false)
-  // Mode the displayed QR actually encodes; can be 'local-only' under an
-  // Anywhere selection when Relay provisioning degraded server-side.
-  const [encodedConnectionMode, setEncodedConnectionMode] =
-    useState<MobilePairingConnectionMode | null>(null)
+  const [relayMintFailure, setRelayMintFailure] = useState<MobileRelayMintFailure | null>(null)
   const [pairLoading, setPairLoading] = useState(false)
   const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
@@ -77,7 +75,7 @@ export default function MobilePage(): React.JSX.Element {
     setPairingUrl,
     setPairingQrError,
     setPairLoading,
-    setEncodedConnectionMode
+    setRelayMintFailure
   })
 
   const handleConnectionModeChange = useCallback(
@@ -88,11 +86,42 @@ export default function MobilePage(): React.JSX.Element {
       // Why: persist the pick and update local state. The QR invalidation +
       // rotate-regenerate is handled centrally by useMobilePairingQrInvalidation
       // (below), which also covers cross-window preference syncs.
+      setRelayMintFailure(null)
       setConnectionMode(nextMode)
       void updateSettings({ mobilePairingConnectionMode: nextMode })
     },
     [connectionMode, updateSettings, setConnectionMode]
   )
+
+  const copyRelayDiagnostics = useCallback(async (): Promise<void> => {
+    if (relayMintFailure == null) {
+      return
+    }
+    // Why: users share this payload — the selected address would leak a LAN/Tailscale IP or hostname.
+    const payload = {
+      kind: 'mobile_pairing_relay_failure',
+      preferredConnectionMode: connectionMode,
+      failure: relayMintFailure,
+      at: new Date().toISOString()
+    }
+    try {
+      await window.api.ui.writeClipboardText(JSON.stringify(payload, null, 2))
+      if (mountedRef.current) {
+        toast.success(
+          translate('auto.components.mobile.MobilePage.diagnosticsCopied', 'Diagnostics copied')
+        )
+      }
+    } catch {
+      if (mountedRef.current) {
+        toast.error(
+          translate(
+            'auto.components.mobile.MobilePage.diagnosticsCopyFailed',
+            'Failed to copy diagnostics'
+          )
+        )
+      }
+    }
+  }, [connectionMode, mountedRef, relayMintFailure])
 
   useMobilePairingQrInvalidation({
     connectionMode,
@@ -104,6 +133,7 @@ export default function MobilePage(): React.JSX.Element {
     setPairingUrl,
     setPairingQrError,
     setPairLoading,
+    setRelayMintFailure,
     regenerate: (mode, opts) => void generatePairing(opts.rotate, undefined, mode)
   })
 
@@ -168,8 +198,6 @@ export default function MobilePage(): React.JSX.Element {
       // not snap it back to a tailnet/LAN fallback.
       const isManual = !networkInterfaces.some((iface) => iface.address === address)
       setAddressIsManual(isManual)
-      // Switching network must remint so the QR encodes the new endpoint —
-      // but only when the selected path may honestly mint (not signed-out Anywhere).
       if (canMintMobilePairingOffer({ connectionMode, signedIn })) {
         void generatePairing(true, address)
       }
@@ -237,7 +265,7 @@ export default function MobilePage(): React.JSX.Element {
     setPairQrDataUrl(null)
     setPairingUrl(null)
     setPairingQrError(false)
-    setEncodedConnectionMode(null)
+    setRelayMintFailure(null)
     showFirstPairingFlow()
   }
 
@@ -248,7 +276,7 @@ export default function MobilePage(): React.JSX.Element {
     setPairQrDataUrl(null)
     setPairingUrl(null)
     setPairingQrError(false)
-    setEncodedConnectionMode(null)
+    setRelayMintFailure(null)
     showPairAnotherDeviceFlow()
   }
 
@@ -299,11 +327,12 @@ export default function MobilePage(): React.JSX.Element {
       pairQrDataUrl={pairQrDataUrl}
       pairingUrl={pairingUrl}
       pairingQrError={pairingQrError}
-      relayDegraded={
-        pairQrDataUrl != null &&
-        connectionMode === 'automatic' &&
-        encodedConnectionMode === 'local-only'
+      relayMintFailure={
+        connectionMode === 'automatic' && pairQrDataUrl == null ? relayMintFailure : null
       }
+      onUseLan={() => handleConnectionModeChange('local-only')}
+      onRetryRelay={() => void generatePairing(true)}
+      onCopyRelayDiagnostics={() => void copyRelayDiagnostics()}
       platform={platform}
       refreshingNetworkInterfaces={refreshingNetworkInterfaces}
       revokeDevice={(id) => void revokeDevice(id)}

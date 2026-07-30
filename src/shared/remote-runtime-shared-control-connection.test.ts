@@ -138,6 +138,29 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     expect(open).toHaveBeenCalledOnce()
   })
 
+  it('keeps a waiting request alive when a reachability probe replaces its pre-ready socket', async () => {
+    const server = await createServer({ suppressReadyFrameCount: 1 })
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+
+    const response = connection.request('worktree.ps', undefined, 1000)
+    await vi.waitFor(() => expect(server.connectionCount()).toBe(1))
+
+    connection.reconnectNow()
+
+    await expect(response).resolves.toMatchObject({
+      ok: true,
+      result: { method: 'worktree.ps' }
+    })
+    expect(server.connectionCount()).toBe(2)
+    expect(server.requests.map(({ method }) => method)).toEqual(['worktree.ps'])
+    expect(connection.getDiagnostics().pendingRequestCount).toBe(0)
+    expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
+      pendingRequestCount: 0,
+      retainedBytes: 0
+    })
+    connection.close()
+  })
+
   it('logs unknown response ids without breaking pending requests', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const server = await createServer({ sendUnknownResponseBeforeResponse: true })
@@ -665,6 +688,7 @@ async function createServer(
     closeAfterFirstStreamingResponse?: boolean
     closeBeforeResponse?: boolean
     suppressReadyFrame?: boolean
+    suppressReadyFrameCount?: number
     // Why: half-open simulation — the socket stays open but never answers
     // protocol pings, like a wedged tunnel that swallows frames silently.
     disableAutoPong?: boolean
@@ -696,7 +720,10 @@ async function createServer(
           serverKeyPair.secretKey,
           publicKeyFromBase64(hello.publicKeyB64)
         )
-        if (options.suppressReadyFrame) {
+        if (
+          options.suppressReadyFrame ||
+          connectionCount <= (options.suppressReadyFrameCount ?? 0)
+        ) {
           return
         }
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))

@@ -19,6 +19,10 @@ import { SshGitProvider } from '../providers/ssh-git-provider'
 import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import {
+  buildManagedHookDetectionCommands,
+  detectedManagedHookAgents
+} from '../agent-hooks/managed-hook-detection-commands'
+import {
   AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
@@ -697,11 +701,6 @@ export class SshRelaySession {
       return false
     }
 
-    await this.installManagedHooksOnRemote(mux)
-    if (shouldContinue && !shouldContinue()) {
-      return false
-    }
-
     await this.installPluginsOnRelay(mux)
     if (shouldContinue && !shouldContinue()) {
       return false
@@ -833,6 +832,7 @@ export class SshRelaySession {
     this.wireUpPtyEvents(ptyProvider, mux, providerGeneration)
     this.wireUpAgentHookEvents(mux)
     this.wireUpRemoteWorkspaceEvents(mux)
+    void this.installManagedHooksOnRemote(mux, shouldContinue)
     return true
   }
 
@@ -926,9 +926,15 @@ export class SshRelaySession {
     })
   }
 
-  // Why: hooks must exist before PTY spawn; relay-local work keeps all managed installs to one SSH round trip.
-  private async installManagedHooksOnRemote(mux: SshChannelMultiplexer): Promise<void> {
-    if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
+  private async installManagedHooksOnRemote(
+    mux: SshChannelMultiplexer,
+    shouldContinue?: () => boolean
+  ): Promise<void> {
+    if (
+      !isRemoteAgentHooksEnabled() ||
+      !this.areAgentStatusHooksEnabled() ||
+      (shouldContinue && !shouldContinue())
+    ) {
       return
     }
     if (
@@ -940,8 +946,19 @@ export class SshRelaySession {
     }
 
     try {
+      const store = this.store as { getSettings?: Store['getSettings'] }
+      const detected = (await mux.request('preflight.detectAgents', {
+        commands: buildManagedHookDetectionCommands(store.getSettings?.() ?? null, 'linux')
+      })) as { agents?: unknown }
+      const agents = detectedManagedHookAgents(detected?.agents)
+      if (agents.length === 0 || (shouldContinue && !shouldContinue())) {
+        return
+      }
       const hostKeyFingerprint = this.requireReadyConnection().getHostKeyFingerprint?.()
-      const params = hostKeyFingerprint ? { hostKeyFingerprint } : {}
+      const params = {
+        ...(hostKeyFingerprint ? { hostKeyFingerprint } : {}),
+        agents
+      }
       const result = (await mux.request(AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD, params)) as {
         errors?: unknown
       }

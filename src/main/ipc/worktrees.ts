@@ -12,6 +12,9 @@ import {
 } from '../../shared/workspace-scope'
 import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
+import { TaskSourceContextSchema } from '../../shared/task-source-context-schema'
+import { WorkspaceLinkedItemSchema } from '../../shared/workspace-linked-item-schema'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../shared/workspace-linked-item-source-context'
 import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
 import { projectResolvedWorktreeLineage } from '../../shared/resolved-worktree-lineage'
 import { isPathInsideOrEqual, isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
@@ -231,8 +234,38 @@ import {
   recoverLocalWindowsWorktreeRemoval
 } from '../local-worktree-removal-recovery'
 
+const NullableWorkspaceLinkedItemSchema = WorkspaceLinkedItemSchema.nullable()
+const NullableTaskSourceContextSchema = TaskSourceContextSchema.nullable()
 const WORKTREE_ARCHIVE_HOOK_TIMEOUT_MS = 120_000
 const WORKTREE_LIST_ALL_CONCURRENCY = 8
+
+function normalizeLinkedWorkItemFields<
+  T extends {
+    linkedWorkItem?: unknown
+    linkedTaskSourceContext?: unknown
+  }
+>(input: T): T {
+  const linkedWorkItem =
+    input.linkedWorkItem === undefined
+      ? undefined
+      : NullableWorkspaceLinkedItemSchema.parse(input.linkedWorkItem)
+  const linkedTaskSourceContext =
+    input.linkedTaskSourceContext === undefined
+      ? undefined
+      : NullableTaskSourceContextSchema.parse(input.linkedTaskSourceContext)
+  if (
+    linkedWorkItem &&
+    linkedTaskSourceContext &&
+    !isWorkspaceLinkedItemSourceContextMatch(linkedWorkItem, linkedTaskSourceContext)
+  ) {
+    throw new Error('Linked work item and source context identities must match')
+  }
+  return {
+    ...input,
+    ...(linkedWorkItem !== undefined ? { linkedWorkItem } : {}),
+    ...(linkedTaskSourceContext !== undefined ? { linkedTaskSourceContext } : {})
+  }
+}
 
 async function mapWithConcurrency<T, R>(
   items: readonly T[],
@@ -883,6 +916,8 @@ function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta
     linkedBitbucketPR: meta.linkedBitbucketPR ?? null,
     linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: meta.linkedGiteaPR ?? null,
+    linkedWorkItem: meta.linkedWorkItem ?? null,
+    linkedTaskSourceContext: meta.linkedTaskSourceContext ?? null,
     isArchived: meta.isArchived ?? false,
     isUnread: meta.isUnread ?? false,
     isPinned: meta.isPinned ?? false,
@@ -1004,7 +1039,11 @@ function createFolderWorkspace(
     ...(args.linkedAzureDevOpsPR !== undefined
       ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
       : {}),
-    ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {})
+    ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
+    ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
+    ...(args.linkedTaskSourceContext !== undefined
+      ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
+      : {})
   })
   return { worktree: mergeFolderWorkspace(repo, worktreeId, meta) }
 }
@@ -2012,7 +2051,8 @@ export function registerWorktreeHandlers(
 
   ipcMain.handle(
     'worktrees:create',
-    async (_event, args: CreateWorktreeArgs): Promise<CreateWorktreeResult> => {
+    async (_event, rawArgs: CreateWorktreeArgs): Promise<CreateWorktreeResult> => {
+      const args = normalizeLinkedWorkItemFields(rawArgs)
       // Why span here: parent the child git spans for the trace tree; don't attach branch name/remote URL (user content) — repo ID is the safer correlator.
       return withWorktreeSpan({ stage: 'create' }, async () => {
         const repo = store.getRepo(args.repoId)
@@ -2885,14 +2925,15 @@ export function registerWorktreeHandlers(
   ipcMain.handle(
     'worktrees:updateMeta',
     (_event, args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => {
+      const validatedUpdates = normalizeLinkedWorkItemFields(args.updates)
       const updates =
-        args.updates.displayName !== undefined
+        validatedUpdates.displayName !== undefined
           ? {
-              ...args.updates,
+              ...validatedUpdates,
               pendingFirstAgentMessageRename: false,
               firstAgentMessageRenameError: null
             }
-          : args.updates
+          : validatedUpdates
       const meta = store.setWorktreeMeta(args.worktreeId, stripOrcaProvenanceMetaUpdates(updates))
       // Do NOT notify here: renderer already applied this optimistically; a notification would re-sort the sidebar (bug PR #209).
       if (args.updates.displayName !== undefined) {
@@ -3035,66 +3076,69 @@ export function registerWorktreeHandlers(
     }
   )
 
-  ipcMain.handle('hooks:inspectSetupScriptImports', async (_event, args: { repoId: string }) => {
-    const repo = store.getRepo(args.repoId)
-    if (!repo || isFolderRepo(repo)) {
-      return []
-    }
+  ipcMain.handle(
+    'hooks:inspectSetupScriptImports',
+    async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
+      const repo = getRepoForWorktreeRemoval(store, args.repoId, args.hostId)
+      if (!repo || isFolderRepo(repo)) {
+        return []
+      }
 
-    return inspectSetupScriptImportCandidates(
-      async (relativePath) => {
-        const filePath = joinWorktreeRelativePath(repo.path, relativePath)
-        if (repo.connectionId) {
-          const fsProvider = getSshFilesystemProvider(repo.connectionId)
-          if (!fsProvider) {
-            return null
-          }
-          try {
-            const result = await fsProvider.readFile(filePath)
-            return result.isBinary ? null : result.content
-          } catch {
-            return null
-          }
-        }
-
-        try {
-          return await readFile(filePath, 'utf-8')
-        } catch (error) {
-          if (!isENOENT(error)) {
-            console.warn('[hooks] Failed to inspect setup script import candidate:', error)
-          }
-          return null
-        }
-      },
-      {
-        fileExists: async (relativePath) => {
+      return inspectSetupScriptImportCandidates(
+        async (relativePath) => {
           const filePath = joinWorktreeRelativePath(repo.path, relativePath)
           if (repo.connectionId) {
             const fsProvider = getSshFilesystemProvider(repo.connectionId)
             if (!fsProvider) {
-              return false
+              return null
             }
             try {
-              const fileStat = await fsProvider.stat(filePath)
-              return fileStat.type !== 'directory'
+              const result = await fsProvider.readFile(filePath)
+              return result.isBinary ? null : result.content
             } catch {
-              return false
+              return null
             }
           }
 
           try {
-            const fileStat = await stat(filePath)
-            return !fileStat.isDirectory()
+            return await readFile(filePath, 'utf-8')
           } catch (error) {
             if (!isENOENT(error)) {
-              console.warn('[hooks] Failed to stat setup script import candidate:', error)
+              console.warn('[hooks] Failed to inspect setup script import candidate:', error)
             }
-            return false
+            return null
+          }
+        },
+        {
+          fileExists: async (relativePath) => {
+            const filePath = joinWorktreeRelativePath(repo.path, relativePath)
+            if (repo.connectionId) {
+              const fsProvider = getSshFilesystemProvider(repo.connectionId)
+              if (!fsProvider) {
+                return false
+              }
+              try {
+                const fileStat = await fsProvider.stat(filePath)
+                return fileStat.type !== 'directory'
+              } catch {
+                return false
+              }
+            }
+
+            try {
+              const fileStat = await stat(filePath)
+              return !fileStat.isDirectory()
+            } catch (error) {
+              if (!isENOENT(error)) {
+                console.warn('[hooks] Failed to stat setup script import candidate:', error)
+              }
+              return false
+            }
           }
         }
-      }
-    )
-  })
+      )
+    }
+  )
 
   ipcMain.handle(
     'hooks:readIssueCommand',

@@ -141,6 +141,7 @@ describe('repo slice runtime routing', () => {
 
     expect(store.getState().repos[0]?.displayName).toBe('SSH Renamed')
     expect(reposUpdate).toHaveBeenCalledWith({
+      hostId: 'ssh:ssh-1',
       repoId: sshRepo.id,
       updates: { displayName: 'SSH Renamed' }
     })

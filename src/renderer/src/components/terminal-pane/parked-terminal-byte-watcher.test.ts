@@ -554,6 +554,32 @@ describe('startParkedTerminalByteWatcher', () => {
     second.dispose()
   })
 
+  it('consumes host facts without a raw terminal stream for paired PTYs', async () => {
+    const remotePtyId = 'remote:env-1@@terminal-1'
+    const { dispose } = await startWatcher({ ptyId: remotePtyId })
+    const handler = await import('./terminal-side-effect-facts-handler')
+
+    expect(onData).toBeNull()
+    handler._dispatchTerminalSideEffectBatchForTest({
+      ptyId: remotePtyId,
+      seq: 10,
+      facts: [
+        {
+          kind: 'title',
+          normalizedTitle: '⠋ Remote build',
+          rawTitle: '⠋ Remote build'
+        }
+      ]
+    })
+
+    expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledWith(
+      TAB_ID,
+      PANE_ID,
+      '⠋ Remote build'
+    )
+    dispose()
+  })
+
   // ─── Main side-effect authority (terminal-side-effect-authority.md) ────
   //
   // With the kill switch on, the watcher must not register byte parsers —

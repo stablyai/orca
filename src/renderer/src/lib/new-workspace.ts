@@ -63,6 +63,12 @@ export type LinkedWorkItemSummary = Omit<FolderWorkspaceLinkedTask, 'provider'> 
   linkedContext?: LinkedWorkItemContext
 }
 
+export function canUseIssueCommandForLinkedItemProvider(
+  provider: FolderWorkspaceLinkedTask['provider'] | null
+): boolean {
+  return provider === 'github' || provider === 'gitlab'
+}
+
 // Why: when a repo has no `orca.yaml` issueCommand and no per-user override,
 // we still want the composer to send a useful default prompt whenever the user
 // attaches a linked work item without typing anything else. "Complete <url>"
