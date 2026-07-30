@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../src/shared/clipboard-image'
+import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import {
@@ -56,6 +57,10 @@ type Args = {
     imagePreviewUris?: string[],
     deadline?: number
   ) => Promise<MobileNativeChatSendOutcome>
+  /** Launch-context text parked on the agent's TUI input line, or null. The
+   *  paste's leading clear must cover every line of it, or the draft's earlier
+   *  lines survive and ride along with the image. */
+  readonly readSeededLaunchDraft: () => string | null
   readonly onAttachSuccess?: () => void
   readonly onError?: () => void
   // Injected so the settle between image paste and submit is instant in tests.
@@ -106,6 +111,7 @@ export function useMobileNativeChatImageAttachments({
   showToast,
   onSendError,
   baseSend,
+  readSeededLaunchDraft,
   onAttachSuccess,
   onError,
   sleep = defaultSleep
@@ -269,12 +275,16 @@ export function useMobileNativeChatImageAttachments({
           return false
         }
         try {
+          const seededLaunchDraft = readSeededLaunchDraft()
           const pasted = await pasteMobileNativeChatImagePaths({
             client,
             terminal: handle,
             deviceToken: deviceTokenRef.current,
             imagePaths: pendingImages.map((attachment) => attachment.path),
-            deadline
+            deadline,
+            ...(seededLaunchDraft
+              ? { clearInput: buildAgentTuiClearInputForText(seededLaunchDraft) }
+              : {})
           })
           if (!pasted) {
             // Keep the chips so the user can retry; the failed paste never submitted.
@@ -351,6 +361,7 @@ export function useMobileNativeChatImageAttachments({
       enabled,
       onError,
       onSendError,
+      readSeededLaunchDraft,
       scopeKey,
       sleep
     ]

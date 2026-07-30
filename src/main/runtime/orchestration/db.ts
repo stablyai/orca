@@ -42,6 +42,7 @@ import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-c
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { OrchestrationError } from './orchestration-error'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
+import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../shared/orchestration-run-pagination'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
 
 // Why: leaf UUID is the remint-stable pane identity (tab half changes on break-out); exact match covers legacy/unparseable keys.
@@ -158,6 +159,28 @@ function exposeRunTimestamps(run: RunRow): RunRow {
   }
 }
 
+function encodeRunListCursor(run: RunRow): string {
+  const cursor: RunListCursor = { createdAt: run.created_at, id: run.id }
+  return Buffer.from(JSON.stringify(cursor)).toString('base64url')
+}
+
+function decodeRunListCursor(value: string): RunListCursor {
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'))
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      typeof (parsed as RunListCursor).createdAt !== 'string' ||
+      typeof (parsed as RunListCursor).id !== 'string'
+    ) {
+      throw new Error('invalid cursor shape')
+    }
+    return parsed as RunListCursor
+  } catch {
+    throw new OrchestrationError('cursor_invalid', 'The Run list cursor is invalid.')
+  }
+}
+
 function exposeDeliveryTimestamps(delivery: DeliveryRow): DeliveryRow {
   return {
     ...delivery,
@@ -213,8 +236,21 @@ export const LEGACY_RUN_ID = ORCHESTRATION_LEGACY_RUN_ID
 export const LEGACY_CONTRACT_VERSION = 0
 export const CURRENT_CONTRACT_VERSION = ORCHESTRATION_CONTRACT_VERSION
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance.
-const SCHEMA_VERSION = 21
+const MUTATION_RECEIPT_MAX_ROWS = 10_000
+const MUTATION_RECEIPT_MAX_AGE_DAYS = 30
+
+export type RunListPage = {
+  runs: RunRow[]
+  nextCursor: string | null
+}
+
+type RunListCursor = {
+  createdAt: string
+  id: string
+}
+
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup.
+const SCHEMA_VERSION = 22
 
 function hardenOrchestrationDatabaseFiles(dbPath: string | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -457,6 +493,7 @@ export class OrchestrationDb {
 
       CREATE INDEX IF NOT EXISTS idx_dispatch_task ON dispatch_contexts(task_id);
       CREATE INDEX IF NOT EXISTS idx_dispatch_status ON dispatch_contexts(status);
+      CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_handle ON dispatch_contexts(assignee_handle);
 
       CREATE TABLE IF NOT EXISTS decision_gates (
         id            TEXT PRIMARY KEY,
@@ -834,6 +871,12 @@ export class OrchestrationDb {
       }
       if (current < 21) {
         this.migrateLegacySchedulerLossProvenance()
+      }
+      if (current < 22) {
+        this.db.exec(`
+          CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_handle
+            ON dispatch_contexts(assignee_handle);
+        `)
       }
       this.createUndeliveredInboxIndexIfPossible()
 
@@ -1245,6 +1288,44 @@ export class OrchestrationDb {
 
   // ── Durable mutation receipts ──
 
+  private ensureMutationReceiptCapacity(): void {
+    this.db
+      .prepare(
+        `DELETE FROM mutation_receipts
+         WHERE state = 'completed'
+           AND updated_at < datetime('now', ?)`
+      )
+      .run(`-${MUTATION_RECEIPT_MAX_AGE_DAYS} days`)
+
+    const row = this.db.prepare('SELECT COUNT(*) AS count FROM mutation_receipts').get() as {
+      count: number
+    }
+    const completedToRemove = row.count - MUTATION_RECEIPT_MAX_ROWS + 1
+    if (completedToRemove > 0) {
+      this.db
+        .prepare(
+          `DELETE FROM mutation_receipts
+           WHERE rowid IN (
+             SELECT rowid FROM mutation_receipts
+             WHERE state = 'completed'
+             ORDER BY updated_at ASC, rowid ASC
+             LIMIT ?
+           )`
+        )
+        .run(completedToRemove)
+    }
+
+    const retained = this.db.prepare('SELECT COUNT(*) AS count FROM mutation_receipts').get() as {
+      count: number
+    }
+    if (retained.count >= MUTATION_RECEIPT_MAX_ROWS) {
+      throw new OrchestrationError(
+        'mutation_ledger_full',
+        'The durable mutation ledger is full of unresolved operations. Resolve or inspect them before starting another mutation.'
+      )
+    }
+  }
+
   beginMutationReceipt(params: {
     callerFingerprint: string
     requestId: string
@@ -1267,6 +1348,7 @@ export class OrchestrationDb {
         this.db.exec('COMMIT')
         return { disposition: existing.state, row: existing }
       }
+      this.ensureMutationReceiptCapacity()
       this.db
         .prepare(
           `INSERT INTO mutation_receipts (
@@ -2221,10 +2303,38 @@ export class OrchestrationDb {
     return run ? exposeRunTimestamps(run) : undefined
   }
 
-  listRuns(): RunRow[] {
-    return (this.db.prepare('SELECT * FROM runs ORDER BY created_at DESC').all() as RunRow[]).map(
-      exposeRunTimestamps
+  listRuns(params: { limit?: number; cursor?: string } = {}): RunListPage {
+    if (params.limit === undefined && params.cursor === undefined) {
+      const rows = this.db
+        .prepare('SELECT * FROM runs ORDER BY created_at DESC, id DESC')
+        .all() as RunRow[]
+      return { runs: rows.map(exposeRunTimestamps), nextCursor: null }
+    }
+    const limit = Math.min(
+      Math.max(1, params.limit ?? ORCHESTRATION_RUN_PAGE_LIMIT),
+      ORCHESTRATION_RUN_PAGE_LIMIT
     )
+    const cursor = params.cursor ? decodeRunListCursor(params.cursor) : undefined
+    const rows = (
+      cursor
+        ? this.db
+            .prepare(
+              `SELECT * FROM runs
+             WHERE created_at < ? OR (created_at = ? AND id < ?)
+             ORDER BY created_at DESC, id DESC
+             LIMIT ?`
+            )
+            .all(cursor.createdAt, cursor.createdAt, cursor.id, limit + 1)
+        : this.db
+            .prepare('SELECT * FROM runs ORDER BY created_at DESC, id DESC LIMIT ?')
+            .all(limit + 1)
+    ) as RunRow[]
+    const hasMore = rows.length > limit
+    const pageRows = hasMore ? rows.slice(0, limit) : rows
+    return {
+      runs: pageRows.map(exposeRunTimestamps),
+      nextCursor: hasMore ? encodeRunListCursor(pageRows.at(-1) as RunRow) : null
+    }
   }
 
   getCurrentRunForPane(paneKey: string): RunRow | undefined {
@@ -3748,6 +3858,7 @@ export class OrchestrationDb {
             `Mutation ${receipt.requestId} already has a durable acceptance record.`
           )
         }
+        this.ensureMutationReceiptCapacity()
         this.db
           .prepare(
             `INSERT INTO mutation_receipts (
@@ -4335,6 +4446,7 @@ export class OrchestrationDb {
           `Remote attachment request ${params.mutationReceipt.requestId} already exists.`
         )
       }
+      this.ensureMutationReceiptCapacity()
       this.db
         .prepare(
           `INSERT INTO mutation_receipts (

@@ -38,6 +38,10 @@ export const CLIENT_EVENT_METHODS: readonly RpcAnyMethod[] = [
         for (const event of runtime.getTerminalSleepClientEventSnapshot?.() ?? []) {
           emit(event)
         }
+        for (const event of runtime.getNativeChatLaunchDraftResolutionClientEventSnapshot?.() ??
+          []) {
+          emit(event)
+        }
         const sshStates = listRegisteredSshTargets().flatMap((target) => {
           const state = getPublicSshState(getRegisteredSshState(target.id) ?? null)
           return state ? [{ targetId: target.id, state }] : []

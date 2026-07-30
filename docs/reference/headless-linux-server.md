@@ -729,6 +729,69 @@ deliberately. The post-upgrade binary and version record are retained in
 artifacts and remove them according to your retention policy after the rollback
 is resolved.
 
+## Installing Agent Skills Without A Desktop
+
+Orca's agent skills (CLI usage, orchestration, computer use, etc.) are normally
+installed from Orca Settings, which pre-fills an `npx skills add ... --global`
+command in a terminal for you to run. A headless host has no Settings UI, so
+use `orca skills install` instead:
+
+```bash
+orca skills install                                      # list installable skills
+orca skills install --skill orca-cli --skill orchestration # install globally (default)
+orca skills install --skill orca-cli --local              # install into the current project only
+orca skills install --all                                 # install every bundled skill
+orca skills install --all --dry-run                       # print the npx command without running it
+```
+
+This resolves the same `npx skills add <repo> --skill <name> ...` command
+Settings would show you (adding `--global` unless `--local` is passed), then
+runs it and forwards its output and exit code. It requires `node`/`npx` on the
+host; it does not need a running Orca runtime.
+
+Unlike the command Settings shows, the spawned one adds `npx --yes` and `-y`.
+Without them the `skills` CLI opens an interactive agent picker and blocks
+forever on any allocated TTY — which includes a normal `ssh` session. Use
+`--dry-run` to see the exact command that will run.
+
+Settings keeps that picker deliberately, because choosing which agents get a
+skill is a real decision. A headless run cannot answer it, so instead of dropping
+the choice Orca makes it explicitly: it passes an `--agent` list built from the
+coding agents it detects on the host, plus the shared `.agents/skills` directory
+it reads itself. Left to decide on its own with no agent detected, the `skills`
+CLI installs into all ~75 agents it knows and leaves a config directory for each.
+Override the targets yourself, or narrow to the shared directory alone:
+
+```bash
+orca skills install --skill orca-cli --agent claude-code,codex
+orca skills install --skill orca-cli --agent universal
+```
+
+If Orca detects no agent at all, `orca skills install` stops and asks for
+`--agent` rather than guessing.
+
+To refresh already-installed skills, `orca skills update` mirrors the same
+selection flags (`--skill`, `--all`, `--local`, `--dry-run`) and resolves to
+`npx skills update <names...>` with a matching scope flag — `--global`, or
+`--project` when you pass `--local`:
+
+```bash
+orca skills update --all                                  # update every bundled skill globally
+orca skills update --skill orca-cli --dry-run             # print the npx command without running it
+```
+
+`orca skills update` only refreshes skills that are already installed — it exits
+0 without doing anything for a skill that is missing, so install it first. More
+generally, a 0 exit means the `skills` CLI ran without erroring, not that it
+wrote anything; read its output to confirm what changed.
+
+`--json` covers the skill listing and `--dry-run`. A real run streams the
+`skills` CLI's own non-JSON output and rejects `--json`.
+
+Both commands install onto the machine that runs them. In an Orca SSH workspace
+or the WSL bridge the `orca` shim forwards commands to the Orca host, so they
+refuse to run there and print the command to run on the machine you want.
+
 ## Troubleshooting
 
 - `dlopen(): error loading libfuse.so.2`: install `libfuse2`.

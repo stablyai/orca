@@ -151,7 +151,7 @@ describe('OrchestrationDb legacy contract storage', () => {
 
     expect(db.getLegacyAdoption()).toBeUndefined()
     expect(db.listLegacyCompatibilityPrincipals(LEGACY_RUN_ID)).toEqual([])
-    expect(db.listRuns()).toEqual([expect.objectContaining({ id: LEGACY_RUN_ID, legacy: 1 })])
+    expect(db.listRuns().runs).toEqual([expect.objectContaining({ id: LEGACY_RUN_ID, legacy: 1 })])
   })
 
   it('keeps current Delivery disjoint from adopted direct and audit-only mail', () => {

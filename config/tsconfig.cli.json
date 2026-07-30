@@ -12,6 +12,8 @@
     "../src/main/agent-hooks/local-agent-cli-presence.ts",
     "../src/main/agent-hooks/managed-agent-hook-controls.ts",
     "../src/main/agent-hooks/managed-agent-hook-registry.ts",
+    "../src/main/ipc/local-agent-install-dir-detection.ts",
+    "../src/main/ipc/tui-agent-detection-commands.ts",
     "../src/main/amp/hook-service.ts",
     "../src/main/antigravity/hook-service.ts",
     "../src/main/claude/hook-settings.ts",

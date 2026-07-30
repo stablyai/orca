@@ -35,7 +35,67 @@ describe('MobilePairingQrSection', () => {
     )
 
     expect(screen.getByRole('alert')).toHaveTextContent('couldn’t be rendered as a QR code')
-    await userEvent.click(screen.getByRole('button', { name: /copy-fallback/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Copy pairing code' }))
     expect(writeClipboardText).toHaveBeenCalledWith('orca://pair?code=copy-fallback')
+  })
+
+  it('moves focus to the copy action when a pairing code becomes ready', () => {
+    const props = {
+      qrDataUrl: null,
+      qrError: false,
+      pairingUrl: null,
+      endpoint: null,
+      qrEnlarged: false,
+      codeCopied: false,
+      onQrEnlargedChange: vi.fn(),
+      onCodeCopiedChange: vi.fn(),
+      onClearCodeCopiedTimer: vi.fn()
+    }
+    const { rerender } = render(<MobilePairingQrSection {...props} />)
+
+    rerender(
+      <MobilePairingQrSection
+        {...props}
+        qrDataUrl="data:image/png;base64,qr"
+        pairingUrl="orca://pair#ready"
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Copy pairing code' })).toHaveFocus()
+  })
+
+  it('does not steal focus from a control that remains mounted', () => {
+    const props = {
+      qrDataUrl: null,
+      qrError: false,
+      pairingUrl: null,
+      endpoint: null,
+      qrEnlarged: false,
+      codeCopied: false,
+      onQrEnlargedChange: vi.fn(),
+      onCodeCopiedChange: vi.fn(),
+      onClearCodeCopiedTimer: vi.fn()
+    }
+    const { rerender } = render(
+      <>
+        <button type="button">Persistent action</button>
+        <MobilePairingQrSection {...props} />
+      </>
+    )
+    const persistentAction = screen.getByRole('button', { name: 'Persistent action' })
+    persistentAction.focus()
+
+    rerender(
+      <>
+        <button type="button">Persistent action</button>
+        <MobilePairingQrSection
+          {...props}
+          qrDataUrl="data:image/png;base64,qr"
+          pairingUrl="orca://pair#ready"
+        />
+      </>
+    )
+
+    expect(persistentAction).toHaveFocus()
   })
 })

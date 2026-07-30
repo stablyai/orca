@@ -130,7 +130,10 @@ export class RemoteRuntimeSharedControlConnection {
       return
     }
     // Why: a successful one-shot status probe proves the restarted endpoint is reachable; replace even a stuck CONNECTING/awaiting-ready socket instead of waiting behind stale backoff.
-    this.closeSocket(remoteRuntimeUnavailableError('Refreshing remote runtime control transport.'))
+    this.closeSocket(
+      remoteRuntimeUnavailableError('Refreshing remote runtime control transport.'),
+      true
+    )
     this.open()
   }
 
@@ -208,7 +211,11 @@ export class RemoteRuntimeSharedControlConnection {
       sendEncrypted: (payload) => this.sendEncrypted(payload),
       markReady: () => {
         this.lastConnectedAt = Date.now()
-        this.scheduleReconnectAttemptReset()
+        this.readyStableReset.schedule({
+          getState: () => this.state,
+          getSocket: () => this.ws,
+          reset: () => this.reconnect.resetAttempt()
+        })
       },
       replaySubscriptions: () => this.replaySubscriptions()
     })
@@ -293,7 +300,7 @@ export class RemoteRuntimeSharedControlConnection {
     }
   }
 
-  private closeSocket(error?: Error): void {
+  private closeSocket(error?: Error, preserveReadyWaitersAndPendingRequests = false): void {
     closeSharedControlSocket({
       environmentId: this.options.environmentId,
       state: this.state,
@@ -304,18 +311,11 @@ export class RemoteRuntimeSharedControlConnection {
       socketCleanup: this.socketCleanup,
       ws: this.ws,
       error,
+      preserveReadyWaitersAndPendingRequests,
       clearReadyStableTimer: () => this.readyStableReset.clear()
     })
     this.ws = this.sharedKey = null
     this.socketCleanup = null
     this.state = 'closed'
-  }
-
-  private scheduleReconnectAttemptReset(): void {
-    this.readyStableReset.schedule({
-      getState: () => this.state,
-      getSocket: () => this.ws,
-      reset: () => this.reconnect.resetAttempt()
-    })
   }
 }
