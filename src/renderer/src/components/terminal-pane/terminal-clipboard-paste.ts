@@ -63,7 +63,7 @@ export async function pasteTerminalClipboard({
   }
   // Why: a clipboard that carries an image plus text *naming* that image (browser
   // "Copy Image", file managers) must not lose the bitmap to the text fast path.
-  const imageReferenceText = text.length > 0 && isImageReferenceOnlyClipboardText(text)
+  const isImageReferenceText = text.length > 0 && isImageReferenceOnlyClipboardText(text)
   const pasteClipboardText = async (): Promise<TerminalClipboardPasteResult> => {
     try {
       const result = await (forceBracketedMultilineTextPaste
@@ -78,7 +78,7 @@ export async function pasteTerminalClipboard({
       return { status: 'skipped', reason: 'text-paste-failed' }
     }
   }
-  if (text && !imageReferenceText) {
+  if (text && !isImageReferenceText) {
     return pasteClipboardText()
   }
 
@@ -87,7 +87,7 @@ export async function pasteTerminalClipboard({
     if (!filePath) {
       // Why: the text still described an image, but no bitmap came with it, so
       // fall back to the paste the user would have gotten before this check.
-      return imageReferenceText ? pasteClipboardText() : { status: 'skipped', reason: 'empty' }
+      return isImageReferenceText ? pasteClipboardText() : { status: 'skipped', reason: 'empty' }
     }
     const result = await pasteText(filePath, {
       // Why: a generated clipboard-image path is terminal image injection, not
@@ -101,7 +101,7 @@ export async function pasteTerminalClipboard({
     return { status: 'pasted', kind: 'image-path' }
   } catch (error) {
     onImagePasteError?.(error)
-    if (imageReferenceText) {
+    if (isImageReferenceText) {
       // Why: report the image failure so a broken temp-file write is still
       // visible, but keep the paste the user would have gotten before this
       // check instead of dropping it entirely.
