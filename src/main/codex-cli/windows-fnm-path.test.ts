@@ -141,6 +141,17 @@ describe('Windows fnm directory selection', () => {
     expect(paths).not.toContain(win32.join(fnmDefault, 'bin'))
   })
 
+  it('honors Windows environment key casing', () => {
+    const paths = getVersionManagerBinPaths({
+      platform: 'win32',
+      homePath: windowsHome,
+      env: { appdata: windowsAppData, fnm_dir: windowsFnmDir }
+    })
+
+    expect(paths).toContain(win32.join(windowsFnmDir, 'aliases', 'default'))
+    expect(paths).not.toContain(win32.join(windowsAppData, 'fnm', 'aliases', 'default'))
+  })
+
   it.each(invalidWindowsDirectories)('falls back to APPDATA for %s FNM_DIR', (_label, fnmDir) => {
     const paths = getVersionManagerBinPaths({
       platform: 'win32',

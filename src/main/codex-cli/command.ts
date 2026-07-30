@@ -95,9 +95,14 @@ function getFnmDefaultDirectory(
   if (platform !== 'win32') {
     return join(homePath, '.fnm', 'aliases', 'default', 'bin')
   }
+  const readEnv = (name: string): string | undefined => {
+    const normalizedName = name.toLowerCase()
+    return Object.entries(env).find(([key]) => key.toLowerCase() === normalizedName)?.[1]
+  }
   const appData =
-    normalizeSingleWindowsPathEntry(env.APPDATA) ?? win32.join(homePath, 'AppData', 'Roaming')
-  const fnmDir = normalizeSingleWindowsPathEntry(env.FNM_DIR) ?? win32.join(appData, 'fnm')
+    normalizeSingleWindowsPathEntry(readEnv('APPDATA')) ??
+    win32.join(homePath, 'AppData', 'Roaming')
+  const fnmDir = normalizeSingleWindowsPathEntry(readEnv('FNM_DIR')) ?? win32.join(appData, 'fnm')
   return win32.join(fnmDir, 'aliases', 'default')
 }
 

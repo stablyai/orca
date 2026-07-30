@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, win32 } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -252,6 +252,71 @@ describe('native Windows fnm Node child fallback', () => {
     expect(normalized(runNode(childEnv))).toBe(normalized(fnmNode))
     expect(cmdResult.status, cmdResult.stderr).toBe(0)
     expect(normalized(cmdResult.stdout.trim())).toBe(normalized(fnmNode))
+  })
+
+  itWindows('starts a real Node-backed agent shim without a persistent Node PATH', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-fnm-agent-'))
+    tempDirectories.push(root)
+    const agentDirectory = join(root, 'agent-bin')
+    mkdirSync(agentDirectory)
+    writeFileSync(join(agentDirectory, 'test-agent.cmd'), '@node.exe -p process.execPath\r\n')
+    const fnmRoot = join(root, 'fnm')
+    const fnmNode = createNode(join(fnmRoot, 'aliases', 'default'))
+    const system32 = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')
+    const inheritedPath = `${system32};${agentDirectory}`
+
+    const result = await withWindowsFnmNodeFallback(
+      { Path: inheritedPath, FNM_DIR: fnmRoot },
+      { homePath: root, sourceEnv: sourceEnv(inheritedPath) }
+    )
+    const childEnv = sourceEnv(result?.Path ?? '')
+    const agentResult = spawnSync(
+      process.env.ComSpec ?? join(system32, 'cmd.exe'),
+      ['/d', '/s', '/c', 'test-agent.cmd'],
+      { encoding: 'utf8', env: childEnv, windowsHide: true }
+    )
+
+    expect(agentResult.status, agentResult.stderr).toBe(0)
+    expect(normalized(agentResult.stdout.trim())).toBe(normalized(fnmNode))
+  })
+
+  itWindows('prefers FNM_DIR over APPDATA for the agent child', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-fnm-precedence-'))
+    tempDirectories.push(root)
+    const fnmRoot = join(root, 'configured-fnm')
+    const fnmNode = createNode(join(fnmRoot, 'aliases', 'default'))
+    const appData = join(root, 'AppData', 'Roaming')
+    createNode(join(appData, 'fnm', 'aliases', 'default'))
+    const system32 = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')
+
+    const result = await withWindowsFnmNodeFallback(
+      { Path: system32, FNM_DIR: fnmRoot, APPDATA: appData },
+      { homePath: root, sourceEnv: sourceEnv(system32) }
+    )
+
+    expect(result?.Path?.split(';')[0]).toBe(win32.join(fnmRoot, 'aliases', 'default'))
+    expect(result?.Path).not.toContain(win32.join(appData, 'fnm', 'aliases', 'default'))
+    expect(normalized(runNode(sourceEnv(result?.Path ?? '')))).toBe(normalized(fnmNode))
+  })
+
+  itWindows('rejects PATH-delimited FNM_DIR before the agent child launch', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-fnm-delimiter-'))
+    tempDirectories.push(root)
+    const escapedDirectory = join(root, 'escaped')
+    createNode(escapedDirectory)
+    const appData = join(root, 'AppData', 'Roaming')
+    const appDataNode = createNode(join(appData, 'fnm', 'aliases', 'default'))
+    const system32 = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')
+    const injectedFnmDir = `${escapedDirectory};${join(root, 'suffix')}`
+
+    const result = await withWindowsFnmNodeFallback(
+      { Path: system32, FNM_DIR: injectedFnmDir, APPDATA: appData },
+      { homePath: root, sourceEnv: sourceEnv(system32) }
+    )
+
+    expect(result?.Path?.split(';')[0]).toBe(win32.join(appData, 'fnm', 'aliases', 'default'))
+    expect(result?.Path).not.toContain(escapedDirectory)
+    expect(normalized(runNode(sourceEnv(result?.Path ?? '')))).toBe(normalized(appDataNode))
   })
 
   itWindows('accepts an fnm default directory junction after executing its node.exe', async () => {
