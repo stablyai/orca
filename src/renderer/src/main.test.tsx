@@ -37,6 +37,20 @@ describe('desktop renderer entry', () => {
     expect(document.querySelector('a')?.getAttribute('href')).toBe('/web-index.html')
   })
 
+  it('treats a null preload bridge as absent', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: null
+    })
+
+    await import('./main')
+
+    expect(mocks.desktopRendererLoaded).not.toHaveBeenCalled()
+    expect(document.getElementById('root')?.textContent).toContain(
+      'Open this page from the Orca app.'
+    )
+  })
+
   it('renders a recovery surface when the deferred desktop import rejects', async () => {
     Object.defineProperty(window, 'api', {
       configurable: true,
