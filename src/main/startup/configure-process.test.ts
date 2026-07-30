@@ -1,5 +1,5 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -93,7 +93,7 @@ describe('patchPackagedProcessPath', () => {
     expect(process.env.PATH).toBe('/usr/bin:/bin')
   })
 
-  itWindows('prepends Windows user-local CLI dirs for packaged Start Menu launches', async () => {
+  itWindows('preserves inherited PATH for packaged Windows launches', async () => {
     const { app } = await import('electron')
     const { patchPackagedProcessPath } = await import('./configure-process')
 
@@ -104,10 +104,7 @@ describe('patchPackagedProcessPath', () => {
 
     patchPackagedProcessPath()
 
-    const segments = (process.env.PATH ?? '').split(pathDelimiter)
-    const userLocalBin = join(homedir(), '.local', 'bin')
-    expect(segments).toContain(userLocalBin)
-    expect(segments.indexOf(userLocalBin)).toBeLessThan(segments.indexOf('C:\\Windows\\System32'))
+    expect(process.env.PATH).toBe(`C:\\Windows\\System32${pathDelimiter}C:\\Windows`)
   })
 })
 

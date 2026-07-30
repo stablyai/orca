@@ -2,7 +2,6 @@ import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { normalizeSingleWindowsPathEntry } from '../../shared/windows-path-entry'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 
@@ -67,10 +66,6 @@ export function configureElectronNetworkCompatibility(
   app.commandLine.appendSwitch('disable-http2')
 }
 
-function getProcessPathDelimiter(): string {
-  return process.platform === 'win32' ? ';' : ':'
-}
-
 function requestDevParentShutdown(): void {
   devParentShutdownRequested = true
   app.quit()
@@ -96,52 +91,42 @@ export function patchPackagedProcessPath(): void {
     return
   }
 
-  const home = process.env.HOME ?? ''
-  const extraPaths: string[] = []
-
-  if (process.platform !== 'win32') {
-    extraPaths.push(
-      '/opt/homebrew/bin',
-      '/opt/homebrew/sbin',
-      '/usr/local/bin',
-      '/usr/local/sbin',
-      '/snap/bin',
-      '/home/linuxbrew/.linuxbrew/bin',
-      '/nix/var/nix/profiles/default/bin'
-    )
-
-    if (home) {
-      extraPaths.push(
-        join(home, 'bin'),
-        join(home, '.local/bin'),
-        join(home, '.nix-profile/bin'),
-        // Why: some agent CLIs install into ~/.<name>/bin; GUI-launched Electron's minimal PATH misses them (stablyai/orca#829).
-        join(home, '.opencode/bin'),
-        join(home, '.vite-plus/bin')
-      )
-    }
+  // Why: Windows terminal children own their PATH fallback; changing main's PATH shadows working inherited tools for every descendant.
+  if (process.platform === 'win32') {
+    return
   }
 
-  // Why: version-manager CLIs use env-node shebangs, so node must be on PATH or spawns fail (also seeds Windows user-local dirs).
+  const home = process.env.HOME ?? ''
+  const extraPaths = [
+    '/opt/homebrew/bin',
+    '/opt/homebrew/sbin',
+    '/usr/local/bin',
+    '/usr/local/sbin',
+    '/snap/bin',
+    '/home/linuxbrew/.linuxbrew/bin',
+    '/nix/var/nix/profiles/default/bin'
+  ]
+
+  if (home) {
+    extraPaths.push(
+      join(home, 'bin'),
+      join(home, '.local/bin'),
+      join(home, '.nix-profile/bin'),
+      // Why: some agent CLIs install into ~/.<name>/bin; GUI-launched Electron's minimal PATH misses them (stablyai/orca#829).
+      join(home, '.opencode/bin'),
+      join(home, '.vite-plus/bin')
+    )
+  }
+
+  // Why: version-manager CLIs use env-node shebangs, so node must be on PATH or spawns fail.
   extraPaths.push(...getVersionManagerBinPaths())
 
-  const safeExtraPaths =
-    process.platform === 'win32'
-      ? extraPaths
-          .map((path) => normalizeSingleWindowsPathEntry(path))
-          .filter((path): path is string => path !== null)
-      : extraPaths
-
-  const pathKey = process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
-  const currentPath = process.env[pathKey] ?? ''
-  const pathDelimiter = getProcessPathDelimiter()
-  const existing = new Set(currentPath.split(pathDelimiter))
-  const missing = safeExtraPaths.filter((path) => !existing.has(path))
+  const currentPath = process.env.PATH ?? ''
+  const existing = new Set(currentPath.split(':'))
+  const missing = extraPaths.filter((path) => !existing.has(path))
 
   if (missing.length > 0) {
-    process.env[pathKey] = [...missing, ...currentPath.split(pathDelimiter).filter(Boolean)].join(
-      pathDelimiter
-    )
+    process.env.PATH = [...missing, ...currentPath.split(':').filter(Boolean)].join(':')
   }
 }
 

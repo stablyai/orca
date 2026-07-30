@@ -143,6 +143,10 @@ function getBaseVersionManagerDirectories(
   return directories
 }
 
+export function getWindowsFnmDefaultDirectory(homePath: string, env: NodeJS.ProcessEnv): string {
+  return getFnmDefaultDirectory('win32', homePath, env)
+}
+
 function getNvmVersionDirectories(homePath: string): string[] {
   const nvmVersionsDir = join(homePath, '.nvm', 'versions', 'node')
   if (!existsSync(nvmVersionsDir)) {

@@ -144,6 +144,10 @@ import {
 } from '../agent-hooks/migration-unsupported-pty-state'
 import { parseWslPath } from '../wsl'
 import { mergePersistedWindowsPath } from '../pty/windows-environment-path'
+import {
+  shouldApplyWindowsFnmNodeFallback,
+  withWindowsFnmNodeFallback
+} from '../pty/windows-fnm-node-fallback'
 import { addOrcaWslInteropEnv, stampWslOrchestrationCompatibilityHost } from '../pty/wsl-orca-env'
 import { PtyProducerFlowController } from './pty-producer-flow-control'
 import { beginTerminalInstall } from './watcher-removal-gate'
@@ -3795,6 +3799,15 @@ export function registerPtyHandlers(
           skipCodexHomeEnv,
           settings: getSettings?.()
         })
+      if (
+        shouldApplyWindowsFnmNodeFallback({
+          connectionId: args.connectionId,
+          isAgentLaunch: isTuiAgent(args.launchAgent),
+          isWsl: codexSelectionTarget.runtime === 'wsl'
+        })
+      ) {
+        env = await withWindowsFnmNodeFallback(env)
+      }
       if (isDaemonHostSpawn && sessionId) {
         if (!isSafePtySessionId(sessionId, app.getPath('userData'))) {
           throw new Error('Invalid PTY session id')
@@ -4947,6 +4960,16 @@ export function registerPtyHandlers(
       const codexResumeHome = codexResumeLaunch.codexResumeHome
       const launchCommand = codexResumeLaunch.command
       baseEnv = stripSequencedStartupResumeArgv(baseEnv, codexResumeLaunch)
+      if (
+        nativeWindowsConptySpawn &&
+        shouldApplyWindowsFnmNodeFallback({
+          connectionId: args.connectionId,
+          isAgentLaunch: isTuiAgent(args.launchAgent),
+          isWsl: codexSelectionTarget.runtime === 'wsl'
+        })
+      ) {
+        baseEnv = await withWindowsFnmNodeFallback(baseEnv)
+      }
       // Why: declared after the strip so a local-provider spawn cannot capture the
       // pre-strip env — only the daemon branch below re-derives this from baseEnv.
       let env: Record<string, string> | undefined = baseEnv
