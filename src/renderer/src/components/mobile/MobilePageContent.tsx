@@ -1,12 +1,19 @@
 import { translate } from '@/i18n/i18n'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
-import { HeroFlow, HeroIntro, HeroPaired, type PairedDevice, type Platform } from './MobileHero'
-import type { StepIndex } from './MobileHero'
+import {
+  HeroFlow,
+  HeroIntro,
+  HeroPaired,
+  type PairedDevice,
+  type Platform,
+  type StepIndex
+} from './MobileHero'
 import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
 import type { MobilePageStage } from './mobile-page-stage'
 import { MobilePageToolbar } from './MobilePageToolbar'
 import { PhoneCarousel } from './PhoneCarousel'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 
 type MobilePageContentProps = {
   closeMobilePage: () => void
@@ -15,7 +22,9 @@ type MobilePageContentProps = {
   devices: readonly PairedDevice[]
   enterFlow: () => void
   generatePairing: (rotate: boolean) => void
+  canGeneratePairing: boolean
   handleAddressChange: (address: string) => void
+  beforeCustomAddressChange: (address: string) => Promise<boolean>
   handleBack: () => void
   handleContinue: () => void
   installQrUrl: string | null
@@ -30,6 +39,11 @@ type MobilePageContentProps = {
   handleConnectionModeChange: (mode: MobilePairingConnectionMode) => void
   pairQrDataUrl: string | null
   pairingUrl: string | null
+  pairingQrError: boolean
+  relayMintFailure: MobileRelayMintFailure | null
+  onUseLan: () => void
+  onRetryRelay: () => void
+  onCopyRelayDiagnostics: () => void
   platform: Platform
   refreshingNetworkInterfaces: boolean
   revokeDevice: (id: string) => void
@@ -50,7 +64,9 @@ export function MobilePageContent({
   devices,
   enterFlow,
   generatePairing,
+  canGeneratePairing,
   handleAddressChange,
+  beforeCustomAddressChange,
   handleBack,
   handleContinue,
   installQrUrl,
@@ -65,6 +81,11 @@ export function MobilePageContent({
   handleConnectionModeChange,
   pairQrDataUrl,
   pairingUrl,
+  pairingQrError,
+  relayMintFailure,
+  onUseLan,
+  onRetryRelay,
+  onCopyRelayDiagnostics,
   platform,
   refreshingNetworkInterfaces,
   revokeDevice,
@@ -78,7 +99,7 @@ export function MobilePageContent({
   toggleMobileSidebarButton
 }: MobilePageContentProps): React.JSX.Element {
   return (
-    <div className="mobile-page-root">
+    <div className="mobile-page-root scrollbar-sleek">
       <MobilePageToolbar
         showMobileButton={showMobileButton}
         onClose={closeMobilePage}
@@ -108,14 +129,21 @@ export function MobilePageContent({
               onCopyInstallUrl={copyInstallUrl}
               pairQrDataUrl={pairQrDataUrl}
               pairingUrl={pairingUrl}
+              pairingQrError={pairingQrError}
+              relayMintFailure={relayMintFailure}
+              onUseLan={onUseLan}
+              onRetryRelay={onRetryRelay}
+              onCopyRelayDiagnostics={onCopyRelayDiagnostics}
               pairLoading={pairLoading}
               connectionMode={connectionMode}
               onConnectionModeChange={handleConnectionModeChange}
               onRegeneratePairing={() => generatePairing(true)}
+              canGeneratePairing={canGeneratePairing}
               onCopyPairingCode={copyPairingCode}
               networkInterfaces={networkInterfaces}
               selectedAddress={selectedAddress}
               onSelectedAddressChange={handleAddressChange}
+              beforeCustomAddressChange={beforeCustomAddressChange}
               onRefreshNetworkInterfaces={loadNetworkInterfaces}
               refreshingNetworkInterfaces={refreshingNetworkInterfaces}
               onBack={handleBack}

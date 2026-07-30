@@ -30,6 +30,7 @@ function provider(
 describe('isProviderConfigured', () => {
   it('hides a provider whose state has not loaded yet', () => {
     expect(isProviderConfigured(null)).toBe(false)
+    expect(isProviderConfigured(undefined)).toBe(false)
   })
 
   it('hides an unconfigured (unavailable) provider', () => {
@@ -260,7 +261,14 @@ describe('getVisibleUsageProvider', () => {
 
   it('hides providers with no live data or durable configuration', () => {
     expect(getVisibleUsageProvider('codex', null, usageSettings())).toBe(null)
+    expect(getVisibleUsageProvider('grok', undefined, usageSettings())).toBe(null)
     expect(getVisibleUsageProvider('gemini', provider('fetching'), usageSettings())).toBe(null)
+  })
+
+  it('creates a pending snapshot when an older main process omits a configured provider', () => {
+    expect(
+      getVisibleUsageProvider('grok', undefined, usageSettings({ grokAuthConfigured: true }))
+    ).toMatchObject({ provider: 'grok', status: 'fetching' })
   })
 
   it('keeps MiniMax visible while the snapshot is pending when a cookie is configured', () => {
@@ -366,6 +374,24 @@ describe('isUsageEmptyState', () => {
           antigravity: null,
           minimax: null,
           grok: null
+        },
+        usageSettings()
+      )
+    ).toBe(false)
+  })
+
+  it('treats provider keys omitted by an older main process as pending', () => {
+    expect(
+      isUsageEmptyState(
+        {
+          claude: provider('unavailable', { provider: 'claude' }),
+          codex: provider('unavailable', { provider: 'codex' }),
+          gemini: provider('unavailable'),
+          opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+          kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: undefined,
+          minimax: undefined,
+          grok: undefined
         },
         usageSettings()
       )

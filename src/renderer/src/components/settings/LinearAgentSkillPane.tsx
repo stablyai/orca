@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import { ArrowRightCircle, BookOpen, Link2, ListTodo, MessageSquarePlus } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { Button } from '@/components/ui/button'
+import { useAppStore } from '@/store'
 import {
   LINEAR_AGENT_SKILL_NAMES,
   ORCA_LINEAR_SKILL_INSTALL_COMMAND,
@@ -48,6 +50,14 @@ function resolveLinearExampleIcon(example: SkillUsageExample): LucideIcon {
 // connection that makes it useful.
 export function LinearAgentSkillPane(): React.JSX.Element {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const openSettingsPage = useAppStore((state) => state.openSettingsPage)
+  const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
+
+  const openIntegrationSettings = (): void => {
+    openSettingsPage()
+    openSettingsTarget({ pane: 'integrations', repoId: null })
+  }
+
   const {
     installed: linearSkillInstalled,
     loading: linearSkillLoading,
@@ -59,30 +69,21 @@ export function LinearAgentSkillPane(): React.JSX.Element {
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
 
-  const installCommand = useMemo(
-    () =>
-      activeSkillRuntime.installDisabledReason
-        ? ORCA_LINEAR_SKILL_INSTALL_COMMAND
-        : buildSkillCommandForRuntime(
-            ORCA_LINEAR_SKILL_INSTALL_COMMAND,
-            activeSkillRuntime.agentRuntime
-          ),
-    [activeSkillRuntime.agentRuntime, activeSkillRuntime.installDisabledReason]
-  )
+  // Why: the built command also depends on the focused runtime environment, so
+  // memoizing it on the runtime alone can serve a stale Windows host command.
+  const installCommand = activeSkillRuntime.installDisabledReason
+    ? ORCA_LINEAR_SKILL_INSTALL_COMMAND
+    : buildSkillCommandForRuntime(
+        ORCA_LINEAR_SKILL_INSTALL_COMMAND,
+        activeSkillRuntime.agentRuntime
+      )
   const updateTarget = useMemo(
     () => getLinearAgentSkillUpdateTarget(linearSkills, linearSkillInstalled),
     [linearSkillInstalled, linearSkills]
   )
-  const updateCommand = useMemo(() => {
-    const command = updateTarget.command
-    return activeSkillRuntime.installDisabledReason
-      ? command
-      : buildSkillCommandForRuntime(command, activeSkillRuntime.agentRuntime)
-  }, [
-    activeSkillRuntime.agentRuntime,
-    activeSkillRuntime.installDisabledReason,
-    updateTarget.command
-  ])
+  const updateCommand = activeSkillRuntime.installDisabledReason
+    ? updateTarget.command
+    : buildSkillCommandForRuntime(updateTarget.command, activeSkillRuntime.agentRuntime)
 
   return (
     <SearchableSetting
@@ -154,6 +155,25 @@ export function LinearAgentSkillPane(): React.JSX.Element {
         resolveIcon={resolveLinearExampleIcon}
         slashCommand={`/${ORCA_LINEAR_SKILL_NAME}`}
       />
+
+      <p className="text-xs text-muted-foreground">
+        {translate(
+          'auto.components.settings.LinearAgentSkillPane.manageConnectionHint',
+          'Review connected Linear workspaces and API keys in'
+        )}{' '}
+        <Button
+          type="button"
+          variant="link"
+          size="sm"
+          className="h-auto p-0 text-xs align-baseline"
+          onClick={openIntegrationSettings}
+        >
+          {translate(
+            'auto.components.settings.LinearAgentSkillPane.manageConnectionLink',
+            'Integrations settings'
+          )}
+        </Button>
+      </p>
     </SearchableSetting>
   )
 }

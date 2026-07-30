@@ -121,6 +121,51 @@ describe('project-host workspace target resolution', () => {
     })
   })
 
+  it('canonicalizes a stale same-host setup id to the setup the picker shows', () => {
+    // Why: the run-target picker renders one row per host. A draft persisted before that collapse
+    // can still name a duplicate local setup; creation must land in the displayed path, not a
+    // transient worktree path the user never sees.
+    const repos = [makeRepo('orca-main'), makeRepo('orca-worktree')]
+    const projects = [makeProject('github:stablyai/orca', ['orca-main', 'orca-worktree'])]
+    const projectHostSetups = [
+      makeSetup('orca-main', 'github:stablyai/orca', 'local', 'orca-main'),
+      makeSetup('orca-worktree', 'github:stablyai/orca', 'local', 'orca-worktree')
+    ]
+
+    const resolution = resolveWorkspaceCreationTarget({
+      eligibleRepos: repos,
+      projects,
+      projectHostSetups,
+      projectHostSetupId: 'orca-worktree'
+    })
+
+    expect(resolution).toMatchObject({
+      status: 'ready',
+      target: { projectHostSetupId: 'orca-main', repoId: 'orca-main', hostId: 'local' }
+    })
+  })
+
+  it('keeps an explicit setup id that is the only one on its host', () => {
+    const repos = [makeRepo('orca-local'), makeRepo('orca-ssh', { connectionId: 'builder' })]
+    const projects = [makeProject('github:stablyai/orca', ['orca-local', 'orca-ssh'])]
+    const projectHostSetups = [
+      makeSetup('orca-local', 'github:stablyai/orca', 'local', 'orca-local'),
+      makeSetup('orca-ssh', 'github:stablyai/orca', 'ssh:builder', 'orca-ssh')
+    ]
+
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: repos,
+        projects,
+        projectHostSetups,
+        projectHostSetupId: 'orca-ssh'
+      })
+    ).toMatchObject({
+      status: 'ready',
+      target: { projectHostSetupId: 'orca-ssh', repoId: 'orca-ssh', hostId: 'ssh:builder' }
+    })
+  })
+
   it('does not merge same-name repos without shared project identity', () => {
     const repos = [
       makeRepo('personal-orca', { displayName: 'orca' }),

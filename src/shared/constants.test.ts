@@ -36,6 +36,11 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').terminalCursorStyleDefaultedToBlock).toBe(true)
   })
 
+  it('allows OSC 52 clipboard writes by default for new settings', () => {
+    expect(getDefaultSettings('/tmp').terminalAllowOsc52Clipboard).toBe(true)
+    expect(getDefaultSettings('/tmp').terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
+  })
+
   it('enables separate light terminal theme by default', () => {
     expect(getDefaultSettings('/tmp').terminalUseSeparateLightTheme).toBe(true)
   })
@@ -89,6 +94,13 @@ describe('getDefaultSettings', () => {
   it('keeps per-workspace environments disabled by default', () => {
     expect(getDefaultSettings('/tmp').experimentalEphemeralVms).toBe(false)
   })
+
+  it('keeps the agent dashboard popout disabled by default', () => {
+    expect(getDefaultSettings('/tmp').experimentalAgentDashboardPopout).toBe(false)
+    expect(getDefaultSettings('/tmp').experimentalAgentDashboardShowIdle).toBe(false)
+  })
+
+  it('routes fresh Codex profiles through the real-home rollout by default', () => {})
 
   it('defaults local Windows projects to the host runtime', () => {
     expect(getDefaultSettings('/tmp').localWindowsRuntimeDefault).toEqual({

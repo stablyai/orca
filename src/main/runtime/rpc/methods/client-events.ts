@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { getRegisteredSshState, listRegisteredSshTargets } from '../../../ipc/ssh'
+import { getPublicSshState } from '../../public-ssh-state'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 
 let clientEventSubscriptionSeq = 0
@@ -32,7 +34,16 @@ export const CLIENT_EVENT_METHODS: readonly RpcAnyMethod[] = [
           connectionId
         )
 
-        emit({ type: 'ready', subscriptionId })
+        // Why: listener-first snapshotting closes the subscribe race while restoring state missed during disconnects.
+        for (const event of runtime.getTerminalSleepClientEventSnapshot?.() ?? []) {
+          emit(event)
+        }
+        const sshStates = listRegisteredSshTargets().flatMap((target) => {
+          const state = getPublicSshState(getRegisteredSshState(target.id) ?? null)
+          return state ? [{ targetId: target.id, state }] : []
+        })
+        // Why: attaching the listener before snapshotting closes the reload gap without exposing HUB-private target configuration.
+        emit({ type: 'ready', subscriptionId, snapshot: { sshStates } })
       })
     }
   }),

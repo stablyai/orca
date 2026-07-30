@@ -3,10 +3,14 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const projectDir = resolve(import.meta.dirname, '../..')
-const skillPath = join(projectDir, 'skills', 'orchestration', 'SKILL.md')
+// Why: orchestration now ships a hybrid discovery stub, so its version-sensitive command
+// guidance lives in the authoritative guide source — assert that content there. The
+// installable stub projection is checked separately below.
+const guidePath = join(projectDir, 'skill-guides', 'orchestration.md')
+const stubPath = join(projectDir, 'skills', 'orchestration', 'SKILL.md')
 
 function readSkill() {
-  return readFileSync(skillPath, 'utf8')
+  return readFileSync(guidePath, 'utf8')
 }
 
 function getSection(markdown, heading) {
@@ -25,10 +29,14 @@ describe('orchestration skill guidance', () => {
     const skill = readSkill()
     const toolBoundary = getSection(skill, 'Tool Boundary')
 
-    expect(toolBoundary).toContain(
-      'must create Orca runtime state with `orca orchestration task-create` and `orca orchestration dispatch --inject`'
+    expect(toolBoundary).toContain('must create or bind a Run')
+    expect(toolBoundary).toContain('create the Task with `orca orchestration task-create`')
+    expect(toolBoundary).toContain('preferred `orca orchestration worker-start` composition')
+    expect(toolBoundary).toContain('low-level `orca orchestration dispatch --inject` path')
+    expect(toolBoundary).not.toContain('or `orca orchestration run`')
+    expect(skill).toContain(
+      '`coordinator-start`, `coordinator-stop`, `run`, and `run-stop` are retired scheduler commands'
     )
-    expect(toolBoundary).toContain('or `orca orchestration run`')
     expect(toolBoundary).toContain(
       'Do not substitute non-Orca subagent tools, generic agent-spawn APIs, or chat-only parallel worker features'
     )
@@ -41,6 +49,41 @@ describe('orchestration skill guidance', () => {
     expect(toolBoundary).toContain(
       'do not retroactively describe the external worker as orchestrated'
     )
+  })
+
+  it('teaches attested adoption without reviving the retired scheduler', () => {
+    const skill = readSkill()
+    const migration = getSection(skill, 'Contract Migration')
+
+    expect(migration).toContain(
+      'adopts a live pre-update orchestration assignment into an ordinary Run'
+    )
+    expect(migration).toContain(
+      'preserves the existing agent process, PTY/session, terminal handle, tab/leaf/pane, worktree or folder workspace, Task, and Dispatch'
+    )
+    expect(migration).toContain('never restarts or replaces the worker')
+    expect(migration).toContain('The retired scheduler is not revived')
+    expect(migration).toContain('[LEGACY COMPATIBILITY]')
+    expect(migration).toContain('[LEGACY READ-ONLY]')
+    expect(migration).toContain(
+      'Loss of lifecycle authority does not invalidate the existing assignment, process, or filesystem work.'
+    )
+    expect(migration).toContain(
+      'It must not spawn, write, signal, stop, switch, focus, split, or inject a terminal.'
+    )
+    expect(migration).not.toContain('task-list --run run_legacy_local')
+    expect(migration).toContain('run_legacy_local is an empty audit tombstone')
+    expect(migration).toContain('Recovered orchestration work from a contract update')
+    expect(migration).toContain('run-show --id <adopted_run_id>')
+    expect(migration).toContain('task-list --run <adopted_run_id>')
+    expect(migration).toContain('Legacy inspection remains available without consuming mail')
+    expect(migration).toContain('run-use --id <adopted_run_id> --takeover-legacy')
+    expect(migration).toContain('Takeover fences only the old coordinator')
+    expect(migration).toContain('Live legacy workers keep their original Tasks, Dispatches')
+    expect(migration).toContain(
+      'keep the original worker as the only editor until it reaches a stable handoff point'
+    )
+    expect(migration).toContain('a conflict-free placement for any remaining work')
   })
 
   it('treats long-running worker waits as liveness checkpoints, not failures', () => {
@@ -144,23 +187,22 @@ describe('orchestration skill guidance', () => {
       'Sidebar lineage and orchestration lifecycle are related but not identical.'
     )
     expect(workerTerminals).toContain(
-      'A same-worktree worker created with `orca terminal create --worktree active` may appear as a peer terminal/agent'
+      'A same-worktree worker may appear as a peer under that worktree in the sidebar'
+    )
+    expect(workerTerminals).toContain('while remaining a child dispatch in orchestration state')
+    expect(workerTerminals).toContain(
+      'only an actual child worktree creates visible parent/child worktree lineage'
     )
     expect(workerTerminals).toContain(
-      'even though it is a child dispatch in Orca orchestration state'
+      'Create a new worktree only when the user explicitly requests one or a concrete checkout or filesystem conflict makes sharing unsafe or impossible'
     )
     expect(workerTerminals).toContain(
-      'A visible parent/child worktree relationship requires creating a child worktree'
+      'Independent tasks, parallel execution, convenience, or a preference for separate checkouts are not isolation requirements.'
     )
     expect(workerTerminals).toContain(
-      'only when the task can safely run from an isolated checkout and does not need uncommitted artifacts from the current working tree'
+      'When a new worktree is allowed, use child lineage for isolated work that is stacked under or dependent on the active worktree'
     )
-    expect(workerTerminals).toContain(
-      'For supervised new-worktree workers, decide the desired Orca lineage before creation'
-    )
-    expect(workerTerminals).toContain(
-      'use `--no-parent` for independent repo-wide fixes, standalone feature work, or unrelated follow-up tasks'
-    )
+    expect(workerTerminals).toContain('use `--no-parent` when it is not stacked')
   })
 
   it('keeps review-only completions and named next-owner fixes in their lanes', () => {
@@ -210,13 +252,13 @@ describe('orchestration skill guidance', () => {
     const messaging = getSection(skill, 'Messaging')
     const workerTerminals = getSection(skill, 'Worker Terminals')
     const agentFirstExample = workerTerminals.match(
-      /```bash\norca worktree create --name <task-name> --agent codex --json\n[\s\S]*?```/
+      /```bash\norca worktree create --name <task-name> --agent codex --setup run --json\n[\s\S]*?```/
     )?.[0]
 
-    expect(workerTerminals).toContain('Agent-first (required for ordinary agent workers)')
+    expect(workerTerminals).toContain('For an allowed new worktree, use agent-first:')
     expect(workerTerminals).toContain('fallback shell + agent pair')
     expect(workerTerminals).toContain(
-      'Repo setup or default-terminal settings may still add tabs or splits'
+      'repo setup and default-terminal settings may add intentional tabs or splits'
     )
     expect(workerTerminals).toContain('without configured default tabs')
     expect(workerTerminals).toContain(
@@ -226,12 +268,58 @@ describe('orchestration skill guidance', () => {
     expect(workerTerminals).not.toContain('ends with **one** agent tab')
     expect(agentFirstExample).toBeDefined()
     expect(agentFirstExample).not.toContain('orca terminal list')
+    expect(agentFirstExample).toContain('agentTerminalHandle')
     expect(agentFirstExample).toContain('startupTerminal.handle')
-    expect(messaging).toContain(
-      'Use `startupTerminal.handle` from the create response when present'
-    )
-    expect(messaging).toContain('continue with the replacement only')
-    expect(messaging).toContain('it does not remotely wake another terminal')
+    expect(messaging).toContain('Prefer `agentTerminalHandle` from the create response')
+    expect(messaging).toContain('Continue with the replacement handle only')
+    expect(messaging).toContain('never writes to terminal input or remotely wakes another terminal')
     expect(messaging).toContain('Use `orchestration dispatch --inject` to deliver a tracked task')
+  })
+})
+
+describe('orchestration install stub', () => {
+  it('points at the version-matched guide and preserves the safe resolver', () => {
+    const stub = readFileSync(stubPath, 'utf8')
+
+    expect(stub).toContain('discovery stub')
+    expect(stub).toContain('ORCA skills get orchestration')
+    // The safe CLI-resolution contract must survive in the stub, never a bare `orca`.
+    expect(stub).toContain('ORCA_CLI_COMMAND')
+    expect(stub).toContain('orca-dev')
+    expect(stub).toContain('orca-ide')
+    expect(stub).toContain('GNOME Orca screen reader')
+    expect(stub).not.toMatch(/^orca /mu)
+  })
+
+  it('does not tell agents to mutate orchestration state before loading the guide', () => {
+    const preGuide = readFileSync(stubPath, 'utf8').split('## Load the full guide')[0]
+
+    expect(preGuide).not.toContain('orca orchestration task-create')
+    expect(preGuide).not.toContain('orca orchestration dispatch')
+  })
+
+  it('gives older binaries a bounded fallback instead of a dead end', () => {
+    const stub = readFileSync(stubPath, 'utf8').replace(/\s+/gu, ' ')
+
+    expect(stub).toContain('explicitly reports that `skills get` is an unknown command')
+    expect(stub).toContain('do not invent commands')
+    expect(stub).toContain('ask the user rather than guessing')
+  })
+
+  it('drops the changing command reference from the installable file', () => {
+    const stub = readFileSync(stubPath, 'utf8')
+
+    // Version-sensitive command detail lives in the binary-served guide now, not here.
+    expect(stub).not.toContain('check --wait')
+    expect(stub).not.toContain('dispatch-show')
+    expect(stub.length).toBeLessThan(readFileSync(guidePath, 'utf8').length)
+  })
+
+  it('keeps the routing frontmatter identical to the guide', () => {
+    const frontmatter = (text) => /^---\n[\s\S]*?\n---\n/u.exec(text)[0]
+
+    expect(frontmatter(readFileSync(stubPath, 'utf8'))).toBe(
+      frontmatter(readFileSync(guidePath, 'utf8'))
+    )
   })
 })

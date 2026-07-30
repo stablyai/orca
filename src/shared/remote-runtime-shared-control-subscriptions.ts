@@ -14,12 +14,14 @@ export function createSharedControlSubscription<TResult>(args: {
   requestId: string
   method: string
   params: unknown
+  retainedParamsBytes: number
   callbacks: SharedControlSubscriptionCallbacks<TResult>
 }): SharedControlLogicalSubscription<TResult> {
   return {
     requestId: args.requestId,
     method: args.method,
     params: args.params,
+    retainedParamsBytes: args.retainedParamsBytes,
     callbacks: args.callbacks,
     sent: false,
     closed: false,
@@ -53,9 +55,12 @@ export function handleSharedControlLogicalResponse(args: {
 
 export function closeSharedControlLogicalSubscription(args: {
   subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
-  subscription: SharedControlLogicalSubscription<unknown>
+  subscription?: SharedControlLogicalSubscription<unknown>
   request: (method: string, params: unknown) => void
 }): void {
+  if (!args.subscription) {
+    return
+  }
   const cleanup = getCleanupRequest(args.subscription)
   if (cleanup) {
     finishSharedControlSubscription(args.subscriptions, args.subscription, false)

@@ -44,6 +44,7 @@ export type EditorConfigParams = {
   filePath: string
   worktreeId: string
   worktreeRoot: string | null
+  externalSshTargetId?: string
   runtimeEnvironmentId?: string | null
   isMac: boolean
   richMarkdownSpellcheckEnabled: boolean
@@ -97,6 +98,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     filePath,
     worktreeId,
     worktreeRoot,
+    externalSshTargetId,
     runtimeEnvironmentId,
     isMac,
     richMarkdownSpellcheckEnabled,
@@ -202,6 +204,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     onBlur: () => {
       window.api.ui.setMarkdownEditorFocused(false)
       clearAnnotationTarget()
+      params.flushPendingSerialization()
     },
     onCreate: ({ editor: nextEditor }) => {
       // Why: normalizeEmptyListItems (not normalizeSoftBreaks) so hard-wrapped
@@ -223,6 +226,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
         nextEditor,
         createRichMarkdownImageResolverContext({
           filePath,
+          externalSshTargetId,
           runtimeEnvironmentId,
           settings,
           worktreeId,
@@ -254,9 +258,9 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
           if (didSerialize) {
             onContentChangeRef.current(markdown)
           }
-        } catch {
-          // Why: save/restart flows should never crash the UI just because
-          // the editor was torn down between scheduling and serializing.
+        } catch (error) {
+          // Why: teardown and reconcile failures are handled above; other failures must stay observable.
+          console.error('[editor] rich markdown serialize (debounced) failed', error)
         }
       }, 300)
     },

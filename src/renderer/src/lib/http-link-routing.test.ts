@@ -16,6 +16,7 @@ const storeState = {
   settings: undefined as
     | {
         openLinksInApp?: boolean
+        openLinksInAppModifierInverts?: boolean
         openLinksInAppPreferencePrompted?: boolean
         activeRuntimeEnvironmentId?: string | null
         localhostWorktreeLabelsEnabled?: boolean
@@ -378,5 +379,80 @@ describe('openHttpLink', () => {
 
     await expect(resolveLocalhostHttpLinkDisplayUrl('http://localhost:5180/')).resolves.toBe(null)
     expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('openHttpLink modifier routing', () => {
+  it('forces the system browser when inverting is off and links open in Orca', () => {
+    storeState.settings = { openLinksInApp: true, openLinksInAppModifierInverts: false }
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1', modifierHeld: true })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  // Why: this is the pre-existing dead gesture — Shift already meant "system
+  // browser", which is where the link was going anyway.
+  it('stays on the system browser when inverting is off and links open externally', () => {
+    storeState.settings = { openLinksInApp: false, openLinksInAppModifierInverts: false }
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1', modifierHeld: true })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('opens in Orca when inverting is on and links open externally', () => {
+    storeState.settings = { openLinksInApp: false, openLinksInAppModifierInverts: true }
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1', modifierHeld: true })
+
+    expect(setActiveWorktreeMock).toHaveBeenCalledWith('wt-1')
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('opens in the system browser when inverting is on and links open in Orca', () => {
+    storeState.settings = { openLinksInApp: true, openLinksInAppModifierInverts: true }
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1', modifierHeld: true })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('leaves unmodified clicks on the setting', () => {
+    storeState.settings = { openLinksInApp: false, openLinksInAppModifierInverts: true }
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  // Why: remote-owned links must never land in an Orca tab that cannot reach them.
+  it('never routes a remote source into Orca even when inverting', () => {
+    storeState.settings = { openLinksInApp: false, openLinksInAppModifierInverts: true }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      modifierHeld: true,
+      sourceOwner: { kind: 'ssh', connectionId: 'conn-1' }
+    })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps forceSystemBrowser unconditional', () => {
+    storeState.settings = { openLinksInApp: true, openLinksInAppModifierInverts: true }
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1', forceSystemBrowser: true })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 })

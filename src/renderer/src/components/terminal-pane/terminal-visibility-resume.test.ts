@@ -28,9 +28,11 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
   scheduleTabRevealWebglAtlasRecovery: () => scheduleTabRevealWebglAtlasRecovery()
 }))
 const resetTerminalLinkifierHoverState = vi.fn()
+const isTerminalLinkifierHoverActive = vi.fn((_terminal: unknown) => false)
 vi.mock('@/lib/pane-manager/terminal-linkifier-hover-reset', () => ({
   resetTerminalLinkifierHoverState: (terminal: unknown) =>
-    resetTerminalLinkifierHoverState(terminal)
+    resetTerminalLinkifierHoverState(terminal),
+  isTerminalLinkifierHoverActive: (terminal: unknown) => isTerminalLinkifierHoverActive(terminal)
 }))
 
 type FakeManager = {
@@ -38,6 +40,8 @@ type FakeManager = {
   resumeRendering: ReturnType<typeof vi.fn>
   scheduleRevealRepaint: ReturnType<typeof vi.fn>
   scheduleRevealPresent: ReturnType<typeof vi.fn>
+  fitAllPanes: ReturnType<typeof vi.fn>
+  fitAllRevealedPanes: ReturnType<typeof vi.fn>
 }
 
 function createManager(order: string[] = []): FakeManager {
@@ -45,7 +49,10 @@ function createManager(order: string[] = []): FakeManager {
     getPanes: vi.fn(() => []),
     resumeRendering: vi.fn(() => order.push('resume-rendering')),
     scheduleRevealRepaint: vi.fn(() => order.push('reveal-repaint')),
-    scheduleRevealPresent: vi.fn(() => order.push('reveal-present'))
+    scheduleRevealPresent: vi.fn(() => order.push('reveal-present')),
+    // Stubbed to assert reveals route through fitAllRevealedPanes, never fitAllPanes.
+    fitAllPanes: vi.fn(() => order.push('fit-sync')),
+    fitAllRevealedPanes: vi.fn(() => order.push('fit-reveal'))
   }
 }
 
@@ -112,7 +119,67 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     const manager = createManager(order)
     resumeTerminalVisibility(resumeArgs(manager, false))
 
-    expect(order).toEqual(['resume-rendering', 'reveal-repaint'])
+    expect(order).toEqual(['resume-rendering', 'fit-reveal', 'reveal-repaint'])
+  })
+
+  it('routes a heavy reveal through fitAllRevealedPanes, not the sync fit', () => {
+    // Regression: the sync reveal fit applied a transient one-column DOM↔WebGL grid, garbling grok on restore.
+    const manager = createManager()
+    resumeTerminalVisibility(resumeArgs(manager, false))
+
+    expect(manager.fitAllRevealedPanes).toHaveBeenCalledTimes(1)
+    expect(manager.fitAllPanes).not.toHaveBeenCalled()
+  })
+
+  it('does not fit on a light tab reveal', () => {
+    const manager = createManager()
+    resumeTerminalVisibility(resumeArgs(manager, true))
+
+    expect(manager.fitAllRevealedPanes).not.toHaveBeenCalled()
+    expect(manager.fitAllPanes).not.toHaveBeenCalled()
+  })
+
+  it('fits window wake recovery through the stable path, not the sync fit', () => {
+    const manager = createManager()
+    recoverVisibleTerminalWindowWake({
+      manager: manager as never as PaneManager,
+      isActive: true,
+      clearGlyphAtlases: false
+    })
+
+    expect(manager.fitAllRevealedPanes).toHaveBeenCalledTimes(1)
+    expect(manager.fitAllPanes).not.toHaveBeenCalled()
+  })
+
+  it('resets each pane linkifier hover cache on window wake recovery so links recover without a scroll', () => {
+    const first = { name: 'pane-a' }
+    const second = { name: 'pane-b' }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ terminal: first }, { terminal: second }])
+
+    recoverVisibleTerminalWindowWake({
+      manager: manager as never as PaneManager,
+      isActive: true,
+      clearGlyphAtlases: false
+    })
+
+    expect(resetTerminalLinkifierHoverState).toHaveBeenCalledWith(first)
+    expect(resetTerminalLinkifierHoverState).toHaveBeenCalledWith(second)
+  })
+
+  it('keeps a genuinely-hovered link intact on window wake recovery', () => {
+    const hovered = { name: 'hovered-pane' }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ terminal: hovered }])
+    isTerminalLinkifierHoverActive.mockReturnValueOnce(true)
+
+    recoverVisibleTerminalWindowWake({
+      manager: manager as never as PaneManager,
+      isActive: true,
+      clearGlyphAtlases: false
+    })
+
+    expect(resetTerminalLinkifierHoverState).not.toHaveBeenCalled()
   })
 
   it('schedules the atlas-clearing repaint on genuine wake recovery', () => {

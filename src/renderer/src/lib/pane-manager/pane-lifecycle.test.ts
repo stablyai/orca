@@ -114,7 +114,7 @@ describe('buildDefaultTerminalOptions', () => {
     expect(normalizeTerminalFastScrollSensitivity(25)).toBe(20)
   })
 
-  it('enables xterm contrast correction for low-contrast CLI colors', () => {
+  it('defaults minimumContrastRatio to the light-background value (applyTerminalAppearance re-gates it)', () => {
     expect(buildDefaultTerminalOptions().minimumContrastRatio).toBe(4.5)
   })
 
@@ -621,6 +621,30 @@ describe('openTerminal — addon and provider wiring', () => {
     disposePane(pane, new Map([[pane.id, pane]]))
     expect(disposeSpy).toHaveBeenCalledTimes(1)
     expect(pane.linkifierHoverResetDisposable).toBeNull()
+  })
+
+  it('installs the mouseleave linkifier hover reset and disposes it', () => {
+    const { pane } = createOpenTerminalHarness()
+    const addEventListener = vi.fn()
+    const removeEventListener = vi.fn()
+    const screen = {
+      addEventListener,
+      removeEventListener
+    } as unknown as HTMLElement
+    vi.mocked(pane.terminal.element!.querySelector).mockReturnValueOnce(screen)
+
+    openTerminal(pane)
+    const disposable = pane.linkifierMouseLeaveResetDisposable
+    expect(disposable?.dispose).toBeTypeOf('function')
+    expect(addEventListener).toHaveBeenCalledWith('mouseleave', expect.any(Function))
+    const mouseLeaveHandler = addEventListener.mock.calls.find(
+      ([eventName]) => eventName === 'mouseleave'
+    )?.[1]
+    expect(mouseLeaveHandler).toBeTypeOf('function')
+
+    disposePane(pane, new Map([[pane.id, pane]]))
+    expect(removeEventListener).toHaveBeenCalledWith('mouseleave', mouseLeaveHandler)
+    expect(pane.linkifierMouseLeaveResetDisposable).toBeNull()
   })
 
   // Why: the DOM renderer misrenders joined spans (per-character

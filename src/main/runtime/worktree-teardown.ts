@@ -2,7 +2,7 @@ import type { IPtyProvider } from '../providers/types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { listRegisteredPtys } from '../memory/pty-registry'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
-import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 
 // Why: normal inventories still coalesce into one process scan, while a stale
@@ -25,6 +25,17 @@ export type WorktreeTeardownResult = {
 }
 
 export const WORKTREE_PROCESS_SWEEP_TIMEOUT_MS = 10_000
+
+// Why: reserve time after bounded stop RPCs to recheck whether a reported
+// failure actually left a live PTY before the outer sweep deadline.
+export const WORKTREE_TEARDOWN_RPC_MARGIN_MS = 500
+
+// Absolute deadline (epoch ms) threaded into provider RPCs on the destructive
+// path; each RPC leaf converts it to the remaining time when it actually issues,
+// so sequential RPCs share one budget without any relative-timeout bookkeeping.
+export function teardownRpcDeadline(sweepDeadline: number): number {
+  return sweepDeadline - WORKTREE_TEARDOWN_RPC_MARGIN_MS
+}
 
 /**
  * Kills every PTY we can prove belongs to `worktreeId`, across all three
@@ -58,7 +69,6 @@ export async function killAllProcessesForWorktree(
   }
   const deadline = Date.now() + Math.max(1, deps.timeoutMs ?? WORKTREE_PROCESS_SWEEP_TIMEOUT_MS)
   const deadlineError = new Error(`Timed out waiting for physical PTY teardown: ${worktreeId}`)
-  const worktreePath = splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
   const stopAttempts = new Map<string, Promise<boolean>>()
   const stopPty = (
     ptyId: string,
@@ -81,22 +91,27 @@ export async function killAllProcessesForWorktree(
     return current
   }
 
-  // Why: headless CLI has no ready renderer graph; only that known sentinel
-  // may fall through to the provider and registry physical-owner sweeps.
+  // Why: headless CLI has no ready renderer graph, and a just-created/removed
+  // worktree may not resolve in the graph yet; either case means zero
+  // runtime-owned PTYs, so both sentinels fall through instead of failing
+  // destructive removal closed.
   const runtimeSweep = deps.runtime
     ? settleBeforeDeadline(
         () => deps.runtime!.stopTerminalsForWorktree(worktreeId, { deadline, stopPty }),
         { stopped: 0 },
         deadline,
         deps.requirePhysicalStop ? deadlineError : undefined,
-        (error) => !(error instanceof Error && error.message === 'runtime_unavailable')
+        (error) =>
+          !(
+            error instanceof Error &&
+            (error.message === 'runtime_unavailable' || error.message === 'selector_not_found')
+          )
       )
     : Promise.resolve({ stopped: 0 })
   const providerSweep = settleBeforeDeadline(
     () =>
       sweepProviderByPrefix(
         worktreeId,
-        worktreePath,
         deps.localProvider,
         deadline,
         stopPty,
@@ -132,13 +147,39 @@ export async function killAllProcessesForWorktree(
   result.providerStopped = providerStopped
   result.registryStopped = registryStopped
   if (deps.requirePhysicalStop) {
-    const stops = await Promise.all(stopAttempts.values())
-    if (stops.some((stopped) => !stopped)) {
+    const stopResults = await Promise.all(
+      [...stopAttempts].map(async ([ptyId, stopped]) => [ptyId, await stopped] as const)
+    )
+    const failedPtyIds = stopResults.filter(([, stopped]) => !stopped).map(([ptyId]) => ptyId)
+    const failedPtysExited =
+      failedPtyIds.length === 0 ||
+      (await verifyFailedPtysExited(failedPtyIds, deps.localProvider, deadline))
+    if (!failedPtysExited) {
       throw new Error(`Failed to physically stop every PTY for worktree: ${worktreeId}`)
+    }
+    for (const ptyId of failedPtyIds) {
+      clearStoppedPtyState(ptyId, deps.onPtyStopped)
     }
   }
 
   return result
+}
+
+async function verifyFailedPtysExited(
+  failedPtyIds: readonly string[],
+  provider: IPtyProvider,
+  deadline: number
+): Promise<boolean> {
+  const sessions = await settleBeforeDeadline(
+    () => provider.listProcesses({ deadlineMs: deadline }),
+    null,
+    deadline
+  ).catch(() => null)
+  if (!sessions) {
+    return false
+  }
+  const livePtyIds = new Set(sessions.map((session) => session.id))
+  return failedPtyIds.every((ptyId) => !livePtyIds.has(ptyId))
 }
 
 async function settleBeforeDeadline<T>(
@@ -186,7 +227,6 @@ async function settleBeforeDeadline<T>(
 
 async function sweepProviderByPrefix(
   worktreeId: string,
-  worktreePath: string | undefined,
   provider: IPtyProvider,
   deadline: number,
   stopPty: (
@@ -197,18 +237,29 @@ async function sweepProviderByPrefix(
   failClosed = false
 ): Promise<number> {
   const prefix = `${worktreeId}@@`
+  // Why (#10252): the cwd fallback only proves ownership when the filesystem path
+  // is the *whole* worktree path. A folder-workspace instance strips its
+  // `::workspace:<uuid>` suffix to a checkout dir shared with sibling instances,
+  // so leave the fallback unset whenever stripping shortened the path — else
+  // deleting one instance would sweep the others.
+  const fullWorktreePath = splitWorktreeId(worktreeId)?.worktreePath
+  const cwdFallbackPath =
+    splitWorktreeIdForFilesystem(worktreeId)?.worktreePath === fullWorktreePath
+      ? fullWorktreePath
+      : undefined
+  const rpcDeadline = teardownRpcDeadline(deadline)
   const sessions = failClosed
-    ? await provider.listProcesses()
-    : await provider.listProcesses().catch(() => [])
+    ? await provider.listProcesses({ deadlineMs: rpcDeadline })
+    : await provider.listProcesses({ deadlineMs: rpcDeadline }).catch(() => [])
   const ownedSessions = sessions.filter((session) => {
     // Why: older daemon/relay process rows may omit cwd; their established ID
     // and authoritative worktree ownership must remain usable during teardown.
     const cwdOwned =
-      worktreePath !== undefined &&
+      cwdFallbackPath !== undefined &&
       session.worktreeId === undefined &&
       typeof session.cwd === 'string' &&
       session.cwd.length > 0 &&
-      isPathInsideOrEqual(worktreePath, session.cwd)
+      isPathInsideOrEqual(cwdFallbackPath, session.cwd)
     return session.id.startsWith(prefix) || session.worktreeId === worktreeId || cwdOwned
   })
   // Why: agent shutdown snapshots coalesce only when requests begin together;
@@ -225,7 +276,7 @@ async function sweepProviderByPrefix(
           return false
         }
         try {
-          await provider.shutdown(session.id, { immediate: true })
+          await provider.shutdown(session.id, { immediate: true, deadlineMs: rpcDeadline })
           return Date.now() < deadline
         } catch {
           return false
@@ -251,6 +302,7 @@ async function sweepRegistryForWorktree(
   ) => Promise<{ stopped: boolean; owner: boolean }>,
   onPtyStopped?: (ptyId: string) => void
 ): Promise<number> {
+  const rpcDeadline = teardownRpcDeadline(deadline)
   const entries = listRegisteredPtys().filter((r) => r.worktreeId === worktreeId)
   const stopped = await mapWithConcurrency(
     entries,
@@ -264,7 +316,7 @@ async function sweepRegistryForWorktree(
           return false
         }
         try {
-          await localProvider.shutdown(entry.ptyId, { immediate: true })
+          await localProvider.shutdown(entry.ptyId, { immediate: true, deadlineMs: rpcDeadline })
           return Date.now() < deadline
         } catch {
           return false

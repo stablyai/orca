@@ -3,8 +3,7 @@
  *
  * Why extracted from pty-connection.ts: the parked byte watcher and the
  * pty:sideEffect facts handler apply the exact live-path semantics without a
- * pane, and policy must not drift between the three consumers
- * (docs/reference/terminal-side-effect-authority.md). This module is
+ * pane, and policy must not drift between the three consumers. This module is
  * deliberately dependency-light — no pane/xterm imports — so pane-less
  * consumers can use it.
  */

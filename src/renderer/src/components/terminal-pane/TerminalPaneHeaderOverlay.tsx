@@ -1,5 +1,11 @@
 import type { CSSProperties, RefObject } from 'react'
-import { MessageSquare, SquareSplitVertical, SquareTerminal, X } from 'lucide-react'
+import {
+  MessageSquare,
+  MessageSquarePlus,
+  SquareSplitVertical,
+  SquareTerminal,
+  X
+} from 'lucide-react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -44,6 +50,8 @@ type TerminalPaneHeaderOverlayProps = {
   isChatViewMode?: boolean
   /** Flip the active pane between the terminal and the native chat view. */
   onToggleNativeChat?: () => void
+  canContinueAgentSessionInNewSession?: boolean
+  onContinueAgentSessionInNewSession?: (pane: ManagedPane) => void
   onSplitPane: (pane: ManagedPane, direction: 'vertical' | 'horizontal') => void
   onBeginPaneDrag: (paneId: number, handle: HTMLElement, event: PointerEvent) => void
   onActivatePaneTitleInteraction: (paneId: number) => void
@@ -80,6 +88,8 @@ export default function TerminalPaneHeaderOverlay({
   canToggleNativeChat,
   isChatViewMode,
   onToggleNativeChat,
+  canContinueAgentSessionInNewSession,
+  onContinueAgentSessionInNewSession,
   onSplitPane,
   onBeginPaneDrag,
   onActivatePaneTitleInteraction,
@@ -234,6 +244,34 @@ export default function TerminalPaneHeaderOverlay({
                   </button>
                 ) : null}
                 <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
+                  {canContinueAgentSessionInNewSession && isActivePane ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="pane-title-split-trigger"
+                          aria-label={translate(
+                            'components.agentSessionContinuation.continueInNewSession',
+                            'Continue in New Session…'
+                          )}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onContinueAgentSessionInNewSession?.(pane)
+                          }}
+                        >
+                          <MessageSquarePlus className="size-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={4}>
+                        {translate(
+                          'components.agentSessionContinuation.continueInNewSession',
+                          'Continue in New Session…'
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : null}
                   {canToggleNativeChat && isActivePane ? (
                     <Tooltip>
                       <TooltipTrigger asChild>

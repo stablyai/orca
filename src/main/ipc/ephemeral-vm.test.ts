@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { listEnvironments } from '../../shared/runtime-environment-store'
+import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
 
 const handlers = new Map<string, (_event: unknown, args: never) => Promise<unknown> | unknown>()
 const {
@@ -12,14 +13,16 @@ const {
   getPathMock,
   connectRuntimeOwnedSshTargetMock,
   disconnectRuntimeOwnedSshTargetMock,
-  removeRuntimeOwnedSshTargetMock
+  removeRuntimeOwnedSshTargetMock,
+  invalidateRuntimeEnvironmentTransportMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
   getPathMock: vi.fn(),
   connectRuntimeOwnedSshTargetMock: vi.fn(),
   disconnectRuntimeOwnedSshTargetMock: vi.fn(),
-  removeRuntimeOwnedSshTargetMock: vi.fn()
+  removeRuntimeOwnedSshTargetMock: vi.fn(),
+  invalidateRuntimeEnvironmentTransportMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -36,6 +39,10 @@ vi.mock('../ephemeral-vm-runtime-ssh', () => ({
   connectRuntimeOwnedSshTarget: connectRuntimeOwnedSshTargetMock,
   disconnectRuntimeOwnedSshTarget: disconnectRuntimeOwnedSshTargetMock,
   removeRuntimeOwnedSshTarget: removeRuntimeOwnedSshTargetMock
+}))
+
+vi.mock('./runtime-environments', () => ({
+  invalidateRuntimeEnvironmentTransport: invalidateRuntimeEnvironmentTransportMock
 }))
 
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
@@ -86,6 +93,15 @@ function nodeCommand(scriptPath: string): string {
   return `"${process.execPath}" "${scriptPath}"`
 }
 
+function pluginServiceWithRecipes(
+  recipes: { pluginKey: string; recipe: Record<string, unknown> }[]
+) {
+  return {
+    whenReady: vi.fn().mockResolvedValue(undefined),
+    contentPacks: { vmRecipes: { list: vi.fn(() => recipes) } }
+  }
+}
+
 describe('registerEphemeralVmHandlers', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 
@@ -98,6 +114,7 @@ describe('registerEphemeralVmHandlers', () => {
     connectRuntimeOwnedSshTargetMock.mockReset()
     disconnectRuntimeOwnedSshTargetMock.mockReset()
     removeRuntimeOwnedSshTargetMock.mockReset()
+    invalidateRuntimeEnvironmentTransportMock.mockReset()
     connectRuntimeOwnedSshTargetMock.mockResolvedValue({
       targetId: 'runtime-ssh-orca-instance-1',
       target: {
@@ -191,6 +208,132 @@ describe('registerEphemeralVmHandlers', () => {
     ])
   })
 
+  it('merges approved plugin recipes while repository recipes shadow matching ids', async () => {
+    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    writeFileSync(
+      join(repoPath, 'orca.yaml'),
+      [
+        'environmentRecipes:',
+        '  - id: shared',
+        '    name: Repository Recipe',
+        '    create: repo-create'
+      ].join('\n')
+    )
+    const pluginService = pluginServiceWithRecipes([
+      {
+        pluginKey: 'orca-samples.recipes',
+        recipe: { id: 'shared', name: 'Plugin Shared', create: 'plugin-shared' }
+      },
+      {
+        pluginKey: 'orca-samples.recipes',
+        recipe: { id: 'global', name: 'Plugin Global', create: 'plugin-global' }
+      }
+    ])
+
+    registerEphemeralVmHandlers(makeStore(repoPath) as never, pluginService as never)
+    const result = (await handlers.get('ephemeralVm:listRecipes')?.(null, {
+      repoId: 'repo-1'
+    } as never)) as { recipes: { id: string; name: string }[] }
+
+    expect(pluginService.whenReady).toHaveBeenCalled()
+    expect(result.recipes).toMatchObject([
+      { id: 'shared', name: 'Repository Recipe' },
+      { id: 'global', name: 'Plugin Global' }
+    ])
+  })
+
+  it('uses an immutable plugin recipe snapshot after the plugin is removed', async () => {
+    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    getPathMock.mockReturnValue(userDataPath)
+    const startPath = join(repoPath, 'start.js')
+    const destroyPath = join(repoPath, 'destroy.js')
+    writeFileSync(
+      startPath,
+      `console.log(${JSON.stringify(
+        JSON.stringify({
+          schemaVersion: 1,
+          pairingCode: makePairingCode(),
+          projectRoot: '/workspace/repo'
+        })
+      )})`
+    )
+    writeFileSync(destroyPath, "require('fs').writeFileSync('plugin-cleaned.txt', 'yes')")
+    const registrations = [
+      {
+        pluginKey: 'orca-samples.recipes',
+        recipe: {
+          id: 'plugin-cloud',
+          name: 'Plugin Cloud',
+          create: nodeCommand(startPath),
+          destroy: nodeCommand(destroyPath)
+        }
+      }
+    ]
+    const pluginService = pluginServiceWithRecipes(registrations)
+    registerEphemeralVmHandlers(makeStore(repoPath) as never, pluginService as never)
+
+    const provisioned = (await handlers.get('ephemeralVm:provision')?.(null, {
+      repoId: 'repo-1',
+      recipeId: 'plugin-cloud'
+    } as never)) as { ok: true; runtime: { id: string; recipe?: { id: string } } }
+    registrations.splice(0)
+    const cleaned = await handlers.get('ephemeralVm:cleanup')?.(null, {
+      runtimeId: provisioned.runtime.id
+    } as never)
+
+    expect(provisioned.runtime.recipe).toMatchObject({ id: 'plugin-cloud' })
+    expect(cleaned).toEqual(expect.objectContaining({ status: 'cleaned' }))
+    expect(readFileSync(join(repoPath, 'plugin-cleaned.txt'), 'utf8')).toBe('yes')
+  })
+
+  it('never substitutes a later same-id plugin recipe for a legacy runtime', async () => {
+    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    getPathMock.mockReturnValue(userDataPath)
+    const pluginDestroyPath = join(repoPath, 'plugin-destroy.js')
+    writeFileSync(
+      pluginDestroyPath,
+      "require('fs').writeFileSync('plugin-destroy-ran.txt', 'unsafe')"
+    )
+    upsertEphemeralVmRuntime(userDataPath, {
+      id: 'legacy-runtime',
+      recipeId: 'shared-id',
+      repoId: 'repo-1',
+      status: 'running',
+      cleanupStatus: 'not_started',
+      createdAt: 1,
+      updatedAt: 1,
+      recipeResult: {
+        schemaVersion: 1,
+        pairingCode: makePairingCode(),
+        projectRoot: '/workspace/repo'
+      }
+    })
+    const pluginService = pluginServiceWithRecipes([
+      {
+        pluginKey: 'orca-samples.recipes',
+        recipe: {
+          id: 'shared-id',
+          name: 'Later Plugin Recipe',
+          create: 'create',
+          destroy: nodeCommand(pluginDestroyPath)
+        }
+      }
+    ])
+    registerEphemeralVmHandlers(makeStore(repoPath) as never, pluginService as never)
+
+    const cleaned = await handlers.get('ephemeralVm:cleanup')?.(null, {
+      runtimeId: 'legacy-runtime'
+    } as never)
+
+    expect(cleaned).toMatchObject({
+      status: 'cleanup_failed',
+      cleanupLastError: 'Recipe not found: shared-id'
+    })
+    expect(existsSync(join(repoPath, 'plugin-destroy-ran.txt'))).toBe(false)
+  })
+
   it('provisions a recipe and persists the ephemeral runtime', async () => {
     const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
     const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
@@ -268,10 +411,8 @@ describe('registerEphemeralVmHandlers', () => {
     } as never)
     expect(cleaned).toEqual(expect.objectContaining({ status: 'cleaned' }))
     expect(listEnvironments(userDataPath)).toEqual([])
-    expect(store.updateSettings).toHaveBeenLastCalledWith(
-      { activeRuntimeEnvironmentId: null },
-      { notifyListeners: true }
-    )
+    expect(store.getSettings().activeRuntimeEnvironmentId).toBe(result.environment!.id)
+    expect(store.updateSettings).toHaveBeenCalledTimes(1)
   })
 
   it('provisions an ssh recipe without creating a runtime environment', async () => {
@@ -493,6 +634,10 @@ describe('registerEphemeralVmHandlers', () => {
     expect(suspended).toEqual(expect.objectContaining({ status: 'suspended' }))
     expect(readFileSync(join(repoPath, 'suspend-mode.txt'), 'utf8')).toBe('suspend')
 
+    invalidateRuntimeEnvironmentTransportMock.mockImplementationOnce((environmentId: string) => {
+      const environment = listEnvironments(userDataPath).find((entry) => entry.id === environmentId)
+      expect(environment?.endpoints[0]?.endpoint).toBe('wss://resumed.example.com')
+    })
     const resumed = await handlers.get('ephemeralVm:resumeWorkspace')?.(null, {
       workspaceId: 'workspace-1'
     } as never)
@@ -507,6 +652,9 @@ describe('registerEphemeralVmHandlers', () => {
       (entry) => entry.id === provisioned.environment.id
     )
     expect(environment?.endpoints[0]?.endpoint).toBe('wss://resumed.example.com')
+    expect(invalidateRuntimeEnvironmentTransportMock).toHaveBeenCalledWith(
+      provisioned.environment.id
+    )
   })
 
   it('returns a copyable cleanup command for a persisted runtime', async () => {

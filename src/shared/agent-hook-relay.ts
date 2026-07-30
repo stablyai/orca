@@ -24,6 +24,7 @@
 
 import type { ParsedAgentStatusPayload } from './agent-status-types'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentHookTarget } from './agent-hook-types'
 
 // Why: the local hook server knows the discriminator from URL pathname routing
 // (`/hook/<source>`); the relay equally must tag each forwarded notification
@@ -107,6 +108,17 @@ export const AGENT_HOOK_REQUEST_REPLAY_METHOD = 'agent_hook.requestReplay' as co
  *  OpenCode/Pi plugin source files to the relay so it can materialize the
  *  overlay dirs on the remote. */
 export const AGENT_HOOK_INSTALL_PLUGINS_METHOD = 'agent_hook.installPlugins' as const
+
+/** JSON-RPC request method that asks the remote relay to install every
+ *  managed hook using its local filesystem instead of WAN-bound SFTP. */
+export const AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD = 'agent_hook.installManagedHooks' as const
+
+export type AgentHookInstallManagedHooksParams = {
+  /** SHA-256 fingerprint of the server key negotiated by Orca's SSH transport. */
+  hostKeyFingerprint?: string
+  /** Positively detected and enabled agents allowed to mutate remote config. */
+  agents: readonly AgentHookTarget[]
+}
 
 /** Feature-flag env var. Read once at process start by Orca and the relay.
  *  Remote agent hooks ship as the default SSH behavior; set "0" to opt out. */

@@ -10,7 +10,7 @@ import { PRCommentComposer } from './PRCommentComposer'
 import { formatPrCommentRelativeTime } from './pr-comment-time'
 import { prCommentsStyles as styles } from './pr-comments-styles'
 
-export type PRCommentRepoSlug = { owner: string; repo: string }
+export type PRCommentRepoSlug = { owner: string; repo: string; host?: string }
 
 // Action handlers are passed from the comment actions hook (stable callbacks), so
 // adding them keeps the memo'd card from re-rendering on unrelated timeline changes.

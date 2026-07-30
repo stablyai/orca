@@ -15,12 +15,22 @@ vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
 }))
 
+vi.mock('./ssh-pty-consumer-session', () => ({
+  openSshPtyConsumerSession: vi.fn(async (_mux, options) => ({
+    clientInstanceId: options.clientInstanceId,
+    clientGeneration: 1,
+    ownerGeneration: 1,
+    ownerLease: 'test-owner-lease'
+  }))
+}))
+
 vi.mock('./ssh-channel-multiplexer', () => {
   return {
     SshChannelMultiplexer: class MockSshChannelMultiplexer {
       notify = vi.fn()
       request = vi.fn().mockResolvedValue([])
       onNotification = vi.fn().mockReturnValue(() => {})
+      onNotificationByMethod = vi.fn().mockReturnValue(() => {})
       onRequest = vi.fn().mockReturnValue(() => {})
       onDispose = vi.fn().mockReturnValue(() => {})
       dispose = vi.fn()
@@ -65,8 +75,7 @@ vi.mock('../ipc/pty', () => ({
   clearPtyOwnershipForConnection: vi.fn(),
   clearProviderPtyState: vi.fn(),
   deletePtyOwnership: vi.fn(),
-  setPtyOwnership: vi.fn(),
-  answerStartupTerminalColorQueriesForPty: vi.fn((_id: string, data: string) => data)
+  setPtyOwnership: vi.fn()
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({

@@ -19,7 +19,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
@@ -198,6 +198,15 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
     const runtime = new OrcaRuntimeService()
     const db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)
+    const coordinatorPaneKey = 'tab_cli:11111111-1111-4111-8111-111111111111'
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+      handle === 'term_cli' ? coordinatorPaneKey : null
+    )
+    db.createRun({
+      objective: 'CLI reset subprocess fixture',
+      coordinatorHandle: 'term_cli',
+      coordinatorPaneKey
+    })
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
     await server.start()
 
@@ -218,6 +227,8 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
         'task-create',
         '--spec',
         'throwaway task',
+        '--from',
+        'term_cli',
         '--json'
       ])
       expect(create.exitCode, create.stderr).toBe(0)
@@ -253,18 +264,41 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
       expect(db.getInbox()).toHaveLength(1)
       expect(db.listTasks()).toHaveLength(0)
 
+      // Why: task resets intentionally remove Runs, so recreate the caller's
+      // normal binding before exercising task creation again.
+      db.createRun({
+        objective: 'CLI reset subprocess fixture after reset',
+        coordinatorHandle: 'term_cli',
+        coordinatorPaneKey
+      })
       const recreate = await runBuiltCli(userDataPath, [
         'orchestration',
         'task-create',
         '--spec',
         'throwaway task after partial reset',
+        '--from',
+        'term_cli',
         '--json'
       ])
       expect(recreate.exitCode, recreate.stderr).toBe(0)
       expect(db.getInbox()).toHaveLength(1)
       expect(db.listTasks()).toHaveLength(1)
 
-      const resetAll = await runBuiltCli(userDataPath, ['orchestration', 'reset', '--json'])
+      const bareReset = await runBuiltCli(userDataPath, ['orchestration', 'reset', '--json'])
+      expect(bareReset.exitCode).toBe(1)
+      expect(JSON.parse(bareReset.stdout)).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_argument' }
+      })
+      expect(db.getInbox()).toHaveLength(1)
+      expect(db.listTasks()).toHaveLength(1)
+
+      const resetAll = await runBuiltCli(userDataPath, [
+        'orchestration',
+        'reset',
+        '--all',
+        '--json'
+      ])
       expect(resetAll.exitCode, resetAll.stderr).toBe(0)
       expect(JSON.parse(resetAll.stdout)).toMatchObject({ ok: true, result: { reset: 'all' } })
       expect(db.getInbox()).toHaveLength(0)

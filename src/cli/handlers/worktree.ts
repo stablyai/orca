@@ -237,8 +237,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
-      activate:
-        flags.get('activate') === true || flags.get('run-hooks') === true || Boolean(startupAgent),
+      activate: flags.get('activate') === true || flags.get('run-hooks') === true,
       ...(setupDecision ? { setupDecision } : {}),
       parentWorktree: explicitParentWorktree,
       ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
@@ -246,6 +245,9 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...(cwdParentWorktree ? { cwdParentWorktree } : {}),
       noParent,
       callerTerminalHandle,
+      // Why: marks the workspace as CLI-created so the sidebar can badge and
+      // filter it. Sent on every `worktree create` — hand-typed or agent-run.
+      cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {},
       ...(startupAgent
         ? {
             startupAgent,

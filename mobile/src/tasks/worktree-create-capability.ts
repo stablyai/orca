@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
-import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { MOBILE_TASKS_CAPABILITY } from './mobile-tasks-capability'
 
@@ -94,11 +94,4 @@ export function useNewWorktreeRuntimeCapabilities(
     [getCapabilities]
   )
   return { tasksSupported, getWorktreeCreateCutoverSupport }
-}
-
-function isLogicalClientCutoverError(error: unknown): boolean {
-  return (
-    error instanceof LogicalClientCutoverError ||
-    (error instanceof Error && error.message === 'RPC interrupted by connection migration')
-  )
 }

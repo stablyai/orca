@@ -6,6 +6,7 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
+import type * as nativeChatAgentProfiles from '../../../../shared/native-chat-agent-profiles'
 import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'
 
 const mocks = vi.hoisted(() => ({
@@ -31,14 +32,18 @@ const mocks = vi.hoisted(() => ({
   sendNativeChatMessageVerified: vi.fn(),
   trackPendingSend: vi.fn(),
   setDraft: vi.fn(),
-  draftScopeKeys: [] as string[]
+  draftScopeKeys: [] as string[],
+  clearNativeChatLaunchDraft: vi.fn(),
+  markNativeChatLaunchDraftAdopted: vi.fn()
 }))
 
 vi.mock('../../store', () => {
   const state = {
     dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
-    updateSettings: vi.fn()
+    updateSettings: vi.fn(),
+    clearNativeChatLaunchDraft: mocks.clearNativeChatLaunchDraft,
+    markNativeChatLaunchDraftAdopted: mocks.markNativeChatLaunchDraftAdopted
   }
   const useAppStore = (selector: (value: typeof state) => unknown) => selector(state)
   useAppStore.getState = () => state
@@ -63,11 +68,15 @@ vi.mock('./claude-model-switch-confirmation', () => ({
   createClaudeModelSwitchConfirmationObserver: (...args: unknown[]) =>
     mocks.createClaudeModelSwitchConfirmationObserver(...args)
 }))
-vi.mock('./native-chat-agent-commands', () => ({
-  getAgentSlashCommands: () => []
+vi.mock('../../../../shared/native-chat-agent-profiles', async (importOriginal) => ({
+  ...(await importOriginal<typeof nativeChatAgentProfiles>()),
+  getVerifiedNativeChatCommands: () => []
 }))
 vi.mock('@/lib/native-chat-telemetry', () => ({
-  emitNativeChatMessageSent: vi.fn()
+  emitNativeChatMessageSent: vi.fn(),
+  emitNativeChatPickerItemAccepted: vi.fn(),
+  emitNativeChatPickerOpened: vi.fn(),
+  emitNativeChatSendClassified: vi.fn()
 }))
 vi.mock('./use-native-chat-draft', () => ({
   useNativeChatDraft: (scopeKey: string) => {
@@ -84,7 +93,9 @@ vi.mock('./NativeChatComposerField', () => ({
     return null
   }
 }))
-vi.mock('./use-native-chat-skills', () => ({ useNativeChatSkills: () => [] }))
+vi.mock('./use-native-chat-skills', () => ({
+  useNativeChatSkills: () => ({ status: 'ready', skills: [], error: null, retry: () => {} })
+}))
 vi.mock('./use-native-chat-composer-attachments', () => ({
   useNativeChatComposerAttachments: () => ({
     imageAttachments: [],
@@ -192,6 +203,22 @@ describe('NativeChatComposer', () => {
 
     expect(onOptimisticSend).toHaveBeenCalledWith('hello', [])
     expect(mocks.trackPendingSend).toHaveBeenCalledWith(mocks.sendHandle, 'pending-1')
+  })
+
+  it('retires the launch-draft seed once a send clears the TUI input line', () => {
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+      />
+    )
+    expect(mocks.clearNativeChatLaunchDraft).not.toHaveBeenCalled()
+
+    act(() => mocks.fieldProps?.onSend?.())
+
+    expect(mocks.clearNativeChatLaunchDraft).toHaveBeenCalledWith('tab-1')
   })
 
   it('keeps the draft scope anchored to the pane while the PTY reconnects', () => {

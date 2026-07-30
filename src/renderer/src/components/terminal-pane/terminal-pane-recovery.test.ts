@@ -5,6 +5,7 @@ import {
   registerTerminalPaneRecoveryInstance,
   requestTerminalPaneRecovery
 } from './terminal-pane-recovery'
+import { isTerminalInputQuarantined } from './terminal-input-quarantine'
 
 const mocks = vi.hoisted(() => ({
   remountTerminalTabForRecovery: vi.fn<(tabId: string) => boolean>(() => true),
@@ -34,7 +35,7 @@ beforeEach(() => {
   vi.stubGlobal('window', {
     api: { pty: { hasPty: mocks.hasPty } }
   })
-  vi.spyOn(console, 'error').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 
 afterEach(() => {
@@ -477,5 +478,56 @@ describe('requestTerminalPaneRecovery', () => {
       'terminal_pane_recovery_remount',
       expect.anything()
     )
+  })
+
+  // Why: quarantine suppresses real keystrokes, so arming it on a recovery that
+  // kept the same shell would eat a legitimate command (#10065 follow-up).
+  describe('input quarantine arming', () => {
+    it('arms after a replaced endpoint so the mangled line cannot be submitted', async () => {
+      const result = await requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'input-undeliverable',
+        endpointReplaced: true
+      })
+
+      expect(result).toBe(true)
+      expect(isTerminalInputQuarantined('tab-1')).toBe(true)
+    })
+
+    it('does not arm when the same live shell is reattached', async () => {
+      const result = await requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'input-undeliverable'
+      })
+
+      expect(result).toBe(true)
+      expect(isTerminalInputQuarantined('tab-1')).toBe(false)
+    })
+
+    it('does not arm for a stalled write pipeline', async () => {
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'write-stalled'
+      })
+
+      expect(isTerminalInputQuarantined('tab-1')).toBe(false)
+    })
+
+    it('does not arm when the remount never happened', async () => {
+      mocks.remountTerminalTabForRecovery.mockReturnValue(false)
+
+      const result = await requestTerminalPaneRecovery({
+        tabId: 'tab-gone',
+        ptyId: 'pty-1',
+        reason: 'input-undeliverable',
+        endpointReplaced: true
+      })
+
+      expect(result).toBe(false)
+      expect(isTerminalInputQuarantined('tab-gone')).toBe(false)
+    })
   })
 })

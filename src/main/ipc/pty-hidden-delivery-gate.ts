@@ -8,7 +8,6 @@
  * the existing seq-guarded machinery. Any renderer party that still needs raw
  * bytes (dispatcher sidecars) registers delivery
  * interest, which suppresses the gate for that PTY.
- * See docs/reference/terminal-side-effect-authority.md (Open Items).
  */
 import type { GlobalSettings } from '../../shared/types'
 

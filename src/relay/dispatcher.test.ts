@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { RelayDispatcher } from './dispatcher'
+import { RelayDispatcher, type SinkWriteSettlement } from './dispatcher'
 import {
   encodeJsonRpcFrame,
   encodeKeepAliveFrame,
@@ -480,6 +480,111 @@ describe('RelayDispatcher', () => {
     }
   })
 
+  it('preserves broadcast order when synchronous settlement re-enters production', () => {
+    const primary: string[] = []
+    const secondary: string[] = []
+    const readData = (frame: Buffer): string => {
+      const message = JSON.parse(decodeFirstFrame(frame).payload.toString()) as JsonRpcNotification
+      return String(message.params?.data)
+    }
+    const orderedDispatcher = new RelayDispatcher((frame) => {
+      primary.push(readData(frame))
+      return true
+    })
+    orderedDispatcher.attachClient((frame) => {
+      secondary.push(readData(frame))
+      return true
+    })
+    let reentered = false
+    orderedDispatcher.onLegacyPtyCapacity(() => {
+      if (reentered) {
+        return
+      }
+      reentered = true
+      orderedDispatcher.tryNotifyPtyData({ id: 'pty-2', data: 'second' })
+    })
+
+    try {
+      expect(orderedDispatcher.tryNotifyPtyData({ id: 'pty-1', data: 'first' })).toBe(true)
+      expect(primary).toEqual(['first', 'second'])
+      expect(secondary).toEqual(['first', 'second'])
+    } finally {
+      orderedDispatcher.dispose()
+    }
+  })
+
+  it('does not retry accepted clients when a later broadcast member closes reentrantly', () => {
+    const primary: string[] = []
+    const secondary: string[] = []
+    let secondaryId = 0
+    const readData = (frame: Buffer): string => {
+      const message = JSON.parse(decodeFirstFrame(frame).payload.toString()) as JsonRpcNotification
+      return String(message.params?.data)
+    }
+    const dispatcher = new RelayDispatcher((frame) => {
+      primary.push(readData(frame))
+      if (secondaryId !== 0) {
+        dispatcher.detachClient(secondaryId)
+      }
+      return true
+    })
+    secondaryId = dispatcher.attachClient((frame) => {
+      secondary.push(readData(frame))
+      return true
+    })
+
+    try {
+      expect(dispatcher.tryNotifyPtyData({ id: 'pty-1', data: 'once' })).toBe(true)
+      expect(primary).toEqual(['once'])
+      expect(secondary).toEqual([])
+    } finally {
+      dispatcher.dispose()
+    }
+  })
+
+  it('keeps a saturated legacy primary as required backpressure', () => {
+    const callbacks: ((result: SinkWriteSettlement) => void)[] = []
+    const legacyDispatcher = new RelayDispatcher(
+      (_data, settle) => {
+        callbacks.push(settle)
+        return false
+      },
+      {
+        supportsWriteCallback: true,
+        writableLength: () => 128 * 1024,
+        writableHighWaterMark: () => 4 * 1024 * 1024
+      }
+    )
+    const detached = vi.fn()
+    legacyDispatcher.onClientDetached(detached)
+    const payload = 'x'.repeat(128 * 1024)
+    let admitted = 0
+
+    try {
+      while (
+        legacyDispatcher.tryNotifyPtyDataToMatchingClients(() => true, {
+          id: 'pty-1',
+          data: payload
+        })
+      ) {
+        admitted++
+      }
+
+      expect(admitted).toBeGreaterThan(0)
+      expect(admitted).toBeLessThan(20)
+      expect(callbacks).toHaveLength(1)
+      expect(detached).not.toHaveBeenCalled()
+      expect(
+        legacyDispatcher.tryNotifyPtyDataToMatchingClients(() => true, {
+          id: 'pty-1',
+          data: payload
+        })
+      ).toBe(false)
+    } finally {
+      legacyDispatcher.dispose()
+    }
+  })
+
   describe('notifyBulk (bulk lane backpressure)', () => {
     it('resolves immediately when the sink accepts the frame', async () => {
       const frames: Buffer[] = []
@@ -506,7 +611,12 @@ describe('RelayDispatcher', () => {
           frames.push(Buffer.from(data))
           return false
         },
-        { waitWriteDrain: (cb) => drainWaiters.add(cb) }
+        {
+          waitWriteDrain: (callback) => {
+            drainWaiters.add(callback)
+            return () => drainWaiters.delete(callback)
+          }
+        }
       )
       try {
         let firstSettled = false
@@ -533,14 +643,20 @@ describe('RelayDispatcher', () => {
       }
     })
 
-    it('interactive notify() frames are not gated behind a stalled bulk lane', async () => {
+    it('does not write an interactive frame around a saturated bulk write', async () => {
       const frames: Buffer[] = []
+      const drainWaiters = new Set<() => void>()
       const bulkDispatcher = new RelayDispatcher(
         (data) => {
           frames.push(Buffer.from(data))
           return false
         },
-        { waitWriteDrain: () => {} }
+        {
+          waitWriteDrain: (callback) => {
+            drainWaiters.add(callback)
+            return () => drainWaiters.delete(callback)
+          }
+        }
       )
       try {
         void bulkDispatcher.notifyBulk('bulk.event', { seq: 0 })
@@ -549,7 +665,13 @@ describe('RelayDispatcher', () => {
         expect(frames).toHaveLength(1)
 
         bulkDispatcher.notify('pty.data', { id: 'pty-1', data: 'x' })
-        expect(frames).toHaveLength(2)
+        expect(frames).toHaveLength(1)
+        for (const callback of Array.from(drainWaiters)) {
+          drainWaiters.delete(callback)
+          callback()
+        }
+        await vi.advanceTimersByTimeAsync(0)
+        expect(frames.length).toBeGreaterThanOrEqual(2)
         const msg = JSON.parse(
           decodeFirstFrame(frames[1]).payload.toString()
         ) as JsonRpcNotification

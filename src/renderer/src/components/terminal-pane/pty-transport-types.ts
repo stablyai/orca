@@ -1,10 +1,18 @@
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session-resume'
+import type {
+  AgentLaunchPreferences,
+  AgentPromptDelivery
+} from '../../../../shared/agent-session-host-authority'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 
 export type PtyBufferSnapshot = {
@@ -42,6 +50,9 @@ export type PtyConnectResult = {
   /** The requested session exited while it had no primary pane handler. Its
    *  buffered final data/exit were delivered, so callers must not fresh-spawn. */
   exitedBeforeAttach?: boolean
+  /** The provider adopted an existing session rather than creating a fresh one.
+   *  Startup commands may be ignored; recovery still requires separate ownership evidence. */
+  isReattach?: boolean
   launchAgent?: TuiAgent
   launchConfig?: SleepingAgentLaunchConfig
   snapshot?: string
@@ -52,6 +63,8 @@ export type PtyConnectResult = {
   coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
   replay?: string
   startupCwdFallback?: { kind: 'worktree'; cwd: string }
+  /** Main declined an unverifiable provider-session resume and launched fresh. */
+  agentResumeUnavailable?: true
   /** Trailing partial escape the daemon emulator held mid-parse; the reattach
    *  replay writes it LAST (after the reset) so a racing live continuation
    *  completes it instead of rendering literally (#7329). */
@@ -69,6 +82,22 @@ type PtyCallbacks = {
   onStatus?: (shell: string) => void
   onError?: (message: string, errors?: string[]) => void
   onExit?: (code: number) => void
+  onWriteUnavailable?: () => void
+  onRecoveryStateChange?: (state: PtyTransportRecoveryState) => void
+}
+
+export type PtyTransportRecoveryState = {
+  phase:
+    | 'connecting'
+    | 'connected'
+    | 'recovering'
+    | 'backoff'
+    | 'disconnected'
+    | 'offline'
+    | 'ended'
+    | 'disposed'
+  epoch: number
+  attempt: number
 }
 
 export type PtyTransport = {
@@ -84,10 +113,14 @@ export type PtyTransport = {
     initiallyHidden?: boolean
     command?: string
     env?: Record<string, string>
+    envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
+    resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
+    /** Reject a stale restored identity before this transport can publish global PTY handlers. */
+    admitPtyId?: (ptyId: string) => boolean
     callbacks: PtyCallbacks
   }) => void | Promise<void | string | PtyConnectResult>
   attach: (options: {
@@ -120,11 +153,18 @@ export type PtyTransport = {
     }
   ) => boolean
   isConnected: () => boolean
+  getRecoveryState?: () => PtyTransportRecoveryState
+  /** Starts a fresh connection epoch while preserving the authoritative remote PTY identity. */
+  retryRecovery?: () => boolean
   getPtyId: () => string | null
   getConnectionId?: () => string | null | undefined
   /** The runtime captured by this transport; legacy remote PTY ids do not
    * encode their owner, and current worktree settings may have changed. */
   getRuntimeEnvironmentId?: () => string | null
+  /** Execution host captured at spawn; nested SSH differs from its outer runtime owner. */
+  getExecutionHostId?: () => ExecutionHostId | null
+  /** Host platform captured by the PTY owner; paired-client OS is not authoritative. */
+  getRemotePlatform?: () => NodeJS.Platform | null
   getLocalSessionMetadata?: () => LocalPtySessionMetadata | null
   /** Drop cross-chunk parser carries (partial OSC-9999 prefix). Called when a
    *  model-restore marker reports dropped bytes — a carry spanning the gap
@@ -132,7 +172,7 @@ export type PtyTransport = {
   resetCrossChunkParserState?: () => void
   serializeBuffer?: (opts?: { scrollbackRows?: number }) => Promise<PtyBufferSnapshot | null>
   preserve?: () => void
-  detach?: () => void
+  detach?: (options?: { preserveExitObserver?: boolean }) => void
   destroy?: () => void | Promise<void>
 }
 
@@ -140,12 +180,19 @@ export type IpcPtyTransportOptions = {
   cwd?: string
   cwdFallback?: 'worktree'
   env?: Record<string, string>
+  envToDelete?: string[]
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentProviderSessionMetadata
+  agentPrompt?: string
+  agentPromptDelivery?: AgentPromptDelivery
+  agentArgsOverride?: string | null
+  agentLaunchPreferences?: AgentLaunchPreferences
   launchToken?: string
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
+  executionHostId?: ExecutionHostId | null
   worktreeId?: string
   tabId?: string
   leafId?: string

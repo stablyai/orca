@@ -1,12 +1,51 @@
 // Why: stdin ownership is a cross-agent process contract; one executable
 // matrix catches an unread early exit without duplicating template assertions.
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type * as osModule from 'node:os'
+
+let isolatedUserDataDir = ''
+let previousUserDataPath: string | undefined
+
+beforeEach(() => {
+  previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+  isolatedUserDataDir = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-user-data-'))
+  // Why: Orca-managed Codex hooks resolve through ORCA_USER_DATA_PATH before
+  // the mocked home; an inherited live path would let this test rewrite them.
+  process.env.ORCA_USER_DATA_PATH = isolatedUserDataDir
+})
+
+afterEach(() => {
+  if (previousUserDataPath === undefined) {
+    delete process.env.ORCA_USER_DATA_PATH
+  } else {
+    process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+  }
+  rmSync(isolatedUserDataDir, { recursive: true, force: true })
+})
+
+function findGitBash(): string {
+  if (process.env.KIMI_SHELL_PATH) {
+    return process.env.KIMI_SHELL_PATH
+  }
+  const candidates = [
+    process.env.ProgramFiles && join(process.env.ProgramFiles, 'Git', 'bin', 'bash.exe'),
+    process.env['ProgramFiles(x86)'] &&
+      join(process.env['ProgramFiles(x86)'], 'Git', 'bin', 'bash.exe'),
+    process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, 'Programs', 'Git', 'bin', 'bash.exe')
+  ]
+  const bash = candidates.find((candidate): candidate is string =>
+    Boolean(candidate && existsSync(candidate))
+  )
+  if (!bash) {
+    throw new Error('Git Bash is required for the Windows Kimi hook lifecycle test')
+  }
+  return bash
+}
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
@@ -43,6 +82,7 @@ import {
   wrapWindowsGitBashHookCommand,
   wrapWindowsHookCommand
 } from './installer-utils'
+import { POSIX_HOOK_STDIN_READER } from './hook-stdin-contract'
 import { createAgentHookMemorySftp } from './agent-hook-memory-sftp.test-fixture'
 
 const REMOTE_HOME = '/home/dev'
@@ -116,6 +156,7 @@ const LOCAL_INSTALLERS = [
 type HookRun = {
   exitCode: number | null
   stdinErrors: NodeJS.ErrnoException[]
+  stdout: string
 }
 
 function runHookProcess(
@@ -124,8 +165,9 @@ function runHookProcess(
   env: NodeJS.ProcessEnv
 ): Promise<HookRun> {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { env, stdio: ['pipe', 'ignore', 'ignore'] })
+    const child = spawn(executable, args, { env, stdio: ['pipe', 'pipe', 'ignore'] })
     const stdinErrors: NodeJS.ErrnoException[] = []
+    let stdout = ''
     const timeout = setTimeout(() => {
       child.kill('SIGKILL')
       reject(new Error('hook did not finish after stdin closed'))
@@ -134,10 +176,13 @@ function runHookProcess(
       clearTimeout(timeout)
       reject(error)
     })
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString()
+    })
     child.stdin.on('error', (error: NodeJS.ErrnoException) => stdinErrors.push(error))
     child.on('close', (exitCode) => {
       clearTimeout(timeout)
-      resolve({ exitCode, stdinErrors })
+      resolve({ exitCode, stdinErrors, stdout })
     })
     child.stdin.end(LARGE_PAYLOAD)
   })
@@ -168,8 +213,11 @@ async function generatePosixScripts(): Promise<Map<string, string>> {
     const generated = [...memory.fs.files.entries()].filter(
       ([path]) => path.includes('/.orca/agent-hooks/') && path.endsWith('.sh')
     )
-    expect(generated, `${entry.agent} generated scripts`).toHaveLength(1)
-    scripts.set(entry.agent, generated[0][1])
+    // Why: Claude ships a second managed script (the statusline usage feed); the stdin lifecycle contract applies to every generated script.
+    expect(generated.length, `${entry.agent} generated scripts`).toBeGreaterThan(0)
+    for (const [path, script] of generated) {
+      scripts.set(`${entry.agent} ${path.split('/').pop()}`, script)
+    }
   }
   return scripts
 }
@@ -232,7 +280,9 @@ describe('Windows managed hook stdin structure', () => {
         copilot.indexOf('if (-not $env:ORCA_AGENT_HOOK_PORT')
       )
       const kimi = readFileSync(join(hooksDir, 'kimi-hook.sh'), 'utf8')
-      expect(kimi.indexOf('payload=$(cat)')).toBeLessThan(kimi.indexOf('exit 0'))
+      expect(kimi.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)).toBeLessThan(
+        kimi.indexOf('exit 0')
+      )
     } finally {
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
       if (previousGrokHome === undefined) {
@@ -255,6 +305,7 @@ describe('Windows managed hook stdin structure', () => {
       const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-live-'))
       homedirMock.mockReturnValue(home)
       try {
+        const gitBash = findGitBash()
         for (const entry of LOCAL_INSTALLERS) {
           expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
         }
@@ -279,7 +330,7 @@ describe('Windows managed hook stdin structure', () => {
                   'v1.0',
                   'powershell.exe'
                 )
-              : process.env.KIMI_SHELL_PATH || 'bash.exe'
+              : gitBash
           const args = fileName.endsWith('.cmd')
             ? ['/d', '/c', scriptPath]
             : fileName.endsWith('.ps1')
@@ -306,7 +357,7 @@ describe('Windows managed hook stdin structure', () => {
           },
           {
             name: 'Git Bash fast path',
-            executable: process.env.KIMI_SHELL_PATH || 'bash.exe',
+            executable: gitBash,
             args: ['-lc', wrapWindowsGitBashHookCommand(missingScript)]
           }
         ]
@@ -327,7 +378,7 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   it('captures stdin before every possible whole-script success exit', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
-      const captureIndex = script.indexOf('payload=$(cat)')
+      const captureIndex = script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)
       const firstExitIndex = script.indexOf('exit 0')
       expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)
       expect(firstExitIndex, `${agent} first success exit`).toBeGreaterThan(captureIndex)
@@ -337,22 +388,65 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   it('accepts a large payload without Orca environment or a broken writer', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
-      const extraEnv =
-        agent === 'command-code'
-          ? {
-              ORCA_AGENT_HOOK_PORT: '1',
-              ORCA_AGENT_HOOK_TOKEN: 'test-token',
-              ORCA_PANE_KEY: 'test-pane'
-            }
-          : {}
+      const extraEnv = agent.startsWith('command-code')
+        ? {
+            ORCA_AGENT_HOOK_PORT: '1',
+            ORCA_AGENT_HOOK_TOKEN: 'test-token',
+            ORCA_PANE_KEY: 'test-pane'
+          }
+        : {}
       const result = await runPosixHook(script, extraEnv)
       expect(result.exitCode, `${agent} exit code`).toBe(0)
       expect(result.stdinErrors, `${agent} stdin errors`).toHaveLength(0)
     }
   })
 
+  it('does not need PATH to capture or drain POSIX hook stdin', async () => {
+    const scripts = await generatePosixScripts()
+    for (const [agent, script] of scripts) {
+      const result = await runPosixHook(script, { PATH: '' })
+      expect(result.exitCode, `${agent} exit code`).toBe(0)
+      expect(result.stdinErrors, `${agent} stdin errors`).toHaveLength(0)
+    }
+
+    const missing = await runPosixHook(wrapPosixHookCommand('/missing/orca-hook.sh'), { PATH: '' })
+    expect(missing.exitCode, 'missing script launcher exit code').toBe(0)
+    expect(missing.stdinErrors, 'missing script launcher stdin errors').toHaveLength(0)
+  })
+
+  // Why: an unread stdin still exits 0, so exit codes alone cannot prove the
+  // reader consumed the payload. Assert the captured byte count directly.
+  it.each([
+    ['empty PATH', ''],
+    // Why: /bin/cat is absent on NixOS-style hosts, so an absolute path alone is
+    // not enough; the reader must fall back to the shell's default PATH.
+    ['PATH without coreutils', '/nonexistent'],
+    // Why: a worktree-local `cat` must never receive the hook payload.
+    ['PATH whose first cat is a decoy', '']
+  ])('captures the whole payload with %s', async (label, pathValue) => {
+    const decoyDir = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-decoy-'))
+    try {
+      let effectivePath = pathValue
+      if (label === 'PATH whose first cat is a decoy') {
+        const decoy = join(decoyDir, 'cat')
+        writeFileSync(decoy, '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+        effectivePath = decoyDir
+      }
+      const result = await runHookProcess(
+        '/bin/sh',
+        ['-c', `payload=$(${POSIX_HOOK_STDIN_READER}); printf '%s' "${'${#payload}'}"`],
+        { ...hookEnvironment(), PATH: effectivePath }
+      )
+      expect(result.exitCode, `${label} exit code`).toBe(0)
+      expect(result.stdinErrors, `${label} stdin errors`).toHaveLength(0)
+      expect(result.stdout, `${label} captured bytes`).toBe(String(LARGE_PAYLOAD.length))
+    } finally {
+      rmSync(decoyDir, { recursive: true, force: true })
+    }
+  })
+
   it('drains before Claude skips hooks imported by Devin', async () => {
-    const script = (await generatePosixScripts()).get('claude')
+    const script = (await generatePosixScripts()).get('claude claude-hook.sh')
     expect(script).toBeDefined()
     const result = await runPosixHook(script!, { DEVIN_PROJECT_DIR: '/tmp/devin-project' })
     expect(result.exitCode).toBe(0)

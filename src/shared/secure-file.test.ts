@@ -1,9 +1,10 @@
 import { execFile, execFileSync } from 'node:child_process'
-import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  __getSecureFileHardeningCacheStateForTests,
   __resetSecureFileHardenedPathsForTests,
   __resetSecureFileWindowsUserSidForTests,
   hardenExistingSecureFile,
@@ -143,6 +144,65 @@ describe('hardenSecurePath', () => {
     // dir hardened once (path-cached), file hardened once (metadata-cached) — 2 total
     expect(getPowerShellCalls()).toHaveLength(2)
     expect(getPowerShellCalls().map(getPowerShellTarget)).toEqual([userDataPath, targetPath])
+  })
+
+  it('LRU-evicts Windows file hardening entries and safely re-hardens an evicted path', () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    __resetSecureFileHardenedPathsForTests({
+      maxEntries: 2,
+      maxKeyBytes: 4096,
+      maxTotalKeyBytes: 8192
+    })
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    tempDirs.push(userDataPath)
+    const paths = ['first.json', 'second.json', 'third.json'].map((name) =>
+      join(userDataPath, name)
+    )
+    for (const path of paths) {
+      writeFileSync(path, '{}')
+      hardenExistingSecureFile(path)
+    }
+
+    hardenExistingSecureFile(paths[0]!)
+
+    const fileTargets = getPowerShellCalls()
+      .map(getPowerShellTarget)
+      .filter((path) => paths.includes(path))
+    expect(fileTargets).toEqual([...paths, paths[0]])
+    expect(__getSecureFileHardeningCacheStateForTests().paths).toMatchObject({
+      entries: 2
+    })
+  })
+
+  it('LRU-evicts Windows directory hardening entries instead of retaining every path', () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    __resetSecureFileHardenedPathsForTests({
+      maxEntries: 2,
+      maxKeyBytes: 4096,
+      maxTotalKeyBytes: 8192
+    })
+    const root = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    tempDirs.push(root)
+    const directories = ['first', 'second', 'third'].map((name) => join(root, name))
+    const files = directories.map((dir) => {
+      mkdirSync(dir)
+      const file = join(dir, 'secret.json')
+      writeFileSync(file, '{}')
+      return file
+    })
+    for (const file of files) {
+      hardenExistingSecureFile(file)
+    }
+
+    hardenExistingSecureFile(files[0]!)
+
+    const directoryTargets = getPowerShellCalls()
+      .map(getPowerShellTarget)
+      .filter((path) => directories.includes(path))
+    expect(directoryTargets).toEqual([...directories, directories[0]])
+    expect(__getSecureFileHardeningCacheStateForTests().directories).toMatchObject({
+      entries: 2
+    })
   })
 
   it('re-hardens an existing file when its metadata changes after caching', async () => {
@@ -349,6 +409,34 @@ describe('hardenSecurePath', () => {
     hardenExistingSecureFile(targetPath)
 
     expect(statMode(userDataPath)).toBe(0o700)
+  })
+
+  posixModeIt('LRU-bounds POSIX hardening entries while keeping recent paths cached', () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    __resetSecureFileHardenedPathsForTests({
+      maxEntries: 2,
+      maxKeyBytes: 4096,
+      maxTotalKeyBytes: 8192
+    })
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    tempDirs.push(userDataPath)
+    const firstPath = join(userDataPath, 'first.json')
+    const secondPath = join(userDataPath, 'second.json')
+    writeFileSync(firstPath, '{}')
+    writeFileSync(secondPath, '{}')
+
+    hardenExistingSecureFile(firstPath)
+    hardenExistingSecureFile(secondPath)
+    expect(__getSecureFileHardeningCacheStateForTests().paths.paths).toEqual([
+      userDataPath,
+      secondPath
+    ])
+
+    hardenExistingSecureFile(firstPath)
+    expect(__getSecureFileHardeningCacheStateForTests().paths.paths).toEqual([
+      userDataPath,
+      firstPath
+    ])
   })
 })
 

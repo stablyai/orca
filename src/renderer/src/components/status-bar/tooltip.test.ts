@@ -563,11 +563,12 @@ describe('clampUsedPercent', () => {
 })
 
 describe('barColor', () => {
-  // Why: thresholds are on % used (consumption). Guard against flipping back
-  // to remaining-based colors without noticing.
-  it('maps used percent to green / yellow / red bands', () => {
-    expect(barColor(0)).toBe('bg-green-500')
-    expect(barColor(59)).toBe('bg-green-500')
+  // Why: thresholds are on % used (consumption). The <60 band is neutral (not
+  // green) so the always-visible meter stays quiet until a limit nears; guard
+  // against flipping back to green or to remaining-based colors without noticing.
+  it('maps used percent to neutral / yellow / red bands', () => {
+    expect(barColor(0)).toBe('bg-muted-foreground/40')
+    expect(barColor(59)).toBe('bg-muted-foreground/40')
     expect(barColor(60)).toBe('bg-yellow-500')
     expect(barColor(79)).toBe('bg-yellow-500')
     expect(barColor(80)).toBe('bg-red-500')

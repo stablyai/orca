@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
+import { runNodeScriptInTerminal } from './helpers/run-node-script-in-terminal'
 import {
   ensureTerminalVisible,
   getActiveTabId,
@@ -336,7 +337,10 @@ test.describe('Terminal hidden view parking', () => {
       // proves the revealed terminal accepts input end-to-end, not just echo.
       const typedMarker = `PARKED_TYPED_OK_${runId}`
       const typedProbeScript = `console.log('PARKED_TYPED_OK_' + '${runId}')`
-      await sendToTerminal(orcaPage, tabAPtyId, `node -e ${JSON.stringify(typedProbeScript)}\r`)
+      // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
+      await runNodeScriptInTerminal(orcaPage, tabAPtyId, typedProbeScript, {
+        prefix: 'orca-parked-typed-probe'
+      })
       await expect
         .poll(() => getTerminalContent(orcaPage, 12_000), {
           timeout: 10_000,
@@ -374,7 +378,10 @@ test.describe('Terminal hidden view parking', () => {
     // before the store assertion lands.
     const payload = `\x1b]0;${parkedTitle}\x07\x07${marker}\n`
     const sideEffectScript = `process.stdout.write(${JSON.stringify(payload)}); setTimeout(() => process.exit(0), 30000)`
-    await sendToTerminal(orcaPage, tabAPtyId, `node -e ${JSON.stringify(sideEffectScript)}\r`)
+    // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
+    await runNodeScriptInTerminal(orcaPage, tabAPtyId, sideEffectScript, {
+      prefix: 'orca-parked-side-effect'
+    })
 
     await expect
       .poll(() => getTerminalTabTitle(orcaPage, worktreeId, tabAId), {

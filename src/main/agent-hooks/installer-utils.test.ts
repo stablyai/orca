@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
   chmodSync
 } from 'node:fs'
@@ -23,11 +25,13 @@ import {
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
   wrapWindowsGitBashHookCommand,
+  readHooksJsonWithRaw,
   wrapWindowsHookCommand,
   writeManagedScript,
   writeHooksJson,
   type HooksConfig
 } from './installer-utils'
+import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 
 let tmpDir: string
 let configPath: string
@@ -41,7 +45,50 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true })
 })
 
+describe('readHooksJsonWithRaw', () => {
+  it('returns the parsed config together with the exact bytes it came from', () => {
+    const contents = '{"hooks": {"Stop": []}, "custom": 1}\n'
+    writeFileSync(configPath, contents, 'utf-8')
+
+    expect(readHooksJsonWithRaw(configPath)).toEqual({
+      raw: contents,
+      config: { hooks: { Stop: [] }, custom: 1 }
+    })
+  })
+
+  it('reports a missing file as an empty config with no raw bytes', () => {
+    expect(readHooksJsonWithRaw(configPath)).toEqual({ raw: null, config: {} })
+  })
+
+  it('keeps the raw bytes when the contents are not a JSON object', () => {
+    writeFileSync(configPath, 'not json\n', 'utf-8')
+
+    expect(readHooksJsonWithRaw(configPath)).toEqual({ raw: 'not json\n', config: null })
+  })
+})
+
 describe('writeHooksJson', () => {
+  it('updates a symlink target without replacing the hook config link', () => {
+    const targetPath = join(tmpDir, 'dotfiles-hooks.json')
+    writeFileSync(targetPath, '{"hooks":{}}\n')
+    symlinkSync(targetPath, configPath)
+
+    writeHooksJson(configPath, { hooks: { Stop: [] } })
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(JSON.parse(readFileSync(targetPath, 'utf-8'))).toEqual({ hooks: { Stop: [] } })
+  })
+
+  it('does not replace a dangling hook config symlink', () => {
+    const targetPath = join(tmpDir, 'missing-dotfiles-hooks.json')
+    symlinkSync(targetPath, configPath)
+
+    expect(() => writeHooksJson(configPath, { hooks: { Stop: [] } })).toThrow()
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(existsSync(targetPath)).toBe(false)
+  })
+
   it('writes the config as formatted JSON', () => {
     const config: HooksConfig = {
       hooks: { Stop: [{ hooks: [{ type: 'command', command: 'foo' }] }] }
@@ -70,6 +117,22 @@ describe('writeHooksJson', () => {
 
     const bak = JSON.parse(readFileSync(`${configPath}.bak`, 'utf-8'))
     expect(bak).toEqual(original)
+  })
+
+  it('does not follow an existing .bak symlink', () => {
+    const original = '{"hooks":{}}\n'
+    const backupTarget = join(tmpDir, 'dotfiles-backup.json')
+    writeFileSync(configPath, original, 'utf-8')
+    writeFileSync(backupTarget, 'pristine backup target\n', 'utf-8')
+    symlinkSync(backupTarget, `${configPath}.bak`)
+
+    expect(() => writeHooksJson(configPath, { hooks: { Stop: [] } })).toThrow(
+      'Refusing to overwrite symlinked backup'
+    )
+
+    expect(readFileSync(configPath, 'utf-8')).toBe(original)
+    expect(lstatSync(`${configPath}.bak`).isSymbolicLink()).toBe(true)
+    expect(readFileSync(backupTarget, 'utf-8')).toBe('pristine backup target\n')
   })
 
   it('does not create a .bak file when the config does not yet exist', () => {
@@ -295,7 +358,7 @@ describe('wrapPosixHookCommand', () => {
   it('produces a guarded command that no-ops when the script is missing', () => {
     const cmd = wrapPosixHookCommand('/does/not/exist.sh')
     expect(cmd).toBe(
-      "if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then /bin/sh '/does/not/exist.sh'; else cat >/dev/null 2>&1 || :; fi"
+      `if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then /bin/sh '/does/not/exist.sh'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     )
   })
 
@@ -313,7 +376,7 @@ describe('wrapPosixHookCommand', () => {
     // /bin/sh as a single argument.
     const cmd = wrapPosixHookCommand("/path/with'quote/x.sh")
     expect(cmd).toBe(
-      "if [ -f '/path/with'\\''quote/x.sh' ] && [ -r '/path/with'\\''quote/x.sh' ] && [ -x '/path/with'\\''quote/x.sh' ]; then /bin/sh '/path/with'\\''quote/x.sh'; else cat >/dev/null 2>&1 || :; fi"
+      `if [ -f '/path/with'\\''quote/x.sh' ] && [ -r '/path/with'\\''quote/x.sh' ] && [ -x '/path/with'\\''quote/x.sh' ]; then /bin/sh '/path/with'\\''quote/x.sh'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     )
   })
 
@@ -322,7 +385,7 @@ describe('wrapPosixHookCommand', () => {
       ORCA_COPILOT_HOOK_EVENT: 'UserPromptSubmit'
     })
     expect(cmd).toBe(
-      "if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then ORCA_COPILOT_HOOK_EVENT='UserPromptSubmit' /bin/sh '/does/not/exist.sh'; else cat >/dev/null 2>&1 || :; fi"
+      `if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then ORCA_COPILOT_HOOK_EVENT='UserPromptSubmit' /bin/sh '/does/not/exist.sh'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     )
   })
 
@@ -496,7 +559,7 @@ describe('wrapWindowsGitBashHookCommand', () => {
     expect(
       wrapWindowsGitBashHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd')
     ).toBe(
-      "if [ -f 'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd' ]; then 'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd'; else cat >/dev/null 2>&1 || :; fi"
+      `if [ -f 'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd' ]; then 'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     )
   })
 

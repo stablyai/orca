@@ -119,12 +119,21 @@ export type HostedReviewCreationNextAction =
   | 'open_existing_review'
   | null
 
+/**
+ * Records whether the eligibility result observed an authoritative existing-review
+ * lookup. `found` / `not_found` come only from an accepted provider lookup;
+ * `unavailable` marks a local-blocker fallback returned after a swallowed or
+ * skipped lookup, so it can never masquerade as authoritative no-review evidence.
+ */
+export type HostedReviewLookupOutcome = 'found' | 'not_found' | 'unavailable'
+
 export type HostedReviewCreationEligibility = {
   provider: HostedReviewProvider
   review: HostedReviewSummary | null
   canCreate: boolean
   blockedReason: HostedReviewCreationBlockedReason
   nextAction: HostedReviewCreationNextAction
+  reviewLookupOutcome: HostedReviewLookupOutcome
   defaultBaseRef?: string | null
   head?: string | null
   title?: string | null
