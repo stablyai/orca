@@ -196,6 +196,32 @@ describe('createPtySubprocess', () => {
     )
   })
 
+  it('deduplicates mixed-case PATH at the detached Windows daemon boundary', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const baseKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') ?? 'Path'
+    const overrideKey = baseKey === 'PATH' ? 'Path' : 'PATH'
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'mixed-path-key',
+        cols: 80,
+        rows: 24,
+        env: { COMSPEC: CMD_ABS, [overrideKey]: 'C:\\fnm;C:\\existing' }
+      })
+      const spawnEnv = spawnMock.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+
+      expect(Object.keys(spawnEnv).filter((key) => key.toLowerCase() === 'path')).toEqual([baseKey])
+      expect(spawnEnv[baseKey]).toBe('C:\\fnm;C:\\existing')
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
   it('appends Git prompt guards after the detached daemon inherited config', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

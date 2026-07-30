@@ -240,6 +240,31 @@ export function __resetPersistedWindowsPathCacheForTests(): void {
   pendingPersistedWindowsPathRefresh = undefined
 }
 
+export function canonicalizeWindowsPathKey(
+  env: NodeJS.ProcessEnv,
+  baseEnv: NodeJS.ProcessEnv,
+  overrideEnv: NodeJS.ProcessEnv | undefined,
+  platform: NodeJS.Platform = process.platform
+): void {
+  if (platform !== 'win32') {
+    return
+  }
+  const overrideEntries = Object.entries(overrideEnv ?? {}).filter(
+    ([key]) => key.toLowerCase() === 'path'
+  )
+  if (overrideEntries.length === 0) {
+    return
+  }
+  const [overrideKey, overrideValue] = overrideEntries.at(-1)!
+  const pathKey = Object.keys(baseEnv).find((key) => key.toLowerCase() === 'path') ?? overrideKey
+  for (const key of Object.keys(env)) {
+    if (key.toLowerCase() === 'path') {
+      delete env[key]
+    }
+  }
+  env[pathKey] = overrideValue
+}
+
 function mergeWindowsPathSegments(
   env: NodeJS.ProcessEnv,
   persistedSegments: string[],

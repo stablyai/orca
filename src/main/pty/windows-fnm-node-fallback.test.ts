@@ -8,6 +8,7 @@ import {
   type WindowsNodeProbe,
   withWindowsFnmNodeFallback
 } from './windows-fnm-node-fallback'
+import { canonicalizeWindowsPathKey } from './windows-environment-path'
 
 const itWindows = it.runIf(process.platform === 'win32')
 const tempDirectories: string[] = []
@@ -227,6 +228,26 @@ describe('Windows fnm Node child fallback', () => {
 })
 
 describe('native Windows fnm Node child fallback', () => {
+  itWindows('keeps fnm first when the detached daemon PATH spelling differs', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-fnm-daemon-path-key-'))
+    tempDirectories.push(root)
+    const fnmRoot = join(root, 'fnm')
+    const fnmNode = createNode(join(fnmRoot, 'aliases', 'default'))
+    const system32 = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')
+    const mainEnv = sourceEnvWithPathKey('Path', system32)
+    const daemonEnv = sourceEnvWithPathKey('PATH', system32)
+    const overlay = await withWindowsFnmNodeFallback(
+      { Path: system32, FNM_DIR: fnmRoot },
+      { homePath: root, sourceEnv: mainEnv }
+    )
+    const providerEnv = { ...daemonEnv, ...overlay }
+
+    canonicalizeWindowsPathKey(providerEnv, daemonEnv, overlay)
+
+    expect(Object.keys(providerEnv).filter((key) => key.toLowerCase() === 'path')).toEqual(['PATH'])
+    expect(normalized(runNode(providerEnv))).toBe(normalized(fnmNode))
+  })
+
   itWindows.each([
     ['PATH', 'Path'],
     ['Path', 'PATH'],

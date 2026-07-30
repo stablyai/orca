@@ -12,6 +12,7 @@ vi.mock('node:child_process', () => ({
 
 import {
   __resetPersistedWindowsPathCacheForTests,
+  canonicalizeWindowsPathKey,
   mergePersistedWindowsPath,
   mergePersistedWindowsPathAsync,
   readPersistedWindowsPathSegments,
@@ -19,6 +20,31 @@ import {
 } from './windows-environment-path'
 
 type ExecCallback = (error: Error | null, stdout: string, stderr: string) => void
+
+describe('canonicalizeWindowsPathKey', () => {
+  it.each([
+    ['PATH', 'Path'],
+    ['Path', 'PATH'],
+    ['Path', 'path']
+  ])('uses the base %s spelling for a %s override', (baseKey, overrideKey) => {
+    const baseEnv = { [baseKey]: 'C:\\stale' }
+    const overrideEnv = { [overrideKey]: 'C:\\fnm;C:\\existing' }
+    const env = { ...baseEnv, ...overrideEnv }
+
+    canonicalizeWindowsPathKey(env, baseEnv, overrideEnv, 'win32')
+
+    expect(Object.keys(env).filter((key) => key.toLowerCase() === 'path')).toEqual([baseKey])
+    expect(env[baseKey]).toBe('C:\\fnm;C:\\existing')
+  })
+
+  it('does not change non-Windows merges', () => {
+    const env = { PATH: '/usr/bin', Path: '/override' }
+
+    canonicalizeWindowsPathKey(env, { PATH: '/usr/bin' }, { Path: '/override' }, 'linux')
+
+    expect(env).toEqual({ PATH: '/usr/bin', Path: '/override' })
+  })
+})
 
 describe('readPersistedWindowsPathSegments', () => {
   it('reads machine and user Path values from the Windows registry', () => {

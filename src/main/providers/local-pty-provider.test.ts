@@ -478,6 +478,22 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.PATH).toBe(process.env.PATH)
     })
 
+    it('deduplicates mixed-case PATH at the native Windows spawn boundary', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const baseKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') ?? 'Path'
+      const overrideKey = baseKey === 'PATH' ? 'Path' : 'PATH'
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        env: { COMSPEC: CMD_ABS, [overrideKey]: 'C:\\fnm;C:\\existing' }
+      })
+
+      const spawnEnv = spawnMock.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(Object.keys(spawnEnv).filter((key) => key.toLowerCase() === 'path')).toEqual([baseKey])
+      expect(spawnEnv[baseKey]).toBe('C:\\fnm;C:\\existing')
+    })
+
     it('keeps an explicitly requested NODE_ENV for spawned terminals', async () => {
       // Why: only the ambient value is stripped; a caller-supplied NODE_ENV still wins.
       const previous = process.env.NODE_ENV

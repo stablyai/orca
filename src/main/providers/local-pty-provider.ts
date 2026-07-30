@@ -38,6 +38,7 @@ import type { ShellReadySignal } from './local-pty-shell-ready'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
+import { canonicalizeWindowsPathKey } from '../pty/windows-environment-path'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { addWslEnvKeys } from '../wsl-env'
 import {
@@ -646,8 +647,9 @@ export class LocalPtyProvider implements IPtyProvider {
     ensureNodePtySpawnHelperExecutable()
     validateWorkingDirectory(validationCwd)
 
+    const inheritedEnv = stripInheritedBuildModeEnv(process.env)
     const spawnEnv: Record<string, string> = {
-      ...mergeGitConfigEnvProtocol(stripInheritedBuildModeEnv(process.env), args.env),
+      ...mergeGitConfigEnvProtocol(inheritedEnv, args.env),
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
       TERM_PROGRAM: 'Orca',
@@ -790,6 +792,7 @@ export class LocalPtyProvider implements IPtyProvider {
       }
     }
     promoteAgentTeamsShimPath(finalEnv, args.env?.PATH)
+    canonicalizeWindowsPathKey(finalEnv, inheritedEnv, finalEnv)
 
     // Why: worktree-scoped HISTFILE — without it worktrees share one global history (terminal-history-scope-design §7–§10).
     const worktreeId = args.worktreeId
