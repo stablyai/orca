@@ -589,7 +589,7 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     )
 
     expect(browserScreencastAwakeAcquireMock).toHaveBeenCalledTimes(1)
-    expect(browserScreencastAwakeAcquireMock).toHaveBeenCalledWith('runtime-browser-screencast')
+    expect(browserScreencastAwakeAcquireMock).toHaveBeenCalledWith('browser-screencast:page-1')
     expect(setBackgroundThrottling).toHaveBeenCalledWith(false)
     expect(browserScreencastAwakeReleaseMock).not.toHaveBeenCalled()
 
@@ -597,7 +597,7 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     await session.session.done
 
     expect(browserScreencastAwakeReleaseMock).toHaveBeenCalledTimes(1)
-    expect(browserScreencastAwakeReleaseMock).toHaveBeenCalledWith('runtime-browser-screencast')
+    expect(browserScreencastAwakeReleaseMock).toHaveBeenCalledWith('browser-screencast:page-1')
     expect(setBackgroundThrottling).toHaveBeenLastCalledWith(true)
   })
 })

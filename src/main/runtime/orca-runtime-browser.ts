@@ -166,7 +166,9 @@ function syncMainWindowBackgroundThrottlingForScreencast(
   }
   try {
     // Why: keep the main renderer painting while a remote/mobile screencast needs
-    // compositor frames; restore the default throttle when the last stream ends.
+    // compositor frames. Electron has no getter for the current throttle flag, so
+    // restore to `true` — the intentional createMainWindow default on darwin and
+    // Electron's default elsewhere — when the last stream ends.
     contents.setBackgroundThrottling(!screencastActive)
   } catch {
     // Why: the window can tear down between the null-check and the call during quit.
@@ -177,22 +179,26 @@ export class RuntimeBrowserCommands {
   private readonly activeScreencastPageIds = new Set<string>()
   private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
   private readonly stoppingScreencastPageIds = new Map<string, Promise<void>>()
-  private screencastAwakeActive = false
 
   constructor(private readonly host: RuntimeBrowserCommandHost) {}
 
-  private syncScreencastAwake(): void {
-    const shouldKeepAwake = this.activeScreencastsByPageId.size > 0
-    if (shouldKeepAwake === this.screencastAwakeActive) {
-      return
-    }
-    this.screencastAwakeActive = shouldKeepAwake
-    if (shouldKeepAwake) {
-      getBrowserScreencastAwakeService().acquire('runtime-browser-screencast')
-    } else {
-      getBrowserScreencastAwakeService().release('runtime-browser-screencast')
-    }
-    syncMainWindowBackgroundThrottlingForScreencast(this.host, shouldKeepAwake)
+  private screencastAwakeToken(browserPageId: string): string {
+    return `browser-screencast:${browserPageId}`
+  }
+
+  private markScreencastPageActive(browserPageId: string): void {
+    // Why: one token per live page so overlapping streams keep the host awake until
+    // the last page ends, even if multiple RuntimeBrowserCommands instances exist.
+    getBrowserScreencastAwakeService().acquire(this.screencastAwakeToken(browserPageId))
+    syncMainWindowBackgroundThrottlingForScreencast(this.host, true)
+  }
+
+  private markScreencastPageInactive(browserPageId: string): void {
+    getBrowserScreencastAwakeService().release(this.screencastAwakeToken(browserPageId))
+    syncMainWindowBackgroundThrottlingForScreencast(
+      this.host,
+      this.activeScreencastsByPageId.size > 0
+    )
   }
 
   private requireAgentBrowserBridge(): AgentBrowserBridge {
@@ -526,7 +532,7 @@ export class RuntimeBrowserCommands {
       done: activeDone
     }
     this.activeScreencastsByPageId.set(browserPageId, activeRecord)
-    this.syncScreencastAwake()
+    this.markScreencastPageActive(browserPageId)
     try {
       session = await startBrowserScreencast(guest, {
         format,
@@ -553,12 +559,17 @@ export class RuntimeBrowserCommands {
       if (this.activeScreencastsByPageId.get(browserPageId) === activeRecord) {
         this.activeScreencastsByPageId.delete(browserPageId)
       }
-      this.syncScreencastAwake()
+      this.markScreencastPageInactive(browserPageId)
       resolveActiveDone()
       throw error
     }
     let stoppingPromise: Promise<void> | null = null
+    let pageGateCleared = false
     const clearPageGate = (): void => {
+      if (pageGateCleared) {
+        return
+      }
+      pageGateCleared = true
       this.activeScreencastPageIds.delete(browserPageId)
       if (this.activeScreencastsByPageId.get(browserPageId) === activeRecord) {
         this.activeScreencastsByPageId.delete(browserPageId)
@@ -569,7 +580,7 @@ export class RuntimeBrowserCommands {
       ) {
         this.stoppingScreencastPageIds.delete(browserPageId)
       }
-      this.syncScreencastAwake()
+      this.markScreencastPageInactive(browserPageId)
       resolveActiveDone()
     }
     const markStopping = (): void => {

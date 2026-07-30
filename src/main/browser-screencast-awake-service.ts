@@ -198,6 +198,9 @@ export class BrowserScreencastAwakeService {
       return
     }
     const id = this.blockerId
+    // Why: clear before reconcile so a flaky isStarted() after a successful stop
+    // cannot strand a stale id and skip the next startBlocker.
+    this.blockerId = null
     try {
       this.blocker.stop(id)
     } catch (err) {
@@ -208,7 +211,6 @@ export class BrowserScreencastAwakeService {
         error: err
       })
     }
-    this.reconcileBlocker('post-stop')
   }
 
   private reconcileBlocker(reason: string): boolean {
