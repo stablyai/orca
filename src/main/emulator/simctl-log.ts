@@ -89,10 +89,12 @@ export function parseSimulatorLogLine(line: string): SimulatorLogEntry | undefin
   }
 }
 
+/** Extracts non-empty strings from loosely typed Unified Log fields. */
 function nonEmptyString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
+/** Escapes a literal before embedding it in an NSPredicate string. */
 function escapePredicateString(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
 }
