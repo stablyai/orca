@@ -1,4 +1,5 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
+import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 
 export type NativeChatComposerProps = {
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
@@ -24,6 +25,10 @@ export type NativeChatComposerProps = {
   onSwitchToTerminal?: () => void
   /** Reads the hosted TUI's current rendered screen when chat is entered. */
   readTerminalScreen?: () => string | null
+  /** Launch context prefilled into the TUI input as an unsent draft; adopted as the composer draft. */
+  launchDraft?: NativeChatLaunchDraft | null
+  /** True once the transcript shows the TUI-side draft was submitted or cleared. */
+  launchDraftResolved?: boolean
 }
 
 export type NativeChatComposerHandle = {

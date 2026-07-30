@@ -247,6 +247,11 @@ import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
+import {
+  acceptSshPtyOutputData,
+  acceptSshPtyOutputExit,
+  closeSshPtyOutputGeneration
+} from './ssh-pty-output-intake-registry'
 
 // Why: Windows resolves a bare PowerShell name to an absolute exe before ConPTY, else CreateProcessW fails with error 5 (PR #6537 / #5161).
 const RESOLVED_WINDOWS_POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
@@ -449,7 +454,8 @@ describe('registerPtyHandlers', () => {
       'ssh-reattach-1',
       'ssh-reattach-fail',
       'ssh-reattach-ok',
-      'ssh-runtime-env'
+      'ssh-runtime-env',
+      'ssh-generation-replacement'
     ]) {
       unregisterSshPtyProvider(leakedConnectionId)
     }
@@ -3599,6 +3605,64 @@ describe('registerPtyHandlers', () => {
         })
       })
 
+      it('resolves default WSL authority before daemon host env and spawn metadata', async () => {
+        await withWin32Platform(async () => {
+          _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+          const daemonSpawn = setupDaemonAdapter()
+          const runtime = {
+            setPtyController: vi.fn(),
+            registerPty: vi.fn(),
+            onPtySpawned: vi.fn(),
+            onPtyExit: vi.fn(),
+            onPtyData: vi.fn(),
+            preparePtyExecutionContext: vi.fn().mockReturnValue(true),
+            getOrchestrationCompatibilityHostId: vi.fn(() => 'compat-host')
+          }
+          const settings = {
+            terminalWindowsShell: 'wsl.exe',
+            terminalWindowsWslDistro: null,
+            terminalWindowsPowerShellImplementation: 'auto'
+          }
+          handlers.clear()
+          registerPtyHandlers(
+            mainWindow as never,
+            runtime as never,
+            undefined,
+            (() => settings) as never
+          )
+          const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+            spawn(args: {
+              cols: number
+              rows: number
+              cwd?: string
+              worktreeId?: string
+              env?: Record<string, string>
+            }): Promise<{ id: string }>
+          }
+
+          await controller.spawn({
+            cols: 80,
+            rows: 24,
+            cwd: 'C:\\repo',
+            worktreeId: 'repo-1::C:\\repo',
+            env: {}
+          })
+
+          const spawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall
+          expect(spawnOptions.terminalWindowsWslDistro).toBe('Ubuntu')
+          expect(spawnOptions.env).toMatchObject({
+            ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND: 'wsl',
+            ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID: 'compat-host',
+            ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION: 'Ubuntu'
+          })
+          expect(runtime.preparePtyExecutionContext).toHaveBeenCalledWith(
+            expect.any(String),
+            'Ubuntu',
+            expect.objectContaining({ resetIncarnation: true })
+          )
+        })
+      })
+
       it('distinguishes an attached native context from an older daemon fallback', async () => {
         await withWin32Platform(async () => {
           _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
@@ -5372,6 +5436,37 @@ describe('registerPtyHandlers', () => {
     expect(controller.hasPty('missing-pty')).toBe(false)
     expect(hasPty).toHaveBeenCalledTimes(2)
     expect(listProcesses).not.toHaveBeenCalled()
+  })
+
+  it('scopes runtime inventories to the requested provider', async () => {
+    const localList = vi
+      .spyOn(getLocalPtyProvider(), 'listProcesses')
+      .mockResolvedValue([{ id: 'local-pty', title: 'Local', cwd: '/local' }])
+    const sshAList = vi.fn(async () => [{ id: 'ssh-a-pty' }])
+    const sshBList = vi.fn(async () => {
+      throw new Error('ssh-b unavailable')
+    })
+    registerSshPtyProvider('ssh-a', { listProcesses: sshAList } as never)
+    registerSshPtyProvider('ssh-b', { listProcesses: sshBList } as never)
+    const runtime = { setPtyController: vi.fn() }
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      listProcesses(connectionId?: string | null): Promise<{ id: string }[]>
+    }
+
+    await expect(controller.listProcesses(null)).resolves.toEqual([
+      { id: 'local-pty', title: 'Local', cwd: '/local' }
+    ])
+    expect(localList).toHaveBeenCalledOnce()
+    expect(sshAList).not.toHaveBeenCalled()
+    expect(sshBList).not.toHaveBeenCalled()
+
+    await expect(controller.listProcesses('ssh-a')).resolves.toEqual([{ id: 'ssh-a-pty' }])
+    expect(sshAList).toHaveBeenCalledOnce()
+    expect(sshBList).not.toHaveBeenCalled()
+
+    await expect(controller.listProcesses()).rejects.toThrow('ssh-b unavailable')
   })
 
   it('returns unavailable runtime confirmation for unsupported or missing providers', async () => {
@@ -11467,6 +11562,197 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('keeps negotiated source-credit overflow off the legacy PTY-global pause path', async () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const provider = installObservableDaemonTestProvider()
+      let modelSequence = 0
+      const runtime = {
+        setPtyController: vi.fn(),
+        setRemoteTerminalSourceRangeConsumerHooks: vi.fn(),
+        getPtyOutputSequence: vi.fn(() => modelSequence),
+        onPtyData: vi.fn(
+          (_id: string, data: string, _at: number, rawLength = data.length) =>
+            (modelSequence += rawLength)
+        ),
+        acceptPtyDataBounded: vi.fn(
+          (_id: string, _data: string, _at: number, rawLength: number) => {
+            modelSequence += rawLength
+            return { sequence: modelSequence, completion: Promise.resolve() }
+          }
+        )
+      }
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      mainWindow.webContents.send.mockClear()
+
+      const sourceChunk = 's'.repeat(128 * 1024)
+      for (let index = 0; index < 17; index++) {
+        const sourceStartSu = index * sourceChunk.length
+        await acceptSshPtyOutputData({
+          id: 'source-credit-pty',
+          data: sourceChunk,
+          providerGeneration: 41,
+          ptyIncarnation: 'source-incarnation',
+          rawLength: sourceChunk.length,
+          transformed: false,
+          source: {
+            relayPtyId: 'relay-source-pty',
+            spanId: `source-token:${sourceStartSu}:${sourceStartSu + sourceChunk.length}`,
+            clientGeneration: 2,
+            ownerGeneration: 3,
+            deliveryToken: 'source-token',
+            sourceStartSu,
+            sourceEndSu: sourceStartSu + sourceChunk.length
+          }
+        })
+      }
+
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 1,
+        pendingChars: 0
+      })
+      expect(provider.pauseProducer).not.toHaveBeenCalledWith('source-credit-pty')
+      expect(provider.resumeProducer).not.toHaveBeenCalledWith('source-credit-pty')
+
+      provider.emitData('legacy-pty', 'l'.repeat(320 * 1024))
+      expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
+      expect(provider.pauseProducer).toHaveBeenCalledWith('legacy-pty')
+      expect(provider.pauseProducer).not.toHaveBeenCalledWith('unrelated-pty')
+
+      vi.runAllTimers()
+      expect(provider.resumeProducer).toHaveBeenCalledTimes(1)
+      expect(provider.resumeProducer).toHaveBeenCalledWith('legacy-pty')
+    } finally {
+      errorSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('pauses and resumes the exact SSH provider generation across reconnect replacement', async () => {
+    vi.useFakeTimers()
+    const completion = makeDeferred()
+    let sequence = 0
+    let captures = 0
+    const runtime = {
+      setPtyController: vi.fn(),
+      setRemoteTerminalSourceRangeConsumerHooks: vi.fn(),
+      getPtyOutputSequence: vi.fn(() => sequence),
+      acceptPtyDataBounded: vi.fn((_id: string, _data: string, _at: number, rawLength: number) => {
+        sequence += rawLength
+        captures++
+        return {
+          sequence,
+          completion: captures === 1 ? completion.promise : Promise.resolve()
+        }
+      })
+    }
+    const original = {
+      providerGeneration: 41,
+      hasPtyDeliveryPauseAdapter: () => true,
+      pauseProducer: vi.fn(),
+      resumeProducer: vi.fn()
+    }
+    const replacement = {
+      providerGeneration: 42,
+      hasPtyDeliveryPauseAdapter: () => true,
+      pauseProducer: vi.fn(),
+      resumeProducer: vi.fn()
+    }
+    const id = 'ssh:ssh-generation-replacement@@relay-pty'
+    const receipts: Promise<unknown>[] = []
+
+    try {
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      registerSshPtyProvider('ssh-generation-replacement', original as never)
+      const running = acceptSshPtyOutputData({
+        id,
+        data: 'a'.repeat(256 * 1024),
+        providerGeneration: 41,
+        ptyIncarnation: 'incarnation-41',
+        rawLength: 256 * 1024,
+        transformed: false
+      })
+      receipts.push(running)
+      registerSshPtyProvider('ssh-generation-replacement', replacement as never)
+      const pressured = acceptSshPtyOutputData({
+        id,
+        data: 'b',
+        providerGeneration: 41,
+        ptyIncarnation: 'incarnation-41',
+        rawLength: 1,
+        transformed: false
+      })
+      receipts.push(pressured)
+
+      expect(original.pauseProducer).toHaveBeenCalledWith(id)
+      expect(replacement.pauseProducer).not.toHaveBeenCalled()
+
+      completion.resolve()
+      await Promise.all([running, pressured])
+      expect(original.resumeProducer).toHaveBeenCalledWith(id)
+      expect(replacement.resumeProducer).not.toHaveBeenCalled()
+    } finally {
+      completion.resolve()
+      await Promise.allSettled(receipts)
+      closeSshPtyOutputGeneration(41, 'test-cleanup')
+      unregisterSshPtyProvider('ssh-generation-replacement')
+    }
+  })
+
+  it('rejects local data while an SSH renderer exit waits for projection settlement', async () => {
+    const provider = installObservableDaemonTestProvider()
+    let sequence = 0
+    const runtime = {
+      setPtyController: vi.fn(),
+      setRemoteTerminalSourceRangeConsumerHooks: vi.fn(),
+      getPtyOutputSequence: vi.fn(() => sequence),
+      acceptPtyDataBounded: vi.fn((_id: string, _data: string, _at: number, rawLength: number) => {
+        sequence += rawLength
+        return { sequence, completion: Promise.resolve() }
+      }),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn()
+    }
+    const id = 'ssh:exit-data-race@@relay-pty'
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    mainWindow.webContents.send.mockClear()
+    await acceptSshPtyOutputData({
+      id,
+      data: 'before-exit',
+      providerGeneration: 51,
+      ptyIncarnation: 'incarnation-51',
+      rawLength: 'before-exit'.length,
+      transformed: false
+    })
+    const exit = acceptSshPtyOutputExit({
+      id,
+      code: 0,
+      providerGeneration: 51,
+      ptyIncarnation: 'incarnation-51'
+    })
+    await Promise.resolve()
+
+    provider.emitData(id, 'must-not-follow-exit')
+    expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', {
+      id,
+      data: 'must-not-follow-exit'
+    })
+
+    getPtyAckDataListener()(null, { id, processedChars: 'before-exit'.length })
+    await exit
+    expect(mainWindow.webContents.send.mock.calls.at(-1)).toEqual([
+      'pty:exit',
+      {
+        id,
+        code: 0,
+        providerGeneration: 51,
+        ptyIncarnation: 'incarnation-51'
+      }
+    ])
+  })
+
   it('resumes a paused producer when the PTY exits before draining', async () => {
     vi.useFakeTimers()
     try {
@@ -14458,6 +14744,45 @@ describe('registerPtyHandlers', () => {
       'legacy history\r\n',
       undefined,
       { cwd: '/projects/legacy', oscLinks: undefined, preferProviderIfExisting: true }
+    )
+  })
+
+  it('seeds the headless emulator from an SSH relay reattach replay', async () => {
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({
+        id: 'pty-ssh-reattach',
+        isReattach: true,
+        replay: 'relay history\r\n'
+      })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    const runtime = {
+      setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      seedHeadlessTerminal: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'handle-ssh-reattach'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      preAllocateHandleForPty: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+    // Why: without this seed main's model would be a strict suffix of what the renderer painted, and a later park-reveal would restore the fragment.
+    expect(runtime.seedHeadlessTerminal).toHaveBeenCalledTimes(1)
+    expect(runtime.seedHeadlessTerminal).toHaveBeenCalledWith(
+      'pty-ssh-reattach',
+      'relay history\r\n'
     )
   })
 

@@ -20,6 +20,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import type { LinkedWorkItemSummary } from '../../src/renderer/src/lib/new-workspace'
+import type { TaskSourceContext } from '../../src/shared/task-source-context'
 
 const SECOND_PROJECT_NAME = 'linked-item-second-project'
 
@@ -53,26 +54,59 @@ async function addSecondProject(page: Page, repoPath: string): Promise<void> {
 async function openComposerWithLinkedWorkItem(
   page: Page,
   linkedWorkItem: LinkedWorkItemSummary,
-  prefilledName: string
+  prefilledName: string,
+  taskSourceContext: TaskSourceContext | null = null
 ): Promise<void> {
   await page.evaluate(
-    ({ linkedWorkItem, prefilledName }) => {
+    ({ linkedWorkItem, prefilledName, taskSourceContext }) => {
       const store = window.__store
       if (!store) {
         throw new Error('window.__store is not available')
       }
-      store.getState().openModal('new-workspace-composer', { linkedWorkItem, prefilledName })
+      store.getState().openModal('new-workspace-composer', {
+        linkedWorkItem,
+        prefilledName,
+        taskSourceContext
+      })
     },
-    { linkedWorkItem, prefilledName }
+    { linkedWorkItem, prefilledName, taskSourceContext }
   )
+}
+
+async function getJiraSourceContext(page: Page): Promise<TaskSourceContext> {
+  return page.evaluate(() => {
+    const state = window.__store?.getState()
+    const activeWorktreeId = state?.activeWorktreeId
+    const setup = state?.projectHostSetups.find((candidate) =>
+      state.worktreesByRepo[candidate.repoId]?.some((worktree) => worktree.id === activeWorktreeId)
+    )
+    if (!setup) {
+      throw new Error('Active project host setup is unavailable')
+    }
+    return {
+      kind: 'task-source',
+      provider: 'jira',
+      projectId: setup.projectId,
+      hostId: setup.hostId,
+      projectHostSetupId: setup.id,
+      repoId: setup.repoId,
+      providerIdentity: {
+        provider: 'jira',
+        siteId: 'e2e-jira-site',
+        siteUrl: 'https://example.atlassian.net',
+        projectKey: 'RDG'
+      }
+    }
+  })
 }
 
 async function switchComposerProject(page: Page, projectName: string): Promise<void> {
   const composer = page.getByRole('dialog')
-  const combobox = composer.locator('button[data-project-combobox-root="true"]')
+  const combobox = composer.getByRole('combobox', { name: 'Project' })
+  const comboboxRoot = composer.locator('div[data-project-combobox-root="true"]')
   await combobox.click()
   await page.getByRole('option', { name: new RegExp(projectName) }).click()
-  await expect(combobox).toContainText(projectName)
+  await expect(comboboxRoot).toContainText(projectName)
 }
 
 test.describe('New workspace composer linked item across project switches', () => {
@@ -93,6 +127,7 @@ test.describe('New workspace composer linked item across project switches', () =
   })
 
   test('keeps a Jira issue linked when the project changes', async ({ orcaPage }) => {
+    const jiraSourceContext = await getJiraSourceContext(orcaPage)
     await openComposerWithLinkedWorkItem(
       orcaPage,
       {
@@ -103,7 +138,8 @@ test.describe('New workspace composer linked item across project switches', () =
         url: 'https://example.atlassian.net/browse/RDG-344',
         jiraIdentifier: 'RDG-344'
       },
-      'rdg-344-nuxtjs-nextjs'
+      'rdg-344-nuxtjs-nextjs',
+      jiraSourceContext
     )
 
     const composer = orcaPage.getByRole('dialog')

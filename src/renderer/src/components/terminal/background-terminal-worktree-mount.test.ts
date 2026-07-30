@@ -11,6 +11,7 @@ import {
   addBackgroundMountedTerminalWorktree,
   applyBackgroundMountTabRestriction,
   canDeferColdActivationTabsForHost,
+  canMountTerminalWorkspaceForStartup,
   collectDeferredMountTabIds,
   hasRequestedBackgroundTerminalWorktreeMount,
   planColdActivationTabDeferral,
@@ -21,6 +22,32 @@ import {
   takeAllPendingBackgroundTerminalWorktreeMounts,
   shouldMountBackgroundWorktreeTab
 } from './background-terminal-worktree-mount'
+
+describe('terminal workspace startup mount gate', () => {
+  it('waits for hydration unless startup entered degraded mode', () => {
+    expect(
+      canMountTerminalWorkspaceForStartup({
+        workspaceSessionReady: true,
+        hydrationSucceeded: false,
+        startupWorktreeRefreshCompleted: false
+      })
+    ).toBe(false)
+    expect(
+      canMountTerminalWorkspaceForStartup({
+        workspaceSessionReady: true,
+        hydrationSucceeded: true,
+        startupWorktreeRefreshCompleted: false
+      })
+    ).toBe(true)
+    expect(
+      canMountTerminalWorkspaceForStartup({
+        workspaceSessionReady: true,
+        hydrationSucceeded: false,
+        startupWorktreeRefreshCompleted: true
+      })
+    ).toBe(true)
+  })
+})
 
 describe('background terminal mount request registry', () => {
   it('replays a request made before the Terminal listener mounts', () => {

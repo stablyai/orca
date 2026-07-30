@@ -523,6 +523,7 @@ export function formatFlagHelp(flag: string): string {
     limit: '--limit <n>            Maximum number of rows to return',
     mode: '--mode <mode>          Mode such as edit, diff, or both',
     'mouse-button': '--mouse-button <btn>   Mouse button: left, right, or middle',
+    modifiers: '--modifiers <chord>  Modifier keys held only for this click',
     name: '--name <name>          Name for the new worktree or automation',
     'no-parent': '--no-parent            Force no parent lineage for unrelated work',
     'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',

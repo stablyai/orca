@@ -1,41 +1,20 @@
-import { spawnSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { runOxlintPluginOnSource } from './oxlint-plugin-test-runner.mjs'
 
 const pluginPath = path.resolve('config/oxlint-plugins/app-store-performance.mjs')
-const oxlintPath = path.resolve(
-  process.platform === 'win32' ? 'node_modules/.bin/oxlint.cmd' : 'node_modules/.bin/oxlint'
-)
 
 function lintSource(source) {
-  const directory = mkdtempSync(path.join(tmpdir(), 'orca-app-store-lint-'))
-  const sourcePath = path.join(directory, 'sample.tsx')
-  const configPath = path.join(directory, 'oxlint.json')
-  writeFileSync(sourcePath, source)
-  writeFileSync(
-    configPath,
-    JSON.stringify({
-      categories: {
-        correctness: 'off'
-      },
-      jsPlugins: [{ name: 'app-store-performance', specifier: pluginPath }],
-      rules: {
-        'app-store-performance/require-selector': 'warn',
-        'app-store-performance/no-identity-selector': 'warn',
-        'app-store-performance/no-fresh-selector-result': 'warn'
-      }
-    })
-  )
-  const result = spawnSync(oxlintPath, ['--config', configPath, '--format', 'json', sourcePath], {
-    encoding: 'utf8'
+  return runOxlintPluginOnSource({
+    pluginName: 'app-store-performance',
+    pluginPath,
+    source,
+    rules: {
+      'app-store-performance/require-selector': 'warn',
+      'app-store-performance/no-identity-selector': 'warn',
+      'app-store-performance/no-fresh-selector-result': 'warn'
+    }
   })
-  if (result.error) {
-    throw result.error
-  }
-  expect(result.status).toBe(0)
-  return JSON.parse(result.stdout).diagnostics
 }
 
 describe('app store performance Oxlint plugin', () => {

@@ -123,7 +123,9 @@ describe('MobilePairingConnectionOptions', () => {
       screen.getByText('Phone can be on cellular or any Wi‑Fi. Sign-in required.')
     ).toBeVisible()
     expect(
-      screen.getByText('Phone must be on this Wi‑Fi or your Tailscale. No sign-in.')
+      screen.getByText(
+        'Phone must be on this Wi‑Fi or connected through Tailscale. No sign-in required.'
+      )
     ).toBeVisible()
 
     await user.click(screen.getByRole('radio', { name: /Orca Relay/i }))
@@ -162,5 +164,35 @@ describe('MobilePairingConnectionOptions', () => {
     await user.click(screen.getByRole('radio', { name: /^LAN\b/i }))
     expect(onChange).toHaveBeenCalledWith('local-only')
     statusListener?.('standby')
+  })
+
+  it('keeps LAN available while Relay is retrying', async () => {
+    mocks.state = {
+      ...mocks.state,
+      orcaProfileAuthStatus: {
+        activeProfileId: 'profile-1',
+        configured: true,
+        state: 'connected',
+        persistence: 'encrypted'
+      }
+    }
+    const onChange = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <MobilePairingConnectionOptions
+        value="automatic"
+        onChange={onChange}
+        relayMintFailed
+        relayMintRetrying
+      />
+    )
+
+    expect(screen.getByText('Retrying')).toBeVisible()
+    const relay = screen.getByRole('radio', { name: /Orca Relay/i })
+    const lan = screen.getByRole('radio', { name: /^LAN\b/i })
+    expect(relay).toHaveAttribute('aria-disabled', 'true')
+    expect(lan).toHaveAttribute('aria-disabled', 'false')
+    await user.click(lan)
+    expect(onChange).toHaveBeenCalledWith('local-only')
   })
 })

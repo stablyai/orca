@@ -14,6 +14,7 @@ import {
 } from '../../shared/window-shortcut-policy'
 import { readGuestNavigationState } from './browser-guest-navigation-state'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../shared/keybindings'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
 import {
   ModifierDoubleTapDetector,
@@ -261,6 +262,8 @@ export function setupGuestShortcutForwarding(args: {
   shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
   isMobileEmulatorEnabled?: IsMobileEmulatorEnabled
   getKeybindings?: () => KeybindingOverrides | undefined
+  // Why: a floating-panel guest owns a distinct workspace; its close/index chords must route to the panel, not the main tab strip.
+  resolveWorktreeId?: (browserTabId: string) => string | null
 }): () => void {
   const {
     browserTabId,
@@ -268,7 +271,8 @@ export function setupGuestShortcutForwarding(args: {
     resolveRenderer,
     shouldForwardDictationShortcut,
     isMobileEmulatorEnabled,
-    getKeybindings
+    getKeybindings,
+    resolveWorktreeId
   } = args
   let ctrlTabSwitching = false
   const doubleTapDetector = new ModifierDoubleTapDetector()
@@ -364,6 +368,8 @@ export function setupGuestShortcutForwarding(args: {
     if (!renderer) {
       return false
     }
+    // Why: floating-panel guests route close/index chords to the panel (carrying their source id) so they hit the floating workspace, not the main tab strip.
+    const isFloatingGuest = resolveWorktreeId?.(browserTabId) === FLOATING_TERMINAL_WORKTREE_ID
     if (keybindingMatchesAction('tab.newBrowser', input, process.platform, keybindings)) {
       renderer.send('ui:newBrowserTab')
     } else if (
@@ -400,7 +406,11 @@ export function setupGuestShortcutForwarding(args: {
       // Why: same as browser.back; the focused guest cannot call the renderer-owned webview's goForward() directly.
       renderer.send('ui:browserHistoryNavigate', 'forward')
     } else if (keybindingMatchesAction('tab.close', input, process.platform, keybindings)) {
-      renderer.send('ui:closeActiveTab')
+      if (isFloatingGuest) {
+        renderer.send('ui:closeFloatingItem', { sourceId: browserTabId })
+      } else {
+        renderer.send('ui:closeActiveTab')
+      }
     } else if (keybindingMatchesAction('tab.nextSameType', input, process.platform, keybindings)) {
       renderer.send('ui:switchTab', 1)
     } else if (
@@ -424,9 +434,17 @@ export function setupGuestShortcutForwarding(args: {
     } else if (action?.type === 'forceReload') {
       renderer.reloadIgnoringCache()
     } else if (action?.type === 'jumpToWorktreeIndex') {
-      renderer.send('ui:jumpToWorktreeIndex', action.index)
+      if (isFloatingGuest) {
+        renderer.send('ui:selectFloatingIndex', { index: action.index })
+      } else {
+        renderer.send('ui:jumpToWorktreeIndex', action.index)
+      }
     } else if (action?.type === 'jumpToTabIndex') {
-      renderer.send('ui:jumpToTabIndex', action.index)
+      if (isFloatingGuest) {
+        renderer.send('ui:selectFloatingIndex', { index: action.index })
+      } else {
+        renderer.send('ui:jumpToTabIndex', action.index)
+      }
     } else if (action?.type === 'dictationKeyDown') {
       if (!shouldForwardDictationShortcut?.()) {
         return false

@@ -9,6 +9,7 @@ on:
       - 'config/scripts/build-windows-cli-launcher.mjs'
       - 'config/scripts/build-windows-cli-launcher.test.mjs'
       - 'config/scripts/computer-e2e-workflow.test.mjs'
+      - 'config/scripts/computer-use-modifier-safety.test.mjs'
       - 'config/scripts/computer-use-skill-guidance.test.mjs'
       - 'config/scripts/computer-use-smoke.mjs'
       - 'config/scripts/computer-use-smoke.test.mjs'
@@ -84,6 +85,7 @@ jobs:
           config/scripts/build-windows-cli-launcher.test.mjs
           src/main/ssh/ssh-remote-cli-launcher.test.ts
           config/scripts/computer-e2e-workflow.test.mjs
+          config/scripts/computer-use-modifier-safety.test.mjs
           config/scripts/computer-use-skill-guidance.test.mjs
           config/scripts/computer-use-smoke.test.mjs
           src/main/computer/computer-provider-lifecycle.test.ts

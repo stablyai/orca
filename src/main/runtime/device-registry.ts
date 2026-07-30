@@ -102,13 +102,15 @@ export class DeviceRegistry {
   }
 
   removeDevice(deviceId: string): boolean {
-    const before = this.devices.length
-    this.devices = this.devices.filter((d) => d.deviceId !== deviceId)
-    if (this.devices.length < before) {
-      this.save()
-      return true
+    const nextDevices = this.devices.filter((d) => d.deviceId !== deviceId)
+    if (nextDevices.length === this.devices.length) {
+      return false
     }
-    return false
+    // Why: persist before memory swap so a failed write does not drop a device
+    // only in-process while disk still lists it (and vice versa on reload).
+    this.save(nextDevices)
+    this.devices = nextDevices
+    return true
   }
 
   getDevice(deviceId: string): DeviceEntry | null {
@@ -120,22 +122,30 @@ export class DeviceRegistry {
   }
 
   setRelayBinding(deviceId: string, binding: RelayDeviceBinding): boolean {
-    const device = this.devices.find((candidate) => candidate.deviceId === deviceId)
-    if (!device || binding.relayDeviceId !== deviceId) {
+    const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
+    if (index < 0 || binding.relayDeviceId !== deviceId) {
       return false
     }
-    device.relayBinding = binding
-    this.save()
+    const nextDevices = this.devices.map((device, candidateIndex) =>
+      candidateIndex === index ? { ...device, relayBinding: binding } : device
+    )
+    this.save(nextDevices)
+    this.devices = nextDevices
     return true
   }
 
   setMobilePairingConnectionMode(deviceId: string, mode: MobilePairingConnectionMode): boolean {
-    const device = this.devices.find((candidate) => candidate.deviceId === deviceId)
-    if (!device || device.scope !== 'mobile') {
+    const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
+    if (index < 0 || this.devices[index]?.scope !== 'mobile') {
       return false
     }
-    device.mobilePairingConnectionMode = mode
-    this.save()
+    // Why: persist before swapping memory so a failed write does not leave a
+    // mode the UI/runtime believe was stored.
+    const nextDevices = this.devices.map((device, candidateIndex) =>
+      candidateIndex === index ? { ...device, mobilePairingConnectionMode: mode } : device
+    )
+    this.save(nextDevices)
+    this.devices = nextDevices
     return true
   }
 
@@ -158,11 +168,18 @@ export class DeviceRegistry {
   }
 
   updateLastSeen(deviceId: string): void {
-    const device = this.devices.find((d) => d.deviceId === deviceId)
-    if (device) {
-      device.lastSeenAt = Date.now()
-      this.save()
+    const index = this.devices.findIndex((d) => d.deviceId === deviceId)
+    if (index < 0) {
+      return
     }
+    // Why: persist before memory swap so a failed write cannot leave a scanned
+    // device looking never-scanned on disk, where rotation would drop it.
+    const seenAt = Date.now()
+    const nextDevices = this.devices.map((device, candidateIndex) =>
+      candidateIndex === index ? { ...device, lastSeenAt: seenAt } : device
+    )
+    this.save(nextDevices)
+    this.devices = nextDevices
   }
 
   private load(): void {
@@ -187,7 +204,7 @@ export class DeviceRegistry {
     }
   }
 
-  private save(devices: DeviceEntry[] = this.devices): void {
+  private save(devices: DeviceEntry[]): void {
     writeSecureJsonFile(this.registryPath, devices)
   }
 }

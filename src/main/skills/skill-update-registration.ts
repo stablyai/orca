@@ -24,6 +24,20 @@ function globalSkillLockPath(args: SkillUpdateRegistrationArgs): string {
 export async function readGloballyUpdatableSkillNames(
   args: SkillUpdateRegistrationArgs = {}
 ): Promise<ReadonlySet<string>> {
+  return new Set((await readGloballyUpdatableSkillLocks(args)).keys())
+}
+
+/**
+ * Each updatable skill's recorded `skillFolderHash`, keyed by name.
+ *
+ * The hash is what the updater believes it installed. It is deliberately
+ * exposed alongside the names because `skills update` decides what to do by
+ * comparing this against the source and never reads disk — so when it disagrees
+ * with the bytes actually on disk, the command can only no-op.
+ */
+export async function readGloballyUpdatableSkillLocks(
+  args: SkillUpdateRegistrationArgs = {}
+): Promise<ReadonlyMap<string, string>> {
   try {
     const parsed = JSON.parse(await readFile(globalSkillLockPath(args), 'utf8')) as {
       version?: unknown
@@ -36,10 +50,10 @@ export async function readGloballyUpdatableSkillNames(
       typeof parsed.skills !== 'object' ||
       Array.isArray(parsed.skills)
     ) {
-      return new Set()
+      return new Map()
     }
 
-    return new Set(
+    return new Map(
       Object.entries(parsed.skills)
         .filter(([, value]) => {
           if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -59,9 +73,11 @@ export async function readGloballyUpdatableSkillNames(
             entry.source.length > 0
           )
         })
-        .map(([name]) => name)
+        .map(
+          ([name, value]) => [name, (value as { skillFolderHash: string }).skillFolderHash] as const
+        )
     )
   } catch {
-    return new Set()
+    return new Map()
   }
 }

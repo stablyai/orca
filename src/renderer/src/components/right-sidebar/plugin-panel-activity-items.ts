@@ -70,7 +70,11 @@ export function resolvePluginPanelIcon(iconName: string | undefined): PluginPane
   }
   // Accept both lucide naming styles ('file-text' and 'FileText').
   const normalized = iconName.replaceAll('-', '').toLowerCase()
-  return PLUGIN_PANEL_ICONS[normalized] ?? Plug
+  // Own-key only: a manifest icon named `constructor` must not resolve to an
+  // inherited member and crash the sidebar with a non-component "icon".
+  return Object.hasOwn(PLUGIN_PANEL_ICONS, normalized)
+    ? (PLUGIN_PANEL_ICONS[normalized] ?? Plug)
+    : Plug
 }
 
 /** Maps active plugin panel contributions onto right-sidebar activity items. */

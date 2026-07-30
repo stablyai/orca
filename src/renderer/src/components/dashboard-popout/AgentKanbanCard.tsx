@@ -1,6 +1,13 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { MessageCircleQuestion } from 'lucide-react'
+import {
+  ChevronRight,
+  GitMerge,
+  GitPullRequest,
+  GitPullRequestClosed,
+  GitPullRequestDraft,
+  MessageCircleQuestion
+} from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { AgentStateDot } from '@/components/AgentStateDot'
@@ -36,6 +43,39 @@ function displayTimestamp(card: DashboardCard): number {
   return card.finishedAt ?? card.startedAt
 }
 
+function formatSubagentCount(count: number): string {
+  return count === 1
+    ? translate('dashboardPopout.card.subagents_one', '{{count}} subagent', { count })
+    : translate('dashboardPopout.card.subagents_other', '{{count}} subagents', { count })
+}
+
+function sameSubagents(a: DashboardCard['subagents'], b: DashboardCard['subagents']): boolean {
+  if (a === b) {
+    return true
+  }
+  if (!a || !b || a.length !== b.length) {
+    return false
+  }
+  for (let index = 0; index < a.length; index += 1) {
+    if (!(index in a) || !(index in b)) {
+      if (index in a !== index in b) {
+        return false
+      }
+      continue
+    }
+    const subagent = a[index]
+    const other = b[index]
+    if (
+      subagent.id !== other.id ||
+      subagent.name !== other.name ||
+      subagent.dotState !== other.dotState
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
 function sameCard(a: DashboardCard, b: DashboardCard): boolean {
   return (
     a.paneKey === b.paneKey &&
@@ -52,12 +92,67 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.leafId === b.leafId &&
     a.repoName === b.repoName &&
     a.worktreeName === b.worktreeName &&
+    a.hasReview === b.hasReview &&
+    a.review?.number === b.review?.number &&
+    a.review?.state === b.review?.state &&
+    sameSubagents(a.subagents, b.subagents) &&
     a.startedAt === b.startedAt &&
     a.finishedAt === b.finishedAt &&
     a.stateChangedAt === b.stateChangedAt &&
     a.unseen === b.unseen &&
     a.askSummary === b.askSummary &&
     a.conversationName === b.conversationName
+  )
+}
+
+const REVIEW_PRESENTATION = {
+  open: {
+    icon: GitPullRequest,
+    className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+  },
+  draft: {
+    icon: GitPullRequestDraft,
+    className: 'border-border bg-muted/60 text-muted-foreground'
+  },
+  merged: {
+    icon: GitMerge,
+    className: 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300'
+  },
+  closed: {
+    icon: GitPullRequestClosed,
+    className: 'border-destructive/30 bg-destructive/10 text-destructive'
+  }
+} as const
+
+function ReviewPill({ card }: { card: DashboardCard }): React.JSX.Element | null {
+  if (!card.review) {
+    return null
+  }
+  const presentation = REVIEW_PRESENTATION[card.review.state]
+  const Icon = presentation.icon
+  const title = (() => {
+    switch (card.review.state) {
+      case 'open':
+        return translate('dashboardPopout.card.review.open', 'Open review')
+      case 'draft':
+        return translate('dashboardPopout.card.review.draft', 'Draft review')
+      case 'merged':
+        return translate('dashboardPopout.card.review.merged', 'Merged review')
+      case 'closed':
+        return translate('dashboardPopout.card.review.closed', 'Closed review')
+    }
+  })()
+  return (
+    <span
+      role="img"
+      aria-label={`${title} #${card.review.number}`}
+      className={cn(
+        'inline-flex shrink-0 items-center gap-0.5 rounded-full border px-1 py-px text-[10px] leading-none tabular-nums',
+        presentation.className
+      )}
+    >
+      <Icon className="size-2.5" aria-hidden />#{card.review.number}
+    </span>
   )
 }
 
@@ -100,6 +195,7 @@ export const AgentKanbanCard = memo(
     onOpenTerminal
   }: AgentKanbanCardProps): React.JSX.Element {
     useTranslation()
+    const [subagentsOpen, setSubagentsOpen] = useState(false)
     // Why: the two outcomes worth scanning for get a tinted card — amber for
     // "answer me", green for "finished, look at it". Everything else stays
     // neutral so the tint keeps meaning something.
@@ -112,16 +208,13 @@ export const AgentKanbanCard = memo(
     const worktreeInFooter = card.conversationName !== undefined
 
     return (
-      <button
-        type="button"
-        onClick={() => onOpenTerminal(card)}
+      <div
         // Why: a stable per-agent view-transition-name lets the browser morph
         // the card from its old column to its new one when its bucket changes.
         // paneKey has ':'/'/' which aren't valid in a custom-ident, so slugify.
         style={{ viewTransitionName: `agentcard-${card.paneKey.replace(/[^a-zA-Z0-9]/g, '-')}` }}
         className={cn(
-          'group flex w-full flex-col gap-1.5 rounded-lg border p-2.5 text-left',
-          'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'group flex w-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors',
           needsYou
             ? 'border-amber-500/40 bg-amber-500/[0.06] hover:border-amber-500/60 hover:bg-amber-500/10'
             : isDone
@@ -129,62 +222,94 @@ export const AgentKanbanCard = memo(
               : 'border-border/60 bg-card hover:border-border hover:bg-accent/40'
         )}
       >
-        <div className="flex items-center gap-1.5">
-          {/* Why: a bare <svg> flex item shrinks with the row — long worktree names squashed the icon. */}
-          <span className="inline-flex shrink-0">
-            <AgentIcon agent={agentTypeToIconAgent(card.agentType)} size={14} />
-          </span>
-          <span
-            // Why: same unvisited treatment as the sidebar's DashboardAgentRow —
-            // bold+bright until acked, normal+muted after — so both surfaces
-            // read identically (the ack map is shared).
-            className={cn(
-              'truncate text-[12.5px]',
-              card.unseen ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground'
-            )}
-          >
-            {heading}
-          </span>
-          {/* The summary pill already carries the attention glyph. */}
-          {card.askSummary ? null : <AgentStateDot state={card.dotState} className="ml-auto" />}
-        </div>
+        <button
+          type="button"
+          onClick={() => onOpenTerminal(card)}
+          className="flex w-full flex-col gap-1.5 text-left focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          <div className="flex w-full items-center gap-1.5">
+            {/* Why: a bare <svg> flex item shrinks with the row. */}
+            <span className="inline-flex shrink-0">
+              <AgentIcon agent={agentTypeToIconAgent(card.agentType)} size={14} />
+            </span>
+            <span
+              className={cn(
+                'truncate text-[12.5px]',
+                card.unseen ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground'
+              )}
+            >
+              {heading}
+            </span>
+            {card.askSummary ? null : <AgentStateDot state={card.dotState} className="ml-auto" />}
+          </div>
 
-        {card.lastUserMessage || card.lastAgentMessage ? (
-          <div className="flex flex-col gap-0.5">
-            {card.lastUserMessage ? (
-              <div className="line-clamp-1 text-[11px] leading-snug text-muted-foreground">
-                {/* Why: plain "You" again — the session's name now heads the card. */}
-                <span className="font-medium text-foreground/45">
-                  {translate('dashboardPopout.card.you', 'You')}
-                </span>{' '}
-                {card.lastUserMessage}
+          {card.lastUserMessage || card.lastAgentMessage ? (
+            <div className="flex w-full flex-col gap-0.5">
+              {card.lastUserMessage ? (
+                <div className="line-clamp-1 text-[11px] leading-snug text-muted-foreground">
+                  <span className="font-medium text-foreground/45">
+                    {translate('dashboardPopout.card.you', 'You')}
+                  </span>{' '}
+                  {card.lastUserMessage}
+                </div>
+              ) : null}
+              {card.lastAgentMessage ? (
+                <div className="line-clamp-2 text-xs leading-snug text-foreground/90">
+                  <span className="font-medium text-foreground/45">
+                    {formatAgentTypeLabel(card.agentType)}
+                  </span>{' '}
+                  {card.lastAgentMessage}
+                </div>
+              ) : null}
+            </div>
+          ) : card.task ? (
+            <div className="line-clamp-2 w-full text-xs leading-snug text-foreground/90">
+              {card.task}
+            </div>
+          ) : null}
+
+          {card.askSummary ? (
+            <div className="flex w-full items-start gap-1 rounded-md bg-amber-500/15 px-1.5 py-1 text-[11px] text-amber-600 ring-1 ring-inset ring-amber-500/25 dark:text-amber-400">
+              <MessageCircleQuestion className="mt-px size-3 shrink-0" aria-hidden />
+              <span className="line-clamp-2">{card.askSummary}</span>
+            </div>
+          ) : null}
+        </button>
+
+        {card.subagents?.length ? (
+          <>
+            <button
+              type="button"
+              aria-expanded={subagentsOpen}
+              onClick={() => setSubagentsOpen((open) => !open)}
+              className="flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <ChevronRight
+                className={cn('size-3 transition-transform', subagentsOpen && 'rotate-90')}
+              />
+              {formatSubagentCount(card.subagents.length)}
+            </button>
+            {subagentsOpen ? (
+              <div className="ml-1 flex flex-col gap-1 border-l border-border pl-2">
+                {card.subagents.map((subagent) => (
+                  <div
+                    key={subagent.id}
+                    className="flex items-center gap-1.5 py-0.5 text-[11px] text-muted-foreground"
+                  >
+                    <AgentStateDot state={subagent.dotState} />
+                    <span className="truncate">{subagent.name}</span>
+                  </div>
+                ))}
               </div>
             ) : null}
-            {card.lastAgentMessage ? (
-              <div className="line-clamp-2 text-xs leading-snug text-foreground/90">
-                <span className="font-medium text-foreground/45">
-                  {formatAgentTypeLabel(card.agentType)}
-                </span>{' '}
-                {card.lastAgentMessage}
-              </div>
-            ) : null}
-          </div>
-        ) : card.task ? (
-          <div className="line-clamp-2 text-xs leading-snug text-foreground/90">{card.task}</div>
+          </>
         ) : null}
 
-        {/* Why: the card behind it is amber now, so the pill needs its own edge
-            to stay a distinct chip instead of a flat block of tint. */}
-        {card.askSummary ? (
-          <div className="flex items-start gap-1 rounded-md bg-amber-500/15 px-1.5 py-1 text-[11px] text-amber-600 ring-1 ring-inset ring-amber-500/25 dark:text-amber-400">
-            <MessageCircleQuestion className="mt-px size-3 shrink-0" aria-hidden />
-            <span className="line-clamp-2">{card.askSummary}</span>
-          </div>
-        ) : null}
-
-        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          {/* Why: the project reads as an icon so its name can't crowd the
-              worktree sitting next to it; the name lives in the tooltip. */}
+        <button
+          type="button"
+          onClick={() => onOpenTerminal(card)}
+          className="flex w-full items-center gap-2 rounded-md text-left text-[11px] text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
           <Tooltip>
             <TooltipTrigger asChild>
               <span
@@ -199,13 +324,14 @@ export const AgentKanbanCard = memo(
             </TooltipContent>
           </Tooltip>
           {worktreeInFooter ? <span className="truncate">{card.worktreeName}</span> : null}
+          <ReviewPill card={card} />
           {displayTimestamp(card) > 0 ? (
             <span className="ml-auto shrink-0 pl-1 tabular-nums">
               {formatStartedAgo(displayTimestamp(card), now)}
             </span>
           ) : null}
-        </div>
-      </button>
+        </button>
+      </div>
     )
   },
   (previous, next) =>

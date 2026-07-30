@@ -13,6 +13,7 @@ import type { MobilePageStage } from './mobile-page-stage'
 import { MobilePageToolbar } from './MobilePageToolbar'
 import { PhoneCarousel } from './PhoneCarousel'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 
 type MobilePageContentProps = {
   closeMobilePage: () => void
@@ -23,6 +24,7 @@ type MobilePageContentProps = {
   generatePairing: (rotate: boolean) => void
   canGeneratePairing: boolean
   handleAddressChange: (address: string) => void
+  beforeCustomAddressChange: (address: string) => Promise<boolean>
   handleBack: () => void
   handleContinue: () => void
   installQrUrl: string | null
@@ -37,7 +39,11 @@ type MobilePageContentProps = {
   handleConnectionModeChange: (mode: MobilePairingConnectionMode) => void
   pairQrDataUrl: string | null
   pairingUrl: string | null
-  relayDegraded: boolean
+  pairingQrError: boolean
+  relayMintFailure: MobileRelayMintFailure | null
+  onUseLan: () => void
+  onRetryRelay: () => void
+  onCopyRelayDiagnostics: () => void
   platform: Platform
   refreshingNetworkInterfaces: boolean
   revokeDevice: (id: string) => void
@@ -60,6 +66,7 @@ export function MobilePageContent({
   generatePairing,
   canGeneratePairing,
   handleAddressChange,
+  beforeCustomAddressChange,
   handleBack,
   handleContinue,
   installQrUrl,
@@ -74,7 +81,11 @@ export function MobilePageContent({
   handleConnectionModeChange,
   pairQrDataUrl,
   pairingUrl,
-  relayDegraded,
+  pairingQrError,
+  relayMintFailure,
+  onUseLan,
+  onRetryRelay,
+  onCopyRelayDiagnostics,
   platform,
   refreshingNetworkInterfaces,
   revokeDevice,
@@ -88,7 +99,7 @@ export function MobilePageContent({
   toggleMobileSidebarButton
 }: MobilePageContentProps): React.JSX.Element {
   return (
-    <div className="mobile-page-root">
+    <div className="mobile-page-root scrollbar-sleek">
       <MobilePageToolbar
         showMobileButton={showMobileButton}
         onClose={closeMobilePage}
@@ -118,7 +129,11 @@ export function MobilePageContent({
               onCopyInstallUrl={copyInstallUrl}
               pairQrDataUrl={pairQrDataUrl}
               pairingUrl={pairingUrl}
-              relayDegraded={relayDegraded}
+              pairingQrError={pairingQrError}
+              relayMintFailure={relayMintFailure}
+              onUseLan={onUseLan}
+              onRetryRelay={onRetryRelay}
+              onCopyRelayDiagnostics={onCopyRelayDiagnostics}
               pairLoading={pairLoading}
               connectionMode={connectionMode}
               onConnectionModeChange={handleConnectionModeChange}
@@ -128,6 +143,7 @@ export function MobilePageContent({
               networkInterfaces={networkInterfaces}
               selectedAddress={selectedAddress}
               onSelectedAddressChange={handleAddressChange}
+              beforeCustomAddressChange={beforeCustomAddressChange}
               onRefreshNetworkInterfaces={loadNetworkInterfaces}
               refreshingNetworkInterfaces={refreshingNetworkInterfaces}
               onBack={handleBack}

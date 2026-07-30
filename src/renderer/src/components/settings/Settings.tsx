@@ -77,9 +77,11 @@ import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { registerWindowCloseGuard } from '../window-close-request-coordinator'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import {
-  getWindowsTerminalCapabilityOwnerKey,
+  isWindowsTerminalCapabilityHost,
+  useLocalWindowsTerminalCapabilities,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
+import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
@@ -119,6 +121,7 @@ import {
   buildRepoIdToRepresentative,
   buildSettingsProjectList,
   getSettingsProjectHostRepo,
+  getSettingsTargetHostSelection,
   removeSettingsProjectFromAllHosts,
   resolveSettingsTargetRepoId
 } from './settings-project-list'
@@ -179,7 +182,7 @@ function getSettingsSectionId(
   pane: SettingsNavTarget,
   repoId: string | null,
   repoIdToRepresentative: Map<string, string>
-): string {
+) {
   if (pane === 'repo' && repoId) {
     // Why: Settings renders one collapsed pane per project, so resolve a repoId target to its project's representative section.
     return `repo-${repoIdToRepresentative.get(repoId) ?? repoId}`
@@ -630,7 +633,7 @@ function Settings(): React.JSX.Element {
     }
 
     const paneSectionId = getSettingsSectionId(
-      settingsNavigationTarget.pane as SettingsNavTarget,
+      settingsNavigationTarget.pane,
       settingsNavigationTarget.repoId,
       repoIdToRepresentative
     )
@@ -640,9 +643,21 @@ function Settings(): React.JSX.Element {
       repoIdToHostSelection.keys()
     )
     if (targetRepoId) {
-      const hostSelection = repoIdToHostSelection.get(targetRepoId)
+      const hostSelection = settingsNavigationTarget.hostId
+        ? getSettingsTargetHostSelection(
+            settingsProjectList,
+            targetRepoId,
+            settingsNavigationTarget.hostId
+          )
+        : repoIdToHostSelection.get(targetRepoId)
       if (hostSelection) {
-        setSettingsProjectHostSelection(hostSelection.projectId, hostSelection.hostId)
+        setSettingsProjectHostSelection(
+          hostSelection.projectId,
+          hostSelection.hostId,
+          'setupId' in hostSelection && typeof hostSelection.setupId === 'string'
+            ? hostSelection.setupId
+            : undefined
+        )
       }
     }
     pendingNavSectionRef.current = paneSectionId
@@ -676,6 +691,7 @@ function Settings(): React.JSX.Element {
     repoIdToRepresentative,
     setSettingsProjectHostSelection,
     settings,
+    settingsProjectList,
     settingsNavigationTarget
   ])
 
@@ -834,32 +850,59 @@ function Settings(): React.JSX.Element {
       }),
     [activeSectionId, mountedSectionIds, navSections, settingsSearchQuery, visibleSectionIds]
   )
-  const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
+  const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const capabilityLoadTarget = useMemo(
+    () => (isWebClient ? { kind: 'local' as const } : runtimeTarget),
+    [isWebClient, runtimeTarget]
+  )
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const needsRepoWindowsRuntimeCapabilities = [...neededSectionIds].some((sectionId) =>
     sectionId.startsWith('repo-')
   )
+  const needsLocalWindowsRuntimeCapabilities =
+    (isWindows || isWebClient) &&
+    (neededSectionIds.has('agents') || neededSectionIds.has('general'))
   const shouldLoadWindowsTerminalCapabilities =
     hasActiveRuntimeEnvironment ||
     ((isWindows || isWebClient) &&
       (neededSectionIds.has('terminal') ||
-        neededSectionIds.has('general') ||
         neededSectionIds.has('accounts') ||
-        neededSectionIds.has('agents') ||
-        needsRepoWindowsRuntimeCapabilities))
-  // Why: General owns the Orca CLI controls, including WSL skill-location setup.
+        needsRepoWindowsRuntimeCapabilities ||
+        (runtimeTarget.kind === 'local' && needsLocalWindowsRuntimeCapabilities)))
+  // Why: terminal, account, and repository settings describe the active execution host.
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldLoadWindowsTerminalCapabilities,
     true,
     windowsTerminalCapabilityOwnerKey,
-    runtimeTarget
+    capabilityLoadTarget
   )
+  // Why: global agent and project defaults belong to the desktop, not its active remote.
+  const remoteViewLocalWindowsRuntimeCapabilities = useLocalWindowsTerminalCapabilities(
+    needsLocalWindowsRuntimeCapabilities && runtimeTarget.kind === 'environment' && !isWebClient,
+    true,
+    'local'
+  )
+  const localWindowsRuntimeCapabilities =
+    runtimeTarget.kind === 'local' || isWebClient
+      ? windowsTerminalCapabilities
+      : remoteViewLocalWindowsRuntimeCapabilities
   // Why: only supported-but-unavailable WSL (Windows) should render disabled controls, not unsupported WSL (macOS/Linux).
-  const wslSupportedPlatform = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
-  const isWindowsTerminalHost = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
+  const runtimeWslSupportedPlatform = isWindowsTerminalCapabilityHost({
+    isWindowsRenderer: isWindows,
+    isWebClient,
+    target: runtimeTarget,
+    hostPlatform: windowsTerminalCapabilities.hostPlatform
+  })
+  const localWslSupportedPlatform = isWindowsTerminalCapabilityHost({
+    isWindowsRenderer: isWindows,
+    isWebClient,
+    target: { kind: 'local' },
+    hostPlatform: localWindowsRuntimeCapabilities.hostPlatform
+  })
+  const isWindowsTerminalHost = runtimeWslSupportedPlatform
 
   if ([...neededSectionIds].some((id) => !mountedSectionIds.has(id))) {
     // Why: record newly needed sections during render so panes don't wait for a follow-up Effect.
@@ -1183,10 +1226,10 @@ function Settings(): React.JSX.Element {
                     <AgentsPane
                       settings={settings}
                       updateSettings={updateSettings}
-                      wslSupportedPlatform={wslSupportedPlatform}
-                      wslAvailable={windowsTerminalCapabilities.wslAvailable}
-                      wslDistros={windowsTerminalCapabilities.wslDistros}
-                      wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+                      wslSupportedPlatform={localWslSupportedPlatform}
+                      wslAvailable={localWindowsRuntimeCapabilities.wslAvailable}
+                      wslDistros={localWindowsRuntimeCapabilities.wslDistros}
+                      wslCapabilitiesLoading={localWindowsRuntimeCapabilities.isLoading}
                     />
                   ) : null}
                 </SettingsSection>
@@ -1211,7 +1254,7 @@ function Settings(): React.JSX.Element {
                     <AccountsPane
                       settings={settings}
                       updateSettings={updateSettings}
-                      wslSupportedPlatform={wslSupportedPlatform}
+                      wslSupportedPlatform={runtimeWslSupportedPlatform}
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
                       wslDistros={windowsTerminalCapabilities.wslDistros}
                       wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
@@ -1310,10 +1353,10 @@ function Settings(): React.JSX.Element {
                       updateSettings={updateSettings}
                       fontSuggestions={terminalFontSuggestions}
                       onRequestFontSuggestions={requestFontSuggestions}
-                      wslSupportedPlatform={wslSupportedPlatform}
-                      wslAvailable={windowsTerminalCapabilities.wslAvailable}
-                      wslDistros={windowsTerminalCapabilities.wslDistros}
-                      wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+                      wslSupportedPlatform={localWslSupportedPlatform}
+                      wslAvailable={localWindowsRuntimeCapabilities.wslAvailable}
+                      wslDistros={localWindowsRuntimeCapabilities.wslDistros}
+                      wslCapabilitiesLoading={localWindowsRuntimeCapabilities.isLoading}
                     />
                   ) : null}
                 </SettingsSection>

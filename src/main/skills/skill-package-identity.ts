@@ -3,12 +3,19 @@ import type { Dirent } from 'node:fs'
 import { lstat, open, opendir } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
 import type { SkillBundleFileIdentity, SkillKnownSnapshot } from '../../shared/skill-freshness'
+import {
+  gitBlobSha,
+  skillPackageGitTreeSha,
+  type SkillGitTreeFileEntry
+} from './skill-git-tree-identity'
 
 type ObservedSkillFile = SkillBundleFileIdentity
 
 export type ObservedSkillPackage = {
   files: ObservedSkillFile[]
   observedDigest: string
+  /** Git tree sha of the raw bytes — comparable against the updater lock's skillFolderHash. */
+  observedGitTreeSha: string
 }
 
 export const SKILL_PACKAGE_OBSERVATION_LIMITS = {
@@ -136,6 +143,7 @@ export async function observeSkillPackage(
   limits: SkillPackageObservationLimits = SKILL_PACKAGE_OBSERVATION_LIMITS
 ): Promise<ObservedSkillPackage> {
   const files: ObservedSkillFile[] = []
+  const treeEntries: SkillGitTreeFileEntry[] = []
   const caseFoldedPaths = new Map<string, string>()
   let entryCount = 0
   let totalBytes = 0
@@ -197,7 +205,9 @@ export async function observeSkillPackage(
           limits.maximumSingleFileBytes
         )
         totalBytes += bytes.length
-        files.push(describeObservedSkillFile(manifestPath, bytes, (fileStat.mode & 0o111) !== 0))
+        const executable = (fileStat.mode & 0o111) !== 0
+        files.push(describeObservedSkillFile(manifestPath, bytes, executable))
+        treeEntries.push({ path: manifestPath, executable, blobSha: gitBlobSha(bytes) })
       } else {
         throw new Error('skill-package-special-file')
       }
@@ -205,7 +215,11 @@ export async function observeSkillPackage(
   }
 
   await visit(packageRoot, 0)
-  return { files, observedDigest: skillPackageDigest(files) }
+  return {
+    files,
+    observedDigest: skillPackageDigest(files),
+    observedGitTreeSha: skillPackageGitTreeSha(treeEntries)
+  }
 }
 
 export function matchingKnownSnapshot(

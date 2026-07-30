@@ -60,6 +60,17 @@ type SettingsSidebarProps = {
   ) => void
 }
 
+type VisibleInstallStatus = Extract<
+  SettingsNavInstallStatus,
+  'update-available' | 'needs-attention'
+>
+
+function isVisibleInstallStatus(
+  status: SettingsNavInstallStatus | undefined
+): status is VisibleInstallStatus {
+  return status === 'update-available' || status === 'needs-attention'
+}
+
 type SettingsSetupGuideRowProps = {
   progress: SettingsSetupGuideProgress
   setupActive: boolean
@@ -146,17 +157,8 @@ export function SettingsSidebar({
         ? 'bg-worktree-sidebar-accent font-medium text-worktree-sidebar-accent-foreground ring-1 ring-worktree-sidebar-ring/25'
         : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-accent/60 hover:text-worktree-sidebar-foreground'
     )
-  const installStatusLabel = (status: SettingsNavInstallStatus): string => {
+  const installStatusLabel = (status: VisibleInstallStatus): string => {
     switch (status) {
-      case 'install':
-        return translate(
-          'auto.components.settings.AgentSkillSetupPanel.5289300939',
-          'Not installed'
-        )
-      case 'installed':
-        return translate('auto.components.settings.AgentSkillSetupPanel.9fcebceb2a', 'Installed')
-      case 'up-to-date':
-        return translate('auto.components.skills.SkillFreshnessStatusPill.upToDate', 'Up to date')
       case 'update-available':
         return translate(
           'auto.components.skills.SkillFreshnessStatusPill.updateAvailable',
@@ -165,23 +167,12 @@ export function SettingsSidebar({
       case 'needs-attention':
         return translate(
           'auto.components.skills.SkillFreshnessStatusPill.needsAttention',
-          'Needs attention'
+          'Review skill'
         )
-      case 'checking':
-        return translate('auto.components.settings.AgentSkillSetupPanel.68a468752e', 'Checking...')
     }
   }
-  const installStatusClassName = (status: SettingsNavInstallStatus): string =>
-    cn(
-      'ml-auto shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none',
-      status === 'installed' || status === 'up-to-date'
-        ? 'border-status-success-border bg-status-success-background text-status-success'
-        : status === 'update-available' || status === 'needs-attention'
-          ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-          : status === 'install'
-            ? 'border-foreground/15 bg-foreground/10 text-foreground'
-            : 'border-border/50 bg-muted/30 text-muted-foreground'
-    )
+  const installStatusClassName =
+    'ml-auto shrink-0 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-amber-700 dark:text-amber-300'
 
   return (
     <aside
@@ -270,8 +261,8 @@ export function SettingsSidebar({
                       >
                         <Icon className="size-4 shrink-0" />
                         <span className="truncate">{section.title}</span>
-                        {section.installStatus ? (
-                          <span className={installStatusClassName(section.installStatus)}>
+                        {isVisibleInstallStatus(section.installStatus) ? (
+                          <span className={installStatusClassName}>
                             {installStatusLabel(section.installStatus)}
                           </span>
                         ) : section.badge ? (

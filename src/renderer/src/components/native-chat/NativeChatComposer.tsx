@@ -18,6 +18,7 @@ import {
 } from './native-chat-composer-state'
 import { readNativeChatDraftCache } from './native-chat-draft-cache'
 import { useNativeChatDraft } from './use-native-chat-draft'
+import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft-adoption'
 import { NativeChatComposerField } from './NativeChatComposerField'
 import {
   nativeChatComposerTargetIsRemote,
@@ -73,7 +74,9 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       onOptimisticSendCanceled,
       onSlashCommand,
       onSwitchToTerminal,
-      readTerminalScreen
+      readTerminalScreen,
+      launchDraft,
+      launchDraftResolved = false
     },
     ref
   ): React.JSX.Element {
@@ -84,6 +87,15 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     const draftScopeKey = paneKey
     const { draft, setDraft } = useNativeChatDraft(draftScopeKey)
     const [caret, setCaret] = useState(draft.length)
+    useNativeChatLaunchDraftAdoption({
+      terminalTabId,
+      agent,
+      launchDraft,
+      launchDraftResolved,
+      draft,
+      setDraft,
+      setCaret
+    })
     const [history, setHistory] = useState<HistoryState>(EMPTY_HISTORY)
     const [activeSuggestion, setActiveSuggestion] = useState(0)
     const [notice, setNotice] = useState<string | null>(null)
@@ -284,6 +296,9 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       clearSkillOrigin()
       clearImageAttachments()
       setNotice(null)
+      // Why: the send path pre-clears the TUI input line, so any launch-draft
+      // prefill still parked there is gone — retire the composer seed with it.
+      useAppStore.getState().clearNativeChatLaunchDraft(terminalTabId)
     }, [
       agent,
       classifySend,
@@ -297,6 +312,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       onOptimisticSend,
       onSlashCommand,
       sessionOptionsSurface,
+      terminalTabId,
       trackPendingSend,
       setDraft
     ])

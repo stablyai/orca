@@ -52,6 +52,10 @@ vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
 
+vi.mock('./ssh-relay-endpoint-credential', () => ({
+  writeRelayEndpointCredential: vi.fn().mockResolvedValue(undefined)
+}))
+
 // Why: the versioned-install modules shell out for install state, locking,
 // and GC. Stub them so deploy tests need no real SSH connection.
 vi.mock('./ssh-relay-versioned-install', () => ({
@@ -97,13 +101,11 @@ function decodePowerShellCommand(command: string): string | null {
   return match ? Buffer.from(match[1], 'base64').toString('utf16le') : null
 }
 
-function extractWindowsSockPath(script: string): string {
-  return /--sock-path\s+'([^']+)'/.exec(script)?.[1] ?? ''
-}
+const extractWindowsSockPath = (script: string): string =>
+  /--sock-path\s+'([^']+)'/.exec(script)?.[1] ?? ''
 
-function extractWindowsMarkerPath(script: string): string {
-  return /-LiteralPath\s+'([^']*\.windows-active-pipe[^']*)'/.exec(script)?.[1] ?? ''
-}
+const extractWindowsMarkerPath = (script: string): string =>
+  /-LiteralPath\s+'([^']*\.windows-active-pipe[^']*)'/.exec(script)?.[1] ?? ''
 
 function makeMockConnection(): SshConnection {
   return {
@@ -115,6 +117,7 @@ function makeMockConnection(): SshConnection {
       stdout: { on: vi.fn() },
       close: vi.fn()
     }),
+    writeFile: vi.fn().mockResolvedValue(undefined),
     sftp: vi.fn().mockResolvedValue({
       mkdir: vi.fn((_p: string, cb: (err: Error | null) => void) => cb(null)),
       createWriteStream: vi.fn().mockReturnValue({
@@ -130,6 +133,10 @@ function makeMockConnection(): SshConnection {
   } as unknown as SshConnection
 }
 
+function queueLaunchNamespaceAndDeadSocketProbe(): void {
+  vi.mocked(execCommand).mockResolvedValueOnce('').mockResolvedValueOnce('DEAD')
+}
+
 describe('deployAndLaunchRelay', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -141,7 +148,7 @@ describe('deployAndLaunchRelay', () => {
     mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
     mockExecCommand.mockResolvedValueOnce('/home/user') // echo $HOME
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
-    mockExecCommand.mockResolvedValueOnce('DEAD') // socket probe
+    queueLaunchNamespaceAndDeadSocketProbe()
     mockExecCommand.mockResolvedValueOnce('READY') // socket poll
 
     await deployAndLaunchRelay(conn)
@@ -159,7 +166,7 @@ describe('deployAndLaunchRelay', () => {
     mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     mockExecCommand.mockResolvedValueOnce('/home/user')
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
-    mockExecCommand.mockResolvedValueOnce('DEAD') // socket probe
+    queueLaunchNamespaceAndDeadSocketProbe()
     mockExecCommand.mockResolvedValueOnce('READY') // socket poll
 
     const progress: string[] = []
@@ -179,6 +186,7 @@ describe('deployAndLaunchRelay', () => {
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       .mockResolvedValueOnce('/home/user')
       .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
+      .mockResolvedValueOnce('') // launch namespace marker
       .mockResolvedValueOnce('ALIVE')
       .mockRejectedValueOnce(unconfirmedCleanup)
 
@@ -195,7 +203,7 @@ describe('deployAndLaunchRelay', () => {
     mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     mockExecCommand.mockResolvedValueOnce('/home/user')
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
-    mockExecCommand.mockResolvedValueOnce('DEAD')
+    queueLaunchNamespaceAndDeadSocketProbe()
     mockExecCommand.mockResolvedValueOnce('READY')
 
     await deployAndLaunchRelay(conn)
@@ -240,7 +248,7 @@ describe('deployAndLaunchRelay', () => {
       // Drain the rest of the happy path so a failed assertion does not leave
       // the deploy promise pending until the overall deploy timeout.
       mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
-      mockExecCommand.mockResolvedValueOnce('DEAD') // socket probe
+      queueLaunchNamespaceAndDeadSocketProbe()
       mockExecCommand.mockResolvedValueOnce('READY') // socket poll
       releaseRemoteHome('/home/user')
       deployError = await deployPromise.then(
@@ -278,7 +286,7 @@ describe('deployAndLaunchRelay', () => {
     expect(resolveRemoteNodePath).not.toHaveBeenCalled()
 
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
-    mockExecCommand.mockResolvedValueOnce('DEAD') // socket probe
+    queueLaunchNamespaceAndDeadSocketProbe()
     mockExecCommand.mockResolvedValueOnce('READY') // socket poll
     releaseRemoteHome('/home/user')
     await deployPromise
@@ -318,7 +326,7 @@ describe('deployAndLaunchRelay', () => {
     mockExecCommand.mockRejectedValueOnce(sessionLimitError) // concurrent node path probe
     mockExecCommand.mockResolvedValueOnce('/home/user') // sequential fallback $HOME
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
-    mockExecCommand.mockResolvedValueOnce('DEAD') // socket probe
+    queueLaunchNamespaceAndDeadSocketProbe()
     mockExecCommand.mockResolvedValueOnce('READY') // socket poll
 
     await deployAndLaunchRelay(conn)
@@ -348,7 +356,7 @@ describe('deployAndLaunchRelay', () => {
     mockExecCommand.mockResolvedValueOnce('/home/user') // concurrent install-state $HOME
     mockExecCommand.mockResolvedValueOnce('/home/user') // sequential fallback $HOME
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
-    mockExecCommand.mockResolvedValueOnce('DEAD') // socket probe
+    queueLaunchNamespaceAndDeadSocketProbe()
     mockExecCommand.mockResolvedValueOnce('READY') // socket poll
 
     await deployAndLaunchRelay(conn)
@@ -458,20 +466,20 @@ describe('deployAndLaunchRelay', () => {
 
     mockExecCommand.mockResolvedValueOnce('/home/user') // sequential fallback $HOME
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
-    mockExecCommand.mockResolvedValueOnce('DEAD') // socket probe
+    queueLaunchNamespaceAndDeadSocketProbe()
     mockExecCommand.mockResolvedValueOnce('READY') // socket poll
     releaseRemoteHome('/home/user')
     await deployPromise
     expect(resolveRemoteNodePath).toHaveBeenCalledTimes(2)
   })
 
-  it('defaults fresh relays to keep-alive-until-reset', async () => {
+  it('defaults fresh relays to keep-alive-until-reset without rollout artifacts', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
     mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     mockExecCommand.mockResolvedValueOnce('/home/user')
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
-    mockExecCommand.mockResolvedValueOnce('DEAD')
+    queueLaunchNamespaceAndDeadSocketProbe()
     mockExecCommand.mockResolvedValueOnce('READY')
 
     await deployAndLaunchRelay(conn)
@@ -482,6 +490,8 @@ describe('deployAndLaunchRelay', () => {
       .find((cmd) => cmd.includes('--detached'))
 
     expect(launchCommand).toContain(`--grace-time ${DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS}`)
+    expect(launchCommand).not.toContain('--pty-source-credit-v1')
+    expect(launchCommand).not.toContain('.pty-source-credit-policy')
   })
 
   it('allows an unlimited SSH disconnect grace window', async () => {
@@ -490,7 +500,7 @@ describe('deployAndLaunchRelay', () => {
     mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     mockExecCommand.mockResolvedValueOnce('/home/user')
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
-    mockExecCommand.mockResolvedValueOnce('DEAD')
+    queueLaunchNamespaceAndDeadSocketProbe()
     mockExecCommand.mockResolvedValueOnce('READY')
 
     await deployAndLaunchRelay(conn, undefined, 0, 'target-a')
@@ -501,6 +511,8 @@ describe('deployAndLaunchRelay', () => {
       .find((cmd) => cmd.includes('--detached'))
 
     expect(launchCommand).toContain('--grace-time 0')
+    expect(launchCommand).not.toContain('--pty-source-credit-v1')
+    expect(launchCommand).not.toContain('.pty-source-credit-policy')
   })
 
   it('clamps configured SSH disconnect grace to the seven-day maximum', async () => {
@@ -509,7 +521,7 @@ describe('deployAndLaunchRelay', () => {
     mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     mockExecCommand.mockResolvedValueOnce('/home/user')
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
-    mockExecCommand.mockResolvedValueOnce('DEAD')
+    queueLaunchNamespaceAndDeadSocketProbe()
     mockExecCommand.mockResolvedValueOnce('READY')
 
     await deployAndLaunchRelay(conn, undefined, MAX_SSH_RELAY_GRACE_PERIOD_SECONDS + 1, 'target-a')
@@ -528,7 +540,7 @@ describe('deployAndLaunchRelay', () => {
     mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     mockExecCommand.mockResolvedValueOnce('/home/user')
     mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
-    mockExecCommand.mockResolvedValueOnce('DEAD')
+    queueLaunchNamespaceAndDeadSocketProbe()
     mockExecCommand.mockResolvedValueOnce('READY')
 
     await deployAndLaunchRelay(conn)
@@ -659,6 +671,7 @@ describe('deployAndLaunchRelay', () => {
               setTimeout(() => resolve('ORCA-NATIVE-DEPS-OK'), 899_900)
             )
         )
+        .mockResolvedValueOnce('') // launch namespace marker
         .mockResolvedValueOnce('DEAD')
         .mockImplementationOnce((_conn, _command, options) => {
           return new Promise<string>((_resolve, reject) => {
@@ -685,9 +698,9 @@ describe('deployAndLaunchRelay', () => {
       expect(result).toBeInstanceOf(Error)
       expect((result as Error).message).toBe('Relay deployment timed out after 900s')
       expect(launchChannel.close).toHaveBeenCalledTimes(1)
-      expect(mockExecCommand).toHaveBeenCalledTimes(5)
+      expect(mockExecCommand).toHaveBeenCalledTimes(6)
       await vi.advanceTimersByTimeAsync(10_000)
-      expect(mockExecCommand).toHaveBeenCalledTimes(5)
+      expect(mockExecCommand).toHaveBeenCalledTimes(6)
     } finally {
       vi.useRealTimers()
     }
@@ -701,11 +714,13 @@ describe('deployAndLaunchRelay', () => {
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe A
       .mockResolvedValueOnce('/home/user') // $HOME A
       .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe A
+      .mockResolvedValueOnce('') // launch namespace marker A
       .mockResolvedValueOnce('DEAD') // probe A
       .mockResolvedValueOnce('READY') // poll A
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe B
       .mockResolvedValueOnce('/home/user') // $HOME B
       .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe B
+      .mockResolvedValueOnce('') // launch namespace marker B
       .mockResolvedValueOnce('DEAD') // probe B
       .mockResolvedValueOnce('READY') // poll B
 
@@ -766,6 +781,8 @@ describe('deployAndLaunchRelay', () => {
       '"C:/Users/me user/.orca-remote/relay-0.1.0+abcdef012345/agent-hooks/orca-relay-'
     )
     expect(launchScript).toContain('--endpoint-dir')
+    expect(launchScript).not.toContain('--pty-source-credit-v1')
+    expect(launchScript).not.toContain('.pty-source-credit-policy')
     expect(launchScript).not.toContain('\\\\.\\pipe\\agent-hooks')
     const waitScript = decodedScripts.find((script) => script.includes('deadline=Date.now()')) ?? ''
     expect(waitScript).toContain('setTimeout(attempt,intervalMs)')

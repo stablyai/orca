@@ -27,7 +27,7 @@ function statusPill(status: SkillFreshnessDisplayStatus): React.JSX.Element {
       <IntegrationStatusPill tone="attention">
         {translate(
           'auto.components.skills.SkillFreshnessStatusPill.needsAttention',
-          'Needs attention'
+          'Review skill'
         )}
       </IntegrationStatusPill>
     )

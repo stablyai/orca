@@ -49,17 +49,20 @@ async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<
   return tabId
 }
 
-// Why: #8262 exempts the single most-recently-hidden tab from cold-park to keep
-// the just-left view instantly warm, so a lone hidden tab never parks. Opening
-// one more tab hides the current view (which then holds that exemption) and
-// leaves the older `targetTabId` free to cold-park. Returns waitForTabParked's
-// elapsed-ms so callers keep their parking annotations.
+// Why: #8262 exempts the single most-recently-hidden tab from cold-park. An
+// active target therefore needs two decoys (hide it, then move the exemption);
+// an already-hidden target needs one. Returns waitForTabParked's elapsed time.
 export async function parkHiddenTabBehindDecoy(
   page: Page,
   worktreeId: string,
   targetTabId: string,
   options?: { parkDelayMs?: number }
 ): Promise<number> {
+  // An active target needs one decoy to become old and another to take the
+  // last-active exemption; already-hidden targets need only the latter.
+  if ((await getActiveTabId(page)) === targetTabId) {
+    await createActiveTerminalTab(page, worktreeId)
+  }
   await createActiveTerminalTab(page, worktreeId)
   return waitForTabParked(page, targetTabId, options)
 }

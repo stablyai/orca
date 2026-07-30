@@ -90,13 +90,31 @@ describe('decideInitialAgentTabViewMode', () => {
     ).toEqual({})
   })
 
-  it('returns undefined for draft delivery', () => {
+  it('opens a mirrorable draft launch in chat', () => {
     expect(
       decideInitialAgentTabViewMode({
         experimentalNativeChat: true,
         openAgentTabsInChatByDefault: true,
         agent: 'claude',
-        promptDelivery: 'draft'
+        promptDelivery: 'draft',
+        launchDraftText: 'https://github.com/o/r/issues/12'
+      })
+    ).toBe('chat')
+  })
+
+  it.each([
+    ['multi-line', 'Reproduce first\n\nhttps://github.com/o/r/issues/12'],
+    ['trailing-newline', 'https://github.com/o/r/issues/12\n'],
+    ['blank', '   '],
+    ['absent', undefined]
+  ])('keeps a %s draft in the terminal, where its text actually is', (_label, launchDraftText) => {
+    expect(
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        agent: 'claude',
+        promptDelivery: 'draft',
+        ...(launchDraftText === undefined ? {} : { launchDraftText })
       })
     ).toBeUndefined()
   })

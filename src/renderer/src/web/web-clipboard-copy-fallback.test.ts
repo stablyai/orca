@@ -11,6 +11,7 @@ type FakeDocOptions = {
 function createFakeDocument(options?: FakeDocOptions) {
   const listeners: ((event: unknown) => void)[] = []
   const clipboardData = { setData: vi.fn() }
+  const stopImmediatePropagation = vi.fn()
   const createElement = vi.fn()
   const appendChild = vi.fn()
   const execCommand = vi.fn((command: string) => {
@@ -24,7 +25,8 @@ function createFakeDocument(options?: FakeDocOptions) {
       for (const listener of listeners.slice()) {
         listener({
           clipboardData: (options?.withClipboardData ?? true) ? clipboardData : undefined,
-          preventDefault: vi.fn()
+          preventDefault: vi.fn(),
+          stopImmediatePropagation
         })
       }
     }
@@ -50,7 +52,15 @@ function createFakeDocument(options?: FakeDocOptions) {
     body: { appendChild }
   } as unknown as Document
 
-  return { doc, clipboardData, createElement, appendChild, execCommand, listeners }
+  return {
+    doc,
+    clipboardData,
+    stopImmediatePropagation,
+    createElement,
+    appendChild,
+    execCommand,
+    listeners
+  }
 }
 
 describe('copyClipboardTextViaExecCommand', () => {

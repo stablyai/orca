@@ -2,6 +2,7 @@ import type { TuiAgent } from '../../../shared/types'
 import grokUrl from '../../../shared/agent-icons/grok.png?url'
 import mimoCodeUrl from '../../../shared/agent-icons/mimo-code.png?url'
 import anteUrl from '../../../shared/agent-icons/ante.png?url'
+import traeUrl from '../../../shared/agent-icons/trae.png?url'
 import geminiUrl from '../../../shared/agent-icons/gemini.png?url'
 import antigravityUrl from '../../../shared/agent-icons/antigravity.png?url'
 import gooseUrl from '../../../shared/agent-icons/goose.png?url'
@@ -34,6 +35,7 @@ export const AGENT_FAVICON_ASSETS: Partial<Record<TuiAgent, string>> = {
   grok: grokUrl,
   'mimo-code': mimoCodeUrl,
   ante: anteUrl,
+  trae: traeUrl,
   gemini: geminiUrl,
   antigravity: antigravityUrl,
   goose: gooseUrl,

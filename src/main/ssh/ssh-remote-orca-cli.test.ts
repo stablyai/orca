@@ -24,7 +24,6 @@ const LEGACY_FALLBACK_OPTIONS: HostCliPassthroughOptions = {
   userDataPath: '/host/user-data',
   entryExists: () => false
 }
-
 type FakeChild = EventEmitter & {
   stdout: EventEmitter
   stderr: EventEmitter
@@ -80,7 +79,10 @@ describe('runRemoteOrcaCli', () => {
           }
         }
       }),
-      getActiveDispatchForIdentity: vi.fn(() => undefined)
+      getLegacyAdoption: vi.fn(() => undefined),
+      getActiveDispatchForIdentity: vi.fn(() => undefined),
+      getCurrentRunForPane: vi.fn(() => undefined),
+      findActiveRemoteAttachmentForPane: vi.fn(() => undefined)
     }
     const runtime = {
       getRuntimeId: () => 'runtime-test',
@@ -478,6 +480,51 @@ describe('runRemoteOrcaCli', () => {
     expect(payload.ok).toBe(true)
     expect(payload.result.count).toBe(1)
     expect(payload.result.messages[0]?.subject).toBe('pong')
+  })
+
+  it('carries the remote pane key for an implicit orchestration check', async () => {
+    const { runtime, db } = createRuntime()
+
+    const result = await runRemoteOrcaCli(
+      runtime,
+      {
+        argv: ['orchestration', 'check', '--all', '--json'],
+        cwd: '/home/alice/repo',
+        env: {
+          ORCA_TERMINAL_HANDLE: 'term_stale_ssh',
+          ORCA_PANE_KEY: 'tab_ssh:leaf_ssh'
+        }
+      },
+      LEGACY_FALLBACK_OPTIONS
+    )
+
+    expect(result.exitCode).toBe(0)
+    expect(db.getCurrentRunForPane).toHaveBeenCalledWith('tab_ssh:leaf_ssh')
+    expect(db.getActiveDispatchForIdentity).toHaveBeenCalledWith(
+      'term_stale_ssh',
+      'tab_ssh:leaf_ssh'
+    )
+  })
+
+  it('does not inherit a remote pane key for explicit legacy inspection', async () => {
+    const { runtime, db } = createRuntime()
+
+    const result = await runRemoteOrcaCli(
+      runtime,
+      {
+        argv: ['orchestration', 'check', '--terminal', 'term_legacy_worker', '--all', '--json'],
+        cwd: '/home/alice/repo',
+        env: {
+          ORCA_TERMINAL_HANDLE: 'term_stale_ssh',
+          ORCA_PANE_KEY: 'tab_ssh:leaf_ssh'
+        }
+      },
+      LEGACY_FALLBACK_OPTIONS
+    )
+
+    expect(result.exitCode).toBe(0)
+    expect(db.getCurrentRunForPane).not.toHaveBeenCalled()
+    expect(db.getActiveDispatchForIdentity).toHaveBeenCalledWith('term_legacy_worker', undefined)
   })
 
   it('routes previously-unsupported commands through the full host CLI', async () => {

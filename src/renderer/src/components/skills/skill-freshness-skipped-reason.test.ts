@@ -25,7 +25,31 @@ describe('skippedReason', () => {
     expect(skippedReason([row('duplicate'), row('read-only')])).toContain('read-only location')
   })
 
-  it('falls back to the generic sentence when nothing is blocking', () => {
+  it('hands over the reinstall command when no location is at fault', () => {
+    // Why: the only way to reach this with a bare out-of-date copy is the updater's own
+    // record, which `skills update` can never converge — so the sentence has to give the
+    // one command that does, not report a skip the user cannot act on.
+    const reason = skippedReason([row(null)], 'orchestration')
+    expect(reason).toContain('reports the skill as already up to date')
+    expect(reason).toContain(
+      'npx skills add https://github.com/stablyai/orca --skill orchestration --global'
+    )
+  })
+
+  it('never offers the reinstall for a copy that is ahead of this build', () => {
+    // Why: reinstalling a newer copy rolls the user back to what this build ships.
+    const reason = skippedReason([row('newer')], 'orchestration')
+    expect(reason).toContain('later version')
+    expect(reason).not.toContain('skills add')
+  })
+
+  it('keeps a placement blocker ahead of the record advice', () => {
+    expect(skippedReason([row(null), row('unrecognized')], 'orchestration')).toContain(
+      'doesn’t match the official version'
+    )
+  })
+
+  it('falls back to the generic sentence when no skill name is available', () => {
     expect(skippedReason([row('current')])).toContain('left this skill out of the update')
     expect(skippedReason([])).toContain('left this skill out of the update')
   })

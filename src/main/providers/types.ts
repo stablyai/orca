@@ -130,6 +130,8 @@ export type IPtyProvider = {
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
   attach(id: string): Promise<void>
   hasPty?: (id: string) => boolean
+  /** Exact provider readback: false only when the provider answered that the PTY is absent. */
+  probePtyLiveness?: (id: string) => Promise<boolean | null>
   write(id: string, data: string): void
   resize(id: string, cols: number, rows: number): void
   /**

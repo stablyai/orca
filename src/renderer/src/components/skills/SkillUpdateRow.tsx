@@ -118,7 +118,7 @@ export function SkillUpdateRow({
           nor on a mount-time `defaultOpen` that a re-scan can't re-fire. */}
       {state === 'blocked' ? (
         <p className="px-1.5 pb-1.5 text-xs leading-5 text-muted-foreground">
-          {skippedReason(group.locations)}
+          {skippedReason(group.locations, group.name)}
         </p>
       ) : null}
 

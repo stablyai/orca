@@ -110,19 +110,21 @@ describe('focusExistingMainWindow', () => {
 
   it('restores minimized windows before focusing them', () => {
     const window = makeFakeWindow({ minimized: true })
+    const timer = makeTimer()
 
     focusExistingMainWindow({
       app: makeFakeApp(),
       getWindow: () => window,
       openWindow: vi.fn(),
       platform: 'darwin',
-      setTimeout: makeTimer().setTimeout
+      setTimeout: timer.setTimeout
     })
 
     expect(window.calls.restore).toHaveBeenCalledTimes(1)
     expect(window.calls.show).toHaveBeenCalledTimes(1)
     expect(window.calls.focus).toHaveBeenCalledTimes(1)
     expect(window.calls.moveTop).not.toHaveBeenCalled()
+    expect(timer.scheduledMs()).toEqual([])
   })
 
   it('waits for normal startup when no window exists before app readiness', () => {

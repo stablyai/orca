@@ -143,7 +143,13 @@ export function useMobileNativeChatController(args: {
     worktreeId,
     tabId: activeSessionTabId,
     sessionId: activeChatSessionId,
-    messages: nativeChatSession.messages
+    messages: nativeChatSession.messages,
+    launchDraft: activeSessionTab?.launchDraft ?? null,
+    // Why: pass the raw draft plus this flag rather than nulling it off-chat —
+    // a null is indistinguishable from a host retraction, and peeking at the
+    // terminal view would permanently decline the prefill.
+    chatActive: showNativeChat,
+    transcriptLoading: nativeChatSession.transcriptLoading
   })
 
   const nativeChatStatus = activeChatResolution ? activeSessionTab?.agentStatus : null

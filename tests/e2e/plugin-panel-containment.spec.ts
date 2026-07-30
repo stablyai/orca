@@ -1,7 +1,7 @@
 /**
- * Invariant: a plugin panel cannot exfiltrate, navigate, or bypass bridge budgets.
+ * Invariant: a plugin panel cannot exfiltrate, navigate, or bypass the host bridge.
  * Oracle: a permissive loopback server receives zero requests while the real
- * sandboxed iframe reports CSP/navigation containment and actual budget refusals.
+ * sandboxed iframe reports CSP/navigation containment and a bounded bridge refusal.
  * Chromium is required because Vitest cannot exercise CSP or iframe sandboxing.
  * Maturity: experimental until this has CI soak history on all desktop platforms.
  */
@@ -13,6 +13,12 @@ import { join } from 'node:path'
 import type { AddressInfo } from 'node:net'
 import type { ElectronApplication, FrameLocator, Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
+import {
+  readPanelNavigationObserver,
+  startPanelNavigationObserver,
+  stopPanelNavigationObserver,
+  type PanelNavigationObservation
+} from './helpers/plugin-panel-navigation-observer'
 
 type InstalledPanel = {
   pluginKey: string
@@ -188,7 +194,8 @@ async function inspectElectronFrameProcesses(
   }, pageUrl)
 }
 
-test('contains hostile panel network, navigation, and bridge-flood probes', async ({
+test('contains hostile panel network and navigation probes', async ({
+  electronApp,
   orcaPage
 }, testInfo) => {
   testInfo.annotations.push({ type: 'maturity', description: 'experimental' })
@@ -198,6 +205,9 @@ test('contains hostile panel network, navigation, and bridge-flood probes', asyn
   const appUrl = orcaPage.url()
   const browserEvents: string[] = []
   const panelDocuments: PanelDocumentSnapshot[] = []
+  const replacedNavigations: { destinations: string[]; probe: string }[] = []
+  let navigationObservation: PanelNavigationObservation | null = null
+  let navigationProbeStarted = false
   orcaPage.on('console', (message) => {
     browserEvents.push(`console:${message.type()}:${message.text()}`)
   })
@@ -238,52 +248,185 @@ test('contains hostile panel network, navigation, and bridge-flood probes', asyn
       )
     }
 
-    await frame.getByRole('button', { name: 'Run bridge budget probes' }).click()
-    for (const probe of ['oversized-message', 'message-flood']) {
-      await expect(frame.locator(`[data-probe="${probe}"]`)).toHaveAttribute(
-        'data-contained',
-        'true',
-        { timeout: 5_000 }
-      )
-    }
+    const bridgeErrorCode = await frame.locator('html').evaluate(
+      () =>
+        new Promise<string>((resolve, reject) => {
+          const requestId = 'small-invalid-probe'
+          const timer = setTimeout(() => reject(new Error('host sent no bridge refusal')), 5_000)
+          const onMessage = (event: MessageEvent): void => {
+            const data = event.data
+            if (
+              event.source !== window.parent ||
+              !data ||
+              data.type !== 'orca-panel-action-result' ||
+              data.requestId !== requestId
+            ) {
+              return
+            }
+            clearTimeout(timer)
+            window.removeEventListener('message', onMessage)
+            resolve(data.errorCode ?? 'missing_error_code')
+          }
+          window.addEventListener('message', onMessage)
+          window.parent.postMessage(
+            {
+              type: 'orca-panel-action',
+              requestId,
+              action: 'invalid.hostileAction',
+              params: {}
+            },
+            '*'
+          )
+        })
+    )
+    expect(bridgeErrorCode).toBe('invalid_request')
 
     expect(server.requests).toEqual([])
     expect(orcaPage.url()).toBe(appUrl)
     await expect(iframe).toBeVisible()
 
+    await startPanelNavigationObserver(electronApp, appUrl)
+    navigationProbeStarted = true
     const initialDocument = await readPanelDocument(frame)
     panelDocuments.push(initialDocument)
     for (const navigation of [
-      { button: 'Try top navigation', probe: 'top-navigation' },
-      { button: 'Try self navigation', probe: 'self-navigation' },
-      { button: 'Try anchor and form navigation', probe: 'anchor-form-navigation' },
-      { button: 'Try meta refresh navigation', probe: 'meta-refresh-navigation' }
+      {
+        button: 'Try top navigation',
+        destinations: [`${server.origin}/`],
+        probe: 'top-navigation'
+      },
+      {
+        button: 'Try self navigation',
+        destinations: [`${server.origin}/self-navigation`],
+        probe: 'self-navigation'
+      },
+      {
+        button: 'Try anchor and form navigation',
+        destinations: [`${server.origin}/anchor-navigation`, `${server.origin}/form-navigation`],
+        probe: 'anchor-form-navigation'
+      },
+      {
+        button: 'Try meta refresh navigation',
+        destinations: [`${server.origin}/meta-refresh`],
+        probe: 'meta-refresh-navigation'
+      }
     ]) {
-      await frame.getByRole('button', { name: navigation.button }).click()
-      await expect(frame.locator(`[data-probe="${navigation.probe}"]`)).toHaveAttribute(
-        'data-contained',
-        'true',
-        { timeout: 5_000 }
+      const sourceDocumentId = `source:${navigation.probe}`
+      const button = frame.getByRole('button', { name: navigation.button })
+      await button.evaluate((element, documentId) => {
+        element.ownerDocument.documentElement.dataset.navigationProbeDocument = documentId
+        const navigationButton = element as HTMLButtonElement
+        navigationButton.click()
+      }, sourceDocumentId)
+      const outcome = await frame.locator('html').evaluate(
+        (element, expected) => {
+          const result = element.querySelector(`[data-probe="${expected.probe}"]`)
+          return {
+            contained: result?.getAttribute('data-contained') ?? null,
+            invocationCount: element.querySelectorAll(
+              `meta[data-navigation-probe-invoked="${expected.probe}"][content="true"]`
+            ).length,
+            retained: element.dataset.navigationProbeDocument === expected.documentId
+          }
+        },
+        {
+          documentId: sourceDocumentId,
+          probe: navigation.probe
+        }
       )
+      expect(outcome.contained === null || outcome.contained === 'true').toBe(true)
+      if (outcome.retained) {
+        expect(outcome.invocationCount).toBe(1)
+      } else {
+        replacedNavigations.push(navigation)
+      }
       const currentDocument = await readPanelDocument(frame)
       panelDocuments.push(currentDocument)
       expect(currentDocument.url).toBe(initialDocument.url)
       expect(currentDocument.html).toContain('Hostile panel fixture')
+      if (outcome.retained && navigation.probe === 'anchor-form-navigation') {
+        await expect(frame.locator(`a[href="${navigation.destinations[0]}"]`)).toHaveCount(1)
+        await expect(frame.locator(`form[action="${navigation.destinations[1]}"]`)).toHaveCount(1)
+      }
+      if (outcome.retained && navigation.probe === 'meta-refresh-navigation') {
+        await expect(frame.locator('meta[http-equiv="refresh"]')).toHaveAttribute(
+          'content',
+          `0;url=${navigation.destinations[0]}`
+        )
+      }
       expect(server.requests).toEqual([])
       expect(orcaPage.url()).toBe(appUrl)
     }
+    const guardDestination = `${server.origin}/frame-guard-navigation`
+    await iframe.evaluate((element, destination) => {
+      const panelWindow = (element as HTMLIFrameElement).contentWindow
+      if (!panelWindow) {
+        throw new Error('plugin panel window unavailable')
+      }
+      panelWindow.location.href = destination
+    }, guardDestination)
+    await expect
+      .poll(async () => {
+        navigationObservation = await readPanelNavigationObserver(electronApp)
+        const attempt = navigationObservation.willFrameNavigations.find(
+          ({ url }) => url === guardDestination
+        )
+        return attempt?.defaultPrevented === true && attempt.isMainFrame === false
+      })
+      .toBe(true)
+    const guardedDocument = await readPanelDocument(frame)
+    panelDocuments.push(guardedDocument)
+    expect(guardedDocument.url).toBe(initialDocument.url)
+    expect(guardedDocument.html).toContain('Hostile panel fixture')
+    await expect(frame.locator('html')).toHaveAttribute(
+      'data-navigation-probe-document',
+      'source:meta-refresh-navigation'
+    )
+    expect(server.requests).toEqual([])
+    expect(orcaPage.url()).toBe(appUrl)
+
+    navigationObservation = await readPanelNavigationObserver(electronApp)
+    const attemptedProbeNavigations = navigationObservation.willFrameNavigations.filter(({ url }) =>
+      url.startsWith(server.origin)
+    )
+    expect(attemptedProbeNavigations.length).toBeGreaterThan(0)
+    expect(attemptedProbeNavigations.every(({ defaultPrevented }) => defaultPrevented)).toBe(true)
+    for (const navigation of replacedNavigations) {
+      expect(
+        navigation.destinations.every((destination) =>
+          attemptedProbeNavigations.some(
+            (attempt) => attempt.url === destination && attempt.defaultPrevented
+          )
+        ),
+        `${navigation.probe} replacement must follow an authoritative blocked navigation`
+      ).toBe(true)
+    }
+    expect(
+      navigationObservation.didFrameNavigations.filter(({ url }) => url.startsWith(server.origin))
+    ).toEqual([])
+    expect(navigationObservation.externalUrls).toEqual([])
   } finally {
-    await attachProbeRequests(testInfo, server.requests)
-    await testInfo.attach('hostile-panel-browser-events', {
-      body: Buffer.from(browserEvents.join('\n')),
-      contentType: 'text/plain'
-    })
-    await testInfo.attach('hostile-panel-documents', {
-      body: Buffer.from(JSON.stringify(panelDocuments, null, 2)),
-      contentType: 'application/json'
-    })
-    await server.close()
-    await rm(tempRoot, { recursive: true, force: true })
+    try {
+      if (navigationProbeStarted) {
+        navigationObservation = await stopPanelNavigationObserver(electronApp)
+      }
+    } finally {
+      await attachProbeRequests(testInfo, server.requests)
+      await testInfo.attach('hostile-panel-browser-events', {
+        body: Buffer.from(browserEvents.join('\n')),
+        contentType: 'text/plain'
+      })
+      await testInfo.attach('hostile-panel-documents', {
+        body: Buffer.from(JSON.stringify(panelDocuments, null, 2)),
+        contentType: 'application/json'
+      })
+      await testInfo.attach('hostile-panel-navigation-observation', {
+        body: Buffer.from(JSON.stringify(navigationObservation, null, 2)),
+        contentType: 'application/json'
+      })
+      await server.close()
+      await rm(tempRoot, { recursive: true, force: true })
+    }
   }
 })
 

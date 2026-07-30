@@ -1,9 +1,10 @@
 import { lstat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Repo } from '../../shared/types'
-import type {
-  SkillFreshnessInstallation,
-  SkillFreshnessInventory
+import {
+  SUPPORTED_GLOBAL_SKILL_TOPOLOGIES,
+  type SkillFreshnessInstallation,
+  type SkillFreshnessInventory
 } from '../../shared/skill-freshness'
 import { buildSkillDiscoverySources, type SkillScanRoot } from './skill-discovery-sources'
 import { loadSkillBundleArtifacts } from './skill-bundle-artifacts'
@@ -17,9 +18,28 @@ import {
   type CandidateLstat
 } from './skill-freshness-placement-observation'
 import { scanKnownPluginSkillCandidates } from './skill-plugin-cache-scan'
-import { readGloballyUpdatableSkillNames } from './skill-update-registration'
+import { convergableSkillNames } from './skill-update-convergence'
+import { readGloballyUpdatableSkillLocks } from './skill-update-registration'
 
 export const MAXIMUM_REPOSITORY_SKILL_ROOTS = 128
+
+// Why: the updater installs source-repo HEAD, which legitimately runs ahead of the
+// bundled registry — content the bundle has never seen is the steady state right
+// after an update. Bytes whose git tree sha equals the lock's recorded hash are the
+// CLI's own install, not a user edit, so calling them "unrecognized" (modified) is
+// false. Judged only over the placements the update command writes; a same-name
+// copy elsewhere earns no trust from someone else's lock entry.
+function trustLockInstalledRevision(
+  installation: SkillFreshnessInstallation,
+  globalSkillLocks: ReadonlyMap<string, string>
+): SkillFreshnessInstallation {
+  return installation.status === 'unrecognized' &&
+    SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&
+    installation.observedGitTreeSha != null &&
+    installation.observedGitTreeSha === globalSkillLocks.get(installation.name)
+    ? { ...installation, status: 'newer-known' }
+    : installation
+}
 
 export function boundRepositorySkillRoots(roots: readonly SkillScanRoot[]): {
   scanned: SkillScanRoot[]
@@ -42,9 +62,9 @@ export async function inventorySkillFreshness(args: {
   candidateLstat?: CandidateLstat
   stateHome?: string | null
 }): Promise<SkillFreshnessInventory> {
-  const [artifacts, globallyUpdatableNames] = await Promise.all([
+  const [artifacts, globalSkillLocks] = await Promise.all([
     loadSkillBundleArtifacts(args.resourceRoot),
-    readGloballyUpdatableSkillNames({ homeDir: args.homeDir, stateHome: args.stateHome })
+    readGloballyUpdatableSkillLocks({ homeDir: args.homeDir, stateHome: args.stateHome })
   ])
   const currentByName = new Map(artifacts.manifest.skills.map((skill) => [skill.name, skill]))
   const discoveryArgs = {
@@ -159,16 +179,21 @@ export async function inventorySkillFreshness(args: {
   const installations = dedupeSkillFreshnessPlacements([
     ...homeInstallations,
     ...unsupportedInstallations
-  ]).sort(
-    (left, right) =>
-      left.name.localeCompare(right.name, 'en') ||
-      left.unresolvedPath.localeCompare(right.unresolvedPath, 'en')
-  )
+  ])
+    .map((installation) => trustLockInstalledRevision(installation, globalSkillLocks))
+    .sort(
+      (left, right) =>
+        left.name.localeCompare(right.name, 'en') ||
+        left.unresolvedPath.localeCompare(right.unresolvedPath, 'en')
+    )
 
   return {
     schemaVersion: 1,
     installations,
-    eligibleUpdateNames: eligibleSkillUpdateNames(installations, globallyUpdatableNames),
+    eligibleUpdateNames: eligibleSkillUpdateNames(
+      installations,
+      convergableSkillNames(installations, globalSkillLocks, artifacts.knownSnapshots)
+    ),
     scanIssues,
     scannedAt: Date.now()
   }

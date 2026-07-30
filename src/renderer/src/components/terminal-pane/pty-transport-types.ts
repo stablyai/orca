@@ -119,6 +119,8 @@ export type PtyTransport = {
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
+    /** Reject a stale restored identity before this transport can publish global PTY handlers. */
+    admitPtyId?: (ptyId: string) => boolean
     callbacks: PtyCallbacks
   }) => void | Promise<void | string | PtyConnectResult>
   attach: (options: {
@@ -170,7 +172,7 @@ export type PtyTransport = {
   resetCrossChunkParserState?: () => void
   serializeBuffer?: (opts?: { scrollbackRows?: number }) => Promise<PtyBufferSnapshot | null>
   preserve?: () => void
-  detach?: () => void
+  detach?: (options?: { preserveExitObserver?: boolean }) => void
   destroy?: () => void | Promise<void>
 }
 

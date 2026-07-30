@@ -7,16 +7,25 @@ import {
   WATCHER_REMOVAL_IN_PROGRESS_MESSAGE
 } from '../../shared/worktree-removal-fence-error'
 
+// Why: fence slots are identities, not a counter, so a removal that gives up waiting can drop exactly
+// the installs it waited on without a late finishInstall corrupting the count for a newer install.
+type WatcherInstallToken = symbol
+
 type WatcherRemovalGateState = {
+  key: string
   connectionId: string | null
   rootPath: string
-  installCount: number
+  installs: Set<WatcherInstallToken>
   removalCount: number
   installDrainWaiters: Set<() => void>
 }
 
 export type WatcherRemovalGate = {
   ready: Promise<void>
+  /** Drop the install fence slots this removal waited on. Call only after `ready` timed out: the
+   *  installs are presumed wedged, and leaving them counted makes every later removal of this root
+   *  wait out the full drain budget again. */
+  abandonPendingInstalls(): void
   release(): void
 }
 
@@ -76,20 +85,11 @@ function beginRemovalSensitiveInstall(
   }
   const key = watcherRemovalGateKey(normalizedRoot, connectionId)
   const state = states.get(key) ?? createState(key, normalizedRoot, connectionId)
-  state.installCount++
-  let released = false
+  const token: WatcherInstallToken = Symbol(normalizedRoot)
+  state.installs.add(token)
   return () => {
-    if (released) {
-      return
-    }
-    released = true
-    state.installCount--
-    if (state.installCount === 0) {
-      for (const resolve of state.installDrainWaiters) {
-        resolve()
-      }
-      state.installDrainWaiters.clear()
-      deleteIdleState(key, state)
+    if (state.installs.delete(token) && state.installs.size === 0) {
+      resolveInstallDrain(state)
     }
   }
 }
@@ -117,16 +117,30 @@ export function acquireWatcherRemovalGate(
   state.removalCount++
   // Why: deleting a parent root must wait for native installs already admitted
   // under that root, not only installs keyed to the exact same spelling.
-  const drains = matchingHostStates(connectionId)
+  const fenced = matchingHostStates(connectionId)
     .filter(
       (candidate) =>
-        candidate.installCount > 0 && isPathInsideOrEqual(normalizedRoot, candidate.rootPath)
+        candidate.installs.size > 0 && isPathInsideOrEqual(normalizedRoot, candidate.rootPath)
     )
-    .map((candidate) => new Promise<void>((resolve) => candidate.installDrainWaiters.add(resolve)))
+    .map((candidate) => ({ state: candidate, tokens: new Set(candidate.installs) }))
+  const drains = fenced.map(
+    ({ state: candidate }) =>
+      new Promise<void>((resolve) => candidate.installDrainWaiters.add(resolve))
+  )
   const ready = drains.length === 0 ? Promise.resolve() : Promise.all(drains).then(() => undefined)
   let released = false
   return {
     ready,
+    abandonPendingInstalls: () => {
+      for (const { state: candidate, tokens } of fenced) {
+        for (const token of tokens) {
+          candidate.installs.delete(token)
+        }
+        if (candidate.installs.size === 0) {
+          resolveInstallDrain(candidate)
+        }
+      }
+    },
     release: () => {
       if (released) {
         return
@@ -161,9 +175,10 @@ function createState(
   connectionId?: string
 ): WatcherRemovalGateState {
   const state = {
+    key,
     connectionId: connectionId ?? null,
     rootPath,
-    installCount: 0,
+    installs: new Set<WatcherInstallToken>(),
     removalCount: 0,
     installDrainWaiters: new Set<() => void>()
   }
@@ -171,8 +186,16 @@ function createState(
   return state
 }
 
+function resolveInstallDrain(state: WatcherRemovalGateState): void {
+  for (const resolve of state.installDrainWaiters) {
+    resolve()
+  }
+  state.installDrainWaiters.clear()
+  deleteIdleState(state.key, state)
+}
+
 function deleteIdleState(key: string, state: WatcherRemovalGateState): void {
-  if (state.installCount === 0 && state.removalCount === 0 && states.get(key) === state) {
+  if (state.installs.size === 0 && state.removalCount === 0 && states.get(key) === state) {
     states.delete(key)
   }
 }
