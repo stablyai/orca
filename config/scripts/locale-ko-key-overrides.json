@@ -2231,9 +2231,6 @@
   "auto.components.settings.DeveloperPermissionsPane.16381e040a": {
     "ko": "마이크"
   },
-  "auto.components.settings.DeveloperPermissionsPane.7ca17b62c8": {
-    "ko": "프로젝트, 워크트리 또는 심볼릭 링크된 파일이 macOS 보호 폴더에 닿을 때 권장됩니다."
-  },
   "auto.components.settings.DeveloperPermissionsPane.e119f0d66b": {
     "ko": "자동화"
   },
@@ -2667,7 +2664,10 @@
     "ko": "SSH를 통해 기존 머신의 파일, terminals, Git, 워크스페이스를 사용합니다."
   },
   "auto.components.settings.SettingsFormControls.c822571b2e": {
-    "ko": "\"{{value0}}\"과(와) 일치"
+    "ko": " \"{{value0}}\"과(와) 일치"
+  },
+  "auto.components.settings.SettingsFormControls.cb330ef7f8": {
+    "ko": "/{{value0}}"
   },
   "auto.components.settings.SettingsFormControls.fbb428db98": {
     "ko": "선택됨:"
@@ -2811,7 +2811,7 @@
     "ko": "{{value0}} 메가바이트"
   },
   "auto.components.settings.TerminalPane.6e6480a7df": {
-    "ko": "terminal의 프로그램(tmux, Neovim, fzf, SSH)이 시스템 클립보드에 복사할 수 있게 합니다."
+    "ko": "terminal의 프로그램(Zellij, tmux, Neovim, fzf, Grok, SSH)이 시스템 클립보드에 복사할 수 있게 합니다."
   },
   "auto.components.settings.TerminalPane.8eefeaa3da": {
     "ko": "마우스를 따라 포커스 이동"

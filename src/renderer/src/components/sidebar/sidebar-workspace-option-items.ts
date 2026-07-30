@@ -97,6 +97,13 @@ const BASE_WORKTREE_CARD_PROPERTY_OPTIONS: WorktreeCardPropertyOption[] = [
     }
   },
   {
+    id: 'cli',
+    properties: ['cli'],
+    get label() {
+      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.cli', 'Orca CLI')
+    }
+  },
+  {
     id: 'ports',
     properties: ['ports'],
     get label() {
@@ -151,6 +158,16 @@ const ISSUE_WORKTREE_CARD_PROPERTY_OPTIONS: WorktreeCardPropertyOption[] = [
       return translate(
         'auto.components.sidebar.SidebarWorkspaceOptionsMenu.44713a5d04',
         'Linear issues'
+      )
+    }
+  },
+  {
+    id: 'jira-issue',
+    properties: ['jira-issue'],
+    get label() {
+      return translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.jiraIssues',
+        'Jira issues'
       )
     }
   }

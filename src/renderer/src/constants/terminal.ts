@@ -69,7 +69,11 @@ export type RequestActiveTerminalPaneSplitDetail = {
 
 export type CloseTerminalPaneDetail = {
   tabId: string
-  paneRuntimeId: number
+  paneRuntimeId?: number
+  leafId?: string
+  preservePty?: boolean
+  retireSurface?: boolean
+  expectedPtyId?: string
 }
 
 export type BackgroundMountTerminalWorktreeDetail = {

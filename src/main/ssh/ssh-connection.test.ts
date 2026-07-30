@@ -23,6 +23,7 @@ type MockSshClient = {
   lastExecCommand?: string
   lastConnectConfig?: unknown
   exec: (cmd: string, cb: (err: Error | undefined, channel: unknown) => void) => void
+  sftp: (cb: (err: Error | undefined, channel: unknown) => void) => void
 }
 let clientInstances: MockSshClient[] = []
 
@@ -59,6 +60,9 @@ vi.mock('ssh2', () => {
     }
     connect(config?: unknown) {
       this.lastConnectConfig = config
+      const hostVerifier = (config as { hostVerifier?: (key: Buffer) => boolean } | undefined)
+        ?.hostVerifier
+      hostVerifier?.(Buffer.from('mock-ssh-host-key'))
       setTimeout(() => {
         const next = connectSequence.shift()
         if (next instanceof Error) {
@@ -150,10 +154,10 @@ vi.mock('./ssh-config-parser', () => ({
 
 import {
   SshConnection,
-  SshConnectionManager,
   shouldUseSystemSshTransport,
   type SshConnectionCallbacks
 } from './ssh-connection'
+import { SshConnectionManager } from './ssh-connection-manager'
 import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
 import {
   downloadFileViaSystemSsh,
@@ -304,6 +308,7 @@ describe('SshConnection', () => {
     await conn.connect()
 
     expect(conn.getState().status).toBe('connected')
+    expect(conn.getState().supportsFolderDownload).toBe(true)
     expect(callbacks.onStateChange).toHaveBeenCalledWith(
       'target-1',
       expect.objectContaining({ status: 'connected' })
@@ -316,6 +321,35 @@ describe('SshConnection', () => {
 
     expect(clientInstances).toHaveLength(1)
     expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
+  })
+
+  it('captures the negotiated SSH server key fingerprint', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+
+    expect(conn.getHostKeyFingerprint()).toMatch(/^SHA256:[A-Za-z\d+/]{43}$/)
+  })
+
+  it('ignores a late host fingerprint from an obsolete connect generation', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    const firstVerifier = (
+      clientInstances[0].lastConnectConfig as { hostVerifier?: (key: Buffer) => boolean }
+    ).hostVerifier
+
+    const privateConn = conn as unknown as { attemptConnect: () => Promise<void> }
+    await privateConn.attemptConnect()
+    const secondVerifier = (
+      clientInstances[1].lastConnectConfig as { hostVerifier?: (key: Buffer) => boolean }
+    ).hostVerifier
+    expect(firstVerifier).toBeTypeOf('function')
+    expect(secondVerifier).toBeTypeOf('function')
+
+    secondVerifier?.(Buffer.from('newer-ssh-host-key'))
+    const currentFingerprint = conn.getHostKeyFingerprint()
+    firstVerifier?.(Buffer.from('obsolete-ssh-host-key'))
+
+    expect(conn.getHostKeyFingerprint()).toBe(currentFingerprint)
   })
 
   it('allows concurrent exec commands for ssh2 transport', async () => {
@@ -422,6 +456,50 @@ describe('SshConnection', () => {
     await conn.disconnect()
 
     expect(conn.getState().status).toBe('disconnected')
+  })
+
+  it('rejects late ssh2 ready after disconnect without resurrecting the connection', async () => {
+    const callbacks = createCallbacks()
+    const conn = new SshConnection(createTarget(), callbacks)
+
+    const connectResult = conn.connect().catch((error: Error) => error)
+    for (let i = 0; i < 5 && clientInstances.length === 0; i++) {
+      await Promise.resolve()
+    }
+    expect(clientInstances).toHaveLength(1)
+    await conn.disconnect()
+
+    await expect(connectResult).resolves.toMatchObject({
+      message: 'SSH connection attempt was cancelled'
+    })
+    expect(conn.getState()).toMatchObject({ status: 'disconnected', error: null })
+    expect(callbacks.onStateChange).not.toHaveBeenCalledWith(
+      'target-1',
+      expect.objectContaining({ status: 'connected' })
+    )
+  })
+
+  it('keeps disconnected state when ssh2 reports a late startup error', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'Connection lost before handshake'
+    const callbacks = createCallbacks()
+    const conn = new SshConnection(createTarget(), callbacks)
+
+    const connectResult = conn.connect().catch((error: Error) => error)
+    for (let i = 0; i < 5 && clientInstances.length === 0; i++) {
+      await Promise.resolve()
+    }
+    expect(clientInstances).toHaveLength(1)
+    await conn.disconnect()
+
+    await expect(connectResult).resolves.toMatchObject({
+      message: 'Connection lost before handshake'
+    })
+    expect(conn.getState()).toMatchObject({ status: 'disconnected', error: null })
+    expect(callbacks.onStateChange).not.toHaveBeenCalledWith(
+      'target-1',
+      expect.objectContaining({ status: 'error' })
+    )
   })
 
   it('getTarget returns a copy of the target', () => {
@@ -690,15 +768,15 @@ describe('SshConnection', () => {
 
     vi.useFakeTimers()
     try {
-      const outcomePromise = conn
-        .exec('printf ready')
-        .then(() => 'opened')
-        .catch((error: Error) => error.message)
+      const outcomePromise = conn.exec('printf ready').catch((error: Error) => error)
 
       await vi.advanceTimersByTimeAsync(30_000)
       const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
 
-      expect(outcome).toBe('SSH exec channel timed out')
+      expect(outcome).toMatchObject({
+        message: 'SSH exec channel timed out',
+        sshChannelCloseConfirmed: false
+      })
     } finally {
       vi.useRealTimers()
     }
@@ -784,15 +862,54 @@ describe('SshConnection', () => {
     try {
       const outcomePromise = conn
         .exec('printf ready', { signal: controller.signal })
-        .then(() => 'opened')
-        .catch((error: Error) => error.name)
+        .catch((error: Error) => error)
 
       controller.abort()
       // Why: a hung socket must not pin the aborted caller for the full 30s
       // connect timeout — the abort settles at the 5s grace bound instead.
       await vi.advanceTimersByTimeAsync(5_000)
 
-      await expect(outcomePromise).resolves.toBe('AbortError')
+      await expect(outcomePromise).resolves.toMatchObject({
+        name: 'AbortError',
+        sshChannelCloseConfirmed: false
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drains an exec channel that opens after the abort grace has settled', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    execBehavior = 'pending'
+    const controller = new AbortController()
+    const lateChannel = Object.assign(new EventEmitter(), {
+      close: vi.fn(),
+      resume: vi.fn(),
+      stderr: { resume: vi.fn() }
+    })
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .exec('printf ready', { signal: controller.signal })
+        .catch((error: Error) => error)
+
+      controller.abort()
+      await vi.advanceTimersByTimeAsync(5_000)
+      const outcome = await outcomePromise
+      expect(outcome).toMatchObject({
+        name: 'AbortError',
+        sshChannelCloseConfirmed: false
+      })
+
+      pendingExecCallback?.(undefined, lateChannel)
+
+      expect(lateChannel.resume).toHaveBeenCalledTimes(1)
+      expect(lateChannel.stderr.resume).toHaveBeenCalledTimes(1)
+      expect(lateChannel.close).toHaveBeenCalledTimes(1)
+      lateChannel.emit('close')
+      expect(outcome).toMatchObject({ sshChannelCloseConfirmed: true })
     } finally {
       vi.useRealTimers()
     }
@@ -837,7 +954,7 @@ describe('SshConnection', () => {
     const lateChannel = Object.assign(new EventEmitter(), {
       close: vi.fn(),
       resume: vi.fn(),
-      stderr: { resume: vi.fn() }
+      stderr: Object.assign(new EventEmitter(), { resume: vi.fn() })
     })
 
     const outcomePromise = conn
@@ -855,9 +972,39 @@ describe('SshConnection', () => {
     expect(early).toBe('pending')
     expect(lateChannel.close).toHaveBeenCalledTimes(1)
     expect(lateChannel.resume).toHaveBeenCalled()
+    expect(() => lateChannel.emit('error', new Error('late channel teardown'))).not.toThrow()
+    expect(() => lateChannel.stderr.emit('error', new Error('late stderr teardown'))).not.toThrow()
 
     lateChannel.emit('close')
     await expect(outcomePromise).resolves.toBe('AbortError')
+  })
+
+  it('removes the late-channel close listener when abort grace expires', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    vi.useFakeTimers()
+    try {
+      sftpBehavior = 'pending'
+      const controller = new AbortController()
+      const lateSftp = Object.assign(new EventEmitter(), { end: vi.fn() })
+
+      const outcomePromise = conn
+        .sftp(controller.signal)
+        .then(() => 'opened')
+        .catch((error: Error) => error.name)
+      await vi.advanceTimersByTimeAsync(0)
+      controller.abort()
+      pendingSftpCallback?.(undefined, lateSftp)
+      expect(lateSftp.listenerCount('close')).toBe(1)
+      expect(() => lateSftp.emit('error', new Error('late SFTP teardown'))).not.toThrow()
+
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(outcomePromise).resolves.toBe('AbortError')
+      expect(lateSftp.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('times out when ssh2 never opens an SFTP channel', async () => {
@@ -867,15 +1014,13 @@ describe('SshConnection', () => {
 
     vi.useFakeTimers()
     try {
-      const outcomePromise = conn
-        .sftp()
-        .then(() => 'opened')
-        .catch((error: Error) => error.message)
+      const outcomePromise = conn.sftp().catch((error: Error) => error)
 
       await vi.advanceTimersByTimeAsync(30_000)
       const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
 
-      expect(outcome).toBe('SSH SFTP channel timed out')
+      expect(outcome).toMatchObject({ message: 'SSH SFTP channel timed out' })
+      expect(outcome).not.toHaveProperty('sshChannelCloseConfirmed')
     } finally {
       vi.useRealTimers()
     }
@@ -904,6 +1049,55 @@ describe('SshConnection', () => {
     }
   })
 
+  it('cancels a pending SFTP channel open and ends the late channel', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+    const controller = new AbortController()
+    const lateSftp = { end: vi.fn() }
+
+    const outcomePromise = conn
+      .sftp({ signal: controller.signal })
+      .then(() => 'opened')
+      .catch((error: Error) => error.name)
+
+    await Promise.resolve()
+    controller.abort()
+    pendingSftpCallback?.(undefined, lateSftp)
+
+    await expect(outcomePromise).resolves.toBe('AbortError')
+    expect(lateSftp.end).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes the late SFTP close listener when the bounded grace expires', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+    const controller = new AbortController()
+    const lateSftp = Object.assign(new EventEmitter(), { end: vi.fn() })
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .sftp({ signal: controller.signal })
+        .then(() => 'opened')
+        .catch((error: Error) => error.name)
+
+      await Promise.resolve()
+      controller.abort()
+      pendingSftpCallback?.(undefined, lateSftp)
+      expect(lateSftp.listenerCount('close')).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(outcomePromise).resolves.toBe('AbortError')
+      expect(lateSftp.listenerCount('close')).toBe(0)
+      expect(lateSftp.end).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('uses system SSH transport when ProxyUseFdpass is resolved by OpenSSH', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
@@ -912,6 +1106,7 @@ describe('SshConnection', () => {
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(conn.getState().supportsFolderDownload).toBe(false)
     expect(clientInstances).toHaveLength(0)
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ configHost: 'fdpass-host' }),
@@ -946,6 +1141,228 @@ describe('SshConnection', () => {
 
     expect(conn.usesSystemSshTransport()).toBe(true)
     expect(conn.canRunConcurrentExecCommands()).toBe(false)
+  })
+
+  it('accepts GitHub restricted-shell SSH probes with resolved user fallback', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(
+      createResolvedConfig({ hostname: 'github.com', user: 'git' })
+    )
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(1, 'Invalid command: echo ORCA-SYSTEM-SSH-OK')
+    )
+    const conn = new SshConnection(
+      createTarget({
+        configHost: 'github.com',
+        host: 'github.com',
+        username: undefined
+      }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+  })
+
+  it('accepts GitHub restricted-shell SSH probes with resolved host and target username', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(
+      createResolvedConfig({ hostname: 'github.com', user: undefined })
+    )
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(1, 'Invalid command: echo ORCA-SYSTEM-SSH-OK')
+    )
+    const conn = new SshConnection(
+      createTarget({
+        configHost: 'github.com',
+        host: 'github.com',
+        username: 'git'
+      }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+  })
+
+  it('accepts ssh.github.com restricted-shell SSH probes', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(
+      createResolvedConfig({ hostname: 'ssh.github.com', user: 'git' })
+    )
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(1, 'Invalid command: echo ORCA-SYSTEM-SSH-OK')
+    )
+    const conn = new SshConnection(
+      createTarget({
+        configHost: 'ssh.github.com',
+        host: 'ssh.github.com',
+        username: 'git'
+      }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+  })
+
+  it('accepts GitHub restricted-shell SSH probes with the real git:// advisory transcript', async () => {
+    // Real 4-line stderr GitHub returns for an invalid command (issue #6988).
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(
+      createResolvedConfig({ hostname: 'github.com', user: 'git' })
+    )
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(
+        1,
+        'Invalid command: echo ORCA-SYSTEM-SSH-OK\n' +
+          '  You appear to be using ssh to clone a git:// URL.\n' +
+          '  Make sure your core.gitProxy config option and the\n' +
+          '  GIT_PROXY_COMMAND environment variable are NOT set.'
+      )
+    )
+    const conn = new SshConnection(
+      createTarget({
+        configHost: 'github.com',
+        host: 'github.com',
+        username: 'git'
+      }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+  })
+
+  it('accepts GitHub restricted-shell SSH probes when OpenSSH config resolution fails', async () => {
+    vi.stubEnv('ORCA_SSH_FORCE_SYSTEM_TRANSPORT', '1')
+    vi.mocked(resolveWithSshG).mockRejectedValueOnce(new Error('ssh -G failed'))
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(1, 'Invalid command: echo ORCA-SYSTEM-SSH-OK')
+    )
+    const conn = new SshConnection(
+      createTarget({
+        configHost: 'github.com',
+        host: 'github.com',
+        username: 'git'
+      }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(conn.getSystemSshResolvedConfig()).toBeNull()
+  })
+
+  it('rejects non-GitHub SSH probes with GitHub invalid-command text', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(
+      createResolvedConfig({ hostname: 'gitlab.com', user: 'git' })
+    )
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(1, 'Invalid command: echo ORCA-SYSTEM-SSH-OK')
+    )
+    const conn = new SshConnection(
+      createTarget({
+        configHost: 'github.com',
+        host: 'github.com',
+        username: 'git'
+      }),
+      createCallbacks()
+    )
+
+    await expect(conn.connect()).rejects.toThrow('System SSH probe failed (exit 1)')
+    expect(conn.usesSystemSshTransport()).toBe(false)
+  })
+
+  it('accepts GitHub restricted-shell SSH probes when target username overrides resolved user', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(
+      createResolvedConfig({ hostname: 'github.com', user: 'deploy' })
+    )
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(1, 'Invalid command: echo ORCA-SYSTEM-SSH-OK')
+    )
+    const conn = new SshConnection(
+      createTarget({
+        configHost: 'github.com',
+        host: 'github.com',
+        username: 'git'
+      }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+  })
+
+  it('rejects GitHub restricted-shell SSH probes when target username overrides resolved git user', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(
+      createResolvedConfig({ hostname: 'github.com', user: 'git' })
+    )
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(1, 'Invalid command: echo ORCA-SYSTEM-SSH-OK')
+    )
+    const conn = new SshConnection(
+      createTarget({
+        configHost: 'github.com',
+        host: 'github.com',
+        username: 'deploy'
+      }),
+      createCallbacks()
+    )
+
+    await expect(conn.connect()).rejects.toThrow('System SSH probe failed (exit 1)')
+    expect(conn.usesSystemSshTransport()).toBe(false)
+  })
+
+  it('rejects GitHub restricted-shell SSH probes with extra stderr text', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(
+      createResolvedConfig({ hostname: 'github.com', user: 'git' })
+    )
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(
+        1,
+        'remote: rejected\nInvalid command: echo ORCA-SYSTEM-SSH-OK\ntry again'
+      )
+    )
+    const conn = new SshConnection(
+      createTarget({
+        configHost: 'github.com',
+        host: 'github.com',
+        username: 'git'
+      }),
+      createCallbacks()
+    )
+
+    await expect(conn.connect()).rejects.toThrow('System SSH probe failed (exit 1)')
+    expect(conn.usesSystemSshTransport()).toBe(false)
+  })
+
+  it('rejects GitHub restricted-shell SSH probes for non-git users', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(
+      createResolvedConfig({ hostname: 'github.com', user: 'deploy' })
+    )
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(1, 'Invalid command: echo ORCA-SYSTEM-SSH-OK')
+    )
+    const conn = new SshConnection(
+      createTarget({
+        configHost: 'github.com',
+        host: 'github.com',
+        username: 'deploy'
+      }),
+      createCallbacks()
+    )
+
+    await expect(conn.connect()).rejects.toThrow('System SSH probe failed (exit 1)')
+    expect(conn.usesSystemSshTransport()).toBe(false)
   })
 
   it('retries a failed system SSH probe without ControlMaster and disables mux for the session', async () => {
@@ -1129,6 +1546,7 @@ describe('SshConnection', () => {
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(conn.getHostKeyFingerprint()).toBeUndefined()
     expect(onCredentialRequest).not.toHaveBeenCalled()
   })
 
@@ -1366,6 +1784,61 @@ describe('SshConnection', () => {
         resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
       })
     )
+  })
+
+  it('composes a caller abort into system SSH relay uploads', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+    const controller = new AbortController()
+    let transferSignal: AbortSignal | undefined
+    vi.mocked(uploadDirectoryViaSystemSsh).mockImplementationOnce(
+      (_target, _localDir, _remoteDir, options) => {
+        transferSignal = options?.signal
+        return new Promise((_resolve, reject) => {
+          transferSignal?.addEventListener('abort', () => reject(transferSignal?.reason), {
+            once: true
+          })
+        })
+      }
+    )
+
+    await conn.connect()
+    const upload = conn.uploadDirectory('/tmp/local-relay', '/remote/relay', {
+      signal: controller.signal
+    })
+    await vi.waitFor(() => expect(transferSignal).toBeDefined())
+    controller.abort()
+
+    await expect(upload).rejects.toMatchObject({ name: 'AbortError' })
+    expect(transferSignal?.aborted).toBe(true)
+  })
+
+  it('keeps connection disconnect cancellation linked to caller-scoped relay writes', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+    const controller = new AbortController()
+    let transferSignal: AbortSignal | undefined
+    vi.mocked(writeFileViaSystemSsh).mockImplementationOnce(
+      (_target, _remotePath, _contents, options) => {
+        transferSignal = options?.signal
+        return new Promise((_resolve, reject) => {
+          transferSignal?.addEventListener('abort', () => reject(transferSignal?.reason), {
+            once: true
+          })
+        })
+      }
+    )
+
+    await conn.connect()
+    const write = conn.writeFile('/remote/relay/.version', '0.1.0', {
+      signal: controller.signal
+    })
+    await vi.waitFor(() => expect(transferSignal).toBeDefined())
+    await conn.disconnect()
+
+    await expect(write).rejects.toMatchObject({ name: 'AbortError' })
+    expect(controller.signal.aborted).toBe(false)
+    expect(transferSignal?.aborted).toBe(true)
   })
 
   it('keeps an upload session cancelled after the connection disconnects', async () => {

@@ -25,6 +25,16 @@ const remoteDuplicate: Repo = {
   executionHostId: 'runtime:env-1'
 }
 
+const sshDuplicate: Repo = {
+  id: 'same-repo',
+  path: '/ssh',
+  displayName: 'SSH',
+  badgeColor: '#222',
+  addedAt: 3,
+  connectionId: 'server',
+  executionHostId: 'ssh:server'
+}
+
 const reposRemove = vi.fn()
 const reposRemoveForHost = vi.fn()
 const reposUpdate = vi.fn()
@@ -185,6 +195,7 @@ describe('repo slice host identity routing', () => {
 
     expect(reposUpdate).toHaveBeenCalledWith({
       repoId: 'same-repo',
+      hostId: 'local',
       updates: { displayName: 'Local via host' }
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
@@ -193,6 +204,26 @@ describe('repo slice host identity routing', () => {
     expect(store.getState().repos).toEqual([
       { ...localDuplicate, displayName: 'Local via host' },
       remoteDuplicate
+    ])
+  })
+
+  it('updateRepo preserves an explicit SSH host through local IPC', async () => {
+    reposUpdate.mockResolvedValue(undefined)
+    const store = createTestStore()
+    store.setState({ repos: [localDuplicate, sshDuplicate] })
+
+    await store
+      .getState()
+      .updateRepo('same-repo', { displayName: 'SSH Renamed' }, { hostId: 'ssh:server' })
+
+    expect(reposUpdate).toHaveBeenCalledWith({
+      repoId: 'same-repo',
+      hostId: 'ssh:server',
+      updates: { displayName: 'SSH Renamed' }
+    })
+    expect(store.getState().repos).toEqual([
+      localDuplicate,
+      { ...sshDuplicate, displayName: 'SSH Renamed' }
     ])
   })
 
@@ -492,6 +523,42 @@ describe('repo slice host identity routing', () => {
       selector: 'env-1',
       method: 'repo.reorder',
       params: { orderedIds: ['same-repo'] },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('persists a moved paired-host project block without reversing its host occurrences', async () => {
+    reposReorderForHost.mockResolvedValue({ status: 'applied' })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-paired-project-reorder',
+      ok: true,
+      result: { status: 'applied' },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const bravo = { ...localDuplicate, id: 'bravo' }
+    const charlie = { ...remoteDuplicate, id: 'charlie' }
+    const store = createTestStore()
+    store.setState({ repos: [bravo, localDuplicate, charlie, remoteDuplicate] })
+
+    await store.getState().reorderRepos(['same-repo', 'same-repo', 'bravo', 'charlie'])
+
+    expect(store.getState().repos).toEqual([localDuplicate, remoteDuplicate, bravo, charlie])
+    expect(uiSet).toHaveBeenCalledWith({
+      manualRepoOrder: [
+        { hostId: 'local', repoId: 'same-repo' },
+        { hostId: 'runtime:env-1', repoId: 'same-repo' },
+        { hostId: 'local', repoId: 'bravo' },
+        { hostId: 'runtime:env-1', repoId: 'charlie' }
+      ]
+    })
+    expect(reposReorderForHost).toHaveBeenCalledWith({
+      hostId: 'local',
+      orderedIds: ['same-repo', 'bravo']
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'repo.reorder',
+      params: { orderedIds: ['same-repo', 'charlie'] },
       timeoutMs: 15_000
     })
   })

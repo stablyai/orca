@@ -3,6 +3,7 @@ import type { Editor } from '@tiptap/react'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useAppStore } from '@/store'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
+import { handleRichMarkdownAddReviewNoteShortcut } from './rich-markdown-annotation-shortcut'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import { commitRow, type DocLinkMenuRow, type DocLinkMenuState } from './rich-markdown-commands'
 import {
@@ -21,6 +22,7 @@ import { handleRichMarkdownCitationKey } from './rich-markdown-citation-keyboard
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import { handleRichMarkdownLinkShortcut } from './rich-markdown-link-shortcut'
 import { handleRichMarkdownSaveShortcut } from './rich-markdown-save-shortcut'
+import { flushPendingProseMirrorSelection } from './rich-markdown-selection-flush'
 
 export type KeyHandlerContext = {
   isMac: boolean
@@ -44,6 +46,7 @@ export type KeyHandlerContext = {
   typedEmptyOrderedListMarkerRef: MutableRefObject<boolean>
   flushPendingSerialization: () => void
   openSearchRef: MutableRefObject<() => void>
+  openAnnotationPopoverRef: MutableRefObject<(requireLiveSelection?: boolean) => boolean>
   setIsEditingLink: (editing: boolean) => void
   setLinkBubble: (bubble: LinkBubbleState | null) => void
   setSelectedCommandIndex: Dispatch<SetStateAction<number>>
@@ -57,47 +60,6 @@ export type KeyHandlerContext = {
 
 function isComposingMarkdownInput(event: KeyboardEvent, editor: Editor | null): boolean {
   return event.isComposing || editor?.view.composing === true
-}
-
-type NativeSelectionSnapshot = {
-  anchorNode: Node | null
-  anchorOffset: number
-  focusNode: Node | null
-  focusOffset: number
-}
-
-type ProseMirrorDomObserver = {
-  currentSelection?: {
-    set?: (selection: NativeSelectionSnapshot) => void
-  }
-  flush?: () => void
-}
-
-type ProseMirrorViewWithDomObserver = Editor['view'] & {
-  domObserver?: ProseMirrorDomObserver
-}
-
-function flushPendingProseMirrorSelection(editor: Editor): void {
-  let observer: ProseMirrorDomObserver | undefined
-  try {
-    observer = (editor.view as ProseMirrorViewWithDomObserver).domObserver
-  } catch {
-    return
-  }
-
-  if (typeof observer?.flush !== 'function') {
-    return
-  }
-
-  // Why: immediate Tab after a mouse click can run before ProseMirror has
-  // copied the native selection into editor state, so list commands hit stale item state.
-  observer.currentSelection?.set?.({
-    anchorNode: null,
-    anchorOffset: 0,
-    focusNode: null,
-    focusOffset: 0
-  })
-  observer.flush()
 }
 
 /**
@@ -131,6 +93,9 @@ export function createRichMarkdownKeyHandler(
       return true
     }
     if (handleRichMarkdownSaveShortcut(ctx, event)) {
+      return true
+    }
+    if (handleRichMarkdownAddReviewNoteShortcut(ctx, event)) {
       return true
     }
 

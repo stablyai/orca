@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   getCmdExePath,
+  getRegExePath,
   getSpawnArgsForWindows,
   isPermissionError,
   isWindowsBatchScript,
@@ -39,6 +40,20 @@ describe('isWindowsBatchScript', () => {
     withPlatform('linux', () => {
       expect(isWindowsBatchScript('/usr/bin/foo.cmd')).toBe(false)
     })
+  })
+})
+
+describe('getRegExePath', () => {
+  it('falls back to a local absolute system path for unsafe roots', () => {
+    expect(getRegExePath({ SystemRoot: '' })).toBe('C:\\Windows\\System32\\reg.exe')
+    expect(getRegExePath({ SystemRoot: 'Windows' })).toBe('C:\\Windows\\System32\\reg.exe')
+    expect(getRegExePath({ SystemRoot: '\\\\server\\share' })).toBe(
+      'C:\\Windows\\System32\\reg.exe'
+    )
+  })
+
+  it('uses an absolute custom Windows root', () => {
+    expect(getRegExePath({ SystemRoot: 'D:\\Windows' })).toBe('D:\\Windows\\System32\\reg.exe')
   })
 })
 

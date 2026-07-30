@@ -5,11 +5,14 @@ import type {
   WorkspaceStatusDefinition,
   Worktree
 } from '../../../../shared/types'
+import type { WorkspaceKanbanLaneView } from './workspace-kanban-search'
 import WorkspaceKanbanStatusLane from './WorkspaceKanbanStatusLane'
 
 type WorkspaceKanbanLaneGridProps = {
   statuses: readonly WorkspaceStatusDefinition[]
-  worktreesByStatus: ReadonlyMap<WorkspaceStatus, readonly Worktree[]>
+  laneViews: ReadonlyMap<WorkspaceStatus, WorkspaceKanbanLaneView>
+  laneFullWorktreeIds: ReadonlyMap<WorkspaceStatus, readonly string[]>
+  hasQuery: boolean
   repoMap: Map<string, Repo>
   activeWorktreeId: string | null
   columnWidth: number
@@ -27,6 +30,7 @@ type WorkspaceKanbanLaneGridProps = {
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
   ) => readonly Worktree[]
+  onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onCreateWorktree: (statusId: string) => void
   onColumnResizeStart: (event: React.PointerEvent<HTMLElement>) => void
   onColumnResizeKeyDown: (event: React.KeyboardEvent<HTMLElement>) => void
@@ -34,7 +38,9 @@ type WorkspaceKanbanLaneGridProps = {
 
 export default function WorkspaceKanbanLaneGrid({
   statuses,
-  worktreesByStatus,
+  laneViews,
+  laneFullWorktreeIds,
+  hasQuery,
   repoMap,
   activeWorktreeId,
   columnWidth,
@@ -49,6 +55,7 @@ export default function WorkspaceKanbanLaneGrid({
   onActivate,
   onSelectionGesture,
   onContextMenuSelect,
+  onAssignWorkspaceStatus,
   onCreateWorktree,
   onColumnResizeStart,
   onColumnResizeKeyDown
@@ -65,7 +72,10 @@ export default function WorkspaceKanbanLaneGrid({
         <WorkspaceKanbanStatusLane
           key={status.id}
           status={status}
-          items={worktreesByStatus.get(status.id) ?? []}
+          items={laneViews.get(status.id)?.items ?? []}
+          totalCount={laneViews.get(status.id)?.totalCount ?? 0}
+          hasQuery={hasQuery}
+          fullWorktreeIds={laneFullWorktreeIds.get(status.id) ?? []}
           repoMap={repoMap}
           activeWorktreeId={activeWorktreeId}
           columnWidth={columnWidth}
@@ -81,6 +91,7 @@ export default function WorkspaceKanbanLaneGrid({
           onActivate={onActivate}
           onSelectionGesture={onSelectionGesture}
           onContextMenuSelect={onContextMenuSelect}
+          onAssignWorkspaceStatus={onAssignWorkspaceStatus}
           onCreateWorktree={onCreateWorktree}
           onColumnResizeStart={onColumnResizeStart}
           onColumnResizeKeyDown={onColumnResizeKeyDown}

@@ -1,5 +1,5 @@
 import { getLinearOrganizationUrlKeyFromIssueUrl } from '../linear-links'
-import type { FolderWorkspaceLinkedTask, LinearIssue } from '../types'
+import type { FolderWorkspaceLinkedTask, JiraIssue, LinearIssue } from '../types'
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName,
@@ -12,6 +12,7 @@ export type WorkspaceSourceProvider = FolderWorkspaceLinkedTask['provider']
 export type WorkspaceSourceLinkedItem = FolderWorkspaceLinkedTask & {
   linearWorkspaceId?: string
   linearOrganizationUrlKey?: string
+  linearBranchName?: string
 }
 
 export type GitHubWorkspaceSource = WorkspaceSourceLinkedItem & {
@@ -26,6 +27,11 @@ export type GitLabWorkspaceSource = WorkspaceSourceLinkedItem & {
 
 export type LinearWorkspaceSource = WorkspaceSourceLinkedItem & {
   provider: 'linear'
+  type: 'issue'
+}
+
+export type JiraWorkspaceSource = WorkspaceSourceLinkedItem & {
+  provider: 'jira'
   type: 'issue'
 }
 
@@ -109,10 +115,19 @@ export function buildGitLabWorkspaceSource(item: {
   return { provider: 'gitlab', ...item }
 }
 
+export function getUsableLinearBranchName(
+  branchName: string | null | undefined
+): string | undefined {
+  // Why: only a non-blank normalized value can safely enter the exact git-ref
+  // override path; missing values must keep Orca's generated-name fallback.
+  return branchName?.trim() || undefined
+}
+
 export function buildLinearWorkspaceSource(
-  issue: Pick<LinearIssue, 'identifier' | 'title' | 'url' | 'workspaceId'>
+  issue: Pick<LinearIssue, 'identifier' | 'title' | 'url' | 'workspaceId' | 'branchName'>
 ): LinearWorkspaceSource {
   const organizationUrlKey = getLinearOrganizationUrlKeyFromIssueUrl(issue.url)
+  const branchName = getUsableLinearBranchName(issue.branchName)
   return {
     provider: 'linear',
     type: 'issue',
@@ -122,7 +137,21 @@ export function buildLinearWorkspaceSource(
     url: issue.url,
     linearIdentifier: issue.identifier,
     ...(issue.workspaceId ? { linearWorkspaceId: issue.workspaceId } : {}),
-    ...(organizationUrlKey ? { linearOrganizationUrlKey: organizationUrlKey } : {})
+    ...(organizationUrlKey ? { linearOrganizationUrlKey: organizationUrlKey } : {}),
+    ...(branchName ? { linearBranchName: branchName } : {})
+  }
+}
+
+export function buildJiraWorkspaceSource(
+  issue: Pick<JiraIssue, 'key' | 'title' | 'url'>
+): JiraWorkspaceSource {
+  return {
+    provider: 'jira',
+    type: 'issue',
+    number: 0,
+    title: issue.title,
+    url: issue.url,
+    jiraIdentifier: issue.key
   }
 }
 

@@ -115,6 +115,19 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [noSession.paneKey]: noSession } }))
     ).toEqual([])
+    const ephemeralPi = entry({ agentType: 'pi', providerSession: undefined })
+    expect(
+      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [ephemeralPi.paneKey]: ephemeralPi } }))
+    ).toEqual([])
+    const piWithoutTranscript = entry({
+      agentType: 'pi',
+      providerSession: { key: 'session_id', id: 'pi-session-1' }
+    })
+    expect(
+      plannedWorktrees(
+        snapshot({ agentStatusByPaneKey: { [piWithoutTranscript.paneKey]: piWithoutTranscript } })
+      )
+    ).toEqual([])
     const unsupported = entry({ agentType: 'amp' })
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [unsupported.paneKey]: unsupported } }))
@@ -355,6 +368,47 @@ describe('agent sleep planner', () => {
     ).toEqual([])
   })
 
+  it.each([
+    {
+      agent: 'pi' as const,
+      providerSession: {
+        key: 'session_id' as const,
+        id: 'pi-session-1',
+        transcriptPath: '/tmp/pi-session-1.jsonl'
+      }
+    },
+    {
+      agent: 'omp' as const,
+      providerSession: { key: 'session_id' as const, id: 'omp-session-1' }
+    }
+  ])(
+    'still hibernates completed $agent panes that only retain live resume identity',
+    ({ agent, providerSession }) => {
+      const agentEntry = entry({ agentType: agent, providerSession })
+      expect(
+        plannedPaneKeys(
+          snapshot({
+            agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
+            sleepingAgentSessionsByPaneKey: {
+              [agentEntry.paneKey]: {
+                paneKey: agentEntry.paneKey,
+                tabId: 'tab-1',
+                worktreeId: 'wt-bg',
+                agent,
+                providerSession,
+                prompt: '',
+                state: 'working',
+                capturedAt: OLD,
+                updatedAt: OLD,
+                origin: 'live'
+              }
+            }
+          })
+        )
+      ).toEqual([agentEntry.paneKey])
+    }
+  )
+
   it('rejects mobile-driven panes because paired clients can send input outside desktop xterm', () => {
     expect(plannedWorktrees(snapshot({ mobileLockedPtyIds: ['pty-1'] }))).toEqual([])
   })
@@ -498,6 +552,41 @@ describe('agent sleep planner', () => {
         })
       )
     ).toEqual([`tab-1:${LEAF}`, `tab-1:${OTHER_LEAF}`])
+  })
+
+  it('restarts the idle window once a phantom subagent stops gating the pane working', () => {
+    // Why: a restored subagent row holds a finished lead at 'working', which is
+    // the one state hibernation never accepts — reaping it is what unlocks it.
+    const gated = entry({
+      state: 'working',
+      subagents: [{ id: 'areview-loop-c237a4c577493352', state: 'working', startedAt: 1 }]
+    })
+    expect(plannedPaneKeys(snapshot({ agentStatusByPaneKey: { [gated.paneKey]: gated } }))).toEqual(
+      []
+    )
+
+    const reaped = entry({ state: 'done', updatedAt: NOW, stateStartedAt: NOW })
+    expect(
+      plannedPaneKeys(snapshot({ agentStatusByPaneKey: { [reaped.paneKey]: reaped } }))
+    ).toEqual([])
+
+    const idleReaped = entry({ state: 'done' })
+    expect(
+      plannedPaneKeys(snapshot({ agentStatusByPaneKey: { [idleReaped.paneKey]: idleReaped } }))
+    ).toEqual([`tab-1:${LEAF}`])
+
+    // Why: reaping only clears the child gate — a draft typed into the composer
+    // while that segment was open still dies with the PTY, so it keeps blocking.
+    expect(
+      plannedPaneKeys(
+        snapshot({
+          agentStatusByPaneKey: { [idleReaped.paneKey]: idleReaped },
+          lastTerminalInputAtByPaneKey: {
+            [idleReaped.paneKey]: idleReaped.stateStartedAt + 1
+          }
+        })
+      )
+    ).toEqual([])
   })
 
   it('clamps corrupt or out-of-range idle durations to the default', () => {

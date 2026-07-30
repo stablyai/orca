@@ -1,0 +1,99 @@
+name: Terminal IME E2E
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/terminal-ime-e2e.yml'
+      - 'config/patches/@xterm__xterm@6.1.0-beta.287.patch'
+      - 'config/scripts/run-terminal-ibus-hangul-e2e.mjs'
+      - 'config/scripts/terminal-ime-e2e-workflow.test.mjs'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'src/renderer/src/components/terminal-pane/keyboard-handlers.ts'
+      - 'src/renderer/src/components/terminal-pane/keyboard-handlers-ime.test.tsx'
+      - 'src/renderer/src/components/terminal-pane/pty-connection.ts'
+      - 'src/renderer/src/components/terminal-pane/pty-connection.test.ts'
+      - 'src/renderer/src/components/terminal-pane/terminal-ime-*'
+      - 'src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts'
+      - 'src/renderer/src/components/terminal-pane/xterm-bypass-policy.ts'
+      - 'src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts'
+      - 'tests/e2e/chinese-ime-chat-input-repro.spec.ts'
+      - 'tests/e2e/korean-ime-terminal-shift-enter-commit.spec.ts'
+      - 'tests/e2e/terminal-ibus-hangul-native.spec.ts'
+      - 'tests/e2e/terminal-ime-*.ts'
+  workflow_dispatch:
+  schedule:
+    - cron: '30 9 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  linux-x11:
+    name: Linux X11 terminal IME
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install native build and IME tools
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install -y
+          build-essential
+          dbus-x11
+          dconf-gsettings-backend
+          ibus
+          ibus-hangul
+          libglib2.0-bin
+          python3
+          xdotool
+          xfwm4
+          xvfb
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Use external node-gyp to avoid pnpm bundled copy
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Electron app for E2E
+        run: pnpm exec electron-vite build --mode e2e
+
+      - name: Run deterministic terminal IME boundary tests
+        run: >-
+          xvfb-run --auto-servernum
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1
+          pnpm run test:e2e --
+          tests/e2e/terminal-ime-exact-byte.spec.ts
+          --workers=1
+
+      - name: Run native IBus Hangul exact-byte tests
+        env:
+          SKIP_BUILD: '1'
+        run: pnpm run test:e2e:terminal-ime-native
+
+      - name: Upload terminal IME evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: terminal-ime-evidence
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore

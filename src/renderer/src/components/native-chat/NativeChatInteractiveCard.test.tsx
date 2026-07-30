@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'
 
@@ -73,7 +73,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
   })
 
   it('keeps the card retryable when no PTY answer was sent', () => {
-    mocks.sendAnswer.mockReturnValue(0)
+    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 0, waitsForVerifiedDelivery: false })
     renderCard()
 
     chooseSpacesAndSubmit()
@@ -84,7 +84,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
   })
 
   it('cancels delayed PTY writes when the owning card unmounts', () => {
-    mocks.sendAnswer.mockReturnValue(5_000)
+    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 5_000, waitsForVerifiedDelivery: false })
     const rendered = renderCard()
 
     chooseSpacesAndSubmit()
@@ -95,7 +95,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
   })
 
   it('cancels delayed PTY writes when desktop send authority is lost', () => {
-    mocks.sendAnswer.mockReturnValue(5_000)
+    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 5_000, waitsForVerifiedDelivery: false })
     const rendered = renderCard()
 
     chooseSpacesAndSubmit()
@@ -105,7 +105,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
   })
 
   it('shows the paced send as busy and freezes the snapshotted answer', () => {
-    mocks.sendAnswer.mockReturnValue(5_000)
+    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 5_000, waitsForVerifiedDelivery: false })
     renderCard()
 
     chooseSpacesAndSubmit()
@@ -117,7 +117,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
   })
 
   it('cancels the old answer sequence when a replacement prompt arrives', () => {
-    mocks.sendAnswer.mockReturnValue(5_000)
+    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 5_000, waitsForVerifiedDelivery: false })
     const rendered = renderCard()
     chooseSpacesAndSubmit()
 
@@ -134,5 +134,35 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
 
     expect(mocks.cancelPending).toHaveBeenCalledOnce()
     expect(screen.getByText('Choose a shell?')).toBeInTheDocument()
+  })
+
+  it('keeps a verified send visible until delivery succeeds', () => {
+    let settleDelivery: ((delivered: boolean) => void) | undefined
+    mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
+      settleDelivery = onDeliverySettled
+      return { settleAfterMs: 500, waitsForVerifiedDelivery: true }
+    })
+    renderCard()
+
+    chooseSpacesAndSubmit()
+    expect(screen.getByRole('button', { name: 'Sending…' })).toBeDisabled()
+
+    act(() => settleDelivery?.(true))
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+  })
+
+  it('restores a verified send for retry when delivery is rejected', () => {
+    let settleDelivery: ((delivered: boolean) => void) | undefined
+    mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
+      settleDelivery = onDeliverySettled
+      return { settleAfterMs: 500, waitsForVerifiedDelivery: true }
+    })
+    renderCard()
+
+    chooseSpacesAndSubmit()
+    act(() => settleDelivery?.(false))
+
+    expect(screen.getByRole('button', { name: 'Send answer' })).toBeEnabled()
+    expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
   })
 })

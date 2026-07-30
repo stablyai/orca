@@ -9,11 +9,15 @@ import {
   rmSync,
   statSync,
   symlinkSync,
-  unlinkSync,
-  writeFileSync
+  unlinkSync
 } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
+import {
+  clearCopiedResourceMarker,
+  markCopiedResource,
+  targetIsOwnedFallbackCopy
+} from './codex-managed-home-resource-copy-marker'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
 
@@ -32,13 +36,22 @@ export function getSystemCodexHomePath(): string {
   return join(homedir(), '.codex')
 }
 
+/** Path only; use when a read-only caller must not materialize the mirror. */
+export function resolveOrcaManagedCodexHomePath(): string {
+  return join(getOrcaUserDataPath(), 'codex-runtime-home', 'home')
+}
+
 export function getOrcaManagedCodexHomePath(): string {
-  const managedHomePath = join(getOrcaUserDataPath(), 'codex-runtime-home', 'home')
+  const managedHomePath = resolveOrcaManagedCodexHomePath()
   mkdirSync(managedHomePath, { recursive: true })
   return managedHomePath
 }
 
-function getOrcaUserDataPath(): string {
+export function getCodexSessionBackfillStateDirPath(): string {
+  return join(getOrcaUserDataPath(), 'codex-session-backfill')
+}
+
+export function getOrcaUserDataPath(): string {
   if (process.env.ORCA_USER_DATA_PATH) {
     return process.env.ORCA_USER_DATA_PATH
   }
@@ -53,11 +66,15 @@ function getOrcaUserDataPath(): string {
   return join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'orca')
 }
 
-export function syncSystemCodexResourcesIntoManagedHome(): void {
+// Why: each managed home (the shared runtime mirror, or a per-account
+// self-contained CODEX_HOME that the caller has already created) links the same
+// system resources with its own ownership markers, so a per-account launch home
+// is complete without ever symlinking into or mutating the user's real ~/.codex.
+export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string): void {
+  const targetHome = managedHomePath ?? getOrcaManagedCodexHomePath()
   const systemHomePath = getSystemCodexHomePath()
-  const managedHomePath = getOrcaManagedCodexHomePath()
   for (const entryName of CODEX_SYSTEM_RESOURCE_ENTRIES) {
-    linkSystemCodexResource(systemHomePath, managedHomePath, entryName)
+    linkSystemCodexResource(systemHomePath, targetHome, entryName)
   }
 }
 
@@ -238,59 +255,6 @@ function linkTargetsMatch(actualTarget: string, expectedTarget: string): boolean
 
 function normalizeWindowsLinkTarget(linkTarget: string): string {
   return linkTarget.replace(/^\\\\\?\\/, '').toLowerCase()
-}
-
-function getResourceCopyMarkerPath(managedHomePath: string, entryName: string): string {
-  return join(managedHomePath, '.orca-resource-copies', `${entryName}.json`)
-}
-
-function markCopiedResource(managedHomePath: string, entryName: string, sourcePath: string): void {
-  const markerPath = getResourceCopyMarkerPath(managedHomePath, entryName)
-  mkdirSync(dirname(markerPath), { recursive: true })
-  writeFileSync(markerPath, `${JSON.stringify({ sourcePath }, null, 2)}\n`, {
-    encoding: 'utf-8',
-    mode: 0o600
-  })
-}
-
-function readCopiedResourceSourcePath(managedHomePath: string, entryName: string): string | null {
-  try {
-    const parsed: unknown = JSON.parse(
-      readFileSync(getResourceCopyMarkerPath(managedHomePath, entryName), 'utf-8')
-    )
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return null
-    }
-    const sourcePath = 'sourcePath' in parsed ? parsed.sourcePath : null
-    return typeof sourcePath === 'string' ? sourcePath : null
-  } catch {
-    return null
-  }
-}
-
-function clearCopiedResourceMarker(managedHomePath: string, entryName: string): void {
-  // Why: a malformed marker directory must not block Codex launch or prevent
-  // an owned resource from being repaired.
-  rmSync(getResourceCopyMarkerPath(managedHomePath, entryName), {
-    recursive: true,
-    force: true
-  })
-}
-
-function targetIsOwnedFallbackCopy(
-  targetPath: string,
-  managedHomePath: string,
-  entryName: string,
-  sourcePath: string
-): boolean {
-  if (readCopiedResourceSourcePath(managedHomePath, entryName) !== sourcePath) {
-    return false
-  }
-  try {
-    return existsSync(targetPath) && !lstatSync(targetPath).isSymbolicLink()
-  } catch {
-    return false
-  }
 }
 
 function removeCopiedResourceIfOwned(

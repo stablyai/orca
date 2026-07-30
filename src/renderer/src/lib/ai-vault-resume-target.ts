@@ -11,6 +11,7 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import type { AppState } from '@/store/types'
+import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { getFolderWorkspaceCandidateRepos } from './folder-workspace-connection'
 
 export type AiVaultResumeTargetStatus = 'local' | 'ssh' | 'runtime' | 'unknown'
@@ -132,9 +133,7 @@ export function getAiVaultResumeWorkspaceExecutionHostId(
   }
 
   const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
-  const worktree = Object.values(state.worktreesByRepo ?? {})
-    .flat()
-    .find((candidate) => candidate.id === worktreeId)
+  const worktree = getIndexedWorktreeMap(state.worktreesByRepo ?? {}).get(worktreeId)
   const worktreeHostId = normalizeExecutionHostId(worktree?.hostId)
   if (worktreeHostId) {
     return worktreeHostId
@@ -158,9 +157,7 @@ export function getAiVaultResumeWorkspaceTargetStatus(
   }
 
   const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
-  const worktree = Object.values(state.worktreesByRepo ?? {})
-    .flat()
-    .find((candidate) => candidate.id === worktreeId)
+  const worktree = getIndexedWorktreeMap(state.worktreesByRepo ?? {}).get(worktreeId)
   const worktreeHost = getAiVaultResumeExecutionHostTargetStatus(worktree?.hostId)
   if (worktreeHost !== 'unknown') {
     return worktreeHost

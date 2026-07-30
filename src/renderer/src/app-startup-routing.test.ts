@@ -6,37 +6,80 @@ describe('renderer startup runtime routing', () => {
   it('hydrates persisted UI before local catalog and worktree hydration', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
     const startupBlockStart = source.indexOf('void (async () => {')
-    const startupBlockEnd = source.indexOf("timeRendererStartupStep('session-get'")
+    // Why: concurrent startup branches all settle before hydrate-session-stores.
+    const startupBlockEnd = source.indexOf("timeRendererStartupSyncStep('hydrate-session-stores'")
     const startupBlock = source.slice(startupBlockStart, startupBlockEnd)
 
-    const settingsIndex = startupBlock.indexOf('actions.fetchSettings()')
-    const uiGetIndex = startupBlock.indexOf("timeRendererStartupStep('ui-get'")
-    const hydrateUiIndex = startupBlock.indexOf(
-      "timeRendererStartupSyncStep('hydrate-persisted-ui'"
-    )
-    const localReposIndex = startupBlock.indexOf(
+    const indexInStartupBlock = (needle: string): number => {
+      const relativeIndex = startupBlock.indexOf(needle)
+      return relativeIndex === -1 ? -1 : startupBlockStart + relativeIndex
+    }
+    const settingsIndex = indexInStartupBlock('actions.fetchSettings()')
+    const uiGetIndex = indexInStartupBlock("timeRendererStartupStep('ui-get'")
+    const hydrateUiIndex = indexInStartupBlock("timeRendererStartupSyncStep('hydrate-persisted-ui'")
+    const localReposIndex = indexInStartupBlock(
       "actions.fetchReposForAllHosts({ remoteHosts: 'skip' })"
     )
-    const localGroupsIndex = startupBlock.indexOf(
+    const localGroupsIndex = indexInStartupBlock(
       "actions.fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })"
     )
-    const localFoldersIndex = startupBlock.indexOf(
+    const localFoldersIndex = indexInStartupBlock(
       "actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })"
     )
-    const localWorktreesIndex = startupBlock.indexOf(
-      "actions.fetchAllWorktrees({ hydrationPurge: 'defer' })"
+    const sessionIndex = indexInStartupBlock("timeRendererStartupStep('session-get'")
+    const hydrationWorktreesIndex = source.indexOf(
+      "timeRendererStartupStep('fetch-hydration-worktrees'"
     )
+    const fullWorktreesIndex = source.indexOf('await actions.fetchAllWorktrees()')
     const lineageIndex = startupBlock.indexOf('actions.fetchWorktreeLineage()')
 
     expect(settingsIndex).toBeGreaterThanOrEqual(0)
     expect(startupBlockEnd).toBeGreaterThan(startupBlockStart)
+    // Persisted UI hydrates before any local catalog/session/worktree read kicks off.
     expect(settingsIndex).toBeLessThan(uiGetIndex)
     expect(uiGetIndex).toBeLessThan(hydrateUiIndex)
     expect(hydrateUiIndex).toBeLessThan(localReposIndex)
+    // The local catalog chain stays internally ordered (folders merge against project groups).
     expect(localReposIndex).toBeLessThan(localGroupsIndex)
     expect(localGroupsIndex).toBeLessThan(localFoldersIndex)
-    expect(localFoldersIndex).toBeLessThan(localWorktreesIndex)
+    expect(localReposIndex).toBeLessThan(sessionIndex)
+    expect(sessionIndex).toBeLessThan(hydrationWorktreesIndex)
+    const hydrationWorktreeBlock = source.slice(
+      hydrationWorktreesIndex,
+      source.indexOf('await keybindingsPromise')
+    )
+    expect(hydrationWorktreeBlock).toContain(
+      'mapWithConcurrency(hydrationRepos, WORKTREE_REFRESH_CONCURRENCY'
+    )
+    expect(hydrationWorktreeBlock).toContain('executionHostId: getRepoExecutionHostId(repo)')
+    // Why: the pre-hydration fetch must include SSH repos (only runtime-owned repos are
+    // excluded); gating on local-only drops SSH tab/editor/browser chrome at hydration.
+    const hydrationFilterBlock = source.slice(
+      source.indexOf('const hydrationRepos'),
+      hydrationWorktreesIndex
+    )
+    expect(hydrationFilterBlock).toContain(
+      "parseExecutionHostId(getRepoExecutionHostId(repo))?.kind !== 'runtime'"
+    )
+    expect(hydrationFilterBlock).not.toContain('=== LOCAL_EXECUTION_HOST_ID')
+    expect(fullWorktreesIndex).toBeGreaterThan(
+      source.indexOf("logRendererStartupDiagnostic('startup-hydration-done'")
+    )
+    // Why: the deferred full scan must be followed by a re-prune so deleted-worktree visit
+    // timestamps for non-session repos are dropped once every repo is authoritative.
+    expect(
+      source.indexOf('actions.pruneLastVisitedTimestamps()', fullWorktreesIndex)
+    ).toBeGreaterThan(fullWorktreesIndex)
     expect(lineageIndex).toBe(-1)
+
+    // The catalog and selective hydration chains overlap, but both settle before recovery or hydration.
+    const joinStart = indexInStartupBlock('await Promise.allSettled([')
+    expect(joinStart).toBeGreaterThan(hydrateUiIndex)
+    const joinBlock = source.slice(joinStart, startupBlockEnd)
+    expect(joinBlock).toContain('hydrationSessionChain')
+    expect(joinBlock).toContain('localCatalogChain')
+    expect(startupBlock).not.toContain('await Promise.all([')
+    expect(startupBlock).not.toContain("actions.fetchAllWorktrees({ hydrationPurge: 'defer' })")
   })
 
   it('refreshes remote catalogs after startup hydration succeeds', () => {
@@ -46,15 +89,30 @@ describe('renderer startup runtime routing', () => {
     )
     const remoteCatalogIndex = source.indexOf("timeRendererStartupStep('remote-catalog-refresh'")
     const remoteWorktreeIndex = source.indexOf("timeRendererStartupStep('remote-worktree-refresh'")
+    const remoteCatalogFailureIndex = source.indexOf(
+      "console.warn('Remote startup catalog refresh failed:'"
+    )
     const lineageIndex = source.indexOf('actions.fetchWorktreeLineage()')
+    const startupRefreshCompletedIndex = source.indexOf('startupWorktreeRefreshCompleted: true')
 
     expect(hydrationDoneIndex).toBeGreaterThanOrEqual(0)
     expect(hydrationDoneIndex).toBeLessThan(remoteCatalogIndex)
-    expect(remoteCatalogIndex).toBeLessThan(remoteWorktreeIndex)
+    expect(remoteCatalogIndex).toBeLessThan(remoteCatalogFailureIndex)
+    // Why: a project-group/folder catalog failure must not suppress the independent full worktree scan.
+    expect(remoteCatalogFailureIndex).toBeLessThan(remoteWorktreeIndex)
     expect(remoteWorktreeIndex).toBeLessThan(lineageIndex)
+    expect(lineageIndex).toBeLessThan(startupRefreshCompletedIndex)
     expect(source.slice(remoteCatalogIndex, remoteWorktreeIndex)).toContain(
       'actions.fetchReposForAllHosts()'
     )
+
+    const startupFailureIndex = source.indexOf(
+      '[startup] Workspace session hydration failed; leaving disk state untouched:'
+    )
+    expect(startupFailureIndex).toBeGreaterThanOrEqual(0)
+    expect(
+      source.indexOf('startupWorktreeRefreshCompleted: true', startupFailureIndex)
+    ).toBeGreaterThan(startupFailureIndex)
     expect(source.slice(remoteCatalogIndex, remoteWorktreeIndex)).toContain(
       'actions.fetchProjectGroupsForAllHosts()'
     )
@@ -65,11 +123,40 @@ describe('renderer startup runtime routing', () => {
 
   it('waits for first-window startup services before terminal reconnect', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
-    const reconnectIndex = source.indexOf('await actions.reconnectPersistedTerminals')
     const servicesIndex = source.indexOf('await window.api.app.awaitFirstWindowStartupServices()')
+    const preReconnectRecoveryIndex = source.indexOf(
+      'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()',
+      servicesIndex
+    )
+    const reconnectIndex = source.indexOf(
+      'actions.reconnectPersistedTerminals(abortController.signal)',
+      preReconnectRecoveryIndex
+    )
+    const postReconnectRecoveryIndex = source.indexOf(
+      'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()',
+      reconnectIndex
+    )
 
     expect(servicesIndex).toBeGreaterThanOrEqual(0)
-    expect(servicesIndex).toBeLessThan(reconnectIndex)
+    expect(preReconnectRecoveryIndex).toBeGreaterThan(servicesIndex)
+    expect(reconnectIndex).toBeGreaterThan(preReconnectRecoveryIndex)
+    expect(postReconnectRecoveryIndex).toBeGreaterThan(reconnectIndex)
+  })
+
+  it('keeps the persisted Automations view from starting its own bootstrap worktree scan', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/renderer/src/components/automations/AutomationsPage.tsx'),
+      'utf8'
+    )
+    const fullRefreshStart = source.indexOf('const mountedBeforeStartupWorktreeRefreshRef')
+    const fullRefreshEffect = source.slice(
+      fullRefreshStart,
+      source.indexOf('void refresh()', fullRefreshStart)
+    )
+
+    expect(fullRefreshEffect).toContain('if (!startupWorktreeRefreshCompleted)')
+    expect(fullRefreshEffect).toContain('mountedBeforeStartupWorktreeRefreshRef.current')
+    expect(fullRefreshEffect).toContain('void fetchAllWorktrees()')
   })
 
   it('does not eagerly import the floating terminal panel on startup', () => {
@@ -253,5 +340,86 @@ describe('renderer startup runtime routing', () => {
     expect(source).not.toContain("from './components/status-bar/StatusBar'")
     expect(source).toContain('statusBarVisible ? (')
     expect(source).toContain('h-6 min-h-[24px] shrink-0 border-t border-border')
+  })
+
+  it('keeps activeView off the 150ms debounced UI writer hot path (#9002)', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const writerStart = source.indexOf('const timer = window.setTimeout(() => {')
+    const writerEnd = source.indexOf('}, 150)', writerStart)
+    const writerBlock = source.slice(writerStart, writerEnd)
+
+    expect(writerStart).toBeGreaterThanOrEqual(0)
+    expect(writerEnd).toBeGreaterThan(writerStart)
+    // Why: this field riding the writer's payload (#8265) is exactly the
+    // #9002 regression — every switch scheduled a full durable-state save. It
+    // must persist through its narrow preference or unload path instead. Matched as
+    // a standalone object-literal property (not the surrounding prose, which
+    // legitimately references the field name) so the assertion is precise.
+    expect(writerBlock).not.toMatch(/^\s*activeView,\s*$/m)
+
+    const depsStart = source.indexOf('}, [', writerEnd)
+    const depsEnd = source.indexOf('])', depsStart)
+    const depsBlock = source.slice(depsStart, depsEnd)
+    expect(depsBlock).not.toMatch(/^\s*activeView,?\s*$/m)
+  })
+
+  it('persists activeView through its narrow preference on every switch (#9002)', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+
+    const preferenceEffect = [
+      '// Why (#9002): activeView has its own tiny profile preference',
+      'void window.api.ui.set({ activeView })',
+      '}, [activeView, persistedUIReady])'
+    ]
+    for (const marker of preferenceEffect) {
+      expect(source).toContain(marker)
+    }
+    expect(source).not.toContain('createActiveViewIdleFlush')
+    expect(source).not.toContain("window.addEventListener('blur', handleBlur)")
+  })
+
+  it('arms the OSC 52 default-on notice behind a statically mounted Toaster (#10567)', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+
+    // Why pin the call site: the hook is the only caller, so deleting this line silences
+    // the migration notice on desktop with every unit suite still green.
+    expect(source).toContain('useOsc52ClipboardDefaultOnNotice(persistedUIReady)')
+    // Why pin the static import and the unconditional mount: sonner drops a toast enqueued
+    // before any Toaster subscribes, and never replays it — a lazy Toaster would burn the
+    // profile's one notice with its callbacks never firing, so it could never re-arm.
+    expect(source).toContain("import { Toaster } from '@/components/ui/sonner'")
+    expect(source).not.toContain("import('@/components/ui/sonner')")
+    expect(source).toContain('<Toaster closeButton')
+  })
+
+  it('checkpoints activeView and all session snapshots through one beforeunload handler (#9002)', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const checkpointStart = source.indexOf(
+      'const shutdownCheckpoint = createShutdownCheckpointGuard(() => {'
+    )
+    const checkpointEnd = source.indexOf(
+      'const persistBeforeUnload = createShutdownCheckpointBeforeUnloadHandler(shutdownCheckpoint)',
+      checkpointStart
+    )
+    expect(checkpointStart).toBeGreaterThanOrEqual(0)
+    expect(checkpointEnd).toBeGreaterThan(checkpointStart)
+    const checkpointBlock = source.slice(checkpointStart, checkpointEnd)
+
+    expect(checkpointBlock).toContain('const sessionSnapshots = shouldCaptureSession')
+    expect(checkpointBlock).toContain(
+      'buildWorkspaceSessionHostSnapshots(buildWorkspaceSessionPayload(freshState), freshState)'
+    )
+    expect(checkpointBlock).toContain('window.api.app.persistBeforeUnloadSync({')
+    expect(checkpointBlock).toContain('sessions: sessionSnapshots')
+    expect(checkpointBlock).toContain('ui: buildActiveViewUnloadPatch(freshState)')
+    expect(source).toContain(
+      'window.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, shutdownCheckpoint.reset)'
+    )
+    expect(source).toContain(
+      'window.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, shutdownCheckpoint.reset)'
+    )
+    expect(source).toContain("window.addEventListener('beforeunload', persistBeforeUnload)")
+    expect(source.match(/window\.addEventListener\('beforeunload'/g) ?? []).toHaveLength(1)
+    expect(source).not.toContain('window.api.ui.setSync')
   })
 })

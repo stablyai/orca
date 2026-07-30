@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { sanitizeRepoIcon } from './repo-icon'
+import { githubAvatarIcon, sanitizeRepoIcon } from './repo-icon'
+
+const PNG_1X1_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
+const WEBP_1X1_BASE64 = 'UklGRhoAAABXRUJQVlA4IA4AAAAwAQCdASoBAAEAAQIlSkwAAA=='
+
+function pngBase64(width: number, height: number): string {
+  const bytes = Buffer.alloc(24)
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes)
+  bytes.writeUInt32BE(13, 8)
+  bytes.write('IHDR', 12, 'ascii')
+  bytes.writeUInt32BE(width, 16)
+  bytes.writeUInt32BE(height, 20)
+  return bytes.toString('base64')
+}
 
 describe('sanitizeRepoIcon', () => {
   it('accepts lucide, emoji, and supported image icons', () => {
@@ -27,6 +41,19 @@ describe('sanitizeRepoIcon', () => {
     expect(
       sanitizeRepoIcon({
         type: 'image',
+        src: 'https://github.acme.test/stablyai.png?size=64',
+        source: 'github',
+        label: 'stablyai/orca'
+      })
+    ).toEqual({
+      type: 'image',
+      src: 'https://github.acme.test/stablyai.png?size=64',
+      source: 'github',
+      label: 'stablyai/orca'
+    })
+    expect(
+      sanitizeRepoIcon({
+        type: 'image',
         src: 'https://www.google.com/s2/favicons?domain=example.com&sz=64',
         source: 'favicon'
       })
@@ -38,23 +65,34 @@ describe('sanitizeRepoIcon', () => {
     expect(
       sanitizeRepoIcon({
         type: 'image',
-        src: 'data:image/png;base64,aGVsbG8=',
+        src: `data:image/png;base64,${PNG_1X1_BASE64}`,
         source: 'upload'
       })
     ).toEqual({
       type: 'image',
-      src: 'data:image/png;base64,aGVsbG8=',
+      src: `data:image/png;base64,${PNG_1X1_BASE64}`,
       source: 'upload'
     })
     expect(
       sanitizeRepoIcon({
         type: 'image',
-        src: 'data:image/png;base64,aGVsbG8=',
+        src: `data:image/png;base64,${PNG_1X1_BASE64}`,
         source: 'file'
       })
     ).toEqual({
       type: 'image',
-      src: 'data:image/png;base64,aGVsbG8=',
+      src: `data:image/png;base64,${PNG_1X1_BASE64}`,
+      source: 'file'
+    })
+    expect(
+      sanitizeRepoIcon({
+        type: 'image',
+        src: `data:image/webp;base64,${WEBP_1X1_BASE64}`,
+        source: 'file'
+      })
+    ).toEqual({
+      type: 'image',
+      src: `data:image/webp;base64,${WEBP_1X1_BASE64}`,
       source: 'file'
     })
   })
@@ -74,6 +112,13 @@ describe('sanitizeRepoIcon', () => {
     expect(
       sanitizeRepoIcon({
         type: 'image',
+        src: `data:image/png;base64,${pngBase64(32_769, 1)}`,
+        source: 'upload'
+      })
+    ).toBeUndefined()
+    expect(
+      sanitizeRepoIcon({
+        type: 'image',
         src: `data:image/png;base64,${'a'.repeat(401 * 1024)}`,
         source: 'upload'
       })
@@ -88,9 +133,37 @@ describe('sanitizeRepoIcon', () => {
     expect(
       sanitizeRepoIcon({
         type: 'image',
-        src: 'https://example.com/icon.png',
+        src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
+        source: 'file'
+      })
+    ).toBeUndefined()
+    expect(
+      sanitizeRepoIcon({
+        type: 'image',
+        src: 'https://example.com/nested/icon.png',
         source: 'github'
       })
     ).toBeUndefined()
+    expect(
+      sanitizeRepoIcon({
+        type: 'image',
+        src: 'https://user@example.com/icon.png',
+        source: 'github'
+      })
+    ).toBeUndefined()
+  })
+
+  it('builds hosted avatar URLs only from a valid host value', () => {
+    expect(
+      githubAvatarIcon({ owner: 'acme', repo: 'widgets', host: 'GitHub.Acme.Test:8443' })
+    ).toMatchObject({ src: 'https://github.acme.test:8443/acme.png?size=64' })
+    // Explicit default port 443 is canonical for an HTTPS host: accept it
+    // (serialized without the port) rather than falling back to github.com.
+    expect(
+      githubAvatarIcon({ owner: 'acme', repo: 'widgets', host: 'ghe.example:443' })
+    ).toMatchObject({ src: 'https://ghe.example/acme.png?size=64' })
+    expect(
+      githubAvatarIcon({ owner: 'acme', repo: 'widgets', host: 'github.com@evil.example' })
+    ).toMatchObject({ src: 'https://github.com/acme.png?size=64' })
   })
 })

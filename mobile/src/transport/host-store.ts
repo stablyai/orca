@@ -23,16 +23,12 @@ import { deleteMobileRelayDirectUpgradeJournal } from './mobile-relay-direct-upg
 import { scheduleOrphanedMobileRelayCleanup } from './mobile-relay-orphan-cleanup'
 
 const STORAGE_KEY = 'orca:hosts'
-// Why: SecureStore keys must match [A-Za-z0-9._-]; colons are rejected.
-// Use dots as the separator so the key shape stays readable while
-// satisfying the validator.
+// Why: SecureStore keys must match [A-Za-z0-9._-] (colons rejected), so use dots as the separator.
 const TOKEN_KEY_PREFIX = 'orca.host-token.'
 const WEB_TOKEN_KEY_PREFIX = 'orca:web-host-token:'
 
-// Why: WHEN_UNLOCKED_THIS_DEVICE_ONLY keeps the pairing token off
-// iCloud Keychain and out of iCloud/iTunes backup restores onto a
-// different physical device. Reads/writes are silent (no biometric
-// prompt) since we don't request access control flags.
+// Why: WHEN_UNLOCKED_THIS_DEVICE_ONLY keeps the pairing token off iCloud Keychain and out of backup restores onto another device.
+// Reads/writes stay silent (no biometric prompt) because we don't request access control flags.
 const KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY
 }
@@ -46,8 +42,7 @@ function webTokenKey(hostId: string): string {
 }
 
 async function readDeviceToken(hostId: string): Promise<string | null> {
-  // Why: Expo SecureStore has no working web backend; keep this fallback
-  // web-only so native builds still keep pairing tokens in the keychain.
+  // Why: Expo SecureStore has no working web backend; fall back to AsyncStorage only on web so native still uses the keychain.
   if (Platform.OS === 'web') {
     return AsyncStorage.getItem(webTokenKey(hostId))
   }
@@ -76,18 +71,10 @@ async function deleteHostCredentials(hostId: string): Promise<void> {
   await deleteMobileRelayDirectUpgradeJournal(hostId)
 }
 
-// Why: SecureStore reads on Android Keystore can take 50-200ms each, and
-// loadHosts() is called from every screen mount + every useFocusEffect.
-// Stack with N hosts and you get N*200ms blocking every navigation, which
-// triggers connection-churn cycles in the home-screen useEffect. Cache
-// per-hostId in memory; invalidate only on save/remove. The cache lives
-// for the JS-runtime lifetime, which matches AsyncStorage semantics
-// (cleared on app uninstall, persisted across foreground/background).
+// Why: Keychain reads are slow (50-200ms) and loadHosts() runs on every screen mount; cache per-hostId in memory, invalidate on save/remove.
 const tokenCache = new Map<string, string>()
 let inflightLoad: Promise<HostProfile[]> | null = null
-// Why: rename / lastConnected / remove / save all RMW the same hosts JSON.
-// Without a queue, concurrent writers re-read a stale snapshot and the last
-// setItem wins — resurrecting a removed host or dropping a rename.
+// Why: serialize RMW of the shared hosts JSON; without a queue concurrent writers drop writes (resurrect a removed host, drop a rename).
 let hostListMutation: Promise<void> = Promise.resolve()
 
 function parseStoredHosts(raw: string | null): StoredHostProfile[] | null {
@@ -100,9 +87,7 @@ function parseStoredHosts(raw: string | null): StoredHostProfile[] | null {
       return null
     }
     return parsed.flatMap((item) => {
-      // Why: pre-v0.0.3 records carry the deviceToken in AsyncStorage.
-      // Drop them silently — the three pre-launch users will re-pair on
-      // first run rather than carry a migration shim through the auth path.
+      // Why: pre-v0.0.3 records stored deviceToken in AsyncStorage; drop them (users re-pair) rather than carry a migration shim.
       if (item && typeof item === 'object' && 'deviceToken' in item) {
         return []
       }
@@ -115,11 +100,9 @@ function parseStoredHosts(raw: string | null): StoredHostProfile[] | null {
 }
 
 export async function loadHosts(): Promise<HostProfile[]> {
-  // Why: writers hold the mutation chain across their full RMW; wait so a
-  // load right after rename/remove does not race a half-written list.
+  // Why: writers hold the mutation chain across their full RMW; wait so a load doesn't race a half-written list.
   await hostListMutation
-  // Why: deduplicate concurrent loadHosts() calls so multiple screens
-  // mounting simultaneously share one Keychain read pass.
+  // Why: deduplicate concurrent loadHosts() calls so simultaneously mounting screens share one Keychain read pass.
   if (inflightLoad) {
     return inflightLoad
   }
@@ -152,16 +135,11 @@ async function doLoadHosts(): Promise<HostProfile[]> {
       try {
         fetched = await readDeviceToken(stored.id)
       } catch {
-        // Why: a transient Keychain failure for one entry (e.g.
-        // errSecInteractionNotAllowed while the device is briefly locked,
-        // or a single corrupt record) must not blank the entire host list.
-        // Skip just this host — it'll reappear on the next load.
+        // Why: a transient Keychain failure for one entry (e.g. errSecInteractionNotAllowed while locked) must not blank the whole host list; skip it.
         continue
       }
       if (!fetched) {
-        // Why: orphaned metadata with no matching keychain entry — most
-        // likely a stale record from a development install. Skip it
-        // rather than surface a half-broken host.
+        // Why: orphaned metadata with no matching keychain entry; skip rather than surface a half-broken host.
         continue
       }
       token = fetched
@@ -187,8 +165,7 @@ export async function resolvePairingHostIdentity(
   publicKeyB64: string,
   newHostId: string
 ): Promise<{ id: string; name: string }> {
-  // Why: one durable read both preserves an existing identity and names a new host,
-  // avoiding duplicate cards and a second serial storage read before connecting.
+  // Why: one durable read both preserves an existing identity and names a new host, avoiding duplicate cards.
   await hostListMutation
   const hosts = await readStoredHostsForMutation()
   const match = hosts.find((host) => host.publicKeyB64 === publicKeyB64)
@@ -201,8 +178,7 @@ async function readStoredHostsForMutation(): Promise<StoredHostProfile[]> {
   try {
     const parsed = parseStoredHosts(await AsyncStorage.getItem(STORAGE_KEY))
     if (!parsed) {
-      // Why: refuse to RMW over unreadable payload — treating it as [] would
-      // wipe the durable host list on the next rename/remove/save.
+      // Why: refuse to RMW over unreadable payload — treating it as [] would wipe the durable host list on the next write.
       throw new Error('host list storage unreadable')
     }
     return parsed
@@ -260,8 +236,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
     }
     if (index >= 0) {
       updatedExistingHost = true
-      // Why: affected installs may already contain duplicate rows; an authoritative
-      // save is the safe point to collapse them to the preserved host id.
+      // Why: an authoritative save is the safe point to collapse pre-existing duplicate rows to the preserved host id.
       return hosts
         .filter(({ id }) => !duplicateHostIds.has(id))
         .map((candidate) => (candidate.id === stored.id ? stored : candidate))
@@ -272,11 +247,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
     }
     return [...hosts.filter(({ id }) => !duplicateHostIds.has(id)), stored]
   })
-  // Why: write metadata BEFORE the keychain token so a crash between the two
-  // leaves orphaned metadata (which loadHosts skips and removeHost can clean
-  // up) rather than an orphaned keychain token with no metadata pointer —
-  // the latter would persist forever since removeHost only deletes by hostId
-  // from current metadata.
+  // Why: write metadata before the keychain token so a crash leaves recoverable orphaned metadata, not an orphaned token that persists forever.
   await writeDeviceToken(stored.id, validated.deviceToken)
   tokenCache.set(stored.id, validated.deviceToken)
   if (validated.endpoints) {
@@ -293,8 +264,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
     overlayRemovalIds.push(stored.id)
   }
   if (overlayRemovalIds.length > 0) {
-    // Why: reusing an id for direct-only re-pairing must not retain routing
-    // metadata from the host's previous transport state.
+    // Why: reusing an id for direct-only re-pairing must not retain routing metadata from the previous transport state.
     await removeMobileRelayHostOverlays(overlayRemovalIds)
   }
   for (const duplicateHostId of duplicateHostIds) {
@@ -313,11 +283,9 @@ export async function removeHost(hostId: string): Promise<void> {
   try {
     await removeMobileRelayHostOverlay(hostId)
   } catch {
-    // The missing legacy base is authoritative, so a retained overlay cannot
-    // resurrect this host and can be cleaned on a later explicit retry.
+    // Base removal is authoritative; a retained overlay can't resurrect the host and is cleaned on a later retry.
   }
-  // Why: await only the durable cleanup intent (AsyncStorage). Native keychain
-  // delete can reject or stall and must not freeze removeHost / the UI.
+  // Why: keychain delete can stall/reject; await only the durable cleanup intent so removeHost can't freeze the UI.
   try {
     await scheduleHostCredentialCleanup(hostId, deleteHostCredentials)
   } catch {
@@ -333,10 +301,7 @@ export async function retryPendingHostCredentialCleanup(): Promise<{
   return retryPendingHostCredentialCleanups(deleteHostCredentials)
 }
 
-// Why: Edit host can change name and endpoint together; a single
-// mutateStoredHosts pass keeps both fields committed atomically so a
-// mid-save failure can never persist one change without the other, and a
-// host removed mid-edit throws consistently instead of silently no-oping.
+// Why: single mutation pass commits name + endpoint atomically so a mid-save failure can't persist one without the other.
 export async function updateHostNameAndEndpoint(
   hostId: string,
   updates: { name?: string; endpoint?: string }
@@ -368,9 +333,7 @@ export async function updateLastConnected(hostId: string): Promise<void> {
       return next
     })
   } catch {
-    // Why: last-connected is a best-effort timestamp and callers fire it with
-    // `void`. Swallow unreadable-storage failures so they don't surface as an
-    // unhandled promise rejection.
+    // Why: best-effort timestamp fired with void; swallow so unreadable storage doesn't reject.
   }
 }
 

@@ -11,4 +11,18 @@ describe('packaged Windows CLI launcher asset', () => {
     expect(launcher).toContain('orca.cmd cannot safely forward orchestration message bodies')
     expect(launcher).not.toContain('"%ELECTRON%" "%CLI%" %*')
   })
+
+  it('marks the packaged child and propagates its exact exit status', () => {
+    const sourcePath = join(process.cwd(), 'native', 'windows-cli-launcher', 'OrcaCliLauncher.cs')
+    const source = readFileSync(sourcePath, 'utf8')
+
+    expect(source).toContain(
+      'startInfo.EnvironmentVariables["ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER"] = "1";'
+    )
+    expect(source).toContain('Environment.GetEnvironmentVariable("ORCA_CLI_COMMAND") == "orca-ide"')
+    expect(source).toContain('? "orca-ide"')
+    expect(source).toContain(': "orca";')
+    expect(source).toContain('child.WaitForExit();')
+    expect(source).toContain('return child.ExitCode;')
+  })
 })

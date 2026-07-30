@@ -44,7 +44,7 @@ export async function getIssue(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabIssueInfo | null> {
-  const knownHosts = await getGlabKnownHosts(connectionId)
+  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const projectRef = await getIssueProjectRef(repoPath, knownHosts, connectionId, localGitOptions)
   // Why: don't fall back to a cwd-inferred `glab issue view` when the project
   // can't be resolved — on an SSH connection cwd is not the repo dir, so glab
@@ -92,7 +92,7 @@ export async function listIssues(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<IssueListResult> {
-  const knownHosts = await getGlabKnownHosts(connectionId)
+  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -162,7 +162,7 @@ export async function createIssue(
   if (!trimmedTitle) {
     return { ok: false, error: 'Title is required' }
   }
-  const knownHosts = await getGlabKnownHosts(connectionId)
+  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -232,7 +232,7 @@ export async function updateIssue(
       await resolveIssueSource(
         repoPath,
         preference,
-        await getGlabKnownHosts(connectionId),
+        await getGlabKnownHosts(connectionId, localGitOptions),
         connectionId,
         localGitOptions
       )
@@ -369,7 +369,7 @@ export async function addIssueComment(
       await resolveIssueSource(
         repoPath,
         preference,
-        await getGlabKnownHosts(connectionId),
+        await getGlabKnownHosts(connectionId, localGitOptions),
         connectionId,
         localGitOptions
       )
@@ -427,7 +427,7 @@ export async function listLabels(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<string[]> {
-  const knownHosts = await getGlabKnownHosts(connectionId)
+  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -468,7 +468,7 @@ export async function listAssignableUsers(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabAssignableUser[]> {
-  const knownHosts = await getGlabKnownHosts(connectionId)
+  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,

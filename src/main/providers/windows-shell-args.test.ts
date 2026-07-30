@@ -3,10 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
-  encodePowerShellCommand,
-  getPowerShellOsc133Bootstrap
-} from '../powershell-osc133-bootstrap'
-import {
   buildWslInteractiveLoginShellCommand,
   escapeWslShCommandForWindows
 } from '../../shared/wsl-login-shell-command'
@@ -17,6 +13,15 @@ function expectedWslArgs(linuxCwd: string, distro?: string): string[] {
   const command = `cd '${linuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && ${buildWslInteractiveLoginShellCommand()}`
   const shellArgs = ['--', 'sh', '-c', escapeWslShCommandForWindows(command)]
   return distro ? ['-d', distro, ...shellArgs] : shellArgs
+}
+
+function decodePowerShellCommand(result: ReturnType<typeof resolveWindowsShellLaunchArgs>): string {
+  expect(result.shellArgs.slice(0, 3)).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand'])
+  return Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
+}
+
+function expectedPowerShellRestoreCwdCommand(cwdLiteral: string): string {
+  return `try { Set-Location -LiteralPath ${cwdLiteral} -ErrorAction Stop } catch { Write-Warning "Failed to restore working directory: $_" }`
 }
 
 describe('resolveWindowsShellLaunchArgs', () => {
@@ -90,14 +95,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
       'C:\\Users\\alice',
       'C:\\Users\\alice'
     )
-    expect(result.shellArgs).toEqual([
-      '-NoLogo',
-      '-NoExit',
-      '-EncodedCommand',
-      encodePowerShellCommand(getPowerShellOsc133Bootstrap())
-    ])
+    expect(result.shellArgs).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)])
 
-    const command = Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
+    const command = decodePowerShellCommand(result)
     const outputEncodingIndex = command.indexOf('[Console]::OutputEncoding')
     const opencodeRestoreIndex = command.indexOf(
       '$env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR'
@@ -106,6 +106,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const ompExtensionIndex = command.indexOf('--extension $env:ORCA_OMP_STATUS_EXTENSION')
     const codexRestoreIndex = command.indexOf('$env:CODEX_HOME = $env:ORCA_CODEX_HOME')
     const promptIndex = command.indexOf('function Global:prompt')
+    const cwdRestoreIndex = command.indexOf(
+      expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'")
+    )
 
     expect(command).not.toContain('$PROFILE')
     expect(command).not.toContain('ORCA_PI_CODING_AGENT_DIR')
@@ -118,6 +121,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(codexRestoreIndex).toBeGreaterThan(outputEncodingIndex)
     expect(codexRestoreIndex).toBeGreaterThan(ompWrapperIndex)
     expect(promptIndex).toBeGreaterThan(codexRestoreIndex)
+    expect(cwdRestoreIndex).toBeGreaterThan(promptIndex)
     expect(command).toContain('Esc = [char]27')
     expect(command).toContain('Bel = [char]7')
     expect(command).toContain(')]133;D;$fakeExitCode$(')
@@ -134,6 +138,21 @@ describe('resolveWindowsShellLaunchArgs', () => {
 
     expect(result.effectiveCwd).toBe('C:\\Users\\alice\\project')
     expect(result.validationCwd).toBe('C:\\Users\\alice\\project')
+    expect(decodePowerShellCommand(result)).toContain(
+      expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice\\project'")
+    )
+  })
+
+  it('quotes the PowerShell cwd restore command literally', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'powershell.exe',
+      "C:\\Users\\alice\\client's app",
+      'C:\\Users\\alice'
+    )
+
+    expect(decodePowerShellCommand(result)).toContain(
+      expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice\\client''s app'")
+    )
   })
 
   it('embeds short PowerShell startup commands after the OSC 133 bootstrap', () => {
@@ -146,8 +165,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
     )
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
 
-    const command = Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
+    const command = decodePowerShellCommand(result)
     expect(command).toContain('function Global:prompt')
+    expect(command).toContain(expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'"))
     expect(command.trimEnd().endsWith("& 'codex' '--no-alt-screen'")).toBe(true)
   })
 
@@ -163,7 +183,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
     )
 
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
-    const command = Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
+    const command = decodePowerShellCommand(result)
     expect(command).toContain(`\n${startupCommand}`)
     expect(command.trimEnd().endsWith(startupCommand)).toBe(true)
   })
@@ -178,32 +198,39 @@ describe('resolveWindowsShellLaunchArgs', () => {
     )
 
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
-    expect(result.shellArgs).toEqual([
-      '-NoLogo',
-      '-NoExit',
-      '-EncodedCommand',
-      encodePowerShellCommand(getPowerShellOsc133Bootstrap())
-    ])
+    expect(result.shellArgs).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)])
+    expect(decodePowerShellCommand(result)).toContain(
+      expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'")
+    )
   })
 
   it('handles pwsh.exe (PowerShell Core) the same as Windows PowerShell', () => {
     const result = resolveWindowsShellLaunchArgs('pwsh.exe', 'C:\\', 'C:\\Users\\alice')
-    expect(result.shellArgs).toEqual([
-      '-NoLogo',
-      '-NoExit',
-      '-EncodedCommand',
-      encodePowerShellCommand(getPowerShellOsc133Bootstrap())
-    ])
+    expect(result.shellArgs).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)])
+    expect(decodePowerShellCommand(result)).toContain(expectedPowerShellRestoreCwdCommand("'C:\\'"))
   })
 
-  it('starts Git Bash as an interactive login shell without changing cwd', () => {
+  it('starts Git Bash as an interactive login shell with UTF-8 console setup', () => {
     const result = resolveWindowsShellLaunchArgs(
       'C:\\Program Files\\Git\\bin\\bash.exe',
       'C:\\Users\\alice\\code',
       'C:\\Users\\alice'
     )
 
-    expect(result.shellArgs).toEqual(['--login', '-i'])
+    // Why: Git Bash inherits the ConPTY OEM code page (CP437), so a byte-writing
+    // UTF-8 TUI mojibakes unless the console is switched to UTF-8 before it runs.
+    // Assert the contract behaviorally: chcp.com 65001 must precede the exec'd
+    // interactive login shell (which preserves `--login -i` and the shell's
+    // foreground identity), rather than pinning the exact command string.
+    expect(result.shellArgs[0]).toBe('-c')
+    const bashCommand = result.shellArgs[1]
+    expect(bashCommand).toContain('chcp.com 65001')
+    expect(bashCommand).toMatch(/exec "\$BASH" --login -i$/)
+    // The UTF-8 switch must run before the login shell is exec'd.
+    expect(bashCommand.indexOf('chcp.com')).toBeLessThan(bashCommand.indexOf('exec'))
+    // Must stay fail-open: `;` (not `&&`) so a missing chcp.com can't abort the
+    // exec and kill the terminal on startup.
+    expect(bashCommand).not.toContain('&&')
     expect(result.effectiveCwd).toBe('C:\\Users\\alice\\code')
     expect(result.validationCwd).toBe('C:\\Users\\alice\\code')
   })
@@ -349,12 +376,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
 
   it('is case-insensitive on the shell basename', () => {
     const result = resolveWindowsShellLaunchArgs('PowerShell.EXE', 'C:\\', 'C:\\')
-    expect(result.shellArgs).toEqual([
-      '-NoLogo',
-      '-NoExit',
-      '-EncodedCommand',
-      encodePowerShellCommand(getPowerShellOsc133Bootstrap())
-    ])
+    expect(result.shellArgs).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)])
   })
 })
 

@@ -38,6 +38,7 @@ import { join, resolve } from 'node:path'
 // `node_modules`). If electron-builder ever drops it, promote this to a
 // direct devDependency in package.json.
 import { extractFile, listPackage } from '@electron/asar'
+import { BUILD_IDENTITY_RE, WRITE_KEY_RE } from './telemetry-bundle-constant-patterns.mjs'
 
 // Why resolve from import.meta.url instead of cwd: a release runner (or a
 // developer debugging locally) may invoke this script from a non-root cwd.
@@ -118,20 +119,8 @@ for (const m of asarMatches) {
 // Why these regexes: electron-vite's `define` block substitutes the bare
 // identifiers `ORCA_BUILD_IDENTITY` and `ORCA_POSTHOG_WRITE_KEY` with their
 // JSON-stringified values at build time. `src/main/telemetry/client.ts`
-// then assigns those into module-local consts named `BUILD_IDENTITY` and
-// `WRITE_KEY`. electron-vite's main config is not minified (Vite default for
-// Electron main builds), so Rollup emits the substituted constants verbatim
-// as `const BUILD_IDENTITY = "stable";`. Match that exact emitted shape so a
-// regression — e.g. the env var unset and the substitution falling back to
-// literal `null` — fails the grep instead of slipping through as a falsy-
-// but-stringy value. NOTE: if `build.minify` is ever enabled on the main
-// bundle, esbuild/terser will rename top-level consts and this regex must
-// be revisited (or replaced with a value-based assertion).
-//
-// WRITE_KEY char class includes `_` and `-` because PostHog project API
-// keys use URL-safe base64 alphabet beyond `phc_`.
-const BUILD_IDENTITY_RE = /const\s+BUILD_IDENTITY\s*=\s*"(rc|stable)"/
-const WRITE_KEY_RE = /const\s+WRITE_KEY\s*=\s*"(phc_[A-Za-z0-9_-]+)"/
+// then assigns those into module-local declarations named `BUILD_IDENTITY`
+// and `WRITE_KEY`. Rollup may preserve `const` or lower it to `var`.
 
 function verifyAsar(asarPath) {
   console.log(`Verifying ${asarPath}`)

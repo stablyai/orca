@@ -1,10 +1,15 @@
 import type { ChildProcess } from 'node:child_process'
 import { gitSpawn } from '../git/runner'
-import { buildGitLsFilesArgsForQuickOpen } from '../../shared/quick-open-filter'
+import {
+  buildGitLsFilesArgsForQuickOpen,
+  shouldExcludeQuickOpenRelPath,
+  shouldIncludeQuickOpenPath
+} from '../../shared/quick-open-filter'
 import {
   createQuickOpenReaddirBudget,
   expandQuickOpenGitFileListing,
-  listQuickOpenFilesWithReaddir
+  listQuickOpenFilesWithReaddir,
+  parseQuickOpenGitLsFilesEntry
 } from '../../shared/quick-open-readdir-walk'
 import { fileListingCancellationError } from '../../shared/file-listing-cancellation'
 
@@ -73,7 +78,8 @@ export async function listFilesWithGit(
   rootPath: string,
   excludePathPrefixes: readonly string[],
   localGitOptions: { wslDistro?: string },
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  maxResults?: number
 ): Promise<string[]> {
   const isGitWorkTree = await isInsideGitWorkTree(rootPath, localGitOptions, signal)
   if (signal?.aborted) {
@@ -83,17 +89,20 @@ export async function listFilesWithGit(
     return listQuickOpenFilesWithReaddir(rootPath, {
       excludePathPrefixes,
       budget: createQuickOpenReaddirBudget(),
+      maxResults,
       signal
     })
   }
 
   const gitPaths = new Set<string>()
   const directoryPaths = new Set<string>()
+  const directFileCandidates = new Set<string>()
   const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
   const children: {
     child: ChildProcess
     isDone: () => boolean
     reject: (error: Error) => void
+    resolve: () => void
   }[] = []
 
   const runGitLsFiles = (args: string[]): Promise<void> => {
@@ -101,15 +110,32 @@ export async function listFilesWithGit(
       let buf = ''
       let done = false
 
-      const processPath = (path: string): void => {
+      const processPath = (path: string): boolean => {
         if (!path) {
-          return
+          return false
         }
         if (path.endsWith('/')) {
           directoryPaths.add(path)
         } else {
           gitPaths.add(path)
+          if (maxResults !== undefined) {
+            // Why: this duplicate classification exists only to stop bounded
+            // scans; unbounded scans must not retain a second repo-sized set.
+            const parsed = parseQuickOpenGitLsFilesEntry(path)
+            const relPath = parsed.path.replace(/\/+$/, '')
+            if (
+              !parsed.isGitlink &&
+              !parsed.isUntrackedDir &&
+              shouldIncludeQuickOpenPath(relPath) &&
+              !shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)
+            ) {
+              directFileCandidates.add(relPath)
+            }
+          }
         }
+        // Why: collapsed directories and gitlinks may be discarded during the
+        // later filesystem classification, so they cannot consume the stop cap.
+        return maxResults !== undefined && directFileCandidates.size >= maxResults
       }
 
       // Why: git ls-files outputs paths relative to cwd, so we set cwd to
@@ -149,14 +175,19 @@ export async function listFilesWithGit(
       children.push({
         child,
         isDone: () => done,
-        reject: rejectPass
+        reject: rejectPass,
+        resolve: resolvePass
       })
       const handleStdoutData = (chunk: string): void => {
         buf += chunk
         let start = 0
         let nulIdx = buf.indexOf('\0', start)
         while (nulIdx !== -1) {
-          processPath(buf.substring(start, nulIdx))
+          if (processPath(buf.substring(start, nulIdx))) {
+            buf = ''
+            finishAtLimit()
+            return
+          }
           start = nulIdx + 1
           nulIdx = buf.indexOf('\0', start)
         }
@@ -176,8 +207,10 @@ export async function listFilesWithGit(
           rejectPass(new Error(`git ls-files killed by ${signal}`))
           return
         }
-        if (buf) {
-          processPath(buf)
+        if (buf && processPath(buf)) {
+          buf = ''
+          finishAtLimit()
+          return
         }
         if (code === 0) {
           resolvePass()
@@ -213,22 +246,39 @@ export async function listFilesWithGit(
     }
   }
 
+  function finishAtLimit(): void {
+    for (const entry of children) {
+      if (entry.isDone()) {
+        continue
+      }
+      entry.resolve()
+      if (entry.child.exitCode === null && entry.child.signalCode === null) {
+        entry.child.kill()
+      }
+    }
+  }
+
   const onAbort = (): void => killSurvivors('git ls-files cancelled')
   signal?.addEventListener('abort', onAbort, { once: true })
   try {
-    await Promise.all([
-      runGitLsFiles(primary),
+    const runIgnoredPass = () =>
       // Why: ignored files are supplementary — a failed or timed-out ignored
-      // pass must not discard the primary listing the user actually needs
-      // (#7719 root cause: the all-or-nothing failure showed zero files).
-      // Entries streamed before the failure are kept; a cancelled scan still
-      // rejects via the primary pass or the expansion's cancellation check.
+      // pass must not discard the primary listing the user actually needs.
       runGitLsFiles(ignoredPass).catch((err: Error) => {
         if (!signal?.aborted) {
           console.warn('[quick-open] git ignored-file pass failed; keeping primary results:', err)
         }
       })
-    ])
+    if (maxResults === undefined) {
+      await Promise.all([runGitLsFiles(primary), runIgnoredPass()])
+    } else {
+      // Why: give ordinary source files first claim on a bounded autocomplete
+      // inventory; a large ignored tree must not win a parallel-output race.
+      await runGitLsFiles(primary)
+      if (directFileCandidates.size < maxResults) {
+        await runIgnoredPass()
+      }
+    }
   } catch (err) {
     killSurvivors()
     if (signal?.aborted) {
@@ -244,9 +294,10 @@ export async function listFilesWithGit(
     gitPaths,
     directoryPaths,
     excludePathPrefixes,
-    signal
+    signal,
+    maxResults
   })
   // Why: directory placeholders are expanded after Git exits; restore Git's
   // path order so empty queries and fuzzy-score ties remain stable.
-  return files.sort()
+  return files.sort().slice(0, maxResults)
 }

@@ -66,6 +66,20 @@ export function setFitOverride(ptyId: string, mode: FitHoldMode, cols: number, r
   })
 }
 
+export function replaceFitOverridePtyId(replacedPtyId: string, ptyId: string): void {
+  const replaced = overridesByPtyId.get(replacedPtyId)
+  if (!replaced) {
+    return
+  }
+  // Why: handle rotation is the same pane lifecycle. Preserve its hold until
+  // the replacement stream publishes authoritative state, without retaining
+  // an unreachable entry for every old handle.
+  if (!overridesByPtyId.has(ptyId)) {
+    setFitOverride(ptyId, replaced.mode, replaced.cols, replaced.rows)
+  }
+  setFitOverride(replacedPtyId, 'desktop-fit', replaced.cols, replaced.rows)
+}
+
 export function getPaneIdsForPty(ptyId: string): number[] {
   const result: number[] = []
   for (const [key, boundPtyId] of ptyIdByFitBindingKey) {

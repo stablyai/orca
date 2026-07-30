@@ -15,7 +15,7 @@ export const CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION =
   'Approve the system prompt so skill setup can use the Orca CLI command.'
 
 export function isOrcaCliAvailableOnPath(status: CliInstallStatus | null | undefined): boolean {
-  return status?.state === 'installed' && status.pathConfigured
+  return status?.state === 'installed' && status.pathConfigured === true
 }
 
 export async function ensureOrcaCliAvailableForAgentSkillTerminal({
@@ -31,7 +31,12 @@ export async function ensureOrcaCliAvailableForAgentSkillTerminal({
       return status
     }
 
-    if (status.state !== 'installed' || !status.pathConfigured) {
+    if (status.pathConfigured === null) {
+      showCliPrerequisiteWarning(status)
+      return status
+    }
+
+    if (status.state !== 'installed' || status.pathConfigured === false) {
       // Why: macOS may immediately show a native authorization prompt, so the
       // user needs app-level context before that OS dialog appears.
       await showOrcaCliRegistrationPromptToast(registrationPromptDelayMs)
@@ -106,7 +111,18 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
     return
   }
 
-  if (!status.pathConfigured) {
+  if (status.pathConfigured === null) {
+    toast.warning(
+      translate(
+        'auto.lib.agent.skill.cli.prerequisite.windowsPathUnknown',
+        'Orca could not check your Windows user PATH'
+      ),
+      { description: status.detail ?? 'Refresh CLI registration status and try again.' }
+    )
+    return
+  }
+
+  if (status.pathConfigured === false) {
     // Why: the skill installer opens a real shell; agents only get the expected
     // Orca affordances when that shell can resolve the Orca CLI command.
     toast.warning(

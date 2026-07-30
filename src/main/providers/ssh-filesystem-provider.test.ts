@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -497,16 +497,18 @@ describe('SshFilesystemProvider', () => {
     expect(result).toEqual(['src/index.ts', 'package.json'])
   })
 
-  it('listFiles forwards excludePaths when provided', async () => {
+  it('listFiles forwards supported list options', async () => {
     mux.request.mockResolvedValue([])
     await provider.listFiles('/home/user/project', {
-      excludePaths: ['/home/user/project/worktrees/b']
+      excludePaths: ['/home/user/project/worktrees/b'],
+      maxResults: 20_000
     })
     expect(mux.request).toHaveBeenCalledWith(
       'fs.listFiles',
       {
         rootPath: '/home/user/project',
-        excludePaths: ['/home/user/project/worktrees/b']
+        excludePaths: ['/home/user/project/worktrees/b'],
+        maxResults: 20_000
       },
       { signal: undefined }
     )

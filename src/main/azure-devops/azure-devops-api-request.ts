@@ -5,6 +5,7 @@ import {
   shouldThrowHostedReviewHttpStatus,
   type HostedReviewRequestFailurePolicy
 } from '../source-control/hosted-review-request-failure-policy'
+import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const REQUEST_TIMEOUT_MS = 5000
 
@@ -78,7 +79,11 @@ function apiUrl(
 export async function requestAzureDevOpsJsonAtBase<T>(
   baseUrl: string,
   path: string,
-  options: AzureDevOpsRequestOptions = {}
+  options: AzureDevOpsRequestOptions = {},
+  // Why: the existing-review lookup behind Create must distinguish a real
+  // transport/auth failure from an accepted "no PR". When true, a failed request
+  // throws instead of collapsing to null so callers never report false not_found.
+  throwOnFailure = false
 ): Promise<T | null> {
   const config = getAzureDevOpsAuthConfig()
   try {
@@ -90,21 +95,27 @@ export async function requestAzureDevOpsJsonAtBase<T>(
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
     if (!response.ok) {
-      if (shouldThrowHostedReviewHttpStatus(options.failureMode, response.status)) {
+      await cancelUnreadResponseBody(response)
+      const failureMode = options.failureMode ?? (throwOnFailure ? 'throw-all' : 'return-null')
+      if (shouldThrowHostedReviewHttpStatus(failureMode, response.status)) {
         throw new Error(`HTTP ${response.status}: Azure DevOps request failed`)
       }
       return null
     }
     return (await response.json()) as T
   } catch (error) {
-    return resolveHostedReviewRequestFailure(options.failureMode, error)
+    return resolveHostedReviewRequestFailure(
+      options.failureMode ?? (throwOnFailure ? 'throw-all' : 'return-null'),
+      error
+    )
   }
 }
 
 export function requestAzureDevOpsJson<T>(
   repo: AzureDevOpsRepoRef,
   path: string,
-  options: AzureDevOpsRequestOptions = {}
+  options: AzureDevOpsRequestOptions = {},
+  throwOnFailure = false
 ): Promise<T | null> {
-  return requestAzureDevOpsJsonAtBase(configuredApiBaseUrl(repo), path, options)
+  return requestAzureDevOpsJsonAtBase(configuredApiBaseUrl(repo), path, options, throwOnFailure)
 }

@@ -18,6 +18,8 @@ import {
   getFreshMetadata,
   loadMetadata
 } from './metadata-request-cache'
+import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+import { githubProjectHost } from '../../../shared/github-project-identity'
 
 type MetadataState<T> = {
   data: T
@@ -36,7 +38,8 @@ export function clearGitHubSlugMetadataCache(): void {
 export function useRepoLabelsBySlug(
   owner: string | null,
   repo: string | null,
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
+  host?: string
 ): MetadataState<string[]> {
   const [state, setState] = useState<MetadataState<string[]>>({
     data: [],
@@ -55,10 +58,11 @@ export function useRepoLabelsBySlug(
       return
     }
     const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId })
+    const repositoryKey = githubRepoIdentityKey({ owner, repo, host })
     const key =
       target.kind === 'environment'
-        ? `runtime:${target.environmentId}:${owner}/${repo}`
-        : `${owner}/${repo}`
+        ? `runtime:${target.environmentId}:${repositoryKey}`
+        : repositoryKey
 
     const cached = getFreshMetadata(slugLabelStore, key)
     if (cached) {
@@ -85,10 +89,10 @@ export function useRepoLabelsBySlug(
         ? callRuntimeRpc<ListLabelsBySlugResult>(
             target,
             'github.project.listLabelsBySlug',
-            { owner, repo },
+            { owner, repo, host: githubProjectHost(host) },
             { timeoutMs: 30_000 }
           )
-        : window.api.gh.listLabelsBySlug({ owner, repo })
+        : window.api.gh.listLabelsBySlug({ owner, repo, host: githubProjectHost(host) })
       ).then((res) => {
         if (!res.ok) {
           throw new Error(res.error.message)
@@ -113,7 +117,7 @@ export function useRepoLabelsBySlug(
           error: err instanceof Error ? err.message : 'Failed to load labels'
         }))
       })
-  }, [owner, repo, activeRuntimeEnvironmentId])
+  }, [owner, repo, host, activeRuntimeEnvironmentId])
 
   return state
 }
@@ -122,7 +126,8 @@ export function useRepoAssigneesBySlug(
   owner: string | null,
   repo: string | null,
   seedLogins?: string[],
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
+  host?: string
 ): MetadataState<GitHubAssignableUser[]> {
   const [state, setState] = useState<MetadataState<GitHubAssignableUser[]>>({
     data: [],
@@ -143,10 +148,11 @@ export function useRepoAssigneesBySlug(
       return
     }
     const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId })
+    const repositoryKey = githubRepoIdentityKey({ owner, repo, host })
     const key =
       target.kind === 'environment'
-        ? `runtime:${target.environmentId}:${owner}/${repo}#${seedKey}`
-        : `${owner}/${repo}#${seedKey}`
+        ? `runtime:${target.environmentId}:${repositoryKey}#${seedKey}`
+        : `${repositoryKey}#${seedKey}`
 
     const cached = getFreshMetadata(slugAssigneeStore, key)
     if (cached) {
@@ -173,6 +179,7 @@ export function useRepoAssigneesBySlug(
     const args = {
       owner,
       repo,
+      host: githubProjectHost(host),
       ...(seedKey ? { seedLogins: seedKey.split(',') } : {})
     }
     loadMetadata(slugAssigneeStore, key, () =>
@@ -208,7 +215,7 @@ export function useRepoAssigneesBySlug(
           error: err instanceof Error ? err.message : 'Failed to load assignees'
         }))
       })
-  }, [owner, repo, seedKey, activeRuntimeEnvironmentId])
+  }, [owner, repo, host, seedKey, activeRuntimeEnvironmentId])
 
   return state
 }

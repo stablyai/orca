@@ -1,6 +1,7 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TuiAgent } from '../../../shared/types'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { agentTypeToIconAgent } from './agent-status'
 
 /**
@@ -109,4 +110,50 @@ function completedAgentFromStatusEntry(entry: AgentStatusEntry | undefined): Tui
     return null
   }
   return agentTypeToIconAgent(entry.agentType)
+}
+
+export function resolveFocusedRetainedTabAgent(
+  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>,
+  layout: TerminalLayoutSnapshot | undefined,
+  tabId: string
+): TuiAgent | null {
+  const activeLeafId = layout?.activeLeafId
+  if (activeLeafId && isTerminalLeafId(activeLeafId)) {
+    return agentFromRetainedEntry(retainedAgentsByPaneKey[makePaneKey(tabId, activeLeafId)])
+  }
+  return resolveAnyRetainedTabAgent(retainedAgentsByPaneKey, tabId)
+}
+
+export function resolveSiblingRetainedTabAgent(
+  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>,
+  layout: TerminalLayoutSnapshot | undefined,
+  tabId: string
+): TuiAgent | null {
+  const activeLeafId =
+    layout?.activeLeafId && isTerminalLeafId(layout.activeLeafId) ? layout.activeLeafId : null
+  if (!activeLeafId) {
+    return null
+  }
+  return resolveAnyRetainedTabAgent(retainedAgentsByPaneKey, tabId, activeLeafId)
+}
+
+function resolveAnyRetainedTabAgent(
+  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>,
+  tabId: string,
+  excludedLeafId?: string
+): TuiAgent | null {
+  for (const [paneKey, retained] of Object.entries(retainedAgentsByPaneKey)) {
+    const parsedPaneKey = parsePaneKey(paneKey)
+    if (parsedPaneKey?.tabId === tabId && parsedPaneKey.leafId !== excludedLeafId) {
+      const agent = agentFromRetainedEntry(retained)
+      if (agent) {
+        return agent
+      }
+    }
+  }
+  return null
+}
+
+function agentFromRetainedEntry(entry: RetainedAgentEntry | undefined): TuiAgent | null {
+  return agentTypeToIconAgent(entry?.agentType)
 }

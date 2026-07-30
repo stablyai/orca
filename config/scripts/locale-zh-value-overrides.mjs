@@ -42,6 +42,8 @@ export const ZH_VALUE_OVERRIDES = {
   'Open the PR details to view current reviewers.': '打开 PR 详情以查看当前评审人。',
   'Review comment added.': '已添加评审评论。',
   'Loading labels': '加载标签',
+  // Why: MT rendered the "Pin Tab" action as "引脚标签" (noun reading of "pin"); pair it with 取消固定标签.
+  'Pin Tab': '固定标签',
   Approved: '已批准',
   Strike: '删除线',
   Bold: '粗体',

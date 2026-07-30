@@ -16,6 +16,7 @@ vi.mock('os', async () => {
 })
 
 import { getGrokToolEventMatcherForTests, GrokHookService } from './hook-service'
+import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
 
 const GROK_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
@@ -97,7 +98,7 @@ describe('GrokHookService', () => {
     } else {
       // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
       // on the curl command line (EDR oversized-command-line false positive).
-      expect(script).toContain('payload=$(cat)')
+      expect(script).toContain(`payload=$(${POSIX_HOOK_STDIN_READER})`)
       expect(script).toContain('printf \'%s\' "$payload" | curl')
       expect(script).toContain('--data-urlencode "payload@-"')
       expect(script).toContain('${#GROK_HOME}" -le 4096')

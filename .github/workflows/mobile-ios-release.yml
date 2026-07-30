@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       bump_patch_version:
-        description: 'Bump the iOS marketing version patch number before release. Tick this after a version has shipped to the App Store (the release fails fast if the current version''s train is already closed).'
+        description: 'Use the first open iOS patch version after the checked-in version, skipping versions already closed on the App Store.'
         required: false
         default: false
         type: boolean

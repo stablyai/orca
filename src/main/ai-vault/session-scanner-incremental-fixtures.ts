@@ -1,5 +1,6 @@
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 
+import { antigravityFixture } from './session-scanner-antigravity-fixtures'
 import { codexFixture } from './session-scanner-codex-fixtures'
 
 // Line builders for the incremental-parse differential tests: each agent gets
@@ -286,6 +287,7 @@ export function allIncrementalAgentFixtures(): IncrementalAgentFixture[] {
     openclawFixture(),
     piFixture(),
     ompFixture(),
-    geminiJsonlFixture()
+    geminiJsonlFixture(),
+    antigravityFixture()
   ]
 }

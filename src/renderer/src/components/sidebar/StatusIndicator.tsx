@@ -1,5 +1,7 @@
 import React from 'react'
+import { MessageCircleQuestion } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
 
 // Why: re-export WorktreeStatus under the existing `Status` alias so the
@@ -33,9 +35,19 @@ const StatusIndicator = React.memo(function StatusIndicator({
         title={resolvedTitle}
         {...rest}
       >
-        {/* Why: a stepped spin preserves the worker-is-running affordance while
-            avoiding a full-refresh-rate compositor loop for long agent runs. */}
-        <span className="block size-2 rounded-full border-2 border-yellow-500 border-t-transparent [animation:spin_1s_steps(12,end)_infinite]" />
+        <AgentWorkingSpinner className="size-2" />
+      </span>
+    )
+  }
+
+  if (status === 'permission') {
+    return (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        title={resolvedTitle}
+        {...rest}
+      >
+        <MessageCircleQuestion className="size-3 text-amber-500" aria-hidden="true" />
       </span>
     )
   }
@@ -49,14 +61,12 @@ const StatusIndicator = React.memo(function StatusIndicator({
       <span
         className={cn(
           'block size-2 rounded-full',
-          status === 'permission'
-            ? 'bg-amber-500'
-            : status === 'done' || status === 'active'
-              ? // Green dot for both hook-reported 'done' and the heuristic
-                // 'active' (terminal open, quiet). Working uses a yellow
-                // ring above; 'inactive' stays grey.
-                'bg-emerald-500'
-              : 'bg-neutral-500/40'
+          status === 'done' || status === 'active'
+            ? // Green dot for both hook-reported 'done' and the heuristic
+              // 'active' (terminal open, quiet). Working uses a yellow
+              // ring above; 'inactive' stays grey.
+              'bg-emerald-500'
+            : 'bg-neutral-500/40'
         )}
       />
     </span>

@@ -1,9 +1,11 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { subscribeViaWatcherProcess } from './parcel-watcher-process'
 import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
 import type {
   WorktreeBasePollEvent,
-  WorktreeBaseSubscription
+  WorktreeBaseSubscription,
+  WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
 import {
   PRIMARY_CHECKOUT_METADATA_FILES,
@@ -20,6 +22,10 @@ import {
 // included). Other platforms: dir-listing poll (no fseventsd to protect, and
 // on Windows an open directory handle on `worktrees/` could interfere with
 // `git worktree prune` removing it).
+// The native stream is hosted in the crash-isolated watcher child, never the
+// Electron main process: watcher.node teardown races heap-corrupt the hosting
+// process when unsubscribe overlaps in-flight callbacks (issue #8732), and
+// root deletion via `git worktree prune` makes that overlap routine here.
 
 // Why: branch switches and commits made in the primary checkout rewrite these
 // top-level files (linked-worktree equivalents live under `worktrees/`).
@@ -64,42 +70,78 @@ async function startSnapshotDiffPoller(
   takeSnapshot: () => Promise<Map<string, number>>,
   onEvents: (events: WorktreeBasePollEvent[]) => void,
   pollIntervalMs: number,
+  visibility: WorktreePollerWindowVisibility,
   onFullScan?: () => void
 ): Promise<WorktreeBaseSubscription> {
   let disposed = false
   let ticking = false
   let snapshot = await takeSnapshot()
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let parkedWhileHidden = false
 
-  const timer = setInterval(() => {
-    if (disposed || ticking) {
+  const tick = async (): Promise<void> => {
+    timer = null
+    if (disposed) {
+      return
+    }
+    if (!visibility.isWindowVisible()) {
+      parkedWhileHidden = true
+      return
+    }
+    if (ticking) {
       return
     }
     ticking = true
+    // Why: measure from tick start so cadence is start-to-start, not gap-after-completion (which would
+    // land each visible refresh a full scan-duration late every tick).
+    const startedAt = Date.now()
     onFullScan?.()
-    void takeSnapshot()
-      .then((next) => {
-        if (disposed) {
-          return
-        }
-        const events = diffMtimeMap(snapshot, next)
-        snapshot = next
-        if (events.length > 0) {
-          onEvents(events)
-        }
-      })
-      .catch(() => {
-        // Transient fs error: keep the previous snapshot and retry next tick.
-      })
-      .finally(() => {
-        ticking = false
-      })
-  }, pollIntervalMs)
+    try {
+      const next = await takeSnapshot()
+      if (disposed) {
+        return
+      }
+      const events = diffMtimeMap(snapshot, next)
+      snapshot = next
+      if (events.length > 0) {
+        onEvents(events)
+      }
+    } catch {
+      // Transient fs error: keep the previous snapshot and retry next tick.
+    } finally {
+      ticking = false
+    }
+    if (!disposed) {
+      // Why: clamp to [0, pollIntervalMs]. Date.now() is not monotonic — a backward wall-clock jump (NTP) would
+      // otherwise make elapsed negative and push the next tick out by the adjustment (suppressing refreshes for
+      // minutes); the upper clamp caps the wait at one interval, the lower clamp keeps a long scan from going negative.
+      const nextDelay = Math.max(
+        0,
+        Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
+      )
+      timer = setTimeout(() => void tick(), nextDelay)
+      timer.unref?.()
+    }
+  }
+
+  const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
+    if (disposed || !parkedWhileHidden) {
+      return
+    }
+    parkedWhileHidden = false
+    void tick()
+  })
+
+  timer = setTimeout(() => void tick(), pollIntervalMs)
   timer.unref?.()
 
   return {
     unsubscribe: async () => {
       disposed = true
-      clearInterval(timer)
+      if (timer) {
+        clearTimeout(timer)
+      }
+      unsubscribeVisibility()
     }
   }
 }
@@ -107,13 +149,15 @@ async function startSnapshotDiffPoller(
 async function startGitCommonNarrowWatch(
   target: WorktreeBaseWatchTarget,
   onEvents: (events: WorktreeBasePollEvent[]) => void,
-  pollIntervalMs: number
+  pollIntervalMs: number,
+  visibility: WorktreePollerWindowVisibility
 ): Promise<WorktreeBaseSubscription> {
   const worktreesDir = join(target.path, 'worktrees')
   let disposed = false
   let subscription: WorktreeBaseSubscription | null = null
   let existenceTimer: ReturnType<typeof setInterval> | null = null
   let subscribing = false
+  let parkedWhileHidden = false
 
   const stopExistencePoll = (): void => {
     if (existenceTimer) {
@@ -122,30 +166,59 @@ async function startGitCommonNarrowWatch(
     }
   }
 
+  const tryUpgradeToNarrowWatch = async (): Promise<void> => {
+    if (disposed || subscribing || subscription) {
+      return
+    }
+    subscribing = true
+    try {
+      const installed = await trySubscribe()
+      if (installed && !disposed) {
+        stopExistencePoll()
+        // The dir appearing means a first linked worktree was just
+        // registered; surface it so the repo's worktree list refreshes.
+        onEvents([{ type: 'create', path: worktreesDir }])
+      }
+    } finally {
+      subscribing = false
+    }
+  }
+
   const armExistencePoll = (): void => {
-    if (disposed || existenceTimer) {
+    if (disposed || existenceTimer || subscription) {
+      return
+    }
+    if (!visibility.isWindowVisible()) {
+      parkedWhileHidden = true
       return
     }
     existenceTimer = setInterval(() => {
-      if (disposed || subscribing || subscription) {
+      if (disposed) {
         return
       }
-      subscribing = true
-      void trySubscribe()
-        .then((installed) => {
-          if (installed && !disposed) {
-            stopExistencePoll()
-            // The dir appearing means a first linked worktree was just
-            // registered; surface it so the repo's worktree list refreshes.
-            onEvents([{ type: 'create', path: worktreesDir }])
-          }
-        })
-        .finally(() => {
-          subscribing = false
-        })
+      // Why: a hidden window has nothing to refresh, so stop stat'ing the dir
+      // entirely instead of burning a syscall per repo per tick in the background.
+      if (!visibility.isWindowVisible()) {
+        parkedWhileHidden = true
+        stopExistencePoll()
+        return
+      }
+      void tryUpgradeToNarrowWatch()
     }, pollIntervalMs)
     existenceTimer.unref?.()
   }
+
+  const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
+    if (disposed || !parkedWhileHidden) {
+      return
+    }
+    parkedWhileHidden = false
+    // Why: the first linked worktree may have been registered while hidden — check
+    // now (emitting the create) rather than losing it for a full interval.
+    void tryUpgradeToNarrowWatch().finally(() => {
+      armExistencePoll()
+    })
+  })
 
   const trySubscribe = async (): Promise<boolean> => {
     try {
@@ -157,12 +230,14 @@ async function startGitCommonNarrowWatch(
       return false
     }
     let errored = false
+    let active = true
     // Why: parcel tears its native stream down when the watched root is
     // deleted (e.g. `git worktree prune` removing an empty worktrees dir) —
     // sometimes surfaced as an error, sometimes as a delete event for the
     // root. Either way: notify, drop the dead stream, and let the existence
     // poll re-arm when a future worktree add recreates the dir.
     const teardownAndRearm = (): void => {
+      active = false
       errored = true
       const current = subscription
       subscription = null
@@ -172,26 +247,38 @@ async function startGitCommonNarrowWatch(
       armExistencePoll()
     }
     try {
-      const watcher = await import('@parcel/watcher')
-      const sub = await watcher.subscribe(worktreesDir, (error, events) => {
-        if (disposed) {
-          return
-        }
-        if (error) {
-          onEvents([{ type: 'update', path: worktreesDir }])
-          teardownAndRearm()
-          return
-        }
-        if (events.length > 0) {
-          const rootGone = events.some(
-            (event) => event.type === 'delete' && event.path === worktreesDir
-          )
-          onEvents(events.map((event) => ({ type: event.type, path: event.path })))
-          if (rootGone) {
+      const sub = await subscribeViaWatcherProcess(
+        worktreesDir,
+        (error, events) => {
+          if (disposed || !active) {
+            return
+          }
+          if (error) {
+            onEvents([{ type: 'update', path: worktreesDir }])
             teardownAndRearm()
+            return
+          }
+          if (events.length > 0) {
+            const rootGone = events.some(
+              (event) => event.type === 'delete' && event.path === worktreesDir
+            )
+            onEvents(events.map((event) => ({ type: event.type, path: event.path })))
+            if (rootGone) {
+              teardownAndRearm()
+            }
+          }
+        },
+        {},
+        {
+          // Why: a watcher-child crash drops events during the automatic
+          // resubscribe gap; report a structural change so worktrees re-sync.
+          onInterruption: () => {
+            if (!disposed && active) {
+              onEvents([{ type: 'update', path: worktreesDir }])
+            }
           }
         }
-      })
+      )
       if (disposed || errored) {
         void sub.unsubscribe().catch(() => {})
         return !errored
@@ -213,6 +300,7 @@ async function startGitCommonNarrowWatch(
     unsubscribe: async () => {
       disposed = true
       stopExistencePoll()
+      unsubscribeVisibility()
       const current = subscription
       subscription = null
       if (current) {
@@ -227,15 +315,17 @@ export async function startGitCommonWatch(
   onEvents: (events: WorktreeBasePollEvent[]) => void,
   pollIntervalMs: number,
   platform: NodeJS.Platform,
+  visibility: WorktreePollerWindowVisibility,
   onFullScan?: () => void
 ): Promise<WorktreeBaseSubscription> {
   if (platform === 'darwin') {
     const [narrowWatch, primaryMetadataPoll] = await Promise.all([
-      startGitCommonNarrowWatch(target, onEvents, pollIntervalMs),
+      startGitCommonNarrowWatch(target, onEvents, pollIntervalMs, visibility),
       startSnapshotDiffPoller(
         () => snapshotPrimaryCheckoutMetadata(target.path),
         onEvents,
         pollIntervalMs,
+        visibility,
         onFullScan
       )
     ])
@@ -245,5 +335,5 @@ export async function startGitCommonWatch(
       }
     }
   }
-  return startGitCommonPolling(target.path, onEvents, pollIntervalMs, onFullScan)
+  return startGitCommonPolling(target.path, onEvents, pollIntervalMs, visibility, onFullScan)
 }

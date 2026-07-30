@@ -5,6 +5,12 @@ harness performs a real silent update and proves, with machine-checkable
 assertions, what happens to the terminal **daemon** and its **sessions** across
 the update — and whether any console/terminal window flashes.
 
+> **Companion harness:** proving the daemon survives a **crash** of the main
+> process (GitHub #7742), rather than an update, lives in
+> [`tools/win-crash-survival-e2e`](../win-crash-survival-e2e/README.md). It reuses
+> the shared modules in this directory (app driver, daemon discovery, PowerShell
+> runner, platform guard, table renderer).
+
 It is the Phase 0 "proof harness" deliverable from
 [`docs/windows-terminal-update-survival-plan.md`](../../docs/windows-terminal-update-survival-plan.md).
 It exists specifically because the July 2026 attempt shipped four broken RCs
