@@ -4,7 +4,14 @@ import { RuntimeClientError } from '../runtime-client'
 import { delimiter, dirname } from 'node:path'
 import { getRepeatedStringFlag } from '../flags'
 import { resolveCliCommand } from '../../main/codex-cli/command'
+import { detectCommandsInInstallDirs } from '../../main/ipc/local-agent-install-dir-detection'
+import {
+  getTuiAgentDetectionProbeCommands,
+  KNOWN_TUI_AGENT_DETECTION_COMMANDS,
+  resolveDetectedTuiAgentIds
+} from '../../main/ipc/tui-agent-detection-commands'
 import { getSpawnArgsForWindows, UnsafeWindowsBatchArgumentsError } from '../../main/win32-utils'
+import { toSkillsCliAgentKeys } from '../../shared/skills-cli-agent-keys'
 import {
   buildAgentFeatureSkillInstallArgs,
   buildAgentFeatureSkillUpdateArgs
@@ -155,14 +162,57 @@ function runNpxSkills(args: string[]): Promise<number> {
 
 type SkillMutationVerb = 'install' | 'update'
 
+/** Agents Orca can see on this host, as `skills --agent` keys. */
+function detectSkillsCliAgentKeys(): string[] {
+  const runtime = process.platform
+  const probes = getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, runtime)
+  const detected = resolveDetectedTuiAgentIds(
+    KNOWN_TUI_AGENT_DETECTION_COMMANDS,
+    detectCommandsInInstallDirs(probes),
+    runtime
+  )
+  return detected.length === 0 ? [] : toSkillsCliAgentKeys(detected)
+}
+
+function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[] {
+  const requested = flags.get('agent')
+  if (typeof requested === 'string' && requested.trim().length > 0) {
+    // Why: one comma-separated value rather than a repeatable flag — `agent` is a
+    // single-value flag on other commands and the repeatable set is process-wide,
+    // so making it repeatable here would change how those parse a second --agent.
+    return [
+      ...new Set(
+        requested
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter(Boolean)
+      )
+    ]
+  }
+  const detected = detectSkillsCliAgentKeys()
+  if (detected.length > 0) {
+    return detected
+  }
+  // Why: without --agent, `skills add -y` falls into its own zero-detected branch
+  // and installs into every agent it knows (~75), creating config directories for
+  // agents this host does not have. Say so instead.
+  throw new RuntimeClientError(
+    'invalid_environment',
+    'No coding agent detected on this host, so there is no install target. Pass ' +
+      '--agent <name>[,<name>...] to choose targets explicitly — --agent universal ' +
+      'writes only the shared .agents/skills directory that Orca reads.'
+  )
+}
+
 function buildNpxSkillsArgs(
   verb: SkillMutationVerb,
   skillNames: string[],
-  global: boolean
+  global: boolean,
+  agents: string[]
 ): string[] {
   const skillArgs =
     verb === 'install'
-      ? buildAgentFeatureSkillInstallArgs(skillNames, { global, yes: true })
+      ? buildAgentFeatureSkillInstallArgs(skillNames, { global, yes: true, agents })
       : buildAgentFeatureSkillUpdateArgs(skillNames, { global, yes: true })
   // Why: a cold package cache makes bare `npx` prompt before it will fetch
   // `skills`, which strands an unattended host just like the picker does.
@@ -202,7 +252,9 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
     }
 
     const global = flags.get('local') !== true
-    const npxArgs = buildNpxSkillsArgs(verb, skillNames, global)
+    // Why: install scopes its targets; update only refreshes what is already placed.
+    const agents = verb === 'install' ? resolveInstallAgentKeys(flags) : []
+    const npxArgs = buildNpxSkillsArgs(verb, skillNames, global, agents)
     const command = formatNpxCommand(npxArgs)
     const dryRun = flags.get('dry-run') === true
 

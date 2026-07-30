@@ -8,9 +8,14 @@ export const ORCA_LINEAR_SKILL_NAME = 'orca-linear'
 export const LINEAR_TICKETS_SKILL_NAME = 'linear-tickets'
 export const LINEAR_AGENT_SKILL_NAMES = [ORCA_LINEAR_SKILL_NAME, LINEAR_TICKETS_SKILL_NAME] as const
 
-// Why: `yes` defaults to false so every Settings/onboarding string a human pastes
-// keeps its interactive prompts. Only an unattended spawn opts in.
-export type AgentFeatureSkillCommandOptions = { global?: boolean; yes?: boolean }
+// Why: `yes` and `agents` default off so every Settings/onboarding string a human
+// pastes keeps its interactive prompts and the CLI's own agent detection. Only an
+// unattended spawn, which nothing can answer, opts in.
+export type AgentFeatureSkillCommandOptions = {
+  global?: boolean
+  yes?: boolean
+  agents?: readonly string[]
+}
 
 export function buildAgentFeatureSkillInstallArgs(
   skillNames: readonly string[],
@@ -28,6 +33,10 @@ export function buildAgentFeatureSkillInstallArgs(
     ORCA_SKILLS_REPOSITORY_URL,
     ...skillArgs,
     ...(global ? ['--global'] : []),
+    // Why: an explicit --agent stops `skills add` calling its own detection, whose
+    // zero-detected branch installs into all ~75 known agents and litters a bare
+    // host with agent config directories it has no agent for.
+    ...(options.agents ?? []).flatMap((agent) => ['--agent', agent]),
     // Why: without -y `skills add` opens an interactive agent picker and blocks
     // forever on any TTY, which is every ssh session.
     ...(options.yes ? ['-y'] : [])

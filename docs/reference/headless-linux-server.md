@@ -754,6 +754,22 @@ Without them the `skills` CLI opens an interactive agent picker and blocks
 forever on any allocated TTY — which includes a normal `ssh` session. Use
 `--dry-run` to see the exact command that will run.
 
+Settings keeps that picker deliberately, because choosing which agents get a
+skill is a real decision. A headless run cannot answer it, so instead of dropping
+the choice Orca makes it explicitly: it passes an `--agent` list built from the
+coding agents it detects on the host, plus the shared `.agents/skills` directory
+it reads itself. Left to decide on its own with no agent detected, the `skills`
+CLI installs into all ~75 agents it knows and leaves a config directory for each.
+Override the targets yourself, or narrow to the shared directory alone:
+
+```bash
+orca skills install --skill orca-cli --agent claude-code,codex
+orca skills install --skill orca-cli --agent universal
+```
+
+If Orca detects no agent at all, `orca skills install` stops and asks for
+`--agent` rather than guessing.
+
 To refresh already-installed skills, `orca skills update` mirrors the same
 selection flags (`--skill`, `--all`, `--local`, `--dry-run`) and resolves to
 `npx skills update <names...>` with a matching scope flag — `--global`, or
