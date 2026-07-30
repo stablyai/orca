@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyAllRepoInsertAt,
   computeProjectHeaderDropPreview,
+  getLogicalRepoOrderRankById,
   getProjectGroupOrderForSidebarDrop,
   getProjectHeaderDragBucketKey,
   getSidebarOrderedRepoHeaderIdsByBucket,
@@ -48,6 +49,20 @@ describe('getSidebarOrderedRepoHeaderIdsByBucket', () => {
       new Map([
         ['group:group-a', ['a']],
         ['ungrouped', ['b']]
+      ])
+    )
+  })
+})
+
+describe('getLogicalRepoOrderRankById', () => {
+  it('anchors a merged paired-host header to its first persisted occurrence', () => {
+    const rankById = getLogicalRepoOrderRankById(['b', 'same', 'c', 'same'])
+
+    expect(rankById).toEqual(
+      new Map([
+        ['b', 0],
+        ['same', 1],
+        ['c', 2]
       ])
     )
   })
@@ -317,6 +332,15 @@ describe('applyAllRepoInsertAt', () => {
       'c',
       'a',
       'b'
+    ])
+  })
+
+  it('moves duplicate host occurrences as one stable logical-project block', () => {
+    expect(applyAllRepoInsertAt(['b', 'same', 'c', 'same'], 'same', 0)).toEqual([
+      'same',
+      'same',
+      'b',
+      'c'
     ])
   })
 

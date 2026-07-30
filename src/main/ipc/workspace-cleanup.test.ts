@@ -17,6 +17,7 @@ const {
   listRepoWorktreesMock,
   getStatusMock,
   gitExecFileAsyncMock,
+  getLocalProjectWorktreeGitOptionsMock,
   getSshGitProviderMock,
   getSshPtyProviderMock,
   listRegisteredPtysMock
@@ -26,6 +27,7 @@ const {
   listRepoWorktreesMock: vi.fn(),
   getStatusMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
+  getLocalProjectWorktreeGitOptionsMock: vi.fn(),
   getSshGitProviderMock: vi.fn(),
   getSshPtyProviderMock: vi.fn(),
   listRegisteredPtysMock: vi.fn()
@@ -60,6 +62,10 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock
 }))
 
+vi.mock('../project-runtime-git-options', () => ({
+  getLocalProjectWorktreeGitOptions: getLocalProjectWorktreeGitOptionsMock
+}))
+
 vi.mock('../memory/pty-registry', () => ({
   listRegisteredPtys: listRegisteredPtysMock
 }))
@@ -76,7 +82,8 @@ const REPO: Repo = {
   path: '/repo',
   displayName: 'Repo',
   badgeColor: '#000',
-  addedAt: NOW
+  addedAt: NOW,
+  symlinkPaths: ['node_modules']
 }
 const LARGE_WORKTREE_COUNT = 150_000
 
@@ -154,6 +161,7 @@ describe('workspace cleanup scan', () => {
     listRepoWorktreesMock.mockReset()
     getStatusMock.mockReset()
     gitExecFileAsyncMock.mockReset()
+    getLocalProjectWorktreeGitOptionsMock.mockReset().mockReturnValue({})
     getSshGitProviderMock.mockReset()
     getSshPtyProviderMock.mockReset()
     listRegisteredPtysMock.mockReset()
@@ -187,7 +195,10 @@ describe('workspace cleanup scan', () => {
   it('default-selects inactive workspaces when git status is clean', async () => {
     const result = await scanWorkspaceCleanup(makeStore())
 
-    expect(getStatusMock).toHaveBeenCalledTimes(1)
+    expect(getStatusMock).toHaveBeenCalledWith('/repo-feature', {
+      signal: expect.any(AbortSignal),
+      sharedLinkPaths: ['node_modules']
+    })
     expect(result.candidates).toHaveLength(1)
     expect(result.candidates[0]).toMatchObject({
       tier: 'ready',

@@ -280,7 +280,6 @@ inline src/renderer/src/lib/pane-manager/pane-manager.ts
 inline src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler.test.ts
 inline src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler.ts
 inline src/renderer/src/lib/pane-manager/pane-tree-ops.ts
-inline src/renderer/src/lib/terminal-links.ts
 inline src/renderer/src/lib/worktree-activation.test.ts
 inline src/renderer/src/lib/worktree-activation.ts
 inline src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts

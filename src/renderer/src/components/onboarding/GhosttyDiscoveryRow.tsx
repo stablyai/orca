@@ -28,7 +28,7 @@ export function GhosttyDiscoveryRow({
         <span className="size-1.5 animate-pulse rounded-full bg-muted-foreground/60" />
         {translate(
           'auto.components.onboarding.ThemeStep.2c3aa538f8',
-          'Looking for a Ghostty config...'
+          'Looking for a Ghostty config…'
         )}
       </div>
     )

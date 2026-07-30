@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useEditorState, type Editor } from '@tiptap/react'
-import type { DiffComment, MarkdownDocument } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/types'
 import { useAppStore } from '@/store'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useLocalImagePick } from './useLocalImagePick'
@@ -10,9 +10,7 @@ import { useLinkBubble } from './useLinkBubble'
 import { useEditorScrollRestore } from './useEditorScrollRestore'
 import { useModifierHeldClass } from './useModifierHeldClass'
 import { registerPendingEditorFlush } from './editor-pending-flush'
-import type { MarkdownTocItem } from './markdown-table-of-contents'
-import { findRichMarkdownTocHeadingTarget } from './rich-markdown-toc-heading-target'
-import { selectMarkdownTableOfContents } from './markdown-toc-visibility-gate'
+import { useRichMarkdownTableOfContents } from './use-rich-markdown-table-of-contents'
 import { RichMarkdownEditorSurface } from './RichMarkdownEditorSurface'
 import { useRichMarkdownEditorInstance } from './useRichMarkdownEditorInstance'
 import { useRichMarkdownMenuController } from './useRichMarkdownMenuController'
@@ -26,45 +24,21 @@ import {
   runRichMarkdownContextCommand
 } from './rich-markdown-context-command-routing'
 import { useRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
+import { useRichMarkdownPendingFocus } from './useRichMarkdownPendingFocus'
 import { useRichMarkdownSuperscriptLinkSetup } from './useRichMarkdownSuperscriptLinkSetup'
 import {
   formatSelectedHtmlSuperscriptLinkStatus,
   getSelectedHtmlSuperscriptLinkStatus
 } from './rich-markdown-selected-link-actions'
-
-type RichMarkdownEditorProps = {
-  fileId: string
-  content: string
-  filePath: string
-  worktreeId: string
-  runtimeEnvironmentId?: string | null
-  scrollCacheKey: string
-  onContentChange: (content: string) => void
-  onDirtyStateHint: (dirty: boolean) => void
-  onSave: (content: string) => void
-  onOpenDocLink?: (target: string) => void
-  markdownDocuments?: MarkdownDocument[]
-  showTableOfContents?: boolean
-  onCloseTableOfContents?: () => void
-  markdownAnnotationsEnabled?: boolean
-  markdownAnnotationFilePath?: string
-  markdownSourceLineOffset?: number
-  markdownReviewContent?: string
-  // Why: front-matter is stripped from the rich editor's content but we still
-  // want it visible to the user. It renders between the toolbar and the editor
-  // surface so the formatting toolbar stays at the top of the pane.
-  headerSlot?: React.ReactNode
-}
-
-function flattenMarkdownTocItems(items: MarkdownTocItem[]): MarkdownTocItem[] {
-  return items.flatMap((item) => [item, ...flattenMarkdownTocItems(item.children)])
-}
+import type { RichMarkdownEditorProps } from './rich-markdown-editor-props'
 
 export default function RichMarkdownEditor({
   fileId,
+  viewStateId,
   content,
   filePath,
   worktreeId,
+  externalSshTargetId,
   runtimeEnvironmentId,
   scrollCacheKey,
   onContentChange,
@@ -112,6 +86,7 @@ export default function RichMarkdownEditor({
   const onOpenDocLinkRef = useRef(onOpenDocLink)
   const handleLocalImagePickRef = useRef<() => void>(() => {})
   const openSearchRef = useRef<() => void>(() => {})
+  const openAnnotationPopoverRef = useRef<(requireLiveSelection?: boolean) => boolean>(() => false)
   // Why: ProseMirror keeps the initial handleKeyDown closure, so `editor` stays
   // stuck at the first-render null value unless we read the live instance here.
   const editorRef = useRef<Editor | null>(null)
@@ -145,17 +120,10 @@ export default function RichMarkdownEditor({
     worktreeId,
     worktreeRoot
   })
-  // Why: building the table of contents runs a full-document remark parse on
-  // every content change. The result is only used while the panel is open
-  // (closed by default), so gate the parse on visibility; including
-  // showTableOfContents in deps rebuilds the outline the moment it opens.
-  const tableOfContentsItems = useMemo(
-    () => selectMarkdownTableOfContents(showTableOfContents, content),
-    [content, showTableOfContents]
-  )
-  const flatTableOfContentsItems = useMemo(
-    () => flattenMarkdownTocItems(tableOfContentsItems),
-    [tableOfContentsItems]
+  const { tableOfContentsItems, navigateToTableOfContentsItem } = useRichMarkdownTableOfContents(
+    showTableOfContents,
+    content,
+    scrollContainerRef
   )
 
   // Why: assigning callback refs during render keeps them current before any
@@ -166,9 +134,11 @@ export default function RichMarkdownEditor({
   onSaveRef.current = onSave
   onOpenDocLinkRef.current = onOpenDocLink
   isEditingLinkRef.current = isEditingLink
+  openAnnotationPopoverRef.current = review.openAnnotationPopover
   const reconcileRoundTripRef = useRichMarkdownReconcileRoundTrip({
     htmlSuperscriptLinkContext,
     filePath,
+    externalSshTargetId,
     runtimeEnvironmentId,
     worktreeId,
     worktreeRoot
@@ -189,9 +159,9 @@ export default function RichMarkdownEditor({
       if (didSerialize) {
         onContentChangeRef.current(markdown)
       }
-    } catch {
-      // Why: save/restart flows should never crash the UI just because the
-      // editor was torn down between scheduling and flushing a debounced sync.
+    } catch (error) {
+      // Why: teardown and reconcile failures are handled above; other failures must stay observable.
+      console.error('[editor] rich markdown serialize (flush) failed', error)
     }
   }, [reconcileRoundTripRef])
 
@@ -225,6 +195,7 @@ export default function RichMarkdownEditor({
     filePath,
     worktreeId,
     worktreeRoot,
+    externalSshTargetId,
     runtimeEnvironmentId,
     isMac,
     richMarkdownSpellcheckEnabled,
@@ -258,6 +229,7 @@ export default function RichMarkdownEditor({
     markdownSourceLineOffsetRef: review.markdownSourceLineOffsetRef,
     flushPendingSerialization,
     openSearchRef,
+    openAnnotationPopoverRef,
     syncAnnotationTarget: review.syncAnnotationTarget,
     clearAnnotationTarget: review.clearAnnotationTarget,
     scrollRichMarkdownReviewNoteCardIntoView: review.scrollRichMarkdownReviewNoteCardIntoView,
@@ -268,6 +240,16 @@ export default function RichMarkdownEditor({
     setSlashMenu: menu.setSlashMenu,
     setDocLinkMenu: menu.setDocLinkMenu
   })
+
+  useRichMarkdownPendingFocus({
+    editor,
+    fileId,
+    viewStateId,
+    worktreeId,
+    rootRef,
+    cancelAutoFocusRef
+  })
+
   // Why: useEditor defaults shouldRerenderOnTransaction to false, so selection-only
   // citation NodeSelections would leave aria status stale without useEditorState.
   const selectedCitationStatus = useEditorState({
@@ -306,6 +288,7 @@ export default function RichMarkdownEditor({
     editor,
     fileId,
     filePath,
+    externalSshTargetId,
     isApplyingProgrammaticUpdateRef,
     lastCommittedMarkdownRef,
     originalSourceRef,
@@ -359,18 +342,6 @@ export default function RichMarkdownEditor({
     scrollContainerRef
   })
   openSearchRef.current = openSearch
-
-  const navigateToTableOfContentsItem = useCallback(
-    (id: string): void => {
-      const container = scrollContainerRef.current
-      if (!container) {
-        return
-      }
-      const heading = findRichMarkdownTocHeadingTarget(container, flatTableOfContentsItems, id)
-      heading?.scrollIntoView({ block: 'center' })
-    },
-    [flatTableOfContentsItems]
-  )
 
   return (
     <RichMarkdownEditorSurface

@@ -9,19 +9,56 @@ import { spawn as nodeSpawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { getCanonicalUserDataPath } from '../persistence'
+import { parseRemoteCliArgs } from './ssh-remote-cli-args'
+import { clampOrchestrationAskTimeoutMs } from '../../shared/orchestration-ask-timeout'
+import {
+  MAX_TIMER_DELAY_MS,
+  isSafeTimerDelayMs,
+  parsePositiveSafeIntegerNumericText,
+  parsePositiveSafeIntegerText
+} from '../../shared/timer-delay'
+import {
+  ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
+} from '../../shared/orchestration-compatibility-evidence'
+
+export type SshCliRuntimeAuthority = {
+  kind: 'ssh'
+  targetId: string
+  connectionIncarnation: string
+  attachmentId: string
+}
 
 export type RemoteOrcaCliRequest = {
   argv: string[]
   cwd: string
   env: Record<string, string>
   stdin?: string
+  runtimeAuthority?: SshCliRuntimeAuthority
 }
 
 export type RemoteOrcaCliResult = {
   stdout: string
   stderr: string
   exitCode: number
+  postOutput?: RemoteOrcaCliPostOutput
 }
+
+export type RemoteOrcaCliPostOutput =
+  | {
+      kind: 'legacy_check_ack'
+      terminal: string
+      messageIds: string[]
+      types?: string[]
+    }
+  | {
+      kind: 'legacy_question_ack'
+      terminal: string
+      questionId: string
+      answerMessageId: string
+    }
 
 export type HostCliPassthroughOptions = {
   execPath?: string
@@ -46,6 +83,7 @@ const REMOTE_CONTEXT_ENV_VARS = [
   'ORCA_TERMINAL_HANDLE',
   'ORCA_WORKTREE_ID',
   'ORCA_PANE_KEY',
+  'ORCA_AGENT_LAUNCH_TOKEN',
   'ORCA_WORKSPACE_ID'
 ] as const
 
@@ -72,9 +110,23 @@ export function resolveHostCliEntryPath(app: {
  * budget in `--timeout-ms`; extend past it so the CLI's own timeout fires
  * first and produces a proper error message. */
 export function resolveHostCliKillTimeoutMs(argv: string[]): number {
-  const explicit = parseTimeoutMsFlag(argv)
-  if (explicit !== null && Number.isFinite(explicit) && explicit > 0) {
-    return Math.max(DEFAULT_KILL_TIMEOUT_MS, explicit + KILL_TIMEOUT_GRACE_MS)
+  const parsed = parseRemoteCliArgs(argv)
+  const rawTimeout = parsed.flags.get('timeout-ms')
+  if (parsed.commandPath[0] === 'orchestration' && parsed.commandPath[1] === 'ask') {
+    const explicit =
+      typeof rawTimeout === 'string' ? parsePositiveSafeIntegerText(rawTimeout) : null
+    return Math.max(
+      DEFAULT_KILL_TIMEOUT_MS,
+      clampOrchestrationAskTimeoutMs(explicit ?? undefined) + KILL_TIMEOUT_GRACE_MS
+    )
+  }
+  const explicit =
+    typeof rawTimeout === 'string' ? parsePositiveSafeIntegerNumericText(rawTimeout) : null
+  // Why: this feeds the kill timer directly, so a post-grace budget outside the
+  // timer range degrades to the default instead of throwing at spawn time.
+  const extended = explicit === null ? null : explicit + KILL_TIMEOUT_GRACE_MS
+  if (extended !== null && isSafeTimerDelayMs(extended)) {
+    return Math.max(DEFAULT_KILL_TIMEOUT_MS, extended)
   }
   return DEFAULT_KILL_TIMEOUT_MS
 }
@@ -84,6 +136,7 @@ export function buildHostCliEnv(args: {
   remoteEnv: Record<string, string>
   userDataPath: string
   remoteCwd: string
+  runtimeAuthority?: SshCliRuntimeAuthority
 }): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...args.hostEnv }
   for (const key of REMOTE_CONTEXT_ENV_VARS) {
@@ -105,6 +158,17 @@ export function buildHostCliEnv(args: {
   env.ORCA_NODE_REPL_EXTERNAL_MODULE = args.hostEnv.NODE_REPL_EXTERNAL_MODULE ?? ''
   delete env.NODE_OPTIONS
   delete env.NODE_REPL_EXTERNAL_MODULE
+  delete env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]
+  delete env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]
+  delete env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]
+  delete env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV]
+  if (args.runtimeAuthority) {
+    env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV] = 'ssh'
+    env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV] = args.runtimeAuthority.targetId
+    env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV] =
+      args.runtimeAuthority.connectionIncarnation
+    env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV] = args.runtimeAuthority.attachmentId
+  }
   env.ELECTRON_RUN_AS_NODE = '1'
   return env
 }
@@ -141,6 +205,11 @@ export async function runHostOrcaCliPassthrough(
   const spawn = options.spawn ?? nodeSpawn
   const entryExists = options.entryExists ?? existsSync
   const killTimeoutMs = options.killTimeoutMs ?? resolveHostCliKillTimeoutMs(request.argv)
+  if (!isSafeTimerDelayMs(killTimeoutMs)) {
+    throw new RangeError(
+      `Host CLI kill timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
+    )
+  }
 
   if (!entryExists(cliEntryPath)) {
     throw new HostCliUnavailableError(`Orca CLI entry not found at ${cliEntryPath}`)
@@ -150,7 +219,8 @@ export async function runHostOrcaCliPassthrough(
     hostEnv,
     remoteEnv: request.env,
     userDataPath,
-    remoteCwd: request.cwd
+    remoteCwd: request.cwd,
+    runtimeAuthority: request.runtimeAuthority
   })
 
   return await new Promise<RemoteOrcaCliResult>((resolve, reject) => {
@@ -251,20 +321,4 @@ class CappedOutputCollector {
     const text = Buffer.concat(this.chunks).toString('utf8')
     return this.truncated ? `${text}\n[orca ssh cli] output truncated\n` : text
   }
-}
-
-function parseTimeoutMsFlag(argv: string[]): number | null {
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i]
-    if (token === '--timeout-ms') {
-      const next = argv[i + 1]
-      const parsed = next === undefined ? Number.NaN : Number(next)
-      return Number.isFinite(parsed) ? parsed : null
-    }
-    if (token.startsWith('--timeout-ms=')) {
-      const parsed = Number(token.slice('--timeout-ms='.length))
-      return Number.isFinite(parsed) ? parsed : null
-    }
-  }
-  return null
 }

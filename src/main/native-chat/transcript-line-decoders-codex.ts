@@ -1,6 +1,10 @@
 // Codex JSONL line → NativeChatMessage decoder.
 
-import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat-types'
+import {
+  NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
+  type NativeChatBlock,
+  type NativeChatMessage
+} from '../../shared/native-chat-types'
 import {
   asRecord,
   extractString,
@@ -8,6 +12,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
+import { CODEX_EVENT_TURN_ABORTED } from './transcript-turn-markers'
 
 export function decodeCodexTranscriptLine(
   line: string,
@@ -87,6 +92,15 @@ function codexEventMessage(
   id: string,
   timestamp: number | null
 ): NativeChatMessage | null {
+  if (payload.type === CODEX_EVENT_TURN_ABORTED) {
+    return {
+      id,
+      role: 'system',
+      blocks: [{ type: 'text', text: NATIVE_CHAT_INTERRUPTED_STATUS_TEXT }],
+      timestamp,
+      source: 'transcript'
+    }
+  }
   if (payload.type === 'user_message') {
     const text = extractString(payload.message)
     return text

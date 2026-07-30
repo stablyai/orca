@@ -14,6 +14,11 @@ import {
   isUnsupportedWorktreeListZError
 } from './git-worktree-command-capabilities'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
+import {
+  githubPullRequestHeadLocalRef,
+  gitlabMergeRequestHeadLocalRef,
+  reviewHeadRemoteRefComponent
+} from './review-head-tracking-ref'
 
 const execFileAsync = promisify(execFile)
 const image = process.env.ORCA_GIT_COMPAT_IMAGE
@@ -159,6 +164,29 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     }
   })
 
+  it('fetches hosted review heads into dedicated refs', async () => {
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    await runGit(['update-ref', 'refs/pull/42/head', head])
+    await runGit(['update-ref', 'refs/merge-requests/42/head', head])
+
+    // Why: exercise the exact remote-identity-scoped ref shape the app generates.
+    const component = reviewHeadRemoteRefComponent('origin', 'git@github.com:org/repo.git')
+    const pullRef = githubPullRequestHeadLocalRef(component, 42)
+    const mergeRequestRef = gitlabMergeRequestHeadLocalRef(component, 42)
+    await expect(
+      runGit(['fetch', '--no-tags', '.', `+refs/pull/42/head:${pullRef}`])
+    ).resolves.toBeDefined()
+    await expect(
+      runGit(['fetch', '--no-tags', '.', `+refs/merge-requests/42/head:${mergeRequestRef}`])
+    ).resolves.toBeDefined()
+    await expect(runGit(['rev-parse', '--verify', pullRef])).resolves.toMatchObject({
+      stdout: `${head}\n`
+    })
+    await expect(runGit(['rev-parse', '--verify', mergeRequestRef])).resolves.toMatchObject({
+      stdout: `${head}\n`
+    })
+  })
+
   it('degrades indexed credential config safely at the Git 2.31 boundary', async () => {
     const guardEnv = gitCredentialPromptGuardEnv({}, 'linux')
     await expect(runGit(['status', '--short'], guardEnv)).resolves.toBeDefined()
@@ -172,5 +200,17 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       // the scalar prompt guards still provide the baseline fail-fast behavior.
       expect(supports(2, 31)).toBe(false)
     }
+  })
+
+  // Why pin this: --verify swallows --end-of-options but --symbolic-full-name echoes
+  // it deliberately, on every version tested (2.25 through 2.49). git-history.ts skips
+  // that line; if a future git stopped emitting it, the skip stays correct, but if this
+  // assertion ever flips the reason for the skip is worth re-reading.
+  it('echoes the option marker from rev-parse --symbolic-full-name', async () => {
+    const result = await runGit(['rev-parse', '--symbolic-full-name', '--end-of-options', 'HEAD'])
+    const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean)
+
+    expect(lines[0]).toBe('--end-of-options')
+    expect(lines.find((line) => line !== '--end-of-options')).toMatch(/^refs\//)
   })
 })

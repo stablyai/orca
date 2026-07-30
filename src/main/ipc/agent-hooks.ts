@@ -5,6 +5,7 @@ import type {
   MigrationUnsupportedPtyEntry
 } from '../../shared/agent-status-types'
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
+import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-question-answered-intent'
 import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
 import { ampHookService } from '../amp/hook-service'
 import {
@@ -67,6 +68,7 @@ export function registerAgentHookHandlers(
   ipcMain.removeHandler('agentHooks:kimiStatus')
   ipcMain.removeHandler('agentStatus:getSnapshot')
   ipcMain.removeHandler('agentStatus:inferInterrupt')
+  ipcMain.removeHandler('agentStatus:inferQuestionAnswered')
   ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
   // Why: agentStatus:drop is sent fire-and-forget from the renderer via
   // ipcRenderer.send(); we listen with ipcMain.on (not handle) so we don't
@@ -120,6 +122,12 @@ export function registerAgentHookHandlers(
       return false
     }
     return agentHookServer.inferInterrupt(request as AgentInterruptInferenceRequest)
+  })
+  ipcMain.handle('agentStatus:inferQuestionAnswered', (_event, request: unknown): boolean => {
+    if (typeof request !== 'object' || request === null) {
+      return false
+    }
+    return agentHookServer.inferQuestionAnswered(request as AgentQuestionAnsweredInferenceRequest)
   })
   ipcMain.handle(
     'agentStatus:getMigrationUnsupportedSnapshot',

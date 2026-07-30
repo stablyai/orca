@@ -20,6 +20,7 @@ import {
   getZoomedImageLayoutSize
 } from './image-viewer-zoom'
 import { translate } from '@/i18n/i18n'
+import { buildImageDataUri } from '../../../../shared/image-data-uri'
 
 const FALLBACK_IMAGE_MIME_TYPE = 'image/png'
 
@@ -59,10 +60,12 @@ export default function ImageViewer({
   const isPdf = mimeType === 'application/pdf'
   const isIntrinsicLayout = layout === 'intrinsic'
   const previewSrc = useMemo(
-    () => (cleanedContent && !isPdf ? `data:${mimeType};base64,${cleanedContent}` : null),
-    [cleanedContent, isPdf, mimeType]
+    () => buildImageDataUri(mimeType, cleanedContent),
+    [cleanedContent, mimeType]
   )
-  const imageError = previewSrc !== null && failedPreviewSrc === previewSrc
+  const imageError =
+    (previewSrc === null && cleanedContent.length > 0) ||
+    (previewSrc !== null && failedPreviewSrc === previewSrc)
   const estimatedSize = useMemo(() => {
     const bytes = Math.floor((cleanedContent.length * 3) / 4)
     if (bytes < 1024) {

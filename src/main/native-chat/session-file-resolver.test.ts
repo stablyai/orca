@@ -39,6 +39,19 @@ describe('resolveSessionFilePath', () => {
     expect(resolved).toBe(target)
   })
 
+  it('resolves OpenClaude sessions from the Claude transcript layout', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-openclaude-')
+    const claudeProjectsDir = join(root, 'claude-projects')
+    const projectDir = join(claudeProjectsDir, '-Users-ada-repo')
+    await mkdir(projectDir, { recursive: true })
+    const target = join(projectDir, 'sess-openclaude.jsonl')
+    await writeFile(target, '{}\n')
+
+    await expect(
+      resolveSessionFilePath('openclaude', 'sess-openclaude', { claudeProjectsDir })
+    ).resolves.toBe(target)
+  })
+
   it('resolves Grok chat_history.jsonl under encodeURIComponent(cwd)/sessionId', async () => {
     const root = await makeRoot('orca-native-chat-resolve-grok-')
     const grokSessionsDir = join(root, 'grok-sessions')

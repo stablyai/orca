@@ -15,6 +15,7 @@ import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-prefligh
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
+import { buildGitHubWorkspaceSource } from '../../../shared/new-workspace/workspace-source'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -174,11 +175,14 @@ export function buildGitHubWorkItemStartupPlan(args: {
 }): {
   startupPlan: AgentStartupPlan | null
   quickPrompt: string
+  /** Draft context (issue link) that reaches only the TUI input; callers thread
+   *  it onto the creation request so completion can seed the chat composer. */
+  launchDraftPrompt: string | null
   quickTelemetry: AgentStartedTelemetry | null
 } {
   const { agent, item, repo, store } = args
   if (!agent) {
-    return { startupPlan: null, quickPrompt: '', quickTelemetry: null }
+    return { startupPlan: null, quickPrompt: '', launchDraftPrompt: null, quickTelemetry: null }
   }
   const { prompt: quickPrompt, draftPrompt } = resolveGitHubWorkItemPrompt(item)
   // Why: runtime-owned repos launch on their owner host, not on the client
@@ -233,6 +237,7 @@ export function buildGitHubWorkItemStartupPlan(args: {
   return {
     startupPlan,
     quickPrompt,
+    launchDraftPrompt: draftPrompt || null,
     quickTelemetry: {
       agent_kind: tuiAgentToAgentKind(agent),
       launch_source: 'new_workspace_composer',
@@ -269,10 +274,26 @@ export function buildInitialGitHubWorkItemRequest(
   const workspaceRunContext = getWorkspaceRunContextForRepo(repo, args.workspaceRunContext)
   const ownerHost = parseExecutionHostId(getRepoExecutionHostId(repo))
   const identity = resolveGitHubWorkItemIdentity(args.item)
+  const linkedWorkItem =
+    identity.number !== null
+      ? buildGitHubWorkspaceSource({
+          type: identity.type,
+          number: identity.number,
+          title: args.item.title,
+          url: args.item.url,
+          repoId: args.repoId
+        })
+      : null
   return {
     repoId: args.repoId,
     worktreeCreateProgressMode: ownerHost?.kind === 'local' ? 'stepped' : 'indeterminate',
     ...(args.taskSourceContext ? { taskSourceContext: args.taskSourceContext } : {}),
+    ...(linkedWorkItem
+      ? {
+          linkedWorkItem,
+          ...(args.taskSourceContext ? { linkedTaskSourceContext: args.taskSourceContext } : {})
+        }
+      : {}),
     ...(workspaceRunContext ? { workspaceRunContext } : {}),
     name: seedName,
     ...(displayName ? { displayName } : {}),

@@ -8,8 +8,10 @@ import { applyDocumentTheme } from './lib/document-theme'
 import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
+import { installTypingLatencyDiagnostic } from './lib/typing-latency-diagnostic'
 
 installRendererCrashDiagnostics()
+installTypingLatencyDiagnostic()
 
 if (
   import.meta.env.DEV &&

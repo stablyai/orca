@@ -175,7 +175,7 @@ describe('github RPC methods', () => {
         repo: 'repo-1',
         prNumber: 7,
         headSha: 'abc123',
-        prRepo: { owner: 'acme', repo: 'widgets' },
+        prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme-corp.com' },
         noCache: true
       })
     )
@@ -184,7 +184,7 @@ describe('github RPC methods', () => {
       'repo-1',
       7,
       'abc123',
-      { owner: 'acme', repo: 'widgets' },
+      { owner: 'acme', repo: 'widgets', host: 'github.acme-corp.com' },
       {
         noCache: true
       }
@@ -235,6 +235,7 @@ describe('github RPC methods', () => {
       makeRequest('github.prFileContents', {
         repo: 'repo-1',
         prNumber: 7,
+        prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme.test' },
         path: 'src/app.ts',
         status: 'modified',
         headSha: 'head',
@@ -244,6 +245,7 @@ describe('github RPC methods', () => {
 
     expect(runtime.getRepoPRFileContents).toHaveBeenCalledWith('repo-1', {
       prNumber: 7,
+      prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme.test' },
       path: 'src/app.ts',
       oldPath: undefined,
       status: 'modified',
@@ -264,11 +266,16 @@ describe('github RPC methods', () => {
       makeRequest('github.resolveReviewThread', {
         repo: 'repo-1',
         threadId: 'PRRT_1',
-        resolve: true
+        resolve: true,
+        prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme.test' }
       })
     )
 
-    expect(runtime.resolveRepoReviewThread).toHaveBeenCalledWith('repo-1', 'PRRT_1', true)
+    expect(runtime.resolveRepoReviewThread).toHaveBeenCalledWith('repo-1', 'PRRT_1', true, {
+      owner: 'acme',
+      repo: 'widgets',
+      host: 'github.acme.test'
+    })
     expect(response).toMatchObject({ ok: true, result: true })
   })
 
@@ -282,6 +289,7 @@ describe('github RPC methods', () => {
     const response = await dispatcher.dispatch(
       makeRequest('github.setPRFileViewed', {
         repo: 'repo-1',
+        prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme.test' },
         pullRequestId: 'PR_kwDO123',
         path: 'src/app.ts',
         viewed: true
@@ -289,6 +297,7 @@ describe('github RPC methods', () => {
     )
 
     expect(runtime.setRepoPRFileViewed).toHaveBeenCalledWith('repo-1', {
+      prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme.test' },
       pullRequestId: 'PR_kwDO123',
       path: 'src/app.ts',
       viewed: true
@@ -406,19 +415,29 @@ describe('github RPC methods', () => {
       makeRequest('github.requestPRReviewers', {
         repo: 'repo-1',
         prNumber: 7,
-        reviewers: ['octo']
+        reviewers: ['octo'],
+        prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme.test' }
       })
     )
     const removeResponse = await dispatcher.dispatch(
       makeRequest('github.removePRReviewers', {
         repo: 'repo-1',
         prNumber: 7,
-        reviewers: ['octo']
+        reviewers: ['octo'],
+        prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme.test' }
       })
     )
 
-    expect(runtime.requestRepoPRReviewers).toHaveBeenCalledWith('repo-1', 7, ['octo'])
-    expect(runtime.removeRepoPRReviewers).toHaveBeenCalledWith('repo-1', 7, ['octo'])
+    expect(runtime.requestRepoPRReviewers).toHaveBeenCalledWith('repo-1', 7, ['octo'], {
+      owner: 'acme',
+      repo: 'widgets',
+      host: 'github.acme.test'
+    })
+    expect(runtime.removeRepoPRReviewers).toHaveBeenCalledWith('repo-1', 7, ['octo'], {
+      owner: 'acme',
+      repo: 'widgets',
+      host: 'github.acme.test'
+    })
     expect(requestResponse).toMatchObject({ ok: true, result: { ok: true } })
     expect(removeResponse).toMatchObject({ ok: true, result: { ok: true } })
   })
@@ -434,11 +453,21 @@ describe('github RPC methods', () => {
       makeRequest('github.updatePRState', {
         repo: 'repo-1',
         prNumber: 7,
+        prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme.test' },
         updates: { state: 'closed' }
       })
     )
 
-    expect(runtime.updateRepoPRState).toHaveBeenCalledWith('repo-1', 7, { state: 'closed' })
+    expect(runtime.updateRepoPRState).toHaveBeenCalledWith(
+      'repo-1',
+      7,
+      { state: 'closed' },
+      {
+        owner: 'acme',
+        repo: 'widgets',
+        host: 'github.acme.test'
+      }
+    )
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 
@@ -542,6 +571,7 @@ describe('github RPC methods', () => {
       makeRequest('github.addPRReviewComment', {
         repo: 'repo-1',
         prNumber: 7,
+        prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme.test' },
         commitId: 'head',
         path: 'src/app.ts',
         line: 12,
@@ -552,6 +582,7 @@ describe('github RPC methods', () => {
 
     expect(runtime.addRepoPRReviewComment).toHaveBeenCalledWith('repo-1', {
       prNumber: 7,
+      prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme.test' },
       commitId: 'head',
       path: 'src/app.ts',
       line: 12,

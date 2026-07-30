@@ -24,6 +24,10 @@ const RESOLVER_HEALTH_CHECK_TIMEOUT_MS = 3_000
 const KILL_WAIT_MS = 3_000
 const KILL_POLL_MS = 100
 const START_TIME_TOLERANCE_MS = 1_500
+// Why: e2e forces the failed-health preserve path without SIGSTOP races —
+// a stopped daemon also blocks listSessions, so the unhealthy guard cannot
+// verify live sessions until SIGCONT, which is flaky under CI load.
+export const E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV = 'ORCA_E2E_FORCE_DAEMON_HEALTH_UNREACHABLE'
 // Why: on Windows the pid file's startedAtMs is the daemon's self-reported
 // Node start time, while verification reads the OS process creation time —
 // the gap between them is the exe bootstrap, which AV/disk pressure can
@@ -82,6 +86,11 @@ function canConnectSocket(socketPath: string): Promise<boolean> {
 
 export function checkDaemonHealth(socketPath: string, tokenPath: string): Promise<DaemonHealth> {
   return new Promise((resolve) => {
+    if (process.env[E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV] === '1') {
+      resolve('unreachable')
+      return
+    }
+
     if (process.platform !== 'win32' && !existsSync(socketPath)) {
       resolve('unreachable')
       return

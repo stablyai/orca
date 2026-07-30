@@ -95,8 +95,8 @@ test.describe('terminal push-delivery loss recovery', () => {
         async () =>
           orcaPage.evaluate(
             () =>
-              (window as DeliveryWatchdogWindow).__terminalDeliveryWatchdog?.snapshot()?.healCount ??
-              0
+              (window as DeliveryWatchdogWindow).__terminalDeliveryWatchdog?.snapshot()
+                ?.healCount ?? 0
           ),
         { timeout: 30_000 }
       )

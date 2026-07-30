@@ -83,6 +83,16 @@ function expectNoOrcaControlMasterArgs(args: string[]): void {
   expect(args).not.toContain('ControlPersist=300')
 }
 
+function expectOrcaControlMasterArgs(args: string[]): void {
+  if (process.platform === 'win32') {
+    expectNoOrcaControlMasterArgs(args)
+    return
+  }
+  expect(args).toContain('ControlMaster=auto')
+  expect(args.some((arg) => arg.startsWith('ControlPath='))).toBe(true)
+  expect(args).toContain('ControlPersist=300')
+}
+
 type EventedProcess = EventEmitter & {
   stdin: EventEmitter & {
     write: ReturnType<typeof vi.fn>
@@ -360,9 +370,7 @@ describe('spawnSystemSsh', () => {
       })
     })
 
-    expect(args).toContain('ControlMaster=auto')
-    expect(args.some((arg) => arg.startsWith('ControlPath='))).toBe(true)
-    expect(args).toContain('ControlPersist=300')
+    expectOrcaControlMasterArgs(args)
     expect(args).not.toContain('-S')
   })
 
@@ -374,9 +382,7 @@ describe('spawnSystemSsh', () => {
       })
     })
 
-    expect(args).toContain('ControlMaster=auto')
-    expect(args.some((arg) => arg.startsWith('ControlPath='))).toBe(true)
-    expect(args).toContain('ControlPersist=300')
+    expectOrcaControlMasterArgs(args)
     expect(args).not.toContain('-S')
   })
 
@@ -387,9 +393,7 @@ describe('spawnSystemSsh', () => {
       })
     })
 
-    expect(args).toContain('ControlMaster=auto')
-    expect(args.some((arg) => arg.startsWith('ControlPath='))).toBe(true)
-    expect(args).toContain('ControlPersist=300')
+    expectOrcaControlMasterArgs(args)
     expect(args).not.toContain('-S')
   })
 
@@ -414,9 +418,7 @@ describe('spawnSystemSsh', () => {
       resolvedConfig: createResolvedConfig()
     })
 
-    expect(args).toContain('ControlMaster=auto')
-    expect(args.some((arg) => arg.startsWith('ControlPath='))).toBe(true)
-    expect(args).toContain('ControlPersist=300')
+    expectOrcaControlMasterArgs(args)
     expect(args).not.toContain('-S')
   })
 
@@ -432,10 +434,11 @@ describe('spawnSystemSsh', () => {
   it('adds keepalive options to Orca-owned ControlMaster connections', () => {
     const args = buildSshArgs(createTarget(), { resolvedConfig: createResolvedConfig() })
 
-    expect(args).toContain('ControlMaster=auto')
-    expect(args).toContain('ControlPersist=300')
-    expect(args).toContain('ServerAliveInterval=15')
-    expect(args).toContain('ServerAliveCountMax=3')
+    expectOrcaControlMasterArgs(args)
+    if (process.platform !== 'win32') {
+      expect(args).toContain('ServerAliveInterval=15')
+      expect(args).toContain('ServerAliveCountMax=3')
+    }
   })
 
   it('spawns a remote command through the system ssh target', () => {
@@ -505,6 +508,15 @@ describe('spawnSystemSsh', () => {
     channel.stdin.end('contents')
 
     expect(mockProc.stdin.end).toHaveBeenCalledWith('contents')
+  })
+
+  it('marks a system command channel when local teardown is requested', () => {
+    const channel = spawnSystemSshCommand(createTarget(), 'npm install')
+
+    channel.close()
+
+    expect(channel._closeRequested).toBe(true)
+    expect(mockProc.kill).toHaveBeenCalledWith('SIGTERM')
   })
 
   it('removes wrapped process listeners after command close', () => {

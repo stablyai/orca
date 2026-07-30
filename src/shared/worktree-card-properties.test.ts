@@ -28,6 +28,7 @@ describe('worktree card properties', () => {
     expect(props).not.toContain('inline-agents')
     expect(props).not.toContain('issue')
     expect(props).not.toContain('linear-issue')
+    expect(props).not.toContain('jira-issue')
     expect(props).not.toContain('comment')
     expect(props).not.toContain('ports')
     expect(props).not.toContain('branch')
@@ -44,6 +45,7 @@ describe('worktree card properties', () => {
     expect(getWorktreeCardModeProperties('Default')).toEqual(
       expect.arrayContaining(TASK_WORKTREE_CARD_PROPERTIES)
     )
+    expect(TASK_WORKTREE_CARD_PROPERTIES).toEqual(['issue', 'linear-issue', 'jira-issue'])
   })
 
   it('normalizes fixed and legacy properties while preserving selected properties', () => {

@@ -9,6 +9,7 @@ import {
   beginTerminalScrollIntentBufferRebuild,
   endTerminalScrollIntentBufferRebuild
 } from './terminal-scroll-intent-rebuild'
+import { safeFitAndThen } from './pane-tree-ops'
 
 type ResizeObserverCallbackLike = ConstructorParameters<typeof ResizeObserver>[0]
 
@@ -176,6 +177,22 @@ describe('attachPaneFitResizeObserver', () => {
 
     expect(pane.fitAddon.fit).not.toHaveBeenCalled()
     expect(onSettled).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases a hidden reattach continuation when the stable grid already matches', async () => {
+    const pane = createPane()
+    vi.mocked(pane.fitAddon.proposeDimensions).mockReturnValue(undefined)
+    const continuation = vi.fn()
+    const pending = safeFitAndThen(pane, 'reattach-pty-resize', continuation)
+
+    expect(continuation).not.toHaveBeenCalled()
+    vi.mocked(pane.fitAddon.proposeDimensions).mockReturnValue({ cols: 79, rows: 24 })
+    requestStablePaneFit(pane)
+    flushAnimationFrames()
+
+    await expect(pending.completion).resolves.toBe(true)
+    expect(continuation).toHaveBeenCalledTimes(1)
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
   })
 
   it('does not notify settled callbacks until a replay-deferred fit completes', async () => {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -19,6 +19,11 @@ import {
   type EditingTarget
 } from '../settings/ssh-target-draft'
 import { MAX_SSH_RELAY_GRACE_PERIOD_SECONDS, type SshTarget } from '../../../../shared/ssh-types'
+import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
+import {
+  translateHostAccessLinkError,
+  translateRemotePairingFailureDescription
+} from '@/lib/remote-pairing-copy'
 import { RemoteServerFields, SshHostFields } from './AddRemoteHostFields'
 
 export type AddRemoteHostMode = 'ssh' | 'server'
@@ -33,15 +38,28 @@ export function AddRemoteHostDialog({
   onOpenChange
 }: AddRemoteHostDialogProps): React.JSX.Element {
   const open = mode !== null
+  // Why: `mode` drives both open-state and which form renders. On close it goes null while the
+  // dialog is still animating out, so the title/fields would flash to the SSH default. Latch the
+  // last non-null mode for rendering so the closing dialog keeps showing what the user saw.
+  const [renderMode, setRenderMode] = useState<AddRemoteHostMode>(mode ?? 'ssh')
+  if (mode !== null && mode !== renderMode) {
+    setRenderMode(mode)
+  }
   const [sshForm, setSshForm] = useState<EditingTarget>(EMPTY_FORM)
   const [serverName, setServerName] = useState('')
   const [pairingCode, setPairingCode] = useState('')
+  const [allowLoopback, setAllowLoopback] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
+  const parsedServerLink = useMemo(() => parseHostAccessLink(pairingCode), [pairingCode])
+  const serverFormCanSubmit =
+    serverName.trim() !== '' &&
+    parsedServerLink.ok &&
+    (parsedServerLink.value.endpointKind !== 'loopback' || allowLoopback)
   const setSshTargetsMetadata = useAppStore((s) => s.setSshTargetsMetadata)
   const recordSshRepoReadoptions = useAppStore((s) => s.recordSshRepoReadoptions)
   const setRuntimeEnvironments = useAppStore((s) => s.setRuntimeEnvironments)
-  const refreshRuntimeEnvironmentStatus = useAppStore((s) => s.refreshRuntimeEnvironmentStatus)
+  const setRuntimeEnvironmentStatus = useAppStore((s) => s.setRuntimeEnvironmentStatus)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   const close = () => {
@@ -55,6 +73,7 @@ export function AddRemoteHostDialog({
     setSshForm(EMPTY_FORM)
     setServerName('')
     setPairingCode('')
+    setAllowLoopback(false)
   }
 
   const refreshSshTargetMetadata = async () => {
@@ -95,6 +114,9 @@ export function AddRemoteHostDialog({
     }
 
     const identityFile = sshForm.identityFile.trim() || undefined
+    const proxyCommand = sshForm.proxyCommand.trim() || undefined
+    const jumpHost = sshForm.jumpHost.trim() || undefined
+    const systemSshConnectionReuse = sshForm.systemSshConnectionReuse ? undefined : false
     const target = {
       label: sshForm.label.trim() || (username ? `${username}@${host}` : configHost),
       configHost,
@@ -102,7 +124,10 @@ export function AddRemoteHostDialog({
       port,
       username,
       relayGracePeriodSeconds: graceSeconds,
-      ...(identityFile ? { identityFile } : {})
+      ...(identityFile ? { identityFile } : {}),
+      ...(proxyCommand ? { proxyCommand } : {}),
+      ...(jumpHost ? { jumpHost } : {}),
+      ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {})
     }
 
     setIsSaving(true)
@@ -182,16 +207,44 @@ export function AddRemoteHostDialog({
       )
       return
     }
+    if (!parsedServerLink.ok) {
+      toast.error(translateHostAccessLinkError(parsedServerLink.kind))
+      return
+    }
+    if (parsedServerLink.value.endpointKind === 'loopback' && !allowLoopback) {
+      toast.error(
+        translate(
+          'auto.components.sidebar.AddRemoteHostDialog.loopbackBlocked',
+          'Enable the SSH tunnel override or create a new link using the other host’s Tailscale or LAN address.'
+        )
+      )
+      return
+    }
 
     setIsSaving(true)
     try {
-      const result = await window.api.runtimeEnvironments.addFromPairingCode({
+      const result = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
         name: trimmedName,
-        pairingCode: trimmedPairingCode
+        pairingCode: trimmedPairingCode,
+        allowLoopback
       })
+      if (!result.ok) {
+        toast.error(
+          result.kind === 'environment-save-failed'
+            ? result.message
+            : translateRemotePairingFailureDescription(
+                result.kind,
+                parsedServerLink.value.displayEndpoint
+              )
+        )
+        return
+      }
       const environments = await window.api.runtimeEnvironments.list()
       setRuntimeEnvironments(environments)
-      await refreshRuntimeEnvironmentStatus(result.environment.id)
+      setRuntimeEnvironmentStatus(result.environment.id, {
+        status: result.runtimeStatus,
+        checkedAt: Date.now()
+      })
       toast.success(
         translate('auto.components.sidebar.AddRemoteHostDialog.serverSaved', 'Remote server added.')
       )
@@ -223,7 +276,7 @@ export function AddRemoteHostDialog({
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
-            {mode === 'server'
+            {renderMode === 'server'
               ? translate(
                   'auto.components.sidebar.AddRemoteHostDialog.serverTitle',
                   'Add remote server'
@@ -231,7 +284,7 @@ export function AddRemoteHostDialog({
               : translate('auto.components.sidebar.AddRemoteHostDialog.sshTitle', 'Add SSH host')}
           </DialogTitle>
           <DialogDescription>
-            {mode === 'server'
+            {renderMode === 'server'
               ? translate(
                   'auto.components.sidebar.AddRemoteHostDialog.serverDescription',
                   'Pair with Orca running on another computer.'
@@ -243,13 +296,19 @@ export function AddRemoteHostDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {mode === 'server' ? (
+        {renderMode === 'server' ? (
           <RemoteServerFields
             name={serverName}
             pairingCode={pairingCode}
+            parsedLink={parsedServerLink}
             disabled={isSaving}
             onNameChange={setServerName}
-            onPairingCodeChange={setPairingCode}
+            onPairingCodeChange={(value) => {
+              setPairingCode(value)
+              setAllowLoopback(false)
+            }}
+            allowLoopback={allowLoopback}
+            onAllowLoopbackChange={setAllowLoopback}
             onSubmit={() => void saveRemoteServer()}
           />
         ) : (
@@ -262,7 +321,7 @@ export function AddRemoteHostDialog({
         )}
 
         <DialogFooter className="sm:justify-between">
-          {mode === 'ssh' ? (
+          {renderMode === 'ssh' ? (
             <button
               type="button"
               className="self-center text-left text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-50"
@@ -290,8 +349,12 @@ export function AddRemoteHostDialog({
             </Button>
             <Button
               type="button"
-              onClick={mode === 'server' ? () => void saveRemoteServer() : () => void saveSshHost()}
-              disabled={isSaving || isImporting}
+              onClick={
+                renderMode === 'server' ? () => void saveRemoteServer() : () => void saveSshHost()
+              }
+              disabled={
+                isSaving || isImporting || (renderMode === 'server' && !serverFormCanSubmit)
+              }
             >
               {isSaving
                 ? translate('auto.components.sidebar.AddRemoteHostDialog.saving', 'Saving...')

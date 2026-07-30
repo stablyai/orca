@@ -39,6 +39,29 @@ describe('BackgroundTransientFactRelay', () => {
     expect(emitted).toEqual([{ sessionId: 's1', fact: { kind: 'command-finished', exitCode: 0 } }])
   })
 
+  it('preserves a provisional 2031 subscribe when scan authority moves to the daemon', () => {
+    const { relay, emitted } = createRelay()
+    relay.onSessionData('s1', '\x1b[?2031h\x1b[?')
+    relay.setSessionBackground('s1', true)
+    relay.seedSessionScanState('s1', '\x1b[?')
+    relay.onSessionData('s1', '25h')
+
+    expect(emitted).toEqual([{ sessionId: 's1', fact: { kind: '2031-subscribe' } }])
+  })
+
+  it('exposes a provisional 2031 subscribe when scan authority returns to main', () => {
+    const { relay } = createRelay()
+    relay.setSessionBackground('s1', true)
+    relay.seedSessionScanState('s1', '')
+    relay.onSessionData('s1', '\x1b[?2031h\x1b[?')
+    relay.setSessionBackground('s1', false)
+
+    expect(relay.getMode2031ReplyScanState('s1')).toEqual({
+      tail: '\x1b[?',
+      pendingSubscribe: true
+    })
+  })
+
   it('stops emitting after un-background and reports the toggle as a state change', () => {
     const { relay, emitted } = createRelay()
     expect(relay.setSessionBackground('s1', true)).toBe(true)

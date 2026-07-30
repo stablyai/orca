@@ -15,6 +15,7 @@ export const AI_VAULT_AGENTS = [
   'omp',
   'cursor',
   'gemini',
+  'antigravity',
   'rovo',
   'copilot',
   'opencode',
@@ -43,6 +44,7 @@ export const AI_VAULT_AGENT_LABELS = {
   omp: 'OMP',
   cursor: 'Cursor',
   gemini: 'Gemini',
+  antigravity: 'Antigravity',
   rovo: 'Rovo Dev',
   copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
@@ -89,6 +91,8 @@ export type AiVaultSession = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  /** Latest provider-authenticated user prompt; absent when the transcript has no trustworthy signal. */
+  lastUserPrompt?: string | null
   // Recoverable signal for sessions whose conversation transcript persisted zero
   // user/assistant turns: queued (never-flushed) prompts survive even when the
   // main conversation was lost.
@@ -275,6 +279,18 @@ function buildResumeShellCommandForShell(args: {
   return segments.join(separator)
 }
 
+// Why: a bare real-home resume carries no CODEX_HOME prefix, so every surface
+// that spawns the pane must drop account-routed or daemon-inherited Codex
+// homes from its env, not only patch a sparse env on top.
+export function realHomeCodexResumeEnvDeletion(
+  session: Pick<AiVaultSession, 'agent' | 'codexHome'>
+): { envToDelete: string[] } | Record<string, never> {
+  if (session.agent !== 'codex' || session.codexHome !== null) {
+    return {}
+  }
+  return { envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'] }
+}
+
 export function aiVaultAgentLabel(agent: AiVaultAgent): string {
   return AI_VAULT_AGENT_LABELS[agent]
 }
@@ -307,6 +323,7 @@ function buildAgentResumeInvocation(
     // Why: Kimi Code resumes with `kimi --session <id>` (alias `-S`). Sessions
     // are work-dir-scoped, so the cwd prefix from buildAiVaultResumeCommand is
     // required — resuming from another directory is rejected by the CLI.
+    // falls through
     case 'kimi':
       return `${baseCommand} --session ${sessionArg}`
     case 'copilot':
@@ -321,8 +338,11 @@ function buildAgentResumeInvocation(
     case 'droid':
     // Why: OMP resumes by absolute transcript path (see buildAiVaultResumeCommand),
     // but the `--resume <arg>` invocation form is identical to the others here.
+    // falls through
     case 'omp':
       return `${baseCommand} --resume ${sessionArg}`
+    case 'antigravity':
+      return `${baseCommand} --conversation ${sessionArg}`
   }
 }
 

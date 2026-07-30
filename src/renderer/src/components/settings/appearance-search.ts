@@ -2,15 +2,19 @@ import type { SettingsSearchEntry } from './settings-search'
 import { getTerminalAppearanceSearchEntries } from './terminal-search'
 import { getLeftSidebarAppearanceEntry, getSidebarEntries } from './appearance-sidebar-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { getStatusBarToggles } from './appearance-status-bar-search'
 import { getUsagePercentageDisplayEntry } from './appearance-usage-percentage-search'
+import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
 
-export { getStatusBarToggles, getUsagePercentageDisplayEntry }
+export {
+  getMenuBarIconEntries,
+  getStatusBarToggles,
+  getSystemTrayEntries,
+  getUsagePercentageDisplayEntry
+}
 
 export const getThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
@@ -45,6 +49,15 @@ export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry
       ...translateSearchKeyword('settings.appearance.language.chinese', '中文（简体）'),
       ...translateSearchKeyword('settings.appearance.language.korean', '한국어'),
       ...translateSearchKeyword('settings.appearance.language.japanese', '日本語'),
+      ...translateSearchKeyword('settings.appearance.language.spanish', 'Español'),
+      // Why: the native word for "language" only reaches search via the localized
+      // title in its own UI locale — index each here so speakers can find (and
+      // switch to) their language whatever the current interface locale is.
+      '语言', // Chinese (Simplified)
+      '語言', // Chinese (Traditional)
+      '언어', // Korean
+      '言語', // Japanese
+      'Idioma', // Spanish
       ...translateSearchKeyword(
         'auto.components.settings.appearance.search.language.locale',
         'locale'
@@ -188,65 +201,6 @@ export const getAppIconEntries = createLocalizedCatalog((): SettingsSearchEntry[
   }
 ])
 
-const getSystemTrayEntryCatalog = createLocalizedCatalog((): SettingsSearchEntry[] => [
-  {
-    title: translate(
-      'auto.components.settings.appearance.search.9a115966d3',
-      'Minimize to Tray on Close'
-    ),
-    description: translate(
-      'auto.components.settings.appearance.search.4d5b9427b5',
-      'When enabled, closing the window keeps Orca running in the system tray instead of quitting.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.appearance.search.tray.tray', 'tray', {
-        englishOnly: true
-      }),
-      ...translateSearchKeyword(
-        'auto.components.settings.appearance.search.tray.system',
-        'system tray',
-        { englishOnly: true }
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.appearance.search.tray.minimize',
-        'minimize',
-        { englishOnly: true }
-      ),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.tray.close', 'close', {
-        englishOnly: true
-      }),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.e5bc35d59e', 'window'),
-      ...translateSearchKeyword(
-        'auto.components.settings.appearance.search.tray.notification',
-        'notification area',
-        { englishOnly: true }
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.appearance.search.tray.background',
-        'background',
-        { englishOnly: true }
-      )
-    ]
-  }
-])
-
-type SystemTraySearchOptions = {
-  showSystemTray?: boolean
-}
-
-function shouldShowSystemTrayEntries(options: SystemTraySearchOptions): boolean {
-  return (
-    options.showSystemTray ??
-    // Why: this setting controls Electron's Windows tray only. A Windows web
-    // browser can report win32, but it has no local tray to affect.
-    (getRendererAppPlatform() === 'win32' && !isWebClientLocation())
-  )
-}
-
-export function getSystemTrayEntries(options: SystemTraySearchOptions = {}): SettingsSearchEntry[] {
-  return shouldShowSystemTrayEntries(options) ? getSystemTrayEntryCatalog() : []
-}
-
 const getAppearanceSectionEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.AppearancePane.interfaceTitle', 'Interface')
@@ -269,6 +223,7 @@ const getAppearanceSectionEntries = createLocalizedCatalog((): SettingsSearchEnt
 type AppearancePaneSearchOptions = {
   showWarpImport?: boolean
   showSystemTray?: boolean
+  showMenuBarIcon?: boolean
 }
 
 function buildAppearancePaneSearchEntries(
@@ -286,7 +241,8 @@ function buildAppearancePaneSearchEntries(
     ...getStatusBarEntries(),
     ...getSidebarEntries(),
     ...getAppIconEntries(),
-    ...getSystemTrayEntries(options)
+    ...getSystemTrayEntries(options),
+    ...getMenuBarIconEntries(options)
   ]
 }
 
@@ -295,6 +251,7 @@ export function getAppearancePaneSearchEntries(
 ): SettingsSearchEntry[] {
   return buildAppearancePaneSearchEntries({
     showWarpImport: options.showWarpImport ?? true,
-    showSystemTray: options.showSystemTray
+    showSystemTray: options.showSystemTray,
+    showMenuBarIcon: options.showMenuBarIcon
   })
 }

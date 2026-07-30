@@ -1,12 +1,16 @@
 /* eslint-disable max-lines -- Why: this suite keeps the hash fixture, TOML edit edge cases, and trust-state parser regressions together so Codex compatibility failures are easy to audit. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  chmodSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,22 +20,22 @@ import {
   computeTrustKey,
   computeTrustedHash,
   escapeTomlString,
-  getCodexCanonicalTrustPath,
+  getCodexExplicitHomeHookSourcePath,
+  normalizeCodexHookSourcePath,
   normalizeCodexProjectPathForLookup,
   normalizeCodexProjectPathForRevocationLookup,
   parseTrustKey,
   readHookTrustEntries,
+  readHookTrustEntriesFromContent,
   removeHookTrustEntries,
+  removeHookTrustEntriesFromContent,
   upsertHookTrustEntries,
   upsertProjectTrustLevel,
   upsertProjectTrustLevelInContent,
   type CodexTrustEntry
 } from './config-toml-trust'
 
-// Why: this hash was captured from a real Codex 0.129 `/hooks` approval. If
-// Codex changes its serialization or normalization rules, this test fails
-// loudly instead of silently shipping bad trust entries that put hooks back
-// into the review pile.
+// Why: captured from a real Codex 0.129 `/hooks` approval; fails loudly if Codex's serialization drifts.
 const REAL_APPROVED_COMMAND = '/bin/sh "/tmp/orca-case-b-mCmCe6/agent-hooks/codex-hook.sh"'
 const REAL_APPROVED_HASH = 'sha256:bc013489dba495431d3790fda62ee5a7d907a7c491e29ad26238c3a5d6d2b163'
 
@@ -153,12 +157,7 @@ describe('computeTrustedHash', () => {
   })
 
   it('drops the matcher on user_prompt_submit/stop like matcher_pattern_for_event', () => {
-    // Why: Codex ignores matchers on these two events and hashes the
-    // identity WITHOUT the matcher field. A definition carrying
-    // `"matcher": ""` (common in third-party installers) must therefore
-    // hash identically to one without a matcher, or the system-trust
-    // mirror misses and the stale-entry sweep deletes the trust Codex
-    // wrote — re-prompting the user on every launch.
+    // Why: Codex hashes these two events WITHOUT the matcher, so `"matcher": ""` must hash like no matcher.
     for (const eventLabel of ['user_prompt_submit', 'stop'] as const) {
       const base: CodexTrustEntry = {
         sourcePath: '/x/hooks.json',
@@ -174,12 +173,7 @@ describe('computeTrustedHash', () => {
   })
 
   it('pins the matcher-omitted hash for a Stop entry that carries an empty matcher', () => {
-    // Why: regression pin for the shape observed in the wild (a real
-    // Codex 0.140 config.toml, path anonymized): Codex stores the
-    // matcher-omitted hash for Stop even when hooks.json carries
-    // `"matcher": ""`, so we must never fold the matcher into this
-    // identity. If serialization or normalization drifts, this constant
-    // fails loudly.
+    // Why: regression pin (real Codex 0.140 config) — Stop uses the matcher-omitted hash even with `"matcher": ""`.
     expect(
       computeTrustedHash({
         sourcePath: '/home/user/.codex/hooks.json',
@@ -273,7 +267,7 @@ describe('computeTrustKey', () => {
     ).toBe('/Users/thebr/.codex/hooks.json:pre_tool_use:0:0')
   })
 
-  it('uses Codex canonicalized source paths when hooks.json exists', () => {
+  it('lexically normalizes source paths without resolving default-home aliases', () => {
     const nestedDir = join(tmpDir, 'nested')
     mkdirSync(nestedDir)
     const hooksPath = join(nestedDir, '..', 'hooks.json')
@@ -287,12 +281,42 @@ describe('computeTrustKey', () => {
         handlerIndex: 0,
         command: 'irrelevant'
       })
-    ).toBe(`${realpathSync.native(hooksPath)}:user_prompt_submit:0:0`)
+    ).toBe(`${join(tmpDir, 'hooks.json')}:user_prompt_submit:0:0`)
   })
 
+  // Why: ordinary Windows CI tokens cannot create file symlinks without Developer Mode.
+  it.skipIf(process.platform === 'win32')(
+    'preserves a hooks.json leaf symlink in the trust key',
+    () => {
+      const hooksPath = join(tmpDir, 'hooks.json')
+      const targetPath = join(tmpDir, 'dotfiles-hooks.json')
+      writeFileSync(targetPath, '{"hooks":{}}\n', 'utf-8')
+      symlinkSync(targetPath, hooksPath)
+
+      expect(
+        computeTrustKey({
+          sourcePath: hooksPath,
+          eventLabel: 'stop',
+          groupIndex: 0,
+          handlerIndex: 0,
+          command: 'irrelevant'
+        })
+      ).toBe(`${hooksPath}:stop:0:0`)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'canonicalizes an existing POSIX path with two leading slashes',
+    () => {
+      const hooksPath = `/${join(tmpDir, 'hooks.json')}`
+      writeFileSync(hooksPath, '{"hooks":{}}\n', 'utf-8')
+
+      expect(normalizeCodexHookSourcePath(hooksPath)).toBe(join(tmpDir, 'hooks.json'))
+    }
+  )
+
   it('uses native Windows backslashes in the trust key Codex looks up', () => {
-    // Why: Codex 0.140 writes approved Windows hook trust keys as raw native
-    // paths under [hooks.state].
+    // Why: Codex 0.140 writes approved Windows hook trust keys as raw native paths under [hooks.state].
     const winPath = 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json'
     const key = computeTrustKey({
       sourcePath: winPath,
@@ -308,10 +332,27 @@ describe('computeTrustKey', () => {
   it('preserves literal backslashes in non-Windows-style fallback paths', () => {
     // Why: SSH/POSIX paths can legally contain `\` as a filename character;
     // only Windows-style separators should be normalized.
-    expect(getCodexCanonicalTrustPath('/tmp/with\\literal/hooks.json')).toBe(
+    expect(normalizeCodexHookSourcePath('/tmp/with\\literal/hooks.json')).toBe(
       '/tmp/with\\literal/hooks.json'
     )
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'resolves an explicit home parent while preserving its hooks.json leaf symlink',
+    () => {
+      const logicalHome = join(tmpDir, 'logical-home')
+      const targetHome = join(tmpDir, 'target-home')
+      const targetHooks = join(tmpDir, 'target-hooks.json')
+      mkdirSync(targetHome)
+      writeFileSync(targetHooks, '{"hooks":{}}\n', 'utf-8')
+      symlinkSync(targetHome, logicalHome)
+      symlinkSync(targetHooks, join(targetHome, 'hooks.json'))
+
+      expect(getCodexExplicitHomeHookSourcePath(join(logicalHome, 'hooks.json'))).toBe(
+        join(realpathSync.native(targetHome), 'hooks.json')
+      )
+    }
+  )
 })
 
 describe('upsertHookTrustEntries', () => {
@@ -387,8 +428,7 @@ describe('upsertHookTrustEntries', () => {
     expect(written).not.toContain('STALE')
     expect(written).toContain('[unrelated]')
     expect(written).toContain('value = 42')
-    // Why: we only own the [hooks.state."<key>"] block — the [features]
-    // block must be unchanged.
+    // Why: we only own the [hooks.state."<key>"] block — [features] must be untouched.
     expect(written).toContain('[features]\nhooks = true')
   })
 
@@ -497,6 +537,30 @@ describe('upsertHookTrustEntries', () => {
     expect(readFileSync(`${configPath}.bak`, 'utf-8')).toBe('model = "old"\n')
   })
 
+  it.skipIf(process.platform === 'win32')('does not follow an existing .bak symlink', () => {
+    const original = 'model = "old"\n'
+    const backupTarget = join(tmpDir, 'dotfiles-config-backup.toml')
+    writeFileSync(configPath, original, 'utf-8')
+    writeFileSync(backupTarget, 'pristine backup target\n', 'utf-8')
+    symlinkSync(backupTarget, `${configPath}.bak`)
+
+    expect(() =>
+      upsertHookTrustEntries(configPath, [
+        {
+          sourcePath: '/x/hooks.json',
+          eventLabel: 'pre_tool_use',
+          groupIndex: 0,
+          handlerIndex: 0,
+          command: 'echo'
+        }
+      ])
+    ).toThrow('Refusing to overwrite symlinked backup')
+
+    expect(readFileSync(configPath, 'utf-8')).toBe(original)
+    expect(lstatSync(`${configPath}.bak`).isSymbolicLink()).toBe(true)
+    expect(readFileSync(backupTarget, 'utf-8')).toBe('pristine backup target\n')
+  })
+
   it('does not write at all when the file already has the right hash', () => {
     const entry: CodexTrustEntry = {
       sourcePath: '/x/hooks.json',
@@ -507,8 +571,7 @@ describe('upsertHookTrustEntries', () => {
     }
     upsertHookTrustEntries(configPath, [entry])
     const firstWrite = readFileSync(configPath, 'utf-8')
-    // Why: a no-op upsert must not roll the .bak forward — repeated calls
-    // (e.g. from app start) would otherwise destroy the last recoverable copy.
+    // Why: a no-op upsert must not roll .bak forward, or repeated calls destroy the last recoverable copy.
     rmSync(`${configPath}.bak`, { force: true })
     upsertHookTrustEntries(configPath, [entry])
     expect(existsSync(`${configPath}.bak`)).toBe(false)
@@ -516,8 +579,7 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('replaces a stale block written with CRLF line endings without duplicating', () => {
-    // Why: regression — Windows-style \r\n in the existing config previously
-    // caused the header pattern to miss and append a duplicate block.
+    // Why: regression — \r\n in the existing config made the header pattern miss and append a duplicate.
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = [
       '[features]',
@@ -598,8 +660,7 @@ describe('upsertHookTrustEntries', () => {
     expect(written).toContain('foo = 1')
   })
 
-  // Why: TOML supports both basic-string and literal-string quoted keys;
-  // header detection must respect `]` inside `'...'` too.
+  // Why: TOML allows literal-string quoted keys, so header detection must respect `]` inside `'...'`.
   it('preserves an unrelated table whose literal-string key contains a `]`', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = [
@@ -749,8 +810,7 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('treats `\\"""` inside a multi-line basic string as an escaped quote, not a close', () => {
-    // Why: a basic multi-line string with `\"` escapes must not be misread as
-    // closing early — content and any following real header must survive intact.
+    // Why: `\"` escapes in a multi-line basic string must not be misread as closing early.
     const original = [
       'prompt = """',
       'use \\"\\"\\" carefully',
@@ -779,8 +839,7 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('escapes literal `"` and `\\` in non-Windows source paths inside the trust block header', () => {
-    // Why: a backslash in a POSIX path can be a literal filename character, so
-    // it must still be escaped instead of normalized away.
+    // Why: a backslash in a POSIX path is a literal filename char, so escape it instead of normalizing.
     const entry: CodexTrustEntry = {
       sourcePath: '/x/with"quote\\and\\back/hooks.json',
       eventLabel: 'pre_tool_use',
@@ -797,9 +856,7 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('overwrites an existing block whose header has leading whitespace (TOML allows indent)', () => {
-    // Why: regression — buildHeaderPattern used to require column-0 headers,
-    // but the reader accepts indented ones. That mismatch caused upsert to
-    // append a duplicate `[hooks.state."<key>"]` block, producing invalid TOML.
+    // Why: regression — buildHeaderPattern required column-0 headers but the reader accepts indented ones.
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = ` [hooks.state."${key}"]\nenabled = true\ntrusted_hash = "sha256:OLD"\n`
     writeFileSync(configPath, original, 'utf-8')
@@ -821,9 +878,7 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('preserves `enabled = false` when the user hand-edited it before reinstall', () => {
-    // Why: regression — auto-install on app start used to clobber a
-    // hand-disabled hook back to enabled = true, removing the only way to
-    // mute Orca's hook short of full uninstall.
+    // Why: regression — auto-install used to clobber a hand-disabled hook back to enabled = true.
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = `[hooks.state."${key}"]\nenabled = false\ntrusted_hash = "sha256:OLD"\n`
     writeFileSync(configPath, original, 'utf-8')
@@ -844,9 +899,7 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('overwrites an existing block when the file ends without a trailing newline', () => {
-    // Why: regression — buildHeaderPattern used to require a trailing
-    // `\r?\n`, missing it caused the upsert path to take the no-match branch
-    // and append a duplicate block at EOF.
+    // Why: regression — buildHeaderPattern required a trailing newline, appending a duplicate at EOF.
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = `[hooks.state."${key}"]\nenabled = true\ntrusted_hash = "sha256:OLD"`
     writeFileSync(configPath, original, 'utf-8')
@@ -868,10 +921,7 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('overwrites an existing block whose header has an inline comment', () => {
-    // Why: regression — buildHeaderPattern used to require the header line
-    // to end at \r?\n or EOF, missing TOML-valid trailing comments. The
-    // upsert path then took the no-match branch and appended a duplicate
-    // `[hooks.state."<key>"]` block, producing invalid TOML.
+    // Why: regression — buildHeaderPattern missed TOML-valid trailing comments and appended a duplicate block.
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = `[hooks.state."${key}"] # user note\nenabled = true\ntrusted_hash = "sha256:OLD"\n`
     writeFileSync(configPath, original, 'utf-8')
@@ -893,8 +943,7 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('finds and replaces a legacy forward-slash block when Orca upserts with native backslash key', () => {
-    // Why: Codex 0.140 can expose Windows trust keys with either separator
-    // shape depending on startup cwd, so Orca replaces stale blocks with both.
+    // Why: Codex 0.140 exposes Windows keys with either separator depending on cwd, so replace both.
     const backslashPath = 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json'
     const legacyKey = `${backslashPath.replace(/\\/g, '/')}:session_start:0:0`
     const original = [
@@ -923,8 +972,7 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('produces exactly one Windows separator pair after two consecutive upserts', () => {
-    // Why: idempotency guard — repeated auto-install on app start must not
-    // accumulate duplicate trust blocks and produce invalid TOML.
+    // Why: idempotency guard — repeated auto-install must not accumulate duplicate blocks.
     const entry: CodexTrustEntry = {
       sourcePath: 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json',
       eventLabel: 'session_start',
@@ -941,8 +989,7 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('falls back to TOML basic-string headers when a Windows path contains an apostrophe', () => {
-    // Why: TOML literal-string table keys cannot contain apostrophes, but
-    // Windows user/profile paths can.
+    // Why: TOML literal-string keys can't hold apostrophes, but Windows profile paths can.
     const entry: CodexTrustEntry = {
       sourcePath: "C:\\Users\\O'Connor\\AppData\\Roaming\\orca\\hooks.json",
       eventLabel: 'session_start',
@@ -964,10 +1011,7 @@ describe('upsertHookTrustEntries', () => {
   })
 
   it('finds a Codex-written block with lowercased username when Orca key has mixed-case username', () => {
-    // Why: realpathSync.native casing can differ between what Codex wrote
-    // (C:\Users\rod\...) and what Orca resolves (C:\Users\Rod\...).
-    // normalizeHookTrustKeyForLookup case-folds Windows-shaped paths so the
-    // existing block is replaced rather than a duplicate appended.
+    // Why: realpathSync.native casing can differ from what Codex wrote, so case-fold to replace not duplicate.
     const lowercasePath = 'C:\\Users\\rod\\AppData\\Roaming\\orca\\hooks.json'
     const mixedCasePath = 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json'
     const literalKey = `${lowercasePath}:session_start:0:0`
@@ -1057,8 +1101,7 @@ describe('upsertProjectTrustLevel', () => {
   })
 
   it('preserves CRLF endings and writes native Windows path separators in the header', () => {
-    // Why: local project trust still follows Codex's realpath display, while
-    // remote project trust preserves the SSH provider's canonical path string.
+    // Why: local trust follows Codex's realpath; remote trust preserves the SSH provider's canonical path.
     const original = ['[profiles.default]', 'model = "gpt-5"', ''].join('\r\n')
 
     const updated = upsertProjectTrustLevelInContent(original, 'C:\\Users\\nw\\repo', 'trusted')
@@ -1070,8 +1113,7 @@ describe('upsertProjectTrustLevel', () => {
   })
 
   it('updates an existing Windows backslash project block after separator normalization', () => {
-    // Why: hook trust now writes paired Windows variants, but project trust
-    // must still repair an existing single project table in place.
+    // Why: hook trust writes paired Windows variants, but project trust still repairs a single table in place.
     const original = [
       '[projects."C:\\\\Users\\\\nw\\\\repo"]',
       'notes = "keep"',
@@ -1089,8 +1131,7 @@ describe('upsertProjectTrustLevel', () => {
   })
 
   it('updates an existing legacy Windows forward-slash project block', () => {
-    // Why: older Orca builds normalized Windows project paths to forward
-    // slashes; native-backslash hook fixes must not duplicate those blocks.
+    // Why: older Orca builds normalized to forward slashes; backslash fixes must not duplicate them.
     const original = [
       '[projects."C:/Users/nw/repo"]',
       'notes = "keep"',
@@ -1149,8 +1190,7 @@ describe('upsertProjectTrustLevel', () => {
   })
 
   it('keeps case-distinct WSL Linux project paths as separate trust blocks', () => {
-    // Why: the \\wsl$\<distro> share is case-insensitive on Windows, but the
-    // Linux path underneath is not — .../Repo and .../repo are two projects.
+    // Why: \\wsl$\<distro> is case-insensitive but the Linux path under it is not — two distinct projects.
     const existingPath = '\\\\wsl$\\Ubuntu\\home\\u\\Repo'
     const incomingPath = '\\\\wsl$\\Ubuntu\\home\\u\\repo'
     const original = [`[projects.'${existingPath}']`, 'trust_level = "untrusted"', ''].join('\n')
@@ -1161,16 +1201,14 @@ describe('upsertProjectTrustLevel', () => {
 
     expect(updated.match(/\[projects\./g)).toHaveLength(2)
     expect(updated).toContain(`[projects.'${existingPath}']`)
-    // Why: serializer writes basic-string headers via escapeTomlString; assert
-    // that form so the fixture can't drift from real header matching.
+    // Why: serializer writes basic-string headers via escapeTomlString; assert that exact form.
     expect(updated).toContain(`[projects."${escapeTomlString(incomingPath)}"]`)
     expect(updated).toContain('trust_level = "untrusted"')
     expect(updated).toContain('trust_level = "trusted"')
   })
 
   it('updates the same WSL project block across wsl$ and wsl.localhost spellings', () => {
-    // Why: the two share spellings alias the same distro filesystem, so a
-    // revoked project must not be re-trusted under the other spelling.
+    // Why: the two share spellings alias the same distro, so a revoke must not survive under the other.
     const original = [
       "[projects.'\\\\wsl$\\Ubuntu\\home\\u\\proj']",
       'trust_level = "untrusted"',
@@ -1204,8 +1242,7 @@ describe('upsertProjectTrustLevel', () => {
   })
 
   it('preserves an already-canonical remote Windows project path', () => {
-    // Why: SSH project paths are resolved on the remote; local realpath would
-    // canonicalize the wrong machine if the same path happens to exist locally.
+    // Why: SSH paths resolve on the remote; local realpath would canonicalize the wrong machine.
     const updated = upsertProjectTrustLevelInContent('', 'C:/Users/nw/repo', 'trusted', {
       alreadyCanonical: true
     })
@@ -1241,8 +1278,7 @@ describe('normalizeCodexProjectPathForLookup', () => {
   })
 
   it('merges separator and distro-casing variants of the same WSL path', () => {
-    // Why: separators and the case-insensitive \\wsl$\<distro> share may drift,
-    // but the same Linux path must still resolve to one trust key.
+    // Why: separator and \\wsl$\<distro> casing may drift, but the same Linux path is one trust key.
     expect(normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\home\\u\\proj')).toBe(
       normalizeCodexProjectPathForLookup('//WSL$/ubuntu/home/u/proj')
     )
@@ -1300,6 +1336,63 @@ describe('normalizeCodexProjectPathForRevocationLookup', () => {
 })
 
 describe('removeHookTrustEntries', () => {
+  it.skipIf(process.platform === 'win32')('preserves restrictive config permissions', () => {
+    const entry: CodexTrustEntry = {
+      sourcePath: '/x/hooks.json',
+      eventLabel: 'stop',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'echo trusted'
+    }
+    upsertHookTrustEntries(configPath, [entry])
+    chmodSync(configPath, 0o600)
+
+    removeHookTrustEntries(configPath, [computeTrustKey(entry)])
+
+    expect(statSync(configPath).mode & 0o777).toBe(0o600)
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'updates a symlink target without replacing config.toml',
+    () => {
+      const targetPath = join(tmpDir, 'dotfiles-config.toml')
+      const entry: CodexTrustEntry = {
+        sourcePath: '/x/hooks.json',
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo trusted'
+      }
+      upsertHookTrustEntries(targetPath, [entry])
+      symlinkSync(targetPath, configPath)
+
+      removeHookTrustEntries(configPath, [computeTrustKey(entry)])
+
+      expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+      expect(readHookTrustEntries(targetPath).has(computeTrustKey(entry))).toBe(false)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')('does not replace a dangling config.toml symlink', () => {
+    const targetPath = join(tmpDir, 'missing-dotfiles-config.toml')
+    symlinkSync(targetPath, configPath)
+
+    expect(() =>
+      upsertHookTrustEntries(configPath, [
+        {
+          sourcePath: '/x/hooks.json',
+          eventLabel: 'stop',
+          groupIndex: 0,
+          handlerIndex: 0,
+          command: 'echo trusted'
+        }
+      ])
+    ).toThrow()
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(existsSync(targetPath)).toBe(false)
+  })
+
   it('is a no-op (creates no file) when the config does not exist', () => {
     removeHookTrustEntries(configPath, ['/x/hooks.json:pre_tool_use:0:0'])
     expect(existsSync(configPath)).toBe(false)
@@ -1451,9 +1544,7 @@ describe('removeHookTrustEntries', () => {
   })
 
   it('preserves the line separator when no blank line precedes the removed block', () => {
-    // Why: regression — removeTrustBlock used to cut from match.index (the
-    // captured leading newline) and fused the previous content into the next
-    // header, producing invalid TOML like `a = 1[other]`.
+    // Why: regression — removeTrustBlock cut the leading newline, fusing prior content into the next header.
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = [
       'a = 1',
@@ -1498,8 +1589,7 @@ describe('removeHookTrustEntries', () => {
   })
 
   it('removes a block whose header has an inline comment', () => {
-    // Why: paired with the upsert regression; the same pattern mismatch
-    // would silently leave the dead block in place during uninstall.
+    // Why: same pattern mismatch as the upsert regression would leave the dead block during uninstall.
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = `[hooks.state."${key}"] # user note\nenabled = true\ntrusted_hash = "sha256:K"\n`
     writeFileSync(configPath, original, 'utf-8')
@@ -1540,6 +1630,70 @@ describe('readHookTrustEntries', () => {
     expect(result.get(keyB)?.enabled).toBe(true)
   })
 
+  it('fails closed when normalized duplicate blocks have conflicting hashes', () => {
+    const key = '/x/hooks.json:stop:0:0'
+    writeFileSync(
+      configPath,
+      [
+        `[hooks.state."${key}"]`,
+        'trusted_hash = "sha256:USER"',
+        '',
+        `[hooks.state.'${key}']`,
+        'trusted_hash = "sha256:ORCA"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    expect(readHookTrustEntries(configPath).get(key)?.trustedHash).toBeUndefined()
+  })
+
+  it('ignores trust-looking fields inside multiline strings', () => {
+    const key = '/x/hooks.json:stop:0:0'
+    writeFileSync(
+      configPath,
+      [
+        `[hooks.state."${key}"]`,
+        'note = """',
+        'trusted_hash = "sha256:NOT-A-FIELD"',
+        'enabled = false',
+        '"""',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    expect(readHookTrustEntries(configPath).get(key)).toEqual({
+      trustedHash: undefined,
+      enabled: undefined
+    })
+  })
+
+  it('does not accept an unterminated trusted_hash string', () => {
+    const key = '/x/hooks.json:stop:0:0'
+    writeFileSync(
+      configPath,
+      `[hooks.state."${key}"]\ntrusted_hash = "sha256:UNTERMINATED\n`,
+      'utf-8'
+    )
+
+    expect(readHookTrustEntries(configPath).get(key)?.trustedHash).toBeUndefined()
+  })
+
+  it('recognizes and removes a first trust block after a leading BOM', () => {
+    const key = '/x/hooks.json:stop:0:0'
+    const content = [
+      `\uFEFF[hooks.state."${key}"]`,
+      'trusted_hash = "sha256:ORCA"',
+      '[other]',
+      'value = true',
+      ''
+    ].join('\n')
+
+    expect(readHookTrustEntriesFromContent(content).get(key)?.trustedHash).toBe('sha256:ORCA')
+    expect(removeHookTrustEntriesFromContent(content, [key])).toBe('[other]\nvalue = true\n')
+  })
+
   it('does not let triple quotes in comments hide later trust entries', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = [
@@ -1574,10 +1728,7 @@ describe('readHookTrustEntries', () => {
   })
 
   it('normalizes backslash block key to forward-slash at ingestion', () => {
-    // Why: a real Windows path on disk like C:\foo gets written escaped as
-    // `C:\\foo` inside the TOML key. The Map key is normalized (backslash ->
-    // forward-slash) so computeTrustKey lookups match regardless of how Codex
-    // encoded the path separator.
+    // Why: normalize the Map key (backslash -> forward-slash) so computeTrustKey lookups match either encoding.
     const original = [
       '[hooks.state."C:\\\\foo\\\\hooks.json:pre_tool_use:0:0"]',
       'enabled = true',
@@ -1608,8 +1759,7 @@ describe('readHookTrustEntries', () => {
   })
 
   it('supports case-insensitive lookups for Windows hook trust keys read from config', () => {
-    // Why: Codex and realpathSync.native can disagree on user-path casing;
-    // status checks still need Map.get(computeTrustKey(...)) to find the row.
+    // Why: Codex and realpathSync.native can disagree on path casing, but lookups must still match.
     const rawKey = 'C:\\Users\\rod\\AppData\\Roaming\\orca\\hooks.json:session_start:0:0'
     const lookupKey = 'C:/Users/Rod/AppData/Roaming/orca/hooks.json:session_start:0:0'
     const original = [
@@ -1651,8 +1801,7 @@ describe('readHookTrustEntries', () => {
   })
 
   it('keeps case-distinct WSL UNC hook paths distinct', () => {
-    // Why: the \\wsl$\<distro> share is case-insensitive, but the Linux tail
-    // is not — folding the whole path would merge two distinct hook sources.
+    // Why: \\wsl$\<distro> is case-insensitive but the Linux tail is not — don't fold two distinct sources.
     const upperKey = '\\\\wsl$\\Ubuntu\\home\\u\\Repo\\hooks.json:session_start:0:0'
     const lowerKey = '\\\\wsl$\\Ubuntu\\home\\u\\repo\\hooks.json:session_start:0:0'
     writeFileSync(
@@ -1720,8 +1869,7 @@ describe('readHookTrustEntries', () => {
   })
 
   it('does not extract a fake [hooks.state."<key>"] header from inside a """ block', () => {
-    // Why: a header-shaped line embedded in a multi-line basic string must not
-    // be parsed as a real trust entry.
+    // Why: a header-shaped line inside a multi-line basic string must not parse as a real entry.
     const original = [
       'description = """',
       '[hooks.state."fake-key"]',
@@ -1753,9 +1901,7 @@ describe('readHookTrustEntries', () => {
   })
 
   it('reads a block whose header has an inline comment', () => {
-    // Why: regression — headerLineRegex used to reject TOML-valid trailing
-    // comments, hiding existing trust entries from getStatus and causing
-    // it to misreport hooks as untrusted.
+    // Why: regression — headerLineRegex rejected TOML-valid trailing comments, hiding trust entries.
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = `[hooks.state."${key}"] # user note\nenabled = true\ntrusted_hash = "sha256:CMT"\n`
     writeFileSync(configPath, original, 'utf-8')
@@ -1777,8 +1923,7 @@ describe('parseTrustKey', () => {
   })
 
   it('parses a Windows-style sourcePath whose drive letter contains a colon', () => {
-    // Why: validates the "anchor on the LAST three colons" approach so colons
-    // inside the sourcePath itself round-trip correctly.
+    // Why: anchor on the LAST three colons so colons inside sourcePath round-trip.
     expect(parseTrustKey('C:\\Users\\x\\.codex\\hooks.json:session_start:2:3')).toEqual({
       sourcePath: 'C:\\Users\\x\\.codex\\hooks.json',
       eventLabel: 'session_start',
@@ -1825,8 +1970,7 @@ describe('parseTrustKey', () => {
     })
   })
 
-  // Why: Number('') === 0 silently passes Number.isInteger; without strict
-  // canonical-form validation, malformed keys would coerce into valid ones.
+  // Why: Number('') === 0 passes Number.isInteger, so empty segments need explicit rejection.
   it('returns null for empty group/handler segments', () => {
     expect(parseTrustKey('/x/hooks.json:pre_tool_use::0')).toBeNull()
     expect(parseTrustKey('/x/hooks.json:pre_tool_use:0:')).toBeNull()
@@ -1841,9 +1985,7 @@ describe('parseTrustKey', () => {
 })
 
 describe('upsertHookTrustEntries with array-of-tables boundaries', () => {
-  // Why: findNextTableHeader must treat `[[array.of.tables]]` as a block
-  // boundary; otherwise an upsert/remove can consume past array entries
-  // into unrelated user content.
+  // Why: [[array.of.tables]] must count as a block boundary, else upsert/remove eats past array entries.
   it('stops the replacement at a following [[array.of.tables]] header', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = [

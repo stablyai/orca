@@ -36,6 +36,7 @@ vi.mock('electron', () => ({
 
 import {
   clearTrustedUIRendererWebContentsId,
+  getTrustedUIRendererWindow,
   registerUIHandlers,
   sendToTrustedUIRenderer,
   setTrustedUIRendererWebContentsId
@@ -110,6 +111,20 @@ describe('UI IPC', () => {
     expect(rendererSend).toHaveBeenCalledWith('gh:prRefreshEvent', { sequence: 1 })
     expect(getAllWebContentsMock).not.toHaveBeenCalled()
     expect(guestSends.reduce((total, send) => total + send.mock.calls.length, 0)).toBe(0)
+  })
+
+  it('resolves only the BrowserWindow that owns the trusted renderer', () => {
+    const renderer = { id: 17, isDestroyed: () => false }
+    const mainWindow = { id: 'main' }
+    fromIdMock.mockReturnValue(renderer)
+    fromWebContentsMock.mockReturnValue(mainWindow)
+    setTrustedUIRendererWebContentsId(17)
+
+    expect(getTrustedUIRendererWindow()).toBe(mainWindow)
+    expect(fromWebContentsMock).toHaveBeenCalledWith(renderer)
+
+    fromIdMock.mockReturnValue({ id: 17, isDestroyed: () => true })
+    expect(getTrustedUIRendererWindow()).toBeNull()
   })
 
   it('skips missing, destroyed, and originating renderers', () => {

@@ -36,10 +36,11 @@ function log(message) {
 // Why: the daemon rejects a hello whose protocol version differs, so read the
 // current version from source rather than hardcoding a number that can drift.
 function readProtocolVersion() {
-  const source = readFileSync(join(projectDir, 'src/main/daemon/types.ts'), 'utf8')
+  const protocolSourcePath = 'src/main/daemon/daemon-protocol-version.ts'
+  const source = readFileSync(join(projectDir, protocolSourcePath), 'utf8')
   const match = source.match(/PROTOCOL_VERSION\s*=\s*(\d+)/)
   if (!match) {
-    throw new Error('could not read PROTOCOL_VERSION from src/main/daemon/types.ts')
+    throw new Error(`could not read PROTOCOL_VERSION from ${protocolSourcePath}`)
   }
   return Number(match[1])
 }

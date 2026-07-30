@@ -1,27 +1,26 @@
-/* eslint-disable max-lines -- Why: ProjectV2 GraphQL has its own normalization
-layer, retry policy (parent-field dance), paste-to-add parser, and discovery
-pagination. Co-locating the read path keeps the retry/classify/normalize
-contract reviewable as one surface. Lower-level plumbing (slug validation,
-error classifier, runGraphql/runRest) lives in ./project-view/internals; the
-slug-addressed write path lives in ./project-view/mutations. */
+/* eslint-disable max-lines -- Why: co-locate the ProjectV2 read path (normalize/retry/paste-parser/discovery) as one reviewable surface; plumbing lives in ./project-view/internals and mutations. */
 import {
   acquire,
   release,
   extractExecError,
   ghExecFileAsync,
-  rateLimitGuard,
-  noteRateLimitSpend,
-  classifyProjectError,
-  driftError,
-  errorsIndicateParentField,
-  rateLimitedError,
+  repositoryRateLimitGuard,
+  noteRepositoryRateLimitSpend,
   runGraphql,
   isValidOwnerSlug,
   assertSlug,
   assertPositiveInt,
-  type GhGraphqlErrorShape,
+  projectHostAuthenticationError,
+  projectGhExecOptions,
   type GraphqlVars
 } from './project-view/internals'
+import {
+  classifyProjectError,
+  driftError,
+  errorsIndicateParentField,
+  rateLimitedError,
+  type GhGraphqlErrorShape
+} from './project-view/project-error-classification'
 import type {
   GetProjectViewTableArgs,
   GetProjectViewTableResult,
@@ -41,6 +40,7 @@ import type {
   GitHubProjectViewError,
   GitHubProjectViewLayout,
   GitHubProjectViewSummary,
+  ListAccessibleProjectsArgs,
   ListAccessibleProjectsResult,
   ListProjectViewsArgs,
   ListProjectViewsResult,
@@ -51,15 +51,11 @@ import {
   GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
   isGitHubProjectRefInputTooLarge
 } from '../../shared/github-project-ref-input'
+import { githubProjectHost } from '../../shared/github-project-identity'
 
-// Re-export the public API so existing call sites (`./project-view`) keep
-// working unchanged. The split is internal-only.
-export {
-  isValidOwnerSlug,
-  isValidRepoSlug,
-  isValidSlug,
-  classifyProjectError
-} from './project-view/internals'
+// Re-export the public API so existing `./project-view` call sites keep working; the split is internal-only.
+export { isValidOwnerSlug, isValidRepoSlug, isValidSlug } from './project-view/internals'
+export { classifyProjectError } from './project-view/project-error-classification'
 export {
   updateProjectItemFieldValue,
   clearProjectItemFieldValue,
@@ -77,14 +73,7 @@ export {
 
 // ─── Constants ─────────────────────────────────────────────────────────
 
-// Why: these defaults were deliberately shrunk from 50/50/100 to cut quota
-// spend in the most expensive gh call reachable from TaskPage. Discovery
-// walks viewer projects, then up to `DISCOVERY_MAX_ORGS` orgs × a nested
-// `projectsV2(first:N)` query. The org loop dominates the cost and is the
-// path that produced the user-visible HTTP 504 when one org was slow. Users
-// with projects outside this window can still paste a URL to reach them —
-// no functional loss. Prior values: MAX_ORGS=50, ORG_PAGE_SIZE=30,
-// PROJECTS_PER_OWNER=100, nested projectsV2 first=50.
+// Why: defaults deliberately shrunk to cut quota spend in discovery — the org loop dominates and produced the HTTP 504; overflow owners can paste a URL.
 const ITEM_PAGE_SIZE = 100
 const MAX_ITEMS = 500
 const VIEWS_PAGE_SIZE = 20
@@ -98,9 +87,7 @@ export const PROJECT_VIEW_OWNER_CACHE_MAX_ENTRIES = 512
 
 // ─── Module-scope caches (reset on HMR — intentional) ──────────────────
 
-// Why: pasted and discovered GitHub owners are user-controlled across a long
-// main-process session; keep capability probes bounded to avoid unbounded
-// retention while preserving the hot-owner fast path.
+// Why: owners are user-controlled over a long session; bound cache entries to avoid unbounded retention while keeping the hot-owner fast path.
 function rememberProjectViewCacheEntry<K, V>(
   cache: Map<K, V>,
   key: K,
@@ -129,32 +116,40 @@ function getProjectViewCacheEntry<K, V>(cache: Map<K, V>, key: K): V | undefined
   return value
 }
 
-// Why: HMR reloading should re-probe capability. Both caches live as plain
-// module locals so a dev-time code swap naturally re-runs capability probes
-// instead of carrying a stale "unsupported" flag into fresh code.
+// Why: plain module locals so HMR code swaps re-run capability probes instead of carrying a stale "unsupported" flag.
 const ownerTypeCache = new Map<string, GitHubProjectOwnerType | null>()
-// Why: keyed by `${owner}\0${ownerType}` rather than a process-global flag so
-// a single owner's capability gap (e.g. token without scope on org A) doesn't
-// poison every subsequent fetch for unrelated owners that DO support
-// Issue.parent. See bug-scan finding 2.
+// Why: keyed per owner (not a process-global flag) so one owner's capability gap doesn't poison others that DO support Issue.parent (bug-scan finding 2).
 const parentFieldRetriedByOwner = new Map<string, true>()
 const parentFieldWarningLoggedByOwner = new Map<string, true>()
-// Why: concurrent fetchAllItems calls for the same owner all observe the
-// same "not-yet-retried" state, each issuing a duplicate first-page probe
-// and racing to set the flag. Use an in-flight promise per owner so only
-// one caller drives the probe; siblings await the same result.
+// Why: in-flight promise per owner so concurrent fetchAllItems callers share one probe instead of each racing a duplicate first-page probe.
 const parentFieldProbeInFlight = new Map<string, Promise<void>>()
 
-function ownerScopeKey(owner: string, ownerType: GitHubProjectOwnerType): string {
-  return `${owner}\u0000${ownerType}`
+// Why: GHES owners are a separate namespace and capability surface from
+// github.com owners with the same login — scope cache keys by host so one
+// host's probe result can't leak into another. Normalize github.com so
+// host-less callers share the same probe state as explicitly pinned calls.
+function ownerScopeKey(owner: string, ownerType: GitHubProjectOwnerType, host?: string): string {
+  const base = `${owner}\u0000${ownerType}`
+  return `${base}\u0000${githubProjectHost(host)}`
 }
 
-function rememberOwnerType(owner: string, ownerType: GitHubProjectOwnerType | null): void {
-  rememberProjectViewCacheEntry(ownerTypeCache, owner, ownerType)
+function ownerTypeCacheKey(owner: string, host?: string): string {
+  return `${owner}\u0000${githubProjectHost(host)}`
 }
 
-function getCachedOwnerType(owner: string): GitHubProjectOwnerType | null | undefined {
-  return getProjectViewCacheEntry(ownerTypeCache, owner)
+function rememberOwnerType(
+  owner: string,
+  ownerType: GitHubProjectOwnerType | null,
+  host?: string
+): void {
+  rememberProjectViewCacheEntry(ownerTypeCache, ownerTypeCacheKey(owner, host), ownerType)
+}
+
+function getCachedOwnerType(
+  owner: string,
+  host?: string
+): GitHubProjectOwnerType | null | undefined {
+  return getProjectViewCacheEntry(ownerTypeCache, ownerTypeCacheKey(owner, host))
 }
 
 function markParentFieldRetried(scopeKey: string): void {
@@ -197,16 +192,18 @@ export function _getProjectViewCacheSizesForTests(): {
 /** @internal - exposed for cache-bound tests only. */
 export function _rememberProjectViewOwnerTypeForTests(
   owner: string,
-  ownerType: GitHubProjectOwnerType | null
+  ownerType: GitHubProjectOwnerType | null,
+  host?: string
 ): void {
-  rememberOwnerType(owner, ownerType)
+  rememberOwnerType(owner, ownerType, host)
 }
 
 /** @internal - exposed for cache-bound tests only. */
 export function _getProjectViewOwnerTypeForTests(
-  owner: string
+  owner: string,
+  host?: string
 ): GitHubProjectOwnerType | null | undefined {
-  return getCachedOwnerType(owner)
+  return getCachedOwnerType(owner, host)
 }
 
 /** @internal - exposed for cache-bound tests only. */
@@ -392,8 +389,7 @@ export function normalizeFieldValue(
     }
     case undefined:
     default:
-      // Unknown __typename → forward-compat: drop silently, do not throw,
-      // do not classify as drift (see design §Error Handling).
+      // Unknown __typename → forward-compat: drop silently, don't classify as drift (see design §Error Handling).
       return null
   }
 }
@@ -642,6 +638,7 @@ async function fetchProjectViewsPage(args: {
   owner: string
   ownerType: GitHubProjectOwnerType
   projectNumber: number
+  host?: string
   after: string | null
 }): Promise<
   | {
@@ -686,7 +683,8 @@ async function fetchProjectViewsPage(args: {
   }
   const res = await runGraphql<Record<string, { projectV2?: RawProjectConfig | null } | null>>(
     query,
-    vars
+    vars,
+    projectGhExecOptions(args.host)
   )
   if (!res.ok) {
     return res
@@ -709,17 +707,12 @@ async function fetchProjectViewsPage(args: {
 
 async function fetchViewFieldsContinuation(
   viewId: string,
-  after: string
+  after: string,
+  host?: string
 ): Promise<
   { ok: true; fields: RawProjectV2Field[] } | { ok: false; error: GitHubProjectViewError }
 > {
-  // Why: address the view directly via `node(id:)` instead of re-fetching the
-  // whole project + walking views every page. Previous shape paid an
-  // unnecessary `${VIEWS_PAGE_SIZE}` views fan-out per field-continuation
-  // page; the new shape is one round-trip per field page, which is the
-  // minimum possible cost. Field-paged views are rare (>50 fields), so this
-  // only matters for the few projects that hit it — but when they do, the
-  // savings compound across pagination loops.
+  // Why: address the view directly via node(id:) instead of re-walking all views each page — one round-trip per field page.
   const query = `
     query($after:String!, $viewId:ID!) {
       node(id:$viewId) {
@@ -745,7 +738,7 @@ async function fetchViewFieldsContinuation(
           nodes?: (RawProjectV2Field | null)[]
         }
       } | null
-    }>(query, { viewId, after: cursor })
+    }>(query, { viewId, after: cursor }, projectGhExecOptions(host))
     if (!res.ok) {
       return res
     }
@@ -844,9 +837,7 @@ type RawItemsPage = {
   nodes?: (RawItem | null)[]
 }
 
-// Why: runGraphql returns the classified error but not the raw GraphQL
-// errors; for the parent-field retry decision we need those. This variant
-// returns the raw envelope so callers can re-inspect.
+// Why: unlike runGraphql, return the raw GraphQL error envelope so the parent-field retry decision can re-inspect it.
 async function fetchItemsPageWithRaw(args: {
   owner: string
   ownerType: GitHubProjectOwnerType
@@ -855,6 +846,7 @@ async function fetchItemsPageWithRaw(args: {
   first: number
   after: string | null
   includeParent: boolean
+  host?: string
 }): Promise<
   | { ok: true; page: RawItemsPage }
   | {
@@ -864,6 +856,10 @@ async function fetchItemsPageWithRaw(args: {
       stderr: string
     }
 > {
+  const authError = await projectHostAuthenticationError(args.host)
+  if (authError) {
+    return { ok: false, error: authError, rawErrors: [], stderr: '' }
+  }
   const root = ownerQueryRoot(args.ownerType)
   const afterArg = args.after ? `, after: $after` : ''
   const afterVar = args.after ? `$after:String!, ` : ''
@@ -896,7 +892,9 @@ async function fetchItemsPageWithRaw(args: {
     argsArr.push('-f', `after=${args.after}`)
   }
 
-  const guard = rateLimitGuard('graphql')
+  // Why: GHES traffic runs against its own quota — only github.com requests
+  // consult/debit the shared snapshot.
+  const guard = repositoryRateLimitGuard(args, 'graphql')
   if (guard.blocked) {
     return {
       ok: false,
@@ -906,13 +904,16 @@ async function fetchItemsPageWithRaw(args: {
     }
   }
   await acquire()
-  noteRateLimitSpend('graphql')
+  noteRepositoryRateLimitSpend(args, 'graphql')
   try {
     let stdout = ''
     let stderr = ''
     let execFailed = false
     try {
-      const r = await ghExecFileAsync(argsArr, { encoding: 'utf-8' })
+      const r = await ghExecFileAsync(argsArr, {
+        encoding: 'utf-8',
+        ...projectGhExecOptions(args.host)
+      })
       stdout = r.stdout
       stderr = r.stderr
     } catch (err) {
@@ -925,13 +926,11 @@ async function fetchItemsPageWithRaw(args: {
     try {
       parsed = JSON.parse(stdout)
     } catch {
-      // Why: when gh exits non-zero with no parseable JSON on stdout (network,
-      // auth, rate-limit, missing scope), classify against stderr so callers
-      // see the real cause instead of a synthesized drift/not-found.
+      // Why: gh exited non-zero with unparseable stdout; classify against stderr so callers see the real cause, not a synthesized drift/not-found.
       if (execFailed) {
         return {
           ok: false,
-          error: classifyProjectError(stderr, stdout),
+          error: classifyProjectError(stderr, stdout, args.host),
           rawErrors: [],
           stderr
         }
@@ -943,13 +942,11 @@ async function fetchItemsPageWithRaw(args: {
         stderr
       }
     }
-    // Why: gh exec rejected but stdout still had a parseable error envelope —
-    // fall through to the parsed.errors branch below. If parsed has neither
-    // data nor errors, surface the stderr classification rather than not_found.
+    // Why: gh rejected but stdout parsed; fall through to parsed.errors below, else surface the stderr classification rather than not_found.
     if (execFailed && (!parsed.errors || parsed.errors.length === 0) && !parsed.data) {
       return {
         ok: false,
-        error: classifyProjectError(stderr, stdout),
+        error: classifyProjectError(stderr, stdout, args.host),
         rawErrors: [],
         stderr
       }
@@ -957,7 +954,7 @@ async function fetchItemsPageWithRaw(args: {
     if (parsed.errors && parsed.errors.length > 0) {
       return {
         ok: false,
-        error: classifyProjectError(stderr, stdout),
+        error: classifyProjectError(stderr, stdout, args.host),
         rawErrors: parsed.errors,
         stderr
       }
@@ -983,30 +980,21 @@ async function fetchAllItems(args: {
   ownerType: GitHubProjectOwnerType
   projectNumber: number
   query: string
+  host?: string
 }): Promise<
   | { ok: true; rows: GitHubProjectRow[]; totalCount: number; parentFieldDropped: boolean }
   | { ok: false; error: GitHubProjectViewError; totalCount?: number }
 > {
-  // Why: caches keyed by (owner, ownerType) so a single owner's lack of
-  // Issue.parent capability (e.g. token without scope on org A) doesn't
-  // poison fetches for unrelated owners. See bug-scan finding 2.
-  const scopeKey = ownerScopeKey(args.owner, args.ownerType)
-  // Why: if another caller for the SAME owner is currently probing whether
-  // Issue.parent is supported, await its decision so we don't fire a
-  // duplicate with-parent probe. We must re-read the retried flag AFTER
-  // awaiting because the probe may have flipped it.
+  // Why: isolate missing Issue.parent capability by owner, type, and host.
+  const scopeKey = ownerScopeKey(args.owner, args.ownerType, args.host)
+  // Why: await the same-scope probe, then re-read state because it may have changed.
   const inFlight = parentFieldProbeInFlight.get(scopeKey)
   if (inFlight) {
     await inFlight.catch(() => {})
   }
   let includeParent = !hasParentFieldRetried(scopeKey)
   let parentFieldDropped = !includeParent
-  // First page — single-flight the with-parent attempt PER OWNER so
-  // concurrent callers for the same owner observe one probe result instead
-  // of each issuing their own. We must assign the in-flight promise
-  // synchronously (no await between the get() check and the set()) so
-  // concurrent callers race on the same promise rather than each creating
-  // a duplicate probe.
+  // Single-flight the with-parent probe per owner; assign the in-flight promise synchronously (no await between get() and set()) so callers share one probe.
   let first: Awaited<ReturnType<typeof fetchItemsPageWithRaw>>
   let probePromise: Promise<Awaited<ReturnType<typeof fetchItemsPageWithRaw>>> | null = null
   if (includeParent && !parentFieldProbeInFlight.has(scopeKey)) {
@@ -1024,14 +1012,10 @@ async function fetchAllItems(args: {
           query: args.query,
           first: ITEM_PAGE_SIZE,
           after: null,
-          includeParent: true
+          includeParent: true,
+          host: args.host
         })
-        // Why: flip parentFieldRetriedByOwner BEFORE resolveProbe()/clearing
-        // parentFieldProbeInFlight so siblings that awoke on `inFlight.catch()`
-        // observe the updated flag. Doing this in the outer block (after
-        // `await probePromise`) leaves a gap where siblings see
-        // parentFieldProbeInFlight=null and parentFieldRetriedByOwner without
-        // the scopeKey, then issue duplicate with-parent probes.
+        // Why: set the retried flag BEFORE resolving/clearing the probe so siblings awoken on inFlight.catch() see it and don't fire duplicate with-parent probes.
         if (!result.ok && errorsIndicateParentField(result.rawErrors, result.stderr)) {
           markParentFieldRetried(scopeKey)
         }
@@ -1050,13 +1034,12 @@ async function fetchAllItems(args: {
       query: args.query,
       first: ITEM_PAGE_SIZE,
       after: null,
-      includeParent
+      includeParent,
+      host: args.host
     })
   }
   if (!first.ok && includeParent && errorsIndicateParentField(first.rawErrors, first.stderr)) {
-    // Retry the whole table without parent. Mark this owner as retried so
-    // subsequent fetches against the same owner skip the probe — but other
-    // owners are unaffected.
+    // Retry the whole table without parent; mark this owner retried so later fetches skip the probe (other owners unaffected).
     markParentFieldRetried(scopeKey)
     includeParent = false
     parentFieldDropped = true
@@ -1073,7 +1056,8 @@ async function fetchAllItems(args: {
       query: args.query,
       first: ITEM_PAGE_SIZE,
       after: null,
-      includeParent: false
+      includeParent: false,
+      host: args.host
     })
   }
   if (!first.ok) {
@@ -1140,7 +1124,8 @@ async function fetchAllItems(args: {
       query: args.query,
       first: ITEM_PAGE_SIZE,
       after: cursor as string,
-      includeParent
+      includeParent,
+      host: args.host
     })
     if (!next.ok) {
       return { ok: false, error: next.error, totalCount }
@@ -1179,6 +1164,7 @@ async function fetchItemsCountOnly(args: {
   ownerType: GitHubProjectOwnerType
   projectNumber: number
   query: string
+  host?: string
 }): Promise<number | null> {
   const root = ownerQueryRoot(args.ownerType)
   const query = `
@@ -1192,7 +1178,11 @@ async function fetchItemsCountOnly(args: {
   `
   const res = await runGraphql<
     Record<string, { projectV2?: { items?: { totalCount?: number } | null } | null } | null>
-  >(query, { owner: args.owner, num: args.projectNumber, q: args.query })
+  >(
+    query,
+    { owner: args.owner, num: args.projectNumber, q: args.query },
+    projectGhExecOptions(args.host)
+  )
   if (!res.ok) {
     return null
   }
@@ -1231,6 +1221,7 @@ export async function getProjectViewTable(
       owner: args.owner,
       ownerType: args.ownerType,
       projectNumber: args.projectNumber,
+      host: args.host,
       after: cursor
     })
     if (!page.ok) {
@@ -1255,16 +1246,7 @@ export async function getProjectViewTable(
         matchStrength = m
       }
     }
-    // Why: stop as soon as we have ANY match — including 'default' (first
-    // table view). Continuing to walk views pages for a default selector
-    // costs one extra GraphQL call per page with no upside: the default
-    // contract is "first table view we see", and view layouts don't change
-    // ordering between pages such that a later view would outrank the
-    // first table layout. Previously we kept walking on default match
-    // because the precedence comment hinted at re-ranking, but no real
-    // selector promotes a 'default' to a stronger match within the same
-    // selector input — those ranks only matter when the caller supplied
-    // a selector. Bail early on any non-null selectedRaw.
+    // Why: stop on ANY match (incl. 'default' = first table view); walking further pages costs a GraphQL call per page with no re-ranking upside.
     if (selectedRaw) {
       break
     }
@@ -1287,7 +1269,7 @@ export async function getProjectViewTable(
   let extraFields: RawProjectV2Field[] = []
   const fieldsPi = selectedRaw.fields?.pageInfo
   if (fieldsPi?.hasNextPage === true && typeof fieldsPi.endCursor === 'string' && selectedRaw.id) {
-    const cont = await fetchViewFieldsContinuation(selectedRaw.id, fieldsPi.endCursor)
+    const cont = await fetchViewFieldsContinuation(selectedRaw.id, fieldsPi.endCursor, args.host)
     if (!cont.ok) {
       return { ok: false, error: cont.error }
     }
@@ -1300,21 +1282,18 @@ export async function getProjectViewTable(
   }
   const selectedView = finalized.view
 
-  // Why: an explicit empty-string override means "no filter"; treat undefined
-  // as "use the view's filter as-is". The override is ephemeral — never
-  // persisted to GitHub — so users can clear the search without mutating the
-  // view's stored filter.
+  // Why: empty-string override means "no filter"; undefined means "use the view's stored filter". The override is ephemeral, never persisted.
   const effectiveQuery =
     typeof args.queryOverride === 'string' ? args.queryOverride : selectedView.filter
 
-  // Unsupported layout: return without paginating items; attempt a cheap
-  // count-only query best-effort.
+  // Unsupported layout: skip item pagination; best-effort count-only query.
   if (selectedView.layout !== 'TABLE_LAYOUT') {
     const count = await fetchItemsCountOnly({
       owner: args.owner,
       ownerType: args.ownerType,
       projectNumber: args.projectNumber,
-      query: effectiveQuery
+      query: effectiveQuery,
+      host: args.host
     })
     return {
       ok: false,
@@ -1331,7 +1310,8 @@ export async function getProjectViewTable(
     owner: args.owner,
     ownerType: args.ownerType,
     projectNumber: args.projectNumber,
-    query: effectiveQuery
+    query: effectiveQuery,
+    host: args.host
   })
   if (!items.ok) {
     return {
@@ -1344,6 +1324,7 @@ export async function getProjectViewTable(
   const table: GitHubProjectTable = {
     project: {
       id: project.id,
+      host: githubProjectHost(args.host),
       owner: args.owner,
       ownerType: args.ownerType,
       number: args.projectNumber,
@@ -1386,13 +1367,13 @@ type RawViewerDiscovery = {
   }
 }
 
-export async function listAccessibleProjects(): Promise<ListAccessibleProjectsResult> {
+export async function listAccessibleProjects(
+  args?: ListAccessibleProjectsArgs
+): Promise<ListAccessibleProjectsResult> {
+  const host = githubProjectHost(args?.host)
   const viewerProjects: GitHubProjectSummary[] = []
   const orgProjects: GitHubProjectSummary[] = []
-  // Why: per-org failures are collected so the picker can render a "some orgs
-  // didn't load" banner with the affected logins, instead of aborting the
-  // whole discovery on the first 504. Users with flaky org fetches still get
-  // viewer + other orgs in the list.
+  // Why: collect per-org failures so the picker shows a "some orgs didn't load" banner instead of aborting discovery on the first 504.
   const partialFailures: { owner: string; message: string }[] = []
   let viewerLogin: string | null = null
 
@@ -1421,12 +1402,9 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
     if (viewerCursor) {
       vars.after = viewerCursor
     }
-    const res = await runGraphql<RawViewerDiscovery>(query, vars)
+    const res = await runGraphql<RawViewerDiscovery>(query, vars, projectGhExecOptions(host))
     if (!res.ok) {
-      // Why: a viewer-level failure is structural — if we can't list the
-      // user's own projects, we have nothing to build on. Propagate as a
-      // hard error instead of returning partial. Org-level errors below
-      // are non-fatal because the viewer slice is still useful on its own.
+      // Why: viewer-level failure is structural (no projects to build on), so propagate hard; org-level errors below are non-fatal.
       return { ok: false, error: res.error }
     }
     if (!res.data.viewer) {
@@ -1445,6 +1423,7 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
         n.owner?.__typename === 'Organization' ? 'organization' : 'user'
       viewerProjects.push({
         id: n.id,
+        host,
         owner: ownerLogin,
         ownerType,
         number: n.number,
@@ -1463,13 +1442,7 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
   }
 
   // 2) Organizations the viewer belongs to, each with its projectsV2.
-  // Why: we intentionally drop the per-org continuation loop that previously
-  // ran `organization(login).projectsV2(first:50, after:$after)` when the
-  // first nested page had more. That inner loop was the dominant cost
-  // multiplier and the most common 504 source — a single slow org would
-  // serially block the picker for tens of seconds. Users with more than
-  // DISCOVERY_PROJECTS_PER_ORG projects in a given org can still paste a
-  // URL to reach them; the picker is discovery, not an exhaustive index.
+  // Why: no per-org projectsV2 continuation loop — it was the dominant 504 cost; users past the cap can paste a URL instead.
   let orgCursor: string | null = null
   let orgMore = true
   let orgsSeen = 0
@@ -1496,13 +1469,9 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
     if (orgCursor) {
       vars.orgAfter = orgCursor
     }
-    const res = await runGraphql<RawViewerDiscovery>(query, vars)
+    const res = await runGraphql<RawViewerDiscovery>(query, vars, projectGhExecOptions(host))
     if (!res.ok) {
-      // Why: the org-listing query itself failed (not a nested projectsV2).
-      // Record it as a partial failure against a synthetic `*` owner so the
-      // UI banner explains why additional orgs aren't listed, but keep any
-      // viewer projects we already collected. This is the critical 504 path
-      // the user reported in the ProjectPicker.
+      // Why: org-listing failed; record a synthetic '*' partial failure so the banner explains it, but keep collected viewer projects (the reported 504 path).
       partialFailures.push({ owner: '*', message: res.error.message })
       break
     }
@@ -1516,10 +1485,8 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
       }
       orgsSeen++
       const login = org.login
-      // Cache owner → ownerType for downstream paste/resolve even when the
-      // nested projects query was empty or partially failed — paste-to-add
-      // uses this to disambiguate /orgs/ vs /users/ URLs.
-      rememberOwnerType(login, 'organization')
+      // Cache for paste/resolve even when the nested projects query was empty or partially failed.
+      rememberOwnerType(login, 'organization', host)
       const nodes = org.projectsV2?.nodes ?? []
       let ownerCount = 0
       for (const n of nodes) {
@@ -1531,6 +1498,7 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
         }
         orgProjects.push({
           id: n.id,
+          host,
           owner: login,
           ownerType: 'organization',
           number: n.number,
@@ -1547,7 +1515,7 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
   }
 
   if (viewerLogin) {
-    rememberOwnerType(viewerLogin, 'user')
+    rememberOwnerType(viewerLogin, 'user', host)
   }
 
   return {
@@ -1560,11 +1528,11 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
 // ─── resolveProjectRef ─────────────────────────────────────────────────
 
 type ParsedPaste =
-  | { kind: 'org'; owner: string; number: number; viewNumber?: number }
-  | { kind: 'user'; owner: string; number: number; viewNumber?: number }
+  | { kind: 'org'; owner: string; number: number; host: string; viewNumber?: number }
+  | { kind: 'user'; owner: string; number: number; host: string; viewNumber?: number }
   | { kind: 'bare'; owner: string; number: number }
 
-export function parseProjectPaste(input: string): ParsedPaste | null {
+export function parseProjectPaste(input: string, host?: string): ParsedPaste | null {
   const trimmed = input.trim()
   if (!trimmed) {
     return null
@@ -1572,28 +1540,43 @@ export function parseProjectPaste(input: string): ParsedPaste | null {
   if (isGitHubProjectRefInputTooLarge(trimmed)) {
     return null
   }
-  // URL forms
-  const urlRe =
-    /^https?:\/\/github\.com\/(orgs|users)\/([^/]+)\/projects\/(\d+)(?:\/views\/(\d+))?/i
-  const m = trimmed.match(urlRe)
-  if (m) {
-    const [, kindSeg, owner, nStr, vStr] = m
-    const number = Number.parseInt(nStr, 10)
-    if (!Number.isInteger(number) || number < 1) {
+  // Why: URL parsing enforces an exact Project path and rejects credentials;
+  // a prefix regex could silently turn `/projects/1evil` into Project 1.
+  try {
+    const url = new URL(trimmed)
+    const allowedHosts = new Set(['github.com', ...(host ? [host.trim().toLowerCase()] : [])])
+    const parts = url.pathname.split('/').filter(Boolean)
+    const hasView = parts.length === 6 && parts[4] === 'views'
+    if (
+      (url.protocol !== 'https:' && url.protocol !== 'http:') ||
+      url.username ||
+      url.password ||
+      !allowedHosts.has(url.host.toLowerCase()) ||
+      (parts[0] !== 'orgs' && parts[0] !== 'users') ||
+      !isValidOwnerSlug(parts[1]) ||
+      parts[2] !== 'projects' ||
+      (parts.length !== 4 && !hasView)
+    ) {
       return null
     }
-    if (!isValidOwnerSlug(owner)) {
+    const number = Number(parts[3])
+    const viewNumber = hasView ? Number(parts[5]) : undefined
+    if (
+      !Number.isSafeInteger(number) ||
+      number < 1 ||
+      (hasView && (!Number.isSafeInteger(viewNumber) || (viewNumber ?? 0) < 1))
+    ) {
       return null
     }
-    const viewNumber = vStr ? Number.parseInt(vStr, 10) : undefined
     return {
-      kind: kindSeg === 'orgs' ? 'org' : 'user',
-      owner,
+      kind: parts[0] === 'orgs' ? 'org' : 'user',
+      owner: parts[1],
       number,
-      ...(viewNumber !== undefined && Number.isInteger(viewNumber) && viewNumber >= 1
-        ? { viewNumber }
-        : {})
+      host: url.host.toLowerCase(),
+      ...(viewNumber !== undefined ? { viewNumber } : {})
     }
+  } catch {
+    // Shorthand parsing below remains available for non-URL input.
   }
   // owner/number shorthand — owner alphabet matches OWNER_SLUG_RE.
   const shortRe = /^([A-Za-z0-9][A-Za-z0-9-]*)\/(\d+)$/
@@ -1610,7 +1593,8 @@ export function parseProjectPaste(input: string): ParsedPaste | null {
 
 async function resolveOwnerType(
   owner: string,
-  preferred: GitHubProjectOwnerType | null
+  preferred: GitHubProjectOwnerType | null,
+  host?: string
 ): Promise<
   | { ok: true; ownerType: GitHubProjectOwnerType; title: string }
   | { ok: false; error: GitHubProjectViewError }
@@ -1638,7 +1622,7 @@ async function resolveOwnerType(
     }
     const res = await runGraphql<
       Record<string, { projectV2?: { id?: string; title?: string } | null; login?: string } | null>
-    >(query, vars)
+    >(query, vars, projectGhExecOptions(host))
     if (!res.ok) {
       return { ok: false, error: res.error }
     }
@@ -1656,7 +1640,7 @@ async function resolveOwnerType(
     return { ok: true, title: '' }
   }
 
-  const cached = getCachedOwnerType(owner)
+  const cached = getCachedOwnerType(owner, host)
   const candidates: GitHubProjectOwnerType[] = preferred
     ? [preferred]
     : cached
@@ -1674,7 +1658,7 @@ async function resolveOwnerType(
   for (const ot of ordered) {
     const r = await tryOne(ot, null)
     if (r.ok) {
-      rememberOwnerType(owner, ot)
+      rememberOwnerType(owner, ot, host)
       return { ok: true, ownerType: ot, title: r.title }
     }
     lastError = r.error
@@ -1683,7 +1667,7 @@ async function resolveOwnerType(
       return { ok: false, error: r.error }
     }
   }
-  rememberOwnerType(owner, null)
+  rememberOwnerType(owner, null, host)
   return {
     ok: false,
     error: lastError ?? { type: 'not_found', message: 'Owner not found.' }
@@ -1706,7 +1690,7 @@ export async function resolveProjectRef(
       error: { type: 'validation_error', message: GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR }
     }
   }
-  const parsed = parseProjectPaste(input)
+  const parsed = parseProjectPaste(input, args.host)
   if (!parsed) {
     return {
       ok: false,
@@ -1718,8 +1702,11 @@ export async function resolveProjectRef(
   }
   const preferred: GitHubProjectOwnerType | null =
     parsed.kind === 'org' ? 'organization' : parsed.kind === 'user' ? 'user' : null
+  // Why: a pasted URL is authoritative. The ambient host only applies to
+  // owner/number shorthand; otherwise same-number Projects can cross hosts.
+  const executionHost = parsed.kind === 'bare' ? githubProjectHost(args.host) : parsed.host
   // Verify by fetching project title.
-  const ownerRes = await resolveOwnerType(parsed.owner, preferred)
+  const ownerRes = await resolveOwnerType(parsed.owner, preferred, executionHost)
   if (!ownerRes.ok) {
     return { ok: false, error: ownerRes.error }
   }
@@ -1732,7 +1719,7 @@ export async function resolveProjectRef(
   `
   const res = await runGraphql<
     Record<string, { projectV2?: { id?: string; title?: string } | null } | null>
-  >(query, { owner: parsed.owner, num: parsed.number })
+  >(query, { owner: parsed.owner, num: parsed.number }, projectGhExecOptions(executionHost))
   if (!res.ok) {
     return { ok: false, error: res.error }
   }
@@ -1746,9 +1733,8 @@ export async function resolveProjectRef(
     ownerType,
     number: parsed.number,
     title: p.title ?? '',
-    // Why: forward the parsed view number from /views/{n} URLs so the
-    // renderer can skip the view-pick step. parsed.kind === 'bare' has no
-    // viewNumber (owner/number shorthand carries no view).
+    host: executionHost,
+    // Why: forward URL view numbers so the renderer can skip view selection; bare shorthand has none.
     ...(parsed.kind !== 'bare' && parsed.viewNumber !== undefined
       ? { viewNumber: parsed.viewNumber }
       : {})
@@ -1778,6 +1764,7 @@ export async function listProjectViews(
       owner: args.owner,
       ownerType: args.ownerType,
       projectNumber: args.projectNumber,
+      host: args.host,
       after: cursor
     })
     if (!page.ok) {

@@ -1,6 +1,6 @@
 import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../shared/types'
 
-type WorktreeOwnerRecord = Pick<Worktree, 'id' | 'repoId' | 'hostId'>
+type WorktreeOwnerRecord = Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>
 type RepoOwnerRecord = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 type FolderWorkspaceOwnerRecord = Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId'>
 type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>
@@ -9,11 +9,11 @@ type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'execu
 // immutable-slice indexes prevent unrelated store writes from rescanning.
 const worktreeOwnerIndexCache = new WeakMap<
   Record<string, readonly WorktreeOwnerRecord[]>,
-  ReadonlyMap<string, WorktreeOwnerRecord>
+  ReadonlyMap<string, IndexedWorktreeOwnerResolution>
 >()
 const repoOwnerIndexCache = new WeakMap<
   readonly RepoOwnerRecord[],
-  ReadonlyMap<string, RepoOwnerRecord>
+  ReadonlyMap<string, IndexedRepoOwnerResolution>
 >()
 const folderWorkspaceOwnerIndexCache = new WeakMap<
   readonly FolderWorkspaceOwnerRecord[],
@@ -52,31 +52,96 @@ export function findIndexedWorktreeOwner(
   worktreesByRepo: Record<string, readonly WorktreeOwnerRecord[]> | undefined,
   worktreeId: string
 ): WorktreeOwnerRecord | null {
+  const resolution = resolveIndexedWorktreeOwner(worktreesByRepo, worktreeId)
+  return resolution.kind === 'resolved' ? resolution.owner : null
+}
+
+export type IndexedRepoOwnerResolution =
+  | { kind: 'resolved'; owner: RepoOwnerRecord }
+  | { kind: 'missing' }
+  | { kind: 'ambiguous' }
+
+function repoOwnerIdentity(owner: RepoOwnerRecord): string {
+  return JSON.stringify([owner.executionHostId ?? null, owner.connectionId?.trim() || null])
+}
+
+export function resolveIndexedRepoOwner(
+  repos: readonly RepoOwnerRecord[] | undefined,
+  repoId: string
+): IndexedRepoOwnerResolution {
+  if (!repos) {
+    return { kind: 'missing' }
+  }
+  let index = repoOwnerIndexCache.get(repos)
+  if (!index) {
+    const next = new Map<string, IndexedRepoOwnerResolution>()
+    for (const repo of repos) {
+      const repoId = repo.id
+      const current = next.get(repoId)
+      if (!current) {
+        next.set(repoId, { kind: 'resolved', owner: repo })
+      } else if (
+        current.kind === 'resolved' &&
+        repoOwnerIdentity(current.owner) !== repoOwnerIdentity(repo)
+      ) {
+        next.set(repoId, { kind: 'ambiguous' })
+      }
+    }
+    index = next
+    repoOwnerIndexCache.set(repos, index)
+  }
+  return index.get(repoId) ?? { kind: 'missing' }
+}
+
+export type IndexedWorktreeOwnerResolution =
+  | { kind: 'resolved'; owner: WorktreeOwnerRecord }
+  | { kind: 'missing' }
+  | { kind: 'ambiguous' }
+
+function worktreeOwnerIdentity(owner: WorktreeOwnerRecord): string {
+  return JSON.stringify([
+    owner.repoId,
+    owner.hostId ?? null,
+    owner.runtimeOwnerEnvironmentId?.trim() || null
+  ])
+}
+
+export function resolveIndexedWorktreeOwner(
+  worktreesByRepo: Record<string, readonly WorktreeOwnerRecord[]> | undefined,
+  worktreeId: string
+): IndexedWorktreeOwnerResolution {
   if (!worktreesByRepo) {
-    return null
+    return { kind: 'missing' }
   }
   let index = worktreeOwnerIndexCache.get(worktreesByRepo)
   if (!index) {
-    const next = new Map<string, WorktreeOwnerRecord>()
+    const next = new Map<string, IndexedWorktreeOwnerResolution>()
     for (const worktrees of Object.values(worktreesByRepo)) {
       for (const worktree of worktrees) {
         const id = worktree.id
-        if (!next.has(id)) {
-          next.set(id, worktree)
+        const current = next.get(id)
+        if (!current) {
+          next.set(id, { kind: 'resolved', owner: worktree })
+        } else if (
+          current.kind === 'resolved' &&
+          worktreeOwnerIdentity(current.owner) !== worktreeOwnerIdentity(worktree)
+        ) {
+          next.set(id, { kind: 'ambiguous' })
         }
       }
     }
     index = next
     worktreeOwnerIndexCache.set(worktreesByRepo, index)
   }
-  return index.get(worktreeId) ?? null
+  return index.get(worktreeId) ?? { kind: 'missing' }
 }
 
 export function findIndexedRepoOwner(
   repos: readonly RepoOwnerRecord[] | undefined,
   repoId: string
 ): RepoOwnerRecord | null {
-  return findIndexedOwnerRecord(repos, repoId, repoOwnerIndexCache)
+  const resolution = resolveIndexedRepoOwner(repos, repoId)
+  return resolution.kind === 'resolved' ? resolution.owner : null
 }
 
 export function findIndexedFolderWorkspaceOwner(
