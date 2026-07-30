@@ -3,18 +3,29 @@ import { getLivePaneCensus } from './pane-manager-registry'
 import type { ManagedPane } from './pane-manager-types'
 
 const MAX_RETRY_FRAMES = 40
+const COLLAPSED_LAYOUT_RETRY_FRAMES = 4
 const LAYOUT_SETTLE_MS = 16
 
 type RetrySchedule = { cancel: () => void }
 
 type RetryState = {
   attempts: number
+  collapsedLayoutAttempts: number
   schedule: RetrySchedule | null
   retry: () => boolean
   onExhausted: () => void
 }
 
 const retryByPane = new WeakMap<ManagedPane, RetryState>()
+
+function isConnectedCollapsedPane(pane: ManagedPane): boolean {
+  const container = pane.container
+  if (container.isConnected !== true || container.offsetParent == null) {
+    return false
+  }
+  const rect = container.getBoundingClientRect?.()
+  return Boolean(rect && (rect.width === 0 || rect.height === 0))
+}
 
 function scheduleRetryTick(run: () => void): RetrySchedule {
   if (typeof requestAnimationFrame === 'function') {
@@ -59,6 +70,7 @@ export function armPaneFitContinuationRetry(
 ): void {
   const state = retryByPane.get(pane) ?? {
     attempts: 0,
+    collapsedLayoutAttempts: 0,
     schedule: null,
     ...callbacks
   }
@@ -75,6 +87,15 @@ export function armPaneFitContinuationRetry(
       return
     }
     state.attempts += 1
+    state.collapsedLayoutAttempts = isConnectedCollapsedPane(pane)
+      ? state.collapsedLayoutAttempts + 1
+      : 0
+    if (state.collapsedLayoutAttempts >= COLLAPSED_LAYOUT_RETRY_FRAMES) {
+      // Why: a connected 0×0 split has no destination grid; waiting the full reveal budget only stalls replay and live output.
+      clearPaneFitContinuationRetry(pane)
+      state.onExhausted()
+      return
+    }
     if (state.attempts >= MAX_RETRY_FRAMES) {
       // Why leafId + census: `pane.id` restarts at 1 per PaneManager and there
       // is one manager per tab, so a burst of identical `paneId: 1` crumbs

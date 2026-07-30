@@ -93,6 +93,7 @@ import {
 } from './terminal-pane/terminal-hidden-view-parking'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
+  selectTerminalLayoutPaneCountByTabId,
   selectForceParkEvictableTabIds,
   selectRetentionForceParkedTerminalWorktrees,
   type TerminalWorktreeRetentionCandidate
@@ -293,9 +294,11 @@ function Terminal(): React.JSX.Element | null {
   )
   const activeView = useAppStore((s) => s.activeView)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const terminalLayoutPaneCountByTabId = useAppStore(selectTerminalLayoutPaneCountByTabId)
   const pendingStartupByTabId = useAppStore((s) => s.pendingStartupByTabId)
   const terminalParkingEnabled = useAppStore((s) => s.settings?.terminalHiddenViewParking !== false)
   const terminalSshParkingEnabled = useAppStore((s) => s.settings?.terminalSshViewParking !== false)
+  const terminalScrollbackRows = useAppStore((s) => s.settings?.terminalScrollbackRows)
   const terminalRetentionBudgetEnabled = useAppStore(
     (s) => s.settings?.terminalHiddenWorktreeRetentionBudget !== false
   )
@@ -978,8 +981,8 @@ function Terminal(): React.JSX.Element | null {
         nextParkedTerminalWorktreeIds.delete(worktreeId)
       }
     }
-    // C1 retention budget: worktrees ordinary parking can never evict (SSH off,
-    // remote-runtime, uncoverable tabs) force-park beyond a count/TTL bound —
+    // Worktrees ordinary parking cannot evict (SSH off, remote-runtime,
+    // uncoverable tabs) force-park beyond the pane-weight budget or TTL —
     // added AFTER the coverage veto because darkness for their uncoverable tabs
     // is the accepted cost of bounding retention.
     const retentionBudgetCandidates: TerminalWorktreeRetentionCandidate[] = retentionCandidates.map(
@@ -1014,6 +1017,10 @@ function Terminal(): React.JSX.Element | null {
               pendingStartupByTabId[tab.id] !== undefined ||
               tab.pendingActivationSpawn === true ||
               (typeof tab.pendingActivationSpawn === 'number' && tab.pendingActivationSpawn > 0)
+          ),
+          retainedPaneCount: tabs.reduce(
+            (count, tab) => count + (terminalLayoutPaneCountByTabId[tab.id] ?? 1),
+            0
           )
         }
       }
@@ -1023,6 +1030,7 @@ function Terminal(): React.JSX.Element | null {
       parkingEnabled: terminalParkingEnabled,
       retentionBudgetEnabled: terminalRetentionBudgetEnabled,
       nowMs,
+      scrollbackRows: terminalScrollbackRows,
       ...overrides
     })
     const capturedForceParked = forceParkedCaptureDoneRef.current
@@ -1047,9 +1055,7 @@ function Terminal(): React.JSX.Element | null {
         // uses), so SSH classes whose reveal has no local snapshot still show
         // last-known content. includeLocalBuffers:false is required here, not
         // optional — a heap fix must not plant 512KB/pane of scrollback strings
-        // in the store for local worktrees that already have the daemon
-        // snapshot; a remote-runtime pane in a local repo likewise needs none,
-        // its reveal repaints from the runtime's own subscribe snapshot.
+        // in the store when the daemon/runtime already owns the snapshot.
         // Eviction-exempt tabs never unmount (per-tab exclusion), so they need
         // no pre-unmount capture — skipping spares a serialize+setTabLayout
         // walk on live panes per force-park episode.
@@ -1128,9 +1134,11 @@ function Terminal(): React.JSX.Element | null {
     pendingStartupByTabId,
     renderedActiveWorktreeId,
     tabsByWorktree,
+    terminalLayoutPaneCountByTabId,
     terminalParkingEnabled,
     terminalParkingRevision,
     terminalRetentionBudgetEnabled,
+    terminalScrollbackRows,
     terminalSshParkingEnabled,
     workspaceSurfaces
   ])

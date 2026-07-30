@@ -16,26 +16,16 @@ import {
   waitForActivePanePtyId,
   waitForActiveTerminalManager
 } from './helpers/terminal'
+import { ensureActiveWorktreePaneLoad, focusPane } from './artificial-opencode-pane-interactions'
 import {
-  ensureActiveWorktreePaneLoad,
-  focusActiveTerminalInput,
-  focusPane,
-  waitForMarkerLatency,
-  waitForTerminalOutputForPtyId
-} from './artificial-opencode-pane-interactions'
+  measureTerminalTypingDuringLoad,
+  type TypingMeasurement
+} from './artificial-opencode-terminal-latency-measurement'
 import { runHiddenRealPtyPressureScenario } from './artificial-opencode-hidden-pressure-scenario'
 import type { HiddenPressureOutputMode } from './artificial-opencode-hidden-pressure-script'
 import { runMainPressureScenario } from './artificial-opencode-main-pressure-scenario'
 import { runRendererBackpressureRevisitScenario } from './artificial-opencode-revisit-pressure-scenario'
 import { startSyntheticOpenCodeInjection } from './artificial-opencode-synthetic-injection'
-
-type TypingMeasurement = {
-  latencies: number[]
-  medianLatencyMs: number
-  worstLatencyMs: number
-  maxTimerDriftMs: number
-  frameCount: number
-}
 
 type SyntheticOpenCodeWindow = Window & {
   __terminalPtyDataInjection?: {
@@ -108,7 +98,6 @@ type MainPtyPressureDebugSnapshot = {
   pendingDroppedChars: number
 }
 
-const KEY_LATENCY_SAMPLES = 'abcdefghijklmnop'
 const DEFAULT_SAME_WORKSPACE_PANES = 5
 const DEFAULT_CROSS_WORKSPACE_PANES_PER_WORKTREE = 3
 const DEFAULT_PRESSURE_BACKGROUND_PANES = 17
@@ -117,7 +106,6 @@ const DEFAULT_HIDDEN_PRESSURE_PANES = 17
 const HIDDEN_PRESSURE_START_DELAY_MS = 1200
 const DEFAULT_FRAME_COUNT = 180
 const DEFAULT_FRAME_INTERVAL_MS = 6
-const TIMER_SAMPLE_MS = 16
 const MAIN_RENDERER_PRESSURE_TARGET_CHARS = 2 * 1024 * 1024
 // Why: these are regression budgets, not observed baselines. Repeated local
 // 100-pane OpenCode-scale runs are below 50ms worst-key latency; keep enough
@@ -233,57 +221,13 @@ function writeInteractivePromptScript(scriptPath: string, runId: string): void {
   writeFileSync(scriptPath, interactivePromptScript(runId))
 }
 
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b)
-  return sorted[Math.floor(sorted.length / 2)] ?? 0
-}
-
 async function measureTypingDuringLoad(
   page: Page,
   scriptPath: string,
   ptyId: string,
   runId: string
 ): Promise<TypingMeasurement> {
-  await sendToTerminal(page, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
-  await waitForTerminalOutputForPtyId(page, ptyId, `OPENCODE_TYPING_READY_${runId}`, 10_000)
-  await focusActiveTerminalInput(page)
-
-  const eventLoop = await page.evaluateHandle((sampleMs) => {
-    let maxTimerDriftMs = 0
-    let lastTick = performance.now()
-    const timer = window.setInterval(() => {
-      const now = performance.now()
-      maxTimerDriftMs = Math.max(maxTimerDriftMs, now - lastTick - sampleMs)
-      lastTick = now
-    }, sampleMs)
-    return {
-      stop: () => {
-        window.clearInterval(timer)
-        return maxTimerDriftMs
-      }
-    }
-  }, TIMER_SAMPLE_MS)
-
-  const latencies: number[] = []
-  for (const [index, char] of [...KEY_LATENCY_SAMPLES].entries()) {
-    const marker = `OPENCODE_TYPING_KEY_${runId}_${index + 1}`
-    const start = performance.now()
-    await page.keyboard.type(char)
-    // Why: wait up to the under-load budget so a slow echo is measured and
-    // asserted per-scenario, not thrown as a confusing "did not contain".
-    await waitForMarkerLatency(page, marker, MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS)
-    latencies.push(performance.now() - start)
-  }
-
-  const maxTimerDriftMs = await eventLoop.evaluate((watcher) => watcher.stop())
-  await eventLoop.dispose()
-  return {
-    latencies,
-    medianLatencyMs: median(latencies),
-    worstLatencyMs: Math.max(...latencies),
-    maxTimerDriftMs,
-    frameCount: FRAME_COUNT
-  }
+  return measureTerminalTypingDuringLoad(page, scriptPath, ptyId, runId, FRAME_COUNT)
 }
 
 async function resetTerminalPtyOutputDebug(page: Page): Promise<void> {
@@ -388,7 +332,35 @@ function annotateTypingMeasurement(
       1
     )}ms worst=${measurement.worstLatencyMs.toFixed(
       1
-    )}ms maxTimerDrift=${measurement.maxTimerDriftMs.toFixed(1)}ms samples=${measurement.latencies
+    )}ms maxTimerDrift=${measurement.maxTimerDriftMs.toFixed(
+      1
+    )}ms controllerDrift=${measurement.controllerMaxTimerDriftMs.toFixed(
+      1
+    )}ms rendererLongTask=${measurement.rendererMaxLongTaskMs.toFixed(
+      1
+    )}ms rendererLongTaskSupported=${measurement.rendererLongTaskSupported} rendererTask=${
+      measurement.rendererTaskDurationMs == null
+        ? 'na'
+        : `${measurement.rendererTaskDurationMs.toFixed(1)}ms`
+    } rendererScript=${
+      measurement.rendererScriptDurationMs == null
+        ? 'na'
+        : `${measurement.rendererScriptDurationMs.toFixed(1)}ms`
+    } rendererKeydowns=${measurement.rendererKeydownCount} typingElapsed=${measurement.elapsedMs.toFixed(
+      1
+    )}ms dispatchSamples=${measurement.dispatchLatencies
+      .map((value) => value.toFixed(1))
+      .join(',')} echoSamples=${measurement.echoLatencies
+      .map((value) => value.toFixed(1))
+      .join(',')} hostCpuBusy=${
+      measurement.hostCpuBusyPercent == null
+        ? 'na'
+        : `${measurement.hostCpuBusyPercent.toFixed(1)}%`
+    } hostCpuPressureWait=${
+      measurement.hostCpuPressureWaitMs == null
+        ? 'na'
+        : `${measurement.hostCpuPressureWaitMs.toFixed(1)}ms`
+    } samples=${measurement.latencies
       .map((value) => value.toFixed(1))
       .join(',')}${mode2031Summary}${schedulerSummary}${mainPressureSummary}${ackGateSummary}`
   })

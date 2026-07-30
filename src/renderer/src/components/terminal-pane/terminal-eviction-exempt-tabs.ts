@@ -75,13 +75,12 @@ export function selectEvictionExemptTerminalTabLayoutKey(
   state: EvictionExemptTabLayoutState,
   tabs: readonly ParkableTerminalTabModel[]
 ): string {
-  return tabs
-    .map((tab) => {
-      const ptyIdsByLeafId = state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}
-      const leafPtys = Object.entries(ptyIdsByLeafId)
-        .map(([leafId, ptyId]) => `${leafId}:${ptyId}`)
-        .join(',')
-      return `${tab.id}=${leafPtys}`
-    })
-    .join('|')
+  return JSON.stringify(
+    tabs.map((tab) => [
+      tab.id,
+      Object.entries(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}).sort(
+        ([leftLeafId], [rightLeafId]) => leftLeafId.localeCompare(rightLeafId)
+      )
+    ])
+  )
 }

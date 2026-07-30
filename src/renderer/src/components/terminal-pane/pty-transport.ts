@@ -76,6 +76,7 @@ export const MAX_PENDING_PTY_SIDE_EFFECTS = 512
 // Why: agent status is last-wins store state, but payloads can carry KB-scale prompt/tool strings;
 // carry only the newest few through eviction so a status flood cannot re-grow what it evicted.
 export const MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY = 16
+const MAX_EVICTED_AGENT_TITLE_TRANSITION_CARRY = 3
 
 type PtyOutputCallbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
 
@@ -106,6 +107,11 @@ type PendingPtySideEffect = {
   titleScanEffect: 'none' | 'stale-probe' | 'ignored-cursor-native'
   containsBell: boolean
   suppressAttentionEvents: boolean
+}
+
+type EvictedAgentTitleTransition = {
+  phase: 'working' | 'settled' | 'cleared'
+  title: string
 }
 
 function isIgnoredCursorNativeTitle(title: string): boolean {
@@ -165,6 +171,7 @@ export function createPtyOutputProcessor({
   let pendingSideEffects: PendingPtySideEffect[] = []
   let pendingSideEffectIndex = 0
   let pendingWorkingTitleSideEffects = 0
+  let evictedAgentTitleTransitions: EvictedAgentTitleTransition[] = []
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
@@ -199,6 +206,37 @@ export function createPtyOutputProcessor({
     }
   }
 
+  function carryEvictedAgentTitleTransitions(next: PendingPtySideEffect): void {
+    if (!agentTracker || next.suppressAttentionEvents) {
+      return
+    }
+    for (const title of next.titles) {
+      const status = detectAgentStatusFromTitle(title)
+      const phase = status === 'working' ? 'working' : status === null ? 'cleared' : 'settled'
+      const prior = evictedAgentTitleTransitions.at(-1)
+      if (prior?.phase === phase) {
+        prior.title = title
+        continue
+      }
+      evictedAgentTitleTransitions.push({ phase, title })
+      if (evictedAgentTitleTransitions.length > MAX_EVICTED_AGENT_TITLE_TRANSITION_CARRY) {
+        evictedAgentTitleTransitions.shift()
+      }
+    }
+  }
+
+  function flushEvictedAgentTitleTransitions(): void {
+    const transitions = evictedAgentTitleTransitions
+    evictedAgentTitleTransitions = []
+    if (transitions.length > 0) {
+      // Carried titles are fresh observations; an older fallback must not clear them.
+      clearStaleTitleTimer()
+    }
+    for (const transition of transitions) {
+      applyObservedTerminalTitle(transition.title)
+    }
+  }
+
   function clearStaleTitleTimer(): void {
     if (staleTitleTimer) {
       clearTimeout(staleTitleTimer)
@@ -214,9 +252,8 @@ export function createPtyOutputProcessor({
     sideEffectDrainTimer = setTimeout(drainPtySideEffects, 0)
   }
 
-  // Why: oldest-first eviction at the cap. Evicted titles are safe to drop (titles are last-wins);
-  // bells and agent-status payloads collapse onto the next-oldest survivor so a pending bell latch
-  // and the newest statuses still apply on drain instead of vanishing.
+  // Why: oldest-first eviction at the cap. Display titles are last-wins, lifecycle phases carry
+  // separately, and bells/statuses collapse onto the next survivor instead of vanishing.
   function evictOldestPendingSideEffectsIfFull(): void {
     while (pendingSideEffects.length - pendingSideEffectIndex >= MAX_PENDING_PTY_SIDE_EFFECTS) {
       const evicted = pendingSideEffects[pendingSideEffectIndex]
@@ -224,6 +261,8 @@ export function createPtyOutputProcessor({
         return
       }
       pendingSideEffectIndex += 1
+      // Why: the queue may drop display titles, but the latest agent lifecycle edge must survive.
+      carryEvictedAgentTitleTransitions(evicted)
       // Why: mirror applyPtySideEffect's accounting so stale-probe arming doesn't stick past eviction.
       pendingWorkingTitleSideEffects -= countWorkingTitles(evicted.titles)
       if (pendingWorkingTitleSideEffects < 0) {
@@ -288,7 +327,9 @@ export function createPtyOutputProcessor({
       data.length > 0 &&
       titles.length === 0 &&
       !suppressAttentionEvents &&
-      (isWorkingTitle(lastEmittedTitle) || pendingWorkingTitleSideEffects > 0)
+      (isWorkingTitle(lastEmittedTitle) ||
+        pendingWorkingTitleSideEffects > 0 ||
+        evictedAgentTitleTransitions.some((transition) => transition.phase === 'working'))
     )
     const shouldEmitEmptyTitleScan = scannedForTitles || needsStaleTitleProbe
     const emptyTitleScanEffect: PendingPtySideEffect['titleScanEffect'] = ignoredCursorNativeTitle
@@ -390,6 +431,7 @@ export function createPtyOutputProcessor({
 
   function drainPtySideEffects(options: { flushAll?: boolean } = {}): void {
     sideEffectDrainTimer = null
+    flushEvictedAgentTitleTransitions()
     const maxEffects = options.flushAll ? Number.POSITIVE_INFINITY : MAX_PTY_SIDE_EFFECTS_PER_DRAIN
     let processed = 0
     while (pendingSideEffectIndex < pendingSideEffects.length && processed < maxEffects) {
@@ -488,6 +530,7 @@ export function createPtyOutputProcessor({
     pendingSideEffects.length = 0
     pendingSideEffectIndex = 0
     pendingWorkingTitleSideEffects = 0
+    evictedAgentTitleTransitions.length = 0
     clearStaleTitleTimer()
     agentTracker?.reset()
     bellDetector.reset()

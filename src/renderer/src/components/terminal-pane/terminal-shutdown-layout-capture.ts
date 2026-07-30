@@ -8,6 +8,7 @@ import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import { serializeWithAbsoluteCursor } from '../../../../shared/terminal-serialize-absolute-cursor'
 import { getUtf8ByteLength, measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
+import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 
 const MAX_BUFFER_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
 
@@ -16,6 +17,23 @@ type ShutdownPane = Pick<ManagedPane, 'id' | 'leafId' | 'terminal' | 'serializeA
 type ShutdownPaneManager = {
   getPanes(): ShutdownPane[]
   getActivePane(): ShutdownPane | null
+}
+
+export function selectRemoteRuntimeScrollbackLeafIds(args: {
+  panes: readonly Pick<ShutdownPane, 'id' | 'leafId'>[]
+  paneTransports: ReadonlyMap<number, Pick<PtyTransport, 'getPtyId'>>
+  existingLayout: TerminalLayoutSnapshot | undefined
+}): Set<string> {
+  const excludedLeafIds = new Set<string>()
+  for (const pane of args.panes) {
+    const livePtyId = args.paneTransports.get(pane.id)?.getPtyId()
+    // The persisted binding covers the attach gap before transport reports its PTY.
+    const ptyId = livePtyId ?? args.existingLayout?.ptyIdsByLeafId?.[pane.leafId] ?? null
+    if (ptyId && isRemoteRuntimePtyId(ptyId)) {
+      excludedLeafIds.add(pane.leafId)
+    }
+  }
+  return excludedLeafIds
 }
 
 type CaptureTerminalShutdownLayoutArgs = {
@@ -27,6 +45,7 @@ type CaptureTerminalShutdownLayoutArgs = {
   existingLayout: TerminalLayoutSnapshot | undefined
   captureBuffers?: boolean
   clearedScrollbackLeafIds?: ReadonlySet<string>
+  excludedScrollbackLeafIds?: ReadonlySet<string>
 }
 
 function omitClearedLeafState(
@@ -97,13 +116,17 @@ export function captureTerminalShutdownLayout({
   paneTitlesByPaneId,
   existingLayout,
   captureBuffers = true,
-  clearedScrollbackLeafIds
+  clearedScrollbackLeafIds,
+  excludedScrollbackLeafIds
 }: CaptureTerminalShutdownLayoutArgs): TerminalLayoutSnapshot {
   const panes = manager.getPanes()
   const buffers: Record<string, string> = {}
 
   if (captureBuffers) {
     for (const pane of panes) {
+      if (excludedScrollbackLeafIds?.has(pane.leafId)) {
+        continue
+      }
       try {
         // Why: non-focused panes may have renderer-throttled PTY bytes queued;
         // push them into xterm before taking the shutdown scrollback snapshot.
@@ -138,6 +161,10 @@ export function captureTerminalShutdownLayout({
     new Map(panes.map((pane) => [pane.id, pane.leafId]))
   )
   const currentLeafIds = new Set(panes.map((p) => p.leafId))
+  const omittedScrollbackLeafIds = new Set([
+    ...(clearedScrollbackLeafIds ?? []),
+    ...(excludedScrollbackLeafIds ?? [])
+  ])
   const livePtyIdsByLeafId: Record<string, string> = {}
   const preservedPtyIdsByLeafId: Record<string, string> = {}
   for (const pane of panes) {
@@ -157,13 +184,13 @@ export function captureTerminalShutdownLayout({
 
   const mergedBuffers = captureBuffers
     ? mergeCapturedLeafState({
-        prior: omitClearedLeafState(existingLayout?.buffersByLeafId, clearedScrollbackLeafIds),
+        prior: omitClearedLeafState(existingLayout?.buffersByLeafId, omittedScrollbackLeafIds),
         fresh: buffers,
         currentLeafIds
       })
     : {}
   const mergedScrollbackRefs = mergeCapturedLeafState({
-    prior: omitClearedLeafState(existingLayout?.scrollbackRefsByLeafId, clearedScrollbackLeafIds),
+    prior: omitClearedLeafState(existingLayout?.scrollbackRefsByLeafId, omittedScrollbackLeafIds),
     fresh: {},
     currentLeafIds
   })

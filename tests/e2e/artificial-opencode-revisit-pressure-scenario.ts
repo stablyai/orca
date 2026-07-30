@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { rmSync } from 'node:fs'
 import path from 'node:path'
 import { writePressureOutputScript } from './artificial-opencode-hidden-pressure-script'
+import { waitForMarkerLatency } from './artificial-opencode-pane-interactions'
 import {
   ensureTerminalVisible,
   getAllWorktreeIds,
@@ -12,7 +13,6 @@ import {
   waitForSessionReady
 } from './helpers/store'
 import {
-  getTerminalContent,
   sendToTerminal,
   waitForActivePanePtyId,
   waitForActiveTerminalManager
@@ -260,21 +260,6 @@ async function startRealPtyPressureCommands({
       )
     )
   )
-}
-
-async function waitForMarkerLatency(
-  page: Page,
-  marker: string,
-  timeoutMs: number
-): Promise<number> {
-  const start = performance.now()
-  while (performance.now() - start < timeoutMs) {
-    if ((await getTerminalContent(page, 12_000)).includes(marker)) {
-      return performance.now() - start
-    }
-    await page.waitForTimeout(5)
-  }
-  throw new Error(`Timed out waiting for terminal marker ${marker}`)
 }
 
 function expectPressureStayedBounded<TMeasurement extends RevisitPressureMeasurement>({

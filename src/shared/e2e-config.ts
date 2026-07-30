@@ -29,7 +29,7 @@ export function createE2EConfig(input: E2EConfigInput): E2EConfig {
     input.terminalParkingDelayMs > 0
       ? input.terminalParkingDelayMs
       : null
-  // Why: a worktree count — only a positive integer is a meaningful budget.
+  // Why: pane-weight units — only a positive integer is a meaningful budget.
   const terminalRetentionLimit =
     typeof input.terminalRetentionLimit === 'number' &&
     Number.isInteger(input.terminalRetentionLimit) &&

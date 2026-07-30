@@ -17,6 +17,7 @@ import {
   waitForActiveTerminalManager,
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../src/shared/terminal-scrollback-policy'
 
 // Why: production cold-park hysteresis is 30s. The fast-park env override is
 // scoped to this spec's app launches via orcaAppExtraEnv (same pattern as
@@ -394,6 +395,9 @@ test.describe('Terminal parked memory', () => {
 const RETENTION_TAB_COUNT = 4
 const RETENTION_FILL_LINE_COUNT = 12_000
 const RETENTION_SCROLLBACK_ROWS = 25_000
+const RETENTION_PANE_WEIGHT = Math.ceil(
+  RETENTION_SCROLLBACK_ROWS / DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT
+)
 // Why 12: xterm packs each cell as 3 uint32s in the BufferLine typed array.
 const XTERM_BYTES_PER_CELL = 12
 // Why 40: this staging measures ~87 MB of retained buffer, so half of that is a
@@ -597,12 +601,8 @@ test.describe('Terminal hidden worktree retention budget', () => {
   test.use({
     orcaAppExtraEnv: {
       ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARKING_DELAY_MS),
-      // Why limit=1: the retention TTL is absolute production timing (45min) and
-      // the parking-delay override deliberately no longer shrinks it, so the
-      // COUNT CAP is the only knob a test can drive. With a budget of 1 the
-      // newest hidden un-parkable worktree takes the last-active exemption and
-      // the older one force-parks — cap and exemption proven in one run.
-      ORCA_E2E_TERMINAL_RETENTION_LIMIT: '1'
+      // The newer one-pane decoy exactly fits; the four-pane victim does not.
+      ORCA_E2E_TERMINAL_RETENTION_LIMIT: String(RETENTION_PANE_WEIGHT)
     },
     orcaAppExtraArgs: ['--enable-precise-memory-info']
   })
@@ -666,8 +666,7 @@ test.describe('Terminal hidden worktree retention budget', () => {
         await stageUnparkableWorktreeTabs(orcaPage, victimWorktreeId)
       }
 
-      // Hiding the victim first makes the decoy the more-recently-hidden
-      // candidate, so the cap's last-active exemption lands on the decoy.
+      // Hiding the victim first lets the newer decoy claim the weighted budget.
       await switchToWorktree(orcaPage, decoyWorktreeId)
       await expect
         .poll(() => orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId), {
@@ -761,8 +760,7 @@ test.describe('Terminal hidden worktree retention budget', () => {
 
       // Primary gate: the staged buffers are gone, not merely hidden.
       expect(after.buffers.cells).toBeLessThan(before.buffers.cells * MAX_RETAINED_CELL_FRACTION)
-      // The decoy holds the cap's last-active exemption, so it stays mounted —
-      // this is the same run proving the cap did not simply evict everything.
+      // The newer decoy fits the budget, proving the cap did not evict everything.
       expect(await countMountedPaneManagers(orcaPage, decoyTabIds)).toBe(decoyTabIds.length)
       // Secondary only: freed typed arrays return to the allocator's free lists,
       // not the OS, so RSS fell just 0.7-3.0 MB locally while 87 MB of buffer was

@@ -7,6 +7,11 @@ import {
   type HiddenPressureOutputMode,
   writePressureOutputScript
 } from './artificial-opencode-hidden-pressure-script'
+import { waitForHiddenPressureCompletion } from './artificial-opencode-hidden-pressure-completion'
+import {
+  describeHiddenOutputRestoreMeasurement,
+  measureHiddenOutputRestoreLatency
+} from './artificial-opencode-hidden-restore-measurement'
 import {
   ensureTerminalVisible,
   getActiveWorktreeId,
@@ -16,7 +21,6 @@ import {
   waitForSessionReady
 } from './helpers/store'
 import {
-  getTerminalContent,
   sendToTerminal,
   waitForActivePanePtyId,
   waitForActiveTerminalManager
@@ -83,11 +87,8 @@ type HiddenPressureAckGate = {
   heldAckChars: number
 }
 
-// Why: restore still has to finish promptly, but parallel Electron workers on
-// Linux CI can overshoot the 1s product target without a responsiveness regression.
-// Main relaxed this to 4s for drain-plus-poll overhead on loaded OSS runners; this
-// branch keeps a far stricter budget with only a small margin for the whole-buffer
-// serialize-poll overhead (seen at ~1.5s), so a genuinely slow restore is still caught.
+// Why: keep a runtime backstop so loaded CI still emits the measurement;
+// saved perf reports enforce the stricter 1s product budget.
 const MAX_HIDDEN_RESTORE_LATENCY_MS = 2_000
 // Why: Phase-4 hidden-delivery gate contract — hidden PTY bytes are dropped in
 // main after model ingestion, so renderer-delivery pressure must stay FAR
@@ -177,6 +178,8 @@ export async function runHiddenRealPtyPressureScenario<
       typingPtyId,
       runId
     )
+    // Why: typing must overlap live pressure, but restore must start from a complete hidden model rather than timing the remaining generators.
+    await waitForHiddenPressureCompletion(orcaPage, hiddenPanes, runId)
     const debug = await deps.readTerminalPtyOutputDebug(orcaPage)
     const scheduler = await deps.readTerminalOutputSchedulerDebug(orcaPage)
     const mainPressure = await deps.readMainPtyPressureDebug(orcaPage)
@@ -217,22 +220,22 @@ export async function runHiddenRealPtyPressureScenario<
     expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_HIDDEN_PRESSURE_TIMER_DRIFT_MS)
 
     await deps.releaseTerminalAckGate(orcaPage)
-    const restoreLatencyMs = await measureHiddenOutputRestoreLatency(
+    const restoreMeasurement = await measureHiddenOutputRestoreLatency(
       orcaPage,
       secondWorktreeId,
       runId
     )
     testInfo.annotations.push({
       type: `opencode-hidden-real-pty-restore${annotationSuffix ?? ''}`,
-      description: `panes=${hiddenPanes.length + 1} restore=${restoreLatencyMs.toFixed(
-        1
-      )}ms hiddenDeliveryDroppedChars=${
-        mainPressure?.hiddenDeliveryDroppedChars ?? 0
-      } mainPeakInFlightChars=${mainPressure?.peakRendererInFlightChars ?? 0} heldAckChars=${
-        ackGate?.heldAckChars ?? 0
-      }`
+      description: describeHiddenOutputRestoreMeasurement({
+        paneCount: hiddenPanes.length + 1,
+        measurement: restoreMeasurement,
+        hiddenDeliveryDroppedChars: mainPressure?.hiddenDeliveryDroppedChars ?? 0,
+        mainPeakInFlightChars: mainPressure?.peakRendererInFlightChars ?? 0,
+        heldAckChars: ackGate?.heldAckChars ?? 0
+      })
     })
-    expect(restoreLatencyMs).toBeLessThan(MAX_HIDDEN_RESTORE_LATENCY_MS)
+    expect(restoreMeasurement.elapsedMs).toBeLessThan(MAX_HIDDEN_RESTORE_LATENCY_MS)
   } finally {
     await cleanupHiddenPressureScenario({
       deps,
@@ -252,30 +255,14 @@ export async function runHiddenRealPtyPressureScenario<
 async function waitForMainHiddenDeliveryDrops<TMainPressure extends HiddenPressureMainSnapshot>(
   orcaPage: Page,
   deps: { readMainPtyPressureDebug: (page: Page) => Promise<TMainPressure | null> },
-  pressureOutputChars: number
+  minimumDroppedChars: number
 ): Promise<void> {
   await expect
     .poll(
       async () => (await deps.readMainPtyPressureDebug(orcaPage))?.hiddenDeliveryDroppedChars ?? 0,
       { timeout: 30_000, message: 'Main hidden-delivery gate did not drop hidden PTY output' }
     )
-    .toBeGreaterThanOrEqual(pressureOutputChars)
-}
-
-async function measureHiddenOutputRestoreLatency(
-  orcaPage: Page,
-  worktreeId: string,
-  runId: string
-): Promise<number> {
-  const restoreStart = performance.now()
-  await switchToWorktree(orcaPage, worktreeId)
-  await expect
-    .poll(() => getTerminalContent(orcaPage, 20_000), {
-      timeout: 20_000,
-      message: 'Hidden PTY output was not restored from main buffer on return'
-    })
-    .toContain(`OPENCODE_PRESSURE_DONE_${runId}_`)
-  return performance.now() - restoreStart
+    .toBeGreaterThanOrEqual(minimumDroppedChars)
 }
 
 async function startHiddenPressureCommands({

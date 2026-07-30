@@ -12586,7 +12586,7 @@ describe('registerPtyHandlers', () => {
         vi.advanceTimersByTime(1)
       }
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
-        rendererInFlightChars: 8 * 1024 * 1024,
+        rendererInFlightChars: 2 * 1024 * 1024,
         flushScheduled: false
       })
 
@@ -12805,7 +12805,7 @@ describe('registerPtyHandlers', () => {
       for (let index = 0; index < 400; index++) {
         vi.advanceTimersByTime(1)
       }
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(512)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(128)
       expect(vi.getTimerCount()).toBe(0)
 
       writeListener(mainWindowIpcEvent, {
@@ -12814,8 +12814,8 @@ describe('registerPtyHandlers', () => {
       })
       interactiveProc.emitData('\x1b[20;2Hredraw')
 
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(513)
-      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(513, 'pty:data', {
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(129)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(129, 'pty:data', {
         id: interactiveSpawn.id,
         data: '\x1b[20;2Hredraw'
       })
@@ -12829,7 +12829,7 @@ describe('registerPtyHandlers', () => {
         })
         interactiveProc.emitData(reserveChunk)
       }
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(529)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(145)
 
       writeListener(mainWindowIpcEvent, {
         id: interactiveSpawn.id,
@@ -12837,7 +12837,7 @@ describe('registerPtyHandlers', () => {
       })
       interactiveProc.emitData(reserveChunk)
       // Why: reserve-exhausted send stays gated, and the fully gated arrival emits one delivery resync probe (not pty:data).
-      expect(getPtyDataSendCalls()).toHaveLength(529)
+      expect(getPtyDataSendCalls()).toHaveLength(145)
       expect(getDeliveryResyncProbeCalls()).toHaveLength(1)
     } finally {
       vi.useRealTimers()
@@ -12874,11 +12874,11 @@ describe('registerPtyHandlers', () => {
         vi.advanceTimersByTime(1)
       }
 
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(512)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(128)
       ackData(null, { id: spawns[0].id, charCount: 16 * 1024 })
       vi.advanceTimersByTime(1)
 
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(513)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(129)
     } finally {
       vi.useRealTimers()
     }
@@ -12911,7 +12911,7 @@ describe('registerPtyHandlers', () => {
       for (let index = 0; index < 400; index++) {
         vi.advanceTimersByTime(1)
       }
-      expect(getPtyDataSendCalls()).toHaveLength(512)
+      expect(getPtyDataSendCalls()).toHaveLength(128)
       expect(vi.getTimerCount()).toBe(0)
 
       mainWindow.webContents.send.mockClear()
@@ -12976,7 +12976,7 @@ describe('registerPtyHandlers', () => {
         vi.advanceTimersByTime(1)
       }
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
-        rendererInFlightChars: 8 * 1024 * 1024,
+        rendererInFlightChars: 2 * 1024 * 1024,
         flushScheduled: false
       })
 
@@ -13057,7 +13057,7 @@ describe('registerPtyHandlers', () => {
         vi.advanceTimersByTime(1)
       }
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
-        rendererInFlightChars: 8 * 1024 * 1024,
+        rendererInFlightChars: 2 * 1024 * 1024,
         flushScheduled: false
       })
 
@@ -13075,7 +13075,7 @@ describe('registerPtyHandlers', () => {
         ['pty:exit', { id: finalSpawn.id, code: 0, incarnationId: finalSpawn.incarnationId }]
       ])
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
-        rendererInFlightChars: 8 * 1024 * 1024,
+        rendererInFlightChars: 2 * 1024 * 1024,
         flushScheduled: false
       })
       expect(vi.getTimerCount()).toBe(timerCountBeforeExit)
@@ -13150,7 +13150,7 @@ describe('registerPtyHandlers', () => {
       for (let index = 0; index < 400; index++) {
         vi.advanceTimersByTime(1)
       }
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(512)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(128)
 
       const activeIndex = procs.length - 1
       procs[activeIndex]!.emitData('active-output')
@@ -13158,8 +13158,8 @@ describe('registerPtyHandlers', () => {
       vi.advanceTimersByTime(2)
 
       // Why: the fully gated arrival also emits a delivery resync probe, so count pty:data sends not raw webContents.send.
-      expect(getPtyDataSendCalls()).toHaveLength(513)
-      expect(getPtyDataSendCalls()[512]).toEqual([
+      expect(getPtyDataSendCalls()).toHaveLength(129)
+      expect(getPtyDataSendCalls()[128]).toEqual([
         'pty:data',
         {
           id: spawns[activeIndex]!.id,
@@ -13169,7 +13169,7 @@ describe('registerPtyHandlers', () => {
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         activeRendererPtyCount: 1,
         pendingPtyCount: procs.length - 1,
-        rendererInFlightChars: 8 * 1024 * 1024 + 'active-output'.length
+        rendererInFlightChars: 2 * 1024 * 1024 + 'active-output'.length
       })
       ackData(null, { id: spawns[0]!.id, charCount: 16 * 1024 })
     } finally {

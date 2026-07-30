@@ -1916,7 +1916,8 @@ export function registerPtyHandlers(
   const PTY_BATCH_FLUSH_CHUNK_CHARS = 16 * 1024
   const PTY_BATCH_FLUSH_MAX_WRITES = 2
   const PTY_RENDERER_IN_FLIGHT_HIGH_WATER_CHARS = 512 * 1024
-  const PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS = 8 * 1024 * 1024
+  // Why 2 MiB: cap aggregate fan-in at the renderer queue budget; parse ACKs sustain healthy throughput.
+  const PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS = 2 * 1024 * 1024
   // Why: cap unbounded pendingData growth when the renderer can't receive (frozen/reloading); beyond it bytes drop and the pane heals from the main buffer snapshot via the droppedOutput sentinel (#7630).
   // Why read settings live: the cap scales with the user's scrollback so power users don't lose lines their scrollback would have retained.
   const pendingDataCapChars = (): number =>

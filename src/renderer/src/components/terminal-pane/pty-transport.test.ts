@@ -929,6 +929,96 @@ describe('createIpcPtyTransport', () => {
     }
   })
 
+  it('preserves the latest agent lifecycle transition through queue eviction', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor, MAX_PENDING_PTY_SIDE_EFFECTS } =
+        await import('./pty-transport')
+      const onAgentBecameWorking = vi.fn()
+      const onAgentBecameIdle = vi.fn()
+      const processor = createPtyOutputProcessor({
+        onTitleChange: vi.fn(),
+        onAgentBecameWorking,
+        onAgentBecameIdle
+      })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x1b]0;. Claude working\x07', callbacks)
+      for (let i = 0; i < MAX_PENDING_PTY_SIDE_EFFECTS; i++) {
+        processor.processData(`\x1b]0;shell-title-${i}\x07`, callbacks)
+      }
+      processor.processData('\x1b]0;* Claude idle\x07', callbacks)
+      processor.flushPendingSideEffects()
+
+      expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
+      expect(onAgentBecameIdle).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resets stale-title timing when a working title survives queue eviction', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor, MAX_PENDING_PTY_SIDE_EFFECTS } =
+        await import('./pty-transport')
+      const onAgentBecameIdle = vi.fn()
+      const processor = createPtyOutputProcessor({
+        onTitleChange: vi.fn(),
+        onAgentBecameWorking: vi.fn(),
+        onAgentBecameIdle,
+        onAgentStatus: vi.fn()
+      })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x1b]0;. Claude working\x07', callbacks)
+      await vi.advanceTimersByTimeAsync(0)
+      processor.processData('plain output\r\n', callbacks)
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(2_900)
+
+      processor.processData('\x1b]0;. Claude working\x07', callbacks)
+      for (let i = 0; i < MAX_PENDING_PTY_SIDE_EFFECTS; i++) {
+        processor.processData(`\x1b]9999;{"state":"working","prompt":"${i}"}\x07`, callbacks)
+      }
+      processor.flushPendingSideEffects()
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(onAgentBecameIdle).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves an agent exit title through queue eviction', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor, MAX_PENDING_PTY_SIDE_EFFECTS } =
+        await import('./pty-transport')
+      const onAgentExited = vi.fn()
+      const processor = createPtyOutputProcessor({
+        onTitleChange: vi.fn(),
+        onAgentBecameWorking: vi.fn(),
+        onAgentBecameIdle: vi.fn(),
+        onAgentExited,
+        onAgentStatus: vi.fn()
+      })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x1b]0;. Claude working\x07', callbacks)
+      processor.processData('\x1b]0;* Claude idle\x07', callbacks)
+      processor.processData('\x1b]0;shell prompt\x07', callbacks)
+      for (let i = 0; i < MAX_PENDING_PTY_SIDE_EFFECTS; i++) {
+        processor.processData(`\x1b]9999;{"state":"working","prompt":"${i}"}\x07`, callbacks)
+      }
+      processor.flushPendingSideEffects()
+
+      expect(onAgentExited).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('collapses evicted agent-status payloads onto the survivor, keeping the newest', async () => {
     vi.useFakeTimers()
     try {

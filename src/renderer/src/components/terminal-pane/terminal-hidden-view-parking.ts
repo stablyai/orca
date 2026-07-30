@@ -25,6 +25,7 @@ export type TerminalColdParkPolicyOverrides = {
   hotRetainMs?: number
   hotRetainLimit?: number
   retentionTtlMs?: number
+  /** Default-scrollback pane units for un-parkable hidden renderer views. */
   retentionLimit?: number
 }
 

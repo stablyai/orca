@@ -25,8 +25,7 @@ test.use({
   seedTestRepo: false,
   orcaAppExtraEnv: {
     ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARKING_DELAY_MS),
-    // Why limit=1: two hidden un-parkable worktrees then exceed the budget while
-    // the last-active exemption still spares exactly one — the smallest live proof.
+    // Two one-pane worktrees exceed this one-unit test budget.
     ORCA_E2E_TERMINAL_RETENTION_LIMIT: '1'
   }
 })
@@ -66,6 +65,19 @@ test.describe('terminal hidden-worktree retention budget', () => {
           message: 'older worktree marker did not render before hiding'
         })
         .toContain(`${olderMarker}:`)
+      // Push the marker outside the relay's 100KiB tail while retaining it in
+      // the force-park capture.
+      await sendToTerminal(
+        orcaPage,
+        olderPtyId,
+        `for i in $(seq 1 3000); do echo "RETENTION_PAD_$i:0123456789012345678901234567890123456789"; done; echo "${olderMarker}_PAD_DONE:"\r`
+      )
+      await expect
+        .poll(() => getTerminalContent(orcaPage, 20_000), {
+          timeout: 60_000,
+          message: 'retention pad output did not finish before hiding'
+        })
+        .toContain(`${olderMarker}_PAD_DONE:`)
 
       // Why: with SSH view parking off, SSH ptys are not park-restorable, so the
       // hidden remote worktrees join the un-parkable class the budget governs.
@@ -110,15 +122,15 @@ test.describe('terminal hidden-worktree retention budget', () => {
 
       // The older worktree must force-park (its pane managers unmount)…
       await waitForTabParked(orcaPage, olderTabId, { parkDelayMs: PARKING_DELAY_MS })
-      // …while the newest hidden worktree keeps its mounted panes (last-active exemption).
+      // …while the newest hidden worktree claims the one-pane retention capacity.
       const newerStillMounted = await orcaPage.evaluate(
         (tabId) => window.__paneManagers?.get(tabId) !== undefined,
         newerTabId
       )
       expect(newerStillMounted).toBe(true)
 
-      // Reveal the evicted worktree: with SSH parking disabled the model paint is
-      // off, so the relay replay must restore the marker tail — never a blank pane.
+      // SSH model restore is disabled, so deep history must survive through the
+      // force-park capture while the relay tail repaints the viewport.
       await orcaPage.evaluate(
         ({ worktreeId, tabId }) => {
           const state = window.__store?.getState()
@@ -130,9 +142,9 @@ test.describe('terminal hidden-worktree retention budget', () => {
       )
       await waitForActiveTerminalManager(orcaPage, 60_000)
       await expect
-        .poll(() => getTerminalContent(orcaPage, 20_000), {
+        .poll(() => getTerminalContent(orcaPage, 2_000_000), {
           timeout: 60_000,
-          message: 'revealed evicted worktree did not restore the marker via relay replay'
+          message: 'revealed evicted worktree lost captured history beyond the relay tail'
         })
         .toContain(`${olderMarker}:`)
     } finally {

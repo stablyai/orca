@@ -41,9 +41,39 @@ describe('selectEvictionExemptTerminalTabLayoutKey', () => {
     ).not.toBe(selectEvictionExemptTerminalTabLayoutKey(layoutState({ [LEAF_ID]: PTY_ID }), TABS))
   })
 
+  it('does not collide when a pty id contains layout-key delimiters', () => {
+    const embeddedLeaf = `pty-local-detached,${SECOND_LEAF_ID}:second`
+    expect(
+      selectEvictionExemptTerminalTabLayoutKey(layoutState({ [LEAF_ID]: embeddedLeaf }), TABS)
+    ).not.toBe(
+      selectEvictionExemptTerminalTabLayoutKey(
+        layoutState({
+          [LEAF_ID]: 'pty-local-detached',
+          [SECOND_LEAF_ID]: 'second'
+        }),
+        TABS
+      )
+    )
+  })
+
+  it('is stable across leaf-map insertion order', () => {
+    const first = layoutState({
+      [LEAF_ID]: PTY_ID,
+      [SECOND_LEAF_ID]: 'pty-local-detached'
+    })
+    const reversed = layoutState({
+      [SECOND_LEAF_ID]: 'pty-local-detached',
+      [LEAF_ID]: PTY_ID
+    })
+
+    expect(selectEvictionExemptTerminalTabLayoutKey(first, TABS)).toBe(
+      selectEvictionExemptTerminalTabLayoutKey(reversed, TABS)
+    )
+  })
+
   it('tolerates tabs with no persisted layout', () => {
     expect(selectEvictionExemptTerminalTabLayoutKey({ terminalLayoutsByTabId: {} }, TABS)).toBe(
-      `${TAB_ID}=`
+      JSON.stringify([[TAB_ID, []]])
     )
   })
 })

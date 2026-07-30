@@ -44,7 +44,10 @@ describe('captureForceParkedWorktreeBuffers', () => {
     })
 
     expect(captured).toBe(true)
-    expect(capture).toHaveBeenCalledWith({ includeLocalBuffers: false })
+    expect(capture).toHaveBeenCalledWith({
+      includeLocalBuffers: false,
+      excludeRemoteRuntimeScrollback: true
+    })
   })
 
   it('reports an incomplete episode when a tab has no registered capture', () => {

@@ -2,7 +2,6 @@ import type { Page } from '@stablyai/playwright-test'
 import { expect } from './helpers/orca-app'
 import { ensureTerminalVisible } from './helpers/store'
 import {
-  getTerminalContent,
   splitActiveTerminalPane,
   waitForActiveTerminalManager,
   waitForPaneIdentitySnapshot
@@ -76,12 +75,59 @@ export async function waitForMarkerLatency(
 ): Promise<number> {
   const start = performance.now()
   while (performance.now() - start < timeoutMs) {
-    if ((await getTerminalContent(page, 12_000)).includes(marker)) {
+    if (await activeTerminalTailContains(page, marker)) {
       return performance.now() - start
     }
     await page.waitForTimeout(5)
   }
   throw new Error(`Timed out waiting for terminal marker ${marker}`)
+}
+
+// Marker probes only need recent text; serializing full scrollback can dominate the latency under test.
+export async function activeTerminalTailContains(
+  page: Page,
+  expected: string,
+  maxRows = 200
+): Promise<boolean> {
+  return page.evaluate(
+    ({ expected, maxRows }) => {
+      const state = window.__store?.getState()
+      const worktreeId = state?.activeWorktreeId
+      const tabs = worktreeId ? (state?.tabsByWorktree[worktreeId] ?? []) : []
+      const preferredTabId =
+        state?.activeTabType === 'terminal'
+          ? state.activeTabId
+          : worktreeId
+            ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+            : null
+      const tabId =
+        preferredTabId && tabs.some((tab) => tab.id === preferredTabId)
+          ? preferredTabId
+          : (tabs[0]?.id ?? null)
+      const manager = tabId ? window.__paneManagers?.get(tabId) : null
+      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+      const buffer = pane?.terminal?.buffer?.active
+      if (!buffer) {
+        return false
+      }
+      const firstRow = Math.max(0, buffer.length - maxRows)
+      let logicalHead = ''
+      for (let row = buffer.length - 1; row >= firstRow; row -= 1) {
+        const line = buffer.getLine(row)
+        if (!line) {
+          logicalHead = ''
+          continue
+        }
+        logicalHead = line.translateToString(true) + logicalHead
+        if (logicalHead.includes(expected)) {
+          return true
+        }
+        logicalHead = line.isWrapped ? logicalHead.slice(0, expected.length) : ''
+      }
+      return false
+    },
+    { expected, maxRows }
+  )
 }
 
 export async function getTerminalContentForPtyId(

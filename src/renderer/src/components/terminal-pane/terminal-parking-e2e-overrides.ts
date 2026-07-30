@@ -16,13 +16,12 @@ export function getTerminalParkingPolicyOverrides(): TerminalColdParkPolicyOverr
   const delayMs = e2eConfig.terminalParkingDelayMs
   const retentionLimit = e2eConfig.terminalRetentionLimit
   return {
-    // Why the retention TTL keeps production timing: it is absolute (the
-    // last-active exemption does not spare it), so shrinking it here would
-    // evict the newest hidden worktree the cap specs assert stays mounted.
+    // Why the retention TTL keeps production timing: it is absolute, so
+    // shrinking it here would evict the newest candidate despite fitting capacity.
     ...(typeof delayMs === 'number' && Number.isFinite(delayMs) && delayMs > 0
       ? { coldParkDelayMs: delayMs, hotRetainMs: delayMs }
       : {}),
-    // Why: limit=1 lets a spec force-park with only two hidden un-parkable worktrees (production floor is 12).
+    // Why: a one-unit override lets two one-pane worktrees exceed the test budget.
     ...(typeof retentionLimit === 'number' && Number.isInteger(retentionLimit) && retentionLimit > 0
       ? { retentionLimit }
       : {})

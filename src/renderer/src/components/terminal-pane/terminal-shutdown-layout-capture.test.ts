@@ -2,9 +2,10 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
+import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 
-const LEAF_ID = '11111111-1111-4111-8111-111111111111' as const
-const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222' as const
+const LEAF_ID = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222' as TerminalLeafId
 
 // Why: capture now appends an absolute cursor restore (see
 // terminal-serialize-absolute-cursor.ts), so pane mocks must expose the
@@ -327,6 +328,87 @@ describe('captureTerminalShutdownLayout', () => {
     expect(layout.scrollbackRefsByLeafId).toBeUndefined()
     expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID]: 'pty-1' })
     expect(layout.titlesByLeafId).toEqual({ [LEAF_ID]: 'local shell' })
+  })
+
+  it('skips excluded remote-runtime scrollback while capturing sibling panes', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const excludedSerialize = vi.fn(() => 'remote snapshot')
+    const capturedSerialize = vi.fn(() => 'ssh snapshot')
+    const firstPane = {
+      id: 1,
+      leafId: LEAF_ID,
+      terminal: mockTerminal(1_000),
+      serializeAddon: { serialize: excludedSerialize }
+    }
+    const secondPane = {
+      id: 2,
+      leafId: LEAF_ID_2,
+      terminal: mockTerminal(1_000),
+      serializeAddon: { serialize: capturedSerialize }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [firstPane, secondPane]),
+      getActivePane: vi.fn(() => secondPane)
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      manager: manager as never,
+      container: mockRootForSplit(),
+      expandedPaneId: null,
+      paneTransports: new Map([
+        [1, { getPtyId: vi.fn(() => 'remote:env-1@@terminal-1') }],
+        [2, { getPtyId: vi.fn(() => 'ssh:conn-1@@pty-2') }]
+      ]),
+      paneTitlesByPaneId: {},
+      existingLayout: {
+        root: null,
+        activeLeafId: LEAF_ID,
+        expandedLeafId: null,
+        buffersByLeafId: {
+          [LEAF_ID]: 'prior remote snapshot',
+          [LEAF_ID_2]: 'prior ssh snapshot'
+        },
+        scrollbackRefsByLeafId: {
+          [LEAF_ID]: 'remote-ref',
+          [LEAF_ID_2]: 'ssh-ref'
+        }
+      },
+      excludedScrollbackLeafIds: new Set([LEAF_ID])
+    })
+
+    expect(excludedSerialize).not.toHaveBeenCalled()
+    expect(capturedSerialize).toHaveBeenCalledOnce()
+    expect(layout.buffersByLeafId).toEqual({
+      [LEAF_ID_2]: `ssh snapshot${CURSOR_HOME}`
+    })
+    expect(layout.scrollbackRefsByLeafId).toEqual({ [LEAF_ID_2]: 'ssh-ref' })
+  })
+
+  it('uses the persisted pty binding to exclude a remote-runtime pane during attach', async () => {
+    const { selectRemoteRuntimeScrollbackLeafIds } =
+      await import('./terminal-shutdown-layout-capture')
+    const panes = [
+      { id: 1, leafId: LEAF_ID },
+      { id: 2, leafId: LEAF_ID_2 }
+    ]
+    const excluded = selectRemoteRuntimeScrollbackLeafIds({
+      panes,
+      paneTransports: new Map([
+        [1, { getPtyId: () => null }],
+        [2, { getPtyId: () => 'repo::/worktree@@live-local' }]
+      ]),
+      existingLayout: {
+        root: null,
+        activeLeafId: LEAF_ID,
+        expandedLeafId: null,
+        ptyIdsByLeafId: {
+          [LEAF_ID]: 'remote:env-1@@terminal-1',
+          [LEAF_ID_2]: 'remote:stale-env@@terminal-2'
+        }
+      }
+    })
+
+    expect(excluded).toEqual(new Set([LEAF_ID]))
   })
 
   it('does not preserve stale prior PTY bindings as shutdown focus targets', async () => {

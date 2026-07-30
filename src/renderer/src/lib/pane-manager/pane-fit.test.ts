@@ -22,6 +22,7 @@ function flushAnimationFrames(timestamp = 16): void {
 type TestPane = ManagedPane & {
   setRect: (rect: { width: number; height: number }) => void
   setXtermRect: (rect: { width: number; height: number }) => void
+  setLayoutConnection: (connected: boolean, hasOffsetParent: boolean) => void
 }
 
 function createPane(options: {
@@ -31,6 +32,8 @@ function createPane(options: {
   let rect = options.rect
   // Why: the reveal gate measures the inner xterm host, which can differ from the outer .pane.
   let xtermRect: { width: number; height: number } | null = null
+  let layoutConnected = false
+  let layoutHasOffsetParent = false
   const leafId = '22222222-2222-4222-8222-222222222222'
   const pane = {
     id: 7,
@@ -39,6 +42,12 @@ function createPane(options: {
     terminal: { cols: 80, rows: 24 },
     container: {
       dataset: {},
+      get isConnected() {
+        return layoutConnected
+      },
+      get offsetParent() {
+        return layoutHasOffsetParent ? {} : null
+      },
       getBoundingClientRect: () => ({ width: rect.width, height: rect.height })
     },
     xtermContainer: {
@@ -59,6 +68,10 @@ function createPane(options: {
     },
     setXtermRect: (next: { width: number; height: number }) => {
       xtermRect = next
+    },
+    setLayoutConnection: (connected: boolean, hasOffsetParent: boolean) => {
+      layoutConnected = connected
+      layoutHasOffsetParent = hasOffsetParent
     }
   }
   return pane as unknown as TestPane
@@ -150,6 +163,65 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
     expect(continuation).not.toHaveBeenCalled()
 
     safeFit(pane)
+
+    expect(continuation).toHaveBeenCalledTimes(1)
+    await expect(handle.completion).resolves.toBe(true)
+  })
+
+  it('settles a persistently collapsed connected split without the hidden-pane retry delay', async () => {
+    const pane = createPane({ rect: { width: 0, height: 0 } })
+    const continuation = vi.fn()
+    pane.setLayoutConnection(true, true)
+
+    const handle = safeFitAndThen(pane, 'hidden-snapshot-pty-resize', continuation, {
+      retryIfUnmeasurable: true
+    })
+    for (let frame = 0; frame < 4; frame += 1) {
+      flushAnimationFrames(frame * 16)
+      vi.advanceTimersByTime(16)
+    }
+
+    expect(continuation).not.toHaveBeenCalled()
+    expect(recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
+    await expect(handle.completion).resolves.toBe(false)
+  })
+
+  it('keeps retrying a connected pane hidden by an ancestor', async () => {
+    const pane = createPane({ rect: { width: 0, height: 0 } })
+    const continuation = vi.fn()
+    pane.setLayoutConnection(true, false)
+
+    const handle = safeFitAndThen(pane, 'hidden-snapshot-pty-resize', continuation, {
+      retryIfUnmeasurable: true
+    })
+    for (let frame = 0; frame < 4; frame += 1) {
+      flushAnimationFrames(frame * 16)
+      vi.advanceTimersByTime(16)
+    }
+    pane.setRect({ width: 800, height: 600 })
+    pane.setLayoutConnection(true, true)
+    flushAnimationFrames(64)
+    vi.advanceTimersByTime(16)
+
+    expect(continuation).toHaveBeenCalledTimes(1)
+    await expect(handle.completion).resolves.toBe(true)
+  })
+
+  it('still accepts a connected split that gains layout within the collapsed retry window', async () => {
+    const pane = createPane({ rect: { width: 0, height: 0 } })
+    const continuation = vi.fn()
+    pane.setLayoutConnection(true, true)
+
+    const handle = safeFitAndThen(pane, 'hidden-snapshot-pty-resize', continuation, {
+      retryIfUnmeasurable: true
+    })
+    for (let frame = 0; frame < 3; frame += 1) {
+      flushAnimationFrames(frame * 16)
+      vi.advanceTimersByTime(16)
+    }
+    pane.setRect({ width: 800, height: 600 })
+    flushAnimationFrames(64)
+    vi.advanceTimersByTime(16)
 
     expect(continuation).toHaveBeenCalledTimes(1)
     await expect(handle.completion).resolves.toBe(true)

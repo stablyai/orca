@@ -7033,7 +7033,9 @@ export function connectPanePty(
         return true
       }
       if (!opts?.bypassScheduler) {
-        const priority = isActiveSplitPane() ? 'active' : 'inactive'
+        const resolvePriority = (): 'active' | 'inactive' =>
+          isActiveSplitPane() ? 'active' : 'inactive'
+        const priority = resolvePriority()
         if (priority === 'inactive') {
           if (!hiddenOutputRestoreScheduled) {
             hiddenOutputRestoreScheduled = true
@@ -7055,15 +7057,28 @@ export function connectPanePty(
                 ) {
                   return
                 }
-                requestHiddenOutputRestoreIfNeeded({ bypassScheduler: true })
+                const restoreRequested = requestHiddenOutputRestoreIfNeeded({
+                  bypassScheduler: true
+                })
+                return restoreRequested ? (hiddenOutputRestoreInFlight ?? undefined) : undefined
               },
-              priority
+              resolvePriority
             )
           }
           return true
         }
         cancelScheduledHiddenOutputRestore(pane.terminal)
         hiddenOutputRestoreScheduled = false
+        let restoreRequested = false
+        scheduleHiddenOutputRestore(
+          pane.terminal,
+          () => {
+            restoreRequested = requestHiddenOutputRestoreIfNeeded({ bypassScheduler: true })
+            return hiddenOutputRestoreInFlight ?? undefined
+          },
+          priority
+        )
+        return restoreRequested
       }
       clearHiddenOutputRestoreDeferredRetryTimer()
       hiddenOutputRestoreRetryDeferred = false
@@ -7679,6 +7694,8 @@ export function connectPanePty(
       const revealFollowsTerminalPark =
         mountFollowsTerminalPark && connectResult?.isReattach === true
       mountFollowsTerminalPark = false
+      const hasRestoredScrollback =
+        deps.restoredViewportBlankingPanesRef?.current.has(pane.id) ?? false
       // Why: a relay restart empties the replay buffer, but main's model may
       // still hold the session — a park-reveal probes it even with no replay
       // so the reveal is never blank when main has content. Prefetched (before
@@ -7785,8 +7802,8 @@ export function connectPanePty(
             }
           } else if (connectResult?.replay) {
             rememberReattachPayloadAgentSignal(connectResult.replay, { fullScreenReplay: true })
-            // Relay replay may overlap xterm's pre-disconnect content; clear first to avoid duplication.
-            writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+            // A restored capture may be the only history outside the relay's 100KiB tail.
+            writeReplayData(hasRestoredScrollback ? '\x1b[2J\x1b[H' : '\x1b[2J\x1b[3J\x1b[H')
             // Why: raw relay replay may contain the app's own kitty pushes; re-arm with set semantics so redelivery can't grow the stack.
             kittyKeyboardModes.scanReplay(connectResult.replay)
             writeReplayData(connectResult.replay)

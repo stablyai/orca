@@ -173,7 +173,9 @@ function applyBatchToConsumer(entry: ConsumerEntry, batch: TerminalSideEffectBat
 // dropped in that window is lost for good. Only a PTY that just lost its
 // consumer buffers (never-consumed PTYs still drop, per the module contract),
 // bounded in time, batches, and PTYs so an abandoned handoff retains nothing.
-const HANDOFF_FACT_BUFFER_TTL_MS = 15_000
+// Why 75s: a reveal can traverse a 30s relay request and 31s direct-pane
+// settlement before registration; keep scheduling margin beyond that chain.
+const HANDOFF_FACT_BUFFER_TTL_MS = 75_000
 const MAX_HANDOFF_FACT_BATCHES = 64
 const MAX_HANDOFF_FACT_PTYS = 32
 
@@ -215,8 +217,15 @@ function bufferHandoffFactBatch(batch: TerminalSideEffectBatch): void {
   if (batch.replay) {
     return
   }
-  if (buffer.batches.length >= MAX_HANDOFF_FACT_BATCHES) {
-    buffer.batches.shift()
+  const isTitleOnly = (candidate: TerminalSideEffectBatch): boolean =>
+    candidate.facts.every((fact) => fact.kind === 'title')
+  if (isTitleOnly(batch)) {
+    // Why: title state is last-wins; compact spinner frames so they cannot evict attention facts.
+    buffer.batches = buffer.batches.filter((candidate) => !isTitleOnly(candidate))
+  }
+  while (buffer.batches.length >= MAX_HANDOFF_FACT_BATCHES) {
+    const titleOnlyIndex = buffer.batches.findIndex(isTitleOnly)
+    buffer.batches.splice(Math.max(titleOnlyIndex, 0), 1)
   }
   buffer.batches.push(batch)
 }

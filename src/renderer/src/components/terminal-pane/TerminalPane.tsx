@@ -127,7 +127,10 @@ import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { applyDesktopFitFallbackAfterReplay } from './desktop-fit-fallback'
 import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
-import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
+import {
+  captureTerminalShutdownLayout,
+  selectRemoteRuntimeScrollbackLeafIds
+} from './terminal-shutdown-layout-capture'
 import { getOverrideAffectedPanes, getPanesNeedingOverrideFit } from './override-affected-panes'
 import {
   inspectRuntimeTerminalProcess,
@@ -200,7 +203,10 @@ function isInsideNativeChatRoot(target: EventTarget | null): boolean {
 }
 
 // Why: registry lives in a leaf module to break the slice → TerminalPane → store → slice import cycle that leaves createTerminalSlice undefined at init.
-import { shutdownBufferCaptures } from './shutdown-buffer-captures'
+import {
+  shutdownBufferCaptures,
+  type ShutdownBufferCaptureOptions
+} from './shutdown-buffer-captures'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import {
@@ -2370,7 +2376,7 @@ function TerminalPane(
 
   // Register a shutdown capture callback; App.tsx's beforeunload handler invokes all to serialize terminal buffers.
   useEffect(() => {
-    const captureBuffers = (options?: { includeLocalBuffers?: boolean }): void => {
+    const captureBuffers = (options?: ShutdownBufferCaptureOptions): void => {
       const manager = managerRef.current
       const container = containerRef.current
       if (!manager || !container) {
@@ -2384,19 +2390,29 @@ function TerminalPane(
       const state = useAppStore.getState()
       const existing = state.terminalLayoutsByTabId[tabId]
       const includeLocalBuffers = options?.includeLocalBuffers ?? true
+      const paneTransports = paneTransportsRef.current
       const shouldCaptureScrollbackBuffers = includeLocalBuffers
         ? true
         : shouldPreserveTerminalScrollbackBuffers(worktreeId, state.repos)
+      const excludedScrollbackLeafIds =
+        options?.excludeRemoteRuntimeScrollback === true
+          ? selectRemoteRuntimeScrollbackLeafIds({
+              panes,
+              paneTransports,
+              existingLayout: existing
+            })
+          : undefined
       const layout = captureTerminalShutdownLayout({
         manager,
         container,
         expandedPaneId: expandedPaneIdRef.current,
-        paneTransports: paneTransportsRef.current,
+        paneTransports,
         paneTitlesByPaneId: paneTitlesRef.current,
         existingLayout: existing,
         // Why: beforeunload skips local/floating bytes (session payloads prune them); worktree sleep keeps them as defense-in-depth.
         captureBuffers: shouldCaptureScrollbackBuffers,
-        clearedScrollbackLeafIds: clearedScrollbackLeafIdsRef.current
+        clearedScrollbackLeafIds: clearedScrollbackLeafIdsRef.current,
+        excludedScrollbackLeafIds
       })
       setTabLayout(tabId, layout)
       for (const pane of panes) {

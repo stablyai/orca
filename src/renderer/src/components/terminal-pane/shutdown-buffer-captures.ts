@@ -1,5 +1,7 @@
 export type ShutdownBufferCaptureOptions = {
   includeLocalBuffers?: boolean
+  /** Force-parking remote-runtime panes restores from the host snapshot. */
+  excludeRemoteRuntimeScrollback?: boolean
 }
 
 /** Map of tabId → buffer-capture callback, one per mounted TerminalPane.

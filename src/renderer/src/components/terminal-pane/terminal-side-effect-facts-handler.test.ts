@@ -484,6 +484,45 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     expect(later).toEqual([])
   })
 
+  it('keeps attention facts through title churn that exceeds the handoff cap', () => {
+    const dispose = registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: createCallbackRecorder().callbacks
+    })
+    dispose()
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'bell' }, { kind: 'command-code-done', prompt: 'Ship it' }], { seq: 1 })
+    )
+    for (let seq = 2; seq <= 130; seq += 1) {
+      _dispatchTerminalSideEffectBatchForTest(
+        batch(
+          [
+            {
+              kind: 'title',
+              normalizedTitle: `Codex frame ${seq}`,
+              rawTitle: `Codex frame ${seq}`
+            }
+          ],
+          { seq }
+        )
+      )
+    }
+
+    const events: unknown[][] = []
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: {
+        onBell: () => events.push(['bell']),
+        onCommandCodeDone: (prompt) => events.push(['cc-done', prompt]),
+        onTitleChange: (title) => events.push(['title', title])
+      }
+    })
+
+    expect(events).toContainEqual(['bell'])
+    expect(events).toContainEqual(['cc-done', 'Ship it'])
+    expect(events.at(-1)).toEqual(['title', 'Codex frame 130'])
+  })
+
   it('does not buffer replay batches across a handoff', () => {
     // Why: the next consumer requests its own snapshot; a held replay would
     // regress the title it just restored.
@@ -538,7 +577,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     expect(events).toEqual([['title', 'live', 'live']])
   })
 
-  it('drops a handoff-buffered batch once the buffer TTL expires', () => {
+  it('keeps handoff facts through relay and SSH retry settlement, then expires them', () => {
     vi.useFakeTimers()
     try {
       const dispose = registerTerminalSideEffectFactConsumer({
@@ -548,12 +587,21 @@ describe('registerTerminalSideEffectFactConsumer', () => {
       dispose()
       _dispatchTerminalSideEffectBatchForTest(batch([{ kind: 'bell' }]))
 
-      vi.advanceTimersByTime(15_001)
+      vi.advanceTimersByTime(61_001)
 
       const { callbacks, events } = createCallbackRecorder()
-      registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
+      const disposeAfterRetry = registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
 
-      expect(events).toEqual([])
+      expect(events).toEqual([['bell']])
+
+      disposeAfterRetry()
+      _dispatchTerminalSideEffectBatchForTest(batch([{ kind: 'bell' }]))
+      vi.advanceTimersByTime(75_001)
+
+      const expired = createCallbackRecorder()
+      registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks: expired.callbacks })
+
+      expect(expired.events).toEqual([])
     } finally {
       vi.useRealTimers()
     }

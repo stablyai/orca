@@ -23,7 +23,8 @@ export function captureForceParkedWorktreeBuffers({
     return true
   }
   const { requested, captured } = captureTerminalShutdownBuffersBestEffort(tabIds, {
-    includeLocalBuffers: false
+    includeLocalBuffers: false,
+    excludeRemoteRuntimeScrollback: true
   })
   return captured === requested
 }
