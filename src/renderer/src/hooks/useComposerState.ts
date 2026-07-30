@@ -3772,9 +3772,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         undefined,
         submitCompareBaseRef,
         {
-          ...(selectedRepoExecutionHostId
-            ? { executionHostId: selectedRepoExecutionHostId }
-            : {}),
+          ...(selectedRepoExecutionHostId ? { executionHostId: selectedRepoExecutionHostId } : {}),
           linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem),
           linkedTaskSourceContext: taskSourceContext
         }

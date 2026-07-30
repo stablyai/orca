@@ -356,7 +356,9 @@ describe('useComposerState host-context boundaries', () => {
     expect(fullSubmit).toContain('submitPushTarget')
     expect(fullSubmit).toContain('submitCompareBaseRef')
     expect(fullSubmit).toContain('executionHostId: selectedRepoExecutionHostId')
-    expect(fullSubmit).toContain('linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem)')
+    expect(fullSubmit).toContain(
+      'linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem)'
+    )
     expect(fullSubmit).toContain('linkedTaskSourceContext: taskSourceContext')
     expect(fullSubmit).not.toContain('smartGitHubResolution?.baseBranch ?? baseBranch')
     expect(fullSubmit).not.toContain('smartGitHubResolution?.compareBaseRef ?? compareBaseRef')
