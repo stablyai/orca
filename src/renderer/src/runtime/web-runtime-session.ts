@@ -14,8 +14,10 @@ import type {
 } from '../../../shared/runtime-types'
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
-import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
+import type {
+  SleepingAgentLaunchConfig,
+  AgentProviderSessionMetadata
+} from '../../../shared/agent-session-resume'
 import { AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type {
   AgentLaunchPreferences,
@@ -46,7 +48,10 @@ import {
   toHostSessionTabId,
   toWebTerminalSurfaceTabId
 } from './web-terminal-surface-id'
-import { deliverLaunchPromptToAgentTab } from '../lib/agent-launch-prompt-delivery'
+import {
+  deliverLaunchPromptToAgentTab,
+  seedNativeChatLaunchDraftForAgentTab
+} from '../lib/agent-launch-prompt-delivery'
 import {
   listRemoteRuntimeSessionTabsAfterCurrentInFlight,
   listRemoteRuntimeSessionTabsDeduped
@@ -178,6 +183,28 @@ export async function createWebRuntimeAgentSessionTerminal(
     forcePaste: args.forcePromptPaste
   })
   return { outcome: created.outcome, promptDelivered }
+}
+
+/**
+ * Launch a web-host agent terminal whose draft already rode in on the launch
+ * command (argv prefill). No post-ready paste runs for that delivery, so seed
+ * the chat-composer copy here once the mirrored host tab id is known.
+ */
+export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
+  args: CreateWebRuntimeSessionTerminalArgs & {
+    agent: TuiAgent
+    launchDraft: string
+  }
+): Promise<WebRuntimeTerminalCreateOutcome> {
+  const created = await createWebRuntimeSessionTerminalResult(args)
+  if (created.outcome.status !== 'failed' && created.hostTabId) {
+    seedNativeChatLaunchDraftForAgentTab({
+      tabId: toWebTerminalSurfaceTabId(created.hostTabId),
+      agent: args.agent,
+      text: args.launchDraft
+    })
+  }
+  return created.outcome
 }
 
 async function createWebRuntimeSessionTerminalResult(

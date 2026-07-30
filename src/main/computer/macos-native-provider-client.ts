@@ -1,4 +1,3 @@
-import { rmSync } from 'node:fs'
 import type net from 'node:net'
 import type {
   ComputerActionResult,
@@ -17,10 +16,10 @@ import {
   type PendingNativeRequest,
   writeNativeProviderLine
 } from './macos-native-provider-contract'
-import { resolveMacOSComputerUseExecutablePath } from './macos-native-provider-paths'
 import {
   attachMacOSNativeProviderSocketListeners,
   consumeNativeProviderLines,
+  releaseMacOSNativeProviderSocketSession,
   startMacOSNativeProviderSocket
 } from './macos-native-provider-transport'
 import { validateComputerProviderActionParams } from './computer-provider-action-validation'
@@ -33,7 +32,7 @@ export class MacOSNativeProviderClient {
   private socket: net.Socket | null = null
   private socketStartPromise: Promise<net.Socket> | null = null
   private socketPath: string | null = null
-  private socketDirectory: string | null = null
+  private socketSessionId: string | null = null
   private socketToken: string | null = null
   private nextId = 1
   private pending = new Map<number, PendingNativeRequest>()
@@ -84,7 +83,7 @@ export class MacOSNativeProviderClient {
       )
       this.pending.delete(id)
     }
-    this.cleanupSocketDirectory()
+    this.releaseSocketSession()
   }
   private async call(method: NativeMethod, params: unknown): Promise<unknown> {
     if (method !== 'handshake') {
@@ -94,11 +93,7 @@ export class MacOSNativeProviderClient {
   }
   private async send(method: NativeMethod, params: unknown): Promise<unknown> {
     const id = this.nextId++
-    const helperExecutablePath = resolveMacOSComputerUseExecutablePath()
-    if (!helperExecutablePath) {
-      throw new RuntimeClientError('accessibility_error', 'Orca Computer Use.app was not found')
-    }
-    const transport = await this.ensureSocketStarted(helperExecutablePath)
+    const transport = await this.ensureSocketStarted()
     const token = this.socketToken
     const line = `${JSON.stringify({ id, method, params, token })}\n`
     const result = new Promise<unknown>((resolve, reject) => {
@@ -167,7 +162,7 @@ export class MacOSNativeProviderClient {
   private async ensureActionSupported(method: NativeActionMethod): Promise<void> {
     await this.ensureCapability('actions', macOSActionCapabilityKey(method))
   }
-  private async ensureSocketStarted(helperExecutablePath: string): Promise<net.Socket> {
+  private async ensureSocketStarted(): Promise<net.Socket> {
     if (this.socket && !this.socket.destroyed) {
       return this.socket
     }
@@ -176,7 +171,7 @@ export class MacOSNativeProviderClient {
     if (this.socketStartPromise) {
       return await this.socketStartPromise
     }
-    const socketStartPromise = this.startSocket(helperExecutablePath)
+    const socketStartPromise = this.startSocket()
     this.socketStartPromise = socketStartPromise
     try {
       return await socketStartPromise
@@ -186,15 +181,22 @@ export class MacOSNativeProviderClient {
       }
     }
   }
-  private async startSocket(helperExecutablePath: string): Promise<net.Socket> {
+  private async startSocket(): Promise<net.Socket> {
     const startGeneration = ++this.socketStartGeneration
     const started = await startMacOSNativeProviderSocket({
-      helperExecutablePath,
       isCurrent: (socketPath) =>
         this.socketStartGeneration === startGeneration &&
         (this.socketPath === null || this.socketPath === socketPath)
     })
-    this.socketDirectory = started.socketDirectory
+    if (this.socketStartGeneration !== startGeneration) {
+      started.socket.destroy()
+      void releaseMacOSNativeProviderSocketSession(started.sessionId).catch(() => undefined)
+      throw new RuntimeClientError(
+        'accessibility_error',
+        'native macOS provider startup was superseded'
+      )
+    }
+    this.socketSessionId = started.sessionId
     this.socketPath = started.socketPath
     this.socketToken = started.socketToken
     const socket = started.socket
@@ -246,7 +248,7 @@ export class MacOSNativeProviderClient {
     this.cleanupActiveSocketListeners()
     this.socket = null
     this.socketBuffer = ''
-    this.cleanupSocketDirectory()
+    this.releaseSocketSession()
     this.rejectPending(
       new RuntimeClientError('accessibility_error', 'native macOS helper app connection closed')
     )
@@ -263,7 +265,7 @@ export class MacOSNativeProviderClient {
     if (!socket.destroyed) {
       socket.destroy()
     }
-    this.cleanupSocketDirectory()
+    this.releaseSocketSession()
     this.rejectPending(new RuntimeClientError('accessibility_error', error.message))
   }
   private invalidateActiveSocketAfterWriteFailure(
@@ -279,16 +281,17 @@ export class MacOSNativeProviderClient {
     if (!socket.destroyed) {
       socket.destroy()
     }
-    this.cleanupSocketDirectory()
+    this.releaseSocketSession()
     this.rejectPending(error)
   }
-  private cleanupSocketDirectory(): void {
-    if (!this.socketDirectory) {
+  private releaseSocketSession(): void {
+    if (!this.socketSessionId) {
       return
     }
-    rmSync(this.socketDirectory, { recursive: true, force: true })
-    this.socketDirectory = null
+    const sessionId = this.socketSessionId
+    this.socketSessionId = null
     this.socketPath = null
+    void releaseMacOSNativeProviderSocketSession(sessionId).catch(() => undefined)
   }
   private rejectPending(error: Error): void {
     for (const [id, pending] of this.pending) {

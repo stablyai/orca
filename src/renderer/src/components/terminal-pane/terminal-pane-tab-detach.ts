@@ -285,6 +285,7 @@ export function detachTerminalPaneToTab(args: {
   const tab = latestStore.createTab(args.worktreeId, args.targetGroupId, sourceShellOverride, {
     activate: true,
     initialPtyId: ptyId ?? undefined,
+    ...(!ptyId ? { pendingActivationSpawn: true } : {}),
     recordInteraction: true
   })
   const afterCreateStore = args.getStore()

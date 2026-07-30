@@ -41,7 +41,8 @@ beforeEach(() => {
       updater: {
         download: vi.fn().mockResolvedValue(undefined),
         quitAndInstall: vi.fn().mockResolvedValue(undefined),
-        dismissNudge: vi.fn().mockResolvedValue(undefined)
+        dismissNudge: vi.fn().mockResolvedValue(undefined),
+        dismissAvailableUpdate: vi.fn().mockResolvedValue(undefined)
       }
     },
     matchMedia: vi.fn().mockReturnValue({

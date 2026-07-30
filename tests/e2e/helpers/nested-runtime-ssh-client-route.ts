@@ -293,7 +293,7 @@ export async function addPairedRuntimeEnvironment(
       if (!(await store.getState().refreshRuntimeEnvironmentStatus(result.environment.id))) {
         throw new Error(`Paired desktop could not reach ${name}`)
       }
-      if (!(await store.getState().switchRuntimeEnvironment(result.environment.id))) {
+      if (!(await store.getState().setActiveRuntimeEnvironmentPreference(result.environment.id))) {
         throw new Error(`Paired desktop could not select ${name}`)
       }
       return result.environment.id

@@ -62,6 +62,28 @@ describe('lightweight Run CLI handlers', () => {
       from: 'term_coord'
     })
   })
+
+  it('passes explicit legacy takeover only when requested', async () => {
+    callMock.mockResolvedValue({
+      result: { run: { id: 'run_adopted', objective: 'Recovered work' } }
+    })
+    await ORCHESTRATION_HANDLERS['orchestration run-use']({
+      flags: new Map<string, string | boolean>([
+        ['id', 'run_adopted'],
+        ['from', 'term_current'],
+        ['takeover-legacy', true]
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.runUse', {
+      id: 'run_adopted',
+      from: 'term_current',
+      takeoverLegacy: true
+    })
+  })
 })
 
 describe('orchestration reset CLI handler', () => {

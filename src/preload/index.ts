@@ -13,6 +13,7 @@ import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
+import type { TerminalTabCreateReply } from '../shared/terminal-reveal-identity'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type {
@@ -21,7 +22,27 @@ import type {
 } from '../shared/agent-session-resume'
 import type { MobileRelayStatus } from '../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
-import type { SshMutationExpectation } from '../shared/ssh-types'
+import type {
+  SshMutationExpectation,
+  SshConnectionState,
+  SshConfigImportResult,
+  SshTargetAddResult,
+  SshTarget,
+  PortForwardEntry,
+  EnrichedDetectedPort
+} from '../shared/ssh-types'
+import {
+  admitSshConnectionStateForAuthorityReconciliation,
+  admitSshDetectedPorts
+} from '../shared/ssh-retained-payload-admission'
+import type {
+  HostRepoCatalogSnapshot,
+  ListReposForExecutionHostArgs
+} from '../shared/host-repo-catalog-contract'
+import type {
+  HostLineageSnapshot,
+  ListDesktopLineageForHostArgs
+} from '../shared/host-lineage-contract'
 import type {
   PluginPanelActionOutcome,
   PluginPanelEntry
@@ -34,6 +55,7 @@ import type {
   BrowserViewportOverride,
   CustomPet,
   FsChangedPayload,
+  FilesystemPathFlavor,
   GetRateLimitResult,
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
@@ -159,14 +181,6 @@ import {
   type RichMarkdownContextMenuCommandPayload
 } from '../shared/rich-markdown-context-menu'
 import type {
-  SshConnectionState,
-  SshConfigImportResult,
-  SshTargetAddResult,
-  SshTarget,
-  PortForwardEntry,
-  EnrichedDetectedPort
-} from '../shared/ssh-types'
-import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
@@ -182,7 +196,18 @@ import type {
   SpeechTranscriptEvent
 } from '../shared/speech-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
-import type { PreflightRuntimeContext, RefreshAgentsResult } from './api-types'
+import type {
+  PreflightRuntimeContext,
+  RefreshAgentsResult,
+  NativeChatAppendedPayload,
+  NativeChatReadSessionResult,
+  NativeChatSubscriptionFrame,
+  PluginHostInstallResult,
+  PluginHostInstallSource,
+  PluginHostListEntry,
+  PluginHostLogLine,
+  PreloadApi
+} from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type { AppStarSource } from '../shared/gh-star-source'
 import type { ExecutionHostId } from '../shared/execution-host'
@@ -205,11 +230,6 @@ import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybi
 import type { AiVaultListArgs, AiVaultSubagentListArgs } from '../shared/ai-vault-types'
 import type { AiVaultPrepareSessionResumeArgs } from '../shared/ai-vault-resume-preparation'
 import type { AgentType } from '../shared/native-chat-types'
-import type {
-  NativeChatAppendedPayload,
-  NativeChatReadSessionResult,
-  NativeChatSubscriptionFrame
-} from './api-types'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
   ORCA_APP_RESTART_STARTED_EVENT,
@@ -252,13 +272,6 @@ import type {
 } from '../shared/crash-reporting'
 import type { RendererHeapStatistics } from '../shared/renderer-heap-statistics'
 import { readRendererHeapStatistics } from './renderer-heap-statistics-reader'
-import type {
-  PluginHostInstallResult,
-  PluginHostInstallSource,
-  PluginHostListEntry,
-  PluginHostLogLine,
-  PreloadApi
-} from './api-types'
 import {
   createUpdaterQuitAbortRelay,
   prepareRendererForAppRestart
@@ -475,6 +488,8 @@ const api = {
     },
     awaitFirstWindowStartupServices: (): Promise<void> =>
       ipcRenderer.invoke('app:awaitFirstWindowStartupServices'),
+    recoverLegacyWorkerTerminalsForRendererStartup: (): Promise<void> =>
+      ipcRenderer.invoke('app:recoverLegacyWorkerTerminalsForRendererStartup'),
     startupDiagnostic: (event: string, details?: Record<string, unknown>): Promise<void> =>
       startupDiagnosticsEnabled
         ? ipcRenderer.invoke('app:startupDiagnostic', event, details)
@@ -591,6 +606,9 @@ const api = {
 
   repos: {
     list: () => ipcRenderer.invoke('repos:list'),
+
+    listForExecutionHost: (args: ListReposForExecutionHostArgs): Promise<HostRepoCatalogSnapshot> =>
+      ipcRenderer.invoke('repos:listForExecutionHost', args),
 
     add: (args) => ipcRenderer.invoke('repos:add', args),
 
@@ -725,6 +743,8 @@ const api = {
 
     listDetected: (args) => ipcRenderer.invoke('worktrees:listDetected', args),
 
+    cancelListDetected: (args) => ipcRenderer.invoke('worktrees:cancelListDetected', args),
+
     listAll: () => ipcRenderer.invoke('worktrees:listAll'),
 
     create: (args) => ipcRenderer.invoke('worktrees:create', args),
@@ -756,6 +776,9 @@ const api = {
     updateMeta: (args) => ipcRenderer.invoke('worktrees:updateMeta', args),
 
     listLineage: () => ipcRenderer.invoke('worktrees:listLineage'),
+
+    listLineageForHost: (args: ListDesktopLineageForHostArgs): Promise<HostLineageSnapshot> =>
+      ipcRenderer.invoke('worktrees:listLineageForHost', args),
 
     updateLineage: (args) => ipcRenderer.invoke('worktrees:updateLineage', args),
 
@@ -1999,6 +2022,8 @@ const api = {
     }): Promise<
       { ptyId: string; launchAccountId: string | null; activeAccountId: string | null }[]
     > => ipcRenderer.invoke('codexAccounts:listStalePanes', args),
+    listRecordedPaneLanes: (args: { ptyIds: string[] }): Promise<Record<string, string>> =>
+      ipcRenderer.invoke('codexAccounts:listRecordedPaneLanes', args),
     forgetStalePanes: (args: { ptyIds: string[] }): Promise<void> =>
       ipcRenderer.invoke('codexAccounts:forgetStalePanes', args)
   },
@@ -2276,6 +2301,22 @@ const api = {
       ipcRenderer.on('terminalPreview:data', listener)
       return () => ipcRenderer.removeListener('terminalPreview:data', listener)
     }
+  },
+
+  macosTccPrompts: {
+    onThreshold: (callback: (payload: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: unknown): void =>
+        callback(payload)
+      ipcRenderer.on('macosTccPrompts:threshold', listener)
+      return () => ipcRenderer.removeListener('macosTccPrompts:threshold', listener)
+    },
+    consumePending: (): Promise<{ claimId: number; promptCount: number } | null> =>
+      ipcRenderer.invoke('macosTccPrompts:consumePending'),
+    acknowledgePending: (claimId: number): Promise<void> =>
+      ipcRenderer.invoke('macosTccPrompts:acknowledgePending', claimId),
+    releasePending: (claimId: number): Promise<void> =>
+      ipcRenderer.invoke('macosTccPrompts:releasePending', claimId),
+    dismiss: (): Promise<void> => ipcRenderer.invoke('macosTccPrompts:dismiss')
   },
 
   developerPermissions: {
@@ -2882,6 +2923,7 @@ const api = {
     check: (options) => ipcRenderer.invoke('updater:check', options),
     download: () => ipcRenderer.invoke('updater:download'),
     dismissNudge: () => ipcRenderer.invoke('updater:dismissNudge'),
+    dismissAvailableUpdate: () => ipcRenderer.invoke('updater:dismissAvailableUpdate'),
     quitAndInstall: async (): Promise<void> => {
       await prepareRendererForAppRestart(window, {
         startedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
@@ -3547,6 +3589,18 @@ const api = {
       ipcRenderer.on('ui:closeActiveTab', listener)
       return () => ipcRenderer.removeListener('ui:closeActiveTab', listener)
     },
+    onCloseFloatingItem: (callback: (payload: { sourceId: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: { sourceId: string }) =>
+        callback(payload)
+      ipcRenderer.on('ui:closeFloatingItem', listener)
+      return () => ipcRenderer.removeListener('ui:closeFloatingItem', listener)
+    },
+    onSelectFloatingIndex: (callback: (payload: { index: number }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: { index: number }) =>
+        callback(payload)
+      ipcRenderer.on('ui:selectFloatingIndex', listener)
+      return () => ipcRenderer.removeListener('ui:selectFloatingIndex', listener)
+    },
     onSwitchTab: (callback: (direction: 1 | -1) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
       ipcRenderer.on('ui:switchTab', listener)
@@ -3645,6 +3699,7 @@ const api = {
         title?: string
         ptyId?: string
         activate?: boolean
+        focus?: boolean
         presentation?: RuntimeTerminalPresentation
         tabId?: string
         leafId?: string
@@ -3669,6 +3724,7 @@ const api = {
           title?: string
           ptyId?: string
           activate?: boolean
+          focus?: boolean
           presentation?: RuntimeTerminalPresentation
           tabId?: string
           leafId?: string
@@ -3700,12 +3756,7 @@ const api = {
       ipcRenderer.on('terminal:requestTabMount', listener)
       return () => ipcRenderer.removeListener('terminal:requestTabMount', listener)
     },
-    replyTerminalCreate: (reply: {
-      requestId: string
-      tabId?: string
-      title?: string
-      error?: string
-    }): void => {
+    replyTerminalCreate: (reply: TerminalTabCreateReply): void => {
       ipcRenderer.send('terminal:tabCreateReply', reply)
     },
     onSplitTerminal: (
@@ -3896,6 +3947,8 @@ const api = {
     }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
     writeClipboardText: (text: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeText', text),
+    writeTerminalClipboardText: (text: string): Promise<void> =>
+      ipcRenderer.invoke('clipboard:writeTerminalText', text),
     writeSelectionClipboardText: (text: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeSelectionText', text),
     writeClipboardImage: (dataUrl: string): Promise<void> =>
@@ -3926,8 +3979,9 @@ const api = {
     setTerminalInputFocused: (focused: boolean): void => {
       ipcRenderer.send('ui:setTerminalInputFocused', focused)
     },
-    setFloatingTerminalInputFocused: (focused: boolean): void => {
-      ipcRenderer.send('ui:setFloatingTerminalInputFocused', focused)
+    // Why: one atomic payload so main's synchronous before-input-event never sees a torn terminal=true/panel=false state.
+    setFloatingFocus: (state: { panelFocused: boolean; terminalFocused: boolean }): void => {
+      ipcRenderer.send('ui:setFloatingFocus', state)
     },
     setShortcutRecorderFocused: (focused: boolean): void => {
       ipcRenderer.send('ui:setShortcutRecorderFocused', focused)
@@ -4297,8 +4351,10 @@ const api = {
     importConfig: (args?: { reAdopt?: boolean }): Promise<SshConfigImportResult> =>
       ipcRenderer.invoke('ssh:importConfig', args),
 
-    connect: (args: { targetId: string }): Promise<SshConnectionState | null> =>
-      ipcRenderer.invoke('ssh:connect', args),
+    connect: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
+      const state: unknown = await ipcRenderer.invoke('ssh:connect', args)
+      return state ? admitSshConnectionStateForAuthorityReconciliation(state, args.targetId) : null
+    },
 
     disconnect: (args: { targetId: string }): Promise<void> =>
       ipcRenderer.invoke('ssh:disconnect', args),
@@ -4309,24 +4365,37 @@ const api = {
     resetRelay: (args: { targetId: string }): Promise<void> =>
       ipcRenderer.invoke('ssh:resetRelay', args),
 
-    getState: (args: { targetId: string }): Promise<SshConnectionState | null> =>
-      ipcRenderer.invoke('ssh:getState', args),
+    getState: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
+      const state: unknown = await ipcRenderer.invoke('ssh:getState', args)
+      return state ? admitSshConnectionStateForAuthorityReconciliation(state, args.targetId) : null
+    },
 
     needsPassphrasePrompt: (args: { targetId: string }): Promise<boolean> =>
       ipcRenderer.invoke('ssh:needsPassphrasePrompt', args),
 
-    testConnection: (args: {
+    testConnection: async (args: {
       targetId: string
-    }): Promise<{ success: boolean; error?: string; state?: SshConnectionState }> =>
-      ipcRenderer.invoke('ssh:testConnection', args),
+    }): Promise<{ success: boolean; error?: string; state?: SshConnectionState }> => {
+      const result: { success: boolean; error?: string; state?: unknown } =
+        await ipcRenderer.invoke('ssh:testConnection', args)
+      const state = result.state
+        ? admitSshConnectionStateForAuthorityReconciliation(result.state, args.targetId)
+        : null
+      return { ...result, ...(state ? { state } : { state: undefined }) }
+    },
 
     onStateChanged: (
       callback: (data: { targetId: string; state: SshConnectionState }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { targetId: string; state: SshConnectionState }
-      ) => callback(data)
+        data: { targetId: string; state: unknown }
+      ): void => {
+        const state = admitSshConnectionStateForAuthorityReconciliation(data.state, data.targetId)
+        if (state) {
+          callback({ targetId: data.targetId, state })
+        }
+      }
       ipcRenderer.on('ssh:state-changed', listener)
       return () => ipcRenderer.removeListener('ssh:state-changed', listener)
     },
@@ -4354,8 +4423,8 @@ const api = {
     listPortForwards: (args?: { targetId?: string }): Promise<PortForwardEntry[]> =>
       ipcRenderer.invoke('ssh:listPortForwards', args),
 
-    listDetectedPorts: (args: { targetId: string }): Promise<EnrichedDetectedPort[]> =>
-      ipcRenderer.invoke('ssh:listDetectedPorts', args),
+    listDetectedPorts: async (args: { targetId: string }): Promise<EnrichedDetectedPort[]> =>
+      admitSshDetectedPorts(await ipcRenderer.invoke('ssh:listDetectedPorts', args)),
 
     onPortForwardsChanged: (
       callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
@@ -4373,8 +4442,8 @@ const api = {
     ): (() => void) => {
       const handler = (
         _event: Electron.IpcRendererEvent,
-        data: { targetId: string; ports: EnrichedDetectedPort[] }
-      ) => callback(data)
+        data: { targetId: string; ports: unknown }
+      ) => callback({ targetId: data.targetId, ports: admitSshDetectedPorts(data.ports) })
       ipcRenderer.on('ssh:detected-ports-changed', handler)
       return () => ipcRenderer.removeListener('ssh:detected-ports-changed', handler)
     },
@@ -4385,6 +4454,7 @@ const api = {
     }): Promise<{
       entries: { name: string; isDirectory: boolean }[]
       resolvedPath: string
+      pathFlavor: FilesystemPathFlavor
     }> => ipcRenderer.invoke('ssh:browseDir', args),
 
     onCredentialRequest: (
@@ -4475,7 +4545,8 @@ const api = {
       | { available: false }
       | {
           available: true
-          qrDataUrl: string
+          qrDataUrl: string | null
+          qrError?: 'encoding_failed'
           pairingUrl: string
           endpoint: string
           deviceId: string
@@ -4574,6 +4645,24 @@ const api = {
         callback(data)
       ipcRenderer.on('agentStatus:migrationUnsupportedClear', listener)
       return () => ipcRenderer.removeListener('agentStatus:migrationUnsupportedClear', listener)
+    },
+    onLegacyWorkerTerminalRecovery: (
+      callback: (data: {
+        paneKey: string
+        resolution: 'adopted' | 'exited' | 'rolled_back'
+        ptyId?: string
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          paneKey: string
+          resolution: 'adopted' | 'exited' | 'rolled_back'
+          ptyId?: string
+        }
+      ) => callback(data)
+      ipcRenderer.on('agentStatus:legacyWorkerTerminalRecovery', listener)
+      return () => ipcRenderer.removeListener('agentStatus:legacyWorkerTerminalRecovery', listener)
     },
     getMigrationUnsupportedSnapshot: (): Promise<MigrationUnsupportedPtyEntry[]> =>
       ipcRenderer.invoke('agentStatus:getMigrationUnsupportedSnapshot'),

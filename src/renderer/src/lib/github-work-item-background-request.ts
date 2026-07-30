@@ -174,11 +174,14 @@ export function buildGitHubWorkItemStartupPlan(args: {
 }): {
   startupPlan: AgentStartupPlan | null
   quickPrompt: string
+  /** Draft context (issue link) that reaches only the TUI input; callers thread
+   *  it onto the creation request so completion can seed the chat composer. */
+  launchDraftPrompt: string | null
   quickTelemetry: AgentStartedTelemetry | null
 } {
   const { agent, item, repo, store } = args
   if (!agent) {
-    return { startupPlan: null, quickPrompt: '', quickTelemetry: null }
+    return { startupPlan: null, quickPrompt: '', launchDraftPrompt: null, quickTelemetry: null }
   }
   const { prompt: quickPrompt, draftPrompt } = resolveGitHubWorkItemPrompt(item)
   // Why: runtime-owned repos launch on their owner host, not on the client
@@ -233,6 +236,7 @@ export function buildGitHubWorkItemStartupPlan(args: {
   return {
     startupPlan,
     quickPrompt,
+    launchDraftPrompt: draftPrompt || null,
     quickTelemetry: {
       agent_kind: tuiAgentToAgentKind(agent),
       launch_source: 'new_workspace_composer',

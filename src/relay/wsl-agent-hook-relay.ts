@@ -38,12 +38,26 @@ async function main(): Promise<void> {
   }
 
   let stdoutAlive = true
-  const dispatcher = new RelayDispatcher((data) => {
-    if (!stdoutAlive) {
-      return
+  const dispatcher = new RelayDispatcher(
+    (data, onSettled) => {
+      if (!stdoutAlive) {
+        onSettled({ ok: false, error: new Error('WSL relay stdout is closed') })
+        return false
+      }
+      return process.stdout.write(data, (error) => {
+        onSettled(error ? { ok: false, error } : { ok: true })
+      })
+    },
+    {
+      supportsWriteCallback: true,
+      writableLength: () => process.stdout.writableLength,
+      writableHighWaterMark: () => process.stdout.writableHighWaterMark,
+      waitWriteDrain: (callback) => {
+        process.stdout.once('drain', callback)
+        return () => process.stdout.off('drain', callback)
+      }
     }
-    return process.stdout.write(data)
-  })
+  )
 
   // Why: restart-stable instance key keeps the endpoint file at one path
   // across app restarts so surviving agents re-coordinate off its rewrite.
@@ -120,7 +134,7 @@ async function main(): Promise<void> {
 
   // Signal readiness — the host watches for this exact string before
   // sending framed data (same contract as the SSH relay).
-  process.stdout.write(RELAY_SENTINEL)
+  dispatcher.writePrimaryBytes(Buffer.from(RELAY_SENTINEL))
 }
 
 void main()

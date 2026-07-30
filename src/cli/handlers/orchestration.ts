@@ -21,10 +21,14 @@ import type {
 } from '../../shared/orchestration-worker-output'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import type { RuntimeTerminalRead } from '../../shared/runtime-types'
+import { orchestrationMigrationData } from '../../shared/orchestration-rpc-contract'
 import {
-  orchestrationMigrationData,
-  orchestrationSkillRecoveryData
-} from '../../shared/orchestration-rpc-contract'
+  formatMessageReadOnlyTag,
+  formatOrchestrationCheckText,
+  prepareOrchestrationCheckOutput,
+  type LegacyCompatibilityResult,
+  type OrchestrationMessageSummary as MessageSummary
+} from '../../shared/orchestration-check-output'
 
 // Why: 15 s is well under Claude Code's ~2 min Bash-tool silence budget while keeping log volume low. See design doc §3.4.
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
@@ -74,17 +78,6 @@ const TASK_STATUS_VALUES = [
   'blocked'
 ] as const
 
-type MessageSummary = {
-  id: string
-  from_handle: string
-  to_handle?: string
-  subject: string
-  type?: string
-  body?: string
-  payload?: string | null
-  read?: number
-}
-
 type LifecycleSendRejection = {
   action: 'rejected'
   code: string
@@ -104,6 +97,40 @@ type OrchestrationSendResult =
       }
       lifecycle?: { action: 'completed' | 'failed' }
     }
+
+function resolveCompatibilityCliCommand(): 'orca' | 'orca-ide' | 'orca-dev' {
+  const configured = process.env.ORCA_CLI_COMMAND
+  if (configured === 'orca' || configured === 'orca-ide' || configured === 'orca-dev') {
+    return configured
+  }
+  return process.platform === 'linux' ? 'orca-ide' : 'orca'
+}
+
+function resolvePackagedWindowsCompatibilityCommand(): 'orca' | 'orca-ide' | undefined {
+  if (process.env.ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER !== '1') {
+    return undefined
+  }
+  const command = process.env.ORCA_CLI_COMMAND
+  if (command === 'orca' || command === 'orca-ide') {
+    return command
+  }
+  throw new RuntimeClientError(
+    'invalid_argument',
+    'The packaged Orca launcher did not provide a valid resume command. No question was created.'
+  )
+}
+
+async function flushStdout(): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    process.stdout.write('', (error) => {
+      if (error) {
+        reject(error)
+      } else {
+        resolve()
+      }
+    })
+  })
+}
 
 function getOptionalStructuredMessagePayload(
   flags: Map<string, string | boolean>
@@ -420,7 +447,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       run: { id: string; objective: string; consumer_generation: number }
     }>(client, flags, 'orchestration.runUse', {
       id: getRequiredStringFlag(flags, 'id'),
-      from
+      from,
+      ...(flags.has('takeover-legacy') ? { takeoverLegacy: true } : {})
     })
     printResult(result, json, (r) => `Using Run ${r.run.id}: ${r.run.objective}`)
   },
@@ -476,13 +504,6 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       rejectLifecycleGroupRecipient(type, to)
     }
     const outcome = getOptionalStringFlag(flags, 'outcome')
-    if (type === 'worker_done' && outcome === undefined && !flags.has('payload')) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'worker_done requires --outcome succeeded or --outcome failed. No effects were applied.',
-        orchestrationSkillRecoveryData()
-      )
-    }
     if (type !== 'worker_done' && outcome !== undefined) {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -555,6 +576,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       )
     }
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
+    const explicitTerminal = getOptionalStringFlag(flags, 'terminal')
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
 
     // Why: Claude Code auto-backgrounds subprocesses silent ~2 min; emit JSON keepalives to stderr (stdout stays one payload). See §3.4.
@@ -568,17 +590,21 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       timedOut?: boolean
       cancelled?: boolean
       connectionLost?: boolean
+      legacyCompatibility?: LegacyCompatibilityResult
     }
     let result: Awaited<ReturnType<typeof client.call<CheckResult>>>
     try {
       result = await callMutation<CheckResult>(client, flags, 'orchestration.check', {
         terminal,
+        terminalPaneKey: explicitTerminal ? undefined : process.env.ORCA_PANE_KEY || undefined,
         // Why: peek also sends unread:false so pre-peek runtimes degrade to non-consuming all mode instead of destructive mark-read.
         unread: flags.has('unread') ? true : peek ? false : undefined,
         peek: peek ? true : undefined,
         all: flags.has('all') ? true : undefined,
         types: getOptionalStringFlag(flags, 'types'),
         format: flags.has('format') ? true : undefined,
+        inject: flags.has('inject') ? true : undefined,
+        compatibilityCliCommand: resolveCompatibilityCliCommand(),
         run: getOptionalStringFlag(flags, 'run'),
         ack: getOptionalStringFlag(flags, 'ack'),
         wait: wait ? true : undefined,
@@ -615,26 +641,25 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         }
       }
     }
-    printResult(result, json, (r) => {
-      if (r.formatted) {
-        return r.formatted
-      }
-      if (r.count === 0) {
-        if (r.timedOut) {
-          return 'Wait timed out; no messages were consumed.'
-        }
-        if (r.cancelled) {
-          return r.connectionLost
-            ? 'Wait cancelled because the connection closed; no messages were consumed.'
-            : 'Wait cancelled; no messages were consumed.'
-        }
-        return 'No messages.'
-      }
-      const rendered = r.messages
-        .map((m) => `${m.id} [${m.type ?? 'status'}] from=${m.from_handle} "${m.subject}"`)
-        .join('\n')
-      return r.deliveryId ? `Delivery ${r.deliveryId}\n${rendered}` : rendered
-    })
+    result = {
+      ...result,
+      result: prepareOrchestrationCheckOutput(result.result, terminal, flags.has('format'))
+    }
+    printResult(result, json, (r) => formatOrchestrationCheckText(r, terminal))
+    const compatibilityAck = result.result.legacyCompatibility?.ackMessageIds
+    if (compatibilityAck && compatibilityAck.length > 0) {
+      await flushStdout()
+      await client.call('orchestration.check', {
+        terminal,
+        compatibilityAck: JSON.stringify({
+          messageIds: compatibilityAck,
+          types: getOptionalStringFlag(flags, 'types')
+            ?.split(',')
+            .map((type) => type.trim())
+            .filter(Boolean)
+        })
+      })
+    }
   },
 
   'orchestration reply': async ({ flags, client, cwd, json }) => {
@@ -669,7 +694,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       // Why: default output omits body/payload for at-a-glance sweeps; --full prints them for auditing.
       return r.messages
         .map((m) => {
-          const head = `${m.id} ${m.from_handle} -> ${m.to_handle ?? '?'}: "${m.subject}"`
+          const head = `${m.id}${formatMessageReadOnlyTag(m)} ${m.from_handle} -> ${m.to_handle ?? '?'}: "${m.subject}"`
           if (!full) {
             return head
           }
@@ -790,6 +815,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       state: string
       failedStage?: string
       lastError?: string
+      warning?: string
       effects: unknown[]
       residualResources: unknown[]
     }>(client, flags, 'orchestration.workerStart', {
@@ -815,9 +841,10 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     }
     printResult(result, json, (worker) => {
       const base = `Worker ${worker.dispatchId} [${worker.state}] for ${worker.taskId}`
-      return worker.lastError
-        ? `${base}\n${worker.failedStage ?? 'start'}: ${worker.lastError}`
-        : base
+      if (worker.lastError) {
+        return `${base}\n${worker.failedStage ?? 'start'}: ${worker.lastError}`
+      }
+      return worker.warning ? `${base}\nWarning: ${worker.warning}` : base
     })
   },
 
@@ -952,6 +979,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       timeoutMs?: number
       cancelled?: boolean
       connectionLost?: boolean
+      answerMessageId?: string | null
+      legacyCompatibility?: LegacyCompatibilityResult
     }>(
       client,
       flags,
@@ -963,7 +992,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         resume,
         options: getOptionalStringFlag(flags, 'options'),
         timeoutMs: parsedTimeoutMs === undefined ? undefined : timeoutMs,
-        from
+        from,
+        compatibilityCliCommand: resolveCompatibilityCliCommand(),
+        compatibilityWindowsCommand: resolvePackagedWindowsCompatibilityCommand()
       },
       // Why: extend past timeoutMs so the RPC transport's 60s default doesn't abort before the runtime's own timeout resolves.
       {
@@ -974,8 +1005,24 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     // Why: bypass printResult so --json emits a bare JSON object (no envelope) pipeable via `jq -r .answer`, unlike other verbs.
     if (json) {
       console.log(JSON.stringify(result.result))
+    } else if (result.result.legacyCompatibility?.resumeRequired) {
+      console.log(`Question ${result.result.messageId} committed.`)
+      console.log(`Resume with: ${result.result.legacyCompatibility.resumeCommand}`)
     } else if (result.result.answer !== null) {
       console.log(result.result.answer)
+    }
+    if (result.result.legacyCompatibility?.resumeRequired) {
+      await flushStdout()
+      process.exitCode = 75
+      return
+    }
+    const answerAck = result.result.legacyCompatibility?.answerAcknowledgement
+    if (answerAck && result.result.answer !== null) {
+      await flushStdout()
+      await client.call('orchestration.check', {
+        terminal: from,
+        compatibilityQuestionAck: JSON.stringify(answerAck)
+      })
     }
     if (result.result.timedOut) {
       if (!json) {

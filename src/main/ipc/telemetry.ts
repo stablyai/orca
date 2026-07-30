@@ -17,8 +17,7 @@ import { getOnboardingCohortAtEmit } from '../telemetry/onboarding-cohort-classi
 import { resolveConsent, type ConsentState } from '../telemetry/consent'
 import type { Store } from '../persistence'
 import { isCohortExtendedEvent, isOnboardingEvent } from '../../shared/telemetry-events'
-import type { EventName, EventProps } from '../../shared/telemetry-events'
-import type { OptInVia } from '../../shared/telemetry-events'
+import type { EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
 
 // Module-level store ref: handlers need a synchronous `settings.telemetry` read to derive `via` before any mutation.
 let storeRef: Store | null = null

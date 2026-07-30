@@ -4,6 +4,7 @@ import type {
 } from '../../../shared/runtime-client-events'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
+import { admitSshConnectionState } from '../../../shared/ssh-retained-payload-admission'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 
 export type RuntimeClientEventSubscription = {
@@ -53,11 +54,25 @@ function handleRuntimeClientEventResponse(
   const message = response.result as RuntimeClientEventStreamMessage
   if (message.type === 'ready') {
     for (const sshState of message.snapshot?.sshStates ?? []) {
-      onEvent({ type: 'sshStateChanged', ...sshState })
+      const state = admitSshConnectionState(sshState.state, sshState.targetId)
+      if (state) {
+        onEvent({ type: 'sshStateChanged', targetId: sshState.targetId, state })
+      } else {
+        onError(new Error('Invalid retained SSH connection state'))
+      }
     }
     return
   }
   if (message.type === 'end') {
+    return
+  }
+  if (message.type === 'sshStateChanged') {
+    const state = admitSshConnectionState(message.state, message.targetId)
+    if (state) {
+      onEvent({ type: 'sshStateChanged', targetId: message.targetId, state })
+    } else {
+      onError(new Error('Invalid retained SSH connection state'))
+    }
     return
   }
   if (isRuntimeClientEvent(message)) {

@@ -1548,6 +1548,26 @@ describe('Store', () => {
     expect(updatedTarget).not.toHaveProperty('systemSshConnectionReuse')
   })
 
+  it('drops retired per-target SSH terminal source-credit selections', async () => {
+    const store = await createStore()
+    store.addSshTarget({
+      id: 'ssh-source-credit-on',
+      label: 'Noisy build host',
+      host: 'build.example.com',
+      port: 22,
+      username: 'dev',
+      experimentalPtySourceCreditV1: true
+    } as never)
+
+    expect(store.getSshTarget('ssh-source-credit-on')).not.toHaveProperty(
+      'experimentalPtySourceCreditV1'
+    )
+    store.flush()
+    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+    const target = persisted.sshTargets?.find((entry) => entry.id === 'ssh-source-credit-on')
+    expect(target).not.toHaveProperty('experimentalPtySourceCreditV1')
+  })
+
   it('upserts ~/.ssh/config through the real store: rotated port updates in place and persists', async () => {
     loadUserSshConfigMock.mockReturnValue([{ host: 'cluster' }])
     const candidate = (port: number, id: string) => [
@@ -1563,7 +1583,6 @@ describe('Store', () => {
     expect(inserted).toHaveLength(1)
     expect(inserted[0]?.source).toBe('ssh-config')
     expect(inserted[0]?.port).toBe(2200)
-
     // Rotated port: upsert updates the same target in place and normalizeSshTarget must keep `source` (no false re-derive into a permanently-dirty state).
     sshConfigHostsToTargetsMock.mockReturnValue(candidate(2222, 'ssh-cfg-2'))
     const changed = sshStore.importFromSshConfig()
@@ -3689,6 +3708,21 @@ describe('Store', () => {
 
     const hostSession = store.getWorkspaceSession(hostId)
     expect(hostSession.lastVisitedAtByWorktreeId?.['r1::/path/wt1']).toBeUndefined()
+  })
+
+  it('lists only persisted workspace-session host partitions', async () => {
+    const store = await createStore()
+    expect(store.getWorkspaceSessionHostIds()).toEqual(['local'])
+
+    store.getWorkspaceSession('ssh:not-persisted')
+    store.setWorkspaceSession(getDefaultWorkspaceSession(), 'ssh:ssh-a')
+    store.setWorkspaceSession(getDefaultWorkspaceSession(), 'runtime:environment-a')
+
+    expect(store.getWorkspaceSessionHostIds()).toEqual([
+      'local',
+      'ssh:ssh-a',
+      'runtime:environment-a'
+    ])
   })
 
   it('removeProject removes the derived project host setup compatibility record', async () => {

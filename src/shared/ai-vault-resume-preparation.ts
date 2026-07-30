@@ -7,6 +7,10 @@ export type AiVaultPrepareSessionResumeArgs = Pick<
 
 export type AiVaultPrepareSessionResumeResult = {
   useRealCodexHome: boolean
+  // Why: cross-account hardlinking lists one rollout under several per-account
+  // homes, so the owning host repins resume to the selected account's home.
+  // Absent (older hosts included) means resume keeps the session's own home.
+  substituteCodexHome?: string
 }
 
 export type AiVaultSessionResumePreparation = (
@@ -32,4 +36,13 @@ export function isLegacySharedCodexHome(codexHome: string | null): boolean {
   }
   const segments = codexHome.split(/[\\/]/).filter(Boolean)
   return segments.at(-2) === 'codex-runtime-home' && segments.at(-1) === 'home'
+}
+
+/** Matches the managed `codex-accounts/<id>/home` layout, mirroring the AI Vault scan-root shape check. */
+export function isPerAccountManagedCodexHome(codexHome: string | null): boolean {
+  if (!codexHome) {
+    return false
+  }
+  const segments = codexHome.split(/[\\/]/).filter(Boolean)
+  return segments.at(-3) === 'codex-accounts' && segments.at(-1) === 'home'
 }

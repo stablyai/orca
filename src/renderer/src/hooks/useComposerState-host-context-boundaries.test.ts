@@ -648,6 +648,22 @@ describe('useComposerState host-context boundaries', () => {
     expect(quickSubmit).not.toContain('platform: CLIENT_PLATFORM')
   })
 
+  // Why: activation no longer rebuilds a startup from `createdWithAgent`, so this
+  // caller's own `startup` is the only thing that launches the agent it planned.
+  it('passes its own startup to activation when submit planned an agent', () => {
+    const activation = sourceBetween(
+      HOOK_SOURCE,
+      'const activation = activateAndRevealWorktree(worktree.id, {',
+      'if (startupPlan) {'
+    )
+
+    expect(activation).toContain('...(startupPlan && !backendSpawnedStartup')
+    expect(activation).toContain('command: startupPlan.launchCommand')
+    expect(activation).toContain('launchAgent: tuiAgent')
+    // The removed activation-time fallback must not come back through this caller.
+    expect(HOOK_SOURCE).not.toContain('buildCreatedAgentReopenStartup')
+  })
+
   it('prepares linked quick-create drafts for the selected default agent', () => {
     const quickSubmit = sourceBetween(
       HOOK_SOURCE,

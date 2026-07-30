@@ -1,4 +1,5 @@
 import { CJK_LATIN_SPACED_TERMS } from './locale-cjk-latin-spaced-terms.mjs'
+import { isLocalizedProseTermContext } from './locale-prose-term-exemptions.mjs'
 import { isScreenCursorContext } from './locale-screen-cursor-exemptions.mjs'
 import { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
 import { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
@@ -380,6 +381,9 @@ function applyBrandMistranslationFixes(enValue, localeValue, locale, key = '') {
     // Why: terminal/theme "Cursor" labels name the on-screen カーソル, not the Cursor product —
     // skip the revert so カーソル survives for these settings.
     if (isScreenCursorContext(brand, enValue, key)) {
+      continue
+    }
+    if (isLocalizedProseTermContext(brand, key)) {
       continue
     }
     if (includesPreservedLatinTerm(result, brand)) {

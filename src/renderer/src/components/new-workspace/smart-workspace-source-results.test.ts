@@ -5,7 +5,9 @@ import {
   getBranchSearchRequest,
   getSmartWorkspaceEmptyHint,
   getVisibleBranchResults,
-  isSmartWorkspaceSourceQueryWithinLimit
+  getVisibleHeldProviderResults,
+  isSmartWorkspaceSourceQueryWithinLimit,
+  shouldHoldSourceResultsForQuery
 } from './smart-workspace-source-results'
 
 describe('Branch source results', () => {
@@ -102,7 +104,7 @@ describe('Branch source results', () => {
     expect(rows).toEqual([])
   })
 
-  it('hides branch results from a stale Branch-mode query', () => {
+  it('hides branch results after the input is cleared while a prior query is still held', () => {
     expect(
       getVisibleBranchResults({
         mode: 'branches',
@@ -113,6 +115,137 @@ describe('Branch source results', () => {
         branches: [{ refName: 'origin/feature', localBranchName: 'feature' }]
       })
     ).toEqual([])
+  })
+
+  it('keeps the last branch results while the user types ahead of the settled query', () => {
+    expect(
+      getVisibleBranchResults({
+        mode: 'branches',
+        value: 'featu',
+        selectedRepoId: 'repo-1',
+        resultRepoId: 'repo-1',
+        resultQuery: 'feat',
+        branches: [{ refName: 'origin/feature', localBranchName: 'feature' }]
+      })
+    ).toEqual([{ refName: 'origin/feature', localBranchName: 'feature' }])
+  })
+
+  it('keeps the last branch results while the user trims a prefix of the settled query', () => {
+    expect(
+      getVisibleBranchResults({
+        mode: 'branches',
+        value: 'fe',
+        selectedRepoId: 'repo-1',
+        resultRepoId: 'repo-1',
+        resultQuery: 'feat',
+        branches: [{ refName: 'origin/feature', localBranchName: 'feature' }]
+      })
+    ).toEqual([{ refName: 'origin/feature', localBranchName: 'feature' }])
+  })
+
+  it('hides held branch results when the live query diverges from the settled query', () => {
+    expect(
+      getVisibleBranchResults({
+        mode: 'branches',
+        value: 'bug',
+        selectedRepoId: 'repo-1',
+        resultRepoId: 'repo-1',
+        resultQuery: 'feat',
+        branches: [{ refName: 'origin/feature', localBranchName: 'feature' }]
+      })
+    ).toEqual([])
+  })
+
+  it('drops a short settled query once the live query grows far beyond a typing delta', () => {
+    // Why: prefix-only hold would keep "f" results under "fix-unrelated-payment-bug".
+    expect(
+      getVisibleBranchResults({
+        mode: 'branches',
+        value: 'fix-unrelated-payment-bug',
+        selectedRepoId: 'repo-1',
+        resultRepoId: 'repo-1',
+        resultQuery: 'f',
+        branches: [{ refName: 'origin/foo', localBranchName: 'foo' }]
+      })
+    ).toEqual([])
+    expect(
+      shouldHoldSourceResultsForQuery({ resultQuery: 'f', value: 'fix-unrelated-payment-bug' })
+    ).toBe(false)
+    expect(shouldHoldSourceResultsForQuery({ resultQuery: 'feat', value: 'featu' })).toBe(true)
+    expect(shouldHoldSourceResultsForQuery({ resultQuery: 'feat', value: 'feature/x' })).toBe(false)
+  })
+
+  it('keeps held branch results across case-only edits of a prefix query', () => {
+    expect(
+      getVisibleBranchResults({
+        mode: 'branches',
+        value: 'Feat',
+        selectedRepoId: 'repo-1',
+        resultRepoId: 'repo-1',
+        resultQuery: 'feat',
+        branches: [{ refName: 'origin/feature', localBranchName: 'feature' }]
+      })
+    ).toEqual([{ refName: 'origin/feature', localBranchName: 'feature' }])
+  })
+
+  it('hides held provider results immediately when the field is cleared ahead of debounce', () => {
+    expect(
+      getVisibleHeldProviderResults({
+        items: [{ id: 'pr-1' }],
+        value: '',
+        debouncedQuery: 'fix'
+      })
+    ).toEqual([])
+  })
+
+  it('keeps held provider results while the user types ahead of debounce', () => {
+    expect(
+      getVisibleHeldProviderResults({
+        items: [{ id: 'pr-1' }],
+        value: 'fix',
+        debouncedQuery: 'fi'
+      })
+    ).toEqual([{ id: 'pr-1' }])
+  })
+
+  it('shows provider results once the cleared field and debounce are both empty', () => {
+    expect(
+      getVisibleHeldProviderResults({
+        items: [{ id: 'default-1' }],
+        value: '',
+        debouncedQuery: ''
+      })
+    ).toEqual([{ id: 'default-1' }])
+  })
+
+  it('uses stable cmdk values for typed-text actions', () => {
+    expect(
+      buildSmartWorkspaceSourceRows({
+        mode: 'smart',
+        value: 'refund-flow',
+        branches: [],
+        githubItems: [],
+        gitlabItems: [],
+        linearIssues: [],
+        gitlabAvailable: false,
+        linearAvailable: false,
+        resultLimit: 12
+      })[0]
+    ).toMatchObject({ kind: 'use-name', value: 'use-name', name: 'refund-flow' })
+
+    expect(
+      buildSmartWorkspaceSourceRows({
+        mode: 'branches',
+        value: 'new-branch',
+        branches: [],
+        githubItems: [],
+        gitlabItems: [],
+        linearIssues: [],
+        gitlabAvailable: false,
+        linearAvailable: false,
+        resultLimit: 12
+      })[0]
+    ).toMatchObject({ kind: 'create-branch', value: 'create-branch', name: 'new-branch' })
   })
 
   it('keeps matching empty-query branch results visible in Branch mode', () => {

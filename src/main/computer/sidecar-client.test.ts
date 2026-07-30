@@ -10,13 +10,33 @@ import {
   callComputerSidecarCapabilities,
   resetComputerSidecarForTest
 } from './sidecar-client'
+import { COMPUTER_SIDECAR_FORCE_KILL_GRACE_MS } from './computer-sidecar-process'
 
-const { forkMock } = vi.hoisted(() => ({
-  forkMock: vi.fn()
-}))
+const { forkMock, supervisorHandleMock, supervisorSenderState, supervisorShutdownMock } =
+  vi.hoisted(() => ({
+    forkMock: vi.fn(),
+    supervisorHandleMock: vi.fn(() => false),
+    supervisorSenderState: {
+      current: null as null | ((message: Record<string, unknown>) => void)
+    },
+    supervisorShutdownMock: vi.fn()
+  }))
 
 vi.mock('child_process', () => ({
   fork: forkMock
+}))
+
+vi.mock('./computer-provider-supervisor-host', () => ({
+  ComputerProviderSupervisorHost: class {
+    attach(sender: (message: Record<string, unknown>) => void): void {
+      supervisorSenderState.current = sender
+    }
+    handle = supervisorHandleMock
+    shutdown(): void {
+      supervisorSenderState.current = null
+      supervisorShutdownMock()
+    }
+  }
 }))
 
 type SentRequest = {
@@ -27,6 +47,7 @@ type SentRequest = {
 
 class FakeChildProcess extends EventEmitter {
   killed = false
+  killSignals: NodeJS.Signals[] = []
   sent: SentRequest[] = []
   deferSendCallback = false
   sendCallbacks: ((error: Error | null) => void)[] = []
@@ -42,8 +63,9 @@ class FakeChildProcess extends EventEmitter {
       return true
     }
 
-  kill(): boolean {
+  kill(signal: NodeJS.Signals = 'SIGTERM'): boolean {
     this.killed = true
+    this.killSignals.push(signal)
     return true
   }
 
@@ -60,6 +82,8 @@ describe('computer sidecar client', () => {
     vi.useFakeTimers()
     children.length = 0
     deferNextSendCallback = false
+    supervisorSenderState.current = null
+    supervisorHandleMock.mockReturnValue(false)
     forkMock.mockImplementation(() => {
       const child = new FakeChildProcess()
       child.deferSendCallback = deferNextSendCallback
@@ -72,6 +96,8 @@ describe('computer sidecar client', () => {
   afterEach(() => {
     resetComputerSidecarForTest()
     forkMock.mockReset()
+    supervisorHandleMock.mockReset()
+    supervisorShutdownMock.mockReset()
     vi.useRealTimers()
   })
 
@@ -86,7 +112,7 @@ describe('computer sidecar client', () => {
     await firstRejection
     expect(firstChild.killed).toBe(true)
     expect(firstChild.listenerCount('message')).toBe(0)
-    expect(firstChild.listenerCount('exit')).toBe(0)
+    expect(firstChild.listenerCount('exit')).toBe(1)
     expect(firstChild.listenerCount('error')).toBe(1)
 
     const secondCall = callComputerSidecarCapabilities()
@@ -102,6 +128,7 @@ describe('computer sidecar client', () => {
     })
     expect(() => firstChild.emit('error', new Error('old sidecar failed late'))).not.toThrow()
     firstChild.emit('exit', 1, null)
+    expect(firstChild.listenerCount('exit')).toBe(0)
 
     secondChild.emit('message', {
       id: secondRequest.id,
@@ -121,7 +148,7 @@ describe('computer sidecar client', () => {
     await firstRejection
     expect(firstChild.killed).toBe(true)
     expect(firstChild.listenerCount('message')).toBe(0)
-    expect(firstChild.listenerCount('exit')).toBe(0)
+    expect(firstChild.listenerCount('exit')).toBe(1)
     expect(firstChild.listenerCount('error')).toBe(1)
 
     const secondCall = callComputerSidecarCapabilities()
@@ -331,7 +358,7 @@ describe('computer sidecar client', () => {
     await secondRejection
     expect(firstChild.killed).toBe(true)
     expect(firstChild.listenerCount('message')).toBe(0)
-    expect(firstChild.listenerCount('exit')).toBe(0)
+    expect(firstChild.listenerCount('exit')).toBe(1)
     expect(firstChild.listenerCount('error')).toBe(1)
 
     const thirdCall = callComputerSidecarCapabilities()
@@ -359,7 +386,53 @@ describe('computer sidecar client', () => {
     await expect(call).rejects.toThrow('computer sidecar IPC is unavailable')
     expect(children[0]!.killed).toBe(true)
     expect(children[0]!.listenerCount('message')).toBe(0)
-    expect(children[0]!.listenerCount('exit')).toBe(0)
+    expect(children[0]!.listenerCount('exit')).toBe(1)
     expect(children[0]!.listenerCount('error')).toBe(1)
+  })
+
+  it('force-kills a sidecar that does not exit after the grace period', async () => {
+    const call = callComputerSidecarCapabilities()
+    const rejection = expect(call).rejects.toThrow('computer sidecar shut down')
+    const child = children[0]!
+
+    resetComputerSidecarForTest()
+
+    await rejection
+    expect(child.killSignals).toEqual(['SIGTERM'])
+    await vi.advanceTimersByTimeAsync(COMPUTER_SIDECAR_FORCE_KILL_GRACE_MS)
+    expect(child.killSignals).toEqual(['SIGTERM', 'SIGKILL'])
+  })
+
+  it('cancels sidecar force-kill escalation after confirmed exit', async () => {
+    const call = callComputerSidecarCapabilities()
+    const rejection = expect(call).rejects.toThrow('computer sidecar shut down')
+    const child = children[0]!
+
+    resetComputerSidecarForTest()
+    child.emit('exit', 0, null)
+
+    await rejection
+    await vi.advanceTimersByTimeAsync(COMPUTER_SIDECAR_FORCE_KILL_GRACE_MS)
+    expect(child.killSignals).toEqual(['SIGTERM'])
+  })
+
+  it('reaps the sidecar when a supervisor response cannot be delivered', async () => {
+    const call = callComputerSidecarCapabilities()
+    const rejection = expect(call).rejects.toThrow('supervisor response failed')
+    const child = children[0]!
+    child.deferSendCallback = true
+
+    supervisorSenderState.current?.({
+      channel: 'orca:computer-provider-supervisor',
+      kind: 'response',
+      id: 99,
+      ok: true,
+      result: {}
+    })
+    child.flushSendCallback(new Error('supervisor response failed'))
+
+    await rejection
+    expect(child.killed).toBe(true)
+    expect(supervisorShutdownMock).toHaveBeenCalled()
   })
 })

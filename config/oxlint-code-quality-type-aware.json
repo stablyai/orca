@@ -12,11 +12,20 @@
   },
   "rules": {
     "typescript/await-thenable": "warn",
-    "typescript/no-floating-promises": "warn",
-    "typescript/no-misused-promises": "warn",
-    "typescript/only-throw-error": "warn",
     "typescript/restrict-plus-operands": "warn",
-    "typescript/restrict-template-expressions": "warn"
+    "typescript/restrict-template-expressions": "warn",
+    "typescript/switch-exhaustiveness-check": [
+      "error",
+      { "allowDefaultCaseForExhaustiveSwitch": false }
+    ]
   },
+  "overrides": [
+    {
+      "files": ["**/*.test.*", "**/*.spec.*"],
+      "rules": {
+        "typescript/await-thenable": "off"
+      }
+    }
+  ],
   "ignorePatterns": ["**/node_modules", "**/dist", "**/out"]
 }

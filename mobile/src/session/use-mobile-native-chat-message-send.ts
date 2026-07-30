@@ -99,6 +99,13 @@ export function useMobileNativeChatMessageSend(args: {
         client,
         terminal: handle,
         text,
+        // Why: pre-clear only when nothing was deliberately pasted first. The heal
+        // above fires only for terminals a mobile image paste marked, so a desktop
+        // launch-draft prefill parked on the input line would otherwise glue onto
+        // this message. An image send already led its own paste with Ctrl+U, and a
+        // second one here would wipe the image it just pasted (desktop's image path
+        // likewise clears once, before the paste, and never again).
+        clearInputFirst: !images?.length,
         deadline,
         ...(deviceTokenRef.current
           ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }

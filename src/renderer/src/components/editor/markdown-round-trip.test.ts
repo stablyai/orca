@@ -32,9 +32,9 @@ function markdownAfterTextReplace(content: string, search: string, replacement: 
   })
 
   try {
-    let from: number | null = null
+    let from = -1
     editor.state.doc.descendants((node, pos) => {
-      if (from !== null || !node.isText || !node.text) {
+      if (from !== -1 || !node.isText || !node.text) {
         return
       }
       const index = node.text.indexOf(search)
@@ -42,7 +42,7 @@ function markdownAfterTextReplace(content: string, search: string, replacement: 
         from = pos + index
       }
     })
-    if (from === null) {
+    if (from === -1) {
       throw new Error(`Missing text: ${search}`)
     }
     editor.view.dispatch(editor.state.tr.insertText(replacement, from, from + search.length))

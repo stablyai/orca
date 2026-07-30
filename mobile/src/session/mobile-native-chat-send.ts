@@ -8,11 +8,17 @@ type MobileTerminalClient = {
   type: 'mobile'
 }
 
+// Why: Ctrl+U kills the TUI's current input line (desktop native chat sends the
+// same byte before its body), so a launch-context prefill parked there cannot
+// concatenate with a mobile chat message. The host writes text bytes verbatim.
+const CLEAR_UNSUBMITTED_INPUT = '\x15'
+
 type MobileNativeChatSendArgs = {
   client: RpcClient
   terminal: string
   text: string
   enter?: boolean
+  clearInputFirst?: boolean
   mobileClient?: MobileTerminalClient
   /** Shared budget for a whole user action (heal → paste → text, or one selector's
    *  keystroke sequence). Omit to give this write its own full budget. */
@@ -51,7 +57,7 @@ export async function sendMobileNativeChatMessageWithOutcome(
       'terminal.send',
       {
         terminal: args.terminal,
-        text: args.text,
+        text: args.clearInputFirst ? `${CLEAR_UNSUBMITTED_INPUT}${args.text}` : args.text,
         enter: args.enter ?? true,
         ...(args.mobileClient ? { client: args.mobileClient } : {})
       },

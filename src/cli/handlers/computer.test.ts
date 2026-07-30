@@ -72,6 +72,14 @@ describe('orca computer observation CLI handlers', () => {
     expect(pressKeyOutput).toContain('Single key, e.g. Return, Escape, Tab, Left, or PageUp')
   })
 
+  it('documents atomic modified clicks', async () => {
+    await main(['computer', 'click', '--help'], '/tmp/repo')
+
+    const output = vi.mocked(console.log).mock.calls[0][0]
+    expect(output).toContain('--modifiers <chord>')
+    expect(output).toContain('Modifier keys held only for this click')
+  })
+
   it('passes list-apps through without resolving a worktree', async () => {
     queueFixtures(callMock, okFixture('req_apps', { apps: [] }))
 

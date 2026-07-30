@@ -57,6 +57,7 @@ import {
   getBranchSearchRequest,
   getSmartWorkspaceEmptyHint,
   getVisibleBranchResults,
+  getVisibleHeldProviderResults,
   isSmartWorkspaceSourceQueryWithinLimit,
   type SmartNameMode,
   type SmartWorkspaceSourceRow
@@ -88,6 +89,15 @@ import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeTarget
 } from '@/lib/github-source-runtime-context'
+import {
+  applyWorkspaceEmojiSuggestion,
+  getActiveWorkspaceEmojiShortcode,
+  replaceCompletedWorkspaceEmojiShortcode,
+  searchWorkspaceEmojiShortcodes,
+  type WorkspaceEmojiReplacement,
+  type WorkspaceEmojiSuggestion
+} from '@/lib/workspace-emoji-shortcodes'
+import { WorkspaceEmojiSuggestionPopover } from './WorkspaceEmojiSuggestionPopover'
 
 type RepoOption = ReturnType<typeof useAppStore.getState>['repos'][number]
 const EMPTY_REPO_SEARCH_REPOS: readonly RepoOption[] = []
@@ -308,6 +318,8 @@ export default function SmartWorkspaceNameField({
   const [branchesLoading, setBranchesLoading] = useState(false)
   const [linearLoading, setLinearLoading] = useState(false)
   const [commandValue, setCommandValue] = useState('')
+  const [emojiCommandValue, setEmojiCommandValue] = useState('')
+  const [emojiCursor, setEmojiCursor] = useState<number | null>(null)
   const localInputRef = useRef<HTMLInputElement | null>(null)
   const focusedSelectedSourceKeyRef = useRef<string | null>(null)
   const tabsListRef = useRef<HTMLDivElement | null>(null)
@@ -547,6 +559,11 @@ export default function SmartWorkspaceNameField({
       return
     }
     let stale = false
+    // Why: empty-query search must not briefly paint the previous non-empty result set
+    // once debounce catches a cleared field.
+    if (debouncedQuery.trim() === '') {
+      setGithubItems([])
+    }
     const directNumber = normalizedGhQuery.directNumber
     const directLink = parsedGhLink
     if (directLink !== null && handledCrossRepoUrlRef.current !== debouncedQuery.trim()) {
@@ -821,8 +838,8 @@ export default function SmartWorkspaceNameField({
       return
     }
     let stale = false
-    setBranches([])
-    setBranchResultsSource(null)
+    // Why: keep prior branch rows until this request settles; visibility already
+    // holds the last list while the user types ahead of the debounced query.
     setBranchesLoading(true)
     void searchRuntimeRepoBaseRefDetails(
       selectedRepoOwnerSettings,
@@ -864,6 +881,10 @@ export default function SmartWorkspaceNameField({
     let stale = false
     setLinearLoading(true)
     const trimmed = debouncedQuery.trim()
+    // Why: empty-query list must not briefly paint the previous non-empty result set.
+    if (trimmed === '') {
+      setLinearIssues([])
+    }
     const request = trimmed
       ? searchLinearIssues(trimmed, RESULT_LIMIT, { sourceContext: linearSourceContext })
       : listLinearIssues(
@@ -981,6 +1002,10 @@ export default function SmartWorkspaceNameField({
     setGitlabLoading(true)
     // Why: thread the typed query so the GitLab API filters MRs by name/number (shouldQueryGitlab already gates oversized queries).
     const trimmedQuery = debouncedQuery.trim() || undefined
+    // Why: empty-query list must not briefly paint the previous non-empty result set.
+    if (trimmedQuery === undefined) {
+      setGitlabItems([])
+    }
     void Promise.all(
       repoBackedSearchTargets.map((target) =>
         listGitLabMRsForSource({
@@ -1040,11 +1065,23 @@ export default function SmartWorkspaceNameField({
           selectedRepoId: selectedRepo?.id ?? null,
           value
         }),
-        githubItems,
+        githubItems: getVisibleHeldProviderResults({
+          items: githubItems,
+          value,
+          debouncedQuery
+        }),
         gitlabAvailable: gitlabSourceAvailable,
-        gitlabItems,
+        gitlabItems: getVisibleHeldProviderResults({
+          items: gitlabItems,
+          value,
+          debouncedQuery
+        }),
         linearAvailable,
-        linearIssues,
+        linearIssues: getVisibleHeldProviderResults({
+          items: linearIssues,
+          value,
+          debouncedQuery
+        }),
         mode,
         resultLimit: RESULT_LIMIT,
         value
@@ -1052,6 +1089,7 @@ export default function SmartWorkspaceNameField({
     [
       branches,
       branchResultsSource,
+      debouncedQuery,
       githubItems,
       gitlabSourceAvailable,
       gitlabItems,
@@ -1070,7 +1108,7 @@ export default function SmartWorkspaceNameField({
     }
   }, [rows])
 
-  // Why: source rows lag debouncedQuery, so keep Enter off a stale row.
+  // Why: live input leads debounced search; freeze highlight until the query catches up.
   const valueWithinSourceLimit = isSmartWorkspaceSourceQueryWithinLimit(value)
   const debouncedQueryWithinSourceLimit = isSmartWorkspaceSourceQueryWithinLimit(debouncedQuery)
   const trimmedValue = valueWithinSourceLimit ? value.trim() : ''
@@ -1104,12 +1142,52 @@ export default function SmartWorkspaceNameField({
     isQueryStale,
     sourceIntent
   })
+  // Why: while isQueryStale, cmdk onValueChange is ignored; re-sync the stored arm
+  // when the query settles so commandValue cannot lag resolvedCommandValue.
+  useEffect(() => {
+    if (isQueryStale || commandValue === resolvedCommandValue) {
+      return
+    }
+    setCommandValue(resolvedCommandValue)
+  }, [commandValue, isQueryStale, resolvedCommandValue])
+  const activeEmojiShortcode = useMemo(
+    () => getActiveWorkspaceEmojiShortcode(value, emojiCursor),
+    [emojiCursor, value]
+  )
+  const emojiSuggestions = useMemo(
+    () =>
+      activeEmojiShortcode
+        ? searchWorkspaceEmojiShortcodes(activeEmojiShortcode.query)
+        : ([] as WorkspaceEmojiSuggestion[]),
+    [activeEmojiShortcode]
+  )
+  const emojiMenuOpen =
+    !disabled &&
+    selectedSource === null &&
+    activeEmojiShortcode !== null &&
+    emojiSuggestions.length > 0
+  const resolvedEmojiCommandValue = emojiSuggestions.some(
+    (suggestion) => `emoji:${suggestion.shortcode}` === emojiCommandValue
+  )
+    ? emojiCommandValue
+    : emojiSuggestions[0]
+      ? `emoji:${emojiSuggestions[0].shortcode}`
+      : ''
+  const selectedEmojiSuggestion =
+    emojiSuggestions.find(
+      (suggestion) => `emoji:${suggestion.shortcode}` === resolvedEmojiCommandValue
+    ) ?? null
 
   const loading = githubLoading || gitlabLoading || branchesLoading || linearLoading
-  const ActiveInputIcon = mode === 'text' ? CaseSensitive : loading ? LoaderCircle : Search
+  // Why: only spin on first load — not on every in-flight refresh while rows stay visible.
+  const showSearchSpinner = loading && searchResultRows.length === 0
+  const ActiveInputIcon =
+    mode === 'text' ? CaseSensitive : showSearchSpinner ? LoaderCircle : Search
 
   const handleSelect = useCallback(
     (row: RowEntry) => {
+      // Why: select what is shown — held provider rows stay visible while the
+      // query is ahead of debounce, so blocking them made click/Enter no-ops.
       if (row.kind === 'use-name' || row.kind === 'create-branch') {
         // Why: "create new branch" has no ref to base from, so it uses the typed-name path (default base).
         onValueChange(row.name)
@@ -1126,6 +1204,30 @@ export default function SmartWorkspaceNameField({
       setOpen(false)
     },
     [onBranchSelect, onGitHubItemSelect, onGitLabItemSelect, onLinearIssueSelect, onValueChange]
+  )
+
+  const applyEmojiReplacement = useCallback(
+    (replacement: WorkspaceEmojiReplacement): void => {
+      onValueChange(replacement.value)
+      setEmojiCursor(null)
+      cancelLocalInputFocusFrame()
+      localInputFocusFrameRef.current = requestAnimationFrame(() => {
+        localInputFocusFrameRef.current = null
+        localInputRef.current?.focus({ preventScroll: true })
+        localInputRef.current?.setSelectionRange(replacement.cursor, replacement.cursor)
+      })
+    },
+    [cancelLocalInputFocusFrame, onValueChange]
+  )
+
+  const handleEmojiSelect = useCallback(
+    (suggestion: WorkspaceEmojiSuggestion): void => {
+      if (!activeEmojiShortcode) {
+        return
+      }
+      applyEmojiReplacement(applyWorkspaceEmojiSuggestion(value, activeEmojiShortcode, suggestion))
+    },
+    [activeEmojiShortcode, applyEmojiReplacement, value]
   )
 
   const acceptGitHubLink = useCallback(
@@ -1351,7 +1453,14 @@ export default function SmartWorkspaceNameField({
       >
         <Command
           value={resolvedCommandValue}
-          onValueChange={setCommandValue}
+          onValueChange={(next) => {
+            // Why: cmdk re-emits when the item list reshapes; ignore while the query
+            // lags so the highlight cannot thrash mid-typing.
+            if (isQueryStale) {
+              return
+            }
+            setCommandValue(next)
+          }}
           shouldFilter={false}
           className="overflow-visible bg-transparent"
         >
@@ -1437,7 +1546,7 @@ export default function SmartWorkspaceNameField({
                   <ActiveInputIcon
                     className={cn(
                       'pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground',
-                      loading && mode !== 'text' && 'animate-spin'
+                      showSearchSpinner && mode !== 'text' && 'animate-spin'
                     )}
                   />
                   <Input
@@ -1450,8 +1559,20 @@ export default function SmartWorkspaceNameField({
                         setOpen(true)
                       }
                     }}
+                    onClick={(event) => setEmojiCursor(event.currentTarget.selectionStart)}
                     onChange={(event) => {
-                      onValueChange(event.target.value)
+                      const nextValue = event.target.value
+                      const nextCursor = event.target.selectionStart
+                      const completedEmoji = replaceCompletedWorkspaceEmojiShortcode(
+                        nextValue,
+                        nextCursor
+                      )
+                      if (completedEmoji) {
+                        applyEmojiReplacement(completedEmoji)
+                        return
+                      }
+                      onValueChange(nextValue)
+                      setEmojiCursor(nextCursor)
                       if (!disabled && mode !== 'text') {
                         markSourcePopoverUserEngaged()
                         setOpen(true)
@@ -1460,8 +1581,10 @@ export default function SmartWorkspaceNameField({
                     onFocus={(event) => {
                       // Why: only open on focus from another composer control (Tab); dialog autofocus from outside stays suppressed.
                       if (!isComposerFieldToFieldFocus(event)) {
+                        setEmojiCursor(event.currentTarget.selectionStart)
                         return
                       }
+                      setEmojiCursor(event.currentTarget.selectionStart)
                       markSourcePopoverUserEngaged()
                       tryOpenSourcePopover()
                     }}
@@ -1475,6 +1598,20 @@ export default function SmartWorkspaceNameField({
                           activeTrigger.focus()
                           return
                         }
+                      }
+                      if (emojiMenuOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        const selectedIndex = emojiSuggestions.findIndex(
+                          (suggestion) =>
+                            `emoji:${suggestion.shortcode}` === resolvedEmojiCommandValue
+                        )
+                        const direction = event.key === 'ArrowDown' ? 1 : -1
+                        const nextIndex =
+                          (selectedIndex + direction + emojiSuggestions.length) %
+                          emojiSuggestions.length
+                        setEmojiCommandValue(`emoji:${emojiSuggestions[nextIndex].shortcode}`)
+                        return
                       }
                       if (
                         event.key === 'Enter' &&
@@ -1490,6 +1627,12 @@ export default function SmartWorkspaceNameField({
                         if (isImeCompositionKeyDown(event)) {
                           return
                         }
+                        if (emojiMenuOpen && selectedEmojiSuggestion) {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          handleEmojiSelect(selectedEmojiSuggestion)
+                          return
+                        }
                         if (open && rows.length > 0) {
                           const row = rows.find((entry) => entry.value === resolvedCommandValue)
                           if (row) {
@@ -1497,9 +1640,25 @@ export default function SmartWorkspaceNameField({
                             handleSelect(row)
                             return
                           }
-                          // No highlighted row (e.g. cleared stale GitHub/Linear results); fall through to onPlainEnter so the keypress isn't inert.
+                          // No highlighted row; fall through to onPlainEnter so the keypress isn't inert.
                         }
                         onPlainEnter?.()
+                      }
+                      if (
+                        event.key === 'Tab' &&
+                        !event.shiftKey &&
+                        emojiMenuOpen &&
+                        selectedEmojiSuggestion
+                      ) {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        handleEmojiSelect(selectedEmojiSuggestion)
+                        return
+                      }
+                      if (event.key === 'Escape' && emojiMenuOpen) {
+                        event.stopPropagation()
+                        setEmojiCursor(null)
+                        return
                       }
                       if (event.key === 'Escape' && open) {
                         event.stopPropagation()
@@ -1517,8 +1676,11 @@ export default function SmartWorkspaceNameField({
             </div>
           </PopoverAnchor>
           <PopoverContent
+            data-workspace-source-suggestions="true"
             align="start"
+            side="bottom"
             sideOffset={4}
+            avoidCollisions={false}
             className="popover-scroll-content flex w-[var(--radix-popover-trigger-width)] flex-col p-0"
             // Why: capped height so the result list can't cover the create-workspace dialog's submit footer while typing.
             style={{ maxHeight: 'min(var(--radix-popover-content-available-height,7rem),7rem)' }}
@@ -1614,6 +1776,20 @@ export default function SmartWorkspaceNameField({
           </PopoverContent>
         </Command>
       </Popover>
+      <WorkspaceEmojiSuggestionPopover
+        anchorRef={localInputRef}
+        open={emojiMenuOpen}
+        commandValue={resolvedEmojiCommandValue}
+        heading={translate('auto.components.new.workspace.SmartWorkspaceNameField.emoji', 'Emoji')}
+        suggestions={emojiSuggestions}
+        onCommandValueChange={setEmojiCommandValue}
+        onSelect={handleEmojiSelect}
+        onOpenChange={(next) => {
+          if (!next) {
+            setEmojiCursor(null)
+          }
+        }}
+      />
       <Dialog
         open={crossRepoPrompt !== null}
         onOpenChange={(next) => !next && dismissCrossRepoPrompt()}

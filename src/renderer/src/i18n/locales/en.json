@@ -356,6 +356,7 @@
           "0708ed89f1": "Claude",
           "fc80296033": "Devin",
           "da41abbdd4": "Ante",
+          "060d152fb5": "Trae",
           "mimo_code_label": "MiMo Code"
         },
         "skill": {
@@ -701,6 +702,7 @@
         "60428567b4": "Local terminal reveal is unavailable while a remote runtime is active",
         "f8aaf2bde3": "Workspace uploaded",
         "2fe88c2e06": "Remote workspace sync unavailable",
+        "workspaceChangedOnAnotherDevice": "Workspace changed on another device",
         "2ec42e1c52": "No remote workspace yet",
         "88214a785b": "Workspace sync waited for local session hydration and timed out",
         "4f78ba5885": "Workspace synced",
@@ -790,6 +792,12 @@
       },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "Paste is too large."
+      },
+      "useMacosTccPromptNotice": {
+        "title": "Reduce repeated macOS file-access prompts",
+        "description": "macOS attributes file access by your agents and terminal tools to Orca. Granting Full Disk Access reduces these prompts.",
+        "openSettings": "Open Settings",
+        "dismiss": "Don't show again"
       }
     },
     "components": {
@@ -2711,6 +2719,12 @@
                     "action": "Open Setting"
                   }
                 }
+              },
+              "failed": {
+                "toast": {
+                  "62a0af2cb4": "Terminal clipboard copy could not be confirmed",
+                  "fdd3e7e977": "The terminal app requested a copy, but Orca could not confirm that it reached the system clipboard."
+                }
               }
             }
           },
@@ -3700,7 +3714,10 @@
         },
         "UsageBreakdownSection": {
           "7765a4c3e1": "n/a",
-          "247c93ca92": "• inferred pricing"
+          "247c93ca92": "• inferred pricing",
+          "32176e1d44": "turns",
+          "79a69522a5": "events",
+          "02a046792e": "sessions •"
         },
         "UsageSessionsTable": {
           "1afc25eb06": "Turns",
@@ -3772,17 +3789,17 @@
           "b088e0785d": "Beta",
           "f43ad6edf3": "Skills",
           "7e828fb2c6": "Back",
-          "ea72d6185b": "Could not scan local skills",
+          "ea72d6185b": "Could not scan skills",
           "dc4c3328ee": "Reveal file",
           "9963dff6d3": "No description found.",
           "995fde8337": "Could not reveal skill file",
-          "ab5b777350": "Checked local home, repository, bundled, and plugin skill folders.",
+          "ab5b777350": "Checked home, repository, bundled, and plugin skill folders.",
           "08a321a984": "Adjust the search or filters.",
-          "4acd6d68ec": "No local skills found",
+          "4acd6d68ec": "No skills found",
           "6a62a0168c": "No matches",
           "cd7893fbc1": "Scanning skills",
           "35b9a724a0": "Available",
-          "0c74e7ff34": "Local"
+          "0c74e7ff34": "Installed"
         },
         "SkillFreshnessNudge": {
           "titleOne": "An installed Orca skill is out of date",
@@ -3820,7 +3837,11 @@
           "tipReadOnly": "This copy is in a read-only location.",
           "tipInRepo": "This copy lives inside a project, not your global skills.",
           "tipPluginCache": "This copy is managed by a plugin.",
-          "skippedReasonDuplicate": "This is a separate copy, so the update won’t reach it — the command only refreshes the main copy. Remove this copy, then reinstall the skill so this location follows the main one."
+          "skippedReasonDuplicate": "This is a separate copy, so the update won’t reach it — the command only refreshes the main copy. Remove this copy, then reinstall the skill so this location follows the main one.",
+          "skippedReasonNewer": "This copy is a later version than the one this build of Orca ships, so Orca left it alone rather than roll it back. Updating Orca will bring the two back in line.",
+          "skippedReasonStaleRecord": "The skills updater has no usable record of this copy, so it reports the skill as already up to date and changes nothing. Reinstall it to bring the record back in line: {{value0}}",
+          "chipNewer": "Newer",
+          "tipNewer": "This copy is a later version than the one this build of Orca ships."
         },
         "SkillFreshnessUpdateDialog": {
           "title": "Update skills",
@@ -3875,7 +3896,7 @@
           "upToDate": "Up to date",
           "installed": "Installed",
           "details": "Details",
-          "needsAttention": "Needs attention"
+          "needsAttention": "Review skill"
         }
       },
       "sidebar": {
@@ -4024,7 +4045,8 @@
           "32a7256d85": "Clone",
           "69f5b5380d": "Cloning...",
           "cloneOnHostDescription": "Enter the Git URL and choose where to clone it on {{value0}}.",
-          "cloneParentFolder": "Parent folder"
+          "cloneParentFolder": "Parent folder",
+          "remoteCloneParentPlaceholder": "/home/user/projects"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Close",
@@ -4393,7 +4415,8 @@
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "Empty",
-          "3611d1ae7f": "Resize workspace board columns"
+          "3611d1ae7f": "Resize workspace board columns",
+          "2df01a03ff": "No matches"
         },
         "WorkspaceStatusAppearancePopover": {
           "514be2f569": "Set {{value0}} color to {{value1}}",
@@ -5006,6 +5029,14 @@
         "WorktreeDeveloperMenu": {
           "developer": "Developer",
           "parkTerminal": "Park terminal"
+        },
+        "WorkspaceKanbanSearchField": {
+          "bdb753c78d": "No workspaces match",
+          "4d96c209d6": "{{value0}} of {{value1}} workspaces match",
+          "c0cd6bdf6c": "Search workspaces",
+          "3b7ea51793": "Clear search",
+          "7f1c2e94a5": "Search text is too long — the board is unfiltered",
+          "9a4d0f6b21": "Too long"
         }
       },
       "shared": {
@@ -5641,7 +5672,7 @@
           "e7bb06007c": "LAN",
           "4a73f5217a": "Apple Events for scripts that control other local apps.",
           "e119f0d66b": "Automation",
-          "7ca17b62c8": "Recommended when projects, worktrees, or symlinked files touch macOS-protected folders.",
+          "7ca17b62c8": "macOS names Orca when the agents it runs read other apps' data, because Orca is the responsible process for terminal commands. Grant this to Orca and Orca Helper to reduce those prompts. Then quit Orca, end any surviving Orca Helper process, and reopen Orca.",
           "c566bca278": "Full Disk Access",
           "9f35980756": "Keystroke injection, window control, and UI automation tools.",
           "5b2f22ca2d": "Accessibility",
@@ -5695,7 +5726,7 @@
           "agentDashboard": {
             "title": "Agent Dashboard",
             "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
-            "copy": "Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents and jump into their live terminals.",
+            "copy": "Adds an Agent Dashboard entry to the left sidebar. Monitor agents that need you, are working, or are done, with optional idle agents.",
             "toggleLabel": "Toggle Agent Dashboard",
             "modeLabel": "Open as",
             "modeCopy": "Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.",
@@ -6187,7 +6218,8 @@
           "6436e56546": "QR Code for mobile pairing",
           "1b1b70279a": "No devices paired yet.",
           "1592afcc7a": "No devices paired yet. Scan the QR code with the Orca mobile app.",
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale. Regenerate to try again."
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale. Regenerate to try again.",
+          "pairingQrError": "This pairing code couldn’t be rendered as a QR code. Copy it into Orca Mobile instead."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub Releases",
@@ -7690,6 +7722,12 @@
             "8dd4805991": "file",
             "68d1db8929": "markdown",
             "90425d313c": "shift",
+            "linkRoutingModifier": {
+              "routing": "routing",
+              "modifier": "modifier",
+              "invert": "invert",
+              "opposite": "opposite"
+            },
             "72c58f7792": "webview",
             "82ba1c80ea": "localhost",
             "bea27bac4b": "links",
@@ -8625,6 +8663,7 @@
         "shortcuts": {
           "search": {
             "ca6a0c2df7": "shortcut",
+            "groupShortcut": "{{value0}} shortcut",
             "4811a8264a": "terminal first",
             "afda131738": "orca first",
             "0ecfc47434": "conflict",
@@ -9356,7 +9395,7 @@
           "copy": "Copy",
           "copied": "Copied",
           "recipes": "Recipes",
-          "recipesHelp": "Recipes your agent adds to orca.yaml show up here, ready to launch a workspace on.",
+          "recipesHelp": "Recipes from orca.yaml and enabled plugins show up here, ready to launch a workspace on.",
           "refresh": "Refresh ephemeral VM recipes",
           "checking": "Checking recipes...",
           "none": "No recipes found yet."
@@ -9553,6 +9592,12 @@
           "serviceManagerHelp": "Update Orca through the service manager that starts this server.",
           "unpackedHelp": "Development builds must be updated from their source checkout.",
           "legacyHelp": "Update this server manually once to enable remote updates."
+        },
+        "BrowserLinkRoutingModifierSetting": {
+          "titleSystem": "Hold Shift to open in your web browser",
+          "titleOrca": "Hold Shift to open in Orca",
+          "descriptionSystem": "Links open in Orca, so {{chord}}+click sends one to your system browser instead.",
+          "descriptionOrca": "Links open in your system browser. When enabled, {{chord}}+click opens one in Orca's built-in browser instead."
         },
         "PluginConsentDialog": {
           "workerTrust": "Background worker — runs its own process",
@@ -9970,6 +10015,7 @@
             "2bfaf4379c": "More {{value0}} actions",
             "377269db6f": "{{value0}} reopened",
             "fa3ee9a515": "closed",
+            "closedToast": "{{value0}} closed",
             "78f5ff294c": "This will reopen the {{value0}}.",
             "a3d572a4de": "This will close the {{value0}}.",
             "e4aca40024": "Delete Workspace",
@@ -11404,16 +11450,25 @@
             "searchGitLab": "Search GitLab MRs and issues",
             "searchBranches": "Search branches",
             "searchLinear": "Search Linear issues",
-            "workspaceName": "Workspace name"
+            "workspaceName": "Workspace name",
+            "emoji": "Emoji"
           },
           "ProjectHostSetupCombobox": {
             "empty": "No hosts are ready for this project.",
             "placeholder": "Choose host"
           },
           "ProjectCombobox": {
-            "search": "Search projects...",
             "empty": "No projects match your search.",
-            "addProject": "Add a new project"
+            "addProject": "Add a new project",
+            "label": "Project",
+            "browse": "Browse projects",
+            "listLabel": "Projects",
+            "noProjects": "No projects yet."
+          },
+          "RunTargetCombobox": {
+            "listLabel": "Run targets",
+            "label": "Run on",
+            "browse": "Browse run targets"
           }
         }
       },
@@ -11464,7 +11519,8 @@
             "preview": "Preview",
             "stable": "Stable"
           },
-          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale."
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your LAN or Tailscale.",
+          "pairingQrError": "This pairing code couldn’t be rendered as a QR code. Copy it into Orca Mobile instead."
         },
         "MobilePage": {
           "e17393c6a3": "Phone preview",
@@ -11581,12 +11637,13 @@
         },
         "CustomNetworkAddressDialog": {
           "title": "Custom network address",
-          "description": "Advertise an address your phone can reach when it is not on the same Wi-Fi — for example a Tailscale hostname or a static IP.",
+          "description": "Advertise an address your phone can reach — for example a Tailscale hostname, IP address, or reverse-proxy URL.",
           "label": "Address",
-          "placeholder": "my-mac.ts.net, home.example.com, or 192.168.1.50",
-          "hint": "Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port.",
+          "placeholder": "home.example.com:8443 or https://example.com/orca",
+          "hint": "Enter an IPv4/IPv6 address, hostname, or full HTTP(S)/WebSocket URL. Ports are optional.",
           "cancel": "Cancel",
-          "use": "Use address"
+          "use": "Use address",
+          "confirmationError": "This address could not produce a scannable pairing code. Check the address and try again."
         },
         "NetworkInterfacePicker": {
           "trigger-label": "Network address to advertise",
@@ -11999,7 +12056,24 @@
             "orchestration": {
               "OrchestrationPage": {
                 "30b509a467": "2 children",
-                "862605d066": "2 child workspaces"
+                "862605d066": "2 child workspaces",
+                "coordinatorName": "redesign auth flow",
+                "childPr1Name": "PR 1/2: migrate users.sql",
+                "childPr2Name": "PR 2/2: withSession middleware"
+              },
+              "types": {
+                "coordinatorInitial": "Splitting auth rewrite into 2 PRs…",
+                "codexInitial": "Writing the users table migration…",
+                "claudeInitial": "Sketching withSession middleware…",
+                "codexBeat1": "Adding the email_verified column…",
+                "claudeBeat1": "Wiring withSession middleware…",
+                "coordinatorBeat1": "PR 1/2 ready",
+                "coordinatorBeat2": "PR 2/2 ready"
+              },
+              "steps": {
+                "name": "Orchestration",
+                "subtitle": "Orchestration",
+                "description": "Enable agents to manage and coordinate Orca workspaces to execute larger tasks."
               },
               "StatusesPage": {
                 "2f549fc0ba": "src/auth/session.test.ts",
@@ -12287,6 +12361,7 @@
           "4cc7b83ffe": "Filter files...",
           "21783df79f": "Collapse file tree",
           "481e63ca52": "Files",
+          "resizeFileTree": "Resize file tree",
           "d5ac717d65": "uncommitted",
           "39b6b9e4e4": "Committed on Branch"
         },
@@ -12918,6 +12993,9 @@
           "bb7f599ee7": "Open Settings",
           "2d5b9fabf9": "Microphone access denied. Grant access in system settings, then restart Orca.",
           "5d2c3e7ae3": "No speech detected."
+        },
+        "DictationIndicator": {
+          "335e1bc6cb": "Stop dictation"
         }
       },
       "dashboard": {
@@ -13333,9 +13411,11 @@
           "d90981f766": "Time",
           "6b914c5fbb": "Day",
           "233b8c94b6": "Cadence",
-          "b08ccb4d06": "hourly",
-          "8cc026fd73": "weekly",
-          "c3e39e17cf": "custom"
+          "55b2ef82a4": "Hourly",
+          "f0202f3a89": "Daily",
+          "57e83307d0": "Weekdays",
+          "837d902bba": "Weekly",
+          "ddba78647e": "Custom cron"
         },
         "AutomationSessionField": {
           "f3c76dce51": "Reuse",
@@ -14100,7 +14180,9 @@
       },
       "tool": {
         "running": "Running…",
-        "result": "Result"
+        "result": "Result",
+        "countOne": "1 tool call",
+        "countN": "{{value0}} tool calls"
       },
       "status": {
         "responding": "Agent is responding"
@@ -14222,12 +14304,16 @@
       "attention": "Needs You",
       "working": "Working",
       "idle": "Idle",
-      "empty": "None"
+      "empty": "None",
+      "done": "Done"
     },
     "title": "Agents",
     "total": "{{count}} total",
     "close": "Close dashboard",
-    "settings": "Agent Dashboard settings",
+    "settings": {
+      "showIdle": "Show idle agents",
+      "showIdleCopy": "Include agents that have gone quiet for 30 minutes without reporting completion. Hidden by default."
+    },
     "settingsTooltip": "Board settings",
     "card": {
       "you": "You",
@@ -14236,17 +14322,66 @@
         "minutes": "{{count}}m",
         "hours": "{{count}}h",
         "days": "{{count}}d"
-      }
+      },
+      "review": {
+        "open": "Open review",
+        "draft": "Draft review",
+        "merged": "Merged review",
+        "closed": "Closed review"
+      },
+      "subagents_one": "{{count}} subagent",
+      "subagents_other": "{{count}} subagents"
     },
     "terminal": {
       "closed": "No live terminal — this agent's pane has closed.",
       "focusWorktree": "Open worktree",
       "close": "Close"
-    }
+    },
+    "filters": {
+      "remove": "Remove {{label}} filter",
+      "active": "Filters",
+      "clear": "Clear",
+      "review": {
+        "open": "Open",
+        "draft": "Draft",
+        "merged": "Merged",
+        "closed": "Closed",
+        "none": "No review"
+      },
+      "reviewChip": "Review: {{state}}",
+      "label": "Filter",
+      "project": "Project",
+      "workspaceStatus": "Workspace status",
+      "reviewStatus": "PR / MR status",
+      "clearAll": "Clear all filters"
+    },
+    "search": {
+      "placeholder": "Search worktree, project, or agent…",
+      "label": "Search agents",
+      "clear": "Clear search",
+      "results": "{{shown}} of {{total}} shown"
+    },
+    "settingsLabel": "Agent Dashboard settings"
   },
   "dashboard": {
     "sidebar": {
       "label": "Agent Dashboard"
+    }
+  },
+  "runtimeRpc": {
+    "startupFailure": {
+      "unknownCause": "No additional error details were available.",
+      "continueButton": "Continue without CLI",
+      "title": "Orca CLI unavailable",
+      "message": "Orca couldn't start its local command transport.",
+      "detail": "Orca will continue to work, but commands such as orca status, orca terminal, and orchestration are unavailable for this session.\n\n{{guidance}}\n\nCause: {{cause}}",
+      "guidance": {
+        "permissionDenied": "Orca couldn't write its runtime file. Check permissions on Orca's data folder, then restart.",
+        "storageUnavailable": "Your disk may be full or read-only. Free up space, then restart Orca.",
+        "invalidPath": "Orca's data folder may be missing, moved, or at a path that is too long. Restore it or use a shorter path, then restart Orca.",
+        "addressInUse": "Another process may be holding the port. Restart Orca to try again.",
+        "unknown": "Restart Orca to try again."
+      }
     }
   }
 }

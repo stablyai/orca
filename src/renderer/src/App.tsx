@@ -75,8 +75,8 @@ import {
 } from '@/lib/floating-terminal'
 import {
   isFloatingWorkspacePanelFocused,
-  isFloatingWorkspacePanelShortcut,
   isFloatingWorkspaceTerminalInputTarget,
+  matchFloatingWorkspacePanelChord,
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
 } from '@/lib/floating-workspace-terminal-actions'
 import { createFloatingWorkspaceTourInteractionSnapshot } from '@/lib/floating-workspace-tour-interaction-snapshot'
@@ -110,6 +110,7 @@ import {
 } from './runtime/sync-runtime-graph'
 import { useWebSessionTabsSync } from './runtime/web-session-tabs-sync'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
+import { MacosTccPromptNoticeHost } from './hooks/MacosTccPromptNoticeHost'
 import { useRadixBodyPointerEventsRecovery } from './hooks/useRadixBodyPointerEventsRecovery'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import {
@@ -179,6 +180,7 @@ import {
   keybindingMatchesAction,
   type KeybindingActionId,
   type KeybindingContext,
+  type KeybindingMatchOptions,
   type PhysicalModifierToken
 } from '../../shared/keybindings'
 import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../shared/plugins/plugin-command-actions'
@@ -407,8 +409,11 @@ function applyRemoteWorkspacePatchStatus(
     message:
       result.message ??
       (result.reason === 'stale-revision'
-        ? 'Workspace changed on another device'
-        : 'Remote workspace sync unavailable')
+        ? translate(
+            'auto.hooks.useIpcEvents.workspaceChangedOnAnotherDevice',
+            'Workspace changed on another device'
+          )
+        : translate('auto.hooks.useIpcEvents.2fe88c2e06', 'Remote workspace sync unavailable'))
   })
 }
 
@@ -657,6 +662,7 @@ function App(): React.JSX.Element {
   const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const markdownTocPanelWidth = useAppStore((s) => s.markdownTocPanelWidth)
+  const combinedDiffFileTreeWidth = useAppStore((s) => s.combinedDiffFileTreeWidth)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -1057,9 +1063,15 @@ function App(): React.JSX.Element {
           await timeRendererStartupStep('first-window-services-await', () =>
             window.api.app.awaitFirstWindowStartupServices()
           )
+          await timeRendererStartupStep('recover-legacy-worker-terminals-pre-reconnect', () =>
+            window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
+          )
           reconnectStarted = true
           await timeRendererStartupStep('reconnect-terminals', () =>
             actions.reconnectPersistedTerminals(abortController.signal)
+          )
+          await timeRendererStartupStep('recover-legacy-worker-terminals-post-reconnect', () =>
+            window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
           syncZoomCSSVar()
           // Why (issue #1158): unlock the session writer only after hydration and all dependent steps succeeded, so a mid-startup throw can't serialize partially-mutated state to disk.
@@ -1135,7 +1147,9 @@ function App(): React.JSX.Element {
           if (!reconnectStarted) {
             try {
               await window.api.app.awaitFirstWindowStartupServices()
+              await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
               await actions.reconnectPersistedTerminals(abortController.signal)
+              await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
             } catch (reconnectErr) {
               console.error(
                 '[startup] reconnectPersistedTerminals failed in error path:',
@@ -1340,6 +1354,7 @@ function App(): React.JSX.Element {
         rightSidebarExplorerView,
         rightSidebarWidth,
         markdownTocPanelWidth,
+        combinedDiffFileTreeWidth,
         groupBy,
         sortBy,
         projectOrderBy,
@@ -1374,6 +1389,7 @@ function App(): React.JSX.Element {
     rightSidebarExplorerView,
     rightSidebarWidth,
     markdownTocPanelWidth,
+    combinedDiffFileTreeWidth,
     groupBy,
     sortBy,
     projectOrderBy,
@@ -1834,11 +1850,15 @@ function App(): React.JSX.Element {
       // Only short-circuit chords the floating panel itself claims; suppressing others here would silently no-op them when focus is in the panel.
       const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
       if (floatingWorkspaceFocused) {
+        const floatingMatchOptions: KeybindingMatchOptions = { context, terminalShortcutPolicy }
         if (
-          isFloatingWorkspacePanelShortcut(input, shortcutPlatform, null, keybindings, {
-            context,
-            terminalShortcutPolicy
-          })
+          matchFloatingWorkspacePanelChord(
+            input,
+            shortcutPlatform,
+            null,
+            keybindings,
+            floatingMatchOptions
+          ) !== null
         ) {
           return
         }
@@ -2181,7 +2201,7 @@ function App(): React.JSX.Element {
   return (
     <div
       ref={setAppRootNode}
-      className="flex flex-col h-dvh w-screen overflow-hidden"
+      className="app-layout"
       style={
         {
           '--collapsed-sidebar-header-width': `${collapsedSidebarHeaderWidth}px`,
@@ -2196,6 +2216,8 @@ function App(): React.JSX.Element {
         <ConfirmationDialogProvider>
           <LinkRoutingPreferenceDialogProvider>
             <WorkspacePortScanner enabled={workspaceSessionReady} />
+            {/* Why: plugin language-pack discovery must not re-render the App shell. */}
+            <MacosTccPromptNoticeHost />
             {/* Why: leaf-mounted retention sync keeps agent-status subscriptions out of the App render tree. */}
             <RetainedAgentsSyncGate />
             <AgentHibernationGate />

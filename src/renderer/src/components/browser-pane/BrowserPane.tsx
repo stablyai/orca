@@ -141,7 +141,9 @@ import {
   browserPageZoomLevelToPercent,
   DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
   getBrowserPageZoomIndicatorState,
+  getExplicitBrowserPageZoomLevel,
   normalizeBrowserPageZoomLevel,
+  rememberExplicitBrowserPageZoomLevel,
   setBrowserPageZoomLevel,
   type BrowserPageZoomDirection
 } from './browser-page-zoom'
@@ -2827,10 +2829,14 @@ function BrowserPagePane({
   const setBrowserDefaultZoomLevel = useAppStore((state) => state.setBrowserDefaultZoomLevel)
   const normalizedBrowserDefaultZoomLevel = normalizeBrowserPageZoomLevel(browserDefaultZoomLevel)
   const browserDefaultZoomPercent = browserPageZoomLevelToPercent(normalizedBrowserDefaultZoomLevel)
-  // Why: the level THIS pane should hold. Seeded once from the configured default ("applied to newly
+  // Why: the level THIS pane should hold. Seeded from the configured default ("applied to newly
   // opened browser tabs") and moved only by zooming this pane, so a reload can't broadcast another
-  // tab's zoom through the shared setting.
-  const paneZoomLevelRef = useRef(normalizedBrowserDefaultZoomLevel)
+  // tab's zoom through the shared setting. Why the module-level lookup: the guest webview outlives
+  // this component (worktree switch, Settings visit), so re-seeding on remount would let a later
+  // Settings change retroactively hijack a tab the user already zoomed.
+  const paneZoomLevelRef = useRef(
+    getExplicitBrowserPageZoomLevel(browserTab.id) ?? normalizedBrowserDefaultZoomLevel
+  )
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
   const faviconUrlRef = useRef<string | null>(browserTab.faviconUrl)
   const initialBrowserUrlRef = useRef(browserTab.url)
@@ -3566,6 +3572,7 @@ function BrowserPagePane({
       const nextLevel = applyBrowserPageZoom(webviewRef.current, direction)
       if (nextLevel !== null) {
         paneZoomLevelRef.current = nextLevel
+        rememberExplicitBrowserPageZoomLevel(browserTabIdRef.current, nextLevel)
         setBrowserDefaultZoomLevel(nextLevel)
         showBrowserZoomFeedback(nextLevel)
       }

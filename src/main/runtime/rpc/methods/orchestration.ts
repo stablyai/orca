@@ -2,14 +2,22 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, OptionalBoolean, requiredString } from '../schemas'
-import type { MessageType, MessagePriority, TaskStatus } from '../../orchestration/db'
+import {
+  LEGACY_CONTRACT_VERSION,
+  type MessageType,
+  type MessagePriority,
+  type TaskStatus
+} from '../../orchestration/db'
 import { MESSAGE_TYPES } from '../../orchestration/types'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
 import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
-import { orchestrationSkillRecoveryData } from '../../../../shared/orchestration-rpc-contract'
+import {
+  ORCHESTRATION_LEGACY_RUN_ID,
+  orchestrationSkillRecoveryData
+} from '../../../../shared/orchestration-rpc-contract'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
@@ -46,6 +54,10 @@ function parseRemoteWorkerPayload(payload: string | undefined): Record<string, u
   } catch {
     throw new OrchestrationError('invalid_argument', 'Message payload must be valid JSON.')
   }
+}
+
+function isWorkerReportOutcome(value: unknown): value is 'succeeded' | 'failed' {
+  return value === 'succeeded' || value === 'failed'
 }
 
 const SendParams = z
@@ -94,6 +106,7 @@ const SendParams = z
 const CheckParams = z
   .object({
     terminal: OptionalString,
+    terminalPaneKey: OptionalString,
     unread: OptionalBoolean,
     peek: OptionalBoolean,
     // Why: `all` surfaces every message and skips mark-read; legacy encoding was the `{unread: false}` trick (design doc §3.2/§3.3).
@@ -103,6 +116,9 @@ const CheckParams = z
     // Why: one-release RPC compatibility only; the public CLI uses --format because no terminal input is injected.
     inject: OptionalBoolean,
     ack: OptionalString,
+    compatibilityAck: OptionalString,
+    compatibilityQuestionAck: OptionalString,
+    compatibilityCliCommand: z.enum(['orca', 'orca-ide', 'orca-dev']).optional(),
     run: OptionalString,
     wait: OptionalBoolean,
     timeoutMs: OptionalFiniteNumber
@@ -201,7 +217,9 @@ const AskParams = z
     options: OptionalString,
     timeoutMs: OptionalFiniteNumber,
     from: OptionalString,
-    run: OptionalString
+    run: OptionalString,
+    compatibilityCliCommand: z.enum(['orca', 'orca-ide', 'orca-dev']).optional(),
+    compatibilityWindowsCommand: z.enum(['orca', 'orca-ide']).optional()
   })
   .superRefine((params, ctx) => {
     if ((params.question ? 1 : 0) + (params.resume ? 1 : 0) !== 1) {
@@ -235,7 +253,9 @@ function resolveRunScope(
   params: {
     runId?: string
     callerTerminalHandle?: string
+    callerPaneKey?: string
     requireCurrentConsumer: boolean
+    legacyCoordinatorRunId?: string
   }
 ): RunRow {
   const db = runtime.getOrchestrationDb()
@@ -247,6 +267,9 @@ function resolveRunScope(
   if (!params.requireCurrentConsumer && explicit) {
     return explicit
   }
+  if (explicit && params.legacyCoordinatorRunId === explicit.id) {
+    return explicit
+  }
   if (!params.callerTerminalHandle) {
     throw new OrchestrationError(
       'run_required',
@@ -254,7 +277,7 @@ function resolveRunScope(
       orchestrationSkillRecoveryData()
     )
   }
-  const paneKey = runtime.getTerminalPaneKey(params.callerTerminalHandle)
+  const paneKey = params.callerPaneKey ?? runtime.getTerminalPaneKey(params.callerTerminalHandle)
   if (!paneKey) {
     throw new OrchestrationError(
       'stable_pane_required',
@@ -361,6 +384,49 @@ function resolveMessageRun(
   return { run, dispatchId: dispatch?.id ?? dispatchId }
 }
 
+function legacyWorkerDeliveryContract(
+  runtime: OrcaRuntimeService,
+  runId: string | undefined,
+  recipient: string
+): 'legacy_direct' | undefined {
+  if (!runId) {
+    return undefined
+  }
+  if (!recipient.startsWith('dispatch:')) {
+    return runtime
+      .getOrchestrationDb()
+      .resolveLegacyWorkerCandidate({ runId, terminalHandle: recipient })
+      ? 'legacy_direct'
+      : undefined
+  }
+  const dispatch = runtime
+    .getOrchestrationDb()
+    .getDispatchContextById(recipient.slice('dispatch:'.length))
+  return dispatch?.run_id === runId &&
+    dispatch.contract_version === LEGACY_CONTRACT_VERSION &&
+    (dispatch.status === 'pending' || dispatch.status === 'dispatched')
+    ? 'legacy_direct'
+    : undefined
+}
+
+function interruptedAcknowledgedCheck(
+  runId: string,
+  acknowledged: string,
+  reason: 'consumer_fenced' | 'outcome_unknown' | 'waiter_exists'
+): Record<string, unknown> {
+  return {
+    runId,
+    deliveryId: null,
+    messages: [],
+    count: 0,
+    acknowledged,
+    timedOut: false,
+    cancelled: false,
+    connectionLost: false,
+    waitInterrupted: reason
+  }
+}
+
 function rejectFederatedExplicitTarget(params: { to?: string; run?: string }): void {
   if (params.to || params.run) {
     throw new OrchestrationError(
@@ -377,7 +443,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.send',
     params: SendParams,
-    handler: async (params, { runtime, orchestrationCapability }) => {
+    handler: async (
+      params,
+      { runtime, orchestrationCapability, legacyCoordinatorRunId, revalidateLegacyCoordinator }
+    ) => {
       const db = runtime.getOrchestrationDb()
       const from = params.from ?? 'unknown'
       // Why: caller-supplied pane fields are only compatibility metadata; lifecycle authority uses the runtime-observed pane plus capability.
@@ -458,6 +527,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         runId: params.run,
         payload: params.payload
       })
+      if (
+        params.type === 'worker_done' &&
+        !isWorkerReportOutcome(parseRemoteWorkerPayload(params.payload).outcome)
+      ) {
+        throw new OrchestrationError(
+          'invalid_argument',
+          'worker_done requires outcome=succeeded|failed for a current Dispatch.'
+        )
+      }
       if (params.to?.startsWith('task:')) {
         throw new OrchestrationError(
           'invalid_argument',
@@ -509,6 +587,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
               'Coordinator-to-worker control mail cannot report worker lifecycle.'
             )
           }
+          revalidateLegacyCoordinator?.()
           const relay = db.enqueueFederationRelay({
             dispatchId,
             direction: 'to_worker',
@@ -535,6 +614,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           }
         }
         // Point-to-point — existing single-recipient behavior
+        revalidateLegacyCoordinator?.()
         const msg = db.insertMessage({
           from,
           to,
@@ -545,7 +625,12 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           threadId: params.threadId,
           payload: params.payload,
           senderPaneKey,
-          runId: routing.run?.id
+          runId: routing.run?.id,
+          deliveryContract: legacyWorkerDeliveryContract(
+            runtime,
+            routing.run?.id ?? legacyCoordinatorRunId,
+            to
+          )
         })
         const dispatch = routing.dispatchId
           ? db.getDispatchContextById(routing.dispatchId)
@@ -602,6 +687,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         throw new Error(`No recipients resolved for group address: ${to}`)
       }
 
+      revalidateLegacyCoordinator?.()
       const threadId = params.threadId ?? `thread_${Date.now()}`
       const messages = handles.map((handle) =>
         db.insertMessage({
@@ -614,7 +700,12 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           threadId,
           payload: params.payload,
           senderPaneKey,
-          runId: routing.run?.id
+          runId: routing.run?.id,
+          deliveryContract: legacyWorkerDeliveryContract(
+            runtime,
+            routing.run?.id ?? legacyCoordinatorRunId,
+            handle
+          )
         })
       )
       for (const message of messages) {
@@ -628,18 +719,30 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.check',
     params: CheckParams,
-    handler: async (params, { runtime, signal }) => {
+    handler: async (
+      params,
+      {
+        runtime,
+        signal,
+        legacyCoordinatorRunId,
+        revalidateLegacyCoordinator,
+        recordMutationReceipt
+      }
+    ) => {
       const db = runtime.getOrchestrationDb()
       const handle = params.terminal ?? 'unknown'
       const typeFilter = parseMessageTypes(params.types)
 
-      const paneKey = runtime.getTerminalPaneKey(handle)
+      // Why: a live runtime handle is authoritative; pane metadata is only the restart fallback.
+      const paneKey = runtime.getTerminalPaneKey(handle) ?? params.terminalPaneKey
       const boundRun = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
       if (params.run || boundRun) {
         const run = resolveRunScope(runtime, {
           runId: params.run,
           callerTerminalHandle: handle,
-          requireCurrentConsumer: true
+          callerPaneKey: paneKey ?? undefined,
+          requireCurrentConsumer: true,
+          legacyCoordinatorRunId
         })
         const generation = run.consumer_generation
         const address = `run:${run.id}`
@@ -652,6 +755,11 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
               deliveryId: params.ack
             })
           : undefined
+        if (acknowledged) {
+          recordMutationReceipt?.(
+            interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'outcome_unknown')
+          )
+        }
         if (params.peek || params.all || params.unread === false) {
           const history = db.getRunMailboxHistory(run.id, 100, typeFilter)
           const messages =
@@ -715,14 +823,28 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           signal,
           exclusive: true
         })
+        try {
+          revalidateLegacyCoordinator?.()
+        } catch (error) {
+          if (!acknowledged) {
+            throw error
+          }
+          return interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'consumer_fenced')
+        }
         const latestRun = db.getRun(run.id)
         if (!latestRun || latestRun.consumer_generation !== generation) {
+          if (acknowledged) {
+            return interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'consumer_fenced')
+          }
           throw new OrchestrationError(
             'consumer_fenced',
             'This mailbox consumer was replaced while waiting.'
           )
         }
         if (waitResult === 'waiter_exists') {
+          if (acknowledged) {
+            return interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'waiter_exists')
+          }
           throw new OrchestrationError(
             'waiter_exists',
             `Run ${run.id} already has an active actionable waiter.`
@@ -777,7 +899,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         remoteAttachment &&
         !db.isRemoteAttachmentProcessCurrent({
           dispatchId: remoteAttachment.dispatch_id,
-          paneKey,
+          paneKey: paneKey ?? null,
           processIncarnation: runtime.getTerminalProcessIncarnation(handle)
         })
       ) {
@@ -849,6 +971,17 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           ? db.getAllMessagesForHandle(handle, undefined, typeFilter)
           : db.getUnreadMessages(handle, typeFilter)
 
+        if (
+          consumeUnread &&
+          messages.some((message) => message.run_id === ORCHESTRATION_LEGACY_RUN_ID)
+        ) {
+          throw new OrchestrationError(
+            'legacy_read_only',
+            'Legacy orchestration messages are inspect-only; use --peek or --all. No acknowledgment was applied.',
+            { effectsApplied: false }
+          )
+        }
+
         let visibleMessages = messages
         if (consumeUnread && messages.length > 0) {
           // Why: unread check is an authoritative read path for worker_done/heartbeat, so reconcile lifecycle messages here too.
@@ -893,11 +1026,33 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.reply',
     params: ReplyParams,
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
       const original = db.getMessageById(params.id)
       if (!original) {
         throw new Error(`Message not found: ${params.id}`)
+      }
+      if (
+        legacyCoordinatorRunId &&
+        (original.run_id !== legacyCoordinatorRunId ||
+          (params.run !== undefined && params.run !== legacyCoordinatorRunId))
+      ) {
+        throw new OrchestrationError(
+          'request_mismatch',
+          `Message ${params.id} does not belong to this adopted Run.`,
+          { effectsApplied: false }
+        )
+      }
+      if (
+        original.run_id === ORCHESTRATION_LEGACY_RUN_ID ||
+        original.delivery_contract === 'legacy_direct' ||
+        original.delivery_contract === 'audit_only'
+      ) {
+        throw new OrchestrationError(
+          'legacy_read_only',
+          'Legacy orchestration messages are inspect-only; no reply was applied.',
+          { effectsApplied: false }
+        )
       }
 
       const question = db.getQuestion(params.id)
@@ -905,7 +1060,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         const run = resolveRunScope(runtime, {
           runId: params.run ?? question.run_id,
           callerTerminalHandle: params.from,
-          requireCurrentConsumer: true
+          requireCurrentConsumer: true,
+          legacyCoordinatorRunId
         })
         const answered = db.answerQuestion({
           messageId: question.message_id,
@@ -943,7 +1099,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         to: original.from_handle,
         subject: `Re: ${original.subject}`,
         body: params.body,
-        threadId: original.thread_id ?? original.id
+        threadId: original.thread_id ?? original.id,
+        runId: original.run_id
       })
 
       runtime.notifyMessageArrived(original.from_handle, reply.type)
@@ -967,7 +1124,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.taskCreate',
     params: TaskCreateParams,
-    handler: (params, { runtime }) => {
+    handler: (params, { runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
       let deps: string[] | undefined
       if (params.deps) {
@@ -991,7 +1148,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         runId: resolveRunScope(runtime, {
           runId: params.run,
           callerTerminalHandle: params.callerTerminalHandle,
-          requireCurrentConsumer: true
+          requireCurrentConsumer: true,
+          legacyCoordinatorRunId
         }).id
       })
       return { task }
@@ -1001,7 +1159,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.taskList',
     params: TaskListParams,
-    handler: (params, { runtime }) => {
+    handler: (params, { runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
       const explicitRun = params.run ? db.getRun(params.run) : undefined
       const run =
@@ -1010,7 +1168,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           : resolveRunScope(runtime, {
               runId: params.run,
               callerTerminalHandle: params.callerTerminalHandle,
-              requireCurrentConsumer: params.run === undefined
+              requireCurrentConsumer: params.run === undefined,
+              legacyCoordinatorRunId
             })
       // Why: listTasksWithDispatch adds assignee_handle + dispatch_id (NULL for non-dispatched), so legacy-shape consumers are unaffected.
       const joined = db.listTasksWithDispatch({
@@ -1037,12 +1196,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.taskUpdate',
     params: TaskUpdateParams,
-    handler: (params, { runtime }) => {
+    handler: (params, { runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
       const run = resolveRunScope(runtime, {
         runId: params.run,
         callerTerminalHandle: params.callerTerminalHandle,
-        requireCurrentConsumer: true
+        requireCurrentConsumer: true,
+        legacyCoordinatorRunId
       })
       const existing = db.getTask(params.id)
       if (!existing || existing.run_id !== run.id) {
@@ -1062,7 +1222,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.dispatch',
     params: DispatchParams,
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, legacyCoordinatorRunId, revalidateLegacyCoordinator }) => {
       const db = runtime.getOrchestrationDb()
       const task = db.getTask(params.task)
       if (!task) {
@@ -1071,7 +1231,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const run = resolveRunScope(runtime, {
         runId: params.run,
         callerTerminalHandle: params.from,
-        requireCurrentConsumer: true
+        requireCurrentConsumer: true,
+        legacyCoordinatorRunId
       })
       if (task.run_id !== run.id) {
         throw new OrchestrationError(
@@ -1117,8 +1278,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
       }
 
-      const assigneePaneKey = runtime.getTerminalPaneKey(to) ?? undefined
-      const processIncarnation = runtime.getTerminalProcessIncarnation(to) ?? undefined
+      const dispatchAuthority = runtime.getOrchestrationDispatchAuthority(to)
+      const assigneePaneKey =
+        dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey(to) ?? undefined
+      const processIncarnation =
+        dispatchAuthority?.processIncarnation ??
+        runtime.getTerminalProcessIncarnation(to) ??
+        undefined
       if (params.inject && (!assigneePaneKey || !processIncarnation)) {
         throw new OrchestrationError(
           'stable_pane_required',
@@ -1126,7 +1292,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         )
       }
 
-      const ctx = db.createDispatchContext(params.task, to, assigneePaneKey)
+      revalidateLegacyCoordinator?.()
+      const ctx = db.createDispatchContext(
+        params.task,
+        to,
+        assigneePaneKey,
+        dispatchAuthority?.launchTokenHash ?? undefined
+      )
       const dispatchCapability = params.inject
         ? db.mintDispatchCapability({
             dispatchId: ctx.id,

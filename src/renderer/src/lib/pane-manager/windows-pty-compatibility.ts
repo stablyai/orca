@@ -56,10 +56,15 @@ export function buildWindowsPtyCompatibilityOptions(
   if (!isLocalNativeWindowsConpty(context)) {
     return {}
   }
-  const buildNumber = parseWindowsBuildNumber(context.osRelease)
-  return {
-    windowsPty: buildXtermWindowsPtyOptions(buildNumber)
-  }
+  return buildLocalConptyTerminalOptions(context.osRelease)
+}
+
+/** ConPTY backend options for a pane already known to be local native Windows —
+ *  the dashboard preview resolves that verdict upstream and reuses this. */
+export function buildLocalConptyTerminalOptions(
+  osRelease: string | null | undefined
+): Partial<ITerminalOptions> {
+  return { windowsPty: buildXtermWindowsPtyOptions(parseWindowsBuildNumber(osRelease)) }
 }
 
 /** Mirror of main's effectiveShellOverride fold (pty.ts spawn handlers): a

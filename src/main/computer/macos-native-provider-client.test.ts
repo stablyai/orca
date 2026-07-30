@@ -1,38 +1,22 @@
 import { EventEmitter } from 'node:events'
-import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
-  chmodSyncMock,
+  claimSupervisedMacOSProviderMock,
   connectMacOSProviderSocketMock,
-  mkdtempSyncMock,
-  resolveMacOSComputerUseExecutablePathMock,
-  rmSyncMock,
-  spawnMock,
-  writeFileSyncMock
+  releaseSupervisedMacOSProviderMock,
+  startSupervisedMacOSProviderMock
 } = vi.hoisted(() => ({
-  chmodSyncMock: vi.fn(),
+  claimSupervisedMacOSProviderMock: vi.fn(),
   connectMacOSProviderSocketMock: vi.fn(),
-  mkdtempSyncMock: vi.fn(),
-  resolveMacOSComputerUseExecutablePathMock: vi.fn(),
-  rmSyncMock: vi.fn(),
-  spawnMock: vi.fn(),
-  writeFileSyncMock: vi.fn()
+  releaseSupervisedMacOSProviderMock: vi.fn(),
+  startSupervisedMacOSProviderMock: vi.fn()
 }))
 
-vi.mock('child_process', () => ({
-  spawn: spawnMock
-}))
-
-vi.mock('fs', () => ({
-  chmodSync: chmodSyncMock,
-  mkdtempSync: mkdtempSyncMock,
-  rmSync: rmSyncMock,
-  writeFileSync: writeFileSyncMock
-}))
-
-vi.mock('./macos-native-provider-paths', () => ({
-  resolveMacOSComputerUseExecutablePath: resolveMacOSComputerUseExecutablePathMock
+vi.mock('./computer-provider-supervisor-client', () => ({
+  claimSupervisedMacOSProvider: claimSupervisedMacOSProviderMock,
+  releaseSupervisedMacOSProvider: releaseSupervisedMacOSProviderMock,
+  startSupervisedMacOSProvider: startSupervisedMacOSProviderMock
 }))
 
 vi.mock('./macos-native-provider-socket', () => ({
@@ -62,11 +46,6 @@ class FakeSocket extends EventEmitter {
   }
 }
 
-class FakeProvider extends EventEmitter {
-  kill = vi.fn()
-  unref = vi.fn()
-}
-
 function pendingConnectThatRejectsOnAbort(signal?: AbortSignal): Promise<never> {
   return new Promise((_resolve, reject) => {
     signal?.addEventListener(
@@ -84,20 +63,22 @@ async function loadClientModule() {
 
 describe('MacOSNativeProviderClient', () => {
   const sockets: FakeSocket[] = []
-  const providers: FakeProvider[] = []
+  let nextSessionId = 1
 
   beforeEach(() => {
     vi.useFakeTimers()
     sockets.length = 0
-    providers.length = 0
-    mkdtempSyncMock.mockImplementation((prefix: string) => `${prefix}${sockets.length}`)
-    resolveMacOSComputerUseExecutablePathMock.mockReturnValue(
-      '/Applications/Orca Computer Use.app/Contents/MacOS/orca-computer-use-macos'
-    )
-    spawnMock.mockImplementation(() => {
-      const provider = new FakeProvider()
-      providers.push(provider)
-      return provider
+    nextSessionId = 1
+    claimSupervisedMacOSProviderMock.mockResolvedValue(undefined)
+    releaseSupervisedMacOSProviderMock.mockResolvedValue(undefined)
+    startSupervisedMacOSProviderMock.mockImplementation(async () => {
+      const sessionId = `session-${nextSessionId++}`
+      return {
+        sessionId,
+        socketPath: `/tmp/${sessionId}/provider.sock`,
+        socketToken: `token-${sessionId}`,
+        termination: new Promise<never>(() => {})
+      }
     })
     connectMacOSProviderSocketMock.mockImplementation(async () => {
       const socket = new FakeSocket()
@@ -107,13 +88,10 @@ describe('MacOSNativeProviderClient', () => {
   })
 
   afterEach(() => {
-    chmodSyncMock.mockReset()
+    claimSupervisedMacOSProviderMock.mockReset()
     connectMacOSProviderSocketMock.mockReset()
-    mkdtempSyncMock.mockReset()
-    resolveMacOSComputerUseExecutablePathMock.mockReset()
-    rmSyncMock.mockReset()
-    spawnMock.mockReset()
-    writeFileSyncMock.mockReset()
+    releaseSupervisedMacOSProviderMock.mockReset()
+    startSupervisedMacOSProviderMock.mockReset()
     vi.useRealTimers()
   })
 
@@ -167,7 +145,6 @@ describe('MacOSNativeProviderClient', () => {
     const firstRejection = expect(firstCall).rejects.toThrow('active helper failed')
     await vi.waitFor(() => expect(sockets).toHaveLength(1))
     const firstSocket = sockets[0]!
-    const firstSocketDirectory = mkdtempSyncMock.mock.results[0]?.value as string
     await vi.waitFor(() => expect(firstSocket.writes).toHaveLength(1))
 
     firstSocket.emit('error', new Error('active helper failed'))
@@ -176,10 +153,7 @@ describe('MacOSNativeProviderClient', () => {
     expect(firstSocket.listenerCount('data')).toBe(0)
     expect(firstSocket.listenerCount('close')).toBe(0)
     expect(firstSocket.listenerCount('error')).toBe(1)
-    expect(rmSyncMock).toHaveBeenCalledWith(firstSocketDirectory, {
-      recursive: true,
-      force: true
-    })
+    expect(releaseSupervisedMacOSProviderMock).toHaveBeenCalledWith('session-1')
 
     const secondCall = client.capabilities()
     await vi.waitFor(() => expect(sockets).toHaveLength(2))
@@ -200,24 +174,25 @@ describe('MacOSNativeProviderClient', () => {
   })
 
   it('invalidates the active socket when a helper write fails', async () => {
+    const firstSocket = new FakeSocket()
+    firstSocket.writeError = new Error('write EPIPE')
+    connectMacOSProviderSocketMock.mockImplementationOnce(async () => {
+      sockets.push(firstSocket)
+      return firstSocket
+    })
     const { MacOSNativeProviderClient } = await loadClientModule()
     const client = new MacOSNativeProviderClient()
 
     const firstCall = client.capabilities()
+    const firstRejection = expect(firstCall).rejects.toThrow('write EPIPE')
     await vi.waitFor(() => expect(sockets).toHaveLength(1))
-    const firstSocket = sockets[0]!
-    const firstSocketDirectory = mkdtempSyncMock.mock.results[0]?.value as string
-    firstSocket.writeError = new Error('write EPIPE')
 
-    await expect(firstCall).rejects.toThrow('write EPIPE')
+    await firstRejection
     expect(firstSocket.destroyed).toBe(true)
     expect(firstSocket.listenerCount('data')).toBe(0)
     expect(firstSocket.listenerCount('close')).toBe(0)
     expect(firstSocket.listenerCount('error')).toBe(1)
-    expect(rmSyncMock).toHaveBeenCalledWith(firstSocketDirectory, {
-      recursive: true,
-      force: true
-    })
+    expect(releaseSupervisedMacOSProviderMock).toHaveBeenCalledWith('session-1')
 
     const secondCall = client.capabilities()
     await vi.waitFor(() => expect(sockets).toHaveLength(2))
@@ -278,6 +253,16 @@ describe('MacOSNativeProviderClient', () => {
       code: 'invalid_argument',
       message: expect.stringContaining('Click requires')
     })
+    await expect(
+      client.action('click', {
+        app: 'TextEdit',
+        elementIndex: 0,
+        modifiers: 'CmdOrCtrl+A'
+      })
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringContaining('Click modifiers accept modifier keys only')
+    })
     await expect(client.action('typeText', { app: 'TextEdit', text: '' })).rejects.toMatchObject({
       code: 'invalid_argument',
       message: expect.stringContaining('Missing text')
@@ -293,9 +278,8 @@ describe('MacOSNativeProviderClient', () => {
       message: expect.stringContaining('Hotkey requires')
     })
 
-    expect(providers).toHaveLength(0)
     expect(sockets).toHaveLength(0)
-    expect(spawnMock).not.toHaveBeenCalled()
+    expect(startSupervisedMacOSProviderMock).not.toHaveBeenCalled()
     expect(connectMacOSProviderSocketMock).not.toHaveBeenCalled()
   })
 
@@ -342,7 +326,7 @@ describe('MacOSNativeProviderClient', () => {
     })
   })
 
-  it('removes the parent-owned token file after the helper socket connects', async () => {
+  it('claims the parent-owned helper session after the socket connects', async () => {
     const { MacOSNativeProviderClient } = await loadClientModule()
     const client = new MacOSNativeProviderClient()
 
@@ -351,11 +335,8 @@ describe('MacOSNativeProviderClient', () => {
     const socket = sockets[0]!
     await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
     const request = JSON.parse(socket.writes[0]!) as { id: number }
-    const socketDirectory = mkdtempSyncMock.mock.results[0]?.value as string
 
-    expect(rmSyncMock).toHaveBeenCalledWith(join(socketDirectory, 'provider.token'), {
-      force: true
-    })
+    expect(claimSupervisedMacOSProviderMock).toHaveBeenCalledWith('session-1')
 
     socket.emit(
       'data',
@@ -368,7 +349,7 @@ describe('MacOSNativeProviderClient', () => {
     await expect(call).resolves.toMatchObject({ protocolVersion: 1 })
   })
 
-  it('does not let a superseded startup clean up the replacement helper token', async () => {
+  it('does not let a superseded startup release the replacement helper session', async () => {
     const pendingConnects: {
       resolve: (socket: FakeSocket) => void
     }[] = []
@@ -383,7 +364,6 @@ describe('MacOSNativeProviderClient', () => {
 
     const firstCall = client.capabilities()
     await vi.waitFor(() => expect(pendingConnects).toHaveLength(1))
-    const firstSocketDirectory = mkdtempSyncMock.mock.results[0]?.value as string
 
     client.shutdown()
 
@@ -399,9 +379,8 @@ describe('MacOSNativeProviderClient', () => {
 
     await expect(firstCall).rejects.toThrow('native macOS provider startup was superseded')
     expect(firstSocket.destroyed).toBe(true)
-    expect(rmSyncMock).toHaveBeenCalledWith(join(firstSocketDirectory, 'provider.token'), {
-      force: true
-    })
+    expect(releaseSupervisedMacOSProviderMock).toHaveBeenCalledWith('session-1')
+    expect(releaseSupervisedMacOSProviderMock).not.toHaveBeenCalledWith('session-2')
 
     secondSocket.emit(
       'data',
@@ -414,23 +393,64 @@ describe('MacOSNativeProviderClient', () => {
     await expect(secondCall).resolves.toMatchObject({ protocolVersion: 1 })
   })
 
-  it('terminates the helper process when socket startup fails', async () => {
-    const providerKill = vi.fn()
-    spawnMock.mockReturnValueOnce({ unref: vi.fn(), kill: providerKill })
+  it('releases a claimed session when shutdown lands before client adoption', async () => {
+    let resolveClaim = (): void => {}
+    claimSupervisedMacOSProviderMock.mockImplementationOnce(
+      async () =>
+        await new Promise<void>((resolve) => {
+          resolveClaim = resolve
+        })
+    )
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const call = client.capabilities()
+    await vi.waitFor(() => expect(claimSupervisedMacOSProviderMock).toHaveBeenCalledTimes(1))
+    const socket = sockets[0]!
+
+    resolveClaim()
+    queueMicrotask(() => client.shutdown())
+
+    await expect(call).rejects.toThrow('native macOS provider startup was superseded')
+    expect(socket.destroyed).toBe(true)
+    expect(releaseSupervisedMacOSProviderMock).toHaveBeenCalledWith('session-1')
+  })
+
+  it('releases the supervised helper session when socket startup fails', async () => {
     connectMacOSProviderSocketMock.mockRejectedValueOnce(new Error('socket did not open'))
     const { MacOSNativeProviderClient } = await loadClientModule()
     const client = new MacOSNativeProviderClient()
 
     await expect(client.capabilities()).rejects.toThrow('socket did not open')
 
-    expect(providerKill).toHaveBeenCalledWith('SIGTERM')
-    expect(rmSyncMock).toHaveBeenCalledWith(expect.stringContaining('orca-computer-use-'), {
-      recursive: true,
-      force: true
-    })
+    expect(releaseSupervisedMacOSProviderMock).toHaveBeenCalledWith('session-1')
   })
 
-  it('rejects helper spawn errors before socket connection and removes temp state', async () => {
+  it('rejects supervisor startup errors before opening a socket', async () => {
+    startSupervisedMacOSProviderMock.mockRejectedValueOnce(
+      new Error('native macOS helper app failed to start: helper missing')
+    )
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    await expect(client.capabilities()).rejects.toThrow(
+      'native macOS helper app failed to start: helper missing'
+    )
+    expect(connectMacOSProviderSocketMock).not.toHaveBeenCalled()
+  })
+
+  it('aborts a pending socket connection when the supervised helper exits', async () => {
+    let rejectTermination = (_error: Error): void => {}
+    const termination = new Promise<never>((_resolve, reject) => {
+      rejectTermination = reject
+    })
+    void termination.catch(() => undefined)
+    startSupervisedMacOSProviderMock.mockResolvedValueOnce({
+      sessionId: 'session-1',
+      socketPath: '/tmp/session-1/provider.sock',
+      socketToken: 'token-session-1',
+      termination
+    })
     const { MacOSNativeProviderClient } = await loadClientModule()
     const client = new MacOSNativeProviderClient()
     connectMacOSProviderSocketMock.mockImplementation((_path, _timeout, signal?: AbortSignal) =>
@@ -438,36 +458,13 @@ describe('MacOSNativeProviderClient', () => {
     )
 
     const call = client.capabilities()
-    await vi.waitFor(() => expect(providers).toHaveLength(1))
-    const socketDirectory = mkdtempSyncMock.mock.results[0]?.value as string
+    await vi.waitFor(() => expect(connectMacOSProviderSocketMock).toHaveBeenCalledTimes(1))
     const connectSignal = connectMacOSProviderSocketMock.mock.calls[0]?.[2] as AbortSignal
-    expect(connectSignal.aborted).toBe(false)
-    providers[0]!.emit('error', new Error('helper missing'))
+    rejectTermination(new Error('native macOS helper app exited with code 13'))
 
-    await expect(call).rejects.toThrow('native macOS helper app failed to start: helper missing')
+    await expect(call).rejects.toThrow('native macOS helper app exited with code 13')
     expect(connectSignal.aborted).toBe(true)
-    expect(providers[0]!.kill).toHaveBeenCalledWith('SIGTERM')
-    expect(rmSyncMock).toHaveBeenCalledWith(socketDirectory, {
-      recursive: true,
-      force: true
-    })
-  })
-
-  it('rejects helper exits before socket connection and aborts the pending connect', async () => {
-    const { MacOSNativeProviderClient } = await loadClientModule()
-    const client = new MacOSNativeProviderClient()
-    connectMacOSProviderSocketMock.mockImplementation((_path, _timeout, signal?: AbortSignal) =>
-      pendingConnectThatRejectsOnAbort(signal)
-    )
-
-    const call = client.capabilities()
-    await vi.waitFor(() => expect(providers).toHaveLength(1))
-    const connectSignal = connectMacOSProviderSocketMock.mock.calls[0]?.[2] as AbortSignal
-    providers[0]!.emit('exit', 13, null)
-
-    await expect(call).rejects.toThrow('native macOS helper app exited before connecting: code 13')
-    expect(connectSignal.aborted).toBe(true)
-    expect(providers[0]!.kill).toHaveBeenCalledWith('SIGTERM')
+    expect(releaseSupervisedMacOSProviderMock).toHaveBeenCalledWith('session-1')
   })
 })
 

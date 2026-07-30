@@ -26,7 +26,12 @@ type RuntimeEnvironmentSubscriptionHandle = {
 
 type TerminalMultiplexEvent =
   | { type: 'ready' }
-  | { type: 'subscribed'; streamId: number }
+  | {
+      type: 'subscribed'
+      streamId: number
+      streamGeneration?: string
+      capabilities?: { ackOutputSourceRanges?: 1 }
+    }
   | { type: 'end'; streamId: number }
   | { type: 'error'; streamId: number; message?: string }
   | {
@@ -81,6 +86,9 @@ type RemoteRuntimeMultiplexedTerminalState = {
   callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
   subscriptionRequested: boolean
   acknowledgeOutput: boolean
+  acknowledgeOutputSourceRanges: boolean
+  streamGeneration: string | null
+  sourceAckedEndByte: number
   heldAckBytes: number
   pendingAckBytes: number
   ackFlushTimer: ReturnType<typeof setTimeout> | null
@@ -251,7 +259,10 @@ class RemoteRuntimeTerminalMultiplexer {
       terminal: args.terminal,
       callbacks: args.callbacks,
       subscriptionRequested: false,
-      acknowledgeOutput: args.client.type === 'desktop',
+      acknowledgeOutput: true,
+      acknowledgeOutputSourceRanges: false,
+      streamGeneration: null,
+      sourceAckedEndByte: 0,
       heldAckBytes: 0,
       pendingAckBytes: 0,
       ackFlushTimer: null,
@@ -323,8 +334,11 @@ class RemoteRuntimeTerminalMultiplexer {
           terminal: args.terminal,
           client: args.client,
           viewport: args.viewport,
-          capabilities:
-            args.client.type === 'desktop' ? { ackOutput: 1, desktopViewportClaims: 1 } : undefined
+          capabilities: {
+            ackOutput: 1,
+            ackOutputSourceRanges: 1,
+            ...(args.client.type === 'desktop' ? { desktopViewportClaims: 1 } : {})
+          }
         })
       )
       if (!sent) {
@@ -437,7 +451,20 @@ class RemoteRuntimeTerminalMultiplexer {
     if (!stream) {
       return
     }
-    if (event.type === 'end') {
+    if (event.type === 'subscribed') {
+      const capabilities =
+        typeof event.capabilities === 'object' && event.capabilities !== null
+          ? (event.capabilities as { ackOutputSourceRanges?: unknown })
+          : null
+      if (
+        capabilities?.ackOutputSourceRanges === 1 &&
+        typeof event.streamGeneration === 'string' &&
+        event.streamGeneration.length > 0
+      ) {
+        stream.acknowledgeOutputSourceRanges = true
+        stream.streamGeneration = event.streamGeneration
+      }
+    } else if (event.type === 'end') {
       discardOutputAcknowledgements(stream)
       clearSnapshot(stream)
       clearResyncTimer(stream)
@@ -874,6 +901,21 @@ class RemoteRuntimeTerminalMultiplexer {
   }
 
   private acknowledgeOutput(stream: RemoteRuntimeMultiplexedTerminalState, bytes: number): boolean {
+    if (stream.acknowledgeOutputSourceRanges && stream.streamGeneration) {
+      const ackedEndByte = stream.sourceAckedEndByte + bytes
+      const sent = this.sendFrame(
+        stream.streamId,
+        TerminalStreamOpcode.Ack,
+        encodeTerminalStreamJson({
+          streamGeneration: stream.streamGeneration,
+          ackedEndByte
+        })
+      )
+      if (sent) {
+        stream.sourceAckedEndByte = ackedEndByte
+      }
+      return sent
+    }
     return this.sendFrame(
       stream.streamId,
       TerminalStreamOpcode.Ack,

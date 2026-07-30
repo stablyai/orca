@@ -2,6 +2,7 @@ import {
   markRestoredStaleCodexSessionsForRestart,
   type CodexPaneScanResult
 } from './codex-session-restart'
+import { isForeignMachineCodexPtyId } from './codex-pane-selection-lane'
 
 // Why: the first delay coalesces the startup burst of binds and lets
 // updateTabPtyId (written just after the layout binding) land, since the scan
@@ -34,6 +35,12 @@ let flushTimerDueAt: number | null = null
  */
 export function notifyCodexPaneBoundForStaleSweep(ptyId: string): void {
   if (notifiedPtyIds.has(ptyId)) {
+    return
+  }
+  // Why: the pane-account registry only records daemon HOST spawns, so a relay
+  // or SSH pane can never come back stale — every rung it takes is a remote RPC
+  // (15s timeout) spent to learn nothing. Drop it before it reaches the queue.
+  if (isForeignMachineCodexPtyId(ptyId)) {
     return
   }
   queue(ptyId, SWEEP_ATTEMPT_DELAYS_MS[0])

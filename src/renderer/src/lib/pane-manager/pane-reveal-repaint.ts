@@ -1,7 +1,6 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import { resetWebglTextureAtlas } from './pane-webgl-renderer'
-import { releaseAbandonedSynchronizedOutput } from './terminal-synchronized-output-release'
 
 function scheduleSettledFrame(callback: () => void): void {
   if (typeof globalThis.requestAnimationFrame !== 'function') {
@@ -61,10 +60,6 @@ export function schedulePaneRevealRepaint(getPanes: () => Iterable<ManagedPaneIn
 export function schedulePaneRevealPresent(getPanes: () => Iterable<ManagedPaneInternal>): void {
   forEachPaneOnSettledFrame(getPanes, (pane) => {
     reattachWebglIfNeeded(pane)
-    // Why before the refresh: while a TUI's synchronized-output frame is
-    // latched, RenderService buffers refreshes instead of rendering them, so
-    // this present would paint nothing. See terminal-synchronized-output-release.
-    releaseAbandonedSynchronizedOutput(pane.terminal)
     if (pane.terminal.rows > 0) {
       pane.terminal.refresh(0, pane.terminal.rows - 1)
     }

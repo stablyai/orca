@@ -139,6 +139,26 @@ export function getCodexPaneAccount(ptyId: string): CodexPaneAccountRecord | nul
   return readRegistry().panes[ptyId] ?? null
 }
 
+/**
+ * Reports the lane each given PTY launched from, omitting panes with no record.
+ *
+ * Why the renderer needs this: an account switch has to know which panes the
+ * change could have stranded, and this key was written from the shell, cwd and
+ * distro the spawn actually resolved. Re-deriving it from current settings
+ * answers for a launch that never happened once the user edits those settings.
+ */
+export function listRecordedCodexPaneLanes(ptyIds: readonly string[]): Record<string, string> {
+  const registry = readRegistry()
+  const lanesByPtyId: Record<string, string> = {}
+  for (const ptyId of ptyIds) {
+    const record = registry.panes[ptyId]
+    if (record) {
+      lanesByPtyId[ptyId] = record.selectionKey
+    }
+  }
+  return lanesByPtyId
+}
+
 export const _internals = {
   resetCache: (): void => {
     cachedRegistry = null

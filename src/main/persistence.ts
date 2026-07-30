@@ -94,7 +94,16 @@ import {
   type SshTarget
 } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostOrder,
+  normalizeExecutionHostId,
+  normalizeVisibleExecutionHostIds,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../shared/execution-host'
 import {
   getDefaultPersistedState,
   getDefaultNotificationSettings,
@@ -116,14 +125,6 @@ import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../shared/usage-percentage-display-change-notice'
 import { normalizePRBotAuthorOverrides } from '../shared/pr-bot-author-overrides'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostOrder,
-  normalizeExecutionHostId,
-  normalizeVisibleExecutionHostIds,
-  toSshExecutionHostId,
-  type ExecutionHostId
-} from '../shared/execution-host'
 import { toRelaySshPtyId } from './providers/ssh-pty-id'
 import {
   migrateUiHostScopeSshTargetId,
@@ -193,6 +194,7 @@ import {
   normalizeWorkspaceStatuses
 } from '../shared/workspace-statuses'
 import { clampMarkdownTocPanelWidth } from '../shared/markdown-toc-panel-width'
+import { clampCombinedDiffFileTreeWidth } from '../shared/combined-diff-file-tree-width'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree-ownership'
 import { sanitizeRepoIcon } from '../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../shared/repo-badge-color'
@@ -1111,6 +1113,7 @@ function backfillLegacyAutomationContexts(
 type LegacySshTarget = SshTarget & {
   remoteWorkspaceSyncEnabled?: unknown
   remoteWorkspaceSyncGracePeriodSeconds?: unknown
+  experimentalPtySourceCreditV1?: unknown
 }
 
 // Why: old targets predate configHost; default to label-based lookup so imported SSH aliases still resolve via ssh -G.
@@ -1125,6 +1128,7 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   delete target.remoteWorkspaceSyncGracePeriodSeconds
   delete target.relayGracePeriodSeconds
   delete target.systemSshConnectionReuse
+  delete target.experimentalPtySourceCreditV1
   // Why: prefer the synced grace over stale relayGracePeriodSeconds so a user's "unlimited" (0) survives migration.
   const relayGracePeriodSeconds =
     legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
@@ -5506,6 +5510,9 @@ export class Store {
       osc52ClipboardDefaultOnNoticePending:
         this.state.ui?.osc52ClipboardDefaultOnNoticePending === true,
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(this.state.ui?.markdownTocPanelWidth),
+      combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
+        this.state.ui?.combinedDiffFileTreeWidth
+      ),
       visibleWorkspaceHostIds: normalizeVisibleExecutionHostIds(
         this.state.ui?.visibleWorkspaceHostIds
       ),
@@ -5605,6 +5612,9 @@ export class Store {
       ),
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(
         sanitizedUpdates.markdownTocPanelWidth ?? this.state.ui?.markdownTocPanelWidth
+      ),
+      combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
+        sanitizedUpdates.combinedDiffFileTreeWidth ?? this.state.ui?.combinedDiffFileTreeWidth
       ),
       visibleWorkspaceHostIds:
         updates.visibleWorkspaceHostIds !== undefined
@@ -5759,6 +5769,17 @@ export class Store {
       return this.state.workspaceSession ?? getDefaultWorkspaceSession()
     }
     return this.state.workspaceSessionsByHostId?.[resolved] ?? getDefaultWorkspaceSession()
+  }
+
+  getWorkspaceSessionHostIds(): ExecutionHostId[] {
+    const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
+    for (const key of Object.keys(this.state.workspaceSessionsByHostId ?? {})) {
+      const hostId = normalizeExecutionHostId(key)
+      if (hostId) {
+        hostIds.add(hostId)
+      }
+    }
+    return [...hostIds]
   }
 
   readTerminalScrollbackSnapshot(ref: string): string | null {

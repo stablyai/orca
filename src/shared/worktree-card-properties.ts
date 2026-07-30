@@ -39,7 +39,9 @@ const LEGACY_NORMALIZED_COMPACT_WORKTREE_CARD_PROPERTIES_WITH_AUTOMATION: Worktr
   'automation'
 ]
 
-const WORKTREE_CARD_PROPERTY_ORDER: WorktreeCardProperty[] = [
+/** Every card property, in canonical render order. Client schemas derive their
+ *  accepted value domain from this so a new property cannot drift out of them. */
+export const WORKTREE_CARD_PROPERTIES = [
   'status',
   'unread',
   'ci',
@@ -52,14 +54,14 @@ const WORKTREE_CARD_PROPERTY_ORDER: WorktreeCardProperty[] = [
   'comment',
   'ports',
   'inline-agents'
-]
+] as const satisfies readonly WorktreeCardProperty[]
 
 export function normalizeWorktreeCardProperties(
   properties: readonly unknown[] | null | undefined
 ): WorktreeCardProperty[] {
   const normalized: WorktreeCardProperty[] = [...FIXED_WORKTREE_CARD_PROPERTIES]
   const source = properties ?? DEFAULT_WORKTREE_CARD_PROPERTIES
-  for (const property of WORKTREE_CARD_PROPERTY_ORDER) {
+  for (const property of WORKTREE_CARD_PROPERTIES) {
     if (source.includes(property) && !normalized.includes(property)) {
       normalized.push(property)
     }

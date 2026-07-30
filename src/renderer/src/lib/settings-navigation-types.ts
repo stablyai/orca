@@ -11,37 +11,71 @@ export type SettingsNavInstallStatus =
   | 'needs-attention'
   | 'checking'
 
-export type SettingsNavTarget =
-  | 'general'
-  | 'integrations'
-  | 'accounts'
-  | 'browser'
-  | 'git'
-  | 'tasks'
-  | 'appearance'
-  | 'input'
-  | 'floating-workspace'
-  | 'terminal'
-  | 'quick-commands'
-  | 'notifications'
-  | 'computer-use'
-  | 'developer-permissions'
-  | 'privacy'
-  | 'advanced'
-  | 'dev'
-  | 'voice'
-  | 'shortcuts'
-  | 'stats'
-  | 'ssh'
-  | 'experimental'
-  | 'plugins'
-  | 'agents'
-  | 'orchestration'
-  | 'linear'
-  | 'servers'
-  | 'mobile'
-  | 'mobile-emulator'
-  | 'repo'
+const SETTINGS_NAV_TARGETS = [
+  'general',
+  'integrations',
+  'accounts',
+  'browser',
+  'git',
+  'tasks',
+  'appearance',
+  'input',
+  'floating-workspace',
+  'terminal',
+  'quick-commands',
+  'notifications',
+  'computer-use',
+  'developer-permissions',
+  'privacy',
+  'advanced',
+  'dev',
+  'voice',
+  'shortcuts',
+  'stats',
+  'ssh',
+  'experimental',
+  'plugins',
+  'agents',
+  'orchestration',
+  'linear',
+  'setup-guide',
+  'servers',
+  'mobile',
+  'mobile-emulator',
+  'repo'
+] as const
+
+const SETTINGS_NAV_INTENTS = [
+  'add-quick-command',
+  'add-remote-orca-server',
+  'add-ssh-host'
+] as const
+
+const SETTINGS_NAV_TARGET_SET: ReadonlySet<string> = new Set(SETTINGS_NAV_TARGETS)
+const SETTINGS_NAV_INTENT_SET: ReadonlySet<string> = new Set(SETTINGS_NAV_INTENTS)
+
+export type SettingsNavTarget = (typeof SETTINGS_NAV_TARGETS)[number]
+export type SettingsNavigationTarget = {
+  pane: SettingsNavTarget
+  repoId: string | null
+  sectionId?: string
+  intent?: (typeof SETTINGS_NAV_INTENTS)[number]
+}
+
+export function isSettingsNavigationTarget(value: unknown): value is SettingsNavigationTarget {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const target = value as Record<string, unknown>
+  return (
+    typeof target.pane === 'string' &&
+    SETTINGS_NAV_TARGET_SET.has(target.pane) &&
+    (typeof target.repoId === 'string' || target.repoId === null) &&
+    (target.sectionId === undefined || typeof target.sectionId === 'string') &&
+    (target.intent === undefined ||
+      (typeof target.intent === 'string' && SETTINGS_NAV_INTENT_SET.has(target.intent)))
+  )
+}
 
 export type SettingsNavSection = {
   id: string

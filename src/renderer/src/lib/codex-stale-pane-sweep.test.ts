@@ -91,7 +91,9 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
     expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledWith({ ptyIds: ['pty-1'] })
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
       previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
+      nextAccountLabel: ACCOUNT_B,
+      previousAccountId: 'account-a',
+      nextAccountId: 'account-b'
     })
   })
 
@@ -136,7 +138,9 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
 
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
       previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
+      nextAccountLabel: ACCOUNT_B,
+      previousAccountId: 'account-a',
+      nextAccountId: 'account-b'
     })
   })
 
@@ -176,7 +180,9 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
 
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
       previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
+      nextAccountLabel: ACCOUNT_B,
+      previousAccountId: 'account-a',
+      nextAccountId: 'account-b'
     })
     expect(inspectCallCountFor('pty-1')).toBe(4)
   })
@@ -230,7 +236,9 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
 
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
       previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
+      nextAccountLabel: ACCOUNT_B,
+      previousAccountId: 'account-a',
+      nextAccountId: 'account-b'
     })
   })
 
@@ -266,7 +274,9 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
     expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledWith({ ptyIds: ['pty-1'] })
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
       previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
+      nextAccountLabel: ACCOUNT_B,
+      previousAccountId: 'account-a',
+      nextAccountId: 'account-b'
     })
   })
 
@@ -286,6 +296,34 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
     await vi.advanceTimersByTimeAsync(60_000)
 
     expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not suppress a pane whose notice the store dropped', async () => {
+    // Why: suppression is permanent for the session, so claiming a pane was
+    // notified when no notice survived silently strands it on the old account.
+    // The pane already remembers account-b as its launch account, which
+    // collapses a fresh notice pointing back at account-b.
+    useAppStore.setState({
+      codexRestartNoticeByPtyId: {
+        'pty-1': {
+          previousAccountLabel: ACCOUNT_B,
+          nextAccountLabel: ACCOUNT_A,
+          previousAccountId: 'account-b',
+          nextAccountId: 'account-a'
+        }
+      }
+    })
+    vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([STALE_PANE])
+
+    notifyCodexPaneBoundForStaleSweep('pty-1')
+    await vi.advanceTimersByTimeAsync(300)
+    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toBeUndefined()
+    expect(inspectCallCountFor('pty-1')).toBe(1)
+
+    notifyCodexPaneBoundForStaleSweep('pty-1')
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(inspectCallCountFor('pty-1')).toBe(2)
   })
 
   it('never marks a plain shell pane, so its input is never blocked', async () => {
@@ -333,7 +371,9 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
 
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
       previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
+      nextAccountLabel: ACCOUNT_B,
+      previousAccountId: 'account-a',
+      nextAccountId: 'account-b'
     })
   })
 
@@ -350,7 +390,57 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
 
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
       previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
+      nextAccountLabel: ACCOUNT_B,
+      previousAccountId: 'account-a',
+      nextAccountId: 'account-b'
+    })
+  })
+
+  // Why: recordCodexPaneAccountForSpawn bails on anything that is not a daemon
+  // HOST spawn, so no remote/SSH pane is ever in the registry and listStalePanes
+  // can never report one. Every rung one takes is a 15s-timeout RPC spent to
+  // learn nothing, five times over.
+  it.each(['remote:env-1@@term-1', 'remote:term-1', 'ssh:my-box@@pty-7'])(
+    'never queues %s, so no rung spends an RPC on it',
+    async (ptyId) => {
+      useAppStore.setState({ ptyIdsByTabId: { 'tab-1': [ptyId] } })
+      vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([
+        { ptyId, launchAccountId: 'account-a', activeAccountId: 'account-b' }
+      ])
+
+      notifyCodexPaneBoundForStaleSweep(ptyId)
+      // Why assert the timer before advancing it: the scan would skip this pane
+      // anyway, so only an unarmed queue proves it was rejected at the door
+      // rather than costing a flush + scan on every rung.
+      expect(vi.getTimerCount()).toBe(0)
+
+      // Well past the whole ladder, so this pins "never queued", not "not yet".
+      await vi.advanceTimersByTimeAsync(120_000)
+
+      expect(vi.getTimerCount()).toBe(0)
+      expect(window.api.codexAccounts.listStalePanes).not.toHaveBeenCalled()
+      expect(window.api.pty.inspectProcess).not.toHaveBeenCalled()
+      expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
+    }
+  )
+
+  it('still sweeps the local panes bound alongside a remote one', async () => {
+    useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'remote:env-1@@term-1'] } })
+    vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([STALE_PANE])
+
+    notifyCodexPaneBoundForStaleSweep('remote:env-1@@term-1')
+    notifyCodexPaneBoundForStaleSweep('pty-1')
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledExactlyOnceWith({
+      ptyIds: ['pty-1']
+    })
+    expect(inspectCallCountFor('remote:env-1@@term-1')).toBe(0)
+    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
+      previousAccountLabel: ACCOUNT_A,
+      nextAccountLabel: ACCOUNT_B,
+      previousAccountId: 'account-a',
+      nextAccountId: 'account-b'
     })
   })
 })

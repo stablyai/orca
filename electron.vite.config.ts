@@ -208,6 +208,11 @@ export const electronViteConfig: UserConfig = {
           // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
           // can't take down the main process (issue #7547).
           'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),
+          // Why: a worker thread survives the macOS 26 AppKit main-thread deadlock
+          // without paying for another Electron process.
+          'main-thread-hang-watchdog-entry': resolve(
+            'src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts'
+          ),
           // Why: run under ELECTRON_RUN_AS_NODE while the caller blocks on
           // spawnSync — codex app-server trust grants need a live event loop
           // but must finish before a Codex pane launch proceeds.

@@ -62,6 +62,7 @@ function createAdapter(
       }))
     ),
     hasPty: vi.fn((id: string) => sessions.includes(id)),
+    probePtyLiveness: vi.fn(async (id: string) => sessions.includes(id)),
     write: vi.fn((id: string, data: string) => {
       writes.push({ id, data })
     }),
@@ -468,6 +469,25 @@ describe('DaemonPtyRouter', () => {
 
     expect(router.hasPty('legacy-session')).toBe(false)
     expect(current.hasPty).not.toHaveBeenCalledWith('legacy-session')
+  })
+
+  it('probes every possible daemon owner for an unmapped session', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['surviving-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await expect(router.probePtyLiveness('surviving-session')).resolves.toBe(true)
+    expect(current.probePtyLiveness).toHaveBeenCalledExactlyOnceWith('surviving-session')
+    expect(legacy.probePtyLiveness).toHaveBeenCalledExactlyOnceWith('surviving-session')
+  })
+
+  it('does not report absence while any possible daemon owner is unavailable', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy')
+    vi.mocked(legacy.probePtyLiveness).mockResolvedValue(null)
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await expect(router.probePtyLiveness('unknown-session')).resolves.toBeNull()
   })
 
   it('fails listProcesses closed when any routed adapter cannot list sessions', async () => {

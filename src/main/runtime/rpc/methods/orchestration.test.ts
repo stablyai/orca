@@ -40,9 +40,12 @@ describe('orchestration RPC methods', () => {
         coordinatorHandle: 'term_coord',
         coordinatorPaneKey
       }).id
+      // Why: default direct fixtures to current-contract state; legacy behavior has dedicated tests.
       const createTask = db.createTask.bind(db)
-      // Why: legacy tests exercise the RPC behavior under test; default their direct fixture rows to the bound Run.
       db.createTask = (task) => createTask({ ...task, runId: task.runId ?? activeRunId })
+      const insertMessage = db.insertMessage.bind(db)
+      db.insertMessage = (message) =>
+        insertMessage({ ...message, runId: message.runId ?? activeRunId })
     } else {
       activeRunId = undefined
     }
@@ -319,6 +322,32 @@ describe('orchestration RPC methods', () => {
       expect(workerCheck).toMatchObject({
         dispatchId: dispatch.id,
         messages: [{ subject: 'Pause after this step' }]
+      })
+    })
+
+    it('routes Dispatch mail by stable pane identity after worker handle remint', async () => {
+      setup()
+      const task = db.createTask({ spec: 'controlled worker after restart' })
+      const dispatch = db.createDispatchContext(
+        task.id,
+        'term_worker_before',
+        'tab_worker:leaf_worker'
+      )
+      db.insertMessage({
+        from: 'term_coord',
+        to: `dispatch:${dispatch.id}`,
+        subject: 'Continue after restart',
+        runId: activeRunId
+      })
+
+      const workerCheck = (await call('orchestration.check', {
+        terminal: 'term_worker_after',
+        terminalPaneKey: 'tab_worker:leaf_worker'
+      })) as { dispatchId: string; messages: { subject: string }[] }
+
+      expect(workerCheck).toMatchObject({
+        dispatchId: dispatch.id,
+        messages: [{ subject: 'Continue after restart' }]
       })
     })
 
@@ -1043,6 +1072,56 @@ describe('orchestration RPC methods', () => {
       expect(inboxB.messages.map((message) => message.subject)).toEqual(['B only'])
     })
 
+    it('uses the stable pane identity when the coordinator handle was reminted', async () => {
+      setup()
+      db.insertMessage({
+        from: 'term_worker',
+        to: `run:${activeRunId}`,
+        subject: 'Completed after restart',
+        runId: activeRunId
+      })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'term_stale_coord',
+        terminalPaneKey: coordinatorPaneKey
+      })) as { runId: string; messages: { subject: string }[] }
+
+      expect(result).toMatchObject({
+        runId: activeRunId,
+        messages: [{ subject: 'Completed after restart' }]
+      })
+    })
+
+    it('keeps a live handle authoritative over mismatched pane metadata', async () => {
+      setup()
+      const foreignRun = db.createRun({
+        objective: 'Foreign run',
+        coordinatorHandle: 'term_foreign',
+        coordinatorPaneKey: 'tab_foreign:leaf_foreign'
+      })
+      db.insertMessage({
+        from: 'term_worker',
+        to: `run:${activeRunId}`,
+        subject: 'Coordinator only',
+        runId: activeRunId
+      })
+      db.insertMessage({
+        from: 'term_foreign_worker',
+        to: `run:${foreignRun.id}`,
+        subject: 'Foreign only',
+        runId: foreignRun.id
+      })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        terminalPaneKey: 'tab_foreign:leaf_foreign',
+        all: true
+      })) as { runId: string; messages: { subject: string }[] }
+
+      expect(result.runId).toBe(activeRunId)
+      expect(result.messages.map((message) => message.subject)).toEqual(['Coordinator only'])
+    })
+
     it('returns formatted output with --format', async () => {
       setup()
       db.insertMessage({ from: 'a', to: 'b', subject: 'test' })
@@ -1472,22 +1551,23 @@ describe('orchestration RPC methods', () => {
       expect(db.getUnreadMessages('b')).toHaveLength(1)
     })
 
-    it('keeps waiting for requested types when an unrelated heartbeat arrives', async () => {
+    it('keeps waiting for requested types when an unrelated status arrives', async () => {
       setup()
 
       const waitPromise = call('orchestration.check', {
         terminal: 'coord',
         wait: true,
         timeoutMs: 5000,
-        types: 'worker_done,escalation'
+        types: 'escalation,question'
       }) as Promise<{ count: number; messages: { type: string }[] }>
       await Promise.resolve()
 
       await call('orchestration.send', {
         from: 'worker',
         to: 'coord',
-        subject: 'alive',
-        type: 'heartbeat'
+        subject: 'still working',
+        type: 'status',
+        run: activeRunId
       })
 
       const early = await Promise.race([
@@ -1499,13 +1579,14 @@ describe('orchestration RPC methods', () => {
       await call('orchestration.send', {
         from: 'worker',
         to: 'coord',
-        subject: 'done',
-        type: 'worker_done'
+        subject: 'needs attention',
+        type: 'escalation',
+        run: activeRunId
       })
 
       const result = await waitPromise
       expect(result.count).toBe(1)
-      expect(result.messages[0].type).toBe('worker_done')
+      expect(result.messages[0].type).toBe('escalation')
     })
 
     it('does not mark existing messages read when the check starts aborted', async () => {
@@ -1529,17 +1610,25 @@ describe('orchestration RPC methods', () => {
   describe('orchestration.reply', () => {
     it('replies to a message', async () => {
       setup()
-      const original = db.insertMessage({ from: 'a', to: 'b', subject: 'question' })
+      const original = db.insertMessage({
+        from: 'a',
+        to: 'b',
+        subject: 'question',
+        runId: activeRunId
+      })
 
       const result = (await call('orchestration.reply', {
         id: original.id,
         body: 'answer',
         from: 'b'
-      })) as { message: { to_handle: string; subject: string; thread_id: string } }
+      })) as {
+        message: { to_handle: string; subject: string; thread_id: string; run_id: string }
+      }
 
       expect(result.message.to_handle).toBe('a')
       expect(result.message.subject).toBe('Re: question')
       expect(result.message.thread_id).toBe(original.id)
+      expect(result.message.run_id).toBe(activeRunId)
     })
 
     it('throws on nonexistent message', async () => {
@@ -1829,6 +1918,30 @@ describe('orchestration RPC methods', () => {
       expect(db.getDispatchContextById(result.dispatch.id)?.assignee_pane_key).toBe('tab_w:leaf_w')
     })
 
+    it('commits the target process launch token on a manual dispatch', async () => {
+      setup()
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+        runtimeId: runtime.getRuntimeId(),
+        terminalHandle: 'term_a',
+        ptyId: 'pty_a',
+        worktreeId: 'repo::worktree',
+        paneKey: 'tab_w:leaf_w',
+        processIncarnation: 'runtime_test:term_a:1',
+        launchTokenHash: 'launch-token-hash',
+        hostScope: { kind: 'local', hostId: 'local' }
+      })
+      const task = db.createTask({ spec: 'work' })
+
+      const result = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a'
+      })) as { dispatch: { id: string } }
+
+      expect(db.getDispatchContextById(result.dispatch.id)?.launch_token_hash).toBe(
+        'launch-token-hash'
+      )
+    })
+
     it('rejects dispatch for a pending task', async () => {
       setup()
       const parent = db.createTask({ spec: 'parent' })
@@ -2063,10 +2176,76 @@ describe('orchestration RPC methods', () => {
       )
       expect(db.getTask(task.id)?.status).toBe('dispatched')
       expect(db.getWorkerDispatch(result.dispatchId)?.state).toBe('ready')
+      expect(runtime.createTerminal).toHaveBeenCalledWith('id:repo::worktree', {
+        command: 'codex',
+        title: `worker-${task.id}`
+      })
       expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
         'term_worker',
         expect.stringContaining('--dispatch-capability dcap_')
       )
+    })
+
+    it('commits the launched worker token with its durable authority', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+        runtimeId: runtime.getRuntimeId(),
+        terminalHandle: 'term_worker',
+        ptyId: 'pty_worker',
+        worktreeId: 'repo::worktree',
+        paneKey: 'tab_worker:leaf_worker',
+        processIncarnation: 'runtime_test:term_worker:1',
+        launchTokenHash: 'worker-launch-token-hash',
+        hostScope: { kind: 'local', hostId: 'local' }
+      })
+      const task = db.createTask({ spec: 'persist worker identity' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as { dispatchId: string }
+
+      expect(db.getDispatchContextById(result.dispatchId)?.launch_token_hash).toBe(
+        'worker-launch-token-hash'
+      )
+    })
+
+    it('surfaces a worker terminal reveal failure without discarding the live worker', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.createTerminal).mockResolvedValue({
+        handle: 'term_worker',
+        worktreeId: 'repo::worktree',
+        title: 'worker',
+        surface: 'background',
+        warning: 'Terminal term_worker is running but could not be revealed.'
+      })
+      const task = db.createTask({ spec: 'keep working if reveal fails' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as {
+        state: string
+        warning?: string
+        effects: { kind: string; surface?: string; warning?: string }[]
+      }
+
+      expect(result).toMatchObject({
+        state: 'ready',
+        warning: 'Terminal term_worker is running but could not be revealed.'
+      })
+      expect(result.effects).toContainEqual(
+        expect.objectContaining({
+          kind: 'terminal',
+          surface: 'background',
+          warning: 'Terminal term_worker is running but could not be revealed.'
+        })
+      )
+      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalled()
     })
 
     it('starts a fresh agent in an exact existing worktree without replaying setup', async () => {
@@ -2279,9 +2458,10 @@ describe('orchestration RPC methods', () => {
         expect.objectContaining({
           repoSelector: 'repo',
           name: 'child-worker',
-          runHooks: true,
+          runHooks: false,
           setupDecision: 'run',
           startupAgent: 'codex',
+          activate: false,
           lineage: expect.objectContaining({ parentWorktree: 'repo::parent', noParent: false })
         })
       )

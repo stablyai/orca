@@ -1,7 +1,8 @@
 /* eslint-disable max-lines -- Why: this store is the single main-process owner for Claude usage persistence, scan gating, and query semantics. Keeping those policy decisions together avoids split-brain range/scope logic across multiple files. */
 import { app } from 'electron'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
 import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
@@ -331,6 +332,9 @@ export class ClaudeUsageStore {
   private state: ClaudeUsagePersistedState
   private readonly store: Store
   private scanPromise: Promise<void> | null = null
+  // Why: the 20 MB usage JSON must not block the Electron main thread; the writer serializes writes
+  // and vetoes superseded renames.
+  private readonly writer = new UsageCacheSnapshotWriter('[claude-usage]', getClaudeUsageFile)
 
   constructor(store: Store) {
     this.store = store
@@ -375,23 +379,19 @@ export class ClaudeUsageStore {
     }
   }
 
-  private writeToDisk(): void {
-    const usageFile = getClaudeUsageFile()
-    const dir = dirname(usageFile)
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true })
-    }
-    // Why: scans can refresh while the app is in active use. Use the same
-    // atomic temp-file pattern as the main store so a crash or concurrent write
-    // cannot leave a truncated analytics file as the common failure mode.
-    const tmpFile = `${usageFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    writeFileSync(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
-    renameSync(tmpFile, usageFile)
+  private writeToDisk(): Promise<void> {
+    // Pretty-print preserved: humans inspect this analytics cache on disk.
+    return this.writer.write(() => JSON.stringify(this.state, null, 2))
+  }
+
+  /** Await queued cache writes so quit does not drop the final snapshot. */
+  flush(): Promise<void> {
+    return this.writer.flush()
   }
 
   async setEnabled(enabled: boolean): Promise<ClaudeUsageScanState> {
     this.state.scanState.enabled = enabled
-    this.writeToDisk()
+    await this.writeToDisk()
     return this.getScanState()
   }
 
@@ -441,8 +441,11 @@ export class ClaudeUsageStore {
 
     this.state.scanState.lastScanStartedAt = Date.now()
     this.state.scanState.lastScanError = null
-    this.writeToDisk()
 
+    // Why no write here: persisting scan-start would rewrite the whole multi-MB cache before a single
+    // result changed. The completion/failure write below persists the same fields.
+
+    // Why: assign scanPromise before any await so concurrent refresh shares one scan.
     this.scanPromise = (async () => {
       try {
         const repos = this.store.getRepos()
@@ -458,10 +461,12 @@ export class ClaudeUsageStore {
         this.state.worktreeFingerprint = worktreeFingerprint
         this.state.scanState.lastScanCompletedAt = Date.now()
         this.state.scanState.lastScanError = null
-        this.writeToDisk()
+        // Why swallow: persistence is a cache concern. A disk failure must not turn a good scan into
+        // a scan error and reject refresh() for every query caller; writeToDisk already logs it.
+        await this.writeToDisk().catch(() => {})
       } catch (error) {
         this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
-        this.writeToDisk()
+        await this.writeToDisk().catch(() => {})
       } finally {
         this.scanPromise = null
       }
