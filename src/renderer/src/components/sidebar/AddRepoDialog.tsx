@@ -4,18 +4,16 @@ import { useRemoteRepo } from './AddRepoSteps'
 import { useCreateRepo } from './useCreateRepo'
 import { AddRepoDialogStepContent } from './AddRepoDialogStepContent'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
-import { useAddRepoNestedReviewState } from './useAddRepoNestedReviewState'
 import { useAddRepoCloneFlow } from './useAddRepoCloneFlow'
 import { useAddRepoLocalFolderFlow } from './useAddRepoLocalFolderFlow'
 import { useAddRepoServerPathFlow } from './useAddRepoServerPathFlow'
-import { useAddRepoNestedImportFlow } from './useAddRepoNestedImportFlow'
 import { useAddRepoHostSelection } from './use-add-repo-host-selection'
 import { useCompleteGitRepoAdd } from './use-complete-git-repo-add'
 import { useCreateProjectDefaults } from './useCreateProjectDefaults'
 import { useAddRepoHostChangeReset } from './use-add-repo-host-change-reset'
 import { AddRepoDialogChrome } from './AddRepoDialogChrome'
 import { AddRepoHostSelectorSlot } from './AddRepoHostSelectorSlot'
-import { useAddRepoRemoteNestedScan } from './use-add-repo-remote-nested-scan'
+import { useAddRepoNestedReviewController } from './useAddRepoNestedReviewController'
 import {
   useAddRepoHostedController,
   type AddRepoDialogHostedController
@@ -42,26 +40,25 @@ export default React.memo(function AddRepoDialog({
   const settings = useAppStore((s) => s.settings)
   const { closeModal, closeForFolderHandoff, finishProjectAdd, handleOpenSshSettings } =
     useAddRepoHostedController(hosted)
+  const [step, setStep] = useState<AddRepoDialogStep>('add')
+  const [isAdding, setIsAdding] = useState(false)
+  const [addProjectBusyLabel, setAddProjectBusyLabel] = useState<string | null>(null)
   const completeGitRepoAdd = useCompleteGitRepoAdd({
     closeModal,
     setHideDefaultBranchWorkspace,
     finishProjectAdd
   })
-
-  const [step, setStep] = useState<AddRepoDialogStep>('add')
-  const [isAdding, setIsAdding] = useState(false)
-  const [addProjectBusyLabel, setAddProjectBusyLabel] = useState<string | null>(null)
+  const hostSelection = useAddRepoHostSelection({ isOpen, setStep })
+  const selectedRuntimeEnvironmentId =
+    hostSelection.selectedParsedHost?.kind === 'runtime'
+      ? hostSelection.selectedParsedHost.environmentId
+      : null
   const {
     nestedScan,
     nestedSelectedPaths,
     nestedGroupName,
-    nestedConnectionId,
-    nestedAttemptId,
-    nestedRuntimeKind,
     nestedScanInProgress,
     nestedScanId,
-    nestedImportScanId,
-    nestedRuntimeEnvironmentId,
     setNestedSelectedPaths,
     setNestedGroupName,
     setNestedScanInProgress,
@@ -69,20 +66,23 @@ export default React.memo(function AddRepoDialog({
     showNestedRepoReview,
     setActiveNestedScanId,
     handleStopNestedScan,
-    resetNestedRepoReviewState
-  } = useAddRepoNestedReviewState({
-    activeRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId,
+    resetNestedRepoReviewState,
+    showRemoteNestedRepoReview,
+    trackRemoteNestedScanResult,
+    handleImportNestedRepos,
+    handleOpenNestedRootFolder,
+    resetNestedImportFlow,
+    trackNestedBackAction
+  } = useAddRepoNestedReviewController({
+    reviewRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId,
     cancelNestedRepoScan,
+    closeModal: closeForFolderHandoff,
+    fetchWorktrees,
+    importNestedRepos,
+    onGitRepoReady: completeGitRepoAdd,
+    setIsAdding,
+    activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
     setStep
-  })
-  const hostSelection = useAddRepoHostSelection({ isOpen, setStep })
-  const selectedRuntimeEnvironmentId =
-    hostSelection.selectedParsedHost?.kind === 'runtime'
-      ? hostSelection.selectedParsedHost.environmentId
-      : null
-  const { showRemoteNestedRepoReview, trackRemoteNestedScanResult } = useAddRepoRemoteNestedScan({
-    setActiveNestedScanId,
-    showNestedRepoReview
   })
   const {
     sshTargets,
@@ -204,28 +204,6 @@ export default React.memo(function AddRepoDialog({
     showNestedRepoReview,
     onGitRepoReady: completeGitRepoAdd,
     setAddProjectBusyLabel
-  })
-  const {
-    handleImportNestedRepos,
-    handleOpenNestedRootFolder,
-    resetNestedImportFlow,
-    trackNestedBackAction
-  } = useAddRepoNestedImportFlow({
-    nestedAttemptId,
-    nestedScan,
-    nestedSelectedPaths,
-    nestedRuntimeKind,
-    nestedConnectionId,
-    nestedGroupName,
-    nestedImportScanId,
-    nestedRuntimeEnvironmentId,
-    activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
-    closeModal: closeForFolderHandoff,
-    fetchWorktrees,
-    importNestedRepos,
-    getNestedRepoRuntimeKind,
-    onGitRepoReady: completeGitRepoAdd,
-    setIsAdding
   })
 
   const resetState = useCallback(() => {
