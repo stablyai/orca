@@ -132,12 +132,6 @@ body {
   color: rgba(255, 255, 255, 0.95);
 }
 
-.orca-logo {
-  flex-shrink: 0;
-  display: block;
-  border-radius: 4px;
-}
-
 /* ── Expanded content ───────────────────────────────── */
 .island-expanded {
   width: 360px;

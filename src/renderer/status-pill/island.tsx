@@ -6,7 +6,7 @@ import type {
 } from '../../shared/status-pill-preload-api'
 import { formatAgentLabel, formatRelativeTime } from './status-pill-formatters'
 import { PendingQuestionCard } from './pending-question-card'
-import orcaLogoUrl from '../../../resources/icon.png'
+import { OrcaLogo } from './orca-logo'
 
 /** A collapsed session row (colored dot + name + agent/worktree chips + time). */
 function SessionMini({
@@ -88,6 +88,17 @@ export function Island({
 }): React.JSX.Element {
   const lead = rows[0]
   const total = summary.working + summary.blocked + summary.waiting + summary.recentDone
+  // Why: the logo is tinted by the most urgent live state (blocked > waiting >
+  // working > done) so the island's color reads the overall status at a glance.
+  const leadState = lead
+    ? lead.state
+    : summary.blocked > 0
+      ? 'blocked'
+      : summary.waiting > 0
+        ? 'waiting'
+        : summary.working > 0
+          ? 'working'
+          : 'idle'
   const idleText = lead
     ? lead.prompt || lead.toolName || formatAgentLabel(lead.agentType)
     : summary.activityLabel || 'No agents'
@@ -139,7 +150,7 @@ export function Island({
               </button>
             </div>
             <div className="session session-hero">
-              <img className="orca-logo" src={orcaLogoUrl} alt="" width={18} height={18} />
+              <OrcaLogo state={leadState} size={18} />
               <div className="si">
                 <div className="srow">
                   <span className="sname">
@@ -164,7 +175,7 @@ export function Island({
           </div>
         ) : (
           <div className="island-compact">
-            <img className="orca-logo" src={orcaLogoUrl} alt="" width={16} height={16} />
+            <OrcaLogo state={leadState} size={16} />
             <span className={`idle-text ${total === 0 ? 'idle-text-muted' : ''}`}>{idleText}</span>
             {total > 0 ? <span className="idle-count">{total}</span> : null}
           </div>
