@@ -11,6 +11,11 @@ type SplitFindFixture = {
   terminalGroupId: string
 }
 
+type BrowserSplitFixture = {
+  firstBrowserTabId: string
+  secondBrowserTabId: string
+}
+
 async function createTerminalBrowserSplit(page: Page): Promise<SplitFindFixture> {
   return page.evaluate(() => {
     const store = window.__store
@@ -36,6 +41,47 @@ async function createTerminalBrowserSplit(page: Page): Promise<SplitFindFixture>
   })
 }
 
+async function createBrowserSplit(page: Page): Promise<BrowserSplitFixture> {
+  return page.evaluate(() => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('Store unavailable')
+    }
+    const state = store.getState()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      throw new Error('Active worktree unavailable')
+    }
+    const terminalGroupId = state.ensureWorktreeRootGroup(worktreeId)
+    const firstBrowserGroupId = state.createEmptySplitGroup(worktreeId, terminalGroupId, 'right')
+    if (!firstBrowserGroupId) {
+      throw new Error('First browser split unavailable')
+    }
+    const firstBrowserTab = state.createBrowserTab(worktreeId, 'about:blank', {
+      activate: true,
+      focusAddressBar: false,
+      targetGroupId: firstBrowserGroupId
+    })
+    const secondBrowserGroupId = state.createEmptySplitGroup(
+      worktreeId,
+      firstBrowserGroupId,
+      'right'
+    )
+    if (!secondBrowserGroupId) {
+      throw new Error('Second browser split unavailable')
+    }
+    const secondBrowserTab = state.createBrowserTab(worktreeId, 'about:blank', {
+      activate: true,
+      focusAddressBar: false,
+      targetGroupId: secondBrowserGroupId
+    })
+    return {
+      firstBrowserTabId: firstBrowserTab.id,
+      secondBrowserTabId: secondBrowserTab.id
+    }
+  })
+}
+
 function browserAddressBar(page: Page, browserTabId: string) {
   return page.locator(
     `[data-browser-overlay-tab-id="${browserTabId}"] [data-orca-browser-address-bar="true"]`
@@ -48,6 +94,50 @@ function browserFindInput(page: Page) {
 
 function browserFindCloseButton(page: Page) {
   return browserFindInput(page).locator('xpath=..').getByTitle('Close')
+}
+
+function browserSplitFindInput(page: Page, browserTabId: string) {
+  return page
+    .locator(`[data-browser-overlay-tab-id="${browserTabId}"]`)
+    .getByPlaceholder('Find in page...')
+}
+
+async function pressFindInBrowserGuest(page: Page, browserTabId: string): Promise<void> {
+  await expect
+    .poll(() =>
+      page.evaluate((targetBrowserTabId) => {
+        const overlay = document.querySelector(
+          `[data-browser-overlay-tab-id="${targetBrowserTabId}"]`
+        )
+        const webview = overlay?.querySelector('webview') as Electron.WebviewTag | null
+        return webview?.getWebContentsId() ?? null
+      }, browserTabId)
+    )
+    .not.toBeNull()
+
+  await page.evaluate(
+    async ({ targetBrowserTabId, inputModifier }) => {
+      const overlay = document.querySelector(
+        `[data-browser-overlay-tab-id="${targetBrowserTabId}"]`
+      )
+      const webview = overlay?.querySelector('webview') as Electron.WebviewTag | null
+      if (!webview) {
+        throw new Error(`Missing webview for browser tab ${targetBrowserTabId}`)
+      }
+      webview.focus()
+      await webview.sendInputEvent({
+        type: 'keyDown',
+        keyCode: 'F',
+        modifiers: [inputModifier]
+      })
+      await webview.sendInputEvent({
+        type: 'keyUp',
+        keyCode: 'F',
+        modifiers: [inputModifier]
+      })
+    },
+    { targetBrowserTabId: browserTabId, inputModifier: modifier.toLowerCase() }
+  )
 }
 
 function terminalFindInput(page: Page) {
@@ -121,6 +211,17 @@ test.describe('browser split Find shortcut', () => {
     await orcaPage.keyboard.press(`${modifier}+f`)
     await expect(terminalFindInput(orcaPage)).toBeFocused()
     await expect(browserFindInput(orcaPage)).toBeHidden()
+  })
+
+  test('opens Find only in the browser split whose guest owns the shortcut', async ({
+    orcaPage
+  }) => {
+    const fixture = await createBrowserSplit(orcaPage)
+
+    await pressFindInBrowserGuest(orcaPage, fixture.firstBrowserTabId)
+
+    await expect(browserSplitFindInput(orcaPage, fixture.firstBrowserTabId)).toBeVisible()
+    await expect(browserSplitFindInput(orcaPage, fixture.secondBrowserTabId)).toBeHidden()
   })
 
   test('keeps browser Find available when split focus state is temporarily missing', async ({

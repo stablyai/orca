@@ -3498,10 +3498,13 @@ function BrowserPagePane({
     if (!isActive) {
       return
     }
-    return window.api.ui.onFindInBrowserPage(() => {
-      setFindOpen(true)
-    })
-  }, [isActive])
+    return window.api.ui.onFindInBrowserPage(
+      { browserPageId: browserTab.id, browserWorkspaceId: workspaceId },
+      () => {
+        setFindOpen(true)
+      }
+    )
+  }, [browserTab.id, isActive, workspaceId])
 
   // Browser history shortcuts (renderer path: focus on browser chrome)
   // Why: macOS can't deliver Logitech side-buttons to Electron; Logi Options+ remaps them to history chords, handled here when chrome is focused.
