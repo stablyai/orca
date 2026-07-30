@@ -133,6 +133,49 @@ test('concurrent floating Markdown renames do not clobber the destination', asyn
   ).toEqual(['first\n', 'second\n'])
 })
 
+test('Electron serializes native Unicode rename aliases', async ({ orcaPage }) => {
+  test.skip(process.platform !== 'darwin', 'Requires native Unicode aliasing')
+  const directory = await orcaPage.evaluate(() => window.api.app.getFloatingMarkdownDirectory())
+  const suffix = Date.now().toString(36)
+  const firstPath = path.join(directory, `floating-unicode-first-${suffix}.md`)
+  const secondPath = path.join(directory, `floating-unicode-second-${suffix}.md`)
+  const sharpSDestination = path.join(directory, `floating-destination-${suffix}-straße.md`)
+  const expandedDestination = path.join(directory, `floating-destination-${suffix}-STRASSE.MD`)
+
+  const result = await orcaPage.evaluate(
+    async ({ firstPath, secondPath, sharpSDestination, expandedDestination }) => {
+      await window.api.fs.createFile({ filePath: firstPath })
+      await window.api.fs.createFile({ filePath: secondPath })
+      await window.api.fs.writeFile({ filePath: firstPath, content: 'first\n' })
+      await window.api.fs.writeFile({ filePath: secondPath, content: 'second\n' })
+
+      const settled = await Promise.allSettled([
+        window.api.fs.rename({ oldPath: firstPath, newPath: sharpSDestination }),
+        window.api.fs.rename({ oldPath: secondPath, newPath: expandedDestination })
+      ])
+      const firstExists = await window.api.fs.pathExists({ filePath: firstPath })
+      const secondExists = await window.api.fs.pathExists({ filePath: secondPath })
+      return {
+        statuses: settled.map(({ status }) => status).sort(),
+        destinationContent: (await window.api.fs.readFile({ filePath: sharpSDestination })).content,
+        firstExists,
+        secondExists,
+        remainingContent: firstExists
+          ? (await window.api.fs.readFile({ filePath: firstPath })).content
+          : (await window.api.fs.readFile({ filePath: secondPath })).content
+      }
+    },
+    { firstPath, secondPath, sharpSDestination, expandedDestination }
+  )
+
+  expect(result.statuses).toEqual(['fulfilled', 'rejected'])
+  expect(Number(result.firstExists) + Number(result.secondExists)).toBe(1)
+  expect([result.destinationContent, result.remainingContent].toSorted()).toEqual([
+    'first\n',
+    'second\n'
+  ])
+})
+
 test('floating workspace Markdown renames survive an app restart', async (// oxlint-disable-next-line no-empty-pattern -- This persistence test owns both Electron launches.
 {}, testInfo) => {
   test.setTimeout(300_000)

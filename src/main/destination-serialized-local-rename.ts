@@ -5,8 +5,8 @@ import { assertNoClobberRenameDestinationAvailable } from '../shared/filesystem-
 const pendingRenamesByDestination = new Map<string, Promise<void>>()
 
 function destinationKey(filePath: string): string {
-  // Why: extra serialization is safe on case-sensitive volumes and closes case aliases elsewhere.
-  return normalize(filePath).normalize('NFC').toLowerCase()
+  // Why: lower-then-upper covers native full-case aliases such as ß/SS, unlike lowercase alone.
+  return normalize(filePath).normalize('NFD').toLowerCase().toUpperCase().normalize('NFD')
 }
 
 export async function renameLocalPathSerializedByDestination(
