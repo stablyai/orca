@@ -160,6 +160,8 @@ describe('electron-builder config', () => {
         'out/shared/**',
         'out/main/claude-accounts/keychain.js',
         'out/main/codex-cli/command.js',
+        'out/main/ipc/local-agent-install-dir-detection.js',
+        'out/main/ipc/tui-agent-detection-commands.js',
         'out/main/win32-utils.js'
       ])
     )

@@ -225,6 +225,12 @@ export const electronViteConfig: UserConfig = {
           'agent-hooks/managed-agent-hook-controls': resolve(
             'src/main/agent-hooks/managed-agent-hook-controls.ts'
           ),
+          'ipc/local-agent-install-dir-detection': resolve(
+            'src/main/ipc/local-agent-install-dir-detection.ts'
+          ),
+          'ipc/tui-agent-detection-commands': resolve(
+            'src/main/ipc/tui-agent-detection-commands.ts'
+          ),
           // Why: same rule — `orca account add` / `account list` import these.
           'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts'),
           'codex-cli/command': resolve('src/main/codex-cli/command.ts'),

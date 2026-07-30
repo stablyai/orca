@@ -150,6 +150,8 @@ module.exports = {
     'out/main/gemini/**',
     'out/main/grok/**',
     'out/main/hermes/**',
+    'out/main/ipc/local-agent-install-dir-detection.js',
+    'out/main/ipc/tui-agent-detection-commands.js',
     'out/main/win32-utils.js',
     'out/main/daemon-entry.js',
     'out/main/plugin-host-entry.js',
