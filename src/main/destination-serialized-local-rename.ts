@@ -1,25 +1,25 @@
 import { rename } from 'node:fs/promises'
-import { normalize } from 'node:path'
+import { dirname, normalize } from 'node:path'
 import { assertNoClobberRenameDestinationAvailable } from '../shared/filesystem-rename-collision'
 
-const pendingRenamesByDestination = new Map<string, Promise<void>>()
+// Why: parent scope covers native Unicode aliases without guessing each filesystem's collation.
+const pendingRenamesByParent = new Map<string, Promise<void>>()
 
-function destinationKey(filePath: string): string {
-  // Why: lower-then-upper covers native full-case aliases such as ß/SS, unlike lowercase alone.
-  return normalize(filePath).normalize('NFD').toLowerCase().toUpperCase().normalize('NFD')
+function destinationParentKey(filePath: string): string {
+  return normalize(dirname(filePath))
 }
 
 export async function renameLocalPathSerializedByDestination(
   oldPath: string,
   newPath: string
 ): Promise<void> {
-  const key = destinationKey(newPath)
-  const previous = pendingRenamesByDestination.get(key) ?? Promise.resolve()
+  const key = destinationParentKey(newPath)
+  const previous = pendingRenamesByParent.get(key) ?? Promise.resolve()
   let release!: () => void
   const current = new Promise<void>((resolve) => {
     release = resolve
   })
-  pendingRenamesByDestination.set(key, current)
+  pendingRenamesByParent.set(key, current)
 
   await previous
   try {
@@ -27,8 +27,8 @@ export async function renameLocalPathSerializedByDestination(
     await rename(oldPath, newPath)
   } finally {
     release()
-    if (pendingRenamesByDestination.get(key) === current) {
-      pendingRenamesByDestination.delete(key)
+    if (pendingRenamesByParent.get(key) === current) {
+      pendingRenamesByParent.delete(key)
     }
   }
 }

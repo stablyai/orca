@@ -164,7 +164,30 @@ describe('renameLocalPathSerializedByDestination', () => {
     expect(renameMock).toHaveBeenCalledTimes(2)
   })
 
-  it('does not serialize unrelated destinations', async () => {
+  it('does not serialize destinations in unrelated parent directories', async () => {
+    const firstRenameGate = createGate()
+    renameMock.mockImplementation(async () => {
+      if (renameMock.mock.calls.length === 1) {
+        await firstRenameGate.promise
+      }
+    })
+
+    const firstRename = renameLocalPathSerializedByDestination(
+      path.join(REPO_PATH, 'first', 'source.md'),
+      path.join(REPO_PATH, 'first', 'alpha.md')
+    )
+    await vi.waitFor(() => expect(renameMock).toHaveBeenCalledTimes(1))
+    const secondRename = renameLocalPathSerializedByDestination(
+      path.join(REPO_PATH, 'second', 'source.md'),
+      path.join(REPO_PATH, 'second', 'beta.md')
+    )
+    await vi.waitFor(() => expect(renameMock).toHaveBeenCalledTimes(2))
+
+    firstRenameGate.release()
+    await expect(Promise.all([firstRename, secondRename])).resolves.toEqual([undefined, undefined])
+  })
+
+  it('scopes conservative serialization to one destination parent', async () => {
     const firstRenameGate = createGate()
     renameMock.mockImplementation(async () => {
       if (renameMock.mock.calls.length === 1) {
@@ -174,16 +197,18 @@ describe('renameLocalPathSerializedByDestination', () => {
 
     const firstRename = renameLocalPathSerializedByDestination(
       path.join(REPO_PATH, 'first.md'),
-      path.join(REPO_PATH, 'alpha.md')
+      path.join(REPO_PATH, 'dotless-ı.md')
     )
     await vi.waitFor(() => expect(renameMock).toHaveBeenCalledTimes(1))
     const secondRename = renameLocalPathSerializedByDestination(
       path.join(REPO_PATH, 'second.md'),
-      path.join(REPO_PATH, 'beta.md')
+      path.join(REPO_PATH, 'dotless-I.md')
     )
-    await vi.waitFor(() => expect(renameMock).toHaveBeenCalledTimes(2))
+    await reachNextMacrotask()
+    expect(renameMock).toHaveBeenCalledTimes(1)
 
     firstRenameGate.release()
     await expect(Promise.all([firstRename, secondRename])).resolves.toEqual([undefined, undefined])
+    expect(renameMock).toHaveBeenCalledTimes(2)
   })
 })
