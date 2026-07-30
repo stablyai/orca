@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Animated, AppState, Linking, type AppStateStatus } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
 import {
+  Animated,
+  AppState,
+  Linking,
+  type AppStateStatus,
   BackHandler,
   FlatList,
   Image,
@@ -17,6 +19,7 @@ import {
   type LayoutChangeEvent,
   type ListRenderItem
 } from 'react-native'
+import * as Clipboard from 'expo-clipboard'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'

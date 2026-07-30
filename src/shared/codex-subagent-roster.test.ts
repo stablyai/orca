@@ -20,6 +20,7 @@ describe('Codex subagent roster', () => {
       ' child-1 ',
       {
         agentType: `reviewer\n${'x'.repeat(AGENT_TYPE_MAX_LENGTH * 2)}`,
+        description: 'Review the sidebar lifecycle',
         model: `gpt-model-${'x'.repeat(AGENT_MODEL_MAX_LENGTH * 2)}`,
         state: 'working'
       },
@@ -30,6 +31,7 @@ describe('Codex subagent roster', () => {
     expect([...roster.keys()]).toEqual(['child-1'])
     expect(snapshot?.agentType).toHaveLength(AGENT_TYPE_MAX_LENGTH)
     expect(snapshot?.agentType).not.toContain('\n')
+    expect(snapshot?.description).toBe('Review the sidebar lifecycle')
     expect(snapshot?.model).toHaveLength(AGENT_MODEL_MAX_LENGTH)
 
     finishCodexSubagent(roster, ' child-1 ')

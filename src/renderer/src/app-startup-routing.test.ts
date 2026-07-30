@@ -123,11 +123,24 @@ describe('renderer startup runtime routing', () => {
 
   it('waits for first-window startup services before terminal reconnect', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
-    const reconnectIndex = source.indexOf('await actions.reconnectPersistedTerminals')
     const servicesIndex = source.indexOf('await window.api.app.awaitFirstWindowStartupServices()')
+    const preReconnectRecoveryIndex = source.indexOf(
+      'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()',
+      servicesIndex
+    )
+    const reconnectIndex = source.indexOf(
+      'actions.reconnectPersistedTerminals(abortController.signal)',
+      preReconnectRecoveryIndex
+    )
+    const postReconnectRecoveryIndex = source.indexOf(
+      'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()',
+      reconnectIndex
+    )
 
     expect(servicesIndex).toBeGreaterThanOrEqual(0)
-    expect(servicesIndex).toBeLessThan(reconnectIndex)
+    expect(preReconnectRecoveryIndex).toBeGreaterThan(servicesIndex)
+    expect(reconnectIndex).toBeGreaterThan(preReconnectRecoveryIndex)
+    expect(postReconnectRecoveryIndex).toBeGreaterThan(reconnectIndex)
   })
 
   it('keeps the persisted Automations view from starting its own bootstrap worktree scan', () => {

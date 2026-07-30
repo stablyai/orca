@@ -238,6 +238,7 @@ const POSIX_FIRST_INSTALL = [
   'ORCA-NPTY-PROBE-OK\n',
   '', // rm probe stderr
   'DEAD',
+  '', // publish the per-launch credential
   'READY'
 ]
 
@@ -253,6 +254,17 @@ const POSIX_REPAIR = [
   'ORCA-NPTY-PROBE-OK\n',
   '', // rm probe stderr
   'DEAD',
+  '', // publish the per-launch credential
+  'READY'
+]
+
+const POSIX_HEALTHY_RECONNECT = [
+  '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+  SHELL_HOME,
+  'ORCA-NATIVE-DEPS-OK',
+  '', // per-launch namespace marker
+  'DEAD',
+  '', // publish the per-launch credential
   'READY'
 ]
 
@@ -280,7 +292,7 @@ describe('relay install writes on a split SFTP namespace', () => {
     vi.restoreAllMocks()
   })
 
-  it('redirects every first-install write while shell commands keep the canonical path', async () => {
+  it('redirects every first-install artifact transfer while shell commands stay canonical', async () => {
     const conn = makeConnection(capture)
     feed(POSIX_FIRST_INSTALL)
 
@@ -310,7 +322,7 @@ describe('relay install writes on a split SFTP namespace', () => {
     expect(markerCommands[0]).toContain(`${SHELL_RELAY_DIR}/.install-lock`)
   })
 
-  it('probes one shared marker for every write of an install', async () => {
+  it('probes one shared marker for every first-install artifact transfer', async () => {
     const conn = makeConnection(capture)
     feed(POSIX_FIRST_INSTALL)
 
@@ -514,6 +526,88 @@ describe('relay repair writes on a split SFTP namespace', () => {
     vi.restoreAllMocks()
   })
 
+  it('publishes a healthy reconnect credential in the canonical shell namespace', async () => {
+    const conn = makeConnection(capture, { transferMethods: true })
+    feed(POSIX_HEALTHY_RECONNECT)
+
+    await deployAndLaunchRelay(conn)
+
+    expect(capture.writePaths).toEqual([])
+    expect(execCommands().find((command) => command.includes('randomBytes'))).toContain(
+      `${SHELL_RELAY_DIR}/relay.sock.credential`
+    )
+  })
+
+  it('does not redirect a healthy reconnect credential through fallback SFTP', async () => {
+    const conn = makeConnection(capture)
+    feed(POSIX_HEALTHY_RECONNECT)
+
+    await deployAndLaunchRelay(conn)
+
+    expect(capture.writePaths).toEqual([])
+    expect(execCommands().find((command) => command.includes('randomBytes'))).toContain(
+      `${SHELL_RELAY_DIR}/relay.sock.credential`
+    )
+  })
+
+  it.each(['busy', 'error'] as const)(
+    'generates a healthy %s-lock credential in the canonical shell namespace',
+    async (lockResult) => {
+      const conn = makeConnection(capture)
+      vi.mocked(tryAcquireRelayRepairLock).mockResolvedValue(lockResult)
+      feed([
+        '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+        SHELL_HOME,
+        'ORCA-NATIVE-DEPS-OK',
+        'DEAD',
+        '', // remote credential generation
+        'READY'
+      ])
+
+      await deployAndLaunchRelay(conn)
+
+      expect(capture.writePaths).toEqual([])
+      expect(execCommands().some((command) => MARKER_PATTERN.test(command))).toBe(false)
+      const credentialCommand = execCommands().find((command) => command.includes('randomBytes'))
+      expect(credentialCommand).toContain(`${SHELL_RELAY_DIR}/relay.sock.credential`)
+      expect(credentialCommand).not.toContain(SFTP_RELAY_DIR)
+    }
+  )
+
+  it('keeps a healthy system-SSH reconnect on its secure shell-path writer', async () => {
+    const conn = makeConnection(capture, { systemSsh: true, transferMethods: true })
+    feed([
+      '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+      SHELL_HOME,
+      'ORCA-NATIVE-DEPS-OK',
+      'DEAD',
+      '', // remote credential generation
+      'READY'
+    ])
+
+    await deployAndLaunchRelay(conn)
+
+    expect(conn.sftp).not.toHaveBeenCalled()
+    expect(execCommands().find((command) => command.includes('randomBytes'))).toContain(
+      `${SHELL_RELAY_DIR}/relay.sock.credential`
+    )
+    expect(capture.writePaths).toEqual([])
+  })
+
+  it('falls back to remote credential generation when a healthy marker is unavailable', async () => {
+    const conn = makeConnection(capture)
+    feed(['__ORCA_REMOTE_PLATFORM__ Linux x86_64', SHELL_HOME, 'ORCA-NATIVE-DEPS-OK'])
+    vi.mocked(execCommand).mockRejectedValueOnce(new Error('read-only marker'))
+    feed(['DEAD', '', 'READY'])
+
+    await deployAndLaunchRelay(conn)
+
+    expect(capture.writePaths).toEqual([])
+    expect(execCommands().find((command) => command.includes('randomBytes'))).toContain(
+      `${SHELL_RELAY_DIR}/relay.sock.credential`
+    )
+  })
+
   it('stamps the marker only after the locked recheck, then redirects package.json', async () => {
     const conn = makeConnection(capture)
     let execCountAtLock = -1
@@ -545,6 +639,7 @@ describe('relay repair writes on a split SFTP namespace', () => {
       'ORCA-NPTY-PROBE-OK\n',
       '', // rm probe stderr
       'DEAD',
+      '', // remote credential generation
       'READY'
     ])
 
@@ -554,6 +649,9 @@ describe('relay repair writes on a split SFTP namespace', () => {
     expect(conn.sftp).not.toHaveBeenCalled()
     expect(capture.writePaths).toEqual([`${SHELL_RELAY_DIR}/package.json`])
     expect(capture.writeOptions).toEqual([expect.objectContaining({ sftpNamespace: undefined })])
+    expect(execCommands().find((command) => command.includes('randomBytes'))).toContain(
+      `${SHELL_RELAY_DIR}/relay.sock.credential`
+    )
   })
 
   it('degrades to shell paths when marker creation fails outright', async () => {
@@ -566,12 +664,16 @@ describe('relay repair writes on a split SFTP namespace', () => {
       'ORCA-NPTY-PROBE-OK\n',
       '', // rm probe stderr
       'DEAD',
+      '', // remote credential generation
       'READY'
     ])
 
     await deployAndLaunchRelay(conn)
 
     expect(capture.writePaths).toEqual([`${SHELL_RELAY_DIR}/package.json`])
+    expect(execCommands().find((command) => command.includes('randomBytes'))).toContain(
+      `${SHELL_RELAY_DIR}/relay.sock.credential`
+    )
     expect(capture.realpathCalls).toEqual([])
     expect(warnSpy.mock.calls.map((args) => String(args[0]))).toContainEqual(
       expect.stringContaining('SFTP namespace marker unavailable')
@@ -584,12 +686,14 @@ describe('relay repair writes on a split SFTP namespace', () => {
     vi.mocked(execCommand).mockRejectedValueOnce(
       Object.assign(new Error('marker teardown unconfirmed'), { sshChannelCloseConfirmed: false })
     )
-    feed(['DEAD', 'READY'])
+    feed(['DEAD', '', 'READY'])
 
     await deployAndLaunchRelay(conn)
 
-    // Repair is best-effort: the relay still launches, but nothing was written and no lock was released.
     expect(capture.writePaths).toEqual([])
+    expect(execCommands().find((command) => command.includes('randomBytes'))).toContain(
+      `${SHELL_RELAY_DIR}/relay.sock.credential`
+    )
     expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
     expect(vi.mocked(abandonInstall)).not.toHaveBeenCalled()
     expect(warnSpy.mock.calls.map((args) => String(args[0]))).toContainEqual(

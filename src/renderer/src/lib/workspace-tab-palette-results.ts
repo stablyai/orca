@@ -1,3 +1,4 @@
+import { resolveWorktreeDisplayName } from './worktree-default-display-name'
 import type { MatchRange } from './worktree-palette-search'
 import type {
   SearchableWorkspaceTab,
@@ -114,6 +115,8 @@ export function searchWorkspaceTabs(
   const results: WorkspaceTabPaletteSearchResult[] = []
 
   for (const entry of entries) {
+    // Why: a cleared display name leaves this undefined at runtime; findRange would throw.
+    const worktreeName = resolveWorktreeDisplayName(entry.worktree)
     const baseResult = {
       tabId: entry.tab.id,
       entityId: entry.tab.entityId,
@@ -123,7 +126,7 @@ export function searchWorkspaceTabs(
       title: entry.title,
       secondaryText: entry.secondaryText,
       repoName: entry.repoName,
-      worktreeName: entry.worktree.displayName,
+      worktreeName,
       isCurrentTab: entry.isCurrentTab,
       isCurrentWorktree: entry.isCurrentWorktree
     }
@@ -200,7 +203,7 @@ export function searchWorkspaceTabs(
       continue
     }
 
-    const worktreeRange = findRange(entry.worktree.displayName, trimmedQuery)
+    const worktreeRange = findRange(worktreeName, trimmedQuery)
     if (worktreeRange) {
       results.push({
         ...baseResult,

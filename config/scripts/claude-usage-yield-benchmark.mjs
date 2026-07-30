@@ -12,11 +12,10 @@
 // other work would be a regression, not a win.
 //
 // Run with:  node config/scripts/claude-usage-yield-benchmark.mjs
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { readdirSync, statSync } from 'node:fs'
 
 const REPO_ROOT = new URL('../..', import.meta.url)
 const ROUNDS = Number(process.env.ORCA_YIELD_BENCH_ROUNDS ?? '10')

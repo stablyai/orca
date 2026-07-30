@@ -10,12 +10,13 @@ function makeTraversal(
     kind: 'directory' | 'file' | 'symlink'
     sizeBytes: number
   }>,
-  limits?: { maxEntries?: number; maxRetainedBytes?: number }
+  limits?: { maxEntries?: number; maxRetainedBytes?: number },
+  concurrency = 5
 ) {
   return scanWorkspaceSpaceEntryTree({
     rootPath: '/root',
     rootName: 'root',
-    concurrency: 5,
+    concurrency,
     entryName: (entry: Entry) => entry.name,
     joinPath: (parent, child) => `${parent}/${child}`,
     classifyEntry: (path) => classifyEntry(path),
@@ -157,8 +158,6 @@ describe('scanWorkspaceSpaceEntryTree', () => {
     ])
   })
 
-  // Why: the cap bounds entries held at once. A deep walk retires each listing
-  // as it descends, so total tree size must not decide the outcome.
   it('scans a chain far longer than the cap because listings are released', async () => {
     const depth = 50
     const directories = new Map<string, readonly Entry[]>()
@@ -188,5 +187,125 @@ describe('scanWorkspaceSpaceEntryTree', () => {
     )
 
     await expect(scan).rejects.toBeInstanceOf(WorkspaceSpaceScanCapacityError)
+  })
+
+  // Why: a cap N workers can each charge scales the verdict with concurrency,
+  // which docs/workspace-space-scan-resource-bounds.md forbids.
+  describe('capacity depends on directory shape, not tree size or concurrency', () => {
+    function buildWideTree(dirCount: number, filesPerDir: number) {
+      const directories = new Map<string, readonly Entry[]>()
+      directories.set(
+        '/root',
+        Array.from({ length: dirCount }, (_, index) => ({ name: `dir-${index}` }))
+      )
+      for (let index = 0; index < dirCount; index += 1) {
+        directories.set(
+          `/root/dir-${index}`,
+          Array.from({ length: filesPerDir }, (_, file) => ({ name: `file-${file}` }))
+        )
+      }
+      return directories
+    }
+
+    function scanWideTree(dirCount: number, filesPerDir: number, concurrency: number) {
+      const directories = buildWideTree(dirCount, filesPerDir)
+      return makeTraversal(
+        directories,
+        async (path) => ({
+          kind: directories.has(path) ? 'directory' : 'file',
+          sizeBytes: 1
+        }),
+        { maxEntries: 100_000, maxRetainedBytes: Number.MAX_SAFE_INTEGER },
+        concurrency
+      )
+    }
+
+    it.each([
+      { dirCount: 48, filesPerDir: 2_100, concurrency: 48 },
+      { dirCount: 100, filesPerDir: 1_500, concurrency: 48 },
+      { dirCount: 10, filesPerDir: 10_001, concurrency: 10 },
+      { dirCount: 40, filesPerDir: 2_500, concurrency: 48 }
+    ])(
+      'scans $dirCount x $filesPerDir at concurrency $concurrency',
+      async ({ dirCount, filesPerDir, concurrency }) => {
+        const result = await scanWideTree(dirCount, filesPerDir, concurrency)
+        expect(result.sizeBytes).toBe(dirCount * filesPerDir + dirCount + 1)
+        expect(result.skippedEntryCount).toBe(0)
+      },
+      30_000
+    )
+
+    it('still rejects a single directory above the cap', async () => {
+      await expect(scanWideTree(1, 100_001, 48)).rejects.toBeInstanceOf(
+        WorkspaceSpaceScanCapacityError
+      )
+    }, 30_000)
+  })
+
+  // Why: the cases above pin maxRetainedBytes open, so only these see the byte
+  // cap — and its verdict must not depend on where the worktree is checked out.
+  describe('capacity at the production default limits', () => {
+    // A real worktree checkout path; the bug appeared above ~58 characters.
+    const DEEP_ROOT = '/Users/octocat/projects/orca/.claude/worktrees/wf_d39acf3c-e7d-2'
+
+    function scanAtDefaults(
+      rootPath: string,
+      dirCount: number,
+      filesPerDir: number,
+      concurrency: number
+    ) {
+      const directories = new Map<string, readonly Entry[]>()
+      directories.set(
+        rootPath,
+        Array.from({ length: dirCount }, (_, index) => ({ name: `dir-${index}` }))
+      )
+      for (let index = 0; index < dirCount; index += 1) {
+        directories.set(
+          `${rootPath}/dir-${index}`,
+          Array.from({ length: filesPerDir }, (_, file) => ({ name: `file-${file}.ts` }))
+        )
+      }
+      return scanWorkspaceSpaceEntryTree({
+        rootPath,
+        rootName: 'root',
+        concurrency,
+        entryName: (entry: Entry) => entry.name,
+        joinPath: (parent, child) => `${parent}/${child}`,
+        classifyEntry: async (path) => ({
+          kind: directories.has(path) ? ('directory' as const) : ('file' as const),
+          sizeBytes: 1
+        }),
+        readDirectory: async (path) => {
+          const entries = directories.get(path)
+          if (!entries) {
+            throw new Error(`unreadable ${path}`)
+          }
+          return entries
+        },
+        checkCancelled: () => undefined,
+        createCancellationError: () => new Error('cancelled'),
+        isCancellationError: (error) => error instanceof Error && error.message === 'cancelled'
+      })
+    }
+
+    it.each([
+      { dirCount: 48, filesPerDir: 2_100, concurrency: 48 },
+      { dirCount: 10, filesPerDir: 10_001, concurrency: 10 },
+      { dirCount: 40, filesPerDir: 2_500, concurrency: 48 }
+    ])(
+      'scans $dirCount x $filesPerDir at concurrency $concurrency under a deep root',
+      async ({ dirCount, filesPerDir, concurrency }) => {
+        const result = await scanAtDefaults(DEEP_ROOT, dirCount, filesPerDir, concurrency)
+        expect(result.sizeBytes).toBe(dirCount * filesPerDir + dirCount + 1)
+      },
+      30_000
+    )
+
+    it('reaches the same verdict under a short root as under a deep one', async () => {
+      const shallow = await scanAtDefaults('/w', 48, 2_100, 48)
+      const deep = await scanAtDefaults(DEEP_ROOT, 48, 2_100, 48)
+
+      expect(deep.sizeBytes).toBe(shallow.sizeBytes)
+    }, 30_000)
   })
 })

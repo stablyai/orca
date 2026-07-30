@@ -387,7 +387,7 @@ describe('createHostedReview', () => {
       wslDistro: 'Ubuntu'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['status', '--porcelain'],
+      ['status', '--porcelain', '-z'],
       expect.objectContaining({ cwd: '/repo', wslDistro: 'Ubuntu' })
     )
     expect(getUpstreamStatusMock).toHaveBeenCalledWith('/repo', undefined, {

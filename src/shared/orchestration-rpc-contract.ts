@@ -13,6 +13,8 @@ export const ORCHESTRATION_SKILL_COMMAND_ARGS = [
   '--full'
 ] as const
 
+export const ORCHESTRATION_LEGACY_RUN_ID = 'run_legacy_local'
+
 const ORCHESTRATION_MUTATION_METHODS = new Set([
   'orchestration.runCreate',
   'orchestration.runUse',

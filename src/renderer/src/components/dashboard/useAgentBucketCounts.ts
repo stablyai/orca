@@ -6,7 +6,7 @@ import { buildDashboardSnapshot } from './build-dashboard-snapshot'
 
 export type AgentBucketCounts = Record<DashboardBucket, number>
 
-const EMPTY_COUNTS: AgentBucketCounts = { attention: 0, working: 0, idle: 0 }
+const EMPTY_COUNTS: AgentBucketCounts = { attention: 0, working: 0, done: 0, idle: 0 }
 
 /**
  * Per-state agent counts for the sidebar dashboard entry, derived from the same
@@ -61,12 +61,13 @@ export function useAgentBucketCounts(): AgentBucketCounts {
         // generated-title gate is moot and the sidebar stays off settings.
         settings: null
       },
-      Date.now()
+      Date.now(),
+      { includeCardDetails: false, includeFilterOptions: false }
     )
     if (snapshot.cards.length === 0) {
       return EMPTY_COUNTS
     }
-    const counts: AgentBucketCounts = { attention: 0, working: 0, idle: 0 }
+    const counts: AgentBucketCounts = { attention: 0, working: 0, done: 0, idle: 0 }
     for (const card of snapshot.cards) {
       counts[card.bucket] += 1
     }

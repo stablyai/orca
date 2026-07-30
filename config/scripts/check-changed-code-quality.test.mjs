@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  OXLINT_SCANS,
   diagnosticTouchesAddedLines,
   overlapsAddedLines,
   parseAddedLineRanges
@@ -40,5 +41,14 @@ describe('changed-code quality line matching', () => {
     expect(
       diagnosticTouchesAddedLines(diagnostic, new Map([[file, [{ start: 24, end: 24 }]]]), root)
     ).toBe(true)
+  })
+
+  // Why: pinning --config disables nested-config discovery, so root rules that
+  // mobile/.oxlintrc.json turns off would fail the gate on mobile files.
+  it('lets the untyped scan discover nested configs instead of pinning the root config', () => {
+    const scan = OXLINT_SCANS.find((candidate) => candidate.label === 'code quality')
+
+    expect(scan.args).not.toContain('--config')
+    expect(scan.args).not.toContain('--disable-nested-config')
   })
 })

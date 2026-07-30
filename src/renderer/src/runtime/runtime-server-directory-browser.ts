@@ -1,9 +1,10 @@
-import type { DirEntry } from '../../../shared/types'
+import type { DirEntry, FilesystemPathFlavor } from '../../../shared/types'
 import { callRuntimeRpc } from './runtime-rpc-client'
 
 export type RuntimeServerDirectoryListing = {
   resolvedPath: string
   entries: DirEntry[]
+  pathFlavor: FilesystemPathFlavor
 }
 
 export async function browseRuntimeServerDirectory(

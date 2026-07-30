@@ -23,9 +23,9 @@ import type {
   Worktree,
   WorktreeLineage,
   WorkspaceLineage,
-  WorktreeLineageWarning
+  WorktreeLineageWarning,
+  TerminalPaneLayoutNode
 } from './types'
-import type { TerminalPaneLayoutNode } from './types'
 import type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult
@@ -171,6 +171,9 @@ export type RuntimeMobileSessionTerminalTab = {
   /** Per-tab view preference (terminal xterm vs native chat). Host-persisted so
    *  paired clients converge; clients still win during the optimistic echo window. */
   viewMode?: 'terminal' | 'chat'
+  /** Launch context delivered only into the TUI input as an unsent draft; the
+   *  mobile chat composer adopts it so the context isn't invisible in chat. */
+  launchDraft?: string
   isActive: boolean
 }
 
@@ -619,6 +622,13 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   title?: string
   activate?: boolean
   presentation?: RuntimeTerminalPresentation
+  /**
+   * Why: adopting a terminal is separate from pointing the user at it. `false`
+   * keeps the tab silent — no sidebar reveal, no tab focus — for terminals the
+   * user never asked to see (e.g. a workspace created in the background).
+   * Absent means "surface it", so this is a suppression switch, never `true`.
+   */
+  surfaceOwner?: false
 }
 
 export type RuntimeTerminalCreateRequestPayload =

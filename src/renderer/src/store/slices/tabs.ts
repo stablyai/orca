@@ -47,6 +47,17 @@ import {
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
+function replaceWorkspaceRecordKeys<T>(
+  current: Record<string, T>,
+  hydrated: Record<string, T>,
+  workspaceKeys: ReadonlySet<string>
+): Record<string, T> {
+  return {
+    ...Object.fromEntries(Object.entries(current).filter(([key]) => !workspaceKeys.has(key))),
+    ...Object.fromEntries(Object.entries(hydrated).filter(([key]) => workspaceKeys.has(key)))
+  }
+}
+
 export type TabsSlice = {
   unifiedTabsByWorktree: Record<string, Tab[]>
   // Why: id of the tab whose inline title editor should open; shortcut (tab.rename) sets it, the tab clears it on consume.
@@ -2011,6 +2022,33 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       validWorktreeIds.add(folderWorkspaceKey(workspace.id))
     }
     addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
-    set(buildHydratedTabState(session, validWorktreeIds))
+    const hydrated = buildHydratedTabState(session, validWorktreeIds)
+    if (!options?.replaceWorkspaceKeys) {
+      set(hydrated)
+      return
+    }
+    const replaceWorkspaceKeys = new Set(options.replaceWorkspaceKeys)
+    set((current) => ({
+      unifiedTabsByWorktree: replaceWorkspaceRecordKeys(
+        current.unifiedTabsByWorktree,
+        hydrated.unifiedTabsByWorktree,
+        replaceWorkspaceKeys
+      ),
+      groupsByWorktree: replaceWorkspaceRecordKeys(
+        current.groupsByWorktree,
+        hydrated.groupsByWorktree,
+        replaceWorkspaceKeys
+      ),
+      activeGroupIdByWorktree: replaceWorkspaceRecordKeys(
+        current.activeGroupIdByWorktree,
+        hydrated.activeGroupIdByWorktree,
+        replaceWorkspaceKeys
+      ),
+      layoutByWorktree: replaceWorkspaceRecordKeys(
+        current.layoutByWorktree,
+        hydrated.layoutByWorktree,
+        replaceWorkspaceKeys
+      )
+    }))
   }
 })

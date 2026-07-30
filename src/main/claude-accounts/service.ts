@@ -967,6 +967,13 @@ export class ClaudeAccountService {
         rejectPromise(new Error('Claude command failed to open output streams.'))
         return
       }
+      const completesOnExit =
+        process.platform === 'win32' &&
+        configDir.linuxPath === null &&
+        configDir.wslDistro === null &&
+        args[0] === 'auth' &&
+        args[1] === 'login'
+      const completionEvent = completesOnExit ? 'exit' : 'close'
 
       let settled = false
       let output = ''
@@ -990,10 +997,14 @@ export class ClaudeAccountService {
         stdout.off('data', appendOutput)
         stderr.off('data', appendOutput)
         child.off('error', onError)
-        child.off('close', onClose)
+        child.off(completionEvent, onDone)
         options?.signal?.removeEventListener('abort', onAbort)
         if (options?.keepStdinOpen) {
           child.stdin?.destroy()
+        }
+        if (completesOnExit) {
+          stdout.destroy()
+          stderr.destroy()
         }
       }
       const settle = (callback: () => void): void => {
@@ -1062,7 +1073,7 @@ export class ClaudeAccountService {
         }
         settle(() => rejectPromise(error))
       }
-      const onClose = (code: number | null): void => {
+      const onDone = (code: number | null): void => {
         if (terminationPending) {
           return
         }
@@ -1085,7 +1096,9 @@ export class ClaudeAccountService {
       stdout.on('data', appendOutput)
       stderr.on('data', appendOutput)
       child.on('error', onError)
-      child.on('close', onClose)
+      // Native Windows browsers can inherit these pipes and indefinitely delay close.
+      child.on(completionEvent, onDone)
+
       if (options?.signal?.aborted) {
         onAbort()
       } else {

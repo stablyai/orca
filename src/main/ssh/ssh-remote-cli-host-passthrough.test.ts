@@ -22,6 +22,12 @@ import {
 import { resolveOrchestrationAskClientTimeoutMs } from '../../shared/orchestration-ask-timeout'
 import { remoteCliRequestTimeoutMs } from '../../relay/remote-cli-timeout'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
+import {
+  ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
+} from '../../shared/orchestration-compatibility-evidence'
 
 type FakeChild = EventEmitter & {
   stdout: EventEmitter
@@ -65,7 +71,12 @@ describe('buildHostCliEnv', () => {
         ORCA_TERMINAL_HANDLE: 'term_remote',
         ORCA_WORKTREE_ID: 'repo::/home/alice/wt',
         ORCA_PANE_KEY: 'pane-9',
+        ORCA_AGENT_LAUNCH_TOKEN: 'launch-secret',
         ORCA_WORKSPACE_ID: 'ws-1',
+        [ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]: 'wsl',
+        [ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]: 'caller-host',
+        [ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]: 'caller-incarnation',
+        [ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV]: 'caller-attachment',
         // Why: these are remote-machine paths and must not leak into the host
         // subprocess (PATH would break host binary lookup; user-data would
         // retarget the CLI at a different local instance).
@@ -73,13 +84,24 @@ describe('buildHostCliEnv', () => {
         ORCA_USER_DATA_PATH: '/remote/user-data'
       },
       userDataPath: '/host/user-data',
-      remoteCwd: '/home/alice/wt/sub'
+      remoteCwd: '/home/alice/wt/sub',
+      runtimeAuthority: {
+        kind: 'ssh',
+        targetId: 'saved-target',
+        connectionIncarnation: 'connection-incarnation',
+        attachmentId: 'runtime-attachment'
+      }
     })
 
     expect(env.ORCA_TERMINAL_HANDLE).toBe('term_remote')
     expect(env.ORCA_WORKTREE_ID).toBe('repo::/home/alice/wt')
     expect(env.ORCA_PANE_KEY).toBe('pane-9')
+    expect(env.ORCA_AGENT_LAUNCH_TOKEN).toBe('launch-secret')
     expect(env.ORCA_WORKSPACE_ID).toBe('ws-1')
+    expect(env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]).toBe('ssh')
+    expect(env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]).toBe('saved-target')
+    expect(env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]).toBe('connection-incarnation')
+    expect(env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV]).toBe('runtime-attachment')
     expect(env.PATH).toBe('/host/bin')
     expect(env.ORCA_USER_DATA_PATH).toBe('/host/user-data')
     expect(env.ORCA_CLI_CWD).toBe('/home/alice/wt/sub')

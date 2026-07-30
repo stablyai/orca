@@ -1,4 +1,4 @@
-import type { DiscoveredSkill } from '../../../../shared/skills'
+import type { DiscoveredSkill, SkillDiscoverySource } from '../../../../shared/skills'
 import type { OrchestrationSkillAgentStatus } from '@/lib/orchestration-skill-coverage'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
@@ -68,14 +68,15 @@ function AgentCoverageChip({
 
 export function OrchestrationSkillAgentCoverage(props: {
   skills: readonly DiscoveredSkill[]
+  sources: readonly SkillDiscoverySource[]
   loading: boolean
   embedded?: boolean
   className?: string
 }): React.JSX.Element {
-  const { skills, loading: skillsLoading, embedded = false, className } = props
+  const { skills, sources, loading: skillsLoading, embedded = false, className } = props
   const { detectedIds, isLoading: agentsLoading } = useDetectedAgents({ kind: 'local' })
   const loading = skillsLoading || agentsLoading || detectedIds === null
-  const agentStatuses = getOrchestrationSkillAgentStatuses(skills, detectedIds ?? [])
+  const agentStatuses = getOrchestrationSkillAgentStatuses(skills, detectedIds ?? [], sources)
   const installedCount = agentStatuses.filter((status) => status.installed).length
   const totalCount = agentStatuses.length
   const fullCoverage = !loading && totalCount > 0 && installedCount === totalCount

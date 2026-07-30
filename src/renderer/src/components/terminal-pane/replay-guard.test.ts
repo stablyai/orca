@@ -495,6 +495,43 @@ describe('replay-guard stall handling (probe-certified release)', () => {
     }
   })
 
+  it('records correlatable replay identity without exposing worktree or PTY paths', () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const ref = makeRef()
+      const { pane, terminal } = makeFakePane(1)
+      pane.leafId = 'leaf-private-identity' as ManagedPane['leafId']
+
+      replayIntoTerminal(pane, ref, 'restored bytes', {
+        breadcrumbIdentity: {
+          tabId: 'tab-private-identity',
+          worktreeId: 'repo::/Users/alice/private-worktree',
+          ptyId: '/Users/alice/private-worktree@@ab12cd34'
+        },
+        stallCheckMs: 1_000
+      })
+      terminal.pendingCallbacks.shift()
+      vi.advanceTimersByTime(1_000)
+      terminal.flush()
+
+      const breadcrumbData = mocks.recordRendererCrashBreadcrumb.mock.calls[0]?.[1]
+      expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+        'terminal_replay_guard_lost_completion',
+        {
+          paneId: 1,
+          leafIdHash: expect.stringMatching(/^[0-9a-f]{8}$/),
+          tabIdHash: expect.stringMatching(/^[0-9a-f]{8}$/),
+          worktreeIdHash: expect.stringMatching(/^[0-9a-f]{8}$/),
+          ptyId: '…@@ab12cd34'
+        }
+      )
+      expect(JSON.stringify(breadcrumbData)).not.toContain('/Users/alice')
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
   it('releases after the probe itself never parses (wedged pipeline) and reports it', () => {
     vi.useFakeTimers()
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

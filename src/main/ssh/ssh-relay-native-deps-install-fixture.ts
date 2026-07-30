@@ -71,6 +71,7 @@ export function makeRepairToolchainSkipExecResponses(): ExecResponse[] {
     '', // cat probe stderr
     '', // rm -f probe stderr
     'DEAD',
+    '', // publish the per-launch credential
     'READY'
   ]
 }
@@ -80,7 +81,7 @@ export function decodePowerShellCommand(command: string): string | null {
   return match ? Buffer.from(match[1], 'base64').toString('utf16le') : null
 }
 
-// Happy-path exec order: uname, $HOME, mkdir, chmod node, npm install, chmod prebuilds, probe, [cat stderr + rm if MISSING], [rebuild → chmod → re-probe if MISSING], DEAD, READY.
+// Happy-path exec order ends with socket probe, credential publication, then readiness poll.
 // When the probe rejects (SSH channel close or vanished install dir), the catch skips both stderr-capture and the rm.
 // A failed npm install takes one of the two early branches below instead, which never reach `probe`.
 export function makeExecResponses(opts: {
@@ -134,6 +135,7 @@ export function makeExecResponses(opts: {
       '', // cat probe stderr
       '', // rm -f probe stderr
       'DEAD',
+      '', // publish the per-launch credential
       'READY'
     ]
   }
@@ -176,6 +178,6 @@ export function makeExecResponses(opts: {
       slots.push('') // rm -f stderr after rebuild probe
     }
   }
-  slots.push('DEAD', 'READY')
+  slots.push('DEAD', '', 'READY')
   return slots
 }

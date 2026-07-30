@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { OrchestrationDb } from './db'
+import { CURRENT_CONTRACT_VERSION, OrchestrationDb } from './db'
 
 describe('OrchestrationDb worker Dispatch state', () => {
   let db: OrchestrationDb | undefined
@@ -44,6 +44,51 @@ describe('OrchestrationDb worker Dispatch state', () => {
       status: 'dispatched',
       assignee_handle: 'term_worker'
     })
+    expect(d.listLegacyWorkerTerminalRecoveryRows()).toEqual([
+      expect.objectContaining({
+        dispatch_id: started.dispatch.id,
+        contract_version: CURRENT_CONTRACT_VERSION,
+        worker_state: 'ready',
+        agent_terminal_handle: 'term_worker'
+      })
+    ])
+  })
+
+  it('requeues an active Task before settling a worker whose terminal is missing', () => {
+    const d = createDb()
+    const task = d.createTask({ spec: 'recover missing worker' })
+    const started = d.createStartingWorkerDispatch({
+      taskId: task.id,
+      startOptions: { topology: 'current', agent: 'codex' }
+    })
+    d.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle: 'term_missing',
+      paneKey: 'tab_missing:11111111-1111-4111-8111-111111111111',
+      processIncarnation: 'pty-missing:22222222-2222-4222-8222-222222222222',
+      worktreeId: 'repo::worktree',
+      setupState: 'not_applicable',
+      effects: []
+    })
+    d.markWorkerDispatchReady(started.dispatch.id)
+
+    expect(
+      d.reconcileMissingWorkerTerminal(started.dispatch.id, 'worker terminal is no longer live')
+    ).toMatchObject({
+      state: 'abandoned',
+      stage: 'terminal_missing',
+      last_error: 'worker terminal is no longer live'
+    })
+    expect(d.getDispatchContextById(started.dispatch.id)).toMatchObject({
+      status: 'failed',
+      failure_count: 1,
+      last_failure: 'worker terminal is no longer live'
+    })
+    expect(d.getTask(task.id)?.status).toBe('ready')
+
+    d.reconcileMissingWorkerTerminal(started.dispatch.id, 'duplicate recovery')
+    expect(d.getDispatchContextById(started.dispatch.id)?.failure_count).toBe(1)
+    expect(d.getTask(task.id)?.status).toBe('ready')
   })
 
   it('commits worker-start mutation acceptance with the starting Dispatch', () => {

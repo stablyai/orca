@@ -27,6 +27,9 @@ import {
 import { useVisibleWorkspaceKanbanWorktreeIds } from './use-visible-workspace-kanban-worktree-ids'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { groupWorkspaceKanbanWorktrees } from './workspace-kanban-worktree-groups'
+import { resolveFullLaneDropIndex } from './workspace-kanban-filtered-drop-index'
+import { buildWorkspaceKanbanLaneViews } from './workspace-kanban-search'
+import { useWorkspaceKanbanSearch } from './use-workspace-kanban-search'
 import {
   getWorkspaceBoardTaskStatusSyncRequest,
   syncWorkspaceBoardTaskStatuses,
@@ -38,7 +41,7 @@ import {
   shouldWriteManualOrderForGroupDrop,
   type WorktreeDragGroup
 } from './worktree-manual-order'
-import type { WorkspaceStatus, WorktreeMeta } from '../../../../shared/types'
+import type { WorkspaceStatus, Worktree, WorktreeMeta } from '../../../../shared/types'
 import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
 import { STATUS_BAR_RESERVE_HEIGHT, WORKSPACE_TOP_CHROME_HEIGHT } from './workspace-chrome-metrics'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
@@ -188,6 +191,29 @@ export default function WorkspaceKanbanDrawer({
       })),
     [worktreesByStatus, workspaceStatuses]
   )
+  const laneFullWorktreeIds = useMemo(
+    () => new Map(boardDragGroups.map((group) => [group.key, group.worktreeIds])),
+    [boardDragGroups]
+  )
+  const { query, setQuery, clearQuery, matchingWorktreeIds, hasQuery, isQueryTooLarge } =
+    useWorkspaceKanbanSearch({
+      open,
+      worktrees: boardWorktrees,
+      repoMap
+    })
+  const laneViews = useMemo(
+    () => buildWorkspaceKanbanLaneViews({ worktreesByStatus, matchingWorktreeIds }),
+    [matchingWorktreeIds, worktreesByStatus]
+  )
+  // Why: range and area gestures must index the cards the user can actually see,
+  // or a shift-click across a filtered gap silently selects hidden workspaces.
+  const renderedBoardWorktrees = useMemo(
+    () =>
+      matchingWorktreeIds
+        ? boardWorktrees.filter((worktree) => matchingWorktreeIds.has(worktree.id))
+        : boardWorktrees,
+    [boardWorktrees, matchingWorktreeIds]
+  )
   const {
     selectedWorktreeIds,
     selectedWorktrees,
@@ -196,7 +222,7 @@ export default function WorkspaceKanbanDrawer({
     updateSelectionForArea,
     clearSelection,
     selectForContextMenu
-  } = useWorkspaceKanbanSelection(open, boardWorktrees)
+  } = useWorkspaceKanbanSelection(open, boardWorktrees, renderedBoardWorktrees)
   const { handleAreaSelectionPointerDown } = useWorkspaceKanbanAreaSelection({
     open,
     boardRef,
@@ -439,12 +465,50 @@ export default function WorkspaceKanbanDrawer({
     },
     [updateWorktreesMeta, worktreeById]
   )
+  // Why: getCardDropTarget indexes the rendered cards, but manual-order math runs
+  // against the full lane. Translate at the pointer-drag boundary only —
+  // dropWorktreesAtEndOfStatus already passes a full-lane index.
+  const dropPointerDraggedWorktreesInStatus = useCallback(
+    (args: { worktreeIds: readonly string[]; status: WorkspaceStatus; dropIndex: number }) => {
+      dropWorktreesInStatus({
+        worktreeIds: args.worktreeIds,
+        status: args.status,
+        dropIndex: resolveFullLaneDropIndex({
+          fullLaneIds: laneFullWorktreeIds.get(args.status) ?? [],
+          renderedIds: (laneViews.get(args.status)?.items ?? []).map((worktree) => worktree.id),
+          filteredDropIndex: args.dropIndex
+        })
+      })
+    },
+    [dropWorktreesInStatus, laneFullWorktreeIds, laneViews]
+  )
+  // Why: dragging or right-clicking one visible match must not silently move
+  // hidden selected cards. selectedWorktreeIds stays unfiltered so highlighting
+  // and area-selection anchoring still see the whole selection.
+  const renderedSelectedWorktrees = useMemo(
+    () =>
+      matchingWorktreeIds
+        ? selectedWorktrees.filter((worktree) => matchingWorktreeIds.has(worktree.id))
+        : selectedWorktrees,
+    [matchingWorktreeIds, selectedWorktrees]
+  )
+  // Why: selectForContextMenu closes over the unfiltered selection, so the
+  // "Move to Status" payload has to be narrowed here too.
+  const selectRenderedForContextMenu = useCallback(
+    (event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
+      const selection = selectForContextMenu(event, worktree)
+      return matchingWorktreeIds
+        ? selection.filter((item) => matchingWorktreeIds.has(item.id))
+        : selection
+    },
+    [matchingWorktreeIds, selectForContextMenu]
+  )
   const { isPointerDragActiveRef, onCardPointerDownCapture } = useWorkspaceKanbanCardPointerDrag({
     open,
     boardRef,
     selectedWorktreeIds,
-    selectedWorktrees,
-    onDropWorktreesInStatus: dropWorktreesInStatus,
+    selectedWorktrees: renderedSelectedWorktrees,
+    onDropWorktreesInStatus: dropPointerDraggedWorktreesInStatus,
     onPinWorktrees: pinWorktrees,
     onDragTargetChange: setDragOverStatus,
     onShouldShowDropIndicator: shouldWriteDropManualOrder,
@@ -695,6 +759,13 @@ export default function WorkspaceKanbanDrawer({
           // its tooltip without hover and makes the drawer feel noisy.
           event.preventDefault()
         }}
+        onEscapeKeyDown={(event) => {
+          // Why: the board owns Escape — useWorkspaceBoardPanel closes it, and
+          // defers to board text fields so the search field can clear itself.
+          // Radix's own dismiss would bypass both, so keep it out of the path
+          // rather than relying on handleSheetOpenChange dropping the request.
+          event.preventDefault()
+        }}
         onPointerDownOutside={(event) => {
           const originalEvent = event.detail.originalEvent
           const target = originalEvent.target
@@ -746,7 +817,16 @@ export default function WorkspaceKanbanDrawer({
         }}
       >
         <WorkspaceKanbanDrawerHeader
-          selectedCount={selectedWorktrees.length}
+          // Why: the badge has to count what a drag or context-menu action will
+          // actually move, which under a query is the rendered subset.
+          selectedCount={renderedSelectedWorktrees.length}
+          query={query}
+          isFiltering={hasQuery}
+          isTooLarge={isQueryTooLarge}
+          matchCount={matchingWorktreeIds?.size ?? boardWorktrees.length}
+          totalCount={boardWorktrees.length}
+          onQueryChange={setQuery}
+          onClearQuery={clearQuery}
           workspaceStatuses={workspaceStatuses}
           syncTaskStatusFromWorkspaceBoard={syncTaskStatusFromWorkspaceBoard}
           onSyncTaskStatusFromWorkspaceBoardChange={setSyncTaskStatusFromWorkspaceBoard}
@@ -782,7 +862,9 @@ export default function WorkspaceKanbanDrawer({
           >
             <WorkspaceKanbanLaneGrid
               statuses={workspaceStatuses}
-              worktreesByStatus={worktreesByStatus}
+              laneViews={laneViews}
+              laneFullWorktreeIds={laneFullWorktreeIds}
+              hasQuery={hasQuery}
               repoMap={repoMap}
               activeWorktreeId={activeWorktreeId}
               columnWidth={columnWidth}
@@ -790,13 +872,13 @@ export default function WorkspaceKanbanDrawer({
               dragOverStatus={dragOverStatus}
               canCreateWorktree={canCreateWorktree}
               selectedWorktreeIds={selectedWorktreeIds}
-              selectedWorktrees={selectedWorktrees}
+              selectedWorktrees={renderedSelectedWorktrees}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onActivate={handleWorktreeActivate}
               onSelectionGesture={updateSelectionForGesture}
-              onContextMenuSelect={selectForContextMenu}
+              onContextMenuSelect={selectRenderedForContextMenu}
               onAssignWorkspaceStatus={moveWorktreesToStatus}
               onCreateWorktree={createWorktreeForStatus}
               onColumnResizeStart={onColumnResizeStart}

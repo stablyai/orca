@@ -5,6 +5,12 @@ import {
 import { buildStartupCommandSubmission } from '../../../shared/startup-command-submission'
 
 const SSH_SHELL_READY_STARTUP_FALLBACK_MS = 1500
+// Why: a remote shell that has not emitted a single byte is still booting —
+// /etc/profile plus nvm/conda/pyenv over a cold link routinely needs more than
+// the post-output deadline. Force-delivering there writes the bracketed-paste
+// command before readline arms it, so a silent-since-spawn shell gets a longer
+// budget; the short deadline applies once output proves the shell is talking.
+const SSH_SHELL_READY_NO_OUTPUT_FALLBACK_MS = 15_000
 
 type SshBackgroundStartupDeliveryOptions = {
   command: string | null
@@ -28,6 +34,7 @@ export function createSshBackgroundStartupDelivery(
   const markerScan = options.waitForShellReady ? createShellReadyMarkerScanState() : null
   let injectTimer: ReturnType<typeof setTimeout> | null = null
   let fallbackTimer: ReturnType<typeof setTimeout> | null = null
+  let sawOutput = false
 
   const clearInjectTimer = (): void => {
     if (injectTimer !== null) {
@@ -57,11 +64,19 @@ export function createSshBackgroundStartupDelivery(
     if (!pendingCommand || fallbackTimer !== null) {
       return
     }
-    fallbackTimer = setTimeout(() => {
-      fallbackTimer = null
-      startupShellReady = true
-      schedule(ptyId)
-    }, SSH_SHELL_READY_STARTUP_FALLBACK_MS)
+    // The long budget only buys time for the shell-ready marker; the fast path
+    // pastes nothing prompt-sensitive, so delaying it there is pure latency.
+    const waitingForSilentShell = options.waitForShellReady && !sawOutput
+    fallbackTimer = setTimeout(
+      () => {
+        fallbackTimer = null
+        startupShellReady = true
+        schedule(ptyId)
+      },
+      waitingForSilentShell
+        ? SSH_SHELL_READY_NO_OUTPUT_FALLBACK_MS
+        : SSH_SHELL_READY_STARTUP_FALLBACK_MS
+    )
   }
 
   const schedule = (ptyId: string): void => {
@@ -100,6 +115,15 @@ export function createSshBackgroundStartupDelivery(
 
   return {
     handleData(data) {
+      // First byte proves the shell is talking, so the spawn-time long budget
+      // collapses back to the original post-output deadline.
+      if (!sawOutput && data.length > 0) {
+        sawOutput = true
+        if (fallbackTimer !== null && !startupShellReady && lastPtyId) {
+          clearFallbackTimer()
+          armFallback(lastPtyId)
+        }
+      }
       if (!markerScan) {
         return data
       }

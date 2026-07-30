@@ -17,7 +17,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
+  createWorktreeSharedPaths,
   createWorktreeSymlinks,
+  worktreeSymlinkTypeCandidates,
   findExistingWorktreeSymlinkPaths,
   removeWorktreeLinkedPaths,
   removeWorktreeSymlinks
@@ -391,6 +393,100 @@ describe('createWorktreeSymlinks', () => {
     expect(cloneWorktreePath).not.toHaveBeenCalled()
     expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(true)
     expect(readlinkSync(join(worktree, '.env'))).toBe(join(primary, '.env'))
+  })
+})
+
+// Why: a plain `fs.symlink` needs Developer Mode or admin on Windows, so an
+// ordinary Windows user gets EPERM and silently ends up with no shared
+// directory at all. A junction needs no privilege — but it cannot target a UNC
+// path, which is exactly where a WSL project's repo lives, so the symlink has
+// to stay as a fallback rather than be replaced.
+describe('worktreeSymlinkTypeCandidates', () => {
+  it('tries a junction before a symlink for a directory on Windows', () => {
+    expect(worktreeSymlinkTypeCandidates('win32', true)).toEqual(['junction', 'dir'])
+  })
+
+  it('keeps the symlink fallback so a UNC (WSL) target still works', () => {
+    expect(worktreeSymlinkTypeCandidates('win32', true).at(-1)).toBe('dir')
+  })
+
+  it('never uses a junction for a file, which junctions cannot represent', () => {
+    expect(worktreeSymlinkTypeCandidates('win32', false)).toEqual(['file'])
+  })
+
+  it('makes exactly one attempt off Windows, where the type is ignored', () => {
+    expect(worktreeSymlinkTypeCandidates('darwin', true)).toEqual(['dir'])
+    expect(worktreeSymlinkTypeCandidates('linux', true)).toEqual(['dir'])
+    expect(worktreeSymlinkTypeCandidates('linux', false)).toEqual(['file'])
+  })
+})
+
+describe('createWorktreeSharedPaths', () => {
+  let root: string
+  let primary: string
+  let worktree: string
+  let warn: ReturnType<typeof vi.spyOn>
+  let error: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'orca-sharedpaths-'))
+    primary = join(root, 'primary')
+    worktree = join(root, 'worktree')
+    mkdirSync(primary, { recursive: true })
+    mkdirSync(worktree, { recursive: true })
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    warn.mockRestore()
+    error.mockRestore()
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  // Why: an APFS clone would give the worktree its own node_modules, defeating
+  // one-install-serves-all. Share mode must symlink even where cloning works.
+  posixIt('symlinks on macOS instead of APFS clone-copying', async () => {
+    mkdirSync(join(primary, 'node_modules'))
+    writeFileSync(join(primary, 'node_modules', 'marker'), 'ORIG\n')
+    const cloneWorktreePath = vi.fn()
+
+    await createWorktreeSharedPaths(primary, worktree, ['node_modules'], {
+      platform: 'darwin',
+      cloneWorktreePath
+    })
+
+    expect(cloneWorktreePath).not.toHaveBeenCalled()
+    expect(lstatSync(join(worktree, 'node_modules')).isSymbolicLink()).toBe(true)
+  })
+
+  posixIt('shares one directory so worktree writes reach the primary checkout', async () => {
+    mkdirSync(join(primary, 'node_modules'))
+
+    await createWorktreeSharedPaths(primary, worktree, ['node_modules'], { platform: 'linux' })
+
+    writeFileSync(join(worktree, 'node_modules', 'installed'), 'SHARED\n')
+    expect(readFileSync(join(primary, 'node_modules', 'installed'), 'utf8')).toBe('SHARED\n')
+  })
+
+  posixIt('skips a path already materialized by the per-user symlink pass', async () => {
+    mkdirSync(join(primary, 'node_modules'))
+    mkdirSync(join(worktree, 'node_modules'))
+
+    await createWorktreeSharedPaths(primary, worktree, ['node_modules'], { platform: 'linux' })
+
+    expect(lstatSync(join(worktree, 'node_modules')).isSymbolicLink()).toBe(false)
+  })
+
+  it('rejects unsafe paths without touching the filesystem', async () => {
+    writeFileSync(join(root, 'outside.txt'), 'DO_NOT_TOUCH')
+
+    await createWorktreeSharedPaths(primary, worktree, ['../outside.txt', '/etc/passwd'], {
+      platform: 'linux'
+    })
+
+    expect(readFileSync(join(root, 'outside.txt'), 'utf8')).toBe('DO_NOT_TOUCH')
+    expect(warn).toHaveBeenCalled()
   })
 })
 
