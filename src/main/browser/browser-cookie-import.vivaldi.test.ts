@@ -20,6 +20,15 @@ function slashPath(pathValue: string): string {
   return pathValue.replaceAll('\\', '/')
 }
 
+/** Restore an environment variable without persisting the string "undefined". */
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key]
+    return
+  }
+  process.env[key] = value
+}
+
 type VivaldiInstallMockOptions = {
   pathExistsOverride?: (normalizedPath: string) => boolean | undefined
   infoCache?: Record<string, { name: string }>
@@ -76,9 +85,9 @@ describe('detectInstalledBrowsers — Vivaldi', () => {
 
   afterEach(() => {
     Object.defineProperty(process, 'platform', { value: originalPlatform })
-    process.env.HOME = originalHome
-    process.env.LOCALAPPDATA = originalLocalAppData
-    process.env.XDG_CONFIG_HOME = originalConfigHome
+    restoreEnv('HOME', originalHome)
+    restoreEnv('LOCALAPPDATA', originalLocalAppData)
+    restoreEnv('XDG_CONFIG_HOME', originalConfigHome)
     vi.restoreAllMocks()
   })
 
