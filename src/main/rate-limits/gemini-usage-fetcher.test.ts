@@ -6,10 +6,15 @@ import {
   quotaResponse
 } from './gemini-usage-fetcher.test-fixtures'
 
-const { readFileMock, extractCredsMock, netFetchMock } = vi.hoisted(() => ({
+const { readFileMock, extractCredsMock, netFetchMock, antigravityFetchMock } = vi.hoisted(() => ({
   readFileMock: vi.fn(),
   extractCredsMock: vi.fn(),
-  netFetchMock: vi.fn()
+  netFetchMock: vi.fn(),
+  antigravityFetchMock: vi.fn()
+}))
+
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchGeminiRateLimitsViaAntigravity: antigravityFetchMock
 }))
 
 // Why: mock the extractor at the module boundary rather than re-routing every
@@ -37,6 +42,15 @@ describe('fetchGeminiRateLimits', () => {
     readFileMock.mockReset()
     extractCredsMock.mockReset()
     netFetchMock.mockReset()
+    antigravityFetchMock.mockReset()
+    antigravityFetchMock.mockResolvedValue({
+      provider: 'gemini',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'Antigravity unavailable',
+      status: 'unavailable'
+    })
     netFetchMock.mockImplementation((url: string) => {
       if (url.includes('loadCodeAssist')) {
         return Promise.resolve(makeResponse({ cloudaicompanionProject: 'proj-123' }))
@@ -67,6 +81,33 @@ describe('fetchGeminiRateLimits', () => {
       throw { code: 'ENOENT' }
     })
   }
+
+  it('uses Antigravity Gemini quota before legacy OAuth sources', async () => {
+    antigravityFetchMock.mockResolvedValue({
+      provider: 'gemini',
+      session: {
+        usedPercent: 9,
+        windowMinutes: 300,
+        resetsAt: Date.parse('2026-07-30T06:05:28Z'),
+        resetDescription: null
+      },
+      weekly: {
+        usedPercent: 28,
+        windowMinutes: 10_080,
+        resetsAt: Date.parse('2026-08-03T03:13:16Z'),
+        resetDescription: null
+      },
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    })
+
+    const result = await fetchGeminiRateLimits(true)
+
+    expect(result.status).toBe('ok')
+    expect(result.session?.usedPercent).toBe(9)
+    expect(readFileMock).not.toHaveBeenCalled()
+  })
 
   it('returns unavailable when no credentials exist', async () => {
     const result = await fetchGeminiRateLimits(true)

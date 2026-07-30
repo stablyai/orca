@@ -14,6 +14,7 @@ import {
   deduplicateBuckets,
   deriveSessionSummary
 } from './gemini-bucket-formatting'
+import { fetchGeminiRateLimitsViaAntigravity } from './antigravity-usage-fetcher'
 
 const API_TIMEOUT_MS = 10_000
 const RETRIEVE_QUOTA_URL = 'https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota'
@@ -200,7 +201,7 @@ async function fetchViaOauthCreds(
   return result
 }
 
-export async function fetchGeminiRateLimits(
+async function fetchLegacyGeminiRateLimits(
   geminiCliOAuthEnabled = false
 ): Promise<ProviderRateLimits> {
   if (!geminiCliOAuthEnabled) {
@@ -245,4 +246,17 @@ export async function fetchGeminiRateLimits(
       status: 'error'
     }
   }
+}
+
+export async function fetchGeminiRateLimits(
+  geminiCliOAuthEnabled = false
+): Promise<ProviderRateLimits> {
+  if (!geminiCliOAuthEnabled) {
+    return fetchLegacyGeminiRateLimits(false)
+  }
+
+  const antigravity = await fetchGeminiRateLimitsViaAntigravity()
+  return antigravity.status === 'ok'
+    ? antigravity
+    : fetchLegacyGeminiRateLimits(geminiCliOAuthEnabled)
 }

@@ -6,10 +6,15 @@ import {
   validCreds
 } from './gemini-usage-fetcher.test-fixtures'
 
-const { readFileMock, extractCredsMock, netFetchMock } = vi.hoisted(() => ({
+const { readFileMock, extractCredsMock, netFetchMock, antigravityFetchMock } = vi.hoisted(() => ({
   readFileMock: vi.fn(),
   extractCredsMock: vi.fn(),
-  netFetchMock: vi.fn()
+  netFetchMock: vi.fn(),
+  antigravityFetchMock: vi.fn()
+}))
+
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchGeminiRateLimitsViaAntigravity: antigravityFetchMock
 }))
 
 // Why: mock the CLI-credential extractor at the module boundary. The extractor
@@ -44,6 +49,15 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
     readFileMock.mockReset()
     extractCredsMock.mockReset()
     netFetchMock.mockReset()
+    antigravityFetchMock.mockReset()
+    antigravityFetchMock.mockResolvedValue({
+      provider: 'gemini',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'Antigravity unavailable',
+      status: 'unavailable'
+    })
     extractCredsMock.mockResolvedValue({
       clientId: 'client-id-123',
       clientSecret: 'client-secret-456'
