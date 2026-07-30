@@ -98,4 +98,41 @@ describe('useAddRepoServerPathFlow', () => {
     expect(mocks.markOnboardingProjectAdded).toHaveBeenCalledWith('addedFolder')
     expect(mocks.closeModal).toHaveBeenCalled()
   })
+
+  it('routes the nested Git pre-scan and add through the selected runtime', async () => {
+    const repo = makeRepo({ id: 'server-git', kind: 'git' })
+    mocks.getNestedRepoRuntimeKind.mockReturnValue('runtime')
+    mocks.scanNestedRepos.mockResolvedValue({
+      selectedPath: '/server/docs',
+      selectedPathKind: 'git_repo',
+      repos: []
+    })
+    mocks.addRepoPath.mockResolvedValue(repo)
+    const { useAddRepoServerPathFlow } = await import('./useAddRepoServerPathFlow')
+
+    const result = useAddRepoServerPathFlow({
+      addRepoPath: mocks.addRepoPath,
+      activeRuntimeEnvironmentId: 'box1-environment-id',
+      closeModal: mocks.closeModal,
+      fetchWorktrees: mocks.fetchWorktrees,
+      getNestedRepoRuntimeKind: mocks.getNestedRepoRuntimeKind,
+      scanNestedRepos: mocks.scanNestedRepos,
+      setActiveNestedScanId: mocks.setActiveNestedScanId,
+      setNestedScanInProgress: mocks.setNestedScanInProgress,
+      showNestedRepoReview: mocks.showNestedRepoReview,
+      onGitRepoReady: mocks.onGitRepoReady,
+      setAddProjectBusyLabel: mocks.setAddProjectBusyLabel
+    })
+    await result.handleAddServerPath('git')
+
+    expect(mocks.scanNestedRepos).toHaveBeenCalledWith(
+      '/server/docs',
+      undefined,
+      expect.objectContaining({ runtimeEnvironmentId: 'box1-environment-id' })
+    )
+    expect(mocks.addRepoPath).toHaveBeenCalledWith('/server/docs', 'git', {
+      runtimeEnvironmentId: 'box1-environment-id'
+    })
+    expect(mocks.fetchWorktrees).toHaveBeenCalledWith('server-git', { requireAuthoritative: true })
+  })
 })

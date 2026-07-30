@@ -27,7 +27,8 @@ export default React.memo(function AddRepoDialog({
   hosted?: AddRepoDialogHostedController
 }) {
   const isOpen = useAppStore((s) => (hosted ? hosted.open : s.activeModal === 'add-repo'))
-  // Why: hosted mode never receives dropped paths through modalData — that channel belongs to the store modal.
+  // Why: hosted mode never receives dropped paths through modalData — that
+  // channel belongs to the store-modal instance.
   const droppedLocalPath = useAppStore((s) =>
     !hosted && typeof s.modalData.droppedLocalPath === 'string' ? s.modalData.droppedLocalPath : ''
   )
@@ -73,7 +74,6 @@ export default React.memo(function AddRepoDialog({
     cancelNestedRepoScan,
     setStep
   })
-
   const hostSelection = useAddRepoHostSelection({ isOpen, setStep })
   const selectedRuntimeEnvironmentId =
     hostSelection.selectedParsedHost?.kind === 'runtime'
@@ -108,7 +108,6 @@ export default React.memo(function AddRepoDialog({
     showRemoteNestedRepoReview,
     trackRemoteNestedScanResult
   )
-
   const {
     createName,
     createParent,
@@ -220,7 +219,8 @@ export default React.memo(function AddRepoDialog({
     nestedGroupName,
     nestedImportScanId,
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
-    // Why: open-as-folder outcomes navigate; git imports finish via completeGitRepoAdd instead.
+    // Why: open-as-folder outcomes navigate; git imports finish via
+    // completeGitRepoAdd instead.
     closeModal: closeForFolderHandoff,
     fetchWorktrees,
     importNestedRepos,

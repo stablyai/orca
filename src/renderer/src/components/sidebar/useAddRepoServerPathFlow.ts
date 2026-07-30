@@ -46,7 +46,11 @@ export function useAddRepoServerPathFlow({
   scanNestedRepos: (
     path: string,
     connectionId?: string,
-    controls?: { scanId?: string; onProgress?: (scan: NestedRepoScanResult) => void }
+    controls?: {
+      scanId?: string
+      onProgress?: (scan: NestedRepoScanResult) => void
+      runtimeEnvironmentId?: string | null
+    }
   ) => Promise<NestedRepoScanResult | null>
   setActiveNestedScanId: (scanId: string | null) => void
   setNestedScanInProgress: (inProgress: boolean) => void
@@ -89,13 +93,12 @@ export function useAddRepoServerPathFlow({
             setActiveNestedScanId(scanId)
             setNestedScanInProgress(true)
           }
-          const scan = await scanNestedRepos(
-            path,
-            undefined,
-            scanId
+          const scan = await scanNestedRepos(path, undefined, {
+            runtimeEnvironmentId: activeRuntimeEnvironmentId,
+            ...(scanId
               ? {
                   scanId,
-                  onProgress: (progressScan) => {
+                  onProgress: (progressScan: NestedRepoScanResult) => {
                     if (
                       gen !== serverAddGenRef.current ||
                       progressScan.selectedPathKind !== 'non_git_folder' ||
@@ -114,8 +117,8 @@ export function useAddRepoServerPathFlow({
                     })
                   }
                 }
-              : undefined
-          )
+              : {})
+          })
           if (gen !== serverAddGenRef.current) {
             return
           }
