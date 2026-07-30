@@ -168,7 +168,11 @@ import {
 } from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
 import { createTerminalStructuralReplayCoordinator } from '@/lib/pane-manager/terminal-structural-replay-coordinator'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { makePaneKey, parseLegacyNumericPaneKey } from '../../../../shared/stable-pane-id'
+import {
+  makePaneKey,
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../../shared/stable-pane-id'
 import {
   getProviderSessionClaimKey,
   isPassiveCompletedHibernationEvidence
@@ -1184,7 +1188,26 @@ export function connectPanePty(
           : oldestLegacyMatch
         : null)
     if (!selectedLegacyMatch) {
-      return null
+      // A crash can remove the persisted terminal layout before the workspace
+      // session is written. On the next launch the tab gets a new stable leaf
+      // UUID, while the sleeping record still points at the old UUID. When
+      // exactly one stable record belongs to this tab/worktree, adopt it;
+      // multiple records remain ambiguous and must not resume in the wrong pane.
+      const rebuiltLeafMatches = Object.entries(state.sleepingAgentSessionsByPaneKey).filter(
+        ([paneKey, record]) => {
+          const parsed = parsePaneKey(paneKey)
+          return (
+            parsed?.tabId === deps.tabId &&
+            record.worktreeId === deps.worktreeId &&
+            (!record.tabId || record.tabId === deps.tabId)
+          )
+        }
+      )
+      if (rebuiltLeafMatches.length !== 1) {
+        return null
+      }
+      const [paneKey, record] = rebuiltLeafMatches[0]
+      return { paneKey, record }
     }
     const [paneKey, record] = selectedLegacyMatch
     return { paneKey, record }
@@ -4800,12 +4823,39 @@ export function connectPanePty(
       }
       return CLIENT_PLATFORM
     }
+    const getColdRestoreAgentStatus = (
+      state: ReturnType<typeof useAppStore.getState>
+    ): AgentStatusEntry | undefined => {
+      const exact = state.agentStatusByPaneKey[cacheKey]
+      if (exact) {
+        return exact
+      }
+      // A hard renderer exit can lose the persisted layout before the main
+      // hook cache is replayed. The rebuilt pane then has a new leaf key while
+      // the durable live status still points at the old leaf. Reuse that
+      // status only when the tab/worktree has exactly one resumable live
+      // provider identity; multiple candidates remain ambiguous and fail
+      // closed rather than resuming the wrong split pane.
+      const candidates = Object.values(state.agentStatusByPaneKey).filter((entry) => {
+        if (
+          entry.state === 'done' ||
+          !entry.providerSession ||
+          !isResumableTuiAgent(entry.agentType) ||
+          entry.worktreeId !== deps.worktreeId
+        ) {
+          return false
+        }
+        const entryTabId = entry.tabId ?? parsePaneKey(entry.paneKey)?.tabId
+        return entryTabId === deps.tabId
+      })
+      return candidates.length === 1 ? candidates[0] : undefined
+    }
     const buildColdRestoreAgentResumeStartup = (): ColdRestoreAgentResumeStartup | null => {
       if (pendingStartupCommand) {
         return null
       }
       const state = useAppStore.getState()
-      const entry = state.agentStatusByPaneKey[cacheKey]
+      const entry = getColdRestoreAgentStatus(state)
       const sleepingRecordEntry = getSleepingRecordForPane(state)
       const sleepingRecord = sleepingRecordEntry?.record
       if (isLegacyWorkerAutomaticResumeBlocked()) {
@@ -8310,7 +8360,15 @@ export function connectPanePty(
     const existingPtyId = storeSnapshot.tabsByWorktree[deps.worktreeId]?.find(
       (t) => t.id === deps.tabId
     )?.ptyId
-    const hasSleepingAgentSession = Boolean(getSleepingRecordForPane(storeSnapshot))
+    const coldRestoreAgentStatus = getColdRestoreAgentStatus(storeSnapshot)
+    const hasColdRestoreAgentSource = Boolean(
+      coldRestoreAgentStatus &&
+      coldRestoreAgentStatus.state !== 'done' &&
+      coldRestoreAgentStatus.providerSession &&
+      isResumableTuiAgent(coldRestoreAgentStatus.agentType)
+    )
+    const hasSleepingAgentSession =
+      Boolean(getSleepingRecordForPane(storeSnapshot)) || hasColdRestoreAgentSource
 
     // Why: the tab-level fallback must not steal a PTY a setup sibling already published while the main pane waited for split geometry.
     const tabFallbackPtyId =

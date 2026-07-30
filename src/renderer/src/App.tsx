@@ -133,6 +133,7 @@ import {
   createShutdownCheckpointBeforeUnloadHandler,
   createShutdownCheckpointGuard
 } from './lib/shutdown-checkpoint-guard'
+import { requestAgentStatusStartupSnapshot } from './lib/agent-status-startup-snapshot'
 import {
   collectFolderWorkspaceKeysFromSession,
   collectWorktreeHydrationRepoIdsFromSession
@@ -1065,6 +1066,17 @@ function App(): React.JSX.Element {
           )
           await timeRendererStartupStep('recover-legacy-worker-terminals-pre-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
+          )
+          // Why: the main hook cache survives an Electron crash, but the
+          // renderer must apply it before TerminalPane builds its cold-restore
+          // command. This closes the race with persisted PTY reconnection.
+          await timeRendererStartupStep('agent-status-startup-snapshot', () =>
+            requestAgentStatusStartupSnapshot().catch((err) => {
+              // The normal post-ready snapshot subscriber remains as a
+              // fallback; hook continuity must not prevent the workspace from
+              // opening when the optional cache read fails.
+              console.warn('[agent-status] startup snapshot failed:', err)
+            })
           )
           reconnectStarted = true
           await timeRendererStartupStep('reconnect-terminals', () =>

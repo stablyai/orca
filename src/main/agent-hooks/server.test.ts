@@ -6284,6 +6284,79 @@ describe('Last-status persistence', () => {
     }
   })
 
+  it('synchronously checkpoints a live provider session before the debounce window', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({
+          hook_event_name: 'UserPromptSubmit',
+          prompt: 'resume me after a hard exit',
+          session_id: 'codex-immediate-checkpoint'
+        }),
+        '/hook/codex'
+      )
+
+      // The provider identity must be durable as soon as the hook is accepted;
+      // waiting for the 250ms trailing debounce would leave a hard-exit gap.
+      expect(existsSync(lastStatusPath())).toBe(true)
+      expect(JSON.parse(readFileSync(lastStatusPath(), 'utf8')).entries[PANE]).toMatchObject({
+        payload: { state: 'working' },
+        providerSession: { key: 'session_id', id: 'codex-immediate-checkpoint' }
+      })
+
+      await postHookEvent(
+        server,
+        buildBody({
+          hook_event_name: 'Stop',
+          session_id: 'codex-immediate-checkpoint'
+        }),
+        '/hook/codex'
+      )
+      expect(JSON.parse(readFileSync(lastStatusPath(), 'utf8')).entries[PANE]).toMatchObject({
+        payload: { state: 'done' },
+        providerSession: { key: 'session_id', id: 'codex-immediate-checkpoint' }
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('synchronously checkpoints Pi metadata-only session identity', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({
+          hook_event_name: 'session_start',
+          session_id: 'pi-immediate-checkpoint',
+          session_file: '/tmp/pi-immediate-checkpoint.jsonl'
+        }),
+        '/hook/pi'
+      )
+
+      expect(existsSync(lastStatusPath())).toBe(true)
+      expect(JSON.parse(readFileSync(lastStatusPath(), 'utf8')).entries[PANE]).toMatchObject({
+        providerSessionOnly: true,
+        providerSession: {
+          key: 'session_id',
+          id: 'pi-immediate-checkpoint',
+          transcriptPath: '/tmp/pi-immediate-checkpoint.jsonl'
+        }
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
   it('scrubs a legacy persisted launch bearer while retaining its authority commitment', async () => {
     mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
     const receivedAt = recentTs()

@@ -138,6 +138,10 @@ async function forceKillProcessTree(proc: ChildProcess): Promise<void> {
   await waitForExit(proc, PROCESS_EXIT_TIMEOUT_MS)
 }
 
+export async function forceKillElectronAppForE2E(app: ElectronApplication): Promise<void> {
+  await forceKillProcessTree(app.process())
+}
+
 export async function closeElectronAppForE2E(app: ElectronApplication): Promise<void> {
   const proc = app.process()
   try {

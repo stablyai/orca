@@ -57,6 +57,8 @@ export async function emitCodexHookStatus(
     state: 'working' | 'done'
     prompt?: string
     lastAssistantMessage?: string
+    providerSessionId?: string
+    transcriptPath?: string
   }
 ): Promise<void> {
   const [tabId] = status.paneKey.split(':')
@@ -64,11 +66,15 @@ export async function emitCodexHookStatus(
     status.state === 'working'
       ? {
           hook_event_name: 'UserPromptSubmit',
-          prompt: status.prompt
+          prompt: status.prompt,
+          ...(status.providerSessionId ? { session_id: status.providerSessionId } : {}),
+          ...(status.transcriptPath ? { transcript_path: status.transcriptPath } : {})
         }
       : {
           hook_event_name: 'Stop',
-          last_assistant_message: status.lastAssistantMessage
+          last_assistant_message: status.lastAssistantMessage,
+          ...(status.providerSessionId ? { session_id: status.providerSessionId } : {}),
+          ...(status.transcriptPath ? { transcript_path: status.transcriptPath } : {})
         }
   const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/codex`, {
     method: 'POST',

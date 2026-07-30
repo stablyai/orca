@@ -142,6 +142,7 @@ import { shouldSuppressCodexAutoApprovalStatus } from '@/components/terminal-pan
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { titleHasAgentName } from '../../../shared/agent-detection'
+import { registerAgentStatusStartupSnapshotLoader } from '@/lib/agent-status-startup-snapshot'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
@@ -3041,10 +3042,10 @@ export function useIpcEvents(): void {
 
     const applyAgentStatus = (
       data: AgentStatusIpcPayload,
-      options?: { replay?: boolean; retry?: boolean }
+      options?: { replay?: boolean; retry?: boolean; allowBeforeWorkspaceReady?: boolean }
     ): AgentStatusApplyResult => {
       const store = useAppStore.getState()
-      if (!store.workspaceSessionReady) {
+      if (!store.workspaceSessionReady && options?.allowBeforeWorkspaceReady !== true) {
         return 'dropped'
       }
       if (isAgentStatusForRecentlyClosedTab(store, data.paneKey)) {
@@ -3251,6 +3252,59 @@ export function useIpcEvents(): void {
 
     let snapshotRequestedForReadyWindow = false
     let snapshotRequestId = 0
+    const loadAgentStatusSnapshot = async (options?: {
+      allowBeforeWorkspaceReady?: boolean
+      requestId?: number
+    }): Promise<void> => {
+      const getSnapshot = window.api.agentStatus.getSnapshot
+      if (typeof getSnapshot !== 'function') {
+        return
+      }
+      const entries = await getSnapshot()
+      if (agentStatusEffectDisposed) {
+        return
+      }
+      if (options?.requestId !== undefined && options.requestId !== snapshotRequestId) {
+        return
+      }
+      const current = useAppStore.getState()
+      if (!current.workspaceSessionReady && options?.allowBeforeWorkspaceReady !== true) {
+        return
+      }
+      for (const entry of entries) {
+        applyAgentStatus(entry, {
+          replay: true,
+          ...(options?.allowBeforeWorkspaceReady === true
+            ? { allowBeforeWorkspaceReady: true }
+            : {})
+        })
+      }
+
+      const getMigrationUnsupportedSnapshot = window.api.agentStatus.getMigrationUnsupportedSnapshot
+      if (typeof getMigrationUnsupportedSnapshot !== 'function') {
+        return
+      }
+      const unsupportedEntries = await getMigrationUnsupportedSnapshot()
+      if (agentStatusEffectDisposed) {
+        return
+      }
+      const unsupportedStore = useAppStore.getState()
+      if (!unsupportedStore.workspaceSessionReady && options?.allowBeforeWorkspaceReady !== true) {
+        return
+      }
+      for (const entry of unsupportedEntries) {
+        if (entry.paneKey && resolvePaneKey(unsupportedStore, entry.paneKey).exists) {
+          unsupportedStore.setMigrationUnsupportedPty(entry)
+        }
+      }
+    }
+
+    unsubs.push(
+      registerAgentStatusStartupSnapshotLoader(() =>
+        loadAgentStatusSnapshot({ allowBeforeWorkspaceReady: true })
+      )
+    )
+
     const requestAgentStatusSnapshotIfReady = (): void => {
       const store = useAppStore.getState()
       if (!store.workspaceSessionReady) {
@@ -3260,48 +3314,12 @@ export function useIpcEvents(): void {
       if (snapshotRequestedForReadyWindow) {
         return
       }
-      const getSnapshot = window.api.agentStatus.getSnapshot
-      if (typeof getSnapshot !== 'function') {
-        return
-      }
       snapshotRequestedForReadyWindow = true
       const requestId = ++snapshotRequestId
-      void getSnapshot()
-        .then((entries) => {
-          if (agentStatusEffectDisposed || requestId !== snapshotRequestId) {
-            return
-          }
-          const current = useAppStore.getState()
-          if (!current.workspaceSessionReady) {
-            return
-          }
-          for (const entry of entries) {
-            applyAgentStatus(entry, { replay: true })
-          }
-          const getMigrationUnsupportedSnapshot =
-            window.api.agentStatus.getMigrationUnsupportedSnapshot
-          if (typeof getMigrationUnsupportedSnapshot !== 'function') {
-            return
-          }
-          void getMigrationUnsupportedSnapshot().then((unsupportedEntries) => {
-            if (agentStatusEffectDisposed || requestId !== snapshotRequestId) {
-              return
-            }
-            const unsupportedStore = useAppStore.getState()
-            if (!unsupportedStore.workspaceSessionReady) {
-              return
-            }
-            for (const entry of unsupportedEntries) {
-              if (entry.paneKey && resolvePaneKey(unsupportedStore, entry.paneKey).exists) {
-                unsupportedStore.setMigrationUnsupportedPty(entry)
-              }
-            }
-          })
-        })
-        .catch((err) => {
-          // Why: stay latched on failure; the store subscriber fires on every update, so resetting here would turn a persistent IPC failure into a retry storm (flag clears on workspaceSessionReady toggle).
-          console.warn('[agent-status] failed to load startup snapshot:', err)
-        })
+      void loadAgentStatusSnapshot({ requestId }).catch((err) => {
+        // Why: stay latched on failure; the store subscriber fires on every update, so resetting here would turn a persistent IPC failure into a retry storm (flag clears on workspaceSessionReady toggle).
+        console.warn('[agent-status] failed to load startup snapshot:', err)
+      })
     }
 
     unsubs.push(

@@ -1,0 +1,60 @@
+import { afterEach, describe, expect, it } from 'vitest'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import { makePaneKey } from '../../../shared/stable-pane-id'
+import { useAppStore } from '@/store'
+import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+
+const initialAppStoreState = useAppStore.getState()
+const WORKTREE_ID = 'wt-1'
+const TAB_ID = 'tab-1'
+const PANE_KEY = makePaneKey(TAB_ID, '11111111-1111-4111-8111-111111111111')
+
+afterEach(() => {
+  useAppStore.setState(initialAppStoreState, true)
+})
+
+describe('preserved sleeping-agent pane ownership', () => {
+  it('keeps quit recovery on a preserved tab when its terminal layout was lost', () => {
+    const record: SleepingAgentSessionRecord = {
+      paneKey: PANE_KEY,
+      tabId: TAB_ID,
+      worktreeId: WORKTREE_ID,
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'sess-1' },
+      prompt: 'finish the task',
+      state: 'working',
+      capturedAt: 1,
+      updatedAt: 1,
+      origin: 'quit'
+    }
+    useAppStore.setState({
+      activeWorktreeId: WORKTREE_ID,
+      activeTabType: 'terminal',
+      activeTabId: TAB_ID,
+      activeTabIdByWorktree: { [WORKTREE_ID]: TAB_ID },
+      tabsByWorktree: {
+        [WORKTREE_ID]: [
+          {
+            id: TAB_ID,
+            ptyId: null,
+            worktreeId: WORKTREE_ID,
+            title: 'shell',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: { [PANE_KEY]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)
+    const state = useAppStore.getState()
+
+    expect(launched).toBe(0)
+    expect(state.tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
+    expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toBe(record)
+  })
+})

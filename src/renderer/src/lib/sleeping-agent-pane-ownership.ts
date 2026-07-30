@@ -137,8 +137,20 @@ export function recordPaneIsOwnedByPreservedPane(
     }
     const tabId = record.tabId ?? stable.tabId
     const tab = worktreeTabs.find((candidate) => candidate.id === tabId) ?? null
-    if (!tab || !hasMatchingStablePaneLayout(tabId, stable.leafId, state.terminalLayoutsByTabId)) {
+    if (!tab) {
       return false
+    }
+    // A crash can remove the terminal layout while leaving the tab and a
+    // quit/live recovery row. The tab will mount a fresh leaf and
+    // connectPanePty can adopt that row by its stable tab/worktree identity;
+    // let the preserved tab own recovery so activation does not fork a second
+    // resume tab first. Worktree-sleep records intentionally keep the old
+    // behavior and launch a new tab when their layout is gone.
+    if (!hasMatchingStablePaneLayout(tabId, stable.leafId, state.terminalLayoutsByTabId)) {
+      return (
+        (record.origin === 'quit' || record.origin === 'live') &&
+        paneWillConnectOnActivation(record.worktreeId, tabId, state)
+      )
     }
     if (isPassiveCompletedHibernationEvidence(record)) {
       return true

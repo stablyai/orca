@@ -1,18 +1,92 @@
 import { ipcMain } from 'electron'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import type { PersistedUIState, WorkspaceSessionState } from '../../shared/types'
 import type { Store } from '../persistence'
+
+const RENDERER_SHUTDOWN_CHECKPOINT_CHANNEL = 'app:persist-before-unload-sync'
+const MAX_RENDERER_SHUTDOWN_SESSION_PARTITIONS = 128
+let trustedRendererShutdownCheckpointWebContentsId: number | null = null
 
 type PersistBeforeUnloadSyncArgs = {
   sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
   ui: Partial<PersistedUIState>
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === 'string'
+}
+
+function isWorkspaceSessionCheckpoint(value: unknown): value is WorkspaceSessionState {
+  if (!isPlainRecord(value)) {
+    return false
+  }
+  return (
+    isNullableString(value.activeRepoId) &&
+    isNullableString(value.activeWorktreeId) &&
+    isNullableString(value.activeTabId) &&
+    isPlainRecord(value.tabsByWorktree) &&
+    isPlainRecord(value.terminalLayoutsByTabId)
+  )
+}
+
+function isExecutionHostId(value: unknown): value is ExecutionHostId | undefined {
+  return (
+    value === undefined || (typeof value === 'string' && parseExecutionHostId(value)?.id === value)
+  )
+}
+
+function isPersistBeforeUnloadSyncArgs(value: unknown): value is PersistBeforeUnloadSyncArgs {
+  if (!isPlainRecord(value) || !Array.isArray(value.sessions) || !isPlainRecord(value.ui)) {
+    return false
+  }
+  if (value.sessions.length > MAX_RENDERER_SHUTDOWN_SESSION_PARTITIONS) {
+    return false
+  }
+  return value.sessions.every(
+    (session) =>
+      isPlainRecord(session) &&
+      isWorkspaceSessionCheckpoint(session.state) &&
+      isExecutionHostId(session.hostId)
+  )
+}
+
+function isTrustedRendererSender(
+  sender: Electron.WebContents | undefined,
+  trustedRendererWebContentsId: number | null
+): boolean {
+  return Boolean(
+    sender &&
+    !sender.isDestroyed() &&
+    sender.getType() === 'window' &&
+    sender.id === trustedRendererWebContentsId
+  )
+}
+
+export function setTrustedRendererShutdownCheckpointWebContentsId(
+  webContentsId: number | null
+): void {
+  trustedRendererShutdownCheckpointWebContentsId = webContentsId
+}
+
 export function registerRendererShutdownCheckpointHandler(store: Store): void {
-  ipcMain.on('app:persist-before-unload-sync', (event, args: PersistBeforeUnloadSyncArgs) => {
+  ipcMain.removeAllListeners(RENDERER_SHUTDOWN_CHECKPOINT_CHANNEL)
+  ipcMain.on(RENDERER_SHUTDOWN_CHECKPOINT_CHANNEL, (event, args: unknown) => {
+    if (!isTrustedRendererSender(event.sender, trustedRendererShutdownCheckpointWebContentsId)) {
+      event.returnValue = { ok: false }
+      return
+    }
+    if (!isPersistBeforeUnloadSyncArgs(args)) {
+      event.returnValue = { ok: false }
+      return
+    }
+
     let ok = true
-    // Why: apply both renderer-owned snapshots before synchronously flushing
-    // each owning store, so an immediate exit cannot outrun either update.
+    // Why: stage both renderer-owned snapshots before synchronously flushing
+    // the stores, so an immediate exit cannot outrun either update.
     try {
       for (const { state, hostId } of args.sessions) {
         store.setWorkspaceSession(state, hostId)
@@ -22,8 +96,8 @@ export function registerRendererShutdownCheckpointHandler(store: Store): void {
       console.error('[app] Failed to stage renderer state before unload:', error)
       ok = false
     }
-    // Why: the durable snapshot and the active-view sidecar are independent stores;
-    // flush each on its own so one store's failure can't skip the other's checkpoint.
+    // Why: the durable state and active-view sidecar are independent stores;
+    // flush each even when the other one fails.
     try {
       store.flushOrThrow()
     } catch (error) {

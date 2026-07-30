@@ -1,7 +1,6 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import type { ChildProcess } from 'node:child_process'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
@@ -15,6 +14,8 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { emitCodexHookStatus, readHookEndpoint } from './helpers/agent-hook-endpoint'
+import { forceKillElectronAppForE2E } from './helpers/electron-process-shutdown'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 
@@ -39,6 +40,9 @@ type PersistedWorkspaceSession = {
 
 type PersistedData = {
   workspaceSession?: PersistedWorkspaceSession
+  settings?: {
+    agentCmdOverrides?: Record<string, unknown>
+  }
 }
 
 function dataFilePath(userDataDir: string): string {
@@ -65,41 +69,6 @@ function readDaemonPid(userDataDir: string): number {
     throw new Error(`Daemon pid file did not contain a numeric pid: ${raw}`)
   }
   return parsed.pid
-}
-
-function hasExited(proc: ChildProcess): boolean {
-  return proc.exitCode !== null || proc.signalCode !== null
-}
-
-function waitForExit(proc: ChildProcess, timeoutMs = 5000): Promise<void> {
-  if (hasExited(proc)) {
-    return Promise.resolve()
-  }
-  return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, timeoutMs)
-    timeout.unref?.()
-    proc.once('exit', () => {
-      clearTimeout(timeout)
-      resolve()
-    })
-  })
-}
-
-async function forceKillElectronApp(app: ElectronApplication): Promise<void> {
-  const proc = app.process()
-  if (!proc.pid || hasExited(proc)) {
-    return
-  }
-  try {
-    if (process.platform === 'win32') {
-      execFileSync('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'ignore' })
-    } else {
-      process.kill(proc.pid, 'SIGKILL')
-    }
-  } catch {
-    // Already gone.
-  }
-  await waitForExit(proc)
 }
 
 function killPid(pid: number): void {
@@ -145,6 +114,70 @@ function persistedLiveRecordExists(userDataDir: string): boolean {
   return Object.values(records ?? {}).some(
     (record) => record.providerSession?.id === PROVIDER_SESSION_ID
   )
+}
+
+function findHookStatusPath(userDataDir: string): string | null {
+  const visit = (directory: string): string | null => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const fullPath = path.join(directory, entry.name)
+      if (entry.isFile() && entry.name === 'last-status.json') {
+        return fullPath
+      }
+      if (entry.isDirectory()) {
+        const nested = visit(fullPath)
+        if (nested) {
+          return nested
+        }
+      }
+    }
+    return null
+  }
+  const roots = [
+    path.join(userDataDir, 'agent-hooks'),
+    path.join(path.dirname(dataFilePath(userDataDir)), 'agent-hooks')
+  ]
+  for (const root of roots) {
+    if (!existsSync(root)) {
+      continue
+    }
+    const statusPath = visit(root)
+    if (statusPath) {
+      return statusPath
+    }
+  }
+  return null
+}
+
+function persistedHookLiveRecordExists(userDataDir: string): boolean {
+  const statusPath = findHookStatusPath(userDataDir)
+  if (!statusPath) {
+    return false
+  }
+  const data = JSON.parse(readFileSync(statusPath, 'utf8')) as {
+    entries?: Record<string, { providerSession?: { id?: unknown }; payload?: { state?: unknown } }>
+  }
+  return Object.values(data.entries ?? {}).some(
+    (entry) =>
+      entry.providerSession?.id === PROVIDER_SESSION_ID && entry.payload?.state === 'working'
+  )
+}
+
+function removePersistedLiveRecord(userDataDir: string): void {
+  const data = readPersistedData(userDataDir)
+  const records = data.workspaceSession?.sleepingAgentSessionsByPaneKey
+  if (!records) {
+    return
+  }
+  for (const [paneKey, record] of Object.entries(records)) {
+    if (record.providerSession?.id === PROVIDER_SESSION_ID) {
+      delete records[paneKey]
+    }
+  }
+  writePersistedData(userDataDir, data)
+}
+
+function persistedCodexEchoOverrideExists(userDataDir: string): boolean {
+  return readPersistedData(userDataDir).settings?.agentCmdOverrides?.codex === 'echo'
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -245,7 +278,7 @@ test('resumes a live agent record after force-exit restart when pane PTY ownersh
     }
 
     const daemonPid = readDaemonPid(session.userDataDir)
-    await forceKillElectronApp(firstApp)
+    await forceKillElectronAppForE2E(firstApp)
     firstApp = null
     killPid(daemonPid)
     stripPersistedPtyOwnership(session.userDataDir)
@@ -268,13 +301,111 @@ test('resumes a live agent record after force-exit restart when pane PTY ownersh
       (wtId) => (window.__store?.getState().tabsByWorktree[wtId] ?? []).length,
       worktreeId
     )
-    expect(terminalTabCount).toBe(2)
+    // Cold restore reuses the rebuilt tab. It must not create a duplicate tab
+    // or auto-submit the old prompt as a second agent launch.
+    expect(terminalTabCount).toBe(1)
   } finally {
     if (secondApp) {
       await session.close(secondApp)
     }
     if (firstApp) {
-      await forceKillElectronApp(firstApp)
+      await forceKillElectronAppForE2E(firstApp)
+    }
+    await session.dispose()
+  }
+})
+
+test('reconstructs a live session from the main hook cache after renderer force-exit', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
+{}, testInfo) => {
+  const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+  if (!repoPath || !existsSync(repoPath)) {
+    test.skip(true, 'Global setup did not produce a seeded test repo')
+    return
+  }
+
+  const session = createRestartSession(testInfo)
+  let firstApp: ElectronApplication | null = null
+  let secondApp: ElectronApplication | null = null
+
+  try {
+    const firstLaunch = await session.launch()
+    firstApp = firstLaunch.app
+    const page = firstLaunch.page
+    const worktreeId = await attachRepoAndOpenTerminal(page, repoPath)
+    await waitForSessionReady(page)
+    await expect
+      .poll(() => page.evaluate(() => window.__store?.getState().hydrationSucceeded === true), {
+        timeout: 30_000,
+        message: 'hydrationSucceeded did not become true before hook-cache recovery test'
+      })
+      .toBe(true)
+    await waitForActiveWorktree(page)
+    await ensureTerminalVisible(page)
+    await waitForActiveTerminalManager(page, 30_000)
+    await waitForPaneCount(page, 1, 30_000)
+
+    const descriptor = await waitForActivePaneHookDescriptor(page)
+    const endpoint = await readHookEndpoint(firstApp)
+    const transcriptPath = session.seedCodexResumeRollout(PROVIDER_SESSION_ID, repoPath)
+    // The command override makes the cold-restore assertion hermetic while
+    // leaving the provider session itself sourced from the main hook cache.
+    await page.evaluate(() =>
+      window.__store?.getState().updateSettings({ agentCmdOverrides: { codex: 'echo' } })
+    )
+    await expect
+      .poll(() => persistedCodexEchoOverrideExists(session.userDataDir), {
+        timeout: 30_000,
+        message: 'The hermetic Codex command override was not flushed before force exit'
+      })
+      .toBe(true)
+    await emitCodexHookStatus(endpoint, {
+      paneKey: descriptor.paneKey,
+      worktreeId: descriptor.worktreeId,
+      state: 'working',
+      prompt: 'recover from the main hook cache',
+      providerSessionId: PROVIDER_SESSION_ID,
+      transcriptPath
+    })
+
+    await expect
+      .poll(() => persistedHookLiveRecordExists(session.userDataDir), {
+        timeout: 10_000,
+        message: 'Main hook cache did not synchronously persist the live provider session'
+      })
+      .toBe(true)
+
+    // Kill the renderer before removing its persisted record. Otherwise a
+    // debounced renderer session write can race the test's file edit and
+    // resurrect the record we are deliberately removing.
+    const daemonPid = readDaemonPid(session.userDataDir)
+    await forceKillElectronAppForE2E(firstApp)
+    firstApp = null
+    killPid(daemonPid)
+    // The only remaining recovery authority is last-status.json in the
+    // main-side hook cache, which is the crash path this test proves.
+    removePersistedLiveRecord(session.userDataDir)
+    stripPersistedPtyOwnership(session.userDataDir)
+    expect(persistedLiveRecordExists(session.userDataDir)).toBe(false)
+
+    const secondLaunch = await session.launch()
+    secondApp = secondLaunch.app
+    await waitForSessionReady(secondLaunch.page)
+    await expect
+      .poll(
+        async () => secondLaunch.page.evaluate(() => window.__store?.getState().activeWorktreeId),
+        { timeout: 15_000 }
+      )
+      .toBe(worktreeId)
+    await ensureTerminalVisible(secondLaunch.page)
+    await waitForActiveTerminalManager(secondLaunch.page, 30_000)
+
+    await waitForTerminalOutput(secondLaunch.page, PROVIDER_SESSION_ID, 30_000)
+  } finally {
+    if (secondApp) {
+      await session.close(secondApp)
+    }
+    if (firstApp) {
+      await forceKillElectronAppForE2E(firstApp)
     }
     await session.dispose()
   }

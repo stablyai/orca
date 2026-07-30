@@ -72,6 +72,7 @@ import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pan
 import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
 import {
   getAgentResumeArgv,
+  isResumableTuiAgent,
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
 } from '../../shared/agent-session-resume'
@@ -194,6 +195,53 @@ function equivalentInterruptAgentType(
   const normalizedActual = actual === 'unknown' ? undefined : actual
   const normalizedBaseline = baseline === 'unknown' ? undefined : baseline
   return normalizedActual === normalizedBaseline
+}
+
+function hasResumableProviderSession(entry: EnrichedAgentHookEventPayload | undefined): boolean {
+  return Boolean(
+    entry &&
+    entry.payload.state !== 'done' &&
+    isResumableTuiAgent(entry.payload.agentType) &&
+    entry.providerSession
+  )
+}
+
+function hasProviderSessionIdentity(entry: EnrichedAgentHookEventPayload | undefined): boolean {
+  return Boolean(entry && isResumableTuiAgent(entry.payload.agentType) && entry.providerSession)
+}
+
+function providerSessionsEqual(
+  left: EnrichedAgentHookEventPayload | undefined,
+  right: EnrichedAgentHookEventPayload | undefined
+): boolean {
+  if (!left?.providerSession || !right?.providerSession) {
+    return left?.providerSession === right?.providerSession
+  }
+  return (
+    left.providerSession.key === right.providerSession.key &&
+    left.providerSession.id === right.providerSession.id &&
+    left.providerSession.transcriptPath === right.providerSession.transcriptPath
+  )
+}
+
+function needsImmediateResumableStatusCheckpoint(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  next: EnrichedAgentHookEventPayload
+): boolean {
+  // Pi's session_start is deliberately represented as a metadata-only done
+  // row, but its provider session is still the identity needed to resume.
+  if (next.providerSessionOnly && hasProviderSessionIdentity(next)) {
+    return !hasProviderSessionIdentity(previous) || !providerSessionsEqual(previous, next)
+  }
+  // The first live provider session ID is the durable identity needed to
+  // reconstruct a session after both Electron and the PTY daemon disappear.
+  // Persist it before the normal trailing debounce closes that window.
+  if (hasResumableProviderSession(next)) {
+    return !hasResumableProviderSession(previous) || !providerSessionsEqual(previous, next)
+  }
+  // A Stop event must synchronously replace a previously persisted working row;
+  // otherwise an abrupt exit in this interval could relaunch a completed turn.
+  return next.payload.state === 'done' && hasResumableProviderSession(previous)
 }
 
 // Why: validate the durable `${tabId}:${leafUuid}` leaf suffix at write/hydrate so legacy numeric rows fail closed.
@@ -1048,7 +1096,12 @@ export class AgentHookServer {
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
       this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
-      this.scheduleStatusPersist()
+      if (needsImmediateResumableStatusCheckpoint(previous, enriched)) {
+        this.flushStatusPersistSync()
+        this.scheduleStatusPersist()
+      } else {
+        this.scheduleStatusPersist()
+      }
       this.notifyStatusChangeListeners()
       this.emitEnrichedStatus(enriched)
       return enriched
@@ -1160,7 +1213,14 @@ export class AgentHookServer {
     const enriched = this.attachStatusTiming(effectivePayload, now)
     this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
-    this.scheduleStatusPersist()
+    if (needsImmediateResumableStatusCheckpoint(previous, enriched)) {
+      this.flushStatusPersistSync()
+      // Why: the sync write is fail-open; leave the trailing retry armed so a
+      // transient filesystem error still gets another persistence attempt.
+      this.scheduleStatusPersist()
+    } else {
+      this.scheduleStatusPersist()
+    }
     this.notifyStatusChangeListeners()
     this.emitEnrichedStatus(enriched)
     return enriched

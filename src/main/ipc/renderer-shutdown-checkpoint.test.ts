@@ -1,18 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { syncHandlers } = vi.hoisted(() => ({
+const { syncHandlers, removeAllListenersMock } = vi.hoisted(() => ({
   syncHandlers: new Map<
     string,
-    (event: { returnValue?: unknown }, args: Record<string, unknown>) => void
-  >()
+    (event: { returnValue?: unknown; sender?: unknown }, args: unknown) => void
+  >(),
+  removeAllListenersMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   ipcMain: {
+    removeAllListeners: removeAllListenersMock,
     on: vi.fn(
       (
         channel: string,
-        handler: (event: { returnValue?: unknown }, args: Record<string, unknown>) => void
+        handler: (event: { returnValue?: unknown; sender?: unknown }, args: unknown) => void
       ) => {
         syncHandlers.set(channel, handler)
       }
@@ -20,11 +22,28 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
+import {
+  registerRendererShutdownCheckpointHandler,
+  setTrustedRendererShutdownCheckpointWebContentsId
+} from './renderer-shutdown-checkpoint'
 
 describe('registerRendererShutdownCheckpointHandler', () => {
   beforeEach(() => {
     syncHandlers.clear()
+    removeAllListenersMock.mockReset()
+    setTrustedRendererShutdownCheckpointWebContentsId(42)
+  })
+
+  const makeSession = (activeWorktreeId: string) => ({
+    activeRepoId: null,
+    activeWorktreeId,
+    activeTabId: null,
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {}
+  })
+
+  const makeRendererEvent = (id = 42): { returnValue?: unknown; sender: unknown } => ({
+    sender: { id, isDestroyed: () => false, getType: () => 'window' }
   })
 
   it('commits every shutdown state mutation before flushing both stores', () => {
@@ -41,9 +60,9 @@ describe('registerRendererShutdownCheckpointHandler', () => {
 
     const handler = syncHandlers.get('app:persist-before-unload-sync')
     expect(handler).toBeDefined()
-    const event: { returnValue?: unknown } = {}
-    const localSession = { activeWorktreeId: 'local-worktree' }
-    const remoteSession = { activeWorktreeId: 'remote-worktree' }
+    const event = makeRendererEvent()
+    const localSession = makeSession('local-worktree')
+    const remoteSession = makeSession('remote-worktree')
     handler?.(event, {
       sessions: [{ state: localSession }, { state: remoteSession, hostId: 'runtime:host-1' }],
       ui: { activeView: 'settings' }
@@ -76,15 +95,13 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     registerRendererShutdownCheckpointHandler(store as never)
 
     const handler = syncHandlers.get('app:persist-before-unload-sync')
-    const event: { returnValue?: unknown } = {}
+    const event = makeRendererEvent()
     handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
 
     expect(event.returnValue).toEqual({ ok: false })
   })
 
   it('still flushes the active-view sidecar when the durable flush throws', () => {
-    // Why: the two stores are independent; a durable-state failure must not drop
-    // the tiny active-view checkpoint (and vice versa).
     const store = {
       setWorkspaceSession: vi.fn(),
       updateUI: vi.fn(),
@@ -96,7 +113,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     registerRendererShutdownCheckpointHandler(store as never)
 
     const handler = syncHandlers.get('app:persist-before-unload-sync')
-    const event: { returnValue?: unknown } = {}
+    const event = makeRendererEvent()
     handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
 
     expect(store.flushActiveViewPreferenceOrThrow).toHaveBeenCalledTimes(1)
@@ -115,10 +132,60 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     registerRendererShutdownCheckpointHandler(store as never)
 
     const handler = syncHandlers.get('app:persist-before-unload-sync')
-    const event: { returnValue?: unknown } = {}
+    const event = makeRendererEvent()
     handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
 
     expect(store.flushOrThrow).toHaveBeenCalledTimes(1)
     expect(event.returnValue).toEqual({ ok: false })
+  })
+
+  it('rejects malformed, unbounded, and untrusted checkpoints before persistence', () => {
+    const store = {
+      setWorkspaceSession: vi.fn(),
+      updateUI: vi.fn(),
+      flushOrThrow: vi.fn(),
+      flushActiveViewPreferenceOrThrow: vi.fn()
+    }
+    registerRendererShutdownCheckpointHandler(store as never)
+
+    const handler = syncHandlers.get('app:persist-before-unload-sync')
+    const malformedEvent = makeRendererEvent()
+    handler?.(malformedEvent, { sessions: 'not-an-array', ui: {} })
+    expect(store.setWorkspaceSession).not.toHaveBeenCalled()
+    expect(store.flushOrThrow).not.toHaveBeenCalled()
+    expect(malformedEvent.returnValue).toEqual({ ok: false })
+
+    const tooManySessions = Array.from({ length: 129 }, (_, index) => ({
+      state: makeSession(`worktree-${index}`)
+    }))
+    handler?.(malformedEvent, { sessions: tooManySessions, ui: {} })
+    expect(store.setWorkspaceSession).not.toHaveBeenCalled()
+    expect(store.flushOrThrow).not.toHaveBeenCalled()
+    expect(malformedEvent.returnValue).toEqual({ ok: false })
+
+    const untrustedEvent = makeRendererEvent(41)
+    handler?.(untrustedEvent, { sessions: [{ state: makeSession('worktree-1') }], ui: {} })
+    expect(store.setWorkspaceSession).not.toHaveBeenCalled()
+    expect(store.flushOrThrow).not.toHaveBeenCalled()
+    expect(untrustedEvent.returnValue).toEqual({ ok: false })
+  })
+
+  it('accepts the latest trusted renderer after the main window is recreated', () => {
+    const store = {
+      setWorkspaceSession: vi.fn(),
+      updateUI: vi.fn(),
+      flushOrThrow: vi.fn(),
+      flushActiveViewPreferenceOrThrow: vi.fn()
+    }
+    registerRendererShutdownCheckpointHandler(store as never)
+    setTrustedRendererShutdownCheckpointWebContentsId(43)
+
+    const handler = syncHandlers.get('app:persist-before-unload-sync')
+    const event = makeRendererEvent(43)
+    handler?.(event, { sessions: [{ state: makeSession('worktree-1') }], ui: {} })
+
+    expect(store.setWorkspaceSession).toHaveBeenCalledTimes(1)
+    expect(store.flushOrThrow).toHaveBeenCalledTimes(1)
+    expect(event.returnValue).toEqual({ ok: true })
   })
 })

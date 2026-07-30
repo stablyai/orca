@@ -422,4 +422,14 @@ describe('renderer startup runtime routing', () => {
     expect(source.match(/window\.addEventListener\('beforeunload'/g) ?? []).toHaveLength(1)
     expect(source).not.toContain('window.api.ui.setSync')
   })
+
+  it('loads the main hook snapshot before reconnecting persisted terminals', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const snapshot = source.indexOf("'agent-status-startup-snapshot'")
+    const reconnect = source.indexOf("'reconnect-terminals'")
+
+    expect(snapshot).toBeGreaterThanOrEqual(0)
+    expect(reconnect).toBeGreaterThan(snapshot)
+    expect(source).toContain('requestAgentStatusStartupSnapshot()')
+  })
 })

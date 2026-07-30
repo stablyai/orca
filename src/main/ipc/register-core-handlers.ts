@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import { registerAppHandlers } from './app'
+import { setTrustedRendererShutdownCheckpointWebContentsId } from './renderer-shutdown-checkpoint'
 import { registerCliHandlers } from './cli'
 import { registerPreflightHandlers } from './preflight'
 import type { Store } from '../persistence'
@@ -132,6 +133,7 @@ export function registerCoreHandlers(
   setTrustedBrowserRendererWebContentsId(mainWindowWebContentsId)
   setTrustedClipboardRendererWebContentsId(mainWindowWebContentsId)
   setTrustedUIRendererWebContentsId(mainWindowWebContentsId)
+  setTrustedRendererShutdownCheckpointWebContentsId(mainWindowWebContentsId)
   setAgentBrowserBridgeRef(runtime.getAgentBrowserBridge())
   if (registered) {
     return
