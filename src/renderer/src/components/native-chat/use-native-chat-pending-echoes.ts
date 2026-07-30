@@ -28,8 +28,11 @@ export type NativeChatPendingEchoes = {
   commandMarkers: NativeChatCommandMarker[]
   /** Echo a composer send and return its optimistic id. */
   recordSend: (text: string, imagePaths?: string[]) => string
+  /** Retire the echo for a send whose delayed Enter was cancelled. */
   cancelSend: (pendingId: string) => void
+  /** Record a slash command as a local system line for this conversation. */
   recordSlashCommand: (command: string) => void
+  /** Drop every echo in the pane, e.g. when Stop interrupts the agent. */
   clearPending: () => void
 }
 
