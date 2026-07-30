@@ -48,7 +48,7 @@ describe('MacOSNativeProviderSupervisor', () => {
   it('registers the helper pid and private session state before returning', () => {
     const supervisor = new MacOSNativeProviderSupervisor((event) => events.push(event), deps)
 
-    const started = supervisor.start()
+    const started = supervisor.start(7654)
 
     expect(started).toEqual({
       sessionId: 'uuid-2',
@@ -61,7 +61,9 @@ describe('MacOSNativeProviderSupervisor', () => {
         '--agent',
         join('/private/tmp/orca-computer-use-session', 'provider.sock'),
         '--token-file',
-        join('/private/tmp/orca-computer-use-session', 'provider.token')
+        join('/private/tmp/orca-computer-use-session', 'provider.token'),
+        '--peer-pid',
+        '7654'
       ],
       { detached: true, stdio: 'ignore' }
     )
@@ -77,7 +79,7 @@ describe('MacOSNativeProviderSupervisor', () => {
 
   it('claims a live session and removes only its token file', async () => {
     const supervisor = new MacOSNativeProviderSupervisor((event) => events.push(event), deps)
-    const started = supervisor.start()
+    const started = supervisor.start(7654)
 
     supervisor.claim(started.sessionId)
     await vi.advanceTimersByTimeAsync(MACOS_HELPER_CLAIM_TIMEOUT_MS)
@@ -92,7 +94,7 @@ describe('MacOSNativeProviderSupervisor', () => {
 
   it('reaps an unclaimed helper and removes private state on the parent deadline', async () => {
     const supervisor = new MacOSNativeProviderSupervisor((event) => events.push(event), deps)
-    supervisor.start()
+    supervisor.start(7654)
 
     await vi.advanceTimersByTimeAsync(MACOS_HELPER_CLAIM_TIMEOUT_MS)
 
@@ -118,7 +120,7 @@ describe('MacOSNativeProviderSupervisor', () => {
 
   it('releases a claimed session with graceful-to-force escalation', async () => {
     const supervisor = new MacOSNativeProviderSupervisor((event) => events.push(event), deps)
-    const started = supervisor.start()
+    const started = supervisor.start(7654)
     supervisor.claim(started.sessionId)
 
     supervisor.release(started.sessionId)
@@ -147,8 +149,8 @@ describe('MacOSNativeProviderSupervisor', () => {
       .mockReturnValueOnce('/private/tmp/orca-computer-use-first')
       .mockReturnValueOnce('/private/tmp/orca-computer-use-second')
     const supervisor = new MacOSNativeProviderSupervisor((event) => events.push(event), deps)
-    supervisor.start()
-    supervisor.start()
+    supervisor.start(7654)
+    supervisor.start(7654)
 
     supervisor.shutdown()
 
@@ -172,7 +174,7 @@ describe('MacOSNativeProviderSupervisor', () => {
 
   it('reports unexpected helper exit and removes its private directory', () => {
     const supervisor = new MacOSNativeProviderSupervisor((event) => events.push(event), deps)
-    supervisor.start()
+    supervisor.start(7654)
 
     child.emit('exit', 13, null)
 
@@ -190,7 +192,7 @@ describe('MacOSNativeProviderSupervisor', () => {
 
   it('reports a registered helper error and retains ownership until exit', () => {
     const supervisor = new MacOSNativeProviderSupervisor((event) => events.push(event), deps)
-    const started = supervisor.start()
+    const started = supervisor.start(7654)
 
     child.emit('error', new Error('helper handle failed'))
 
@@ -212,7 +214,7 @@ describe('MacOSNativeProviderSupervisor', () => {
     child.pid = undefined
     const supervisor = new MacOSNativeProviderSupervisor((event) => events.push(event), deps)
 
-    expect(() => supervisor.start()).toThrow('helper process did not report a pid')
+    expect(() => supervisor.start(7654)).toThrow('helper process did not report a pid')
 
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
     expect(deps.rmSync).toHaveBeenCalledWith('/private/tmp/orca-computer-use-session', {
@@ -229,7 +231,7 @@ describe('MacOSNativeProviderSupervisor', () => {
     })
     const supervisor = new MacOSNativeProviderSupervisor((event) => events.push(event), deps)
 
-    expect(() => supervisor.start()).toThrow('token write failed')
+    expect(() => supervisor.start(7654)).toThrow('token write failed')
 
     expect(deps.spawn).not.toHaveBeenCalled()
     expect(deps.rmSync).toHaveBeenCalledWith('/private/tmp/orca-computer-use-session', {
@@ -237,4 +239,18 @@ describe('MacOSNativeProviderSupervisor', () => {
       force: true
     })
   })
+
+  it.each([0, -1, 1.5, Number.NaN, 0x80000000])(
+    'rejects invalid expected peer pid %s before creating private state',
+    (expectedPeerProcessId) => {
+      const supervisor = new MacOSNativeProviderSupervisor((event) => events.push(event), deps)
+
+      expect(() => supervisor.start(expectedPeerProcessId)).toThrow(
+        'owner process did not report a valid pid'
+      )
+      expect(deps.mkdtempSync).not.toHaveBeenCalled()
+      expect(deps.spawn).not.toHaveBeenCalled()
+      expect(events).toEqual([])
+    }
+  )
 })

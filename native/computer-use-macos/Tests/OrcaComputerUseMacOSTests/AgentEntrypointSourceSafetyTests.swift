@@ -34,6 +34,20 @@ final class AgentEntrypointSourceSafetyTests: XCTestCase {
         XCTAssertTrue(source.contains("event.flags = flags\n        event.postToPid(pid)"))
     }
 
+    func testAgentUsesExactKernelPeerPidWithoutProcessInspection() throws {
+        let source = try agentEntrypointSource()
+
+        XCTAssertTrue(source.contains(
+            """
+            let authorizedPeer = isAuthorizedAgentPeer(
+                        peerProcessId: peerProcessId(fd),
+                        expectedProcessId: expectedPeerProcessId
+            """
+        ))
+        XCTAssertFalse(source.contains("/bin/ps"))
+        XCTAssertFalse(source.contains("computer-sidecar.js"))
+    }
+
     private func agentEntrypointSource() throws -> String {
         let testFile = URL(fileURLWithPath: #filePath)
         let packageRoot = testFile

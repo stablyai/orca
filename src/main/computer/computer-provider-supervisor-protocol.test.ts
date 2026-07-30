@@ -18,6 +18,20 @@ function desktopRequest(request: Record<string, unknown>): Record<string, unknow
 }
 
 describe('computer provider supervisor protocol', () => {
+  it('does not let the sidecar choose the macOS helper peer pid', () => {
+    const request = {
+      channel: COMPUTER_PROVIDER_SUPERVISOR_CHANNEL,
+      kind: 'request',
+      id: 1,
+      method: 'macos.start'
+    }
+
+    expect(isComputerProviderSupervisorRequest({ ...request, params: {} })).toBe(true)
+    expect(isComputerProviderSupervisorRequest({ ...request, params: { peerPid: 4321 } })).toBe(
+      false
+    )
+  })
+
   it('accepts exact desktop tool requests with validated nested element state', () => {
     expect(
       isComputerProviderSupervisorRequest(

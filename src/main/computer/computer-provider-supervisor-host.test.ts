@@ -27,7 +27,7 @@ describe('ComputerProviderSupervisorHost', () => {
     const macOS = macOSSupervisor()
     const host = new ComputerProviderSupervisorHost(macOS as never)
     const sent: unknown[] = []
-    host.attach((message) => sent.push(message))
+    host.attach((message) => sent.push(message), 4321)
 
     expect(
       host.handle({
@@ -40,7 +40,7 @@ describe('ComputerProviderSupervisorHost', () => {
     ).toBe(true)
     await vi.waitFor(() => expect(sent).toHaveLength(1))
 
-    expect(macOS.start).toHaveBeenCalledTimes(1)
+    expect(macOS.start).toHaveBeenCalledWith(4321)
     expect(sent).toEqual([
       {
         channel: COMPUTER_PROVIDER_SUPERVISOR_CHANNEL,
@@ -61,7 +61,7 @@ describe('ComputerProviderSupervisorHost', () => {
     const desktop = desktopSupervisor()
     const host = new ComputerProviderSupervisorHost(macOS as never, desktop as never)
     const sent: unknown[] = []
-    host.attach((message) => sent.push(message))
+    host.attach((message) => sent.push(message), 4321)
 
     expect(
       host.handle({
@@ -112,7 +112,7 @@ describe('ComputerProviderSupervisorHost', () => {
     const host = new ComputerProviderSupervisorHost(macOSSupervisor() as never, desktop as never)
     const originalSend = vi.fn()
     const replacementSend = vi.fn()
-    host.attach(originalSend)
+    host.attach(originalSend, 4321)
     host.handle({
       channel: COMPUTER_PROVIDER_SUPERVISOR_CHANNEL,
       kind: 'request',
@@ -122,12 +122,34 @@ describe('ComputerProviderSupervisorHost', () => {
     })
 
     host.shutdown()
-    host.attach(replacementSend)
+    host.attach(replacementSend, 5432)
     resolveExecution({ stdout: '{"ok":true}', stderr: '', error: null })
     await new Promise<void>((resolve) => setImmediate(resolve))
 
     expect(originalSend).not.toHaveBeenCalled()
     expect(replacementSend).not.toHaveBeenCalled()
+  })
+
+  it('uses the replacement owner pid for a restarted macOS helper', async () => {
+    const macOS = macOSSupervisor()
+    const host = new ComputerProviderSupervisorHost(macOS as never)
+    const replacementSend = vi.fn()
+    host.attach(vi.fn(), 4321)
+    host.shutdown()
+    host.attach(replacementSend, 5432)
+
+    expect(
+      host.handle({
+        channel: COMPUTER_PROVIDER_SUPERVISOR_CHANNEL,
+        kind: 'request',
+        id: 5,
+        method: 'macos.start',
+        params: {}
+      })
+    ).toBe(true)
+    await vi.waitFor(() => expect(replacementSend).toHaveBeenCalledTimes(1))
+
+    expect(macOS.start).toHaveBeenCalledWith(5432)
   })
 
   it('rejects arbitrary executable and argument fields at the protocol boundary', () => {
@@ -140,7 +162,7 @@ describe('ComputerProviderSupervisorHost', () => {
         kind: 'request',
         id: 1,
         method: 'macos.start',
-        params: { executablePath: '/tmp/untrusted', args: ['--anything'] }
+        params: { executablePath: '/tmp/untrusted', args: ['--anything'], peerPid: 9999 }
       })
     ).toBe(false)
     expect(macOS.start).not.toHaveBeenCalled()
@@ -151,7 +173,7 @@ describe('ComputerProviderSupervisorHost', () => {
     const desktop = desktopSupervisor()
     const host = new ComputerProviderSupervisorHost(macOS as never, desktop as never)
     const send = vi.fn()
-    host.attach(send)
+    host.attach(send, 4321)
 
     host.shutdown()
 
@@ -169,4 +191,15 @@ describe('ComputerProviderSupervisorHost', () => {
     expect(macOS.start).not.toHaveBeenCalled()
     expect(send).not.toHaveBeenCalled()
   })
+
+  it.each([0, -1, 1.5, Number.NaN, 0x80000000])(
+    'rejects invalid owner pid %s before accepting requests',
+    (ownerProcessId) => {
+      const host = new ComputerProviderSupervisorHost(macOSSupervisor() as never)
+
+      expect(() => host.attach(vi.fn(), ownerProcessId)).toThrow(
+        'owner process did not report a valid pid'
+      )
+    }
+  )
 })

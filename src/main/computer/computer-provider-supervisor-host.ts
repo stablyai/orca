@@ -15,6 +15,7 @@ type SupervisorResponsePayload =
 
 export class ComputerProviderSupervisorHost {
   private sender: SupervisorMessageSender | null = null
+  private ownerProcessId: number | null = null
   private ownerGeneration = 0
   private readonly macOS: MacOSNativeProviderSupervisor
   private readonly desktop: DesktopScriptProviderSupervisor
@@ -24,17 +25,26 @@ export class ComputerProviderSupervisorHost {
     this.desktop = desktop ?? new DesktopScriptProviderSupervisor()
   }
 
-  attach(sender: SupervisorMessageSender): void {
+  attach(sender: SupervisorMessageSender, ownerProcessId: number): void {
+    if (!Number.isInteger(ownerProcessId) || ownerProcessId <= 0 || ownerProcessId > 0x7fffffff) {
+      throw new Error('computer provider owner process did not report a valid pid')
+    }
     this.ownerGeneration++
     this.sender = sender
+    this.ownerProcessId = ownerProcessId
   }
 
   handle(message: unknown): boolean {
-    if (!this.sender || !isComputerProviderSupervisorRequest(message)) {
+    if (
+      !this.sender ||
+      this.ownerProcessId === null ||
+      !isComputerProviderSupervisorRequest(message)
+    ) {
       return false
     }
     const ownerGeneration = this.ownerGeneration
-    void this.dispatch(message).then(
+    const ownerProcessId = this.ownerProcessId
+    void this.dispatch(message, ownerProcessId).then(
       (result) => this.send(ownerGeneration, { id: message.id, ok: true, result }),
       (error) =>
         this.send(ownerGeneration, {
@@ -49,14 +59,18 @@ export class ComputerProviderSupervisorHost {
   shutdown(): void {
     this.ownerGeneration++
     this.sender = null
+    this.ownerProcessId = null
     this.macOS.shutdown()
     this.desktop.shutdown()
   }
 
-  private async dispatch(request: ComputerProviderSupervisorRequest): Promise<unknown> {
+  private async dispatch(
+    request: ComputerProviderSupervisorRequest,
+    ownerProcessId: number
+  ): Promise<unknown> {
     switch (request.method) {
       case 'macos.start':
-        return this.macOS.start()
+        return this.macOS.start(ownerProcessId)
       case 'macos.claim':
         this.macOS.claim(request.params.sessionId)
         return { claimed: true }

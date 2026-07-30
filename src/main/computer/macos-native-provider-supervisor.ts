@@ -41,6 +41,10 @@ export type MacOSNativeProviderSupervisorDeps = {
 
 function ignoreUnownedChildError(): void {}
 
+function isValidPeerProcessId(pid: number): boolean {
+  return Number.isInteger(pid) && pid > 0 && pid <= 0x7fffffff
+}
+
 export class MacOSNativeProviderSupervisor {
   private readonly sessions = new Map<string, SupervisedMacOSProviderSession>()
   private readonly deps: MacOSNativeProviderSupervisorDeps
@@ -52,7 +56,13 @@ export class MacOSNativeProviderSupervisor {
     this.deps = deps ?? createDefaultDeps()
   }
 
-  start(): StartedSupervisedMacOSProvider {
+  start(expectedPeerProcessId: number): StartedSupervisedMacOSProvider {
+    if (!isValidPeerProcessId(expectedPeerProcessId)) {
+      throw new RuntimeClientError(
+        'accessibility_error',
+        'computer provider owner process did not report a valid pid'
+      )
+    }
     const executablePath = this.deps.resolveExecutablePath()
     if (!executablePath) {
       throw new RuntimeClientError('accessibility_error', 'Orca Computer Use.app was not found')
@@ -69,7 +79,14 @@ export class MacOSNativeProviderSupervisor {
       this.deps.writeFileSync(socketTokenPath, socketToken, { encoding: 'utf8', mode: 0o600 })
       child = this.deps.spawn(
         executablePath,
-        ['--agent', socketPath, '--token-file', socketTokenPath],
+        [
+          '--agent',
+          socketPath,
+          '--token-file',
+          socketTokenPath,
+          '--peer-pid',
+          String(expectedPeerProcessId)
+        ],
         { detached: true, stdio: 'ignore' }
       )
       child.on('error', ignoreUnownedChildError)

@@ -2583,12 +2583,14 @@ private final class AgentRuntime: NSObject, NSApplicationDelegate {
 
     private let socketPath: String
     private let token: String?
+    private let expectedPeerProcessId: pid_t
     private var listener: SocketListener?
     private var unclaimedSessionTimeout: DispatchWorkItem?
 
-    init(socketPath: String, token: String?) {
+    init(socketPath: String, token: String?, expectedPeerProcessId: pid_t) {
         self.socketPath = socketPath
         self.token = token
+        self.expectedPeerProcessId = expectedPeerProcessId
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -2601,6 +2603,7 @@ private final class AgentRuntime: NSObject, NSApplicationDelegate {
             let listener = try SocketListener(
                 socketPath: socketPath,
                 token: token,
+                expectedPeerProcessId: expectedPeerProcessId,
                 onSessionClaimed: {
                     DispatchQueue.main.async {
                         timeout.cancel()
@@ -3532,6 +3535,7 @@ private final class ButtonTarget: NSObject {
 private final class SocketListener: @unchecked Sendable {
     private let socketPath: String
     private let token: String?
+    private let expectedPeerProcessId: pid_t
     private let onSessionClaimed: () -> Void
     private let onSessionClosed: () -> Void
     private let provider = Provider()
@@ -3544,11 +3548,13 @@ private final class SocketListener: @unchecked Sendable {
     init(
         socketPath: String,
         token: String?,
+        expectedPeerProcessId: pid_t,
         onSessionClaimed: @escaping () -> Void,
         onSessionClosed: @escaping () -> Void
     ) throws {
         self.socketPath = socketPath
         self.token = token
+        self.expectedPeerProcessId = expectedPeerProcessId
         self.onSessionClaimed = onSessionClaimed
         self.onSessionClosed = onSessionClosed
         try bindSocket()
@@ -3641,7 +3647,10 @@ private final class SocketListener: @unchecked Sendable {
                 onSessionClosed()
             }
         }
-        let authorizedPeer = peerProcessId(fd).map(isAuthorizedAgentPeer) == true
+        let authorizedPeer = isAuthorizedAgentPeer(
+            peerProcessId: peerProcessId(fd),
+            expectedProcessId: expectedPeerProcessId
+        )
         let decoder = JSONDecoder()
         var registrationComplete = false
         while let line = readLine(from: fd) {
@@ -3700,70 +3709,14 @@ private func peerProcessId(_ fd: Int32) -> pid_t? {
     return result == 0 && pid > 0 ? pid : nil
 }
 
-private func isAuthorizedAgentPeer(_ pid: pid_t) -> Bool {
-    guard let command = processCommand(pid),
-          command.contains("/out/main/computer-sidecar.js")
-              || command.contains("/Contents/Resources/app.asar.unpacked/out/main/computer-sidecar.js")
-    else {
-        return false
-    }
-    if isTrustedOrcaApplication(pid) {
-        return true
-    }
-    guard let parentPid = parentProcessId(pid) else { return false }
-    return isTrustedOrcaApplication(parentPid)
-}
-
-private func isTrustedOrcaApplication(_ pid: pid_t) -> Bool {
-    guard let app = NSRunningApplication(processIdentifier: pid),
-          let bundleId = app.bundleIdentifier
-    else {
-        return false
-    }
-    // Why: dev validation runs from per-worktree wrapper apps with stable
-    // Orca-owned bundle ids; the sidecar peer check must still authorize them.
-    return bundleId == "com.stablyai.orca" ||
-        bundleId.hasPrefix("com.stablyai.orca.dev.") ||
-        bundleId == "com.github.Electron"
-}
-
-private func parentProcessId(_ pid: pid_t) -> pid_t? {
-    guard let output = processField(pid: pid, field: "ppid=") else {
-        return nil
-    }
-    let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard let parentPid = pid_t(trimmed), parentPid > 1 else {
-        return nil
-    }
-    return parentPid
-}
-
-private func processCommand(_ pid: pid_t) -> String? {
-    return processField(pid: pid, field: "command=")
-}
-
-private func processField(pid: pid_t, field: String) -> String? {
-    let process = Process()
-    let pipe = Pipe()
-    process.executableURL = URL(fileURLWithPath: "/bin/ps")
-    process.arguments = ["-p", "\(pid)", "-o", field]
-    process.standardOutput = pipe
-    process.standardError = Pipe()
-    do {
-        try process.run()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8)
-    } catch {
-        return nil
-    }
-}
-
 @MainActor
-private func runAgent(socketPath: String, token: String?) {
+private func runAgent(socketPath: String, token: String?, expectedPeerProcessId: pid_t) {
     let app = NSApplication.shared
-    let delegate = AgentRuntime(socketPath: socketPath, token: token)
+    let delegate = AgentRuntime(
+        socketPath: socketPath,
+        token: token,
+        expectedPeerProcessId: expectedPeerProcessId
+    )
     app.delegate = delegate
     // Why: SCK is reliable once this code runs as a signed app with a real TCC identity.
     setenv("ORCA_COMPUTER_USE_SCK_SCREENSHOTS", "1", 1)
@@ -3896,23 +3849,23 @@ private func writeAll(_ data: Data, to fd: Int32) -> Bool {
 
 let arguments = Array(CommandLine.arguments.dropFirst())
 if arguments.first == "--agent" {
-    guard arguments.count >= 2 else {
-        fputs("usage: orca-computer-use-macos --agent <socket-path> --token-file <token-path>\n", stderr)
+    guard let launchArguments = AgentLaunchArguments.parse(arguments) else {
+        fputs("usage: orca-computer-use-macos --agent <socket-path> --token-file <token-path> --peer-pid <pid>\n", stderr)
         exit(2)
     }
-    let tokenFileIndex = arguments.firstIndex(of: "--token-file")
-    let token = tokenFileIndex.flatMap { index -> String? in
-        let valueIndex = index + 1
-        guard valueIndex < arguments.count else { return nil }
-        let tokenPath = arguments[valueIndex]
-        return try? String(contentsOfFile: tokenPath, encoding: .utf8)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+    let token = try? String(
+        contentsOfFile: launchArguments.tokenFilePath,
+        encoding: .utf8
+    ).trimmingCharacters(in: .whitespacesAndNewlines)
     guard let token, !token.isEmpty else {
         fputs("orca-computer-use-macos --agent requires a non-empty --token-file\n", stderr)
         exit(2)
     }
-    runAgent(socketPath: arguments[1], token: token)
+    runAgent(
+        socketPath: launchArguments.socketPath,
+        token: token,
+        expectedPeerProcessId: launchArguments.expectedPeerProcessId
+    )
 } else if arguments.first == "--permissions" {
     runPermissionCheck()
 } else if arguments.first == "--permission" {

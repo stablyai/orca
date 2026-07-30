@@ -2,6 +2,7 @@ import { fork, type ChildProcess } from 'node:child_process'
 import { join } from 'node:path'
 import { ComputerProviderSupervisorHost } from './computer-provider-supervisor-host'
 import type { ComputerProviderSupervisorMessage } from './computer-provider-supervisor-protocol'
+import { terminateComputerSidecarChild } from './computer-sidecar-termination'
 import { RuntimeClientError } from './runtime-client-error'
 
 export type ComputerSidecarMethod =
@@ -36,37 +37,9 @@ type PendingRequest = {
 }
 
 const REQUEST_TIMEOUT_MS = 60_000
-export const COMPUTER_SIDECAR_FORCE_KILL_GRACE_MS = 5_000
 
 // Why: stale children need an error listener without retaining their former owner.
 function ignoreStaleChildError(): void {}
-
-function terminateSidecarChild(child: ChildProcess): void {
-  let exited = false
-  let forceKillTimer: NodeJS.Timeout | null = null
-  const onExit = (): void => {
-    exited = true
-    if (forceKillTimer) {
-      clearTimeout(forceKillTimer)
-      forceKillTimer = null
-    }
-  }
-  child.once('exit', onExit)
-  try {
-    child.kill('SIGTERM')
-  } catch {}
-  if (exited) {
-    return
-  }
-  forceKillTimer = setTimeout(() => {
-    forceKillTimer = null
-    child.off('exit', onExit)
-    try {
-      child.kill('SIGKILL')
-    } catch {}
-  }, COMPUTER_SIDECAR_FORCE_KILL_GRACE_MS)
-  forceKillTimer.unref()
-}
 
 export class ComputerSidecarProcess {
   private child: ChildProcess | null = null
@@ -116,12 +89,17 @@ export class ComputerSidecarProcess {
       this.pending.delete(id)
     }
     if (child) {
-      terminateSidecarChild(child)
+      terminateComputerSidecarChild(child)
     }
   }
 
   private send(method: ComputerSidecarMethod, params: unknown): Promise<unknown> {
-    const child = this.ensureStarted()
+    let child: ChildProcess
+    try {
+      child = this.ensureStarted()
+    } catch (error) {
+      return Promise.reject(error)
+    }
     if (!child.send) {
       const error = new RuntimeClientError(
         'accessibility_error',
@@ -196,8 +174,23 @@ export class ComputerSidecarProcess {
       child.on('error', ignoreStaleChildError)
     }
     this.child = child
-    this.providerSupervisor.attach((message) =>
-      this.sendComputerProviderSupervisorMessage(child, message)
+    const childProcessId = child.pid
+    if (
+      typeof childProcessId !== 'number' ||
+      !Number.isInteger(childProcessId) ||
+      childProcessId <= 0 ||
+      childProcessId > 0x7fffffff
+    ) {
+      const error = new RuntimeClientError(
+        'accessibility_error',
+        'computer sidecar process did not report a valid pid'
+      )
+      this.failActiveChild(child, error)
+      throw error
+    }
+    this.providerSupervisor.attach(
+      (message) => this.sendComputerProviderSupervisorMessage(child, message),
+      childProcessId
     )
     return child
   }
@@ -250,7 +243,7 @@ export class ComputerSidecarProcess {
     this.child = null
     this.queueGeneration++
     this.providerSupervisor.shutdown()
-    terminateSidecarChild(child)
+    terminateComputerSidecarChild(child)
     this.rejectPending(error)
   }
 

@@ -10,17 +10,23 @@ import {
   callComputerSidecarCapabilities,
   resetComputerSidecarForTest
 } from './sidecar-client'
-import { COMPUTER_SIDECAR_FORCE_KILL_GRACE_MS } from './computer-sidecar-process'
+import { COMPUTER_SIDECAR_FORCE_KILL_GRACE_MS } from './computer-sidecar-termination'
 
-const { forkMock, supervisorHandleMock, supervisorSenderState, supervisorShutdownMock } =
-  vi.hoisted(() => ({
-    forkMock: vi.fn(),
-    supervisorHandleMock: vi.fn(() => false),
-    supervisorSenderState: {
-      current: null as null | ((message: Record<string, unknown>) => void)
-    },
-    supervisorShutdownMock: vi.fn()
-  }))
+const {
+  forkMock,
+  supervisorAttachedPids,
+  supervisorHandleMock,
+  supervisorSenderState,
+  supervisorShutdownMock
+} = vi.hoisted(() => ({
+  forkMock: vi.fn(),
+  supervisorAttachedPids: [] as number[],
+  supervisorHandleMock: vi.fn(() => false),
+  supervisorSenderState: {
+    current: null as null | ((message: Record<string, unknown>) => void)
+  },
+  supervisorShutdownMock: vi.fn()
+}))
 
 vi.mock('child_process', () => ({
   fork: forkMock
@@ -28,8 +34,9 @@ vi.mock('child_process', () => ({
 
 vi.mock('./computer-provider-supervisor-host', () => ({
   ComputerProviderSupervisorHost: class {
-    attach(sender: (message: Record<string, unknown>) => void): void {
+    attach(sender: (message: Record<string, unknown>) => void, ownerProcessId: number): void {
       supervisorSenderState.current = sender
+      supervisorAttachedPids.push(ownerProcessId)
     }
     handle = supervisorHandleMock
     shutdown(): void {
@@ -46,6 +53,10 @@ type SentRequest = {
 }
 
 class FakeChildProcess extends EventEmitter {
+  constructor(readonly pid: number | undefined) {
+    super()
+  }
+
   killed = false
   killSignals: NodeJS.Signals[] = []
   sent: SentRequest[] = []
@@ -83,9 +94,10 @@ describe('computer sidecar client', () => {
     children.length = 0
     deferNextSendCallback = false
     supervisorSenderState.current = null
+    supervisorAttachedPids.length = 0
     supervisorHandleMock.mockReturnValue(false)
     forkMock.mockImplementation(() => {
-      const child = new FakeChildProcess()
+      const child = new FakeChildProcess(4321 + children.length)
       child.deferSendCallback = deferNextSendCallback
       deferNextSendCallback = false
       children.push(child)
@@ -107,6 +119,7 @@ describe('computer sidecar client', () => {
       'computer sidecar capabilities timed out'
     )
     const firstChild = children[0]!
+    expect(supervisorAttachedPids).toEqual([4321])
 
     await vi.advanceTimersByTimeAsync(60_000)
     await firstRejection
@@ -154,6 +167,7 @@ describe('computer sidecar client', () => {
     const secondCall = callComputerSidecarCapabilities()
     void secondCall.catch(() => undefined)
     expect(children).toHaveLength(2)
+    expect(supervisorAttachedPids).toEqual([4321, 4322])
     const secondChild = children[1]!
     const secondRequest = secondChild.sent[0]!
 
@@ -375,7 +389,7 @@ describe('computer sidecar client', () => {
 
   it('fails immediately when the forked sidecar has no IPC send channel', async () => {
     forkMock.mockImplementationOnce(() => {
-      const child = new FakeChildProcess()
+      const child = new FakeChildProcess(4321)
       child.send = undefined
       children.push(child)
       return child
@@ -388,6 +402,21 @@ describe('computer sidecar client', () => {
     expect(children[0]!.listenerCount('message')).toBe(0)
     expect(children[0]!.listenerCount('exit')).toBe(1)
     expect(children[0]!.listenerCount('error')).toBe(1)
+  })
+
+  it('rejects and reaps a forked sidecar without a valid pid', async () => {
+    forkMock.mockImplementationOnce(() => {
+      const child = new FakeChildProcess(undefined)
+      children.push(child)
+      return child
+    })
+
+    await expect(callComputerSidecarCapabilities()).rejects.toThrow(
+      'computer sidecar process did not report a valid pid'
+    )
+
+    expect(children[0]!.killed).toBe(true)
+    expect(supervisorAttachedPids).toEqual([])
   })
 
   it('force-kills a sidecar that does not exit after the grace period', async () => {
