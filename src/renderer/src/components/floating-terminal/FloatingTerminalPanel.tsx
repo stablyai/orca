@@ -1723,6 +1723,7 @@ export function FloatingTerminalPanel({
       ref={setPanelNode}
       data-floating-terminal-panel
       aria-hidden={!open}
+      inert={!open}
       tabIndex={-1}
       className={`fixed z-[45] flex min-h-[280px] min-w-[420px] rounded-lg bg-transparent text-card-foreground shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] outline-none dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)] ${
         visualOpen
@@ -1730,7 +1731,7 @@ export function FloatingTerminalPanel({
           : open
             ? 'translate-y-2 opacity-0 transition-none'
             : 'translate-y-0 opacity-0 transition-[opacity,transform] duration-150 ease-in motion-reduce:transition-none'
-      }${open ? '' : ' pointer-events-none'}${panelHidden ? ' invisible' : ''}`}
+      }${open ? '' : ' pointer-events-none'}`}
       style={{
         visibility: panelHidden ? 'hidden' : 'visible',
         left: bounds.left,

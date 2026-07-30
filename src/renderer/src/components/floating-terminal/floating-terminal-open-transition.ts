@@ -1,9 +1,8 @@
 import { useLayoutEffect, useState } from 'react'
 import type { RefObject } from 'react'
 
-// Open decelerates in, close accelerates out; asymmetric timing keeps the
-// toggle users hit constantly feeling snappy instead of sluggish.
-export const FLOATING_TERMINAL_OPEN_TRANSITION_MS = 200
+// Open decelerates in over 200ms (duration-200 on the panel root); close
+// accelerates out — asymmetric timing keeps the constantly-hit toggle snappy.
 export const FLOATING_TERMINAL_CLOSE_TRANSITION_MS = 150
 
 export type FloatingTerminalOpenTransition = {
