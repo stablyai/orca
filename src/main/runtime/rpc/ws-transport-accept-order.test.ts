@@ -111,6 +111,62 @@ describe('WebSocketTransport accepted socket ordering', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('keeps later sockets on the shared cadence and reaps them within two intervals', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    const firstPingTimes: number[] = []
+    let firstSocket: WebSocket
+    firstSocket = createSocket({
+      ping: () => {
+        firstPingTimes.push(Date.now())
+        firstSocket.emit('pong')
+      }
+    })
+    const { lifecycle } = createHarness(firstSocket)
+
+    lifecycle.handleConnection(firstSocket)
+    const sharedTimer = lifecycle.heartbeat.timer
+    expect(firstPingTimes).toEqual([0])
+
+    await vi.advanceTimersByTimeAsync(50)
+    const laterPingTimes: number[] = []
+    const laterReapTimes: number[] = []
+    let laterSocket: WebSocket
+    laterSocket = createSocket({
+      ping: () => laterPingTimes.push(Date.now()),
+      terminate: () => {
+        laterReapTimes.push(Date.now())
+        laterSocket.emit('close')
+      }
+    })
+    lifecycle.wss.clients.add(laterSocket)
+    lifecycle.handleConnection(laterSocket)
+
+    expect(lifecycle.heartbeat.timer).toBe(sharedTimer)
+    expect(laterPingTimes).toEqual([])
+    expect(vi.getTimerCount()).toBe(3)
+
+    await vi.advanceTimersByTimeAsync(50)
+    expect(laterPingTimes).toEqual([100])
+    expect(laterSocket.terminate).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(99)
+    expect(laterSocket.terminate).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(laterSocket.terminate).toHaveBeenCalledTimes(1)
+    expect(laterReapTimes).toEqual([200])
+    expect(firstPingTimes).toEqual([0, 100, 200])
+    expect(
+      ['pong', 'message', 'close', 'error'].map((event) => laterSocket.listenerCount(event))
+    ).toEqual([0, 0, 0, 0])
+
+    firstSocket.emit('close')
+    expect(lifecycle.heartbeatConnections.size).toBe(0)
+    expect(lifecycle.heartbeat.timer).toBeNull()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('finalizes an accepted socket when the first probe reports an error', async () => {
     vi.useFakeTimers()
     const events: string[] = []
