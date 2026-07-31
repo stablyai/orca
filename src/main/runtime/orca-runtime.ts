@@ -2718,6 +2718,7 @@ export class OrcaRuntimeService {
   // ptyId keeps active TUI redraws independent of the total open terminal count.
   private leavesByPtyId = new Map<string, RuntimeLeafRecord[]>()
   private handles = new Map<string, TerminalHandleRecord>()
+  private historicalPaneKeys = new Map<string, string>()
   private handleByLeafKey = new Map<string, string>()
   private handleByPtyId = new Map<string, string>()
   private syntheticTerminalHandles = new Set<string>()
@@ -26358,6 +26359,17 @@ export class OrcaRuntimeService {
     this.graphStatus = 'reloading'
     this.setTerminalSideEffectConsumerAvailable(false)
     this.rememberDetachedPreAllocatedLeaves()
+    // Why: preserve handle->pane mapping before bulk graph teardown for historical pane key recovery
+    for (const [handle, record] of this.handles) {
+      if (isTerminalLeafId(record.leafId)) {
+        setBoundedMapEntry(
+          this.historicalPaneKeys,
+          handle,
+          makePaneKey(record.tabId, record.leafId),
+          HISTORICAL_PANE_KEY_MAX
+        )
+      }
+    }
     this.handles.clear()
     this.handleByLeafKey.clear()
     // Why: handleByPtyId (pre-allocated CLI handles) survives reloads so CLI agents keep control; adoptPreAllocatedHandle re-links on the new graph.
@@ -26389,6 +26401,17 @@ export class OrcaRuntimeService {
     this.tabs.clear()
     this.leaves.clear()
     this.leavesByPtyId.clear()
+    // Why: preserve handle->pane mapping before bulk graph teardown for historical pane key recovery
+    for (const [handle, record] of this.handles) {
+      if (isTerminalLeafId(record.leafId)) {
+        setBoundedMapEntry(
+          this.historicalPaneKeys,
+          handle,
+          makePaneKey(record.tabId, record.leafId),
+          HISTORICAL_PANE_KEY_MAX
+        )
+      }
+    }
     this.handles.clear()
     this.handleByLeafKey.clear()
     // Why: pre-allocated CLI handles must survive graph unavailability so they can be re-adopted on reconnect.
@@ -29226,7 +29249,7 @@ export class OrcaRuntimeService {
     return Date.now() - completedAtMs <= AGENT_STATUS_STALE_AFTER_MS ? dispatch : undefined
   }
 
-  private getTerminalHandleForPaneKey(paneKey: string): string | null {
+  getTerminalHandleForPaneKey(paneKey: string): string | null {
     const parsed = parsePaneKey(paneKey)
     const leaf = parsed ? this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId)) : undefined
     if (leaf?.ptyId && leaf.connected) {
@@ -29271,13 +29294,10 @@ export class OrcaRuntimeService {
       return livePty.pty.paneKey
     }
     const record = this.handles.get(handle)
-    if (!record || record.runtimeId !== this.runtimeId) {
-      return null
+    if (record && record.runtimeId === this.runtimeId && isTerminalLeafId(record.leafId)) {
+      return makePaneKey(record.tabId, record.leafId)
     }
-    if (!isTerminalLeafId(record.leafId)) {
-      return null
-    }
-    return makePaneKey(record.tabId, record.leafId)
+    return this.historicalPaneKeys.get(handle) ?? null
   }
 
   private setPtyManagementTitleFromObservedTitle(
@@ -33099,6 +33119,7 @@ const DEFAULT_TERMINAL_LIST_LIMIT = 200
 const DEFAULT_WORKTREE_LIST_LIMIT = 200
 const DEFAULT_WORKTREE_PS_LIMIT = 200
 const DISCONNECTED_PTY_RECORD_MAX = 128
+const HISTORICAL_PANE_KEY_MAX = 512
 const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
 const WORKTREE_SCAN_CACHE_TTL_MS = 30_000
 // Why: agent-scratch repos don't need 30s freshness — the steady-state scan

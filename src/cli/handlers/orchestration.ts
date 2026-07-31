@@ -204,13 +204,20 @@ async function resolveOrchestrationTerminalHandle(
   }
   const envHandle = process.env.ORCA_TERMINAL_HANDLE
   if (envHandle && envHandle.length > 0) {
-    if (flagName === 'from' && options.validateEnvHandle) {
-      // Why: long-lived shells can retain a stale ORCA_TERMINAL_HANDLE after remint; don't bake it into coordinator preambles.
+    if ((flagName === 'from' || flagName === 'terminal') && options.validateEnvHandle) {
+      // Why: long-lived shells can retain a stale ORCA_TERMINAL_HANDLE after remint; don't bake it into coordinator preambles or listen on a dead mailbox.
       const live = await isLiveTerminalHandle(envHandle, client)
       if (!live) {
         const reminted = await resolveOrchestrationPaneTerminalHandle(client)
         if (reminted) {
           return reminted
+        }
+        if (flagName === 'terminal') {
+          throw new RuntimeClientError(
+            'no_active_terminal',
+            'Could not determine the terminal for this orchestration command. ' +
+              'Pass --terminal <terminal-handle> or run the command inside a live Orca terminal with ORCA_TERMINAL_HANDLE set.'
+          )
         }
         throwNoActiveSenderTerminal()
       }
@@ -584,7 +591,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     }
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
     const explicitTerminal = getOptionalStringFlag(flags, 'terminal')
-    const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
+    const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal', {
+      validateEnvHandle: true
+    })
 
     // Why: Claude Code auto-backgrounds subprocesses silent ~2 min; emit JSON keepalives to stderr (stdout stays one payload). See §3.4.
     const stopKeepalive = wait ? startCheckKeepalive(timeoutMs) : null

@@ -248,6 +248,16 @@ const ResetParams = z
     }
   })
 
+function resolveCanonicalHandle(handle: string, runtime: OrcaRuntimeService): string {
+  if (isGroupAddress(handle)) return handle
+  const paneKey = runtime.getTerminalPaneKey(handle)
+  if (paneKey) {
+    const liveHandle = runtime.getTerminalHandleForPaneKey(paneKey)
+    if (liveHandle && liveHandle !== handle) return liveHandle
+  }
+  return handle
+}
+
 function resolveRunScope(
   runtime: OrcaRuntimeService,
   params: {
@@ -558,6 +568,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         )
       }
 
+      to = resolveCanonicalHandle(to, runtime);
       if (!isGroupAddress(to)) {
         const federatedDispatchId = routing.dispatchId
         const federatedTarget =
@@ -649,6 +660,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
                 'dispatch_capability_invalid',
                 authority.reason
               ) ?? msg
+            runtime.deliverPendingMessagesForHandle(to);
             runtime.notifyMessageArrived(to, rejection.type)
             return {
               message: rejection,
@@ -669,10 +681,12 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           }
           if (reconciled.action === 'rejected') {
             const rejection = db.getMessageById(msg.id) ?? msg
+            runtime.deliverPendingMessagesForHandle(to);
             runtime.notifyMessageArrived(to, rejection.type)
             return { message: rejection, lifecycle: reconciled }
           }
         }
+        runtime.deliverPendingMessagesForHandle(to);
         runtime.notifyMessageArrived(to, msg.type)
         return { message: msg }
       }
@@ -709,6 +723,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         })
       )
       for (const message of messages) {
+        runtime.deliverPendingMessagesForHandle(message.to_handle);
         runtime.notifyMessageArrived(message.to_handle, message.type)
       }
 
@@ -1094,16 +1109,18 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
 
       db.markAsRead([original.id])
 
+      const canonicalFromHandle = resolveCanonicalHandle(original.from_handle, runtime)
       const reply = db.insertMessage({
         from: params.from ?? original.to_handle,
-        to: original.from_handle,
+        to: canonicalFromHandle,
         subject: `Re: ${original.subject}`,
         body: params.body,
         threadId: original.thread_id ?? original.id,
         runId: original.run_id
       })
 
-      runtime.notifyMessageArrived(original.from_handle, reply.type)
+      runtime.deliverPendingMessagesForHandle(canonicalFromHandle);
+      runtime.notifyMessageArrived(canonicalFromHandle, reply.type)
       return { message: reply }
     }
   }),
@@ -1248,10 +1265,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           dispatchId: 'ctx_dryrun',
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
-          workerHandle: params.to ?? 'worker',
+          workerHandle: params.to ? resolveCanonicalHandle(params.to, runtime) : 'worker',
           devMode: params.devMode,
           ...(params.to
-            ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(params.to) }
+            ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(resolveCanonicalHandle(params.to, runtime)) }
             : {})
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
@@ -1260,7 +1277,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       if (!params.to) {
         throw new Error('Missing --to')
       }
-      const to = params.to
+      const to = resolveCanonicalHandle(params.to, runtime)
 
       if (task.status !== 'ready') {
         throw new Error(`Task ${params.task} is ${task.status}; only ready tasks can be dispatched`)
@@ -1380,7 +1397,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       { runtime, signal, orchestrationCapability, recordMutationReceipt }
     ) => {
       // Why: group addresses have no unambiguous first-answer authority.
-      if (params.to && isGroupAddress(params.to)) {
+      const to = params.to ? resolveCanonicalHandle(params.to, runtime) : undefined
+      if (to && isGroupAddress(to)) {
         throw new Error(
           'ask does not support group addresses; use send for non-blocking fan-out questions'
         )
@@ -1451,7 +1469,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             `Dispatch ${activeDispatch.id} belongs to Run ${run.id}, not ${params.run}.`
           )
         }
-        if (params.to && params.to !== `run:${run.id}` && params.to !== run.coordinator_handle) {
+        if (to && to !== `run:${run.id}` && to !== resolveCanonicalHandle(run.coordinator_handle, runtime)) {
           throw new OrchestrationError(
             'dispatch_run_mismatch',
             `ask from Dispatch ${activeDispatch.id} must target its owning Run ${run.id}.`
