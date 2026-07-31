@@ -495,6 +495,48 @@ describe('Store', () => {
     expect(store.getSettings()).toEqual(beforeSettings)
   })
 
+  it('rejects Codex settings mutations during an account settings preview', async () => {
+    const store = await createStore()
+    const beforeSettings = structuredClone(store.getSettings())
+
+    expect(() =>
+      store.withCodexAccountSettingsPreview(
+        {
+          codexManagedAccounts: [],
+          activeCodexManagedAccountId: null,
+          activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} }
+        },
+        () => {
+          store.updateSettings({ activeCodexManagedAccountId: 'unexpected-account' })
+        }
+      )
+    ).toThrow('Cannot update settings during a Codex account settings preview')
+
+    expect(store.getSettings()).toEqual(beforeSettings)
+  })
+
+  it('rejects persistence during a Codex account settings preview', async () => {
+    const store = await createStore()
+    store.flushOrThrow()
+    const beforeSettings = structuredClone(store.getSettings())
+
+    expect(() =>
+      store.withCodexAccountSettingsPreview(
+        {
+          codexManagedAccounts: [],
+          activeCodexManagedAccountId: null,
+          activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} }
+        },
+        () => {
+          store.flushOrThrow()
+        }
+      )
+    ).toThrow('Cannot persist during a Codex account settings preview')
+
+    expect(store.getSettings()).toEqual(beforeSettings)
+    expect((readDataFile() as PersistedState).settings).toEqual(beforeSettings)
+  })
+
   it('rolls Codex account settings and reset ledger back together when removal flush fails', async () => {
     const store = await createStore()
     const account = createPersistedCodexAccount()

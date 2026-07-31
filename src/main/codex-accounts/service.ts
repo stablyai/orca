@@ -715,14 +715,13 @@ export class CodexAccountService {
     outgoingAccountId: string | null | undefined,
     target: CodexAccountSelectionTarget | undefined
   ): void {
-    try {
-      void this.rateLimits
-        .refreshForCodexAccountChange(outgoingAccountId, target)
-        .catch((error) => {
-          console.error('[codex-accounts] Quota refresh after account change failed:', error)
-        })
-    } catch (error) {
+    const logFailure = (error: unknown): void => {
       console.error('[codex-accounts] Quota refresh after account change failed:', error)
+    }
+    try {
+      void this.rateLimits.refreshForCodexAccountChange(outgoingAccountId, target).catch(logFailure)
+    } catch (error) {
+      logFailure(error)
     }
   }
 

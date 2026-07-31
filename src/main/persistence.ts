@@ -2806,6 +2806,7 @@ export class Store {
   /** Set by flushAsync so the quit flush is the final write; see scheduleSave. */
   private quitFlushStarted = false
   private quitFlushPromise: Promise<void> | null = null
+  private codexAccountSettingsPreviewActive = false
   // Content hash at last write, to skip no-op writes; derived from the payload with encrypted blobs normalized back to plaintext (see buildStateToSave), since encrypt() uses a random IV per call.
   private lastWrittenStateHash: string | null = null
   private lastDurableWriteGeneration = -1
@@ -4161,6 +4162,9 @@ export class Store {
   }
 
   flushOrThrow(): void {
+    if (this.codexAccountSettingsPreviewActive) {
+      throw new Error('Cannot persist during a Codex account settings preview')
+    }
     if (this.quitFlushStarted) {
       throw new Error('Cannot synchronously flush after final persistence has started')
     }
@@ -4225,7 +4229,11 @@ export class Store {
     if (this.writesFrozen) {
       throw new Error('Cannot preview Codex account removal while writes are frozen')
     }
+    if (this.codexAccountSettingsPreviewActive) {
+      throw new Error('Cannot nest Codex account settings previews')
+    }
     const previousSettings = this.state.settings
+    this.codexAccountSettingsPreviewActive = true
     this.state.settings = { ...previousSettings, ...updates }
     try {
       const result = action()
@@ -4242,6 +4250,7 @@ export class Store {
       return result
     } finally {
       this.state.settings = previousSettings
+      this.codexAccountSettingsPreviewActive = false
     }
   }
 
@@ -5865,6 +5874,9 @@ export class Store {
     updates: Partial<GlobalSettings>,
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
+    if (this.codexAccountSettingsPreviewActive) {
+      throw new Error('Cannot update settings during a Codex account settings preview')
+    }
     const sanitizedUpdates = stripLegacyTerminalScrollbackBytes(updates)
     if ('opencodeSessionCookie' in updates && !updates.opencodeSessionCookie) {
       this.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeSessionCookie)

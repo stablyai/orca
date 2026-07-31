@@ -172,6 +172,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
 
 function createStore(settings: GlobalSettings) {
   let resetLedger: CodexResetCreditAttemptLedger = { version: 1, attempts: [] }
+  let settingsPreviewActive = false
   const applySettings = (updates: Partial<GlobalSettings>) => {
     settings = {
       ...settings,
@@ -183,19 +184,40 @@ function createStore(settings: GlobalSettings) {
     }
     return settings
   }
+  const updateSettings = (updates: Partial<GlobalSettings>) => {
+    if (settingsPreviewActive) {
+      throw new Error('Cannot update settings during a Codex account settings preview')
+    }
+    return applySettings(updates)
+  }
   const withSettingsPreview = <T>(updates: Partial<GlobalSettings>, action: () => T): T => {
+    if (settingsPreviewActive) {
+      throw new Error('Cannot nest Codex account settings previews')
+    }
     const previousSettings = settings
     applySettings(updates)
+    settingsPreviewActive = true
     try {
-      return action()
+      const result = action()
+      const resultType = typeof result
+      if (
+        result !== null &&
+        (resultType === 'object' || resultType === 'function') &&
+        typeof (result as { then?: unknown }).then === 'function'
+      ) {
+        void Promise.resolve(result).catch(() => {})
+        throw new Error('Codex account settings preview callback must be synchronous')
+      }
+      return result
     } finally {
       settings = previousSettings
+      settingsPreviewActive = false
     }
   }
   return {
     getSettings: vi.fn(() => settings),
-    updateSettings: vi.fn(applySettings),
-    updateCodexAccountSettingsAndFlush: vi.fn(applySettings),
+    updateSettings: vi.fn(updateSettings),
+    updateCodexAccountSettingsAndFlush: vi.fn(updateSettings),
     withCodexAccountSettingsPreview: vi.fn(withSettingsPreview),
     getCodexResetCreditAttemptLedger: vi.fn(() => structuredClone(resetLedger)),
     replaceCodexResetCreditAttemptLedgerAndFlush: vi.fn((next: CodexResetCreditAttemptLedger) => {
@@ -203,7 +225,7 @@ function createStore(settings: GlobalSettings) {
     }),
     updateCodexAccountSettingsAndResetLedgerAndFlush: vi.fn(
       (updates: Partial<GlobalSettings>, next: CodexResetCreditAttemptLedger) => {
-        applySettings(updates)
+        updateSettings(updates)
         resetLedger = structuredClone(next)
       }
     )
@@ -2044,6 +2066,47 @@ describe('CodexAccountService config sync', () => {
     expect(observedSelections).toEqual([null, 'account-1'])
     expect(store.getSettings().codexManagedAccounts.map(({ id }) => id)).toEqual(['account-1'])
     expect(existsSync(managedHomePath)).toBe(true)
+
+    await expect(service.removeAccount('account-1')).resolves.toMatchObject({ accounts: [] })
+    expect(existsSync(managedHomePath)).toBe(false)
+  })
+
+  it('rolls removal back when runtime reconciliation tries to mutate preview settings', async () => {
+    const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          managedHomeRuntime: 'host',
+          wslDistro: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const runtimeHome = createRuntimeHome()
+    runtimeHome.syncForCurrentSelection.mockImplementationOnce(() => {
+      store.updateSettings({ activeCodexManagedAccountId: 'unexpected-account' })
+    })
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      store as never,
+      createRateLimits() as never,
+      runtimeHome as never
+    )
+
+    await expect(service.removeAccount('account-1')).rejects.toThrow(
+      'Cannot update settings during a Codex account settings preview'
+    )
+    expect(store.getSettings().codexManagedAccounts.map(({ id }) => id)).toEqual(['account-1'])
+    expect(existsSync(managedHomePath)).toBe(true)
+    expect(store.updateCodexAccountSettingsAndResetLedgerAndFlush).not.toHaveBeenCalled()
+    expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(2)
 
     await expect(service.removeAccount('account-1')).resolves.toMatchObject({ accounts: [] })
     expect(existsSync(managedHomePath)).toBe(false)
