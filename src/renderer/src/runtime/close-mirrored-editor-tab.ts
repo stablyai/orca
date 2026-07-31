@@ -27,7 +27,9 @@ export function notifyHostOfMirroredEditorClose(
   if (!file?.mirroredFromRuntimeSession) {
     return false
   }
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  const runtimeEnvironmentId =
+    file.mirroredFromRuntimeEnvironmentId?.trim() ||
+    getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   if (!runtimeEnvironmentId?.trim()) {
     return false
   }

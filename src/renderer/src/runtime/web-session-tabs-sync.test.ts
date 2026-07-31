@@ -21,7 +21,7 @@ import {
   resetWebSessionReorderIntentForTests
 } from './web-session-reorder-intent'
 import type { BrowserPage, BrowserWorkspace, Tab, TerminalTab } from '../../../shared/types'
-import type { OpenFile } from '../store/slices/editor'
+import { buildOwnedEditorFileId, type OpenFile } from '../store/slices/editor'
 import {
   confirmWebAgentSessionHandoffAfterCreate,
   recordWebAgentSessionHandoff,
@@ -52,6 +52,7 @@ vi.mock('../store', () => ({
 
 const WT = 'repo::/worktree'
 const ENV = 'web-env-1'
+const ENV_2 = 'web-env-2'
 const NOW = 1_700_000_000_000
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -3419,7 +3420,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     const terminalId = patch.tabsByWorktree?.[WT]?.[0]?.id
     expect(patch.openFiles).toMatchObject([
       {
-        id: '/repo/README.md',
+        id: buildOwnedEditorFileId('/repo/README.md', WT, ENV),
         filePath: '/repo/README.md',
         relativePath: 'README.md',
         worktreeId: WT,
@@ -3433,7 +3434,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: 'host-readme-unified',
-          entityId: '/repo/README.md',
+          entityId: buildOwnedEditorFileId('/repo/README.md', WT, ENV),
           contentType: 'editor',
           label: 'README.md',
           color: '#16a34a',
@@ -3445,8 +3446,10 @@ describe('applyWebSessionTabsSnapshot', () => {
       activeTabId: 'host-readme-unified',
       tabOrder: [terminalId, 'host-readme-unified']
     })
-    expect(patch.activeFileId).toBe('/repo/README.md')
-    expect(patch.activeFileIdByWorktree?.[WT]).toBe('/repo/README.md')
+    expect(patch.activeFileId).toBe(buildOwnedEditorFileId('/repo/README.md', WT, ENV))
+    expect(patch.activeFileIdByWorktree?.[WT]).toBe(
+      buildOwnedEditorFileId('/repo/README.md', WT, ENV)
+    )
     expect(patch.activeTabType).toBe('editor')
     expect(patch.activeTabTypeByWorktree?.[WT]).toBe('editor')
   })
@@ -3631,7 +3634,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(patch.openFiles).toMatchObject([
       {
-        id: 'markdown-preview::/repo/README.md',
+        id: buildOwnedEditorFileId('markdown-preview::/repo/README.md', WT, ENV),
         filePath: '/repo/README.md',
         markdownPreviewSourceFileId: '/repo/README.md',
         mode: 'markdown-preview'
@@ -3640,11 +3643,13 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.unifiedTabsByWorktree?.[WT]).toMatchObject([
       {
         id: 'host-preview-unified',
-        entityId: 'markdown-preview::/repo/README.md',
+        entityId: buildOwnedEditorFileId('markdown-preview::/repo/README.md', WT, ENV),
         contentType: 'editor'
       }
     ])
-    expect(patch.activeFileId).toBe('markdown-preview::/repo/README.md')
+    expect(patch.activeFileId).toBe(
+      buildOwnedEditorFileId('markdown-preview::/repo/README.md', WT, ENV)
+    )
   })
 
   it('removes mirrored editor tabs when the host closes the file', () => {
@@ -3676,12 +3681,12 @@ describe('applyWebSessionTabsSnapshot', () => {
     const hydratedState = { ...makeState(), ...hydratedPatch } as WebSessionTabsSyncState
 
     expect(hydratedState.openFiles[0]).toMatchObject({
-      id: '/repo/README.md',
+      id: buildOwnedEditorFileId('/repo/README.md', WT, ENV),
       mirroredFromRuntimeSession: true
     })
     expect(hydratedState.unifiedTabsByWorktree[WT]?.[0]).toMatchObject({
       id: 'host-readme-unified',
-      entityId: '/repo/README.md'
+      entityId: buildOwnedEditorFileId('/repo/README.md', WT, ENV)
     })
 
     const patch = applyWebSessionTabsSnapshot(
@@ -3866,5 +3871,151 @@ describe('applyWebSessionTabsSnapshot', () => {
     })
     expect(patch.activeTabId).toBe(mirroredId)
     expect(patch.activeTabIdByWorktree?.[WT]).toBe(mirroredId)
+  })
+
+  it('translates mirrored editor ownership and culls by mirror host provenance', () => {
+    const state = makeState({
+      openFiles: [
+        {
+          id: 'stale-editor',
+          filePath: '/repo/README.md',
+          relativePath: 'README.md',
+          worktreeId: WT,
+          language: 'markdown',
+          isDirty: false,
+          runtimeEnvironmentId: null,
+          mirroredFromRuntimeSession: true,
+          mirroredFromRuntimeEnvironmentId: ENV,
+          mode: 'edit'
+        }
+      ]
+    })
+    Object.assign(state, {
+      repos: [{ id: 'repo-1', executionHostId: 'local' }],
+      worktreesByRepo: { 'repo-1': [{ id: WT, repoId: 'repo-1' }] }
+    })
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([
+        {
+          type: 'file',
+          id: 'host-editor-1',
+          title: 'README.md',
+          filePath: '/repo/README.md',
+          relativePath: 'README.md',
+          language: 'markdown',
+          isDirty: false,
+          isActive: true
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.openFiles).toHaveLength(1)
+    expect(patch.openFiles?.[0]).toMatchObject({
+      runtimeEnvironmentId: null,
+      mirroredFromRuntimeEnvironmentId: ENV,
+      mirroredFromRuntimeSession: true
+    })
+  })
+
+  it('replaces an earlier mirror-host copy when a second host publishes the same translated editor id', () => {
+    const mirroredId = buildOwnedEditorFileId('/repo/README.md', WT, null)
+    const state = makeState({
+      openFiles: [
+        {
+          id: mirroredId,
+          filePath: '/repo/README.md',
+          relativePath: 'README.md',
+          worktreeId: WT,
+          language: 'markdown',
+          isDirty: false,
+          runtimeEnvironmentId: null,
+          mirroredFromRuntimeSession: true,
+          mirroredFromRuntimeEnvironmentId: ENV,
+          mode: 'edit'
+        }
+      ]
+    })
+    Object.assign(state, {
+      repos: [{ id: 'repo-1', executionHostId: 'local' }],
+      worktreesByRepo: { 'repo-1': [{ id: WT, repoId: 'repo-1' }] }
+    })
+
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([
+        {
+          type: 'file',
+          id: 'host-editor-2',
+          title: 'README.md',
+          filePath: '/repo/README.md',
+          relativePath: 'README.md',
+          language: 'markdown',
+          isDirty: false,
+          isActive: true
+        }
+      ]),
+      ENV_2,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.openFiles).toHaveLength(1)
+    expect(patch.openFiles?.[0]).toMatchObject({
+      id: mirroredId,
+      runtimeEnvironmentId: null,
+      mirroredFromRuntimeEnvironmentId: ENV_2,
+      mirroredFromRuntimeSession: true
+    })
+  })
+
+  it('replaces a preexisting local entry when a mirrored snapshot publishes the same translated editor id', () => {
+    const mirroredId = buildOwnedEditorFileId('/repo/README.md', WT, null)
+    const state = makeState({
+      openFiles: [
+        {
+          id: mirroredId,
+          filePath: '/repo/README.md',
+          relativePath: 'README.md',
+          worktreeId: WT,
+          language: 'markdown',
+          isDirty: false,
+          runtimeEnvironmentId: null,
+          mirroredFromRuntimeSession: false,
+          mode: 'edit'
+        }
+      ]
+    })
+    Object.assign(state, {
+      repos: [{ id: 'repo-1', executionHostId: 'local' }],
+      worktreesByRepo: { 'repo-1': [{ id: WT, repoId: 'repo-1' }] }
+    })
+
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([
+        {
+          type: 'file',
+          id: 'host-editor-3',
+          title: 'README.md',
+          filePath: '/repo/README.md',
+          relativePath: 'README.md',
+          language: 'markdown',
+          isDirty: false,
+          isActive: true
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.openFiles).toHaveLength(1)
+    expect(patch.openFiles?.[0]).toMatchObject({
+      id: mirroredId,
+      runtimeEnvironmentId: null,
+      mirroredFromRuntimeEnvironmentId: ENV,
+      mirroredFromRuntimeSession: true
+    })
   })
 })

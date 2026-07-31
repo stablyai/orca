@@ -28,15 +28,17 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../shared/types'
-import type { OpenFile } from '../store/slices/editor'
+import { buildOwnedEditorFileId, type OpenFile } from '../store/slices/editor'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '@/lib/terminal-pane-title-sanitization'
 import { normalizeTerminalLayoutPtyOwnership } from '@/components/terminal-pane/terminal-layout-pty-ownership'
 import {
   getExplicitRuntimeEnvironmentIdForWorktree,
-  getRuntimeSessionMirrorEnvironmentIds
+  getRuntimeSessionMirrorEnvironmentIds,
+  translateMirroredEditorRuntimeEnvironmentId
 } from '@/lib/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner'
 import {
   createWebRuntimeSessionTerminal,
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -443,11 +445,16 @@ function isReadyEditorTab(
   return tab.type === 'markdown' || tab.type === 'file'
 }
 
-function localEditorFileId(tab: ReadyEditorSurface): string {
-  if (tab.type === 'markdown' && tab.mode === 'markdown-preview') {
-    return `markdown-preview::${tab.sourceFilePath}`
-  }
-  return tab.filePath
+function localEditorFileId(
+  tab: ReadyEditorSurface,
+  worktreeId: string,
+  runtimeEnvironmentId: string | null | undefined
+): string {
+  const filePath =
+    tab.type === 'markdown' && tab.mode === 'markdown-preview'
+      ? `markdown-preview::${tab.sourceFilePath}`
+      : tab.filePath
+  return buildOwnedEditorFileId(filePath, worktreeId, runtimeEnvironmentId)
 }
 
 function editorSourceFileId(tab: ReadyEditorSurface): string | undefined {
@@ -924,7 +931,12 @@ function buildMirroredEditorTabs(
   now: number
 ): MirroredEditorTab[] {
   return snapshot.tabs.filter(isReadyEditorTab).map((tab, index) => {
-    const fileId = localEditorFileId(tab)
+    const runtimeEnvironmentId = translateMirroredEditorRuntimeEnvironmentId(
+      state as unknown as WorktreeRuntimeOwnerState,
+      snapshot.worktree,
+      environmentId
+    )
+    const fileId = localEditorFileId(tab, snapshot.worktree, runtimeEnvironmentId)
     const existingFile = state.openFiles.find(
       (file) => file.worktreeId === snapshot.worktree && file.id === fileId
     )
@@ -944,11 +956,12 @@ function buildMirroredEditorTabs(
       worktreeId: snapshot.worktree,
       language: tab.language,
       isDirty: tab.isDirty,
-      runtimeEnvironmentId: environmentId,
+      runtimeEnvironmentId,
       mode: tab.type === 'markdown' ? tab.mode : 'edit',
       markdownPreviewSourceFileId: sourceFileId,
       // Why: marks this tab host-owned so a later snapshot that omits it can cull it; locally opened tabs lack this flag and survive.
-      mirroredFromRuntimeSession: true
+      mirroredFromRuntimeSession: true,
+      mirroredFromRuntimeEnvironmentId: environmentId
     }
     return {
       file,
@@ -1646,6 +1659,7 @@ function openFileEqual(a: OpenFile, b: OpenFile): boolean {
     a.language === b.language &&
     a.isDirty === b.isDirty &&
     a.runtimeEnvironmentId === b.runtimeEnvironmentId &&
+    a.mirroredFromRuntimeEnvironmentId === b.mirroredFromRuntimeEnvironmentId &&
     a.markdownPreviewSourceFileId === b.markdownPreviewSourceFileId &&
     a.markdownPreviewAnchor === b.markdownPreviewAnchor &&
     a.isPreview === b.isPreview &&
@@ -1945,7 +1959,7 @@ export function applyWebSessionTabsSnapshot(
       .filter(
         (file) =>
           file.worktreeId === worktreeId &&
-          file.runtimeEnvironmentId === environmentId &&
+          file.mirroredFromRuntimeEnvironmentId === environmentId &&
           (file.mode === 'edit' || file.mode === 'markdown-preview') &&
           // Why: only cull host-mirrored tabs; locally opened files have no host counterpart, so their omission isn't a close signal.
           file.mirroredFromRuntimeSession === true &&
@@ -1958,7 +1972,7 @@ export function applyWebSessionTabsSnapshot(
       (file) =>
         !(
           file.worktreeId === worktreeId &&
-          file.runtimeEnvironmentId === environmentId &&
+          (file.mode === 'edit' || file.mode === 'markdown-preview') &&
           (removedEditorFileIds.has(file.id) || mirroredEditorFileIds.has(file.id))
         )
     )

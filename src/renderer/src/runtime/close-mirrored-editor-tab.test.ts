@@ -71,6 +71,30 @@ describe('notifyHostOfMirroredEditorClose', () => {
     })
   })
 
+  it('uses mirror-host provenance when route ownership was translated locally', async () => {
+    const handled = notifyHostOfMirroredEditorClose(
+      buildState({
+        openFiles: [
+          {
+            id: 'file-1',
+            worktreeId: 'wt-1',
+            mirroredFromRuntimeSession: true,
+            mirroredFromRuntimeEnvironmentId: 'host-env'
+          }
+        ] as unknown as MirroredEditorCloseState['openFiles']
+      }),
+      'wt-1',
+      'file-1'
+    )
+
+    expect(handled).toBe(true)
+    await vi.waitFor(() => expect(closeWebRuntimeSessionTabMock).toHaveBeenCalled())
+    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith(
+      expect.objectContaining({ environmentId: 'host-env' })
+    )
+    expect(getRuntimeEnvironmentIdForWorktreeMock).not.toHaveBeenCalled()
+  })
+
   it('does not route locally-opened (non-mirrored) files to the host', () => {
     const state = buildState({
       openFiles: [

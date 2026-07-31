@@ -106,6 +106,65 @@ function mirroredEditorUnifiedTab(id: string, entityId: string, worktreeId: stri
 }
 
 describe('createEditorSlice right sidebar state', () => {
+  it('re-owns mirrored hydration in the receiver frame', () => {
+    const store = createEditorStore()
+    store.setState({ unifiedTabsByWorktree: {} })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings']
+    })
+
+    store.getState().hydrateEditorSession({
+      openFilesByWorktree: {
+        'wt-1': [
+          {
+            filePath: '/repo/README.md',
+            relativePath: 'README.md',
+            worktreeId: 'wt-1',
+            language: 'markdown',
+            runtimeEnvironmentId: 'peer-env'
+          }
+        ]
+      }
+    } as never)
+
+    expect(store.getState().openFiles[0]).toMatchObject({
+      id: ownedEditorFileId('/repo/README.md', 'wt-1', null),
+      runtimeEnvironmentId: null
+    })
+  })
+
+  it('uses an owned id when hydration translates a local snapshot into explicit remote ownership', () => {
+    const store = createEditorStore()
+    store.setState({
+      unifiedTabsByWorktree: {},
+      repos: [
+        { id: 'repo-1', executionHostId: 'runtime:owner-env' }
+      ] as unknown as AppState['repos'],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }]
+      } as unknown as AppState['worktreesByRepo']
+    })
+
+    store.getState().hydrateEditorSession({
+      openFilesByWorktree: {
+        'wt-1': [
+          {
+            filePath: '/repo/README.md',
+            relativePath: 'README.md',
+            worktreeId: 'wt-1',
+            language: 'markdown',
+            runtimeEnvironmentId: null
+          }
+        ]
+      }
+    } as never)
+
+    expect(store.getState().openFiles[0]).toMatchObject({
+      id: ownedEditorFileId('/repo/README.md', 'wt-1', 'owner-env'),
+      runtimeEnvironmentId: 'owner-env'
+    })
+  })
+
   it('queues and safely consumes explicit editor focus requests', () => {
     const store = createEditorStore()
 
@@ -1564,6 +1623,7 @@ describe('createEditorSlice recently closed editor tabs', () => {
         language: 'markdown',
         runtimeEnvironmentId: 'env-1',
         mirroredFromRuntimeSession: true,
+        mirroredFromRuntimeEnvironmentId: 'host-env',
         mode: 'edit'
       },
       { preview }
@@ -1579,10 +1639,12 @@ describe('createEditorSlice recently closed editor tabs', () => {
     const recent = store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.[0]
     expect(recent).toMatchObject({ filePath: '/repo/notes.md' })
     expect(recent).not.toHaveProperty('mirroredFromRuntimeSession')
+    expect(recent).not.toHaveProperty('mirroredFromRuntimeEnvironmentId')
 
     expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
     expect(store.getState().openFiles[0]).toMatchObject({ filePath: '/repo/notes.md' })
     expect(store.getState().openFiles[0]).not.toHaveProperty('mirroredFromRuntimeSession')
+    expect(store.getState().openFiles[0]).not.toHaveProperty('mirroredFromRuntimeEnvironmentId')
   })
 
   it('reopens close-all mirrored editor tabs as local tabs', () => {

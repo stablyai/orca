@@ -68,7 +68,10 @@ import {
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getExplicitRuntimeEnvironmentIdForWorktree,
+  translateMirroredEditorRuntimeEnvironmentId
+} from '@/lib/worktree-runtime-owner'
 import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
@@ -262,6 +265,8 @@ export type OpenFile = {
   checkRunDetails?: OpenCheckRunDetailsState
   /** Why: web-client tab mirrored from the host snapshot; only mirrored tabs may be culled when they vanish, locally-opened tabs must survive. */
   mirroredFromRuntimeSession?: boolean
+  /** Runtime-only sender provenance; route ownership remains receiver-relative in runtimeEnvironmentId. */
+  mirroredFromRuntimeEnvironmentId?: string | null
   /** Why: orthogonal to `mode` — an edit-mode tab that must never accept edits/autosave/rename (AI Vault View Log). Persisted only when true. */
   readOnly?: boolean
   /** Why: explicit live tail, only meaningful for a read-only local log. */
@@ -280,7 +285,7 @@ export type EditorViewMode = 'edit' | 'changes'
 // Why: omit mirroredFromRuntimeSession so a user-reopened tab isn't treated as host-owned and culled by the next web session sync.
 export type ClosedEditorTabSnapshot = Omit<
   OpenFile,
-  'id' | 'isDirty' | 'mirroredFromRuntimeSession'
+  'id' | 'isDirty' | 'mirroredFromRuntimeSession' | 'mirroredFromRuntimeEnvironmentId'
 >
 
 const MAX_RECENT_CLOSED_EDITOR_TABS = 10
@@ -1119,6 +1124,15 @@ function shouldHydrateWithOwnedEditorFileId(
   )
 }
 
+function didHydratedEditorOwnerChange(
+  persistedRuntimeEnvironmentId: string | null | undefined,
+  hydratedRuntimeEnvironmentId: string | null | undefined
+): boolean {
+  return (
+    runtimeOwnerKey(persistedRuntimeEnvironmentId) !== runtimeOwnerKey(hydratedRuntimeEnvironmentId)
+  )
+}
+
 function addEditorFileIdMigration(
   migrationsByWorktree: Record<string, Map<string, string>>,
   worktreeId: string,
@@ -1796,6 +1810,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
               id: _rid,
               isDirty: _rdirty,
               mirroredFromRuntimeSession: _rmirrored,
+              mirroredFromRuntimeEnvironmentId: _rsourceEnvironment,
               ...snap
             } = replacedPreview
             const stack = s.recentlyClosedEditorTabsByWorktree[worktreeId] ?? []
@@ -2185,6 +2200,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           id: _id,
           isDirty: _dirty,
           mirroredFromRuntimeSession: _mirrored,
+          mirroredFromRuntimeEnvironmentId: _sourceEnvironment,
           ...snap
         } = closedFile
         const stack = s.recentlyClosedEditorTabsByWorktree[wtRecent] ?? []
@@ -2374,7 +2390,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         ) {
           continue
         }
-        const { id: _id, isDirty: _dirty, mirroredFromRuntimeSession: _mirrored, ...snap } = f
+        const {
+          id: _id,
+          isDirty: _dirty,
+          mirroredFromRuntimeSession: _mirrored,
+          mirroredFromRuntimeEnvironmentId: _sourceEnvironment,
+          ...snap
+        } = f
         nextRecentClosed = [snap as ClosedEditorTabSnapshot, ...nextRecentClosed].slice(
           0,
           MAX_RECENT_CLOSED_EDITOR_TABS
@@ -4514,9 +4536,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             worktreeId
           )
           // Why: floating/runtime-owned files need IDs that survive peers disappearing between restarts; collision-based IDs drift when the path is no longer open elsewhere.
-          const ownedId = buildOwnedEditorFileId(pf.filePath, worktreeId, pf.runtimeEnvironmentId)
+          const runtimeEnvironmentId = translateMirroredEditorRuntimeEnvironmentId(
+            s,
+            worktreeId,
+            pf.runtimeEnvironmentId
+          )
+          const ownedId = buildOwnedEditorFileId(pf.filePath, worktreeId, runtimeEnvironmentId)
           const id =
-            shouldHydrateWithOwnedEditorFileId(worktreeId, pf.runtimeEnvironmentId) ||
+            shouldHydrateWithOwnedEditorFileId(worktreeId, runtimeEnvironmentId) ||
+            didHydratedEditorOwnerChange(pf.runtimeEnvironmentId, runtimeEnvironmentId) ||
             usedOpenFileIds.has(pf.filePath)
               ? ownedId
               : pf.filePath
@@ -4527,7 +4555,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             id: legacyId,
             filePath: pf.filePath,
             worktreeId,
-            runtimeEnvironmentId: pf.runtimeEnvironmentId
+            runtimeEnvironmentId
           })
           // Why: read-only tabs (AI Vault View Log) must restore clean — ignore any persisted dirty draft/baseline so they can't come back writable.
           const isReadOnly = pf.readOnly === true
@@ -4543,7 +4571,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             language: detectLanguage(pf.relativePath || pf.filePath),
             isDirty: !isReadOnly && pf.dirtyDraftContent !== undefined,
             isPreview: pf.isPreview,
-            runtimeEnvironmentId: pf.runtimeEnvironmentId,
+            runtimeEnvironmentId,
             externalSshTargetId: pf.externalSshTargetId,
             ...(isReadOnly ? { readOnly: true } : {}),
             ...(isReadOnly && pf.liveTail === true ? { liveTail: true } : {}),

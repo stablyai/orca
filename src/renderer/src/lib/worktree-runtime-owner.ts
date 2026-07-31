@@ -14,7 +14,8 @@ import { getSingleFocusedRuntimeEnvironmentId } from './single-runtime-legacy-ow
 import {
   getExecutionHostIdForFolderWorkspace,
   getExplicitRuntimeEnvironmentIdForFolderWorkspace,
-  getRuntimeEnvironmentIdForFolderWorkspace
+  getRuntimeEnvironmentIdForFolderWorkspace,
+  findFolderWorkspaceOwner
 } from './folder-workspace-runtime-owner'
 import {
   resolveExplicitWorktreeOperationRouteResult,
@@ -156,6 +157,25 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
   // Why: session mirroring is expensive; a merely focused runtime must not make
   // legacy/local worktrees look remote-owned.
   return getExplicitRuntimeEnvironmentIdFromHost(getRepoExecutionHostId(repo))
+}
+
+export function translateMirroredEditorRuntimeEnvironmentId(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string,
+  incomingRuntimeEnvironmentId: string | null | undefined
+): string | null | undefined {
+  const workspaceScope = parseWorkspaceKey(worktreeId)
+  const hasDetectedOwner = Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
+    result.worktrees.some((worktree) => worktree.id === worktreeId)
+  )
+  const hasConcreteRecord =
+    workspaceScope?.type === 'folder'
+      ? Boolean(findFolderWorkspaceOwner(state, workspaceScope.folderWorkspaceId))
+      : Boolean(findWorktreeRecord(state.worktreesByRepo, worktreeId) || hasDetectedOwner)
+
+  return hasConcreteRecord
+    ? getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+    : incomingRuntimeEnvironmentId
 }
 
 export function getExecutionHostIdForWorktree(

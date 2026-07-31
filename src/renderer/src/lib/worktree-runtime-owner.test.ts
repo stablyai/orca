@@ -6,6 +6,7 @@ import {
   getRuntimeEnvironmentIdForWorktree,
   getRuntimeSessionMirrorEnvironmentIds,
   getSettingsForWorktreeRuntimeOwner,
+  translateMirroredEditorRuntimeEnvironmentId,
   type WorktreeRuntimeOwnerState
 } from './worktree-runtime-owner'
 
@@ -162,6 +163,18 @@ describe('getSettingsForWorktreeRuntimeOwner', () => {
 })
 
 describe('getExplicitRuntimeEnvironmentIdForWorktree', () => {
+  it('translates only concrete receiver records and preserves peer-only ownership', () => {
+    expect(
+      translateMirroredEditorRuntimeEnvironmentId(state, 'local-repo::wt-a', 'peer-env')
+    ).toBeNull()
+    expect(
+      translateMirroredEditorRuntimeEnvironmentId(state, 'runtime-repo::wt-b', 'peer-env')
+    ).toBe('owner-env')
+    expect(translateMirroredEditorRuntimeEnvironmentId(state, 'peer-only::wt', 'peer-env')).toBe(
+      'peer-env'
+    )
+  })
+
   it('keeps SSH execution on its paired HUB transport owner', () => {
     const nestedState: WorktreeRuntimeOwnerState = {
       settings: { activeRuntimeEnvironmentId: 'different-hub' },
