@@ -14,6 +14,10 @@ name: Hourly macOS Dev Build
 # Artifacts publish to stablyai/orca-hourly, never to stablyai/orca: the main
 # repo's releases atom feed exposes only its 10 newest entries, so 24 hourly
 # tags a day would evict every stable/RC entry and break updates for real users.
+#
+# Requires the HOURLY_RELEASE_TOKEN secret (write access to orca-hourly);
+# GITHUB_TOKEN is scoped to this repo and cannot publish there. Provision it with
+# `bash config/scripts/setup-hourly-release-token.sh`.
 
 on:
   schedule:
