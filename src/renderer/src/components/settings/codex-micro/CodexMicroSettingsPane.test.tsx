@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { CodexMicroConnectionState } from '../../../../../shared/codex-micro-types'
+import { CodexMicroControlMap } from './CodexMicroControlMap'
 import { CodexMicroSettingsPane, updateMapping } from './CodexMicroSettingsPane'
 
 const retry = vi.fn()
@@ -120,6 +121,24 @@ describe('CodexMicroSettingsPane layout', () => {
     expect(markup).toContain('Top-left agent key')
     expect(markup).toContain('Dial · clockwise')
     expect(markup).toContain('>AG00<')
+  })
+
+  it('keeps the joystick clear of AG01 and styles active controls accessibly', () => {
+    const container = new DOMParser().parseFromString(
+      renderToStaticMarkup(
+        <CodexMicroControlMap activeControl="AG01" onActivate={() => {}} onHover={() => {}} />
+      ),
+      'text/html'
+    )
+    const agentControl = container.querySelector('[data-control-id="AG01"]')
+    const agentKey = agentControl?.querySelector('rect')
+    const joystick = container.querySelector('[aria-label="Joystick directions"] circle')
+
+    expect(agentControl?.hasAttribute('aria-pressed')).toBe(false)
+    expect(agentControl?.getAttribute('class')).toContain('[&>text]:fill-accent-foreground')
+    expect(
+      Number(agentKey?.getAttribute('x')) + Number(agentKey?.getAttribute('width'))
+    ).toBeLessThan(Number(joystick?.getAttribute('cx')) - Number(joystick?.getAttribute('r')))
   })
 
   it('links diagram controls and mapping selectors through focus', async () => {

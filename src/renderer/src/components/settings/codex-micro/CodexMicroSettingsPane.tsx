@@ -228,7 +228,7 @@ export function CodexMicroSettingsPane({ settings, updateSettings }: Props): Rea
             'Map buttons and dial gestures to existing Orca commands.'
           )}
         />
-        <Card className="p-4 shadow-xs">
+        <Card className="mx-auto w-full max-w-xl p-4 shadow-xs">
           <CodexMicroControlMap
             activeControl={activeControl}
             onActivate={(control) => {

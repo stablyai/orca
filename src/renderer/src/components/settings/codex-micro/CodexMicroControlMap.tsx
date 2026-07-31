@@ -17,18 +17,18 @@ type KeyShape = {
 }
 
 const KEY_SHAPES: KeyShape[] = [
-  { control: 'AG00', x: 78, y: 30, width: 34, height: 34 },
-  { control: 'AG01', x: 120, y: 30, width: 34, height: 34 },
-  { control: 'AG02', x: 20, y: 76, width: 34, height: 34 },
-  { control: 'AG03', x: 62, y: 76, width: 34, height: 34 },
-  { control: 'AG04', x: 104, y: 76, width: 34, height: 34 },
-  { control: 'AG05', x: 146, y: 76, width: 34, height: 34 },
-  { control: 'ACT06', x: 20, y: 118, width: 34, height: 34 },
-  { control: 'ACT07', x: 62, y: 118, width: 34, height: 34 },
-  { control: 'ACT08', x: 104, y: 118, width: 34, height: 34 },
-  { control: 'ACT09', x: 146, y: 118, width: 34, height: 34 },
-  { control: 'ACT11', x: 62, y: 160, width: 76, height: 34 },
-  { control: 'ACT12', x: 146, y: 160, width: 34, height: 34 }
+  { control: 'AG00', x: 79, y: 25, width: 36, height: 36 },
+  { control: 'AG01', x: 123, y: 25, width: 36, height: 36 },
+  { control: 'AG02', x: 22, y: 70, width: 36, height: 36 },
+  { control: 'AG03', x: 66, y: 70, width: 36, height: 36 },
+  { control: 'AG04', x: 110, y: 70, width: 36, height: 36 },
+  { control: 'AG05', x: 154, y: 70, width: 36, height: 36 },
+  { control: 'ACT06', x: 22, y: 112, width: 36, height: 36 },
+  { control: 'ACT07', x: 66, y: 112, width: 36, height: 36 },
+  { control: 'ACT08', x: 110, y: 112, width: 36, height: 36 },
+  { control: 'ACT09', x: 154, y: 112, width: 36, height: 36 },
+  { control: 'ACT11', x: 66, y: 154, width: 80, height: 36 },
+  { control: 'ACT12', x: 154, y: 154, width: 36, height: 36 }
 ]
 
 const TOUCH_CONTROL: CodexMicroControlId = 'ACT10'
@@ -64,7 +64,7 @@ export function CodexMicroControlMap({
 }: Props): React.JSX.Element {
   return (
     <svg
-      viewBox="0 0 200 216"
+      viewBox="0 0 232 208"
       role="group"
       aria-label={translate(
         'auto.components.settings.codexMicro.controlMap',
@@ -72,10 +72,10 @@ export function CodexMicroControlMap({
       )}
       className="mx-auto h-auto w-full max-w-sm"
     >
-      <rect x="4" y="4" width="192" height="208" rx="18" className="fill-muted/30 stroke-border" />
-      <path d="M100 14v8m-4-4 4-4 4 4" className="fill-none stroke-muted-foreground" />
+      <rect x="4" y="4" width="224" height="200" rx="18" className="fill-muted/30 stroke-border" />
+      <path d="M116 11v8m-4-4 4-4 4 4" className="fill-none stroke-muted-foreground" />
 
-      <circle cx="42" cy="47" r="27" className="fill-card stroke-border" />
+      <circle cx="40" cy="43" r="20" className="fill-card stroke-border" />
       <DialControl
         control="ENC_CC"
         x={28}
@@ -86,7 +86,7 @@ export function CodexMicroControlMap({
       />
       <DialControl
         control="ENC_CLK"
-        x={42}
+        x={40}
         label="•"
         active={activeControl === 'ENC_CLK'}
         onActivate={onActivate}
@@ -94,7 +94,7 @@ export function CodexMicroControlMap({
       />
       <DialControl
         control="ENC_CW"
-        x={56}
+        x={52}
         label="↷"
         active={activeControl === 'ENC_CW'}
         onActivate={onActivate}
@@ -118,9 +118,9 @@ export function CodexMicroControlMap({
           'Joystick directions'
         )}
       >
-        <circle cx="167" cy="47" r="20" className="fill-card stroke-border" />
+        <circle cx="190" cy="43" r="15" className="fill-card stroke-border" />
         <path
-          d="M167 32v8m0 14v8m-15-15h8m14 0h8m-18-4 3-3 3 3m-6 8 3 3 3-3"
+          d="M190 32v6m0 10v6m-11-11h6m10 0h6m-14-4 3-3 3 3m-6 8 3 3 3-3"
           className="fill-none stroke-muted-foreground"
         />
       </g>
@@ -131,11 +131,11 @@ export function CodexMicroControlMap({
         onActivate={onActivate}
         onHover={onHover}
       >
-        <circle cx="37" cy="177" r="13" className="control-surface fill-card stroke-border" />
-        <circle cx="37" cy="177" r="4" className="fill-muted-foreground" />
+        <circle cx="40" cy="172" r="12" className="control-surface fill-card stroke-border" />
+        <circle cx="40" cy="172" r="4" className="fill-muted-foreground" />
         <text
-          x="37"
-          y="199"
+          x="40"
+          y="198"
           textAnchor="middle"
           className="pointer-events-none fill-muted-foreground text-[6px]"
         >
@@ -193,10 +193,10 @@ function DialControl({
 }): React.JSX.Element {
   return (
     <SvgControl control={control} active={active} onActivate={onActivate} onHover={onHover}>
-      <circle cx={x} cy="47" r="7" className="control-surface fill-card stroke-border" />
+      <circle cx={x} cy="43" r="7" className="control-surface fill-card stroke-border" />
       <text
         x={x}
-        y="49"
+        y="45"
         textAnchor="middle"
         className="pointer-events-none fill-muted-foreground text-[8px]"
       >
@@ -238,7 +238,9 @@ function SvgControl({
       onFocus={() => onHover(control)}
       onBlur={() => onHover(null)}
       className={`cursor-pointer outline-none [&>*]:transition-colors focus:[&>.control-surface]:stroke-ring focus:[&>.control-surface]:stroke-2 ${
-        active ? '[&>.control-surface]:fill-accent [&>.control-surface]:stroke-ring' : ''
+        active
+          ? '[&>.control-surface]:fill-accent [&>.control-surface]:stroke-ring [&>.control-surface]:stroke-2 [&>text]:fill-accent-foreground'
+          : ''
       }`}
     >
       <title>{codexMicroControlLabel(control)}</title>
