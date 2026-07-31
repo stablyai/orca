@@ -278,13 +278,47 @@ describe('SshGitProvider', () => {
 
     const result = await provider.execNonInteractive('pnpm', ['--version'], '/home/user/repo', 8000)
 
-    expect(mux.request).toHaveBeenCalledWith('agent.execNonInteractive', {
-      binary: 'pnpm',
-      args: ['--version'],
-      cwd: '/home/user/repo',
-      stdin: null,
-      timeoutMs: 8000
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'agent.execNonInteractive',
+      {
+        binary: 'pnpm',
+        args: ['--version'],
+        cwd: '/home/user/repo',
+        stdin: null,
+        timeoutMs: 8000
+      },
+      { timeoutMs: 38_000 }
+    )
+    expect(result).toEqual(execResult)
+  })
+
+  it('execNonInteractive forwards a request timeout with margin for the relay exec budget', async () => {
+    const execResult = {
+      stdout: 'host example.com\n',
+      stderr: '',
+      exitCode: 0,
+      timedOut: false
+    }
+    mux.request.mockResolvedValue(execResult)
+
+    const result = await provider.execNonInteractive(
+      'ssh',
+      ['-G', '--', 'example.com'],
+      '/home/user/repo',
+      5_000
+    )
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'agent.execNonInteractive',
+      {
+        binary: 'ssh',
+        args: ['-G', '--', 'example.com'],
+        cwd: '/home/user/repo',
+        stdin: null,
+        timeoutMs: 5_000
+      },
+      { timeoutMs: 35_000 }
+    )
     expect(result).toEqual(execResult)
   })
 
@@ -309,17 +343,21 @@ describe('SshGitProvider', () => {
       }
     )
 
-    expect(mux.request).toHaveBeenCalledWith('agent.execNonInteractive', {
-      binary: '/bin/bash',
-      args: ['-lc', 'echo "$ORCA_WORKTREE_PATH"'],
-      cwd: '/home/user/repo',
-      stdin: null,
-      timeoutMs: 120_000,
-      env: {
-        ORCA_ROOT_PATH: '/home/user/repo',
-        ORCA_WORKTREE_PATH: '/home/user/repo-feature'
-      }
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'agent.execNonInteractive',
+      {
+        binary: '/bin/bash',
+        args: ['-lc', 'echo "$ORCA_WORKTREE_PATH"'],
+        cwd: '/home/user/repo',
+        stdin: null,
+        timeoutMs: 120_000,
+        env: {
+          ORCA_ROOT_PATH: '/home/user/repo',
+          ORCA_WORKTREE_PATH: '/home/user/repo-feature'
+        }
+      },
+      { timeoutMs: 150_000 }
+    )
   })
 
   it('cancelNonInteractiveExec sends best-effort relay cancellation', async () => {
@@ -452,14 +490,18 @@ describe('SshGitProvider', () => {
       60_000
     )
 
-    expect(mux.request).toHaveBeenCalledWith('agent.execNonInteractive', {
-      binary: 'codex',
-      args: ['exec', 'PROMPT'],
-      cwd: '/home/user/repo',
-      stdin: null,
-      timeoutMs: 60_000,
-      operation: 'commit-message'
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'agent.execNonInteractive',
+      {
+        binary: 'codex',
+        args: ['exec', 'PROMPT'],
+        cwd: '/home/user/repo',
+        stdin: null,
+        timeoutMs: 60_000,
+        operation: 'commit-message'
+      },
+      { timeoutMs: 90_000 }
+    )
     expect(result).toEqual(execResult)
   })
 
@@ -496,22 +538,32 @@ describe('SshGitProvider', () => {
     )
 
     await waitForRequestCount(mux.request, 2)
-    expect(mux.request).toHaveBeenNthCalledWith(1, 'agent.execNonInteractive', {
-      binary: 'codex',
-      args: ['exec', 'PROMPT'],
-      cwd: '/home/user/repo',
-      stdin: null,
-      timeoutMs: 60_000,
-      operation: 'commit-message'
-    })
-    expect(mux.request).toHaveBeenNthCalledWith(2, 'agent.execNonInteractive', {
-      binary: 'codex',
-      args: ['exec', 'PROMPT'],
-      cwd: '/home/user/repo',
-      stdin: null,
-      timeoutMs: 60_000,
-      operation: 'pull-request-fields'
-    })
+    expect(mux.request).toHaveBeenNthCalledWith(
+      1,
+      'agent.execNonInteractive',
+      {
+        binary: 'codex',
+        args: ['exec', 'PROMPT'],
+        cwd: '/home/user/repo',
+        stdin: null,
+        timeoutMs: 60_000,
+        operation: 'commit-message'
+      },
+      { timeoutMs: 90_000 }
+    )
+    expect(mux.request).toHaveBeenNthCalledWith(
+      2,
+      'agent.execNonInteractive',
+      {
+        binary: 'codex',
+        args: ['exec', 'PROMPT'],
+        cwd: '/home/user/repo',
+        stdin: null,
+        timeoutMs: 60_000,
+        operation: 'pull-request-fields'
+      },
+      { timeoutMs: 90_000 }
+    )
 
     await provider.cancelGenerateCommitMessage('/home/user/repo')
     await provider.cancelGenerateCommitMessage('/home/user/repo', 'pull-request-fields')
@@ -556,13 +608,18 @@ describe('SshGitProvider', () => {
     await first
     await waitForRequestCount(mux.request, 2)
 
-    expect(mux.request).toHaveBeenNthCalledWith(2, 'agent.execNonInteractive', {
-      binary: 'pnpm',
-      args: ['install'],
-      cwd: '/home/user/repo',
-      stdin: null,
-      timeoutMs: 8000
-    })
+    expect(mux.request).toHaveBeenNthCalledWith(
+      2,
+      'agent.execNonInteractive',
+      {
+        binary: 'pnpm',
+        args: ['install'],
+        cwd: '/home/user/repo',
+        stdin: null,
+        timeoutMs: 8000
+      },
+      { timeoutMs: 38_000 }
+    )
     completeRequests.shift()?.()
     await second
   })
@@ -637,15 +694,36 @@ describe('SshGitProvider', () => {
     completeRequests.shift()?.()
     await first
     await waitForRequestCount(mux.request, 3)
-    expect(mux.request).toHaveBeenNthCalledWith(3, 'agent.execNonInteractive', {
-      binary: 'pnpm',
-      args: ['install'],
-      cwd: '/home/user/repo',
-      stdin: null,
-      timeoutMs: 8000
-    })
+    expect(mux.request).toHaveBeenNthCalledWith(
+      3,
+      'agent.execNonInteractive',
+      {
+        binary: 'pnpm',
+        args: ['install'],
+        cwd: '/home/user/repo',
+        stdin: null,
+        timeoutMs: 8000
+      },
+      { timeoutMs: 38_000 }
+    )
     completeRequests.shift()?.()
     await second
+  })
+
+  it('releases the lane when a mux request times out so queued work still runs', async () => {
+    const execResult = { stdout: '', stderr: '', exitCode: 0, timedOut: false }
+    mux.request
+      .mockRejectedValueOnce(
+        new Error('Request "agent.execNonInteractive" timed out after 38000ms')
+      )
+      .mockResolvedValue(execResult)
+
+    const first = provider.execNonInteractive('pnpm', ['store', 'prune'], '/home/user/repo', 8000)
+    const second = provider.execNonInteractive('pnpm', ['install'], '/home/user/repo', 8000)
+
+    await expect(first).rejects.toThrow('timed out after 38000ms')
+    await expect(second).resolves.toEqual(execResult)
+    expect(mux.request).toHaveBeenCalledTimes(2)
   })
 
   it('cancelGenerateCommitMessage sends best-effort relay cancellation', async () => {
