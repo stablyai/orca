@@ -9,6 +9,8 @@ import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
+import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export function useAddRepoCloneFlow({
   step,
@@ -22,7 +24,10 @@ export function useAddRepoCloneFlow({
   activeRuntimeEnvironmentId: string | null | undefined
   sshTargetId?: string | null
   workspaceDir: string | null | undefined
-  fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
+  fetchWorktrees: (
+    repoId: string,
+    options?: { requireAuthoritative?: boolean; executionHostId?: ExecutionHostId }
+  ) => Promise<unknown>
   onGitRepoReady: (repoId: string, source: AddRepoExistingWorkspaceSource) => Promise<void>
 }): {
   cloneUrl: string
@@ -148,18 +153,24 @@ export function useAddRepoCloneFlow({
       if (gen !== cloneGenRef.current || requestHostToken !== hostTokenRef.current) {
         return
       }
+      const { repo: ownedRepo } = upsertAddedRepoWithProjectHostSetup(repo, {
+        runtimeEnvironmentId: activeRuntimeEnvironmentId,
+        sshConnectionId: sshTargetId
+      })
       toast.success(
         translate('auto.components.sidebar.useAddRepoCloneFlow.4d0013cc93', 'Repository cloned'),
-        { description: repo.displayName }
+        { description: ownedRepo.displayName }
       )
-      upsertAddedRepoWithProjectHostSetup(repo)
       // Why: once the repo exists, a transient non-authoritative refresh
       // should fall through to project reveal instead of leaving the add flow open.
-      await fetchWorktrees(repo.id, { requireAuthoritative: true })
+      await fetchWorktrees(
+        ownedRepo.id,
+        worktreeRefreshOptions(activeRuntimeEnvironmentId, sshTargetId)
+      )
       if (gen !== cloneGenRef.current || requestHostToken !== hostTokenRef.current) {
         return
       }
-      await onGitRepoReady(repo.id, 'clone_url')
+      await onGitRepoReady(ownedRepo.id, 'clone_url')
     } catch (err) {
       if (gen !== cloneGenRef.current || requestHostToken !== hostTokenRef.current) {
         return

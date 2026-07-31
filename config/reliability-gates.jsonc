@@ -2233,13 +2233,13 @@
       "providers": ["local", "remote-runtime", "ssh", "wsl"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "remote-runtime", "ssh", "wsl"],
-      "coverageNotes": "Platform-neutral deterministic tests separate the durable Active Server preference from per-client connection, selected-workspace, browser-session, Add Project, and execution-host routing. The composed regression models Local desktop -> connect/navigate Windows 2 -> reveal a local terminal -> restart. Multi-client browser host overrides, multi-server profile caches, generic settings IPC rejection, local and remote workspace ownership, Add Project owner capture and stale-result fencing, and restart reset of transient routing are covered. A visible macOS Orca desktop server plus a separate paired Electron client proves real Git, folder, nested import, runtime-switch, disconnect, and reconnect routing; hidden-window parity also passed. Live Linux, Windows, WSL, and SSH Add Project journeys remain uncollected.",
+      "coverageNotes": "Platform-neutral deterministic tests separate the durable Active Server preference from per-client connection, selected-workspace, browser-session, Add Project, and execution-host routing. The composed regression models Local desktop -> connect/navigate Windows 2 -> reveal a local terminal -> restart. Multi-client browser host overrides, multi-server profile caches, generic settings IPC rejection, local and remote workspace ownership, Add Project owner capture and stale-result fencing, and restart reset of transient routing are covered. A visible macOS Orca desktop server plus a separate paired Electron client proves real Git, plain-folder, Clone, Create, nested import, runtime-switch, disconnect, reconnect, and local-after-runtime catalog refresh routing; hidden-window parity also passed. Live Linux, Windows, WSL, and SSH Add Project journeys remain uncollected.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/9687"],
       "invariant": "Only an explicit user change in Settings > Remote Orca Servers > Advanced > Active Server may mutate activeRuntimeEnvironmentId. Connecting, pairing, disconnecting, selecting or revealing a workspace or terminal, browser/mobile handoff, remote navigation, and reconnect must use transient or target-owner routing and must never rewrite the durable preference. Every Add Project scan, add, import, catalog refresh, and worktree refresh must stay on the host selected when that operation began, even if the durable preference changes or the repo catalog is not hydrated. Generic settings mutation cannot bypass the dedicated preference IPC.",
-      "oracle": "Start with Active Server=Local desktop, connect and navigate Windows 2, then reveal a local terminal and assert it succeeds while the persisted preference remains local before and after restart. Repeat with multiple clients and servers, browser host switches, remote-owned and local-owned workspaces, pairing/connect/disconnect, and generic settings writes. In a separate paired Electron client, select a non-default headed runtime and add a real Git repo, plain folder, and nested repos while switching the preference and disconnecting/reconnecting; require only the selected server inventory to change, exact runtime ownership in the client store, visible projects, and zero direct SSH fallback. Assert only the dedicated validated preference method changes activeRuntimeEnvironmentId and stale host-operation completions cannot overwrite the newly selected transient host.",
+      "oracle": "Start with Active Server=Local desktop, connect and navigate Windows 2, then reveal a local terminal and assert it succeeds while the persisted preference remains local before and after restart. Repeat with multiple clients and servers, browser host switches, remote-owned and local-owned workspaces, pairing/connect/disconnect, and generic settings writes. In a separate paired Electron client, select a non-default headed runtime and add a real Git repo, plain folder, clone, created project, and nested repos while switching the preference and disconnecting/reconnecting; then issue ordinary unqualified local group and folder refreshes. Require only the selected server inventory to change, exact runtime ownership in the client store, preserved runtime group/folder catalogs, visible projects, and zero direct SSH fallback. Assert only the dedicated validated preference method changes activeRuntimeEnvironmentId and stale host-operation completions cannot overwrite the newly selected transient host.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents.test.ts src/renderer/src/web/web-preload-api.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/worktrees.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/worktrees.test.ts --maxWorkers=1",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line"
       ],
@@ -2259,6 +2259,8 @@
         "src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts",
         "src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts",
         "src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts",
+        "src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts",
+        "src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts",
         "src/renderer/src/store/slices/repos-project-groups.test.ts",
         "src/renderer/src/store/slices/repos-selected-owner-routing.test.ts",
         "src/renderer/src/store/slices/worktrees.test.ts",
@@ -2307,9 +2309,22 @@
           ]
         },
         {
+          "file": "src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts",
+          "assertions": [
+            "stamps a Clone response with the captured runtime or SSH owner before store upsert and worktree refresh",
+            "preserves same-ID repository siblings that belong to different execution hosts"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts",
+          "assertions": [
+            "stamps Create responses with the captured runtime or SSH owner before store upsert and Git or folder worktree refresh"
+          ]
+        },
+        {
           "file": "src/renderer/src/store/slices/repos-selected-owner-routing.test.ts",
           "assertions": [
-            "merges explicit runtime groups and folders without erasing local siblings",
+            "keeps explicit runtime groups and folders after a later ordinary local refresh",
             "keeps a selected-runtime import refresh across an overlapping local refresh",
             "pins selected SSH scans and cancellation to local IPC over an ambient runtime"
           ]
@@ -2326,8 +2341,8 @@
         {
           "file": "tests/e2e/pr11346-selected-runtime-add.spec.ts",
           "assertions": [
-            "routes Add Project server paths to a selected non-default headed runtime @headful",
-            "keeps selected runtime Add Project routing in hidden-window desktop parity"
+            "routes every Add Project path to a selected non-default headed runtime @headful",
+            "keeps every selected-runtime Add Project path in hidden-window desktop parity"
           ]
         }
       ],
@@ -2345,10 +2360,10 @@
           "date": "2026-07-30",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/worktrees.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/worktrees.test.ts --maxWorkers=1",
           "result": "passed",
-          "durationSeconds": 2.69,
-          "summary": "Eight files and 290 tests passed, including selected runtime and SSH owner capture, catalog merge isolation, missing-catalog worktree routing, and catalog/provider generation fencing."
+          "durationSeconds": 7.41,
+          "summary": "Ten files and 301 tests passed, including selected runtime and SSH owner capture for Clone and Create, local-after-runtime catalog merge isolation, missing-catalog worktree routing, and catalog/provider generation fencing."
         },
         {
           "date": "2026-07-30",
@@ -2356,8 +2371,8 @@
           "platform": "macos",
           "command": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
           "result": "passed",
-          "durationSeconds": 17.9,
-          "summary": "A visible isolated Orca desktop server and separate paired Electron client added one real Git repo, one plain folder, and two nested repos to the selected non-default runtime across preference switches and disconnect/reconnect, with zero local inventory writes or direct SSH fallback attempts."
+          "durationSeconds": 19.8,
+          "summary": "A visible isolated Orca desktop server and separate paired Electron client added one real Git repo, one plain folder, one clone, one created project, and two nested repos to the selected non-default runtime across preference switches and disconnect/reconnect. A later unqualified local refresh preserved the runtime group/folder catalogs; server inventory, client owner rows, rendered project rows, local-client exclusion, and zero direct SSH fallback agreed."
         },
         {
           "date": "2026-07-30",
@@ -2365,8 +2380,8 @@
           "platform": "macos",
           "command": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
           "result": "passed",
-          "durationSeconds": 16.9,
-          "summary": "The hidden-window desktop-server parity journey passed with the same selected-runtime inventory and ownership assertions."
+          "durationSeconds": 28.0,
+          "summary": "The hidden-window desktop-server parity journey passed with the same Clone, Create, selected-runtime inventory, ownership, local exclusion, and catalog-preservation assertions."
         }
       ],
       "runtimeBudget": {
@@ -2379,11 +2394,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "For Add Project, current main and the candidate with its product routing disabled both fail the byte-identical headed oracle: the selected server retains only its seeded repo while the paired client completes the Git, folder, and nested adds through its local/default runtime. The candidate passes with exact selected-runtime inventory and client ownership. Earlier Active Server preference paths retain deterministic coverage but do not yet have a saved intentional-break artifact."
+        "evidence": "The byte-identical headed oracle fails on current main because manual Git, plain-folder, and nested adds miss the selected server. With only this follow-up disabled, seven of eighteen focused assertions fail because Clone/Create/SSH refreshes omit their captured executionHostId, and the headed oracle erases the selected-runtime group after an ordinary local refresh. The candidate passes with exact selected-runtime server inventory, paired-client ownership, local-client exclusion, preserved group/folder catalogs, visible rows, and zero direct SSH fallback. Earlier Active Server preference paths retain deterministic coverage but do not yet have a saved intentional-break artifact."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Preference writes are explicit user actions; transient routing adds no polling and uses existing host/worktree indexes. The headed journey measured 51 ms for three preference switches, 1,478 ms for Git add, 924 ms for folder add, 58 ms for disconnect/reconnect, and 1,294 ms for nested import. Zustand fan-out remained 0 render invalidations across 5,000,000 selector runs."
+        "evidence": "Preference writes are explicit user actions; transient routing adds no polling or provider fanout and retains one authoritative worktree refresh per completed add. The headed journey measured 55 ms for three preference switches, 1,475 ms for Git add, 821 ms for folder add, 1,187 ms for Clone, 732 ms for Create, 80 ms for disconnect/reconnect, and 1,267 ms for nested import. Zustand fan-out remained 0 render invalidations across 5,000,000 selector runs."
       },
       "promotionCriteria": [
         "Run the focused gate in soak across macOS, Linux, and Windows.",

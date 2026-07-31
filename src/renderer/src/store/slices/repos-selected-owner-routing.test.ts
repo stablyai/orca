@@ -115,6 +115,18 @@ describe('selected Add Project owner routing', () => {
       { ...runtimeGroup, executionHostId: 'runtime:env-1' }
     ])
     expect(store.getState().folderWorkspaces).toEqual([localFolder, runtimeFolder])
+
+    projectGroupsList.mockResolvedValue([localGroup])
+    folderWorkspacesList.mockResolvedValue([localFolder])
+    store.setState({ settings: { activeRuntimeEnvironmentId: null } as never })
+    await store.getState().fetchProjectGroups()
+    await store.getState().fetchFolderWorkspaces()
+
+    expect(store.getState().projectGroups).toEqual([
+      localGroup,
+      { ...runtimeGroup, executionHostId: 'runtime:env-1' }
+    ])
+    expect(store.getState().folderWorkspaces).toEqual([localFolder, runtimeFolder])
   })
 
   it('keeps a selected-runtime import refresh across an overlapping local refresh', async () => {

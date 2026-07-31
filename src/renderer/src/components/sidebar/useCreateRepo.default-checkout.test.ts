@@ -240,13 +240,18 @@ describe('useCreateRepo default-checkout handoff', () => {
     })
     expect(mocks.createRepo).not.toHaveBeenCalled()
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true
+      requireAuthoritative: true,
+      executionHostId: 'ssh:ssh-1'
+    })
+    expect(mocks.storeState.repos).toContainEqual({
+      ...repo,
+      executionHostId: 'ssh:ssh-1'
     })
     expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
   })
 
   it('creates projects through the selected runtime environment', async () => {
-    const repo = makeRepo({ executionHostId: 'runtime:env-1', path: '/srv/created' })
+    const repo = makeRepo({ path: '/srv/created' })
     mocks.callRuntimeRpc.mockResolvedValue({ repo })
     mocks.fetchWorktrees.mockResolvedValue(true)
     const { useCreateRepo } = await import('./useCreateRepo')
@@ -270,7 +275,12 @@ describe('useCreateRepo default-checkout handoff', () => {
     expect(mocks.createRepo).not.toHaveBeenCalled()
     expect(mocks.createRemoteRepo).not.toHaveBeenCalled()
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true
+      requireAuthoritative: true,
+      executionHostId: 'runtime:env-1'
+    })
+    expect(mocks.storeState.repos).toContainEqual({
+      ...repo,
+      executionHostId: 'runtime:env-1'
     })
     expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
   })

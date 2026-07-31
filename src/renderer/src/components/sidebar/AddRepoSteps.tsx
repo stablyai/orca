@@ -8,13 +8,15 @@ import { createNestedRepoTelemetryAttemptId } from '../../../../shared/nested-re
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
+import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 // ── SSH host project hook ───────────────────────────────────────────
 
 export function useRemoteRepo(
   fetchWorktrees: (
     repoId: string,
-    options?: { requireAuthoritative?: boolean }
+    options?: { requireAuthoritative?: boolean; executionHostId?: ExecutionHostId }
   ) => Promise<unknown>,
   setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'nested') => void,
   closeModal: () => void,
@@ -187,14 +189,13 @@ export function useRemoteRepo(
       if ('error' in result) {
         throw new Error(result.error)
       }
-      const repo = result.repo
+      const { alreadyPresent, repo } = upsertAddedRepoWithProjectHostSetup(result.repo, {
+        sshConnectionId: selectedTargetId
+      })
 
-      const state = useAppStore.getState()
-      const existingIdx = state.repos.findIndex((r) => r.id === repo.id)
-      if (existingIdx !== -1) {
-        state.clearOrcaHookTrustForRepo(repo.id)
+      if (alreadyPresent) {
+        useAppStore.getState().clearOrcaHookTrustForRepo(repo.id)
       }
-      upsertAddedRepoWithProjectHostSetup(repo)
 
       if (!mountedRef.current || gen !== remoteGenRef.current) {
         return
@@ -205,7 +206,7 @@ export function useRemoteRepo(
       )
       // Why: the repo is already persisted here; if SSH refresh is temporarily
       // non-authoritative, finish onto the project row instead of stranding the dialog.
-      await fetchWorktrees(repo.id, { requireAuthoritative: true })
+      await fetchWorktrees(repo.id, worktreeRefreshOptions(undefined, selectedTargetId))
       if (!mountedRef.current || gen !== remoteGenRef.current) {
         return
       }

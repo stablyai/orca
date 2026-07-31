@@ -2013,10 +2013,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       )
       const catalog = await fetchProjectGroupCatalogForTarget(target)
       set((current) => ({
-        projectGroups: mergeFetchedProjectGroupCatalog(
-          catalog,
-          options === undefined ? [] : current.projectGroups
-        ).projectGroups,
+        projectGroups: mergeFetchedProjectGroupCatalog(catalog, current.projectGroups)
+          .projectGroups,
         folderWorkspacePathStatuses: {}
       }))
     } catch (err) {
@@ -2076,7 +2074,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         )
         const { folderWorkspaces } = mergeFetchedFolderWorkspaceCatalog(
           catalog,
-          options === undefined ? [] : current.folderWorkspaces,
+          current.folderWorkspaces,
           current.projectGroups
         )
         return { folderWorkspaces, folderWorkspacePathStatuses: {} }

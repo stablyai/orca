@@ -33,6 +33,11 @@ function initializeGitRepo(repoPath: string, markerName: string): void {
 }
 
 async function createProjectFixtures(): Promise<{
+  catalogFolderPath: string
+  cloneParentPath: string
+  clonedRepoPath: string
+  createdRepoPath: string
+  createParentPath: string
   folderPath: string
   gitPath: string
   nestedParentPath: string
@@ -42,21 +47,35 @@ async function createProjectFixtures(): Promise<{
   const rootPath = realpathSync(await mkdtemp(path.join(os.tmpdir(), 'orca-pr11346-headed-')))
   const gitPath = path.join(rootPath, 'remote-git-project')
   const folderPath = path.join(rootPath, 'remote-plain-folder')
+  const cloneParentPath = path.join(rootPath, 'remote-clones')
+  const createParentPath = path.join(rootPath, 'remote-created-projects')
   const nestedParentPath = path.join(rootPath, 'remote-nested-projects')
+  const catalogFolderPath = path.join(nestedParentPath, 'catalog-workspace')
   const nestedRepoPaths = ['nested-api', 'nested-web'].map((name) =>
     path.join(nestedParentPath, name)
   )
   mkdirSync(folderPath)
+  mkdirSync(cloneParentPath)
+  mkdirSync(createParentPath)
   writeFileSync(path.join(folderPath, 'REMOTE_FOLDER_MARKER.txt'), 'remote-folder-authority\n')
   initializeGitRepo(gitPath, 'REMOTE_GIT_MARKER.md')
   nestedRepoPaths.forEach((repoPath) => initializeGitRepo(repoPath, 'NESTED_REMOTE_MARKER.md'))
-  return { folderPath, gitPath, nestedParentPath, nestedRepoPaths, rootPath }
+  mkdirSync(catalogFolderPath)
+  return {
+    catalogFolderPath,
+    cloneParentPath,
+    clonedRepoPath: path.join(cloneParentPath, path.basename(gitPath)),
+    createParentPath,
+    createdRepoPath: path.join(createParentPath, 'runtime-created-project'),
+    folderPath,
+    gitPath,
+    nestedParentPath,
+    nestedRepoPaths,
+    rootPath
+  }
 }
 
-async function selectRuntimeHostAndOpenManualPath(
-  page: Page,
-  runtimeName: string
-): Promise<Locator> {
+async function selectRuntimeHost(page: Page, runtimeName: string): Promise<Locator> {
   await page
     .getByRole('button', { name: /Add Project/i })
     .first()
@@ -66,6 +85,14 @@ async function selectRuntimeHostAndOpenManualPath(
   await dialog.getByRole('combobox').click()
   await page.getByText(runtimeName, { exact: true }).click()
   await expect(dialog.getByRole('combobox')).toContainText(runtimeName)
+  return dialog
+}
+
+async function selectRuntimeHostAndOpenManualPath(
+  page: Page,
+  runtimeName: string
+): Promise<Locator> {
+  const dialog = await selectRuntimeHost(page, runtimeName)
   await dialog.getByRole('button', { name: /Browse folder|Browse host/i }).click()
   const browseDialog = page.getByRole('dialog', { name: /Browse host filesystem/i })
   await expect(browseDialog).toBeVisible()
@@ -162,6 +189,26 @@ async function runSelectedRuntimeAddJourney(
     measurements.folderAddMs = Date.now() - startedAt
 
     startedAt = Date.now()
+    const cloneDialog = await selectRuntimeHost(client.page, runtimeName)
+    await cloneDialog.getByRole('button', { name: /Clone from URL/i }).click()
+    const cloneStep = client.page.getByRole('dialog', { name: /Clone from URL/i })
+    await cloneStep.getByRole('textbox').nth(0).fill(fixture.gitPath)
+    await cloneStep.getByRole('textbox').nth(1).fill(fixture.cloneParentPath)
+    await cloneStep.getByRole('button', { name: /^Clone$/i }).click()
+    await expect(cloneStep).toBeHidden({ timeout: 30_000 })
+    measurements.cloneMs = Date.now() - startedAt
+
+    startedAt = Date.now()
+    const createDialog = await selectRuntimeHost(client.page, runtimeName)
+    await createDialog.getByRole('button', { name: /Create (?:on host|new project)/i }).click()
+    const createStep = client.page.getByRole('dialog', { name: /Create a new project/i })
+    await createStep.locator('#create-project-name').fill('runtime-created-project')
+    await createStep.getByPlaceholder('/home/user/projects').fill(fixture.createParentPath)
+    await createStep.getByRole('button', { name: 'Create project', exact: true }).click()
+    await expect(createStep).toBeHidden({ timeout: 30_000 })
+    measurements.createMs = Date.now() - startedAt
+
+    startedAt = Date.now()
     await client.page.evaluate(async (environmentId) => {
       await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
       const response = await window.api.runtimeEnvironments.connect({
@@ -234,18 +281,80 @@ async function runSelectedRuntimeAddJourney(
         repoPaths: expect.arrayContaining([
           fixture.gitPath,
           fixture.folderPath,
+          fixture.clonedRepoPath,
+          fixture.createdRepoPath,
           ...fixture.nestedRepoPaths
         ])
       })
 
+    const runtimeCatalog = await listRuntimeInventory(serverRuntime)
+    const runtimeGroup = runtimeCatalog.projectGroups.find(
+      (group) => group.parentPath === fixture.nestedParentPath
+    )
+    if (!runtimeGroup) {
+      throw new Error('Runtime project group unavailable for folder catalog boundary')
+    }
+    await serverRuntime.call('folderWorkspace.create', {
+      folderPath: fixture.catalogFolderPath,
+      name: 'Runtime catalog workspace',
+      projectGroupId: runtimeGroup.id
+    })
+    expect(
+      (await listRuntimeInventory(serverRuntime)).folderWorkspaces.map(
+        (workspace) => workspace.folderPath
+      )
+    ).toContain(fixture.catalogFolderPath)
+
+    const catalogAfterLocalRefresh = await client.page.evaluate(async (runtimeEnvironmentId) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('Renderer store unavailable')
+      }
+      await store.getState().fetchProjectGroups({ runtimeEnvironmentId })
+      await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId })
+      await store.getState().fetchProjectGroups()
+      await store.getState().fetchFolderWorkspaces()
+      return {
+        folderWorkspaces: store.getState().folderWorkspaces,
+        projectGroups: store.getState().projectGroups
+      }
+    }, client.environmentId)
+    expect(catalogAfterLocalRefresh.projectGroups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          executionHostId: `runtime:${client.environmentId}`,
+          parentPath: fixture.nestedParentPath
+        })
+      ])
+    )
+    expect(catalogAfterLocalRefresh.folderWorkspaces).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          folderPath: fixture.catalogFolderPath
+        })
+      ])
+    )
+
     const clientRegistration = await client.page.evaluate(
-      ({ environmentId, folderPath, gitPath, nestedParentPath, nestedRepoPaths }) => {
+      ({
+        clonedRepoPath,
+        createdRepoPath,
+        environmentId,
+        folderPath,
+        gitPath,
+        nestedParentPath,
+        nestedRepoPaths
+      }) => {
         const state = window.__store?.getState()
         const nestedGroup = state?.projectGroups.find(
           (group) => group.parentPath === nestedParentPath
         )
         const nestedRepos = state?.repos.filter((repo) => nestedRepoPaths.includes(repo.path)) ?? []
         return {
+          clonedOwner:
+            state?.repos.find((repo) => repo.path === clonedRepoPath)?.executionHostId ?? null,
+          createdOwner:
+            state?.repos.find((repo) => repo.path === createdRepoPath)?.executionHostId ?? null,
           folderKind: state?.repos.find((repo) => repo.path === folderPath)?.kind ?? null,
           folderOwner:
             state?.repos.find((repo) => repo.path === folderPath)?.executionHostId ?? null,
@@ -261,6 +370,8 @@ async function runSelectedRuntimeAddJourney(
         }
       },
       {
+        clonedRepoPath: fixture.clonedRepoPath,
+        createdRepoPath: fixture.createdRepoPath,
         environmentId: client.environmentId,
         folderPath: fixture.folderPath,
         gitPath: fixture.gitPath,
@@ -270,6 +381,8 @@ async function runSelectedRuntimeAddJourney(
     )
     expect(clientRegistration).toEqual({
       activeRuntimeEnvironmentId: null,
+      clonedOwner: `runtime:${client.environmentId}`,
+      createdOwner: `runtime:${client.environmentId}`,
       expectedOwner: `runtime:${client.environmentId}`,
       folderKind: 'folder',
       folderOwner: `runtime:${client.environmentId}`,
@@ -280,8 +393,14 @@ async function runSelectedRuntimeAddJourney(
     })
 
     const finalClientInventory = await listRuntimeInventory(clientLocalRuntime)
-    expect(finalClientInventory.repos.map((repo) => repo.path)).not.toContain(fixture.gitPath)
-    expect(finalClientInventory.repos.map((repo) => repo.path)).not.toContain(fixture.folderPath)
+    expect(finalClientInventory.repos.map((repo) => repo.path)).toEqual(
+      expect.not.arrayContaining([
+        fixture.gitPath,
+        fixture.folderPath,
+        fixture.clonedRepoPath,
+        fixture.createdRepoPath
+      ])
+    )
     expect(finalClientInventory.repos.map((repo) => repo.path)).toEqual(
       expect.not.arrayContaining(fixture.nestedRepoPaths)
     )
@@ -290,10 +409,12 @@ async function runSelectedRuntimeAddJourney(
     )
     expect(
       finalClientInventory.folderWorkspaces.map((workspace) => workspace.folderPath)
-    ).not.toContain(fixture.folderPath)
+    ).not.toContain(fixture.catalogFolderPath)
     for (const projectName of [
       path.basename(fixture.gitPath),
       path.basename(fixture.folderPath),
+      path.basename(fixture.clonedRepoPath),
+      path.basename(fixture.createdRepoPath),
       ...fixture.nestedRepoPaths.map((repoPath) => path.basename(repoPath))
     ]) {
       await expect(client.page.getByText(projectName, { exact: true }).first()).toBeVisible()
@@ -310,7 +431,7 @@ async function runSelectedRuntimeAddJourney(
   }
 }
 
-test('routes Add Project server paths to a selected non-default headed runtime @headful', async ({
+test('routes every Add Project path to a selected non-default headed runtime @headful', async ({
   electronApp,
   orcaPage
 }, testInfo) => {
@@ -318,7 +439,7 @@ test('routes Add Project server paths to a selected non-default headed runtime @
   await runSelectedRuntimeAddJourney(electronApp, orcaPage, testInfo, true)
 })
 
-test('keeps selected runtime Add Project routing in hidden-window desktop parity', async ({
+test('keeps every selected-runtime Add Project path in hidden-window desktop parity', async ({
   electronApp,
   orcaPage
 }, testInfo) => {

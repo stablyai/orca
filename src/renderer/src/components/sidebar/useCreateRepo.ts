@@ -12,11 +12,13 @@ import type { Repo } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
+import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export function useCreateRepo(
   fetchWorktrees: (
     repoId: string,
-    options?: { requireAuthoritative?: boolean }
+    options?: { requireAuthoritative?: boolean; executionHostId?: ExecutionHostId }
   ) => Promise<boolean>,
   closeModal: () => void,
   onGitRepoReady?: (repoId: string) => void | Promise<void>,
@@ -137,15 +139,17 @@ export function useCreateRepo(
         setCreateError(result.error)
         return
       }
-      const repo = result.repo
-      const state = useAppStore.getState()
-      const existingIdx = state.repos.findIndex((r) => r.id === repo.id)
+      const { alreadyPresent: wasDeduped, repo } = upsertAddedRepoWithProjectHostSetup(
+        result.repo,
+        {
+          runtimeEnvironmentId: options.runtimeEnvironmentId,
+          sshConnectionId: options.sshTargetId
+        }
+      )
       // Why: the IPC handler dedupes by path (see repos:create) and returns
-      // the existing repo unchanged. If its ID is already in our store, the
+      // the existing repo unchanged. If its host identity is already in our store, the
       // handler took the dedup path — no new project was created, so don't
       // claim one was.
-      const wasDeduped = existingIdx !== -1
-      upsertAddedRepoWithProjectHostSetup(repo)
       if (wasDeduped) {
         toast.info(
           translate(
@@ -168,7 +172,10 @@ export function useCreateRepo(
         // Why: Git repos use the shared default-checkout completion path.
         // Why: if refresh is temporarily non-authoritative, the shared opener
         // still reveals the project so the user is not left in a completed add flow.
-        await fetchWorktrees(repo.id, { requireAuthoritative: true })
+        await fetchWorktrees(
+          repo.id,
+          worktreeRefreshOptions(options.runtimeEnvironmentId, options.sshTargetId)
+        )
         if (
           gen !== createGenRef.current ||
           requestHostToken !== hostTokenRef.current ||
@@ -180,7 +187,13 @@ export function useCreateRepo(
       } else {
         // Why: folder repos skip the Git default-checkout handoff, so activate the synthetic
         // root workspace before closing. Matches addNonGitFolder's behavior.
-        await fetchWorktrees(repo.id)
+        const ownerOptions = worktreeRefreshOptions(
+          options.runtimeEnvironmentId,
+          options.sshTargetId
+        )
+        await (ownerOptions.executionHostId
+          ? fetchWorktrees(repo.id, { executionHostId: ownerOptions.executionHostId })
+          : fetchWorktrees(repo.id))
         if (
           gen !== createGenRef.current ||
           requestHostToken !== hostTokenRef.current ||

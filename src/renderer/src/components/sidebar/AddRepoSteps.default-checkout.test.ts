@@ -135,7 +135,12 @@ describe('useRemoteRepo default-checkout handoff', () => {
       remotePath: '/srv/repo'
     })
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true
+      requireAuthoritative: true,
+      executionHostId: 'ssh:ssh-1'
+    })
+    expect(mocks.storeState.repos).toContainEqual({
+      ...repo,
+      executionHostId: 'ssh:ssh-1'
     })
     expect(mocks.storeState.projects).toEqual(
       expect.arrayContaining([expect.objectContaining({ sourceRepoIds: [repo.id] })])
@@ -162,7 +167,8 @@ describe('useRemoteRepo default-checkout handoff', () => {
     await result.handleAddRemoteRepo()
 
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true
+      requireAuthoritative: true,
+      executionHostId: 'ssh:ssh-1'
     })
     expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
     expect(mocks.stateSetters[3]).not.toHaveBeenCalledWith(
