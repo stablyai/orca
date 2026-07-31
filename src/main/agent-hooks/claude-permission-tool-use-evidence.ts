@@ -1,12 +1,5 @@
-// Why: Claude's PermissionRequest hook carries no `tool_use_id`, so a permission wait can only be released
-// once the approved tool proves it resumed. The proof is the id Claude announced in the matching
-// `PreToolUse`, which the server must remember per pane: with a parallel tool batch the previously cached
-// event belongs to a sibling call, so the id is not reachable from it.
-//
-// The ledger is turn-scoped. Besides the queue of announced-but-unclaimed calls it keeps when this pane
-// announced each id and which ids have already completed, because "an id this pane had not announced when
-// the prompt appeared" is what separates the approved call reporting back from a retried, replayed or
-// sibling completion.
+// Why: Claude's PermissionRequest carries no `tool_use_id`, so a pane must remember the ids announced in
+// `PreToolUse` to prove the approved call resumed; a sibling of a parallel batch sits between the two.
 
 export type ClaudePendingToolUse = {
   toolUseId: string
@@ -18,23 +11,19 @@ export type ClaudePendingToolUse = {
 }
 
 type ClaudePaneToolUseLedger = {
+  /** Claimable calls; turn-scoped. */
   pending: ClaudePendingToolUse[]
-  /** id → the moment this pane announced it, so a completion can be told apart from one whose
-   *  announcement only arrived after the prompt was already on screen. */
+  /** id → announcement time; outlives the turn so a retried completion still reads as already seen. */
   announced: Map<string, number>
   completed: Set<string>
 }
 
 export type ClaudePendingToolUseStore = Map<string, ClaudePaneToolUseLedger>
 
-// Why: the queue and the id history share one bound on purpose — a call the pane still remembers announcing
-// must stay claimable, or its prompt could never attach an id while the ledger insists the id is accounted
-// for, and the pane would sit amber for the rest of the turn.
+// Why: one bound for both stores — a call the pane still remembers announcing must stay claimable.
 export const CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE = 64
 
-// Why: the ledger is cleared at every turn boundary, so the TTL only bounds ids left behind by a turn that
-// ended without a Stop hook (kill, crash, lost POST). It must outlast a human staring at a prompt, since
-// the turn stays open the whole time.
+// Why: backstop for a turn that ends without a Stop hook; must outlast a human staring at a prompt.
 export const CLAUDE_PENDING_TOOL_USE_TTL_MS = 60 * 60_000
 
 type ClaudeToolUseIdentity = {
@@ -59,8 +48,7 @@ function matchesPendingToolUse(
   if (entry.toolAgentId !== request.toolAgentId || entry.toolAgentType !== request.toolAgentType) {
     return false
   }
-  // Why: an unknown input on both sides is still the same call as long as the identity fields above agree;
-  // one known and one unknown is not, or a permission would adopt a sibling's id.
+  // Why: exact equality — one known and one unknown input would let a permission adopt a sibling's id.
   return entry.toolInput === request.toolInput
 }
 
@@ -78,14 +66,12 @@ function ledgerFor(store: ClaudePendingToolUseStore, paneKey: string): ClaudePan
   return created
 }
 
-function rememberId(ids: Set<string> | Map<string, number>, toolUseId: string, at?: number): void {
-  // Why: re-adding moves the id to the end, so the trim below drops genuinely old ids.
-  ids.delete(toolUseId)
-  if (ids instanceof Map) {
-    ids.set(toolUseId, at ?? 0)
-  } else {
-    ids.add(toolUseId)
-  }
+// Why: re-inserting moves an id to the end, so the trim drops genuinely old ones.
+function trimOldestIds(ids: {
+  size: number
+  keys: () => IterableIterator<string>
+  delete: (id: string) => boolean
+}): void {
   while (ids.size > CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE) {
     const oldest = ids.keys().next().value
     if (oldest === undefined) {
@@ -93,6 +79,18 @@ function rememberId(ids: Set<string> | Map<string, number>, toolUseId: string, a
     }
     ids.delete(oldest)
   }
+}
+
+function rememberAnnouncedId(announced: Map<string, number>, toolUseId: string, at: number): void {
+  announced.delete(toolUseId)
+  announced.set(toolUseId, at)
+  trimOldestIds(announced)
+}
+
+function rememberCompletedId(completed: Set<string>, toolUseId: string): void {
+  completed.delete(toolUseId)
+  completed.add(toolUseId)
+  trimOldestIds(completed)
 }
 
 function pruneLedger(
@@ -126,8 +124,7 @@ export function rememberClaudePendingToolUse(
     ...(toolUse.toolAgentType !== undefined ? { toolAgentType: toolUse.toolAgentType } : {}),
     recordedAt: now
   }
-  // Why: a retried POST of the same announcement must refresh its entry, not queue a duplicate that the
-  // next permission would claim in place of its own call.
+  // Why: a retried announcement refreshes its entry; a duplicate would be claimed by the wrong prompt.
   const kept = ledger.pending.filter(
     (candidate) => candidate.toolUseId !== toolUseId && isFresh(candidate, now)
   )
@@ -136,10 +133,12 @@ export function rememberClaudePendingToolUse(
     kept.length > CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE
       ? kept.slice(kept.length - CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE)
       : kept
-  rememberId(ledger.announced, toolUseId, now)
+  rememberAnnouncedId(ledger.announced, toolUseId, now)
 }
 
-/** Retire a call that reported back: its id can no longer be claimed by a later permission request. */
+/** Retire a call that reported back: its id can no longer be claimed by a later permission request.
+ *  Creates the pane's ledger when absent — a completion seen before any announcement still has to be
+ *  remembered, or its retry would look like an unannounced call and answer the next prompt. */
 export function retireClaudeCompletedToolUse(
   store: ClaudePendingToolUseStore,
   paneKey: string,
@@ -151,11 +150,10 @@ export function retireClaudeCompletedToolUse(
   }
   const ledger = ledgerFor(store, paneKey)
   ledger.pending = ledger.pending.filter((entry) => entry.toolUseId !== id)
-  rememberId(ledger.completed, id)
+  rememberCompletedId(ledger.completed, id)
 }
 
-/** Claim the id of the oldest announced call matching this permission request, removing it so the next
- *  prompt of the same batch claims the next one. Undefined when the pane announced nothing usable. */
+/** Claim the oldest matching announced call, removing it so the batch's next prompt claims the next one. */
 export function takeClaudePendingToolUseId(
   store: ClaudePendingToolUseStore,
   paneKey: string,
@@ -166,8 +164,7 @@ export function takeClaudePendingToolUseId(
   if (!ledger || request.toolName === undefined) {
     return undefined
   }
-  // Why: oldest-first. Claude prompts for a batch in announcement order, so two calls that share a
-  // truncated input preview must be claimed in that order or each prompt adopts its sibling's id.
+  // Why: oldest-first — Claude prompts in announcement order, so calls sharing an input preview pair up.
   const index = ledger.pending.findIndex(
     (entry) => isFresh(entry, now) && matchesPendingToolUse(entry, request)
   )
@@ -179,10 +176,8 @@ export function takeClaudePendingToolUseId(
   return claimed?.toolUseId
 }
 
-/** True when this id cannot be traced to a call this pane had already announced by `announcedBefore` — it
- *  is either a call whose `PreToolUse` never reached us, or one announced only after that moment. That is
- *  the signature of the call a permission prompt is waiting on, as opposed to a retried or replayed
- *  completion, a sibling of the same batch, or a call from an earlier turn. */
+/** True when the id traces to no call this pane had announced by `announcedBefore` — the signature of the
+ *  call a prompt waits on, as opposed to a retry, a replay, a batch sibling or an earlier turn. */
 export function isClaudeToolUseUnaccountedFor(
   store: ClaudePendingToolUseStore,
   paneKey: string,
@@ -204,7 +199,21 @@ export function isClaudeToolUseUnaccountedFor(
   return announcedAt === undefined || announcedAt >= announcedBefore
 }
 
-/** Drop a pane's evidence — pane teardown, and the turn boundaries that make older ids meaningless. */
+/** Drop what a pane can still claim, keeping the seen-id history: a new turn must not adopt the previous
+ *  turn's call, yet a completion retried across the boundary must still read as a repeat. */
+export function forgetClaudeClaimableToolUses(
+  store: ClaudePendingToolUseStore,
+  paneKey: string
+): void {
+  const ledger = store.get(paneKey)
+  if (!ledger) {
+    return
+  }
+  ledger.pending = []
+  pruneLedger(ledger, store, paneKey)
+}
+
+/** Drop a pane's evidence entirely — pane teardown, where nothing about the old process stays relevant. */
 export function forgetClaudePendingToolUses(
   store: ClaudePendingToolUseStore,
   paneKey: string
@@ -225,7 +234,35 @@ export function forgetClaudePendingToolUsesWhere(
   }
 }
 
-/** Follow a pane through an authority transfer so its batch evidence stays reachable. */
+function mergeLedgers(destination: ClaudePaneToolUseLedger, source: ClaudePaneToolUseLedger): void {
+  const pendingById = new Map<string, ClaudePendingToolUse>()
+  for (const entry of [...destination.pending, ...source.pending]) {
+    const existing = pendingById.get(entry.toolUseId)
+    if (existing === undefined || existing.recordedAt < entry.recordedAt) {
+      pendingById.set(entry.toolUseId, entry)
+    }
+  }
+  destination.pending = [...pendingById.values()]
+    .sort((left, right) => left.recordedAt - right.recordedAt)
+    .slice(-CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE)
+  for (const [toolUseId, announcedAt] of source.announced) {
+    const existing = destination.announced.get(toolUseId)
+    if (existing === undefined || existing < announcedAt) {
+      destination.announced.set(toolUseId, announcedAt)
+    }
+  }
+  destination.announced = new Map(
+    [...destination.announced.entries()]
+      .sort((left, right) => left[1] - right[1])
+      .slice(-CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE)
+  )
+  const completed = [...destination.completed, ...source.completed]
+  destination.completed = new Set(completed.slice(-CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE))
+}
+
+/** Follow a pane through an authority transfer so its batch evidence stays reachable. Merges rather than
+ *  replaces: a destination pane that has been live has evidence of its own, and dropping it would leave its
+ *  prompts unable to attach an id. */
 export function moveClaudePendingToolUses(
   store: ClaudePendingToolUseStore,
   fromPaneKey: string,
@@ -234,12 +271,19 @@ export function moveClaudePendingToolUses(
   if (fromPaneKey === toPaneKey) {
     return
   }
-  const ledger = store.get(fromPaneKey)
-  store.delete(fromPaneKey)
-  if (ledger) {
-    store.set(toPaneKey, ledger)
-    pruneLedger(ledger, store, toPaneKey)
+  const source = store.get(fromPaneKey)
+  if (!source) {
+    return
   }
+  store.delete(fromPaneKey)
+  const destination = store.get(toPaneKey)
+  if (!destination) {
+    store.set(toPaneKey, source)
+    pruneLedger(source, store, toPaneKey)
+    return
+  }
+  mergeLedgers(destination, source)
+  pruneLedger(destination, store, toPaneKey)
 }
 
 export function clearClaudePendingToolUses(store: ClaudePendingToolUseStore): void {

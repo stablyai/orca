@@ -168,6 +168,16 @@ describe('claude pending tool-use evidence', () => {
         NOW + 100
       )
     ).toBe(`toolu_${CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE + 3}`)
+    // Why: the id history shares the bound, so the oldest trimmed id also stops counting as accounted for.
+    expect(isClaudeToolUseUnaccountedFor(pending, PANE, 'toolu_0', NOW + 100)).toBe(true)
+    expect(
+      isClaudeToolUseUnaccountedFor(
+        pending,
+        PANE,
+        `toolu_${CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE + 3}`,
+        NOW + 100
+      )
+    ).toBe(false)
   })
 
   it('ignores announcements without an id or tool name', () => {
@@ -206,5 +216,37 @@ describe('claude pending tool-use evidence', () => {
     expect(
       takeClaudePendingToolUseId(pending, OTHER_PANE, { toolName: 'Bash', toolInput: 'ls' }, NOW)
     ).toBe('toolu_a')
+  })
+
+  it('merges into a destination pane that has evidence of its own', () => {
+    // Why: a live destination pane has announced calls too; replacing its ledger would orphan them and its
+    // own prompts could never attach an id.
+    const pending = store()
+    announce(pending, 'toolu_source', 'git status', NOW)
+    announce(pending, 'toolu_destination', 'git log', NOW + 5, OTHER_PANE)
+    retireClaudeCompletedToolUse(pending, OTHER_PANE, 'toolu_destination_done')
+
+    moveClaudePendingToolUses(pending, PANE, OTHER_PANE)
+
+    expect(
+      takeClaudePendingToolUseId(
+        pending,
+        OTHER_PANE,
+        { toolName: 'Bash', toolInput: 'git log' },
+        NOW
+      )
+    ).toBe('toolu_destination')
+    expect(
+      takeClaudePendingToolUseId(
+        pending,
+        OTHER_PANE,
+        { toolName: 'Bash', toolInput: 'git status' },
+        NOW
+      )
+    ).toBe('toolu_source')
+    expect(isClaudeToolUseUnaccountedFor(pending, OTHER_PANE, 'toolu_source', NOW + 10)).toBe(false)
+    expect(
+      isClaudeToolUseUnaccountedFor(pending, OTHER_PANE, 'toolu_destination_done', NOW + 10)
+    ).toBe(false)
   })
 })

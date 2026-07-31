@@ -78,6 +78,7 @@ import {
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
 import {
   clearClaudePendingToolUses,
+  forgetClaudeClaimableToolUses,
   forgetClaudePendingToolUses,
   forgetClaudePendingToolUsesWhere,
   isClaudeToolUseUnaccountedFor,
@@ -499,11 +500,8 @@ function isClaudePermissionResumingApprovedTool(
     previous.payload.toolInput === undefined &&
     next.payload.toolInput === undefined
 
-  // Why: safety valve for a permission the pane could never attach an id to (a lost PreToolUse POST, or an
-  // agent build that stops sending ids). A PostToolUse proves the tool ran, so the prompt was answered — but
-  // only a call this pane had not already announced when the prompt was cached can be that call: a retried
-  // POST, a relay replay, a sibling of the batch or an earlier turn's completion all carry an id the ledger
-  // had already seen, and accepting those would clear the glyph while the dialog is still open.
+  // Why: valve for a permission that could never attach an id (lost PreToolUse POST); only a call unseen at
+  // prompt time qualifies, since a retry, replay, sibling or earlier turn would clear an open dialog.
   const bothUnknownToolInput =
     previous.payload.toolInput === undefined && next.payload.toolInput === undefined
   if (
@@ -580,25 +578,25 @@ function attachClaudePermissionToolUseId(
   if (!isClaudePermissionMissingToolUseId(next)) {
     return next
   }
-  // Why: Claude emits PermissionRequest without tool_use_id, then PostToolUse carries the original
-  // PreToolUse id. Claim it from every call the pane announced, not just the previous event: a parallel
-  // tool batch puts a sibling call's PreToolUse in between.
-  const claimedToolUseId = takeClaudePendingToolUseId(
-    pendingToolUses,
-    next.paneKey,
-    {
-      toolName: next.payload.toolName,
-      toolInput: next.payload.toolInput,
-      toolAgentId: next.toolAgentId,
-      toolAgentType: next.toolAgentType
-    },
-    now
-  )
-  // Why: the claim is one-shot, so a re-delivered POST of the same prompt finds nothing left; keep the id
-  // the first delivery already resolved instead of downgrading the row to an unprovable wait.
+  // Why: a re-delivered prompt reuses the id its first delivery resolved; claiming again would take the
+  // batch sibling's id and leave that call unprovable.
+  const alreadyResolvedToolUseId = isSameClaudePermissionRequest(previous, next)
+    ? previous?.toolUseId
+    : undefined
+  // Why: claim from every call the pane announced — a parallel batch sits between PreToolUse and its prompt.
   const inheritedToolUseId =
-    claimedToolUseId ??
-    (isSameClaudePermissionRequest(previous, next) ? previous?.toolUseId : undefined)
+    alreadyResolvedToolUseId ??
+    takeClaudePendingToolUseId(
+      pendingToolUses,
+      next.paneKey,
+      {
+        toolName: next.payload.toolName,
+        toolInput: next.payload.toolInput,
+        toolAgentId: next.toolAgentId,
+        toolAgentType: next.toolAgentType
+      },
+      now
+    )
   if (inheritedToolUseId === undefined) {
     return next
   }
@@ -651,8 +649,7 @@ export class AgentHookServer {
   private connectionTimestampWatermarkById = new Map<string, number>()
   // Why: skip disk writes when the JSON exactly matches the last write; guards against re-firing trailing timers when nothing changed.
   private lastWrittenJson: string | null = null
-  // Why: Claude's PermissionRequest carries no tool_use_id; these announced ids are the only evidence that
-  // can later prove the approved tool resumed. Not persisted — proof is only meaningful within a live turn.
+  // Why: announced ids are the only proof a permission's own call resumed; in-memory, live turns only.
   private claudePendingToolUsesByPaneKey: ClaudePendingToolUseStore = new Map()
 
   setListener(listener: ((payload: EnrichedAgentHookEventPayload) => void) | null): void {
@@ -1092,21 +1089,18 @@ export class AgentHookServer {
     }
   }
 
-  /** Keep the pane's Claude tool-id ledger in step with the hook stream: announcements queue up, completions
-   *  retire, and a turn boundary wipes the pane so no id can survive into the next turn. */
+  /** Track announcements and completions per pane; a turn boundary drops claims but keeps the seen ids. */
   private updateClaudeToolUseLedger(payload: AgentHookEventPayload, now: number): void {
     if (payload.payload.agentType !== 'claude') {
       return
     }
-    // Why: a turn boundary (new user prompt, or the turn ending) makes every id from the previous turn
-    // meaningless — keeping them would let a finished call answer a later prompt.
-    if (payload.hookEventName === 'UserPromptSubmit' || payload.payload.state === 'done') {
-      forgetClaudePendingToolUses(this.claudePendingToolUsesByPaneKey, payload.paneKey)
+    // Why: replays are cache continuity — first, so a replayed turn boundary cannot clear a live ledger.
+    if (payload.isReplay === true) {
       return
     }
-    // Why: replayed rows are cache continuity, not live hook traffic; recording them would refresh ids that
-    // the agent announced long ago (or in a turn that has already ended).
-    if (payload.isReplay === true) {
+    // Why: a turn boundary makes older calls unclaimable; the seen-id history stays so retries read as repeats.
+    if (payload.hookEventName === 'UserPromptSubmit' || payload.payload.state === 'done') {
+      forgetClaudeClaimableToolUses(this.claudePendingToolUsesByPaneKey, payload.paneKey)
       return
     }
     if (isClaudeToolUseAnnouncement(payload)) {
@@ -1223,16 +1217,14 @@ export class AgentHookServer {
               agentType: identity.agentType
             }
           }
-    // Why: read the ledger before updating it — the incoming completion must be judged against what the pane
-    // knew when the prompt was cached, not against the entry this event is about to add.
+    // Why: judge the completion against what the pane knew at prompt time, not the entry it is about to add.
     const nextToolUseIsUnaccountedFor = isClaudeToolUseUnaccountedFor(
       this.claudePendingToolUsesByPaneKey,
       identityResolvedPayload.paneKey,
       identityResolvedPayload.toolUseId,
       previous?.receivedAt ?? now
     )
-    // Why: update before the suppression checks below — a sticky permission drops the very PreToolUse events
-    // whose ids the next permission request of the same turn needs to resolve against.
+    // Why: update before suppression — a sticky permission drops the PreToolUse events the next prompt needs.
     this.updateClaudeToolUseLedger(identityResolvedPayload, now)
     const effectivePayload = attachClaudePermissionToolUseId(
       this.claudePendingToolUsesByPaneKey,
@@ -2291,8 +2283,7 @@ export class AgentHookServer {
         clearedAlias = true
       }
     }
-    // Why: a pane key is stable across a PTY restart, so the next agent process must not inherit the ids the
-    // previous one announced; aliases resolved above are cleared with it.
+    // Why: pane keys survive a PTY restart, so the next agent process must not inherit announced ids.
     forgetClaudePendingToolUsesWhere(this.claudePendingToolUsesByPaneKey, (key) =>
       paneKeys.has(key)
     )

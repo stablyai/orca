@@ -168,6 +168,33 @@ describe('Claude permission waits and the call that resumes them', () => {
     expect(currentState(server)).toBe('waiting')
   })
 
+  it('reuses the resolved id when the same prompt is delivered twice', () => {
+    // Why: a re-delivered PermissionRequest must not claim the sibling's id — that would leave the sibling
+    // unprovable for the rest of the turn.
+    const server = new AgentHookServer()
+    const permissionToolUseIds: (string | undefined)[] = []
+    server.setListener((payload) => {
+      if (payload.hookEventName === 'PermissionRequest') {
+        permissionToolUseIds.push(payload.toolUseId)
+      }
+    })
+
+    announce(server, 'pnpm test', 'toolu_first')
+    announce(server, 'pnpm test', 'toolu_second')
+    requestPermission(server, 'pnpm test')
+    requestPermission(server, 'pnpm test')
+
+    expect(permissionToolUseIds).toEqual(['toolu_first', 'toolu_first'])
+
+    reportBack(server, 'pnpm test', 'toolu_first')
+    expect(currentState(server)).toBe('working')
+
+    requestPermission(server, 'pnpm test')
+    reportBack(server, 'pnpm test', 'toolu_second')
+
+    expect(currentState(server)).toBe('working')
+  })
+
   it('keeps the wait when a call that already completed reports again', () => {
     // Why: the hook script retries on timeout and the relay replays on reconnect, so the same completion can
     // arrive twice. A repeat must not answer a prompt that opened afterwards.
@@ -201,6 +228,54 @@ describe('Claude permission waits and the call that resumes them', () => {
     expect(currentState(server)).toBe('waiting')
 
     reportBack(server, 'pnpm test', 'toolu_new')
+
+    expect(currentState(server)).toBe('working')
+  })
+
+  it('keeps the wait when the previous turn’s completion is retried across the boundary', () => {
+    // Why: a PostToolUse POST that timed out in the last turn can be retried into this one. The pane no
+    // longer has that call queued, but it still remembers seeing the id, so the retry is a repeat — not the
+    // approved call of the prompt now on screen.
+    const server = new AgentHookServer()
+
+    announce(server, 'pnpm test', 'toolu_previous_turn')
+    reportBack(server, 'pnpm test', 'toolu_previous_turn')
+    ingestClaudeStatus(server, { state: 'done', hookEventName: 'Stop' })
+    ingestClaudeStatus(server, {
+      state: 'working',
+      hookEventName: 'UserPromptSubmit',
+      prompt: 'run the tests again'
+    })
+    requestPermission(server, 'pnpm test')
+
+    reportBack(server, 'pnpm test', 'toolu_previous_turn')
+
+    expect(currentState(server)).toBe('waiting')
+  })
+
+  it('does not let a replayed turn boundary erase what the live stream announced', () => {
+    // Why: a relay reconnect can replay a historical UserPromptSubmit after live announcements arrived. If
+    // that replay cleared the ledger, this turn's prompt would have no id to claim and would depend on the
+    // safety valve instead of on proof — so assert the id, not just the state.
+    const server = new AgentHookServer()
+    const permissionToolUseIds: (string | undefined)[] = []
+    server.setListener((payload) => {
+      if (payload.hookEventName === 'PermissionRequest') {
+        permissionToolUseIds.push(payload.toolUseId)
+      }
+    })
+
+    announce(server, 'git status', 'toolu_live')
+    ingestClaudeStatus(server, {
+      state: 'working',
+      hookEventName: 'UserPromptSubmit',
+      prompt: 'replayed prompt',
+      isReplay: true
+    })
+    requestPermission(server, 'git status')
+    expect(permissionToolUseIds).toEqual(['toolu_live'])
+
+    reportBack(server, 'git status', 'toolu_live')
 
     expect(currentState(server)).toBe('working')
   })
