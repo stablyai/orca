@@ -63,6 +63,16 @@ export const SUPPORTED_GLOBAL_SKILL_TOPOLOGIES: ReadonlySet<SkillInstallationTop
   'provider-alias'
 ])
 
+// Why: outdated copies the update command can converge are ordinary work, not
+// amber attention. On Windows, skills installs fall back to real file copies
+// (`independent-copy`) instead of symlinks (`provider-alias`); excluding only
+// the symlink-friendly topologies left every outdated Windows install showing
+// a warning triangle while the pill said "Update available" (issue #11455).
+export const ROUTINE_OUTDATED_SKILL_TOPOLOGIES: ReadonlySet<SkillInstallationTopology> = new Set([
+  ...SUPPORTED_GLOBAL_SKILL_TOPOLOGIES,
+  'independent-copy'
+])
+
 export type SkillFreshnessInstallation = {
   id: string
   name: string
@@ -131,7 +141,7 @@ export function isSkillCopyNeedingAttention(installation: SkillFreshnessInstalla
     installation.status !== 'newer-known' &&
     !(installation.status === 'unrecognized' && installation.topology === 'plugin-cache') &&
     !(
-      SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&
+      ROUTINE_OUTDATED_SKILL_TOPOLOGIES.has(installation.topology) &&
       installation.status === 'outdated'
     )
   )
