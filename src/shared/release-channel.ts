@@ -82,6 +82,20 @@ export function getVersionChannel(version: string): ReleaseChannel | null {
   return normalized.includes('-') ? 'rc' : 'stable'
 }
 
+/**
+ * Release-notes page for a version, in whichever repo published it. Hourly tags
+ * exist only in the hourly repo, so a main-repo tag URL for one 404s.
+ * A null version falls back to the plain releases listing (not /releases/latest
+ * — /latest also breaks when GitHub's API is degraded).
+ */
+export function getReleaseNotesUrlForVersion(version: string | null): string {
+  const repo =
+    version && getVersionChannel(version) === 'hourly' ? HOURLY_RELEASE_REPO : MAIN_RELEASE_REPO
+  return version
+    ? `https://github.com/${repo}/releases/tag/v${normalizeTagToVersion(version)}`
+    : `https://github.com/${repo}/releases`
+}
+
 export type ReleaseBuild = {
   tag: string
   version: string

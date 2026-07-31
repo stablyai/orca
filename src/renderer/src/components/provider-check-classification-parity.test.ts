@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { deriveTaskPagePRCheckSummary } from './task-page-pr-check-summary'
+import { getCheckCountChips, getCheckCounts } from './pr-check-counts'
 import { derivePipelineStatus } from '../../../main/gitlab/mappers'
 import { gitLabPipelineJobsToPRChecks } from '../../../shared/gitlab-pipeline-checks'
 import { derivePRCheckStatus, derivePRCheckStatusFromRollup } from '../../../shared/pr-check-status'
@@ -171,6 +172,24 @@ describe('provider check classification parity', () => {
       const summary = { ...expected, total: checks.length }
       expect(summarizeProviderChecks(checks)).toEqual(summary)
       expect(deriveTaskPagePRCheckSummary(checks)).toEqual(summary)
+      // Why: the PR page and the work-item dialog share these counts; their absence here is how
+      // their neutral chip kept saying "skipped" for what the sidebar calls "unresolved".
+      const paneCounts = getCheckCounts(checks)
+      expect({
+        passed: paneCounts.passing,
+        // Both panes split action_required into its own amber chip; it is still the failed bucket.
+        failed: paneCounts.failing + paneCounts.needsAction,
+        pending: paneCounts.pending,
+        neutral: paneCounts.neutral
+      }).toEqual({
+        passed: expected.passed,
+        failed: expected.failed,
+        pending: expected.pending,
+        neutral: expected.neutral
+      })
+      expect(getCheckCountChips(paneCounts).find((chip) => chip.tone === 'neutral')?.label).toBe(
+        expected.neutral > 0 ? `${expected.neutral} unresolved` : undefined
+      )
       expect(derivePRCheckStatus(checks)).toBe(expected.state)
       expect(derivePRCheckStatusFromRollup(checks.map(toGraphQLRollup))).toBe(expected.state)
       if (gitLabJobStatuses) {

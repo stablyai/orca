@@ -3006,6 +3006,10 @@ export type GlobalSettings = {
   /** Preferred mobile pairing path for new QR codes. Missing/'automatic' = Anywhere (Relay + local);
    *  explicit 'local-only' = same-network only. */
   mobilePairingConnectionMode?: 'automatic' | 'local-only'
+  /** Explicit custom address restored when generating future mobile pairing codes. */
+  mobilePairingCustomAddress?: string | null
+  /** Saved custom addresses available in both mobile pairing pickers. */
+  mobilePairingCustomAddresses?: string[]
   /** Experimental: floating animated pet in the bottom-right corner. Opt-in cosmetic;
    *  off never mounts the overlay, and toggling takes effect instantly (renderer-side). */
   experimentalPet: boolean

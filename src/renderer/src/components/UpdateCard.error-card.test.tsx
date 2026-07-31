@@ -98,6 +98,29 @@ describe('UpdateCard Windows signature failures', () => {
   })
 })
 
+describe('UpdateCard hourly builds', () => {
+  it('links a pinned hourly build to its own repo instead of a 404 main-repo tag', () => {
+    useAppStore.setState({
+      updateStatus: {
+        state: 'available',
+        version: '1.4.160-hourly.202607281400',
+        changelog: null,
+        source: 'hourly'
+      },
+      updateChangelog: null,
+      dismissedUpdateVersion: null,
+      updateCardCollapsed: false,
+      updateReassuranceSeen: true
+    })
+    render(<UpdateCard />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Release notes' }))
+    expect(openUrl).toHaveBeenCalledWith(
+      'https://github.com/stablyai/orca-hourly/releases/tag/v1.4.160-hourly.202607281400'
+    )
+  })
+})
+
 describe('UpdateCard local builds', () => {
   it('does not link local versions to GitHub release downloads', () => {
     useAppStore.setState({
