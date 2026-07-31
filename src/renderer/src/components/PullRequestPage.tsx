@@ -230,6 +230,7 @@ import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { sortChecksBySeverity } from '../../../shared/pr-check-severity-order'
 import {
   getCheckConclusion,
+  getCheckCountChips,
   getCheckCounts,
   getChecksSummaryLabel
 } from '@/components/pr-check-counts'
@@ -5257,51 +5258,7 @@ function ChecksTab({
     )
   }
   if (variant === 'page') {
-    const countChips: { label: string; className: string }[] = []
-    if (counts.passing > 0) {
-      countChips.push({
-        label: translate('auto.components.PullRequestPage.7c5035931a', '{{value0}} passing', {
-          value0: counts.passing
-        }),
-        className: CHECK_COLOR.success
-      })
-    }
-    if (counts.failing > 0) {
-      countChips.push({
-        label: translate('auto.components.PullRequestPage.ae2a34c7b8', '{{value0}} failing', {
-          value0: counts.failing
-        }),
-        className: CHECK_COLOR.failure
-      })
-    }
-    if (counts.needsAction > 0) {
-      countChips.push({
-        label: translate(
-          'auto.components.PullRequestPage.checksNeedActionChip',
-          '{{value0}} action required',
-          {
-            value0: counts.needsAction
-          }
-        ),
-        className: CHECK_COLOR.action_required
-      })
-    }
-    if (counts.pending > 0) {
-      countChips.push({
-        label: translate('auto.components.PullRequestPage.88267924d5', '{{value0}} pending', {
-          value0: counts.pending
-        }),
-        className: CHECK_COLOR.pending
-      })
-    }
-    if (counts.neutral > 0) {
-      countChips.push({
-        label: translate('auto.components.PullRequestPage.e6ad0a8d06', '{{value0}} skipped', {
-          value0: counts.neutral
-        }),
-        className: 'text-muted-foreground'
-      })
-    }
+    const countChips = getCheckCountChips(counts)
     return (
       <>
         <div className="flex flex-col gap-3 px-4 py-3">
@@ -5320,9 +5277,9 @@ function ChecksTab({
               {countChips.length > 1 && (
                 <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                   {countChips.map((chip, i) => (
-                    <React.Fragment key={chip.label}>
+                    <React.Fragment key={chip.tone}>
                       {i > 0 && <span className="opacity-40">·</span>}
-                      <span className={chip.className}>{chip.label}</span>
+                      <span className={CHECK_COLOR[chip.tone]}>{chip.label}</span>
                     </React.Fragment>
                   ))}
                 </span>

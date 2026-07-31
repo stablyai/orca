@@ -893,11 +893,6 @@
         "83ac703dda": "Assignees",
         "00ccdf9b5a": "Status",
         "2aa9acdf34": "Edit labels on GitHub",
-        "d23bbb6416": "{{value0}} skipped",
-        "18f80e1329": "{{value0}} pending",
-        "b1ac991806": "{{value0}} failing",
-        "checksNeedActionChip": "{{value0}} action required",
-        "311d0cee55": "{{value0}} passing",
         "e52bed9264": "No checks reported yet",
         "90020cc1f3": "This pull request has no reported checks yet.",
         "ecffebc251": "No checks found",
@@ -1391,11 +1386,6 @@
         "bc215fea4d": "+ Label",
         "b936cc51a4": "Closed",
         "7b8f6bf6d8": "Open",
-        "e6ad0a8d06": "{{value0}} skipped",
-        "88267924d5": "{{value0}} pending",
-        "ae2a34c7b8": "{{value0}} failing",
-        "checksNeedActionChip": "{{value0}} action required",
-        "7c5035931a": "{{value0}} passing",
         "a18d01cda3": "No checks reported yet",
         "3912daf310": "This pull request has no reported checks yet.",
         "45877f5089": "No checks found",
@@ -14380,6 +14370,13 @@
         "title": "Workspace created from a local base",
         "description": "The remote-tracking ref \"{{value0}}\" was unavailable, so Orca used local \"{{value1}}\" instead. This workspace may not include the latest remote changes.",
         "dismiss": "Got it"
+      },
+      "pr-check-counts": {
+        "passingChip": "{{value0}} passing",
+        "failingChip": "{{value0}} failing",
+        "pendingChip": "{{value0}} pending",
+        "needsActionChip": "{{value0}} action required",
+        "unresolvedChip": "{{value0}} unresolved"
       }
     },
     "i18n": {

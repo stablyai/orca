@@ -869,11 +869,6 @@
         "83ac703dda": "담당자",
         "00ccdf9b5a": "상태",
         "2aa9acdf34": "GitHub에서 라벨 편집",
-        "d23bbb6416": "{{value0}} 건너뜀",
-        "18f80e1329": "{{value0}} 보류 중",
-        "b1ac991806": "{{value0}} 실패",
-        "checksNeedActionChip": "{{value0}}개 조치 필요",
-        "311d0cee55": "{{value0}} 통과",
         "e52bed9264": "아직 보고된 체크가 없습니다.",
         "90020cc1f3": "이 PR에는 아직 보고된 체크가 없습니다.",
         "ecffebc251": "체크를 찾을 수 없습니다.",
@@ -1363,11 +1358,6 @@
         "bc215fea4d": "+ 라벨",
         "b936cc51a4": "닫힘",
         "7b8f6bf6d8": "열림",
-        "e6ad0a8d06": "{{value0}} 건너뛰었습니다",
-        "88267924d5": "{{value0}} 보류 중",
-        "ae2a34c7b8": "{{value0}} 실패",
-        "checksNeedActionChip": "{{value0}}개 조치 필요",
-        "7c5035931a": "{{value0}} 통과",
         "a18d01cda3": "아직 보고된 체크가 없습니다.",
         "3912daf310": "이 PR에는 아직 보고된 체크가 없습니다.",
         "45877f5089": "체크를 찾을 수 없습니다.",
@@ -14289,6 +14279,13 @@
         "useManualTerminalWorktreeParking": {
           "cannotPark": "These terminals cannot be parked safely."
         }
+      },
+      "pr-check-counts": {
+        "passingChip": "{{value0}} 통과",
+        "failingChip": "{{value0}} 실패",
+        "pendingChip": "{{value0}} 보류 중",
+        "needsActionChip": "{{value0}}개 조치 필요",
+        "unresolvedChip": "{{value0}}개 미해결"
       }
     },
     "i18n": {

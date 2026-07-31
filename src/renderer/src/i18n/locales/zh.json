@@ -869,11 +869,6 @@
         "83ac703dda": "负责人",
         "00ccdf9b5a": "状态",
         "2aa9acdf34": "在 GitHub 上编辑标签",
-        "d23bbb6416": "{{value0}} 已跳过",
-        "18f80e1329": "{{value0}} 待处理",
-        "b1ac991806": "{{value0}} 失败",
-        "checksNeedActionChip": "{{value0}} 个需要操作",
-        "311d0cee55": "{{value0}} 通过",
         "e52bed9264": "尚未报告任何 CI 检查",
         "90020cc1f3": "此PR尚未报告检查。",
         "ecffebc251": "未找到检查",
@@ -1363,11 +1358,6 @@
         "bc215fea4d": "+ 标签",
         "b936cc51a4": "已关闭",
         "7b8f6bf6d8": "进行中",
-        "e6ad0a8d06": "{{value0}} 已跳过",
-        "88267924d5": "{{value0}} 待处理",
-        "ae2a34c7b8": "{{value0}} 失败",
-        "checksNeedActionChip": "{{value0}} 个需要操作",
-        "7c5035931a": "{{value0}} 通过",
         "a18d01cda3": "尚未报告任何 CI 检查",
         "3912daf310": "此PR尚未报告检查。",
         "45877f5089": "未找到检查",
@@ -14289,6 +14279,13 @@
         "useManualTerminalWorktreeParking": {
           "cannotPark": "These terminals cannot be parked safely."
         }
+      },
+      "pr-check-counts": {
+        "passingChip": "{{value0}} 通过",
+        "failingChip": "{{value0}} 失败",
+        "pendingChip": "{{value0}} 待处理",
+        "needsActionChip": "{{value0}} 个需要操作",
+        "unresolvedChip": "{{value0}} 个未解决"
       }
     },
     "i18n": {
