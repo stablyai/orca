@@ -43,6 +43,7 @@
   <body>
     <h1>Hello Orca 👋</h1>
     <p>Panel + worker command + events, gated by consent.</p>
+    <button id="ping">Ping this plugin's worker</button>
     <button id="ctx">Read workspace context</button>
     <select id="terms" hidden></select>
     <button id="send" hidden>Type "echo hi from plugin" into selected terminal</button>
@@ -75,6 +76,17 @@
         if (!resolve) return
         delete pending[data.requestId]
         resolve(data)
+      })
+
+      document.getElementById('ping').addEventListener('click', function () {
+        call('plugin.command.invoke', {
+          commandId: 'hello-ping',
+          args: { source: 'panel' }
+        }).then(function (result) {
+          statusEl.textContent = result.ok
+            ? 'worker pong count=' + result.value.count
+            : 'worker ping failed: ' + (result.error || result.errorCode)
+        })
       })
 
       document.getElementById('ctx').addEventListener('click', function () {
