@@ -35,29 +35,30 @@ export class LegacyCoordinatorAuthority {
       paneKey: request.orchestrationCompatibilityEvidence?.paneKey
     })
     if (!candidate) {
-      if (request.orchestrationCompatibilityEvidence) {
-        const run = db.getRun(adoption.adopted_run_id)
-        // Why: an unclaimed adopted Run has no coordinator to fence — same rule as bindingMatches below.
-        if (
-          !run?.coordinator_pane_key &&
-          !db.getLegacyCoordinatorPrincipal(adoption.adopted_run_id)
-        ) {
-          return undefined
-        }
-        const caller = this.runtime.verifyOrchestrationCompatibilityCaller(
-          request.orchestrationCompatibilityEvidence
-        )
-        if (
-          caller &&
-          run?.coordinator_handle === caller.terminalHandle &&
-          run.coordinator_pane_key &&
-          equivalentLegacyPaneKey(run.coordinator_pane_key, caller.paneKey)
-        ) {
-          return undefined
-        }
-        throw legacyCoordinatorReadOnly()
+      const evidence = request.orchestrationCompatibilityEvidence
+      if (!evidence) {
+        return undefined
       }
-      return undefined
+      const run = db.getRun(adoption.adopted_run_id)
+      const principal = db.getLegacyCoordinatorPrincipal(adoption.adopted_run_id)
+      // Why: an unclaimed adopted Run has no coordinator to fence, and a revoked principal is exactly that.
+      if (!run?.coordinator_pane_key && principal?.status !== 'committed') {
+        return undefined
+      }
+      const caller = this.runtime.verifyOrchestrationCompatibilityCaller(evidence)
+      // Why: the binding is trusted DB state, so the owner keeps its Run on hosts where attestation is unavailable.
+      if (run && (ownsRunBinding(run, caller) || ownsRunBinding(run, evidence))) {
+        return undefined
+      }
+      // Why: only a caller already known as the legacy coordinator is in this fence's jurisdiction;
+      // fencing anyone else hides the honest downstream error behind unusable takeover guidance.
+      if (
+        !evidence.terminalHandle ||
+        !db.isLegacyCoordinatorHandle(adoption.adopted_run_id, evidence.terminalHandle)
+      ) {
+        return undefined
+      }
+      throw legacyCoordinatorReadOnly()
     }
     const existing = db.getLegacyCoordinatorPrincipal(adoption.adopted_run_id)
     const proofCandidate = existing
@@ -179,6 +180,18 @@ export class LegacyCoordinatorAuthority {
       principal.process_incarnation === attestation.processIncarnation
     )
   }
+}
+
+function ownsRunBinding(
+  run: { coordinator_handle: string | null; coordinator_pane_key: string | null },
+  identity: { terminalHandle?: string; paneKey?: string } | null
+): boolean {
+  return Boolean(
+    identity?.terminalHandle &&
+    run.coordinator_pane_key &&
+    run.coordinator_handle === identity.terminalHandle &&
+    equivalentLegacyPaneKey(run.coordinator_pane_key, identity.paneKey)
+  )
 }
 
 function boundRunId(db: OrchestrationDb, request: RpcRequest): string | undefined {

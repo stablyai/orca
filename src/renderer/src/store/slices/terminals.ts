@@ -31,6 +31,7 @@ import {
 import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import {
+  isTerminalLeafId,
   makePaneKey,
   parseLegacyNumericPaneKey,
   parsePaneKey
@@ -87,6 +88,10 @@ import {
   normalizeTerminalLayoutSnapshot,
   resolvePtyBoundActiveLeafId
 } from '@/components/terminal-pane/terminal-layout-leaf-ids'
+import {
+  normalizeTerminalLayoutPtyOwnership,
+  resolveTerminalLayoutPtyOwnershipTransfers
+} from '@/components/terminal-pane/terminal-layout-pty-ownership'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { parseRemoteRuntimePtyId, toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
@@ -121,6 +126,7 @@ import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import type { NativeChatLaunchDraft, NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
+import { resolveAgentPaneAuthorityKey } from './agent-pane-authority'
 import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
@@ -866,6 +872,48 @@ function replaceHydratedRecordKeys<T>(
   return {
     ...Object.fromEntries(Object.entries(current).filter(([key]) => !replaceKeys.has(key))),
     ...Object.fromEntries(Object.entries(hydrated).filter(([key]) => replaceKeys.has(key)))
+  }
+}
+
+type TerminalLayoutPtyOwnershipTransfer = ReturnType<
+  typeof resolveTerminalLayoutPtyOwnershipTransfers
+>[number]
+
+function transferNormalizedTerminalLayoutPtyOwnership(
+  state: Pick<AppState, 'terminalLayoutsByTabId' | 'transferAgentPaneAuthority'>,
+  tabId: string,
+  transfers: readonly TerminalLayoutPtyOwnershipTransfer[]
+): void {
+  if (transfers.length === 0) {
+    return
+  }
+  const ptyIdsOwnedByOtherTabs = new Set<string>()
+  for (const [candidateTabId, layout] of Object.entries(state.terminalLayoutsByTabId)) {
+    if (candidateTabId === tabId) {
+      continue
+    }
+    for (const ptyId of Object.values(layout.ptyIdsByLeafId ?? {})) {
+      ptyIdsOwnedByOtherTabs.add(ptyId)
+    }
+  }
+  for (const { removedLeafId, retainedLeafId, ptyId } of transfers) {
+    if (
+      !isTerminalLeafId(removedLeafId) ||
+      !isTerminalLeafId(retainedLeafId) ||
+      ptyIdsOwnedByOtherTabs.has(ptyId)
+    ) {
+      continue
+    }
+    const fromPaneKey = makePaneKey(tabId, removedLeafId)
+    const currentOwner = parsePaneKey(resolveAgentPaneAuthorityKey(fromPaneKey))
+    if (currentOwner && currentOwner.tabId !== tabId) {
+      continue
+    }
+    state.transferAgentPaneAuthority({
+      fromPaneKey,
+      toPaneKey: makePaneKey(tabId, retainedLeafId),
+      ptyId
+    })
   }
 }
 
@@ -3514,15 +3562,24 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   setTabLayout: (tabId, layout) => {
+    let ownershipTransfers: ReturnType<typeof resolveTerminalLayoutPtyOwnershipTransfers> = []
     set((s) => {
       const next = { ...s.terminalLayoutsByTabId }
       if (layout) {
-        next[tabId] = layout
+        const normalized = normalizeTerminalLayoutPtyOwnership(layout)
+        next[tabId] = normalized.snapshot
+        if (normalized.changed) {
+          ownershipTransfers = resolveTerminalLayoutPtyOwnershipTransfers(
+            layout,
+            normalized.snapshot
+          )
+        }
       } else {
         delete next[tabId]
       }
       return { terminalLayoutsByTabId: next }
     })
+    transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, ownershipTransfers)
   },
 
   syncPaneDetachPtyOwnership: ({
@@ -3722,6 +3779,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   hydrateWorkspaceSession: (session, options) => {
+    const ownershipTransferTabIds = options?.replaceWorkspaceKeys
+      ? new Set(
+          options.replaceWorkspaceKeys.flatMap((workspaceKey) =>
+            (session.tabsByWorktree[workspaceKey] ?? []).map((tab) => tab.id)
+          )
+        )
+      : null
+    const ownershipTransfersByTabId = new Map<string, TerminalLayoutPtyOwnershipTransfer[]>()
     set((s) => {
       const runtimeSessionPlaceholders = buildRuntimeSessionPlaceholders({
         repos: s.repos,
@@ -3977,7 +4042,17 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             .filter(([tabId]) => validTabIds.has(tabId))
             .map(([tabId, layout]) => {
               // Why: old sessions can contain renderer-local pane:1-style leaf ids; normalize before runtime/mobile surfaces read them.
-              const normalized = normalizeTerminalLayoutSnapshot(layout).snapshot
+              const normalization = normalizeTerminalLayoutSnapshot(layout)
+              const normalized = normalization.snapshot
+              if (
+                normalization.changed &&
+                (!ownershipTransferTabIds || ownershipTransferTabIds.has(tabId))
+              ) {
+                ownershipTransfersByTabId.set(
+                  tabId,
+                  resolveTerminalLayoutPtyOwnershipTransfers(layout, normalized)
+                )
+              }
               const tab = tabById.get(tabId)
               const sanitized = tab ? sanitizeTerminalLayoutPaneTitles(normalized, tab) : normalized
               const activeLeafId = sanitized.root
@@ -3995,6 +4070,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ? targetScopedWorkspaceHydrationPatch(s, hydrated, session, options)
         : hydrated
     })
+    for (const [tabId, transfers] of ownershipTransfersByTabId) {
+      transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, transfers)
+    }
   },
 
   reconnectPersistedTerminals: async (signal, options) => {
