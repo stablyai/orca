@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { translate } from '../../i18n/i18n'
+import { AgentIcon } from '@/lib/agent-catalog'
+import { agentTypeToIconAgent } from '@/lib/agent-status'
 import { formatNotchElapsedSince } from '../../../../shared/notch/notch-duration-format'
 import { SESSION_ROW_HEIGHT } from '../../../../shared/notch/notch-panel-rect'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NotchRow } from '../../../../shared/notch/notch-snapshot'
 import type { NotchLane } from '../../../../shared/notch/notch-status-summary'
 
@@ -56,6 +59,12 @@ export function NotchSessionRow({
       className="flex w-full items-center gap-2.5 rounded px-2.5 text-left transition-colors hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
     >
       <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${LANE_DOT[row.lane]}`} />
+      {/* Why the shared AgentIcon: it already resolves every provider Orca ships, so the notch
+          and the sidebar can't disagree about what a Codex row looks like. Falls back to a
+          neutral glyph when the agent identity has not arrived yet. */}
+      <span aria-hidden="true" className="flex size-3.5 shrink-0 items-center justify-center">
+        <AgentIcon agent={agentTypeToIconAgent(row.agentType as AgentType | null)} size={13} />
+      </span>
       <span className="min-w-0 flex-1 truncate text-[12px] leading-none text-foreground">
         {row.title}
       </span>
