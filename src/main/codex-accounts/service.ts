@@ -913,16 +913,14 @@ export class CodexAccountService {
     const accountTarget = getCodexSelectionTargetForAccount(account)
     const settings = this.store.getSettings()
     const nextAccounts = settings.codexManagedAccounts.filter((entry) => entry.id !== accountId)
-    const nextSelection = removeCodexAccountIdFromSelection(
-      normalizeCodexRuntimeSelection(settings),
-      accountId
+    const nextSelection = pruneInvalidCodexRuntimeSelection(
+      removeCodexAccountIdFromSelection(normalizeCodexRuntimeSelection(settings), accountId),
+      nextAccounts
     )
-    const nextActiveId =
-      settings.activeCodexManagedAccountId === accountId ? null : nextSelection.host
 
     const settingsUpdate = {
       codexManagedAccounts: nextAccounts,
-      activeCodexManagedAccountId: nextActiveId,
+      activeCodexManagedAccountId: nextSelection.host,
       activeCodexManagedAccountIdsByRuntime: nextSelection
     }
     try {

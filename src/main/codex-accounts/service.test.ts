@@ -2112,6 +2112,57 @@ describe('CodexAccountService config sync', () => {
     expect(existsSync(managedHomePath)).toBe(false)
   })
 
+  it('prunes a stale next selection in the same removal commit', async () => {
+    const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          managedHomeRuntime: 'host',
+          wslDistro: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'missing-account',
+      activeCodexManagedAccountIdsByRuntime: {
+        host: 'missing-account',
+        wsl: { Ubuntu: 'missing-wsl-account' }
+      }
+    })
+    const store = createStore(settings)
+    const runtimeHome = createRuntimeHome()
+    runtimeHome.syncForCurrentSelection.mockImplementation(() => {
+      const current = store.getSettings().activeCodexManagedAccountIdsByRuntime ?? {
+        host: null,
+        wsl: {}
+      }
+      if (current.host === 'missing-account') {
+        store.updateSettings({
+          activeCodexManagedAccountId: null,
+          activeCodexManagedAccountIdsByRuntime: { host: null, wsl: current.wsl }
+        })
+      }
+    })
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      store as never,
+      createRateLimits() as never,
+      runtimeHome as never
+    )
+
+    await expect(service.removeAccount('account-1')).resolves.toMatchObject({
+      accounts: [],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } }
+    })
+    expect(existsSync(managedHomePath)).toBe(false)
+    expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledOnce()
+  })
+
   it('refuses to remove a managed home owned by a different account', async () => {
     const otherAccountHome = createManagedHome(
       testState.userDataDir,

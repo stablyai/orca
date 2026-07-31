@@ -495,6 +495,24 @@ describe('Store', () => {
     expect(store.getSettings()).toEqual(beforeSettings)
   })
 
+  it('rejects nested Codex account settings previews', async () => {
+    const store = await createStore()
+    const beforeSettings = structuredClone(store.getSettings())
+    const preview = {
+      codexManagedAccounts: [],
+      activeCodexManagedAccountId: null,
+      activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} }
+    }
+
+    expect(() =>
+      store.withCodexAccountSettingsPreview(preview, () => {
+        store.withCodexAccountSettingsPreview(preview, () => {})
+      })
+    ).toThrow('Cannot nest Codex account settings previews')
+
+    expect(store.getSettings()).toEqual(beforeSettings)
+  })
+
   it('rejects Codex settings mutations during an account settings preview', async () => {
     const store = await createStore()
     const beforeSettings = structuredClone(store.getSettings())
