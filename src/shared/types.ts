@@ -2910,6 +2910,8 @@ export type GlobalSettings = {
   devPluginPaths: string[]
   /** One-shot guard: start Claude Agent Teams hidden for existing profiles without overriding later opt-ins. */
   claudeAgentTeamsDefaultDisabledMigrated?: boolean
+  /** One-shot guard: start IBM Bob hidden for existing profiles without overriding later opt-ins. */
+  bobDefaultDisabledMigrated?: boolean
   /** Why: worktree deletion is destructive (rm -rf of the working dir), so confirm by default. */
   skipDeleteWorktreeConfirm: boolean
   /** Why: closing a terminal with child processes kills foreground work; keep this skip separate from other confirmations. */

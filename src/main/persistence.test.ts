@@ -5542,7 +5542,12 @@ describe('Store', () => {
     )
     const store = await createStore()
 
-    expect(store.getSettings().disabledTuiAgents).toEqual(['codex', 'claude', 'claude-agent-teams'])
+    expect(store.getSettings().disabledTuiAgents).toEqual([
+      'codex',
+      'claude',
+      'claude-agent-teams',
+      'bob'
+    ])
 
     const updated = store.updateSettings({
       disabledTuiAgents: ['gemini', 'not-real', 'gemini', 'opencode'] as never
@@ -5553,8 +5558,33 @@ describe('Store', () => {
   it('enables Claude Agent Teams by default for fresh installs', async () => {
     const store = await createStore()
 
-    expect(store.getSettings().disabledTuiAgents).toEqual([])
+    expect(store.getSettings().disabledTuiAgents).toEqual(['bob'])
     expect(store.getSettings().claudeAgentTeamsDefaultDisabledMigrated).toBe(true)
+  })
+
+  it('hides IBM Bob on existing profiles once, then respects an explicit opt-in', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: { claudeAgentTeamsDefaultDisabledMigrated: true, disabledTuiAgents: [] }
+      })
+    )
+    const migrated = await createStore()
+    expect(migrated.getSettings().disabledTuiAgents).toEqual(['bob'])
+    expect(migrated.getSettings().bobDefaultDisabledMigrated).toBe(true)
+
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          claudeAgentTeamsDefaultDisabledMigrated: true,
+          bobDefaultDisabledMigrated: true,
+          disabledTuiAgents: []
+        }
+      })
+    )
+    const optedIn = await createStore()
+    expect(optedIn.getSettings().disabledTuiAgents).toEqual([])
   })
 
   it('migrates yolo default args onto untouched agent launch settings', async () => {
