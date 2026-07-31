@@ -31,9 +31,15 @@ type TccPromptTally = {
   promptCount: number
   notified: boolean
   dismissed: boolean
+  acknowledgedAfterClose: boolean
 }
 
-const EMPTY_TALLY: TccPromptTally = { promptCount: 0, notified: false, dismissed: false }
+const EMPTY_TALLY: TccPromptTally = {
+  promptCount: 0,
+  notified: false,
+  dismissed: false,
+  acknowledgedAfterClose: false
+}
 
 let tally: TccPromptTally = { ...EMPTY_TALLY }
 let mainWindowRef: BrowserWindow | null = null
@@ -50,10 +56,17 @@ function tallyPath(): string {
 function loadTally(): TccPromptTally {
   try {
     const parsed = JSON.parse(readFileSync(tallyPath(), 'utf-8')) as Partial<TccPromptTally>
+    const dismissed = parsed.dismissed === true
+    if (!dismissed && typeof parsed.acknowledgedAfterClose !== 'boolean') {
+      // Why: a legacy tally only proves a past prompt, not that Full Disk Access is still missing.
+      return { ...EMPTY_TALLY }
+    }
+    const acknowledgedAfterClose = parsed.acknowledgedAfterClose === true
     return {
       promptCount: typeof parsed.promptCount === 'number' ? parsed.promptCount : 0,
-      notified: parsed.notified === true,
-      dismissed: parsed.dismissed === true
+      notified: parsed.notified === true && (dismissed || acknowledgedAfterClose),
+      dismissed,
+      acknowledgedAfterClose
     }
   } catch {
     return { ...EMPTY_TALLY }
@@ -108,7 +121,7 @@ export function acknowledgePendingTccPromptNotice(ownerToken: number, claimId: n
     return
   }
   pendingClaim = null
-  tally = { ...tally, notified: true }
+  tally = { ...tally, notified: true, acknowledgedAfterClose: true }
   saveTally()
 }
 
@@ -124,7 +137,7 @@ export function releasePendingTccPromptNotice(ownerToken: number, claimId?: numb
 /** Permanently stops the notice for this user; the watcher shuts down with it. */
 export function dismissTccPromptNotice(): void {
   pendingClaim = null
-  tally = { ...tally, dismissed: true, notified: true }
+  tally = { ...tally, dismissed: true, notified: true, acknowledgedAfterClose: true }
   saveTally()
   stopTccPromptNotice()
 }

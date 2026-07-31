@@ -7,6 +7,7 @@ import {
   refreshBranchCleanupTargetRefs
 } from '../../shared/git-branch-cleanup'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
+import { withSpan } from '../observability/tracer'
 import type {
   GitWorktreeInfo,
   LocalBaseRefRefreshResult,
@@ -1157,6 +1158,19 @@ async function performRemoveWorktree(
     return {}
   }
 
+  // Why its own span: branch cleanup can reach the network (`fetch --prune`), so a stall here reads as
+  // `git worktree remove` being slow unless it is timed separately.
+  return withSpan('worktree.remove.branch_delete', () =>
+    deleteBranchAfterWorktreeRemoval(repoPath, branchName, branchHead, options)
+  )
+}
+
+async function deleteBranchAfterWorktreeRemoval(
+  repoPath: string,
+  branchName: string,
+  branchHead: string,
+  options: RemoveWorktreeOptions
+): Promise<RemoveWorktreeResult> {
   try {
     // Why: also drop the now-orphaned branch so delete-worktree leaves none; `-d` (not `-D`) preserves
     // unmerged work, and forceBranchDelete opts into `-D` for failed-creation rollback.

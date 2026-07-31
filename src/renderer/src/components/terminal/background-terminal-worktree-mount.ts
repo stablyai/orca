@@ -141,6 +141,16 @@ export function shouldMountBackgroundWorktreeTab(
 // until first reveal, parked byte watchers own their side effects meanwhile.
 export const COLD_ACTIVATION_TAB_DEFER_THRESHOLD = 4
 
+export function canMountTerminalWorkspaceForStartup(args: {
+  workspaceSessionReady: boolean
+  hydrationSucceeded: boolean
+  startupWorktreeRefreshCompleted: boolean
+}): boolean {
+  return (
+    args.workspaceSessionReady && (args.hydrationSucceeded || args.startupWorktreeRefreshCompleted)
+  )
+}
+
 export function canDeferColdActivationTabsForHost(args: {
   executionHostId: string | null
 }): boolean {

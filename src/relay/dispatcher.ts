@@ -13,11 +13,44 @@ import {
 } from './protocol'
 import { ClientRequestAborts } from './client-request-aborts'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../shared/timer-delay'
+import {
+  DISPATCHER_CONTROL_QUEUE_MAX_BYTES,
+  DEFAULT_PRODUCER_QUEUE_MAX_BYTES,
+  DispatcherClientWriter,
+  type DispatcherWriterLane,
+  type RelayClientSinkOptions,
+  type RelayClientWrite,
+  type SinkWriteSettlement
+} from './dispatcher-client-writer'
+import {
+  LegacyRelayPublicationLedger,
+  type LegacyPublicationLease
+} from './legacy-relay-publication-ledger'
+
+export type {
+  RelayClientSinkOptions,
+  RelayClientWrite,
+  SinkWriteSettlement
+} from './dispatcher-client-writer'
 
 export type RequestContext = {
   clientId: number
   isStale: () => boolean
   signal?: AbortSignal
+  sessionIdentity?: RelayClientSessionIdentity
+  onResponseSettled?: (handler: (result: SinkWriteSettlement) => void) => void
+}
+
+export type RelayClientSessionIdentity = {
+  principal: string
+  authenticated: boolean
+  allowSessionOwner: boolean
+  authenticationKind: 'unproved' | 'launch-nonce' | 'endpoint-credential'
+}
+
+export type RelayClientSourceOptions = {
+  pauseReads?: () => void
+  resumeReads?: () => void
 }
 
 export type MethodHandler = (
@@ -27,27 +60,16 @@ export type MethodHandler = (
 
 export type NotificationHandler = (params: Record<string, unknown>, context: RequestContext) => void
 
-/** Sink write: `false` signals saturation (Node stream semantics); `void`/`true` mean accepted. */
-export type RelayClientWrite = (data: Buffer) => boolean | void
-
-export type RelayClientSinkOptions = {
-  /** One-shot: invoke `cb` when the sink can accept more data (drain) or is permanently dead, so waiters never hang. */
-  waitWriteDrain?: (cb: () => void) => void
-}
-
 type RelayClient = {
   id: number
   decoder: FrameDecoder
-  write: RelayClientWrite
-  waitWriteDrain?: (cb: () => void) => void
-  /** Resolvers for bulk sends stalled on sink saturation; flushed so no pump hangs. */
-  drainWaiters: Set<() => void>
-  /** Serializes bulk-lane sends so only one bulk frame is admitted past the sink high-water mark at a time. */
+  writer: DispatcherClientWriter
   bulkChain: Promise<void>
   nextOutgoingSeq: number
   highestReceivedSeq: number
   generation: number
   closed: boolean
+  sessionIdentity: RelayClientSessionIdentity
 }
 
 type PendingRelayRequest = {
@@ -64,15 +86,26 @@ export class RelayDispatcher {
   private requestHandlers = new Map<string, MethodHandler>()
   private notificationHandlers = new Map<string, NotificationHandler>()
   private readonly requestAborts = new ClientRequestAborts()
+  private readonly publicationLedger = new LegacyRelayPublicationLedger()
   private pendingRelayRequests = new Map<number, PendingRelayRequest>()
   private clientDetachListeners = new Set<(clientId: number) => void>()
+  private disposeListeners = new Set<() => void>()
+  private legacyCapacityListeners = new Set<() => void>()
+  private publicationTransactionDepth = 0
+  private deferredLegacyCapacity = false
+  private deferredForcedLegacyCapacity = false
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null
   private disposed = false
   private nextClientId = 1
   private nextRequestId = 1
 
-  constructor(write: RelayClientWrite, sinkOptions?: RelayClientSinkOptions) {
-    this.primaryClient = this.createClient(write, sinkOptions)
+  constructor(
+    write: RelayClientWrite,
+    sinkOptions?: RelayClientSinkOptions,
+    sessionIdentity?: RelayClientSessionIdentity,
+    sourceOptions?: RelayClientSourceOptions
+  ) {
+    this.primaryClient = this.createClient(write, sinkOptions, sessionIdentity, sourceOptions)
     this.clients.set(this.primaryClient.id, this.primaryClient)
     this.startKeepalive()
   }
@@ -81,26 +114,25 @@ export class RelayDispatcher {
   // Why: the new client's multiplexer restarts at seq=1, so reset seq/decoder state or acks stall and fire a false connection-dead signal.
   setWrite(write: RelayClientWrite, sinkOptions?: RelayClientSinkOptions): void {
     this.requestAborts.abortClient(this.primaryClient.id)
-    this.primaryClient.write = write
-    this.primaryClient.waitWriteDrain = sinkOptions?.waitWriteDrain
-    this.primaryClient.closed = false
-    // Why: the old sink is gone; wake stalled bulk senders to re-evaluate against the new one.
-    this.flushDrainWaiters(this.primaryClient)
+    this.primaryClient.closed = true
+    this.primaryClient.writer.close(new Error('Relay primary sink replaced'))
     this.resetClient(this.primaryClient)
+    this.primaryClient.writer = this.createWriter(this.primaryClient, write, sinkOptions)
   }
 
   // Why: mark in-flight requests stale on disconnect so a late pty.spawn/fs.watch can't create unowned remote state.
   invalidateClient(): void {
-    this.requestAborts.abortClient(this.primaryClient.id)
-    this.primaryClient.generation++
-    this.primaryClient.closed = true
-    this.flushDrainWaiters(this.primaryClient)
-    this.notifyClientDetached(this.primaryClient.id)
+    this.closeClient(this.primaryClient, new Error('Relay primary client invalidated'), false)
   }
 
   // Why: seq numbers and request ids are per SSH channel, so each attached client needs independent protocol state.
-  attachClient(write: RelayClientWrite, sinkOptions?: RelayClientSinkOptions): number {
-    const client = this.createClient(write, sinkOptions)
+  attachClient(
+    write: RelayClientWrite,
+    sinkOptions?: RelayClientSinkOptions,
+    sessionIdentity?: RelayClientSessionIdentity,
+    sourceOptions?: RelayClientSourceOptions
+  ): number {
+    const client = this.createClient(write, sinkOptions, sessionIdentity, sourceOptions)
     this.clients.set(client.id, client)
     return client.id
   }
@@ -110,12 +142,7 @@ export class RelayDispatcher {
     if (!client || client === this.primaryClient) {
       return
     }
-    this.requestAborts.abortClient(clientId)
-    client.generation++
-    client.closed = true
-    this.flushDrainWaiters(client)
-    this.clients.delete(clientId)
-    this.notifyClientDetached(clientId)
+    this.closeClient(client, new Error('Relay client detached'), true)
   }
 
   feedClient(clientId: number, data: Buffer): void {
@@ -137,6 +164,228 @@ export class RelayDispatcher {
   onClientDetached(listener: (clientId: number) => void): () => void {
     this.clientDetachListeners.add(listener)
     return () => this.clientDetachListeners.delete(listener)
+  }
+
+  onDisposed(listener: () => void): () => void {
+    this.disposeListeners.add(listener)
+    return () => this.disposeListeners.delete(listener)
+  }
+
+  onLegacyPtyCapacity(listener: () => void): () => void {
+    this.legacyCapacityListeners.add(listener)
+    return () => this.legacyCapacityListeners.delete(listener)
+  }
+
+  get legacyRetentionBelowLowWater(): boolean {
+    return this.publicationLedger.belowLowWater(this.activeClientKeys())
+  }
+
+  writePrimaryBytes(data: Buffer, lane: 'control' | 'ordinary' = 'control'): boolean {
+    if (this.disposed || this.primaryClient.closed) {
+      return false
+    }
+    return this.primaryClient.writer.enqueue(lane, () => data, data.length)
+  }
+
+  maxLegacyPtyDataChars(
+    params: Record<string, unknown>,
+    data: string,
+    limit = data.length
+  ): number {
+    const clients = this.activeClients()
+    const max = Math.min(data.length, limit)
+    if (clients.length === 0) {
+      return max
+    }
+    if (!(max > 0)) {
+      return 0
+    }
+    const fitsAll = (bytes: number): boolean =>
+      clients.every((client) => bytes <= client.writer.producerFrameCapacity)
+    const sizeFrame = (chunk: string): number =>
+      this.estimateFrameBytes({
+        jsonrpc: '2.0',
+        method: 'pty.data',
+        params: { ...params, data: chunk }
+      })
+    // Fast path: the whole chunk usually fits — one encode instead of log2(n).
+    if (fitsAll(sizeFrame(data.slice(0, max)))) {
+      return max
+    }
+    // Exact per-step size: only the escaped data string varies; its quotes are in baseBytes.
+    const baseBytes = sizeFrame('')
+    const bytesFor = (chars: number): number =>
+      baseBytes + Buffer.byteLength(JSON.stringify(data.slice(0, chars))) - 2
+    let low = 0
+    let high = max
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2)
+      if (fitsAll(bytesFor(mid))) {
+        low = mid
+      } else {
+        high = mid - 1
+      }
+    }
+    return low
+  }
+
+  tryNotifyPtyData(
+    params: Record<string, unknown>,
+    options: { interactive?: boolean } = {}
+  ): boolean {
+    if (this.disposed) {
+      return false
+    }
+    const msg: JsonRpcNotification = {
+      jsonrpc: '2.0',
+      method: 'pty.data',
+      params
+    }
+    return this.tryPublishToClients(
+      this.activeClients(),
+      msg,
+      options.interactive ? 'interactive' : 'ordinary'
+    )
+  }
+
+  tryNotifyPtyDataToMatchingClients(
+    matchesClient: (clientId: number) => boolean,
+    params: Record<string, unknown>,
+    options: { interactive?: boolean } = {}
+  ): boolean {
+    if (this.disposed) {
+      return false
+    }
+    return this.tryPublishToClients(
+      this.activeClients().filter((client) => matchesClient(client.id)),
+      { jsonrpc: '2.0', method: 'pty.data', params },
+      options.interactive ? 'interactive' : 'ordinary'
+    )
+  }
+
+  projectPtyDataToMatchingClients(
+    matchesClient: (clientId: number) => boolean,
+    params: Record<string, unknown>,
+    options: { interactive?: boolean } = {}
+  ): boolean {
+    if (this.disposed) {
+      return false
+    }
+    return this.projectToClients(
+      this.activeClients().filter((client) => matchesClient(client.id)),
+      { jsonrpc: '2.0', method: 'pty.data', params },
+      options.interactive ? 'interactive' : 'ordinary'
+    )
+  }
+
+  tryNotifyPtyDataToClient(
+    clientId: number,
+    params: Record<string, unknown>,
+    onSettled: (result: SinkWriteSettlement) => void
+  ): boolean {
+    if (this.disposed) {
+      onSettled({ ok: false, error: new Error('Relay dispatcher is disposed') })
+      return false
+    }
+    const client = this.clients.get(clientId)
+    if (!client || client.closed) {
+      onSettled({ ok: false, error: new Error('Relay client is not connected') })
+      return false
+    }
+    return this.publishToClient(
+      client,
+      { jsonrpc: '2.0', method: 'pty.data', params },
+      'ordinary',
+      onSettled
+    )
+  }
+
+  tryNotifyPtyExit(params: Record<string, unknown>): boolean {
+    if (this.disposed) {
+      return false
+    }
+    return this.tryPublishToClients(
+      this.activeClients(),
+      {
+        jsonrpc: '2.0',
+        method: 'pty.exit',
+        params
+      },
+      'ordinary'
+    )
+  }
+
+  tryNotifyPtyExitToMatchingClients(
+    matchesClient: (clientId: number) => boolean,
+    params: Record<string, unknown>
+  ): boolean {
+    if (this.disposed) {
+      return false
+    }
+    return this.tryPublishToClients(
+      this.activeClients().filter((client) => matchesClient(client.id)),
+      { jsonrpc: '2.0', method: 'pty.exit', params },
+      'ordinary'
+    )
+  }
+
+  projectPtyExitToMatchingClients(
+    matchesClient: (clientId: number) => boolean,
+    params: Record<string, unknown>
+  ): boolean {
+    if (this.disposed) {
+      return false
+    }
+    return this.projectToClients(
+      this.activeClients().filter((client) => matchesClient(client.id)),
+      { jsonrpc: '2.0', method: 'pty.exit', params },
+      'ordinary'
+    )
+  }
+
+  tryNotifyPtyExitToClient(
+    clientId: number,
+    params: Record<string, unknown>,
+    onSettled: (result: SinkWriteSettlement) => void
+  ): boolean {
+    if (this.disposed) {
+      onSettled({ ok: false, error: new Error('Relay dispatcher is disposed') })
+      return false
+    }
+    const client = this.clients.get(clientId)
+    if (!client || client.closed) {
+      onSettled({ ok: false, error: new Error('Relay client is not connected') })
+      return false
+    }
+    return this.publishToClient(
+      client,
+      { jsonrpc: '2.0', method: 'pty.exit', params },
+      'ordinary',
+      onSettled
+    )
+  }
+
+  producerDataBudget(
+    method: string,
+    paramsWithoutData: Record<string, unknown>,
+    clientId?: number
+  ): number {
+    const targets =
+      clientId === undefined
+        ? this.activeClients()
+        : [this.clients.get(clientId)].filter((client): client is RelayClient => !!client)
+    if (targets.length === 0) {
+      return Number.MAX_SAFE_INTEGER
+    }
+    const emptyFrameBytes = this.estimateFrameBytes({
+      jsonrpc: '2.0',
+      method,
+      params: { ...paramsWithoutData, data: '' }
+    })
+    return Math.max(
+      0,
+      Math.min(...targets.map((client) => client.writer.producerFrameCapacity - emptyFrameBytes))
+    )
   }
 
   feed(data: Buffer): void {
@@ -165,24 +414,75 @@ export class RelayDispatcher {
       method,
       ...(params !== undefined ? { params } : {})
     }
-    for (const client of this.clients.values()) {
-      this.sendFrame(client, msg)
-    }
+    this.runPublicationTransaction(() => {
+      for (const client of this.clients.values()) {
+        if (client.closed) {
+          continue
+        }
+        if (method === 'pty.replay') {
+          this.enqueueFrame(client, msg, 'control')
+          continue
+        }
+        if (!this.publishToClient(client, msg, 'ordinary')) {
+          this.closeClient(
+            client,
+            new Error('Relay ordinary publication capacity exceeded'),
+            client !== this.primaryClient
+          )
+        }
+      }
+    })
   }
 
   notifyClient(clientId: number, method: string, params?: Record<string, unknown>): void {
+    this.tryNotifyClient(clientId, method, params)
+  }
+
+  tryNotifyClient(
+    clientId: number,
+    method: string,
+    params?: Record<string, unknown>,
+    onSettled: (result: SinkWriteSettlement) => void = () => {}
+  ): boolean {
     if (this.disposed) {
-      return
+      onSettled({ ok: false, error: new Error('Relay dispatcher is disposed') })
+      return false
     }
     const client = this.clients.get(clientId)
     if (!client || client.closed) {
+      onSettled({ ok: false, error: new Error('Relay client is not connected') })
+      return false
+    }
+    return this.enqueueFrame(
+      client,
+      {
+        jsonrpc: '2.0',
+        method,
+        ...(params !== undefined ? { params } : {})
+      },
+      'control',
+      onSettled
+    )
+  }
+
+  notifyControl(method: string, params?: Record<string, unknown>): void {
+    if (this.disposed) {
       return
     }
-    this.sendFrame(client, {
+    const msg: JsonRpcNotification = {
       jsonrpc: '2.0',
       method,
       ...(params !== undefined ? { params } : {})
-    })
+    }
+    for (const client of this.activeClients()) {
+      if (!this.enqueueFrame(client, msg, 'control')) {
+        this.closeClient(
+          client,
+          new Error('Relay control publication capacity exceeded'),
+          client !== this.primaryClient
+        )
+      }
+    }
   }
 
   /**
@@ -213,17 +513,7 @@ export class RelayDispatcher {
       if (client.closed) {
         continue
       }
-      // Why: encode inside the chain step, not at call time, so sequence numbers match actual write order.
-      const step = client.bulkChain.then(() => {
-        if (this.disposed || client.closed) {
-          return
-        }
-        const accepted = this.sendFrame(client, msg)
-        if (accepted === false) {
-          return this.waitForClientDrain(client)
-        }
-        return undefined
-      })
+      const step = client.bulkChain.then(() => this.publishBulkWhenAvailable(client, msg))
       client.bulkChain = step.catch(() => {})
       waits.push(step)
     }
@@ -231,35 +521,6 @@ export class RelayDispatcher {
       return Promise.resolve()
     }
     return Promise.all(waits).then(() => {})
-  }
-
-  private waitForClientDrain(client: RelayClient): Promise<void> {
-    if (this.disposed || client.closed || !client.waitWriteDrain) {
-      return Promise.resolve()
-    }
-    return new Promise<void>((resolve) => {
-      let settled = false
-      const finish = (): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        client.drainWaiters.delete(finish)
-        resolve()
-      }
-      client.drainWaiters.add(finish)
-      try {
-        client.waitWriteDrain!(finish)
-      } catch {
-        finish()
-      }
-    })
-  }
-
-  private flushDrainWaiters(client: RelayClient): void {
-    for (const waiter of Array.from(client.drainWaiters)) {
-      waiter()
-    }
   }
 
   requestPrimary(
@@ -315,7 +576,7 @@ export class RelayDispatcher {
         reject(new Error(`Request "${method}" timed out after ${timeoutMs}ms`))
       }, timeoutMs)
       this.pendingRelayRequests.set(id, { resolve, reject, timer })
-      this.sendFrame(client, msg)
+      this.enqueueFrame(client, msg, 'control')
     })
   }
 
@@ -336,24 +597,48 @@ export class RelayDispatcher {
     // Why: can't send responses after dispose; abort in-flight work so SSH-side scans/watchers release.
     this.requestAborts.abortAll()
     for (const client of this.clients.values()) {
-      this.flushDrainWaiters(client)
+      client.closed = true
+      client.writer.close(new Error('Relay dispatcher disposed'))
     }
+    for (const listener of Array.from(this.legacyCapacityListeners)) {
+      listener()
+    }
+    this.legacyCapacityListeners.clear()
+    for (const listener of Array.from(this.disposeListeners)) {
+      listener()
+    }
+    this.disposeListeners.clear()
   }
 
-  private createClient(write: RelayClientWrite, sinkOptions?: RelayClientSinkOptions): RelayClient {
+  private createClient(
+    write: RelayClientWrite,
+    sinkOptions?: RelayClientSinkOptions,
+    sessionIdentity?: RelayClientSessionIdentity,
+    sourceOptions?: RelayClientSourceOptions
+  ): RelayClient {
     const id = this.nextClientId++
-    const client: RelayClient = {
+    const client = {
       id,
-      decoder: new FrameDecoder((frame) => this.handleFrame(client, frame)),
-      write,
-      waitWriteDrain: sinkOptions?.waitWriteDrain,
-      drainWaiters: new Set(),
+      decoder: undefined as unknown as FrameDecoder,
+      writer: undefined as unknown as DispatcherClientWriter,
       bulkChain: Promise.resolve(),
       nextOutgoingSeq: 1,
       highestReceivedSeq: 0,
       generation: 0,
-      closed: false
-    }
+      closed: false,
+      sessionIdentity: sessionIdentity ?? {
+        principal: `unproved:${id}`,
+        authenticated: false,
+        allowSessionOwner: false,
+        authenticationKind: 'unproved'
+      }
+    } satisfies RelayClient
+    client.decoder = new FrameDecoder(
+      (frame) => this.handleFrame(client, frame),
+      (error) => this.closeClient(client, error, client !== this.primaryClient),
+      { pause: sourceOptions?.pauseReads, resume: sourceOptions?.resumeReads }
+    )
+    client.writer = this.createWriter(client, write, sinkOptions)
     return client
   }
 
@@ -432,27 +717,70 @@ export class RelayDispatcher {
       client.id,
       req.id
     )
+    const responseSettledHandlers = new Set<(result: SinkWriteSettlement) => void>()
+    let responseSettled = false
+    const settleResponse = (result: SinkWriteSettlement): void => {
+      if (responseSettled) {
+        return
+      }
+      responseSettled = true
+      for (const callback of responseSettledHandlers) {
+        try {
+          callback(result)
+        } catch (err) {
+          process.stderr.write(
+            `[relay] Response settlement callback failed: ${err instanceof Error ? err.message : String(err)}\n`
+          )
+        }
+      }
+      responseSettledHandlers.clear()
+      this.requestAborts.delete(abortKey)
+    }
     const context: RequestContext = {
       clientId: client.id,
       isStale: () =>
         client.generation !== gen || !this.clients.has(client.id) || abortController.signal.aborted,
-      signal: abortController.signal
+      signal: abortController.signal,
+      sessionIdentity: client.sessionIdentity,
+      onResponseSettled: (handler) => {
+        if (responseSettled) {
+          throw new Error('Response settlement callback registered after settlement')
+        }
+        responseSettledHandlers.add(handler)
+      }
     }
     try {
       const result = await handler(req.params ?? {}, context)
       if (context.isStale()) {
+        settleResponse({ ok: false, error: new Error('Relay request became stale') })
         return
       }
-      this.sendResponse(client, req.id, result)
+      const accepted = this.sendResponse(client, req.id, result, undefined, (settlement) => {
+        settleResponse(
+          context.isStale()
+            ? { ok: false, error: new Error('Relay request became stale') }
+            : settlement
+        )
+      })
+      if (!accepted) {
+        settleResponse({ ok: false, error: new Error('Relay response was not admitted') })
+      }
     } catch (err) {
       if (context.isStale()) {
+        settleResponse({ ok: false, error: new Error('Relay request became stale') })
         return
       }
       const message = err instanceof Error ? err.message : String(err)
       const code = (err as { code?: number }).code ?? -32000
-      this.sendResponse(client, req.id, undefined, { code, message })
-    } finally {
-      this.requestAborts.delete(abortKey)
+      const accepted = this.sendResponse(client, req.id, undefined, { code, message }, (result) => {
+        settleResponse({
+          ok: false,
+          error: result.ok ? new Error(message) : result.error
+        })
+      })
+      if (!accepted) {
+        settleResponse({ ok: false, error: new Error('Relay error response was not admitted') })
+      }
     }
   }
 
@@ -468,7 +796,11 @@ export class RelayDispatcher {
       const gen = client.generation
       handler(notif.params ?? {}, {
         clientId: client.id,
-        isStale: () => client.generation !== gen || !this.clients.has(client.id)
+        isStale: () => client.generation !== gen || !this.clients.has(client.id),
+        sessionIdentity: client.sessionIdentity,
+        onResponseSettled: () => {
+          throw new Error('Notifications do not have response publication fences')
+        }
       })
     }
   }
@@ -477,26 +809,50 @@ export class RelayDispatcher {
     client: RelayClient,
     id: number,
     result?: unknown,
-    error?: { code: number; message: string; data?: unknown }
-  ): void {
+    error?: { code: number; message: string; data?: unknown },
+    onSettled: (result: SinkWriteSettlement) => void = () => {}
+  ): boolean {
     const msg: JsonRpcResponse = {
       jsonrpc: '2.0',
       id,
       ...(error ? { error } : { result: result ?? null })
     }
-    this.sendFrame(client, msg)
+    const estimatedBytes = this.estimateFrameBytes(msg)
+    const lane = estimatedBytes > DISPATCHER_CONTROL_QUEUE_MAX_BYTES ? 'legacy-response' : 'control'
+    const accepted = this.enqueueFrame(client, msg, lane, onSettled)
+    if (!accepted) {
+      this.closeClient(
+        client,
+        new Error(
+          `Relay response exceeds the bounded ${DEFAULT_PRODUCER_QUEUE_MAX_BYTES}-byte legacy lane`
+        ),
+        client !== this.primaryClient
+      )
+    }
+    return accepted
   }
 
-  private sendFrame(
+  private enqueueFrame(
     client: RelayClient,
-    msg: JsonRpcRequest | JsonRpcResponse | JsonRpcNotification
-  ): boolean | void {
+    msg: JsonRpcRequest | JsonRpcResponse | JsonRpcNotification,
+    lane: DispatcherWriterLane,
+    onSettled: (result: SinkWriteSettlement) => void = () => {},
+    // Why: publish paths already sized the frame; avoid a redundant encode.
+    estimatedBytes?: number
+  ): boolean {
     if (this.disposed || client.closed) {
-      return
+      return false
     }
-    const seq = client.nextOutgoingSeq++
-    const frame = encodeJsonRpcFrame(msg, seq, client.highestReceivedSeq)
-    return this.writeFrame(client, frame)
+    const frameBytes = estimatedBytes ?? this.estimateFrameBytes(msg)
+    return client.writer.enqueue(
+      lane,
+      () => {
+        const seq = client.nextOutgoingSeq++
+        return encodeJsonRpcFrame(msg, seq, client.highestReceivedSeq)
+      },
+      frameBytes,
+      onSettled
+    )
   }
 
   private startKeepalive(): void {
@@ -508,31 +864,240 @@ export class RelayDispatcher {
         if (client.closed) {
           continue
         }
-        const seq = client.nextOutgoingSeq++
-        const frame = encodeKeepAliveFrame(seq, client.highestReceivedSeq)
-        this.writeFrame(client, frame)
+        client.writer.enqueue(
+          'liveness',
+          () => {
+            const seq = client.nextOutgoingSeq++
+            return encodeKeepAliveFrame(seq, client.highestReceivedSeq)
+          },
+          13
+        )
       }
     }, KEEPALIVE_SEND_MS)
     // Why: unref so the keepalive interval doesn't pin the event loop and block process exit.
     this.keepaliveTimer.unref()
   }
 
-  private writeFrame(client: RelayClient, frame: Buffer): boolean | void {
-    try {
-      return client.write(frame)
-    } catch (err) {
-      client.closed = true
-      client.generation++
-      this.requestAborts.abortClient(client.id)
-      this.flushDrainWaiters(client)
-      // Why: frames have no retransmit buffer; detach now so reconnect/PTY-reattach runs instead of waiting the ~20s keepalive timeout.
-      if (client !== this.primaryClient) {
-        this.clients.delete(client.id)
+  private activeClients(): RelayClient[] {
+    return Array.from(this.clients.values()).filter((client) => !client.closed)
+  }
+
+  private activeClientKeys(): string[] {
+    return this.activeClients().map((client) => this.clientKey(client))
+  }
+
+  private clientKey(client: RelayClient): string {
+    return `${client.id}:${client.generation}`
+  }
+
+  private estimateFrameBytes(msg: JsonRpcRequest | JsonRpcResponse | JsonRpcNotification): number {
+    return encodeJsonRpcFrame(msg, 0, 0).length
+  }
+
+  private tryPublishToClients(
+    clients: readonly RelayClient[],
+    msg: JsonRpcNotification,
+    lane: 'interactive' | 'ordinary' | 'bulk'
+  ): boolean {
+    return this.runPublicationTransaction(() => {
+      if (clients.length === 0) {
+        return true
       }
-      this.notifyClientDetached(client.id)
-      process.stderr.write(
-        `[relay] Client write failed: ${err instanceof Error ? err.message : String(err)}\n`
+      const bytes = this.estimateFrameBytes(msg)
+      if (clients.some((client) => !client.writer.canEnqueueProducer(bytes))) {
+        return false
+      }
+      const leases = this.publicationLedger.tryReserve(
+        clients.map((client) => ({ clientKey: this.clientKey(client), bytes }))
       )
+      if (!leases) {
+        return false
+      }
+      for (let index = 0; index < clients.length; index++) {
+        if (!this.enqueueLeasedFrame(clients[index], msg, lane, leases[index], bytes)) {
+          if (this.disposed || clients[index].closed) {
+            continue
+          }
+          for (let remaining = index; remaining < leases.length; remaining++) {
+            leases[remaining].release()
+          }
+          return false
+        }
+      }
+      return true
+    })
+  }
+
+  private projectToClients(
+    clients: readonly RelayClient[],
+    msg: JsonRpcNotification,
+    lane: 'interactive' | 'ordinary'
+  ): boolean {
+    return this.runPublicationTransaction(() => {
+      for (const client of clients) {
+        if (client.closed || this.publishToClient(client, msg, lane)) {
+          continue
+        }
+        this.closeClient(
+          client,
+          new Error('Relay PTY subscriber projection capacity exceeded'),
+          client !== this.primaryClient
+        )
+      }
+      return !this.disposed
+    })
+  }
+
+  private publishToClient(
+    client: RelayClient,
+    msg: JsonRpcNotification,
+    lane: 'interactive' | 'ordinary' | 'fixed-bulk' | 'bulk',
+    onSettled: (result: SinkWriteSettlement) => void = () => {}
+  ): boolean {
+    const bytes = this.estimateFrameBytes(msg)
+    const fixedBlocked =
+      lane === 'fixed-bulk' &&
+      (client.writer.retainedProducerBytes > 0 || bytes > client.writer.fixedFrameCapacity)
+    if (fixedBlocked || (lane !== 'fixed-bulk' && !client.writer.canEnqueueProducer(bytes))) {
+      return false
+    }
+    const leases = this.publicationLedger.tryReserve([{ clientKey: this.clientKey(client), bytes }])
+    if (!leases) {
+      return false
+    }
+    return this.enqueueLeasedFrame(client, msg, lane, leases[0], bytes, onSettled)
+  }
+
+  private publishBulkWhenAvailable(client: RelayClient, msg: JsonRpcNotification): Promise<void> {
+    const bytes = this.estimateFrameBytes(msg)
+    const lane = msg.method === 'fs.streamChunk' ? 'fixed-bulk' : 'bulk'
+    if (bytes > DEFAULT_PRODUCER_QUEUE_MAX_BYTES) {
+      return Promise.reject(new Error('Relay bulk frame exceeds sink producer capacity'))
+    }
+    if (lane === 'bulk' && bytes > client.writer.producerFrameCapacity) {
+      return Promise.reject(new Error('Relay bulk frame exceeds sink frame capacity'))
+    }
+    return new Promise<void>((resolve, reject) => {
+      let removeCapacityListener: (() => void) | null = null
+      const finish = (): void => {
+        removeCapacityListener?.()
+        removeCapacityListener = null
+      }
+      const tryPublish = (): void => {
+        if (this.disposed || client.closed) {
+          finish()
+          resolve()
+          return
+        }
+        if (
+          this.publishToClient(client, msg, lane, (result) => {
+            finish()
+            if (result.ok || this.disposed || client.closed) {
+              resolve()
+            } else {
+              reject(result.error)
+            }
+          })
+        ) {
+          return
+        }
+        if (!removeCapacityListener) {
+          removeCapacityListener = this.onLegacyPtyCapacity(tryPublish)
+        }
+      }
+      tryPublish()
+    })
+  }
+
+  private enqueueLeasedFrame(
+    client: RelayClient,
+    msg: JsonRpcNotification,
+    lane: 'interactive' | 'ordinary' | 'fixed-bulk' | 'bulk',
+    lease: LegacyPublicationLease,
+    estimatedBytes: number,
+    onSettled: (result: SinkWriteSettlement) => void = () => {}
+  ): boolean {
+    const accepted = this.enqueueFrame(
+      client,
+      msg,
+      lane,
+      (result) => {
+        lease.release()
+        onSettled(result)
+        this.notifyLegacyCapacityIfLow()
+      },
+      estimatedBytes
+    )
+    if (!accepted) {
+      lease.release()
+      this.notifyLegacyCapacityIfLow()
+    }
+    return accepted
+  }
+
+  private createWriter(
+    client: RelayClient,
+    write: RelayClientWrite,
+    sinkOptions?: RelayClientSinkOptions
+  ): DispatcherClientWriter {
+    const writer = new DispatcherClientWriter(write, sinkOptions, (error) => {
+      this.closeClient(client, error, client !== this.primaryClient)
+    })
+    writer.onCapacity(() => this.notifyLegacyCapacityIfLow())
+    return writer
+  }
+
+  private closeClient(client: RelayClient, error: Error, remove: boolean): void {
+    if (client.closed) {
+      return
+    }
+    client.closed = true
+    this.requestAborts.abortClient(client.id)
+    client.writer.close(error)
+    client.generation++
+    if (remove) {
+      this.clients.delete(client.id)
+    }
+    this.notifyClientDetached(client.id)
+    this.notifyLegacyCapacity(true)
+    if (!/^Relay (?:primary client invalidated|client detached)$/.test(error.message)) {
+      process.stderr.write(`[relay] Client write closed: ${error.message}\n`)
+    }
+  }
+
+  private notifyLegacyCapacityIfLow(): void {
+    this.notifyLegacyCapacity(false)
+  }
+
+  private notifyLegacyCapacity(force: boolean): void {
+    if (this.publicationTransactionDepth > 0) {
+      this.deferredForcedLegacyCapacity ||= force
+      this.deferredLegacyCapacity ||= !force
+      return
+    }
+    if (!force && !this.publicationLedger.belowLowWater(this.activeClientKeys())) {
+      return
+    }
+    for (const listener of this.legacyCapacityListeners) {
+      listener()
+    }
+  }
+
+  private runPublicationTransaction<T>(operation: () => T): T {
+    this.publicationTransactionDepth++
+    try {
+      return operation()
+    } finally {
+      this.publicationTransactionDepth--
+      if (this.publicationTransactionDepth === 0) {
+        const force = this.deferredForcedLegacyCapacity
+        const low = this.deferredLegacyCapacity
+        this.deferredForcedLegacyCapacity = false
+        this.deferredLegacyCapacity = false
+        if (force || low) {
+          this.notifyLegacyCapacity(force)
+        }
+      }
     }
   }
 

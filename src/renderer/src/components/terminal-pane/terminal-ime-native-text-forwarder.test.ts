@@ -68,6 +68,18 @@ describe('isImeNativeTextKeydownCandidate', () => {
     ).toBe(true)
   })
 
+  // Why: macOS Korean sources emit ₩ from Backquote, and a DefaultKeyBinding.dict
+  // entry can rewrite it to ` — but only in the keypress/input events.
+  it('accepts the Korean won-sign key even when the input source probe is stale', () => {
+    expect(
+      isImeNativeTextKeydownCandidate(
+        keyEvent({ key: '₩', code: 'Backquote', keyCode: 192 }),
+        false,
+        DISABLED_FEATURES
+      )
+    ).toBe(true)
+  })
+
   it('accepts Vietnamese short replacement keys without enabling punctuation', () => {
     expect(
       isImeNativeTextKeydownCandidate(
@@ -262,6 +274,40 @@ describe('installTerminalImeNativeTextForwarder', () => {
     dispatchInsertText(textarea, '。')
 
     expect(sendInput).toHaveBeenCalledExactlyOnceWith('。')
+  })
+
+  it('forwards the key binding substitution for the Korean won-sign key', () => {
+    const sendInput = vi.fn()
+    const forwarder = installTerminalImeNativeTextForwarder({
+      terminalElement: element,
+      isComposing: () => false,
+      sendInput,
+      getInputSourceFeatures: () => CJK_FEATURES
+    })
+
+    expect(forwarder.claimKeyEvent(keyEvent({ key: '₩', code: 'Backquote', keyCode: 192 }))).toBe(
+      true
+    )
+    dispatchInsertText(textarea, '`')
+
+    expect(sendInput).toHaveBeenCalledExactlyOnceWith('`')
+  })
+
+  it('forwards the won sign unchanged when no key binding remaps it', () => {
+    const sendInput = vi.fn()
+    const forwarder = installTerminalImeNativeTextForwarder({
+      terminalElement: element,
+      isComposing: () => false,
+      sendInput,
+      getInputSourceFeatures: () => CJK_FEATURES
+    })
+
+    expect(forwarder.claimKeyEvent(keyEvent({ key: '₩', code: 'Backquote', keyCode: 192 }))).toBe(
+      true
+    )
+    dispatchInsertText(textarea, '₩')
+
+    expect(sendInput).toHaveBeenCalledExactlyOnceWith('₩')
   })
 
   it('forwards a plain ASCII symbol unchanged when the IME does not convert it', () => {

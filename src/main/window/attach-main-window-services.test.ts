@@ -829,4 +829,73 @@ describe('attachMainWindowServices', () => {
     await expect(revealPromise).resolves.toEqual({ tabId: 'tab-1', title: 'SSH tmux' })
     expect(removeListenerMock).toHaveBeenCalledWith('terminal:tabCreateReply', handler)
   })
+
+  it('requires an exact renderer identity receipt for recovered worker reveals', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+    const runtime = createRuntime()
+
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+
+    const notifier = runtime.setNotifier.mock.calls[0][0] as {
+      revealTerminalSession: (
+        worktreeId: string,
+        opts: {
+          ptyId: string
+          tabId: string
+          leafId: string
+          expectedProcessIdentity: { terminalHandle: string; incarnationId: string }
+        }
+      ) => Promise<unknown>
+    }
+    const opts = {
+      ptyId: 'pty-worker',
+      tabId: 'tab-worker',
+      leafId: 'leaf-worker',
+      expectedProcessIdentity: {
+        terminalHandle: 'term_worker',
+        incarnationId: 'inc-worker'
+      }
+    }
+    const mismatch = notifier.revealTerminalSession('worktree-1', opts)
+    const mismatchPayload = sendMock.mock.calls.at(-1)?.[1]
+    const mismatchHandler = onMock.mock.calls.findLast(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+    mismatchHandler?.(
+      { sender: mainWindow.webContents },
+      {
+        requestId: mismatchPayload.requestId,
+        tabId: 'tab-worker',
+        identity: {
+          worktreeId: 'worktree-1',
+          tabId: 'tab-worker',
+          leafId: 'leaf-worker',
+          ptyId: 'pty-replacement'
+        }
+      }
+    )
+    await expect(mismatch).rejects.toThrow('terminal_reveal_identity_mismatch')
+
+    const exact = notifier.revealTerminalSession('worktree-1', opts)
+    const exactPayload = sendMock.mock.calls.at(-1)?.[1]
+    const exactHandler = onMock.mock.calls.findLast(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+    const identity = {
+      worktreeId: 'worktree-1',
+      tabId: 'tab-worker',
+      leafId: 'leaf-worker',
+      ptyId: 'pty-worker'
+    }
+    exactHandler?.(
+      { sender: mainWindow.webContents },
+      { requestId: exactPayload.requestId, tabId: 'tab-worker', identity }
+    )
+    await expect(exact).resolves.toEqual({
+      tabId: 'tab-worker',
+      title: undefined,
+      identity
+    })
+  })
 })

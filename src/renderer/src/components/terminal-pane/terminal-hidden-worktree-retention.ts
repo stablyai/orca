@@ -7,6 +7,7 @@ import {
   type ColdParkRetainCandidate,
   type TerminalColdParkPolicyOverrides
 } from './terminal-hidden-view-parking'
+import type { TerminalTab } from '../../../../shared/types'
 
 // Why these sizes: a retained hidden pane costs a measured ~2.5MB of V8 heap
 // at the 5k-row default scrollback and ~19MB at 50k (plus per-pane queues),
@@ -27,6 +28,18 @@ import {
 // eviction, not demotion.
 export const TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT = 12
 export const TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS = 45 * 60_000
+
+export function hasPendingRetentionSpawnWork(
+  tab: Pick<TerminalTab, 'id' | 'ptyId' | 'pendingActivationSpawn'>,
+  pendingStartupByTabId: Readonly<Record<string, unknown>>
+): boolean {
+  if (pendingStartupByTabId[tab.id] !== undefined) {
+    return true
+  }
+  // Why: paired mirrors never spawn locally; their host-backed PTY id proves
+  // activation's sort-suppression residue cannot represent unfinished work.
+  return Boolean(tab.pendingActivationSpawn && (!tab.ptyId || !isRemoteRuntimePtyId(tab.ptyId)))
+}
 
 // Why: an eviction-exempt pty is a live local one a remount could not reattach
 // (daemon-fail-open separator-less ids, ptys minted under another worktree) — a

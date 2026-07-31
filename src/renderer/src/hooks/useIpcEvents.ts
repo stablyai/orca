@@ -15,6 +15,7 @@ import { OPEN_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoa
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
+import { resolveTerminalTabPtyOwnership } from '@/lib/terminal-tab-for-pty-id'
 import {
   hasRegisteredRuntimeTerminalTab,
   focusRuntimeTerminalSurface
@@ -87,6 +88,9 @@ import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
 import { createWorktreeChangeRefreshQueue } from './worktree-change-refresh-queue'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
+import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
+import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { subscribeToUnpairedDeviceAuthNotification } from './unpaired-device-auth-notification'
 import {
   applyRuntimeEnvironmentSshStateChanged,
@@ -101,9 +105,14 @@ import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
+import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
+import {
+  resolveLegacyWorkerTerminalRecoveryAction,
+  rollbackLegacyWorkerTerminalSurfaceInStore
+} from './legacy-worker-terminal-recovery-event'
 import type { AppState } from '../store/types'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '../store/pinned-tab-close-guard'
 import {
@@ -181,9 +190,13 @@ const browserAutomationBootstrapLeaseByPageId = new Map<string, { token: string;
 function resolveTerminalPresentation(data: {
   presentation?: RuntimeTerminalPresentation
   activate?: boolean
+  focus?: boolean
 }): RuntimeTerminalPresentation | undefined {
   if (data.presentation) {
     return data.presentation
+  }
+  if (data.focus !== undefined) {
+    return data.focus ? 'focused' : 'background'
   }
   if (data.activate === true) {
     return 'focused'
@@ -917,6 +930,17 @@ export function useIpcEvents(): void {
         applyHostWorktreeTerminalSleepState(environmentId, event)
         return
       }
+      if (event.type === 'terminalSideEffects') {
+        dispatchTerminalSideEffectBatch({
+          ...event.batch,
+          ptyId: toRemoteRuntimePtyId(event.batch.ptyId, environmentId)
+        })
+        return
+      }
+      if (event.type === 'nativeChatLaunchDraftResolved') {
+        applyNativeChatLaunchDraftResolved(useAppStore.getState(), event)
+        return
+      }
       if (event.type === 'reposChanged') {
         runtimeProjectRefreshScheduler.request(environmentId)
         return
@@ -1395,7 +1419,9 @@ export function useIpcEvents(): void {
           title,
           ptyId,
           activate,
+          focus,
           presentation,
+          surfaceOwner,
           tabId,
           leafId,
           splitFromLeafId,
@@ -1404,20 +1430,32 @@ export function useIpcEvents(): void {
         }) => {
           try {
             const store = useAppStore.getState()
-            const terminalPresentation = resolveTerminalPresentation({ presentation, activate })
+            const terminalPresentation = resolveTerminalPresentation({
+              presentation,
+              activate,
+              focus
+            })
             const shouldActivate = terminalPresentation === 'focused'
-            const shouldSurfaceOwner = terminalPresentation !== 'background'
+            const shouldSurfaceOwner =
+              terminalPresentation !== 'background' && surfaceOwner !== false
             if (shouldActivate) {
               activateTerminalInitiatedWorktree(store, worktreeId)
             }
             const worktreeTabs = store.tabsByWorktree[worktreeId] ?? []
-            const existingTab = ptyId
-              ? worktreeTabs.find(
-                  (candidate) =>
-                    candidate.ptyId === ptyId ||
-                    (store.ptyIdsByTabId[candidate.id] ?? []).includes(ptyId)
+            // Why: a split pane revealed from mobile is only bound in the persisted
+            // layout until its pane mounts; missing it minted a duplicate tab (#10486).
+            const ownership = ptyId
+              ? resolveTerminalTabPtyOwnership(
+                  store,
+                  worktreeId,
+                  ptyId,
+                  tabId !== undefined ? { preferTabId: tabId } : {}
                 )
-              : undefined
+              : { kind: 'none' as const }
+            const existingTab =
+              ownership.kind === 'owned'
+                ? worktreeTabs.find((candidate) => candidate.id === ownership.tabId)
+                : undefined
             const isSplitReveal = Boolean(ptyId && tabId && leafId && splitFromLeafId)
             const splitTargetTab = isSplitReveal
               ? worktreeTabs.find((candidate) => candidate.id === tabId)
@@ -1425,18 +1463,7 @@ export function useIpcEvents(): void {
             if (isSplitReveal && !splitTargetTab) {
               throw new Error(`Terminal tab ${tabId} not found`)
             }
-            const hintedPendingTab =
-              ptyId && tabId && !isSplitReveal
-                ? worktreeTabs.find((candidate) => {
-                    if (candidate.id !== tabId) {
-                      return false
-                    }
-                    const candidatePtyIds = store.ptyIdsByTabId[candidate.id] ?? []
-                    return candidate.ptyId == null && candidatePtyIds.length === 0
-                  })
-                : undefined
-            // Why: runtime fallback reveals a PTY for a renderer-created pending tab; adopt only when the hinted tab has no PTY yet.
-            const reusedTab = existingTab ?? splitTargetTab ?? hintedPendingTab
+            const reusedTab = existingTab ?? splitTargetTab
             const tab =
               reusedTab ??
               (ptyId
@@ -1567,11 +1594,25 @@ export function useIpcEvents(): void {
                 ...(launchAgent ? { launchAgent } : {})
               })
             }
+            if (ptyId && terminalPresentation === 'background') {
+              requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
+            }
             if (requestId) {
+              // Why: attest the actual binding; recovery callers compare it with their expected identity.
+              const identity =
+                ptyId && tabId && leafId
+                  ? verifyTerminalRevealIdentity(useAppStore.getState(), {
+                      worktreeId,
+                      tabId: tab.id,
+                      leafId,
+                      ptyId
+                    })
+                  : undefined
               window.api.ui.replyTerminalCreate({
                 requestId,
                 tabId: tab.id,
-                title: title ?? tab.title
+                title: title ?? tab.title,
+                ...(identity ? { identity } : {})
               })
             }
           } catch (err) {
@@ -1648,7 +1689,8 @@ export function useIpcEvents(): void {
           }
           const terminalPresentation = resolveTerminalPresentation(data)
           const shouldActivate = terminalPresentation === 'focused'
-          const shouldSurfaceOwner = terminalPresentation !== 'background'
+          const shouldSurfaceOwner =
+            terminalPresentation !== 'background' && data.surfaceOwner !== false
           if (shouldActivate) {
             activateTerminalInitiatedWorktree(store, worktreeId)
           }
@@ -3338,6 +3380,21 @@ export function useIpcEvents(): void {
     if (unsubscribeMigrationUnsupportedClear) {
       unsubs.push(unsubscribeMigrationUnsupportedClear)
     }
+    const unsubscribeLegacyWorkerTerminalRecovery =
+      window.api.agentStatus.onLegacyWorkerTerminalRecovery?.((event) => {
+        const action = resolveLegacyWorkerTerminalRecoveryAction(event)
+        if (action.kind === 'rollback-surface') {
+          window.dispatchEvent(
+            new CustomEvent(CLOSE_TERMINAL_PANE_EVENT, { detail: action.detail })
+          )
+          rollbackLegacyWorkerTerminalSurfaceInStore(useAppStore.getState(), action.detail)
+        } else if (action.kind === 'clear-sleeping') {
+          useAppStore.getState().clearSleepingAgentSession(action.paneKey)
+        }
+      })
+    if (unsubscribeLegacyWorkerTerminalRecovery) {
+      unsubs.push(unsubscribeLegacyWorkerTerminalRecovery)
+    }
 
     // Why: main hook server is the durable source of truth; pull the snapshot only after tabs are ready so early startup pushes can be ignored, not buffered.
     requestAgentStatusSnapshotIfReady()
@@ -3422,6 +3479,18 @@ export function useIpcEvents(): void {
         setDriverForPty(event.ptyId, event.driver)
       })
     )
+
+    const unsubscribeLaunchDraftResolution = window.api.runtime.onNativeChatLaunchDraftResolved?.(
+      (event) => {
+        applyNativeChatLaunchDraftResolved(useAppStore.getState(), {
+          type: 'nativeChatLaunchDraftResolved',
+          ...event
+        })
+      }
+    )
+    if (unsubscribeLaunchDraftResolution) {
+      unsubs.push(unsubscribeLaunchDraftResolution)
+    }
 
     unsubs.push(
       window.api.runtime.onBrowserDriverChanged((event) => {

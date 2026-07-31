@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildGitHubCheckSummary } from './github-check-summary'
+import { buildGitLabCheckSummary } from './gitlab-check-summary'
 
 describe('buildGitHubCheckSummary', () => {
   it('returns none for empty check lists', () => {
@@ -8,7 +9,8 @@ describe('buildGitHubCheckSummary', () => {
       total: 0,
       passed: 0,
       failed: 0,
-      pending: 0
+      pending: 0,
+      neutral: 0
     })
   })
 
@@ -24,22 +26,35 @@ describe('buildGitHubCheckSummary', () => {
       total: 3,
       passed: 1,
       failed: 1,
-      pending: 1
+      pending: 1,
+      neutral: 0
     })
   })
 
-  it('marks all completed non-failing checks as successful', () => {
+  it('keeps neutral and unknown terminal conclusions out of passed', () => {
     expect(
       buildGitHubCheckSummary([
         { status: 'completed', conclusion: 'success' },
         { status: 'completed', conclusion: 'neutral' }
       ])
     ).toEqual({
-      state: 'success',
+      state: 'neutral',
       total: 2,
-      passed: 2,
+      passed: 1,
       failed: 0,
-      pending: 0
+      pending: 0,
+      neutral: 1
+    })
+  })
+
+  it('rolls up GitLab jobs with unknown terminal statuses as neutral', () => {
+    expect(buildGitLabCheckSummary([{ status: 'success' }, { status: 'future_status' }])).toEqual({
+      state: 'neutral',
+      total: 2,
+      passed: 1,
+      failed: 0,
+      pending: 0,
+      neutral: 1
     })
   })
 })

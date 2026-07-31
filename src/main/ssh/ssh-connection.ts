@@ -19,6 +19,7 @@ import {
 } from './ssh-system-fallback'
 import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
 import { removeControlSocketPath } from './ssh-control-socket'
+import { isOpenSshConfigBackedTarget } from './system-ssh-args'
 import {
   INITIAL_RETRY_ATTEMPTS,
   INITIAL_RETRY_DELAY_MS,
@@ -39,6 +40,7 @@ import {
   type SshExecOptions,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
+import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import {
   resolveSftpTransferPathIfMapped,
@@ -82,7 +84,11 @@ function isGitHubRestrictedShellProbeSuccess(
     return false
   }
 
-  const effectiveUser = (target.username?.trim() || resolvedConfig?.user?.trim())?.toLowerCase()
+  const effectiveUser = (
+    isOpenSshConfigBackedTarget(target) && resolvedConfig
+      ? resolvedConfig.user?.trim() || target.username?.trim()
+      : target.username?.trim() || resolvedConfig?.user?.trim()
+  )?.toLowerCase()
   if (effectiveUser !== 'git') {
     return false
   }
@@ -631,7 +637,11 @@ export class SshConnection {
       return
     }
     // Why: ssh2 lacks gssapi-with-mic; GSSAPIAuthentication hosts try Kerberos SSO via system OpenSSH first, then fall through to key/credential auth.
-    if (this.target.gssapiAuthentication === true) {
+    if (
+      isOpenSshConfigBackedTarget(this.target) && resolved
+        ? resolved.gssapiAuthentication === true
+        : this.target.gssapiAuthentication === true
+    ) {
       try {
         await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved, true)
         return
@@ -719,14 +729,19 @@ export class SshConnection {
               throw keyErr
             }
             authError = keyErr
+            const passphraseKeyPath = getPassphrasePrivateKeyPath(keyConfig)
             // Why: with GSSAPI enabled, let the reactive system-ssh probe try a Kerberos ticket before prompting for the passphrase; the prompt still runs if it fails.
             if (
-              isPassphraseError(authError) &&
+              (isPassphraseError(authError) || passphraseKeyPath) &&
               !this.cachedPassphrase &&
               !isGssapiSystemSshFallbackCandidate(authError, this.target, resolved)
             ) {
               passphrasePromptHandled = true
-              const detail = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
+              const detail =
+                passphraseKeyPath ||
+                this.target.identityFile ||
+                resolved?.identityFile?.[0] ||
+                '(unknown)'
               const val = await this.callbacks.onCredentialRequest?.(
                 this.target.id,
                 'passphrase',
@@ -770,8 +785,17 @@ export class SshConnection {
       }
 
       // Why: prompt for passphrase on encrypted-key error, then retry with a fresh proxy socket (ssh2 may have destroyed the original).
-      if (isPassphraseError(authError) && !this.cachedPassphrase && !passphrasePromptHandled) {
-        const detail = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
+      const passphraseKeyPath = getPassphrasePrivateKeyPath(credentialRetryConfig)
+      if (
+        (isPassphraseError(authError) || passphraseKeyPath) &&
+        !this.cachedPassphrase &&
+        !passphrasePromptHandled
+      ) {
+        const detail =
+          passphraseKeyPath ||
+          this.target.identityFile ||
+          resolved?.identityFile?.[0] ||
+          '(unknown)'
         const val = await this.callbacks.onCredentialRequest(this.target.id, 'passphrase', detail)
         if (val) {
           this.cachedPassphrase = val
@@ -1362,6 +1386,14 @@ export function shouldUseSystemSshTransport(
   target: SshTarget,
   resolved: Pick<SshResolvedConfig, 'proxyUseFdpass' | 'proxyCommand' | 'proxyJump'> | null
 ): boolean {
+  if (isOpenSshConfigBackedTarget(target) && resolved) {
+    return (
+      process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT === '1' ||
+      resolved.proxyUseFdpass === true ||
+      resolved.proxyCommand != null ||
+      resolved.proxyJump != null
+    )
+  }
   return (
     process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT === '1' ||
     target.proxyCommand != null ||

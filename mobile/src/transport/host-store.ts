@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import * as SecureStore from 'expo-secure-store'
 import { Platform } from 'react-native'
 import {
   HostProfileSchema,
@@ -8,6 +7,12 @@ import {
   type StoredHostProfile
 } from './types'
 import { getNextHostNameFromHosts } from './host-names'
+import {
+  deletePairingKeychainItem,
+  readPairingKeychainItem,
+  resetPairingKeychainForTests,
+  writePairingKeychainItem
+} from './pairing-keychain'
 import {
   retryPendingHostCredentialCleanups,
   scheduleHostCredentialCleanup
@@ -27,12 +32,6 @@ const STORAGE_KEY = 'orca:hosts'
 const TOKEN_KEY_PREFIX = 'orca.host-token.'
 const WEB_TOKEN_KEY_PREFIX = 'orca:web-host-token:'
 
-// Why: WHEN_UNLOCKED_THIS_DEVICE_ONLY keeps the pairing token off iCloud Keychain and out of backup restores onto another device.
-// Reads/writes stay silent (no biometric prompt) because we don't request access control flags.
-const KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = {
-  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY
-}
-
 function tokenKey(hostId: string): string {
   return `${TOKEN_KEY_PREFIX}${hostId}`
 }
@@ -46,7 +45,7 @@ async function readDeviceToken(hostId: string): Promise<string | null> {
   if (Platform.OS === 'web') {
     return AsyncStorage.getItem(webTokenKey(hostId))
   }
-  return SecureStore.getItemAsync(tokenKey(hostId), KEYCHAIN_OPTIONS)
+  return readPairingKeychainItem(tokenKey(hostId))
 }
 
 async function writeDeviceToken(hostId: string, token: string): Promise<void> {
@@ -54,7 +53,7 @@ async function writeDeviceToken(hostId: string, token: string): Promise<void> {
     await AsyncStorage.setItem(webTokenKey(hostId), token)
     return
   }
-  await SecureStore.setItemAsync(tokenKey(hostId), token, KEYCHAIN_OPTIONS)
+  await writePairingKeychainItem(tokenKey(hostId), token)
 }
 
 async function deleteDeviceToken(hostId: string): Promise<void> {
@@ -62,7 +61,7 @@ async function deleteDeviceToken(hostId: string): Promise<void> {
     await AsyncStorage.removeItem(webTokenKey(hostId))
     return
   }
-  await SecureStore.deleteItemAsync(tokenKey(hostId), KEYCHAIN_OPTIONS)
+  await deletePairingKeychainItem(tokenKey(hostId))
 }
 
 async function deleteHostCredentials(hostId: string): Promise<void> {
@@ -342,4 +341,5 @@ export function resetHostStoreForTests(): void {
   hostListMutation = Promise.resolve()
   tokenCache.clear()
   inflightLoad = null
+  resetPairingKeychainForTests()
 }

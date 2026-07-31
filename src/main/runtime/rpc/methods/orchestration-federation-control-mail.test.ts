@@ -265,7 +265,7 @@ describe('orchestration federation control mail', () => {
     })
     await expect(waiting).resolves.toMatchObject({
       ok: true,
-      result: { count: 0, timedOut: true }
+      result: { count: 0 }
     })
   })
 

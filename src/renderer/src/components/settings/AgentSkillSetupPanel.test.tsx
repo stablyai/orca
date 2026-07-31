@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, type ComponentProps } from 'react'
+import { act, useState, type ComponentProps } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,9 +12,17 @@ const UPDATE_COMMAND = 'npx skills update orca-cli --global'
 
 const mocks = vi.hoisted(() => ({
   clipboardWrite: vi.fn(),
-  terminalProps: [] as { command: string; description: string }[],
+  terminalProps: [] as {
+    command: string
+    description: string
+    onTerminalExit?: () => void
+    onCommandFinished?: (bestEffortExitCode: number | null) => void
+  }[],
   toastError: vi.fn(),
-  toastSuccess: vi.fn()
+  toastSuccess: vi.fn(),
+  skillsChanged: vi.fn(),
+  skillsRefreshed: vi.fn(),
+  terminalInstanceCount: 0
 }))
 
 vi.mock('sonner', () => ({
@@ -24,19 +32,40 @@ vi.mock('sonner', () => ({
   }
 }))
 
+vi.mock('@/hooks/useInstalledAgentSkills', () => ({
+  notifyInstalledAgentSkillsChanged: mocks.skillsChanged,
+  notifyInstalledAgentSkillsRefreshed: mocks.skillsRefreshed
+}))
+
 vi.mock('../onboarding/OnboardingInlineCommandTerminal', () => ({
-  OnboardingInlineCommandTerminal: (props: { command: string; description: string }) => {
+  OnboardingInlineCommandTerminal: (props: {
+    command: string
+    description: string
+    onTerminalExit?: () => void
+    onCommandFinished?: (bestEffortExitCode: number | null) => void
+  }) => {
+    const [instance] = useState(() => {
+      mocks.terminalInstanceCount += 1
+      return mocks.terminalInstanceCount
+    })
     mocks.terminalProps.push(props)
     return (
       <div
         data-testid="inline-command-terminal"
         data-command={props.command}
         data-description={props.description}
+        data-instance={instance}
       >
         {props.command}
       </div>
     )
   }
+}))
+
+vi.mock('../skills/SkillFreshnessStatusPill', () => ({
+  SkillFreshnessStatusPill: ({ skillName }: { skillName: string }) => (
+    <span data-testid="skill-freshness">{skillName}</span>
+  )
 }))
 
 function panelProps(
@@ -124,6 +153,9 @@ describe('AgentSkillSetupPanel', () => {
     mocks.terminalProps.length = 0
     mocks.toastError.mockReset()
     mocks.toastSuccess.mockReset()
+    mocks.skillsChanged.mockReset()
+    mocks.skillsRefreshed.mockReset()
+    mocks.terminalInstanceCount = 0
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -155,6 +187,26 @@ describe('AgentSkillSetupPanel', () => {
     expect(html).toContain('Installed')
     expect(buttonLabels(html)).toContain('Update')
     expect(buttonLabels(html)).toContain('Re-check')
+  })
+
+  it('surfaces skill freshness under hideHeader for guided setup hubs', () => {
+    const html = renderPanel({
+      installed: true,
+      hideHeader: true,
+      description: null,
+      freshnessSkillName: 'orca-linear'
+    })
+
+    expect(html).toContain('data-testid="skill-freshness"')
+    expect(html).toContain('orca-linear')
+    expect(html).not.toContain('CLI skill')
+  })
+
+  it('does not render an empty description paragraph when description is null', () => {
+    const html = renderPanel({ description: null, hideHeader: true })
+
+    expect(html).not.toContain('text-muted-foreground">null')
+    expect(html).not.toMatch(/<p class="text-\[13px\] leading-snug text-muted-foreground"><\/p>/)
   })
 
   it('hides only re-check when installed re-checks are disabled', () => {
@@ -215,6 +267,25 @@ describe('AgentSkillSetupPanel', () => {
     const html = renderPanel({ installDisabled: true })
 
     expect(buttonMarkupByLabel(html, 'Install')).toContain('disabled=""')
+  })
+
+  it('notifies sibling surfaces only after re-check finishes', async () => {
+    let finishRecheck: (() => void) | null = null
+    const recheck = new Promise<void>((resolve) => {
+      finishRecheck = resolve
+    })
+    await renderInteractivePanel({ onRecheck: () => recheck })
+
+    await clickButton('Re-check')
+    expect(mocks.skillsRefreshed).not.toHaveBeenCalled()
+
+    await act(async () => {
+      finishRecheck?.()
+      await recheck
+    })
+
+    expect(mocks.skillsRefreshed).toHaveBeenCalledOnce()
+    expect(mocks.skillsChanged).not.toHaveBeenCalled()
   })
 
   it('opens not-installed setup with the install command for preview, copy, and terminal', async () => {
@@ -298,6 +369,169 @@ describe('AgentSkillSetupPanel', () => {
     await clickButton('Update')
 
     expect(container?.textContent).toContain(INSTALL_COMMAND)
+    expect(mocks.terminalProps.at(-1)).toMatchObject({ command: INSTALL_COMMAND })
+  })
+
+  it('keeps a failed setup command visible with durable recovery', async () => {
+    const onRecheck = vi.fn()
+    await renderInteractivePanel({ onRecheck })
+    await clickButton('Install')
+    onRecheck.mockClear()
+
+    await act(async () => {
+      const onCommandFinished = mocks.terminalProps.at(-1)?.onCommandFinished
+      onCommandFinished?.(1)
+      onCommandFinished?.(0)
+    })
+
+    expect(container?.textContent).toContain(
+      'The setup command exited with code 1. This error will clear after a successful retry.'
+    )
+    expect(container?.textContent).toContain('Setup failed')
+    expect(container?.querySelector('[data-testid="inline-command-terminal"]')).not.toBeNull()
+    expect(findButton('Retry').disabled).toBe(false)
+    expect(onRecheck).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears the failure notice when a later command succeeds', async () => {
+    await renderInteractivePanel()
+    await clickButton('Install')
+
+    await act(async () => {
+      mocks.terminalProps.at(-1)?.onCommandFinished?.(1)
+    })
+    await clickButton('Retry')
+    await act(async () => {
+      mocks.terminalProps.at(-1)?.onCommandFinished?.(0)
+    })
+
+    expect(container?.textContent).not.toContain('exited with code')
+  })
+
+  it('keeps the failure verdict when a command finishes without an exit code', async () => {
+    await renderInteractivePanel()
+    await clickButton('Install')
+
+    await act(async () => {
+      mocks.terminalProps.at(-1)?.onCommandFinished?.(1)
+    })
+    await clickButton('Retry')
+    await act(async () => {
+      mocks.terminalProps.at(-1)?.onCommandFinished?.(null)
+    })
+
+    expect(container?.textContent).toContain(
+      'The setup command exited with code 1. This error will clear after a successful retry.'
+    )
+  })
+
+  it('retries a failed command in a fresh interactive terminal', async () => {
+    let finishRetryPreflight: (() => void) | null = null
+    const retryPreflight = new Promise<void>((resolve) => {
+      finishRetryPreflight = resolve
+    })
+    let preflightCount = 0
+    await renderInteractivePanel({
+      onBeforeOpenTerminal: () => {
+        preflightCount += 1
+        return preflightCount === 1 ? undefined : retryPreflight
+      }
+    })
+    await clickButton('Install')
+    const firstInstance = container
+      ?.querySelector('[data-testid="inline-command-terminal"]')
+      ?.getAttribute('data-instance')
+
+    await act(async () => {
+      mocks.terminalProps.at(-1)?.onCommandFinished?.(1)
+    })
+    await clickButton('Retry')
+    expect(container?.querySelector('[data-testid="inline-command-terminal"]')).toBeNull()
+
+    await act(async () => {
+      finishRetryPreflight?.()
+      await retryPreflight
+    })
+    await act(async () => {})
+
+    expect(mocks.terminalProps.at(-1)).toMatchObject({ command: INSTALL_COMMAND })
+    expect(
+      container
+        ?.querySelector('[data-testid="inline-command-terminal"]')
+        ?.getAttribute('data-instance')
+    ).not.toBe(firstInstance)
+    expect(findButton('Retry').disabled).toBe(true)
+  })
+
+  it('keeps the command failure authoritative over presence discovery', async () => {
+    await renderInteractivePanel({ freshnessSkillName: 'orca-cli' })
+    await clickButton('Install')
+
+    await act(async () => {
+      mocks.terminalProps.at(-1)?.onCommandFinished?.(1)
+    })
+    await rerenderInteractivePanel({ installed: true, freshnessSkillName: 'orca-cli' })
+
+    expect(container?.textContent).toContain('Setup failed')
+    expect(container?.textContent).toContain('exited with code 1')
+    expect(container?.textContent).not.toContain('Installed')
+    expect(container?.querySelector('[data-testid="skill-freshness"]')).toBeNull()
+    expect(findButton('Retry').disabled).toBe(false)
+  })
+
+  it('keeps failed updates recoverable when installed re-check is hidden', async () => {
+    await renderInteractivePanel({
+      installed: true,
+      installedCommand: UPDATE_COMMAND,
+      showRecheckWhenInstalled: false
+    })
+    await clickButton('Update')
+
+    await act(async () => {
+      mocks.terminalProps.at(-1)?.onCommandFinished?.(1)
+    })
+
+    expect(container?.textContent).toContain('Setup failed')
+    expect(container?.textContent).toContain('exited with code 1')
+    expect(findButton('Retry').disabled).toBe(false)
+
+    await clickButton('Retry')
+    expect(mocks.terminalProps.at(-1)).toMatchObject({ command: UPDATE_COMMAND })
+  })
+
+  it('invalidates shared skill state before the direct completion re-check', async () => {
+    const calls: string[] = []
+    mocks.skillsChanged.mockImplementation(() => calls.push('invalidate'))
+    const onRecheck = vi.fn(() => {
+      calls.push('recheck')
+    })
+    await renderInteractivePanel({ freshnessSkillName: 'orca-cli', onRecheck })
+    await clickButton('Install')
+    calls.length = 0
+
+    await act(async () => {
+      mocks.terminalProps.at(-1)?.onCommandFinished?.(0)
+    })
+
+    expect(calls).toEqual(['invalidate', 'recheck'])
+  })
+
+  it('re-enables Install after the setup shell exits so a failed attempt can retry', async () => {
+    await renderInteractivePanel()
+    await clickButton('Install')
+
+    expect(findButton('Install').disabled).toBe(true)
+
+    await act(async () => {
+      mocks.terminalProps.at(-1)?.onTerminalExit?.()
+    })
+
+    expect(findButton('Install').disabled).toBe(false)
+    expect(container?.querySelector('[data-testid="inline-command-terminal"]')).toBeNull()
+
+    await clickButton('Install')
+
+    expect(findButton('Install').disabled).toBe(true)
     expect(mocks.terminalProps.at(-1)).toMatchObject({ command: INSTALL_COMMAND })
   })
 })

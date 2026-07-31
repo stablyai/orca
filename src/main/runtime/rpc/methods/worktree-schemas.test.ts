@@ -32,6 +32,76 @@ describe('worktree RPC schemas', () => {
     expect(parsed.success).toBe(false)
   })
 
+  it('normalizes durable Jira linked-item metadata and rejects provider mismatches', () => {
+    const linkedWorkItem = {
+      provider: 'jira',
+      type: 'issue',
+      number: 0,
+      title: ' ORCA-123 Link Jira ',
+      url: ' https://company.atlassian.net/browse/ORCA-123 ',
+      jiraIdentifier: ' ORCA-123 '
+    }
+    const linkedTaskSourceContext = {
+      kind: 'task-source',
+      provider: 'jira',
+      projectId: ' project-1 ',
+      hostId: 'runtime:env-1',
+      providerIdentity: {
+        provider: 'jira',
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      }
+    }
+    const parsed = WorktreeCreate.parse({
+      repo: 'repo-1',
+      name: 'jira-link',
+      linkedWorkItem,
+      linkedTaskSourceContext
+    })
+
+    expect(parsed.linkedWorkItem).toMatchObject({
+      provider: 'jira',
+      title: 'ORCA-123 Link Jira',
+      jiraIdentifier: 'ORCA-123'
+    })
+    expect(parsed.linkedTaskSourceContext).toMatchObject({
+      provider: 'jira',
+      projectId: 'project-1',
+      hostId: 'runtime:env-1'
+    })
+    expect(
+      WorktreeCreate.safeParse({
+        repo: 'repo-1',
+        name: 'mismatch',
+        linkedWorkItem,
+        linkedTaskSourceContext: { ...linkedTaskSourceContext, provider: 'linear' }
+      }).success
+    ).toBe(false)
+    expect(
+      WorktreeCreate.safeParse({
+        repo: 'repo-1',
+        name: 'wrong-site',
+        linkedWorkItem,
+        linkedTaskSourceContext: {
+          ...linkedTaskSourceContext,
+          providerIdentity: {
+            ...linkedTaskSourceContext.providerIdentity,
+            siteUrl: 'https://other.atlassian.net'
+          }
+        }
+      }).success
+    ).toBe(false)
+    expect(() =>
+      WorktreeCreate.safeParse({
+        repo: 'repo-1',
+        name: 'malformed',
+        linkedWorkItem,
+        linkedTaskSourceContext: { ...linkedTaskSourceContext, accountLabel: 44 }
+      })
+    ).not.toThrow()
+  })
+
   it('keeps a blanked display name on remote hosts instead of dropping the clear', () => {
     // Blanking sends displayName:'' meaning "fall back to the branch/folder name".
     // Coercing it to undefined made updateManagedWorktreeMeta's omitUndefinedProperties

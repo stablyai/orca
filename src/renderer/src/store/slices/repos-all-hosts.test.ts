@@ -785,8 +785,8 @@ describe('fetchReposForAllHosts', () => {
 
   it('preserves remote repo filters during first-paint local catalog refresh', async () => {
     const store = createTestStore()
-    const remoteDismissalKey = getSetupScriptPromptDismissalKey('remote-repo')
-    const staleDismissalKey = getSetupScriptPromptDismissalKey('stale-repo')
+    const remoteDismissalKey = getSetupScriptPromptDismissalKey('runtime:env-1\0remote-repo')
+    const staleDismissalKey = getSetupScriptPromptDismissalKey('local\0stale-repo')
     store.setState({
       activeRepoId: 'remote-repo',
       filterRepoIds: ['remote-repo', 'stale-repo'],

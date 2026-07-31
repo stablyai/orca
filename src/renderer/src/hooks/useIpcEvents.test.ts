@@ -11,6 +11,11 @@ import {
   resolveBrowserSessionTabTarget,
   resolveZoomTarget
 } from './useIpcEvents'
+import {
+  createHarnessStoreState,
+  loadIpcEventsHarness,
+  type HarnessStoreState
+} from './ipc-events-test-harness'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../shared/types'
@@ -1504,7 +1509,6 @@ describe('useIpcEvents updater integration', () => {
         openAgentTabsInChatByDefault: false
       }
     }
-
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
       return {
@@ -1789,7 +1793,11 @@ describe('useIpcEvents updater integration', () => {
   })
 
   it('surfaces terminal creates without stealing focus unless requested', async () => {
-    const createTab = vi.fn(() => ({ id: 'tab-new' }))
+    const createTab = vi.fn(
+      (_worktreeId: string, _groupId?: string, _tabType?: string, options?: { id?: string }) => ({
+        id: options?.id ?? 'tab-new'
+      })
+    )
     const setActiveView = vi.fn()
     const setActiveWorktree = vi.fn()
     const markWorktreeVisited = vi.fn()
@@ -1876,6 +1884,20 @@ describe('useIpcEvents updater integration', () => {
         activeRuntimeEnvironmentId: undefined as string | undefined
       }
     }
+    updateTabPtyId.mockImplementation((tabId: string, ptyId: string) => {
+      storeState.ptyIdsByTabId[tabId] = [
+        ...new Set([...(storeState.ptyIdsByTabId[tabId] ?? []), ptyId])
+      ]
+      for (const tabs of Object.values(storeState.tabsByWorktree)) {
+        const tab = tabs.find((candidate) => candidate.id === tabId)
+        if (tab) {
+          tab.ptyId = ptyId
+        }
+      }
+    })
+    setTabLayout.mockImplementation((tabId: string, layout: unknown) => {
+      storeState.terminalLayoutsByTabId[tabId] = layout
+    })
     const createTerminalListenerRef: {
       current:
         | ((data: {
@@ -1888,6 +1910,7 @@ describe('useIpcEvents updater integration', () => {
             title?: string
             ptyId?: string
             activate?: boolean
+            focus?: boolean
             presentation?: 'background' | 'focused'
             tabId?: string
             leafId?: string
@@ -2036,6 +2059,7 @@ describe('useIpcEvents updater integration', () => {
               title?: string
               ptyId?: string
               activate?: boolean
+              focus?: boolean
               presentation?: 'background' | 'focused'
               tabId?: string
               leafId?: string
@@ -2278,6 +2302,7 @@ describe('useIpcEvents updater integration', () => {
     setActiveTabType.mockClear()
     setActiveTab.mockClear()
     revealWorktreeInSidebar.mockClear()
+    dispatchEvent.mockClear()
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
       title: 'Runner',
@@ -2586,6 +2611,7 @@ describe('useIpcEvents updater integration', () => {
     setActiveTab.mockClear()
     revealWorktreeInSidebar.mockClear()
     replyTerminalCreate.mockClear()
+    dispatchEvent.mockClear()
     requestTerminalCreateListenerRef.current({
       requestId: 'req-renderer-backed-background',
       worktreeId: 'wt-2',
@@ -2603,6 +2629,12 @@ describe('useIpcEvents updater integration', () => {
     expect(setActiveTabType).not.toHaveBeenCalled()
     expect(setActiveTab).not.toHaveBeenCalled()
     expect(revealWorktreeInSidebar).not.toHaveBeenCalled()
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-background-mount-terminal-worktree',
+        detail: { worktreeId: 'wt-2', tabIds: ['tab-new'] }
+      })
+    )
     expect(replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'req-renderer-backed-background',
       tabId: 'tab-new',
@@ -2706,6 +2738,7 @@ describe('useIpcEvents updater integration', () => {
     setActiveTabType.mockClear()
     setActiveTab.mockClear()
     revealWorktreeInSidebar.mockClear()
+    dispatchEvent.mockClear()
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
       ptyId: 'pty-bg-3',
@@ -2723,6 +2756,50 @@ describe('useIpcEvents updater integration', () => {
     expect(setActiveTabType).not.toHaveBeenCalled()
     expect(setActiveTab).not.toHaveBeenCalled()
     expect(revealWorktreeInSidebar).not.toHaveBeenCalled()
+    expect(dispatchEvent).toHaveBeenCalledOnce()
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-background-mount-terminal-worktree',
+        detail: { worktreeId: 'wt-2', tabIds: ['tab-cli-bg-reveal'] }
+      })
+    )
+
+    createTab.mockClear()
+    setActiveView.mockClear()
+    setActiveWorktree.mockClear()
+    setActiveTabType.mockClear()
+    setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
+    focusRuntimeTerminalSurface.mockClear()
+    focusTerminalTabSurface.mockClear()
+    dispatchEvent.mockClear()
+    createTerminalListenerRef.current({
+      worktreeId: 'wt-2',
+      ptyId: 'pty-recovery-bg',
+      activate: true,
+      focus: false,
+      tabId: 'tab-recovery-bg'
+    })
+
+    expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
+      initialPtyId: 'pty-recovery-bg',
+      activate: false,
+      id: 'tab-recovery-bg'
+    })
+    expect(setActiveView).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).not.toHaveBeenCalled()
+    expect(focusRuntimeTerminalSurface).not.toHaveBeenCalled()
+    expect(focusTerminalTabSurface).not.toHaveBeenCalled()
+    expect(dispatchEvent).toHaveBeenCalledOnce()
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-background-mount-terminal-worktree',
+        detail: { worktreeId: 'wt-2', tabIds: ['tab-recovery-bg'] }
+      })
+    )
 
     storeState.tabsByWorktree = {
       'wt-2': [{ id: 'tab-existing', ptyId: 'pty-bg', title: 'Terminal 1' }]
@@ -2805,7 +2882,13 @@ describe('useIpcEvents updater integration', () => {
     expect(replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'req-adopt-pending',
       tabId: pendingTabId,
-      title: 'Terminal 3'
+      title: 'Terminal 3',
+      identity: {
+        worktreeId: 'wt-2',
+        tabId: pendingTabId,
+        leafId: pendingLeafId,
+        ptyId: 'serve-cf39bedb-a33a-417c-9ab6-f304dc27a6c0'
+      }
     })
 
     storeState.tabsByWorktree = {
@@ -2871,7 +2954,13 @@ describe('useIpcEvents updater integration', () => {
     expect(replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'req-split',
       tabId: 'tab-existing',
-      title: 'Terminal 1'
+      title: 'Terminal 1',
+      identity: {
+        worktreeId: 'wt-2',
+        tabId: 'tab-existing',
+        leafId: 'leaf-split',
+        ptyId: 'pty-split'
+      }
     })
 
     storeState.terminalLayoutsByTabId = {
@@ -4933,6 +5022,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
   function buildWindowApi(args: {
     onSet: (cb: (data: AgentStatusSetData) => void) => () => void
     onClear?: (cb: (data: AgentStatusClearIpcPayload) => void) => () => void
+    onLegacyWorkerTerminalRecovery?: (
+      cb: (data: { paneKey: string; resolution: 'adopted' | 'exited' }) => void
+    ) => () => void
     getSnapshot?: () => Promise<AgentStatusSetData[]>
     drop?: (paneKey: string) => void
     remoteWorkspace?: Record<string, unknown>
@@ -5044,6 +5136,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
         agentStatus: {
           onSet: args.onSet,
           onClear: args.onClear ?? vi.fn(() => () => {}),
+          onLegacyWorkerTerminalRecovery:
+            args.onLegacyWorkerTerminalRecovery ?? vi.fn(() => () => {}),
           getSnapshot: args.getSnapshot ?? vi.fn(() => Promise.resolve([])),
           drop: args.drop ?? vi.fn()
         },
@@ -5196,6 +5290,51 @@ describe('useIpcEvents agent status snapshot integration', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.unstubAllGlobals()
+  })
+
+  it('retires the exact sleeping record after adopted or exited legacy worker recovery', async () => {
+    const clearSleepingAgentSession = vi.fn()
+    const setSleepingAgentAutomaticResumeBlocked = vi.fn()
+    let listener:
+      | ((data: { paneKey: string; resolution: 'adopted' | 'exited' }) => void)
+      | undefined
+    const storeState = buildStoreState({
+      clearSleepingAgentSession,
+      setSleepingAgentAutomaticResumeBlocked
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: () => () => {},
+        onLegacyWorkerTerminalRecovery: (callback) => {
+          listener = callback
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+    expect(listener).toBeTypeOf('function')
+
+    listener?.({ paneKey: 'tab-adopted:leaf-adopted', resolution: 'adopted' })
+    expect(clearSleepingAgentSession).toHaveBeenCalledWith('tab-adopted:leaf-adopted')
+    expect(setSleepingAgentAutomaticResumeBlocked).not.toHaveBeenCalled()
+
+    clearSleepingAgentSession.mockClear()
+    listener?.({ paneKey: 'tab-exited:leaf-exited', resolution: 'exited' })
+    expect(clearSleepingAgentSession).toHaveBeenCalledWith('tab-exited:leaf-exited')
+    expect(setSleepingAgentAutomaticResumeBlocked).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -8419,5 +8558,127 @@ describe('parked terminal recovery on repos:changed', () => {
 
     expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
     clearTerminalTabsParkedOnUnresolvedHost()
+  })
+})
+
+describe('useIpcEvents silent terminal adoption (surfaceOwner: false)', () => {
+  const asMock = (value: unknown): ReturnType<typeof vi.fn> => value as ReturnType<typeof vi.fn>
+
+  function createBackgroundWorkspaceState(): HarnessStoreState {
+    return createHarnessStoreState({
+      tabsByWorktree: {},
+      // Honour the pre-minted tab id so adoption resolves the same tab main asked for.
+      createTab: vi.fn(
+        (_worktreeId: string, _groupId?: string, _tabType?: string, options?: { id?: string }) => ({
+          id: options?.id ?? 'tab-minted'
+        })
+      ),
+      worktreesByRepo: {
+        'repo-1': [
+          { id: 'wt-1', repoId: 'repo-1' },
+          { id: 'wt-2', repoId: 'repo-1' }
+        ]
+      }
+    })
+  }
+
+  it('adopts a background workspace terminal without scrolling the sidebar to it', async () => {
+    const storeState = createBackgroundWorkspaceState()
+    const harness = await loadIpcEventsHarness(storeState)
+    harness.useIpcEvents()
+
+    // Control: `orca terminal create` (no surfaceOwner) keeps its reveal so the
+    // user can find the terminal they just asked for.
+    harness.createTerminal({
+      worktreeId: 'wt-2',
+      ptyId: 'pty-cli',
+      activate: false,
+      tabId: 'tab-cli'
+    })
+
+    expect(storeState.createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
+      initialPtyId: 'pty-cli',
+      activate: false,
+      id: 'tab-cli'
+    })
+    expect(storeState.revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
+
+    asMock(storeState.createTab).mockClear()
+    asMock(storeState.revealWorktreeInSidebar).mockClear()
+    asMock(storeState.setActiveView).mockClear()
+    asMock(storeState.setActiveWorktree).mockClear()
+    asMock(storeState.setActiveTabType).mockClear()
+    asMock(storeState.setActiveTab).mockClear()
+
+    // Regression: a workspace created in the background spawns its agent terminal
+    // here; the tab must still be adopted, but the sidebar must not scroll to it.
+    harness.createTerminal({
+      worktreeId: 'wt-2',
+      ptyId: 'pty-background-create',
+      activate: false,
+      surfaceOwner: false,
+      tabId: 'tab-background-create'
+    })
+
+    expect(storeState.createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
+      initialPtyId: 'pty-background-create',
+      activate: false,
+      id: 'tab-background-create'
+    })
+    expect(storeState.revealWorktreeInSidebar).not.toHaveBeenCalled()
+    expect(storeState.setActiveView).not.toHaveBeenCalled()
+    expect(storeState.setActiveWorktree).not.toHaveBeenCalled()
+    expect(storeState.setActiveTabType).not.toHaveBeenCalled()
+    expect(storeState.setActiveTab).not.toHaveBeenCalled()
+  })
+
+  it('replies to a requested terminal create without scrolling the sidebar when surfaceOwner is false', async () => {
+    const storeState = createBackgroundWorkspaceState()
+    const harness = await loadIpcEventsHarness(storeState)
+    harness.useIpcEvents()
+
+    // Control: the same request without surfaceOwner still reveals its workspace.
+    harness.requestTerminalCreate({
+      requestId: 'req-cli',
+      worktreeId: 'wt-2',
+      title: 'Claude'
+    })
+
+    expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-cli',
+      tabId: 'tab-minted',
+      title: 'Claude'
+    })
+    expect(storeState.revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
+
+    asMock(storeState.createTab).mockClear()
+    asMock(storeState.revealWorktreeInSidebar).mockClear()
+    asMock(storeState.setActiveView).mockClear()
+    asMock(storeState.setActiveWorktree).mockClear()
+    asMock(storeState.setActiveTabType).mockClear()
+    asMock(storeState.setActiveTab).mockClear()
+    harness.replyTerminalCreate.mockClear()
+
+    harness.requestTerminalCreate({
+      requestId: 'req-background-create',
+      worktreeId: 'wt-2',
+      title: 'Claude',
+      surfaceOwner: false
+    })
+
+    expect(storeState.createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
+      activate: false,
+      recordInteraction: false
+    })
+    expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-background-create',
+      tabId: 'tab-minted',
+      title: 'Claude'
+    })
+    expect(storeState.revealWorktreeInSidebar).not.toHaveBeenCalled()
+    expect(storeState.setActiveView).not.toHaveBeenCalled()
+    expect(storeState.setActiveWorktree).not.toHaveBeenCalled()
+    expect(storeState.setActiveTabType).not.toHaveBeenCalled()
+    expect(storeState.setActiveTab).not.toHaveBeenCalled()
   })
 })

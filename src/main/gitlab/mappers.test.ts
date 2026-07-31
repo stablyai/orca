@@ -38,8 +38,9 @@ describe('mapPipelineJobStatusToConclusion', () => {
     expect(mapPipelineJobStatusToConclusion('skipped')).toBe('skipped')
   })
 
-  it("maps 'manual' to neutral so it doesn't stall pending forever", () => {
-    expect(mapPipelineJobStatusToConclusion('manual')).toBe('neutral')
+  it('maps manual and action-required jobs to an actionable conclusion', () => {
+    expect(mapPipelineJobStatusToConclusion('manual')).toBe('action_required')
+    expect(mapPipelineJobStatusToConclusion('action_required')).toBe('action_required')
   })
 
   it('maps active lifecycle states to pending', () => {
@@ -227,7 +228,7 @@ describe('derivePipelineStatus', () => {
     expect(derivePipelineStatus('success')).toBe('success')
     expect(derivePipelineStatus('failed')).toBe('failure')
     expect(derivePipelineStatus('running')).toBe('pending')
-    expect(derivePipelineStatus('manual')).toBe('neutral')
+    expect(derivePipelineStatus('manual')).toBe('failure')
   })
 
   it('rolls up an array of jobs', () => {
@@ -238,9 +239,18 @@ describe('derivePipelineStatus', () => {
 
   it('failure beats pending in the rollup', () => {
     expect(derivePipelineStatus([{ status: 'failed' }, { status: 'running' }])).toBe('failure')
+    expect(derivePipelineStatus([{ status: 'manual' }, { status: 'success' }])).toBe('failure')
   })
 
   it('handles a single object with status', () => {
     expect(derivePipelineStatus({ status: 'success' })).toBe('success')
+  })
+
+  it('keeps malformed and unknown array jobs neutral', () => {
+    expect(derivePipelineStatus([{ status: 'future_status' }])).toBe('neutral')
+    expect(derivePipelineStatus([{}])).toBe('neutral')
+    expect(derivePipelineStatus([{ status: 'success' }, { status: 'future_status' }])).toBe(
+      'neutral'
+    )
   })
 })

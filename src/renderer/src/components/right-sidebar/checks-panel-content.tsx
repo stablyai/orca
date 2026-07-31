@@ -99,6 +99,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useActiveWorktree } from '@/store/selectors'
 import { useAppStore } from '@/store'
+import { sortChecksBySeverity } from '../../../../shared/pr-check-severity-order'
 
 export const PullRequestIcon = GitPullRequest
 
@@ -502,17 +503,6 @@ export function ConflictTriageStrip({
       </div>
     </div>
   )
-}
-
-const CHECK_SORT_ORDER: Record<string, number> = {
-  failure: 0,
-  timed_out: 0,
-  action_required: 0,
-  cancelled: 1,
-  pending: 2,
-  neutral: 3,
-  skipped: 4,
-  success: 5
 }
 
 type CheckDetailsLoadState = {
@@ -970,15 +960,7 @@ export function ChecksList({
     shouldConstrainCheckList && checks.length > 0
   )
   detailsContextRef.current = checkDetailsContextKey
-  const sorted = React.useMemo(
-    () =>
-      [...checks].sort(
-        (a, b) =>
-          (CHECK_SORT_ORDER[a.conclusion ?? 'pending'] ?? 3) -
-          (CHECK_SORT_ORDER[b.conclusion ?? 'pending'] ?? 3)
-      ),
-    [checks]
-  )
+  const sorted = React.useMemo(() => sortChecksBySeverity(checks), [checks])
   const rows = React.useMemo(
     () =>
       sorted.map((check, index) => ({

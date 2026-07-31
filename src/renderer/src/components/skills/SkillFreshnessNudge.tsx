@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { skillPlacementParticipatesInGlobalFreshness } from '../../../../shared/skill-freshness'
 import { requestSkillFreshnessUpdateDialog } from './skill-freshness-update-dialog'
 
 const MAX_DISMISSED_FRESHNESS_NUDGES = 512
@@ -52,6 +53,10 @@ export function SkillFreshnessNudge(): null {
     }
     const eligibleNames = new Set(inventory.eligibleUpdateNames)
     const candidates = inventory.installations.flatMap((installation) =>
+      // Why: a project copy the global update never touches must not enter the dismissal
+      // fingerprint, or re-checking out that repo re-raises a nudge the user already
+      // dismissed — and spends the bounded dismissal budget on copies Orca cannot update.
+      skillPlacementParticipatesInGlobalFreshness(installation) &&
       installation.status === 'outdated' &&
       eligibleNames.has(installation.name) &&
       installation.physicalIdentity

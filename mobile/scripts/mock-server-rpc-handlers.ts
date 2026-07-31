@@ -12,6 +12,7 @@ import { handleMockFilePreviewRequest } from './mock-server-file-preview-data'
 import { handleMockGitRequest } from './mock-server-git-state'
 import { handleMockAccountRequest } from './mock-server-account-rpc'
 import { handleMockNativeChatRequest } from './mock-server-native-chat-scenario'
+import { handleMockSessionTabsRequest } from './mock-server-session-tabs-fixture'
 import {
   createMockTerminals,
   FAKE_SCROLLBACK,
@@ -124,7 +125,8 @@ export function handleRequest(
     handleMockGitRequest(request, respond, success) ||
     handleMockFilePreviewRequest(request, respond, success, error) ||
     handleMockAccountRequest(request, respond, success, error) ||
-    handleMockNativeChatRequest(request, respond, success, error, ws)
+    handleMockNativeChatRequest(request, respond, success, error, ws) ||
+    handleMockSessionTabsRequest(request, respond, success, terminalListWorktreeId)
   ) {
     return
   }

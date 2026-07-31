@@ -9,6 +9,7 @@ import {
   consumePendingWebRuntimeSplitMirrorTelemetry,
   createWebRuntimeSessionBrowserTab,
   createWebRuntimeAgentSessionTerminal,
+  createWebRuntimeAgentSessionTerminalWithLaunchDraft,
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive,
   moveWebRuntimeSessionTab,
@@ -45,6 +46,7 @@ const mocks = vi.hoisted(() => ({
   resolveHostSessionTabIdForWebSessionTab: vi.fn(),
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
+  seedNativeChatLaunchDraftForAgentTab: vi.fn(),
   getRuntimeEnvironmentIdForWorktree: vi.fn()
 }))
 
@@ -72,7 +74,8 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
 }))
 
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
-  deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab
+  deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
+  seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
 
 const ENVIRONMENT_ID = 'web-env-1'
@@ -1248,6 +1251,62 @@ describe('createWebRuntimeSessionTerminal', () => {
       agent: 'claude',
       submit: true,
       forcePaste: true
+    })
+  })
+
+  it('seeds the chat composer for a draft that rode in on the launch command', async () => {
+    const runtimeCall = vi.fn(async (request: { method: string; params?: unknown }) => {
+      if (request.method === 'status.get') {
+        return {
+          id: 'status',
+          ok: true,
+          result: {
+            runtimeId: 'runtime-1',
+            graphStatus: 'ready',
+            runtimeProtocolVersion: 3,
+            minCompatibleRuntimeClientVersion: 2,
+            capabilities: ['agent-session.host-authority.v1']
+          }
+        }
+      }
+      if (request.method === 'terminal.createAgentSession') {
+        return {
+          id: 'create',
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'term_created',
+              worktreeId: WORKTREE_ID,
+              tabId: 'host-tab-2',
+              paneKey: `host-tab-2:${FOCUS_LEAF_ID}`
+            },
+            disposition: 'created'
+          }
+        }
+      }
+      return { id: 'list', ok: true, result: makeSnapshot() }
+    })
+    vi.stubGlobal('window', {
+      api: { runtimeEnvironments: { call: runtimeCall } }
+    })
+
+    await expect(
+      createWebRuntimeAgentSessionTerminalWithLaunchDraft({
+        worktreeId: WORKTREE_ID,
+        agentSessionKind: 'fresh',
+        agent: 'claude',
+        command: "claude --prefill 'https://github.com/o/r/issues/12'",
+        launchDraft: 'https://github.com/o/r/issues/12'
+      })
+    ).resolves.toEqual({ status: 'created' })
+
+    // No paste runs for an argv-prefill draft, so this is the only thing that
+    // fills the mirrored tab's composer on this host class.
+    expect(mocks.deliverLaunchPromptToAgentTab).not.toHaveBeenCalled()
+    expect(mocks.seedNativeChatLaunchDraftForAgentTab).toHaveBeenCalledWith({
+      tabId: 'web-terminal-host-tab-2',
+      agent: 'claude',
+      text: 'https://github.com/o/r/issues/12'
     })
   })
 })

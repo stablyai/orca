@@ -161,7 +161,8 @@ describe('MobilePane pairing connection mode', () => {
           listDevices: mocks.listDevices,
           listNetworkInterfaces: mocks.listNetworkInterfaces,
           revokeDevice: mocks.revokeDevice
-        }
+        },
+        ui: { writeClipboardText: vi.fn().mockResolvedValue(undefined) }
       }
     })
   })
@@ -197,39 +198,49 @@ describe('MobilePane pairing connection mode', () => {
     expect(getPairingQR).not.toHaveBeenCalled()
   })
 
-  it('flags an Anywhere mint that degraded to a local-only code', async () => {
+  it('surfaces Relay mint failure without a QR and offers Use LAN', async () => {
     getPairingQR.mockResolvedValue({
-      available: true,
-      qrDataUrl: 'data:image/png;base64,qr',
-      pairingUrl: 'orca://pair#degraded',
-      endpoint: 'ws://host',
-      // Relay provisioning failed server-side; the offer encodes local-only.
-      connectionMode: 'local-only'
+      available: false,
+      reason: 'relay_mint_failed',
+      guidance: 'Use LAN or retry',
+      relayFailure: {
+        code: 'relay offline',
+        stage: 'create_pairing_relay',
+        message: 'relay offline'
+      }
     })
     const user = userEvent.setup()
     render(<MobilePane />)
 
     await user.click(screen.getByRole('button', { name: 'Generate' }))
     await waitFor(() =>
-      expect(screen.getByTestId('relay-degraded-notice')).toHaveTextContent(
-        'only works on your LAN or Tailscale'
+      expect(screen.getByTestId('relay-mint-failure-notice')).toHaveTextContent(
+        'Couldn’t create a Relay pairing code'
       )
     )
+    expect(screen.getByTestId('qr')).toHaveTextContent('none')
 
-    // Switching to LAN clears the mismatch along with the QR.
-    await user.click(screen.getByRole('button', { name: 'choose-local' }))
+    getPairingQR.mockResolvedValue({
+      available: true,
+      qrDataUrl: 'data:image/png;base64,local',
+      pairingUrl: 'orca://pair#local',
+      endpoint: 'ws://host',
+      connectionMode: 'local-only'
+    })
+    await user.click(screen.getByRole('button', { name: 'Use LAN' }))
+    await waitFor(() => expect(screen.getByTestId('mode')).toHaveTextContent('local-only'))
     await waitFor(() =>
-      expect(screen.queryByTestId('relay-degraded-notice')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('relay-mint-failure-notice')).not.toBeInTheDocument()
     )
   })
 
-  it('does not flag an honest Relay mint', async () => {
+  it('does not show mint failure after an honest Relay mint', async () => {
     const user = userEvent.setup()
     render(<MobilePane />)
 
     await user.click(screen.getByRole('button', { name: 'Generate' }))
     await waitFor(() => expect(screen.getByTestId('qr')).toHaveTextContent('base64,qr'))
-    expect(screen.queryByTestId('relay-degraded-notice')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('relay-mint-failure-notice')).not.toBeInTheDocument()
   })
 
   it('keeps the copy fallback when QR encoding fails', async () => {
@@ -256,6 +267,103 @@ describe('MobilePane pairing connection mode', () => {
     render(<MobilePane />)
     await user.click(screen.getByRole('button', { name: 'choose-local' }))
     expect(updateSettings).toHaveBeenCalledWith({ mobilePairingConnectionMode: 'local-only' })
+    expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
+    expect(getPairingQR).not.toHaveBeenCalled()
+  })
+
+  it('disables Relay recovery while a retry is in flight', async () => {
+    getPairingQR.mockResolvedValueOnce({
+      available: false,
+      reason: 'relay_mint_failed',
+      relayFailure: {
+        code: 'relay_mint_failed',
+        stage: 'create_pairing_relay',
+        message: 'Relay pairing invite request failed'
+      }
+    })
+    const user = userEvent.setup()
+    render(<MobilePane />)
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await screen.findByTestId('relay-mint-failure-notice')
+
+    let resolveRetry: ((value: Record<string, unknown>) => void) | undefined
+    getPairingQR.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRetry = resolve
+        })
+    )
+    await user.click(screen.getByRole('button', { name: 'Retry Relay' }))
+    expect(screen.getByRole('button', { name: 'Retry Relay' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Use LAN' })).toBeEnabled()
+    await user.dblClick(screen.getByRole('button', { name: 'Retry Relay' }))
+    expect(getPairingQR).toHaveBeenCalledTimes(2)
+    await waitFor(() => expect(screen.getByRole('button', { name: /Retrying/ })).toBeDisabled())
+
+    resolveRetry?.({
+      available: true,
+      qrDataUrl: 'data:image/png;base64,relay',
+      pairingUrl: 'orca://relay',
+      endpoint: 'ws://relay',
+      connectionMode: 'automatic'
+    })
+    await waitFor(() => expect(screen.getByTestId('qr')).toHaveTextContent('base64,relay'))
+    expect(screen.getByRole('status')).toHaveTextContent('Pairing code ready')
+  })
+
+  it('lets LAN recover immediately while a Relay retry is unresolved', async () => {
+    mocks.listNetworkInterfaces.mockResolvedValue({
+      interfaces: [{ name: 'Ethernet', address: '10.0.0.2' }]
+    })
+    getPairingQR.mockResolvedValueOnce({
+      available: false,
+      reason: 'relay_mint_failed',
+      relayFailure: {
+        code: 'relay_mint_failed',
+        stage: 'create_pairing_relay',
+        message: 'Relay pairing invite request failed'
+      }
+    })
+    const user = userEvent.setup()
+    render(<MobilePane />)
+    await waitFor(() => expect(mocks.listNetworkInterfaces).toHaveBeenCalledOnce())
+    await user.click(screen.getByRole('button', { name: 'Generate' }))
+    await screen.findByTestId('relay-mint-failure-notice')
+
+    let resolveRetry: ((value: Record<string, unknown>) => void) | undefined
+    getPairingQR.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRetry = resolve
+        })
+    )
+    getPairingQR.mockResolvedValueOnce({
+      available: true,
+      qrDataUrl: 'data:image/png;base64,local',
+      pairingUrl: 'orca://local',
+      endpoint: 'ws://10.0.0.2',
+      connectionMode: 'local-only'
+    })
+    await user.click(screen.getByRole('button', { name: 'Retry Relay' }))
+    await user.click(screen.getByRole('button', { name: 'Use LAN' }))
+
+    await waitFor(() =>
+      expect(getPairingQR).toHaveBeenLastCalledWith({
+        address: '10.0.0.2',
+        connectionMode: 'local-only'
+      })
+    )
+    await waitFor(() => expect(screen.getByTestId('qr')).toHaveTextContent('base64,local'))
+    act(() => {
+      resolveRetry?.({
+        available: true,
+        qrDataUrl: 'data:image/png;base64,stale-relay',
+        pairingUrl: 'orca://stale-relay',
+        endpoint: 'ws://relay',
+        connectionMode: 'automatic'
+      })
+    })
+    await waitFor(() => expect(screen.getByTestId('qr')).toHaveTextContent('base64,local'))
     expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
   })
 
@@ -366,7 +474,7 @@ describe('MobilePane pairing connection mode', () => {
     expect(screen.getByTestId('qr')).toHaveTextContent('none')
   })
 
-  it('discards a QR that resolves after switching path mid-generate', async () => {
+  it('discards a Relay QR that resolves after switching path mid-generate', async () => {
     const user = userEvent.setup()
     let resolveQr: ((value: Record<string, unknown>) => void) | undefined
     getPairingQR.mockImplementationOnce(
@@ -379,18 +487,27 @@ describe('MobilePane pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Generate' }))
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'automatic' }))
 
-    // Switch to LAN before the Relay mint resolves.
+    // Switch to LAN before the Relay mint resolves — LAN may auto-mint a new code.
+    getPairingQR.mockResolvedValue({
+      available: true,
+      qrDataUrl: 'data:image/png;base64,local',
+      pairingUrl: 'orca://pair#local',
+      endpoint: 'ws://host',
+      connectionMode: 'local-only'
+    })
     await user.click(screen.getByRole('button', { name: 'choose-local' }))
 
     resolveQr?.({
       available: true,
       qrDataUrl: 'data:image/png;base64,relay',
       pairingUrl: 'orca://relay',
-      endpoint: 'ws://relay'
+      endpoint: 'ws://relay',
+      connectionMode: 'automatic'
     })
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    expect(screen.getByTestId('qr')).toHaveTextContent('none')
-    expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
+    await waitFor(() => expect(screen.getByTestId('mode')).toHaveTextContent('local-only'))
+    await waitFor(() =>
+      expect(screen.getByTestId('pairing-url')).not.toHaveTextContent('orca://relay')
+    )
   })
 })
 

@@ -186,9 +186,15 @@ export function closeSharedControlSocketState(args: {
   socketCleanup: (() => void) | null
   ws: { close: () => void } | null
   error?: Error
+  preserveReadyWaitersAndPendingRequests?: boolean
 }): void {
-  rejectSharedControlReadyWaiters(args.readyWaiters, args.error ?? remoteRuntimeUnavailableError())
-  rejectAllSharedControlPendingRequests(args.pendingRequests, args.error)
+  if (!args.preserveReadyWaitersAndPendingRequests) {
+    rejectSharedControlReadyWaiters(
+      args.readyWaiters,
+      args.error ?? remoteRuntimeUnavailableError()
+    )
+    rejectAllSharedControlPendingRequests(args.pendingRequests, args.error)
+  }
   markSharedControlSubscriptionsUnsent(args.subscriptions)
   try {
     args.socketCleanup?.()

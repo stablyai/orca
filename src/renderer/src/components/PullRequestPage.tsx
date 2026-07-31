@@ -227,6 +227,7 @@ import {
 } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { sortChecksBySeverity } from '../../../shared/pr-check-severity-order'
 
 // Why: the item URL is the only host-aware repository identity present on every work item across IPC.
 function parseOwnerRepoFromItemUrl(url: string): GitHubOwnerRepo | null {
@@ -4329,17 +4330,6 @@ function CommentReplyForm({
   )
 }
 
-const CHECK_SORT_ORDER: Record<string, number> = {
-  failure: 0,
-  timed_out: 0,
-  action_required: 0,
-  cancelled: 1,
-  pending: 2,
-  neutral: 3,
-  skipped: 4,
-  success: 5
-}
-
 function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['conclusion']> {
   return check.conclusion ?? 'pending'
 }
@@ -4578,11 +4568,7 @@ function ChecksTab({
   const prRepo = useMemo(() => resolvePullRequestRepo(item), [item])
   const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
   const canUseChecksRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
-  const sorted = [...list].sort(
-    (a, b) =>
-      (CHECK_SORT_ORDER[getCheckConclusion(a)] ?? 3) -
-      (CHECK_SORT_ORDER[getCheckConclusion(b)] ?? 3)
-  )
+  const sorted = sortChecksBySeverity(list)
   const failedChecks = getBrokenChecks(list)
   const counts = getCheckCounts(list)
   const summaryLabel = getChecksSummaryLabel(list)

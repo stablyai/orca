@@ -12,9 +12,8 @@ import {
 } from './macos-tcc-prompt-notice-subscription'
 
 /**
- * Shows the Full Disk Access hint only after macOS has repeatedly raised its
- * consent dialog naming Orca (#9756). The main process counts the dialogs, so
- * users who never see one never see this.
+ * Shows the Full Disk Access hint after macOS raises a consent dialog naming
+ * Orca (#9756). Users who never see one never see this.
  */
 export function useMacosTccPromptNotice(): void {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -38,7 +37,7 @@ export function useMacosTccPromptNotice(): void {
     if (!localeReady) {
       return
     }
-    return subscribeToMacosTccPromptNotice(window.api?.macosTccPrompts, () => {
+    return subscribeToMacosTccPromptNotice(window.api?.macosTccPrompts, (_, acknowledge) => {
       toast.warning(
         translate(
           'auto.hooks.useMacosTccPromptNotice.title',
@@ -49,10 +48,12 @@ export function useMacosTccPromptNotice(): void {
             'auto.hooks.useMacosTccPromptNotice.description',
             'macOS attributes file access by your agents and terminal tools to Orca. Granting Full Disk Access reduces these prompts.'
           ),
-          duration: 12_000,
+          duration: Infinity,
+          onDismiss: acknowledge,
           action: {
             label: translate('auto.hooks.useMacosTccPromptNotice.openSettings', 'Open Settings'),
             onClick: () => {
+              acknowledge()
               openSettingsPage()
               openSettingsTarget({ pane: 'developer-permissions', repoId: null })
             }

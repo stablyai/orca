@@ -4,11 +4,12 @@ export type GitHubCheckLike = {
 }
 
 export type GitHubCheckSummary = {
-  state: 'success' | 'failure' | 'pending' | 'none'
+  state: 'success' | 'failure' | 'pending' | 'neutral' | 'none'
   total: number
   passed: number
   failed: number
   pending: number
+  neutral: number
 }
 
 function isFailedCheck(check: GitHubCheckLike): boolean {
@@ -28,18 +29,32 @@ function isPendingCheck(check: GitHubCheckLike): boolean {
 export function buildGitHubCheckSummary(checks: GitHubCheckLike[]): GitHubCheckSummary {
   let failed = 0
   let pending = 0
+  let neutral = 0
 
   for (const check of checks) {
-    if (isFailedCheck(check)) {
+    if (isFailedCheck(check) || check.conclusion === 'action_required') {
       failed += 1
     } else if (isPendingCheck(check)) {
       pending += 1
+    } else if (check.conclusion === 'success') {
+      continue
+    } else {
+      neutral += 1
     }
   }
 
   const total = checks.length
-  const passed = Math.max(0, total - failed - pending)
-  const state = total === 0 ? 'none' : failed > 0 ? 'failure' : pending > 0 ? 'pending' : 'success'
+  const passed = total - failed - pending - neutral
+  const state =
+    total === 0
+      ? 'none'
+      : failed > 0
+        ? 'failure'
+        : pending > 0
+          ? 'pending'
+          : neutral > 0
+            ? 'neutral'
+            : 'success'
 
-  return { state, total, passed, failed, pending }
+  return { state, total, passed, failed, pending, neutral }
 }

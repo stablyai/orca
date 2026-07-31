@@ -103,8 +103,12 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.gateCreate',
     params: GateCreateParams,
-    handler: (params, { runtime }) => {
+    handler: (params, { runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
+      const task = db.getTask(params.task)
+      if (legacyCoordinatorRunId && task?.run_id !== legacyCoordinatorRunId) {
+        throw new Error(`Task not found: ${params.task}`)
+      }
       let options: string[] | undefined
       if (params.options) {
         try {
@@ -129,8 +133,12 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.gateResolve',
     params: GateResolveParams,
-    handler: (params, { runtime }) => {
+    handler: (params, { runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
+      const existing = db.getGate(params.id)
+      if (legacyCoordinatorRunId && existing?.run_id !== legacyCoordinatorRunId) {
+        throw new Error(`Gate not found: ${params.id}`)
+      }
       const gate = db.resolveGate(params.id, params.resolution)
       if (!gate) {
         throw new Error(`Gate not found: ${params.id}`)

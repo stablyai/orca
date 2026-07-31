@@ -6,6 +6,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 
 type StoreState = {
   closeMobilePage: () => void
@@ -48,6 +49,8 @@ vi.mock('./MobilePageContent', () => ({
     pairQrDataUrl: string | null
     pairingUrl: string | null
     pairingQrError: boolean
+    relayMintFailure: MobileRelayMintFailure | null
+    onRetryRelay: () => void
     stage: string | null
     stepIdx: number
   }) => (
@@ -59,6 +62,7 @@ vi.mock('./MobilePageContent', () => ({
       <span data-testid="pairing-qr">{props.pairQrDataUrl ?? 'none'}</span>
       <span data-testid="pairing-url">{props.pairingUrl ?? 'none'}</span>
       <span data-testid="pairing-qr-error">{String(props.pairingQrError)}</span>
+      <span data-testid="relay-failure">{props.relayMintFailure?.stage ?? 'none'}</span>
       <button type="button" onClick={props.enterFlow}>
         Enter flow
       </button>
@@ -70,6 +74,9 @@ vi.mock('./MobilePageContent', () => ({
       </button>
       <button type="button" onClick={() => props.handleConnectionModeChange('local-only')}>
         LAN
+      </button>
+      <button type="button" onClick={props.onRetryRelay}>
+        Retry Relay
       </button>
       <button type="button" onClick={() => props.handleAddressChange('10.0.0.2')}>
         Change address
@@ -310,7 +317,90 @@ describe('MobilePage pairing connection mode', () => {
     expect(screen.getByTestId('pairing-url')).toHaveTextContent('copy-fallback')
   })
 
-  it('does not commit a custom address when its real QR preflight fails', async () => {
+  it('surfaces Relay failure and retries with a rotated credential', async () => {
+    getPairingQR.mockResolvedValueOnce({
+      available: false,
+      reason: 'relay_mint_failed',
+      relayFailure: {
+        code: 'relay_control_not_active',
+        stage: 'create_pairing_relay',
+        message: 'Relay pairing invite request failed'
+      }
+    })
+    const user = userEvent.setup()
+    await openPairingStep()
+    await waitFor(() =>
+      expect(screen.getByTestId('relay-failure')).toHaveTextContent('create_pairing_relay')
+    )
+
+    getPairingQR.mockResolvedValueOnce({
+      available: true,
+      qrDataUrl: 'data:image/png;base64,retried',
+      pairingUrl: 'orca://pair#retried',
+      endpoint: 'ws://host',
+      connectionMode: 'automatic'
+    })
+    await user.click(screen.getByRole('button', { name: 'Retry Relay' }))
+
+    await waitFor(() =>
+      expect(getPairingQR).toHaveBeenLastCalledWith({
+        connectionMode: 'automatic',
+        rotate: true
+      })
+    )
+    await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('retried'))
+    expect(screen.getByTestId('relay-failure')).toHaveTextContent('none')
+  })
+
+  it('switches to LAN while a Relay retry is still unresolved', async () => {
+    getPairingQR.mockResolvedValueOnce({
+      available: false,
+      reason: 'relay_mint_failed',
+      relayFailure: {
+        code: 'relay_mint_failed',
+        stage: 'create_pairing_relay',
+        message: 'Relay pairing invite request failed'
+      }
+    })
+    const user = userEvent.setup()
+    await openPairingStep()
+    await waitFor(() =>
+      expect(screen.getByTestId('relay-failure')).toHaveTextContent('create_pairing_relay')
+    )
+
+    let resolveRetry: ((value: Record<string, unknown>) => void) | undefined
+    getPairingQR.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRetry = resolve
+        })
+    )
+    getPairingQR.mockResolvedValueOnce({
+      available: true,
+      qrDataUrl: 'data:image/png;base64,local',
+      pairingUrl: 'orca://pair#local',
+      endpoint: 'ws://host',
+      connectionMode: 'local-only'
+    })
+    await user.click(screen.getByRole('button', { name: 'Retry Relay' }))
+    await user.click(screen.getByRole('button', { name: 'LAN' }))
+
+    await waitFor(() =>
+      expect(getPairingQR).toHaveBeenLastCalledWith({ connectionMode: 'local-only' })
+    )
+    await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('base64,local'))
+    resolveRetry?.({
+      available: true,
+      qrDataUrl: 'data:image/png;base64,stale-relay',
+      pairingUrl: 'orca://pair#stale-relay',
+      endpoint: 'ws://relay',
+      connectionMode: 'automatic'
+    })
+    await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('base64,local'))
+    expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
+  })
+
+  it('does not commit a custom direct address when its QR preflight fails', async () => {
     const user = userEvent.setup()
     await openPairingStep()
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledTimes(1))
@@ -331,7 +421,6 @@ describe('MobilePage pairing connection mode', () => {
         connectionMode: 'automatic'
       })
     )
-    await new Promise((resolve) => setTimeout(resolve, 20))
     expect(getPairingQR).toHaveBeenCalledTimes(2)
   })
 })

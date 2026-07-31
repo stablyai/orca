@@ -44,6 +44,19 @@ describe('startup ordering', () => {
     )
   })
 
+  it('requires daemon authority before restored-subagent liveness runs', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const sweepStart = source.indexOf('function reapRestoredSubagentsWithoutLiveAgent()')
+    const sweepEnd = source.indexOf('function startTerminalRuntimeStartupServices()', sweepStart)
+    const sweep = source.slice(sweepStart, sweepEnd)
+
+    expect(sweepStart).toBeGreaterThanOrEqual(0)
+    expect(sweepEnd).toBeGreaterThan(sweepStart)
+    expect(sweep).toContain('const provider = getDaemonProvider()')
+    expect(sweep).toContain('if (!provider) {')
+    expect(sweep).toContain('provider.probePtyLiveness(ptyId)')
+  })
+
   it('bounds WSL reconciliation before serve RPC while leaving desktop startup independent', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const barrierStart = source.indexOf("ipcMain.handle('app:awaitFirstWindowStartupServices'")
@@ -73,6 +86,13 @@ describe('startup ordering', () => {
     expect(desktopStartup).not.toContain('await managedWslCliReconciliationReady')
     expect(barrier).toContain('managedWslCliStartupBarrierReady')
     expect(barrier).not.toContain('managedWslCliReconciliationReady')
+    expect(barrier).toContain("ipcMain.handle('app:recoverLegacyWorkerTerminalsForRendererStartup'")
+    expect(barrier).toContain('recoverLegacyWorkerTerminalsForRendererStartup({')
+    expect(barrier).toContain('localPtyProviderStartupReady,')
+    expect(barrier).toContain('await runtime?.refreshRestoredOrchestrationAuthority()')
+    expect(barrier).toContain(
+      'return runtime?.reconcileLegacyWorkerTerminals({ materializeRenderer: true })'
+    )
   })
 
   it('exposes managed WSL reconciliation status to headless serve clients and diagnostics', () => {

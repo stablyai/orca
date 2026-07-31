@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test as base, expect } from './helpers/orca-app'
@@ -15,19 +15,40 @@ import { RuntimeClient } from '../../src/cli/runtime-client'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-orchestration-worker-'))
+const spawnLedgerPath = path.join(fakeCliDir, 'spawn.jsonl')
+const interruptionLedgerPath = path.join(fakeCliDir, 'interruption.jsonl')
 const fakeCodexSource = `
+const { appendFileSync } = require('node:fs')
+function appendLedger(envName, event) {
+  const ledgerPath = process.env[envName]
+  if (!ledgerPath) return
+  try {
+    appendFileSync(ledgerPath, JSON.stringify({ pid: process.pid, at: Date.now(), ...event }) + '\\n')
+  } catch {}
+}
 if (process.argv.slice(2).includes('app-server')) {
   process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
   process.exit(2)
 }
+appendLedger('ORCA_E2E_SPAWN_LEDGER', { event: 'spawn', startedAt: Date.now() })
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
 let acknowledged = false
 process.stdin.on('data', (chunk) => {
-  if (!acknowledged && chunk.toString().includes('\\r')) {
+  const input = chunk.toString()
+  if (input.includes('\\x03')) {
+    appendLedger('ORCA_E2E_INTERRUPTION_LEDGER', { event: 'stdin-ctrl-c' })
+  }
+  if (!acknowledged && input.includes('\\r')) {
     acknowledged = true
     process.stdout.write('ACK\\n')
   }
 })
+for (const signal of ['SIGINT', 'SIGHUP', 'SIGTERM']) {
+  process.on(signal, () => {
+    appendLedger('ORCA_E2E_INTERRUPTION_LEDGER', { event: 'signal', signal })
+    process.exit(0)
+  })
+}
 process.stdin.resume()
 setInterval(() => {}, 60_000)
 `
@@ -47,7 +68,9 @@ if (process.platform === 'win32') {
 const test = base.extend({
   launchEnv: [
     {
-      PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`
+      PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
+      ORCA_E2E_SPAWN_LEDGER: spawnLedgerPath,
+      ORCA_E2E_INTERRUPTION_LEDGER: interruptionLedgerPath
     },
     { option: true }
   ]
@@ -57,7 +80,33 @@ test.afterAll(() => {
   rmSync(fakeCliDir, { recursive: true, force: true })
 })
 
-test('worker-start materializes one inactive terminal tab before workspace re-entry', async ({
+type LedgerEvent = {
+  pid: number
+  event: string
+  startedAt?: number
+  signal?: string
+}
+
+function readLedger(ledgerPath: string): LedgerEvent[] {
+  if (!existsSync(ledgerPath)) {
+    return []
+  }
+  return readFileSync(ledgerPath, 'utf8')
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as LedgerEvent)
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+test('worker-start preserves one live inactive worker across workspace re-entry', async ({
   orcaPage,
   electronApp
 }) => {
@@ -124,6 +173,33 @@ test('worker-start materializes one inactive terminal tab before workspace re-en
       return read.result.terminal.tail.join('\n')
     })
     .toContain('ACK')
+  const initialWorkerIdentity = {
+    ptyId: workerTerminal!.ptyId,
+    incarnationId: workerTerminal!.incarnationId,
+    worktreeId: workerTerminal!.worktreeId,
+    tabId: workerTerminal!.tabId,
+    leafId: workerTerminal!.leafId
+  }
+  const initialDispatch = await client.call<{
+    dispatch: { id: string; task_id: string; assignee_handle: string } | null
+  }>('orchestration.dispatchShow', { task: task.result.task.id })
+  expect(initialDispatch.result.dispatch).toEqual(
+    expect.objectContaining({
+      task_id: task.result.task.id,
+      assignee_handle: workerHandle
+    })
+  )
+  await expect.poll(() => readLedger(spawnLedgerPath)).toHaveLength(1)
+  const [spawn] = readLedger(spawnLedgerPath)
+  expect(spawn).toEqual(
+    expect.objectContaining({
+      event: 'spawn',
+      pid: expect.any(Number),
+      startedAt: expect.any(Number)
+    })
+  )
+  expect(isProcessAlive(spawn.pid)).toBe(true)
+  expect(readLedger(interruptionLedgerPath)).toEqual([])
   const workerTab = orcaPage.locator(
     `[data-testid="sortable-tab"][data-tab-id="${workerTerminal!.tabId}"]`
   )
@@ -156,4 +232,27 @@ test('worker-start materializes one inactive terminal tab before workspace re-en
   await expect(
     orcaPage.locator(`[data-testid="sortable-tab"][data-tab-title="${workerTabTitle}"]`)
   ).toHaveCount(1)
+  const terminalsAfterReturn = await client.call<RuntimeTerminalListResult>('terminal.list')
+  const workerAfterReturn = terminalsAfterReturn.result.terminals.find(
+    (terminal) => terminal.ptyId === initialWorkerIdentity.ptyId
+  )
+  expect(workerAfterReturn).toEqual(expect.objectContaining(initialWorkerIdentity))
+  const dispatchAfterReturn = await client.call<{
+    dispatch: { id: string; task_id: string; assignee_handle: string } | null
+  }>('orchestration.dispatchShow', { task: task.result.task.id })
+  expect(dispatchAfterReturn.result.dispatch).toEqual(initialDispatch.result.dispatch)
+  expect(readLedger(spawnLedgerPath)).toEqual([spawn])
+  expect(readLedger(interruptionLedgerPath)).toEqual([])
+  expect(isProcessAlive(spawn.pid)).toBe(true)
+  const workerOutputAfterReturn = await client.call<{ terminal: RuntimeTerminalRead }>(
+    'terminal.read',
+    {
+      terminal: workerAfterReturn!.handle,
+      limit: 200
+    }
+  )
+  expect(workerOutputAfterReturn.result.terminal.tail.join('\n')).not.toContain(
+    'Conversation interrupted'
+  )
+  await expect(orcaPage.locator('body')).not.toContainText('Conversation interrupted')
 })

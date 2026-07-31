@@ -52,11 +52,27 @@ Sync catalog keys after adding or removing `translate(...)` calls:
 pnpm run sync:localization-catalog
 ```
 
-The sync command adds missing `en.json` entries from each call's string fallback,
-copies untranslated English placeholders into other locale catalogs to keep
-parity, removes locale entries whose English key was deleted, and repairs
-placeholder mismatches. Run the machine-translation bootstrap commands only when
-refreshing real translations, not for ordinary UI copy changes.
+The sync command adds missing `en.json` entries from each call's string fallback.
+It never edits target catalogs: missing values remain absent and use the existing
+runtime English fallback. Existing placeholder mismatches fail validation until
+a localization PR fixes or retires the target entry.
+
+Run maintained source extraction without committing a second English catalog:
+
+```sh
+pnpm run verify:localization-extraction
+```
+
+Extraction fails when a statically extracted key is absent from `en.json` or an
+inline default has incompatible placeholders. Existing unreferenced English keys
+and wording-only fallback drift are reported as migration debt; the permanent
+bilingual translation source will reconcile them without a large disposition
+database. Reviewed and stale translation state is likewise deferred to that
+source rather than inferred permanently from Git history.
+
+The legacy free-endpoint bootstrap and whole-catalog repair scripts intentionally
+have no package-script entry points. Ordinary product and localization work must
+not invoke tools that can overwrite an entire target catalog.
 
 The coverage gate compares current candidates against
 `config/localization-coverage-allowlist.json`. The committed allowlist is empty:
@@ -97,8 +113,8 @@ Recommended migration order:
 The final gate should combine three checks:
 
 1. Scanner coverage: no unclassified localizable candidates remain.
-2. Catalog coverage: every supported locale has the same keys as English, with
-   matching interpolation variables.
+2. Catalog correctness: existing translations have matching interpolation
+   variables; missing target entries are reported rather than rejected.
 3. Runtime coverage: pseudo-localization and real locale smoke tests show no
    obvious English leftovers or layout clipping in core screens.
 

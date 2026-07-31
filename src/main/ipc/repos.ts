@@ -37,6 +37,9 @@ import {
   relativePathInsideRoot
 } from '../../shared/cross-platform-path'
 import { isTuiAgent } from '../../shared/tui-agent-config'
+import { TaskSourceContextSchema } from '../../shared/task-source-context-schema'
+import { WorkspaceLinkedItemSchema } from '../../shared/workspace-linked-item-schema'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../shared/workspace-linked-item-source-context'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'node:child_process'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
@@ -89,7 +92,10 @@ import type {
 } from '../../shared/host-repo-catalog-contract'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
-import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-projection'
+import {
+  getProjectHostSetupForRepo,
+  getProjectIdForProviderIdentity
+} from '../../shared/project-host-setup-projection'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -235,20 +241,23 @@ function alignRepoWithRequestedProject(
   store: Store,
   repo: Repo,
   projectId: string,
-  setupMethod: ProjectHostSetupExistingFolderArgs['setupMethod'] = 'imported-existing-folder'
+  setupMethod: ProjectHostSetupExistingFolderArgs['setupMethod'] = 'imported-existing-folder',
+  requestedProviderIdentity?: ProjectHostSetupExistingFolderArgs['projectProviderIdentity']
 ): ProjectHostSetupResult {
   let setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
   if (setup.projectId !== projectId) {
     const project = store.getProjects().find((entry) => entry.id === projectId)
-    if (!project?.providerIdentity || project.providerIdentity.provider !== 'github') {
+    // Why: the selected project can exist only on the source host, so its structured identity travels with the request.
+    const identity = project?.providerIdentity ?? requestedProviderIdentity
+    if (!identity || getProjectIdForProviderIdentity(identity) !== projectId) {
       throw new Error('Imported folder does not match the selected project identity.')
     }
     // Why: stamp the selected project's provider identity when the folder lacks upstream, so projection can merge it.
     const updated = store.updateRepo(repo.id, {
       upstream: {
-        owner: project.providerIdentity.owner,
-        repo: project.providerIdentity.repo,
-        ...(project.providerIdentity.host ? { host: project.providerIdentity.host } : {})
+        owner: identity.owner,
+        repo: identity.repo,
+        ...(identity.host ? { host: identity.host } : {})
       }
     })
     if (!updated) {
@@ -801,6 +810,14 @@ const ProjectGroupMoveProjectArgs = z.object({
 
 const ProjectHostSetupExistingFolderIpcArgs = z.object({
   projectId: z.string().min(1),
+  projectProviderIdentity: z
+    .object({
+      provider: z.literal('github'),
+      owner: z.string().min(1),
+      repo: z.string().min(1),
+      host: z.string().min(1).optional()
+    })
+    .optional(),
   hostId: z.string().min(1),
   path: z.string().min(1),
   kind: z.enum(['git', 'folder']).optional(),
@@ -863,47 +880,61 @@ const ProjectHostSetupDeleteIpcArgs = z.object({
   setupId: z.string().min(1)
 })
 
-const FolderWorkspaceLinkedTaskArgs = z
-  .object({
-    provider: z.enum(['github', 'gitlab', 'linear', 'jira']),
-    type: z.enum(['issue', 'pr', 'mr']),
-    number: z.number().finite(),
-    title: z.string().min(1),
-    url: z.string().min(1),
-    linearIdentifier: z.string().min(1).optional(),
-    jiraIdentifier: z.string().min(1).optional(),
-    repoId: z.string().min(1).optional()
-  })
-  .nullable()
+const FolderWorkspaceLinkedTaskArgs = WorkspaceLinkedItemSchema.nullable()
 
-const FolderWorkspaceCreateArgs = z.object({
-  projectGroupId: z.string().min(1),
-  name: z.string().optional(),
-  folderPath: z.string().nullable().optional(),
-  connectionId: z.string().nullable().optional(),
-  linkedTask: FolderWorkspaceLinkedTaskArgs.optional(),
-  createdWithAgent: z.string().refine(isTuiAgent).optional(),
-  pendingFirstAgentMessageRename: z.boolean().optional()
-})
+function assertFolderWorkspaceLinkedSourceContextMatch(
+  value: {
+    linkedTask?: z.infer<typeof FolderWorkspaceLinkedTaskArgs>
+    linkedTaskSourceContext?: z.infer<typeof TaskSourceContextSchema> | null
+  },
+  ctx: z.RefinementCtx
+): void {
+  if (
+    value.linkedTask &&
+    value.linkedTaskSourceContext &&
+    !isWorkspaceLinkedItemSourceContextMatch(value.linkedTask, value.linkedTaskSourceContext)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Linked task and source context identities must match'
+    })
+  }
+}
+
+const FolderWorkspaceCreateArgs = z
+  .object({
+    projectGroupId: z.string().min(1),
+    name: z.string().optional(),
+    folderPath: z.string().nullable().optional(),
+    connectionId: z.string().nullable().optional(),
+    linkedTask: FolderWorkspaceLinkedTaskArgs.optional(),
+    linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
+    createdWithAgent: z.string().refine(isTuiAgent).optional(),
+    pendingFirstAgentMessageRename: z.boolean().optional()
+  })
+  .superRefine(assertFolderWorkspaceLinkedSourceContextMatch)
 
 const FolderWorkspaceUpdateArgs = z.object({
   folderWorkspaceId: z.string().min(1),
-  updates: z.object({
-    name: z.string().optional(),
-    folderPath: z.string().optional(),
-    linkedTask: FolderWorkspaceLinkedTaskArgs.optional(),
-    comment: z.string().optional(),
-    isArchived: z.boolean().optional(),
-    isUnread: z.boolean().optional(),
-    isPinned: z.boolean().optional(),
-    sortOrder: z.number().finite().optional(),
-    manualOrder: z.number().finite().optional(),
-    workspaceStatus: z.string().optional(),
-    createdWithAgent: z.string().refine(isTuiAgent).optional(),
-    pendingFirstAgentMessageRename: z.boolean().optional(),
-    firstAgentMessageRenameError: z.string().nullable().optional(),
-    lastActivityAt: z.number().finite().optional()
-  })
+  updates: z
+    .object({
+      name: z.string().optional(),
+      folderPath: z.string().optional(),
+      linkedTask: FolderWorkspaceLinkedTaskArgs.optional(),
+      linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
+      comment: z.string().optional(),
+      isArchived: z.boolean().optional(),
+      isUnread: z.boolean().optional(),
+      isPinned: z.boolean().optional(),
+      sortOrder: z.number().finite().optional(),
+      manualOrder: z.number().finite().optional(),
+      workspaceStatus: z.string().optional(),
+      createdWithAgent: z.string().refine(isTuiAgent).optional(),
+      pendingFirstAgentMessageRename: z.boolean().optional(),
+      firstAgentMessageRenameError: z.string().nullable().optional(),
+      lastActivityAt: z.number().finite().optional()
+    })
+    .superRefine(assertFolderWorkspaceLinkedSourceContextMatch)
 })
 
 const FolderWorkspaceSelectorArgs = z.object({
@@ -1378,11 +1409,6 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if (!parsedHost) {
         throw new Error(`Unsupported host: ${args.hostId}`)
       }
-      const existingProject = store.getProjects().find((project) => project.id === args.projectId)
-      if (!existingProject) {
-        throw new Error(`Project not found: ${args.projectId}`)
-      }
-
       const result =
         parsedHost.kind === 'local'
           ? await addLocalRepoFromPath(store, args.path, args.kind)
@@ -1400,15 +1426,26 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if ('error' in result) {
         throw new Error(result.error)
       }
+      let aligned: ProjectHostSetupResult
+      try {
+        aligned = alignRepoWithRequestedProject(
+          store,
+          result.repo,
+          args.projectId,
+          args.setupMethod,
+          args.projectProviderIdentity
+        )
+      } catch (err) {
+        // Why: an import that cannot be linked must not leave a new repo registration or authorization root behind.
+        if (!result.alreadyExisted) {
+          store.removeProject(result.repo.id)
+          invalidateAuthorizedRootsCache()
+        }
+        throw err
+      }
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
       emitRepoAdded('folder_picker', result.alreadyExisted)
-      const aligned = alignRepoWithRequestedProject(
-        store,
-        result.repo,
-        args.projectId,
-        args.setupMethod
-      )
       if (result.alreadyExisted) {
         await prepareLocalWorktreeRootForRepo(store, aligned.repo)
       }
@@ -2036,6 +2073,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       _event,
       args: {
         repoId: string
+        hostId?: ExecutionHostId
         updates: Partial<
           Pick<
             Repo,
@@ -2177,7 +2215,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           updates.sourceControlAi = normalizedSourceControlAi
         }
       }
-      const updated = store.updateRepo(args.repoId, updates)
+      const hostId = args.hostId ? normalizeExecutionHostId(args.hostId) : null
+      if (args.hostId && !hostId) {
+        return null
+      }
+      const updated = hostId
+        ? store.updateRepo(args.repoId, updates, hostId)
+        : store.updateRepo(args.repoId, updates)
       if (updated) {
         if ('worktreeBasePath' in updates) {
           void prepareLocalWorktreeRootForRepo(store, updated)

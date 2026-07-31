@@ -11,9 +11,25 @@ import {
   canParkTerminalWorktreeRenderers,
   isParkRestorableTerminalPty,
   isSnapshotBackedTerminalPty,
+  selectPairedRuntimeParkingEnvironmentIds,
   selectColdParkedTerminalTabs,
   selectColdParkedTerminalWorktrees
 } from './terminal-hidden-view-parking'
+
+describe('selectPairedRuntimeParkingEnvironmentIds', () => {
+  it('selects only reachable hosts advertising the paired parking contract', () => {
+    const statuses = new Map([
+      [
+        'capable',
+        { status: { capabilities: ['terminal.paired-parking.v1'] }, checkedAt: Date.now() }
+      ],
+      ['legacy', { status: { capabilities: ['terminal.multiplex.v1'] }, checkedAt: Date.now() }],
+      ['offline', { status: null, checkedAt: Date.now() }]
+    ])
+
+    expect(selectPairedRuntimeParkingEnvironmentIds(statuses)).toEqual(new Set(['capable']))
+  })
+})
 
 describe('isSnapshotBackedTerminalPty', () => {
   it('allows local daemon sessions owned by the worktree', () => {
@@ -76,7 +92,22 @@ describe('isParkRestorableTerminalPty', () => {
     ).toBe(false)
   })
 
-  it('rejects remote-runtime, fail-open, foreign, and null ptys under every policy', () => {
+  it('accepts paired ptys only for the exact snapshot-capable owner', () => {
+    const pairedPolicy = {
+      ...sshPolicy,
+      pairedRuntimeParkingEnvironmentIds: new Set(['env-1'])
+    }
+
+    expect(isParkRestorableTerminalPty('remote:env-1@@terminal-1', worktreeId, pairedPolicy)).toBe(
+      true
+    )
+    expect(isParkRestorableTerminalPty('remote:env-2@@terminal-1', worktreeId, pairedPolicy)).toBe(
+      false
+    )
+    expect(isParkRestorableTerminalPty('remote:terminal-1', worktreeId, pairedPolicy)).toBe(false)
+  })
+
+  it('rejects paired, fail-open, foreign, and null ptys without capability evidence', () => {
     for (const ptyId of ['remote:env-1@@terminal-1', 'pty-local-detached', 'other@@s-1', null]) {
       expect(isParkRestorableTerminalPty(ptyId, worktreeId, sshPolicy)).toBe(false)
     }
@@ -214,6 +245,22 @@ describe('canParkTerminalWorktreeRenderers', () => {
       })
     ).toBe(false)
   })
+
+  it('ignores mirrored activation residue after a capable paired PTY exists', () => {
+    expect(
+      canParkTerminalWorktreeRenderers({
+        ...base,
+        terminalTabs: [
+          {
+            id: 'tab-1',
+            ptyId: 'remote:env-1@@terminal-1',
+            pendingActivationSpawn: true
+          }
+        ],
+        restorePolicy: { pairedRuntimeParkingEnvironmentIds: new Set(['env-1']) }
+      })
+    ).toBe(true)
+  })
 })
 
 describe('canParkTerminalTabRenderer', () => {
@@ -235,6 +282,20 @@ describe('canParkTerminalTabRenderer', () => {
   it('parks an idle hidden local tab and honors the kill switch', () => {
     expect(canParkTerminalTabRenderer(base)).toBe(true)
     expect(canParkTerminalTabRenderer({ ...base, parkingEnabled: false })).toBe(false)
+  })
+
+  it('ignores mirrored activation residue after a capable paired PTY exists', () => {
+    expect(
+      canParkTerminalTabRenderer({
+        ...base,
+        terminalTab: {
+          ...base.terminalTab,
+          ptyId: 'remote:env-1@@terminal-1',
+          pendingActivationSpawn: true
+        },
+        restorePolicy: { pairedRuntimeParkingEnvironmentIds: new Set(['env-1']) }
+      })
+    ).toBe(true)
   })
 
   it('honors a per-call cold-park delay override', () => {

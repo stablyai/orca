@@ -18,6 +18,7 @@ import {
   hasTerminalHistoryRecoveryProtection,
   isTerminalHistoryQuarantineEntry
 } from './terminal-history-recovery-quarantine'
+import { isTerminalHistoryPendingDeleteEntry } from './terminal-history-session-tombstone'
 import {
   readTerminalHistoryMeta,
   type SessionMeta,
@@ -195,7 +196,10 @@ export class HistoryReader {
         if (!entry.isDirectory()) {
           continue
         }
-        if (isTerminalHistoryQuarantineEntry(entry.name)) {
+        if (
+          isTerminalHistoryQuarantineEntry(entry.name) ||
+          isTerminalHistoryPendingDeleteEntry(entry.name)
+        ) {
           continue
         }
         let sessionId: string

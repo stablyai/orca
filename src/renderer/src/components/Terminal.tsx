@@ -69,6 +69,7 @@ import { scheduleBackgroundTerminalWorktreeMeasure } from './terminal/background
 import {
   applyBackgroundMountTabRestriction,
   canDeferColdActivationTabsForHost,
+  canMountTerminalWorkspaceForStartup,
   planColdActivationTabDeferral,
   pruneClosedBackgroundMountTabs,
   revealActivationDeferredTabs,
@@ -88,18 +89,23 @@ import { getTerminalWorktreeColdParkRecheckDelayMs } from './terminal-pane/termi
 import {
   TERMINAL_WORKTREE_COLD_PARK_DELAY_MS,
   canParkTerminalWorktreeRenderers,
+  selectPairedRuntimeParkingEnvironmentIds,
   selectColdParkedTerminalWorktrees,
   type TerminalWorktreeColdParkCandidate
 } from './terminal-pane/terminal-hidden-view-parking'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
+  hasPendingRetentionSpawnWork,
   selectForceParkEvictableTabIds,
   selectRetentionForceParkedTerminalWorktrees,
   type TerminalWorktreeRetentionCandidate
 } from './terminal-pane/terminal-hidden-worktree-retention'
 import { captureForceParkedWorktreeBuffers } from './terminal-pane/force-park-buffer-capture'
 import { warnTerminalLifecycleAnomaly } from './terminal-pane/terminal-lifecycle-diagnostics'
-import { getTerminalParkingPolicyOverrides } from './terminal-pane/terminal-parking-e2e-overrides'
+import {
+  getTerminalParkingPolicyOverrides,
+  recordTerminalWorktreeParkingDebugVerdicts
+} from './terminal-pane/terminal-parking-e2e-overrides'
 import { selectEvictionExemptTerminalTabIds } from './terminal-pane/terminal-eviction-exempt-tabs'
 import {
   canWatcherCoverParkedTerminalTab,
@@ -296,6 +302,11 @@ function Terminal(): React.JSX.Element | null {
   const pendingStartupByTabId = useAppStore((s) => s.pendingStartupByTabId)
   const terminalParkingEnabled = useAppStore((s) => s.settings?.terminalHiddenViewParking !== false)
   const terminalSshParkingEnabled = useAppStore((s) => s.settings?.terminalSshViewParking !== false)
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const pairedRuntimeParkingEnvironmentIds = useMemo(
+    () => selectPairedRuntimeParkingEnvironmentIds(runtimeStatusByEnvironmentId),
+    [runtimeStatusByEnvironmentId]
+  )
   const terminalRetentionBudgetEnabled = useAppStore(
     (s) => s.settings?.terminalHiddenWorktreeRetentionBudget !== false
   )
@@ -317,6 +328,7 @@ function Terminal(): React.JSX.Element | null {
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const hydrationSucceeded = useAppStore((s) => s.hydrationSucceeded)
+  const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const openFiles = useAppStore((s) => s.openFiles)
   const activeFileId = useAppStore((s) => s.activeFileId)
   const activeBrowserTabId = useAppStore((s) => s.activeBrowserTabId)
@@ -949,7 +961,10 @@ function Terminal(): React.JSX.Element | null {
       })
     }
 
-    const restorePolicy = { sshParkingEnabled: terminalSshParkingEnabled }
+    const restorePolicy = {
+      sshParkingEnabled: terminalSshParkingEnabled,
+      pairedRuntimeParkingEnvironmentIds
+    }
     const nextParkedTerminalWorktreeIds = selectColdParkedTerminalWorktrees({
       worktrees: retentionCandidates,
       pendingStartupByTabId,
@@ -1006,14 +1021,11 @@ function Terminal(): React.JSX.Element | null {
           isVisible: candidate.isVisible,
           shouldMeasureHiddenWorktree: candidate.shouldMeasureHiddenWorktree,
           hasActivityTerminalPortal: candidate.hasActivityTerminalPortal,
-          parkCooldownUntilMs: candidate.parkCooldownUntilMs,
+          parkCooldownUntilMs: candidate.parkCooldownUntilMs ?? null,
           ordinaryParkingCovers:
             parkEligible && worktreeTabsAreWatcherCovered(candidate.worktreeId, tabs),
-          hasPendingSpawnWork: tabs.some(
-            (tab) =>
-              pendingStartupByTabId[tab.id] !== undefined ||
-              tab.pendingActivationSpawn === true ||
-              (typeof tab.pendingActivationSpawn === 'number' && tab.pendingActivationSpawn > 0)
+          hasPendingSpawnWork: tabs.some((tab) =>
+            hasPendingRetentionSpawnWork(tab, pendingStartupByTabId)
           )
         }
       }
@@ -1025,6 +1037,13 @@ function Terminal(): React.JSX.Element | null {
       nowMs,
       ...overrides
     })
+    recordTerminalWorktreeParkingDebugVerdicts(
+      retentionBudgetCandidates.map((candidate) => ({
+        ...candidate,
+        parkCooldownUntilMs: candidate.parkCooldownUntilMs ?? null,
+        forceParked: forceParkedWorktreeIds.has(candidate.worktreeId)
+      }))
+    )
     const capturedForceParked = forceParkedCaptureDoneRef.current
     for (const id of Array.from(capturedForceParked)) {
       if (!forceParkedWorktreeIds.has(id)) {
@@ -1126,6 +1145,7 @@ function Terminal(): React.JSX.Element | null {
     activityTerminalPortals,
     backgroundMountRevision,
     pendingStartupByTabId,
+    pairedRuntimeParkingEnvironmentIds,
     renderedActiveWorktreeId,
     tabsByWorktree,
     terminalParkingEnabled,
@@ -1134,8 +1154,15 @@ function Terminal(): React.JSX.Element | null {
     terminalSshParkingEnabled,
     workspaceSurfaces
   ])
-  // Why: gate on workspaceSessionReady so TerminalPane doesn't mount and spawn a duplicate PTY before reconnectPersistedTerminals() finishes.
-  if (renderedActiveWorktreeId && workspaceSessionReady) {
+  // Why: a slow post-reconnect step exposes workspaceSessionReady before hydration can populate snapshot capabilities.
+  if (
+    renderedActiveWorktreeId &&
+    canMountTerminalWorkspaceForStartup({
+      workspaceSessionReady,
+      hydrationSucceeded,
+      startupWorktreeRefreshCompleted
+    })
+  ) {
     // Why: mounting every saved tab at once (scrollback replay + WebGL + sync-IPC snapshot per pane) freezes the renderer, so hidden tabs defer and mount on first reveal.
     const worktreeTabs = tabsByWorktree[renderedActiveWorktreeId] ?? []
     const coldActivationDeferralEnabled =

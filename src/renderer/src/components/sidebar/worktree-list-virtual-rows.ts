@@ -1,7 +1,7 @@
 import { defaultRangeExtractor } from '@tanstack/react-virtual'
 import type { Range, VirtualItem } from '@tanstack/react-virtual'
 import type { HostSectionRow } from './host-section-rows'
-import { PINNED_GROUP_KEY } from './worktree-list-groups'
+import { getLineageGroupKey, PINNED_GROUP_KEY } from './worktree-list-groups'
 
 export const GROUP_HEADER_ROW_HEIGHT = 28
 export const HOST_HEADER_ROW_HEIGHT = 32
@@ -14,6 +14,63 @@ type WorktreeItemRow = Extract<HostSectionRow, { type: 'item' }>
 export type RenderRow =
   | HostSectionRow
   | { type: 'lineage-group'; key: string; rows: WorktreeItemRow[] }
+
+export function getRenderRowKey(row: RenderRow): string {
+  if (row.type === 'host-header') {
+    return `host:${row.hostId}`
+  }
+  if (row.type === 'header') {
+    return `hdr:${row.key}`
+  }
+  if (row.type === 'lineage-group') {
+    return `lineage-group:${row.key}`
+  }
+  if (row.type === 'imported-worktrees-card') {
+    return `imported:${row.key}`
+  }
+  if (row.type === 'new-external-worktrees-inbox') {
+    return `inbox:${row.key}`
+  }
+  if (row.type === 'pending-creation') {
+    return `pending:${row.creationId}`
+  }
+  if (row.type === 'folder-workspace') {
+    return `folder-workspace:${row.folderWorkspace.id}`
+  }
+  return `wt:${row.rowKey}`
+}
+
+/**
+ * Old row key -> current row key for rows that were re-keyed without moving.
+ *
+ * A parent's key flips between `wt:` and `lineage-group:` the moment it gains
+ * its first child (and back when it loses its last), even though the row still
+ * starts at the same pixel. Without this, a scroll anchor recorded under the
+ * old key resolves a fallback row below it and the sidebar visibly jumps.
+ */
+export function buildLineageRowRekeyMap(rows: readonly RenderRow[]): ReadonlyMap<string, string> {
+  const rekeyed = new Map<string, string>()
+  for (const row of rows) {
+    if (row.type === 'lineage-group') {
+      const groupKey = getRenderRowKey(row)
+      for (const member of row.rows) {
+        rekeyed.set(`wt:${member.rowKey}`, groupKey)
+      }
+      continue
+    }
+    if (row.type !== 'item') {
+      continue
+    }
+    // Why: deliberately unguarded by lineageChildCount — the dissolve case (last
+    // child deleted) is exactly when the count is already 0 but an anchor still
+    // holds the group key.
+    rekeyed.set(
+      `lineage-group:${row.sectionKey}:${getLineageGroupKey(row.worktree.id)}`,
+      getRenderRowKey(row)
+    )
+  }
+  return rekeyed
+}
 
 export function shouldUseHeaderTopSpacing(args: {
   rows: readonly RenderRow[]

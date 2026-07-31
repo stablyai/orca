@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
-import type { SetupScriptPromptInspection } from '@/lib/setup-script-prompt'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo } from '../../../../shared/types'
+import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
 
 /**
  * Re-runs the setup-script prompt inspection when a shared `orca.yaml` setup hook
@@ -13,7 +14,7 @@ export function useSetupScriptPromptRevalidation(input: {
   activeRepo: Repo | null
   isDismissed: boolean
   sidebarOpen: boolean
-  promptState: SetupScriptPromptInspection | null
+  promptState: SetupScriptPromptState | null
   requestRevalidation: () => void
 }): void {
   const { activeRepo, isDismissed, sidebarOpen, promptState, requestRevalidation } = input
@@ -25,6 +26,7 @@ export function useSetupScriptPromptRevalidation(input: {
   const showsMissingSetup =
     promptState?.status === 'ok' &&
     promptState.repoId === activeRepo?.id &&
+    Boolean(activeRepo && promptState.repoHostIdentity === getRepoHostIdentity(activeRepo)) &&
     !promptState.hasEffectiveSetup
 
   // Why: orca.yaml is edited on disk or the hook runs in a terminal outside React

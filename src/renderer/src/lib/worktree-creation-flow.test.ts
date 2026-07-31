@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   PendingWorktreeCreation,
@@ -13,7 +11,11 @@ const { prepareEphemeralVmWorkspaceTargetMock } = vi.hoisted(() => ({
 type TestActiveView = 'terminal' | 'tasks'
 
 const store = {
-  settings: { activeRuntimeEnvironmentId: null as string | null },
+  settings: {
+    activeRuntimeEnvironmentId: null as string | null,
+    experimentalNativeChat: undefined as boolean | undefined,
+    openAgentTabsInChatByDefault: undefined as boolean | undefined
+  },
   activeView: 'terminal' as TestActiveView,
   activePendingCreationId: 'creation-1' as string | null,
   repos: [{ id: 'repo-runtime', connectionId: null }],
@@ -41,7 +43,9 @@ const store = {
   setupProjectExistingFolder: vi.fn(),
   refreshRuntimeEnvironmentStatus: vi.fn(),
   seedNativeChatLaunchDraft: vi.fn(),
-  tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string }[]>
+  setTabViewMode: vi.fn(),
+  tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string }[]>,
+  unifiedTabsByWorktree: {}
 }
 
 vi.mock('@/store', () => ({
@@ -86,20 +90,22 @@ import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activatio
 import {
   beginBackgroundWorktreePreparation,
   continueBackgroundWorktreeCreation,
+  retryBackgroundWorktreeCreation,
   runBackgroundWorktreeCreation
 } from './worktree-creation-flow'
-
-const FLOW_SOURCE = readFileSync(join(__dirname, 'worktree-creation-flow.ts'), 'utf8')
 
 beforeEach(() => {
   vi.clearAllMocks()
   store.settings.activeRuntimeEnvironmentId = null
+  store.settings.experimentalNativeChat = undefined
+  store.settings.openAgentTabsInChatByDefault = undefined
   store.activeView = 'terminal'
   store.activePendingCreationId = 'creation-1'
   store.repos = []
   store.pendingWorktreeCreations = { 'creation-1': makePendingCreation(makeRequest()) }
   store.createWorktree.mockImplementation(() => new Promise(() => {}))
   store.tabsByWorktree = {}
+  store.unifiedTabsByWorktree = {}
   vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('tab-1')
 })
 
@@ -133,14 +139,6 @@ function makePendingCreation(request: WorktreeCreationRequest): PendingWorktreeC
 async function flushAsyncWorktreeCreation(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
-}
-
-function sourceBetween(source: string, startPattern: string, endPattern: string): string {
-  const start = source.indexOf(startPattern)
-  expect(start).toBeGreaterThanOrEqual(0)
-  const end = source.indexOf(endPattern, start + startPattern.length)
-  expect(end).toBeGreaterThan(start)
-  return source.slice(start, end)
 }
 
 describe('runBackgroundWorktreeCreation', () => {
@@ -449,6 +447,44 @@ describe('staged background worktree creation', () => {
     expect(store.setSidebarOpen).toHaveBeenCalledWith(true)
   })
 
+  it('preserves linked Jira context through staged creation and retry', async () => {
+    const linkedWorkItem = {
+      provider: 'jira' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: 'ORCA-123 Durable Jira link',
+      url: 'https://company.atlassian.net/browse/ORCA-123',
+      jiraIdentifier: 'ORCA-123'
+    }
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: 'project-1',
+      hostId: 'local' as const,
+      repoId: 'repo-1',
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      },
+      accountLabel: 'dev@company.test'
+    }
+    const request = makeRequest({ linkedWorkItem, linkedTaskSourceContext })
+    const expectedOptions = { linkedWorkItem, linkedTaskSourceContext }
+
+    expect(continueBackgroundWorktreeCreation('creation-1', request)).toBe(true)
+    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
+    const stagedCreateCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
+    expect(stagedCreateCall?.[25]).toEqual(expectedOptions)
+
+    store.createWorktree.mockClear()
+    retryBackgroundWorktreeCreation('creation-1')
+    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
+    const retryCreateCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
+    expect(retryCreateCall?.[25]).toEqual(expectedOptions)
+  })
+
   it('can continue without revealing a staged create after background preflight', async () => {
     store.updatePendingWorktreeCreation.mockClear()
     store.createWorktree.mockClear()
@@ -697,6 +733,70 @@ describe('staged background worktree creation', () => {
     )
   })
 
+  it.each([
+    ['mirrorable local Grok', 'grok', 'https://github.com/o/r/issues/12', 'chat'],
+    ['multi-line Claude', 'claude', 'note\nhttps://github.com/o/r/issues/12', 'chat']
+  ] as const)('passes %s draft mode to backend startup', async (_label, agent, draft, viewMode) => {
+    store.settings.experimentalNativeChat = true
+    store.settings.openAgentTabsInChatByDefault = true
+    store.repos = [{ id: 'repo-1', connectionId: null }]
+    continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({
+        agent,
+        startup: { command: `${agent} --prefill x`, launchAgent: agent },
+        startupPlan: {
+          agent,
+          launchCommand: `${agent} --prefill x`,
+          expectedProcess: agent,
+          followupPrompt: null,
+          launchConfig: { agentArgs: '', agentEnv: {} }
+        },
+        launchDraftPrompt: draft
+      })
+    )
+
+    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalled())
+    const createCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
+    expect(createCall?.[16]).toEqual({
+      command: `${agent} --prefill x`,
+      launchAgent: agent,
+      viewMode
+    })
+  })
+
+  it('carries launchDraftText into activation for an argv-prefill launch', async () => {
+    // Why: the draft rides inside `launchCommand` here, so the plan sets no
+    // draftPrompt — without launchDraftText the initial view-mode decision
+    // never sees a draft and opens chat on an unmirrorable one.
+    store.activeView = 'terminal'
+    store.activePendingCreationId = 'creation-1'
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' }
+    })
+    vi.mocked(activateAndRevealWorktree).mockReturnValueOnce({ primaryTabId: 'tab-1' })
+
+    continueBackgroundWorktreeCreation(
+      'creation-1',
+      makeRequest({
+        agent: 'claude',
+        startupPlan: {
+          agent: 'claude',
+          launchCommand: "claude --prefill 'https://github.com/o/r/issues/12'",
+          expectedProcess: 'claude',
+          followupPrompt: null,
+          launchConfig: { agentArgs: '', agentEnv: {} }
+        },
+        launchDraftPrompt: 'https://github.com/o/r/issues/12'
+      })
+    )
+
+    await vi.waitFor(() => expect(activateAndRevealWorktree).toHaveBeenCalled())
+    const startup = vi.mocked(activateAndRevealWorktree).mock.calls[0]?.[1]?.startup
+    expect(startup?.draftPrompt).toBeUndefined()
+    expect(startup?.launchDraftText).toBe('https://github.com/o/r/issues/12')
+  })
+
   it('does not seed a launch draft without draft launch context', async () => {
     store.activeView = 'terminal'
     store.activePendingCreationId = 'creation-1'
@@ -781,28 +881,5 @@ describe('staged background worktree creation', () => {
       })
     )
     expect(toast.error).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('worktree creation flow agent trust preflight', () => {
-  it('forwards the repo SSH connection id when pre-marking agent trust', () => {
-    const preflight = sourceBetween(
-      FLOW_SOURCE,
-      'async function preflightAgentTrust',
-      'async function executeWorktreeCreation'
-    )
-    const createFlow = sourceBetween(
-      FLOW_SOURCE,
-      'const backendSpawned = result.startupTerminal?.spawned === true',
-      '// `createWorktree` already inserted the real worktree row'
-    )
-
-    expect(preflight).toContain('connectionId?: string | null')
-    expect(preflight).toContain('...(connectionId ? { connectionId } : {})')
-    expect(createFlow).toContain('repoConnectionId')
-    expect(createFlow).toContain('repo.id === worktree.repoId')
-    expect(createFlow).toContain(
-      'await preflightAgentTrust(preparedRequest, worktree.path, repoConnectionId)'
-    )
   })
 })

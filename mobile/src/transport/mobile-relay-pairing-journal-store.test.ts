@@ -31,6 +31,8 @@ import {
 import type { PairingOffer } from './types'
 
 const now = Date.UTC(2026, 6, 13)
+const GENERATION_KEY = 'orca:pairing-keychain-generation'
+const JOURNAL_PRESENCE_KEY = 'orca:pairing-keychain-presence:orca.mobile-relay.pairing-journal.v1'
 const offer = {
   v: 2,
   endpoint: 'ws://192.168.1.10:6768',
@@ -51,6 +53,8 @@ const offer = {
 describe('mobile relay pairing journal store', () => {
   let metadataRaw: string | null
   let secretRaw: string | null
+  let generationRaw: string | null
+  let presenceRaw: string | null
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -58,12 +62,32 @@ describe('mobile relay pairing journal store', () => {
     platform.OS = 'ios'
     metadataRaw = null
     secretRaw = null
-    asyncStorage.getItem.mockImplementation(async () => metadataRaw)
-    asyncStorage.setItem.mockImplementation(async (_key: string, value: string) => {
-      metadataRaw = value
+    generationRaw = null
+    presenceRaw = null
+    asyncStorage.getItem.mockImplementation(async (key: string) => {
+      if (key === GENERATION_KEY) {
+        return generationRaw
+      }
+      if (key === JOURNAL_PRESENCE_KEY) {
+        return presenceRaw
+      }
+      return metadataRaw
     })
-    asyncStorage.removeItem.mockImplementation(async () => {
-      metadataRaw = null
+    asyncStorage.setItem.mockImplementation(async (key: string, value: string) => {
+      if (key === GENERATION_KEY) {
+        generationRaw = value
+      } else if (key === JOURNAL_PRESENCE_KEY) {
+        presenceRaw = value
+      } else {
+        metadataRaw = value
+      }
+    })
+    asyncStorage.removeItem.mockImplementation(async (key: string) => {
+      if (key === JOURNAL_PRESENCE_KEY) {
+        presenceRaw = null
+      } else {
+        metadataRaw = null
+      }
     })
     secureStore.getItemAsync.mockImplementation(async () => secretRaw)
     secureStore.setItemAsync.mockImplementation(async (_key: string, value: string) => {
@@ -92,6 +116,36 @@ describe('mobile relay pairing journal store', () => {
     expect(metadataRaw).not.toContain(offer.relay.inviteToken)
     expect(metadataRaw).not.toContain(journal.secrets.pendingResumeToken)
     await expect(loadMobileRelayPairingJournal()).resolves.toEqual(journal)
+  })
+
+  it('retries the journal under a distinct alias before relay pairing connects (#6600)', async () => {
+    const journal = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-1',
+      hostName: 'Blue Whale',
+      now,
+      randomBytes: (length) => new Uint8Array(length).fill(length)
+    })
+    secureStore.setItemAsync.mockImplementation(
+      async (_key: string, value: string, options?: { keychainService?: string }) => {
+        if (options?.keychainService === undefined) {
+          throw new Error(
+            "Could not encrypt the value for key 'orca.mobile-relay.pairing-journal.v1' under keychain 'key_v1'. Caused by: unknown"
+          )
+        }
+        secretRaw = value
+      }
+    )
+    platform.OS = 'android'
+
+    await expect(saveMobileRelayPairingJournal(journal)).resolves.toBeUndefined()
+
+    expect(generationRaw).toBe('1')
+    expect(secureStore.setItemAsync).toHaveBeenLastCalledWith(
+      'orca.mobile-relay.pairing-journal.v1',
+      expect.any(String),
+      expect.objectContaining({ keychainService: 'orca.pairing.v1' })
+    )
   })
 
   it('records a provisional winner only for the active journal identity', async () => {
@@ -223,7 +277,7 @@ describe('mobile relay pairing journal store', () => {
       hostName: 'Red Panda',
       randomBytes: (length) => new Uint8Array(length).fill(12)
     })
-    secureStore.setItemAsync.mockRejectedValueOnce(new Error('keychain unavailable'))
+    secureStore.setItemAsync.mockRejectedValue(new Error('keychain unavailable'))
 
     await expect(saveMobileRelayPairingJournal(replacement)).rejects.toThrow(/keychain/)
     await expect(loadMobileRelayPairingJournal()).resolves.toBeNull()

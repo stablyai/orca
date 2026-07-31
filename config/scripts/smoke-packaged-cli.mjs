@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
+import assert from 'node:assert/strict'
 
 const execFileAsync = promisify(execFile)
 
@@ -37,10 +38,41 @@ const copiedAppDir = join(tempRoot, basename(appDir))
 try {
   await cp(appDir, copiedAppDir, { recursive: true, verbatimSymlinks: true })
   const cliPath = getPackagedCliPath(copiedAppDir)
-  await execFileAsync(cliPath, ['--help'], {
-    env: { ...process.env, NODE_PATH: '' }
-  })
-  console.log(`[packaged-cli-smoke] ${cliPath} --help succeeded outside the repo`)
+  const env = { ...process.env, NODE_PATH: '' }
+  delete env.ORCA_CLI_CWD
+  const run = (args) =>
+    execFileAsync(cliPath, args, {
+      env,
+      killSignal: 'SIGKILL',
+      maxBuffer: 16 * 1024 * 1024,
+      timeout: 30_000
+    })
+
+  await run(['--help'])
+  const list = JSON.parse((await run(['skills', 'list', '--json'])).stdout)
+  assert(list.topics.some((topic) => topic.name === 'orca-cli'))
+  assert.match((await run(['skills', 'get', 'orca-cli'])).stdout, /name: orca-cli/)
+  assert.match((await run(['skills', 'get', 'computer-use'])).stdout, /name: computer-use/)
+  const install = JSON.parse(
+    (
+      await run([
+        'skills',
+        'install',
+        '--skill',
+        'orca-cli',
+        '--agent',
+        'codex',
+        '--dry-run',
+        '--json'
+      ])
+    ).stdout
+  )
+  const update = JSON.parse(
+    (await run(['skills', 'update', '--skill', 'orca-cli', '--dry-run', '--json'])).stdout
+  )
+  assert.equal(install.executed, false)
+  assert.equal(update.executed, false)
+  console.log(`[packaged-cli-smoke] help and skills commands passed via ${cliPath}`)
 } finally {
   await rm(tempRoot, { recursive: true, force: true })
 }

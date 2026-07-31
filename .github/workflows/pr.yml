@@ -62,6 +62,11 @@ jobs:
       - name: Verify localization catalog
         run: pnpm run verify:localization-catalog
 
+      # Why: extraction writes sorted evidence to an isolated temporary path,
+      # so feature PRs need one normalized AST pass rather than a three-OS matrix.
+      - name: Verify localization extraction
+        run: pnpm run verify:localization-extraction
+
       - name: Verify localization coverage
         run: pnpm run verify:localization-coverage
 
@@ -179,12 +184,14 @@ jobs:
             src/shared/posix-command-path-lookup.test.ts
 
   test:
-    name: tests ${{ matrix.shard }}/${{ strategy.job-total }}
+    name: tests node ${{ matrix.node }} ${{ matrix.shard }}/${{ matrix.shard_total }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        node: ['24', '26']
         shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        shard_total: [16]
 
     steps:
       - name: Checkout
@@ -195,6 +202,7 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
+          node-version: ${{ matrix.node }}
 
       - name: Install Electron package binary for tests
         run: node config/scripts/install-electron-package-binary.mjs
@@ -208,7 +216,7 @@ jobs:
             --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
             --exclude=src/shared/posix-command-path-lookup.test.ts \
-            --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+            --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
 
   package:
     name: package
@@ -264,6 +272,58 @@ jobs:
 
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked
+
+      - name: Smoke packaged hang watchdog worker
+        run: xvfb-run --auto-servernum node config/scripts/smoke-packaged-hang-watchdog-worker.mjs --app-dir=dist/linux-unpacked
+
+  package_windows:
+    name: package (windows)
+    runs-on: windows-2022
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-windows-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-windows-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build package inputs
+        run: pnpm run build:release
+
+      - name: Prepare Electron native runtime
+        run: node config/scripts/ensure-native-runtime.mjs --runtime=electron
+
+      - name: Package unpacked app
+        env:
+          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
+        run: pnpm exec electron-builder --config config/electron-builder.config.cjs --dir
+
+      - name: Smoke packaged CLI
+        run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked
 
   # Why: regression specs under tests/e2e/** used to merge green without ever
   # running — e2e.yml only fired on schedule/release (#10518). Path-filter so
@@ -323,6 +383,7 @@ jobs:
       - shell_contracts
       - test
       - package
+      - package_windows
     runs-on: ubuntu-latest
 
     steps:
@@ -342,6 +403,7 @@ jobs:
           SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
           TEST: ${{ needs.test.result }}
           PACKAGE: ${{ needs.package.result }}
+          PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
         run: |
           for result in \
             "$STATIC_ANALYSIS" \
@@ -349,7 +411,8 @@ jobs:
             "$GIT_COMPATIBILITY" \
             "$SHELL_CONTRACTS" \
             "$TEST" \
-            "$PACKAGE"; do
+            "$PACKAGE" \
+            "$PACKAGE_WINDOWS"; do
             if [ "$result" != "success" ]; then
               exit 1
             fi

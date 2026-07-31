@@ -875,6 +875,12 @@ export function ResourceUsageStatusSegment({
     }
   }, [open, fetchSnapshot, refreshSessions])
 
+  useEffect(() => {
+    if (!open) {
+      clearSessionsError()
+    }
+  }, [open, clearSessionsError])
+
   const repoDisplayNameById = useMemo(() => {
     const map = new Map<string, string>()
     for (const repo of repos) {

@@ -5,6 +5,20 @@ import {
 } from './terminal-hidden-view-parking'
 import { getParkedTerminalWatcherTabIds } from './terminal-parked-tab-watchers'
 
+export type TerminalWorktreeParkingDebugVerdict = {
+  worktreeId: string
+  forceParked: boolean
+  hasActivityTerminalPortal: boolean
+  hasPendingSpawnWork: boolean
+  hiddenSinceMs: number | null
+  isVisible: boolean
+  ordinaryParkingCovers: boolean
+  parkCooldownUntilMs: number | null
+  shouldMeasureHiddenWorktree: boolean
+}
+
+let worktreeVerdicts: TerminalWorktreeParkingDebugVerdict[] = []
+
 // Why: ORCA_E2E_TERMINAL_PARKING_DELAY_MS must shrink BOTH the cold-park
 // hysteresis and the hot-retain window — recently hidden tabs otherwise sit
 // in the hot-retain working set for 5 minutes and never park within a test
@@ -36,7 +50,17 @@ export function registerTerminalParkingDebugHandle(): void {
   window.__terminalParkingDebug = {
     parkDelayMs:
       getTerminalParkingPolicyOverrides().coldParkDelayMs ?? TERMINAL_TAB_COLD_PARK_DELAY_MS,
-    parkedTabIds: () => getParkedTerminalWatcherTabIds()
+    parkedTabIds: () => getParkedTerminalWatcherTabIds(),
+    retentionLimit: getTerminalParkingPolicyOverrides().retentionLimit ?? null,
+    worktreeVerdicts: () => worktreeVerdicts
+  }
+}
+
+export function recordTerminalWorktreeParkingDebugVerdicts(
+  verdicts: TerminalWorktreeParkingDebugVerdict[]
+): void {
+  if (e2eConfig.exposeStore) {
+    worktreeVerdicts = verdicts
   }
 }
 

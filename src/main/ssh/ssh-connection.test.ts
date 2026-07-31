@@ -1165,6 +1165,29 @@ describe('SshConnection', () => {
     expect(conn.usesSystemSshTransport()).toBe(true)
   })
 
+  it('uses fresh OpenSSH user for imported GitHub targets', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(
+      createResolvedConfig({ hostname: 'github.com', user: 'git' })
+    )
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(1, 'Invalid command: echo ORCA-SYSTEM-SSH-OK')
+    )
+    const conn = new SshConnection(
+      createTarget({
+        source: 'ssh-config',
+        configHost: 'github.com',
+        host: 'github.com',
+        username: 'stale-user'
+      }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+  })
+
   it('accepts GitHub restricted-shell SSH probes with resolved host and target username', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(
       createResolvedConfig({ hostname: 'github.com', user: undefined })
@@ -1528,6 +1551,26 @@ describe('SshConnection', () => {
         wrapCommand: false
       }
     )
+  })
+
+  it('ignores stale imported GSSAPI when fresh OpenSSH config disables it', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: false })
+    )
+    const conn = new SshConnection(
+      createTarget({
+        source: 'ssh-config',
+        configHost: 'krb-host',
+        gssapiAuthentication: true
+      }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(false)
+    expect(spawnSystemSshCommandMock).not.toHaveBeenCalled()
   })
 
   it('falls back to system SSH after an ssh2 auth failure when resolved config enables GSSAPI', async () => {
@@ -2086,6 +2129,22 @@ describe('shouldUseSystemSshTransport', () => {
   it('allows an environment override for e2e coverage', () => {
     vi.stubEnv('ORCA_SSH_FORCE_SYSTEM_TRANSPORT', '1')
     expect(shouldUseSystemSshTransport(createTarget(), null)).toBe(true)
+    vi.unstubAllEnvs()
+  })
+
+  it('ignores stale imported proxy fields when fresh OpenSSH config has no proxy', () => {
+    expect(
+      shouldUseSystemSshTransport(
+        createTarget({
+          source: 'ssh-config',
+          configHost: 'workbox',
+          proxyCommand: 'ssh -W %h:%p stale-bastion'
+        }),
+        {
+          proxyUseFdpass: false
+        }
+      )
+    ).toBe(false)
   })
 })
 
