@@ -1009,7 +1009,7 @@ export type BuildPtyHostEnvOptions = {
   /** Per-user disabled agents from Settings > Agents. Used to avoid installing
    *  managed Pi/OMP extensions (writing orca-*.ts files into ~/.pi or ~/.omp)
    *  for agents the user has explicitly disabled. */
-  disabledTuiAgents?: readonly unknown[] | null
+  disabledTuiAgents?: readonly TuiAgent[] | null
   networkProxySettings?: NetworkProxySettings
   /** Keep indexed Git config off the sparse daemon wire; the daemon appends guard entries after merging its inherited env. */
   deferGitConfigGuardToDaemon?: boolean
