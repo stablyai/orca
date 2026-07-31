@@ -373,7 +373,12 @@ test.describe('Workspace board lane virtualization', () => {
 
     await orcaPage.mouse.move(box.x + 2, box.y + 12)
     await orcaPage.mouse.down()
-    await orcaPage.mouse.move(box.x + box.width - 18, box.y + 80)
+    await orcaPage.mouse.move(box.x + box.width - 18, box.y + 80, { steps: 4 })
+    await expect
+      .poll(() => lane.locator('[data-workspace-board-card-area-selected="true"]').count(), {
+        timeout: 15_000
+      })
+      .toBeGreaterThan(0)
     await laneScroll.evaluate(async (element) => {
       for (let pass = 0; pass < 4; pass++) {
         element.scrollTop = element.scrollHeight
