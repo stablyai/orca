@@ -251,8 +251,20 @@ export async function discoverSkills(args: {
   for (const skill of skillGroups.flat()) {
     // Why: WSL discovery sets cwd to the WSL home, so home skills can also be
     // reached through the synthetic repo root. Keep the global home identity.
-    if (!seen.has(skill.skillFilePath)) {
-      seen.set(skill.skillFilePath, skill)
+    // A symlinked skill and its realpath resolve to the same skill via realpath,
+    // so collapse them to a single entry instead of showing duplicates.
+    let key = skill.skillFilePath
+    try {
+      key = await realpath(skill.skillFilePath)
+    } catch {
+      // Broken link — keep the raw path as the key so it still appears once.
+    }
+    const existing = seen.get(key)
+    if (!existing) {
+      seen.set(key, skill)
+    } else if (skill.sourceKind === 'home' && existing.sourceKind !== 'home') {
+      // Prefer the home-rooted (symlinked) entry: the UI treats it as authoritative.
+      seen.set(key, skill)
     }
   }
   return {

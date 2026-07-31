@@ -63,6 +63,10 @@ type CliErrorContext = {
   commandPath?: readonly string[]
 }
 
+export function printText(text: string): void {
+  console.log(text)
+}
+
 export function printResult<TResult>(
   response: RuntimeRpcSuccess<TResult>,
   json: boolean,

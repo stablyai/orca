@@ -145,6 +145,35 @@ describe('skill discovery', () => {
     expect(skill?.directoryPath).toBe(bundledSkill)
   })
 
+  it('collapses a skill reachable via both a home symlink and the repo skills/ root into one entry', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const repo = join(root, 'repo')
+    const realSkill = join(repo, 'skills', 'orchestration')
+    const linkedSkill = join(home, '.agents', 'skills', 'orchestration')
+    await mkdir(realSkill, { recursive: true })
+    await mkdir(join(home, '.agents', 'skills'), { recursive: true })
+    await writeFile(
+      join(realSkill, 'SKILL.md'),
+      ['---', 'name: orchestration', 'description: Multi-agent coordination.', '---', ''].join('\n')
+    )
+    await symlink(realSkill, linkedSkill, process.platform === 'win32' ? 'junction' : 'dir')
+
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd'),
+      repos: [makeRepo(repo)]
+    })
+
+    const entries = result.skills.filter((entry) => entry.name === 'orchestration')
+    // Why: the symlink under ~/.agents/skills and the <repo>/skills scan root point
+    // at the same realpath; realpath-dedup must collapse them to ONE entry.
+    expect(entries).toHaveLength(1)
+    // The home-rooted (symlinked) entry is preferred — the UI treats it as authoritative.
+    expect(entries[0]?.sourceKind).toBe('home')
+    expect(entries[0]?.directoryPath).toBe(linkedSkill)
+  })
+
   it('enforces depth limits for valid child directories whose names start with dot-dot', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')
