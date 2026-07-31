@@ -168,7 +168,7 @@ describe('installNativeDeps staged uploads', () => {
     vi.useFakeTimers()
     try {
       const conn = makeMockConnection(sftpCapture)
-      feed(['__ORCA_REMOTE_PLATFORM__ Linux x86_64', '/home/u', '', '', ''])
+      feed(['__ORCA_REMOTE_PLATFORM__ Linux x86_64', '/home/u', '', ''])
       vi.mocked(acquireInstallLock).mockImplementationOnce(
         (_conn, _remoteDir, _host, options) =>
           new Promise<void>((_resolve, reject) => {
@@ -198,7 +198,6 @@ describe('installNativeDeps staged uploads', () => {
     vi.mocked(execCommand)
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       .mockResolvedValueOnce('/home/u')
-      .mockResolvedValueOnce('')
       .mockResolvedValueOnce('')
       .mockResolvedValueOnce('')
       .mockResolvedValueOnce('')

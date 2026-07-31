@@ -31,7 +31,14 @@ export function raceSftpFileTransferWithAbort<T>(
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     let settled = false
-    let abortError: (Error & { sshChannelCloseConfirmed: boolean }) | null = null
+    let operationSettled = false
+    let sftpClosed = false
+    let abortError:
+      | (Error & {
+          sshChannelCloseConfirmed: boolean
+          sshTransferTeardownConfirmed: boolean
+        })
+      | null = null
     let closeGraceTimer: ReturnType<typeof setTimeout> | null = null
     const settle = (fn: typeof resolve | typeof reject, value: T | Error): void => {
       if (settled) {
@@ -48,24 +55,37 @@ export function raceSftpFileTransferWithAbort<T>(
       // Why: rejecting the caller is insufficient; ending SFTP stops the
       // abandoned transfer from mutating a successor relay install.
       abortError = Object.assign(createSshOperationAbortError(), {
-        sshChannelCloseConfirmed: false
+        sshChannelCloseConfirmed: false,
+        sshTransferTeardownConfirmed: false
       })
       closeGraceTimer = setTimeout(() => settle(reject, abortError!), 5_000)
       closeSftp(() => {
+        sftpClosed = true
         abortError!.sshChannelCloseConfirmed = true
-        settle(reject, abortError!)
+        if (operationSettled) {
+          abortError!.sshTransferTeardownConfirmed = true
+          settle(reject, abortError!)
+        }
       })
     }
     signal.addEventListener('abort', onAbort, { once: true })
     void operation.then(
       (value) => {
+        operationSettled = true
         if (!abortError) {
           settle(resolve, value)
+        } else if (sftpClosed) {
+          abortError.sshTransferTeardownConfirmed = true
+          settle(reject, abortError)
         }
       },
       (error: unknown) => {
+        operationSettled = true
         if (!abortError) {
           settle(reject, error instanceof Error ? error : new Error(String(error)))
+        } else if (sftpClosed) {
+          abortError.sshTransferTeardownConfirmed = true
+          settle(reject, abortError)
         }
       }
     )

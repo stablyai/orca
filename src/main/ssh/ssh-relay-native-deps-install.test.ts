@@ -519,16 +519,18 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     feed([
       '__ORCA_REMOTE_PLATFORM__ Windows AMD64',
       'C:\\Users\\u',
-      '', // mkdir remoteDir
+      '', // mkdir stage payload
+      '', // promote staged payload
       '', // npm install native deps
       'MISSING\n', // native process exit normalized by PowerShell command
       '', // npm rebuild native deps
       'MISSING\n', // rebuilt native process still cannot load
+      '', // clean stage root
       '', // no persisted active pipe marker
-      'WAITING',
+      'WAITING', // initial pipe probe
       '', // publish the per-launch credential
       '', // WMI relay launch
-      'READY',
+      'READY', // readiness poll
       '' // persist active pipe marker
     ])
 

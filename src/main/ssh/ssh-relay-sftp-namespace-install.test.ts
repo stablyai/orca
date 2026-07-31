@@ -233,7 +233,6 @@ function feed(responses: string[]): void {
 const POSIX_FIRST_INSTALL = [
   '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
   SHELL_HOME,
-  '', // stale stage listing
   '', // mkdir stage payload + attempt marker
   '', // chmod staged node
   '', // final install namespace marker
@@ -251,7 +250,6 @@ const POSIX_FIRST_INSTALL = [
 const POSIX_SYSTEM_SSH_FIRST_INSTALL = [
   '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
   SHELL_HOME,
-  '', // stale stage listing
   '', // mkdir stage payload
   '', // chmod staged node
   '', // promote staged payload
@@ -472,7 +470,6 @@ describe('relay install writes on a split SFTP namespace', () => {
     feed([
       '__ORCA_REMOTE_PLATFORM__ Windows AMD64',
       'C:\\Users\\u',
-      '', // stale stage listing
       '', // mkdir stage payload
       '', // chmod staged node
       '' // promote staged payload

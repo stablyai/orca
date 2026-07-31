@@ -58,12 +58,6 @@ import {
   removeRemoteTreeCommand
 } from './ssh-remote-commands'
 import {
-  listStaleRemoteUploadStagesCommand,
-  MAX_STALE_UPLOAD_STAGE_CANDIDATES,
-  parseStaleRemoteUploadStageListing,
-  removeStaleRemoteUploadStagesCommand
-} from './ssh-relay-upload-stage-commands'
-import {
   isWindowsRemoteHost,
   joinRemotePath,
   normalizeRemoteHome,
@@ -368,7 +362,6 @@ async function deployAndLaunchRelayAttempt(
     onProgress?.('Uploading relay...')
     console.log('[ssh-relay] Uploading relay...')
     try {
-      await recoverStaleUploadStages(conn, remoteRelayDir, hostPlatform, deploySignal)
       try {
         await uploadRelay(
           conn,
@@ -492,18 +485,10 @@ async function deployAndLaunchRelayAttempt(
   }
   console.log('[ssh-relay] Relay started successfully')
 
-  // Why: serialize post-launch maintenance for hosts that allow only one SSH exec channel.
-  const staleStageRecovery = alreadyInstalled
-    ? recoverStaleUploadStages(conn, remoteRelayDir, hostPlatform, deploySignal).catch(() => {})
-    : Promise.resolve()
-  void staleStageRecovery
-    .then(() =>
-      gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform, {
-        windowsNodePath: launched.nodePath,
-        windowsSockNames: [relaySocketNameForInstanceId(relayInstanceId)]
-      })
-    )
-    .catch(() => {})
+  void gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform, {
+    windowsNodePath: launched.nodePath,
+    windowsSockNames: [relaySocketNameForInstanceId(relayInstanceId)]
+  }).catch(() => {})
 
   return {
     transport: launched.transport,
@@ -578,47 +563,6 @@ async function uploadRelay(
         : undefined
     }
   )
-}
-
-const UPLOAD_STAGE_STALE_SECONDS = 40 * 60
-
-async function recoverStaleUploadStages(
-  conn: SshConnection,
-  remoteRelayDir: string,
-  hostPlatform: RemoteHostPlatform,
-  signal?: AbortSignal
-): Promise<void> {
-  const listing = await execHostCommand(
-    conn,
-    hostPlatform,
-    listStaleRemoteUploadStagesCommand(
-      hostPlatform,
-      remoteRelayDir,
-      UPLOAD_STAGE_STALE_SECONDS,
-      MAX_STALE_UPLOAD_STAGE_CANDIDATES
-    ),
-    { signal }
-  ).catch(() => '')
-  const stages = parseStaleRemoteUploadStageListing(
-    hostPlatform,
-    remoteRelayDir,
-    String(listing ?? '')
-  )
-  signal?.throwIfAborted()
-  if (stages.length === 0) {
-    return
-  }
-  await execHostCommand(
-    conn,
-    hostPlatform,
-    removeStaleRemoteUploadStagesCommand(
-      hostPlatform,
-      remoteRelayDir,
-      stages,
-      UPLOAD_STAGE_STALE_SECONDS
-    ),
-    { signal }
-  ).catch(() => {})
 }
 
 /**

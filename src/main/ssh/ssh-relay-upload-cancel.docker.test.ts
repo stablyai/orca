@@ -242,7 +242,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     expect(sentinelCommand).toContain('sleep 300')
   }, 180_000)
 
-  it('keeps cancellation retryable and drains its aged stage after an installed launch', async () => {
+  it('keeps cancellation retryable and leaves aged stages untouched on installed launch', async () => {
     const activeFixture = fixture as TargetFixture
     const relayVersion = readFileSync(
       join(process.cwd(), 'out', 'relay', 'linux-arm64', '.version'),
@@ -294,9 +294,24 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
 
     const expected = process.env.ORCA_REVIEW_EXPECT_RECOVERY === '1' ? 'recovered' : 'blocked'
     if (expected === 'recovered') {
+      const replacedStage = firstInventory.uploadStages[0]!
+      const originalStage = `${replacedStage}.original`
+      const foreignTarget = '/root/orca-pr10207-foreign-stage-target'
+      const symlinkStage = `${remoteRelayDir}.upload-123e4567-e89b-12d3-a456-ffffffffffff`
       for (const stage of firstInventory.uploadStages) {
         dockerExec(activeFixture, `touch -d '3 hours ago' ${shellQuote(stage)}`)
       }
+      dockerExec(
+        activeFixture,
+        [
+          `mv ${shellQuote(replacedStage)} ${shellQuote(originalStage)}`,
+          `mkdir ${shellQuote(replacedStage)} ${shellQuote(foreignTarget)}`,
+          `touch -d '3 hours ago' ${shellQuote(replacedStage)} ${shellQuote(originalStage)}`,
+          `ln -s ${shellQuote(foreignTarget)} ${shellQuote(symlinkStage)}`,
+          `i=0; while [ "$i" -lt 1000 ]; do suffix=$(printf '%012d' "$i"); mkdir ${shellQuote(`${remoteRelayDir}.upload-123e4567-e89b-12d3-a456-`)}"$suffix"; i=$((i + 1)); done`
+        ].join(' && ')
+      )
+      const adversarialInventory = readInventory(activeFixture, remoteRelayDir)
       const cleanupConnection = createConnection(activeFixture)
       await cleanupConnection.connect()
       const cleanedDeployment = await deployAndLaunchRelay(cleanupConnection, undefined, 60)
@@ -304,18 +319,25 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
       await expect(cleanupMux.request('session.resolveHome', { path: '~' })).resolves.toEqual({
         resolvedPath: '/root'
       })
-      await vi.waitFor(
-        () => {
-          finalInventory = readInventory(activeFixture, remoteRelayDir)
-          expect(finalInventory.uploadStages).toHaveLength(0)
-        },
-        { timeout: 10_000, interval: 100 }
-      )
+      finalInventory = readInventory(activeFixture, remoteRelayDir)
+      expect(
+        dockerExec(
+          activeFixture,
+          `test -L ${shellQuote(symlinkStage)} && test -d ${shellQuote(foreignTarget)} && echo PRESERVED`
+        ).trim()
+      ).toBe('PRESERVED')
+      expect(
+        dockerExec(
+          activeFixture,
+          `test -d ${shellQuote(replacedStage)} && test -d ${shellQuote(originalStage)} && echo PRESERVED`
+        ).trim()
+      ).toBe('PRESERVED')
+      expect(finalInventory.uploadStages.sort()).toEqual(adversarialInventory.uploadStages.sort())
       cleanupMux.dispose()
       await cleanupConnection.disconnect()
     }
     console.log(
-      `[pr-10207-oracle] ${JSON.stringify({ progress, firstInventory, retryResult, finalInventory, repoHead: repoHead.trim() })}`
+      `[pr-10207-oracle] ${JSON.stringify({ progress, firstInventory, retryResult, finalInventory: finalInventory ? { ...finalInventory, uploadStages: finalInventory.uploadStages.length } : undefined, repoHead: repoHead.trim() })}`
     )
     expect(progress).toContain('Uploading relay...')
     expect(repoHead.trim()).toMatch(/^[0-9a-f]{40}$/)
@@ -324,7 +346,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
       expect(firstInventory.installLock).toBe(false)
       expect(firstInventory.uploadStages.length).toBeGreaterThan(0)
       expect(finalInventory?.installLock).toBe(false)
-      expect(finalInventory?.uploadStages).toHaveLength(0)
+      expect(finalInventory!.uploadStages.length).toBeGreaterThan(1_000)
     } else {
       expect(firstInventory.installLock).toBe(true)
       expect(firstInventory.payloadFiles).toBe(0)

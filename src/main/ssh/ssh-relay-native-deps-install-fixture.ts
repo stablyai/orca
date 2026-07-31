@@ -58,7 +58,6 @@ export function makeStagedFirstInstallExecPrefix(): ExecResponse[] {
   return [
     '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
     '/home/u',
-    '', // stale stage listing
     '', // mkdir stage payload + namespace marker
     '', // chmod staged node
     '', // final install namespace marker
