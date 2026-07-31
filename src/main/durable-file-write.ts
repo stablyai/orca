@@ -4,7 +4,7 @@
 // hour's loss; fsync stops it from happening.
 
 import { closeSync, fsyncSync, openSync, renameSync, writeFileSync } from 'node:fs'
-import { open, readdir, rename, rm, stat } from 'node:fs/promises'
+import { open, readdir, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 
 /**
@@ -47,7 +47,8 @@ function syncDirectorySync(directory: string): void {
  * themselves and need the rename made durable.
  */
 export async function renameDurable(tmpPath: string, finalPath: string): Promise<void> {
-  await rename(tmpPath, finalPath)
+  // Why: the commit must not yield after a caller's generation check, or an older writer can overwrite a newer sync flush.
+  renameSync(tmpPath, finalPath)
   await syncDirectory(dirname(finalPath))
 }
 
@@ -85,7 +86,8 @@ export async function writeFileDurableIfCurrent(
     if (!isCurrent()) {
       return false
     }
-    await rename(tmpPath, finalPath)
+    // Why: keep the current-generation check and its publish point in one event-loop turn.
+    renameSync(tmpPath, finalPath)
     renamed = true
     await syncDirectory(dirname(finalPath))
     return true

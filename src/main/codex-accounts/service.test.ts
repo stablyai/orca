@@ -172,24 +172,48 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
 
 function createStore(settings: GlobalSettings) {
   let resetLedger: CodexResetCreditAttemptLedger = { version: 1, attempts: [] }
+  const applySettings = (updates: Partial<GlobalSettings>) => {
+    settings = {
+      ...settings,
+      ...updates,
+      notifications: {
+        ...settings.notifications,
+        ...updates.notifications
+      }
+    }
+    return settings
+  }
+  const withSettingsPreview = <T>(updates: Partial<GlobalSettings>, action: () => T): T => {
+    const previousSettings = settings
+    applySettings(updates)
+    try {
+      return action()
+    } finally {
+      settings = previousSettings
+    }
+  }
   return {
     getSettings: vi.fn(() => settings),
-    updateSettings: vi.fn((updates: Partial<GlobalSettings>) => {
-      settings = {
-        ...settings,
-        ...updates,
-        notifications: {
-          ...settings.notifications,
-          ...updates.notifications
-        }
-      }
-      return settings
-    }),
+    updateSettings: vi.fn(applySettings),
+    updateCodexAccountSettingsAndFlush: vi.fn(applySettings),
+    withCodexAccountSettingsPreview: vi.fn(withSettingsPreview),
     getCodexResetCreditAttemptLedger: vi.fn(() => structuredClone(resetLedger)),
     replaceCodexResetCreditAttemptLedgerAndFlush: vi.fn((next: CodexResetCreditAttemptLedger) => {
       resetLedger = structuredClone(next)
-    })
+    }),
+    updateCodexAccountSettingsAndResetLedgerAndFlush: vi.fn(
+      (updates: Partial<GlobalSettings>, next: CodexResetCreditAttemptLedger) => {
+        applySettings(updates)
+        resetLedger = structuredClone(next)
+      }
+    )
   }
+}
+
+function failNextAccountRemovalPersistence(store: ReturnType<typeof createStore>): void {
+  store.updateCodexAccountSettingsAndResetLedgerAndFlush.mockImplementationOnce(() => {
+    throw new Error('disk full')
+  })
 }
 
 function createRateLimits() {
@@ -1740,6 +1764,10 @@ describe('CodexAccountService config sync', () => {
       expect(existsSync(wslManagedHomePath)).toBe(false)
       expect(existsSync(join(testState.userDataDir, 'wsl-account'))).toBe(false)
       expect(rateLimits.evictInactiveCodexCache).toHaveBeenCalledWith('account-1')
+      expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledWith({
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu'
+      })
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,
@@ -1974,6 +2002,51 @@ describe('CodexAccountService config sync', () => {
     expect(result.activeAccountId).toBe(null)
     expect(existsSync(managedHomePath)).toBe(false)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
+    expect(store.updateCodexAccountSettingsAndResetLedgerAndFlush).toHaveBeenCalledOnce()
+  })
+
+  it('keeps account removal retryable when runtime reconciliation fails', async () => {
+    const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          managedHomeRuntime: 'host',
+          wslDistro: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const observedSelections: (string | null)[] = []
+    let failReconciliation = true
+    const runtimeHome = createRuntimeHome()
+    runtimeHome.syncForCurrentSelection.mockImplementation(() => {
+      observedSelections.push(store.getSettings().activeCodexManagedAccountId)
+      if (failReconciliation) {
+        failReconciliation = false
+        throw new Error('activation failed')
+      }
+    })
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      store as never,
+      createRateLimits() as never,
+      runtimeHome as never
+    )
+
+    await expect(service.removeAccount('account-1')).rejects.toThrow('activation failed')
+    expect(observedSelections).toEqual([null, 'account-1'])
+    expect(store.getSettings().codexManagedAccounts.map(({ id }) => id)).toEqual(['account-1'])
+    expect(existsSync(managedHomePath)).toBe(true)
+
+    await expect(service.removeAccount('account-1')).resolves.toMatchObject({ accounts: [] })
+    expect(existsSync(managedHomePath)).toBe(false)
   })
 
   it('refuses to remove a managed home owned by a different account', async () => {
@@ -2588,7 +2661,21 @@ describe('CodexAccountService config sync', () => {
   })
 
   it('fails only reset operations closed when the durable ledger is corrupt', async () => {
-    const settings = createSettings()
+    const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          managedHomeRuntime: 'host',
+          wslDistro: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    })
     const store = createStore(settings)
     store.getCodexResetCreditAttemptLedger.mockImplementation(() => {
       throw new Error('Codex reset-credit attempt ledger is corrupt')
@@ -2604,7 +2691,9 @@ describe('CodexAccountService config sync', () => {
       createRuntimeHome() as never
     )
 
-    expect(service.listAccounts()).toMatchObject({ accounts: [] })
+    expect(service.listAccounts()).toMatchObject({
+      accounts: [expect.objectContaining({ id: 'account-1' })]
+    })
     await expect(
       service.consumeRateLimitResetCredit('dddddddd-dddd-4ddd-8ddd-dddddddddddd', {
         target: { runtime: 'host', wslDistro: null },
@@ -2617,6 +2706,13 @@ describe('CodexAccountService config sync', () => {
       'Codex reset-credit attempt ledger is corrupt'
     )
     expect(consume).not.toHaveBeenCalled()
+
+    await expect(service.removeAccount('account-1')).resolves.toMatchObject({ accounts: [] })
+    expect(existsSync(managedHomePath)).toBe(false)
+    expect(store.updateCodexAccountSettingsAndFlush).toHaveBeenCalledOnce()
+    expect(() => store.getCodexResetCreditAttemptLedger()).toThrow(
+      'Codex reset-credit attempt ledger is corrupt'
+    )
   })
 
   it('rejects a stale offer scope before calling the provider and permits a corrected retry key', async () => {
@@ -3060,7 +3156,7 @@ describe('CodexAccountService config sync', () => {
     expect(store.getCodexResetCreditAttemptLedger().attempts).toEqual([])
   })
 
-  it('keeps reset attempts fail-closed when removal cannot persist their purge', async () => {
+  it('keeps account removal retryable when reset-attempt purge cannot persist', async () => {
     const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
     const account = {
       id: 'account-1',
@@ -3105,13 +3201,60 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
-    vi.spyOn(store, 'replaceCodexResetCreditAttemptLedgerAndFlush').mockImplementationOnce(() => {
-      throw new Error('disk full')
-    })
+    failNextAccountRemovalPersistence(store)
 
     await expect(service.removeAccount('account-1')).rejects.toThrow('disk full')
+    expect(store.getSettings().codexManagedAccounts.map(({ id }) => id)).toEqual(['account-1'])
+    expect(existsSync(managedHomePath)).toBe(true)
     await expect(service.consumeCurrentRateLimitResetCredit()).rejects.toThrow('unknown outcome')
     expect(consume).not.toHaveBeenCalled()
+
+    await expect(service.removeAccount('account-1')).resolves.toMatchObject({ accounts: [] })
+    expect(existsSync(managedHomePath)).toBe(false)
+    expect(store.getCodexResetCreditAttemptLedger().attempts).toEqual([])
+    await expect(service.consumeCurrentRateLimitResetCredit()).resolves.toEqual({
+      outcome: 'reset',
+      state
+    })
+    expect(consume).toHaveBeenCalledTimes(1)
+  })
+
+  it('restores the selected runtime when account removal persistence fails', async () => {
+    const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          managedHomeRuntime: 'host',
+          wslDistro: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const observedSelections: (string | null)[] = []
+    const runtimeHome = createRuntimeHome()
+    runtimeHome.syncForCurrentSelection.mockImplementation(() => {
+      observedSelections.push(store.getSettings().activeCodexManagedAccountId)
+    })
+    failNextAccountRemovalPersistence(store)
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      store as never,
+      createRateLimits() as never,
+      runtimeHome as never
+    )
+
+    await expect(service.removeAccount('account-1')).rejects.toThrow('disk full')
+
+    expect(observedSelections).toEqual([null, 'account-1'])
+    expect(store.getSettings().activeCodexManagedAccountId).toBe('account-1')
+    expect(existsSync(managedHomePath)).toBe(true)
   })
 
   it('does not reset a different system-default target after waiting in the mutation queue', async () => {

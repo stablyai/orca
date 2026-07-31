@@ -41,6 +41,7 @@ import { SshConnectionStore } from './ssh/ssh-connection-store'
 import { setSourceControlActionDefault } from '../shared/source-control-ai-actions'
 import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { closeTerminalTabInWorkspaceSession } from '../shared/workspace-session-terminal-tab-close'
+import type { CodexResetCreditAttemptLedger } from '../shared/codex-reset-credit-attempt-ledger'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
@@ -158,6 +159,37 @@ function writeDataFile(data: unknown): void {
 
 function readDataFile(): unknown {
   return JSON.parse(readFileSync(dataFile(), 'utf-8'))
+}
+
+function createPersistedCodexAccount(): GlobalSettings['codexManagedAccounts'][number] {
+  return {
+    id: 'account-host',
+    email: 'user@example.com',
+    managedHomePath: join(testState.dir, 'account-host', 'home'),
+    managedHomeRuntime: 'host',
+    wslDistro: null,
+    createdAt: 1,
+    updatedAt: 1,
+    lastAuthenticatedAt: 1
+  }
+}
+
+function createPendingCodexResetLedger(): CodexResetCreditAttemptLedger {
+  return {
+    version: 1,
+    attempts: [
+      {
+        idempotencyKey: '11111111-1111-4111-8111-111111111111',
+        expectedScope: {
+          target: { runtime: 'host', wslDistro: null },
+          accountId: 'account-host',
+          accountRevision: 42,
+          offerRevision: 'v1:offer'
+        },
+        state: 'providerPending'
+      }
+    ]
+  }
 }
 
 function symlinkDirectorySync(target: string, linkPath: string): void {
@@ -389,19 +421,148 @@ describe('Store', () => {
     expect(store.getCodexResetCreditAttemptLedger()).toEqual(before)
   })
 
+  it('persists Codex account removal and reset-ledger cleanup in one flush', async () => {
+    const store = await createStore()
+    const account = createPersistedCodexAccount()
+    store.updateSettings({
+      codexManagedAccounts: [account],
+      activeCodexManagedAccountId: 'account-host',
+      activeCodexManagedAccountIdsByRuntime: { host: 'account-host', wsl: {} }
+    })
+    store.replaceCodexResetCreditAttemptLedgerAndFlush(createPendingCodexResetLedger())
+
+    store.updateCodexAccountSettingsAndResetLedgerAndFlush(
+      {
+        codexManagedAccounts: [],
+        activeCodexManagedAccountId: null,
+        activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} }
+      },
+      { version: 1, attempts: [] }
+    )
+
+    expect(store.getSettings().codexManagedAccounts).toEqual([])
+    expect(store.getCodexResetCreditAttemptLedger().attempts).toEqual([])
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.settings.codexManagedAccounts).toEqual([])
+    expect(persisted.codexResetCreditAttemptLedger?.attempts).toEqual([])
+  })
+
+  it('restores Codex account settings when pre-removal reconciliation fails', async () => {
+    const store = await createStore()
+    const account = createPersistedCodexAccount()
+    store.updateSettings({
+      codexManagedAccounts: [account],
+      activeCodexManagedAccountId: 'account-host',
+      activeCodexManagedAccountIdsByRuntime: { host: 'account-host', wsl: {} }
+    })
+    store.flushOrThrow()
+    const beforeSettings = structuredClone(store.getSettings())
+
+    expect(() =>
+      store.withCodexAccountSettingsPreview(
+        {
+          codexManagedAccounts: [],
+          activeCodexManagedAccountId: null,
+          activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} }
+        },
+        () => {
+          expect(store.getSettings().codexManagedAccounts).toEqual([])
+          throw new Error('activation failed')
+        }
+      )
+    ).toThrow('activation failed')
+
+    expect(store.getSettings()).toEqual(beforeSettings)
+    expect((readDataFile() as PersistedState).settings).toEqual(beforeSettings)
+  })
+
+  it('rejects asynchronous Codex account settings preview callbacks', async () => {
+    const store = await createStore()
+    const beforeSettings = structuredClone(store.getSettings())
+
+    expect(() =>
+      store.withCodexAccountSettingsPreview(
+        {
+          codexManagedAccounts: [],
+          activeCodexManagedAccountId: null,
+          activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} }
+        },
+        () => Promise.reject(new Error('async failed'))
+      )
+    ).toThrow('Codex account settings preview callback must be synchronous')
+
+    await Promise.resolve()
+    expect(store.getSettings()).toEqual(beforeSettings)
+  })
+
+  it('rolls Codex account settings and reset ledger back together when removal flush fails', async () => {
+    const store = await createStore()
+    const account = createPersistedCodexAccount()
+    const ledger = createPendingCodexResetLedger()
+    store.updateSettings({
+      codexManagedAccounts: [account],
+      activeCodexManagedAccountId: 'account-host',
+      activeCodexManagedAccountIdsByRuntime: { host: 'account-host', wsl: {} }
+    })
+    store.replaceCodexResetCreditAttemptLedgerAndFlush(ledger)
+    const beforeSettings = structuredClone(store.getSettings())
+    vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+
+    expect(() =>
+      store.updateCodexAccountSettingsAndResetLedgerAndFlush(
+        {
+          codexManagedAccounts: [],
+          activeCodexManagedAccountId: null,
+          activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} }
+        },
+        { version: 1, attempts: [] }
+      )
+    ).toThrow('disk full')
+
+    expect(store.getSettings()).toEqual(beforeSettings)
+    expect(store.getCodexResetCreditAttemptLedger()).toEqual(ledger)
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.settings).toEqual(beforeSettings)
+    expect(persisted.codexResetCreditAttemptLedger).toEqual(ledger)
+  })
+
   it('preserves a corrupt Codex reset ledger as a fail-closed read error', async () => {
+    const account = createPersistedCodexAccount()
+    const corruptLedger = {
+      version: 1,
+      attempts: [{ state: 'providerPending' }]
+    }
+    const initialState = getDefaultPersistedState(testState.dir)
     writeDataFile({
-      ...getDefaultPersistedState(testState.dir),
-      codexResetCreditAttemptLedger: {
-        version: 1,
-        attempts: [{ state: 'providerPending' }]
-      }
+      ...initialState,
+      settings: {
+        ...initialState.settings,
+        codexManagedAccounts: [account],
+        activeCodexManagedAccountId: 'account-host',
+        activeCodexManagedAccountIdsByRuntime: { host: 'account-host', wsl: {} }
+      },
+      codexResetCreditAttemptLedger: corruptLedger
     })
 
     const store = await createStore()
     expect(() => store.getCodexResetCreditAttemptLedger()).toThrow(
       'Codex reset-credit attempt ledger is corrupt'
     )
+    store.updateCodexAccountSettingsAndFlush({
+      codexManagedAccounts: [],
+      activeCodexManagedAccountId: null,
+      activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} }
+    })
+
+    expect(store.getSettings().codexManagedAccounts).toEqual([])
+    expect(() => store.getCodexResetCreditAttemptLedger()).toThrow(
+      'Codex reset-credit attempt ledger is corrupt'
+    )
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.settings.codexManagedAccounts).toEqual([])
+    expect(persisted.codexResetCreditAttemptLedger).toEqual(corruptLedger)
   })
 
   it('does not restore a terminal tab after its durable close flush returns', async () => {

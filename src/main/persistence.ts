@@ -2783,6 +2783,11 @@ export type StoreOptions = {
   dataFile?: string
 }
 
+type CodexAccountSettingsUpdate = Pick<
+  GlobalSettings,
+  'codexManagedAccounts' | 'activeCodexManagedAccountId' | 'activeCodexManagedAccountIdsByRuntime'
+>
+
 export class Store {
   private state: PersistedState
   private readonly dataFile: string
@@ -4208,6 +4213,66 @@ export class Store {
       // Why: callers use a successful return as the durability barrier before
       // handing a scarce-credit mutation to the provider.
       this.state.codexResetCreditAttemptLedger = previous
+      throw error
+    }
+  }
+
+  updateCodexAccountSettingsAndFlush(updates: CodexAccountSettingsUpdate): void {
+    this.updateCodexAccountStateAndFlush(updates)
+  }
+
+  withCodexAccountSettingsPreview<T>(updates: CodexAccountSettingsUpdate, action: () => T): T {
+    if (this.writesFrozen) {
+      throw new Error('Cannot preview Codex account removal while writes are frozen')
+    }
+    const previousSettings = this.state.settings
+    this.state.settings = { ...previousSettings, ...updates }
+    try {
+      const result = action()
+      const resultType = typeof result
+      if (
+        result !== null &&
+        (resultType === 'object' || resultType === 'function') &&
+        typeof (result as { then?: unknown }).then === 'function'
+      ) {
+        // Why: consume a rejected forbidden callback so the contract error does not leak an unhandled rejection.
+        void Promise.resolve(result).catch(() => {})
+        throw new Error('Codex account settings preview callback must be synchronous')
+      }
+      return result
+    } finally {
+      this.state.settings = previousSettings
+    }
+  }
+
+  updateCodexAccountSettingsAndResetLedgerAndFlush(
+    updates: CodexAccountSettingsUpdate,
+    ledger: CodexResetCreditAttemptLedger
+  ): void {
+    this.updateCodexAccountStateAndFlush(updates, ledger)
+  }
+
+  private updateCodexAccountStateAndFlush(
+    updates: CodexAccountSettingsUpdate,
+    ledger?: CodexResetCreditAttemptLedger
+  ): void {
+    if (this.writesFrozen) {
+      throw new Error('Cannot persist Codex account removal while writes are frozen')
+    }
+    const nextLedger = ledger ? parseCodexResetCreditAttemptLedger(ledger) : undefined
+    const previousSettings = this.state.settings
+    const previousLedger = this.state.codexResetCreditAttemptLedger
+      ? structuredClone(this.state.codexResetCreditAttemptLedger)
+      : undefined
+    try {
+      this.updateSettings(updates)
+      if (nextLedger !== undefined) {
+        this.state.codexResetCreditAttemptLedger = nextLedger
+      }
+      this.flushOrThrow()
+    } catch (error) {
+      this.state.settings = previousSettings
+      this.state.codexResetCreditAttemptLedger = previousLedger
       throw error
     }
   }
