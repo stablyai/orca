@@ -70,24 +70,30 @@ export async function readLatestCodexSessionUsedPercent(
 ): Promise<number | null> {
   try {
     const files = await listFiles()
-    let latestPath: string | null = null
-    let latestMtimeMs = -Infinity
+    const candidates: { path: string; mtimeMs: number }[] = []
     for (const filePath of files) {
       try {
         const info = await statFile(filePath)
-        if (info.mtimeMs > latestMtimeMs) {
-          latestMtimeMs = info.mtimeMs
-          latestPath = filePath
-        }
+        candidates.push({ path: filePath, mtimeMs: info.mtimeMs })
       } catch {
         // Missing/unreadable file — another session log may still qualify.
       }
     }
-    if (!latestPath) {
-      return null
+    // Why: the newest session log may not have a token_count event yet (e.g. just
+    // created, no turns sent) — fall through to older logs rather than going dark.
+    candidates.sort((a, b) => b.mtimeMs - a.mtimeMs)
+    for (const { path } of candidates) {
+      try {
+        const content = await readFileFn(path)
+        const usedPercent = extractCodexSessionUsedPercentFromLog(content)
+        if (usedPercent !== null) {
+          return usedPercent
+        }
+      } catch {
+        // Unreadable file — try the next-newest candidate.
+      }
     }
-    const content = await readFileFn(latestPath)
-    return extractCodexSessionUsedPercentFromLog(content)
+    return null
   } catch {
     return null
   }

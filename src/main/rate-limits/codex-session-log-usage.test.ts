@@ -134,4 +134,39 @@ describe('readLatestCodexSessionUsedPercent', () => {
     )
     expect(result).toBeNull()
   })
+
+  it('falls back to an older session file when the newest has no usable token_count event', async () => {
+    const listFiles = vi
+      .fn()
+      .mockResolvedValue(['/sessions/older.jsonl', '/sessions/newest.jsonl'])
+    const statFile = vi.fn(async (filePath: string) => ({
+      mtimeMs: filePath.includes('newest') ? 2_000 : 1_000
+    }))
+    const readFileFn = vi.fn(async (filePath: string) =>
+      filePath.includes('newest')
+        ? JSON.stringify({ type: 'session_meta', payload: { id: 'abc' } })
+        : tokenCountLine({ total_token_usage: { total_tokens: 40 }, model_context_window: 100 })
+    )
+    const result = await readLatestCodexSessionUsedPercent(listFiles, statFile, readFileFn)
+    expect(result).toBe(40)
+    expect(readFileFn).toHaveBeenCalledWith('/sessions/newest.jsonl')
+    expect(readFileFn).toHaveBeenCalledWith('/sessions/older.jsonl')
+  })
+
+  it('falls back to an older session file when reading the newest throws', async () => {
+    const listFiles = vi
+      .fn()
+      .mockResolvedValue(['/sessions/older.jsonl', '/sessions/newest.jsonl'])
+    const statFile = vi.fn(async (filePath: string) => ({
+      mtimeMs: filePath.includes('newest') ? 2_000 : 1_000
+    }))
+    const readFileFn = vi.fn(async (filePath: string) => {
+      if (filePath.includes('newest')) {
+        throw new Error('permission denied')
+      }
+      return tokenCountLine({ total_token_usage: { total_tokens: 5 }, model_context_window: 100 })
+    })
+    const result = await readLatestCodexSessionUsedPercent(listFiles, statFile, readFileFn)
+    expect(result).toBe(5)
+  })
 })
