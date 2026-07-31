@@ -5,11 +5,13 @@ import {
   type DaemonLauncher,
   type DaemonProcessHandle
 } from './daemon-spawner'
+import { parseDaemonReadyIdentity, type DaemonReadyIdentity } from './daemon-ready-identity'
 
 const READY_TIMEOUT_MS = 10_000
 
 export type ProductionLauncherOptions = {
   getDaemonEntryPath: () => string
+  getAppVersion: () => string
 }
 
 export function createProductionLauncher(opts: ProductionLauncherOptions): DaemonLauncher {
@@ -45,9 +47,9 @@ export function createProductionLauncher(opts: ProductionLauncherOptions): Daemo
       }
     )
 
-    let startedAtMs: number
+    let readyIdentity: DaemonReadyIdentity
     try {
-      startedAtMs = await waitForReady(child)
+      readyIdentity = await waitForReady(child)
     } catch (error) {
       return rejectAfterChildCleanup(child, error)
     }
@@ -60,8 +62,9 @@ export function createProductionLauncher(opts: ProductionLauncherOptions): Daemo
           pidPath,
           serializeDaemonPidFile({
             pid: child.pid as number,
-            startedAtMs,
+            ...readyIdentity,
             entryPath,
+            appVersion: opts.getAppVersion(),
             launchNonce
           }),
           { mode: 0o600, flag: 'wx' }
@@ -81,7 +84,7 @@ export function createProductionLauncher(opts: ProductionLauncherOptions): Daemo
   }
 }
 
-function waitForReady(child: ChildProcess): Promise<number> {
+function waitForReady(child: ChildProcess): Promise<DaemonReadyIdentity> {
   return new Promise((resolve, reject) => {
     let timeout: ReturnType<typeof setTimeout> | undefined
     let settled = false
@@ -106,8 +109,8 @@ function waitForReady(child: ChildProcess): Promise<number> {
         if (settled) {
           return
         }
-        const startedAtMs = (msg as { startedAtMs?: unknown }).startedAtMs
-        if (typeof startedAtMs !== 'number' || !Number.isFinite(startedAtMs) || startedAtMs <= 0) {
+        const readyIdentity = parseDaemonReadyIdentity(msg)
+        if (!readyIdentity) {
           fail(new Error('Daemon readiness identity is incomplete'))
           return
         }
@@ -115,7 +118,7 @@ function waitForReady(child: ChildProcess): Promise<number> {
         // Why: the daemon is detached after readiness, so startup listeners
         // must not keep the child process closure alive for the daemon lifetime.
         cleanupStartupListeners()
-        resolve(startedAtMs)
+        resolve(readyIdentity)
       }
     }
     function onError(err: Error): void {

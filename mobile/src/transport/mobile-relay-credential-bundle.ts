@@ -1,8 +1,12 @@
-import * as SecureStore from 'expo-secure-store'
 import { Platform } from 'react-native'
 import { z } from 'zod'
 import type { DeviceCredentialInstalled } from '../../../src/shared/mobile-relay-credential-contract'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
+import {
+  deletePairingKeychainItem,
+  readPairingKeychainItem,
+  writePairingKeychainItem
+} from './pairing-keychain'
 
 const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 const ResumeCredentialSchema = z
@@ -38,10 +42,6 @@ export const MobileRelayCredentialBundleSchema = z
 
 export type MobileRelayCredentialBundle = z.infer<typeof MobileRelayCredentialBundleSchema>
 
-const KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = {
-  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY
-}
-
 function credentialKey(hostId: string): string {
   return `orca.mobile-relay.credentials.${hostId}`
 }
@@ -74,7 +74,7 @@ export async function readMobileRelayCredentialBundle(
   hostId: string
 ): Promise<MobileRelayCredentialBundle | null> {
   requireNativeSecretStore()
-  const raw = await SecureStore.getItemAsync(credentialKey(hostId), KEYCHAIN_OPTIONS)
+  const raw = await readPairingKeychainItem(credentialKey(hostId))
   if (raw === null) {
     return null
   }
@@ -91,18 +91,14 @@ export async function writeMobileRelayCredentialBundle(
 ): Promise<void> {
   requireNativeSecretStore()
   const validated = MobileRelayCredentialBundleSchema.parse(bundle)
-  await SecureStore.setItemAsync(
-    credentialKey(validated.hostId),
-    JSON.stringify(validated),
-    KEYCHAIN_OPTIONS
-  )
+  await writePairingKeychainItem(credentialKey(validated.hostId), JSON.stringify(validated))
 }
 
 export async function deleteMobileRelayCredentialBundle(hostId: string): Promise<void> {
   if (Platform.OS === 'web') {
     return
   }
-  await SecureStore.deleteItemAsync(credentialKey(hostId), KEYCHAIN_OPTIONS)
+  await deletePairingKeychainItem(credentialKey(hostId))
 }
 
 function requireNativeSecretStore(): void {

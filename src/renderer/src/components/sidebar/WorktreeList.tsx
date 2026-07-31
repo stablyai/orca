@@ -95,9 +95,11 @@ import {
   type PinnedWorktreeDisplayPolicy
 } from './worktree-list-groups'
 import {
+  buildLineageRowRekeyMap,
   estimateRenderRowSize,
   extractWorktreeVirtualRowIndexes,
   getActiveStickyIndexesForScroll,
+  getRenderRowKey,
   getStickyHeaderIndexes,
   getVirtualRowTransform,
   pruneStaleVirtualRowElementCache,
@@ -1210,30 +1212,9 @@ function buildRenderableRows(rows: HostSectionRow[]): RenderRow[] {
   return renderRows
 }
 
-export function getRenderRowKey(row: RenderRow): string {
-  if (row.type === 'host-header') {
-    return `host:${row.hostId}`
-  }
-  if (row.type === 'header') {
-    return `hdr:${row.key}`
-  }
-  if (row.type === 'lineage-group') {
-    return `lineage-group:${row.key}`
-  }
-  if (row.type === 'imported-worktrees-card') {
-    return `imported:${row.key}`
-  }
-  if (row.type === 'new-external-worktrees-inbox') {
-    return `inbox:${row.key}`
-  }
-  if (row.type === 'pending-creation') {
-    return `pending:${row.creationId}`
-  }
-  if (row.type === 'folder-workspace') {
-    return `folder-workspace:${row.folderWorkspace.id}`
-  }
-  return `wt:${row.rowKey}`
-}
+// Why: getRenderRowKey lives with the other virtual-row helpers now; keep the
+// long-standing import path working for callers that reach for it here.
+export { getRenderRowKey }
 
 export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup[] {
   const groups: WorktreeDragGroup[] = []
@@ -2432,6 +2413,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [renderRows]
   )
   const activeRenderRowKeys = useMemo(() => new Set(renderRows.map(getRenderRowKey)), [renderRows])
+  const lineageRowRekeys = useMemo(() => buildLineageRowRekeyMap(renderRows), [renderRows])
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
   const activeStickyIndexes = getActiveStickyIndexesForScroll({
@@ -2489,6 +2471,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     getItemElementKey: getVirtualRowKey,
     getRowKey: getRenderRowKey,
     itemElementSelector: '[data-worktree-virtual-row]',
+    rekeyedRowKeys: lineageRowRekeys,
     rows: renderRows,
     scrollElementRef: scrollRef,
     scrollOffsetRef,

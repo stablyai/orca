@@ -54,6 +54,9 @@ export type SendRequestOptions = {
    *  against the post-connect clock, and squeezing them to the floor after a slow
    *  reconnect would fail sends that used to land. */
   budgetSpansConnect?: boolean
+  /** Reject immediately when not connected — a send parked in the connect wait
+   *  replays stale terminal bytes into the PTY after reconnect. */
+  failWhenDisconnected?: boolean
 }
 
 type SubscribeOptions = {
@@ -1013,6 +1016,9 @@ export function connect(
       const budget = openRpcRequestBudget(options)
       const waitStart = budget.startedAt
       const wasConnected = state === 'connected'
+      if (options?.failWhenDisconnected && !wasConnected) {
+        throw new Error(`Not connected: ${method}`)
+      }
       await waitForConnected(options?.timeoutMs)
       if (!wasConnected) {
         console.log('[net] sendRequest waited for connect', {

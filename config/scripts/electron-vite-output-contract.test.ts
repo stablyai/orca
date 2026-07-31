@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs'
+import { EventEmitter } from 'node:events'
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { electronViteConfig } from '../../electron.vite.config'
+import { createBootstrapFatalExitBanner, electronViteConfig } from '../../electron.vite.config'
+import { BOOTSTRAP_FATAL_EXIT_GUARD_KEY } from '../../src/main/startup/bootstrap-fatal-exit-guard'
 
 const targetConfig = readFileSync('config/electron-vite-target.config.ts', 'utf8')
 const devRunner = readFileSync('config/scripts/run-electron-vite-dev.mjs', 'utf8')
@@ -29,6 +32,35 @@ describe('Electron Vite output contract', () => {
     expect(external('node:fs', undefined, false)).toBe(true)
     expect(external('@xterm/headless', undefined, false)).toBe(false)
     expect(external('@xterm/addon-serialize', undefined, false)).toBe(false)
+    expect(external('zod', undefined, false)).toBe(false)
+    expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('zod')
+  })
+
+  it('exits when a static import fails before source error guards load', () => {
+    const processMock = new EventEmitter() as EventEmitter & {
+      exit: (code: number) => void
+      exitCode?: number
+    }
+    let scheduledExit: (() => void) | null = null
+    let exitedWith: number | null = null
+    processMock.exit = (code) => {
+      exitedWith = code
+    }
+    const context = {
+      process: processMock,
+      setImmediate: (callback: () => void) => {
+        scheduledExit = callback
+      }
+    }
+
+    runInNewContext(createBootstrapFatalExitBanner(), context)
+    processMock.emit('uncaughtException', new Error("Cannot find module 'zod'"))
+
+    expect(processMock.exitCode).toBe(1)
+    expect(scheduledExit).not.toBeNull()
+    scheduledExit?.()
+    expect(exitedWith).toBe(1)
+    expect(context).toHaveProperty(BOOTSTRAP_FATAL_EXIT_GUARD_KEY)
   })
 
   it('isolates renderer entry side effects behind strict facades', () => {

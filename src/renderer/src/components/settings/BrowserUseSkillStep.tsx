@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
-import { StepBadge } from './BrowserUseStepBadge'
+import { StepBadge } from './SetupStepBadge'
 import { translate } from '@/i18n/i18n'
 
 type Props = {

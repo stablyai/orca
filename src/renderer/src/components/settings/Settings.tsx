@@ -1281,7 +1281,7 @@ function Settings(): React.JSX.Element {
                     title={translate('auto.components.settings.Settings.linearTitle', 'Linear')}
                     description={translate(
                       'auto.components.settings.Settings.linearDescription',
-                      'Give agents the skill to read and update your linked Linear tickets.'
+                      'How Linear works in Orca, setup checklist, agent skill, and example prompts.'
                     )}
                     searchEntries={getSectionSearchEntries('linear')}
                   >
@@ -1431,8 +1431,8 @@ function Settings(): React.JSX.Element {
                   id="tasks"
                   title={translate('auto.components.settings.Settings.11faa2f7dd', 'Task Sources')}
                   description={translate(
-                    'auto.components.settings.Settings.dd72ed437a',
-                    'Choose which task providers appear in the Tasks page and sidebar.'
+                    'auto.components.settings.Settings.tasksDescription',
+                    'Connect providers, install the Linear skill, and choose what appears in Tasks.'
                   )}
                   searchEntries={getSectionSearchEntries('tasks')}
                 >
