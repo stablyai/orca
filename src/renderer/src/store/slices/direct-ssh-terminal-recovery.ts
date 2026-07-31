@@ -40,6 +40,19 @@ function clearPtyBinding(
   }
 }
 
+/** Prefer the live tab/leaf id; fall back to lastKnown so sleep→wake still reattaches. */
+export function resolveDirectSshReconnectSessionId(
+  state: Pick<DirectSshTerminalBindingState, 'ptyIdsByTabId' | 'lastKnownRelayPtyIdByTabId'>,
+  tab: TerminalTab
+): string | null {
+  return (
+    tab.ptyId ??
+    state.ptyIdsByTabId[tab.id]?.[0] ??
+    state.lastKnownRelayPtyIdByTabId[tab.id] ??
+    null
+  )
+}
+
 export function clearDirectSshTerminalBindings(
   state: DirectSshTerminalBindingState,
   terminalWorkspaceKeys: ReadonlySet<string>,
@@ -50,6 +63,7 @@ export function clearDirectSshTerminalBindings(
   const pendingCodexPaneRestartIds = { ...state.pendingCodexPaneRestartIds }
   const codexRestartNoticeByPtyId = { ...state.codexRestartNoticeByPtyId }
   const scopedTabIds = new Set<string>()
+  const deferredSessionIdsByTabId: Record<string, string> = {}
   let clearedCount = 0
 
   for (const workspaceKey of terminalWorkspaceKeys) {
@@ -63,6 +77,12 @@ export function clearDirectSshTerminalBindings(
         continue
       }
       scopedTabIds.add(tab.id)
+      // Why (#11791): seed deferred reattach even when ptyId was already null — lastKnown
+      // still names the relay session, and pty-connection only reads deferred/leaf maps.
+      const reconnectSessionId = resolveDirectSshReconnectSessionId(state, tab)
+      if (reconnectSessionId) {
+        deferredSessionIdsByTabId[tab.id] = reconnectSessionId
+      }
       if (tab.ptyId == null) {
         continue
       }
@@ -96,10 +116,11 @@ export function clearDirectSshTerminalBindings(
     directSshPaneRetryByTabId !== state.directSshPaneRetryByTabId ||
     directSshLivePtyBindingByTabId !== state.directSshLivePtyBindingByTabId
   if (clearedCount === 0 && !recoveryChanged) {
-    return { clearedCount, patch: null }
+    return { clearedCount, patch: null, deferredSessionIdsByTabId }
   }
   return {
     clearedCount,
+    deferredSessionIdsByTabId,
     patch: {
       tabsByWorktree,
       ptyIdsByTabId,
@@ -168,6 +189,7 @@ export function invalidateStaleDirectSshTerminalBindings(
       : {}
   return {
     clearedCount: cleared.clearedCount,
+    deferredSessionIdsByTabId: cleared.deferredSessionIdsByTabId,
     patch: { ...authorityState, ...cleared.patch, ...preservedPending }
   }
 }

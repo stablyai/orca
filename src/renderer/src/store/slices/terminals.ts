@@ -197,6 +197,26 @@ function resolveDirectSshTerminalKeys(state: AppState, targetId: string): Set<st
   )
 }
 
+/** Merge disconnect-seeded reattach ids for one SSH target; drop foreign-connection seeds. */
+function mergeDeferredSshSessionIdsForTarget(
+  current: Record<string, string>,
+  seeds: Record<string, string>,
+  targetId: string
+): Record<string, string> {
+  let next: Record<string, string> | null = null
+  for (const [tabId, sessionId] of Object.entries(seeds)) {
+    if (parseAppSshPtyId(sessionId)?.connectionId !== targetId) {
+      continue
+    }
+    if (current[tabId] === sessionId) {
+      continue
+    }
+    next ??= { ...current }
+    next[tabId] = sessionId
+  }
+  return next ?? current
+}
+
 function getPendingActivationSpawnCount(value: boolean | number | undefined): number {
   if (value === true) {
     return 1
@@ -2887,7 +2907,22 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     set((s) => {
       const result = clearDirectSshTerminalBindings(s, resolveDirectSshTerminalKeys(s, targetId))
       clearedCount = result.clearedCount
-      return result.patch ?? s
+      if (!result.patch && Object.keys(result.deferredSessionIdsByTabId).length === 0) {
+        return s
+      }
+      // Why (#11791): after disconnect, remounted panes only reattach via deferred/leaf
+      // session ids — tab.ptyId is null and lastKnown is not read by pty-connection.
+      const deferredSshSessionIdsByTabId = mergeDeferredSshSessionIdsForTarget(
+        s.deferredSshSessionIdsByTabId,
+        result.deferredSessionIdsByTabId,
+        targetId
+      )
+      return {
+        ...result.patch,
+        ...(deferredSshSessionIdsByTabId !== s.deferredSshSessionIdsByTabId
+          ? { deferredSshSessionIdsByTabId }
+          : {})
+      }
     })
     return clearedCount
   },
@@ -2904,7 +2939,20 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         authority
       )
       clearedCount = result.clearedCount
-      return result.patch ?? s
+      if (!result.patch && Object.keys(result.deferredSessionIdsByTabId).length === 0) {
+        return s
+      }
+      const deferredSshSessionIdsByTabId = mergeDeferredSshSessionIdsForTarget(
+        s.deferredSshSessionIdsByTabId,
+        result.deferredSessionIdsByTabId,
+        authority.targetId
+      )
+      return {
+        ...result.patch,
+        ...(deferredSshSessionIdsByTabId !== s.deferredSshSessionIdsByTabId
+          ? { deferredSshSessionIdsByTabId }
+          : {})
+      }
     })
     return clearedCount
   },
