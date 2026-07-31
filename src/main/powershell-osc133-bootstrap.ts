@@ -2,6 +2,12 @@ import { getPowerShellOmpShellWrapper } from './pty/omp-shell-wrapper'
 export { encodePowerShellCommand } from '../shared/powershell-command-encoding'
 
 const POWERSHELL_OSC133_BOOTSTRAP = `# Orca OSC 133 shell integration for PowerShell.
+# Profiles have already loaded normally by the time -EncodedCommand runs.
+# Restore managed ownership before any shell-integration compatibility exit.
+if ($env:ORCA_OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR }
+if ($env:ORCA_MIMOCODE_HOME) { $env:MIMOCODE_HOME = $env:ORCA_MIMOCODE_HOME }
+if ($env:ORCA_CODEX_HOME) { $env:CODEX_HOME = $env:ORCA_CODEX_HOME }
+
 if ((Test-Path variable:global:__OrcaOsc133State) -and
     $null -ne $Global:__OrcaOsc133State.OriginalPrompt) {
     return
@@ -11,7 +17,6 @@ if ($ExecutionContext.SessionState.LanguageMode -ne "FullLanguage") {
     return
 }
 
-# Profiles have already loaded normally by the time -EncodedCommand runs.
 # Wrap the user's final prompt/readline state; do not source profiles here.
 
 # Preserve Windows CJK output by keeping ConPTY on UTF-8 without bypassing
@@ -22,11 +27,7 @@ try {
     $OutputEncoding = [Console]::OutputEncoding
 } catch { Write-Error $_ -ErrorAction Continue }
 
-# Profiles can re-export user defaults after Orca's spawn env is set.
-if ($env:ORCA_OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR }
-if ($env:ORCA_MIMOCODE_HOME) { $env:MIMOCODE_HOME = $env:ORCA_MIMOCODE_HOME }
 ${getPowerShellOmpShellWrapper()}
-if ($env:ORCA_CODEX_HOME) { $env:CODEX_HOME = $env:ORCA_CODEX_HOME }
 
 $Global:__OrcaOsc133State = @{
     OriginalPrompt = $function:prompt
