@@ -10,7 +10,7 @@ import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bund
 import { MobileRelayCredentialRotationController } from './mobile-relay-credential-rotation-controller'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { MobileRelayHostPersistence } from './mobile-relay-host-persistence'
-import { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
+import type { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
 import {
   isFinalRelayFailure,
   openMobileRelayRoute,

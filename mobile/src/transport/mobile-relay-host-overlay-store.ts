@@ -17,11 +17,9 @@ function overlayKey(hostId: string): string {
 }
 
 const overlayWrites = new SecureStoreLatestValueCoordinator(async (hostId, desired) => {
-  if (desired) {
-    await AsyncStorage.setItem(overlayKey(hostId), desired.value)
-  } else {
-    await AsyncStorage.removeItem(overlayKey(hostId))
-  }
+  await (desired
+    ? AsyncStorage.setItem(overlayKey(hostId), desired.value)
+    : AsyncStorage.removeItem(overlayKey(hostId)))
 })
 
 function parseOverlays(raw: string | null): MobileRelayHostOverlay[] | null {

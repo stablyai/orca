@@ -3,7 +3,7 @@ import { RelayPhoneHelloSchema } from '../../../src/shared/mobile-relay-phone-pr
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
 import { isRpcResponse } from './rpc-response-shape'
-import type { RpcResponse } from './types'
+import type { ConnectionState, RpcResponse } from './types'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
 export { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
@@ -16,7 +16,7 @@ type PendingRequest = {
 
 export type PairingCandidateClient = {
   sendRequest(method: string, params?: unknown): Promise<RpcResponse>
-  getState?(): import('./types').ConnectionState
+  getState?(): ConnectionState
   close(): void
 }
 

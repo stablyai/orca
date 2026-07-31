@@ -240,14 +240,12 @@ export function connect(
       return
     }
 
-    if (!opts.continuePass) {
-      activeEndpoint = dialPass.begin(
-        preferredEndpoints,
-        dialPass.resolveOpenMode(lastConnectedAt, reconnectAttempt)
-      )
-    } else {
-      activeEndpoint = dialPass.activeOrFallback(preferredEndpoints)
-    }
+    activeEndpoint = !opts.continuePass
+      ? dialPass.begin(
+          preferredEndpoints,
+          dialPass.resolveOpenMode(lastConnectedAt, reconnectAttempt)
+        )
+      : dialPass.activeOrFallback(preferredEndpoints)
 
     const now = Date.now()
     wsConstructionCounter++

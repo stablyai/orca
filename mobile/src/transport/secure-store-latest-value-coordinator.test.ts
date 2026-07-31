@@ -7,7 +7,7 @@ describe('secure-store latest-value coordinator', () => {
 
   it('retains and retries the latest generation when stale-write repair fails', async () => {
     let finishFirst!: () => void
-    const persisted: Array<string | null> = []
+    const persisted: (string | null)[] = []
     let latestRepairAttempts = 0
     const coordinator = new SecureStoreLatestValueCoordinator(async (_hostId, desired) => {
       const value = desired?.value ?? null

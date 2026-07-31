@@ -45,16 +45,14 @@ export class OrderedDialPass {
   authPinnedEndpoint: string | null = null
 
   begin(preferredEndpoints: readonly string[], mode: DialOrderMode): string {
-    if (this.authPinnedEndpoint) {
-      this.order = [this.authPinnedEndpoint]
-    } else {
-      this.order = buildDialOrder({
-        endpoints: preferredEndpoints,
-        lastGoodEndpoint: this.lastGoodEndpoint,
-        mode,
-        stickyLastGood: mode === 'reconnect' ? this.stickyLastGood : false
-      })
-    }
+    this.order = this.authPinnedEndpoint
+      ? [this.authPinnedEndpoint]
+      : buildDialOrder({
+          endpoints: preferredEndpoints,
+          lastGoodEndpoint: this.lastGoodEndpoint,
+          mode,
+          stickyLastGood: mode === 'reconnect' ? this.stickyLastGood : false
+        })
     this.index = 0
     this.active = true
     return this.order[0] ?? preferredEndpoints[0]!

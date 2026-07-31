@@ -5,8 +5,8 @@ import {
   withEndpointRouteDeadline
 } from './mobile-endpoint-supervisor-support'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
-import { MobileRelayCredentialBundleLoader } from './mobile-relay-credential-bundle-loader'
-import { MobileRelayHostPersistence } from './mobile-relay-host-persistence'
+import type { MobileRelayCredentialBundleLoader } from './mobile-relay-credential-bundle-loader'
+import type { MobileRelayHostPersistence } from './mobile-relay-host-persistence'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import {
   isFinalRelayFailure,

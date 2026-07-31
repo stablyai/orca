@@ -144,10 +144,10 @@ describe('rpc-client ordered endpoint failover (U4)', () => {
     authenticate(mockSockets[1]!)
     expect(client.getState()).toBe('connected')
 
-    mockSockets[mockSockets.length - 1]!.close()
+    mockSockets.at(-1)!.close()
     expect(client.getState()).toBe('reconnecting')
     await vi.advanceTimersByTimeAsync(500)
-    expect(mockSockets[mockSockets.length - 1]!.endpoint).toBe(LAN)
+    expect(mockSockets.at(-1)!.endpoint).toBe(LAN)
     client.close()
   })
 
@@ -158,15 +158,15 @@ describe('rpc-client ordered endpoint failover (U4)', () => {
     authenticate(mockSockets[1]!)
 
     // Drop; sticky reconnect tries LAN first and misses once.
-    mockSockets[mockSockets.length - 1]!.close()
+    mockSockets.at(-1)!.close()
     await vi.advanceTimersByTimeAsync(500)
-    const stickyLan = mockSockets[mockSockets.length - 1]!
+    const stickyLan = mockSockets.at(-1)!
     expect(stickyLan.endpoint).toBe(LAN)
     stickyLan.emitCloseOnClose = false
     await vi.advanceTimersByTimeAsync(12_000)
 
     // Same pass continues preferred order → Tailscale can recover without give-up.
-    const next = mockSockets[mockSockets.length - 1]!
+    const next = mockSockets.at(-1)!
     expect(next.endpoint).toBe(TS)
     // One bump for the reconnect pass that started after the live drop (KTD3).
     expect(client.getReconnectAttempt()).toBe(1)
@@ -184,7 +184,7 @@ describe('rpc-client ordered endpoint failover (U4)', () => {
     first.receive('encrypted:{"type":"e2ee_error","error":{"code":"unauthorized"}}')
     expect(client.getState()).toBe('reconnecting')
     await vi.advanceTimersByTimeAsync(500)
-    expect(mockSockets[mockSockets.length - 1]!.endpoint).toBe(TS)
+    expect(mockSockets.at(-1)!.endpoint).toBe(TS)
     client.close()
   })
 
@@ -196,12 +196,12 @@ describe('rpc-client ordered endpoint failover (U4)', () => {
     first.receive('encrypted:{"type":"e2ee_error","error":{"code":"unauthorized"}}')
 
     await vi.advanceTimersByTimeAsync(500)
-    const pinnedRetry = mockSockets[mockSockets.length - 1]!
+    const pinnedRetry = mockSockets.at(-1)!
     expect(pinnedRetry.endpoint).toBe(TS)
     pinnedRetry.emitCloseOnClose = false
     await vi.advanceTimersByTimeAsync(12_000)
 
-    const alternative = mockSockets[mockSockets.length - 1]!
+    const alternative = mockSockets.at(-1)!
     expect(alternative.endpoint).toBe(LAN)
     authenticate(alternative)
     expect(client.getState()).toBe('connected')
@@ -214,18 +214,18 @@ describe('rpc-client ordered endpoint failover (U4)', () => {
     await vi.advanceTimersByTimeAsync(12_000)
     authenticate(mockSockets[1]!)
 
-    mockSockets[mockSockets.length - 1]!.close()
+    mockSockets.at(-1)!.close()
     await vi.advanceTimersByTimeAsync(500)
     // Sticky LAN miss…
-    mockSockets[mockSockets.length - 1]!.emitCloseOnClose = false
+    mockSockets.at(-1)!.emitCloseOnClose = false
     await vi.advanceTimersByTimeAsync(12_000)
     // …then TS miss → pass exhausted (attempt bumps once for this full pass).
-    mockSockets[mockSockets.length - 1]!.emitCloseOnClose = false
+    mockSockets.at(-1)!.emitCloseOnClose = false
     await vi.advanceTimersByTimeAsync(12_000)
     expect(client.getReconnectAttempt()).toBe(2)
 
     await vi.advanceTimersByTimeAsync(1_000)
-    expect(mockSockets[mockSockets.length - 1]!.endpoint).toBe(TS)
+    expect(mockSockets.at(-1)!.endpoint).toBe(TS)
     client.close()
   })
 
