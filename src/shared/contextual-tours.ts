@@ -153,7 +153,7 @@ export const CONTEXTUAL_TOURS = [
       },
       {
         title: 'Find the results',
-        body: 'Runs show when automations executed, what happened, and where to inspect their output.',
+        body: 'Runs show when automations ran, what happened, and where to inspect their output.',
         targetSelector: '[data-contextual-tour-target="automations-runs"]'
       }
     ]

@@ -110,7 +110,7 @@ export function measureContextualTourOverlayRenderState(args: {
       : args.tour.id === 'automations' && args.activeStepIndex === 1
         ? translate(
             'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.body',
-            'Runs show when automations executed, what happened, and where to inspect their output.'
+            'Runs show when automations ran, what happened, and where to inspect their output.'
           )
         : activeStep
           ? getContextualTourStepCopy(activeStep)
