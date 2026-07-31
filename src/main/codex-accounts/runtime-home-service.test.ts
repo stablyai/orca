@@ -16,6 +16,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { GlobalSettings } from '../../shared/types'
+import type * as ShellStartupEnv from '../pty/shell-startup-env'
 
 const testState = {
   userDataDir: '',
@@ -280,6 +281,10 @@ describe('CodexRuntimeHomeService', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
+    vi.doMock('../pty/shell-startup-env', async () => ({
+      ...(await vi.importActual<typeof ShellStartupEnv>('../pty/shell-startup-env')),
+      isShellStartupEnvProbeSupported: () => true
+    }))
     testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-runtime-home-'))
     testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-home-'))
     testState.previousUserDataPath = process.env.ORCA_USER_DATA_PATH
