@@ -244,6 +244,11 @@ import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
 import { persistedUIValuesEqual } from '../shared/persisted-ui-equality'
 import { ActiveViewPreference } from './active-view-preference'
 import {
+  ClaudeLiveSessions,
+  normalizeClaudeLivePtySessionIds
+} from './claude-live-sessions'
+import { PtyBindings } from './pty-bindings'
+import {
   normalizeFolderWorkspaceName,
   normalizeFolderWorkspaces
 } from '../shared/folder-workspaces'
@@ -2178,32 +2183,8 @@ function remapAcknowledgedAgentPaneKeys(
   return { acknowledgements: next, changed }
 }
 
-// Why: bounds a corrupt/bloated persisted list — the gate only needs the few Claude sessions a daemon can keep alive.
-const MAX_CLAUDE_LIVE_PTY_SESSION_IDS = 200
-
 // Why: bound removed-SSH-target history so remove/re-add churn can't grow the file unbounded.
 const MAX_REMOVED_SSH_TARGET_TOMBSTONES = 50
-
-function normalizeClaudeLivePtySessionIds(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return []
-  }
-  // Why: scan newest-first so the cap keeps the most recent ids, matching addClaudeLivePtySessionId's eviction policy.
-  const ids: string[] = []
-  for (let index = value.length - 1; index >= 0; index -= 1) {
-    const entry = value[index]
-    if (typeof entry !== 'string' || entry.length === 0 || entry.length > 512) {
-      continue
-    }
-    if (!ids.includes(entry)) {
-      ids.push(entry)
-    }
-    if (ids.length >= MAX_CLAUDE_LIVE_PTY_SESSION_IDS) {
-      break
-    }
-  }
-  return ids.toReversed()
-}
 
 function normalizeMigrationUnsupportedPtyEntries(value: unknown): MigrationUnsupportedPtyEntry[] {
   if (!Array.isArray(value)) {
@@ -2421,6 +2402,87 @@ function createMinimalPersistedTerminalTab(args: {
 
 function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSessionState {
   return structuredClone(session)
+}
+
+export type PtyBindingArgs = {
+  worktreeId: string
+  tabId: string
+  leafId: string
+  ptyId: string
+  startupCwd?: string
+}
+
+// Apply a pty:spawn binding to a session in place. Shared by the live
+// persistPtyBinding path and the load-time shadow overlay so the minimal
+// tab/layout-skeleton reconstruction lives in exactly one place.
+export function applyPtyBindingToSession(
+  session: WorkspaceSessionState,
+  args: PtyBindingArgs
+): void {
+  const tabs = session.tabsByWorktree?.[args.worktreeId]
+  const tab = tabs?.find((t) => t.id === args.tabId)
+  if (tab) {
+    tab.ptyId = args.ptyId
+  } else {
+    // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
+    const nextTabs = [
+      ...(tabs ?? []),
+      createMinimalPersistedTerminalTab({
+        ...args,
+        existingTabCount: tabs?.length ?? 0
+      })
+    ]
+    session.tabsByWorktree = {
+      ...session.tabsByWorktree,
+      [args.worktreeId]: nextTabs
+    }
+    session.activeWorktreeId ??= args.worktreeId
+    session.activeTabId ??= args.tabId
+    session.activeTabIdByWorktree = {
+      ...session.activeTabIdByWorktree,
+      [args.worktreeId]: session.activeTabIdByWorktree?.[args.worktreeId] ?? args.tabId
+    }
+  }
+  if (!isTerminalLeafId(args.leafId)) {
+    // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
+    return
+  }
+  const layout = session.terminalLayoutsByTabId?.[args.tabId]
+  if (layout) {
+    if (!layout.root) {
+      // Why: createTab can persist an empty layout before TerminalPane mounts; the sync binding still needs a durable root.
+      layout.root = { type: 'leaf', leafId: args.leafId }
+      layout.activeLeafId = args.leafId
+      layout.expandedLeafId = null
+    } else if (!layoutContainsLeafId(layout.root, args.leafId)) {
+      // Why: splitPane spawns before its snapshot reaches main; add a minimal leaf so a crash can't strand the pane's binding.
+      layout.root = {
+        type: 'split',
+        direction: 'vertical',
+        first: cloneLayoutNode(layout.root),
+        second: { type: 'leaf', leafId: args.leafId }
+      }
+      layout.activeLeafId = args.leafId
+      if (layout.expandedLeafId && !layoutContainsLeafId(layout.root, layout.expandedLeafId)) {
+        layout.expandedLeafId = null
+      }
+    }
+    layout.ptyIdsByLeafId = {
+      ...layout.ptyIdsByLeafId,
+      [args.leafId]: args.ptyId
+    }
+  } else {
+    // Why: first tab spawn — persist a minimal layout so a SIGKILL before the renderer snapshot can't lose ptyIdsByLeafId.
+    session.terminalLayoutsByTabId = {
+      ...session.terminalLayoutsByTabId,
+      [args.tabId]: {
+        root: { type: 'leaf', leafId: args.leafId },
+        activeLeafId: args.leafId,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [args.leafId]: args.ptyId }
+      }
+    }
+  }
 }
 
 // Deletes the O(1) owner-keyed fields for `ownerKey` from an already-cloned
@@ -2681,6 +2743,8 @@ export class Store {
   private state: PersistedState
   private readonly dataFile: string
   private readonly activeViewPreference: ActiveViewPreference
+  private readonly claudeLiveSessions: ClaudeLiveSessions
+  private readonly ptyBindings: PtyBindings
   private readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   private pendingWrite: Promise<void> | null = null
@@ -2717,6 +2781,20 @@ export class Store {
     // Why: activeView is a frequent, tiny preference; keeping it beside the
     // profile avoids serializing the multi-MB recovery store on navigation.
     this.activeViewPreference = new ActiveViewPreference(this.dataFile, this.state.ui?.activeView)
+    // Why: the live-PTY gate must survive a force-quit right after a Claude spawn; an authoritative
+    // sidecar lets that write a tiny id list instead of serializing the multi-MB recovery store.
+    this.claudeLiveSessions = new ClaudeLiveSessions(
+      this.dataFile,
+      this.state.claudeLivePtySessionIds
+    )
+    // Why: replay the pty:spawn shadow (Issue #217) onto the hydrated session before any pty
+    // reconciliation runs, so a binding written seconds before a force-quit isn't lost.
+    this.ptyBindings = new PtyBindings(this.dataFile)
+    if (this.state.workspaceSession) {
+      for (const binding of this.ptyBindings.get()) {
+        applyPtyBindingToSession(this.state.workspaceSession, binding)
+      }
+    }
     const adaptedProjectGroups = this.adaptFlatFolderScanProjectGroups()
     for (const entry of normalized.migrationUnsupportedEntries) {
       setMigrationUnsupportedPty(entry)
@@ -3676,12 +3754,19 @@ export class Store {
 
   /** Wait for any in-flight async disk write to complete. Used in tests. */
   async waitForPendingWrite(): Promise<void> {
-    await Promise.all([this.pendingWrite, this.activeViewPreference.waitForPendingWrite()])
+    await Promise.all([
+      this.pendingWrite,
+      this.activeViewPreference.waitForPendingWrite(),
+      this.claudeLiveSessions.waitForPendingWrite(),
+      this.ptyBindings.waitForPendingWrite()
+    ])
   }
 
   // Why githubCache is omitted: memory-only this session (see getGithubCacheFile), so refreshes never touch the durable file.
   private getDurableState(): Omit<PersistedState, 'githubCache'> {
-    const { githubCache: _memoryOnly, ...durable } = this.state
+    // Why: claudeLivePtySessionIds now lives in an authoritative sidecar (claudeLiveSessions);
+    // keep it out of the main blob so its force-quit-durable writes stay tiny.
+    const { githubCache: _memoryOnly, claudeLivePtySessionIds: _sidecar, ...durable } = this.state
     return durable
   }
 
@@ -3845,6 +3930,9 @@ export class Store {
     this.writeGeneration++
     this.pendingWrite = null
     this.writeToDiskSync({ force: asyncWriteWasInFlight })
+    // Why: shutdown must also drain the sidecars' debounced writes; their sync paths (add/record) are already durable.
+    this.claudeLiveSessions.flushOrThrow()
+    this.ptyBindings.flushOrThrow()
   }
 
   flushActiveViewPreferenceOrThrow(): void {
@@ -4867,7 +4955,7 @@ export class Store {
     }
     this.state.automations = [...(this.state.automations ?? []), automation]
     this.recordFeatureInteraction('automation-created')
-    this.flush()
+    this.scheduleSave()
     return automation
   }
 
@@ -4939,7 +5027,7 @@ export class Store {
       updatedAt: Date.now()
     }
     this.state.automations[index] = updated
-    this.flush()
+    this.scheduleSave()
     return updated
   }
 
@@ -4948,7 +5036,7 @@ export class Store {
     this.state.automationRuns = (this.state.automationRuns ?? []).filter(
       (entry) => entry.automationId !== id
     )
-    this.flush()
+    this.scheduleSave()
   }
 
   createAutomationRun(
@@ -4996,7 +5084,7 @@ export class Store {
     if (trigger === 'manual') {
       this.recordFeatureInteraction('automation-run')
     }
-    this.flush()
+    this.scheduleSave()
     return run
   }
 
@@ -5045,7 +5133,7 @@ export class Store {
       automation.lastRunAt = now
       automation.updatedAt = now
     }
-    this.flush()
+    this.scheduleSave()
     return updated
   }
 
@@ -5063,7 +5151,7 @@ export class Store {
       return { ...run, workspaceDisplayName: normalizedDisplayName }
     })
     if (updatedCount > 0) {
-      this.flush()
+      this.scheduleSave()
     }
     return updatedCount
   }
@@ -5089,7 +5177,7 @@ export class Store {
     const nextRunAt = nextAutomationOccurrenceAfter(current.rrule, current.dtstart, now)
     const updated = { ...current, nextRunAt, updatedAt: Date.now() }
     this.state.automations[index] = updated
-    this.flush()
+    this.scheduleSave()
     return updated
   }
 
@@ -6202,7 +6290,9 @@ export class Store {
     return this.state.repos.find((repo) => repo.id === repoId)?.connectionId ?? null
   }
 
-  // Why: sync-flush the pty binding before pty:spawn returns to close the spawn/persist SIGKILL race (Issue #217).
+  // Why: durably record the pty binding before pty:spawn returns to close the spawn/persist
+  // SIGKILL race (Issue #217). The binding goes to the pty-bindings shadow sidecar (a tiny sync
+  // write) instead of a full-state flush; the main blob catches up on the next debounced save.
   persistPtyBinding(
     args: {
       worktreeId: string
@@ -6288,11 +6378,12 @@ export class Store {
       // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
       advanceTopologyAfterMembershipChange()
       try {
-        this.flushOrThrow()
+        this.ptyBindings.record(args)
       } catch (err) {
         restoreSession()
         throw err
       }
+      this.scheduleSave()
       return
     }
     const layout = session.terminalLayoutsByTabId?.[args.tabId]
@@ -6336,11 +6427,12 @@ export class Store {
     }
     advanceTopologyAfterMembershipChange()
     try {
-      this.flushOrThrow()
+      this.ptyBindings.record(args)
     } catch (err) {
       restoreSession()
       throw err
     }
+    this.scheduleSave()
   }
 
   // ── SSH Targets ────────────────────────────────────────────────────
@@ -6388,30 +6480,15 @@ export class Store {
   // ── Live Claude PTY sessions ───────────────────────────────────────
 
   getClaudeLivePtySessionIds(): string[] {
-    return [...(this.state.claudeLivePtySessionIds ?? [])]
+    return this.claudeLiveSessions.get()
   }
 
   addClaudeLivePtySessionId(sessionId: string): void {
-    if (sessionId.length === 0 || sessionId.length > 512) {
-      return
-    }
-    const ids = this.state.claudeLivePtySessionIds ?? []
-    if (ids.includes(sessionId)) {
-      return
-    }
-    // Why: drop oldest at the cap — stale ids get pruned against the daemon at startup, so only recency matters.
-    this.state.claudeLivePtySessionIds = [...ids, sessionId].slice(-MAX_CLAUDE_LIVE_PTY_SESSION_IDS)
-    // Why: flush sync so a force-quit right after a Claude spawn still seeds the live-PTY gate next launch.
-    this.flush()
+    this.claudeLiveSessions.add(sessionId)
   }
 
   removeClaudeLivePtySessionId(sessionId: string): void {
-    const ids = this.state.claudeLivePtySessionIds ?? []
-    if (!ids.includes(sessionId)) {
-      return
-    }
-    this.state.claudeLivePtySessionIds = ids.filter((id) => id !== sessionId)
-    this.scheduleSave()
+    this.claudeLiveSessions.remove(sessionId)
   }
 
   getDeletedSshConfigAliases(): string[] {
@@ -6600,7 +6677,7 @@ export class Store {
     } else {
       this.state.sshRemotePtyLeases.push(next)
     }
-    this.flush()
+    this.scheduleSave()
   }
 
   markSshRemotePtyLeases(targetId: string, state: SshRemotePtyLease['state']): void {
@@ -6634,7 +6711,7 @@ export class Store {
       ? this.clearSshRemotePtyBindingsForLeases(targetId, leasesToClear)
       : false
     if (changed || bindingsChanged) {
-      this.flush()
+      this.scheduleSave()
     }
   }
 
@@ -6649,7 +6726,7 @@ export class Store {
     const shouldClearBindings = state === 'terminated' || state === 'expired'
     if (lease.state === state) {
       if (shouldClearBindings && this.clearSshRemotePtyBindingsForLeases(targetId, [lease])) {
-        this.flush()
+        this.scheduleSave()
       }
       return
     }
@@ -6664,7 +6741,7 @@ export class Store {
     if (shouldClearBindings) {
       this.clearSshRemotePtyBindingsForLeases(targetId, [lease])
     }
-    this.flush()
+    this.scheduleSave()
   }
 
   removeSshRemotePtyLease(targetId: string, ptyId: string): void {
@@ -6678,7 +6755,7 @@ export class Store {
       (lease) => lease.targetId !== targetId || lease.ptyId !== relayPtyId
     )
     if (this.state.sshRemotePtyLeases.length !== before) {
-      this.flush()
+      this.scheduleSave()
     }
   }
 
@@ -6690,7 +6767,7 @@ export class Store {
       (lease) => lease.targetId !== targetId
     )
     if (this.state.sshRemotePtyLeases.length !== before) {
-      this.flush()
+      this.scheduleSave()
     }
   }
 
