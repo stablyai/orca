@@ -827,7 +827,7 @@
       },
       "useMacosTccPromptNotice": {
         "title": "Seeing “Orca would like to access…” prompts?",
-        "description": "macOS permission messages may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.",
+        "description": "MacOS permission messages may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.",
         "openSettings": "Open Settings",
         "dismiss": "Don't show again"
       }
