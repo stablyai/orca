@@ -11837,6 +11837,8 @@
           "title": "Dirección de red personalizada",
           "description": "Anuncia una dirección a la que pueda acceder tu teléfono, por ejemplo, un nombre de host de Tailscale, una dirección IP o una URL de proxy inverso.",
           "label": "Dirección",
+          "placeholder": "my-mac.ts.net, home.example.com, 192.168.1.50 o 2001:db8::10",
+          "hint": "Introduce una dirección IP o un nombre de host (un nombre MagicDNS de Tailscale, un dominio DDNS o un nombre de host de LAN), opcionalmente con :puerto. Usa [IPv6]:puerto al añadir un puerto a IPv6.",
           "placeholder": "home.example.com:8443 o https://example.com/orca",
           "hint": "Introduce una dirección IPv4/IPv6, un nombre de host o una URL HTTP(S)/WebSocket completa. Los puertos son opcionales.",
           "cancel": "Cancelar",

@@ -11837,6 +11837,8 @@
           "title": "사용자 지정 네트워크 주소",
           "description": "휴대폰에서 접근할 수 있는 주소를 지정하세요. 예: Tailscale 호스트 이름, IP 주소 또는 리버스 프록시 URL.",
           "label": "주소",
+          "placeholder": "my-mac.ts.net, home.example.com, 192.168.1.50 또는 2001:db8::10",
+          "hint": "IP 주소 또는 호스트 이름(Tailscale MagicDNS 이름, DDNS 도메인 또는 LAN 호스트 이름)을 입력하세요. 필요하면 :포트를 붙일 수 있습니다. IPv6에 포트를 추가할 때는 [IPv6]:포트를 사용하세요.",
           "placeholder": "home.example.com:8443 또는 https://example.com/orca",
           "hint": "IPv4/IPv6 주소, 호스트 이름 또는 전체 HTTP(S)/WebSocket URL을 입력하세요. 포트는 선택 사항입니다.",
           "cancel": "취소",

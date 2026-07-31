@@ -11909,6 +11909,8 @@
           "title": "Custom network address",
           "description": "Advertise an address your phone can reach — for example a Tailscale hostname, IP address, or reverse-proxy URL.",
           "label": "Address",
+          "placeholder": "my-mac.ts.net, home.example.com, 192.168.1.50, or 2001:db8::10",
+          "hint": "Enter an IP address or a hostname — a Tailscale MagicDNS name, a DDNS domain, or a LAN hostname — optionally with :port. Use [IPv6]:port when adding a port to IPv6.",
           "placeholder": "home.example.com:8443 or https://example.com/orca",
           "hint": "Enter an IPv4/IPv6 address, hostname, or full HTTP(S)/WebSocket URL. Ports are optional.",
           "cancel": "Cancel",

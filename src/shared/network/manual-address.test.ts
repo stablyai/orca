@@ -4,6 +4,8 @@ import { resolve } from 'node:path'
 import { parseManualNetworkAddress } from './manual-address'
 import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../mobile-pairing-protocol-limits'
 
+const ERROR_MESSAGE = 'Enter an IP address or hostname, optionally with a :port suffix'
+
 describe('parseManualNetworkAddress', () => {
   it('keeps renderer validation off the Zod schema import path', () => {
     const source = readFileSync(resolve('src/shared/network/manual-address.ts'), 'utf8')
@@ -39,6 +41,7 @@ describe('parseManualNetworkAddress', () => {
       for (const bad of ['', '   ', '1.2.3', '1.2.3.4.5', '256.0.0.1']) {
         expect(parseManualNetworkAddress(bad)).toEqual({
           ok: false,
+          error: ERROR_MESSAGE
           error: 'Enter an IPv4/IPv6 address, hostname, or HTTP(S)/WebSocket URL'
         })
       }
@@ -47,8 +50,35 @@ describe('parseManualNetworkAddress', () => {
     it('rejects leading zeros in octets', () => {
       expect(parseManualNetworkAddress('01.02.03.04')).toEqual({
         ok: false,
+        error: ERROR_MESSAGE
         error: 'Enter an IPv4/IPv6 address, hostname, or HTTP(S)/WebSocket URL'
       })
+    })
+  })
+
+  describe('IPv6', () => {
+    it('accepts bare IPv6 literals', () => {
+      expect(parseManualNetworkAddress('2001:db8::24')).toEqual({
+        ok: true,
+        address: '2001:db8::24'
+      })
+      expect(parseManualNetworkAddress('::1')).toEqual({
+        ok: true,
+        address: '::1'
+      })
+    })
+
+    it('accepts bracketed IPv6 literals with a port suffix', () => {
+      expect(parseManualNetworkAddress('[2001:db8::24]:8443')).toEqual({
+        ok: true,
+        address: '[2001:db8::24]:8443'
+      })
+    })
+
+    it('rejects unusable or malformed IPv6 overrides', () => {
+      for (const bad of ['::', 'fe80::1', '[::1]:0', '[::1]:0080', '[::1]:65536', '[::1]:']) {
+        expect(parseManualNetworkAddress(bad).ok).toBe(false)
+      }
     })
   })
 
@@ -169,6 +199,8 @@ describe('parseManualNetworkAddress', () => {
       expect(parseManualNetworkAddress(`example.com:${'0'.repeat(1000)}8080`).ok).toBe(false)
     })
 
+    it('rejects host-port input with more than one colon', () => {
+      expect(parseManualNetworkAddress('example.com:80:90').ok).toBe(false)
     it('rejects malformed addresses with more than one colon', () => {
       expect(parseManualNetworkAddress('example.com:80:90').ok).toBe(false)
     })

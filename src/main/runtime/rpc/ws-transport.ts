@@ -25,7 +25,7 @@ type WebSocketMessageHandler = {
 const HEARTBEAT_INTERVAL_MS = 15_000
 
 export type WebSocketTransportOptions = {
-  host: string
+  host: string | readonly string[]
   port: number
   tlsCert?: string
   tlsKey?: string
@@ -44,7 +44,7 @@ export type WebSocketTransportOptions = {
 }
 
 export class WebSocketTransport implements RpcTransport {
-  private readonly host: string
+  private readonly hostCandidates: readonly string[]
   private readonly port: number
   private readonly tlsCert: string | undefined
   private readonly tlsKey: string | undefined
@@ -76,7 +76,11 @@ export class WebSocketTransport implements RpcTransport {
     fallbackPort,
     preferPinnedPort
   }: WebSocketTransportOptions) {
-    this.host = host
+    const hostCandidates = Array.isArray(host) ? [...host] : [host]
+    if (hostCandidates.length === 0) {
+      throw new TypeError('WebSocketTransport requires at least one host candidate')
+    }
+    this.hostCandidates = hostCandidates
     this.port = port
     this.tlsCert = tlsCert
     this.tlsKey = tlsKey
@@ -127,6 +131,11 @@ export class WebSocketTransport implements RpcTransport {
     return this.port
   }
 
+  get resolvedHost(): string {
+    const addr = this.httpServer?.address()
+    return addr && typeof addr === 'object' ? addr.address : (this.hostCandidates[0] ?? '127.0.0.1')
+  }
+
   async start(): Promise<void> {
     if (this.wss) {
       return
@@ -145,7 +154,7 @@ export class WebSocketTransport implements RpcTransport {
           : [persistedFallbackPort, this.port]
     for (const port of candidatePorts) {
       try {
-        await this.tryListen(port)
+        await this.tryListenOnAnyHost(port)
         return
       } catch (error: unknown) {
         // Why: a persisted fallback may fail for any reason, while configured ports fall through only when their listen is occupied or denied.
@@ -161,7 +170,7 @@ export class WebSocketTransport implements RpcTransport {
       }
     }
     console.warn('[ws-transport] All configured ports failed to bind, using an OS-assigned port')
-    await this.tryListen(0)
+    await this.tryListenOnAnyHost(0)
   }
 
   private createHttpServer(): HttpServer | HttpsServer {
@@ -174,12 +183,15 @@ export class WebSocketTransport implements RpcTransport {
   }
 
   // Why: attach the WSS only after listen succeeds; earlier it re-emits httpServer's EADDRINUSE as an uncatchable exception and breaks the fallback.
-  private async tryListen(port: number): Promise<void> {
+  private async tryListen(
+    port: number,
+    host = this.hostCandidates[0] ?? '127.0.0.1'
+  ): Promise<void> {
     const httpServer = this.createHttpServer()
 
     await new Promise<void>((resolve, reject) => {
       httpServer.once('error', reject)
-      httpServer.listen(port, this.host, () => {
+      httpServer.listen(port, host, () => {
         httpServer.off('error', reject)
         resolve()
       })
@@ -203,6 +215,19 @@ export class WebSocketTransport implements RpcTransport {
 
     this.httpServer = httpServer
     this.wss = wss
+  }
+
+  private async tryListenOnAnyHost(port: number): Promise<void> {
+    let lastError: unknown
+    for (const host of this.hostCandidates) {
+      try {
+        await this.tryListen(port, host)
+        return
+      } catch (error) {
+        lastError = error
+      }
+    }
+    throw lastError
   }
 
   // Why: force-terminate soon after the 1013 close since a half-open phone may never ack and would hold the descriptor past the WS cap; the 'error' listener absorbs a reset while closing.

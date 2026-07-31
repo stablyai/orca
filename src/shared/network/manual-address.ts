@@ -1,3 +1,4 @@
+// Why: pure shared helper so renderer and future callers share the same IP/host + optional-port grammar.
 import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../mobile-pairing-protocol-limits'
 import { isPairingWildcardHostname, normalizePairingUrl } from './pairing-url'
 
@@ -17,6 +18,8 @@ const HOSTNAME_REGEX = new RegExp(`^${HOSTNAME}$`, 'i')
 const HOSTNAME_MAX_LENGTH = 253
 const MIN_PORT = 1
 const MAX_PORT = 65535
+const ERROR_MESSAGE = 'Enter an IP address or hostname, optionally with a :port suffix'
+const IPV6_LINK_LOCAL_PREFIX = /^fe[89ab][0-9a-f]:/i
 const ERROR_MESSAGE = 'Enter an IPv4/IPv6 address, hostname, or HTTP(S)/WebSocket URL'
 
 export type ParseManualAddressResult = { ok: true; address: string } | { ok: false; error: string }
@@ -36,6 +39,10 @@ export function parseManualNetworkAddress(input: string): ParseManualAddressResu
   }
 
   if (isValidIpv6Override(trimmed)) {
+    return { ok: true, address: trimmed }
+  }
+
+  if (trimmed.includes(':') && isValidIpv6AddressOverride(trimmed)) {
     return { ok: true, address: trimmed }
   }
 
@@ -88,6 +95,31 @@ function isValidPort(port: string): boolean {
   return value >= MIN_PORT && value <= MAX_PORT
 }
 
+function isValidIpv6AddressOverride(value: string): boolean {
+  const explicitPort = value.startsWith('[')
+    ? (value.match(/^\[[^\]]+\]:(\d+)$/)?.[1] ?? null)
+    : null
+  if (value.startsWith('[') && value.includes(']:') && explicitPort === null) {
+    return false
+  }
+  if (explicitPort !== null && !isValidPort(explicitPort)) {
+    return false
+  }
+
+  try {
+    const url = new URL(value.startsWith('[') ? `ws://${value}` : `ws://[${value}]`)
+    const hostname = url.hostname.replace(/^\[|\]$/g, '')
+    return (
+      hostname.includes(':') &&
+      hostname !== '::' &&
+      !IPV6_LINK_LOCAL_PREFIX.test(hostname) &&
+      !url.username &&
+      !url.password &&
+      url.pathname === '/' &&
+      !url.search &&
+      !url.hash &&
+      url.port !== '0'
+    )
 function isValidIpv6Override(value: string): boolean {
   const bracketed = value.match(/^\[([^\]]+)\](?::(\d+))?$/)
   const hostname = bracketed?.[1] ?? value

@@ -11837,6 +11837,8 @@
           "title": "カスタムネットワークアドレス",
           "description": "スマートフォンから到達できるアドレスを指定します。たとえば、Tailscale ホスト名、IP アドレス、リバースプロキシ URL です。",
           "label": "アドレス",
+          "placeholder": "my-mac.ts.net、home.example.com、192.168.1.50、または 2001:db8::10",
+          "hint": "IP アドレスまたはホスト名（Tailscale の MagicDNS 名、DDNS ドメイン、LAN のホスト名など）を入力してください。必要に応じて :ポート を付けられます。IPv6 にポートを追加する場合は [IPv6]:ポート を使用してください。",
           "placeholder": "home.example.com:8443 または https://example.com/orca",
           "hint": "IPv4/IPv6 アドレス、ホスト名、または完全な HTTP(S)/WebSocket URL を入力してください。ポートは省略できます。",
           "cancel": "キャンセル",

@@ -14,6 +14,8 @@ import {
   type WindowsMobileFirewallEnvironment
 } from '../runtime/windows-mobile-firewall'
 
+const IPV6_LINK_LOCAL_PREFIX = /^fe[89ab][0-9a-f]:/i
+
 export type NetworkInterface = {
   name: string
   address: string

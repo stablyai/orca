@@ -465,6 +465,29 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.stop()
   })
 
+  it('publishes a valid wildcard WebSocket endpoint for the bound listener', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+
+    try {
+      expect(server.getWebSocketEndpoint()).toMatch(/^ws:\/\/(\[::\]|0\.0\.0\.0):\d+$/)
+      expect(server.createPairingOffer({ name: 'Default endpoint test' })).toMatchObject({
+        available: true,
+        endpoint: expect.stringMatching(/^ws:\/\/127\.0\.0\.1:\d+$/)
+      })
+    } finally {
+      await server.stop()
+    }
+  })
+
   it('reports why pairing is unavailable before the WebSocket listener is ready', () => {
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),

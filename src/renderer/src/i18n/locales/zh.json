@@ -11837,6 +11837,8 @@
           "title": "自定义网络地址",
           "description": "公布一个手机可访问的地址，例如 Tailscale 主机名、IP 地址或反向代理 URL。",
           "label": "地址",
+          "placeholder": "my-mac.ts.net、home.example.com、192.168.1.50 或 2001:db8::10",
+          "hint": "请输入 IP 地址或主机名（Tailscale MagicDNS 名称、DDNS 域名或 LAN 主机名），可选择附加 :端口。为 IPv6 添加端口时请使用 [IPv6]:端口。",
           "placeholder": "home.example.com:8443 或 https://example.com/orca",
           "hint": "请输入 IPv4/IPv6 地址、主机名或完整的 HTTP(S)/WebSocket URL。端口可选。",
           "cancel": "取消",
