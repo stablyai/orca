@@ -9,6 +9,17 @@ export const MAIN_THREAD_DIAGNOSTICS_ENV = 'ORCA_MAIN_THREAD_DIAGNOSTICS'
 const TICK_MS = 25
 const REPORT_EVERY_MS = 5_000
 
+// Why: bounded so a pathologically janky window cannot grow the report without
+// limit; startup shows ~3 stalls over 250ms, so this never truncates in practice.
+const MAX_STALLS_PER_REPORT = 20
+
+/** One main-thread block over 250ms, on the same clock as startup milestones. */
+export type MainThreadStall = {
+  fromMs: number
+  toMs: number
+  gapMs: number
+}
+
 export function isMainThreadDiagnosticsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env[MAIN_THREAD_DIAGNOSTICS_ENV] === '1'
 }
@@ -137,9 +148,10 @@ export function writeMainThreadDiagnosticMarker(marker: string): void {
 /**
  * Long-running main-process jank probe for benchmarks and field diagnosis of
  * issue #7576. Every 5s emits one `[main-thread] {json}` stderr line with the
- * window's worst event-loop stall, stall counts over 50/250ms, and drained
- * subprocess spawn stats. Unlike the startup stall probe this never stops:
- * the churn it measures (git status polling, updater retries) is steady-state.
+ * window's worst event-loop stall, stall counts over 50/250ms, drained
+ * subprocess spawn stats, and the [fromMs, toMs] span of each stall over 250ms.
+ * Unlike the startup stall probe this never stops: the churn it measures
+ * (git status polling, updater retries) is steady-state.
  */
 export function startMainThreadChurnProbe(): void {
   if (!isMainThreadDiagnosticsEnabled()) {
@@ -150,9 +162,15 @@ export function startMainThreadChurnProbe(): void {
   let windowMaxGapMs = 0
   let gapsOver50Ms = 0
   let gapsOver250Ms = 0
+  let stalls: MainThreadStall[] = []
   const timer = setInterval(() => {
     const now = performance.now()
-    const gap = now - last - TICK_MS
+    // Why: the tick before this one ran at `previous`, so the blocked span is
+    // [previous, now]. Keeping it before the reassignment is what lets a stall
+    // be placed between two startup milestones on the same performance.now()
+    // clock — the window max alone names no culprit.
+    const previous = last
+    const gap = now - previous - TICK_MS
     last = now
     if (gap > windowMaxGapMs) {
       windowMaxGapMs = gap
@@ -162,6 +180,16 @@ export function startMainThreadChurnProbe(): void {
     }
     if (gap > 250) {
       gapsOver250Ms++
+      if (stalls.length < MAX_STALLS_PER_REPORT) {
+        stalls.push({
+          // One nominal tick after the previous callback: `gap` already
+          // subtracts TICK_MS, so anchoring at `previous` would report a span
+          // 25ms wider than the stall it names and place its start too early.
+          fromMs: Math.round(previous + TICK_MS),
+          toMs: Math.round(now),
+          gapMs: Math.round(gap)
+        })
+      }
     }
     if (now - lastReport < REPORT_EVERY_MS) {
       return
@@ -174,11 +202,13 @@ export function startMainThreadChurnProbe(): void {
       gapsOver50Ms,
       gapsOver250Ms,
       spawnCount: Object.values(spawns).reduce((sum, s) => sum + s.count, 0),
-      spawns
+      spawns,
+      stalls
     }
     windowMaxGapMs = 0
     gapsOver50Ms = 0
     gapsOver250Ms = 0
+    stalls = []
     writeStartupDiagnosticLine(`[main-thread] ${JSON.stringify(report)}`)
   }, TICK_MS)
   timer.unref?.()

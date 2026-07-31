@@ -4,11 +4,20 @@ import {
   classifySubprocessCommand,
   drainSubprocessSpawnStats,
   isMainThreadDiagnosticsEnabled,
-  recordSubprocessSpawn
+  recordSubprocessSpawn,
+  startMainThreadChurnProbe
 } from './main-thread-churn-probe'
+import { writeStartupDiagnosticLine } from '../startup/startup-diagnostics'
+
+vi.mock('../startup/startup-diagnostics', () => ({
+  writeStartupDiagnosticLine: vi.fn()
+}))
 
 afterEach(() => {
   vi.unstubAllEnvs()
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+  vi.mocked(writeStartupDiagnosticLine).mockClear()
   drainSubprocessSpawnStats()
 })
 
@@ -49,6 +58,52 @@ describe('classifySubprocessCommand', () => {
     // value, and "3"/"pattern" must not become fake subcommand buckets.
     expect(classifySubprocessCommand('rg', ['-C', '3', 'pattern'])).toBe('rg')
     expect(classifySubprocessCommand('node', ['script.js'])).toBe('node')
+  })
+})
+
+describe('startMainThreadChurnProbe stall spans', () => {
+  const TICK_MS = 25
+  const REPORT_EVERY_MS = 5_000
+
+  /**
+   * Drives the probe's interval with a scripted performance.now() so a stall of
+   * a known length can be asserted. Returns the stalls from the emitted report.
+   */
+  function runProbeWithStall(stallMs: number): { fromMs: number; toMs: number; gapMs: number }[] {
+    vi.stubEnv(MAIN_THREAD_DIAGNOSTICS_ENV, '1')
+    vi.useFakeTimers()
+    // Tick 0 sets the baseline; tick 1 lands `stallMs` late; the rest are
+    // on time until the 5s report boundary is crossed.
+    let clock = 0
+    let tick = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
+
+    startMainThreadChurnProbe()
+    while (clock < REPORT_EVERY_MS + TICK_MS) {
+      clock += tick === 1 ? TICK_MS + stallMs : TICK_MS
+      tick++
+      vi.advanceTimersByTime(TICK_MS)
+    }
+
+    const lines = vi.mocked(writeStartupDiagnosticLine).mock.calls.map(([line]) => line)
+    const report = lines.find((line) => line.startsWith('[main-thread] '))
+    expect(report, 'probe emitted no report').toBeDefined()
+    return JSON.parse(report!.slice('[main-thread] '.length)).stalls
+  }
+
+  // Why: gapMs subtracts one nominal tick, so anchoring fromMs at the previous
+  // callback reported a span 25ms wider than the stall it names and pointed at
+  // a moment the main thread was still responsive — which misattributes the
+  // stall to whichever startup milestone happens to sit in that window.
+  it('reports a span whose width equals the gap it names', () => {
+    const stalls = runProbeWithStall(1_000)
+    expect(stalls).toHaveLength(1)
+    expect(stalls[0].gapMs).toBe(1_000)
+    expect(stalls[0].toMs - stalls[0].fromMs).toBe(stalls[0].gapMs)
+  })
+
+  it('ignores a gap under the 250ms threshold', () => {
+    expect(runProbeWithStall(100)).toEqual([])
   })
 })
 

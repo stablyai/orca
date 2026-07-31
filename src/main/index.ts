@@ -158,7 +158,10 @@ import {
   shouldSkipSingleInstanceLock
 } from './startup/single-instance-lock'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
-import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe'
+import {
+  startMainThreadChurnProbe,
+  writeMainThreadDiagnosticMarker
+} from './diagnostics/main-thread-churn-probe'
 import {
   isStartupDiagnosticsEnabled,
   logStartupDiagnostic,
@@ -2056,17 +2059,20 @@ void app.whenReady().then(async () => {
   if (shouldSuppressDevEducation({ isDev: is.dev })) {
     suppressDevEducationForStore(store)
   }
+  writeMainThreadDiagnosticMarker('init:claude-pty-persistence-done')
   try {
     // Why: Dock/Launchpad launches don't inherit shell proxy env vars, so apply the persisted proxy before any app-owned network fetchers run.
     await applyElectronProxySettings(store.getSettings())
   } catch {
     console.warn('[proxy] Failed to apply network proxy settings')
   }
+  writeMainThreadDiagnosticMarker('init:proxy-done')
   // Why: browser sessions serve desktop webviews and runtime profile commands, so init at app startup rather than via a renderer IPC path.
   initializeBrowserSessionsForApp({
     orcaProfileId: activeOrcaProfile.profile.id,
     profileDirectory: activeOrcaProfile.profileDirectory
   })
+  writeMainThreadDiagnosticMarker('init:browser-sessions-done')
   unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
   agentAwakeService = new AgentAwakeService()
   agentAwakeService.setEnabled(store.getSettings().keepComputerAwakeWhileAgentsRun)
@@ -2135,14 +2141,18 @@ void app.whenReady().then(async () => {
     platform: process.platform
   })
   // Why: cohort-classifier reads repo count synchronously at every emit, so hydrate it here — before any IPC handler or window can trigger track().
+  writeMainThreadDiagnosticMarker('init:observability-done')
   initCohortClassifier(store)
   initOnboardingCohortClassifier(store)
+  writeMainThreadDiagnosticMarker('init:cohort-classifier-done')
   stats = new StatsCollector()
   claudeUsage = new ClaudeUsageStore(store)
   codexUsage = new CodexUsageStore(store)
   openCodeUsage = new OpenCodeUsageStore(store)
   rateLimits = new RateLimitService()
+  writeMainThreadDiagnosticMarker('init:usage-stores-done')
   codexRuntimeHome = new CodexRuntimeHomeService(store)
+  writeMainThreadDiagnosticMarker('init:codex-runtime-home-done')
   // Why: an incapable trust-grant host must fall back to the managed home for
   // every consumer (PTY env, rate limits, commit messages) in one place.
   codexRuntimeHome.setRealHomeLaneGate(() => isRealHomeCodexHookLaneUsable())
@@ -2164,9 +2174,11 @@ void app.whenReady().then(async () => {
     startBackfill: startCodexSessionBackfillInBackground,
     startIndexHeal: startCodexSessionIndexHealInBackground
   })
+  writeMainThreadDiagnosticMarker('init:codex-session-migration-created')
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome, {
     onHostSystemDefaultSelected: codexSessionMigration.requestRun
   })
+  writeMainThreadDiagnosticMarker('init:codex-accounts-done')
   // Why: one-time per-host backfill makes historical Orca-managed Codex
   // sessions visible to the user's own resume picker and app history (#4444,
   // #8612). Deferred so startup and first PTY spawns never compete with the
@@ -2174,6 +2186,7 @@ void app.whenReady().then(async () => {
   codexSessionMigration.scheduleInitialRun()
   claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
+  writeMainThreadDiagnosticMarker('init:claude-accounts-done')
   rateLimits.setCodexHomePathResolver((target) =>
     codexRuntimeHome!.prepareForRateLimitFetch(target)
   )
@@ -2223,6 +2236,7 @@ void app.whenReady().then(async () => {
       }
     }
   })
+  writeMainThreadDiagnosticMarker('init:keybindings-done')
   browserManager.setSettingsResolver(() => ({ keybindings: keybindings?.getOverrides() }))
   rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store!.getSettings()
@@ -2275,6 +2289,7 @@ void app.whenReady().then(async () => {
         envelope
       )
   }
+  writeMainThreadDiagnosticMarker('init:orca-runtime-service-start')
   const runtimeService = new OrcaRuntimeService(store, stats, {
     agentSessionClaimSigner: loadAgentSessionClaimSigner(
       getProfileUserDataPath(),
