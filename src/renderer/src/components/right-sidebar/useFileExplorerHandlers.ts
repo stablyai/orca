@@ -96,13 +96,7 @@ export async function activateFileExplorerNode(args: {
     try {
       targetIsDirectory = (await statPath(node.path)).isDirectory
     } catch {
-      toast.error(
-        translate(
-          'auto.components.right.sidebar.useFileExplorerHandlers.32cd9fd991',
-          'Cannot open symlink target'
-        )
-      )
-      return
+      targetIsDirectory = false
     }
     if (targetIsDirectory) {
       const loadedAsDirectory = await loadDir(node.path, node.depth, {
