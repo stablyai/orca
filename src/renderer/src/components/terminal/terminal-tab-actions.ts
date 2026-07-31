@@ -17,6 +17,8 @@ import type {
   TerminalTabRetirementPlan
 } from '@/store/slices/terminal-tab-retirement'
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+
 import { getTerminalIncarnationHandle } from './terminal-close-incarnation'
 import {
   getWorktreeTerminalTabIds,
@@ -39,6 +41,30 @@ function isPinnedVisibleTab(
       (tab) => (tab.id === visibleId || tab.entityId === visibleId) && tab.isPinned
     ) ?? false
   )
+}
+function resolveTerminalRuntimeEnvironmentId(
+  state: TerminalTabActionState,
+  worktreeId: string,
+  terminalTabId: string
+): string | null {
+  const tab = state.tabsByWorktree[worktreeId]?.find((entry) => entry.id === terminalTabId)
+  const ptyIds = [
+    tab?.ptyId,
+    ...(state.ptyIdsByTabId?.[terminalTabId] ?? []),
+    ...Object.values(state.terminalLayoutsByTabId?.[terminalTabId]?.ptyIdsByLeafId ?? {})
+  ]
+  let ownerEnvironmentId: string | null = null
+  for (const ptyId of ptyIds) {
+    const environmentId = ptyId ? getRemoteRuntimePtyEnvironmentId(ptyId) : null
+    if (!environmentId) {
+      continue
+    }
+    if (ownerEnvironmentId && ownerEnvironmentId !== environmentId) {
+      return null
+    }
+    ownerEnvironmentId = environmentId
+  }
+  return ownerEnvironmentId
 }
 
 export function closeTerminalTab(
@@ -73,8 +99,13 @@ export function closeTerminalTab(
     return
   }
   const { worktreeId: owningWorktreeId, terminalTabId } = target
+  const terminalRuntimeEnvironmentId = resolveTerminalRuntimeEnvironmentId(
+    state,
+    owningWorktreeId,
+    terminalTabId
+  )
   const worktreeRoute = resolveTerminalWorktreeRoute(state, owningWorktreeId)
-  if (!worktreeRoute) {
+  if (!worktreeRoute && !terminalRuntimeEnvironmentId) {
     options?.onCancel?.()
     return
   }
@@ -101,7 +132,8 @@ export function closeTerminalTab(
     return
   }
 
-  const runtimeEnvironmentId = worktreeRoute.runtimeEnvironmentId
+  const runtimeEnvironmentId =
+    terminalRuntimeEnvironmentId ?? worktreeRoute?.runtimeEnvironmentId ?? null
   if (runtimeEnvironmentId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (options?.reason === 'pty-exit') {
       // Why: stream exit is not host-tab closure; the HUB snapshot decides whether reconnect restores or removes this tab.
