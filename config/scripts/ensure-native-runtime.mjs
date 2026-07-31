@@ -350,8 +350,10 @@ function rebuildPatchedNodePtyFromSource() {
 
 function resolveNodeGypScript() {
   // Why: CI overrides this when pnpm's bundled node-gyp is unusable (see computer-e2e.yml).
-  if (process.env.npm_config_node_gyp) {
-    return process.env.npm_config_node_gyp
+  const override = process.env.npm_config_node_gyp
+  if (override) {
+    // Why: an explicit override is a contract; fall back and it silently builds with the wrong gyp.
+    return existsSync(override) ? override : null
   }
 
   try {

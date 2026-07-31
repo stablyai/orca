@@ -103,7 +103,7 @@ describe('ensure-native-runtime', () => {
         )
         const log = readFileSync(logPath, 'utf8')
         expect(log).toContain('node-gyp rebuild')
-        expect(log).not.toContain('pnpm rebuild node-pty')
+        expect(log).not.toContain('pnpm rebuild')
       } finally {
         rmSync(projectDir, { recursive: true, force: true })
       }
@@ -140,7 +140,7 @@ describe('ensure-native-runtime', () => {
         expect(result.stderr).toContain("expected build/Release so Orca's node-pty patch is active")
         const log = readFileSync(logPath, 'utf8')
         expect(log).toContain('node-gyp rebuild')
-        expect(log).not.toContain('pnpm rebuild node-pty')
+        expect(log).not.toContain('pnpm rebuild')
       } finally {
         rmSync(projectDir, { recursive: true, force: true })
       }
@@ -176,13 +176,14 @@ describe('ensure-native-runtime', () => {
         expect(result.status, result.stderr).toBe(0)
         expect(result.stderr).not.toContain('Patched node-pty build artifacts are missing')
         const log = readFileSync(logPath, 'utf8')
-        expect(log).not.toContain('pnpm rebuild node-pty')
+        expect(log).not.toContain('pnpm rebuild')
         expect(log).not.toContain('node-gyp rebuild')
       } finally {
         rmSync(projectDir, { recursive: true, force: true })
       }
     }
   )
+
   it.skipIf(process.platform === 'win32')(
     'builds patched node-pty from source even though a shipped prebuild short-circuits its install script',
     () => {
@@ -220,9 +221,29 @@ describe('ensure-native-runtime', () => {
       }
     }
   )
+
+  it.skipIf(process.platform === 'win32')(
+    'builds through npm_config_node_gyp when the bundled node-gyp is unusable',
+    () => {
+      const projectDir = mkTempProject()
+
+      try {
+        const outcome = runAgainstUpstreamLikeNodePty(projectDir, {
+          nodeGypOverridePath: join(projectDir, 'external-node-gyp.cjs')
+        })
+
+        expect(outcome.result.status, outcome.result.stderr).toBe(0)
+        expect(existsSync(join(nodePtyDirOf(projectDir), 'build', 'Release', 'pty.node'))).toBe(
+          true
+        )
+      } finally {
+        rmSync(projectDir, { recursive: true, force: true })
+      }
+    }
+  )
 })
 
-function runAgainstUpstreamLikeNodePty(projectDir) {
+function runAgainstUpstreamLikeNodePty(projectDir, { nodeGypOverridePath = null } = {}) {
   const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.mjs')
   const logPath = join(projectDir, 'native-runtime.log')
   const binDir = join(projectDir, 'bin')
@@ -230,15 +251,21 @@ function runAgainstUpstreamLikeNodePty(projectDir) {
   copyFileSync(sourceScriptPath, scriptPath)
   writeUpstreamLikeNodePty(projectDir)
   writeNodePtyPatchFile(projectDir)
-  writeFakeNodeGyp(projectDir)
   writePnpmRunningInstallScripts(binDir)
+  // Why: omitting the resolvable copy proves the override is what got used.
+  if (nodeGypOverridePath) {
+    writeFileSync(nodeGypOverridePath, NODE_GYP_SHIM_SOURCE)
+  } else {
+    writeFakeNodeGyp(projectDir)
+  }
 
   const result = spawnSync(process.execPath, [scriptPath, '--runtime=node'], {
     cwd: projectDir,
     encoding: 'utf8',
     env: envWithPrependedPath(binDir, {
       ORCA_NATIVE_TEST_LOG: logPath,
-      ORCA_NATIVE_TEST_MARKER: join(projectDir, 'rebuilt.marker')
+      ORCA_NATIVE_TEST_MARKER: join(projectDir, 'rebuilt.marker'),
+      ...(nodeGypOverridePath ? { npm_config_node_gyp: nodeGypOverridePath } : {})
     })
   })
 
@@ -256,8 +283,13 @@ function envWithPrependedPath(binDir, extraEnv) {
     process.platform === 'win32'
       ? (Object.keys(process.env).find((key) => key.toLowerCase() === 'path') ?? 'Path')
       : 'PATH'
+  const inherited = { ...process.env }
+  // Why: CI exports npm_config_node_gyp job-wide, which would run the real
+  // node-gyp against these fixtures instead of the shim.
+  delete inherited.npm_config_node_gyp
+
   return {
-    ...process.env,
+    ...inherited,
     ...extraEnv,
     [pathKey]: `${binDir}${delimiter}${process.env[pathKey] ?? ''}`
   }
