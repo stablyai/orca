@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
   getDefaultNotificationSettings,
   getDefaultPrimarySelectionMiddleClickPaste,
   getDefaultTerminalRightClickToPaste,
@@ -43,6 +44,12 @@ describe('getDefaultSettings', () => {
 
   it('enables separate light terminal theme by default', () => {
     expect(getDefaultSettings('/tmp').terminalUseSeparateLightTheme).toBe(true)
+  })
+
+  it('keeps inactive terminal panes readable by default', () => {
+    expect(getDefaultSettings('/tmp').terminalInactivePaneOpacity).toBe(
+      DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY
+    )
   })
 
   it('asks before closing terminals with running processes by default', () => {

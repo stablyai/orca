@@ -165,6 +165,13 @@ type StoreState = {
     }[]
   >
   runtimeEnvironments?: { id: string }[]
+  runtimeStatusByEnvironmentId: Map<
+    string,
+    {
+      checkedAt: number
+      status: { capabilities?: string[] } | null
+    }
+  >
   runtimeEnvironmentCatalogHydrated?: boolean
   repos: {
     id: string
@@ -894,6 +901,7 @@ describe('connectPanePty', () => {
       worktreesByRepo: {
         repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/tmp/wt-1', displayName: 'feat/notis' }]
       },
+      runtimeStatusByEnvironmentId: new Map(),
       repos: [{ id: 'repo1', connectionId: null, displayName: 'orca' }],
       projects: [],
       sshConnectionStates: new Map(),
@@ -5502,6 +5510,7 @@ describe('connectPanePty', () => {
     // Once replay completes (guard cleared), real keystrokes flow through.
     replayingPanesRef.current.delete(1)
     setFitOverride('pty-live', 'remote-desktop-fit', 80, 24)
+    transport.claimViewport.mockClear()
     ;(onDataHandler as (data: string) => void)('a')
     expect(transport.sendInput).toHaveBeenCalledWith('a')
     expect(transport.claimViewport).toHaveBeenCalledTimes(1)
@@ -20047,6 +20056,54 @@ describe('connectPanePty', () => {
     expect(api.pty.signal).toHaveBeenCalledWith('leaf-session', 'SIGWINCH')
   })
 
+  it('restores configured paired scrollback after an ordinary park reveal', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const remotePtyId = 'remote:env-1@@terminal-1'
+    const transport = createMockTransport(remotePtyId)
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      transport.getPtyId.mockReturnValue(remotePtyId)
+      callbacks.onReplayData?.('current screen from initial subscribe\r\n')
+      return { id: remotePtyId, isReattach: true, replay: '' }
+    })
+    transport.serializeBuffer = vi.fn().mockResolvedValue({
+      data: 'DEEP_PAIRED_SCROLLBACK\r\ncurrent screen\r\n',
+      cols: 100,
+      rows: 30,
+      seq: 4_096,
+      source: 'headless'
+    })
+    transportFactoryQueue.push(transport)
+    await parkTabForReveal('tab-1', remotePtyId)
+    mockStoreState = {
+      ...mockStoreState,
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'env-1',
+          {
+            checkedAt: Date.now(),
+            status: { capabilities: ['terminal.paired-parking.v1'] }
+          }
+        ]
+      ])
+    }
+
+    const pane = createPane(1)
+    const { parseCallbacks, writes } = captureCallbackTerminalWrites(pane)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    for (let step = 0; step < 30; step += 1) {
+      parseCallbacks.shift()?.()
+      await flushAsyncTicks(2)
+    }
+
+    expect(transport.serializeBuffer).toHaveBeenCalledWith({ scrollbackRows: 5000 })
+    expect(transport.attach).not.toHaveBeenCalled()
+    expect(writes.join('')).toContain('DEEP_PAIRED_SCROLLBACK')
+    expect(writes.join('')).toContain('current screen from initial subscribe')
+    expect(transport.getPtyId).toHaveReturnedWith(remotePtyId)
+  })
+
   it('falls back to relay replay when the SSH model snapshot stalls', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { SSH_REATTACH_MODEL_SNAPSHOT_TIMEOUT_MS } = await import('./ssh-reattach-model-restore')
@@ -23506,6 +23563,72 @@ describe('connectPanePty', () => {
       // Never even queries size for a remote pane, and never re-asserts.
       expect(getSize).not.toHaveBeenCalled()
       expect(transport.resize).not.toHaveBeenCalled()
+    })
+
+    it('claims a focused visible remote mirror once when its passive fit hold arrives', async () => {
+      let documentFocused = true
+      ;(globalThis as { document?: Document }).document = {
+        visibilityState: 'visible',
+        hasFocus: vi.fn(() => documentFocused)
+      } as unknown as Document
+      const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
+      const { connectPanePty } = await import('./pty-connection')
+      const ptyId = 'remote:env-1@@terminal-visible'
+      const transport = createMockTransport(ptyId)
+      transportFactoryQueue.push(transport)
+      const deps = createDeps({
+        restoredLeafId: LEAF_2,
+        restoredPtyIdByLeafId: { [LEAF_2]: ptyId },
+        paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
+      })
+      const pane = createPane(2)
+      pane.fitAddon = {
+        ...pane.fitAddon,
+        proposeDimensions: vi.fn(() => ({ cols: 132, rows: 42 }))
+      } as never
+      const binding = connectPanePty(pane as never, createManager(2) as never, deps as never)
+      await flushAsyncTicks()
+      transport.claimViewport.mockClear()
+
+      setFitOverride(ptyId, 'remote-desktop-fit', 10, 4)
+
+      expect(transport.claimViewport).toHaveBeenCalledWith(132, 42)
+      setFitOverride(ptyId, 'desktop-fit', 132, 42)
+      transport.claimViewport.mockClear()
+      setFitOverride(ptyId, 'remote-desktop-fit', 80, 24)
+      expect(transport.claimViewport).not.toHaveBeenCalled()
+
+      deps.isVisibleRef.current = false
+      binding.syncProcessTracking()
+      deps.isVisibleRef.current = true
+      binding.noteVisibilityResume()
+      expect(transport.claimViewport).toHaveBeenCalledWith(132, 42)
+
+      setFitOverride(ptyId, 'desktop-fit', 132, 42)
+      documentFocused = false
+      deps.isVisibleRef.current = false
+      binding.syncProcessTracking()
+      deps.isVisibleRef.current = true
+      binding.noteVisibilityResume()
+      transport.claimViewport.mockClear()
+      setFitOverride(ptyId, 'remote-desktop-fit', 80, 24)
+      expect(transport.claimViewport).not.toHaveBeenCalled()
+
+      documentFocused = true
+      binding.reassertPtySizeAfterWindowWake()
+      expect(transport.claimViewport).toHaveBeenCalledWith(132, 42)
+
+      setFitOverride(ptyId, 'desktop-fit', 132, 42)
+      deps.isVisibleRef.current = false
+      binding.syncProcessTracking()
+      deps.isVisibleRef.current = true
+      binding.noteVisibilityResume()
+      transport.claimViewport.mockClear()
+      setFitOverride(ptyId, 'remote-desktop-fit', 80, 24)
+      expect(transport.claimViewport).not.toHaveBeenCalled()
+
+      setFitOverride(ptyId, 'desktop-fit', 132, 42)
+      binding.dispose()
     })
 
     it('does NOT re-assert while a mobile-fit override parks the PTY at phone dims', async () => {

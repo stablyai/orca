@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JiraClientForSite } from './client'
 import { credentialDecryptionMessage } from '../../shared/integration-credential-errors'
+import { getJiraSummaryLookupErrorCode } from '../../shared/jira-summary-lookup'
 
 const {
   clearTokenMock,
@@ -113,6 +114,62 @@ describe('Jira issue operations', () => {
       '/rest/api/2/search',
       expect.objectContaining({ method: 'POST' })
     )
+  })
+
+  it('loads Jira summaries without descriptions, rendered fields, or attachment media', async () => {
+    jiraRequestMock.mockResolvedValueOnce({
+      id: 'issue-1',
+      key: 'ALP-1',
+      fields: {
+        summary: 'Lightweight lookup',
+        project: { id: '10000', key: 'ALP', name: 'Alpha' },
+        issuetype: { id: '10001', name: 'Bug' },
+        status: { id: '1', name: 'To Do', statusCategory: { key: 'new', name: 'To Do' } },
+        labels: [],
+        created: '2026-07-27T00:00:00.000Z',
+        updated: '2026-07-28T11:22:33.000Z'
+      }
+    })
+    const { getIssueSummary } = await import('./issues')
+    await expect(getIssueSummary('ALP-1', 'site-1')).resolves.toMatchObject({
+      key: 'ALP-1',
+      title: 'Lightweight lookup',
+      siteId: 'site-1',
+      createdAt: '2026-07-27T00:00:00.000Z',
+      updatedAt: '2026-07-28T11:22:33.000Z'
+    })
+    const requestPath = String(jiraRequestMock.mock.calls[0]?.[1])
+    const query = new URL(requestPath, 'https://example.atlassian.net').searchParams
+    const fields = query.get('fields')?.split(',') ?? []
+    expect(fields).toEqual(['summary', 'project', 'issuetype', 'status', 'created', 'updated'])
+    expect(query.has('expand')).toBe(false)
+    expect(jiraRequestBinaryMock).not.toHaveBeenCalled()
+    expect(clearTokenMock).not.toHaveBeenCalled()
+  })
+
+  it('returns typed summary errors without clearing Jira credentials', async () => {
+    const authError = Object.assign(new Error('Unauthorized'), { status: 401 })
+    isAuthErrorMock.mockImplementation((error) => error === authError)
+    jiraRequestMock.mockRejectedValueOnce(authError)
+    const { getIssueSummary } = await import('./issues')
+    const read = getIssueSummary('ALP-1', 'site-1')
+    await expect(read).rejects.toSatisfy(
+      (error: unknown) => getJiraSummaryLookupErrorCode(error) === 'auth'
+    )
+    jiraRequestMock.mockRejectedValueOnce(Object.assign(new Error('Missing'), { status: 404 }))
+    await expect(getIssueSummary('ALP-404', 'site-1')).rejects.toSatisfy(
+      (error: unknown) => getJiraSummaryLookupErrorCode(error) === 'not-found'
+    )
+    expect(clearTokenMock).not.toHaveBeenCalled()
+  })
+
+  it('reports an explicit disconnected summary scope before issuing a request', async () => {
+    getClientsMock.mockReturnValueOnce([])
+    const { getIssueSummary } = await import('./issues')
+    await expect(getIssueSummary('ALP-1', 'site-1')).rejects.toSatisfy(
+      (error: unknown) => getJiraSummaryLookupErrorCode(error) === 'disconnected'
+    )
+    expect(jiraRequestMock).not.toHaveBeenCalled()
   })
 
   it('sends plain-text bodies and v2 paths for self-hosted issue creation', async () => {

@@ -43,7 +43,7 @@ import { initObservability, shutdownObservability } from './observability'
 import { registerMobileHandlers } from './ipc/mobile'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce, track } from './telemetry/client'
 import { classifyError } from './telemetry/classify-error'
-import { runManagedHookInstallers } from './agent-hooks/install-telemetry'
+import { recordManagedHookInstallFailure } from './agent-hooks/install-telemetry'
 import {
   indexPersistedPaneKeyPtyIds,
   isLocalExecutionHost,
@@ -51,8 +51,8 @@ import {
   sweepRestoredSubagentsWithoutLiveAgent
 } from './agent-hooks/restored-subagent-liveness-sweep'
 import {
+  applyAgentStatusHooksEnabled,
   isAgentStatusHooksEnabled,
-  MANAGED_AGENT_HOOK_INSTALLERS,
   removeManagedAgentHooks
 } from './agent-hooks/managed-agent-hook-controls'
 import { initCohortClassifier } from './telemetry/cohort-classifier'
@@ -127,6 +127,7 @@ import {
   type GpuFallbackEnvironment,
   type WindowsGpuFallbackEnvironment
 } from './startup/gpu-fallback-marker'
+import { applyGpuFallbackCommandLineSwitches } from './startup/gpu-fallback-switches'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
   DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
@@ -1518,10 +1519,13 @@ function maybeApplyGpuFallbackForThisLaunch(): void {
     return
   }
   app.disableHardwareAcceleration()
-  app.commandLine.appendSwitch('disable-gpu')
+  const appliedSwitches = applyGpuFallbackCommandLineSwitches(app.commandLine, process.platform)
   gpuFallbackActiveThisLaunch = true
+  // Why: with no GPU child left, child-process-gone can't report a GPU fault, so
+  // name the applied switches in the trail any later crash report carries.
   recordCrashBreadcrumb('gpu_fallback_applied', {
-    crashesInWindow: marker.crashesInWindow
+    crashesInWindow: marker.crashesInWindow,
+    switches: appliedSwitches.join(',')
   })
 }
 
@@ -1541,23 +1545,6 @@ async function handleGpuChildCrash(reason: string, exitCode: number | null): Pro
     crashesInWindow: result.crashesInWindow
   })
   const engagedAt = Date.now()
-  const environment = getWindowsGpuFallbackEnvironment()
-  if (!environment) {
-    return
-  }
-  try {
-    writeGpuFallbackMarker(
-      app.getPath('userData'),
-      {
-        engagedAt,
-        crashesInWindow: result.crashesInWindow
-      },
-      environment
-    )
-  } catch (error) {
-    console.warn('[gpu-fallback] failed to persist marker:', error)
-    return
-  }
   const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
   let restartDecision: GpuFallbackRestartDecision
   try {
@@ -1576,6 +1563,23 @@ async function handleGpuChildCrash(reason: string, exitCode: number | null): Pro
   }
   if (restartDecision !== 'restart') {
     recordDurableCrashBreadcrumb('gpu_fallback_restart_deferred', fallbackData)
+    return
+  }
+  const environment = getWindowsGpuFallbackEnvironment()
+  if (!environment) {
+    return
+  }
+  try {
+    writeGpuFallbackMarker(
+      app.getPath('userData'),
+      {
+        engagedAt,
+        crashesInWindow: result.crashesInWindow
+      },
+      environment
+    )
+  } catch (error) {
+    console.warn('[gpu-fallback] failed to persist marker:', error)
     return
   }
   isQuitting = true
@@ -1997,6 +2001,7 @@ void app.whenReady().then(async () => {
 
   const activeOrcaProfile = ensureActiveOrcaProfile()
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
+  wslHookRelayManager.setManagedHookSettingsResolver(() => store?.getSettings() ?? null)
   logStartupMilestone('store-loaded')
   // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
@@ -2557,7 +2562,17 @@ void app.whenReady().then(async () => {
   if (shouldInstallManagedHooks(is.dev)) {
     // Why: check the persisted off switch before any auto-install so removed hooks don't silently reappear on launch.
     if (isAgentStatusHooksEnabled(store.getSettings())) {
-      runManagedHookInstallers(MANAGED_AGENT_HOOK_INSTALLERS)
+      const managedHookStore = store
+      void applyAgentStatusHooksEnabled(true, managedHookStore.getSettings(), {
+        shouldHydrateShellPath: app.isPackaged && process.platform !== 'win32',
+        onInstallError: recordManagedHookInstallFailure,
+        shouldContinue: (agent) => {
+          const settings = managedHookStore.getSettings()
+          return isAgentStatusHooksEnabled(settings) && !settings.disabledTuiAgents.includes(agent)
+        }
+      }).catch((error) => {
+        console.warn('[agent-hooks] failed to reconcile managed hooks on startup:', error)
+      })
     } else {
       removeManagedAgentHooks()
     }

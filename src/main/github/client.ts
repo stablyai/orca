@@ -658,11 +658,12 @@ function checkRollupEntries(value: unknown): unknown[] {
 function deriveWorkItemCheckSummary(value: unknown): GitHubWorkItem['checksSummary'] {
   const entries = checkRollupEntries(value)
   if (entries.length === 0) {
-    return { state: 'none', total: 0, passed: 0, failed: 0, pending: 0 }
+    return { state: 'none', total: 0, passed: 0, failed: 0, pending: 0, neutral: 0 }
   }
   let passed = 0
   let failed = 0
   let pending = 0
+  let neutral = 0
   for (const entry of entries) {
     if (typeof entry !== 'object' || entry === null) {
       pending += 1
@@ -671,7 +672,7 @@ function deriveWorkItemCheckSummary(value: unknown): GitHubWorkItem['checksSumma
     const raw = entry as Record<string, unknown>
     const conclusion = String(raw.conclusion ?? raw.state ?? '').toUpperCase()
     const status = String(raw.status ?? '').toUpperCase()
-    if (['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(conclusion)) {
+    if (['SUCCESS', 'SKIPPED'].includes(conclusion)) {
       passed += 1
     } else if (
       ['FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(
@@ -679,18 +680,19 @@ function deriveWorkItemCheckSummary(value: unknown): GitHubWorkItem['checksSumma
       )
     ) {
       failed += 1
-    } else if (status === 'COMPLETED' && conclusion) {
-      failed += 1
+    } else if (status === 'COMPLETED') {
+      neutral += 1
     } else {
       pending += 1
     }
   }
   return {
-    state: failed > 0 ? 'failure' : pending > 0 ? 'pending' : 'success',
+    state: failed > 0 ? 'failure' : pending > 0 ? 'pending' : neutral > 0 ? 'neutral' : 'success',
     total: entries.length,
     passed,
     failed,
-    pending
+    pending,
+    neutral
   }
 }
 

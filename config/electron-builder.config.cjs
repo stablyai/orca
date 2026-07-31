@@ -14,6 +14,7 @@ const {
 const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
 const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
+const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
 
 const isMacRelease = process.env.ORCA_MAC_RELEASE === '1'
 const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
@@ -141,6 +142,7 @@ module.exports = {
     'out/main/agent-hooks/**',
     'out/main/antigravity/**',
     'out/main/claude/**',
+    'out/main/claude-accounts/keychain.js',
     'out/main/codex/**',
     'out/main/copilot/**',
     'out/main/cursor/**',
@@ -148,7 +150,6 @@ module.exports = {
     'out/main/gemini/**',
     'out/main/grok/**',
     'out/main/hermes/**',
-    'out/main/win32-utils.js',
     'out/main/daemon-entry.js',
     'out/main/plugin-host-entry.js',
     'out/main/computer-sidecar.js',
@@ -178,7 +179,7 @@ module.exports = {
           )
         : join(context.appOutDir, 'resources')
     if (!existsSync(resourcesDir)) {
-      return
+      throw new Error(`Missing packaged resources directory: ${resourcesDir}`)
     }
     if (context.electronPlatformName === 'darwin') {
       const architectureByEnum = { 1: 'x64', 3: 'arm64' }
@@ -208,7 +209,16 @@ module.exports = {
     // arm64=3, universal=4 (universal contains the host slice, so run it).
     const archEnumByNodeArch = { ia32: 0, x64: 1, armv7l: 2, arm64: 3 }
     const hostArchEnum = archEnumByNodeArch[process.arch]
-    if (context.arch === hostArchEnum || context.arch === 4) {
+    const canExecuteTargetArch = context.arch === hostArchEnum || context.arch === 4
+    verifySkillsCliRuntime(join(resourcesDir, 'app.asar.unpacked', 'out'), resourcesDir, {
+      executeCommands: canExecuteTargetArch
+    })
+    if (!canExecuteTargetArch) {
+      console.log(
+        `[verify-skills-cli-runtime] skipped command probes on cross-arch slice (target ${context.arch}, host ${process.arch})`
+      )
+    }
+    if (canExecuteTargetArch) {
       verifyPackagedDaemonEntryBoots(resourcesDir)
     } else {
       // Why: a cross-arch slice can't be booted by the host Node, but the

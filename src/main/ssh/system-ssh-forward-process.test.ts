@@ -137,7 +137,7 @@ describe('system SSH forward process', () => {
     expect(standaloneControlIdx).toBe(-1)
     expectNoOrcaControlMasterArgs(args)
     expect(args).toContain('127.0.0.1:5173:127.0.0.1:3000')
-    expect(args[terminatorIdx + 1]).toBe('deploy@fdpass-host')
+    expect(args[terminatorIdx + 1]).toBe('fdpass-host')
     expect(spawnMock).toHaveBeenCalledWith(
       SYSTEM_SSH_PATH,
       expect.any(Array),
@@ -192,7 +192,7 @@ describe('system SSH forward process', () => {
     const args = spawnMock.mock.calls[0][1] as string[]
     expect(args.indexOf('-S')).toBe(-1)
     expectNoOrcaControlMasterArgs(args)
-    expect(args).toContain('deploy@workbox')
+    expect(args).toContain('workbox')
   })
 
   it('preserves manual target port and identity options in the forwarded ssh command', () => {

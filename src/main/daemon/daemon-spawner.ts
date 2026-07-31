@@ -14,6 +14,8 @@ export type DaemonPidFile = {
   entryPath?: string
   appVersion?: string
   launchNonce?: string
+  linuxStartTicks?: string
+  bootId?: string
 }
 
 export type DaemonProcessHandle = {

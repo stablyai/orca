@@ -6,7 +6,10 @@ import { SkillFreshnessStatusPill } from '../skills/SkillFreshnessStatusPill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
+import {
+  notifyInstalledAgentSkillsChanged,
+  notifyInstalledAgentSkillsRefreshed
+} from '@/hooks/useInstalledAgentSkills'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
@@ -82,8 +85,8 @@ export function AgentSkillSetupPanel({
   onBeforeOpenTerminal,
   showInstallWhenInstalled = true,
   showRecheckWhenInstalled = true,
-  installLabel = 'Install',
-  installedInstallLabel = 'Update',
+  installLabel,
+  installedInstallLabel,
   installVariant = 'outline',
   actionHint,
   openingHint,
@@ -91,6 +94,12 @@ export function AgentSkillSetupPanel({
   onRecheck,
   freshnessSkillName
 }: AgentSkillSetupPanelProps): React.JSX.Element {
+  const resolvedInstallLabel =
+    installLabel ??
+    translate('auto.components.settings.AgentSkillSetupPanel.installLabel', 'Install')
+  const resolvedInstalledInstallLabel =
+    installedInstallLabel ??
+    translate('auto.components.settings.AgentSkillSetupPanel.updateLabel', 'Update')
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [terminalCommand, setTerminalCommand] = useState<string | null>(null)
   const [terminalOpening, setTerminalOpening] = useState(false)
@@ -211,8 +220,8 @@ export function AgentSkillSetupPanel({
           {terminalOpening
             ? translate('auto.components.settings.AgentSkillSetupPanel.5f818f12ab', 'Preparing...')
             : installed
-              ? installedInstallLabel
-              : installLabel}
+              ? resolvedInstalledInstallLabel
+              : resolvedInstallLabel}
         </Button>
       ) : null}
       {!installed || showRecheckWhenInstalled ? (
@@ -222,10 +231,10 @@ export function AgentSkillSetupPanel({
           size="sm"
           className="gap-1.5"
           onClick={() => {
-            void onRecheck()
-            if (freshnessSkillName) {
-              notifyInstalledAgentSkillsChanged()
-            }
+            void Promise.resolve(onRecheck()).then(() => {
+              // Reuse the completed scan so sibling surfaces sync without rediscovery.
+              notifyInstalledAgentSkillsRefreshed()
+            })
           }}
           disabled={loading}
         >
@@ -257,9 +266,15 @@ export function AgentSkillSetupPanel({
         className={variant === 'card' ? cn('px-5 pt-5', terminalOpen ? 'pb-2' : 'pb-5') : 'pt-1.5'}
       >
         {hideHeader ? (
-          error ? (
-            <p className="text-[12px] text-destructive">{error}</p>
-          ) : null
+          <>
+            {error ? <p className="text-[12px] text-destructive">{error}</p> : null}
+            {/* hideHeader drops the title row; keep freshness so guided hubs still surface updates. */}
+            {installed && freshnessSkillName ? (
+              <div className="mb-2">
+                <SkillFreshnessStatusPill skillName={freshnessSkillName} />
+              </div>
+            ) : null}
+          </>
         ) : (
           <div className="flex items-center gap-4">
             {leading}
@@ -303,7 +318,9 @@ export function AgentSkillSetupPanel({
           </div>
         )}
         <div className={cn('max-w-none', hideHeader ? null : 'mt-3')}>
-          <p className="text-[13px] leading-snug text-muted-foreground">{description}</p>
+          {description != null ? (
+            <p className="text-[13px] leading-snug text-muted-foreground">{description}</p>
+          ) : null}
           {actionRow}
           {actionHint ? <div className="mt-2">{actionHint}</div> : null}
           {!installed && preInstallNotice && preInstallNoticeVisible ? (

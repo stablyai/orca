@@ -2,12 +2,15 @@ import { useCallback, type RefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { canRetryMobileNativeChatSend } from './mobile-native-chat-input-recovery'
 import {
+  clearMobileNativeChatInput,
   openMobileNativeChatSendBudget,
   sendMobileNativeChatMessageWithOutcome,
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-draft-contract'
+import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
+import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
 
 export type MobileNativeChatMessageSend = {
   /** Composer send that syncs the draft (clear on send, restore on rejection). */
@@ -38,6 +41,9 @@ export function useMobileNativeChatMessageSend(args: {
     expectedSessionTabId: string | null
   ) => Promise<boolean>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
+  /** Launch-context text Orca parked on the agent's TUI input line, or null. Read
+   *  at send time so the pre-clear can be sized to every line it occupies. */
+  readSeededLaunchDraftSeed: () => MobileNativeChatLaunchDraftSeed | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
@@ -56,6 +62,7 @@ export function useMobileNativeChatMessageSend(args: {
     deviceTokenRef,
     recoverInputLease,
     captureSendOrigin,
+    readSeededLaunchDraftSeed,
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,
@@ -104,18 +111,63 @@ export function useMobileNativeChatMessageSend(args: {
       if (syncComposer) {
         clearDraftForSend(origin, text)
       }
-      const sendToTerminal = (terminal: string) =>
-        sendMobileNativeChatMessageWithOutcome({
+      // Why: a parked launch draft is routinely multi-line, and one Ctrl+U clears
+      // only one logical line. Size the clear to the text Orca injected, with
+      // slack — the user can also have typed into the TUI line directly, so that
+      // line count is a lower bound. Mobile cannot read the agent's screen, so
+      // there is no empty-line observable to confirm against here; the upper
+      // bound plus the host's write acceptance is what makes it safe.
+      //
+      // The burst goes out as its OWN write: bundled into the body write it
+      // arrived as literal Ctrl+U text and the draft concatenated (see
+      // clearMobileNativeChatInput). A rejected clear aborts the send rather
+      // than pasting on top of an uncleared line.
+      const seededLaunchDraft = readSeededLaunchDraftSeed()
+      const sendToTerminal = async (terminal: string): Promise<MobileNativeChatSendOutcome> => {
+        if (seededLaunchDraft && !images?.length) {
+          const cleared = await clearMobileNativeChatInput({
+            client,
+            terminal,
+            clearInput: buildAgentTuiClearInputForText(seededLaunchDraft.text),
+            deadline,
+            ...(deviceTokenRef.current
+              ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
+              : {})
+          })
+          if (!cleared) {
+            return 'rejected'
+          }
+        }
+        return sendMobileNativeChatMessageWithOutcome({
           client,
           terminal,
           text,
-          // A second clear would wipe an image pasted by the caller.
-          clearInputFirst: !images?.length,
+          // Why: pre-clear only when nothing was deliberately pasted first. The heal
+          // above fires only for terminals a mobile image paste marked, so a desktop
+          // launch-draft prefill parked on the input line would otherwise glue onto
+          // this message. An image send already led its own paste with Ctrl+U, and a
+          // second one here would wipe the image it just pasted (desktop's image path
+          // likewise clears once, before the paste, and never again).
+          //
+          // Also skipped once the dedicated clear above ran: the line is already
+          // empty, and a Ctrl+U written immediately before body text in the SAME
+          // write reaches the agent as a literal control character rather than a
+          // keypress (observed live as a stray \x15 heading the received message).
+          clearInputFirst: !images?.length && !seededLaunchDraft,
+          ...(syncComposer && typeof seededLaunchDraft?.createdAt === 'number'
+            ? {
+                resolvedLaunchDraft: {
+                  text: seededLaunchDraft.text,
+                  createdAt: seededLaunchDraft.createdAt
+                }
+              }
+            : {}),
           deadline,
           ...(deviceTokenRef.current
             ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
             : {})
         })
+      }
       let outcome = await sendToTerminal(handle)
       if (outcome === 'rejected' && (await recoverInputLease(handle, sessionTabId))) {
         const recoveredHandle = handleRef.current
@@ -163,6 +215,7 @@ export function useMobileNativeChatMessageSend(args: {
       holdUnconfirmedSend,
       onSendError,
       recoverInputLease,
+      readSeededLaunchDraftSeed,
       restoreRejectedDraft
     ]
   )

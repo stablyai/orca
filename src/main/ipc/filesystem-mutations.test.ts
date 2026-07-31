@@ -171,6 +171,36 @@ describe('registerFilesystemMutationHandlers', () => {
     expect(renameMock).toHaveBeenCalledWith(oldPath, newPath)
   })
 
+  it('serializes concurrent local renames targeting the same destination', async () => {
+    const firstPath = path.resolve('/workspace/repo/first.ts')
+    const secondPath = path.resolve('/workspace/repo/second.ts')
+    const destinationPath = path.resolve('/workspace/repo/destination.ts')
+    let destinationExists = false
+    lstatMock.mockImplementation(async (filePath: string) => {
+      if (filePath === destinationPath && destinationExists) {
+        return mockStats(1, 30)
+      }
+      if (filePath === firstPath) {
+        return mockStats(1, 10)
+      }
+      if (filePath === secondPath) {
+        return mockStats(1, 20)
+      }
+      throw enoent()
+    })
+    renameMock.mockImplementation(async () => {
+      destinationExists = true
+    })
+
+    const results = await Promise.allSettled([
+      handlers.get('fs:rename')!(null, { oldPath: firstPath, newPath: destinationPath }),
+      handlers.get('fs:rename')!(null, { oldPath: secondPath, newPath: destinationPath })
+    ])
+
+    expect(results.map(({ status }) => status).sort()).toEqual(['fulfilled', 'rejected'])
+    expect(renameMock).toHaveBeenCalledTimes(1)
+  })
+
   it('rejects rename when destination already exists as a true collision', async () => {
     const oldPath = path.resolve('/workspace/repo/old.ts')
     const resolvedNewPath = path.resolve('/workspace/repo/new.ts')
@@ -197,12 +227,30 @@ describe('registerFilesystemMutationHandlers', () => {
   it('allows case-only rename when destination is the same entry in the same parent', async () => {
     const oldPath = path.resolve('/workspace/repo/README.md')
     const newPath = path.resolve('/workspace/repo/readme.md')
+    const canonicalPath = path.resolve('/workspace/repo/README.md')
     lstatMock.mockImplementation(async (p: string) => {
       if (p === oldPath || p === newPath) {
         return mockStats(2, 20)
       }
       throw enoent()
     })
+    mockRealpath({ [oldPath]: canonicalPath, [newPath]: canonicalPath })
+
+    await handlers.get('fs:rename')!(null, { oldPath, newPath })
+
+    expect(renameMock).toHaveBeenCalledWith(oldPath, newPath)
+  })
+
+  it('allows a native Unicode alias rename for the same directory entry', async () => {
+    const oldPath = path.resolve('/workspace/repo/Straße.md')
+    const newPath = path.resolve('/workspace/repo/STRASSE.md')
+    lstatMock.mockImplementation(async (p: string) => {
+      if (p === oldPath || p === newPath) {
+        return mockStats(2, 21)
+      }
+      throw enoent()
+    })
+    mockRealpath({ [oldPath]: oldPath, [newPath]: oldPath })
 
     await handlers.get('fs:rename')!(null, { oldPath, newPath })
 
@@ -223,6 +271,25 @@ describe('registerFilesystemMutationHandlers', () => {
       "A file or folder named 'README-hardlink.md' already exists in this location"
     )
 
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when same-entry realpath encounters a permission error', async () => {
+    const oldPath = path.resolve('/workspace/repo/README.md')
+    const newPath = path.resolve('/workspace/repo/readme.md')
+    lstatMock.mockImplementation(async (p: string) => {
+      if (p === oldPath || p === newPath) {
+        return mockStats(3, 30)
+      }
+      throw enoent()
+    })
+    realpathMock.mockRejectedValue(
+      Object.assign(new Error('permission denied'), { code: 'EACCES' })
+    )
+
+    await expect(handlers.get('fs:rename')!(null, { oldPath, newPath })).rejects.toMatchObject({
+      code: 'EACCES'
+    })
     expect(renameMock).not.toHaveBeenCalled()
   })
 

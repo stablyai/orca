@@ -37,6 +37,9 @@ import {
   relativePathInsideRoot
 } from '../../shared/cross-platform-path'
 import { isTuiAgent } from '../../shared/tui-agent-config'
+import { TaskSourceContextSchema } from '../../shared/task-source-context-schema'
+import { WorkspaceLinkedItemSchema } from '../../shared/workspace-linked-item-schema'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../shared/workspace-linked-item-source-context'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'node:child_process'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
@@ -877,47 +880,61 @@ const ProjectHostSetupDeleteIpcArgs = z.object({
   setupId: z.string().min(1)
 })
 
-const FolderWorkspaceLinkedTaskArgs = z
-  .object({
-    provider: z.enum(['github', 'gitlab', 'linear', 'jira']),
-    type: z.enum(['issue', 'pr', 'mr']),
-    number: z.number().finite(),
-    title: z.string().min(1),
-    url: z.string().min(1),
-    linearIdentifier: z.string().min(1).optional(),
-    jiraIdentifier: z.string().min(1).optional(),
-    repoId: z.string().min(1).optional()
-  })
-  .nullable()
+const FolderWorkspaceLinkedTaskArgs = WorkspaceLinkedItemSchema.nullable()
 
-const FolderWorkspaceCreateArgs = z.object({
-  projectGroupId: z.string().min(1),
-  name: z.string().optional(),
-  folderPath: z.string().nullable().optional(),
-  connectionId: z.string().nullable().optional(),
-  linkedTask: FolderWorkspaceLinkedTaskArgs.optional(),
-  createdWithAgent: z.string().refine(isTuiAgent).optional(),
-  pendingFirstAgentMessageRename: z.boolean().optional()
-})
+function assertFolderWorkspaceLinkedSourceContextMatch(
+  value: {
+    linkedTask?: z.infer<typeof FolderWorkspaceLinkedTaskArgs>
+    linkedTaskSourceContext?: z.infer<typeof TaskSourceContextSchema> | null
+  },
+  ctx: z.RefinementCtx
+): void {
+  if (
+    value.linkedTask &&
+    value.linkedTaskSourceContext &&
+    !isWorkspaceLinkedItemSourceContextMatch(value.linkedTask, value.linkedTaskSourceContext)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Linked task and source context identities must match'
+    })
+  }
+}
+
+const FolderWorkspaceCreateArgs = z
+  .object({
+    projectGroupId: z.string().min(1),
+    name: z.string().optional(),
+    folderPath: z.string().nullable().optional(),
+    connectionId: z.string().nullable().optional(),
+    linkedTask: FolderWorkspaceLinkedTaskArgs.optional(),
+    linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
+    createdWithAgent: z.string().refine(isTuiAgent).optional(),
+    pendingFirstAgentMessageRename: z.boolean().optional()
+  })
+  .superRefine(assertFolderWorkspaceLinkedSourceContextMatch)
 
 const FolderWorkspaceUpdateArgs = z.object({
   folderWorkspaceId: z.string().min(1),
-  updates: z.object({
-    name: z.string().optional(),
-    folderPath: z.string().optional(),
-    linkedTask: FolderWorkspaceLinkedTaskArgs.optional(),
-    comment: z.string().optional(),
-    isArchived: z.boolean().optional(),
-    isUnread: z.boolean().optional(),
-    isPinned: z.boolean().optional(),
-    sortOrder: z.number().finite().optional(),
-    manualOrder: z.number().finite().optional(),
-    workspaceStatus: z.string().optional(),
-    createdWithAgent: z.string().refine(isTuiAgent).optional(),
-    pendingFirstAgentMessageRename: z.boolean().optional(),
-    firstAgentMessageRenameError: z.string().nullable().optional(),
-    lastActivityAt: z.number().finite().optional()
-  })
+  updates: z
+    .object({
+      name: z.string().optional(),
+      folderPath: z.string().optional(),
+      linkedTask: FolderWorkspaceLinkedTaskArgs.optional(),
+      linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
+      comment: z.string().optional(),
+      isArchived: z.boolean().optional(),
+      isUnread: z.boolean().optional(),
+      isPinned: z.boolean().optional(),
+      sortOrder: z.number().finite().optional(),
+      manualOrder: z.number().finite().optional(),
+      workspaceStatus: z.string().optional(),
+      createdWithAgent: z.string().refine(isTuiAgent).optional(),
+      pendingFirstAgentMessageRename: z.boolean().optional(),
+      firstAgentMessageRenameError: z.string().nullable().optional(),
+      lastActivityAt: z.number().finite().optional()
+    })
+    .superRefine(assertFolderWorkspaceLinkedSourceContextMatch)
 })
 
 const FolderWorkspaceSelectorArgs = z.object({
@@ -2056,6 +2073,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       _event,
       args: {
         repoId: string
+        hostId?: ExecutionHostId
         updates: Partial<
           Pick<
             Repo,
@@ -2197,7 +2215,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           updates.sourceControlAi = normalizedSourceControlAi
         }
       }
-      const updated = store.updateRepo(args.repoId, updates)
+      const hostId = args.hostId ? normalizeExecutionHostId(args.hostId) : null
+      if (args.hostId && !hostId) {
+        return null
+      }
+      const updated = hostId
+        ? store.updateRepo(args.repoId, updates, hostId)
+        : store.updateRepo(args.repoId, updates)
       if (updated) {
         if ('worktreeBasePath' in updates) {
           void prepareLocalWorktreeRootForRepo(store, updated)

@@ -29,7 +29,6 @@ import { useAppStore } from '@/store'
 import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mode'
 import { resolveStartupLaunchDraftText } from '@/lib/worktree-activation'
 import {
-  buildFolderWorkspaceLinkedStartupPlan,
   getFolderWorkspaceAgentLaunchPlatform,
   submitFolderWorkspaceCreate
 } from './folder-workspace-composer-submit'
@@ -227,6 +226,52 @@ describe('submitFolderWorkspaceCreate', () => {
       connectionId: null,
       linkedTask: linkedWorkItem,
       createdWithAgent: 'codex'
+    })
+  })
+
+  it('creates a Jira folder workspace with its bound source context', async () => {
+    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+    const linkedWorkItem = {
+      provider: 'jira' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: 'ORCA-123 Link Jira',
+      url: 'https://company.atlassian.net/browse/ORCA-123',
+      jiraIdentifier: 'ORCA-123'
+    }
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: 'group-1',
+      hostId: 'runtime:folder-env' as const,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      }
+    }
+
+    await submitFolderWorkspaceCreate({
+      projectGroup: makeProjectGroup(),
+      name: '',
+      lastAutoName: '',
+      linkedWorkItem,
+      linkedTaskSourceContext,
+      note: '',
+      quickAgent: null,
+      autoRenameBranchFromWork: true,
+      agentCmdOverrides: {},
+      createFolderWorkspace,
+      onOpenChange: vi.fn()
+    })
+
+    expect(createFolderWorkspace).toHaveBeenCalledWith({
+      projectGroupId: 'group-1',
+      name: 'ORCA-123 Link Jira',
+      connectionId: null,
+      linkedTask: linkedWorkItem,
+      linkedTaskSourceContext
     })
   })
 
@@ -641,30 +686,6 @@ describe('submitFolderWorkspaceCreate', () => {
   })
 })
 
-describe('buildFolderWorkspaceLinkedStartupPlan', () => {
-  it('uses cmd quoting for configured arguments on local Windows', () => {
-    const plan = buildFolderWorkspaceLinkedStartupPlan({
-      agent: 'hermes',
-      linkedWorkItem: {
-        provider: 'github',
-        type: 'issue',
-        number: 42,
-        title: 'Restore linked quick-create',
-        url: 'https://github.com/stablyai/orca/issues/42',
-        repoId: 'repo-1'
-      },
-      note: '',
-      agentCmdOverrides: {},
-      agentArgs: '--provider "value with space"',
-      platform: 'win32',
-      shell: 'cmd',
-      isRemote: false
-    })
-
-    expect(plan?.launchCommand).toBe('hermes --tui "--provider" "value with space"')
-  })
-})
-
 describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
   const ISSUE_URL = 'https://github.com/stablyai/orca/issues/42'
   const linkedIssue = {
@@ -735,7 +756,7 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
     expect(seededDraftFor('tab-1')?.text).toBe(ISSUE_URL)
   })
 
-  it('leaves a multi-line draft in the terminal only', async () => {
+  it('mirrors a multi-line draft into chat', async () => {
     await submitFolderWorkspaceCreate({
       projectGroup: makeProjectGroup(),
       name: '',
@@ -749,8 +770,6 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
       onOpenChange: vi.fn()
     })
 
-    // Terminal still gets it; the chat mirror is withheld until multi-line send
-    // is safe, and decideInitialAgentTabViewMode keeps this launch in terminal.
     expect(mocks.ensureAgentStartupInTerminal).toHaveBeenCalledWith(
       expect.objectContaining({
         startup: expect.objectContaining({
@@ -758,7 +777,7 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
         })
       })
     )
-    expect(seededDraftFor('tab-1')).toBeUndefined()
+    expect(seededDraftFor('tab-1')?.text).toBe(`Reproduce on Windows first\n\n${ISSUE_URL}`)
   })
 
   it('does not mirror an unlinked note, which is submitted rather than drafted', async () => {
@@ -811,9 +830,9 @@ describe('folder-workspace draft: seeded set == chat-opening set', () => {
   // view-mode gate, and both must agree with what the composer actually holds.
   it.each([
     ['argv-prefill', 'claude' as const, '', true],
-    ['argv-prefill multi-line', 'claude' as const, 'Reproduce on Windows first', false],
+    ['argv-prefill multi-line', 'claude' as const, 'Reproduce on Windows first', true],
     ['startup-paste', 'codex' as const, '', true],
-    ['startup-paste multi-line', 'codex' as const, 'Reproduce on Windows first', false]
+    ['startup-paste multi-line', 'codex' as const, 'Reproduce on Windows first', true]
   ])('%s', async (_label, quickAgent, note, expectMirrored) => {
     await submitFolderWorkspaceCreate({
       projectGroup: makeProjectGroup(),

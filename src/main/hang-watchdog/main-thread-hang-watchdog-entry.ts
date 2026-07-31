@@ -6,6 +6,11 @@ import type {
   MainToHangWatchdogWorkerMessage
 } from './hang-watchdog-worker-protocol'
 
+type HangWatchdogPort = {
+  on: (event: 'message', listener: (message: MainToHangWatchdogWorkerMessage) => void) => unknown
+  close: () => void
+}
+
 // Observation only: a false positive must never kill a live main thread mid-write.
 export function recordHangObservation(options: {
   parentPid: number
@@ -28,8 +33,10 @@ export function recordHangObservation(options: {
   }
 }
 
-function runWatchdog(config: HangWatchdogWorkerData): void {
-  const port = parentPort
+export function runWatchdog(
+  config: HangWatchdogWorkerData,
+  port: HangWatchdogPort | null = parentPort
+): void {
   if (!port) {
     return
   }
@@ -71,7 +78,7 @@ function runWatchdog(config: HangWatchdogWorkerData): void {
   })
 }
 
-function isHangWatchdogWorkerData(value: unknown): value is HangWatchdogWorkerData {
+export function isHangWatchdogWorkerData(value: unknown): value is HangWatchdogWorkerData {
   const data = value as Partial<HangWatchdogWorkerData> | null
   return (
     !!data &&

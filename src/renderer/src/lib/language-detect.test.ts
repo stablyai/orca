@@ -47,6 +47,23 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\Users\\alice\\.codex\\LOG.JSONL')).toBe('jsonl')
   })
 
+  it('maps .cts/.mts files to the Monaco built-in typescript language id (case-insensitive)', () => {
+    expect(detectLanguage('config/vitest.config.mts')).toBe('typescript')
+    expect(detectLanguage('scripts/postinstall.cts')).toBe('typescript')
+    expect(detectLanguage('types/global.d.mts')).toBe('typescript')
+    expect(detectLanguage('C:\\repo\\config\\BUILD.MTS')).toBe('typescript')
+  })
+
+  it('keeps .mjs/.cjs on the Monaco built-in javascript language id', () => {
+    expect(detectLanguage('scripts/build.mjs')).toBe('javascript')
+    expect(detectLanguage('scripts/legacy.cjs')).toBe('javascript')
+  })
+
+  it('maps .r files to the r language id regardless of case', () => {
+    expect(detectLanguage('analysis/model.r')).toBe('r')
+    expect(detectLanguage('analysis/MODEL.R')).toBe('r')
+  })
+
   it('keeps .json/.jsonc on the built-in json language and unknown on plaintext', () => {
     expect(detectLanguage('config/settings.json')).toBe('json')
     expect(detectLanguage('config/tsconfig.jsonc')).toBe('json')

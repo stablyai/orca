@@ -22,6 +22,7 @@ import type {
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import type { RuntimeTerminalRead } from '../../shared/runtime-types'
 import { orchestrationMigrationData } from '../../shared/orchestration-rpc-contract'
+import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../shared/orchestration-run-pagination'
 import {
   formatMessageReadOnlyTag,
   formatOrchestrationCheckText,
@@ -463,19 +464,25 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     )
   },
 
-  'orchestration run-list': async ({ client, json }) => {
+  'orchestration run-list': async ({ flags, client, json }) => {
     const result = await client.call<{
       runs: { id: string; objective: string; legacy: number }[]
-    }>('orchestration.runList', {})
-    printResult(result, json, (r) =>
-      r.runs.length === 0
-        ? 'No Runs found.'
-        : r.runs
-            .map(
-              (run) => `${run.id}${run.legacy ? ' [legacy, inspect only]' : ''} ${run.objective}`
-            )
-            .join('\n')
-    )
+      nextCursor: string | null
+    }>('orchestration.runList', {
+      limit: getOptionalPositiveIntegerFlag(flags, 'limit') ?? ORCHESTRATION_RUN_PAGE_LIMIT,
+      cursor: getOptionalStringFlag(flags, 'cursor')
+    })
+    printResult(result, json, (r) => {
+      const rows =
+        r.runs.length === 0
+          ? 'No Runs found.'
+          : r.runs
+              .map(
+                (run) => `${run.id}${run.legacy ? ' [legacy, inspect only]' : ''} ${run.objective}`
+              )
+              .join('\n')
+      return r.nextCursor ? `${rows}\nMore Runs: --cursor ${r.nextCursor}` : rows
+    })
   },
 
   'orchestration run-show': async ({ flags, client, json }) => {

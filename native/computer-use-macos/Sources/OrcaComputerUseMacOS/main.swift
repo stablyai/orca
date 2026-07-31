@@ -2602,9 +2602,7 @@ private final class AgentRuntime: NSObject, NSApplicationDelegate {
                 socketPath: socketPath,
                 token: token,
                 onSessionClaimed: {
-                    DispatchQueue.main.async {
-                        timeout.cancel()
-                    }
+                    timeout.cancel()
                 },
                 onSessionClosed: {
                     DispatchQueue.main.async {
@@ -3538,6 +3536,7 @@ private final class SocketListener: @unchecked Sendable {
     private let providerLock = NSLock()
     private let sessionLock = NSLock()
     private var sessionOwnership = AgentSessionOwnership()
+    private var lastConnectionID: UInt64 = 0
     private var socketFd: Int32 = -1
     private var isStopped = false
 
@@ -3625,42 +3624,73 @@ private final class SocketListener: @unchecked Sendable {
                 }
                 continue
             }
+            guard let connectionID = allocateConnectionID() else {
+                fputs("computer-use socket exhausted connection identities\n", stderr)
+                close(fd)
+                continue
+            }
             Thread.detachNewThread { [weak self] in
-                self?.handleConnection(fd)
+                self?.handleConnection(fd, connectionID: connectionID)
             }
         }
     }
 
-    private func handleConnection(_ fd: Int32) {
+    private func allocateConnectionID() -> AgentSessionConnectionID? {
+        sessionLock.lock()
+        defer { sessionLock.unlock() }
+        guard lastConnectionID < UInt64.max else { return nil }
+        lastConnectionID += 1
+        return AgentSessionConnectionID(rawValue: lastConnectionID)
+    }
+
+    private func handleConnection(_ fd: Int32, connectionID: AgentSessionConnectionID) {
+        var registeredSession = false
+        var hangupMonitor: AuthenticatedConnectionHangupMonitor?
         defer {
-            sessionLock.lock()
-            let shouldTerminate = sessionOwnership.disconnect(fd)
-            sessionLock.unlock()
-            close(fd)
-            if shouldTerminate {
-                onSessionClosed()
+            hangupMonitor?.cancel()
+            if registeredSession {
+                disconnectSession(connectionID)
             }
+            close(fd)
         }
         let authorizedPeer = peerProcessId(fd).map(isAuthorizedAgentPeer) == true
         let decoder = JSONDecoder()
-        var registrationComplete = false
         while let line = readLine(from: fd) {
             guard let data = line.data(using: .utf8),
                   let request = try? decoder.decode(Request.self, from: data)
             else {
                 continue
             }
-            if !registrationComplete {
+            if !registeredSession && isAuthenticatedAgentSession(
+                expectedToken: token,
+                requestToken: request.token,
+                authorizedPeer: authorizedPeer
+            ) {
+                let monitor: AuthenticatedConnectionHangupMonitor
+                do {
+                    monitor = try AuthenticatedConnectionHangupMonitor(
+                        fileDescriptor: fd,
+                        onHangup: { [weak self] in
+                            self?.disconnectSession(connectionID)
+                        }
+                    )
+                } catch {
+                    fputs("computer-use owner monitor failed: \(error)\n", stderr)
+                    return
+                }
                 sessionLock.lock()
                 let registration = sessionOwnership.registerConnection(
-                    fd,
-                    authenticated: isAuthenticated(
-                        request: request,
-                        authorizedPeer: authorizedPeer
-                    )
+                    connectionID,
+                    authenticated: true
                 )
                 sessionLock.unlock()
-                registrationComplete = registration != .rejected
+                guard registration != .rejected else {
+                    monitor.cancel()
+                    return
+                }
+                registeredSession = true
+                hangupMonitor = monitor
+                monitor.start()
                 if registration == .claimed {
                     onSessionClaimed()
                 }
@@ -3676,10 +3706,13 @@ private final class SocketListener: @unchecked Sendable {
         }
     }
 
-    private func isAuthenticated(request: Request, authorizedPeer: Bool) -> Bool {
-        guard authorizedPeer else { return false }
-        guard let token else { return true }
-        return request.token == token
+    private func disconnectSession(_ connectionID: AgentSessionConnectionID) {
+        sessionLock.lock()
+        let shouldTerminate = sessionOwnership.disconnect(connectionID)
+        sessionLock.unlock()
+        if shouldTerminate {
+            onSessionClosed()
+        }
     }
 }
 
@@ -3813,7 +3846,7 @@ private func handleRequest(
     if let expectedToken, request.token != expectedToken {
         return ["id": request.id, "ok": false, "error": ["code": "permission_denied", "message": "invalid computer-use agent token"]]
     }
-    if !authorizedPeer {
+    if expectedToken != nil && !authorizedPeer {
         return ["id": request.id, "ok": false, "error": ["code": "permission_denied", "message": "computer-use agent peer is not authorized"]]
     }
     if request.method == "terminate" {

@@ -5572,10 +5572,10 @@ describe('registerWorktreeHandlers', () => {
     getActiveMultiplexerMock.mockReturnValue(mux)
     store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
 
-    await handlers['worktrees:create'](null, {
+    const result = (await handlers['worktrees:create'](null, {
       repoId: 'repo-ssh',
       name: 'slash-local-base'
-    })
+    })) as CreateWorktreeResult
 
     expect(provider.fetchRemoteTrackingRef).not.toHaveBeenCalledWith(
       '/remote/repo',
@@ -5591,6 +5591,10 @@ describe('registerWorktreeHandlers', () => {
         base: 'team/feature'
       }
     )
+    expect(result.baseFallback).toEqual({
+      requestedRef: 'team/feature',
+      localRef: 'team/feature'
+    })
   })
 
   it('reuses a fresh SSH remote-tracking base refresh for repeated creates', async () => {
@@ -6396,19 +6400,74 @@ describe('registerWorktreeHandlers', () => {
       return { stdout: 'created-sha\n', stderr: '' }
     })
 
-    await expect(
-      handlers['worktrees:create'](null, {
-        repoId: 'repo-1',
-        name: 'slash-local-base'
-      })
-    ).resolves.toEqual(expect.objectContaining({ worktree: expect.any(Object) }))
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'slash-local-base'
+    })
 
+    expect(result).toEqual(expect.objectContaining({ worktree: expect.any(Object) }))
+    expect((result as CreateWorktreeResult).baseFallback).toEqual({
+      requestedRef: 'team/feature',
+      localRef: 'team/feature'
+    })
     expect(runtimeStub.getOrStartRemoteTrackingBaseRefresh).not.toHaveBeenCalled()
     expect(addWorktreeMock).toHaveBeenCalledWith(
       '/workspace/repo',
       '/workspace/slash-local-base',
       'slash-local-base',
       'team/feature',
+      false
+    )
+  })
+
+  it('uses a local branch when its missing remote-tracking base cannot refresh', async () => {
+    const remoteBase = {
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    }
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
+    runtimeStub.hasRemoteTrackingRef.mockResolvedValue(false)
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/offline-local-main',
+        head: 'created-sha',
+        branch: 'offline-local-main',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main^{commit}')) {
+        throw new Error('missing remote-tracking ref')
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/main^{commit}')) {
+        return { stdout: 'main-sha\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse') {
+        return { stdout: '', stderr: '' }
+      }
+      return { stdout: 'created-sha\n', stderr: '' }
+    })
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'offline-local-main',
+      baseBranch: 'origin/main'
+    })
+
+    expect(result).toEqual(expect.objectContaining({ worktree: expect.any(Object) }))
+    expect((result as CreateWorktreeResult).baseFallback).toEqual({
+      requestedRef: 'origin/main',
+      localRef: 'main'
+    })
+    expect(runtimeStub.getOrStartRemoteTrackingBaseRefresh).not.toHaveBeenCalled()
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/offline-local-main',
+      'offline-local-main',
+      'main',
       false
     )
   })
@@ -8888,6 +8947,42 @@ describe('registerWorktreeHandlers', () => {
     })
     expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
     expect(hasHooksFileMock).not.toHaveBeenCalled()
+  })
+
+  it('inspects setup-script imports on the requested host when repo ids collide', async () => {
+    const localRepo = {
+      id: 'repo-shared',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = { ...localRepo, path: '/remote/repo', connectionId: 'conn-1' }
+    const fsProvider = {
+      readFile: vi.fn(async (filePath: string) => {
+        if (filePath === '/remote/repo/.superset/config.json') {
+          return { content: '{"setup":"remote setup"}', isBinary: false }
+        }
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      }),
+      stat: vi.fn().mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+    store.getRepo.mockReturnValue(localRepo)
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+
+    await expect(
+      handlers['hooks:inspectSetupScriptImports'](null, {
+        repoId: 'repo-shared',
+        hostId: 'ssh:conn-1'
+      })
+    ).resolves.toContainEqual(
+      expect.objectContaining({
+        provider: 'superset',
+        setup: 'remote setup'
+      })
+    )
+    expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/.superset/config.json')
   })
 
   it('does not coalesce forget requests for the same id on different hosts', async () => {

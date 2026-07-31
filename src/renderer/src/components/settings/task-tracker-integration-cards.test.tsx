@@ -126,6 +126,7 @@ describe('LinearIntegrationCard account scope', () => {
 
     const rendered = await renderCard()
 
+    expect(rendered.querySelector('[data-settings-section="integrations-linear"]')).not.toBeNull()
     expect(rendered.textContent).toContain(`Account scope: ${LOCAL_HOST_LABEL}`)
     expect(rendered.textContent).toContain(
       'Credentials and account checks for this provider are owned by this desktop client. Use Settings > Remote Orca Servers > Advanced to edit server-owned credentials.'

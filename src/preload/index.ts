@@ -22,6 +22,8 @@ import type {
 } from '../shared/agent-session-resume'
 import type { MobileRelayStatus } from '../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../shared/mobile-relay-mint-failure'
+import type { VerifyAndAddRuntimeEnvironmentResult } from '../shared/remote-pairing-verification'
 import type {
   SshMutationExpectation,
   SshConnectionState,
@@ -209,6 +211,7 @@ import type {
   PreloadApi
 } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
+import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
 import type { AppStarSource } from '../shared/gh-star-source'
 import type { ExecutionHostId } from '../shared/execution-host'
 import type {
@@ -455,6 +458,11 @@ document.addEventListener(
 )
 
 const startupDiagnosticsEnabled = process.env.ORCA_STARTUP_DIAGNOSTICS === '1'
+const browserFindSubscriptions = createBrowserFindSubscriptions()
+
+ipcRenderer.on('ui:findInBrowserPage', (_event, source: unknown) => {
+  browserFindSubscriptions.dispatch(source)
+})
 
 // Custom APIs for renderer
 const api = {
@@ -1236,8 +1244,10 @@ const api = {
       submitAnonymously?: boolean
       githubLogin: string | null
       githubEmail: string | null
-    }): Promise<{ ok: true } | { ok: false; status: number | null; error: string }> =>
-      ipcRenderer.invoke('feedback:submit', args)
+      images?: { contentType: string; data: Uint8Array }[]
+    }): Promise<
+      { ok: true; imagesDelivered?: boolean } | { ok: false; status: number | null; error: string }
+    > => ipcRenderer.invoke('feedback:submit', args)
   },
 
   crashReports: {
@@ -1815,13 +1825,21 @@ const api = {
 
     status: (): Promise<unknown> => ipcRenderer.invoke('jira:status'),
 
+    readStatus: (): Promise<unknown> => ipcRenderer.invoke('jira:readStatus'),
+
     testConnection: (args?: {
       siteId?: string
     }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
       ipcRenderer.invoke('jira:testConnection', args),
 
-    searchIssues: (args: { jql: string; limit?: number; siteId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('jira:searchIssues', args),
+    searchIssues: (args: {
+      jql: string
+      limit?: number
+      siteId?: string
+      requestId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('jira:searchIssues', args),
+    cancelSearchIssues: (args: { requestId: string }): Promise<void> =>
+      ipcRenderer.invoke('jira:cancelSearchIssues', args),
 
     listIssues: (args?: {
       filter?: 'assigned' | 'reported' | 'all' | 'done'
@@ -1831,6 +1849,14 @@ const api = {
 
     getIssue: (args: { key: string; siteId?: string }): Promise<unknown> =>
       ipcRenderer.invoke('jira:getIssue', args),
+
+    lookupIssueSummary: (args: {
+      key: string
+      siteId: string
+      requestId?: string
+    }): Promise<unknown> => ipcRenderer.invoke('jira:lookupIssueSummary', args),
+    cancelIssueSummary: (args: { requestId: string }): Promise<void> =>
+      ipcRenderer.invoke('jira:cancelIssueSummary', args),
 
     createIssue: (args: {
       siteId?: string
@@ -2830,8 +2856,10 @@ const api = {
       mayNeedUpdate: boolean
     }> => ipcRenderer.invoke('hooks:check', args),
 
-    inspectSetupScriptImports: (args: { repoId: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('hooks:inspectSetupScriptImports', args),
+    inspectSetupScriptImports: (args: {
+      repoId: string
+      hostId?: ExecutionHostId
+    }): Promise<unknown[]> => ipcRenderer.invoke('hooks:inspectSetupScriptImports', args),
 
     createIssueCommandRunner: (args: {
       repoId: string
@@ -3557,11 +3585,7 @@ const api = {
       ipcRenderer.on('ui:focusBrowserAddressBar', listener)
       return () => ipcRenderer.removeListener('ui:focusBrowserAddressBar', listener)
     },
-    onFindInBrowserPage: (callback: () => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent) => callback()
-      ipcRenderer.on('ui:findInBrowserPage', listener)
-      return () => ipcRenderer.removeListener('ui:findInBrowserPage', listener)
-    },
+    onFindInBrowserPage: browserFindSubscriptions.subscribe,
     onReloadBrowserPage: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:reloadBrowserPage', listener)
@@ -3701,6 +3725,7 @@ const api = {
         activate?: boolean
         focus?: boolean
         presentation?: RuntimeTerminalPresentation
+        surfaceOwner?: false
         tabId?: string
         leafId?: string
         splitFromLeafId?: string
@@ -3726,6 +3751,7 @@ const api = {
           activate?: boolean
           focus?: boolean
           presentation?: RuntimeTerminalPresentation
+          surfaceOwner?: false
           tabId?: string
           leafId?: string
           splitFromLeafId?: string
@@ -4230,6 +4256,16 @@ const api = {
       ipcRenderer.on('runtime:terminalDriverChanged', listener)
       return () => ipcRenderer.removeListener('runtime:terminalDriverChanged', listener)
     },
+    onNativeChatLaunchDraftResolved: (
+      callback: (event: { tabId: string; text: string; createdAt: number }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { tabId: string; text: string; createdAt: number }
+      ) => callback(data)
+      ipcRenderer.on('runtime:nativeChatLaunchDraftResolved', listener)
+      return () => ipcRenderer.removeListener('runtime:nativeChatLaunchDraftResolved', listener)
+    },
     onBrowserDriverChanged: (
       callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
     ): (() => void) => {
@@ -4253,6 +4289,12 @@ const api = {
       pairingCode: string
     }): Promise<{ environment: PublicKnownRuntimeEnvironment }> =>
       ipcRenderer.invoke('runtimeEnvironments:addFromPairingCode', args),
+    verifyAndAddFromPairingCode: (args: {
+      name: string
+      pairingCode: string
+      allowLoopback?: boolean
+    }): Promise<VerifyAndAddRuntimeEnvironmentResult> =>
+      ipcRenderer.invoke('runtimeEnvironments:verifyAndAddFromPairingCode', args),
     resolve: (args: { selector: string }): Promise<PublicKnownRuntimeEnvironment> =>
       ipcRenderer.invoke('runtimeEnvironments:resolve', args),
     remove: (args: { selector: string }): Promise<{ removed: PublicKnownRuntimeEnvironment }> =>
@@ -4261,6 +4303,11 @@ const api = {
       selector: string
     }): Promise<{ disconnected: PublicKnownRuntimeEnvironment }> =>
       ipcRenderer.invoke('runtimeEnvironments:disconnect', args),
+    connect: (args: {
+      selector: string
+      timeoutMs?: number
+    }): Promise<RuntimeRpcResponse<RuntimeStatus>> =>
+      ipcRenderer.invoke('runtimeEnvironments:connect', args),
     getStatus: (args: {
       selector: string
       timeoutMs?: number
@@ -4542,7 +4589,12 @@ const api = {
       connectionMode?: MobilePairingConnectionMode
       rotate?: boolean
     }): Promise<
-      | { available: false }
+      | {
+          available: false
+          reason?: string
+          guidance?: string
+          relayFailure?: MobileRelayMintFailure
+        }
       | {
           available: true
           qrDataUrl: string | null

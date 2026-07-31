@@ -18,6 +18,7 @@ import { RelayAgentHookServer } from './agent-hook-server'
 import { registerWslHookFsHandlers } from './wsl-hook-fs-bridge'
 import { PluginOverlayManager } from './plugin-overlay'
 import { createInstallPluginsHandler } from './wsl-install-plugins-handler'
+import { PreflightHandler } from './preflight-handler'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
@@ -73,6 +74,7 @@ async function main(): Promise<void> {
         envelope as unknown as Record<string, unknown>
       )
   })
+  new PreflightHandler(dispatcher)
 
   dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => ({
     replayed: hookServer.replayCachedPayloadsForPanes()

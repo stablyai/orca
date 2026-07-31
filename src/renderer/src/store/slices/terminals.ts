@@ -569,6 +569,10 @@ export type TerminalSlice = {
   nativeChatLaunchDraftByTabId: Record<string, NativeChatLaunchDraft>
   seedNativeChatLaunchDraft: (draft: NativeChatLaunchDraft) => void
   markNativeChatLaunchDraftAdopted: (tabId: string) => void
+  resolveNativeChatLaunchDraft: (
+    tabId: string,
+    resolution: Pick<NativeChatLaunchDraft, 'createdAt' | 'text'>
+  ) => void
   clearNativeChatLaunchDraft: (tabId: string) => void
   pendingStartupByTabId: Record<
     string,
@@ -1122,6 +1126,26 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         nativeChatLaunchDraftByTabId: {
           ...s.nativeChatLaunchDraftByTabId,
           [tabId]: { ...current, adopted: true }
+        }
+      }
+    })
+  },
+
+  resolveNativeChatLaunchDraft: (tabId, resolution) => {
+    set((s) => {
+      const current = s.nativeChatLaunchDraftByTabId[tabId]
+      if (
+        !current ||
+        current.resolved ||
+        current.createdAt !== resolution.createdAt ||
+        current.text !== resolution.text
+      ) {
+        return {}
+      }
+      return {
+        nativeChatLaunchDraftByTabId: {
+          ...s.nativeChatLaunchDraftByTabId,
+          [tabId]: { ...current, resolved: true }
         }
       }
     })

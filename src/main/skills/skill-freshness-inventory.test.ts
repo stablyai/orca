@@ -248,6 +248,32 @@ describe('read-only skill freshness inventory', () => {
     expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
   })
 
+  it('reads up to date after the OS drops a sidecar into an untouched install', async () => {
+    const test = await fixture()
+    const directory = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      test.currentMarkdown
+    )
+    // What one Finder visit leaves behind. Sorts before SKILL.md, which is what made the
+    // index-aligned snapshot comparison miss and report the copy as modified.
+    await writeFile(join(directory, '.DS_Store'), Buffer.from([0, 1, 2, 3]))
+    // No lock trust available here: the recorded hash is a different tree, so this proves
+    // the identity fix alone carries it rather than falling through to newer-known.
+    await writeSkillLockHash(test.homeDir, 'a'.repeat(40))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations.map((entry) => entry.status)).toEqual(['current'])
+    // The whole point: no amber, and nothing offered to "fix" a copy that is already right.
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+    expect(inventory.eligibleUpdateNames).toEqual([])
+  })
+
   it('still flags canonical bytes that do not match what the lock says was installed', async () => {
     const test = await fixture()
     const editedMarkdown = `${test.currentMarkdown}\nLocal edit the updater never wrote.\n`

@@ -7,7 +7,6 @@
 // exercises minus the wsl.exe byte transport (validated separately on-rig).
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:net'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -59,7 +58,7 @@ describe.skipIf(process.platform === 'win32')(
     })
 
     it('delivers a Claude hook POST from the live relay into ingestRemote and installs guest hooks', async () => {
-      fakeHome = mkdtempSync(join(tmpdir(), 'wsl-live-home-'))
+      fakeHome = mkdtempSync(join('/tmp', 'wsl-live-home-'))
       const preferredPort = await pickFreePort()
       const version = readFileSync(join(BUNDLE_DIR, '.version'), 'utf8').trim()
 
@@ -102,6 +101,12 @@ describe.skipIf(process.platform === 'win32')(
             envelope as Parameters<AgentHookServer['ingestRemote']>[0],
             connectionId
           ),
+        managedHookSettings: () => ({
+          agentCmdOverrides: {
+            claude: process.execPath,
+            codex: process.execPath
+          }
+        }),
         warn: (message) => warns.push(message),
         transientRetryDelayMs: 1
       })

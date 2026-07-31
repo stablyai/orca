@@ -39,6 +39,7 @@ import {
   mergeGitConfigEnvProtocol
 } from '../shared/git-credential-prompt-env'
 import { isTuiAgent } from '../shared/tui-agent-config'
+import type { TuiAgent } from '../shared/types'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
 import {
@@ -338,6 +339,7 @@ export type PtyEnvAugmenter = (ctx: {
   shell: string
   env: Record<string, string>
   command?: string
+  launchAgent?: TuiAgent
 }) => Record<string, string>
 
 export type RelayPtyWorktreeRemovalCoordinator = {
@@ -507,7 +509,13 @@ export class PtyHandler {
   /** Build augmented spawn env; augmenter values win over process.env/renderer env. Shared by spawn()/revive() so precedence can't drift. */
   private buildSpawnEnv(
     rendererEnv: Record<string, string> | undefined,
-    ctx: { id: string; paneKey?: string; shell: string; command?: string },
+    ctx: {
+      id: string
+      paneKey?: string
+      shell: string
+      command?: string
+      launchAgent?: TuiAgent
+    },
     envToDelete: readonly string[] = []
   ): Record<string, string> {
     const baseEnv = mergeGitConfigEnvProtocol(
@@ -886,10 +894,15 @@ export class PtyHandler {
       ...(pending.rawLength === undefined ? {} : { rawLength: pending.rawLength }),
       ...(pending.transformed ? { transformed: true } : {})
     }
-    let chunkChars = pending.transformed
-      ? desiredChars
-      : (this.dispatcher.maxLegacyPtyDataChars?.(paramsWithoutData, pending.data, desiredChars) ??
-        desiredChars)
+    // Why: a failed publish may already have reserved this exact span (source-ledger append,
+    // partial legacy fan-out), so a retry must resend it verbatim and slice the remainder at
+    // the memo boundary — capacity and coalesced data can both have changed since. The capacity
+    // search is skipped on retry: its result is discarded, and publish re-checks capacity.
+    let chunkChars =
+      pending.transformed || pending.sourceChunk
+        ? desiredChars
+        : (this.dispatcher.maxLegacyPtyDataChars?.(paramsWithoutData, pending.data, desiredChars) ??
+          desiredChars)
     if (
       chunkChars > 0 &&
       chunkChars < pending.data.length &&
@@ -906,8 +919,8 @@ export class PtyHandler {
       this.pausePtyOutput(id)
       return false
     }
-    const chunk = pending.data.slice(0, chunkChars)
-    const remaining = pending.data.slice(chunkChars)
+    const chunk = pending.sourceChunk?.data ?? pending.data.slice(0, chunkChars)
+    const remaining = pending.data.slice(chunk.length)
     const chunkRawLength = pending.transformed
       ? pending.rawLength
       : pending.rawLength === undefined
@@ -930,10 +943,16 @@ export class PtyHandler {
       this.pausePtyOutput(id)
       return false
     }
-    if (remaining) {
+    // rawLength fallback is defensive only: transformed memos always carry rawLength (ingress meta).
+    const publishedRawLength = sourceChunk.rawLength ?? sourceChunk.data.length
+    const remainingRawLength = pending.transformed
+      ? (pending.rawLength ?? 0) - publishedRawLength
+      : remaining.length
+    if (remaining || (pending.transformed && remainingRawLength > 0)) {
       queue[0] = {
         data: remaining,
-        ...(pending.rawLength === undefined ? {} : { rawLength: remaining.length }),
+        ...(pending.transformed ? { transformed: true } : {}),
+        ...(pending.rawLength === undefined ? {} : { rawLength: remainingRawLength }),
         seq: pending.seq
       }
     } else {
@@ -1011,14 +1030,33 @@ export class PtyHandler {
       return
     }
     if (this.sourcePublication?.accepts(id)) {
-      if (
-        !this.sourcePublication.sealAndPublishExit(exit) ||
-        !this.sourcePublication.exitPublicationSettled(id)
-      ) {
+      try {
+        // Why: after the exit settlement, re-entering sealAndPublishExit would pump a closed
+        // ledger delivery; the settled state alone decides completion.
+        if (this.sourcePublication.exitPublicationSettled(id)) {
+          this.pendingExitByPty.delete(id)
+          return
+        }
+        if (!this.sourcePublication.sealAndPublishExit(exit)) {
+          return
+        }
+        if (
+          this.sourcePublication.accepts(id) &&
+          !this.sourcePublication.exitPublicationSettled(id)
+        ) {
+          return
+        }
+        this.pendingExitByPty.delete(id)
         return
+      } catch (err) {
+        // Why: a source-publication fault must never escape onExit — it reaches
+        // uncaughtException and kills the whole relay daemon. Fall back to the legacy exit.
+        process.stderr.write(
+          `[pty-handler] pty source exit publication failed for ${id}: ${
+            err instanceof Error ? (err.stack ?? err.message) : String(err)
+          }\n`
+        )
       }
-      this.pendingExitByPty.delete(id)
-      return
     }
     const published = this.dispatcher.tryNotifyPtyExit
       ? this.dispatcher.tryNotifyPtyExit(exit)
@@ -1324,16 +1362,21 @@ export class PtyHandler {
     const terminalHandle =
       typeof env?.ORCA_TERMINAL_HANDLE === 'string' ? env.ORCA_TERMINAL_HANDLE : undefined
     const command = typeof params.command === 'string' ? params.command : undefined
+    const launchAgent = isTuiAgent(params.launchAgent) ? params.launchAgent : undefined
     const terminalWindowsWslDistro =
       typeof params.terminalWindowsWslDistro === 'string' ? params.terminalWindowsWslDistro : null
     const commandDelivery = params.commandDelivery === 'provider' ? 'provider' : 'renderer'
     const shouldProviderDeliverCommand = commandDelivery === 'provider' && command !== undefined
-    const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command }, envToDelete)
+    const spawnEnv = this.buildSpawnEnv(
+      env,
+      { id, paneKey, shell, command, launchAgent },
+      envToDelete
+    )
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
     // Why: SSH PTYs bypass main's host-env builder, so apply the guard after the relay merges its authoritative env.
     const gitCredentialPromptGuarded = applyTerminalGitCredentialPromptGuard(spawnEnv, {
       launchCommand: launchCommandHint,
-      isUnattended: isTuiAgent(params.launchAgent),
+      isUnattended: launchAgent !== undefined,
       platform: process.platform
     })
     const shouldEmitShellReadyMarker =

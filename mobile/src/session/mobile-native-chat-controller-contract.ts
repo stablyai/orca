@@ -38,4 +38,5 @@ export type MobileNativeChatController = {
     images?: string[],
     deadline?: number
   ) => Promise<MobileNativeChatSendOutcome>
+  readSeededLaunchDraft: () => string | null
 }

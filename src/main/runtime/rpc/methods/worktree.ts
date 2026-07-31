@@ -19,7 +19,8 @@ import {
   WorktreeResolvePrBase,
   WorktreeSelector,
   WorktreeSet,
-  WorktreeSortOrder
+  WorktreeSortOrder,
+  WorktreeTeardownMissingTerminalsParams
 } from './worktree-schemas'
 
 export const WORKTREE_METHODS: RpcMethod[] = [
@@ -37,6 +38,16 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     name: 'worktree.detectedList',
     params: WorktreeDetectedListParams,
     handler: async (params, { runtime }) => runtime.listDetectedManagedWorktrees(params.repo)
+  }),
+  defineMethod({
+    name: 'worktree.teardownMissingTerminals',
+    params: WorktreeTeardownMissingTerminalsParams,
+    handler: async (params, { runtime }) =>
+      runtime.teardownMissingManagedWorktreeTerminals(
+        params.repo,
+        params.worktreeIds,
+        params.connectionId
+      )
   }),
   defineMethod({
     name: 'worktree.lineageList',
@@ -108,6 +119,8 @@ export const WORKTREE_METHODS: RpcMethod[] = [
             linkedBitbucketPR: params.linkedBitbucketPR,
             linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
             linkedGiteaPR: params.linkedGiteaPR,
+            linkedWorkItem: params.linkedWorkItem,
+            linkedTaskSourceContext: params.linkedTaskSourceContext,
             comment: params.comment,
             displayName: params.displayName,
             telemetrySource: params.telemetrySource,
@@ -188,6 +201,8 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedBitbucketPR: params.linkedBitbucketPR,
         linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
         linkedGiteaPR: params.linkedGiteaPR,
+        linkedWorkItem: params.linkedWorkItem,
+        linkedTaskSourceContext: params.linkedTaskSourceContext,
         comment: params.comment,
         isArchived: params.isArchived,
         isUnread: params.isUnread,

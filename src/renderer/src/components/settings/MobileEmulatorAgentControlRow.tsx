@@ -13,7 +13,7 @@ import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRunti
 import { useMobileEmulatorAgentSetupState } from '../emulator-pane/use-mobile-emulator-agent-setup-state'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { buildSkillCommandForRuntime } from './CliSkillRuntimeSetup'
-import { StepBadge } from './BrowserUseStepBadge'
+import { StepBadge } from './SetupStepBadge'
 import { MobileEmulatorExamples } from './MobileEmulatorExamples'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'

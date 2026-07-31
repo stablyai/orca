@@ -14,7 +14,9 @@ const mocks = vi.hoisted(() => ({
   clipboardWrite: vi.fn(),
   terminalProps: [] as { command: string; description: string }[],
   toastError: vi.fn(),
-  toastSuccess: vi.fn()
+  toastSuccess: vi.fn(),
+  skillsChanged: vi.fn(),
+  skillsRefreshed: vi.fn()
 }))
 
 vi.mock('sonner', () => ({
@@ -22,6 +24,11 @@ vi.mock('sonner', () => ({
     error: mocks.toastError,
     success: mocks.toastSuccess
   }
+}))
+
+vi.mock('@/hooks/useInstalledAgentSkills', () => ({
+  notifyInstalledAgentSkillsChanged: mocks.skillsChanged,
+  notifyInstalledAgentSkillsRefreshed: mocks.skillsRefreshed
 }))
 
 vi.mock('../onboarding/OnboardingInlineCommandTerminal', () => ({
@@ -37,6 +44,12 @@ vi.mock('../onboarding/OnboardingInlineCommandTerminal', () => ({
       </div>
     )
   }
+}))
+
+vi.mock('../skills/SkillFreshnessStatusPill', () => ({
+  SkillFreshnessStatusPill: ({ skillName }: { skillName: string }) => (
+    <span data-testid="skill-freshness">{skillName}</span>
+  )
 }))
 
 function panelProps(
@@ -124,6 +137,8 @@ describe('AgentSkillSetupPanel', () => {
     mocks.terminalProps.length = 0
     mocks.toastError.mockReset()
     mocks.toastSuccess.mockReset()
+    mocks.skillsChanged.mockReset()
+    mocks.skillsRefreshed.mockReset()
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -155,6 +170,26 @@ describe('AgentSkillSetupPanel', () => {
     expect(html).toContain('Installed')
     expect(buttonLabels(html)).toContain('Update')
     expect(buttonLabels(html)).toContain('Re-check')
+  })
+
+  it('surfaces skill freshness under hideHeader for guided setup hubs', () => {
+    const html = renderPanel({
+      installed: true,
+      hideHeader: true,
+      description: null,
+      freshnessSkillName: 'orca-linear'
+    })
+
+    expect(html).toContain('data-testid="skill-freshness"')
+    expect(html).toContain('orca-linear')
+    expect(html).not.toContain('CLI skill')
+  })
+
+  it('does not render an empty description paragraph when description is null', () => {
+    const html = renderPanel({ description: null, hideHeader: true })
+
+    expect(html).not.toContain('text-muted-foreground">null')
+    expect(html).not.toMatch(/<p class="text-\[13px\] leading-snug text-muted-foreground"><\/p>/)
   })
 
   it('hides only re-check when installed re-checks are disabled', () => {
@@ -215,6 +250,25 @@ describe('AgentSkillSetupPanel', () => {
     const html = renderPanel({ installDisabled: true })
 
     expect(buttonMarkupByLabel(html, 'Install')).toContain('disabled=""')
+  })
+
+  it('notifies sibling surfaces only after re-check finishes', async () => {
+    let finishRecheck: (() => void) | null = null
+    const recheck = new Promise<void>((resolve) => {
+      finishRecheck = resolve
+    })
+    await renderInteractivePanel({ onRecheck: () => recheck })
+
+    await clickButton('Re-check')
+    expect(mocks.skillsRefreshed).not.toHaveBeenCalled()
+
+    await act(async () => {
+      finishRecheck?.()
+      await recheck
+    })
+
+    expect(mocks.skillsRefreshed).toHaveBeenCalledOnce()
+    expect(mocks.skillsChanged).not.toHaveBeenCalled()
   })
 
   it('opens not-installed setup with the install command for preview, copy, and terminal', async () => {

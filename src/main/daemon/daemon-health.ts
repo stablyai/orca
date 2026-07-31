@@ -40,11 +40,14 @@ const WIN32_START_TIME_TOLERANCE_MS = 10_000
 // also covers a live-but-wedged daemon that simply missed the RPC budget.
 export type DaemonHealth = 'healthy' | 'unreachable' | 'rejected' | 'pty-spawn-unhealthy'
 
-type ParsedDaemonPid = {
+export type ParsedDaemonPid = {
   pid: number
   startedAtMs: number | null
   entryPath: string | null
   appVersion: string | null
+  launchNonce: string | null
+  linuxStartTicks: string | null
+  bootId: string | null
 }
 
 function canConnectSocket(socketPath: string): Promise<boolean> {
@@ -301,7 +304,7 @@ export function getMacDaemonSystemResolverHealth(
   })
 }
 
-function commandLineMatchesDaemon(
+export function commandLineMatchesDaemon(
   commandLine: string,
   socketPath: string,
   tokenPath: string
@@ -321,6 +324,9 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
       startedAtMs?: unknown
       entryPath?: unknown
       appVersion?: unknown
+      launchNonce?: unknown
+      linuxStartTicks?: unknown
+      bootId?: unknown
     }
     if (typeof parsed.pid === 'number' && Number.isFinite(parsed.pid)) {
       return {
@@ -330,7 +336,10 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
             ? parsed.startedAtMs
             : null,
         entryPath: typeof parsed.entryPath === 'string' ? parsed.entryPath : null,
-        appVersion: typeof parsed.appVersion === 'string' ? parsed.appVersion : null
+        appVersion: typeof parsed.appVersion === 'string' ? parsed.appVersion : null,
+        launchNonce: typeof parsed.launchNonce === 'string' ? parsed.launchNonce : null,
+        linuxStartTicks: typeof parsed.linuxStartTicks === 'string' ? parsed.linuxStartTicks : null,
+        bootId: typeof parsed.bootId === 'string' ? parsed.bootId : null
       }
     }
   } catch {
@@ -338,7 +347,17 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
   }
 
   const pid = Number(trimmed)
-  return Number.isFinite(pid) ? { pid, startedAtMs: null, entryPath: null, appVersion: null } : null
+  return Number.isFinite(pid)
+    ? {
+        pid,
+        startedAtMs: null,
+        entryPath: null,
+        appVersion: null,
+        launchNonce: null,
+        linuxStartTicks: null,
+        bootId: null
+      }
+    : null
 }
 
 function getLinuxProcessStartedAtMs(pid: number): number | null {

@@ -7,6 +7,7 @@ import {
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
 } from './types'
+import { HISTORY_SEED_TRANSFER_PROTOCOL_VERSION } from './daemon-protocol-version'
 
 type AdapterMock = DaemonPtyAdapter & {
   emitData: (id: string, data: string, sequenceChars?: number) => void
@@ -490,6 +491,52 @@ describe('DaemonPtyRouter', () => {
     await expect(router.probePtyLiveness('unknown-session')).resolves.toBeNull()
   })
 
+  it('hands a checkpointed pre-v30 session to the current daemon on wake', async () => {
+    const current = createAdapter('current', [], undefined, HISTORY_SEED_TRANSFER_PROTOCOL_VERSION)
+    const legacy = createAdapter(
+      'legacy',
+      ['legacy-session'],
+      undefined,
+      HISTORY_SEED_TRANSFER_PROTOCOL_VERSION - 1
+    )
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+
+    await router.shutdown('legacy-session', { keepHistory: true })
+    await router.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
+
+    expect(legacy.shutdown).toHaveBeenCalledWith('legacy-session', { keepHistory: true })
+    expect(legacy.ackColdRestore).toHaveBeenCalledWith('legacy-session')
+    expect(current.spawn).toHaveBeenCalledWith({
+      sessionId: 'legacy-session',
+      cols: 80,
+      rows: 24
+    })
+    expect(legacy.spawn).not.toHaveBeenCalled()
+  })
+
+  it('keeps the legacy route when checkpointed shutdown fails', async () => {
+    const current = createAdapter('current', [], undefined, HISTORY_SEED_TRANSFER_PROTOCOL_VERSION)
+    const legacy = createAdapter(
+      'legacy',
+      ['legacy-session'],
+      undefined,
+      HISTORY_SEED_TRANSFER_PROTOCOL_VERSION - 1
+    )
+    vi.mocked(legacy.shutdown).mockRejectedValueOnce(new Error('checkpoint failed'))
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+
+    await expect(router.shutdown('legacy-session', { keepHistory: true })).rejects.toThrow(
+      'checkpoint failed'
+    )
+    await router.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
+
+    expect(legacy.spawn).toHaveBeenCalled()
+    expect(legacy.ackColdRestore).not.toHaveBeenCalled()
+    expect(current.spawn).not.toHaveBeenCalled()
+  })
+
   it('fails listProcesses closed when any routed adapter cannot list sessions', async () => {
     const current = createAdapter('current', ['current-session'])
     const legacy = createAdapter('legacy', ['legacy-session'])
@@ -497,6 +544,35 @@ describe('DaemonPtyRouter', () => {
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
     await expect(router.listProcesses()).rejects.toThrow('legacy unavailable')
+  })
+
+  it('keeps a legacy adapter that exits after construction in fail-closed aggregates', async () => {
+    const current = createAdapter('current', ['current-session'])
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+    vi.mocked(legacy.listProcesses).mockRejectedValue(new Error('legacy exited'))
+
+    await expect(router.listProcesses()).rejects.toThrow('legacy exited')
+    await expect(router.listProcesses()).rejects.toThrow('legacy exited')
+    expect(router.getLegacyAdapters()).toEqual([legacy])
+    expect(current.listProcesses).toHaveBeenCalledTimes(2)
+  })
+
+  it('pins colliding unmapped legacy ids falling through to the current daemon', async () => {
+    const sessionId = 'cross-generation-collision'
+    const current = createAdapter('current', [sessionId])
+    const legacy = createAdapter('legacy', [sessionId])
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.mocked(legacy.listProcesses).mockRejectedValueOnce(new Error('legacy discovery failed'))
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await router.discoverLegacySessions()
+    router.write(sessionId, 'misrouted\n')
+
+    expect(current.write).toHaveBeenCalledWith(sessionId, 'misrouted\n')
+    expect(legacy.write).not.toHaveBeenCalled()
+    warn.mockRestore()
   })
 
   it('merges startup reconciliation and updates route mappings', async () => {

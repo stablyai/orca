@@ -308,7 +308,7 @@ describe('launchAgentInNewTab', () => {
     )
   })
 
-  it('keeps a multi-line draft out of chat entirely', async () => {
+  it('mirrors a multi-line draft into chat and opens the tab there', async () => {
     store.settings = {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
@@ -319,21 +319,22 @@ describe('launchAgentInNewTab', () => {
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
+    const prompt = 'Reproduce first\n\nhttps://github.com/o/r/issues/12'
     launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
-      prompt: 'Reproduce first\n\nhttps://github.com/o/r/issues/12',
+      prompt,
       promptDelivery: 'draft'
     })
 
-    // Unseedable and un-opened must move together: a chat view here would be
-    // an empty composer beside a filled TUI input.
-    expect(mockSeedNativeChatLaunchDraft).not.toHaveBeenCalled()
+    expect(mockSeedNativeChatLaunchDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'tab-1', agent: 'claude', text: prompt })
+    )
     expect(mockCreateTab).toHaveBeenCalledWith(
       'wt-1',
       undefined,
       undefined,
-      expect.not.objectContaining({ viewMode: 'chat' })
+      expect.objectContaining({ viewMode: 'chat' })
     )
   })
 

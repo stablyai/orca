@@ -119,17 +119,29 @@ describe('getSpawnArgsForWindows', () => {
 
   it('rejects unsafe args for .cmd scripts on win32', () => {
     withPlatform('win32', () => {
-      expect(() => getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['hello & goodbye'])).toThrow(
-        'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
-      )
+      for (const argument of ['hello & goodbye', 'close)', '(open']) {
+        expect(() => getSpawnArgsForWindows('C:\\tools\\agent.cmd', [argument])).toThrow(
+          'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
+        )
+      }
     })
   })
 
   it('rejects unsafe command paths for .cmd scripts on win32', () => {
     withPlatform('win32', () => {
-      expect(() => getSpawnArgsForWindows('C:\\bad&path\\agent.cmd', ['login'])).toThrow(
-        'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
-      )
+      for (const command of ['C:\\bad&path\\agent.cmd', 'C:\\bad(path\\agent.cmd']) {
+        expect(() => getSpawnArgsForWindows(command, ['login'])).toThrow(
+          'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
+        )
+      }
+    })
+  })
+
+  it('allows punctuation that is not a cmd command operator', () => {
+    withPlatform('win32', () => {
+      expect(
+        getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['package,name;version']).spawnArgs
+      ).toEqual(['/d', '/c', 'C:\\tools\\agent.cmd', 'package,name;version'])
     })
   })
 })

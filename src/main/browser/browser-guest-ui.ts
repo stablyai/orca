@@ -20,6 +20,7 @@ import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
 } from '../../shared/modifier-double-tap-detector'
+import type { BrowserFindSource } from '../../shared/browser-find-source'
 
 type ResolveRenderer = (browserTabId: string) => Electron.WebContents | null
 type ShouldForwardDictationShortcut = () => boolean
@@ -264,6 +265,7 @@ export function setupGuestShortcutForwarding(args: {
   getKeybindings?: () => KeybindingOverrides | undefined
   // Why: a floating-panel guest owns a distinct workspace; its close/index chords must route to the panel, not the main tab strip.
   resolveWorktreeId?: (browserTabId: string) => string | null
+  resolveWorkspaceId?: (browserTabId: string) => string | null
 }): () => void {
   const {
     browserTabId,
@@ -272,7 +274,8 @@ export function setupGuestShortcutForwarding(args: {
     shouldForwardDictationShortcut,
     isMobileEmulatorEnabled,
     getKeybindings,
-    resolveWorktreeId
+    resolveWorktreeId,
+    resolveWorkspaceId
   } = args
   let ctrlTabSwitching = false
   const doubleTapDetector = new ModifierDoubleTapDetector()
@@ -397,8 +400,15 @@ export function setupGuestShortcutForwarding(args: {
       // Why: forward soft reload so the renderer's reload() hits the parked-webview eviction the guest's built-in shortcut skips.
       renderer.send('ui:reloadBrowserPage')
     } else if (keybindingMatchesAction('browser.find', input, process.platform, keybindings)) {
-      // Why: guest-native find UI is invisible behind Orca's chrome; forward so the renderer opens its own find-in-page bar.
-      renderer.send('ui:findInBrowserPage')
+      const browserWorkspaceId = resolveWorkspaceId?.(browserTabId)
+      if (browserWorkspaceId) {
+        const source: BrowserFindSource = {
+          browserPageId: browserTabId,
+          browserWorkspaceId
+        }
+        // Why: active browser splits share one renderer; preserve the registered guest owner so only its Find bar opens.
+        renderer.send('ui:findInBrowserPage', source)
+      }
     } else if (keybindingMatchesAction('browser.back', input, process.platform, keybindings)) {
       // Why: macOS Logitech side-button remaps arrive as history keystrokes, not mouse events; forward so the renderer can goBack().
       renderer.send('ui:browserHistoryNavigate', 'back')

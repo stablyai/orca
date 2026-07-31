@@ -72,6 +72,11 @@ jobs:
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
       latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
+      # Why: downstream SignPath Slack pings need the cut source (not only the
+      # new tag) so approvers know what they're signing and who cut it.
+      source_ref: ${{ steps.resolve.outputs.ref }}
+      source_sha: ${{ steps.resolve.outputs.sha }}
+      source_short_sha: ${{ steps.resolve.outputs.short_sha }}
     steps:
       # Why inlined (not m-s-abeer/update-gha-summary-with-workflow-inputs):
       # this job runs with contents:write and secret scope, so avoid executing
@@ -122,9 +127,12 @@ jobs:
           SERVER_URL: ${{ github.server_url }}
         run: |
           set -euo pipefail
+          input_ref="${INPUT_REF:-main}"
           sha="$(git rev-parse HEAD)"
           short_sha="$(git rev-parse --short=12 HEAD)"
+          echo "ref=$input_ref" >>"$GITHUB_OUTPUT"
           echo "sha=$sha" >>"$GITHUB_OUTPUT"
+          echo "short_sha=$short_sha" >>"$GITHUB_OUTPUT"
 
           # Why: only push the version-bump commit back to main when the
           # caller is releasing the exact tip of main. For any older or
@@ -142,7 +150,6 @@ jobs:
           # `ref` input alone is ambiguous (branch vs tag vs SHA); for SHA
           # inputs it also hides the human-readable names operators need
           # when auditing RC cuts.
-          input_ref="${INPUT_REF:-main}"
           repo_url="${SERVER_URL}/${REPO}"
 
           branches="$(
@@ -1176,82 +1183,7 @@ jobs:
 
       - name: Install SignPath PowerShell module
         if: matrix.platform == 'win'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          # Why: force TLS 1.2 so gallery downloads work on older hosted images.
-          [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-
-          # Why: on some hosted Windows images `Register-PSRepository -Default`
-          # fails inside the legacy nuget.exe provider with "Missing option value
-          # for: '-source'", so PSGallery is never registered and the install
-          # below dies with "No repository with the name 'PSGallery'". PSResourceGet
-          # (bundled with PowerShell 7.4+) has PSGallery registered by default and
-          # avoids that code path, so prefer it and fall back to PowerShellGet only
-          # when it is absent.
-          $useResourceGet = $null -ne (Get-Command -Name Install-PSResource -ErrorAction SilentlyContinue)
-
-          if ($useResourceGet) {
-            if ($null -eq (Get-PSResourceRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-              Register-PSResourceRepository -PSGallery -Trusted
-            } else {
-              Set-PSResourceRepository -Name PSGallery -Trusted
-            }
-          } else {
-            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force | Out-Null
-            if ($null -eq (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-              Register-PSRepository -Default -InstallationPolicy Trusted
-            }
-            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-          }
-
-          $trimChars = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
-          $documentsRoot = [System.IO.Path]::GetFullPath([Environment]::GetFolderPath('MyDocuments')).TrimEnd($trimChars)
-          $currentUserModuleRoot = $env:PSModulePath -split [System.IO.Path]::PathSeparator |
-            Where-Object {
-              if ([string]::IsNullOrWhiteSpace($_)) {
-                $false
-              } else {
-                $candidate = [System.IO.Path]::GetFullPath($_).TrimEnd($trimChars)
-                $candidate.StartsWith($documentsRoot, [System.StringComparison]::OrdinalIgnoreCase)
-              }
-            } |
-            Select-Object -First 1
-
-          if ([string]::IsNullOrWhiteSpace($currentUserModuleRoot)) {
-            throw 'Unable to resolve the current-user PowerShell module root from PSModulePath.'
-          }
-
-          $signPathModulePath = Join-Path -Path $currentUserModuleRoot -ChildPath 'SignPath'
-
-          for ($attempt = 1; $attempt -le 3; $attempt++) {
-            if ($attempt -eq 2) {
-              Start-Sleep -Seconds 15
-            } elseif ($attempt -eq 3) {
-              Start-Sleep -Seconds 30
-            }
-
-            try {
-              if ($useResourceGet) {
-                Install-PSResource -Name SignPath -Version '[4.0.0,5.0.0)' -Repository PSGallery -Scope CurrentUser -TrustRepository -Reinstall -ErrorAction Stop
-              } else {
-                Install-Module -Name SignPath -Repository PSGallery -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
-              }
-              Import-Module SignPath -ErrorAction Stop
-              Get-Command -Name Get-SignedArtifact -Module SignPath -ErrorAction Stop
-              break
-            } catch {
-              if ($attempt -eq 3) {
-                throw
-              }
-
-              Write-Warning "SignPath PowerShell module preflight attempt $attempt failed: $_"
-              if (Test-Path -LiteralPath $signPathModulePath) {
-                Write-Warning "Removing current-user SignPath module directory before retry: $signPathModulePath"
-                Remove-Item -LiteralPath $signPathModulePath -Recurse -Force
-              }
-            }
-          }
+        uses: ./.github/actions/install-signpath-module
 
       # ── Windows inner-binary signing (issue #7785) ─────────────────────
       # Why: SignPath cannot deep-sign inside NSIS installers, so inner PE
@@ -1339,6 +1271,12 @@ jobs:
           SIGNPATH_REQUEST_ID: ${{ steps.submit-inner-signing.outputs.signing-request-id }}
           SIGNPATH_REQUEST_URL: ${{ steps.submit-inner-signing.outputs.signing-request-web-url }}
           TAG: ${{ needs.cut.outputs.tag }}
+          SOURCE_REF: ${{ needs.cut.outputs.source_ref }}
+          SOURCE_SHA: ${{ needs.cut.outputs.source_sha }}
+          SOURCE_SHORT_SHA: ${{ needs.cut.outputs.source_short_sha }}
+          # Prefer triggering_actor so re-runs name who re-ran; fall back to actor.
+          CUT_BY: ${{ github.triggering_actor || github.actor }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
@@ -1350,7 +1288,26 @@ jobs:
             $requestUrl = "https://app.signpath.io/Web/$env:SIGNPATH_ORGANIZATION_ID/SigningRequests/$env:SIGNPATH_REQUEST_ID"
           }
 
-          $message = "Orca Windows release $env:TAG inner-binaries signing request (1 of 2) is ready for SignPath approval.`n<$requestUrl|Open SignPath signing request>`n<$env:GITHUB_RUN_URL|Open GitHub Actions run>"
+          # Why: approvers need tag + source ref/commit + who cut, not only the tag.
+          $sourceRef = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_REF)) { $env:SOURCE_REF } else { 'unknown' }
+          $shortSha = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHORT_SHA)) {
+            $env:SOURCE_SHORT_SHA
+          } elseif (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHA)) {
+            $env:SOURCE_SHA.Substring(0, [Math]::Min(12, $env:SOURCE_SHA.Length))
+          } else {
+            'unknown'
+          }
+          $commitLink = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHA)) {
+            "<$($env:REPO_URL)/commit/$($env:SOURCE_SHA)|``$shortSha``>"
+          } else {
+            "``$shortSha``"
+          }
+          $cutBy = if (-not [string]::IsNullOrWhiteSpace($env:CUT_BY)) {
+            "<https://github.com/$($env:CUT_BY)|@$($env:CUT_BY)>"
+          } else {
+            'unknown'
+          }
+          $message = "Orca Windows release ``$($env:TAG)`` inner-binaries signing request (1 of 2) is ready for SignPath approval.`nSource: ``$sourceRef`` @ $commitLink · cut by $cutBy`n<$requestUrl|Open SignPath signing request>`n<$($env:GITHUB_RUN_URL)|Open GitHub Actions run>"
           $payload = @{
             text = $message
             blocks = @(
@@ -1523,6 +1480,12 @@ jobs:
           SIGNPATH_REQUEST_ID: ${{ steps.submit-signing-request.outputs.signing-request-id }}
           SIGNPATH_REQUEST_URL: ${{ steps.submit-signing-request.outputs.signing-request-web-url }}
           TAG: ${{ needs.cut.outputs.tag }}
+          SOURCE_REF: ${{ needs.cut.outputs.source_ref }}
+          SOURCE_SHA: ${{ needs.cut.outputs.source_sha }}
+          SOURCE_SHORT_SHA: ${{ needs.cut.outputs.source_short_sha }}
+          # Prefer triggering_actor so re-runs name who re-ran; fall back to actor.
+          CUT_BY: ${{ github.triggering_actor || github.actor }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           INNER_SIGNING_SUBMITTED: ${{ steps.submit-inner-signing.outcome == 'success' }}
         run: |
@@ -1537,7 +1500,26 @@ jobs:
 
           # Why: releases where inner signing fell through have only this one request.
           $stage = if ($env:INNER_SIGNING_SUBMITTED -eq 'true') { 'installer signing request (2 of 2)' } else { 'signing request' }
-          $message = "Orca Windows release $env:TAG $stage is ready for SignPath approval.`n<$requestUrl|Open SignPath signing request>`n<$env:GITHUB_RUN_URL|Open GitHub Actions run>"
+          # Why: approvers need tag + source ref/commit + who cut, not only the tag.
+          $sourceRef = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_REF)) { $env:SOURCE_REF } else { 'unknown' }
+          $shortSha = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHORT_SHA)) {
+            $env:SOURCE_SHORT_SHA
+          } elseif (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHA)) {
+            $env:SOURCE_SHA.Substring(0, [Math]::Min(12, $env:SOURCE_SHA.Length))
+          } else {
+            'unknown'
+          }
+          $commitLink = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHA)) {
+            "<$($env:REPO_URL)/commit/$($env:SOURCE_SHA)|``$shortSha``>"
+          } else {
+            "``$shortSha``"
+          }
+          $cutBy = if (-not [string]::IsNullOrWhiteSpace($env:CUT_BY)) {
+            "<https://github.com/$($env:CUT_BY)|@$($env:CUT_BY)>"
+          } else {
+            'unknown'
+          }
+          $message = "Orca Windows release ``$($env:TAG)`` $stage is ready for SignPath approval.`nSource: ``$sourceRef`` @ $commitLink · cut by $cutBy`n<$requestUrl|Open SignPath signing request>`n<$($env:GITHUB_RUN_URL)|Open GitHub Actions run>"
           $payload = @{
             text = $message
             blocks = @(

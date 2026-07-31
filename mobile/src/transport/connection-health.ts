@@ -61,19 +61,18 @@ export function classifyConnection(args: {
     return { kind: 'auth-failed', label: 'Pairing invalid — re-pair with your desktop' }
   }
 
-  // Connected / connecting / handshaking are normal.
   if (state === 'connected') {
     return { kind: 'normal', label: 'Connected' }
-  }
-  if (state === 'connecting' || state === 'handshaking') {
-    return { kind: 'normal', label: 'Connecting…' }
   }
 
   if (state === 'disconnected') {
     return { kind: 'normal', label: 'Disconnected' }
   }
 
-  // state === 'reconnecting' from here.
+  // connecting / handshaking / reconnecting from here. The gates apply to all
+  // three: every redial re-enters 'connecting', and letting that revert an
+  // escalated verdict to "Connecting…" hid the failure loop behind a reassuring
+  // label for most of each cycle (issue #10119).
   if (reconnectAttempts >= UNREACHABLE_ATTEMPTS) {
     if (lastConnectedAt == null) {
       return {
@@ -97,7 +96,7 @@ export function classifyConnection(args: {
     return { kind: 'warning', label: "Can't connect", hint }
   }
 
-  return { kind: 'normal', label: 'Reconnecting…' }
+  return { kind: 'normal', label: state === 'reconnecting' ? 'Reconnecting…' : 'Connecting…' }
 }
 
 // Why: single place that turns a verdict into display text so every screen

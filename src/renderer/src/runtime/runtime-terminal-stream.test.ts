@@ -462,6 +462,63 @@ describe('remote runtime terminal multiplex ACK gate', () => {
     liveTerminal.close()
   })
 
+  it('drops output only from the armed stream when its replacement reuses the stream ID', async () => {
+    const { getRemoteRuntimeTerminalMultiplexer, resetRemoteRuntimeTerminalMultiplexersForTests } =
+      await import('./remote-runtime-terminal-multiplexer')
+    resetRemoteRuntimeTerminalMultiplexersForTests()
+
+    const oldData = vi.fn()
+    const oldStream = await getRemoteRuntimeTerminalMultiplexer(
+      'env-output-drop-gate'
+    ).subscribeTerminal({
+      terminal: 'terminal-reused-stream-id',
+      client: { id: 'desktop-old', type: 'desktop' },
+      callbacks: { onData: oldData, onSnapshot: vi.fn() }
+    })
+    const gate = (
+      window as typeof window & {
+        __remoteTerminalMultiplexAckGate?: {
+          dropOutputUntilResubscribe: (terminals: string[]) => number
+          release: () => void
+        }
+      }
+    ).__remoteTerminalMultiplexAckGate
+    expect(gate?.dropOutputUntilResubscribe(['terminal-reused-stream-id'])).toBe(1)
+
+    callbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Output,
+        streamId: oldStream.streamId,
+        seq: 7,
+        payload: encodeTerminalStreamText('dropped')
+      })
+    )
+    expect(oldData).not.toHaveBeenCalled()
+    oldStream.close()
+
+    const replacementData = vi.fn()
+    const replacement = await getRemoteRuntimeTerminalMultiplexer(
+      'env-output-drop-gate'
+    ).subscribeTerminal({
+      terminal: 'terminal-reused-stream-id',
+      client: { id: 'desktop-new', type: 'desktop' },
+      callbacks: { onData: replacementData, onSnapshot: vi.fn() }
+    })
+    expect(replacement.streamId).toBe(oldStream.streamId)
+    callbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Output,
+        streamId: replacement.streamId,
+        seq: 9,
+        payload: encodeTerminalStreamText('delivered')
+      })
+    )
+
+    expect(replacementData).toHaveBeenCalledWith('delivered', { seq: 9, rawLength: 9 })
+    gate?.release()
+    replacement.close()
+  })
+
   it('applies mid-session recovery snapshots without re-subscribing', async () => {
     const { getRemoteRuntimeTerminalMultiplexer } =
       await import('./remote-runtime-terminal-multiplexer')

@@ -54,6 +54,9 @@ export type SendRequestOptions = {
    *  against the post-connect clock, and squeezing them to the floor after a slow
    *  reconnect would fail sends that used to land. */
   budgetSpansConnect?: boolean
+  /** Reject immediately when not connected — a send parked in the connect wait
+   *  replays stale terminal bytes into the PTY after reconnect. */
+  failWhenDisconnected?: boolean
 }
 
 type SubscribeOptions = {
@@ -89,7 +92,7 @@ export type RpcClient = {
     viewport: { cols: number; rows: number }
   ) => void
   getState: () => ConnectionState
-  // 0 means never failed (reset on successful open); the UI escalates "Reconnecting…" to "Can't connect" past a threshold.
+  // 0 means never failed (reset once the handshake authenticates); the UI escalates "Reconnecting…" to "Can't connect" past a threshold.
   getReconnectAttempt: () => number
   // Last 'connected' timestamp (ms epoch); null = never connected. Lets the UI tell "never reachable" from "transient blip".
   getLastConnectedAt: () => number | null
@@ -161,6 +164,7 @@ export function connect(
   let connectTimer: ReturnType<typeof setTimeout> | null = null
   let handshakeTimer: ReturnType<typeof setTimeout> | null = null
   let activityProbeTimer: ReturnType<typeof setInterval> | null = null
+  let activityProbeInFlight = false
   let intentionallyClosed = false
   // Consecutive auth rejections; tolerate up to AUTH_RETRY_BUDGET (issue #5200) before latching to avoid a needless re-pair.
   let authRejectionCount = 0
@@ -220,6 +224,8 @@ export function connect(
     })
     if (next === 'connected') {
       lastConnectedAt = Date.now()
+      // Why: only a completed E2EE handshake proves the path is healthy (issue #10119).
+      reconnectAttempt = 0
       // Why: a clean handshake proves the token is valid — reset the auth retry budget.
       authRejectionCount = 0
       for (const waiter of connectWaiters.splice(0)) {
@@ -348,7 +354,9 @@ export function connect(
       }
       console.log('[net] ws.onopen', { attempt: reconnectAttempt })
       clearConnectTimer()
-      reconnectAttempt = 0
+      // Why: no reconnectAttempt reset here — an open socket isn't a healthy session
+      // until e2ee_authenticated. Resetting pre-handshake pinned the counter at 0↔1,
+      // so a handshake-stall loop never escalated past "Connecting…" (issue #10119).
       setState('handshaking')
       emitLog('success', 'WebSocket open', 'Starting E2EE handshake')
 
@@ -764,15 +772,17 @@ export function connect(
 
   // Why: app-level liveness probe (see ACTIVITY_PROBE_INTERVAL_MS) — force-closes the WS on failure so onclose reconnects.
   function runActivityProbe() {
-    if (state !== 'connected' || !ws) {
+    if (state !== 'connected' || !ws || activityProbeInFlight) {
       return
     }
+    activityProbeInFlight = true
     const probeWs = ws
     const id = nextId()
     const probeInboundSequence = inboundSequence
     let timedOut = false
     const timeout = setTimeout(() => {
       timedOut = true
+      activityProbeInFlight = false
       pending.delete(id)
       if (inboundSequence > probeInboundSequence) {
         return
@@ -781,6 +791,10 @@ export function connect(
       // Why: stale probe timers must not close a replacement socket.
       if (probeWs === ws && probeWs.readyState === WebSocket.OPEN) {
         probeWs.close()
+        // Why: React Native can omit onclose for a wedged iOS transport.
+        if (probeWs === ws) {
+          handleSocketClosed(probeWs, { timedOut: true })
+        }
       }
     }, 8_000)
     pending.set(id, {
@@ -788,16 +802,19 @@ export function connect(
         if (timedOut) {
           return
         }
+        activityProbeInFlight = false
         clearTimeout(timeout)
       },
       reject: () => {
         if (timedOut) {
           return
         }
+        activityProbeInFlight = false
         clearTimeout(timeout)
       }
     })
     if (!sendEncrypted({ id, deviceToken, method: 'status.get' })) {
+      activityProbeInFlight = false
       clearTimeout(timeout)
       pending.delete(id)
     }
@@ -999,6 +1016,9 @@ export function connect(
       const budget = openRpcRequestBudget(options)
       const waitStart = budget.startedAt
       const wasConnected = state === 'connected'
+      if (options?.failWhenDisconnected && !wasConnected) {
+        throw new Error(`Not connected: ${method}`)
+      }
       await waitForConnected(options?.timeoutMs)
       if (!wasConnected) {
         console.log('[net] sendRequest waited for connect', {

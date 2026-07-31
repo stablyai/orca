@@ -19,6 +19,10 @@ import { SshGitProvider } from '../providers/ssh-git-provider'
 import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import {
+  buildManagedHookDetectionCommands,
+  detectedManagedHookAgents
+} from '../agent-hooks/managed-hook-detection-commands'
+import {
   AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
@@ -697,11 +701,6 @@ export class SshRelaySession {
       return false
     }
 
-    await this.installManagedHooksOnRemote(mux)
-    if (shouldContinue && !shouldContinue()) {
-      return false
-    }
-
     await this.installPluginsOnRelay(mux)
     if (shouldContinue && !shouldContinue()) {
       return false
@@ -833,6 +832,7 @@ export class SshRelaySession {
     this.wireUpPtyEvents(ptyProvider, mux, providerGeneration)
     this.wireUpAgentHookEvents(mux)
     this.wireUpRemoteWorkspaceEvents(mux)
+    void this.installManagedHooksOnRemote(mux, shouldContinue)
     return true
   }
 
@@ -926,9 +926,15 @@ export class SshRelaySession {
     })
   }
 
-  // Why: hooks must exist before PTY spawn; relay-local work keeps all managed installs to one SSH round trip.
-  private async installManagedHooksOnRemote(mux: SshChannelMultiplexer): Promise<void> {
-    if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
+  private async installManagedHooksOnRemote(
+    mux: SshChannelMultiplexer,
+    shouldContinue?: () => boolean
+  ): Promise<void> {
+    if (
+      !isRemoteAgentHooksEnabled() ||
+      !this.areAgentStatusHooksEnabled() ||
+      (shouldContinue && !shouldContinue())
+    ) {
       return
     }
     if (
@@ -940,8 +946,19 @@ export class SshRelaySession {
     }
 
     try {
+      const store = this.store as { getSettings?: Store['getSettings'] }
+      const detected = (await mux.request('preflight.detectAgents', {
+        commands: buildManagedHookDetectionCommands(store.getSettings?.() ?? null, 'linux')
+      })) as { agents?: unknown }
+      const agents = detectedManagedHookAgents(detected?.agents)
+      if (agents.length === 0 || (shouldContinue && !shouldContinue())) {
+        return
+      }
       const hostKeyFingerprint = this.requireReadyConnection().getHostKeyFingerprint?.()
-      const params = hostKeyFingerprint ? { hostKeyFingerprint } : {}
+      const params = {
+        ...(hostKeyFingerprint ? { hostKeyFingerprint } : {}),
+        agents
+      }
       const result = (await mux.request(AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD, params)) as {
         errors?: unknown
       }
@@ -2102,6 +2119,8 @@ export class SshRelaySession {
     }
     const checkpoints = recovery?.checkpointsByAppPtyId
     const relayPtyId = toRelaySshPtyId(this.targetId, appPtyId)
+    // Why: every checkpoint writer records app-id keys now, so the relay-id
+    // lookup (and its paired delete below) is a legacy guard only.
     const checkpoint = checkpoints?.get(appPtyId) ?? checkpoints?.get(relayPtyId)
     if (!checkpoint) {
       return Object.freeze({ status: 'checkpointUnavailable' })
@@ -2256,10 +2275,12 @@ export class SshRelaySession {
       (endSu, payload) => Math.max(endSu, payload.source?.sourceEndSu ?? endSu),
       acceptedRecovery.recoveryEndSu
     )
+    // Why: checkpoints are app-id keyed; a relay-id entry here would be shadowed
+    // by a staler app-id entry on the next sourceRecoveryRequest lookup.
     ptyConsumerRecoveryByTarget.get(this.targetId)?.checkpointsByAppPtyId.set(
-      relayPtyId,
+      appPtyId,
       Object.freeze({
-        id: relayPtyId,
+        id: appPtyId,
         providerGeneration: this.activePtyProviderGeneration!,
         clientGeneration: acceptedRecovery.clientGeneration,
         ownerGeneration: acceptedRecovery.ownerGeneration,

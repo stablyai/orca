@@ -15,7 +15,10 @@ import {
   getSkillDiscoveryTargetKey,
   resetSkillDiscoveryCacheForTests
 } from './installed-agent-skill-discovery'
-import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
+import {
+  INSTALLED_AGENT_SKILLS_CHANGED_EVENT,
+  INSTALLED_AGENT_SKILLS_REFRESHED_EVENT
+} from './installed-agent-skills-change-event'
 import { useActiveSkillDiscoveryRuntimeTarget } from './use-active-skill-discovery-runtime-target'
 import { useMountedRef } from './useMountedRef'
 
@@ -41,6 +44,9 @@ type InstalledAgentSkillMatchOptions = {
 export type InstalledAgentSkillState = {
   installed: boolean
   loading: boolean
+  // Why: a forced rescan keeps the previous result, so only the first scan per
+  // runtime-scoped target is genuinely unknown.
+  settled: boolean
   error: string | null
   skills: readonly DiscoveredSkill[]
   sources: readonly SkillDiscoverySource[]
@@ -85,6 +91,12 @@ export function hasInstalledAgentSkillNamed(
       expected.has(normalizeSkillName(basenameFromPath(skill.directoryPath)))
     )
   })
+}
+
+export function notifyInstalledAgentSkillsRefreshed(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT))
+  }
 }
 
 export const _installedAgentSkillDiscoveryInternalsForTests = {
@@ -159,7 +171,7 @@ export function useInstalledAgentSkillNames(
   }
 
   const refresh = useCallback(
-    async (force = true): Promise<boolean> => {
+    async (force = true, showLoading = true): Promise<boolean> => {
       const requestDiscoveryTargetKey = discoveryTargetKey
       const requestGeneration = ++refreshGenerationRef.current
       const writeIfCurrent = (write: () => void): void => {
@@ -178,9 +190,11 @@ export function useInstalledAgentSkillNames(
         })
         return false
       }
-      writeIfCurrent(() => {
-        setLoading(true)
-      })
+      if (showLoading) {
+        writeIfCurrent(() => {
+          setLoading(true)
+        })
+      }
       if (!runtimeTarget) {
         // Why: stay in the loading state rather than scanning the wrong host and
         // reporting "not installed" before the owning runtime is known.
@@ -205,6 +219,9 @@ export function useInstalledAgentSkillNames(
           )
         })
       } finally {
+        // Why: a silent refresh can supersede an in-flight loading one, whose own
+        // clear is then dropped by the generation guard. Only the winning
+        // generation clears, so it must clear regardless of its own showLoading.
         writeIfCurrent(() => {
           setLoading(false)
         })
@@ -233,13 +250,18 @@ export function useInstalledAgentSkillNames(
     const refreshFromExternalChange = (): void => {
       void refresh(true)
     }
+    const refreshFromCompletedScan = (): void => {
+      void refresh(false, false)
+    }
     // Why: skill install commands run outside React state, often in a terminal.
     // Refresh on focus and explicit install events so completion is detected.
     window.addEventListener('focus', refreshFromExternalChange)
     window.addEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refreshFromExternalChange)
+    window.addEventListener(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT, refreshFromCompletedScan)
     return () => {
       window.removeEventListener('focus', refreshFromExternalChange)
       window.removeEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refreshFromExternalChange)
+      window.removeEventListener(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT, refreshFromCompletedScan)
     }
   }, [enabled, refresh])
 
@@ -271,6 +293,7 @@ export function useInstalledAgentSkillNames(
   return {
     installed,
     loading: loadingForRender,
+    settled: enabled && resultForRender !== null,
     error: errorForRender,
     skills,
     sources,

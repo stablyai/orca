@@ -141,23 +141,7 @@ jobs:
           if-no-files-found: error
 
       - name: Install SignPath PowerShell module
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-          $useResourceGet = $null -ne (Get-Command -Name Install-PSResource -ErrorAction SilentlyContinue)
-          if ($useResourceGet) {
-            if ($null -eq (Get-PSResourceRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-              Register-PSResourceRepository -PSGallery -Trusted
-            } else {
-              Set-PSResourceRepository -Name PSGallery -Trusted
-            }
-            Install-PSResource -Name SignPath -Version '[4.0.0,5.0.0)' -Repository PSGallery -Scope CurrentUser -TrustRepository -Reinstall -ErrorAction Stop
-          } else {
-            Install-Module -Name SignPath -Repository PSGallery -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
-          }
-          Import-Module SignPath -ErrorAction Stop
-          Get-Command -Name Get-SignedArtifact -Module SignPath -ErrorAction Stop
+        uses: ./.github/actions/install-signpath-module
 
       - name: Submit inner binaries signing request
         id: submit-inner-signing

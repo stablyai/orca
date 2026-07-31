@@ -1340,6 +1340,123 @@ describe('PtyHandler', () => {
     ])
   })
 
+  describe('legacy flush retry with a memoized source chunk', () => {
+    let capacityListener: (() => void) | undefined
+    let hasCapacity: boolean
+    let maxChars: number
+    let admitted: Record<string, unknown>[]
+    let dataCallback: ((data: string) => void) | undefined
+
+    async function setupRetryHarness(spawnParams: Record<string, unknown> = {}): Promise<void> {
+      await handler.dispose({ waitForPhysicalExit: false })
+      capacityListener = undefined
+      hasCapacity = false
+      admitted = []
+      Object.assign(dispatcher, {
+        onLegacyPtyCapacity: vi.fn((listener: () => void) => {
+          capacityListener = listener
+          return vi.fn()
+        }),
+        tryNotifyPtyData: vi.fn((params: Record<string, unknown>) => {
+          if (hasCapacity) {
+            admitted.push(params)
+          }
+          return hasCapacity
+        }),
+        tryNotifyPtyExit: vi.fn(() => true),
+        legacyRetentionBelowLowWater: true,
+        // Clamped like the real dispatcher: never more than min(data.length, limit).
+        maxLegacyPtyDataChars: vi.fn((_params: unknown, data: string, limit?: number) =>
+          Math.min(maxChars, data.length, limit ?? data.length)
+        )
+      })
+      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      dataCallback = undefined
+      mockPtySpawn.mockReturnValue({
+        ...mockPtyInstance,
+        onData: vi.fn((callback: (data: string) => void) => {
+          dataCallback = callback
+        }),
+        onExit: vi.fn()
+      })
+      await dispatcher.callRequest('pty.spawn', spawnParams)
+      expect(dataCallback).toBeDefined()
+    }
+
+    it('resends the memo verbatim and keeps the coalesced tail when capacity grows', async () => {
+      maxChars = 5_000
+      await setupRetryHarness()
+      dataCallback!('a'.repeat(20_000))
+      await vi.advanceTimersByTimeAsync(8)
+      // Why before restoring capacity: the failed batch made zero writes so no flush is
+      // rescheduled; this enqueue re-arms the timer.
+      dataCallback!('b'.repeat(10))
+      hasCapacity = true
+      maxChars = 16_384
+      await vi.runAllTimersAsync()
+
+      expect(admitted.map((frame) => frame.data).join('')).toBe('a'.repeat(20_000) + 'b'.repeat(10))
+      expect((admitted[0].data as string).length).toBe(5_000)
+      // Why: remainder frames must not leak transformed/rawLength/seq keys.
+      expect(admitted[1]).toStrictEqual({ id: 'pty-1', data: expect.any(String) })
+    })
+
+    it('keeps a tail appended after a failed flush under constant capacity', async () => {
+      maxChars = 16_384
+      await setupRetryHarness()
+      dataCallback!('a'.repeat(5_000))
+      await vi.advanceTimersByTimeAsync(8)
+      dataCallback!('b'.repeat(10))
+      hasCapacity = true
+      await vi.runAllTimersAsync()
+
+      expect(admitted.map((frame) => frame.data).join('')).toBe('a'.repeat(5_000) + 'b'.repeat(10))
+      expect(admitted[1].data).toBe('b'.repeat(10))
+    })
+
+    it('does not duplicate memoized chars when capacity shrinks before the retry', async () => {
+      maxChars = 16_384
+      await setupRetryHarness()
+      dataCallback!('a'.repeat(20_000))
+      await vi.advanceTimersByTimeAsync(8)
+      maxChars = 5_000
+      hasCapacity = true
+      // Why: nothing else re-arms the flush timer after a zero-write batch.
+      capacityListener!()
+      await vi.runAllTimersAsync()
+
+      expect(admitted.map((frame) => frame.data).join('')).toBe('a'.repeat(20_000))
+      expect((admitted[0].data as string).length).toBe(16_384)
+      expect((admitted[1].data as string).length).toBe(3_616)
+    })
+
+    it('retains a coalesced transformed raw advance behind a memoized source-only chunk', async () => {
+      maxChars = 16_384
+      await setupRetryHarness({
+        startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
+        startupIngress: {
+          colors: { foreground: '#2e3434', background: '#ffffff' },
+          deadlineMs: 5_000
+        }
+      })
+      // First answered query: direct publish fails, entry queued without a memo.
+      dataCallback!('\x1b]10;?\x07')
+      // Capacity event while still blocked: the flush fails and memoizes the source-only chunk.
+      capacityListener!()
+      await vi.advanceTimersByTimeAsync(0)
+      // Second answered query coalesces into the memoized transformed head.
+      dataCallback!('\x1b]11;?\x07')
+      hasCapacity = true
+      capacityListener!()
+      await vi.runAllTimersAsync()
+
+      expect(admitted).toEqual([
+        { id: 'pty-1', data: '', rawLength: 7, seq: 7, transformed: true },
+        { id: 'pty-1', data: '', rawLength: 7, seq: 14, transformed: true }
+      ])
+    })
+  })
+
   it('leaves startup queries untouched for an unsupported relay capability version', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
@@ -2271,8 +2388,13 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_TAB_ID).toBe('tab-1')
   })
 
-  it('passes the PTY id and renderer paneKey to env augmenters', async () => {
-    const seenContexts: { id: string; paneKey?: string; env: Record<string, string> }[] = []
+  it('passes PTY and explicit launch identity to env augmenters', async () => {
+    const seenContexts: {
+      id: string
+      paneKey?: string
+      launchAgent?: string
+      env: Record<string, string>
+    }[] = []
     handler.addEnvAugmenter((ctx) => {
       seenContexts.push(ctx)
       return {
@@ -2281,7 +2403,8 @@ describe('PtyHandler', () => {
     })
 
     await dispatcher.callRequest('pty.spawn', {
-      env: { ORCA_PANE_KEY: 'tab-context:0' }
+      env: { ORCA_PANE_KEY: 'tab-context:0' },
+      launchAgent: 'pi'
     })
     await dispatcher.callRequest('pty.spawn', {})
 
@@ -2290,6 +2413,7 @@ describe('PtyHandler', () => {
     expect(seenContexts[0]).toMatchObject({
       id: 'pty-1',
       paneKey: 'tab-context:0',
+      launchAgent: 'pi',
       env: { ORCA_PANE_KEY: 'tab-context:0' }
     })
     expect(seenContexts[1]).toMatchObject({ id: 'pty-2', paneKey: undefined })

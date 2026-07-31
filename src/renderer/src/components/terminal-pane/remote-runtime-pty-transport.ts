@@ -146,6 +146,7 @@ export function createRemoteRuntimePtyTransport(
   let destroyed = false
   let terminalEnded = false
   let connecting = false
+  const attachmentReadyWaiters = new Set<(ready: boolean) => void>()
   // Why: transport methods overlap during remounts; only the latest pane lifecycle may install a returned PTY.
   let lifecycleEpoch = 0
   let handle: string | null = null
@@ -163,14 +164,62 @@ export function createRemoteRuntimePtyTransport(
   let resubscribeRequestedRequiresReplacement = false
   let recoveryRequiresReplacement = false
   let stopWaitingForPublishedHandle: (() => void) | null = null
+  let settleHostSessionAttachRetry: ((retry: boolean) => void) | null = null
   let attachGeneration = 0
   let subscriptionGeneration = 0
+
+  function setAttachmentReady(ready: boolean): void {
+    attachmentReady = ready
+    if (!ready) {
+      return
+    }
+    for (const resolve of attachmentReadyWaiters) {
+      resolve(true)
+    }
+    attachmentReadyWaiters.clear()
+  }
+
+  function setAttachmentUnavailable(): void {
+    attachmentReady = false
+    for (const resolve of attachmentReadyWaiters) {
+      resolve(false)
+    }
+    attachmentReadyWaiters.clear()
+  }
+
+  function waitForAttachmentReady(): Promise<boolean> {
+    if (attachmentReady) {
+      return Promise.resolve(true)
+    }
+    if (destroyed || terminalEnded || !connected || !handle) {
+      return Promise.resolve(false)
+    }
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        attachmentReadyWaiters.delete(settle)
+        resolve(false)
+      }, HOST_SESSION_ATTACH_TIMEOUT_MS)
+      const settle = (ready: boolean): void => {
+        clearTimeout(timer)
+        resolve(ready)
+      }
+      attachmentReadyWaiters.add(settle)
+    })
+  }
+
   const recovery = new RemoteRuntimePtyRecoveryState(() => {
     if (recovery.currentPhase === 'disconnected') {
       clearPublishedHandleWait()
       // Why: cached pixels may remain, but no stream from the exhausted epoch may keep delivering or accepting terminal traffic.
       subscriptionGeneration += 1
       closeMultiplexedStream()
+    }
+    if (
+      recovery.currentPhase === 'disconnected' ||
+      recovery.currentPhase === 'disposed' ||
+      recovery.currentPhase === 'idle'
+    ) {
+      settleHostSessionAttachRetry?.(false)
     }
     emitRecoveryState()
   })
@@ -187,6 +236,7 @@ export function createRemoteRuntimePtyTransport(
   let agentSessionRequiresHostAuthorityReplay = false
   let terminalCreateUnknownOutcomeError: unknown = null
   let lastConnectOptions: Parameters<PtyTransport['connect']>[0] | null = null
+  let lastAttachOptions: Parameters<PtyTransport['attach']>[0] | null = null
   let resolvePaneUnavailable = false
   let recoveringPaneHandle: string | null = null
   const adoptExecutionMetadata = (terminal: {
@@ -356,7 +406,8 @@ export function createRemoteRuntimePtyTransport(
   }
 
   async function waitForHostSessionHandle(
-    hostTabId: string
+    hostTabId: string,
+    isCurrent: () => boolean
   ): Promise<string | null | undefined | false> {
     if (!worktreeId) {
       return undefined
@@ -384,7 +435,7 @@ export function createRemoteRuntimePtyTransport(
     }
 
     const startedAt = Date.now()
-    while (!destroyed) {
+    while (isCurrent()) {
       const remainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
       if (remainingMs <= 0) {
         return undefined
@@ -411,6 +462,63 @@ export function createRemoteRuntimePtyTransport(
             matchRequestedLeaf: false
           }).length > 0
         return siblingStillExists ? false : null
+      }
+    }
+    return undefined
+  }
+
+  function waitForHostSessionAttachRetry(recoveryEpoch: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      let settled = false
+      const settle = (retry: boolean): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        if (settleHostSessionAttachRetry === settle) {
+          settleHostSessionAttachRetry = null
+        }
+        resolve(retry)
+      }
+      settleHostSessionAttachRetry?.(false)
+      settleHostSessionAttachRetry = settle
+      if (!recovery.schedule(recoveryEpoch, () => settle(true))) {
+        settle(false)
+      }
+    })
+  }
+
+  async function waitForHostSessionHandleWithRecovery(
+    hostTabId: string,
+    isCurrent: () => boolean
+  ): Promise<string | null | undefined | false> {
+    let recoveryEpoch = recovery.isActive ? recovery.currentEpoch : undefined
+    while (isCurrent()) {
+      try {
+        const hostHandle = await waitForHostSessionHandle(hostTabId, isCurrent)
+        if (!isCurrent()) {
+          return undefined
+        }
+        if (recoveryEpoch !== undefined) {
+          if (!recovery.isCurrent(recoveryEpoch)) {
+            return undefined
+          }
+        }
+        return hostHandle
+      } catch (error) {
+        if (
+          !isRecoverableRemoteRuntimeConnectionError(toRemoteRuntimeClientErrorLike(error)) ||
+          !isCurrent()
+        ) {
+          throw error
+        }
+        if (recoveryEpoch !== undefined && !recovery.isCurrent(recoveryEpoch)) {
+          return undefined
+        }
+        recoveryEpoch ??= recovery.begin()
+        if (!(await waitForHostSessionAttachRetry(recoveryEpoch)) || !isCurrent()) {
+          return undefined
+        }
       }
     }
     return undefined
@@ -482,29 +590,27 @@ export function createRemoteRuntimePtyTransport(
   async function attachHostSessionMirror(
     options: { cols?: number; rows?: number },
     notifySpawn = true,
-    expectedAttachGeneration?: number
+    expectedAttachGeneration?: number,
+    expectedLifecycleEpoch?: number
   ): Promise<PtyConnectResult | undefined> {
     if (!tabId || !isWebTerminalSurfaceTabId(tabId)) {
       return undefined
     }
+    const isCurrent = (): boolean =>
+      !destroyed &&
+      (expectedAttachGeneration === undefined || expectedAttachGeneration === attachGeneration) &&
+      (expectedLifecycleEpoch === undefined || expectedLifecycleEpoch === lifecycleEpoch)
     const hostTabId = toHostSessionTabId(tabId)
-    const hostHandle = await waitForHostSessionHandle(hostTabId)
-    if (hostHandle === undefined || destroyed) {
+    const hostHandle = await waitForHostSessionHandleWithRecovery(hostTabId, isCurrent)
+    if (hostHandle === undefined || !isCurrent()) {
       return undefined
     }
     if (hostHandle === null) {
       storedCallbacks.onError?.('Remote terminal was closed.')
       return undefined
     }
-    if (
-      !hostHandle ||
-      destroyed ||
-      (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration)
-    ) {
-      if (
-        !destroyed &&
-        (expectedAttachGeneration === undefined || expectedAttachGeneration === attachGeneration)
-      ) {
+    if (!hostHandle || !isCurrent()) {
+      if (isCurrent()) {
         storedCallbacks.onError?.('Remote terminal was closed.')
       }
       return undefined
@@ -532,6 +638,9 @@ export function createRemoteRuntimePtyTransport(
       }
     }
 
+    if (!isCurrent() || recovery.currentPhase === 'disconnected') {
+      return undefined
+    }
     handle = hostHandle
     remotePtyId = toRemoteRuntimePtyId(hostHandle, currentRuntimeEnvironmentId)
     registerShutdownHandlers(remotePtyId)
@@ -551,18 +660,14 @@ export function createRemoteRuntimePtyTransport(
         throw error
       }
     }
-    if (
-      destroyed ||
-      !connected ||
-      !remotePtyId ||
-      (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration)
-    ) {
+    if (!connected || !remotePtyId || !isCurrent()) {
       return undefined
     }
 
     return {
       id: remotePtyId,
-      replay: ''
+      replay: '',
+      isReattach: true
     } satisfies PtyConnectResult
   }
 
@@ -846,7 +951,7 @@ export function createRemoteRuntimePtyTransport(
     ) {
       return undefined
     }
-    return { id: remotePtyId, replay: '' }
+    return { id: remotePtyId, replay: '', isReattach: true }
   }
 
   function recoverExpiredHostPane(): void {
@@ -1033,7 +1138,7 @@ export function createRemoteRuntimePtyTransport(
     multiplexedStream?.close()
     multiplexedStream = null
     multiplexedStreamHandle = null
-    attachmentReady = false
+    setAttachmentReady(false)
   }
 
   function clearPublishedHandleWait(): void {
@@ -1064,6 +1169,7 @@ export function createRemoteRuntimePtyTransport(
     handle = null
     remotePtyId = null
     closeMultiplexedStream()
+    setAttachmentUnavailable()
     emitRecoveryState()
     if (stalePtyId) {
       onPtyExit?.(stalePtyId)
@@ -1077,7 +1183,7 @@ export function createRemoteRuntimePtyTransport(
     handle = nextHandle
     remotePtyId = toRemoteRuntimePtyId(nextHandle, currentRuntimeEnvironmentId)
     registerShutdownHandlers(remotePtyId)
-    attachmentReady = false
+    setAttachmentReady(false)
     // Why: host handle rotation preserves the pane generation; only the store identity changes, not spawn/exit semantics.
     if (replacedPtyId) {
       replaceFitOverridePtyId(replacedPtyId, remotePtyId)
@@ -1172,6 +1278,9 @@ export function createRemoteRuntimePtyTransport(
     clearPendingViewportClaim()
     if (!isRecoverableRemoteRuntimeConnectionError(toRemoteRuntimeClientErrorLike(error))) {
       return false
+    }
+    if (recovery.currentPhase === 'disconnected') {
+      return true
     }
     scheduleResubscribeAfterTransportClose()
     return true
@@ -1306,6 +1415,22 @@ export function createRemoteRuntimePtyTransport(
       })
   }
 
+  function scheduleCapacityPressureRetry(): void {
+    if (destroyed || !connected || !handle) {
+      return
+    }
+    const recoveryWasActive = recovery.isActive
+    const recoveryEpoch = recovery.begin()
+    if (!recoveryWasActive) {
+      inputBatcher.clear()
+      viewportBatcher.clear()
+      clearPendingViewportClaim()
+    }
+    recovery.schedule(recoveryEpoch, (nextEpoch) => {
+      scheduleResubscribeAfterTransportClose(false, nextEpoch)
+    })
+  }
+
   async function subscribeToHandle(expectedRecoveryEpoch?: number): Promise<void> {
     if (!handle) {
       return
@@ -1313,7 +1438,7 @@ export function createRemoteRuntimePtyTransport(
     const subscribedHandle = handle
     const subscribedPtyId = remotePtyId
     const generation = ++subscriptionGeneration
-    attachmentReady = false
+    setAttachmentReady(false)
     let transportClosed = false
     let subscriptionAttached = false
     // Why: viewport handed to subscribe; a resize during the round-trip falls back to the refresh-only one-shot RPC, replayed through the stream below once current.
@@ -1358,7 +1483,7 @@ export function createRemoteRuntimePtyTransport(
             return
           }
           subscriptionAttached = true
-          attachmentReady = true
+          setAttachmentReady(true)
           connecting = false
           recoveryRequiresReplacement = false
           recovery.markHealthy()
@@ -1372,6 +1497,7 @@ export function createRemoteRuntimePtyTransport(
           }
           outputProcessor.clearAccumulatedState()
           if (tabId && isWebTerminalSurfaceTabId(tabId)) {
+            setAttachmentReady(false)
             multiplexedStream = null
             multiplexedStreamHandle = null
             clearPendingViewportClaim()
@@ -1386,7 +1512,7 @@ export function createRemoteRuntimePtyTransport(
           remotePtyId = null
           multiplexedStream = null
           multiplexedStreamHandle = null
-          attachmentReady = false
+          setAttachmentUnavailable()
           terminalEnded = true
           clearPendingViewportClaim()
           emitRecoveryState()
@@ -1411,7 +1537,7 @@ export function createRemoteRuntimePtyTransport(
             setDriverForPty(subscribedPtyId, driver)
           }
         },
-        onTransportClose: ({ recoverable }) => {
+        onTransportClose: ({ recoverable, retryWithBackoff }) => {
           transportClosed = true
           if (generation !== subscriptionGeneration) {
             return
@@ -1424,12 +1550,17 @@ export function createRemoteRuntimePtyTransport(
           }
           multiplexedStream = null
           multiplexedStreamHandle = null
-          attachmentReady = false
+          setAttachmentReady(false)
           if (recoverable) {
-            scheduleResubscribeAfterTransportClose()
+            if (retryWithBackoff) {
+              scheduleCapacityPressureRetry()
+            } else {
+              scheduleResubscribeAfterTransportClose()
+            }
           } else {
             connecting = false
             recovery.cancel()
+            setAttachmentUnavailable()
             emitRecoveryState()
           }
         }
@@ -1450,7 +1581,7 @@ export function createRemoteRuntimePtyTransport(
     closeMultiplexedStream()
     multiplexedStream = nextStream
     multiplexedStreamHandle = subscribedHandle
-    attachmentReady = subscriptionAttached
+    setAttachmentReady(subscriptionAttached)
     if (subscriptionAttached) {
       recoveryRequiresReplacement = false
       recovery.markHealthy()
@@ -1483,6 +1614,7 @@ export function createRemoteRuntimePtyTransport(
       const connectLifecycleEpoch = ++lifecycleEpoch
       const createEnvironmentId = currentRuntimeEnvironmentId
       lastConnectOptions = options
+      lastAttachOptions = null
       storedCallbacks = options.callbacks
       recoveryRequiresReplacement = false
       terminalEnded = false
@@ -1494,7 +1626,7 @@ export function createRemoteRuntimePtyTransport(
 
       try {
         if (isWebTerminalSurfaceTabId(tabId ?? '')) {
-          return await attachHostSessionMirror(options)
+          return await attachHostSessionMirror(options, true, undefined, connectLifecycleEpoch)
         }
 
         if (options.sessionId && !getRemoteRuntimeTerminalHandle(options.sessionId)) {
@@ -1697,12 +1829,13 @@ export function createRemoteRuntimePtyTransport(
     },
 
     attach(options) {
-      lifecycleEpoch += 1
+      const attachLifecycleEpoch = ++lifecycleEpoch
       const generation = ++attachGeneration
       cancelTerminalCreateRetryWait()
       recovery.cancel()
       recoveryRequiresReplacement = false
       clearPublishedHandleWait()
+      lastAttachOptions = options
       storedCallbacks = options.callbacks
       terminalEnded = false
       connecting = true
@@ -1733,7 +1866,7 @@ export function createRemoteRuntimePtyTransport(
       const persistedHandle = nextHandle
       void (async () => {
         if (isWebTerminalSurfaceTabId(tabId ?? '')) {
-          await attachHostSessionMirror(options, false, generation)
+          await attachHostSessionMirror(options, false, generation, attachLifecycleEpoch)
           return
         }
         if (!tabId || !leafId || !worktreeId) {
@@ -1780,10 +1913,15 @@ export function createRemoteRuntimePtyTransport(
         }
         await adoptResolvedHostPane(resolved, options, false, generation)
       })().catch((error) => {
-        if (generation !== attachGeneration || destroyed) {
+        if (
+          generation !== attachGeneration ||
+          attachLifecycleEpoch !== lifecycleEpoch ||
+          destroyed
+        ) {
           return
         }
         clearPendingViewportClaim()
+        recovery.cancel()
         handleRemoteTerminalError(error)
       })
     },
@@ -1809,6 +1947,7 @@ export function createRemoteRuntimePtyTransport(
       const id = remotePtyId
       unregisterShutdownHandlers(id)
       closeMultiplexedStream()
+      setAttachmentUnavailable()
       handle = null
       remotePtyId = null
       emitRecoveryState()
@@ -1834,6 +1973,7 @@ export function createRemoteRuntimePtyTransport(
       connecting = false
       clearPendingViewportClaim()
       closeMultiplexedStream()
+      setAttachmentUnavailable()
       emitRecoveryState()
       storedCallbacks = {}
     },
@@ -1935,6 +2075,23 @@ export function createRemoteRuntimePtyTransport(
         !destroyed &&
         !terminalEnded &&
         !connected &&
+        isWebTerminalSurfaceTabId(tabId ?? '') &&
+        recovery.currentPhase === 'disconnected'
+      ) {
+        recovery.cancel()
+        if (lastAttachOptions) {
+          transport.attach(lastAttachOptions)
+          return true
+        }
+        if (lastConnectOptions) {
+          void transport.connect(lastConnectOptions)
+          return true
+        }
+      }
+      if (
+        !destroyed &&
+        !terminalEnded &&
+        !connected &&
         !handle &&
         (terminalCreateNeedsReconciliation || agentSessionRequiresHostAuthorityReplay) &&
         lastConnectOptions &&
@@ -1982,11 +2139,15 @@ export function createRemoteRuntimePtyTransport(
       if (!connected || !handle) {
         return null
       }
+      if (!(await waitForAttachmentReady()) || !handle) {
+        return null
+      }
       return getCurrentMultiplexedStream(handle)?.serializeBuffer(opts) ?? null
     },
 
     destroy() {
       destroyed = true
+      setAttachmentUnavailable()
       this.disconnect()
       recovery.dispose()
       inputBatcher.clear()

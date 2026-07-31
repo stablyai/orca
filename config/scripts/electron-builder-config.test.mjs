@@ -154,7 +154,12 @@ describe('electron-builder config', () => {
 
   it('unpacks the compiled CommonJS boundary with CLI runtime files', () => {
     expect(electronBuilderConfig.asarUnpack).toEqual(
-      expect.arrayContaining(['out/package.json', 'out/cli/**', 'out/shared/**'])
+      expect.arrayContaining([
+        'out/package.json',
+        'out/cli/**',
+        'out/shared/**',
+        'out/main/claude-accounts/keychain.js'
+      ])
     )
   })
 
@@ -475,6 +480,20 @@ describe('electron-builder config', () => {
     }
   })
 
+  it('fails when the packaged resources directory is missing', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-electron-builder-config-'))
+    try {
+      await expect(
+        electronBuilderConfig.afterPack({
+          appOutDir: root,
+          electronPlatformName: 'win32'
+        })
+      ).rejects.toThrow(/Missing packaged resources directory/)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it.skipIf(process.platform === 'win32')(
     'marks packaged Unix CLI launchers executable',
     async () => {
@@ -496,6 +515,19 @@ describe('electron-builder config', () => {
         await writeFile(
           join(unpackedMainDir, 'daemon-entry.js'),
           'console.error("Usage: daemon-entry <socket>"); process.exit(1)\n',
+          'utf8'
+        )
+        const unpackedCliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
+        await mkdir(join(unpackedCliDir, 'handlers'), { recursive: true })
+        await writeFile(join(unpackedCliDir, 'handlers', 'skills.js'), '', 'utf8')
+        await writeFile(
+          join(unpackedCliDir, 'index.js'),
+          [
+            'const args = process.argv.slice(2)',
+            "if (args[1] === 'list') console.log(JSON.stringify({ topics: [{ name: 'orca-cli' }, { name: 'computer-use' }] }))",
+            "else if (args[1] === 'get') console.log(`---\\nname: ${args[2]}\\n---`)",
+            'else console.log(JSON.stringify({ executed: false }))'
+          ].join('\n'),
           'utf8'
         )
         await writeFile(launcherPath, '#!/usr/bin/env bash\n', { encoding: 'utf8', mode: 0o644 })

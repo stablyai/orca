@@ -1,7 +1,7 @@
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-// Why: written by the plain-Node watchdog child when main-thread heartbeats stop, and rewritten if
+// Why: written by the watchdog worker when main-thread heartbeats stop, and rewritten if
 // they resume; consumed on the next launch to report how long the stall lasted and whether it ever
 // cleared. `selfRecovered` separates a real deadlock from a long-but-survivable stall — the two are
 // indistinguishable at detection time, and only the latter would have been a destructive kill.
