@@ -62,7 +62,13 @@ export function DefaultEditorSetting({
             updateSettings({ defaultEditorMode: value as GlobalSettings['defaultEditorMode'] })
           }
         >
-          <SelectTrigger className="h-7 w-44 text-xs">
+          <SelectTrigger
+            className="h-7 w-44 text-xs"
+            aria-label={translate(
+              'auto.components.settings.DefaultEditorSetting.title',
+              'Default Editor'
+            )}
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

@@ -8248,7 +8248,11 @@
             "editorFontFamily": "Editor Font Family",
             "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
             "defaultEditor": "Default Editor",
-            "defaultEditorDesc": "Editor used when opening files: Orca built-in, system default, or a custom command in a terminal."
+            "defaultEditorDesc": "Editor used when opening files: Orca built-in, system default, or a custom command in a terminal.",
+            "defaultEditorExternal": "external",
+            "defaultEditorTerminal": "terminal",
+            "defaultEditorHelix": "helix",
+            "defaultEditorVim": "vim"
           }
         },
         "git": {

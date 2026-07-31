@@ -75,6 +75,7 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
         'auto.components.settings.general.search.defaultEditorHelix',
         'helix'
       ),
+      ...translateSearchKeyword('auto.components.settings.general.search.defaultEditorVim', 'vim'),
       ...translateSearchKeyword('auto.components.settings.general.search.3ca5ab78a5', 'code'),
       ...translateSearchKeyword('auto.components.settings.general.search.dbeb1f348e', 'command')
     ]
