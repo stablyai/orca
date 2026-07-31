@@ -157,6 +157,7 @@ export function createRemoteRuntimePtyTransport(
   const runtimeEnvironmentPairingRevision = getRuntimeEnvironmentRevision(runtimeEnvironmentId)
   let multiplexedStream: RemoteRuntimeMultiplexedTerminal | null = null
   let multiplexedStreamHandle: string | null = null
+  let desiredOutputPaused = false
   let desiredViewport: { cols: number; rows: number } | null = null
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   let resubscribeEpoch: number | null = null
@@ -1478,10 +1479,22 @@ export function createRemoteRuntimePtyTransport(
             })
           }
         },
+        onOutputPauseCapability: () => {
+          if (isCurrentSubscription()) {
+            storedCallbacks.onOutputPauseChanged?.(
+              desiredOutputPaused,
+              nextStream.setOutputPaused(desiredOutputPaused)
+            )
+          }
+        },
         onSubscribed: () => {
           if (!isCurrentSubscription()) {
             return
           }
+          storedCallbacks.onOutputPauseChanged?.(
+            desiredOutputPaused,
+            nextStream.setOutputPaused(desiredOutputPaused)
+          )
           subscriptionAttached = true
           setAttachmentReady(true)
           connecting = false
@@ -2038,6 +2051,16 @@ export function createRemoteRuntimePtyTransport(
       viewportBatcher.clear()
       sendViewportUpdate(cols, rows, true)
       return true
+    },
+
+    setOutputPaused(paused: boolean): boolean {
+      desiredOutputPaused = paused
+      if (!connected || !handle) {
+        return false
+      }
+      const supported = getCurrentMultiplexedStream(handle)?.setOutputPaused(paused) === true
+      storedCallbacks.onOutputPauseChanged?.(paused, supported)
+      return supported
     },
 
     resize(cols: number, rows: number, meta): boolean {

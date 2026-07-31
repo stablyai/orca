@@ -226,7 +226,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(latestSubscribePayload().capabilities).toEqual({
         ackOutput: 1,
         ackOutputSourceRanges: 1,
-        desktopViewportClaims: 1
+        desktopViewportClaims: 1,
+        outputPause: 1
       })
     )
     expect(runtimeSubscribe).toHaveBeenCalledWith(
@@ -3521,6 +3522,80 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(onPtyExit).not.toHaveBeenCalled()
     expect(onError).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+  })
+
+  it('reapplies negotiated output pause across reconnect and resumes exact snapshot plus live data', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onReplayData = vi.fn()
+    const onData = vi.fn()
+    const onOutputPauseChanged = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({
+      url: '',
+      callbacks: { onData, onReplayData, onOutputPauseChanged }
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    expect(transport.setOutputPaused?.(true)).toBe(false)
+    const firstStreamId = latestSubscribePayload().streamId
+    emitSnapshot(firstStreamId, 'INITIAL_SNAPSHOT')
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: {
+        type: 'subscribed',
+        streamId: firstStreamId,
+        capabilities: { outputPause: 1 }
+      }
+    })
+    await vi.waitFor(() =>
+      expect(
+        decodeTerminalStreamJson<{ paused?: boolean }>(
+          latestFrameForOpcode(TerminalStreamOpcode.SetOutputPaused)!.payload
+        )
+      ).toEqual({ paused: true })
+    )
+
+    subscriptionCallbacks?.onClose?.()
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() =>
+      expect(
+        subscriptionSendBinary.mock.calls
+          .map((call) => decodeTerminalStreamFrame(call[0]))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe)
+      ).toHaveLength(2)
+    )
+    const reconnectStreamId = latestSubscribePayload().streamId
+    emitSnapshot(reconnectStreamId, 'RECONNECT_SNAPSHOT')
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: {
+        type: 'subscribed',
+        streamId: reconnectStreamId,
+        capabilities: { outputPause: 1 }
+      }
+    })
+    await vi.waitFor(() =>
+      expect(
+        subscriptionSendBinary.mock.calls
+          .map((call) => decodeTerminalStreamFrame(call[0]))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.SetOutputPaused)
+          .map((frame) => decodeTerminalStreamJson<{ paused?: boolean }>(frame!.payload))
+      ).toEqual([{ paused: true }, { paused: true }])
+    )
+
+    expect(transport.setOutputPaused?.(false)).toBe(true)
+    emitOutput(reconnectStreamId, 'LIVE_AFTER_RECONNECT')
+    expect(onReplayData.mock.calls.map((call) => call[0])).toEqual([
+      'INITIAL_SNAPSHOT',
+      'RECONNECT_SNAPSHOT'
+    ])
+    expect(onData.mock.calls.map((call) => call[0])).toEqual(['LIVE_AFTER_RECONNECT'])
+    expect(onOutputPauseChanged).toHaveBeenLastCalledWith(false, true)
+    transport.destroy?.()
   })
 
   it('backs off before retrying a capacity-rejected terminal stream', async () => {

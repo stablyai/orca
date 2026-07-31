@@ -3088,7 +3088,7 @@
       "providers": ["paired-runtime", "ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["paired-runtime"],
-      "coverageNotes": "Deterministic headed macOS runs launch an isolated Orca desktop server and a separate paired web client. A byte-identical headless run uses an isolated `orca serve` host. Both create six real paired host PTYs with bounded high-output scrollback, ordinary-park five client xterms without enabling the lossy retention budget, assert bounded cells/heap/timer lag, then restore 5,000 rows on the original PTY including output produced while parked and continued input/output. The headed oracle additionally keeps every remote target workspace and terminal unmounted in the host renderer before and after client recovery. Separate headed/headless ACK-starvation tests recover one stalled stream without replacing its PTY. A headed output-drop oracle proves a successful snapshot probe cannot certify a stale live stream when the authoritative PTY sequence advanced beyond the client high-water. Unit coverage requires an unsequenced client to establish a first-probe baseline, remain attached at the same sequence, and recover only after a later probe advances. A capability-disabled run proves legacy hosts retain the prior lossy limit/TTL fallback. Unit tests cover exact-owner capability routing, raw-stream release, singleton side-effect facts with timed handoff cleanup, provider-authoritative snapshots, 128 active streams plus retry after a 129th-stream capacity rejection, capacity-pressure backoff, full split-leaf remint reconciliation, truncation, and manual-disconnect queue fencing. Linux, Windows, mixed-version paired hosts, live SSH, and production-scale paired hosts remain gaps.",
+      "coverageNotes": "Deterministic headed macOS runs launch an isolated Orca desktop server and a separate paired web client. A byte-identical headless run uses an isolated `orca serve` host. Both create six real paired host PTYs with bounded high-output scrollback, prove sustained output while all six client xterms are warm-mounted but hidden causes zero renderer scheduler work, ordinary-park five xterms without enabling the lossy retention budget, assert bounded cells/heap/timer lag, then restore the bounded authoritative tail exactly once on the original PTY including output produced while parked and continued input/output. The headed oracle additionally keeps every remote target workspace and terminal unmounted in the host renderer before and after client recovery. Separate headed/headless ACK-starvation tests recover one stalled stream without replacing its PTY. A headed output-drop oracle proves a successful snapshot probe cannot certify a stale live stream when the authoritative PTY sequence advanced beyond the client high-water. Unit coverage requires an unsequenced client to establish a first-probe baseline, remain attached at the same sequence, and recover only after a later probe advances. A capability-disabled run proves legacy hosts retain the prior lossy limit/TTL fallback. Unit tests cover exact-owner capability routing, raw-stream release, singleton side-effect facts with timed handoff cleanup, provider-authoritative snapshots, 128 active streams plus retry after a 129th-stream capacity rejection, capacity-pressure backoff, full split-leaf remint reconciliation, truncation, and manual-disconnect queue fencing. Linux, Windows, mixed-version paired hosts, live SSH, and production-scale paired hosts remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8652",
         "https://github.com/stablyai/orca/pull/10625"
@@ -3162,12 +3162,16 @@
           "file": "tests/e2e/paired-remote-terminal-retention-memory.spec.ts",
           "assertions": [
             "ordinary-parks paired terminals and restores authoritative host scrollback",
+            "warm-mounted hidden paired streams schedule zero renderer output work under sustained host output",
             "client recovery completes while every target terminal remains unmounted in the host renderer"
           ]
         },
         {
           "file": "tests/e2e/headless-paired-remote-terminal-retention-memory.spec.ts",
-          "assertions": ["ordinary-parks paired terminals against an isolated headless Orca host"]
+          "assertions": [
+            "ordinary-parks paired terminals against an isolated headless Orca host",
+            "the headless host shares the zero-hidden-renderer-work and exact-restoration contract"
+          ]
         },
         {
           "file": "tests/e2e/terminal-parked-memory.spec.ts",
@@ -3335,6 +3339,24 @@
           "result": "passed",
           "durationSeconds": 3.16,
           "summary": "All 27 encrypted shared-control tests passed. The new oracle was red on rc.1-equivalent behavior with the exact Refreshing remote runtime control transport error, then passed with one replacement connection, one delivered host RPC, and zero retained pending bytes."
+        },
+        {
+          "date": "2026-07-30",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-retention-memory.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "result": "passed",
+          "durationSeconds": 17.5,
+          "summary": "The headed six-PTY oracle kept all warm-mounted hidden streams at zero renderer scheduler enqueues/drains under sustained output and under 500 ms timer lag, then restored the authoritative flood tail and parked/live markers exactly once."
+        },
+        {
+          "date": "2026-07-30",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/headless-paired-remote-terminal-retention-memory.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "result": "passed",
+          "durationSeconds": 14.0,
+          "summary": "The isolated headless host passed the same six-stream zero-hidden-renderer-work, bounded-lag, exact authoritative restoration, same-PTY, and continued-I/O oracle."
         }
       ],
       "runtimeBudget": {
@@ -3351,14 +3373,14 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Capable paired hosts use ordinary parking: the host PTY and bounded 5,000-row provider model remain, while five hidden client xterms and their raw per-PTY multiplex streams are destroyed. Parked side effects share the singleton runtime client-event stream. Headed and headless oracles require exact reduction from six managers to one, at least 55% staged xterm-cell release, no more than 16 MiB heap growth, and under 500 ms timer drift. Legacy hosts retain the prior 12-worktree/45-minute lossy force-parking policy. Stream recovery adds no polling and is scoped to one stream."
+        "evidence": "Before ordinary parking, six warm-mounted hidden paired xterms receive zero raw frames and schedule zero renderer output drains while host models continue ingesting sustained output. Ordinary parking then retains the host PTY and bounded 5,000-row provider model while destroying five client xterms. Parked side effects share the singleton runtime client-event stream. Headed and headless oracles require exact reduction from six managers to one, at least 55% staged xterm-cell release, no more than 16 MiB heap growth, and under 500 ms timer drift. Legacy hosts retain the prior 12-worktree/45-minute lossy force-parking policy. Stream recovery adds no polling and is scoped to one stream."
       },
       "promotionCriteria": [
         "Collect 100 consecutive CI passes or 14 days of soak history for the headed and headless parking commands.",
         "Run the paired topology on Windows and Linux and add one live SSH retention run.",
         "Run the stream-stall oracle with a v1.4.160-rc.3 host and v1.4.160-rc.4 client.",
         "Add a production-scale paired run with dozens of worktrees and explicit event-loop and renderer-memory budgets.",
-        "Keep the budget-off control, exact manager count, row-4,000 reveal marker, parked-time output, and post-reveal PTY input in both topology runs."
+        "Keep the budget-off control, exact manager count, final bounded-tail flood marker, parked-time output, and post-reveal PTY input in both topology runs."
       ],
       "knownGaps": [
         "Paired reveal restores at most the requested 5,000 rows; older history is intentionally unavailable.",
@@ -6449,18 +6471,19 @@
       "platforms": ["macos", "linux", "windows", "mobile"],
       "providers": ["remote-runtime", "ssh", "local", "daemon"],
       "coveredPlatforms": ["macos"],
-      "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence covers runtime-RPC stream budgets plus paired-renderer parse/discard credit. Deferred credit is shared by local and remote transports, batches ACKs at 192 KiB or 4 ms, grows per-stream windows from 512 KiB to 2 MiB and aggregate windows from 2 MiB to 8 MiB, bounds queued output to 256 KiB per stream, and caps each multiplex connection at 32 active or pending streams for an 8 MiB aggregate pending-output ceiling. Deterministic tests cover replay ordering, stale generations, malformed frames, hidden panes, queue eviction, disposal, send/recovery failure, repeated pending-slot replacement, reconnect, and round-robin fairness. The opt-in benchmark covers 1/20/100 ms RTT and 1/4/8 viewers, exact protocol-frame allocations, scheduler CPU, and measured @xterm/headless parser CPU/retained heap. Live Android restore evidence, browser/WebGL parser measurements, and legacy JSON subscribe parity remain required.",
+      "coveredProviders": ["remote-runtime"],
+      "coverageNotes": "Local macOS evidence covers runtime-RPC stream budgets, paired-renderer parse/discard credit, and negotiated host-side suppression for hidden paired desktop panes. Deferred credit is shared by local and remote transports, batches ACKs at 192 KiB or 4 ms, grows per-stream windows from 512 KiB to 2 MiB and aggregate windows from 2 MiB to 8 MiB, bounds queued output to 256 KiB per stream, and caps each multiplex connection at 32 active or pending streams for an 8 MiB aggregate pending-output ceiling. Deterministic tests cover replay ordering, stale generations, malformed frames, hidden panes, queue eviction, disposal, send/recovery failure, repeated pending-slot replacement, reconnect, mixed-version pause negotiation, and round-robin fairness. The opt-in benchmark covers 1/20/100 ms RTT and 1/4/8 viewers, exact protocol-frame allocations, scheduler CPU, and measured @xterm/headless parser CPU/retained heap. Live Android restore evidence, browser/WebGL parser measurements, and legacy JSON subscribe parity remain required.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6951",
         "https://github.com/stablyai/orca/pull/6955",
         "https://github.com/stablyai/orca/pull/7009"
       ],
-      "invariant": "Runtime and mobile terminal subscriptions must cap initial snapshots, live output buffered while snapshots load, chunk sizes, batches, and aggregate in-flight credit. ACK means the renderer parsed the bytes or intentionally discarded them; receipt-time ACK is forbidden. Every replay, stale-generation, malformed-frame, hidden-pane, eviction, disposal, error, and reconnect path must settle credit exactly once so streams neither leak memory nor stall. A terminal covered by native chat must restore from fresh scrollback when revealed, while preserving output order, input locks, resize/driver events, fairness, and fallback parity or explicit fallback deprecation.",
-      "oracle": "Assert mobile initial snapshots downgrade until they fit <=512KB, requested binary snapshots downgrade until they fit <=2MB, live output queued while snapshots load stays <=256KB per stream, large output splits into <=48KB frames, and output bursts coalesce. Feed paired output through the xterm parse callback and prove ACK is deferred until parse or intentional discard, then inject stale generation, malformed/transformed frames, replay failure, queue eviction, hidden panes, pane disposal, ACK send failure, recovery serialization failure, and reconnect races; assert ordered replay and exactly-once credit settlement. Fill the aggregate window across bulk and interactive streams, ACK once, and prove round-robin progress. Run the opt-in 64 MiB/viewer RTT matrix and enforce bounded 8 MiB aggregate in-flight memory, >7 MiB/s/viewer at 100 ms RTT, and <200 ms completion spread. JSON fallback parity and live Android scrollback restoration remain explicit gaps.",
+      "invariant": "Runtime and mobile terminal subscriptions must cap initial snapshots, live output buffered while snapshots load, chunk sizes, batches, and aggregate in-flight credit. ACK means the renderer parsed the bytes or intentionally discarded them; receipt-time ACK is forbidden. A capability-negotiated hidden paired desktop stream must deliver zero raw output frames after host model ingestion, preserve side-effect facts, and restore from one authoritative snapshot before exact live output resumes. Every replay, stale-generation, malformed-frame, hidden-pane, eviction, disposal, error, and reconnect path must settle credit exactly once so streams neither leak memory nor stall. A terminal covered by native chat must restore from fresh scrollback when revealed, while preserving output order, input locks, resize/driver events, fairness, and safe mixed-version fallback.",
+      "oracle": "Assert mobile initial snapshots downgrade until they fit <=512KB, requested binary snapshots downgrade until they fit <=2MB, live output queued while snapshots load stays <=256KB per stream, large output splits into <=48KB frames, and output bursts coalesce. Pause three negotiated paired desktop streams, sustain output, and assert zero renderer frames; reveal one and assert one authoritative snapshot followed by exact live bytes with no loss or duplication. Prove old clients continue receiving output and new clients never send pause to old hosts. Feed paired output through the xterm parse callback and prove ACK is deferred until parse or intentional discard, then inject stale generation, malformed/transformed frames, replay failure, queue eviction, hidden panes, pane disposal, ACK send failure, recovery serialization failure, and reconnect races; assert ordered replay and exactly-once credit settlement. Fill the aggregate window across bulk and interactive streams, ACK once, and prove round-robin progress. Run the opt-in 64 MiB/viewer RTT matrix and enforce bounded 8 MiB aggregate in-flight memory, >7 MiB/s/viewer at 100 ms RTT, and <200 ms completion spread. JSON fallback parity and live Android scrollback restoration remain explicit gaps.",
       "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-multiplex.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/terminal-pty-ack-gate.test.ts src/renderer/src/lib/pane-manager/terminal-delivery-credit.test.ts src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts src/renderer/src/runtime/runtime-terminal-stream.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/components/terminal-pane/terminal-pty-ack-gate.test.ts src/renderer/src/lib/pane-manager/terminal-delivery-credit.test.ts src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts src/renderer/src/runtime/runtime-terminal-stream.test.ts --maxWorkers=1",
         "ORCA_TERMINAL_PERF_BENCH=1 pnpm exec vitest run --config config/vitest.config.ts --disableConsoleIntercept src/main/runtime/rpc/terminal-multiplex-flow-control.bench.test.ts",
         "pnpm --dir mobile exec vitest run --root .. mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
         "pnpm --dir mobile exec vitest run --root .. mobile/src/session/use-mobile-native-chat-terminal-stream.test.ts"
@@ -6471,6 +6494,7 @@
         "src/main/runtime/rpc/terminal-multiplex.test.ts",
         "src/main/runtime/rpc/terminal-multiplex-flow-control.bench.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-pty-ack-gate.test.ts",
         "src/renderer/src/lib/pane-manager/terminal-delivery-credit.test.ts",
         "src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts",
@@ -6502,7 +6526,24 @@
             "multibyte live output flushes when encoded bytes reach the batch budget",
             "adaptive credit grows only after ACK, stays globally bounded, and drains pending streams round-robin",
             "send and recovery serialization failures detach once instead of leaking credit or retrying forever",
-            "32 active or pending slots cap aggregate queued output and repeated pending-slot subscribe cancels its older waiter"
+            "32 active or pending slots cap aggregate queued output and repeated pending-slot subscribe cancels its older waiter",
+            "three negotiated hidden desktop streams emit zero output frames under sustained load while an unpaused stream remains live",
+            "an older client that omits pause negotiation continues receiving output"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "assertions": [
+            "a runtime-owned hidden pane pauses output, consumes status/title/theme facts, and keeps input writable",
+            "reveal resumes before one authoritative snapshot and exact live output with no hidden raw write, loss, or duplication",
+            "dispose releases pause and unregisters the fact consumer"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts",
+          "assertions": [
+            "desired pause reapplies after either capability/snapshot ordering and across reconnect",
+            "reconnect delivers each authoritative snapshot and post-resume live marker exactly once"
           ]
         },
         {
@@ -6577,6 +6618,15 @@
           "result": "passed",
           "durationSeconds": 0.91,
           "summary": "The 1/20/100 ms RTT x 1/4/8 viewer matrix stayed at or below 8 MiB in flight with zero completion spread. At 100 ms it modeled 18.8 MiB/s per viewer for 1-4 viewers and 9.7 MiB/s for 8 viewers. Measured @xterm/headless parsing was 26.7/63.6/95.3 aggregate MiB/s for 1/4/8 viewers, with 84.4/236.5/336.0 ms CPU and 2893/13409/28991 KiB retained heap for 4 MiB per viewer."
+        },
+        {
+          "date": "2026-07-30",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-multiplex.test.ts --maxWorkers=1",
+          "result": "passed",
+          "durationSeconds": 9.05,
+          "summary": "All 58 terminal multiplex tests passed, including the three-stream hidden-output oracle. Its byte-identical title-selected command failed on current origin/main and failed again with the two causal host/protocol files reverted because hidden Output frames reached the renderer."
         }
       ],
       "runtimeBudget": {
@@ -6589,11 +6639,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Tests cover mobile initial snapshot byte downgrade, requested binary snapshot byte downgrade, pending live-output cap while snapshot loads, output chunk size, output coalescing, abort cleanup, and stale resize re-stream suppression. Needs intentional-break proof plus JSON fallback coverage before promotion."
+        "evidence": "The hidden paired-output oracle is red on origin/main, green on the candidate, and red with its causal host/protocol files reverted. It proves three paused streams emit no raw frames while an unpaused control remains live; compatibility tests preserve old-client/new-host output and prevent new-client/old-host pause opcodes. The broader gate remains partial pending legacy JSON fallback and live Android coverage."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Parsed/discarded credit uses 192 KiB/4 ms ACK batching, 512 KiB-to-2 MiB adaptive per-stream windows, a 2 MiB-to-8 MiB aggregate window, <=48 KiB output frames, <=256 KiB queued output per stream, and <=32 streams per connection (8 MiB aggregate pending output). The 64 MiB/viewer model gate requires >7 MiB/s/viewer at 100 ms RTT, <200 ms completion spread, and aggregate in-flight bytes <=8 MiB. The 2026-07-22 run modeled 9.7 MiB/s/viewer at 100 ms with eight viewers and measured @xterm/headless at 95.3 aggregate MiB/s, 336.0 ms parser CPU, and 28991 KiB retained heap for eight 4 MiB viewers."
+        "evidence": "Parsed/discarded credit uses 192 KiB/4 ms ACK batching, 512 KiB-to-2 MiB adaptive per-stream windows, a 2 MiB-to-8 MiB aggregate window, <=48 KiB output frames, <=256 KiB queued output per stream, and <=32 streams per connection (8 MiB aggregate pending output). Negotiated hidden paired streams add zero renderer output frames or scheduler drains after host ingestion; headed and headless six-stream runs enforce under 500 ms timer lag. The 64 MiB/viewer model gate requires >7 MiB/s/viewer at 100 ms RTT, <200 ms completion spread, and aggregate in-flight bytes <=8 MiB."
       },
       "promotionCriteria": [
         "Gate binary multiplex first.",

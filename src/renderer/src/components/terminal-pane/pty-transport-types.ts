@@ -84,6 +84,7 @@ type PtyCallbacks = {
   onExit?: (code: number) => void
   onWriteUnavailable?: () => void
   onRecoveryStateChange?: (state: PtyTransportRecoveryState) => void
+  onOutputPauseChanged?: (paused: boolean, supported: boolean) => void
 }
 
 export type PtyTransportRecoveryState = {
@@ -141,6 +142,8 @@ export type PtyTransport = {
   sendInputImmediate: (data: string) => boolean
   sendInputAccepted?: (data: string) => Promise<boolean>
   claimViewport?: (cols: number, rows: number) => boolean
+  /** Capability-negotiated paired-runtime delivery gate; false preserves legacy delivery. */
+  setOutputPaused?: (paused: boolean) => boolean
   resize: (
     cols: number,
     rows: number,

@@ -36,7 +36,7 @@ type TerminalMultiplexEvent =
       type: 'subscribed'
       streamId: number
       streamGeneration?: string
-      capabilities?: { ackOutputSourceRanges?: 1 }
+      capabilities?: { ackOutputSourceRanges?: 1; outputPause?: 1 }
     }
   | { type: 'end'; streamId: number }
   | { type: 'error'; streamId: number; message?: string }
@@ -58,6 +58,7 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onData: (data: string, meta?: { seq?: number; rawLength?: number; transformed?: boolean }) => void
   onSnapshot: (data: string, meta?: { pendingEscapeTailAnsi?: string }) => void
   onSubscribed?: () => void
+  onOutputPauseCapability?: () => void
   onEnd?: () => void
   onError?: (message: string) => void
   onFitOverrideChanged?: (event: {
@@ -76,6 +77,7 @@ export type RemoteRuntimeMultiplexedTerminal = {
   sendInput: (text: string) => boolean
   resize: (cols: number, rows: number) => boolean
   claimViewport: (cols: number, rows: number) => boolean
+  setOutputPaused: (paused: boolean) => boolean
   serializeBuffer: (opts?: { scrollbackRows?: number }) => Promise<{
     data: string
     cols: number
@@ -93,6 +95,8 @@ type RemoteRuntimeMultiplexedTerminalState = {
   subscriptionRequested: boolean
   acknowledgeOutput: boolean
   acknowledgeOutputSourceRanges: boolean
+  supportsOutputPause: boolean
+  outputPaused: boolean
   streamGeneration: string | null
   sourceAckedEndByte: number
   heldAckBytes: number
@@ -320,6 +324,8 @@ class RemoteRuntimeTerminalMultiplexer {
       subscriptionRequested: false,
       acknowledgeOutput: true,
       acknowledgeOutputSourceRanges: false,
+      supportsOutputPause: false,
+      outputPaused: false,
       streamGeneration: null,
       sourceAckedEndByte: 0,
       heldAckBytes: 0,
@@ -391,6 +397,7 @@ class RemoteRuntimeTerminalMultiplexer {
         )
         return claimed && resized
       },
+      setOutputPaused: (paused) => this.setOutputPaused(state, paused),
       serializeBuffer: (opts) => this.requestSnapshot(state, opts),
       close: () => {
         if (this.streams.get(streamId) === state) {
@@ -421,6 +428,7 @@ class RemoteRuntimeTerminalMultiplexer {
           capabilities: {
             ackOutput: 1,
             ackOutputSourceRanges: 1,
+            outputPause: 1,
             ...(args.client.type === 'desktop' ? { desktopViewportClaims: 1 } : {})
           }
         })
@@ -539,7 +547,7 @@ class RemoteRuntimeTerminalMultiplexer {
     if (event.type === 'subscribed') {
       const capabilities =
         typeof event.capabilities === 'object' && event.capabilities !== null
-          ? (event.capabilities as { ackOutputSourceRanges?: unknown })
+          ? (event.capabilities as { ackOutputSourceRanges?: unknown; outputPause?: unknown })
           : null
       if (
         capabilities?.ackOutputSourceRanges === 1 &&
@@ -548,6 +556,10 @@ class RemoteRuntimeTerminalMultiplexer {
       ) {
         stream.acknowledgeOutputSourceRanges = true
         stream.streamGeneration = event.streamGeneration
+      }
+      stream.supportsOutputPause = capabilities?.outputPause === 1
+      if (stream.supportsOutputPause) {
+        stream.callbacks.onOutputPauseCapability?.()
       }
     } else if (event.type === 'end') {
       discardOutputAcknowledgements(stream)
@@ -1043,8 +1055,26 @@ class RemoteRuntimeTerminalMultiplexer {
       TerminalStreamOpcode.Input,
       encodeTerminalStreamText(text)
     )
-    if (sent) {
+    if (sent && !stream.outputPaused) {
       stream.watchdog.recordCommandInput(text)
+    }
+    return sent
+  }
+
+  private setOutputPaused(stream: RemoteRuntimeMultiplexedTerminalState, paused: boolean): boolean {
+    if (!stream.supportsOutputPause || this.streams.get(stream.streamId) !== stream) {
+      return false
+    }
+    if (stream.outputPaused === paused) {
+      return true
+    }
+    const sent = this.sendFrame(
+      stream.streamId,
+      TerminalStreamOpcode.SetOutputPaused,
+      encodeTerminalStreamJson({ paused })
+    )
+    if (sent) {
+      stream.outputPaused = paused
     }
     return sent
   }

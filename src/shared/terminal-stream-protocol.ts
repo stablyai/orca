@@ -28,7 +28,9 @@ export enum TerminalStreamOpcode {
   // Why 14: Ack already occupies 13 on current clients; older runtimes ignore
   // this opcode and still receive the compatibility Resize frame behind it.
   ClaimViewport = 14,
-  OutputSpan = 15
+  OutputSpan = 15,
+  // Negotiated per stream; older hosts reject unknown opcodes, so clients send only after capability confirmation.
+  SetOutputPaused = 16
 }
 
 export type TerminalStreamFrame = {
@@ -116,6 +118,7 @@ function isTerminalStreamOpcode(value: number): value is TerminalStreamOpcode {
     value === TerminalStreamOpcode.Metadata ||
     value === TerminalStreamOpcode.Ack ||
     value === TerminalStreamOpcode.ClaimViewport ||
-    value === TerminalStreamOpcode.OutputSpan
+    value === TerminalStreamOpcode.OutputSpan ||
+    value === TerminalStreamOpcode.SetOutputPaused
   )
 }
