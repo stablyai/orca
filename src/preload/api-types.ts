@@ -1189,6 +1189,8 @@ export type PreloadApi = {
     focusPane: (args: NotchFocusPaneRequest) => void
     /** Main-window side: navigate to a pane the user picked in the notch panel. */
     onRevealPane: (callback: (args: NotchFocusPaneRequest) => void) => () => void
+    /** Main-window side: tells main the reveal listener is attached, flushing any buffered one. */
+    notifyRevealReady: () => void
   }
   repos: {
     list: () => Promise<Repo[]>

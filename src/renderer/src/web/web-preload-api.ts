@@ -670,7 +670,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       setExpanded: () => undefined,
       setInteractive: () => undefined,
       focusPane: () => undefined,
-      onRevealPane: () => () => undefined
+      onRevealPane: () => () => undefined,
+      notifyRevealReady: () => undefined
     },
     settings: {
       get: async () => getRuntimeBackedStoredSettings(),

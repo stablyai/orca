@@ -3,9 +3,11 @@ import {
   NOTCH_ACKNOWLEDGE_CHANNEL,
   NOTCH_FOCUS_PANE_CHANNEL,
   NOTCH_SET_EXPANDED_CHANNEL,
+  NOTCH_RENDERER_READY_CHANNEL,
   NOTCH_SET_INTERACTIVE_CHANNEL
 } from '../../shared/notch/notch-snapshot'
 import { isNotchRenderer, setNotchExpanded, setNotchInteractive } from '../notch/notch-window'
+import { getTrustedUIRendererWindow } from './ui'
 import type { NotchStatusService } from '../notch/notch-status-service'
 
 // Why: pane keys arrive from a renderer, so they are treated as untrusted — a malformed or
@@ -56,9 +58,15 @@ export type NotchHandlerOptions = {
   getService: () => NotchStatusService | null
   /** Raises the app window (reopening it if closed) and routes it to the pane. */
   revealPane: (args: NotchFocusPaneArgs) => void
+  /** The app renderer's reveal listener is attached; deliver anything buffered. */
+  onRevealRendererReady: () => void
 }
 
-export function registerNotchHandlers({ getService, revealPane }: NotchHandlerOptions): void {
+export function registerNotchHandlers({
+  getService,
+  revealPane,
+  onRevealRendererReady
+}: NotchHandlerOptions): void {
   // Why: openMainWindow() runs again on dock re-activation and on a notch row click, so without
   // this every reopen would stack another listener — one ack becoming N acks, one row click
   // becoming N reveals. Mirrors the removeHandler prologue in ipc/dashboard-popout.ts.
@@ -66,8 +74,19 @@ export function registerNotchHandlers({ getService, revealPane }: NotchHandlerOp
   ipcMain.removeAllListeners(NOTCH_SET_EXPANDED_CHANNEL)
   ipcMain.removeAllListeners(NOTCH_FOCUS_PANE_CHANNEL)
   ipcMain.removeAllListeners(NOTCH_SET_INTERACTIVE_CHANNEL)
+  ipcMain.removeAllListeners(NOTCH_RENDERER_READY_CHANNEL)
 
-  ipcMain.on(NOTCH_ACKNOWLEDGE_CHANNEL, (_event, paneKeys: unknown) => {
+  ipcMain.on(NOTCH_ACKNOWLEDGE_CHANNEL, (event, paneKeys: unknown) => {
+    // Why this check differs from the other three channels: acknowledgement has two legitimate
+    // senders — the notch renderer (clicking a row) and the main window (visiting a pane, via
+    // acknowledgeAgents in store/slices/ui.ts). Gating on isNotchRenderer alone would silently
+    // break the visit-clears-the-finished-lane rule, which is the whole retention model.
+    if (
+      !isNotchRenderer(event.sender) &&
+      event.sender !== getTrustedUIRendererWindow()?.webContents
+    ) {
+      return
+    }
     const service = getService()
     if (!service) {
       return
@@ -98,6 +117,12 @@ export function registerNotchHandlers({ getService, revealPane }: NotchHandlerOp
     const parsed = parseFocusPaneArgs(args)
     if (parsed) {
       revealPane(parsed)
+    }
+  })
+
+  ipcMain.on(NOTCH_RENDERER_READY_CHANNEL, (event) => {
+    if (event.sender === getTrustedUIRendererWindow()?.webContents) {
+      onRevealRendererReady()
     }
   })
 }

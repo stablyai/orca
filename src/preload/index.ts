@@ -8,6 +8,7 @@ import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dash
 import {
   NOTCH_ACKNOWLEDGE_CHANNEL,
   NOTCH_FOCUS_PANE_CHANNEL,
+  NOTCH_RENDERER_READY_CHANNEL,
   NOTCH_REVEAL_PANE_CHANNEL,
   NOTCH_SET_EXPANDED_CHANNEL,
   NOTCH_SET_INTERACTIVE_CHANNEL,
@@ -4617,6 +4618,9 @@ const api = {
       return () => {
         ipcRenderer.removeListener(NOTCH_REVEAL_PANE_CHANNEL, listener)
       }
+    },
+    notifyRevealReady: (): void => {
+      ipcRenderer.send(NOTCH_RENDERER_READY_CHANNEL)
     }
   } satisfies PreloadApi['notch'],
 

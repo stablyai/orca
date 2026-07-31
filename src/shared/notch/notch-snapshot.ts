@@ -12,6 +12,8 @@ export const NOTCH_FOCUS_PANE_CHANNEL = 'notch:focusPane'
 /** Toggles OS-level click capture; see setNotchInteractive for why this must exist. */
 export const NOTCH_SET_INTERACTIVE_CHANNEL = 'notch:setInteractive'
 export const NOTCH_REVEAL_PANE_CHANNEL = 'ui:revealNotchPane'
+/** Renderer -> main: the reveal listener is attached and buffered reveals can be flushed. */
+export const NOTCH_RENDERER_READY_CHANNEL = 'notch:revealRendererReady'
 
 /** Identifies the pane a notch row points at, for both the request and the reveal. */
 export type NotchFocusPaneRequest = {

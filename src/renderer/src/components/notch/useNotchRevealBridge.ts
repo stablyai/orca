@@ -11,9 +11,14 @@ import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
  */
 export function useNotchRevealBridge(): void {
   useEffect(() => {
-    return window.api.notch?.onRevealPane?.((args) => {
+    const unsubscribe = window.api.notch?.onRevealPane?.((args) => {
       useAppStore.getState().setActiveWorktree(args.worktreeId)
       activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
     })
+    // Why: main buffers a reveal until this ack. did-finish-load fires before React commits
+    // this effect, and ipcRenderer does not queue, so without the handshake a row click with
+    // the app window closed was silently dropped every time.
+    window.api.notch?.notifyRevealReady?.()
+    return unsubscribe
   }, [])
 }

@@ -45,3 +45,30 @@ describe('shouldRestoreNotchAfterQuitAttempt', () => {
     ).toBe(false)
   })
 })
+
+describe('back-to-back vetoed quits', () => {
+  // Why: the second before-quit finds the window already destroyed. If the call site read a
+  // shared flag at timer-fire time instead of capturing it, the first timer would then see
+  // false and never restore — leaving the bar hidden for the session with the switch still on.
+  // index.ts therefore computes `getNotchWindow() !== null || notchRestorePending`.
+  const wasOpenForAttempt = (hasWindow: boolean, restorePending: boolean): boolean =>
+    hasWindow || restorePending
+
+  it('still restores when the second attempt saw no window but a restore was pending', () => {
+    expect(
+      shouldRestoreNotchAfterQuitAttempt({
+        ...base,
+        wasOpenBeforeQuit: wasOpenForAttempt(false, true)
+      })
+    ).toBe(true)
+  })
+
+  it('does not restore when neither a window nor a pending restore existed', () => {
+    expect(
+      shouldRestoreNotchAfterQuitAttempt({
+        ...base,
+        wasOpenBeforeQuit: wasOpenForAttempt(false, false)
+      })
+    ).toBe(false)
+  })
+})

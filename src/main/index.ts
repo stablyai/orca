@@ -1166,28 +1166,34 @@ function syncNotchStatus(showNotchStatus: boolean): void {
 // Quit handling for the notch. The teardown must happen on `before-quit` so `window-all-closed`
 // can fire and complete a deferred Cmd+Q; the restore below covers a quit that gets vetoed.
 let notchQuitCommitted = false
-let notchWasOpenBeforeQuit = false
+let notchRestorePending = false
 
 app.on('will-quit', () => {
   notchQuitCommitted = true
 })
 
 app.on('before-quit', () => {
-  notchWasOpenBeforeQuit = getNotchWindow() !== null
+  // Why captured in the closure rather than read from module scope at fire time: two vetoed
+  // quits inside the grace window would otherwise cancel each other. The second `before-quit`
+  // finds the window already destroyed, and a shared flag would then read false when the first
+  // timer fires — leaving the bar hidden for the session with the settings switch still on.
+  // A restore already pending also counts as "was open", so the second attempt re-arms.
+  const wasOpen = getNotchWindow() !== null || notchRestorePending
   closeNotchWindowForQuit()
-  if (!notchWasOpenBeforeQuit) {
+  if (!wasOpen) {
     return
   }
+  notchRestorePending = true
   const timer = setTimeout(() => {
+    notchRestorePending = false
     if (
       shouldRestoreNotchAfterQuitAttempt({
         quitCommitted: notchQuitCommitted,
         hasAppWindow: findAppWindow() !== null,
         settingEnabled: store?.getSettings().showNotchStatus === true,
-        wasOpenBeforeQuit: notchWasOpenBeforeQuit
+        wasOpenBeforeQuit: wasOpen
       })
     ) {
-      notchWasOpenBeforeQuit = false
       syncNotchStatus(true)
     }
   }, NOTCH_QUIT_ABORT_GRACE_MS)
@@ -1197,19 +1203,37 @@ app.on('before-quit', () => {
 
 // Why: clicking a notch row must work with the app window closed — that is the state the notch
 // exists for — so this reopens it rather than no-oping the way the pop-out relay does.
-function revealNotchPane(args: NotchFocusPaneRequest): void {
-  const window = getTrustedUIRendererWindow() ?? openMainWindow()
-  safelyRevealWindow(window)
-  const send = (): void => {
-    if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-      window.webContents.send(NOTCH_REVEAL_PANE_CHANNEL, args)
-    }
+/**
+ * Buffered until the app renderer says its listener is attached.
+ *
+ * Why not `did-finish-load`: that fires at page load, but useNotchRevealBridge registers its
+ * listener inside a React effect committed in a later task, and ipcRenderer does not queue for
+ * a channel with no listener — so the reveal was silently dropped every time the row was
+ * clicked with the window closed, which is the case the notch exists for. Mirrors the
+ * rendererReady handshake AutomationService already uses for the same problem.
+ */
+let pendingNotchReveal: NotchFocusPaneRequest | null = null
+
+function flushNotchReveal(): void {
+  const args = pendingNotchReveal
+  pendingNotchReveal = null
+  const window = getTrustedUIRendererWindow()
+  if (!args || !window || window.isDestroyed() || window.webContents.isDestroyed()) {
+    return
   }
-  // A freshly opened window has no listeners yet; wait for its renderer to attach.
-  if (window.webContents.isLoading()) {
-    window.webContents.once('did-finish-load', send)
+  window.webContents.send(NOTCH_REVEAL_PANE_CHANNEL, args)
+}
+
+function revealNotchPane(args: NotchFocusPaneRequest): void {
+  const existing = getTrustedUIRendererWindow()
+  const window = existing ?? openMainWindow()
+  safelyRevealWindow(window)
+  // An already-live renderer has its listener attached, so send straight through; a freshly
+  // opened one buffers until it acks.
+  if (existing && !existing.webContents.isLoading()) {
+    existing.webContents.send(NOTCH_REVEAL_PANE_CHANNEL, args)
   } else {
-    send()
+    pendingNotchReveal = args
   }
   try {
     app.focus({ steal: true })
@@ -1372,7 +1396,8 @@ function openMainWindow(): BrowserWindow {
 
   registerNotchHandlers({
     getService: () => notchStatusService,
-    revealPane: revealNotchPane
+    revealPane: revealNotchPane,
+    onRevealRendererReady: flushNotchReveal
   })
   registerCoreHandlers(
     store,
