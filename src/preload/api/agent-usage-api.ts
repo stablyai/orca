@@ -55,5 +55,6 @@ export type RateLimitsApi = {
   fetchInactiveCodexAccounts: () => Promise<void>
   refreshMiniMax: () => Promise<RateLimitState>
   refreshGrok: () => Promise<RateLimitState>
+  refreshCursor: () => Promise<RateLimitState>
   onUpdate: (callback: (state: RateLimitState) => void) => () => void
 }

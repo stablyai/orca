@@ -187,6 +187,7 @@ import type {
 import type {
   CodexRateLimitResetResult,
   GrokAccountStatus,
+  CursorAccountStatus,
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../shared/rate-limit-types'
@@ -4651,6 +4652,7 @@ const api = {
       ipcRenderer.invoke('rateLimits:fetchInactiveCodexAccounts'),
     refreshMiniMax: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshMiniMax'),
     refreshGrok: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshGrok'),
+    refreshCursor: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshCursor'),
     onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, state: RateLimitState) => callback(state)
       ipcRenderer.on('rateLimits:update', listener)
@@ -4669,6 +4671,10 @@ const api = {
 
   grokAccounts: {
     getStatus: (): Promise<GrokAccountStatus> => ipcRenderer.invoke('grokAccounts:getStatus')
+  },
+
+  cursorAccounts: {
+    getStatus: (): Promise<CursorAccountStatus> => ipcRenderer.invoke('cursorAccounts:getStatus')
   },
 
   ssh: {

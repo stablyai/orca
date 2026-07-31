@@ -906,6 +906,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     rateLimits: createRateLimitsApi(),
     minimaxCredentials: createMiniMaxCredentialsApi(),
     grokAccounts: createGrokAccountsApi(),
+    cursorAccounts: createCursorAccountsApi(),
     codexAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),
     cli: createCliApi(),
@@ -3197,8 +3198,10 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     antigravity: null,
     minimax: null,
     grok: null,
+    cursor: null,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
+    cursorAuthConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
@@ -3216,7 +3219,21 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     fetchInactiveCodexAccounts: () => Promise.resolve(),
     refreshMiniMax: () => Promise.resolve(empty),
     refreshGrok: () => Promise.resolve(empty),
+    refreshCursor: () => Promise.resolve(empty),
     onUpdate: () => noopUnsubscribe
+  }
+}
+
+function createCursorAccountsApi(): NonNullable<Partial<PreloadApi>['cursorAccounts']> {
+  const unsigned = {
+    signedIn: false,
+    email: null,
+    userId: null,
+    tokenFresh: false,
+    error: null
+  }
+  return {
+    getStatus: () => Promise.resolve(unsigned)
   }
 }
 

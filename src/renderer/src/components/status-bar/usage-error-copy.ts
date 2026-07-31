@@ -26,6 +26,9 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   if (provider === 'grok') {
     return 'Grok'
   }
+  if (provider === 'cursor') {
+    return 'Cursor'
+  }
   return provider
 }
 
@@ -111,6 +114,18 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
         break
     }
   }
+  if (p.provider === 'cursor') {
+    switch (p.usageMetadata?.failureKind) {
+      case 'stale-token':
+        return translate('auto.components.status.bar.tooltip.c4d8e2a1f0', 'Sign in to Cursor')
+      case 'missing-credentials':
+        return translate('auto.components.status.bar.tooltip.b3c7d1f0e9', 'Cursor not signed in')
+      case 'network':
+        return translate('auto.components.status.bar.tooltip.f8f0f9d8cc', 'Network issue')
+      default:
+        break
+    }
+  }
   if (isUsageRateLimitError(p.error)) {
     return translate('auto.components.status.bar.tooltip.7ad719c4bf', 'Limited')
   }
@@ -176,6 +191,27 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
       case 'rate-limited':
       case 'unknown':
       case undefined:
+        break
+    }
+  }
+  if (p.provider === 'cursor') {
+    switch (p.usageMetadata?.failureKind) {
+      case 'stale-token':
+        return translate(
+          'auto.components.status.bar.tooltip.a2b6c0d4e8',
+          'Cursor sign-in expired. Sign in to Cursor on the computer running Orca, then refresh usage.'
+        )
+      case 'missing-credentials':
+        return translate(
+          'auto.components.status.bar.tooltip.91a5b9c3d7',
+          'Sign in to Cursor on the computer running Orca to view plan usage.'
+        )
+      case 'network':
+        return translate(
+          'auto.components.status.bar.tooltip.80a4b8c2d6',
+          'Cursor usage could not be refreshed because the network request failed.'
+        )
+      default:
         break
     }
   }

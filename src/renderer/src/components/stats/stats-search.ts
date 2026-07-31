@@ -6,7 +6,7 @@ export const getStatsPaneSearchEntries = createLocalizedCatalog(() => [
     title: translate('auto.components.stats.stats.search.cb2430ae6a', 'Stats & Usage'),
     description: translate(
       'auto.components.stats.stats.search.26bb901fcd',
-      'Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.'
+      'Orca stats plus Claude, Codex, OpenCode token analytics, Grok subscription usage, and Cursor plan usage.'
     ),
     keywords: [
       translate('auto.components.stats.stats.search.372debfac0', 'stats'),
@@ -25,7 +25,9 @@ export const getStatsPaneSearchEntries = createLocalizedCatalog(() => [
       translate('auto.components.stats.stats.search.e7f0a1b2c3', 'subscription'),
       translate('auto.components.stats.stats.search.d6e9f0a1b2', 'credits'),
       translate('auto.components.stats.stats.search.a3b6c7d8e9', 'grok usage'),
-      translate('auto.components.stats.stats.search.9f2a3b4c5d', 'xai')
+      translate('auto.components.stats.stats.search.9f2a3b4c5d', 'xai'),
+      translate('auto.components.stats.stats.search.b4c5d6e7f8', 'cursor'),
+      translate('auto.components.stats.stats.search.c5d6e7f8a9', 'cursor usage')
     ]
   }
 ])

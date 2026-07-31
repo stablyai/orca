@@ -60,7 +60,8 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "cursorToggleDescription": "Show Cursor subscription plan usage when signed in via Cursor IDE."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -887,7 +888,7 @@
         "94a5afe910": "SSH Hosts",
         "40d80bad8a": "Beta",
         "de0c2907a1": "Remote Orca Servers",
-        "b351014180": "Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.",
+        "b351014180": "Orca stats plus Claude, Codex, OpenCode token analytics and Grok/Cursor subscription usage.",
         "d72a58b5b9": "Stats & Usage",
         "dcd0d9b74f": "Keyboard shortcuts for common actions.",
         "94295ebfb3": "Shortcuts",
@@ -928,7 +929,7 @@
         "cd50cec5d7": "Coordinate multiple coding agents through Orca.",
         "58a868e8e4": "Orchestration",
         "7c79d3b7bf": "Optional",
-        "b1c2f8b0ac": "Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.",
+        "b1c2f8b0ac": "Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, Grok, and Cursor.",
         "f70ac54d38": "AI Provider Accounts",
         "4121f7a0a2": "Manage AI agents, set a default, and customize commands.",
         "b49abbd2f7": "Agents",
@@ -3502,7 +3503,8 @@
             "grokUsageMenu": "Grok Usage",
             "floatingTerminalNewActivity": "{{label}}, new activity",
             "codexSignInSuccess": "Signed in to Codex",
-            "codexSignInError": "Codex sign-in failed. Please try again."
+            "codexSignInError": "Codex sign-in failed. Please try again.",
+            "cursorUsageMenu": "Cursor Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -3943,7 +3945,8 @@
           "eb6a066185": "claude",
           "eee19cfade": "overview",
           "grokUsageTab": "Grok",
-          "trackingSince": "Tracking since {{value0}}"
+          "trackingSince": "Tracking since {{value0}}",
+          "cursorUsageTab": "Cursor"
         },
         "UsageOverviewPane": {
           "22ed1b7669": "sessions",
@@ -3994,13 +3997,15 @@
             "0bba8ca244": "statistics",
             "0e2a0b6431": "usage",
             "372debfac0": "stats",
-            "26bb901fcd": "Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.",
+            "26bb901fcd": "Orca stats plus Claude, Codex, OpenCode token analytics, Grok subscription usage, and Cursor plan usage.",
             "cb2430ae6a": "Stats & Usage",
             "f8a1b2c3d4": "grok",
             "e7f0a1b2c3": "subscription",
             "d6e9f0a1b2": "credits",
             "a3b6c7d8e9": "grok usage",
-            "9f2a3b4c5d": "xai"
+            "9f2a3b4c5d": "xai",
+            "b4c5d6e7f8": "cursor",
+            "c5d6e7f8a9": "cursor usage"
           }
         },
         "usage": {
@@ -4067,6 +4072,19 @@
           "e5a6b7c8d9": "Weekly credits used",
           "f6b7c8d9e0": "Billing period reset",
           "a7b8c9d0e1": "Grok account settings"
+        },
+        "CursorUsagePane": {
+          "c1d2e3f4a5": "Cursor usage",
+          "b6c7d8e9f0": "Plan usage from your Cursor IDE sign-in (globalStorage state database). Same source as the status bar.",
+          "c7d8e9f0a1": "Set up in Accounts",
+          "d8e9f0a1b2": " • {{value0}}",
+          "e9f0a1b2c3": "Refresh Cursor usage",
+          "f0a1b2c3d4": "Refresh",
+          "a1b2c3d4e5": "Plan usage",
+          "a8b9c0d1e2": "Auto",
+          "b9c0d1e2f3": "API",
+          "b2c3d4e5f6": "Billing period reset",
+          "c3d4e5f6a7": "Cursor account settings"
         }
       },
       "sparse": {
@@ -8498,7 +8516,12 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "oauth",
-            "a9f3d7b5c8": "login"
+            "a9f3d7b5c8": "login",
+            "a5b9d3f2c8": "Cursor Usage",
+            "b4a8c2e1d7": "Sign-in via Cursor IDE for plan usage tracking.",
+            "c3b7f1e0c6": "cursor",
+            "d2a6e9d8b5": "ide",
+            "e1f5d8c7a4": "login"
           }
         },
         "advanced": {
@@ -8724,6 +8747,9 @@
             "e7d1b0f3a5": "Show Grok weekly credit usage from Grok CLI OAuth.",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
+            "c8f3e2a1b5": "Cursor Usage",
+            "b7d1c0f4a6": "Show Cursor plan usage from Cursor IDE sign-in.",
+            "a6b9f8e3d4": "cursor",
             "usagePercentageDisplayTitle": "Usage percentages",
             "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
           }
@@ -10558,6 +10584,21 @@
           "75e396bf42": "Included monthly usage for Grok unified-billing accounts.",
           "b36fa2c908": "Signed in. Orca reads the Grok CLI session stored on disk.",
           "f08c41de73": "Session expired — run grok on the computer running Orca and wait for it to start. If prompted, complete sign-in, then click Refresh usage. No chat message is needed."
+        },
+        "CursorAccountsSection": {
+          "a1b2c3d4e5": "Cursor",
+          "f6e5d4c3b2": "Shows plan usage from your Cursor IDE sign-in (globalStorage state database).",
+          "0d8e77bc40": "Cursor docs",
+          "ad47a33f72": "Loading…",
+          "b2c3d4e5f6": "Signed in",
+          "b36fa2c908": "Signed in. Orca reads the Cursor IDE session stored on disk.",
+          "f08c41de73": "Session expired — sign in to Cursor on the computer running Orca, then click Refresh usage.",
+          "e5f6a7b8c9": "Not signed in to Cursor",
+          "f6a7b8c9d0": "Open Cursor and sign in, then click Refresh usage here.",
+          "3325d996cb": "Refresh usage",
+          "a8f3e2c1b4": "Plan usage",
+          "b7e2d9f0a3": "Same plan usage % as the Cursor dashboard.",
+          "c6d1a8f4e2": "Resets {{when}}"
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",

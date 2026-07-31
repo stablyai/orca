@@ -321,8 +321,46 @@ describe('getWindowSections', () => {
     const sections = getWindowSections(p)
     expect(sections).toEqual([
       { label: 'Pro', window: p.buckets![0] },
-      { label: 'Flash', window: p.buckets![1] },
-      { label: 'Weekly', window: null }
+      { label: 'Flash', window: p.buckets![1] }
+    ])
+  })
+
+  it('includes monthly with named buckets when both are present', () => {
+    const monthly = {
+      usedPercent: 42,
+      windowMinutes: 43_200,
+      resetsAt: null,
+      resetDescription: null
+    }
+    const p: ProviderRateLimits = {
+      provider: 'cursor',
+      session: null,
+      weekly: null,
+      monthly,
+      buckets: [
+        {
+          name: 'Auto',
+          usedPercent: 45,
+          windowMinutes: 43_200,
+          resetsAt: null,
+          resetDescription: null
+        },
+        {
+          name: 'API',
+          usedPercent: 30,
+          windowMinutes: 43_200,
+          resetsAt: null,
+          resetDescription: null
+        }
+      ],
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+    expect(getWindowSections(p)).toEqual([
+      { label: 'Auto', window: p.buckets![0] },
+      { label: 'API', window: p.buckets![1] },
+      { label: 'Monthly', window: monthly }
     ])
   })
 
@@ -440,7 +478,7 @@ describe('getWindowSections', () => {
       status: 'ok'
     }
     const sections = getWindowSections(p)
-    expect(sections).toHaveLength(2)
+    expect(sections).toHaveLength(1)
     expect(sections[0].label).toBe('Pro')
     expect(sections[0].window!.resetsAt).toBe(18000000)
     expect(sections[0].window!.resetDescription).toBe('5:00 PM')

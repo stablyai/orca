@@ -1160,6 +1160,8 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'M'
     case 'grok':
       return 'R'
+    case 'cursor':
+      return 'Cu'
     case 'codex':
       return 'X'
   }
@@ -1170,7 +1172,8 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
 // ---------------------------------------------------------------------------
 
 // Why: Gemini exposes extra experimental buckets that made the pre-existing verbose footer noisy.
-const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
+// Cursor Auto/API are first-class lanes (same role as Gemini Flash/Pro).
+const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro', 'Auto', 'API'])
 
 function VerboseProviderUsage({
   p,
@@ -1181,25 +1184,20 @@ function VerboseProviderUsage({
 }): React.JSX.Element {
   if (p.buckets && p.buckets.length > 0) {
     const visibleBuckets = p.buckets.filter((bucket) => STATUS_BAR_BUCKET_NAMES.has(bucket.name))
-    return (
-      <>
-        {visibleBuckets.map((bucket, index) => (
-          <React.Fragment key={bucket.name}>
-            {index > 0 ? <span className="text-muted-foreground">·</span> : null}
-            <span className="tabular-nums">
-              {bucket.name} {formatUsagePercentageLabel(bucket.usedPercent, display)}
-            </span>
-          </React.Fragment>
-        ))}
-        {visibleBuckets.length === 0 && p.session ? (
-          <WindowLabel
-            w={p.session}
-            label={formatRateLimitWindowChipLabel(p.session)}
-            display={display}
-          />
-        ) : null}
-      </>
-    )
+    if (visibleBuckets.length > 0) {
+      return (
+        <>
+          {visibleBuckets.map((bucket, index) => (
+            <React.Fragment key={bucket.name}>
+              {index > 0 ? <span className="text-muted-foreground">·</span> : null}
+              <span className="tabular-nums">
+                {bucket.name} {formatUsagePercentageLabel(bucket.usedPercent, display)}
+              </span>
+            </React.Fragment>
+          ))}
+        </>
+      )
+    }
   }
 
   const visibleWindows = [
@@ -2106,7 +2104,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor } = rateLimits
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
   // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
@@ -2119,7 +2117,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     ...settings,
     antigravityUsageConfigured,
     minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
-    grokAuthConfigured: rateLimits.grokAuthConfigured
+    grokAuthConfigured: rateLimits.grokAuthConfigured,
+    cursorAuthConfigured: rateLimits.cursorAuthConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
@@ -2128,6 +2127,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
+  const visibleCursor = getVisibleUsageProvider('cursor', cursor, usageSettings)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -2154,6 +2154,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     visibleGrok !== null &&
     statusBarItems.includes('grok') &&
     isStatusBarItemAvailable('grok', detectedAgentIds)
+  // Why: Cursor reads IDE state DB, not a CLI on PATH, so detection-gating doesn't apply.
+  const showCursor = visibleCursor !== null && statusBarItems.includes('cursor')
   // Why: OpenCode Go is web/cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
@@ -2171,11 +2173,12 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     showKimi ||
     showAntigravity ||
     showMiniMax ||
-    showGrok
+    showGrok ||
+    showCursor
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
+    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor },
     usageSettings
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
@@ -2188,7 +2191,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     kimi?.status === 'fetching' ||
     antigravity?.status === 'fetching' ||
     minimax?.status === 'fetching' ||
-    grok?.status === 'fetching'
+    grok?.status === 'fetching' ||
+    cursor?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -2207,7 +2211,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     showOpencodeGo ? visibleOpencodeGo : null,
     showKimi ? visibleKimi : null,
     showMiniMax ? visibleMiniMax : null,
-    showGrok ? visibleGrok : null
+    showGrok ? visibleGrok : null,
+    showCursor ? visibleCursor : null
   ].filter((p): p is ProviderRateLimits => p !== null)
 
   const handleManageAccounts = (): void => {
@@ -2546,6 +2551,16 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               {translate('auto.components.status.bar.StatusBar.grokUsageMenu', 'Grok Usage')}
             </DropdownMenuCheckboxItem>
           )}
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('cursor')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('usage-tracking')
+              toggleStatusBarItem('cursor')
+            }}
+          >
+            <AgentIcon agent="cursor" size={14} />
+            {translate('auto.components.status.bar.StatusBar.cursorUsageMenu', 'Cursor Usage')}
+          </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('ssh')}
             onCheckedChange={() => {
