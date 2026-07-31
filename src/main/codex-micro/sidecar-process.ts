@@ -44,7 +44,7 @@ export class CodexMicroSidecarProcess extends EventEmitter {
     child.stdout?.on('data', (chunk: Buffer) => this.handleData(child, chunk))
     // Why: stderr may embed raw hidapi text; drain without forwarding it anywhere.
     child.stderr?.on('data', () => {})
-    child.on('exit', (code, signal) => this.handleExit(child, code, signal))
+    child.on('close', (code, signal) => this.handleExit(child, code, signal))
     child.on('error', (error) => this.handleError(child, error))
   }
 

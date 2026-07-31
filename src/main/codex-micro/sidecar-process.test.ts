@@ -90,7 +90,7 @@ describe('CodexMicroSidecarProcess', () => {
     expect(child.stdin.write).toHaveBeenCalledWith(encodeCodexMicroFrame({ type: 'release' }))
   })
 
-  it('forwards exit and error events for the live child', () => {
+  it('waits for stdio close before forwarding exit for the live child', () => {
     const proc = new CodexMicroSidecarProcess('/path/to/codex-micro')
     proc.start()
     const child = children[0]!
@@ -98,6 +98,8 @@ describe('CodexMicroSidecarProcess', () => {
     proc.on('exit', onExit)
 
     child.emit('exit', 1, null)
+    expect(onExit).not.toHaveBeenCalled()
+    child.emit('close', 1, null)
 
     expect(onExit).toHaveBeenCalledWith(1, null)
   })
@@ -116,7 +118,7 @@ describe('CodexMicroSidecarProcess', () => {
     proc.on('exit', onExit)
 
     staleChild.stdout.emit('data', encodeCodexMicroFrame({ type: 'handshake' }))
-    staleChild.emit('exit', 1, null)
+    staleChild.emit('close', 1, null)
 
     expect(onFrame).not.toHaveBeenCalled()
     expect(onExit).not.toHaveBeenCalled()
