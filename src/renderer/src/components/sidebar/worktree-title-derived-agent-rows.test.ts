@@ -43,6 +43,28 @@ function makeSingleLayout(leafId: string): TerminalLayoutSnapshot {
 }
 
 describe('buildTitleDerivedAgentRows', () => {
+  it('adds idle and working rows for live Trae panes', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: 'Trae ready',
+          2: '⠋ Trae'
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-idle', 'pty-working'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state, row.entry.lastAssistantMessage])).toEqual([
+      ['trae', 'idle', 'Idle'],
+      ['trae', 'working', 'Running']
+    ])
+  })
+
   it('adds title-derived rows for live agent panes that have no hook status yet', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
@@ -115,10 +137,26 @@ describe('buildTitleDerivedAgentRows', () => {
       entries: [],
       retained: [],
       runtimePaneTitlesByTabId: {
-        'tab-1': { 1: '⠋ Codex' }
+        'tab-1': { 1: 'Trae ready' }
       },
       ptyIdsByTabId: {},
       terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('does not infer Trae from an unknown similar title', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: 'trae-cli ready' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-unknown'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
       now: 2000
     })
 

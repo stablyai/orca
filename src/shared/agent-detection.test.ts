@@ -101,6 +101,26 @@ describe('MiMo title detection', () => {
   )
 })
 
+describe('Trae title detection', () => {
+  it.each([
+    ['Trae', 'idle'],
+    ['Trae ready', 'idle'],
+    ['⠋ Trae', 'working'],
+    ['Trae working', 'working']
+  ] as const)('classifies %s', (title, expectedStatus) => {
+    expect(getAgentLabel(title)).toBe('Trae')
+    expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
+  })
+
+  it.each(['trae-cli ready', 'trae-agent working', '~/trae/working'])(
+    'does not classify a non-Trae title %s',
+    (title) => {
+      expect(getAgentLabel(title)).toBeNull()
+      expect(detectAgentStatusFromTitle(title)).toBeNull()
+    }
+  )
+})
+
 describe('Pi-compatible title detection', () => {
   it.each([
     ['\u280b OMP', 'OMP', 'working'],

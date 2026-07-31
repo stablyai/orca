@@ -113,6 +113,9 @@ export function getAgentLabel(title: string): string | null {
   if (HERMES_AGENT_NAME_RE.test(title)) {
     return 'Hermes'
   }
+  if (titleHasAgentName(title, 'trae')) {
+    return 'Trae'
+  }
   if (isClaudeAgent(title)) {
     return 'Claude Code'
   }

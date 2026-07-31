@@ -46,6 +46,12 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
     expect(resolveExplicitTerminalTitleAgentType('OMP')).toBe('omp')
   })
 
+  it('maps Trae titles without accepting similarly named commands', () => {
+    expect(resolveExplicitTerminalTitleAgentType('Trae ready')).toBe('trae')
+    expect(resolveExplicitTerminalTitleAgentType('⠋ Trae')).toBe('trae')
+    expect(resolveExplicitTerminalTitleAgentType('trae-cli ready')).toBeNull()
+  })
+
   it('treats Claude generic status prefixes as activity-only, not identity', () => {
     expect(resolveExplicitTerminalTitleAgentType('✳ investigating startup')).toBeNull()
     expect(resolveExplicitTerminalTitleAgentType('⠸ investigating startup')).toBeNull()
