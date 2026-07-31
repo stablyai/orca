@@ -9609,6 +9609,8 @@ describe('connectPanePty', () => {
     })
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
+    const transcriptPath =
+      '\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-codex-session-1.jsonl'
     // Why: after restart agentStatusByPaneKey is empty — the persisted sleeping record is the only provider session id source (#5232).
     mockStoreState = {
       ...mockStoreState,
@@ -9626,7 +9628,11 @@ describe('connectPanePty', () => {
           tabId: 'tab-1',
           worktreeId: 'wt-1',
           agent: 'codex',
-          providerSession: { key: 'session_id', id: 'codex-session-1' },
+          providerSession: {
+            key: 'session_id',
+            id: 'codex-session-1',
+            transcriptPath
+          },
           prompt: 'finish the task',
           state: 'working',
           capturedAt: 1,
@@ -9660,6 +9666,11 @@ describe('connectPanePty', () => {
       expect.objectContaining({
         sessionId: 'lost-pty',
         command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+        resumeProviderSession: {
+          key: 'session_id',
+          id: 'codex-session-1',
+          transcriptPath
+        },
         env: expect.objectContaining({
           ORCA_PANE_KEY: paneKey,
           ORCA_TAB_ID: 'tab-1',

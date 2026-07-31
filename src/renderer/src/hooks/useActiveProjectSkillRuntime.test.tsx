@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { getDefaultSettings } from '../../../shared/constants'
 import { useAppStore } from '@/store'
-import { useActiveProjectSkillRuntime } from './useActiveProjectSkillRuntime'
+import {
+  shouldUseLocalSkillFreshness,
+  useActiveProjectSkillRuntime
+} from './useActiveProjectSkillRuntime'
 
 function setPlatform(platform: NodeJS.Platform): void {
   ;(window as unknown as { api: unknown }).api = {
@@ -41,5 +44,22 @@ describe('useActiveProjectSkillRuntime', () => {
     const { result } = renderHook(() => useActiveProjectSkillRuntime())
 
     expect(result.current.terminalShellOverride).toBeUndefined()
+  })
+
+  it('limits local freshness to resolved host runtimes', () => {
+    expect(shouldUseLocalSkillFreshness({ kind: 'local' }, undefined)).toBe(true)
+    expect(
+      shouldUseLocalSkillFreshness({ kind: 'local' }, { runtime: 'host', label: 'Host' })
+    ).toBe(true)
+    expect(shouldUseLocalSkillFreshness({ kind: 'local' }, { runtime: 'wsl', label: 'WSL' })).toBe(
+      false
+    )
+    expect(
+      shouldUseLocalSkillFreshness(
+        { kind: 'environment', environmentId: 'ssh-production' },
+        undefined
+      )
+    ).toBe(false)
+    expect(shouldUseLocalSkillFreshness(null, undefined)).toBe(false)
   })
 })

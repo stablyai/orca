@@ -3929,7 +3929,9 @@
           "upToDate": "Up to date",
           "installed": "Installed",
           "details": "Details",
-          "needsAttention": "Review skill"
+          "needsAttention": "Review skill",
+          "checking": "Checking...",
+          "checkFailed": "Check failed"
         }
       },
       "sidebar": {
@@ -10680,6 +10682,8 @@
                 "9ad98f2a17": "pending",
                 "5e52f4ef7f": "failing",
                 "02ca4f9074": "passing",
+                "checksUnresolvedChip": "unresolved",
+                "checksUnresolvedStripHint": "These checks finished without a pass or fail verdict.",
                 "e15a8b77ef": "No inline details are available for this check.",
                 "679bf2093c": "Copy log excerpt",
                 "d713f500b2": "Log excerpt",
@@ -11914,7 +11918,9 @@
         "NetworkInterfacePicker": {
           "trigger-label": "Network address to advertise",
           "custom-option": "{{address}} (custom)",
-          "add-custom": "Add custom address…"
+          "add-custom": "Add custom address…",
+          "custom-section": "Custom",
+          "remove-custom": "Remove {{address}}"
         },
         "WindowsFirewallNotice": {
           "repair-success": "Windows Firewall now allows Orca Mobile on private networks",

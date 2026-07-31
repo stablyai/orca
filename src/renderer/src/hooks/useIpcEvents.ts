@@ -31,7 +31,11 @@ import type {
 } from '../../../shared/types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { DirectSshAuthority, SshConnectionState } from '../../../shared/ssh-types'
-import { toSshExecutionHostId } from '../../../shared/execution-host'
+import {
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
 import type {
   RuntimeBrowserDriverState,
@@ -96,7 +100,10 @@ import {
   applyRuntimeEnvironmentSshStateChanged,
   hydrateRuntimeEnvironmentSshState
 } from '@/runtime/runtime-environment-ssh-state'
-import { createRuntimeProjectRefreshScheduler } from './runtime-project-refresh-scheduler'
+import {
+  createRuntimeProjectRefreshScheduler,
+  refreshRuntimeProjectWorktrees
+} from './runtime-project-refresh-scheduler'
 import { createRuntimeClientEventsSync } from './runtime-client-events-sync'
 import { detectLanguage } from '@/lib/language-detect'
 import { makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
@@ -184,7 +191,6 @@ function getShortcutPlatform(): NodeJS.Platform {
 }
 
 const BROWSER_AUTOMATION_BOOTSTRAP_LEASE_MS = 10_000
-const RUNTIME_PROJECT_REFRESH_CONCURRENCY = 5
 const browserAutomationBootstrapLeaseByPageId = new Map<string, { token: string; timer: number }>()
 
 function resolveTerminalPresentation(data: {
@@ -588,36 +594,6 @@ export function getRuntimeProjectRefreshEnvironmentIds(args: {
   ]
 }
 
-async function refreshRuntimeProjectWorktrees(repos: readonly { id: string }[]): Promise<void> {
-  let nextIndex = 0
-  const failures: { repoId: string; error: unknown }[] = []
-  const workerCount = Math.min(RUNTIME_PROJECT_REFRESH_CONCURRENCY, repos.length)
-
-  // Why: one coalesced repo event can represent many repos; bound the probes so idle refresh never floods the renderer.
-  await Promise.all(
-    Array.from({ length: workerCount }, async () => {
-      while (nextIndex < repos.length) {
-        const index = nextIndex
-        nextIndex += 1
-        const repoId = repos[index].id
-        try {
-          await useAppStore.getState().fetchWorktrees(repoId)
-        } catch (error) {
-          failures.push({ repoId, error })
-        }
-      }
-    })
-  )
-  if (failures.length > 0) {
-    throw new AggregateError(
-      failures.map((failure) => failure.error),
-      `Failed to refresh ${failures.length} runtime project worktree(s): ${failures
-        .map((failure) => failure.repoId)
-        .join(', ')}`
-    )
-  }
-}
-
 function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined): string | null {
   return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
 }
@@ -788,7 +764,7 @@ export function useIpcEvents(): void {
     const handleWorktreesChanged = async (
       repoId: string,
       renamed?: { oldWorktreeId: string; newWorktreeId: string },
-      options?: { forceLocalOwner?: boolean }
+      options?: { forceLocalOwner?: boolean; executionHostId?: ExecutionHostId }
     ): Promise<void> => {
       const localRefreshStartedWithRuntime =
         options?.forceLocalOwner === true && isRuntimeEnvironmentActive()
@@ -809,11 +785,21 @@ export function useIpcEvents(): void {
         getVisibleWorktreeIdsForRepo(state, repoId)
       await state.fetchWorktrees(
         repoId,
-        options?.forceLocalOwner ? { forceLocalOwner: true } : undefined
+        options?.forceLocalOwner
+          ? { forceLocalOwner: true }
+          : options?.executionHostId
+            ? { executionHostId: options.executionHostId }
+            : undefined
       )
       await useAppStore
         .getState()
-        .fetchWorktreeLineage(options?.forceLocalOwner ? { forceLocalOwner: true } : undefined)
+        .fetchWorktreeLineage(
+          options?.forceLocalOwner
+            ? { forceLocalOwner: true }
+            : options?.executionHostId
+              ? { executionHostId: options.executionHostId }
+              : undefined
+        )
       // Why: an id change unmounts the active pane; re-activate so the tab reconciles, else it vanishes until re-select.
       if (renamedWasActive && renamed) {
         useAppStore.getState().setActiveWorktree(renamed.newWorktreeId)
@@ -909,8 +895,12 @@ export function useIpcEvents(): void {
         // Why: refresh the env's SSH bucket on (re)connect so a pre-drop snapshot can't keep a reconnect overlay stale.
         void hydrateRuntimeEnvironmentSshState(environmentId, { force: true }).catch(() => {})
         const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
-        await refreshRuntimeProjectWorktrees(repos)
-        await useAppStore.getState().fetchWorktreeLineage()
+        await refreshRuntimeProjectWorktrees(environmentId, repos, (repoId, options) =>
+          useAppStore.getState().fetchWorktrees(repoId, options)
+        )
+        await useAppStore.getState().fetchWorktreeLineage({
+          executionHostId: toRuntimeExecutionHostId(environmentId)
+        })
       },
       onError: (error) => {
         console.error('Failed to refresh runtime projects:', error)
@@ -956,7 +946,10 @@ export function useIpcEvents(): void {
       }
       if (event.type === 'worktreesChanged') {
         void ensureRuntimeEventRepoKnown(environmentId, event.repoId).then(() =>
-          worktreeChangeRefreshQueue.enqueue({ repoId: event.repoId })
+          worktreeChangeRefreshQueue.enqueue({
+            repoId: event.repoId,
+            executionHostId: toRuntimeExecutionHostId(environmentId)
+          })
         )
         return
       }

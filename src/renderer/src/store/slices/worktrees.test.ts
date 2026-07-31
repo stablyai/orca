@@ -2066,6 +2066,154 @@ describe('fetchWorktrees', () => {
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
   })
 
+  it('honors an explicit runtime owner before the repo catalog is hydrated', async () => {
+    const store = createTestStore()
+    const remote = makeWorktree({
+      id: 'repo-missing::/runtime/wt',
+      repoId: 'repo-missing',
+      path: '/runtime/wt',
+      hostId: 'local'
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: null } as never,
+      repos: []
+    } as Partial<AppState>)
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-missing-repo',
+      ok: true,
+      result: makeDetectedResult('repo-missing', [remote]),
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+
+    await store.getState().fetchWorktrees('repo-missing', {
+      executionHostId: 'runtime:env-1',
+      requireAuthoritative: true
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'worktree.detectedList',
+      params: { repo: 'repo-missing' },
+      timeoutMs: 15_000
+    })
+    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['repo-missing']).toEqual([
+      { ...remote, hostId: 'runtime:env-1', runtimeOwnerEnvironmentId: 'env-1' }
+    ])
+  })
+
+  it('honors an explicit SSH owner before the repo catalog is hydrated', async () => {
+    const store = createTestStore()
+    const remote = makeWorktree({
+      id: 'repo-missing::/ssh/wt',
+      repoId: 'repo-missing',
+      path: '/ssh/wt',
+      hostId: 'local'
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-ambient' } as never,
+      repos: []
+    } as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockImplementationOnce(async (args: ListDetectedWorktreesArgs) =>
+      qualifyDetectedResult(args, makeDetectedResult('repo-missing', [remote]))
+    )
+
+    await store.getState().fetchWorktrees('repo-missing', {
+      executionHostId: 'ssh:ssh-1',
+      requireAuthoritative: true
+    })
+
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'repo-missing',
+        executionHostId: 'ssh:ssh-1',
+        expectedAuthority: TEST_SSH_AUTHORITY
+      })
+    )
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['repo-missing']).toEqual([
+      { ...remote, hostId: 'ssh:ssh-1' }
+    ])
+  })
+
+  it('rejects a missing-owner SSH result after the repo catalog changes', async () => {
+    const store = createTestStore()
+    const remote = makeWorktree({
+      id: 'repo-missing::/ssh/wt',
+      repoId: 'repo-missing',
+      path: '/ssh/wt'
+    })
+    let release!: () => void
+    const started = new Promise<void>((resolve) => {
+      mockApi.worktrees.listDetected.mockImplementationOnce(
+        async (args: ListDetectedWorktreesArgs) => {
+          resolve()
+          await new Promise<void>((resume) => {
+            release = resume
+          })
+          return qualifyDetectedResult(args, makeDetectedResult('repo-missing', [remote]))
+        }
+      )
+    })
+
+    const refresh = store.getState().fetchWorktrees('repo-missing', {
+      executionHostId: 'ssh:ssh-1',
+      requireAuthoritative: true
+    })
+    await started
+    store.setState({ repos: [] })
+    release()
+
+    await expect(refresh).resolves.toBe(false)
+    expect(store.getState().worktreesByRepo['repo-missing']).toBeUndefined()
+  })
+
+  it('rejects a missing-owner SSH result after the provider reconnects', async () => {
+    const store = createTestStore()
+    const remote = makeWorktree({
+      id: 'repo-missing::/ssh/wt',
+      repoId: 'repo-missing',
+      path: '/ssh/wt'
+    })
+    let release!: () => void
+    const started = new Promise<void>((resolve) => {
+      mockApi.worktrees.listDetected.mockImplementationOnce(
+        async (args: ListDetectedWorktreesArgs) => {
+          resolve()
+          await new Promise<void>((resume) => {
+            release = resume
+          })
+          return qualifyDetectedResult(args, makeDetectedResult('repo-missing', [remote]))
+        }
+      )
+    })
+
+    const refresh = store.getState().fetchWorktrees('repo-missing', {
+      executionHostId: 'ssh:ssh-1',
+      requireAuthoritative: true
+    })
+    await started
+    store.setState({
+      sshConnectionStates: new Map([
+        [
+          TEST_SSH_AUTHORITY.targetId,
+          {
+            targetId: TEST_SSH_AUTHORITY.targetId,
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            providerEpoch: 'provider-ssh-2' as SshProviderEpoch,
+            connectionGeneration: TEST_SSH_AUTHORITY.connectionGeneration + 1
+          }
+        ]
+      ])
+    })
+    release()
+
+    await expect(refresh).resolves.toBe(false)
+    expect(store.getState().worktreesByRepo['repo-missing']).toBeUndefined()
+  })
+
   it('stamps remote runtime worktrees with the owning repo runtime host', async () => {
     const store = createTestStore()
     // Why: a remote runtime returns worktrees from its own perspective, so their hostId arrives as the default "local".
@@ -2665,6 +2813,31 @@ describe('worktree lineage state', () => {
     })
     expect(mockApi.worktrees.listLineage).not.toHaveBeenCalled()
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+  })
+
+  it('pins lineage refresh to the event runtime when the default is local', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-lineage-list',
+      ok: true,
+      result: { lineage: { [lineage.worktreeId]: lineage } },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: null } as never,
+      worktreesByRepo: {}
+    } as Partial<AppState>)
+
+    await store.getState().fetchWorktreeLineage({ executionHostId: 'runtime:env-1' })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'worktree.lineageList',
+      params: undefined,
+      timeoutMs: 15_000
+    })
+    expect(mockApi.worktrees.listLineage).not.toHaveBeenCalled()
   })
 
   it('pins lineage refresh to the local host when forceLocalOwner is set', async () => {

@@ -134,6 +134,19 @@ export function resolveWorktreeOperationRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRouteResolution {
+  const activeHost =
+    state.activeWorktreeId === worktreeId
+      ? parseExecutionHostId(state.activeWorkspaceExecutionHostId)
+      : null
+  if (activeHost) {
+    return {
+      kind: 'resolved',
+      route: {
+        executionHostId: activeHost.id,
+        runtimeEnvironmentId: activeHost.kind === 'runtime' ? activeHost.environmentId : null
+      }
+    }
+  }
   // Why: folder workspaces are not Git worktrees — they never appear in the worktree/repo
   // catalogs scanned below, so without this branch a plain local folder workspace reads as an
   // unresolved cross-host identity and every owner-routed operation fails closed (#10251).

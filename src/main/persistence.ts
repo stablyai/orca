@@ -169,6 +169,11 @@ import {
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-rename-branch-from-work-settings'
+import {
+  addMobilePairingCustomAddress,
+  normalizeMobilePairingCustomAddress,
+  normalizeMobilePairingCustomAddresses
+} from '../shared/mobile-pairing-custom-address'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
 import { normalizeSourceControlGroupOrder } from '../shared/source-control-group-order'
@@ -3146,6 +3151,34 @@ export class Store {
           parsed.settings?.compactWorktreeCards ??
           parsed.settings?.experimentalCompactWorktreeCards ??
           defaults.settings.compactWorktreeCards
+        const mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(
+          parsed.settings?.mobilePairingCustomAddress
+        )
+        const rawMobilePairingCustomAddresses = parsed.settings?.mobilePairingCustomAddresses
+        const mobilePairingCustomAddresses = mobilePairingCustomAddress
+          ? addMobilePairingCustomAddress(
+              normalizeMobilePairingCustomAddresses(rawMobilePairingCustomAddresses),
+              mobilePairingCustomAddress
+            )
+          : normalizeMobilePairingCustomAddresses(rawMobilePairingCustomAddresses)
+        if (
+          parsed.settings?.mobilePairingCustomAddress !== undefined &&
+          parsed.settings.mobilePairingCustomAddress !== mobilePairingCustomAddress
+        ) {
+          this.loadNeedsSave = true
+        }
+        const customAddressesMatch =
+          Array.isArray(rawMobilePairingCustomAddresses) &&
+          rawMobilePairingCustomAddresses.length === mobilePairingCustomAddresses.length &&
+          rawMobilePairingCustomAddresses.every(
+            (address, index) => address === mobilePairingCustomAddresses[index]
+          )
+        if (
+          (rawMobilePairingCustomAddresses !== undefined || mobilePairingCustomAddress !== null) &&
+          !customAddressesMatch
+        ) {
+          this.loadNeedsSave = true
+        }
         const normalizedSourceControlGroupOrder = normalizeSourceControlGroupOrder(
           parsed.settings?.sourceControlGroupOrder
         )
@@ -3229,6 +3262,8 @@ export class Store {
               parsed.settings?.terminalCustomThemes
             ),
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
+            mobilePairingCustomAddress,
+            mobilePairingCustomAddresses,
             // Why: persisted settings may be hand-edited or from older builds; keep tray-minimize false unless stored value is true.
             minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
             // Why: missing means default-on; round-trips unchanged on non-mac since darwin consumers gate the effect.
@@ -5522,6 +5557,33 @@ export class Store {
       sanitizedUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
         updates.prBotAuthorOverrides
       )
+    }
+    if ('mobilePairingCustomAddress' in updates) {
+      sanitizedUpdates.mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(
+        updates.mobilePairingCustomAddress
+      )
+    }
+    if ('mobilePairingCustomAddresses' in updates) {
+      sanitizedUpdates.mobilePairingCustomAddresses = normalizeMobilePairingCustomAddresses(
+        updates.mobilePairingCustomAddresses
+      )
+    }
+    if (
+      'mobilePairingCustomAddress' in sanitizedUpdates ||
+      'mobilePairingCustomAddresses' in sanitizedUpdates
+    ) {
+      const mobilePairingCustomAddress =
+        'mobilePairingCustomAddress' in sanitizedUpdates
+          ? sanitizedUpdates.mobilePairingCustomAddress
+          : this.state.settings.mobilePairingCustomAddress
+      if (mobilePairingCustomAddress) {
+        sanitizedUpdates.mobilePairingCustomAddresses = addMobilePairingCustomAddress(
+          sanitizedUpdates.mobilePairingCustomAddresses ??
+            this.state.settings.mobilePairingCustomAddresses ??
+            [],
+          mobilePairingCustomAddress
+        )
+      }
     }
     const historyWithPreviousLayout = buildWorkspaceDirHistoryForUpdate(
       this.state.settings,

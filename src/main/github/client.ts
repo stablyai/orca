@@ -27,6 +27,7 @@ import {
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
 import { normalizeGitHubPRMergeMethodSettings } from '../../shared/github-pr-merge-methods'
+import { summarizeProviderChecks } from '../../shared/provider-check-summary'
 import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github-work-items-query-bounds'
 import { classifyGitHubUnavailable } from '../../shared/github-api-availability'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
@@ -656,44 +657,19 @@ function checkRollupEntries(value: unknown): unknown[] {
 }
 
 function deriveWorkItemCheckSummary(value: unknown): GitHubWorkItem['checksSummary'] {
-  const entries = checkRollupEntries(value)
-  if (entries.length === 0) {
-    return { state: 'none', total: 0, passed: 0, failed: 0, pending: 0, neutral: 0 }
-  }
-  let passed = 0
-  let failed = 0
-  let pending = 0
-  let neutral = 0
-  for (const entry of entries) {
-    if (typeof entry !== 'object' || entry === null) {
-      pending += 1
-      continue
-    }
-    const raw = entry as Record<string, unknown>
-    const conclusion = String(raw.conclusion ?? raw.state ?? '').toUpperCase()
-    const status = String(raw.status ?? '').toUpperCase()
-    if (['SUCCESS', 'SKIPPED'].includes(conclusion)) {
-      passed += 1
-    } else if (
-      ['FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(
-        conclusion
-      )
-    ) {
-      failed += 1
-    } else if (status === 'COMPLETED') {
-      neutral += 1
-    } else {
-      pending += 1
-    }
-  }
-  return {
-    state: failed > 0 ? 'failure' : pending > 0 ? 'pending' : neutral > 0 ? 'neutral' : 'success',
-    total: entries.length,
-    passed,
-    failed,
-    pending,
-    neutral
-  }
+  return summarizeProviderChecks(
+    checkRollupEntries(value).map((entry) => {
+      if (typeof entry !== 'object' || entry === null) {
+        return { status: '', conclusion: '' }
+      }
+      const raw = entry as Record<string, unknown>
+      // Why: StatusContext reports `state` and carries no `status`; CheckRun reports both.
+      return {
+        status: String(raw.status ?? ''),
+        conclusion: String(raw.conclusion ?? raw.state ?? '')
+      }
+    })
+  )
 }
 
 function mapPullRequestWorkItem(

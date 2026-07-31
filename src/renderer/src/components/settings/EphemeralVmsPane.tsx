@@ -183,7 +183,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
         }}
         onRecheck={refreshSkill}
         freshnessSkillName={
-          activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : EPHEMERAL_VMS_SKILL_NAME
+          activeSkillRuntime.canUseLocalSkillFreshness ? EPHEMERAL_VMS_SKILL_NAME : undefined
         }
       />
 

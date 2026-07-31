@@ -77,7 +77,7 @@ import {
   type DaemonAuditTrigger
 } from './daemon-audit-classifier'
 import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-incarnation-evidence'
-import { trackDaemonAuditEligibility } from './daemon-audit-eligibility-event'
+import { createDaemonAuditEligibilityTracker } from './daemon-audit-eligibility-event'
 
 type PendingDaemonSpawnOperation = {
   exitsBySessionId: Map<string, { incarnationId?: string }[]>
@@ -159,6 +159,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private lastAuthenticatedIdentity: DaemonEndpointIdentity | null = null
   private exactDaemonIncarnation: ExactDaemonIncarnation | null = null
   private lastAuditObservation: DaemonAuditObservation | null = null
+  // Why: every listProcesses call republishes the same observation; unthrottled it drains the shared per-session telemetry ceiling.
+  private readonly trackAuditEligibility = createDaemonAuditEligibilityTracker()
   private auditObservationListeners: ((observation: DaemonAuditObservation) => void)[] = []
   private identityChangeListeners: ((event: DaemonIdentityChangeEvent) => void)[] = []
   private historyManager: HistoryManager | null
@@ -1723,7 +1725,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   private publishAuditObservation(observation: DaemonAuditObservation): void {
     this.lastAuditObservation = observation
-    trackDaemonAuditEligibility(observation)
+    this.trackAuditEligibility(observation)
     notifyAuditListeners(this.auditObservationListeners, observation)
   }
 

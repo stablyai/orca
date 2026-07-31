@@ -87,8 +87,12 @@ describe('HeroFlow height', () => {
         canGeneratePairing
         onCopyPairingCode={vi.fn()}
         networkInterfaces={[]}
+        customAddresses={[]}
         selectedAddress={undefined}
+        selectedAddressIsCustom={false}
         onSelectedAddressChange={vi.fn()}
+        onCustomAddressSelect={vi.fn()}
+        onCustomAddressRemove={vi.fn()}
         beforeCustomAddressChange={vi.fn().mockResolvedValue(true)}
         onRefreshNetworkInterfaces={vi.fn()}
         refreshingNetworkInterfaces={false}
@@ -130,8 +134,12 @@ describe('HeroFlow height', () => {
         canGeneratePairing
         onCopyPairingCode={vi.fn()}
         networkInterfaces={[]}
+        customAddresses={[]}
         selectedAddress={undefined}
+        selectedAddressIsCustom={false}
         onSelectedAddressChange={vi.fn()}
+        onCustomAddressSelect={vi.fn()}
+        onCustomAddressRemove={vi.fn()}
         beforeCustomAddressChange={vi.fn().mockResolvedValue(true)}
         onRefreshNetworkInterfaces={vi.fn()}
         refreshingNetworkInterfaces={false}
@@ -239,8 +247,12 @@ describe('HeroFlow height', () => {
       canGeneratePairing: true,
       onCopyPairingCode: vi.fn(),
       networkInterfaces: [],
+      customAddresses: [],
       selectedAddress: undefined,
+      selectedAddressIsCustom: false,
       onSelectedAddressChange: vi.fn(),
+      onCustomAddressSelect: vi.fn(),
+      onCustomAddressRemove: vi.fn(),
       beforeCustomAddressChange: vi.fn().mockResolvedValue(true),
       onRefreshNetworkInterfaces: vi.fn(),
       refreshingNetworkInterfaces: false
@@ -276,8 +288,12 @@ describe('HeroFlow height', () => {
       canGeneratePairing: true,
       onCopyPairingCode: vi.fn(),
       networkInterfaces: [],
+      customAddresses: [],
       selectedAddress: undefined,
+      selectedAddressIsCustom: false,
       onSelectedAddressChange: vi.fn(),
+      onCustomAddressSelect: vi.fn(),
+      onCustomAddressRemove: vi.fn(),
       beforeCustomAddressChange: vi.fn().mockResolvedValue(true),
       onRefreshNetworkInterfaces: vi.fn(),
       refreshingNetworkInterfaces: false

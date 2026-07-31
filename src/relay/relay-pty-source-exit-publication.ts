@@ -7,23 +7,133 @@ import {
 } from './relay-pty-source-send-scheduler'
 import type { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
 
-type ExitParams = { id: string; code: number; incarnationId: string }
+export type PtyExitParams = { id: string; code: number; incarnationId: string }
 
-export function sealAndPublishPtySourceExit(options: {
-  params: ExitParams
+type PtySourceExitOptions = {
+  params: PtyExitParams
   record: RelayPtySourceDeliveryRecord
   deliveries: Map<string, RelayPtySourceDeliveryRecord>
+  legacyExits?: RelayPtySourceLegacyExitIndex
   dispatcher: RelayDispatcher
   session: SshPtyConsumerSessionAdapter
   sender: RelayPtySourceSendScheduler
   counters: RelayPtySourcePublicationCounters
   onCapacity: (id: string) => void
-}): boolean {
+}
+
+/**
+ * Remembers which exits already reached the legacy subscribers. `legacyExitAccepted` dies with
+ * the delivery record, but a cancel or grace expiry can retire the record between the legacy
+ * projection and the owner's exit frame, and the fallback must not broadcast a second copy.
+ */
+export class RelayPtySourceLegacyExitIndex {
+  private readonly stateByPty = new Map<
+    string,
+    Readonly<{ incarnationId: string; state: 'owner-pending' | 'complete' }>
+  >()
+
+  remember(params: PtyExitParams, delivered: boolean): void {
+    if (delivered) {
+      this.stateByPty.set(params.id, {
+        incarnationId: params.incarnationId,
+        state: 'owner-pending'
+      })
+    } else {
+      this.forget(params.id)
+    }
+  }
+
+  complete(params: PtyExitParams): void {
+    if (this.stateByPty.get(params.id)?.incarnationId !== params.incarnationId) {
+      return
+    }
+    this.stateByPty.set(params.id, { incarnationId: params.incarnationId, state: 'complete' })
+  }
+
+  /** Drops the entry once the exit is complete for every client, so the map cannot grow unbounded. */
+  forget(id: string): void {
+    this.stateByPty.delete(id)
+  }
+
+  clear = (): void => this.stateByPty.clear()
+
+  /** Publishes a retired record's exit to the owner alone, or null when nothing was projected. */
+  publishAfterRetire(
+    params: PtyExitParams,
+    dispatcher: RelayDispatcher,
+    session: SshPtyConsumerSessionAdapter
+  ): boolean | null {
+    const remembered = this.stateByPty.get(params.id)
+    if (remembered?.incarnationId !== params.incarnationId) {
+      return null
+    }
+    if (remembered.state === 'complete') {
+      this.forget(params.id)
+      return true
+    }
+    const published = dispatcher.tryNotifyPtyExitToMatchingClients(
+      (clientId) => session.deliveryMode(clientId) === 'source-owner',
+      params
+    )
+    if (published) {
+      this.forget(params.id)
+    }
+    return published
+  }
+}
+
+function logExitSettlementFault(id: string, err: unknown): void {
+  process.stderr.write(
+    `[pty-source-exit] exit settlement failed for ${id}: ${
+      err instanceof Error ? (err.stack ?? err.message) : String(err)
+    }\n`
+  )
+}
+
+function retireFaultedPtySourceExit(
+  options: PtySourceExitOptions,
+  record: RelayPtySourceDeliveryRecord
+): void {
+  try {
+    options.session.cancelDelivery(record.identity, 'exit-publication-failed')
+  } catch (err) {
+    logExitSettlementFault(options.params.id, err)
+  }
+  try {
+    options.sender.wakeSendWaiters(record)
+  } catch (err) {
+    logExitSettlementFault(options.params.id, err)
+  } finally {
+    record.sendWaiters.clear()
+  }
+  if (options.deliveries.get(options.params.id) === record) {
+    options.deliveries.delete(options.params.id)
+  }
+}
+
+/** Seals and publishes the pty's exit, recording whether the legacy projection outlives the record. */
+export function sealAndPublishTrackedPtySourceExit(
+  options: Omit<PtySourceExitOptions, 'record'> & { legacyExits: RelayPtySourceLegacyExitIndex }
+): boolean {
+  const record = options.deliveries.get(options.params.id)
+  if (!record) {
+    return false
+  }
+  try {
+    return sealAndPublishPtySourceExit({ ...options, record })
+  } catch (err) {
+    retireFaultedPtySourceExit({ ...options, record }, record)
+    throw err
+  }
+}
+
+export function sealAndPublishPtySourceExit(options: PtySourceExitOptions): boolean {
   const { params, record, deliveries, dispatcher, session, sender, counters, onCapacity } = options
   if (record.restoreRequired) {
     const published = dispatcher.tryNotifyPtyExit(params)
     if (published && deliveries.get(params.id) === record) {
       deliveries.delete(params.id)
+      options.legacyExits?.forget(params.id)
     }
     return published
   }
@@ -32,12 +142,15 @@ export function sealAndPublishPtySourceExit(options: {
     return false
   }
   const probe = session.sourceDeliverySnapshotIfKnown(record.identity)
+  // Why: 'closing' is defensive — the ledger closes a canceled record in the same call, so it
+  // only ever hands back 'closed' (or null once the tombstone is evicted).
   if (!probe || probe.state === 'closed' || probe.state === 'closing') {
     if (probe?.exitPublished === true || record.sourceExitState === 'published') {
       // Why: the delivery completed healthily — the owner already has the credit-mode exit.
       if (deliveries.get(params.id) === record) {
         deliveries.delete(params.id)
       }
+      options.legacyExits?.forget(params.id)
       return true
     }
     // Why: the delivery was canceled out from under the record; never touch the sealed
@@ -50,6 +163,7 @@ export function sealAndPublishPtySourceExit(options: {
       : dispatcher.tryNotifyPtyExit(params)
     if (published && deliveries.get(params.id) === record) {
       deliveries.delete(params.id)
+      options.legacyExits?.forget(params.id)
     }
     return published
   }
@@ -67,6 +181,7 @@ export function sealAndPublishPtySourceExit(options: {
       (clientId) => session.deliveryMode(clientId) !== 'source-owner',
       params
     )
+    options.legacyExits?.remember(params, record.legacyExitAccepted)
     if (!record.legacyExitAccepted) {
       return false
     }
@@ -96,14 +211,19 @@ export function sealAndPublishPtySourceExit(options: {
       }
     } catch (err) {
       settlementFailed = true
-      process.stderr.write(
-        `[pty-source-exit] exit settlement failed for ${params.id}: ${
-          err instanceof Error ? (err.stack ?? err.message) : String(err)
-        }\n`
-      )
+      logExitSettlementFault(params.id, err)
+      if (result.ok) {
+        options.legacyExits?.complete(params)
+      }
+      retireFaultedPtySourceExit(options, record)
     } finally {
       if (result.ok || deliveryGone || settlementFailed) {
-        onCapacity(params.id)
+        try {
+          // Why: capacity fans out into arbitrary handler code, still from the bare socket callback.
+          onCapacity(params.id)
+        } catch (err) {
+          logExitSettlementFault(params.id, err)
+        }
       }
     }
   })

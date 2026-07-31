@@ -1093,13 +1093,15 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     )
   },
 
-  'orchestration gate-create': async ({ flags, client, json }) => {
+  'orchestration gate-create': async ({ flags, client, cwd, json }) => {
     const result = await callMutation<{
       gate: { id: string; task_id: string; status: string }
     }>(client, flags, 'orchestration.gateCreate', {
       task: getRequiredStringFlag(flags, 'task'),
       question: getRequiredStringFlag(flags, 'question'),
-      options: getOptionalStringFlag(flags, 'options')
+      options: getOptionalStringFlag(flags, 'options'),
+      // Why: gates are Run-scoped, so the coordinator handle is the caller identity the runtime authorizes against.
+      from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })
     printResult(
       result,
@@ -1108,23 +1110,30 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     )
   },
 
-  'orchestration gate-resolve': async ({ flags, client, json }) => {
+  'orchestration gate-resolve': async ({ flags, client, cwd, json }) => {
     const result = await callMutation<{
       gate: { id: string; task_id: string; status: string; resolution: string }
     }>(client, flags, 'orchestration.gateResolve', {
       id: getRequiredStringFlag(flags, 'id'),
-      resolution: getRequiredStringFlag(flags, 'resolution')
+      resolution: getRequiredStringFlag(flags, 'resolution'),
+      from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })
     printResult(result, json, (r) => `Gate ${r.gate.id} resolved: ${r.gate.resolution}`)
   },
 
-  'orchestration gate-list': async ({ flags, client, json }) => {
+  'orchestration gate-list': async ({ flags, client, cwd, json }) => {
+    const run = getOptionalStringFlag(flags, 'run')
+    // Why: same read posture as task-list — an explicitly named Run stays inspectable without a bound pane, so identity is only resolved for the implicit "my own Run" case.
+    const from = run ? undefined : await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
       gates: { id: string; task_id: string; question: string; status: string }[]
       count: number
+      runId?: string
     }>('orchestration.gateList', {
       task: getOptionalStringFlag(flags, 'task'),
-      status: getOptionalStringFlag(flags, 'status')
+      status: getOptionalStringFlag(flags, 'status'),
+      run,
+      from
     })
     printResult(result, json, (r) => {
       if (r.gates.length === 0) {

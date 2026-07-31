@@ -64,7 +64,7 @@ import { getDefaultWslDistro, getWslHome } from '../wsl'
 import { isCodexSystemDefaultRealHomeEnabled } from '../codex/codex-real-home-flag'
 import { hasCustomCodexHomeOverride } from '../codex/codex-real-home-path'
 import { invalidateCodexSessionBackfillMarker } from '../codex/codex-session-backfill-marker'
-import { readShellStartupEnvVar } from '../pty/shell-startup-env'
+import { isShellStartupEnvProbeSupported, readShellStartupEnvVar } from '../pty/shell-startup-env'
 import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-ownership'
 import {
   codexAuthIsFresher,
@@ -431,6 +431,9 @@ export class CodexRuntimeHomeService {
     // process never inherited. Those custom homes must keep the managed lane.
     const effectiveEnv = launchEnv ? getEffectiveCodexHomeEnv(launchEnv) : process.env
     if (hasCustomCodexHomeOverride(effectiveEnv)) {
+      return false
+    }
+    if (!isShellStartupEnvProbeSupported()) {
       return false
     }
     // Why: Finder/Dock launches do not inherit shell exports, but the login

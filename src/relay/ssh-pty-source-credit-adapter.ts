@@ -289,7 +289,10 @@ export class SshPtySourceCreditAdapter {
   }
 
   private cancelExact(token: string, identity: PtySourceDeliveryIdentity, reason: string): void {
-    if (this.sourceCredit.snapshot(identity).state !== 'closed') {
+    // Why: this runs from the bare grace setTimeout, where an evicted tombstone probing unknown
+    // would throw straight into uncaughtException.
+    const snapshot = this.sourceCredit.snapshotIfKnown(identity)
+    if (snapshot && snapshot.state !== 'closed') {
       const proof = this.sourceCredit.cancel(identity, reason)
       this.recentCancellations.remember(proof)
       this.publishCancellation?.(proof)

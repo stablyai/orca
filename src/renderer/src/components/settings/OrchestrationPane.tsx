@@ -156,10 +156,8 @@ export function OrchestrationPane(): React.JSX.Element {
           />
         }
         onRecheck={refreshOrchestrationSkill}
-        // Why: the local-host-only freshness scan cannot vouch for a WSL runtime,
-        // so fall back to the presence-only pill there (mirrors the Computer Use card).
         freshnessSkillName={
-          activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : ORCHESTRATION_SKILL_NAME
+          activeSkillRuntime.canUseLocalSkillFreshness ? ORCHESTRATION_SKILL_NAME : undefined
         }
       />
 

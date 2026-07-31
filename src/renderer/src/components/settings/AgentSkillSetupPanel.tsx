@@ -8,11 +8,11 @@ import { AgentSkillSetupFailureNotice } from './AgentSkillSetupFailureNotice'
 import type { AgentSkillSetupPanelProps } from './agent-skill-setup-panel-props'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import {
-  notifyInstalledAgentSkillsChanged,
-  notifyInstalledAgentSkillsRefreshed
-} from '@/hooks/useInstalledAgentSkills'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import {
+  recheckSurfacesAfterAgentSkillTerminal,
+  syncSurfacesAfterAgentSkillRecheck
+} from './agent-skill-recheck-surface-sync'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -122,22 +122,20 @@ export function AgentSkillSetupPanel({
       if (bestEffortExitCode !== null) {
         setSetupCommandFailedCode(bestEffortExitCode === 0 ? null : bestEffortExitCode)
       }
-      if (freshnessSkillName) {
-        notifyInstalledAgentSkillsChanged()
-      }
-      void onRecheck()
+      recheckSurfacesAfterAgentSkillTerminal(onRecheck, freshnessSkillName)
     },
     [freshnessSkillName, onRecheck]
   )
 
   const handleTerminalExit = useCallback((): void => {
+    const shouldRecheck = setupAttemptRunningRef.current
     if (mountedRef.current) {
       setupAttemptRunningRef.current = false
       setTerminalOpen(false)
       setSetupAttemptRunning(false)
     }
-    notifyInstalledAgentSkillsChanged()
-  }, [mountedRef])
+    void (shouldRecheck && recheckSurfacesAfterAgentSkillTerminal(onRecheck, freshnessSkillName))
+  }, [freshnessSkillName, mountedRef, onRecheck])
 
   useEffect(() => {
     if (!preInstallNotice) {
@@ -235,8 +233,7 @@ export function AgentSkillSetupPanel({
               return
             }
             void Promise.resolve(onRecheck()).then(() => {
-              // Reuse the completed scan so sibling surfaces sync without rediscovery.
-              notifyInstalledAgentSkillsRefreshed()
+              syncSurfacesAfterAgentSkillRecheck(freshnessSkillName)
             })
           }}
           disabled={
