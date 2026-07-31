@@ -22,6 +22,7 @@ const powerShellExecutable = (
     }).status === 0
 )
 const candidateCounts = [0, 1, 7, 8, 9] as const
+const requirePowerShellExecution = process.env.ORCA_REQUIRE_POWERSHELL_STAGE_COMMANDS === '1'
 
 function decodePowerShellCommand(command: string): string {
   const encoded = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)?.[1] ?? ''
@@ -48,6 +49,10 @@ function createStaleStageFixture(count: number): {
 }
 
 describe('stale relay upload stage commands', () => {
+  it.runIf(requirePowerShellExecution)('requires a native PowerShell executable', () => {
+    expect(powerShellExecutable).toBeDefined()
+  })
+
   it.each(candidateCounts)('lists %i POSIX candidates with successful bounded output', (count) => {
     const fixture = createStaleStageFixture(count)
     try {
@@ -200,6 +205,26 @@ describe('stale relay upload stage commands', () => {
     }
   })
 
+  it.runIf(powerShellExecutable)('removes the maximum bounded PowerShell cleanup batch', () => {
+    const fixture = createStaleStageFixture(8)
+    try {
+      const command = decodePowerShellCommand(
+        removeStaleRemoteUploadStagesCommand(windows, fixture.relayDir, fixture.stages, 2 * 60 * 60)
+      )
+      const result = spawnSync(
+        powerShellExecutable!,
+        ['-NoProfile', '-NonInteractive', '-Command', command],
+        { encoding: 'utf8' }
+      )
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(fixture.stages.some(existsSync)).toBe(false)
+      expect(readdirSync(fixture.root).some((name) => name.includes('.cleanup-'))).toBe(false)
+    } finally {
+      rmSync(fixture.root, { recursive: true, force: true })
+    }
+  })
+
   it.runIf(powerShellExecutable)(
     'restores a PowerShell stage refreshed before the atomic rename claim',
     () => {
@@ -249,6 +274,8 @@ describe('stale relay upload stage commands', () => {
         )
 
         expect(result.status).not.toBe(0)
+        expect(result.stderr).toContain('injected listing failure')
+        expect(result.stderr).not.toContain('ParserError')
         expect(result.stdout).not.toContain(STALE_UPLOAD_STAGE_OUTPUT_PREFIX)
       } finally {
         rmSync(fixture.root, { recursive: true, force: true })

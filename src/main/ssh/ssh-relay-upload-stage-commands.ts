@@ -47,7 +47,7 @@ export function listStaleRemoteUploadStagesCommand(
       "$_.LastWriteTimeUtc -lt $cutoff -and $_.Name -match '\\.upload-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'",
       `} | Select-Object -First ${limit} | ForEach-Object { '${STALE_UPLOAD_STAGE_OUTPUT_PREFIX}' + $_.FullName }`,
       '}'
-    ].join(' ')
+    ].join('\n')
   )
 }
 
@@ -120,7 +120,7 @@ export function removeStaleRemoteUploadStagesCommand(
       '}',
       '}',
       '}'
-    ].join('; ')
+    ].join('\n')
   )
 }
 
