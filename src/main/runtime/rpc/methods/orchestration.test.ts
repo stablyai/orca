@@ -2180,6 +2180,7 @@ describe('orchestration RPC methods', () => {
       // the tab without scrolling the sidebar to the worker's workspace.
       expect(runtime.createTerminal).toHaveBeenCalledWith('id:repo::worktree', {
         command: 'codex',
+        env: { ORCA_ORCH_ROLE: 'worker', ORCA_ORCH_DEPTH: '1' },
         title: `worker-${task.id}`,
         surfaceOwner: false
       })

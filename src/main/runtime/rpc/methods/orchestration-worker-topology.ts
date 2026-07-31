@@ -2,6 +2,11 @@ import type { TuiAgent } from '../../../../shared/types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 
+const ORCHESTRATION_WORKER_ENV = {
+  ORCA_ORCH_ROLE: 'worker',
+  ORCA_ORCH_DEPTH: '1'
+}
+
 export type WorkerEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
   action?: string
@@ -60,6 +65,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
 }): Promise<{ handle: string; warning?: string }> {
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
     command: args.agent,
+    env: ORCHESTRATION_WORKER_ENV,
     title: `worker-${args.taskId}`,
     // Why: dispatching a worker is background work; it must not pull the sidebar
     // to the worker's workspace while the user is reading somewhere else.
@@ -135,6 +141,7 @@ export async function createWorkerWorktree(args: {
     observeSetupCompletion: true,
     createdWithAgent: args.agent,
     startupAgent: args.agent,
+    startupAgentEnv: ORCHESTRATION_WORKER_ENV,
     activate: false,
     lineage: {
       parentWorktree: requestedWorktree === 'new-child' ? coordinatorWorktree.id : undefined,

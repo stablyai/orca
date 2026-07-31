@@ -20520,6 +20520,7 @@ export class OrcaRuntimeService {
     observeSetupCompletion?: boolean
     createdWithAgent?: TuiAgent
     startupAgent?: TuiAgent
+    startupAgentEnv?: Record<string, string>
     startupPrompt?: string
     pendingFirstAgentMessageRename?: boolean
     automationProvenance?: AutomationWorkspaceProvenance
@@ -20558,7 +20559,14 @@ export class OrcaRuntimeService {
       !args.startup && !agentStartup && args.startupDraft
         ? await this.buildStartupForDraft(repo, args.startupDraft, requestedAgent)
         : null
-    const effectiveStartup = args.startup ?? agentStartup?.startup ?? draftStartup?.startup
+    const resolvedStartup = args.startup ?? agentStartup?.startup ?? draftStartup?.startup
+    const effectiveStartup =
+      resolvedStartup && args.startupAgentEnv
+        ? {
+            ...resolvedStartup,
+            env: { ...resolvedStartup.env, ...args.startupAgentEnv }
+          }
+        : resolvedStartup
     const effectiveStartupFollowup = agentStartup?.followup
     const effectiveCreatedWithAgent = args.startup
       ? args.createdWithAgent

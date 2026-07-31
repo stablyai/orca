@@ -5407,6 +5407,7 @@ describe('OrcaRuntimeService', () => {
         repoSelector: TEST_REPO_ID,
         name: 'agent-feature',
         startupAgent: 'codex',
+        startupAgentEnv: { ORCA_ORCH_ROLE: 'worker', ORCA_ORCH_DEPTH: '1' },
         startupPrompt: 'hi',
         activate: true
       })
@@ -5415,6 +5416,10 @@ describe('OrcaRuntimeService', () => {
         expect.objectContaining({
           cwd: '/remote/agent-feature',
           command: "codex '--dangerously-bypass-approvals-and-sandbox' 'hi'",
+          env: expect.objectContaining({
+            ORCA_ORCH_ROLE: 'worker',
+            ORCA_ORCH_DEPTH: '1'
+          }),
           worktreeId: result.worktree.id
         })
       )
