@@ -23,6 +23,8 @@ import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
+import { fetchCursorRateLimits } from './cursor-fetcher'
+import { readCursorAuthSession } from './cursor-auth'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
@@ -82,7 +84,8 @@ const MAX_ACTIVE_FAILURE_STREAK = 8
 const INDIVIDUALLY_REFRESHABLE_PROVIDERS: ReadonlySet<ActiveRateLimitProvider> = new Set([
   'claude',
   'codex',
-  'grok'
+  'grok',
+  'cursor'
 ])
 const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped
 // Why: usage-endpoint 429 windows can outlast the generic threshold (Retry-After ~1h); quota is informational, so a stale snapshot beats a bare "Limited".
@@ -102,6 +105,7 @@ type InternalRateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  cursor: ProviderRateLimits | null
 }
 
 function normalizePollingInterval(ms: number): number {
@@ -151,9 +155,11 @@ export class RateLimitService {
     kimi: null,
     antigravity: null,
     minimax: null,
-    grok: null
+    grok: null,
+    cursor: null
   }
   private grokAuthConfigured = readGrokAuthSession().status === 'ok'
+  private cursorAuthConfigured = readCursorAuthSession().status === 'ok'
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -166,6 +172,7 @@ export class RateLimitService {
     kimi: 0,
     minimax: 0,
     grok: 0,
+    cursor: 0,
     antigravity: 0
   }
   // Why: consecutive failures drive exponential backoff of the fast activation-retry lane; reset on any success/unavailable result.
@@ -177,6 +184,7 @@ export class RateLimitService {
     kimi: 0,
     minimax: 0,
     grok: 0,
+    cursor: 0,
     antigravity: 0
   }
   private mainWindow: BrowserWindow | null = null
@@ -186,6 +194,7 @@ export class RateLimitService {
   private codexOnlyFetchQueued = false
   private claudeOnlyFetchQueued = false
   private grokOnlyFetchQueued = false
+  private cursorOnlyFetchQueued = false
   private activeFetchAbortControllers = new Set<AbortController>()
   private fetchIdleResolvers: (() => void)[] = []
   private codexFetchGeneration = 0
@@ -333,6 +342,7 @@ export class RateLimitService {
       // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
       grokAuthConfigured: this.grokAuthConfigured,
+      cursorAuthConfigured: this.cursorAuthConfigured,
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
       inactiveClaudeAccounts: this.buildInactiveArray(
@@ -361,6 +371,11 @@ export class RateLimitService {
 
   async refreshGrok(): Promise<RateLimitState> {
     await this.fetchGrokOnly({ force: true })
+    return this.getState()
+  }
+
+  async refreshCursor(): Promise<RateLimitState> {
+    await this.fetchCursorOnly({ force: true })
     return this.getState()
   }
 
@@ -792,6 +807,7 @@ export class RateLimitService {
       kimi: this.state.kimi,
       minimax: this.state.minimax,
       grok: this.state.grok,
+      cursor: this.state.cursor,
       antigravity: this.state.antigravity
     }
     return Object.entries(byProvider).map(([provider, limits]) => ({
@@ -885,6 +901,9 @@ export class RateLimitService {
     if (plan.providers.includes('grok')) {
       await this.fetchGrokOnly()
     }
+    if (plan.providers.includes('cursor')) {
+      await this.fetchCursorOnly()
+    }
   }
 
   private async refreshIfWindowActive(): Promise<void> {
@@ -950,6 +969,15 @@ export class RateLimitService {
             break
           }
         }
+        if (this.cursorOnlyFetchQueued) {
+          this.cursorOnlyFetchQueued = false
+          const cursorSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
+            this.runFetchCursorOnlyCycle(fetchSignal)
+          )
+          if (cursorSignal.aborted) {
+            break
+          }
+        }
       }
     } finally {
       this.isFetching = false
@@ -1006,6 +1034,15 @@ export class RateLimitService {
             this.runFetchGrokOnlyCycle(fetchSignal)
           )
           if (grokSignal.aborted) {
+            break
+          }
+        }
+        if (this.cursorOnlyFetchQueued) {
+          this.cursorOnlyFetchQueued = false
+          const cursorSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
+            this.runFetchCursorOnlyCycle(fetchSignal)
+          )
+          if (cursorSignal.aborted) {
             break
           }
         }
@@ -1130,6 +1167,83 @@ export class RateLimitService {
             break
           }
         }
+        if (this.cursorOnlyFetchQueued) {
+          this.cursorOnlyFetchQueued = false
+          const cursorSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
+            this.runFetchCursorOnlyCycle(fetchSignal)
+          )
+          if (cursorSignal.aborted) {
+            break
+          }
+        }
+      }
+    } finally {
+      this.isFetching = false
+      this.resolveFetchIdleWaiters()
+    }
+  }
+
+  private async fetchCursorOnly(options?: { force?: boolean }): Promise<void> {
+    if (this.isFetching) {
+      if (options?.force) {
+        this.cursorOnlyFetchQueued = true
+        return this.waitForFetchIdle()
+      }
+      return
+    }
+    this.isFetching = true
+
+    try {
+      let shouldContinue = true
+      while (shouldContinue) {
+        const signal = await this.runWithFetchAbortSignal((fetchSignal) =>
+          this.runFetchCursorOnlyCycle(fetchSignal)
+        )
+        shouldContinue = false
+        if (signal.aborted) {
+          break
+        }
+        if (this.fullFetchQueued) {
+          this.fullFetchQueued = false
+          const fullSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
+            this.runFetchAllCycle(fetchSignal, { force: true })
+          )
+          if (fullSignal.aborted) {
+            break
+          }
+          continue
+        }
+        if (this.cursorOnlyFetchQueued) {
+          this.cursorOnlyFetchQueued = false
+          shouldContinue = true
+        }
+        if (this.codexOnlyFetchQueued) {
+          this.codexOnlyFetchQueued = false
+          const codexSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
+            this.runFetchCodexOnlyCycle(fetchSignal)
+          )
+          if (codexSignal.aborted) {
+            break
+          }
+        }
+        if (this.claudeOnlyFetchQueued) {
+          this.claudeOnlyFetchQueued = false
+          const claudeSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
+            this.runFetchClaudeOnlyCycle(fetchSignal, { force: true })
+          )
+          if (claudeSignal.aborted) {
+            break
+          }
+        }
+        if (this.grokOnlyFetchQueued) {
+          this.grokOnlyFetchQueued = false
+          const grokSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
+            this.runFetchGrokOnlyCycle(fetchSignal)
+          )
+          if (grokSignal.aborted) {
+            break
+          }
+        }
       }
     } finally {
       this.isFetching = false
@@ -1143,7 +1257,8 @@ export class RateLimitService {
       !this.fullFetchQueued &&
       !this.codexOnlyFetchQueued &&
       !this.claudeOnlyFetchQueued &&
-      !this.grokOnlyFetchQueued
+      !this.grokOnlyFetchQueued &&
+      !this.cursorOnlyFetchQueued
     ) {
       return Promise.resolve()
     }
@@ -1159,7 +1274,8 @@ export class RateLimitService {
       this.fullFetchQueued ||
       this.codexOnlyFetchQueued ||
       this.claudeOnlyFetchQueued ||
-      this.grokOnlyFetchQueued
+      this.grokOnlyFetchQueued ||
+      this.cursorOnlyFetchQueued
     ) {
       return
     }
@@ -1204,6 +1320,7 @@ export class RateLimitService {
     this.codexOnlyFetchQueued = false
     this.claudeOnlyFetchQueued = false
     this.grokOnlyFetchQueued = false
+    this.cursorOnlyFetchQueued = false
   }
 
   private resolveAndClearFetchIdleWaiters(): void {
@@ -1495,6 +1612,7 @@ export class RateLimitService {
       | 'kimi'
       | 'minimax'
       | 'grok'
+      | 'cursor'
       | 'antigravity'
   ): ProviderRateLimits {
     if (!current) {
@@ -1546,6 +1664,8 @@ export class RateLimitService {
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
+    const cursorAuthReadResult = readCursorAuthSession()
+    this.cursorAuthConfigured = cursorAuthReadResult.status === 'ok'
 
     // Discard stale data on config change — it belongs to a different session/workspace.
     const currentConfigHash = `${cookie}|${workspaceIdOverride}`
@@ -1578,7 +1698,8 @@ export class RateLimitService {
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
-      grok: this.withFetchingStatus(previousState.grok, 'grok')
+      grok: this.withFetchingStatus(previousState.grok, 'grok'),
+      cursor: this.withFetchingStatus(previousState.cursor, 'cursor')
     })
 
     const missingWslCodexHome = codexHomePath
@@ -1588,6 +1709,10 @@ export class RateLimitService {
       signal,
       authReadResult: grokAuthReadResult
     }).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+    const cursorResultPromise = fetchCursorRateLimits(signal).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
@@ -1799,6 +1924,28 @@ export class RateLimitService {
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)
     })
+
+    const cursorResult = await cursorResultPromise
+    if (signal.aborted) {
+      return
+    }
+    const cursor =
+      cursorResult.status === 'fulfilled'
+        ? cursorResult.value
+        : ({
+            provider: 'cursor',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error:
+              cursorResult.reason instanceof Error ? cursorResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+    this.trackActiveFailureStreak('cursor', cursor)
+    this.updateState({
+      ...this.state,
+      cursor: this.applyStalePolicy(cursor, previousState.cursor)
+    })
   }
 
   private async runFetchCodexOnlyCycle(signal: AbortSignal): Promise<void> {
@@ -1960,6 +2107,41 @@ export class RateLimitService {
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)
+    })
+  }
+
+  private async runFetchCursorOnlyCycle(signal: AbortSignal): Promise<void> {
+    if (signal.aborted) {
+      return
+    }
+    const previousState = this.state
+    const cursorAuthReadResult = readCursorAuthSession()
+    this.cursorAuthConfigured = cursorAuthReadResult.status === 'ok'
+
+    this.updateState({
+      ...previousState,
+      cursor: this.withFetchingStatus(previousState.cursor, 'cursor')
+    })
+
+    const cursor = await fetchCursorRateLimits(signal).catch(
+      (err): ProviderRateLimits => ({
+        provider: 'cursor',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: err instanceof Error ? err.message : 'Unknown error',
+        status: 'error'
+      })
+    )
+
+    if (signal.aborted) {
+      return
+    }
+
+    this.trackActiveFailureStreak('cursor', cursor)
+    this.updateState({
+      ...this.state,
+      cursor: this.applyStalePolicy(cursor, previousState.cursor)
     })
   }
 

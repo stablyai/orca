@@ -436,6 +436,7 @@ import type {
 import type {
   CodexRateLimitResetResult,
   GrokAccountStatus,
+  CursorAccountStatus,
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../shared/rate-limit-types'
@@ -3378,6 +3379,7 @@ export type PreloadApi = {
     fetchInactiveCodexAccounts: () => Promise<void>
     refreshMiniMax: () => Promise<RateLimitState>
     refreshGrok: () => Promise<RateLimitState>
+    refreshCursor: () => Promise<RateLimitState>
     onUpdate: (callback: (state: RateLimitState) => void) => () => void
   }
   minimaxCredentials: {
@@ -3387,6 +3389,9 @@ export type PreloadApi = {
   }
   grokAccounts: {
     getStatus: () => Promise<GrokAccountStatus>
+  }
+  cursorAccounts: {
+    getStatus: () => Promise<CursorAccountStatus>
   }
   ssh: {
     listTargets: () => Promise<SshTarget[]>

@@ -3240,7 +3240,8 @@
             "antigravityUsage": "Antigravity Usage",
             "antigravityUsageDetails": "Open Antigravity usage details",
             "grokUsageAria": "Open Grok usage details",
-            "grokUsageMenu": "Grok Usage"
+            "grokUsageMenu": "Grok Usage",
+            "cursorUsageMenu": "Cursor Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -3653,7 +3654,8 @@
           "908c470587": "codex",
           "eb6a066185": "claude",
           "eee19cfade": "overview",
-          "grokUsageTab": "Grok"
+          "grokUsageTab": "Grok",
+          "cursorUsageTab": "Cursor"
         },
         "UsageOverviewPane": {
           "22ed1b7669": "sessions",
@@ -3774,6 +3776,17 @@
           "e5a6b7c8d9": "Weekly credits used",
           "f6b7c8d9e0": "Billing period reset",
           "a7b8c9d0e1": "Grok account settings"
+        },
+        "CursorUsagePane": {
+          "c1d2e3f4a5": "Cursor usage",
+          "b6c7d8e9f0": "Plan usage from your Cursor IDE sign-in (globalStorage state database). Same source as the status bar.",
+          "c7d8e9f0a1": "Set up in Accounts",
+          "d8e9f0a1b2": " • {{value0}}",
+          "e9f0a1b2c3": "Refresh Cursor usage",
+          "f0a1b2c3d4": "Refresh",
+          "a1b2c3d4e5": "Plan usage",
+          "b2c3d4e5f6": "Billing period reset",
+          "c3d4e5f6a7": "Cursor account settings"
         }
       },
       "sparse": {
@@ -9578,6 +9591,21 @@
           "75e396bf42": "Included monthly usage for Grok unified-billing accounts.",
           "b36fa2c908": "Signed in. Orca reads the Grok CLI session stored on disk.",
           "f08c41de73": "Session expired — run grok on the computer running Orca and wait for it to start. If prompted, complete sign-in, then click Refresh usage. No chat message is needed."
+        },
+        "CursorAccountsSection": {
+          "a1b2c3d4e5": "Cursor",
+          "f6e5d4c3b2": "Shows plan usage from your Cursor IDE sign-in (globalStorage state database).",
+          "0d8e77bc40": "Cursor docs",
+          "ad47a33f72": "Loading…",
+          "b2c3d4e5f6": "Signed in",
+          "b36fa2c908": "Signed in. Orca reads the Cursor IDE session stored on disk.",
+          "f08c41de73": "Session expired — sign in to Cursor on the computer running Orca, then click Refresh usage.",
+          "e5f6a7b8c9": "Not signed in to Cursor",
+          "f6a7b8c9d0": "Open Cursor and sign in, then click Refresh usage here.",
+          "3325d996cb": "Refresh usage",
+          "a8f3e2c1b4": "Plan usage",
+          "b7e2d9f0a3": "Same plan usage % as the Cursor dashboard.",
+          "c6d1a8f4e2": "Resets {{when}}"
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",
