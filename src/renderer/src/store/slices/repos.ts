@@ -1014,6 +1014,13 @@ function getFolderWorkspaceHostIdentity(
   return JSON.stringify([getFolderWorkspaceHostId(workspace, projectGroups), workspace.id])
 }
 
+function getFolderWorkspaceUpdateIdentity(
+  hostId: ExecutionHostId,
+  folderWorkspaceId: string
+): string {
+  return `${hostId}\0${folderWorkspaceId}`
+}
+
 function mergeFetchedFolderWorkspacesForHost({
   previous,
   fetched,
@@ -1056,18 +1063,26 @@ type FetchedFolderWorkspaceCatalog = {
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 }
 
-function getFolderWorkspaceCatalogReplacementIds(
+function getFolderWorkspaceCatalogReplacementIdentities(
   catalog: FetchedFolderWorkspaceCatalog,
   currentFolderWorkspaces: readonly FolderWorkspace[],
   projectGroups: readonly ProjectGroup[]
 ): Set<string> {
-  const replacedIds = new Set(catalog.folderWorkspaces.map((workspace) => workspace.id))
+  const replacedIdentities = new Set(
+    catalog.folderWorkspaces.map((workspace) =>
+      getFolderWorkspaceUpdateIdentity(
+        getFolderWorkspaceHostId(workspace, projectGroups),
+        workspace.id
+      )
+    )
+  )
   for (const workspace of currentFolderWorkspaces) {
-    if (catalogOwnsHost(catalog.hostId, getFolderWorkspaceHostId(workspace, projectGroups))) {
-      replacedIds.add(workspace.id)
+    const hostId = getFolderWorkspaceHostId(workspace, projectGroups)
+    if (catalogOwnsHost(catalog.hostId, hostId)) {
+      replacedIdentities.add(getFolderWorkspaceUpdateIdentity(hostId, workspace.id))
     }
   }
-  return replacedIds
+  return replacedIdentities
 }
 
 async function fetchRepoCatalogForTarget(
@@ -2220,7 +2235,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           return current
         }
         folderWorkspaceUpdates.recordCatalogReplacement(
-          getFolderWorkspaceCatalogReplacementIds(
+          getFolderWorkspaceCatalogReplacementIdentities(
             catalog,
             current.folderWorkspaces,
             current.projectGroups
@@ -2253,7 +2268,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           return current
         }
         folderWorkspaceUpdates.recordCatalogReplacement(
-          getFolderWorkspaceCatalogReplacementIds(
+          getFolderWorkspaceCatalogReplacementIdentities(
             catalog,
             current.folderWorkspaces,
             current.projectGroups
@@ -2555,7 +2570,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     // Why: owner-scoped mutations must not follow whichever runtime happens to be focused.
     const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
     const ownerHostId = executionHostId ?? getRuntimeTargetHostId(target)
-    const updateIdentity = `${ownerHostId}\0${folderWorkspaceId}`
+    const updateIdentity = getFolderWorkspaceUpdateIdentity(ownerHostId, folderWorkspaceId)
     // Why: same gate as folderWorkspace.create — an older paired runtime would drop the Jira link silently.
     if (
       target.kind === 'environment' &&
