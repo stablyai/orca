@@ -31,12 +31,19 @@ const CHANNEL_DESCRIPTIONS: Record<ReleaseChannel, string> = {
 }
 
 function formatBuildLabel(build: ReleaseBuild): string {
+  // Why the release's own title wins: the hourly workflow composes it
+  // (`1.4.163 • 01 • 07-31 13:54 • e698241`), so this row is the same string the
+  // GitHub releases list shows — one thing to search for in either place, rather
+  // than two renderings of the same build that have to be matched up by eye.
+  if (build.name) {
+    return build.name
+  }
   const stamp = parseHourlyVersionStamp(build.version)
   if (!stamp) {
     return build.version
   }
-  // Why: an hourly's semver tail is an opaque timestamp; show it as local time so
-  // "which build was that" is answerable at a glance.
+  // Fallback for hourlies cut before that naming; retention ages them out in ~3
+  // days. An hourly's semver tail is an opaque timestamp, so show it as a date.
   return `${build.version.split('-')[0]} · ${stamp.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
