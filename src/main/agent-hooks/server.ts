@@ -77,16 +77,14 @@ import {
 } from '../../shared/agent-session-resume'
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
 import {
-  clearClaudePendingToolUses,
-  forgetClaudeClaimableToolUses,
-  forgetClaudePendingToolUses,
-  forgetClaudePendingToolUsesWhere,
-  isClaudeToolUseUnaccountedFor,
-  moveClaudePendingToolUses,
-  rememberClaudePendingToolUse,
-  retireClaudeCompletedToolUse,
-  takeClaudePendingToolUseId,
-  type ClaudePendingToolUseStore
+  clearClaudeAnnouncedToolUses,
+  forgetClaudeAnnouncedToolUses,
+  forgetClaudeAnnouncedToolUsesWhere,
+  moveClaudeAnnouncedToolUses,
+  rememberClaudeAnnouncedToolUse,
+  resolveClaudeAnnouncedToolUseId,
+  retireClaudeAnnouncedToolUse,
+  type ClaudeAnnouncedToolUseStore
 } from './claude-permission-tool-use-evidence'
 
 export type { AgentHookSource }
@@ -439,8 +437,7 @@ function paneCacheKeyMatchesTab(key: string, tabId: string): boolean {
 
 function shouldKeepClaudePermissionVisible(
   previous: EnrichedAgentHookEventPayload | undefined,
-  next: AgentHookEventPayload,
-  nextToolUseIsUnaccountedFor: boolean
+  next: AgentHookEventPayload
 ): boolean {
   if (
     previous?.payload.agentType !== 'claude' ||
@@ -454,7 +451,7 @@ function shouldKeepClaudePermissionVisible(
   if (next.hasExplicitPrompt === true) {
     return false
   }
-  if (isClaudePermissionResumingApprovedTool(previous, next, nextToolUseIsUnaccountedFor)) {
+  if (isClaudePermissionResumingApprovedTool(previous, next)) {
     return false
   }
   // Why: only real permission requests stay sticky; newer Claude reports AskUserQuestion as a PermissionRequest, so tool name (not event) decides.
@@ -466,8 +463,7 @@ function shouldKeepClaudePermissionVisible(
 
 function isClaudePermissionResumingApprovedTool(
   previous: EnrichedAgentHookEventPayload,
-  next: AgentHookEventPayload,
-  nextToolUseIsUnaccountedFor: boolean
+  next: AgentHookEventPayload
 ): boolean {
   const previousToolUseId = previous.toolUseId?.trim() || undefined
   const nextToolUseId = next.toolUseId?.trim() || undefined
@@ -500,18 +496,12 @@ function isClaudePermissionResumingApprovedTool(
     previous.payload.toolInput === undefined &&
     next.payload.toolInput === undefined
 
-  // Why: valve for a permission that could never attach an id (lost PreToolUse POST); only a call unseen at
-  // prompt time qualifies, since a retry, replay, sibling or earlier turn would clear an open dialog.
-  const bothUnknownToolInput =
-    previous.payload.toolInput === undefined && next.payload.toolInput === undefined
+  // Why: a failing call still answers its prompt, but its payload carries no tool name, so only the id
+  // can identify it.
   if (
-    previousToolUseId === undefined &&
-    next.hookEventName === 'PostToolUse' &&
-    nextToolUseIsUnaccountedFor &&
-    sameToolName &&
-    (sameKnownToolInput || bothUnknownToolInput) &&
-    previousAgentId === nextAgentId &&
-    previousAgentType === nextAgentType
+    next.hookEventName === 'PostToolUseFailure' &&
+    previousToolUseId !== undefined &&
+    previousToolUseId === nextToolUseId
   ) {
     return true
   }
@@ -554,56 +544,75 @@ function isClaudePermissionMissingToolUseId(next: AgentHookEventPayload): boolea
   )
 }
 
-function isSameClaudePermissionRequest(
-  previous: EnrichedAgentHookEventPayload | undefined,
-  next: AgentHookEventPayload
-): boolean {
-  return (
-    previous?.payload.agentType === 'claude' &&
-    previous.payload.state === 'waiting' &&
-    previous.hookEventName === 'PermissionRequest' &&
-    previous.payload.toolName === next.payload.toolName &&
-    previous.payload.toolInput === next.payload.toolInput &&
-    previous.toolAgentId === next.toolAgentId &&
-    previous.toolAgentType === next.toolAgentType
-  )
+function claudeToolUseIdentityOf(payload: AgentHookEventPayload): {
+  toolName?: string
+  toolInput?: string
+  toolAgentId?: string
+  toolAgentType?: string
+} {
+  return {
+    toolName: payload.payload.toolName,
+    toolInput: payload.payload.toolInput,
+    toolAgentId: payload.toolAgentId,
+    toolAgentType: payload.toolAgentType
+  }
 }
 
 function attachClaudePermissionToolUseId(
-  pendingToolUses: ClaudePendingToolUseStore,
-  previous: EnrichedAgentHookEventPayload | undefined,
+  announcedToolUses: ClaudeAnnouncedToolUseStore,
   next: AgentHookEventPayload,
   now: number
 ): AgentHookEventPayload {
-  if (!isClaudePermissionMissingToolUseId(next)) {
+  // Why: a replayed prompt is cache continuity, not a live dialog; it must not adopt a live call's id.
+  if (!isClaudePermissionMissingToolUseId(next) || next.isReplay === true) {
     return next
   }
-  // Why: a re-delivered prompt reuses the id its first delivery resolved; claiming again would take the
-  // batch sibling's id and leave that call unprovable.
-  const alreadyResolvedToolUseId = isSameClaudePermissionRequest(previous, next)
-    ? previous?.toolUseId
-    : undefined
-  // Why: claim from every call the pane announced — a parallel batch sits between PreToolUse and its prompt.
-  const inheritedToolUseId =
-    alreadyResolvedToolUseId ??
-    takeClaudePendingToolUseId(
-      pendingToolUses,
-      next.paneKey,
-      {
-        toolName: next.payload.toolName,
-        toolInput: next.payload.toolInput,
-        toolAgentId: next.toolAgentId,
-        toolAgentType: next.toolAgentType
-      },
-      now
-    )
-  if (inheritedToolUseId === undefined) {
+  // Why: resolve against every call the pane announced, not just the previous event — the prompt's own
+  // announcement can arrive late, or a sibling of a parallel batch can sit in between.
+  const resolvedToolUseId = resolveClaudeAnnouncedToolUseId(
+    announcedToolUses,
+    next.paneKey,
+    claudeToolUseIdentityOf(next),
+    now
+  )
+  if (resolvedToolUseId === undefined) {
     return next
   }
   return {
     ...next,
-    toolUseId: inheritedToolUseId
+    toolUseId: resolvedToolUseId
   }
+}
+
+/** The id a still-open prompt should adopt from an announcement that arrived after it. Undefined unless the
+ *  announcement is unambiguously the prompted call — anything less would answer a dialog nobody answered. */
+function lateResolvedClaudePermissionToolUseId(
+  announcedToolUses: ClaudeAnnouncedToolUseStore,
+  waiting: EnrichedAgentHookEventPayload,
+  announcement: AgentHookEventPayload,
+  now: number
+): string | undefined {
+  if (
+    waiting.payload.agentType !== 'claude' ||
+    waiting.payload.state !== 'waiting' ||
+    waiting.hookEventName !== 'PermissionRequest' ||
+    waiting.toolUseId !== undefined ||
+    !isClaudeToolUseAnnouncement(announcement) ||
+    announcement.isReplay === true ||
+    waiting.payload.toolName !== announcement.payload.toolName ||
+    waiting.payload.toolInput !== announcement.payload.toolInput ||
+    waiting.toolAgentId !== announcement.toolAgentId ||
+    waiting.toolAgentType !== announcement.toolAgentType
+  ) {
+    return undefined
+  }
+  const resolved = resolveClaudeAnnouncedToolUseId(
+    announcedToolUses,
+    waiting.paneKey,
+    claudeToolUseIdentityOf(announcement),
+    now
+  )
+  return resolved === announcement.toolUseId?.trim() ? resolved : undefined
 }
 
 export class AgentHookServer {
@@ -650,7 +659,7 @@ export class AgentHookServer {
   // Why: skip disk writes when the JSON exactly matches the last write; guards against re-firing trailing timers when nothing changed.
   private lastWrittenJson: string | null = null
   // Why: announced ids are the only proof a permission's own call resumed; in-memory, live turns only.
-  private claudePendingToolUsesByPaneKey: ClaudePendingToolUseStore = new Map()
+  private claudeAnnouncedToolUsesByPaneKey: ClaudeAnnouncedToolUseStore = new Map()
 
   setListener(listener: ((payload: EnrichedAgentHookEventPayload) => void) | null): void {
     this.onAgentStatus = listener
@@ -1089,8 +1098,8 @@ export class AgentHookServer {
     }
   }
 
-  /** Track announcements and completions per pane; a turn boundary drops claims but keeps the seen ids. */
-  private updateClaudeToolUseLedger(payload: AgentHookEventPayload, now: number): void {
+  /** Track the calls a pane announced; a completion or a turn boundary makes them stop being resolvable. */
+  private updateClaudeAnnouncedToolUses(payload: AgentHookEventPayload, now: number): void {
     if (payload.payload.agentType !== 'claude') {
       return
     }
@@ -1098,14 +1107,15 @@ export class AgentHookServer {
     if (payload.isReplay === true) {
       return
     }
-    // Why: a turn boundary makes older calls unclaimable; the seen-id history stays so retries read as repeats.
+    // Why: a turn boundary makes the previous turn's calls irrelevant; keeping them would let a finished
+    // call be resolved as the answer to a later prompt.
     if (payload.hookEventName === 'UserPromptSubmit' || payload.payload.state === 'done') {
-      forgetClaudeClaimableToolUses(this.claudePendingToolUsesByPaneKey, payload.paneKey)
+      forgetClaudeAnnouncedToolUses(this.claudeAnnouncedToolUsesByPaneKey, payload.paneKey)
       return
     }
     if (isClaudeToolUseAnnouncement(payload)) {
-      rememberClaudePendingToolUse(
-        this.claudePendingToolUsesByPaneKey,
+      rememberClaudeAnnouncedToolUse(
+        this.claudeAnnouncedToolUsesByPaneKey,
         payload.paneKey,
         {
           toolUseId: payload.toolUseId,
@@ -1119,11 +1129,10 @@ export class AgentHookServer {
       return
     }
     if (isClaudeToolUseCompletion(payload)) {
-      retireClaudeCompletedToolUse(
-        this.claudePendingToolUsesByPaneKey,
+      retireClaudeAnnouncedToolUse(
+        this.claudeAnnouncedToolUsesByPaneKey,
         payload.paneKey,
-        payload.toolUseId,
-        now
+        payload.toolUseId
       )
     }
   }
@@ -1218,26 +1227,29 @@ export class AgentHookServer {
               agentType: identity.agentType
             }
           }
-    // Why: judge the completion against what the pane knew at prompt time, not the entry it is about to add.
-    const nextToolUseIsUnaccountedFor = isClaudeToolUseUnaccountedFor(
-      this.claudePendingToolUsesByPaneKey,
-      identityResolvedPayload.paneKey,
-      identityResolvedPayload.toolUseId,
-      previous?.receivedAt ?? now
-    )
     // Why: update before suppression — a sticky permission drops the PreToolUse events the next prompt needs.
-    this.updateClaudeToolUseLedger(identityResolvedPayload, now)
+    this.updateClaudeAnnouncedToolUses(identityResolvedPayload, now)
     const effectivePayload = attachClaudePermissionToolUseId(
-      this.claudePendingToolUsesByPaneKey,
-      previous,
+      this.claudeAnnouncedToolUsesByPaneKey,
       identityResolvedPayload,
       now
     )
-    if (
-      previous &&
-      shouldKeepClaudePermissionVisible(previous, effectivePayload, nextToolUseIsUnaccountedFor)
-    ) {
-      return previous
+    if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
+      // Why: the prompt's own announcement can arrive while the dialog is already on screen; adopting its id
+      // is what lets the approval that follows be recognised, and the row stays waiting either way.
+      const lateToolUseId = lateResolvedClaudePermissionToolUseId(
+        this.claudeAnnouncedToolUsesByPaneKey,
+        previous,
+        effectivePayload,
+        now
+      )
+      if (lateToolUseId === undefined) {
+        return previous
+      }
+      const withToolUseId: EnrichedAgentHookEventPayload = { ...previous, toolUseId: lateToolUseId }
+      this.state.lastStatusByPaneKey.set(withToolUseId.paneKey, withToolUseId)
+      this.scheduleStatusPersist()
+      return withToolUseId
     }
     // Why: some TUIs emit a delayed tool/working hook after Ctrl+C stopped the turn; don't let it resurrect the row.
     if (
@@ -1600,7 +1612,11 @@ export class AgentHookServer {
       this.promptSentDedupeByPaneKey.delete(previousOwnerPaneKey)
       this.promptSentDedupeByPaneKey.set(toPaneKey, promptDedupe)
     }
-    moveClaudePendingToolUses(this.claudePendingToolUsesByPaneKey, previousOwnerPaneKey, toPaneKey)
+    moveClaudeAnnouncedToolUses(
+      this.claudeAnnouncedToolUsesByPaneKey,
+      previousOwnerPaneKey,
+      toPaneKey
+    )
     this.clearAssistantMessageRetry(previousOwnerPaneKey)
     this.clearCodexSubagentPoll(previousOwnerPaneKey)
     // Why: the live process keeps posting the physical source key after detach; persist a chain-safe mapping to the current owner.
@@ -2095,7 +2111,7 @@ export class AgentHookServer {
     this.closedAgentStatusPaneKeys.clear()
     this.connectionTimestampWatermarkById.clear()
     this.legacyPaneKeyAliases.clear()
-    clearClaudePendingToolUses(this.claudePendingToolUsesByPaneKey)
+    clearClaudeAnnouncedToolUses(this.claudeAnnouncedToolUsesByPaneKey)
     clearAllListenerCaches(this.state)
     this.notifyStatusChangeListeners()
   }
@@ -2173,7 +2189,7 @@ export class AgentHookServer {
     }
     this.clearAssistantMessageRetry(resolvedPaneKey)
     this.clearCodexSubagentPoll(resolvedPaneKey)
-    forgetClaudePendingToolUses(this.claudePendingToolUsesByPaneKey, resolvedPaneKey)
+    forgetClaudeAnnouncedToolUses(this.claudeAnnouncedToolUsesByPaneKey, resolvedPaneKey)
     this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
     this.currentAuthorityObservations.delete(resolvedPaneKey)
     if (existing.payload.state === 'done') {
@@ -2247,7 +2263,7 @@ export class AgentHookServer {
       }
       this.clearAssistantMessageRetry(paneKey)
       this.clearCodexSubagentPoll(paneKey)
-      forgetClaudePendingToolUses(this.claudePendingToolUsesByPaneKey, paneKey)
+      forgetClaudeAnnouncedToolUses(this.claudeAnnouncedToolUsesByPaneKey, paneKey)
       clearPaneCacheState(this.state, paneKey)
       this.runtimeObservedStatusPaneKeys.delete(paneKey)
       this.currentAuthorityObservations.delete(paneKey)
@@ -2285,7 +2301,7 @@ export class AgentHookServer {
       }
     }
     // Why: pane keys survive a PTY restart, so the next agent process must not inherit announced ids.
-    forgetClaudePendingToolUsesWhere(this.claudePendingToolUsesByPaneKey, (key) =>
+    forgetClaudeAnnouncedToolUsesWhere(this.claudeAnnouncedToolUsesByPaneKey, (key) =>
       paneKeys.has(key)
     )
     const authorityChanged = this.revokeHydratedAuthorityForPaneKeys(paneKeys)
@@ -2721,8 +2737,12 @@ export class AgentHookServer {
     this.promptSentDedupeByPaneKey.clear()
   }
 
-  _resetClaudePendingToolUsesForTests(): void {
-    clearClaudePendingToolUses(this.claudePendingToolUsesByPaneKey)
+  _resetClaudeAnnouncedToolUsesForTests(): void {
+    clearClaudeAnnouncedToolUses(this.claudeAnnouncedToolUsesByPaneKey)
+  }
+
+  _getClaudeAnnouncedToolUsesForTests(): ClaudeAnnouncedToolUseStore {
+    return this.claudeAnnouncedToolUsesByPaneKey
   }
 
   _resetConnectionTimestampWatermarksForTests(): void {
@@ -2746,6 +2766,6 @@ export const _internals = {
     clearAllListenerCaches(agentHookServer._getStateForTests())
     agentHookServer._resetPromptSentDedupeForTests()
     agentHookServer._resetConnectionTimestampWatermarksForTests()
-    agentHookServer._resetClaudePendingToolUsesForTests()
+    agentHookServer._resetClaudeAnnouncedToolUsesForTests()
   }
 }
