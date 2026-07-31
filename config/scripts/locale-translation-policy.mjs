@@ -548,6 +548,11 @@ export function repairCatalog(enCatalog, localeCatalog, locale) {
 
   for (const leaf of leaves) {
     const current = leaf.key.split('.').reduce((cursor, part) => cursor?.[part], localeCatalog)
+    // Why: en.json carries keys the locale catalog has not been bootstrapped with yet; repair only
+    // rewrites values that already exist, so skip instead of crashing on undefined.
+    if (typeof current !== 'string') {
+      continue
+    }
     const next = repairTranslatedValue({
       key: leaf.key,
       enValue: leaf.value,
