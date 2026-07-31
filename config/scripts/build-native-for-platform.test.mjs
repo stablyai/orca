@@ -78,6 +78,14 @@ describe('build:native pnpm invocation', () => {
         shell: true
       })
     })
+
+    it('doubles an embedded quote, the cmd.exe escape', () => {
+      expect(resolvePnpmInvocation('build:computer-macos', 'C:\\a"b\\pnpm.cmd', 'win32')).toEqual({
+        command: '"C:\\a""b\\pnpm.cmd"',
+        args: ['run', 'build:computer-macos'],
+        shell: true
+      })
+    })
   })
 })
 
@@ -89,9 +97,12 @@ describe('build:native entry guard', () => {
     })
   })
 
-  it('rejects a missing argv[1] and an unrelated entry path', () => {
+  it('rejects anything that is not this module, including a path that no longer exists', () => {
     expect(isEntryPoint(undefined, sourceScriptPath)).toBe(false)
     expect(isEntryPoint(process.execPath, sourceScriptPath)).toBe(false)
+    expect(
+      isEntryPoint(join(tmpdir(), 'orca-entry-that-never-existed.mjs'), sourceScriptPath)
+    ).toBe(false)
   })
 
   itLinux('runs the build flow when spawned through a symlinked path', () => {

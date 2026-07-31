@@ -24,13 +24,25 @@ export function resolvePnpmInvocation(scriptName, npmExecPath, platform = proces
 function withWindowsShell(command, args, platform) {
   const needsShell = platform === 'win32' && WINDOWS_SHELL_ENTRY_PATTERN.test(command)
 
-  return { command: needsShell ? `"${command}"` : command, args, shell: needsShell }
+  return {
+    command: needsShell ? `"${command.replaceAll('"', '""')}"` : command,
+    args,
+    shell: needsShell
+  }
 }
 
 // Why: argv[1] keeps the symlinked path that import.meta.filename resolves away, so comparing
 // them raw would skip the whole build in silence behind a symlinked checkout.
 export function isEntryPoint(entryPath, moduleFilename) {
-  return Boolean(entryPath) && realpathSync(entryPath) === realpathSync(moduleFilename)
+  if (!entryPath) {
+    return false
+  }
+  try {
+    return realpathSync(entryPath) === realpathSync(moduleFilename)
+  } catch {
+    // Why: a path that cannot be resolved is not this module.
+    return false
+  }
 }
 
 function runOrExit(command, args, options) {
