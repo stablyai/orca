@@ -326,7 +326,18 @@ export async function resolveLocalGitUsernameDetailed(
   }
   if (await localRepoHasEffectiveGitHubRemote(repoPath)) {
     const outcome = await getGhLoginOutcome()
-    return { username: outcome.login, authoritative: !outcome.timedOut }
+    if (outcome.login || outcome.timedOut) {
+      return { username: outcome.login, authoritative: !outcome.timedOut }
+    }
+  }
+  // Why: branch-prefix "Git Username" was unreachable when only `user.name` was
+  // set (common when github.user / gh login are absent). Accept branch-safe
+  // tokens only — free-form author names with spaces stay out of branch names
+  // (issue #11590). git config --get already walks local → global → system.
+  const authorName = await readGitStdout(repoPath, ['config', '--get', 'user.name'])
+  const fromAuthor = normalizeConfiguredLogin(authorName)
+  if (fromAuthor) {
+    return { username: fromAuthor, authoritative: true }
   }
   return { username: '', authoritative: true }
 }

@@ -713,7 +713,11 @@ function Settings(): React.JSX.Element {
     applyDocumentTheme(theme)
   }, [])
 
-  const displayedGitUsername = repos[0]?.gitUsername ?? ''
+  // Why: repos[0] alone left the Git Username branch-prefix blank when only a
+  // later project had been enriched (issue #11590). Prefer the first resolved
+  // non-empty username across projects so Settings reflects any known identity.
+  const displayedGitUsername =
+    repos.map((repo) => repo.gitUsername?.trim() ?? '').find((name) => name.length > 0) ?? ''
   const baseNavSections = useSettingsNavigationMetadata()
   const { installed: orchestrationSkillInstalled, loading: orchestrationSkillLoading } =
     orchestrationSkill

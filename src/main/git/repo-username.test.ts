@@ -166,13 +166,32 @@ describe('resolveLocalGitUsername', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
-  it('does not derive GitHub username prefixes from non-GitHub remotes', async () => {
+  it('does not derive GitHub username prefixes from free-form author names on non-GitHub remotes', async () => {
     originRemoteUrl = 'https://gitlab.com/stablyai/orca.git'
     gitConfig['user.email'] = 'demo@example.com'
     gitConfig['user.name'] = 'Demo User'
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'gh-demo\n', stderr: '' })
 
+    // Spaces make "Demo User" branch-unsafe; free-form author identity stays out of prefixes.
     await expect(resolveLocalGitUsername('/repo')).resolves.toBe('')
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to branch-safe user.name when github.user and gh login are absent', async () => {
+    // Issue #11590: only `user.name = lorengroves` is configured; branch prefix was empty.
+    originRemoteUrl = 'https://github.com/stablyai/orca.git'
+    gitConfig['user.name'] = 'lorengroves'
+    ghExecFileAsyncMock.mockRejectedValue(makeExecError('gh unavailable'))
+
+    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('lorengroves')
+  })
+
+  it('uses branch-safe user.name on non-GitHub remotes when no explicit username keys exist', async () => {
+    originRemoteUrl = 'https://gitlab.com/stablyai/orca.git'
+    gitConfig['user.name'] = 'lorengroves'
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'gh-demo\n', stderr: '' })
+
+    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('lorengroves')
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
