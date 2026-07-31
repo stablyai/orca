@@ -105,7 +105,20 @@ function isRpcRateLimitsResponse(value: unknown): value is RpcRateLimitsResponse
     return false
   }
   const rateLimits = (value as { rateLimits: unknown }).rateLimits
-  return rateLimits === null || (typeof rateLimits === 'object' && !Array.isArray(rateLimits))
+  if (rateLimits === null) {
+    return true
+  }
+  if (typeof rateLimits !== 'object' || Array.isArray(rateLimits)) {
+    return false
+  }
+  const windows = rateLimits as Partial<Record<'primary' | 'secondary', unknown>>
+  return (['primary', 'secondary'] as const).every((key) => {
+    if (!Object.prototype.hasOwnProperty.call(windows, key)) {
+      return true
+    }
+    const window = windows[key]
+    return window === null || (typeof window === 'object' && !Array.isArray(window))
+  })
 }
 
 type CodexAuthFile = {

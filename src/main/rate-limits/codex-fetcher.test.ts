@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -32,74 +31,15 @@ vi.mock('./codex-auth-presence', () => ({
 }))
 
 import { fetchCodexRateLimits } from './codex-fetcher'
+import {
+  makeDisposable,
+  makePtyTerm,
+  makeRpcChild,
+  respondToRpcRateLimitRead,
+  respondToRpcResult
+} from './codex-fetcher-rpc-test-harness'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import { getActiveHiddenRateLimitPtyCount } from './hidden-pty-cleanup'
-
-function makeDisposable() {
-  return { dispose: vi.fn() }
-}
-
-function makeRpcChild() {
-  const child = new EventEmitter() as EventEmitter & {
-    stdout: EventEmitter
-    stderr: EventEmitter
-    stdin: { write: ReturnType<typeof vi.fn> }
-    kill: ReturnType<typeof vi.fn>
-  }
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  child.stdin = { write: vi.fn() }
-  child.kill = vi.fn()
-  return child
-}
-
-function respondToRpcResult(rpcChild: ReturnType<typeof makeRpcChild>, result: unknown): void {
-  rpcChild.stdin.write.mockImplementation((line: string) => {
-    const msg = JSON.parse(line) as { id?: number; method?: string }
-    if (msg.method === 'initialize') {
-      setTimeout(() => {
-        rpcChild.stdout.emit(
-          'data',
-          Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
-        )
-      }, 0)
-    }
-    if (msg.method === 'account/rateLimits/read') {
-      setTimeout(() => {
-        rpcChild.stdout.emit(
-          'data',
-          Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result })}\n`)
-        )
-      }, 0)
-    }
-  })
-}
-
-function respondToRpcRateLimitRead(
-  rpcChild: ReturnType<typeof makeRpcChild>,
-  rateLimits: unknown
-): void {
-  respondToRpcResult(rpcChild, { rateLimits })
-}
-
-function makePtyTerm() {
-  let dataHandler: ((data: string) => void) | null = null
-  let exitHandler: (() => void) | null = null
-  return {
-    onData: vi.fn((callback: (data: string) => void) => {
-      dataHandler = callback
-      return makeDisposable()
-    }),
-    onExit: vi.fn((callback: () => void) => {
-      exitHandler = callback
-      return makeDisposable()
-    }),
-    write: vi.fn(),
-    kill: vi.fn(),
-    emitData: (data: string) => dataHandler?.(data),
-    emitExit: () => exitHandler?.()
-  }
-}
 
 describe('fetchCodexRateLimits', () => {
   beforeEach(() => {
@@ -113,6 +53,7 @@ describe('fetchCodexRateLimits', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.useRealTimers()
   })
 
   it('does not spawn Codex when the user is not signed in', async () => {
@@ -338,6 +279,29 @@ describe('fetchCodexRateLimits', () => {
     })
   })
 
+  it('falls back to PTY when RPC returns a malformed nested rate-limit window', async () => {
+    const rpcChild = makeRpcChild()
+    const term = makePtyTerm()
+    childSpawnMock.mockReturnValue(rpcChild)
+    ptySpawnMock.mockReturnValue(term)
+    respondToRpcResult(rpcChild, { rateLimits: { primary: [] } })
+
+    const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(2)
+
+    expect(ptySpawnMock).toHaveBeenCalled()
+    term.emitData('>')
+    term.emitData('5h limit: 10%\nWeekly limit: 15%\n')
+    await vi.advanceTimersByTimeAsync(500)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      session: { usedPercent: 10 },
+      weekly: { usedPercent: 15 },
+      status: 'ok',
+      error: null
+    })
+  })
+
   it('accepts an explicit null RPC rate-limits snapshot without starting PTY fallback', async () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
@@ -363,6 +327,21 @@ describe('fetchCodexRateLimits', () => {
     const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
     await vi.advanceTimersByTimeAsync(1)
     await vi.advanceTimersByTimeAsync(1)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      status: 'error',
+      error: 'Invalid RPC rate-limit response'
+    })
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('reports a malformed nested RPC window when PTY fallback is disabled', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    respondToRpcResult(rpcChild, { rateLimits: { secondary: [] } })
+
+    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    await vi.advanceTimersByTimeAsync(2)
 
     await expect(resultPromise).resolves.toMatchObject({
       status: 'error',
