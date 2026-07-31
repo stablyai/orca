@@ -2,11 +2,20 @@ import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
+const {
+  childSpawnMock,
+  readFileMock,
+  resolveCodexCommandMock,
+  ptySpawnMock,
+  readLatestCodexSessionUsedPercentMock
+} = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
   readFileMock: vi.fn(),
   resolveCodexCommandMock: vi.fn(),
-  ptySpawnMock: vi.fn()
+  ptySpawnMock: vi.fn(),
+  // Why: default to "no local fallback available" so the 21 existing status-'error'
+  // assertions below stay accurate; only the dedicated fallback test overrides this.
+  readLatestCodexSessionUsedPercentMock: vi.fn().mockResolvedValue(null)
 }))
 
 vi.mock('node:child_process', () => ({
@@ -29,6 +38,10 @@ vi.mock('node-pty', () => ({
 // itself is covered by codex-auth-presence.test.ts and the no-auth case below.
 vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(() => 'present')
+}))
+
+vi.mock('./codex-session-log-usage', () => ({
+  readLatestCodexSessionUsedPercent: readLatestCodexSessionUsedPercentMock
 }))
 
 import { fetchCodexRateLimits } from './codex-fetcher'
@@ -326,6 +339,42 @@ describe('fetchCodexRateLimits', () => {
       status: 'error'
     })
     expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the local session log when every network path fails', async () => {
+    readLatestCodexSessionUsedPercentMock.mockResolvedValueOnce(17)
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+
+    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    await vi.advanceTimersByTimeAsync(0)
+    rpcChild.emit('close')
+    await vi.advanceTimersByTimeAsync(0)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'codex',
+      session: { usedPercent: 17 },
+      status: 'ok',
+      error: null,
+      usageMetadata: { source: 'session-log' }
+    })
+  })
+
+  it('does not consult the local session log when the fetch was aborted', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    const controller = new AbortController()
+
+    const resultPromise = fetchCodexRateLimits({ signal: controller.signal })
+    await vi.advanceTimersByTimeAsync(0)
+    controller.abort()
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'codex',
+      status: 'error',
+      error: 'Rate-limit fetch aborted'
+    })
+    expect(readLatestCodexSessionUsedPercentMock).not.toHaveBeenCalled()
   })
 
   it('removes RPC listeners when the app-server timeout settles', async () => {

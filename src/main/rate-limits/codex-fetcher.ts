@@ -11,6 +11,7 @@ import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 import { join } from 'node:path'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import { extractClaudePtyResetMetadata } from './claude-pty-reset-parser'
+import { readLatestCodexSessionUsedPercent } from './codex-session-log-usage'
 import {
   classifyCodexRateLimitWindows,
   CODEX_SESSION_WINDOW_MINUTES,
@@ -1119,7 +1120,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function fetchCodexRateLimits(
+async function fetchCodexRateLimitsViaNetwork(
   options?: FetchCodexRateLimitsOptions
 ): Promise<ProviderRateLimits> {
   if (options?.signal?.aborted) {
@@ -1236,5 +1237,36 @@ export async function fetchCodexRateLimits(
       error: isNotInstalled ? 'Codex CLI not found' : withMacTailscaleDnsHint(message),
       status: isNotInstalled ? 'unavailable' : 'error'
     }
+  }
+}
+
+export async function fetchCodexRateLimits(
+  options?: FetchCodexRateLimitsOptions
+): Promise<ProviderRateLimits> {
+  const result = await fetchCodexRateLimitsViaNetwork(options)
+  // Why: an auth error means the user needs to re-authenticate — masking it with a
+  // locally-derived 'ok' would hide the one thing they actually need to act on.
+  if (result.status !== 'error' || options?.signal?.aborted || isCodexAuthError(result.error)) {
+    return result
+  }
+  // Why: Codex has no live per-turn push like Claude's statusline — when every network
+  // path (backend/RPC/PTY) fails for a non-auth reason, the local session log's last
+  // token_count event is the only usage signal left, so usage doesn't go completely
+  // dark on an internal network.
+  const usedPercent = await readLatestCodexSessionUsedPercent().catch(() => null)
+  if (usedPercent === null) {
+    return result
+  }
+  return {
+    ...result,
+    session: {
+      usedPercent,
+      windowMinutes: CODEX_SESSION_WINDOW_MINUTES,
+      resetsAt: null,
+      resetDescription: null
+    },
+    status: 'ok',
+    error: null,
+    usageMetadata: { ...result.usageMetadata, source: 'session-log' }
   }
 }
