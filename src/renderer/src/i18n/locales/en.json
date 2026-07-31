@@ -5320,7 +5320,10 @@
           "5f818f12ab": "Preparing...",
           "4c05b9d7cb": "Preparing setup terminal.",
           "installLabel": "Install",
-          "updateLabel": "Update"
+          "updateLabel": "Update",
+          "setupCommandFailed": "The setup command exited with code {{value0}}. This error will clear after a successful retry.",
+          "setupFailed": "Setup failed",
+          "retrySetup": "Retry"
         },
         "AgentsPane": {
           "d83834f5e6": "Detecting installed agents…",
@@ -10073,6 +10076,23 @@
           "setupRecipe": "Set up an environment recipe for your cloud provider.",
           "createWorkspace": "Create a workspace and select that recipe under Run on.",
           "openSetup": "Set up environment recipes"
+        },
+        "ReleaseChannelSection": {
+          "switchFailed": "Could not switch to that build.",
+          "title": "Release channel",
+          "description": "Switch update channels or jump to any published build, including older ones. Downgrades are allowed and unvetted builds can be broken.",
+          "devOnly": "Dev only",
+          "channelAriaLabel": "Update channel",
+          "hourlyWarning": "Hourly builds are macOS-only, ship straight from main with no test gate, and are signed but not notarized. Keep a stable build handy.",
+          "loadingBuilds": "Loading builds…",
+          "noBuilds": "No builds found",
+          "refresh": "Refresh build list",
+          "switchTo": "Switch to build",
+          "alreadyRunning": "This is the build you are running.",
+          "willSwitch": "{{value0}} → {{value1}}",
+          "webUnavailable": "Switching builds is only available in the desktop app.",
+          "hourlyMacOnlyAria": "Hourly (macOS only)",
+          "hourlyMacOnly": "Hourly builds are produced only for macOS. Linux and Windows stay on Stable or RC."
         }
       },
       "right": {

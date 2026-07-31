@@ -6,6 +6,7 @@ import {
   TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS
 } from './terminal-paste-limits'
 import { runTerminalPasteOperationWithTimeout } from './terminal-paste-operation-timeout'
+import { runTerminalPtyInputTransaction } from './terminal-pty-input-transaction'
 import type {
   TerminalPasteExecutionReason,
   TerminalPasteExecutionResult,
@@ -24,6 +25,15 @@ type ExecuteTerminalPastePlanArgs = {
 }
 
 export async function executeTerminalPastePlan(
+  plan: TerminalPastePlan,
+  args: ExecuteTerminalPastePlanArgs
+): Promise<TerminalPasteExecutionResult> {
+  return await runTerminalPtyInputTransaction(plan.target.ptyId, () =>
+    executeTerminalPastePlanNow(plan, args)
+  )
+}
+
+async function executeTerminalPastePlanNow(
   plan: TerminalPastePlan,
   {
     pasteText,

@@ -36,6 +36,7 @@ import {
   normalizeManualRepoOrder
 } from '../../../../shared/manual-repo-order'
 import { isTopLevelView } from '../../../../shared/top-level-view'
+import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
   DEFAULT_USAGE_PERCENTAGE_DISPLAY,
@@ -969,6 +970,9 @@ export type UISlice = {
   dismissedUpdateVersion: string | null
   dismissUpdate: (versionOverride?: string) => void
   clearDismissedUpdateVersion: () => void
+  /** Dev-only channel override; null follows the running build's own channel. */
+  releaseChannelOverride: ReleaseChannel | null
+  setReleaseChannelOverride: (channel: ReleaseChannel | null) => void
   // Why: ephemeral, renderer-only — never persisted; resets each session and on every phase transition (see setUpdateStatus).
   updateCardCollapsed: boolean
   setUpdateCardCollapsed: (collapsed: boolean) => void
@@ -2494,6 +2498,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           return DEFAULT_PET_ID
         })(),
         dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
+        // Why: a persisted value from a build that knew a different channel set
+        // would otherwise survive as-is; activeChannel only falls back on null,
+        // so an unknown string reaches listBuilds and the segmented control.
+        releaseChannelOverride: isReleaseChannel(ui.releaseChannelOverride)
+          ? ui.releaseChannelOverride
+          : null,
         updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
         osc52ClipboardDefaultOnNoticePending: ui.osc52ClipboardDefaultOnNoticePending === true,
         browserDefaultUrl: ui.browserDefaultUrl ?? null,
@@ -2587,6 +2597,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   dismissedUpdateVersion: null,
   clearDismissedUpdateVersion: () => {
     set({ dismissedUpdateVersion: null })
+  },
+  releaseChannelOverride: null,
+  setReleaseChannelOverride: (channel) => {
+    void window.api.ui.set({ releaseChannelOverride: channel }).catch(console.error)
+    set({ releaseChannelOverride: channel })
   },
   dismissUpdate: (versionOverride?: string) =>
     set((s) => {

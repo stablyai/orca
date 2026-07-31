@@ -6415,7 +6415,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('orders a startup draft behind xterm focus input when Codex renders its composer', async () => {
+  it('orders a startup draft behind existing user input when Codex renders its composer', async () => {
     const { connectPanePty } = await import('./pty-connection')
 
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -6454,6 +6454,11 @@ describe('connectPanePty', () => {
         mock: { calls: [(data: string) => void][] }
       }
     ).mock.calls[0]?.[0]('\x1b[I')
+    ;(
+      pane.terminal.onData as unknown as {
+        mock: { calls: [(data: string) => void][] }
+      }
+    ).mock.calls[0]?.[0]('USER_DRAFT')
     ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
     capturedDataCallback.current?.('\x1b[?2004h\x1b[2K› ')
     await flushAsyncTicks()
@@ -6463,6 +6468,7 @@ describe('connectPanePty', () => {
     )
     expect(transport.sendInput.mock.calls.map(([data]) => data)).toEqual([
       '\x1b[I',
+      'USER_DRAFT',
       '\x1b[200~https://github.com/stablyai/orca/issues/42\x1b[201~'
     ])
     expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()

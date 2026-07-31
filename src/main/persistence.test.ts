@@ -6840,6 +6840,46 @@ describe('Store', () => {
     expect(store.getUI().syncTaskStatusFromWorkspaceBoard).toBe(true)
   })
 
+  it('preserves workflows above 20 statuses across load, write, and restart', async () => {
+    const imported = Array.from({ length: 21 }, (_, index) => ({
+      id: `state-${index + 1}`,
+      label: `State ${index + 1}`
+    })).toReversed()
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: { workspaceStatuses: imported },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().workspaceStatuses?.map((status) => status.id)).toEqual(
+      imported.map((status) => status.id)
+    )
+
+    const authored = Array.from({ length: 64 }, (_, index) => ({
+      id: `final-${String(index + 1).padStart(3, '0')}`,
+      label: `Final ${index + 1}`
+    })).toReversed()
+    store.updateUI({ workspaceStatuses: authored })
+    store.flush()
+
+    expect(store.getUI().workspaceStatuses?.map((status) => status.id)).toEqual(
+      authored.map((status) => status.id)
+    )
+    expect(
+      (readDataFile() as PersistedState).ui.workspaceStatuses?.map((status) => status.id)
+    ).toEqual(authored.map((status) => status.id))
+
+    const restarted = await createStore()
+    expect(restarted.getUI().workspaceStatuses?.map((status) => status.id)).toEqual(
+      authored.map((status) => status.id)
+    )
+  })
+
   it('repairs the known-bad reordered default workspace statuses once on load', async () => {
     writeDataFile({
       schemaVersion: 1,

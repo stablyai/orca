@@ -16,9 +16,14 @@ const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibilit
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
 
-const isMacRelease = process.env.ORCA_MAC_RELEASE === '1'
+// Why: hourly dev builds must carry the *release* identity — same bundle id and
+// Developer ID signature — or Squirrel.Mac refuses to swap them over an installed
+// Orca. Only notarization is skipped, which in-place updates never check.
+const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
+const isMacRelease = process.env.ORCA_MAC_RELEASE === '1' || isMacHourly
 const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
 const localBuildVersion = isMacRelease ? undefined : process.env.ORCA_LOCAL_BUILD_VERSION
+const hourlyBuildVersion = isMacHourly ? process.env.ORCA_HOURLY_BUILD_VERSION : undefined
 const appId = 'com.stablyai.orca'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
@@ -65,7 +70,11 @@ const winSpeechNativeResource = {
 module.exports = {
   appId,
   productName: 'Orca',
-  ...(localBuildVersion ? { extraMetadata: { version: localBuildVersion } } : {}),
+  ...(hourlyBuildVersion
+    ? { extraMetadata: { version: hourlyBuildVersion } }
+    : localBuildVersion
+      ? { extraMetadata: { version: localBuildVersion } }
+      : {}),
   directories: {
     buildResources: 'resources/build'
   },
@@ -321,7 +330,11 @@ module.exports = {
     // explicit release path so production artifacts remain strict while dev
     // artifacts do not fail with broken ad-hoc launch behavior.
     hardenedRuntime: isMacRelease,
-    notarize: isMacRelease,
+    // Why: Squirrel.Mac validates the replacement bundle's signature, not its
+    // notarization, so hourly builds stay installable while skipping the ~10min
+    // notary round trip 24x a day. A manually-downloaded hourly zip will be
+    // Gatekeeper-quarantined — that is the accepted tradeoff for a dev channel.
+    notarize: isMacRelease && !isMacHourly,
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('darwin'),
@@ -461,8 +474,11 @@ module.exports = {
   publish: {
     provider: 'github',
     owner: 'stablyai',
-    repo: 'orca',
-    releaseType: 'release'
+    // Why: hourly tags must never enter the main repo's releases atom feed — it
+    // exposes only the 10 newest entries, so 24 hourly tags a day would evict
+    // every stable/RC entry and strand users on a feed with nothing to install.
+    repo: isMacHourly ? 'orca-hourly' : 'orca',
+    releaseType: isMacHourly ? 'prerelease' : 'release'
   }
 }
 
