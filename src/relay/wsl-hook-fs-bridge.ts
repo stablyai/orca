@@ -46,7 +46,7 @@ export function registerWslHookFsHandlers(
     return resolved
   }
   // Why: the installers' mkdir-p walks top-down from `/`, probing every
-  // ancestor of home with readdir before it ever creates a dir. Allow
+  // ancestor of home before it ever creates a dir. Allow
   // read-only existence probes on those ancestors; everything else stays
   // home-scoped.
   const scopedProbe = (rawPath: unknown): string => {
@@ -93,7 +93,8 @@ export function registerWslHookFsHandlers(
     WSL_HOOK_FS_METHODS.stat,
     async (params): Promise<WslFsResult<{ mode: number }>> => {
       try {
-        const stats = await fs.stat(scoped(params.path))
+        // Why: mkdir-p stat probes ancestors of home; writes remain home-scoped.
+        const stats = await fs.stat(scopedProbe(params.path))
         return { ok: true, mode: stats.mode }
       } catch (err) {
         return failure(err)

@@ -54,6 +54,31 @@ describe('managed-hook local filesystem', () => {
     }
   })
 
+  it('discovers and installs an alternate Claude config on the SSH relay filesystem', async () => {
+    const home = await createTempHome()
+    const flavorConfig = join(home, '.claude-grok', 'settings.json')
+    await mkdir(join(home, '.claude-grok'), { recursive: true })
+    await writeFile(flavorConfig, JSON.stringify({ hooks: {}, userKey: 'keep' }), 'utf8')
+
+    const results = await installRemoteManagedAgentHooks(createManagedHookLocalFilesystem(), home, {
+      agents: ['claude']
+    })
+
+    expect(results).toHaveLength(2)
+    expect(results.every((result) => result.state === 'installed')).toBe(true)
+    expect(
+      results.some((result) =>
+        result.configPath.replaceAll('\\', '/').endsWith('/.claude-grok/settings.json')
+      )
+    ).toBe(true)
+    const installed = JSON.parse(await readFile(flavorConfig, 'utf8')) as {
+      hooks?: Record<string, unknown>
+      userKey?: string
+    }
+    expect(installed.hooks?.Stop).toBeDefined()
+    expect(installed.userKey).toBe('keep')
+  })
+
   it('isolates a malformed config while installing the remaining agents', async () => {
     const home = await createTempHome()
     const claudeConfig = join(home, '.claude', 'settings.json')

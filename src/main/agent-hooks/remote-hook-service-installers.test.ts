@@ -100,11 +100,11 @@ function createFakeSftp(initialFiles: Record<string, string> = {}): {
       cb(null)
     },
     stat: (path: string, cb: (err: unknown, stats?: { mode: number }) => void): void => {
-      if (!fs.files.has(path)) {
+      if (!fs.files.has(path) && !fs.dirs.has(path)) {
         cb(noEntryError(path))
         return
       }
-      cb(null, fakeStats(fs.modes.get(path) ?? 0o100644))
+      cb(null, fakeStats(fs.modes.get(path) ?? (fs.dirs.has(path) ? 0o40755 : 0o100644)))
     },
     readdir: (path: string, cb: (err: unknown, list?: { filename: string }[]) => void): void => {
       if (fs.dirs.has(path)) {

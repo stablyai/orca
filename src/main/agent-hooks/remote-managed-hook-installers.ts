@@ -91,7 +91,7 @@ async function installRemoteDiscoveredClaudeConfigDirHooks(
   signal?: AbortSignal
 ): Promise<AgentHookInstallStatus[]> {
   const results: AgentHookInstallStatus[] = []
-  for (const dirName of await discoverRemoteClaudeConfigDirNames(sftp, remoteHome)) {
+  for (const dirName of await discoverRemoteClaudeConfigDirNames(sftp, remoteHome, signal)) {
     // Why: discovery may outlive a cancelled relay request; do not begin another config mutation afterward.
     signal?.throwIfAborted()
     let result: AgentHookInstallStatus

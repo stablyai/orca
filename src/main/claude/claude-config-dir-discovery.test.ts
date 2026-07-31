@@ -50,6 +50,7 @@ function spyOnConsole(): ReturnType<typeof vi.spyOn>[] {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
@@ -214,6 +215,19 @@ describe('discoverRemoteClaudeConfigDirNames', () => {
     await expect(discoverRemoteClaudeConfigDirNames(sftp, '/home/dev')).resolves.toEqual([
       '.claude-a'
     ])
+  })
+
+  it('bounds a marker probe that never calls back by the overall deadline', async () => {
+    vi.useFakeTimers()
+    const sftp: SftpShapedClaudeConfigDirFs = {
+      readdir: (_path, callback) => callback(null, [{ filename: '.claude-grok' }]),
+      stat: () => {}
+    }
+
+    const discovery = discoverRemoteClaudeConfigDirNames(sftp, '/home/dev')
+    await vi.advanceTimersByTimeAsync(15_000)
+
+    await expect(discovery).resolves.toEqual([])
   })
 
   it('probes markers without following symlinks when lstat is available', async () => {

@@ -1,10 +1,9 @@
 // Promise-shaped, timeout-guarded wrappers over ssh2's callback SFTP API,
-// shared by the remote hook installers (`installer-utils-remote.ts`). Split
-// out mechanically from that file; semantics are unchanged. Every operation
-// fails open after a bounded timeout so a wedged SFTP callback degrades hook
-// status instead of blocking SSH workspace startup forever.
+// shared by the remote hook installers (`installer-utils-remote.ts`). Every
+// operation has a bounded timeout so a wedged callback degrades hook status
+// instead of blocking SSH workspace startup forever.
 
-import type { SFTPWrapper, FileEntryWithStats } from 'ssh2'
+import type { SFTPWrapper } from 'ssh2'
 
 const REMOTE_SFTP_OPERATION_TIMEOUT_MS = 10_000
 
@@ -133,12 +132,6 @@ export async function chmod(sftp: SFTPWrapper, remotePath: string, mode: number)
   })
 }
 
-export async function readdir(sftp: SFTPWrapper, remotePath: string): Promise<FileEntryWithStats[]> {
-  return await sftpOperation<FileEntryWithStats[]>(`readdir ${remotePath}`, (callback) => {
-    sftp.readdir(remotePath, callback)
-  })
-}
-
 async function mkdir(sftp: SFTPWrapper, remotePath: string): Promise<void> {
   await sftpOperation<void>(`mkdir ${remotePath}`, (callback) => {
     sftp.mkdir(remotePath, callback)
@@ -149,22 +142,19 @@ export async function mkdirpRemote(sftp: SFTPWrapper, remotePath: string): Promi
   if (remotePath === '/' || remotePath === '' || remotePath === '.') {
     return
   }
-  // Why: walk the path top-down rather than bottom-up so an existing parent
-  // chain doesn't cost a full readdir per segment. POSIX-only — Windows-
-  // remote is out of scope for v1.
+  // Why: stat avoids serializing a large directory listing for each ancestor.
+  // POSIX-only — Windows-remote is out of scope for v1.
   const segments = remotePath.split('/').filter((s) => s.length > 0)
   let current = remotePath.startsWith('/') ? '' : '.'
   for (const seg of segments) {
     current = current === '' ? `/${seg}` : current === '.' ? seg : `${current}/${seg}`
     try {
-      await readdir(sftp, current)
+      await statMode(sftp, current)
     } catch {
       try {
         await mkdir(sftp, current)
       } catch (err) {
-        // Why: re-raise only when the dir really isn't there. SSH_FX_FAILURE
-        // on a concurrent mkdir from another client is harmless — readdir on
-        // the next iteration will succeed.
+        // Why: SSH_FX_FAILURE on a concurrent mkdir is harmless; a later probe or write proves usability.
         if (!isAlreadyExistsError(err)) {
           throw err
         }
@@ -194,8 +184,7 @@ function isAlreadyExistsError(err: unknown): boolean {
     return false
   }
   // SSH_FX_FAILURE (4) is OpenSSH's catch-all for "exists" alongside other
-  // mkdir failures; we accept the ambiguity and let the next readdir prove
-  // success.
+  // mkdir failures; the next ancestor probe or write proves usability.
   return (err as { code?: unknown }).code === 4
 }
 

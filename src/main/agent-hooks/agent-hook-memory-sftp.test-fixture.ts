@@ -65,11 +65,11 @@ export function createAgentHookMemorySftp(initialFiles: Record<string, string> =
       done(null)
     },
     stat: (path: string, done: (error: unknown, stats?: { mode: number }) => void) => {
-      if (!fs.files.has(path)) {
+      if (!fs.files.has(path) && !fs.dirs.has(path)) {
         done(missing(path))
         return
       }
-      done(null, { mode: fs.modes.get(path) ?? 0o100644 })
+      done(null, { mode: fs.modes.get(path) ?? (fs.dirs.has(path) ? 0o40755 : 0o100644) })
     },
     readdir: (path: string, done: (error: unknown, entries?: { filename: string }[]) => void) => {
       if (!fs.dirs.has(path)) {

@@ -125,30 +125,45 @@ const REMOTE_DISCOVERY_OPERATION_TIMEOUT_MS = 10_000
 const REMOTE_DISCOVERY_DEADLINE_MS = 15_000
 
 function remoteOperation<T>(
-  run: (callback: (err: unknown, value?: T) => void) => void
+  run: (callback: (err: unknown, value?: T) => void) => void,
+  timeoutMs = REMOTE_DISCOVERY_OPERATION_TIMEOUT_MS,
+  signal?: AbortSignal
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let settled = false
-    const timer = setTimeout(() => {
-      if (!settled) {
-        settled = true
-        reject(new Error('Timed out waiting for SFTP config-dir discovery'))
-      }
-    }, REMOTE_DISCOVERY_OPERATION_TIMEOUT_MS)
-    if (typeof timer === 'object' && 'unref' in timer) {
-      timer.unref()
+    const cleanup = (): void => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', abort)
     }
     const finish = (err: unknown, value?: T): void => {
       if (settled) {
         return
       }
       settled = true
-      clearTimeout(timer)
+      cleanup()
       if (err) {
         reject(err)
         return
       }
       resolve(value as T)
+    }
+    const abort = (): void => {
+      try {
+        signal?.throwIfAborted()
+      } catch (error) {
+        finish(error)
+      }
+    }
+    const timer = setTimeout(() => {
+      finish(new Error('Timed out waiting for SFTP config-dir discovery'))
+    }, timeoutMs)
+    if (typeof timer === 'object' && 'unref' in timer) {
+      timer.unref()
+    }
+    signal?.addEventListener('abort', abort, { once: true })
+    if (signal?.aborted) {
+      abort()
+      return
     }
     try {
       run(finish)
@@ -162,15 +177,22 @@ function remoteOperation<T>(
  *  transport (SSH or the WSL fs bridge). Fails open on listing errors. */
 export async function discoverRemoteClaudeConfigDirNames(
   sftp: SftpShapedClaudeConfigDirFs,
-  remoteHome: string
+  remoteHome: string,
+  signal?: AbortSignal
 ): Promise<string[]> {
   const home = remoteHome.replace(/\/+$/, '') || '/'
+  const deadline = Date.now() + REMOTE_DISCOVERY_DEADLINE_MS
   let entries: { filename: string }[]
   try {
-    entries = await remoteOperation<{ filename: string }[]>((callback) => {
-      sftp.readdir(home, (err, list) => callback(err, list ?? []))
-    })
+    entries = await remoteOperation<{ filename: string }[]>(
+      (callback) => {
+        sftp.readdir(home, (err, list) => callback(err, list ?? []))
+      },
+      Math.min(REMOTE_DISCOVERY_OPERATION_TIMEOUT_MS, REMOTE_DISCOVERY_DEADLINE_MS),
+      signal
+    )
   } catch {
+    signal?.throwIfAborted()
     return []
   }
   const candidates = entries
@@ -178,20 +200,33 @@ export async function discoverRemoteClaudeConfigDirNames(
     .filter(isClaudeFlavorConfigDirName)
     .sort()
     .slice(0, CLAUDE_CONFIG_DIR_DISCOVERY_MAX_CANDIDATES)
-  const deadline = Date.now() + REMOTE_DISCOVERY_DEADLINE_MS
   const markerProbe = sftp.lstat ?? sftp.stat
   const discovered: string[] = []
   for (const name of candidates) {
+    signal?.throwIfAborted()
     if (Date.now() >= deadline) {
       break
     }
     const dirPath = home === '/' ? `/${name}` : `${home}/${name}`
     for (const marker of CLAUDE_CONFIG_DIR_MARKERS) {
-      const present = await remoteOperation<boolean>((callback) => {
-        markerProbe.call(sftp, `${dirPath}/${marker}`, (err, stats) =>
-          callback(null, !err && isRemoteRegularFile(stats))
+      const remainingMs = deadline - Date.now()
+      if (remainingMs <= 0) {
+        return discovered
+      }
+      let present = false
+      try {
+        present = await remoteOperation<boolean>(
+          (callback) => {
+            markerProbe.call(sftp, `${dirPath}/${marker}`, (err, stats) =>
+              callback(null, !err && isRemoteRegularFile(stats))
+            )
+          },
+          Math.min(REMOTE_DISCOVERY_OPERATION_TIMEOUT_MS, remainingMs),
+          signal
         )
-      }).catch(() => false)
+      } catch {
+        signal?.throwIfAborted()
+      }
       if (present) {
         discovered.push(name)
         break

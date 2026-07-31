@@ -96,11 +96,11 @@ function createFakeSftp(
       cb(null)
     },
     stat: (path: string, cb: (err: unknown, stats?: { mode: number }) => void): void => {
-      if (!fs.files.has(path)) {
+      if (!fs.files.has(path) && !fs.dirs.has(path)) {
         cb(noEntryError(path))
         return
       }
-      cb(null, fakeStats(fs.modes.get(path) ?? 0o100644))
+      cb(null, fakeStats(fs.modes.get(path) ?? (fs.dirs.has(path) ? 0o40755 : 0o100644)))
     },
     readdir: (path: string, cb: (err: unknown, list?: { filename: string }[]) => void): void => {
       if (fs.dirs.has(path)) {
@@ -138,6 +138,15 @@ function createFakeSftp(
 }
 
 describe('installer-utils-remote', () => {
+  it('checks mkdir ancestors without serializing directory listings', async () => {
+    const { sftp } = createFakeSftp()
+    const readdirSpy = vi.spyOn(sftp, 'readdir')
+
+    await writeManagedScriptRemote(sftp, '/home/u/.orca/agent-hooks/claude-hook.sh', '#!/bin/sh')
+
+    expect(readdirSpy).not.toHaveBeenCalled()
+  })
+
   it('returns {} when settings.json does not exist on the remote', async () => {
     const { sftp } = createFakeSftp()
     const result = await readHooksJsonRemote(sftp, '/home/u/.claude/settings.json')

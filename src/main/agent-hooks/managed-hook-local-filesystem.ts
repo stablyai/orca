@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs'
+import { chmod, lstat, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs'
 import type { SFTPWrapper } from 'ssh2'
 
 type Callback<T = void> = (error: Error | null, value?: T) => void
@@ -36,10 +36,17 @@ export function createManagedHookLocalFilesystem(): SFTPWrapper {
     stat(path: string, callback: Callback<{ mode: number }>): void {
       stat(path, (error, stats) => finish(callback, error, stats))
     },
-    readdir(path: string, callback: Callback<[]>): void {
-      // Why: installers use readdir only as an existence check; names and
-      // attrs would allocate work that no caller consumes.
-      readdir(path, (error) => finish(callback, error, []))
+    lstat(path: string, callback: Callback<{ mode: number }>): void {
+      lstat(path, (error, stats) => finish(callback, error, stats))
+    },
+    readdir(path: string, callback: Callback<{ filename: string }[]>): void {
+      readdir(path, (error, names) =>
+        finish(
+          callback,
+          error,
+          names?.map((filename) => ({ filename }))
+        )
+      )
     },
     mkdir(path: string, callback: Callback): void {
       mkdir(path, (error) => finish(callback, error))
