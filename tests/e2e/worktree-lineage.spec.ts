@@ -29,6 +29,15 @@ async function captureSidebarEvidence(page: Page, name: string): Promise<void> {
     })
 }
 
+async function captureLineageMenuEvidence(page: Page, name: string): Promise<void> {
+  if (process.env.ORCA_CAPTURE_EVIDENCE !== '1') {
+    return
+  }
+  const outputDir = resolve(process.cwd(), 'pr-evidence')
+  mkdirSync(outputDir, { recursive: true })
+  await page.screenshot({ path: resolve(outputDir, name) })
+}
+
 test.describe('Worktree Lineage', () => {
   test.describe.configure({ mode: 'serial' })
 
@@ -203,6 +212,79 @@ test.describe('Worktree Lineage', () => {
 
     await markWorkspaceTerminalSlept(orcaPage, { worktreeId: childId, tabId: childTabId })
     await expect(childRow).toContainText('Inactive')
+  })
+
+  test('sleeps a workspace and every descendant from the parent context menu', async ({
+    orcaPage
+  }) => {
+    const { parentId, childId } = await seedLineageScenario(orcaPage)
+    await orcaPage.evaluate((parentId) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      store.setState((current) => ({
+        worktreesByRepo: Object.fromEntries(
+          Object.entries(current.worktreesByRepo).map(([repoId, worktrees]) => [
+            repoId,
+            worktrees.map((worktree) =>
+              worktree.id === parentId ? { ...worktree, isMainWorktree: false } : worktree
+            )
+          ])
+        )
+      }))
+    }, parentId)
+    const parentTabId = await seedWorkspaceLiveTerminal(orcaPage, parentId)
+    const childTabId = await seedWorkspaceLiveTerminal(orcaPage, childId)
+
+    await orcaPage.evaluate(() => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      store.setState({
+        shutdownWorktreeBrowsers: async (worktreeId: string) => {
+          store.setState((current) => ({
+            browserTabsByWorktree: { ...current.browserTabsByWorktree, [worktreeId]: [] }
+          }))
+        },
+        shutdownWorktreeTerminals: async (worktreeId: string) => {
+          const tabIds = (store.getState().tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
+          store.setState((current) => ({
+            ptyIdsByTabId: {
+              ...current.ptyIdsByTabId,
+              ...Object.fromEntries(tabIds.map((tabId) => [tabId, []]))
+            }
+          }))
+        }
+      })
+      window.api.ephemeralVm.suspendWorkspace = async () => null
+    })
+
+    await worktreeOption(orcaPage, parentId).click({ button: 'right' })
+    const sleepSubtree = orcaPage.getByRole('menuitem', {
+      name: 'Sleep with Descendants (1)'
+    })
+    await expect(sleepSubtree).toBeVisible()
+    await expect(sleepSubtree).toBeEnabled()
+    await expect(orcaPage.getByRole('menuitem', { name: 'Delete with Descendants…' })).toBeVisible()
+    await captureLineageMenuEvidence(orcaPage, 'workspace-descendant-actions.png')
+    await sleepSubtree.click()
+
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(
+          ({ parentTabId, childTabId }) => {
+            const state = window.__store?.getState()
+            return {
+              parentPtys: state?.ptyIdsByTabId[parentTabId],
+              childPtys: state?.ptyIdsByTabId[childTabId]
+            }
+          },
+          { parentTabId, childTabId }
+        )
+      )
+      .toEqual({ parentPtys: [], childPtys: [] })
   })
 
   test('shows parent and child agent rows while the parent workspace is active', async ({
