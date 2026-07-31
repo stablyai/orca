@@ -542,8 +542,8 @@ function shouldReplaceTerminalTab(
     if (tab.pendingActivationSpawn && nextRemotePtyIds.size > 0) {
       return true
     }
-    // Why: restored placeholders need a bounded create window, but once it expires an
-    // authoritative host omission proves that retaining the handle-less tab creates a ghost.
+    // Why: a worktree has one execution host, so null-PTY placeholders inherit this
+    // snapshot's owner; after the bounded create window, omission proves they are ghosts.
     if (now - tab.createdAt >= REMOTE_NULL_PTY_TAB_GRACE_MS) {
       return true
     }
