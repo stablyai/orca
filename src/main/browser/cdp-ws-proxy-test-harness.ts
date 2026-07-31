@@ -29,7 +29,7 @@ export type MockWebContents = {
     focus: Mock<() => void>
     hostWebContents: {
       isDestroyed: Mock<() => boolean>
-      send: Mock<(channel: string, phase: string) => void>
+      send: Mock<(channel: string, detail: { phase: 'begin' | 'end'; guestId: number }) => void>
     }
     printToPDF: Mock<() => Promise<Buffer>>
     reload: Mock<() => void>
