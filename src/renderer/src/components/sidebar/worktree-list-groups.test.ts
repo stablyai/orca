@@ -826,6 +826,129 @@ describe('buildRows with pinned worktrees', () => {
     ])
   })
 
+  it('keeps runtime-local and nested SSH checkouts under one project header', () => {
+    const runtimeHostId = 'runtime:m2-air'
+    const runtimeLocalSetup: ProjectHostSetup = {
+      ...projectHostSetups[0]!,
+      hostId: runtimeHostId
+    }
+    const nestedSshSetup: ProjectHostSetup = {
+      ...projectHostSetups[1]!,
+      hostId: runtimeHostId,
+      connectionId: 'intel-mac'
+    }
+    const grouping = {
+      projects: [project],
+      projectHostSetups: [runtimeLocalSetup, nestedSshSetup]
+    }
+
+    expect([
+      getGroupKeyForWorktree('repo', worktree, repoMap, null, undefined, undefined, grouping),
+      getGroupKeyForWorktree(
+        'repo',
+        remoteWorktree,
+        new Map([[remoteRepo.id, remoteRepo]]),
+        null,
+        undefined,
+        undefined,
+        grouping
+      )
+    ]).toEqual(['project:github:stablyai/orca', 'project:github:stablyai/orca'])
+  })
+
+  // Why: RPC-fetched runtime setups (setupWithFetchedOwner) null connectionId and
+  // route through the runtime host; the nested SSH surface survives only in
+  // executionHostId, so grouping must discriminate on that field too.
+  it('keeps runtime-local and nested SSH checkouts grouped when fetched over runtime RPC', () => {
+    const runtimeHostId = 'runtime:m2-air'
+    const runtimeLocalSetup: ProjectHostSetup = {
+      ...projectHostSetups[0]!,
+      hostId: runtimeHostId,
+      connectionId: null,
+      // Why: setupWithFetchedOwner collapses a runtime-local checkout onto the runtime host.
+      executionHostId: runtimeHostId
+    }
+    const nestedSshSetup: ProjectHostSetup = {
+      ...projectHostSetups[1]!,
+      hostId: runtimeHostId,
+      connectionId: null,
+      executionHostId: 'ssh:intel-mac'
+    }
+    const grouping = {
+      projects: [project],
+      projectHostSetups: [runtimeLocalSetup, nestedSshSetup]
+    }
+
+    expect([
+      getGroupKeyForWorktree('repo', worktree, repoMap, null, undefined, undefined, grouping),
+      getGroupKeyForWorktree(
+        'repo',
+        remoteWorktree,
+        new Map([[remoteRepo.id, remoteRepo]]),
+        null,
+        undefined,
+        undefined,
+        grouping
+      )
+    ]).toEqual(['project:github:stablyai/orca', 'project:github:stablyai/orca'])
+  })
+
+  it('still splits duplicate checkouts on one nested SSH target', () => {
+    const nestedRepoB: Repo = {
+      ...remoteRepo,
+      id: 'repo-nested-b',
+      path: '/home/alice/orca-b',
+      displayName: 'orca-b'
+    }
+    const nestedWorktreeB: Worktree = {
+      ...remoteWorktree,
+      id: 'wt-nested-b',
+      repoId: nestedRepoB.id,
+      path: '/home/alice/orca-b-feature'
+    }
+    const runtimeHostId = 'runtime:m2-air'
+    const nestedSshSetupA: ProjectHostSetup = {
+      ...projectHostSetups[1]!,
+      hostId: runtimeHostId,
+      connectionId: 'intel-mac'
+    }
+    const nestedSshSetupB: ProjectHostSetup = {
+      ...nestedSshSetupA,
+      id: nestedRepoB.id,
+      repoId: nestedRepoB.id,
+      path: nestedRepoB.path,
+      displayName: nestedRepoB.displayName
+    }
+    const grouping = {
+      projects: [{ ...project, sourceRepoIds: [remoteRepo.id, nestedRepoB.id] }],
+      projectHostSetups: [nestedSshSetupA, nestedSshSetupB]
+    }
+
+    expect([
+      getGroupKeyForWorktree(
+        'repo',
+        remoteWorktree,
+        new Map([[remoteRepo.id, remoteRepo]]),
+        null,
+        undefined,
+        undefined,
+        grouping
+      ),
+      getGroupKeyForWorktree(
+        'repo',
+        nestedWorktreeB,
+        new Map([[nestedRepoB.id, nestedRepoB]]),
+        null,
+        undefined,
+        undefined,
+        grouping
+      )
+    ]).toEqual([
+      'project:github:stablyai/orca::setup:repo-remote',
+      'project:github:stablyai/orca::setup:repo-nested-b'
+    ])
+  })
+
   it('keeps a provisioned runtime copy under the project header alongside a same-host checkout', () => {
     const runtimeRepoB: Repo = {
       ...repo,

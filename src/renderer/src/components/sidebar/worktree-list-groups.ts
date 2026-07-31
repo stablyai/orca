@@ -189,6 +189,19 @@ function isDistinctUserCheckout(setup: ProjectHostSetup): boolean {
 }
 
 function getProjectSetupSurfaceKey(setup: ProjectHostSetup): string {
+  const connectionId = setup.connectionId?.trim()
+  if (connectionId) {
+    // Why: runtime catalogs keep nested SSH repos on the runtime host;
+    // the raw target still identifies their distinct execution surface.
+    return `${setup.projectId}::${setup.hostId}::ssh:${connectionId}`
+  }
+  const executionHostId = setup.executionHostId?.trim()
+  if (executionHostId && executionHostId !== setup.hostId) {
+    // Why: RPC-fetched runtime setups null connectionId, but a nested SSH
+    // checkout's distinct execution surface survives in executionHostId;
+    // the runtime-local checkout collapses executionHostId to the runtime host.
+    return `${setup.projectId}::${setup.hostId}::exec:${executionHostId}`
+  }
   const wslPath = parseWslUncPath(setup.path)
   if (wslPath) {
     // Why: Windows host and WSL on one machine are separate execution surfaces;
