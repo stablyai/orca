@@ -133,8 +133,14 @@ export async function routeFileOpenToDefaultEditor(args: {
     return 'remote'
   }
   if (mode === 'system') {
-    const opened = await window.api.shell.openFilePath(args.filePath)
-    return opened ? 'system' : 'builtin'
+    // Why: an IPC failure (main-process exception, dead bridge) must not
+    // reject the whole routing promise; fall back to the built-in editor.
+    try {
+      const opened = await window.api.shell.openFilePath(args.filePath)
+      return opened ? 'system' : 'builtin'
+    } catch {
+      return 'builtin'
+    }
   }
   const command = resolveDefaultEditorCustomCommand(settings)
   if (!command) {

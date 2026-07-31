@@ -236,6 +236,19 @@ describe('routeFileOpenToDefaultEditor', () => {
     expect(route).toBe('builtin')
   })
 
+  it('falls back to the built-in editor when the OS open rejects', async () => {
+    const openFilePath = vi.fn().mockRejectedValue(new Error('ipc bridge failed'))
+    stubWindowApi(openFilePath)
+    mockState.settings = { defaultEditorMode: 'system' }
+
+    const route = await routeFileOpenToDefaultEditor({
+      filePath: '/repo/a.ts',
+      worktreeId: 'wt-1'
+    })
+
+    expect(route).toBe('builtin')
+  })
+
   it('keeps remote files on the built-in editor', async () => {
     const openFilePath = vi.fn()
     stubWindowApi(openFilePath)
