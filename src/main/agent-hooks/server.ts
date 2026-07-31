@@ -1122,7 +1122,8 @@ export class AgentHookServer {
       retireClaudeCompletedToolUse(
         this.claudePendingToolUsesByPaneKey,
         payload.paneKey,
-        payload.toolUseId
+        payload.toolUseId,
+        now
       )
     }
   }

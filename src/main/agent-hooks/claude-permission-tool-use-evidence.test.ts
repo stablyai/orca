@@ -218,6 +218,41 @@ describe('claude pending tool-use evidence', () => {
     ).toBe('toolu_a')
   })
 
+  it('keeps the newest completions of both panes when a merge exceeds the bound', () => {
+    // Why: completions carry a timestamp so the cap drops the genuinely oldest — trimming by position would
+    // evict a destination completion from seconds ago in favour of an older one carried over.
+    const pending = store()
+    for (let index = 0; index < CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE; index += 1) {
+      retireClaudeCompletedToolUse(pending, PANE, `toolu_source_${index}`, NOW + index)
+    }
+    for (let index = 0; index < CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE; index += 1) {
+      retireClaudeCompletedToolUse(
+        pending,
+        OTHER_PANE,
+        `toolu_destination_${index}`,
+        NOW + 1_000 + index
+      )
+    }
+
+    moveClaudePendingToolUses(pending, PANE, OTHER_PANE)
+
+    const at = NOW + 5_000
+    // Why: the destination's completions are the newest, so all of them survive the trim.
+    expect(isClaudeToolUseUnaccountedFor(pending, OTHER_PANE, 'toolu_destination_0', at)).toBe(
+      false
+    )
+    expect(
+      isClaudeToolUseUnaccountedFor(
+        pending,
+        OTHER_PANE,
+        `toolu_destination_${CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE - 1}`,
+        at
+      )
+    ).toBe(false)
+    // Why: the oldest source completion is the one the cap drops.
+    expect(isClaudeToolUseUnaccountedFor(pending, OTHER_PANE, 'toolu_source_0', at)).toBe(true)
+  })
+
   it('merges into a destination pane that has evidence of its own', () => {
     // Why: a live destination pane has announced calls too; replacing its ledger would orphan them and its
     // own prompts could never attach an id.

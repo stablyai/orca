@@ -15,7 +15,8 @@ type ClaudePaneToolUseLedger = {
   pending: ClaudePendingToolUse[]
   /** id → announcement time; outlives the turn so a retried completion still reads as already seen. */
   announced: Map<string, number>
-  completed: Set<string>
+  /** id → completion time; timestamped so a merge trims the genuinely oldest, not the other pane's. */
+  completed: Map<string, number>
 }
 
 export type ClaudePendingToolUseStore = Map<string, ClaudePaneToolUseLedger>
@@ -60,18 +61,16 @@ function ledgerFor(store: ClaudePendingToolUseStore, paneKey: string): ClaudePan
   const created: ClaudePaneToolUseLedger = {
     pending: [],
     announced: new Map<string, number>(),
-    completed: new Set<string>()
+    completed: new Map<string, number>()
   }
   store.set(paneKey, created)
   return created
 }
 
-// Why: re-inserting moves an id to the end, so the trim drops genuinely old ones.
-function trimOldestIds(ids: {
-  size: number
-  keys: () => IterableIterator<string>
-  delete: (id: string) => boolean
-}): void {
+// Why: re-inserting moves an id to the end, so the trim drops the genuinely oldest.
+function rememberIdAt(ids: Map<string, number>, toolUseId: string, at: number): void {
+  ids.delete(toolUseId)
+  ids.set(toolUseId, at)
   while (ids.size > CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE) {
     const oldest = ids.keys().next().value
     if (oldest === undefined) {
@@ -81,16 +80,23 @@ function trimOldestIds(ids: {
   }
 }
 
-function rememberAnnouncedId(announced: Map<string, number>, toolUseId: string, at: number): void {
-  announced.delete(toolUseId)
-  announced.set(toolUseId, at)
-  trimOldestIds(announced)
-}
-
-function rememberCompletedId(completed: Set<string>, toolUseId: string): void {
-  completed.delete(toolUseId)
-  completed.add(toolUseId)
-  trimOldestIds(completed)
+function mergeIdsByRecency(
+  destination: Map<string, number>,
+  source: Map<string, number>
+): Map<string, number> {
+  const merged = new Map(destination)
+  for (const [toolUseId, at] of source) {
+    const existing = merged.get(toolUseId)
+    if (existing === undefined || existing < at) {
+      merged.set(toolUseId, at)
+    }
+  }
+  // Why: sort before the trim so the cap drops the oldest ids overall, not whichever pane came first.
+  return new Map(
+    [...merged.entries()]
+      .sort((left, right) => left[1] - right[1])
+      .slice(-CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE)
+  )
 }
 
 function pruneLedger(
@@ -133,7 +139,7 @@ export function rememberClaudePendingToolUse(
     kept.length > CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE
       ? kept.slice(kept.length - CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE)
       : kept
-  rememberAnnouncedId(ledger.announced, toolUseId, now)
+  rememberIdAt(ledger.announced, toolUseId, now)
 }
 
 /** Retire a call that reported back: its id can no longer be claimed by a later permission request.
@@ -142,7 +148,8 @@ export function rememberClaudePendingToolUse(
 export function retireClaudeCompletedToolUse(
   store: ClaudePendingToolUseStore,
   paneKey: string,
-  toolUseId: string | undefined
+  toolUseId: string | undefined,
+  now = Date.now()
 ): void {
   const id = toolUseId?.trim()
   if (!id) {
@@ -150,7 +157,7 @@ export function retireClaudeCompletedToolUse(
   }
   const ledger = ledgerFor(store, paneKey)
   ledger.pending = ledger.pending.filter((entry) => entry.toolUseId !== id)
-  rememberCompletedId(ledger.completed, id)
+  rememberIdAt(ledger.completed, id, now)
 }
 
 /** Claim the oldest matching announced call, removing it so the batch's next prompt claims the next one. */
@@ -245,19 +252,8 @@ function mergeLedgers(destination: ClaudePaneToolUseLedger, source: ClaudePaneTo
   destination.pending = [...pendingById.values()]
     .sort((left, right) => left.recordedAt - right.recordedAt)
     .slice(-CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE)
-  for (const [toolUseId, announcedAt] of source.announced) {
-    const existing = destination.announced.get(toolUseId)
-    if (existing === undefined || existing < announcedAt) {
-      destination.announced.set(toolUseId, announcedAt)
-    }
-  }
-  destination.announced = new Map(
-    [...destination.announced.entries()]
-      .sort((left, right) => left[1] - right[1])
-      .slice(-CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE)
-  )
-  const completed = [...destination.completed, ...source.completed]
-  destination.completed = new Set(completed.slice(-CLAUDE_PENDING_TOOL_USE_MAX_PER_PANE))
+  destination.announced = mergeIdsByRecency(destination.announced, source.announced)
+  destination.completed = mergeIdsByRecency(destination.completed, source.completed)
 }
 
 /** Follow a pane through an authority transfer so its batch evidence stays reachable. Merges rather than
