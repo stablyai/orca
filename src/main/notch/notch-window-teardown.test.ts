@@ -18,7 +18,7 @@ type FakeWindow = {
   once: () => void
   on: () => void
   setAlwaysOnTop: () => void
-  setVisibleOnAllWorkspaces: () => void
+  setVisibleOnAllWorkspaces: (...args: unknown[]) => void
   setIgnoreMouseEvents: () => void
   setBounds: () => void
   showInactive: () => void
@@ -28,6 +28,7 @@ type FakeWindow = {
 }
 
 const appHandlers = new Map<string, () => void>()
+const workspaceCalls: unknown[][] = []
 let created: FakeWindow[] = []
 const order: string[] = []
 
@@ -49,7 +50,9 @@ function makeWindow(id: number): FakeWindow {
     once: () => undefined,
     on: () => undefined,
     setAlwaysOnTop: () => undefined,
-    setVisibleOnAllWorkspaces: () => undefined,
+    setVisibleOnAllWorkspaces: (...args: unknown[]) => {
+      workspaceCalls.push(args)
+    },
     setIgnoreMouseEvents: () => undefined,
     setBounds: () => undefined,
     showInactive: () => undefined,
@@ -118,6 +121,7 @@ beforeEach(async () => {
   // fail. Pin it rather than skip, so the teardown contract is exercised on every host.
   Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
   created = []
+  workspaceCalls.length = 0
   order.length = 0
   appHandlers.clear()
   vi.resetModules()
@@ -189,6 +193,17 @@ describe('notch window teardown', () => {
 
     expect(() => mod.closeNotchWindowForQuit()).not.toThrow()
     expect(order).toEqual([])
+  })
+
+  it('never asks for fullscreen visibility, which would drop the app from Cmd+Tab', () => {
+    // Why pinned: `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })` makes
+    // Electron demote the app to accessory — no Dock icon, absent from Cmd+Tab — and the
+    // symptom looks nothing like its cause. Measured: with the option the app reports
+    // UIElement, without it Foreground.
+    create()
+
+    expect(workspaceCalls).toContainEqual([true])
+    expect(workspaceCalls.some((args) => args.length > 1)).toBe(false)
   })
 
   it('is safe to tear down when no window was ever created', () => {

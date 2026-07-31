@@ -159,7 +159,13 @@ export function createNotchWindow(options: NotchWindowOptions): BrowserWindow | 
   window.webContents.session.setPermissionCheckHandler(() => false)
 
   window.setAlwaysOnTop(true, 'status')
-  window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  // Why no `visibleOnFullScreen`: that option makes Electron demote the whole app to
+  // NSApplicationActivationPolicyAccessory so a window can float over fullscreen apps — which
+  // silently removes Orca from the Dock and from Cmd+Tab. Measured per-process: with the
+  // option the app reports UIElement, without it Foreground, and every other window option
+  // here is innocent. The bar therefore follows Spaces but not fullscreen apps, which is also
+  // where macOS hides the menu bar it lives in.
+  window.setVisibleOnAllWorkspaces(true)
   // Start inert: the renderer opts in per painted region. See setNotchInteractive.
   window.setIgnoreMouseEvents(true, { forward: true })
 
