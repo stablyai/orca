@@ -25462,10 +25462,13 @@ export class OrcaRuntimeService {
           try {
             await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId)
           } catch (error) {
-            if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
+            const reason = error instanceof Error ? error.message : null
+            // Why: a successful kill can synchronously retire its tab, so its follow-up tab_not_found is idempotent success.
+            if (reason === 'workspace_session_unavailable') {
+              this.notifier?.closeTerminal(tabId)
+            } else if (!ptyKilled || reason !== 'tab_not_found') {
               throw error
             }
-            this.notifier?.closeTerminal(tabId)
           }
         } else {
           this.notifier?.closeTerminal(tabId)
