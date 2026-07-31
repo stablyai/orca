@@ -2614,7 +2614,9 @@ describe('registerPtyHandlers', () => {
         'pi'
       )
       // OMP shadow prep still runs for non-omp launches unless omp is disabled.
-      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'omp')
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'omp', {
+        materializeDefaultHome: false
+      })
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
     })
 
