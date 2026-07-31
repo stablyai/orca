@@ -14,6 +14,8 @@ export type ConnectWaiter = {
 
 export type SendRequestOptions = {
   timeoutMs?: number
+  budgetSpansConnect?: boolean
+  failWhenDisconnected?: boolean
 }
 
 export type SubscribeOptions = {

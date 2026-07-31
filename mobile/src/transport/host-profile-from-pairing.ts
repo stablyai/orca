@@ -1,5 +1,4 @@
-import { normalizePairingEndpoints, type PairingOffer } from './types'
-import type { HostProfile } from './types'
+import { normalizePairingEndpoints, type HostProfile, type PairingOffer } from './types'
 import { buildMobileAccessRoutes } from './mobile-access-route-order'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'

@@ -132,7 +132,7 @@ export async function clearMobileRelayPairingJournalForHost(hostId: string): Pro
     // Why: host removal invalidates automatic recovery, while a later pairing
     // save stays ordered after this host-scoped cleanup.
     await AsyncStorage.removeItem(JOURNAL_STORAGE_KEY)
-    await SecureStore.deleteItemAsync(JOURNAL_SECRET_KEY, KEYCHAIN_OPTIONS)
+    await deletePairingKeychainItem(JOURNAL_SECRET_KEY)
   })
   journalMutation = mutation.catch(() => {})
   return mutation

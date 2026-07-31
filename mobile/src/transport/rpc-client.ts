@@ -1,10 +1,4 @@
-import type {
-  RpcResponse,
-  RpcSuccess,
-  ConnectionState,
-  ConnectionLogLevel,
-  ConnectionLogSink
-} from './types'
+import type { RpcResponse, RpcSuccess, ConnectionState, ConnectionLogLevel } from './types'
 import {
   generateKeyPair,
   deriveSharedKey,
@@ -39,75 +33,21 @@ import { isRpcResponse } from './rpc-response-shape'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
 import { OrderedDialPass } from './ordered-endpoint-dial'
 import { normalizePairingEndpoints } from './types'
-
-type PendingRequest = {
-  resolve: (response: RpcResponse) => void
-  reject: (error: Error) => void
-}
-
-type ConnectWaiter = {
-  resolve: () => void
-  reject: (error: Error) => void
-  timeout: ReturnType<typeof setTimeout> | null
-}
-
-export type SendRequestOptions = {
-  timeoutMs?: number
-  /** Spend `timeoutMs` across connect-wait AND the request instead of giving each
-   *  phase its own. Interactive chat writes need it: they run as sequential loops
-   *  under one shared budget, so a per-phase clock lets the composer sit `sending`
-   *  for a multiple of the stated ceiling. Off by default — the long-running
-   *  callers (worktree create, dictation finish, credit reset) sized their budgets
-   *  against the post-connect clock, and squeezing them to the floor after a slow
-   *  reconnect would fail sends that used to land. */
-  budgetSpansConnect?: boolean
-  /** Reject immediately when not connected — a send parked in the connect wait
-   *  replays stale terminal bytes into the PTY after reconnect. */
-  failWhenDisconnected?: boolean
-}
-
-type SubscribeOptions = {
-  onBinaryFrame?: (frame: BrowserScreencastFrame) => void
-}
-
-type StreamingListener = (result: unknown) => void
-
-type StreamRequest = {
-  method: string
-  params: unknown
-  listener: StreamingListener
-  onBinaryFrame?: (frame: BrowserScreencastFrame) => void
-  subscriptionId?: string
-  cancelled?: boolean
-  sent?: boolean
-}
-
-export type RpcClient = {
-  sendRequest: (
-    method: string,
-    params?: unknown,
-    options?: SendRequestOptions
-  ) => Promise<RpcResponse>
-  subscribe: (
-    method: string,
-    params: unknown,
-    onData: StreamingListener,
-    options?: SubscribeOptions
-  ) => () => void
-  updateTerminalSubscriptionViewport: (
-    terminal: string,
-    viewport: { cols: number; rows: number }
-  ) => void
-  getState: () => ConnectionState
-  // 0 means never failed (reset once the handshake authenticates); the UI escalates "Reconnecting…" to "Can't connect" past a threshold.
-  getReconnectAttempt: () => number
-  // Last 'connected' timestamp (ms epoch); null = never connected. Lets the UI tell "never reachable" from "transient blip".
-  getLastConnectedAt: () => number | null
-  onStateChange: (listener: (state: ConnectionState) => void) => () => void
-  // Why: app-resume hook — iOS/Android can kill the TCP path while backgrounded; call on AppState 'active' to recover.
-  notifyForeground: () => void
-  close: () => void
-}
+import {
+  isStreamingSubscriptionReadyResult,
+  isTerminalSubscribedResult
+} from './rpc-client-subscription-result'
+import type {
+  ConnectOptions,
+  ConnectWaiter,
+  PendingRequest,
+  RpcClient,
+  SendRequestOptions,
+  StreamingListener,
+  StreamRequest,
+  SubscribeOptions
+} from './rpc-client-contract'
+export type { ConnectOptions, RpcClient, SendRequestOptions } from './rpc-client-contract'
 
 // Why: tiered backoff — fast early entries recover blips; the slow tail avoids burning a SYN every 4s on an unreachable desktop.
 const RECONNECT_DELAYS = [500, 1000, 2000, 4000, 8000, 15_000, 30_000, 60_000]
@@ -130,22 +70,6 @@ const WEBSOCKET_CONNECTING_STATE = 0
 
 // Why: RN auto-pongs pings natively, so JS needs an app-level probe to detect half-open sockets.
 const ACTIVITY_PROBE_INTERVAL_MS = 20_000
-
-export type ConnectOptions = {
-  onStateChange?: (state: ConnectionState) => void
-  // Fires for every lifecycle event so the UI can show where 'Connecting…' is stuck (e.g. broken Tailscale route).
-  onLog?: ConnectionLogSink
-  /** Preferred advertise order; defaults to `[endpoint]`. */
-  endpoints?: readonly string[]
-  /** Sticky reconnect hint only — never written into host.endpoint (KTD9). */
-  lastGoodEndpoint?: string | null
-  /** Per-endpoint open timeout; pair-time uses a shorter budget (KTD4). */
-  connectTimeoutMs?: number
-  /** Fires with the endpoint that completed auth — persist last-good via host-store. */
-  onDialSuccess?: (endpoint: string) => void
-  /** Disable transport-owned retries when a higher-level route supervisor owns them. */
-  autoReconnect?: boolean
-}
 
 export function connect(
   endpoint: string,
@@ -1272,26 +1196,4 @@ export function connect(
       rejectAllPending('Client closed', { deliveryUnknown: true })
     }
   }
-}
-
-function isTerminalSubscribedResult(
-  value: unknown
-): value is { type: 'subscribed'; streamId: number } {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    (value as { type?: unknown }).type === 'subscribed' &&
-    typeof (value as { streamId?: unknown }).streamId === 'number'
-  )
-}
-
-function isStreamingSubscriptionReadyResult(
-  value: unknown
-): value is { type: 'ready'; subscriptionId: string } {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    (value as { type?: unknown }).type === 'ready' &&
-    typeof (value as { subscriptionId?: unknown }).subscriptionId === 'string'
-  )
 }

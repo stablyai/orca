@@ -94,6 +94,8 @@ export async function writeMobileRelayCredentialBundle(
   await writePairingKeychainItem(credentialKey(validated.hostId), JSON.stringify(validated))
 }
 
+export const replaceMobileRelayCredentialBundle = writeMobileRelayCredentialBundle
+
 export async function deleteMobileRelayCredentialBundle(hostId: string): Promise<void> {
   if (Platform.OS === 'web') {
     return

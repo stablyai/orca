@@ -245,6 +245,20 @@ describe('pre-profile pairing coordinator', () => {
 
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
     expect(events).toEqual([directOffer.endpoint, secondary, 'save-host'])
+    expect(deps.connectDirect).toHaveBeenNthCalledWith(
+      1,
+      directOffer.endpoint,
+      directOffer.deviceToken,
+      directOffer.publicKeyB64,
+      expect.objectContaining({ endpoints: [directOffer.endpoint], connectTimeoutMs: 1_000 })
+    )
+    expect(deps.connectDirect).toHaveBeenNthCalledWith(
+      2,
+      secondary,
+      directOffer.deviceToken,
+      directOffer.publicKeyB64,
+      expect.objectContaining({ endpoints: [secondary], connectTimeoutMs: 1_000 })
+    )
     expect(deps.saveHost).toHaveBeenCalledWith(
       expect.objectContaining({
         endpoint: directOffer.endpoint,

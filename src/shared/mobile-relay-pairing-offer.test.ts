@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { createPairingOfferSchema } from './mobile-relay-pairing-offer'
-import { MAX_PAIRING_OFFER_JSON_BYTES } from './mobile-relay-pairing-offer'
+import {
+  createPairingOfferSchema,
+  MAX_PAIRING_OFFER_JSON_BYTES
+} from './mobile-relay-pairing-offer'
 import { createMobileRelayPairingFixtures } from './mobile-relay-pairing-fixtures'
-import QRCode from 'qrcode'
 
 describe('desktop mobile-relay pairing contract', () => {
   const now = Date.UTC(2026, 6, 12, 16)
@@ -52,7 +53,8 @@ describe('desktop mobile-relay pairing contract', () => {
     ).toBe(false)
   })
 
-  it('keeps the maximum accepted payload within the rendered QR density budget', () => {
+  it('keeps the maximum accepted payload within the rendered QR density budget', async () => {
+    const QRCode = (await import('qrcode')).default
     const base = {
       v: 2 as const,
       endpoint: 'ws://192.168.1.10:6768',

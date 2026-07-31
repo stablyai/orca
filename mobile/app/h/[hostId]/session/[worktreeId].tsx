@@ -1007,7 +1007,6 @@ export default function SessionScreen() {
   const initialModesSeenRef = useRef<Set<string>>(new Set())
   const deviceTokenRef = useRef<string | null>(null)
   // Why: state (not a ref) so the connection verdict re-renders when the endpoint loads and the Tailscale hint can appear.
-  const [hostEndpoint, setHostEndpoint] = useState<string | null>(null)
   const [hostEndpoints, setHostEndpoints] = useState<string[] | null>(null)
   const clientRef = useRef<RpcClient | null>(null)
   const connStateRef = useRef<ConnectionState>(connState)
@@ -2447,8 +2446,7 @@ export default function SessionScreen() {
       const host = hosts.find((h) => h.id === hostId)
       if (host) {
         deviceTokenRef.current = host.deviceToken
-        setHostEndpoint(host.endpoint)
-        setHostEndpoints(host.endpoints)
+        setHostEndpoints(host.endpoints?.map(({ url }) => url) ?? [host.endpoint])
       }
     })
     return () => {
@@ -4255,7 +4253,7 @@ export default function SessionScreen() {
     state: connState,
     reconnectAttempts,
     lastConnectedAt,
-    endpoint: hostEndpoint,
+    endpoint: hostEndpoints?.[0] ?? null,
     endpoints: hostEndpoints
   })
   const showConnectionRetry =

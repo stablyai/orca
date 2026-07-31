@@ -10,8 +10,7 @@ import {
   readMobileRelayCredentialBundle,
   writeMobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
-import { saveExistingHostRelayUpgrade } from './host-store'
-import { updateHostLastGoodEndpoint } from './host-store'
+import { saveExistingHostRelayUpgrade, updateHostLastGoodEndpoint } from './host-store'
 import { upgradeDirectMobileRelay } from './mobile-relay-direct-upgrade'
 import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'

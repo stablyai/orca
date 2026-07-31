@@ -120,6 +120,7 @@ type MobilePairingOfferAvailable = {
   available: true
   pairingUrl: string
   endpoint: string
+  endpoints: string[]
   deviceId: string
   webClientUrl: string | null
   /** Mode the offer actually encodes. */
@@ -127,6 +128,40 @@ type MobilePairingOfferAvailable = {
 }
 
 type MobilePairingOffer = PairingOfferUnavailable | MobilePairingOfferAvailable
+
+type MobilePairingOfferArgs = {
+  address?: string | null
+  /** Ordered advertise addresses; when set, takes precedence over `address`. */
+  addresses?: readonly string[] | null
+  connectionMode?: MobilePairingConnectionMode
+  relayPreferenceIndex?: number
+  orderedRoutes?: boolean
+  name?: string
+  rotate?: boolean
+}
+
+function mobileRelayPairingRequestKey(args: MobilePairingOfferArgs): string {
+  const orderedRoutes = args.orderedRoutes === true
+  const candidates =
+    orderedRoutes && args.addresses && args.addresses.length > 0
+      ? args.addresses
+      : [args.address ?? args.addresses?.[0] ?? null]
+  const seen = new Set<string | null>()
+  const addresses = candidates.flatMap((candidate) => {
+    const normalized = typeof candidate === 'string' ? candidate.trim() : null
+    if (seen.has(normalized)) {
+      return []
+    }
+    seen.add(normalized)
+    return [normalized]
+  })
+  return JSON.stringify({
+    orderedRoutes,
+    addresses,
+    relayPreferenceIndex: orderedRoutes ? (args.relayPreferenceIndex ?? null) : null,
+    name: args.name ?? null
+  })
+}
 
 type PairingIdentityInitialization =
   | { ok: true; deviceRegistry: DeviceRegistry; e2eeKeypair: E2EEKeypair }
@@ -522,7 +557,7 @@ export class OrcaRuntimeRpcServer {
   private mobileRelayPairingOfferQueue: Promise<void> = Promise.resolve()
   private mobileRelayPairingOfferInFlight: {
     generation: number
-    address: string | null
+    requestKey: string
     rotate: boolean
     request: Promise<MobilePairingOffer>
   } | null = null
@@ -756,26 +791,17 @@ export class OrcaRuntimeRpcServer {
     }
   }
 
-  async createMobilePairingOffer(args: {
-    address?: string | null
-    /** Ordered advertise addresses; when set, takes precedence over `address`. */
-    addresses?: readonly string[] | null
-    connectionMode?: MobilePairingConnectionMode
-    relayPreferenceIndex?: number
-    orderedRoutes?: boolean
-    name?: string
-    rotate?: boolean
-  }): Promise<MobilePairingOffer> {
+  async createMobilePairingOffer(args: MobilePairingOfferArgs): Promise<MobilePairingOffer> {
     if (args.connectionMode === 'local-only') {
       this.mobilePairingOfferGeneration += 1
       return this.createMobilePairingOfferSerial(args, this.mobilePairingOfferGeneration)
     }
-    const address = args.address ?? null
+    const requestKey = mobileRelayPairingRequestKey(args)
     const rotate = args.rotate === true
     const inFlight = this.mobileRelayPairingOfferInFlight
     if (
       inFlight?.generation === this.mobilePairingOfferGeneration &&
-      inFlight.address === address &&
+      inFlight.requestKey === requestKey &&
       (inFlight.rotate || !rotate)
     ) {
       return inFlight.request
@@ -791,7 +817,7 @@ export class OrcaRuntimeRpcServer {
       () => undefined,
       () => undefined
     )
-    this.mobileRelayPairingOfferInFlight = { generation, address, rotate, request }
+    this.mobileRelayPairingOfferInFlight = { generation, requestKey, rotate, request }
     void request.then(
       () => {
         if (this.mobileRelayPairingOfferInFlight?.request === request) {
@@ -808,15 +834,7 @@ export class OrcaRuntimeRpcServer {
   }
 
   private async createMobilePairingOfferSerial(
-    args: {
-      address?: string | null
-      addresses?: readonly string[] | null
-      connectionMode?: MobilePairingConnectionMode
-      relayPreferenceIndex?: number
-      orderedRoutes?: boolean
-      name?: string
-      rotate?: boolean
-    },
+    args: MobilePairingOfferArgs,
     generation: number
   ): Promise<MobilePairingOffer> {
     if (!hasBoundedPairingAddressInput(args.address, args.addresses)) {

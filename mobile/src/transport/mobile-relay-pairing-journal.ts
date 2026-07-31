@@ -1,10 +1,8 @@
 import * as ExpoCrypto from 'expo-crypto'
 import { sha256 } from '@noble/hashes/sha256'
 import { z } from 'zod'
-import {
-  PAIRING_RELAY_URL_MAX_CHARACTERS,
-  type PairingRelay
-} from '../../../src/shared/mobile-relay-pairing-offer'
+import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
+import { PAIRING_RELAY_URL_MAX_CHARACTERS } from '../../../src/shared/mobile-pairing-protocol-limits'
 import { hashMobileRelayCredential } from './mobile-relay-credential-hash'
 import {
   MOBILE_HOST_ID_MAX_CHARACTERS,
@@ -26,13 +24,17 @@ export const MobileRelayPairingJournalMetadataSchema = z
     offerFingerprint: Base64Url32ByteSchema,
     host: z
       .object({
-        id: z.string().min(1),
-        name: z.string().min(1),
-        endpoint: z.string().min(1),
-        endpoints: z.array(z.string().min(1)).min(1).max(4).optional(),
+        id: z.string().min(1).max(MOBILE_HOST_ID_MAX_CHARACTERS),
+        name: z.string().min(1).max(MOBILE_HOST_NAME_MAX_CHARACTERS),
+        endpoint: z.string().min(1).max(PAIRING_ENDPOINT_MAX_CHARACTERS),
+        endpoints: z
+          .array(z.string().min(1).max(PAIRING_ENDPOINT_MAX_CHARACTERS))
+          .min(1)
+          .max(4)
+          .optional(),
         relayPreferenceIndex: z.number().int().min(0).max(4).optional(),
         routeOrder: z.literal(1).optional(),
-        publicKeyB64: z.string().min(1),
+        publicKeyB64: z.string().min(1).max(PAIRING_PUBLIC_KEY_MAX_CHARACTERS),
         lastConnected: z.number().int().nonnegative()
       })
       .strict(),

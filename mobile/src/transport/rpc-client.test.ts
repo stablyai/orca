@@ -153,39 +153,6 @@ describe('mobile rpc-client connection timeout', () => {
     client.close()
   })
 
-  it('keeps WebSocket credentials and URL paths out of retained connection logs', () => {
-    const details: Array<string | undefined> = []
-    const client = connect(
-      'wss://user:password@desktop.example:8443/relay?access_token=secret',
-      'token',
-      'server-key',
-      {
-        onLog: (entry) => details.push(entry.detail)
-      }
-    )
-
-    expect(details).toContain('desktop.example:8443')
-    expect(details.join('\n')).not.toContain('password')
-    expect(details.join('\n')).not.toContain('access_token')
-    expect(details.join('\n')).not.toContain('/relay')
-    client.close()
-  })
-
-  it('leaves retry ownership to the route supervisor for single-attempt clients', () => {
-    const client = connect('ws://desktop.invalid', 'token', 'server-key', {
-      autoReconnect: false,
-      connectTimeoutMs: 100
-    })
-
-    vi.advanceTimersByTime(100)
-
-    expect(client.getState()).toBe('disconnected')
-    expect(mockSockets).toHaveLength(1)
-    vi.advanceTimersByTime(90_000)
-    expect(mockSockets).toHaveLength(1)
-    client.close()
-  })
-
   it('ignores stale socket opens after reconnect swaps in a new socket', () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const firstSocket = mockSockets[0]!

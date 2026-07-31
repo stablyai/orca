@@ -1,7 +1,14 @@
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
-import type { PairingCandidateClient } from './mobile-relay-physical-client'
+import type {
+  connectMobileRelayForPairing,
+  PairingCandidateClient
+} from './mobile-relay-physical-client'
 import { normalizePairingEndpoints, type PairingOffer } from './types'
-import { PAIR_CONNECT_TIMEOUT_MS, resolvePairRouteAuthTimeout } from './pairing-connection-attempt'
+import {
+  PAIR_CONNECT_TIMEOUT_MS,
+  resolvePairDialPlan,
+  resolvePairRouteAuthTimeout
+} from './pairing-connection-attempt'
 import {
   selectOrderedPairingCandidate,
   type OrderedPairingCandidate,
@@ -10,7 +17,6 @@ import {
 import { racePairingCandidates } from './pairing-candidate-race'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 import type { connect, ConnectOptions } from './rpc-client'
-import type { connectMobileRelayForPairing } from './mobile-relay-physical-client'
 import type { resolvePairingInviteThroughDirector } from './mobile-relay-invite-director'
 import type { updateMobileRelayPairingJournal } from './mobile-relay-pairing-journal-store'
 
@@ -34,9 +40,16 @@ export async function selectPreProfilePairingRoute(args: {
   // Why: unmarked offers must retain the released direct/Relay race; only the
   // explicit pairing marker opts a new mobile build into sequential routing.
   const orderedRoutes = args.offer.routeOrder === 1
-  const directUrls = orderedRoutes
+  const normalizedDirectUrls = orderedRoutes
     ? normalizePairingEndpoints(args.offer.endpoint, args.offer.endpoints)
     : [args.offer.endpoint]
+  const dialPlan = orderedRoutes
+    ? resolvePairDialPlan(
+        normalizedDirectUrls,
+        Math.max(1, args.pairingDeadlineAt - args.dependencies.now())
+      )
+    : { endpoints: normalizedDirectUrls, connectTimeoutMs: PAIR_CONNECT_TIMEOUT_MS }
+  const directUrls = dialPlan.endpoints
   const candidates: OrderedPairingCandidate[] = directUrls.map((endpoint) => ({
     path: 'direct',
     url: endpoint,
@@ -46,8 +59,8 @@ export async function selectPreProfilePairingRoute(args: {
         endpoints: [endpoint],
         lastGoodEndpoint: null,
         connectTimeoutMs: Math.min(
-          args.connectOptions?.connectTimeoutMs ?? PAIR_CONNECT_TIMEOUT_MS,
-          PAIR_CONNECT_TIMEOUT_MS
+          args.connectOptions?.connectTimeoutMs ?? dialPlan.connectTimeoutMs,
+          dialPlan.connectTimeoutMs
         )
       })
   }))

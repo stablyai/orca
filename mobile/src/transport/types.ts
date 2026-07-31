@@ -5,13 +5,28 @@ import {
   type PairingOffer
 } from '../../../src/shared/mobile-relay-pairing-offer'
 import {
+  PAIRING_CODE_MAX_CHARACTERS,
+  PAIRING_DEVICE_TOKEN_MAX_CHARACTERS,
+  PAIRING_ENDPOINT_MAX_CHARACTERS,
+  PAIRING_INPUT_MAX_CHARACTERS,
+  PAIRING_PUBLIC_KEY_MAX_CHARACTERS
+} from '../../../src/shared/mobile-pairing-protocol-limits'
+import {
   MobileAccessEndpointSchema,
   type MobileAccessEndpoint,
   type MobileRelayHostOverlay
 } from './mobile-relay-host-overlay'
 import { MobileRelayEndpointSchema } from '../../../src/shared/mobile-relay-credential-contract'
 
-export { MAX_PAIRING_ENDPOINTS, PairingOfferSchema }
+export {
+  MAX_PAIRING_ENDPOINTS,
+  PAIRING_CODE_MAX_CHARACTERS,
+  PAIRING_DEVICE_TOKEN_MAX_CHARACTERS,
+  PAIRING_ENDPOINT_MAX_CHARACTERS,
+  PAIRING_INPUT_MAX_CHARACTERS,
+  PAIRING_PUBLIC_KEY_MAX_CHARACTERS,
+  PairingOfferSchema
+}
 export type { MobileAccessEndpoint, PairingOffer }
 
 export const MOBILE_HOST_ID_MAX_CHARACTERS = 4_096

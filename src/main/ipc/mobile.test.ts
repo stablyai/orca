@@ -94,7 +94,7 @@ describe('registerMobileHandlers', () => {
 
     await handlers.get('mobile:getPairingQR')?.(null, {})
     expect(createMobilePairingOffer).toHaveBeenCalledWith(
-      expect.objectContaining({ address: '192.168.50.238' })
+      expect.objectContaining({ addresses: ['192.168.50.238'] })
     )
   })
 
@@ -197,7 +197,7 @@ describe('registerMobileHandlers', () => {
     })
     expect(toDataUrlMock).toHaveBeenCalledWith(
       'orca://pair#mobile-multi',
-      expect.objectContaining({ width: 320, errorCorrectionLevel: 'M' })
+      expect.objectContaining({ width: 256, margin: 2, errorCorrectionLevel: 'M' })
     )
   })
 

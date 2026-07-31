@@ -101,7 +101,8 @@ describe('host-store list mutations', () => {
   it('resolves an existing host by pinned key with one durable read', async () => {
     await expect(resolvePairingHostIdentity(HOST_TWO.publicKeyB64, 'host-new')).resolves.toEqual({
       id: HOST_TWO.id,
-      name: HOST_TWO.name
+      name: HOST_TWO.name,
+      publicationEpoch: 1
     })
     expect(asyncStorageMock.getItem).toHaveBeenCalledOnce()
   })
@@ -109,7 +110,8 @@ describe('host-store list mutations', () => {
   it('names a new host from the same durable read used for identity lookup', async () => {
     await expect(resolvePairingHostIdentity('unpaired-key', 'host-new')).resolves.toEqual({
       id: 'host-new',
-      name: 'Host 3'
+      name: 'Host 3',
+      publicationEpoch: 1
     })
     expect(asyncStorageMock.getItem).toHaveBeenCalledOnce()
   })
