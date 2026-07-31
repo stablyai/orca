@@ -141,6 +141,28 @@ describe('CodexMicroSettingsPane layout', () => {
     ).toBeLessThan(Number(joystick?.getAttribute('cx')) - Number(joystick?.getAttribute('r')))
   })
 
+  it('renders dial rotation as annular zones around one press control', () => {
+    const container = new DOMParser().parseFromString(
+      renderToStaticMarkup(
+        <CodexMicroControlMap activeControl={null} onActivate={() => {}} onHover={() => {}} />
+      ),
+      'text/html'
+    )
+    const counterclockwise = container.querySelector('[data-control-id="ENC_CC"]')
+    const clockwise = container.querySelector('[data-control-id="ENC_CW"]')
+    const press = container.querySelector('[data-control-id="ENC_CLK"]')
+    const paintOrder = [...container.querySelectorAll('[data-control-id^="ENC_"]')].map((control) =>
+      control.getAttribute('data-control-id')
+    )
+
+    expect(paintOrder).toEqual(['ENC_CC', 'ENC_CW', 'ENC_CLK'])
+    expect(counterclockwise?.querySelector('path.control-surface')).not.toBeNull()
+    expect(clockwise?.querySelector('path.control-surface')).not.toBeNull()
+    expect(press?.querySelector('circle.control-surface')).not.toBeNull()
+    expect(counterclockwise?.querySelector('circle.control-surface')).toBeNull()
+    expect(clockwise?.querySelector('circle.control-surface')).toBeNull()
+  })
+
   it('links diagram controls and mapping selectors through focus', async () => {
     const { root, container } = await renderPane()
     const diagramControl = container.querySelector<SVGGElement>('[data-control-id="ACT11"]')

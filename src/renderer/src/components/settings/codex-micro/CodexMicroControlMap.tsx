@@ -76,30 +76,39 @@ export function CodexMicroControlMap({
       <path d="M116 11v8m-4-4 4-4 4 4" className="fill-none stroke-muted-foreground" />
 
       <circle cx="40" cy="43" r="20" className="fill-card stroke-border" />
-      <DialControl
+      <DialRotationControl
         control="ENC_CC"
-        x={28}
+        path="M40 23A20 20 0 0 0 40 63L40 54A11 11 0 0 1 40 32Z"
+        labelX={30}
         label="↶"
         active={activeControl === 'ENC_CC'}
         onActivate={onActivate}
         onHover={onHover}
       />
-      <DialControl
-        control="ENC_CLK"
-        x={40}
-        label="•"
-        active={activeControl === 'ENC_CLK'}
-        onActivate={onActivate}
-        onHover={onHover}
-      />
-      <DialControl
+      <DialRotationControl
         control="ENC_CW"
-        x={52}
+        path="M40 23A20 20 0 0 1 40 63L40 54A11 11 0 0 0 40 32Z"
+        labelX={50}
         label="↷"
         active={activeControl === 'ENC_CW'}
         onActivate={onActivate}
         onHover={onHover}
       />
+      <SvgControl
+        control="ENC_CLK"
+        active={activeControl === 'ENC_CLK'}
+        onActivate={onActivate}
+        onHover={onHover}
+      >
+        <circle cx="40" cy="43" r="10.5" className="control-surface fill-card stroke-border" />
+        <line
+          x1="35"
+          y1="43"
+          x2="45"
+          y2="43"
+          className="stroke-muted-foreground stroke-[1.3] [stroke-linecap:round]"
+        />
+      </SvgControl>
 
       {KEY_SHAPES.map((shape) => (
         <KeyControl
@@ -178,25 +187,27 @@ function KeyControl({
   )
 }
 
-function DialControl({
+function DialRotationControl({
   control,
-  x,
+  path,
+  labelX,
   label,
   active,
   onActivate,
   onHover
 }: Omit<Props, 'activeControl'> & {
   control: CodexMicroControlId
-  x: number
+  path: string
+  labelX: number
   label: string
   active: boolean
 }): React.JSX.Element {
   return (
     <SvgControl control={control} active={active} onActivate={onActivate} onHover={onHover}>
-      <circle cx={x} cy="43" r="7" className="control-surface fill-card stroke-border" />
+      <path d={path} className="control-surface fill-muted/40 stroke-border" />
       <text
-        x={x}
-        y="45"
+        x={labelX}
+        y="46"
         textAnchor="middle"
         className="pointer-events-none fill-muted-foreground text-[8px]"
       >
@@ -239,7 +250,7 @@ function SvgControl({
       onBlur={() => onHover(null)}
       className={`cursor-pointer outline-none [&>*]:transition-colors focus:[&>.control-surface]:stroke-ring focus:[&>.control-surface]:stroke-2 ${
         active
-          ? '[&>.control-surface]:fill-accent [&>.control-surface]:stroke-ring [&>.control-surface]:stroke-2 [&>text]:fill-accent-foreground'
+          ? '[&>.control-surface]:fill-accent [&>.control-surface]:stroke-ring [&>.control-surface]:stroke-2 [&>line]:stroke-accent-foreground [&>text]:fill-accent-foreground'
           : ''
       }`}
     >
