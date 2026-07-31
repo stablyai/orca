@@ -40,21 +40,54 @@ export async function readHooksJsonRemote(
   sftp: SFTPWrapper,
   remotePath: string
 ): Promise<HooksConfig | null> {
-  let body: string
+  return (await readHooksJsonRemoteWithRaw(sftp, remotePath)).config
+}
+
+async function readHooksJsonRemoteWithRaw(
+  sftp: SFTPWrapper,
+  remotePath: string
+): Promise<{ raw: string | null; config: HooksConfig | null }> {
+  let raw: string
   try {
-    body = await readFile(sftp, remotePath)
+    raw = await readFile(sftp, remotePath)
   } catch (err) {
     if (isNoEntryError(err)) {
-      return {}
+      return { raw: null, config: {} }
     }
     throw err
   }
   try {
-    const parsed = JSON.parse(body)
-    return isPlainObject(parsed) ? parsed : null
+    const parsed = JSON.parse(raw)
+    return { raw, config: isPlainObject(parsed) ? parsed : null }
   } catch {
-    return null
+    return { raw, config: null }
   }
+}
+
+export async function updateHooksJsonRemoteWithRetry(
+  sftp: SFTPWrapper,
+  remotePath: string,
+  mutate: (config: HooksConfig) => HooksConfig | null,
+  maxAttempts = 3
+): Promise<HooksConfig | null> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const { raw: baseline, config } = await readHooksJsonRemoteWithRaw(sftp, remotePath)
+    if (!config) {
+      return null
+    }
+    const next = mutate(config)
+    if (next === null) {
+      return config
+    }
+    if (
+      await writeHooksJsonRemote(sftp, remotePath, next, {
+        expectedDiskContent: baseline
+      })
+    ) {
+      return next
+    }
+  }
+  return null
 }
 
 /** Suffix of the one-shot pristine backup taken before Orca's FIRST
@@ -71,8 +104,9 @@ export const REMOTE_HOOKS_BACKUP_SUFFIX = '.orca-backup'
 export async function writeHooksJsonRemote(
   sftp: SFTPWrapper,
   remotePath: string,
-  config: HooksConfig
-): Promise<void> {
+  config: HooksConfig,
+  options: { expectedDiskContent?: string | null } = {}
+): Promise<boolean> {
   const dir = dirnamePosix(remotePath)
   await mkdirpRemote(sftp, dir)
   const serialized = `${JSON.stringify(config, null, 2)}\n`
@@ -90,10 +124,13 @@ export async function writeHooksJsonRemote(
     }
   }
   if (existingContent === serialized) {
-    return
+    return true
   }
-  if (existingContent !== null) {
-    await writeOneShotBackup(sftp, remotePath, existingContent)
+  if (
+    options.expectedDiskContent !== undefined &&
+    existingContent !== options.expectedDiskContent
+  ) {
+    return false
   }
   // Why: tmp + rename so a partial network drop mid-write does not leave a
   // truncated settings.json that the agent CLI would refuse to load.
@@ -102,6 +139,15 @@ export async function writeHooksJsonRemote(
     const mode = await getRemoteFileModeOrDefault(sftp, remotePath, DEFAULT_REMOTE_CONFIG_MODE)
     await writeFile(sftp, tmp, serialized, mode)
     await chmod(sftp, tmp, mode)
+    if (options.expectedDiskContent !== undefined) {
+      const currentContent = await readRemoteRawFile(sftp, remotePath)
+      if (currentContent !== options.expectedDiskContent) {
+        return false
+      }
+    }
+    if (existingContent !== null) {
+      await writeOneShotBackup(sftp, remotePath, existingContent)
+    }
     await rename(sftp, tmp, remotePath)
   } finally {
     // Best-effort cleanup if rename failed.
@@ -110,6 +156,18 @@ export async function writeHooksJsonRemote(
     } catch {
       // already gone or never created
     }
+  }
+  return true
+}
+
+async function readRemoteRawFile(sftp: SFTPWrapper, remotePath: string): Promise<string | null> {
+  try {
+    return await readFile(sftp, remotePath)
+  } catch (error) {
+    if (isNoEntryError(error)) {
+      return null
+    }
+    throw error
   }
 }
 

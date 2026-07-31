@@ -771,6 +771,7 @@ export class AgentHookServer {
         prompt: payload.prompt,
         agentType,
         ...(payload.model ? { model: payload.model } : {}),
+        ...(payload.configDir ? { configDir: payload.configDir } : {}),
         interrupted: true,
         // Why: idle children are display state; dropping them on an inferred interrupt blanks rows a later hook would restore.
         ...(payload.subagents ? { subagents: payload.subagents } : {})
@@ -826,6 +827,7 @@ export class AgentHookServer {
         state: restored.state,
         prompt: payload.prompt,
         agentType: payload.agentType,
+        ...(payload.configDir ? { configDir: payload.configDir } : {}),
         ...(restored.state === 'done' && restored.interrupted ? { interrupted: true } : {}),
         ...(payload.subagents ? { subagents: payload.subagents } : {})
       }

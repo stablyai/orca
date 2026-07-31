@@ -1,16 +1,14 @@
-import { existsSync, rmSync, writeFileSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   buildWindowsAgentHookCurlPostCommand,
   readHooksJson,
   updateHooksJsonWithRetry,
-  writeManagedScript,
-  type HooksConfig
+  writeManagedScript
 } from '../agent-hooks/installer-utils'
 import {
-  readHooksJsonRemote,
-  writeHooksJsonRemote,
+  updateHooksJsonRemoteWithRetry,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
 import {
@@ -19,10 +17,8 @@ import {
   buildWindowsHookStdinDrainEpilogue,
   WINDOWS_HOOK_STDIN_DRAIN_LABEL
 } from '../agent-hooks/hook-stdin-contract'
-import { getManagedStatusLineScript } from './statusline-script'
 import {
   applyManagedHooks,
-  applyManagedStatusLine,
   CLAUDE_EVENTS,
   CLAUDE_HOOK_SETTINGS,
   getManagedScriptFileName,
@@ -34,12 +30,15 @@ import {
   getRemoteManagedCommand,
   getStatusLineInstallMarkerPath,
   getStatusLineScriptFileName,
-  getStatusLineScriptPath,
-  getStatusLineSlotState,
   removeManagedHooks,
   removeManagedStatusLine,
   type ClaudeCompatibleHookSettings
 } from './hook-settings'
+import {
+  installManagedStatusLine,
+  managesClaudeStatusLine,
+  recordManagedStatusLine
+} from './statusline-hook-installation'
 
 type ClaudeHookServiceOptions = {
   agent: AgentHookInstallStatus['agent']
@@ -206,8 +205,8 @@ export class ClaudeHookService {
         getManagedScriptFileName(this.options.settings)
       )
       // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
-      if (this.options.agent === 'claude') {
-        nextConfig = this.installManagedStatusLine(nextConfig)
+      if (this.managesStatusLine()) {
+        nextConfig = installManagedStatusLine(nextConfig, this.options.settings)
       }
       return nextConfig
     })
@@ -220,31 +219,14 @@ export class ClaudeHookService {
         detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
+    if (this.managesStatusLine()) {
+      recordManagedStatusLine(updated, this.options.settings)
+    }
     return this.getStatus()
   }
 
-  // Why: the statusline feed is opportunistic (usage display, not agent status); a user who deleted the
-  // managed entry has opted out, and the marker distinguishes that deletion from a first install.
-  private installManagedStatusLine(config: HooksConfig): HooksConfig {
-    const scriptFileName = getStatusLineScriptFileName(this.options.settings)
-    const markerPath = getStatusLineInstallMarkerPath(this.options.settings)
-    const slot = getStatusLineSlotState(config, scriptFileName)
-    if (slot === 'user' || (slot === 'empty' && existsSync(markerPath))) {
-      return config
-    }
-    const statusLineScriptPath = getStatusLineScriptPath(this.options.settings)
-    writeManagedScript(statusLineScriptPath, getManagedStatusLineScript('local'))
-    const next = applyManagedStatusLine(
-      config,
-      getManagedCommand(statusLineScriptPath),
-      scriptFileName
-    )
-    try {
-      writeFileSync(markerPath, '')
-    } catch {
-      // Best-effort: a missing marker only means one future user deletion gets re-installed once.
-    }
-    return next
+  private managesStatusLine(): boolean {
+    return managesClaudeStatusLine(this.options.agent, this.options.settings)
   }
 
   // Why: install the Claude hook on the remote box (via SFTP); POSIX-only by design (Windows-remote deferred).
@@ -255,20 +237,8 @@ export class ClaudeHookService {
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
     // Why: SFTP I/O fails often (network/EACCES/disk); wrap install so transient failures surface as structured state:'error' rather than an unhandled rejection.
     try {
-      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
-      if (!config) {
-        return {
-          agent: this.options.agent,
-          state: 'error',
-          configPath: remoteConfigPath,
-          managedHooksPresent: false,
-          detail: `Could not parse remote ${this.options.displayName} settings.json`
-        }
-      }
-
       // Why: the POSIX wrapper is identical regardless of where the script lands; only the path differs.
       const command = getRemoteManagedCommand(remoteScriptPath)
-      const nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
 
       // Why: write script before settings — a mid-install failure then leaves a harmless orphan script, not settings.json pointing at a missing one.
       // Why: SSH remotes use POSIX `.sh` paths even when Orca runs on Windows; never derive remote script syntax from the local OS.
@@ -280,7 +250,18 @@ export class ClaudeHookService {
       // Why: no statusline install here — this path serves SSH remotes and WSL guests, whose relay hook
       // listener doesn't route /statusline/claude, and an SSH box's Claude login can be a different
       // account than the locally selected one, so its usage must not feed the local bar (live feed is host-local only).
-      await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
+      const updated = await updateHooksJsonRemoteWithRetry(sftp, remoteConfigPath, (config) =>
+        applyManagedHooks(config, command, remoteScriptFileName)
+      )
+      if (!updated) {
+        return {
+          agent: this.options.agent,
+          state: 'error',
+          configPath: remoteConfigPath,
+          managedHooksPresent: false,
+          detail: `Could not parse remote ${this.options.displayName} settings.json or safely update it after concurrent changes`
+        }
+      }
 
       return {
         agent: this.options.agent,
@@ -336,7 +317,7 @@ export class ClaudeHookService {
         detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
-    if (this.options.agent === 'claude') {
+    if (this.managesStatusLine()) {
       try {
         // Why: an Orca-level uninstall resets the opt-out memory so a later re-enable installs the statusline again.
         rmSync(getStatusLineInstallMarkerPath(this.options.settings), { force: true })

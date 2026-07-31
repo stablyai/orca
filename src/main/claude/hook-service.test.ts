@@ -9,7 +9,10 @@ import { join } from 'node:path'
 import { vi, describe, expect, it } from 'vitest'
 import type * as InstallerUtilsModule from '../agent-hooks/installer-utils'
 
-const installerUtilsTestState = vi.hoisted(() => ({ forceUpdateFailure: false }))
+const installerUtilsTestState = vi.hoisted(() => ({
+  forceUpdateFailure: false,
+  runDiscardedAttempt: false
+}))
 
 vi.mock('../agent-hooks/installer-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof InstallerUtilsModule>()
@@ -17,8 +20,16 @@ vi.mock('../agent-hooks/installer-utils', async (importOriginal) => {
     ...actual,
     updateHooksJsonWithRetry: (
       ...args: Parameters<typeof actual.updateHooksJsonWithRetry>
-    ): ReturnType<typeof actual.updateHooksJsonWithRetry> =>
-      installerUtilsTestState.forceUpdateFailure ? null : actual.updateHooksJsonWithRetry(...args)
+    ): ReturnType<typeof actual.updateHooksJsonWithRetry> => {
+      if (installerUtilsTestState.forceUpdateFailure) {
+        return null
+      }
+      if (installerUtilsTestState.runDiscardedAttempt) {
+        args[1]({})
+        return null
+      }
+      return actual.updateHooksJsonWithRetry(...args)
+    }
   }
 })
 
@@ -32,7 +43,7 @@ import type { SFTPWrapper } from 'ssh2'
 import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
 import { createClaudeConfigDirHookService } from './claude-config-dir-hook-service'
 import { ClaudeHookService } from './hook-service'
-import { OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
+import { getStatusLineInstallMarkerPath, OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
 
 const CLAUDE_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
 const STATUSLINE_SCRIPT_FILE_NAME =
@@ -322,6 +333,51 @@ describe('ClaudeHookService.install', () => {
     }
   })
 
+  it('records statusLine ownership only after a guarded settings update succeeds', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-statusline-retry-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    installerUtilsTestState.runDiscardedAttempt = true
+    try {
+      expect(new ClaudeHookService().install().state).toBe('error')
+      expect(existsSync(getStatusLineInstallMarkerPath())).toBe(false)
+
+      installerUtilsTestState.runDiscardedAttempt = false
+      expect(new ClaudeHookService().install().state).toBe('installed')
+      const settings = JSON.parse(readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8'))
+      expect(settings.statusLine?.command).toContain('claude-statusline')
+      expect(existsSync(getStatusLineInstallMarkerPath())).toBe(true)
+    } finally {
+      installerUtilsTestState.runDiscardedAttempt = false
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps statusLine ownership scoped to the primary Claude config', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-statusline-primary-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      expect(new ClaudeHookService().install().state).toBe('installed')
+      const markerPath = getStatusLineInstallMarkerPath()
+      expect(existsSync(markerPath)).toBe(true)
+
+      const flavorSettingsPath = join(tmpHome, '.claude-grok', 'settings.json')
+      mkdirSync(join(tmpHome, '.claude-grok'), { recursive: true })
+      writeFileSync(flavorSettingsPath, '{}')
+      const flavorService = createClaudeConfigDirHookService('.claude-grok')
+      expect(flavorService.install().state).toBe('installed')
+      expect(JSON.parse(readFileSync(flavorSettingsPath, 'utf-8')).statusLine).toBeUndefined()
+
+      expect(flavorService.remove().state).toBe('not_installed')
+      expect(existsSync(markerPath)).toBe(true)
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
   // Why: #6078 — Claude Code runs hooks through Git Bash, and an unquoted path
   // with a space (e.g. `C:/Users/Jane Doe`) splits at the space. The managed
   // command must use an encoded launcher so Git Bash/cmd.exe never splits or
@@ -570,7 +626,9 @@ describe('ClaudeHookService.installRemote', () => {
     const status = await svc.installRemote(sftp, '/home/dev')
     expect(status.state).toBe('error')
     expect(status.managedHooksPresent).toBe(false)
-    expect(status.detail).toContain('Could not parse remote Claude settings.json')
+    expect(status.detail).toBe(
+      'Could not parse remote Claude settings.json or safely update it after concurrent changes'
+    )
   })
 
   it('preserves user-authored hook entries while sweeping old managed entries', async () => {
@@ -605,6 +663,29 @@ describe('ClaudeHookService.installRemote', () => {
     const userCmds = stopDefs.flatMap((d) => d.hooks.map((h) => h.command))
     expect(userCmds).toContain('/usr/local/bin/my-user-hook')
     expect(userCmds.filter((c) => c.includes('claude-hook.sh'))).toHaveLength(1)
+  })
+
+  it('preserves a concurrent remote settings change by retrying the merge', async () => {
+    const svc = new ClaudeHookService()
+    const { sftp, fs } = createFakeSftp()
+    const path = '/home/dev/.claude/settings.json'
+    fs.files.set(path, `${JSON.stringify({ original: true }, null, 2)}\n`)
+    const chmod = sftp.chmod.bind(sftp)
+    let injected = false
+    sftp.chmod = ((tmpPath, mode, callback): void => {
+      if (!injected && tmpPath.startsWith('/home/dev/.claude/.')) {
+        injected = true
+        fs.files.set(path, `${JSON.stringify({ original: true, concurrent: true }, null, 2)}\n`)
+      }
+      chmod(tmpPath, mode, callback)
+    }) as SFTPWrapper['chmod']
+
+    const status = await svc.installRemote(sftp, '/home/dev')
+
+    expect(status.state).toBe('installed')
+    const parsed = JSON.parse(fs.files.get(path)!)
+    expect(parsed).toMatchObject({ original: true, concurrent: true })
+    expect(parsed.hooks.Stop).toBeTruthy()
   })
 })
 

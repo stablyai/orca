@@ -3,6 +3,7 @@ import type { SFTPWrapper } from 'ssh2'
 
 import {
   readHooksJsonRemote,
+  updateHooksJsonRemoteWithRetry,
   writeHooksJsonRemote,
   writeManagedScriptRemote,
   writeTextFileRemoteAtomic
@@ -270,6 +271,55 @@ describe('installer-utils-remote', () => {
     await writeTextFileRemoteAtomic(sftp, path, 'new')
 
     expect(fs.modes.get(path)).toBe(0o640)
+  })
+
+  it('re-merges a concurrent settings change before replacing the file', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const path = '/home/u/.claude/settings.json'
+    fs.files.set(path, `${JSON.stringify({ original: true }, null, 2)}\n`)
+    const chmod = sftp.chmod.bind(sftp)
+    let injected = false
+    sftp.chmod = ((tmpPath, mode, callback): void => {
+      if (!injected && tmpPath.startsWith('/home/u/.claude/.')) {
+        injected = true
+        fs.files.set(path, `${JSON.stringify({ original: true, concurrent: true }, null, 2)}\n`)
+      }
+      chmod(tmpPath, mode, callback)
+    }) as SFTPWrapper['chmod']
+
+    const result = await updateHooksJsonRemoteWithRetry(sftp, path, (config) => ({
+      ...config,
+      managed: true
+    }))
+
+    expect(result).toEqual({ original: true, concurrent: true, managed: true })
+    expect(JSON.parse(fs.files.get(path)!)).toEqual(result)
+    expect(Array.from(fs.files.keys()).some((key) => key.includes('.tmp'))).toBe(false)
+  })
+
+  it('fails closed when every remote settings attempt becomes stale', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const path = '/home/u/.claude/settings.json'
+    fs.files.set(path, `${JSON.stringify({ original: true }, null, 2)}\n`)
+    const chmod = sftp.chmod.bind(sftp)
+    let concurrentVersion = 0
+    sftp.chmod = ((tmpPath, mode, callback): void => {
+      if (tmpPath.startsWith('/home/u/.claude/.')) {
+        concurrentVersion += 1
+        fs.files.set(path, `${JSON.stringify({ concurrentVersion }, null, 2)}\n`)
+      }
+      chmod(tmpPath, mode, callback)
+    }) as SFTPWrapper['chmod']
+
+    const result = await updateHooksJsonRemoteWithRetry(sftp, path, (config) => ({
+      ...config,
+      managed: true
+    }))
+
+    expect(result).toBeNull()
+    expect(JSON.parse(fs.files.get(path)!)).toEqual({ concurrentVersion: 3 })
+    expect(fs.files.has(`${path}.orca-backup`)).toBe(false)
+    expect(Array.from(fs.files.keys()).some((key) => key.includes('.tmp'))).toBe(false)
   })
 
   it('uses OpenSSH overwrite rename when an atomic write updates an existing file', async () => {
