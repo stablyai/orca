@@ -328,6 +328,8 @@ export type FolderWorkspace = {
   folderPath: string
   /** SSH target ID for folder workspaces whose folder path lives remotely. */
   connectionId?: string | null
+  /** Renderer-owned host stamp for host-qualified folder catalogs. */
+  executionHostId?: ExecutionHostId | null
   linkedTask: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
   comment: string

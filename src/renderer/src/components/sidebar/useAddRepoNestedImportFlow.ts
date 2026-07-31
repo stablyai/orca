@@ -15,6 +15,7 @@ import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions, type CapturedRuntimeOwner } from './add-repo-runtime-owner'
 import { completeNestedFolderOpen } from './complete-nested-folder-open'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export function useAddRepoNestedImportFlow({
   nestedAttemptId,
@@ -57,7 +58,7 @@ export function useAddRepoNestedImportFlow({
   onGitRepoReady: (
     repoId: string,
     source: AddRepoExistingWorkspaceSource,
-    runtimeEnvironmentId?: string | null
+    executionHostId?: ExecutionHostId
   ) => Promise<void>
   setIsAdding: (isAdding: boolean) => void
 }): {
@@ -174,11 +175,9 @@ export function useAddRepoNestedImportFlow({
           return
         }
         const completionOwner = nestedConnectionId === null ? nestedRuntimeEnvironmentId : undefined
+        const completionOwnerOptions = worktreeRefreshOptions(completionOwner, nestedConnectionId)
         for (const projectId of importedRepoIds) {
-          await fetchWorktrees(
-            projectId,
-            worktreeRefreshOptions(completionOwner, nestedConnectionId)
-          )
+          await fetchWorktrees(projectId, completionOwnerOptions)
         }
         if (gen !== nestedImportGenRef.current) {
           return
@@ -205,7 +204,7 @@ export function useAddRepoNestedImportFlow({
             : activeRuntimeEnvironmentId?.trim()
               ? 'runtime_server_path'
               : 'local_folder_picker'
-          await onGitRepoReady(repo.id, source, completionOwner)
+          await onGitRepoReady(repo.id, source, completionOwnerOptions.executionHostId)
         }
       } catch (err) {
         if (gen === nestedImportGenRef.current) {

@@ -148,7 +148,7 @@ describe('useRemoteRepo default-checkout handoff', () => {
     expect(mocks.storeState.projectHostSetups).toEqual(
       expect.arrayContaining([expect.objectContaining({ repoId: repo.id, path: repo.path })])
     )
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'ssh:ssh-1')
   })
 
   it('continues to completion when refresh is not authoritative after remote add', async () => {
@@ -170,7 +170,7 @@ describe('useRemoteRepo default-checkout handoff', () => {
       requireAuthoritative: true,
       executionHostId: 'ssh:ssh-1'
     })
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'ssh:ssh-1')
     expect(mocks.stateSetters[3]).not.toHaveBeenCalledWith(
       'Could not refresh project worktrees. Try again.'
     )

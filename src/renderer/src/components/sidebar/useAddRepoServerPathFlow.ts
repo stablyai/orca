@@ -12,6 +12,7 @@ import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 type ShowNestedRepoReview = (args: {
   scan: NestedRepoScanResult
@@ -61,7 +62,7 @@ export function useAddRepoServerPathFlow({
   onGitRepoReady: (
     repoId: string,
     source: AddRepoExistingWorkspaceSource,
-    runtimeEnvironmentId?: string | null
+    executionHostId?: ExecutionHostId
   ) => Promise<void>
   setAddProjectBusyLabel: (label: string | null) => void
 }): {
@@ -165,11 +166,12 @@ export function useAddRepoServerPathFlow({
         if (repo && isGitRepoKind(repo)) {
           // Why: once the repo exists, a transient non-authoritative refresh
           // should fall through to project reveal instead of leaving the add flow open.
-          await fetchWorktrees(repo.id, worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null))
+          const ownerOptions = worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null)
+          await fetchWorktrees(repo.id, ownerOptions)
           if (gen !== serverAddGenRef.current) {
             return
           }
-          await onGitRepoReady(repo.id, 'runtime_server_path', activeRuntimeEnvironmentId ?? null)
+          await onGitRepoReady(repo.id, 'runtime_server_path', ownerOptions.executionHostId)
         } else if (repo) {
           // Why: folder repos skip the Git default-checkout handoff; their synthetic
           // root workspace is opened by the folder add flow.

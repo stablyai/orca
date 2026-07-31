@@ -14,6 +14,7 @@ import type { RepoSlice } from '@/store/slices/repos'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 type ShowNestedRepoReview = (args: {
   scan: NestedRepoScanResult
@@ -60,7 +61,7 @@ export function useAddRepoLocalFolderFlow({
   onGitRepoReady: (
     repoId: string,
     source: AddRepoExistingWorkspaceSource,
-    runtimeEnvironmentId?: string | null
+    executionHostId?: ExecutionHostId
   ) => Promise<void>
   setIsAdding: (isAdding: boolean) => void
   setAddProjectBusyLabel: (label: string | null) => void
@@ -170,14 +171,15 @@ export function useAddRepoLocalFolderFlow({
         }
         if (isGitRepoKind(repo)) {
           // Why: a transient non-authoritative refresh must not strand a persisted repo.
-          await fetchWorktrees(repo.id, worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null))
+          const ownerOptions = worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null)
+          await fetchWorktrees(repo.id, ownerOptions)
           if (gen !== localAddGenRef.current) {
             return { status: 'cancelled' }
           }
           if (mode === 'batch') {
             return { status: 'completed', repo }
           }
-          await onGitRepoReady(repo.id, source, activeRuntimeEnvironmentId ?? null)
+          await onGitRepoReady(repo.id, source, ownerOptions.executionHostId)
         } else {
           // Why: folder repos skip the Git default-checkout handoff and activate
           // their synthetic root workspace in the folder add flow.
@@ -267,7 +269,11 @@ export function useAddRepoLocalFolderFlow({
         )
       }
       if (shouldDeferGitRepoReady && gitRepoIds.length > 0) {
-        await onGitRepoReady(gitRepoIds[0], source, activeRuntimeEnvironmentId ?? null)
+        await onGitRepoReady(
+          gitRepoIds[0],
+          source,
+          worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null).executionHostId
+        )
       }
     },
     [activeRuntimeEnvironmentId, addLocalPathForGeneration, onGitRepoReady]

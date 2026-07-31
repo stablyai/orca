@@ -247,7 +247,7 @@ describe('useCreateRepo default-checkout handoff', () => {
       ...repo,
       executionHostId: 'ssh:ssh-1'
     })
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'ssh:ssh-1')
   })
 
   it('creates projects through the selected runtime environment', async () => {
@@ -282,6 +282,6 @@ describe('useCreateRepo default-checkout handoff', () => {
       ...repo,
       executionHostId: 'runtime:env-1'
     })
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'runtime:env-1')
   })
 })

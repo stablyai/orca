@@ -104,7 +104,7 @@ export default React.memo(function AddRepoDialog({
     setStep,
     // Why: useRemoteRepo closes only for the non-git → confirm-dialog handoff.
     closeForFolderHandoff,
-    (repoId) => completeGitRepoAdd(repoId, 'ssh_remote_path'),
+    (repoId, executionHostId) => completeGitRepoAdd(repoId, 'ssh_remote_path', executionHostId),
     scanNestedRepos,
     showRemoteNestedRepoReview,
     trackRemoteNestedScanResult
@@ -123,7 +123,7 @@ export default React.memo(function AddRepoDialog({
   } = useCreateRepo(
     fetchWorktrees,
     closeForFolderHandoff,
-    (repoId) => completeGitRepoAdd(repoId, 'create_project'),
+    (repoId, executionHostId) => completeGitRepoAdd(repoId, 'create_project', executionHostId),
     {
       hostId: hostSelection.selectedHostId,
       runtimeEnvironmentId: selectedRuntimeEnvironmentId,

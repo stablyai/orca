@@ -60,6 +60,68 @@ beforeEach(() => {
 })
 
 describe('selected Add Project owner routing', () => {
+  it('keeps same-ID project groups and folder workspaces partitioned by host', async () => {
+    const localGroup = {
+      ...projectGroup,
+      id: 'shared-group',
+      name: 'Local group',
+      parentPath: '/local/platform',
+      executionHostId: 'local' as const
+    }
+    const runtimeGroup = {
+      ...projectGroup,
+      id: localGroup.id,
+      name: 'Runtime group',
+      parentPath: '/runtime/platform'
+    }
+    const localFolder: FolderWorkspace = {
+      id: 'shared-folder',
+      projectGroupId: localGroup.id,
+      name: 'Local folder',
+      folderPath: '/local/platform',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const runtimeFolder = {
+      ...localFolder,
+      name: 'Runtime folder',
+      folderPath: '/runtime/platform'
+    }
+    runtimeEnvironmentCall.mockImplementation(async ({ method }) => ({
+      id: `rpc-${method}`,
+      ok: true,
+      result:
+        method === 'projectGroup.list'
+          ? { groups: [runtimeGroup] }
+          : { folderWorkspaces: [runtimeFolder] },
+      _meta: { runtimeId: 'runtime-remote' }
+    }))
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [localGroup],
+      folderWorkspaces: [localFolder]
+    })
+
+    await store.getState().fetchProjectGroups({ runtimeEnvironmentId: 'env-1' })
+    await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: 'env-1' })
+
+    expect(store.getState().projectGroups).toEqual([
+      localGroup,
+      { ...runtimeGroup, executionHostId: 'runtime:env-1' }
+    ])
+    expect(store.getState().folderWorkspaces).toEqual([
+      localFolder,
+      { ...runtimeFolder, executionHostId: 'runtime:env-1' }
+    ])
+  })
+
   it('merges explicit runtime groups and folders without erasing local siblings', async () => {
     const localGroup = { ...projectGroup, id: 'group-local', executionHostId: 'local' as const }
     const runtimeGroup = { ...projectGroup, name: 'Runtime' }
@@ -114,7 +176,10 @@ describe('selected Add Project owner routing', () => {
       localGroup,
       { ...runtimeGroup, executionHostId: 'runtime:env-1' }
     ])
-    expect(store.getState().folderWorkspaces).toEqual([localFolder, runtimeFolder])
+    expect(store.getState().folderWorkspaces).toEqual([
+      localFolder,
+      { ...runtimeFolder, executionHostId: 'runtime:env-1' }
+    ])
 
     projectGroupsList.mockResolvedValue([localGroup])
     folderWorkspacesList.mockResolvedValue([localFolder])
@@ -126,7 +191,10 @@ describe('selected Add Project owner routing', () => {
       localGroup,
       { ...runtimeGroup, executionHostId: 'runtime:env-1' }
     ])
-    expect(store.getState().folderWorkspaces).toEqual([localFolder, runtimeFolder])
+    expect(store.getState().folderWorkspaces).toEqual([
+      { ...localFolder, executionHostId: 'local' },
+      { ...runtimeFolder, executionHostId: 'runtime:env-1' }
+    ])
   })
 
   it('keeps a selected-runtime import refresh across an overlapping local refresh', async () => {
@@ -196,6 +264,237 @@ describe('selected Add Project owner routing', () => {
         { ...runtimeRepo, executionHostId: 'runtime:env-1' }
       ])
     )
+  })
+
+  it('drops older same-host group and folder responses that finish last', async () => {
+    let resolveOldGroup!: (value: unknown) => void
+    let resolveNewGroup!: (value: unknown) => void
+    let resolveOldFolder!: (value: unknown) => void
+    let resolveNewFolder!: (value: unknown) => void
+    const groupResponses = [
+      new Promise((resolve) => {
+        resolveOldGroup = resolve
+      }),
+      new Promise((resolve) => {
+        resolveNewGroup = resolve
+      })
+    ]
+    const folderResponses = [
+      new Promise((resolve) => {
+        resolveOldFolder = resolve
+      }),
+      new Promise((resolve) => {
+        resolveNewFolder = resolve
+      })
+    ]
+    runtimeEnvironmentCall.mockImplementation(({ method }) => {
+      if (method === 'projectGroup.list') {
+        return groupResponses.shift()
+      }
+      if (method === 'folderWorkspace.list') {
+        return folderResponses.shift()
+      }
+      throw new Error(`Unexpected method: ${method}`)
+    })
+    const store = createTestStore()
+    const oldGroup = { ...projectGroup, id: 'group-old', parentPath: '/runtime/old' }
+    const newGroup = { ...projectGroup, id: 'group-new', parentPath: '/runtime/new' }
+    const oldFolder: FolderWorkspace = {
+      id: 'old-folder',
+      projectGroupId: oldGroup.id,
+      name: 'Old folder',
+      folderPath: '/runtime/old',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const newFolder = {
+      ...oldFolder,
+      id: 'new-folder',
+      projectGroupId: newGroup.id,
+      name: 'New folder',
+      folderPath: '/runtime/new'
+    }
+
+    const oldGroupsRequest = store.getState().fetchProjectGroups({ runtimeEnvironmentId: 'env-1' })
+    const newGroupsRequest = store.getState().fetchProjectGroups({ runtimeEnvironmentId: 'env-1' })
+    resolveNewGroup({
+      id: 'rpc-new-group',
+      ok: true,
+      result: { groups: [newGroup] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await newGroupsRequest
+    resolveOldGroup({
+      id: 'rpc-old-group',
+      ok: true,
+      result: { groups: [oldGroup] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await oldGroupsRequest
+
+    store.setState({
+      projectGroups: [{ ...newGroup, executionHostId: 'runtime:env-1' }]
+    })
+    const oldFoldersRequest = store
+      .getState()
+      .fetchFolderWorkspaces({ runtimeEnvironmentId: 'env-1' })
+    const newFoldersRequest = store
+      .getState()
+      .fetchFolderWorkspaces({ runtimeEnvironmentId: 'env-1' })
+    resolveNewFolder({
+      id: 'rpc-new-folder',
+      ok: true,
+      result: { folderWorkspaces: [newFolder] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await newFoldersRequest
+    resolveOldFolder({
+      id: 'rpc-old-folder',
+      ok: true,
+      result: { folderWorkspaces: [oldFolder] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await oldFoldersRequest
+
+    expect(store.getState().projectGroups).toEqual([
+      { ...newGroup, executionHostId: 'runtime:env-1' }
+    ])
+    expect(store.getState().folderWorkspaces).toEqual([
+      { ...newFolder, executionHostId: 'runtime:env-1' }
+    ])
+  })
+
+  it('drops pre-reconnect group and folder responses without pruning the new catalog', async () => {
+    let resolveOldGroup!: (value: unknown) => void
+    let resolveOldFolder!: (value: unknown) => void
+    runtimeEnvironmentCall.mockImplementation(({ method }) => {
+      if (method === 'projectGroup.list') {
+        return new Promise((resolve) => {
+          resolveOldGroup = resolve
+        })
+      }
+      if (method === 'folderWorkspace.list') {
+        return new Promise((resolve) => {
+          resolveOldFolder = resolve
+        })
+      }
+      throw new Error(`Unexpected method: ${method}`)
+    })
+    const store = createTestStore()
+    store
+      .getState()
+      .setRuntimeEnvironments([{ id: 'env-1', createdAt: 1, pairingRevision: 1 } as never])
+    const pending = store.getState().fetchProjectGroups({ runtimeEnvironmentId: 'env-1' })
+    const pendingFolders = store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: 'env-1' })
+    await vi.waitFor(() => expect(resolveOldGroup).toBeTypeOf('function'))
+    await vi.waitFor(() => expect(resolveOldFolder).toBeTypeOf('function'))
+    store
+      .getState()
+      .setRuntimeEnvironments([{ id: 'env-1', createdAt: 1, pairingRevision: 2 } as never])
+    const newGroup = {
+      ...projectGroup,
+      id: 'group-after-reconnect',
+      executionHostId: 'runtime:env-1'
+    }
+    const newFolder: FolderWorkspace = {
+      id: 'folder-after-reconnect',
+      projectGroupId: newGroup.id,
+      name: 'New folder',
+      folderPath: '/runtime/new',
+      executionHostId: 'runtime:env-1',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    store.setState({ projectGroups: [newGroup], folderWorkspaces: [newFolder] })
+    resolveOldGroup({
+      id: 'rpc-before-reconnect',
+      ok: true,
+      result: { groups: [{ ...projectGroup, id: 'stale-group' }] },
+      _meta: { runtimeId: 'runtime-old' }
+    })
+    resolveOldFolder({
+      id: 'rpc-folder-before-reconnect',
+      ok: true,
+      result: {
+        folderWorkspaces: [
+          {
+            ...newFolder,
+            id: 'stale-folder',
+            executionHostId: undefined
+          }
+        ]
+      },
+      _meta: { runtimeId: 'runtime-old' }
+    })
+    await pending
+    await pendingFolders
+
+    expect(store.getState().projectGroups).toEqual([newGroup])
+    expect(store.getState().folderWorkspaces).toEqual([newFolder])
+  })
+
+  it('prunes deleted desktop and direct-SSH catalog rows without erasing runtime siblings', async () => {
+    const sshGroup = {
+      ...projectGroup,
+      id: 'ssh-group',
+      connectionId: 'ssh-1',
+      executionHostId: 'ssh:ssh-1'
+    }
+    const runtimeGroup = {
+      ...projectGroup,
+      id: sshGroup.id,
+      executionHostId: 'runtime:env-1'
+    }
+    const sshFolder: FolderWorkspace = {
+      id: 'ssh-folder',
+      projectGroupId: sshGroup.id,
+      name: 'SSH folder',
+      folderPath: '/srv/folder',
+      connectionId: 'ssh-1',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const runtimeFolder = {
+      ...sshFolder,
+      id: sshFolder.id,
+      projectGroupId: runtimeGroup.id,
+      connectionId: null,
+      executionHostId: 'runtime:env-1' as const
+    }
+    projectGroupsList.mockResolvedValue([])
+    folderWorkspacesList.mockResolvedValue([])
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [sshGroup, runtimeGroup],
+      folderWorkspaces: [sshFolder, runtimeFolder]
+    })
+
+    await store.getState().fetchProjectGroups({ runtimeEnvironmentId: null })
+    await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: null })
+
+    expect(store.getState().projectGroups).toEqual([runtimeGroup])
+    expect(store.getState().folderWorkspaces).toEqual([runtimeFolder])
   })
 
   it('pins selected SSH scans and cancellation to local IPC over an ambient runtime', async () => {

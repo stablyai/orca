@@ -28,7 +28,11 @@ export function useAddRepoCloneFlow({
     repoId: string,
     options?: { requireAuthoritative?: boolean; executionHostId?: ExecutionHostId }
   ) => Promise<unknown>
-  onGitRepoReady: (repoId: string, source: AddRepoExistingWorkspaceSource) => Promise<void>
+  onGitRepoReady: (
+    repoId: string,
+    source: AddRepoExistingWorkspaceSource,
+    executionHostId?: ExecutionHostId
+  ) => Promise<void>
 }): {
   cloneUrl: string
   cloneDestination: string
@@ -163,14 +167,12 @@ export function useAddRepoCloneFlow({
       )
       // Why: once the repo exists, a transient non-authoritative refresh
       // should fall through to project reveal instead of leaving the add flow open.
-      await fetchWorktrees(
-        ownedRepo.id,
-        worktreeRefreshOptions(activeRuntimeEnvironmentId, sshTargetId)
-      )
+      const ownerOptions = worktreeRefreshOptions(activeRuntimeEnvironmentId, sshTargetId)
+      await fetchWorktrees(ownedRepo.id, ownerOptions)
       if (gen !== cloneGenRef.current || requestHostToken !== hostTokenRef.current) {
         return
       }
-      await onGitRepoReady(ownedRepo.id, 'clone_url')
+      await onGitRepoReady(ownedRepo.id, 'clone_url', ownerOptions.executionHostId)
     } catch (err) {
       if (gen !== cloneGenRef.current || requestHostToken !== hostTokenRef.current) {
         return

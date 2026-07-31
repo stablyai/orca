@@ -22,7 +22,7 @@ function getResolvedFolderHost(
   const group = folder
     ? findIndexedProjectGroupOwner(state.projectGroups, folder.projectGroupId)
     : null
-  const explicitHost = parseExecutionHostId(group?.executionHostId)
+  const explicitHost = parseExecutionHostId(folder?.executionHostId ?? group?.executionHostId)
   if (explicitHost) {
     return explicitHost.id
   }

@@ -20,7 +20,7 @@ export function useRemoteRepo(
   ) => Promise<unknown>,
   setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'nested') => void,
   closeModal: () => void,
-  onGitRepoReady?: (repoId: string) => void | Promise<void>,
+  onGitRepoReady?: (repoId: string, executionHostId?: ExecutionHostId) => void | Promise<void>,
   scanNestedRepos?: (
     path: string,
     connectionId?: string,
@@ -206,11 +206,12 @@ export function useRemoteRepo(
       )
       // Why: the repo is already persisted here; if SSH refresh is temporarily
       // non-authoritative, finish onto the project row instead of stranding the dialog.
-      await fetchWorktrees(repo.id, worktreeRefreshOptions(undefined, selectedTargetId))
+      const ownerOptions = worktreeRefreshOptions(undefined, selectedTargetId)
+      await fetchWorktrees(repo.id, ownerOptions)
       if (!mountedRef.current || gen !== remoteGenRef.current) {
         return
       }
-      await onGitRepoReady?.(repo.id)
+      await onGitRepoReady?.(repo.id, ownerOptions.executionHostId)
     } catch (err) {
       const message = extractIpcErrorMessage(err, String(err))
       if (message.includes('Not a valid git repository')) {

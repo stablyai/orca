@@ -2,7 +2,10 @@ import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../sha
 
 type WorktreeOwnerRecord = Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>
 type RepoOwnerRecord = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
-type FolderWorkspaceOwnerRecord = Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId'>
+type FolderWorkspaceOwnerRecord = Pick<
+  FolderWorkspace,
+  'id' | 'projectGroupId' | 'connectionId' | 'executionHostId'
+>
 type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>
 
 // Why: owner resolution runs inside retained selectors and interaction paths;

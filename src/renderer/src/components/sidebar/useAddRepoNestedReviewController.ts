@@ -6,6 +6,7 @@ import { useAddRepoNestedImportFlow } from './useAddRepoNestedImportFlow'
 import { useAddRepoNestedReviewState } from './useAddRepoNestedReviewState'
 import { useAddRepoRemoteNestedScan } from './use-add-repo-remote-nested-scan'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export function useAddRepoNestedReviewController({
   activeRuntimeEnvironmentId,
@@ -38,7 +39,7 @@ export function useAddRepoNestedReviewController({
   onGitRepoReady: (
     repoId: string,
     source: AddRepoExistingWorkspaceSource,
-    runtimeEnvironmentId?: string | null
+    executionHostId?: ExecutionHostId
   ) => Promise<void>
   setIsAdding: (isAdding: boolean) => void
   setStep: Dispatch<SetStateAction<AddRepoDialogStep>>

@@ -14,7 +14,10 @@ import {
 type RuntimeExecutionHost = Extract<ParsedExecutionHost, { kind: 'runtime' }>
 
 export type FolderWorkspaceRuntimeOwnerState = SingleRuntimeLegacyOwnerState & {
-  folderWorkspaces?: readonly Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId'>[]
+  folderWorkspaces?: readonly Pick<
+    FolderWorkspace,
+    'id' | 'projectGroupId' | 'connectionId' | 'executionHostId'
+  >[]
   projectGroups?: readonly Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>[]
   restoredRuntimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
 }
@@ -22,7 +25,7 @@ export type FolderWorkspaceRuntimeOwnerState = SingleRuntimeLegacyOwnerState & {
 export function findFolderWorkspaceOwner(
   state: FolderWorkspaceRuntimeOwnerState,
   folderWorkspaceId: string
-): Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId'> | null {
+): Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId' | 'executionHostId'> | null {
   return findIndexedFolderWorkspaceOwner(state.folderWorkspaces, folderWorkspaceId)
 }
 
@@ -56,7 +59,9 @@ export function getRuntimeEnvironmentIdForFolderWorkspace(
 ): string | null {
   const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId)
   const projectGroup = findFolderProjectGroup(state, folderWorkspaceId)
-  const parsed = parseExecutionHostId(projectGroup?.executionHostId)
+  const parsed = parseExecutionHostId(
+    folderWorkspace?.executionHostId ?? projectGroup?.executionHostId
+  )
   if (parsed?.kind === 'runtime') {
     return parsed.environmentId
   }
@@ -81,7 +86,9 @@ export function getExplicitRuntimeEnvironmentIdForFolderWorkspace(
 ): string | null {
   const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId)
   const projectGroup = findFolderProjectGroup(state, folderWorkspaceId)
-  const parsed = parseExecutionHostId(projectGroup?.executionHostId)
+  const parsed = parseExecutionHostId(
+    folderWorkspace?.executionHostId ?? projectGroup?.executionHostId
+  )
   if (parsed) {
     return parsed.kind === 'runtime' ? parsed.environmentId : null
   }
@@ -97,7 +104,9 @@ export function getExecutionHostIdForFolderWorkspace(
 ): ExecutionHostId {
   const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId)
   const projectGroup = findFolderProjectGroup(state, folderWorkspaceId)
-  const parsed = parseExecutionHostId(projectGroup?.executionHostId)
+  const parsed = parseExecutionHostId(
+    folderWorkspace?.executionHostId ?? projectGroup?.executionHostId
+  )
   if (parsed) {
     return parsed.id
   }

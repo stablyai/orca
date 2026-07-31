@@ -62,6 +62,27 @@ describe('getSettingsForWorktreeRuntimeOwner', () => {
     expect(getExecutionHostIdForWorktree(state, 'folder:runtime-folder')).toBe('runtime:folder-env')
   })
 
+  it('uses the folder host stamp when same-ID project groups exist on different hosts', () => {
+    const collisionState: WorktreeRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: null },
+      folderWorkspaces: [
+        {
+          id: 'same-folder',
+          projectGroupId: 'same-group',
+          executionHostId: 'runtime:folder-env'
+        }
+      ],
+      projectGroups: [
+        { id: 'same-group', connectionId: null, executionHostId: 'local' },
+        { id: 'same-group', connectionId: null, executionHostId: 'runtime:folder-env' }
+      ]
+    }
+
+    expect(getExecutionHostIdForWorktree(collisionState, 'folder:same-folder')).toBe(
+      'runtime:folder-env'
+    )
+  })
+
   it('routes restored runtime folder workspaces before their catalog loads', () => {
     const restoredFolderState: WorktreeRuntimeOwnerState = {
       settings: { activeRuntimeEnvironmentId: 'focused-env' },

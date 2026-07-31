@@ -270,7 +270,7 @@ describe('project group store routing', () => {
           { projectGroupId: projectGroup.id, name: 'Runtime folder' },
           { runtimeEnvironmentId: 'env-1' }
         )
-    ).resolves.toEqual(folderWorkspace)
+    ).resolves.toEqual({ ...folderWorkspace, executionHostId: 'runtime:env-1' })
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
@@ -350,7 +350,7 @@ describe('project group store routing', () => {
         name: 'Refund fix',
         linkedTask
       })
-    ).resolves.toEqual(folderWorkspace)
+    ).resolves.toEqual({ ...folderWorkspace, executionHostId: 'local' })
     await expect(
       store.getState().updateFolderWorkspace(folderWorkspace.id, { comment: 'Ready' })
     ).resolves.toBe(true)

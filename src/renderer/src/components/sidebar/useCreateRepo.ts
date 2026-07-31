@@ -21,7 +21,7 @@ export function useCreateRepo(
     options?: { requireAuthoritative?: boolean; executionHostId?: ExecutionHostId }
   ) => Promise<boolean>,
   closeModal: () => void,
-  onGitRepoReady?: (repoId: string) => void | Promise<void>,
+  onGitRepoReady?: (repoId: string, executionHostId?: ExecutionHostId) => void | Promise<void>,
   options: {
     hostId?: string | null
     runtimeEnvironmentId?: string | null
@@ -172,10 +172,11 @@ export function useCreateRepo(
         // Why: Git repos use the shared default-checkout completion path.
         // Why: if refresh is temporarily non-authoritative, the shared opener
         // still reveals the project so the user is not left in a completed add flow.
-        await fetchWorktrees(
-          repo.id,
-          worktreeRefreshOptions(options.runtimeEnvironmentId, options.sshTargetId)
+        const ownerOptions = worktreeRefreshOptions(
+          options.runtimeEnvironmentId,
+          options.sshTargetId
         )
+        await fetchWorktrees(repo.id, ownerOptions)
         if (
           gen !== createGenRef.current ||
           requestHostToken !== hostTokenRef.current ||
@@ -183,7 +184,9 @@ export function useCreateRepo(
         ) {
           return
         }
-        await onGitRepoReady?.(repo.id)
+        await (ownerOptions.executionHostId
+          ? onGitRepoReady?.(repo.id, ownerOptions.executionHostId)
+          : onGitRepoReady?.(repo.id))
       } else {
         // Why: folder repos skip the Git default-checkout handoff, so activate the synthetic
         // root workspace before closing. Matches addNonGitFolder's behavior.
@@ -201,7 +204,13 @@ export function useCreateRepo(
         ) {
           return
         }
-        const folderWorktree = useAppStore.getState().worktreesByRepo[repo.id]?.[0]
+        const folderWorktree = useAppStore
+          .getState()
+          .worktreesByRepo[repo.id]?.find(
+            (worktree) =>
+              ownerOptions.executionHostId === undefined ||
+              worktree.hostId === ownerOptions.executionHostId
+          )
         if (folderWorktree) {
           activateAndRevealWorktree(folderWorktree.id, { sidebarRevealBehavior: 'auto' })
         }

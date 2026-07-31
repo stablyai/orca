@@ -149,7 +149,7 @@ describe('useAddRepoCloneFlow', () => {
     expect(mocks.storeState.projectHostSetups).toEqual(
       expect.arrayContaining([expect.objectContaining({ repoId: repo.id, path: repo.path })])
     )
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url')
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url', 'ssh:ssh-1')
   })
 
   it('does not prefill SSH clone destinations from the local workspace directory', async () => {
@@ -232,6 +232,6 @@ describe('useAddRepoCloneFlow', () => {
       executionHostId: 'runtime:env-1'
     })
     expect(mocks.storeState.repos).toContainEqual(localRepo)
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url')
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url', 'runtime:env-1')
   })
 })
