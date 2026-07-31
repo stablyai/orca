@@ -1,0 +1,284 @@
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtemp } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import type { ElectronApplication, Locator, Page, TestInfo } from '@stablyai/playwright-test'
+import { RuntimeClient } from '../../src/cli/runtime/client'
+import type { FolderWorkspace, ProjectGroup, Repo } from '../../src/shared/types'
+import { expect, test } from './helpers/orca-app'
+import {
+  createRuntimeDesktopPairingOffer,
+  launchPairedElectronClient
+} from './helpers/paired-electron-client'
+import { waitForSessionReady } from './helpers/store'
+
+function initializeGitRepo(repoPath: string, markerName: string): void {
+  mkdirSync(repoPath, { recursive: true })
+  execFileSync('git', ['init'], { cwd: repoPath, stdio: 'pipe' })
+  execFileSync('git', ['config', 'user.email', 'pr11346@test.local'], {
+    cwd: repoPath,
+    stdio: 'pipe'
+  })
+  execFileSync('git', ['config', 'user.name', 'PR 11346 E2E'], {
+    cwd: repoPath,
+    stdio: 'pipe'
+  })
+  writeFileSync(path.join(repoPath, markerName), `# ${path.basename(repoPath)} authority\n`)
+  execFileSync('git', ['add', markerName], { cwd: repoPath, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-m', 'Initial remote fixture'], {
+    cwd: repoPath,
+    stdio: 'pipe'
+  })
+}
+
+async function createProjectFixtures(): Promise<{
+  folderPath: string
+  gitPath: string
+  nestedParentPath: string
+  nestedRepoPaths: string[]
+  rootPath: string
+}> {
+  const rootPath = realpathSync(await mkdtemp(path.join(os.tmpdir(), 'orca-pr11346-headed-')))
+  const gitPath = path.join(rootPath, 'remote-git-project')
+  const folderPath = path.join(rootPath, 'remote-plain-folder')
+  const nestedParentPath = path.join(rootPath, 'remote-nested-projects')
+  const nestedRepoPaths = ['nested-api', 'nested-web'].map((name) =>
+    path.join(nestedParentPath, name)
+  )
+  mkdirSync(folderPath)
+  writeFileSync(path.join(folderPath, 'REMOTE_FOLDER_MARKER.txt'), 'remote-folder-authority\n')
+  initializeGitRepo(gitPath, 'REMOTE_GIT_MARKER.md')
+  nestedRepoPaths.forEach((repoPath) => initializeGitRepo(repoPath, 'NESTED_REMOTE_MARKER.md'))
+  return { folderPath, gitPath, nestedParentPath, nestedRepoPaths, rootPath }
+}
+
+async function selectRuntimeHostAndOpenManualPath(
+  page: Page,
+  runtimeName: string
+): Promise<Locator> {
+  await page
+    .getByRole('button', { name: /Add Project/i })
+    .first()
+    .click()
+  const dialog = page.getByRole('dialog', { name: /Add a project/i })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('combobox').click()
+  await page.getByText(runtimeName, { exact: true }).click()
+  await expect(dialog.getByRole('combobox')).toContainText(runtimeName)
+  await dialog.getByRole('button', { name: /Browse folder|Browse host/i }).click()
+  const browseDialog = page.getByRole('dialog', { name: /Browse host filesystem/i })
+  await expect(browseDialog).toBeVisible()
+  await browseDialog.getByRole('button', { name: /^Cancel$/i }).click()
+  const manualDialog = page.getByRole('dialog', { name: /Open host project/i })
+  await expect(manualDialog.locator('#server-project-path')).toBeVisible()
+  return manualDialog
+}
+
+async function listRuntimeInventory(client: RuntimeClient): Promise<{
+  folderWorkspaces: FolderWorkspace[]
+  projectGroups: ProjectGroup[]
+  repos: Repo[]
+}> {
+  const [repoResult, folderResult, projectGroupResult] = await Promise.all([
+    client.call<{ repos: Repo[] }>('repo.list'),
+    client.call<{ folderWorkspaces: FolderWorkspace[] }>('folderWorkspace.list'),
+    client.call<{ groups: ProjectGroup[] }>('projectGroup.list')
+  ])
+  return {
+    repos: repoResult.result.repos,
+    folderWorkspaces: folderResult.result.folderWorkspaces,
+    projectGroups: projectGroupResult.result.groups
+  }
+}
+
+async function runSelectedRuntimeAddJourney(
+  electronApp: ElectronApplication,
+  orcaPage: Page,
+  testInfo: TestInfo,
+  headful: boolean
+): Promise<void> {
+  const runtimeName = `PR 11346 ${headful ? 'headed' : 'headless'} runtime`
+  const fixture = await createProjectFixtures()
+  await waitForSessionReady(orcaPage)
+  const serverVisible = await electronApp.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows().some((window) => window.isVisible())
+  )
+  expect(serverVisible).toBe(headful)
+
+  const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+  const client = await launchPairedElectronClient(offer, testInfo, runtimeName)
+  const serverUserDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+  const clientUserDataDir = await client.app.evaluate(({ app }) => app.getPath('userData'))
+  const serverRuntime = new RuntimeClient(serverUserDataDir)
+  const clientLocalRuntime = new RuntimeClient(clientUserDataDir)
+
+  try {
+    if (headful) {
+      await client.app.evaluate(({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows()[0]?.show()
+      })
+      expect(
+        await client.app.evaluate(
+          ({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isVisible() ?? false
+        )
+      ).toBe(true)
+    }
+    const settings = await client.page.evaluate(async () => {
+      const next = await window.api.settings.setActiveRuntimeEnvironmentPreference({
+        environmentId: null
+      })
+      window.__store?.setState({ settings: next })
+      return next
+    })
+    expect(settings.activeRuntimeEnvironmentId).toBeNull()
+
+    const initialServerInventory = await listRuntimeInventory(serverRuntime)
+    const initialClientInventory = await listRuntimeInventory(clientLocalRuntime)
+    expect(initialServerInventory.repos.map((repo) => repo.path)).not.toContain(fixture.gitPath)
+    expect(initialClientInventory.repos.map((repo) => repo.path)).not.toContain(fixture.gitPath)
+
+    const gitDialog = await selectRuntimeHostAndOpenManualPath(client.page, runtimeName)
+    await gitDialog.locator('#server-project-path').fill(fixture.gitPath)
+    await gitDialog.getByRole('button', { name: /Add Git Project/i }).click()
+    await expect(gitDialog).toBeHidden({ timeout: 30_000 })
+
+    const folderDialog = await selectRuntimeHostAndOpenManualPath(client.page, runtimeName)
+    await folderDialog.locator('#server-project-path').fill(fixture.folderPath)
+    await folderDialog.getByRole('button', { name: /Open as Folder/i }).click()
+    await expect(folderDialog).toBeHidden({ timeout: 30_000 })
+
+    const nestedDialog = await selectRuntimeHostAndOpenManualPath(client.page, runtimeName)
+    await nestedDialog.locator('#server-project-path').fill(fixture.nestedParentPath)
+    await nestedDialog.getByRole('button', { name: /Add Git Project/i }).click()
+    const importDialog = client.page.getByRole('dialog', {
+      name: /Import repositories from folder/i
+    })
+    await expect(importDialog.getByText('nested-api', { exact: true }).first()).toBeVisible({
+      timeout: 30_000
+    })
+    await expect(importDialog.getByText('nested-web', { exact: true }).first()).toBeVisible()
+    await importDialog.getByRole('button', { name: 'Yes, import as group', exact: true }).click()
+    await expect(importDialog).toBeHidden({ timeout: 30_000 })
+
+    const remoteBrowse = await client.page.evaluate(
+      async ({ environmentId, rootPath }) => {
+        const response = await window.api.runtimeEnvironments.call({
+          selector: environmentId,
+          method: 'files.browseServerDir',
+          params: { path: rootPath },
+          timeoutMs: 15_000
+        })
+        if (!response.ok) {
+          throw new Error(response.error.message)
+        }
+        return response.result as { entries: { name: string; isDirectory: boolean }[] }
+      },
+      { environmentId: client.environmentId, rootPath: fixture.rootPath }
+    )
+    expect(remoteBrowse.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: path.basename(fixture.gitPath), isDirectory: true }),
+        expect.objectContaining({ name: path.basename(fixture.folderPath), isDirectory: true }),
+        expect.objectContaining({
+          name: path.basename(fixture.nestedParentPath),
+          isDirectory: true
+        })
+      ])
+    )
+
+    await expect
+      .poll(async () => {
+        const inventory = await listRuntimeInventory(serverRuntime)
+        return {
+          groupParentPaths: inventory.projectGroups.map((group) => group.parentPath),
+          repoPaths: inventory.repos.map((repo) => repo.path)
+        }
+      })
+      .toEqual({
+        groupParentPaths: expect.arrayContaining([fixture.nestedParentPath]),
+        repoPaths: expect.arrayContaining([
+          fixture.gitPath,
+          fixture.folderPath,
+          ...fixture.nestedRepoPaths
+        ])
+      })
+
+    const clientRegistration = await client.page.evaluate(
+      ({ environmentId, folderPath, gitPath, nestedParentPath, nestedRepoPaths }) => {
+        const state = window.__store?.getState()
+        const nestedGroup = state?.projectGroups.find(
+          (group) => group.parentPath === nestedParentPath
+        )
+        const nestedRepos = state?.repos.filter((repo) => nestedRepoPaths.includes(repo.path)) ?? []
+        return {
+          folderKind: state?.repos.find((repo) => repo.path === folderPath)?.kind ?? null,
+          folderOwner:
+            state?.repos.find((repo) => repo.path === folderPath)?.executionHostId ?? null,
+          gitOwner: state?.repos.find((repo) => repo.path === gitPath)?.executionHostId ?? null,
+          nestedGroupOwner: nestedGroup?.executionHostId ?? null,
+          nestedRepoOwners: nestedRepos.map((repo) => repo.executionHostId ?? null).sort(),
+          nestedReposInGroup:
+            nestedGroup !== undefined &&
+            nestedRepos.length === nestedRepoPaths.length &&
+            nestedRepos.every((repo) => repo.projectGroupId === nestedGroup.id),
+          activeRuntimeEnvironmentId: state?.settings?.activeRuntimeEnvironmentId ?? null,
+          expectedOwner: `runtime:${environmentId}`
+        }
+      },
+      {
+        environmentId: client.environmentId,
+        folderPath: fixture.folderPath,
+        gitPath: fixture.gitPath,
+        nestedParentPath: fixture.nestedParentPath,
+        nestedRepoPaths: fixture.nestedRepoPaths
+      }
+    )
+    expect(clientRegistration).toEqual({
+      activeRuntimeEnvironmentId: null,
+      expectedOwner: `runtime:${client.environmentId}`,
+      folderKind: 'folder',
+      folderOwner: `runtime:${client.environmentId}`,
+      gitOwner: `runtime:${client.environmentId}`,
+      nestedGroupOwner: `runtime:${client.environmentId}`,
+      nestedRepoOwners: [`runtime:${client.environmentId}`, `runtime:${client.environmentId}`],
+      nestedReposInGroup: true
+    })
+
+    const finalClientInventory = await listRuntimeInventory(clientLocalRuntime)
+    expect(finalClientInventory.repos.map((repo) => repo.path)).not.toContain(fixture.gitPath)
+    expect(finalClientInventory.repos.map((repo) => repo.path)).not.toContain(fixture.folderPath)
+    expect(finalClientInventory.repos.map((repo) => repo.path)).toEqual(
+      expect.not.arrayContaining(fixture.nestedRepoPaths)
+    )
+    expect(finalClientInventory.projectGroups.map((group) => group.parentPath)).not.toContain(
+      fixture.nestedParentPath
+    )
+    expect(
+      finalClientInventory.folderWorkspaces.map((workspace) => workspace.folderPath)
+    ).not.toContain(fixture.folderPath)
+    await client.page.screenshot({
+      path: testInfo.outputPath(`${headful ? 'headed' : 'headless'}-selected-runtime-add.png`),
+      fullPage: true
+    })
+  } finally {
+    await client.dispose()
+    rmSync(fixture.rootPath, { recursive: true, force: true })
+  }
+}
+
+test('routes Add Project server paths to a selected non-default headed runtime @headful', async ({
+  electronApp,
+  orcaPage
+}, testInfo) => {
+  test.setTimeout(180_000)
+  await runSelectedRuntimeAddJourney(electronApp, orcaPage, testInfo, true)
+})
+
+test('keeps selected runtime Add Project routing in headless paired parity', async ({
+  electronApp,
+  orcaPage
+}, testInfo) => {
+  test.setTimeout(180_000)
+  await runSelectedRuntimeAddJourney(electronApp, orcaPage, testInfo, false)
+})
