@@ -47,7 +47,7 @@ export function useMacosTccPromptNotice(): void {
         {
           description: translate(
             'auto.hooks.useMacosTccPromptNotice.description',
-            'MacOS permission messages may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.'
+            'Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.'
           ),
           duration: Infinity,
           onDismiss: acknowledge,
