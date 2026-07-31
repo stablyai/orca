@@ -52,8 +52,7 @@ export type TrackedClaudeSubagent = {
 }
 
 /** One agent entry from the `background_tasks` array Claude attaches to Stop
- *  (and SubagentStop) hook payloads. Non-agent task types (background shells,
- *  crons) are filtered out at read time. */
+ *  (and SubagentStop) hook payloads. Non-agent tasks do not become rows. */
 export type ClaudeBackgroundAgentTask = {
   id: string
   agentType?: string
@@ -170,18 +169,26 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   present: boolean
   tasks: ClaudeBackgroundAgentTask[]
   truncated: boolean
+  hasRunningShellOrMonitor: boolean
 } {
   const raw = hookPayload['background_tasks']
   if (!Array.isArray(raw)) {
-    return { present: false, tasks: [], truncated: false }
+    return { present: false, tasks: [], truncated: false, hasRunningShellOrMonitor: false }
   }
   const tasks: ClaudeBackgroundAgentTask[] = []
   let truncated = false
+  let hasRunningShellOrMonitor = false
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) {
       continue
     }
     const obj = item as Record<string, unknown>
+    if (
+      (obj.type === 'shell' || obj.type === 'monitor') &&
+      (obj.status === 'running' || obj.status === 'pending')
+    ) {
+      hasRunningShellOrMonitor = true
+    }
     if (obj.type !== 'subagent' && obj.type !== 'teammate') {
       continue
     }
@@ -192,7 +199,7 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       // Why: a capped inventory cannot prove a tracked id is absent; callers
       // must retain unlisted rows rather than deleting live overflow tasks.
       truncated = true
-      break
+      continue
     }
     tasks.push({
       id: obj.id,
@@ -202,7 +209,7 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       teammate: obj.type === 'teammate'
     })
   }
-  return { present: true, tasks, truncated }
+  return { present: true, tasks, truncated, hasRunningShellOrMonitor }
 }
 
 /** Fold a lead Stop's `background_tasks` into the lifecycle-tracked roster.
