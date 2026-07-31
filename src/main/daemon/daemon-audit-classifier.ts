@@ -123,14 +123,14 @@ export async function classifyDaemonAuditFailure(
     context.endpointKind === 'unix-socket' ? ['endpoint_stat'] : [],
     options.additionalEvidenceSources ?? []
   )
-  if (
-    options.endpointGoneProof &&
-    context.endpointKind === 'windows-named-pipe' &&
-    exactIncarnation
-  ) {
+  const windowsNamedPipeMissing =
+    options.endpointGoneProof === 'windows_named_pipe_missing' &&
+    context.endpointKind === 'windows-named-pipe'
+  const observedEndpointState = windowsNamedPipeMissing ? 'missing' : endpointState
+  if (windowsNamedPipeMissing && exactIncarnation && processEvidence.state !== 'present') {
     return {
       state: 'gone',
-      reason: options.endpointGoneProof,
+      reason: 'windows_named_pipe_missing',
       trigger,
       evidenceSources,
       context,
@@ -138,8 +138,8 @@ export async function classifyDaemonAuditFailure(
       reachability,
       inventoryAuthority: 'unavailable',
       processLiveness: 'gone',
-      processReason: options.endpointGoneProof,
-      endpointState: 'missing',
+      processReason: 'windows_named_pipe_missing',
+      endpointState: observedEndpointState,
       observedAtMs: Date.now()
     }
   }
@@ -155,7 +155,7 @@ export async function classifyDaemonAuditFailure(
       inventoryAuthority: 'unavailable',
       processLiveness: 'gone',
       processReason: processEvidence.reason,
-      endpointState,
+      endpointState: observedEndpointState,
       observedAtMs: Date.now()
     }
   }
@@ -170,7 +170,7 @@ export async function classifyDaemonAuditFailure(
     inventoryAuthority: 'unavailable',
     processLiveness: processEvidence.state,
     processReason: processEvidence.reason,
-    endpointState,
+    endpointState: observedEndpointState,
     observedAtMs: Date.now()
   }
 }
@@ -192,9 +192,6 @@ async function inspectDaemonEndpointState(
 function reachabilityForTrigger(
   trigger: DaemonAuditFailureTrigger
 ): 'authenticated' | 'disconnected' | 'unknown' {
-  if (trigger === 'endpoint_identity_changed') {
-    return 'authenticated'
-  }
   if (
     trigger === 'transport_closed' ||
     trigger === 'token_missing_after_authenticated_disconnect'

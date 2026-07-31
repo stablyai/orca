@@ -64,11 +64,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Why: building once avoids five parallel electron-vite builds inside
-      # Playwright globalSetup, which otherwise contends for CPU/RAM on OSS
-      # runners before the sharded tests even start.
+      # Why: building here avoids parallel builds inside Playwright globalSetup;
+      # paired-browser specs also need the standalone web bundle.
       - name: Build Electron app for E2E
-        run: npx electron-vite build --mode e2e
+        env:
+          VITE_EXPOSE_STORE: 'true'
+        run: |
+          npx electron-vite build --mode e2e
+          pnpm run build:web-from-renderer
 
       - name: Upload E2E build output
         uses: actions/upload-artifact@v7

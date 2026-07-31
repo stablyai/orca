@@ -6,6 +6,7 @@ import {
   normalizeTerminalPasteLineEndings,
   wrapTerminalBracketedPasteText
 } from '@/components/terminal-pane/terminal-bracketed-paste'
+import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-inspection'
 
 // Why: bracketed paste markers let supported TUIs treat generated prompt text
@@ -21,6 +22,17 @@ const AGENT_DRAFT_PASTE_INERT_ESCAPE = '\u241b'
 export type AgentDraftPtyInputWriter = (data: string) => boolean | Promise<boolean>
 
 export async function sendAgentDraftPasteContent(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  ptyId: string,
+  content: string,
+  writePty?: AgentDraftPtyInputWriter
+): Promise<boolean> {
+  return await runTerminalPtyInputTransaction(ptyId, () =>
+    sendAgentDraftPasteContentNow(settings, ptyId, content, writePty)
+  )
+}
+
+async function sendAgentDraftPasteContentNow(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
   content: string,

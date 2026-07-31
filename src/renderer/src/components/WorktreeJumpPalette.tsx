@@ -1267,22 +1267,25 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   )
 
   const handleSelectWorktree = useCallback(
-    (worktreeId: string) => {
-      const worktree = findWorktreeById(useAppStore.getState().worktreesByRepo, worktreeId)
-      if (!worktree) {
+    (worktree: Worktree) => {
+      const current = useAppStore.getState().getKnownWorktreeById(worktree.id, worktree.hostId)
+      if (!current) {
         toast.error(
           translate('auto.components.WorktreeJumpPalette.2c38630a01', 'Workspace no longer exists')
         )
         return
       }
-      const activation = activateAndRevealWorktree(worktreeId)
+      const activation = activateAndRevealWorktree(
+        worktree.id,
+        worktree.hostId ? { executionHostId: worktree.hostId } : {}
+      )
       recordFeatureInteraction('cmd-j-workspace-open')
       skipRestoreFocusRef.current = true
       closeModal()
       setSelectedItemId('')
       // Why: #9939 — the unscoped fallback grabs the first terminal in the document, which is
       // often the worktree we just left, now hidden. Focus the destination's own tab instead.
-      if (!queueWorkspaceActivationTerminalFocus(worktreeId, activation)) {
+      if (!queueWorkspaceActivationTerminalFocus(worktree.id, activation)) {
         focusFallbackSurface()
       }
     },
@@ -1304,7 +1307,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }
       // Why: capture page info before activateAndRevealWorktree mutates store state — a later findBrowserSelection would be unreliable.
       const { worktree, workspace, page } = selection
-      const activated = activateAndRevealWorktree(worktree.id)
+      const activated = activateAndRevealWorktree(
+        worktree.id,
+        worktree.hostId ? { executionHostId: worktree.hostId } : {}
+      )
       if (!activated) {
         toast.error(
           translate('auto.components.WorktreeJumpPalette.2c38630a01', 'Workspace no longer exists')
@@ -1470,7 +1476,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const handleSelectItem = useCallback(
     (item: PaletteItem) => {
       if (item.type === 'worktree') {
-        handleSelectWorktree(item.worktree.id)
+        handleSelectWorktree(item.worktree)
       } else if (item.type === 'project-target') {
         handleSelectProjectTarget(item.result)
       } else if (item.type === 'browser-page') {

@@ -1,7 +1,6 @@
 export const DAEMON_AUDIT_STATE_VALUES = ['present', 'gone', 'unknown'] as const
 
 export const DAEMON_AUDIT_TRIGGER_VALUES = [
-  'endpoint_identity_changed',
   'inventory_answered',
   'inventory_failed',
   'token_missing_after_authenticated_disconnect',
@@ -57,7 +56,6 @@ export const DAEMON_AUDIT_GONE_REASON_VALUES = [
 
 export const DAEMON_AUDIT_REASON_VALUES = [
   'authenticated_inventory',
-  'endpoint_identity_changed',
   'inventory_failed',
   'token_missing_after_authenticated_disconnect',
   'transport_closed',

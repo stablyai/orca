@@ -232,6 +232,11 @@ import {
   type TaskPageGitHubCloseAction
 } from '@/components/task-page-github-status-actions'
 import { sortChecksBySeverity } from '../../../shared/pr-check-severity-order'
+import {
+  getCheckConclusion,
+  getCheckCounts,
+  getChecksSummaryLabel
+} from '@/components/pr-check-counts'
 
 // Why: the dialog lacks repository context, so recover its host-aware identity from the canonical item URL.
 function parseOwnerRepoFromItemUrl(url: string): GitHubOwnerRepo | null {
@@ -4321,10 +4326,6 @@ function CommentReplyForm({
   )
 }
 
-function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['conclusion']> {
-  return check.conclusion ?? 'pending'
-}
-
 function getCheckStatusLabel(check: PRCheckDetail): string {
   const conclusion = getCheckConclusion(check)
   if (conclusion === 'success') {
@@ -4355,57 +4356,6 @@ function getCheckStatusLabel(check: PRCheckDetail): string {
     return 'In progress'
   }
   return 'Pending'
-}
-
-function getCheckCounts(checks: PRCheckDetail[]): {
-  passing: number
-  failing: number
-  needsAction: number
-  pending: number
-  skipped: number
-  neutral: number
-} {
-  return checks.reduce(
-    (counts, check) => {
-      const conclusion = getCheckConclusion(check)
-      if (conclusion === 'success') {
-        counts.passing += 1
-      } else if (conclusion === 'action_required') {
-        counts.needsAction += 1
-      } else if (['failure', 'cancelled', 'timed_out'].includes(conclusion)) {
-        counts.failing += 1
-      } else if (conclusion === 'skipped') {
-        counts.skipped += 1
-      } else if (conclusion === 'neutral') {
-        counts.neutral += 1
-      } else {
-        counts.pending += 1
-      }
-      return counts
-    },
-    { passing: 0, failing: 0, needsAction: 0, pending: 0, skipped: 0, neutral: 0 }
-  )
-}
-
-function getChecksSummaryLabel(checks: PRCheckDetail[]): string {
-  const counts = getCheckCounts(checks)
-  if (checks.length === 0) {
-    return 'No checks found'
-  }
-  if (counts.failing > 0) {
-    return `${counts.failing} ${counts.failing === 1 ? 'check' : 'checks'} failing`
-  }
-  // Why: action_required blocks merge but isn't a failure; surface it distinctly so users know a manual step is needed.
-  if (counts.needsAction > 0) {
-    return `${counts.needsAction} ${counts.needsAction === 1 ? 'check needs' : 'checks need'} action`
-  }
-  if (counts.pending > 0) {
-    return `${counts.pending} ${counts.pending === 1 ? 'check' : 'checks'} pending`
-  }
-  if (counts.passing === checks.length) {
-    return 'All checks passing'
-  }
-  return `${counts.passing} of ${checks.length} checks passing`
 }
 
 function getCheckDetailsKey(check: PRCheckDetail): string {
@@ -4468,6 +4418,8 @@ function ChecksTab({
   const failedChecks = getBrokenChecks(list)
   const counts = getCheckCounts(list)
   const summaryLabel = getChecksSummaryLabel(list)
+  // Why: keying the green tick off `list.length` painted an all-neutral PR green above the words
+  // "0 of N checks passing"; nothing passed, so it reads unresolved like the checks pill does.
   const SummaryIcon =
     counts.failing > 0
       ? CHECK_ICON.failure
@@ -4475,7 +4427,7 @@ function ChecksTab({
         ? CHECK_ICON.action_required
         : counts.pending > 0
           ? CHECK_ICON.pending
-          : list.length > 0
+          : counts.passing > 0
             ? CHECK_ICON.success
             : CircleDashed
   const summaryColor =
@@ -4485,7 +4437,7 @@ function ChecksTab({
         ? CHECK_COLOR.action_required
         : counts.pending > 0
           ? CHECK_COLOR.pending
-          : list.length > 0
+          : counts.passing > 0
             ? CHECK_COLOR.success
             : 'text-muted-foreground'
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
@@ -5208,10 +5160,10 @@ function ChecksTab({
         className: CHECK_COLOR.pending
       })
     }
-    if (counts.skipped + counts.neutral > 0) {
+    if (counts.neutral > 0) {
       countChips.push({
         label: translate('auto.components.GitHubItemDialog.d23bbb6416', '{{value0}} skipped', {
-          value0: counts.skipped + counts.neutral
+          value0: counts.neutral
         }),
         className: 'text-muted-foreground'
       })

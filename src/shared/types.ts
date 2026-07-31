@@ -3,6 +3,7 @@ import type { ExecutionHostId } from './execution-host'
 import type { RemovedSshTargetTombstone, SshRemotePtyLease, SshTarget } from './ssh-types'
 import type { Automation, AutomationExecutionTargetType, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './workspace-source'
+import type { ReleaseBuild, ReleaseChannel } from './release-channel'
 import type { GitHubProjectSettings } from './github-project-types'
 import type {
   AgentStatusState,
@@ -327,6 +328,8 @@ export type FolderWorkspace = {
   folderPath: string
   /** SSH target ID for folder workspaces whose folder path lives remotely. */
   connectionId?: string | null
+  /** Renderer-owned host stamp for host-qualified folder catalogs. */
+  executionHostId?: ExecutionHostId | null
   linkedTask: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
   comment: string
@@ -1116,6 +1119,7 @@ export type WorkspaceSessionState = {
   activeRepoId: string | null
   /** Scope-aware active owner for folder workspaces. Legacy worktree UI still reads activeWorktreeId. */
   activeWorkspaceKey?: WorkspaceKey | null
+  activeWorkspaceExecutionHostId?: ExecutionHostId | null
   activeWorktreeId: string | null
   activeTabId: string | null
   /** Keys may be legacy raw worktree IDs or canonical WorkspaceKey values. */
@@ -2286,6 +2290,7 @@ export type CreateWorktreeResult = {
   }
   defaultTabs?: WorktreeDefaultTabsLaunch
   warning?: string
+  baseFallback?: WorktreeCreateBaseFallback
   initialBaseStatus?: WorktreeBaseStatusEvent
   localBaseRefRefresh?: LocalBaseRefRefreshResult
   localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion
@@ -2298,6 +2303,11 @@ export type CreateWorktreeResult = {
     surface?: 'visible' | 'background'
   }
   timing?: WorktreeCreateTiming
+}
+
+export type WorktreeCreateBaseFallback = {
+  requestedRef: string
+  localRef: string
 }
 
 export type PreservedWorktreeBranch = {
@@ -2367,9 +2377,12 @@ export type UpdateCheckOptions = {
   includePrerelease?: boolean
   includePerfPrerelease?: boolean
   localBuild?: boolean
+  /** Dev channel switching; `targetTag` pins an exact build, including older ones. */
+  channel?: ReleaseChannel
+  targetTag?: string
 }
 
-export type UpdateSource = 'local'
+export type UpdateSource = 'local' | 'hourly'
 
 export type UpdateStatus = (
   | { state: 'idle' }
@@ -2395,6 +2408,10 @@ export type UpdateStatus = (
   | { state: 'downloaded'; version: string; releaseUrl?: string; activeNudgeId?: string }
   | { state: 'error'; message: string; userInitiated?: boolean; activeNudgeId?: string }
 ) & { source?: UpdateSource }
+
+export type ReleaseBuildListResult =
+  | { ok: true; channel: ReleaseChannel; builds: ReleaseBuild[] }
+  | { ok: false; channel: ReleaseChannel; message: string }
 
 // ─── Settings ────────────────────────────────────────────────────────
 export type NotificationSettings = {
@@ -3371,6 +3388,8 @@ export type PersistedUIState = {
   statusBarUsageMode?: StatusBarUsageMode
   dismissedUpdateVersion: string | null
   lastUpdateCheckAt: number | null
+  /** Dev-only update channel override; absent means the build's own channel. */
+  releaseChannelOverride?: ReleaseChannel | null
   pendingUpdateNudgeId?: string | null
   dismissedUpdateNudgeId?: string | null
   /** Whether Orca already tried triggering the macOS notification permission dialog; prevents re-firing every launch. */
@@ -3423,6 +3442,8 @@ export type PersistedUIState = {
   _inlineAgentsDefaultedForAllUsers?: boolean
   /** One-shot migration flag for split-out card properties, set once so later deliberate unchecks of Linear issue/Ports stick across restarts. */
   _expandedWorktreeCardPropertiesDefaulted?: boolean
+  /** One-shot backfill flag for 'jira-issue', which joined the defaults after the expansion migration had already stamped upgraded profiles. */
+  _jiraIssueWorktreeCardPropertyDefaulted?: boolean
   /** totalAgentsSpawned snapshot at first sighting of the current app version, so the nag counts agents since last update (not from zero). */
   starNagBaselineAgents?: number | null
   /** App version that set the current baseline; a version change re-captures the baseline on next spawn, restarting the nag countdown. */

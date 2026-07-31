@@ -3,14 +3,18 @@ import type { CommandHandler } from '../dispatch'
 import { RuntimeClientError } from '../runtime-client'
 import { delimiter, dirname } from 'node:path'
 import { getRepeatedStringFlag } from '../flags'
-import { resolveCliCommand } from '../../main/codex-cli/command'
-import { detectCommandsInInstallDirs } from '../../main/ipc/local-agent-install-dir-detection'
+import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
+import { detectCommandsInInstallDirs } from '../../shared/local-agent-install-dir-detection'
 import {
   getTuiAgentDetectionProbeCommands,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   resolveDetectedTuiAgentIds
-} from '../../main/ipc/tui-agent-detection-commands'
-import { getSpawnArgsForWindows, UnsafeWindowsBatchArgumentsError } from '../../main/win32-utils'
+} from '../../shared/tui-agent-detection-commands'
+import {
+  getSpawnArgsForWindows,
+  UnsafeWindowsBatchArgumentsError,
+  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
+} from '../../shared/windows-batch-spawn'
 import { isSkillsCliAgentKeyShaped, toSkillsCliAgentKeys } from '../../shared/skills-cli-agent-keys'
 import {
   buildAgentFeatureSkillInstallArgs,
@@ -131,7 +135,7 @@ function runNpxSkills(args: string[]): Promise<number> {
         new RuntimeClientError(
           'invalid_environment',
           `Cannot run npx from "${resolved}": the path contains characters cmd.exe would ` +
-            'reinterpret. Install Node.js somewhere without & | < > ^ " % ! in the path.'
+            `reinterpret. Install Node.js somewhere without ${WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL} in the path.`
         )
       )
       return

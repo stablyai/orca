@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type { SkillDiscoveryTarget } from '../../../shared/skills'
+import { useActiveSkillDiscoveryRuntimeTarget } from './use-active-skill-discovery-runtime-target'
+import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   getProjectAgentSkillRuntime,
@@ -19,11 +21,20 @@ type ActiveProjectSkillRuntime = {
   agentRuntime?: ProjectAgentSkillRuntime
   terminalShellOverride?: string
   installDisabledReason: string | null
+  canUseLocalSkillFreshness: boolean
 }
 
 const EMPTY_ACTIVE_PROJECT_SKILL_RUNTIME: ActiveProjectSkillRuntime = Object.freeze({
-  installDisabledReason: null
+  installDisabledReason: null,
+  canUseLocalSkillFreshness: false
 })
+
+export function shouldUseLocalSkillFreshness(
+  runtimeTarget: RuntimeClientTarget | null,
+  agentRuntime?: ProjectAgentSkillRuntime
+): boolean {
+  return runtimeTarget?.kind === 'local' && agentRuntime?.runtime !== 'wsl'
+}
 
 // Why: on Windows the runtime resolution is rebuilt from scratch on every
 // worktree-store change, so a same-runtime result still arrives with a fresh
@@ -48,6 +59,7 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
   )
   const currentPlatform = getCurrentPlatform()
   const windowsCapabilities = useWindowsTerminalCapabilities(currentPlatform === 'win32')
+  const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
 
   const resolved = useMemo(() => {
     const projectRuntime = getLocalProjectExecutionRuntimeContext(
@@ -67,9 +79,11 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
         runtimeState.settings,
         undefined
       )
-      return terminalShellOverride
-        ? { installDisabledReason: null, terminalShellOverride }
-        : EMPTY_ACTIVE_PROJECT_SKILL_RUNTIME
+      const canUseLocalSkillFreshness = shouldUseLocalSkillFreshness(runtimeTarget)
+      if (!terminalShellOverride && !canUseLocalSkillFreshness) {
+        return EMPTY_ACTIVE_PROJECT_SKILL_RUNTIME
+      }
+      return { installDisabledReason: null, terminalShellOverride, canUseLocalSkillFreshness }
     }
 
     const agentRuntime = getProjectAgentSkillRuntime(projectRuntime, currentPlatform)
@@ -82,9 +96,10 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
         runtimeState.settings,
         agentRuntime
       ),
-      installDisabledReason: getProjectSkillInstallDisabledReason(projectRuntime)
+      installDisabledReason: getProjectSkillInstallDisabledReason(projectRuntime),
+      canUseLocalSkillFreshness: shouldUseLocalSkillFreshness(runtimeTarget, agentRuntime)
     }
-  }, [currentPlatform, runtimeState, windowsCapabilities])
+  }, [currentPlatform, runtimeState, runtimeTarget, windowsCapabilities])
 
   // Content-equal runtimes keep one reference so effect keys do not thrash.
   // Adjust during render (not a ref write) when serialized identity changes.

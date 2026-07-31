@@ -1,6 +1,7 @@
 /* oxlint-disable max-lines -- Why: history .catch() safety wiring spread across spawn/event-routing is tightly coupled to the adapter↔history lifecycle. */
 import { basename } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { DaemonClient } from './client'
 import {
   getMacDaemonSystemResolverHealth,
@@ -76,7 +77,7 @@ import {
   type DaemonAuditTrigger
 } from './daemon-audit-classifier'
 import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-incarnation-evidence'
-import { trackDaemonAuditEligibility } from './daemon-audit-eligibility-event'
+import { createDaemonAuditEligibilityTracker } from './daemon-audit-eligibility-event'
 
 type PendingDaemonSpawnOperation = {
   exitsBySessionId: Map<string, { incarnationId?: string }[]>
@@ -152,11 +153,14 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private socketPath: string
   private tokenPath: string
   private pidPath: string | null
+  private pidRecord: ParsedDaemonPid | null
   private client: DaemonClient
   private auditContext: DaemonAuditContext
   private lastAuthenticatedIdentity: DaemonEndpointIdentity | null = null
   private exactDaemonIncarnation: ExactDaemonIncarnation | null = null
   private lastAuditObservation: DaemonAuditObservation | null = null
+  // Why: every listProcesses call republishes the same observation; unthrottled it drains the shared per-session telemetry ceiling.
+  private readonly trackAuditEligibility = createDaemonAuditEligibilityTracker()
   private auditObservationListeners: ((observation: DaemonAuditObservation) => void)[] = []
   private identityChangeListeners: ((event: DaemonIdentityChangeEvent) => void)[] = []
   private historyManager: HistoryManager | null
@@ -248,6 +252,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.socketPath = opts.socketPath
     this.tokenPath = opts.tokenPath
     this.pidPath = opts.pidPath ?? null
+    this.pidRecord = readDaemonPidRecord(this.pidPath)
     this.auditContext = {
       protocolGeneration: this.protocolVersion,
       provider: 'local-daemon',
@@ -1635,34 +1640,61 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (previous && sameEndpointIdentity(previous, current)) {
       return
     }
-    const previousExactIncarnation = this.exactDaemonIncarnation
-    const pidRecord = this.readMatchingPidRecord(current)
     this.lastAuthenticatedIdentity = { ...current }
-    this.exactDaemonIncarnation = {
-      identity: { ...current },
-      ...(pidRecord?.linuxStartTicks && pidRecord.bootId
-        ? {
-            linuxStartTicks: pidRecord.linuxStartTicks,
-            bootId: pidRecord.bootId
-          }
-        : {})
-    }
+    this.exactDaemonIncarnation = exactDaemonIncarnationForPidRecord(current, this.pidRecord)
     if (!previous) {
       return
     }
     const event = { previous: { ...previous }, current: { ...current } }
     notifyAuditListeners(this.identityChangeListeners, event)
-    this.observeAuditFailure('endpoint_identity_changed', previousExactIncarnation, [
-      'endpoint_identity'
-    ])
   }
 
-  private readMatchingPidRecord(identity: DaemonEndpointIdentity): ParsedDaemonPid | null {
+  private async resolveExactDaemonIncarnation(
+    exactIncarnation: ExactDaemonIncarnation | null
+  ): Promise<ExactDaemonIncarnation | null> {
+    if (
+      !exactIncarnation ||
+      process.platform !== 'linux' ||
+      (exactIncarnation.linuxStartTicks && exactIncarnation.bootId)
+    ) {
+      return exactIncarnation
+    }
+    const cachedIncarnation = exactDaemonIncarnationForPidRecord(
+      exactIncarnation.identity,
+      this.pidRecord
+    )
+    if (cachedIncarnation.linuxStartTicks && cachedIncarnation.bootId) {
+      return cachedIncarnation
+    }
+    const pidRecord = await this.readMatchingPidRecord(exactIncarnation.identity)
+    this.pidRecord = pidRecord ?? this.pidRecord
+    return pidRecord?.linuxStartTicks && pidRecord.bootId
+      ? {
+          identity: { ...exactIncarnation.identity },
+          linuxStartTicks: pidRecord.linuxStartTicks,
+          bootId: pidRecord.bootId
+        }
+      : exactIncarnation
+  }
+
+  private cacheExactDaemonIncarnation(exactIncarnation: ExactDaemonIncarnation | null): void {
+    if (
+      exactIncarnation &&
+      this.lastAuthenticatedIdentity &&
+      sameEndpointIdentity(exactIncarnation.identity, this.lastAuthenticatedIdentity)
+    ) {
+      this.exactDaemonIncarnation = exactIncarnation
+    }
+  }
+
+  private async readMatchingPidRecord(
+    identity: DaemonEndpointIdentity
+  ): Promise<ParsedDaemonPid | null> {
     if (!this.pidPath) {
       return null
     }
     try {
-      const parsed = parseDaemonPidFile(readFileSync(this.pidPath, 'utf8'))
+      const parsed = parseDaemonPidFile(await readFile(this.pidPath, 'utf8'))
       return parsed?.pid === identity.pid &&
         parsed.startedAtMs === identity.startedAtMs &&
         parsed.launchNonce === identity.launchNonce
@@ -1679,17 +1711,21 @@ export class DaemonPtyAdapter implements IPtyProvider {
     additionalEvidenceSources: readonly DaemonEvidenceSource[] = [],
     endpointGoneProof?: 'windows_named_pipe_missing'
   ): void {
-    void classifyDaemonAuditFailure(this.auditContext, trigger, exactIncarnation, {
-      additionalEvidenceSources,
-      endpointGoneProof
-    })
+    void this.resolveExactDaemonIncarnation(exactIncarnation)
+      .then((resolvedIncarnation) => {
+        this.cacheExactDaemonIncarnation(resolvedIncarnation)
+        return classifyDaemonAuditFailure(this.auditContext, trigger, resolvedIncarnation, {
+          additionalEvidenceSources,
+          endpointGoneProof
+        })
+      })
       .then((observation) => this.publishAuditObservation(observation))
       .catch(() => {})
   }
 
   private publishAuditObservation(observation: DaemonAuditObservation): void {
     this.lastAuditObservation = observation
-    trackDaemonAuditEligibility(observation)
+    this.trackAuditEligibility(observation)
     notifyAuditListeners(this.auditObservationListeners, observation)
   }
 
@@ -2301,6 +2337,37 @@ function sameEndpointIdentity(
     left.startedAtMs === right.startedAtMs &&
     left.launchNonce === right.launchNonce
   )
+}
+
+function exactDaemonIncarnationForPidRecord(
+  identity: DaemonEndpointIdentity,
+  pidRecord: ParsedDaemonPid | null
+): ExactDaemonIncarnation {
+  return {
+    identity: { ...identity },
+    ...(process.platform === 'linux' &&
+    pidRecord?.pid === identity.pid &&
+    pidRecord.startedAtMs === identity.startedAtMs &&
+    pidRecord.launchNonce === identity.launchNonce &&
+    pidRecord.linuxStartTicks &&
+    pidRecord.bootId
+      ? {
+          linuxStartTicks: pidRecord.linuxStartTicks,
+          bootId: pidRecord.bootId
+        }
+      : {})
+  }
+}
+
+function readDaemonPidRecord(pidPath: string | null): ParsedDaemonPid | null {
+  if (!pidPath) {
+    return null
+  }
+  try {
+    return parseDaemonPidFile(readFileSync(pidPath, 'utf8'))
+  } catch {
+    return null
+  }
 }
 
 function removeListener<T>(listeners: T[], listener: T): void {

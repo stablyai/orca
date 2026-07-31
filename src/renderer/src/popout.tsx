@@ -1,7 +1,6 @@
 import './assets/main.css'
 
 import { StrictMode, useEffect } from 'react'
-import { createRoot } from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
 import { DashboardPopoutRoot } from './components/dashboard-popout/DashboardPopoutRoot'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
@@ -15,6 +14,7 @@ import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
 import { useAppStore } from './store'
 import type { GlobalSettings } from '../../shared/types'
+import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 
 // Why: the pop-out window is a separate BrowserWindow with its own React root,
 // so it must run the same renderer bootstrap as main.tsx (crash diagnostics,
@@ -114,7 +114,7 @@ function PopoutRoot(): React.JSX.Element {
   )
 }
 
-createRoot(rootElement).render(
+getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
   <StrictMode>
     <I18nProvider>
       <PopoutSettingsSync />

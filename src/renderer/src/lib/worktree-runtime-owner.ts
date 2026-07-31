@@ -43,6 +43,15 @@ function getExecutionHostIdFromWorktreeHost(
   return parseExecutionHostId(hostId)?.id ?? null
 }
 
+function getActiveWorkspaceExecutionHostId(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string
+): ExecutionHostId | null {
+  return state.activeWorktreeId === worktreeId
+    ? (state.activeWorkspaceExecutionHostId ?? null)
+    : null
+}
+
 export function getRuntimeEnvironmentIdForWorktree(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined
@@ -52,6 +61,10 @@ export function getRuntimeEnvironmentIdForWorktree(
   }
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return null
+  }
+  const activeHost = parseExecutionHostId(getActiveWorkspaceExecutionHostId(state, worktreeId))
+  if (activeHost) {
+    return activeHost.kind === 'runtime' ? activeHost.environmentId : null
   }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
@@ -99,6 +112,10 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
 ): string | null {
   if (!worktreeId) {
     return null
+  }
+  const activeHost = parseExecutionHostId(getActiveWorkspaceExecutionHostId(state, worktreeId))
+  if (activeHost) {
+    return activeHost.kind === 'runtime' ? activeHost.environmentId : null
   }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
@@ -150,6 +167,10 @@ export function getExecutionHostIdForWorktree(
   }
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return 'local'
+  }
+  const activeHostId = getActiveWorkspaceExecutionHostId(state, worktreeId)
+  if (activeHostId) {
+    return activeHostId
   }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {

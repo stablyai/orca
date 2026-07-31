@@ -243,6 +243,55 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     }
   })
 
+  it('skips the Windows preflight when the configured Windows shell is POSIX-family', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+    const windowsHost = { runtime: 'host', label: 'Windows' } as const
+    const previous = useAppStore.getState()
+
+    try {
+      // MSYS rewrites cmd.exe's leading /d /s /c switches into drive paths, so
+      // the copied command must stay bare for a Git Bash / wsl.exe paste target.
+      for (const terminalWindowsShell of ['git-bash', 'C:\\Program Files\\Git\\bin\\bash.exe']) {
+        useAppStore.setState({
+          settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell }
+        })
+        expect(buildSkillCommandForRuntime(installCommand, windowsHost, 'win32')).toBe(
+          installCommand
+        )
+      }
+
+      // cmd-family shells still need the preflight wrapper.
+      useAppStore.setState({
+        settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'cmd.exe' }
+      })
+      expect(buildSkillCommandForRuntime(installCommand, windowsHost, 'win32')).toBe(
+        `${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`
+      )
+    } finally {
+      useAppStore.setState({ settings: previous.settings })
+    }
+  })
+
+  it('keeps the bare reinstall rewrite for POSIX-family Windows skill updates', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+    const previous = useAppStore.getState()
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'git-bash' }
+    })
+
+    try {
+      expect(
+        buildSkillCommandForRuntime(
+          'npx skills update orchestration --global',
+          { runtime: 'host', label: 'Windows' },
+          'win32'
+        )
+      ).toBe(installCommand)
+    } finally {
+      useAppStore.setState({ settings: previous.settings })
+    }
+  })
+
   it('does not wrap unrelated Windows host commands', () => {
     expect(
       buildSkillCommandForRuntime(

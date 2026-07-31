@@ -193,20 +193,34 @@ export class RelayDispatcher {
     limit = data.length
   ): number {
     const clients = this.activeClients()
+    const max = Math.min(data.length, limit)
     if (clients.length === 0) {
-      return Math.min(data.length, limit)
+      return max
     }
-    let low = 0
-    let high = Math.min(data.length, limit)
-    while (low < high) {
-      const mid = Math.ceil((low + high) / 2)
-      const msg: JsonRpcNotification = {
+    if (!(max > 0)) {
+      return 0
+    }
+    const fitsAll = (bytes: number): boolean =>
+      clients.every((client) => bytes <= client.writer.producerFrameCapacity)
+    const sizeFrame = (chunk: string): number =>
+      this.estimateFrameBytes({
         jsonrpc: '2.0',
         method: 'pty.data',
-        params: { ...params, data: data.slice(0, mid) }
-      }
-      const bytes = this.estimateFrameBytes(msg)
-      if (clients.every((client) => bytes <= client.writer.producerFrameCapacity)) {
+        params: { ...params, data: chunk }
+      })
+    // Fast path: the whole chunk usually fits — one encode instead of log2(n).
+    if (fitsAll(sizeFrame(data.slice(0, max)))) {
+      return max
+    }
+    // Exact per-step size: only the escaped data string varies; its quotes are in baseBytes.
+    const baseBytes = sizeFrame('')
+    const bytesFor = (chars: number): number =>
+      baseBytes + Buffer.byteLength(JSON.stringify(data.slice(0, chars))) - 2
+    let low = 0
+    let high = max
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2)
+      if (fitsAll(bytesFor(mid))) {
         low = mid
       } else {
         high = mid - 1
@@ -822,19 +836,21 @@ export class RelayDispatcher {
     client: RelayClient,
     msg: JsonRpcRequest | JsonRpcResponse | JsonRpcNotification,
     lane: DispatcherWriterLane,
-    onSettled: (result: SinkWriteSettlement) => void = () => {}
+    onSettled: (result: SinkWriteSettlement) => void = () => {},
+    // Why: publish paths already sized the frame; avoid a redundant encode.
+    estimatedBytes?: number
   ): boolean {
     if (this.disposed || client.closed) {
       return false
     }
-    const estimatedBytes = this.estimateFrameBytes(msg)
+    const frameBytes = estimatedBytes ?? this.estimateFrameBytes(msg)
     return client.writer.enqueue(
       lane,
       () => {
         const seq = client.nextOutgoingSeq++
         return encodeJsonRpcFrame(msg, seq, client.highestReceivedSeq)
       },
-      estimatedBytes,
+      frameBytes,
       onSettled
     )
   }
@@ -898,7 +914,7 @@ export class RelayDispatcher {
         return false
       }
       for (let index = 0; index < clients.length; index++) {
-        if (!this.enqueueLeasedFrame(clients[index], msg, lane, leases[index])) {
+        if (!this.enqueueLeasedFrame(clients[index], msg, lane, leases[index], bytes)) {
           if (this.disposed || clients[index].closed) {
             continue
           }
@@ -949,7 +965,7 @@ export class RelayDispatcher {
     if (!leases) {
       return false
     }
-    return this.enqueueLeasedFrame(client, msg, lane, leases[0], onSettled)
+    return this.enqueueLeasedFrame(client, msg, lane, leases[0], bytes, onSettled)
   }
 
   private publishBulkWhenAvailable(client: RelayClient, msg: JsonRpcNotification): Promise<void> {
@@ -998,13 +1014,20 @@ export class RelayDispatcher {
     msg: JsonRpcNotification,
     lane: 'interactive' | 'ordinary' | 'fixed-bulk' | 'bulk',
     lease: LegacyPublicationLease,
+    estimatedBytes: number,
     onSettled: (result: SinkWriteSettlement) => void = () => {}
   ): boolean {
-    const accepted = this.enqueueFrame(client, msg, lane, (result) => {
-      lease.release()
-      onSettled(result)
-      this.notifyLegacyCapacityIfLow()
-    })
+    const accepted = this.enqueueFrame(
+      client,
+      msg,
+      lane,
+      (result) => {
+        lease.release()
+        onSettled(result)
+        this.notifyLegacyCapacityIfLow()
+      },
+      estimatedBytes
+    )
     if (!accepted) {
       lease.release()
       this.notifyLegacyCapacityIfLow()

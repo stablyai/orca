@@ -113,4 +113,8 @@ describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
     expect(FIELD_SOURCE).toContain('onPointerDown={() => {')
     expect(FIELD_SOURCE).toContain('markSourcePopoverUserEngaged()')
   })
+
+  it('confines source-mode overflow to the source strip', () => {
+    expect(FIELD_SOURCE).toContain('overflow-x-auto overflow-y-hidden px-0 scrollbar-sleek')
+  })
 })

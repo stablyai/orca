@@ -286,9 +286,12 @@ Four independent review lenses over the full diff; confirmed findings fixed:
 Accepted gaps (reviewed, deliberately not addressed here): old version-namespaced
 install dirs accrete across upgrades (~200KB each); an outdated running daemon
 /p-translates the guest endpoint path until it restarts (hook scripts fall back to env
-coords, which same-port binding keeps correct); `wslDistroCache` caches a transient
-empty list for the app run (pre-existing semantics, now load-bearing for default-distro
-resolution); default-distro resolution caches the first answer for the app run.
+coords, which same-port binding keeps correct); default-distro resolution caches the
+first non-empty answer for the app run.
+
+`wslDistroCache` no longer caches a transient empty list for the app run — an empty
+result is re-probed after a short window, so a distro registered mid-session is picked
+up. `isWslAvailable` likewise re-probes instead of latching a failure.
 
 ## 2026-07-09 round-4 external adversarial review
 

@@ -19,7 +19,7 @@ import type { SubprocessHandle } from './session'
 import type { PendingOutputRecord } from './types'
 import type { DaemonFileLog } from './daemon-file-log'
 import type * as DaemonHealthModule from './daemon-health'
-import { getDaemonSocketPath } from './daemon-spawner'
+import { getDaemonSocketPath, serializeDaemonPidFile } from './daemon-spawner'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import { TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS } from './terminal-history-seed-chunks'
 
@@ -1454,6 +1454,53 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         reason: 'authenticated_inventory',
         inventoryAuthority: 'authoritative'
       })
+    })
+
+    it('loads persisted Linux birth identity for audit observations', async () => {
+      adapter.dispose()
+      await server.shutdown()
+      const startedAtMs = 1_700_000_000_000
+      const launchNonce = 'launch-with-linux-identity'
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        startedAtMs,
+        launchNonce,
+        log: daemonLog,
+        spawnSubprocess: (opts) => {
+          lastSpawnOpts = opts
+          lastSubprocess = createMockSubprocess()
+          return lastSubprocess
+        }
+      })
+      await server.start()
+      const pidPath = join(dir, 'daemon.pid')
+      writeFileSync(
+        pidPath,
+        serializeDaemonPidFile({
+          pid: process.pid,
+          startedAtMs,
+          launchNonce,
+          linuxStartTicks: '4242',
+          bootId: 'boot-a'
+        })
+      )
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+      try {
+        adapter = new DaemonPtyAdapter({ socketPath, tokenPath, pidPath })
+
+        await expect(adapter.listProcesses()).resolves.toEqual([])
+
+        expect(adapter.getLastAuditObservation()?.exactIncarnation).toMatchObject({
+          linuxStartTicks: '4242',
+          bootId: 'boot-a'
+        })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
     })
 
     it('reports the daemon session WSL owner', async () => {

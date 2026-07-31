@@ -84,6 +84,7 @@ import { translate } from '@/i18n/i18n'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
+  getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
   toRuntimeExecutionHostId
@@ -872,7 +873,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
         sshDisconnected: isSshDisconnected
       })
       onImmediateActivate?.(worktree.id, activationRowKey)
-      void activateWorktreeFromSidebar(worktree.id)
+      void activateWorktreeFromSidebar(
+        worktree.id,
+        worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
+      )
       // Why: a deliberate card click warrants the blocking reconnect prompt; skip it when a terminal already shows the overlay.
       if (isSshDisconnected && !activeViewIsTerminal) {
         setShowDisconnectedDialog(true)
@@ -883,6 +887,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
       affiliateListMode,
       worktree.id,
       worktree.repoId,
+      worktree.hostId,
+      repo,
       isActive,
       isDeleting,
       activationRowKey,

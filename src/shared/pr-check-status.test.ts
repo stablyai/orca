@@ -33,4 +33,8 @@ describe('provider-neutral check status', () => {
     expect(derivePRCheckStatusFromRollup([{ state: 'PENDING' }])).toBe('pending')
     expect(derivePRCheckStatusFromRollup([{ state: 'ERROR' }])).toBe('failure')
   })
+
+  it.each(['ERROR', 'STARTUP_FAILURE'])('treats raw %s conclusions as failures', (conclusion) => {
+    expect(derivePRCheckStatusFromRollup([{ status: 'COMPLETED', conclusion }])).toBe('failure')
+  })
 })

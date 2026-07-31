@@ -61,7 +61,7 @@ describe('daemon process identity evidence', () => {
   })
 
   it('proves Linux pid reuse from native start ticks without derived milliseconds', async () => {
-    const readProcessStartedAtMs = vi.fn(() => exactIncarnation.identity.startedAtMs)
+    const readProcessStartedAtMs = vi.fn(async () => exactIncarnation.identity.startedAtMs)
 
     await expect(
       probeDaemonProcessIdentity(
@@ -112,6 +112,18 @@ describe('daemon process identity evidence', () => {
         })
       )
     ).resolves.toMatchObject({ state: 'unknown', reason: 'permission_denied' })
+  })
+
+  it('keeps a missing proc stat unknown when signal zero still sees the pid', async () => {
+    await expect(
+      probeDaemonProcessIdentity(
+        exactIncarnation,
+        endpoint,
+        linuxDependencies({
+          readLinuxStat: async () => ({ status: 'missing' })
+        })
+      )
+    ).resolves.toMatchObject({ state: 'unknown', reason: 'inspection_failed' })
   })
 
   it('keeps an unreadable command line unknown even when Linux start identity matches', async () => {
@@ -235,7 +247,7 @@ describe('daemon process identity evidence', () => {
         signalProcess: () => 'occupied',
         readCommandLine: async () =>
           `node daemon-entry --socket ${endpoint.socketPath} --token ${endpoint.tokenPath}`,
-        readProcessStartedAtMs: () => exactIncarnation.identity.startedAtMs + 2_500
+        readProcessStartedAtMs: async () => exactIncarnation.identity.startedAtMs + 2_500
       })
     ).resolves.toMatchObject({ state: 'unknown', reason: 'macos_start_time_mismatch' })
   })
@@ -247,6 +259,21 @@ describe('daemon process identity evidence', () => {
         signalProcess: () => 'missing'
       })
     ).resolves.toMatchObject({ state: 'gone', reason: 'pid_missing' })
+  })
+
+  it('keeps unsupported platforms indeterminate without running a Darwin probe', async () => {
+    const signalProcess = vi.fn(() => 'occupied' as const)
+    const readCommandLine = vi.fn(async () => 'node daemon-entry')
+
+    await expect(
+      probeDaemonProcessIdentity(exactIncarnation, endpoint, {
+        platform: 'freebsd',
+        signalProcess,
+        readCommandLine
+      })
+    ).resolves.toMatchObject({ state: 'unknown', reason: 'inspection_failed' })
+    expect(signalProcess).not.toHaveBeenCalled()
+    expect(readCommandLine).not.toHaveBeenCalled()
   })
 })
 
@@ -321,6 +348,36 @@ describe('daemon audit availability evidence', () => {
       reason: 'windows_named_pipe_missing',
       endpointState: 'missing',
       exactIncarnation
+    })
+  })
+
+  it('keeps contradictory Windows pipe and process evidence unknown', async () => {
+    const windowsContext: DaemonAuditContext = {
+      ...context,
+      endpoint: '\\\\?\\pipe\\orca-daemon',
+      endpointKind: 'windows-named-pipe'
+    }
+    const dependencies = {
+      ...auditClassifierDependencies,
+      probeProcessIdentity: async () => ({
+        state: 'present',
+        reason: 'windows_identity_match',
+        evidenceSources: ['windows_cim', 'endpoint_identity']
+      })
+    } satisfies DaemonAuditClassifierDependencies
+
+    await expect(
+      classifyDaemonAuditFailure(windowsContext, 'inventory_failed', exactIncarnation, {
+        additionalEvidenceSources: ['windows_named_pipe'],
+        endpointGoneProof: 'windows_named_pipe_missing',
+        dependencies
+      })
+    ).resolves.toMatchObject({
+      state: 'unknown',
+      reason: 'inventory_failed',
+      processLiveness: 'present',
+      processReason: 'windows_identity_match',
+      endpointState: 'missing'
     })
   })
 
