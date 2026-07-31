@@ -25781,6 +25781,7 @@ describe('OrcaRuntimeService', () => {
       leafId: HEADLESS_LEAF_ID
     })
     const [terminal] = (await runtime.listTerminals()).terminals
+    getWorkspaceSession.mockClear()
 
     await expect(runtime.closeTerminalTab(terminal.handle)).resolves.toMatchObject({
       tabId: 'host-tab',
@@ -25789,6 +25790,8 @@ describe('OrcaRuntimeService', () => {
 
     expect(localSession.tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(staleHostSession.tabsByWorktree[TEST_WORKTREE_ID]).toBeUndefined()
+    expect(getWorkspaceSession).toHaveBeenNthCalledWith(1, staleHostId)
+    expect(getWorkspaceSession).toHaveBeenNthCalledWith(2, 'local')
     expect(setWorkspaceSession).toHaveBeenCalledWith(expect.any(Object), 'local')
   })
 
@@ -32673,7 +32676,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     syncSinglePty(runtime)
-    const stopPty = vi.fn(async (_ptyId: string, stop: () => boolean | Promise<boolean>) => ({
+    const stopPty = vi.fn(async (_ptyId: string, stop: () => Promise<boolean>) => ({
       stopped: await stop(),
       owner: true
     }))
@@ -32703,8 +32706,10 @@ describe('OrcaRuntimeService', () => {
     )
     const flushOrThrow = vi.fn()
     const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow } as never)
+    const physicalStop = makeDeferred()
     const kill = vi.fn(() => true)
     const stopAndWait = vi.fn(async (ptyId: string) => {
+      await physicalStop.promise
       runtime.onPtyExit(ptyId, 0, incarnationId)
       return true
     })
@@ -32721,15 +32726,48 @@ describe('OrcaRuntimeService', () => {
       incarnationId
     })
 
-    await expect(runtime.stopTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)).resolves.toEqual({
-      stopped: 1
+    const stopping = runtime.stopTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
+    await vi.waitFor(() => expect(stopAndWait).toHaveBeenCalledWith('persisted-pty'))
+    let settled = false
+    void stopping.then(() => {
+      settled = true
     })
+    await Promise.resolve()
+    expect(settled).toBe(false)
 
-    expect(stopAndWait).toHaveBeenCalledWith('persisted-pty')
+    physicalStop.resolve()
+    await expect(stopping).resolves.toEqual({ stopped: 1 })
     expect(kill).not.toHaveBeenCalled()
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
     expect(flushOrThrow).toHaveBeenCalledOnce()
+  })
+
+  it('continues a worktree terminal sweep after one provider stop rejects', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const stopAndWait = vi.fn(async (ptyId: string) => {
+      if (ptyId === 'pty-1') {
+        throw new Error('relay_unavailable')
+      }
+      return true
+    })
+    runtime.setPtyController({
+      write: () => true,
+      kill: vi.fn(() => true),
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime)
+    runtime.registerPty('pty-2', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-2',
+      leafId: 'pane:2'
+    })
+
+    await expect(runtime.stopTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)).resolves.toEqual({
+      stopped: 1
+    })
+    expect(stopAndWait).toHaveBeenNthCalledWith(1, 'pty-1')
+    expect(stopAndWait).toHaveBeenNthCalledWith(2, 'pty-2')
   })
 
   it('passes a margin-adjusted RPC deadline into stopAndWait for destructive teardown', async () => {
@@ -32742,7 +32780,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     syncSinglePty(runtime)
-    const stopPty = vi.fn(async (_ptyId: string, stop: () => boolean | Promise<boolean>) => ({
+    const stopPty = vi.fn(async (_ptyId: string, stop: () => Promise<boolean>) => ({
       stopped: await stop(),
       owner: true
     }))

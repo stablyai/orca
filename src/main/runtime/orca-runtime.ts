@@ -25755,7 +25755,7 @@ export class OrcaRuntimeService {
       deadline?: number
       stopPty?: (
         ptyId: string,
-        stop: () => boolean | Promise<boolean>
+        stop: () => Promise<boolean>
       ) => Promise<{ stopped: boolean; owner: boolean }>
     } = {}
   ): Promise<{ stopped: number }> {
@@ -25787,16 +25787,21 @@ export class OrcaRuntimeService {
         if (options.deadline !== undefined && Date.now() >= options.deadline) {
           return false
         }
-        // Why: terminal.stop is a durable lifecycle receipt; wait for provider exit so onPtyExit de-persists the tab before returning.
-        if (this.ptyController?.stopAndWait) {
-          if (options.deadline !== undefined) {
-            return await this.ptyController.stopAndWait(ptyId, {
-              deadlineMs: teardownRpcDeadline(options.deadline)
-            })
+        try {
+          // Why: terminal.stop is a durable lifecycle receipt; wait for provider exit so onPtyExit de-persists the tab before returning.
+          if (this.ptyController?.stopAndWait) {
+            if (options.deadline !== undefined) {
+              return await this.ptyController.stopAndWait(ptyId, {
+                deadlineMs: teardownRpcDeadline(options.deadline)
+              })
+            }
+            return await this.ptyController.stopAndWait(ptyId)
           }
-          return await this.ptyController.stopAndWait(ptyId)
+          return Boolean(this.ptyController?.kill(ptyId))
+        } catch {
+          // Why: a worktree sweep is best-effort per PTY; one unavailable provider must not leave later terminals running.
+          return false
         }
-        return Boolean(this.ptyController?.kill(ptyId))
       }
       const stopResult = options.stopPty
         ? await options.stopPty(ptyId, stop)
