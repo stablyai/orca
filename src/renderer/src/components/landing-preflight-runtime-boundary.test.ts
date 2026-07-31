@@ -98,6 +98,16 @@ describe('landing preflight runtime boundary', () => {
     view.unmount()
   })
 
+  it('keeps the banner empty while the active remote runtime is still unknown', () => {
+    useAppStore.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-a' } } as never)
+
+    const view = renderHook(() => useLandingPreflightRuntime())
+
+    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(refresh).not.toHaveBeenCalled()
+    view.unmount()
+  })
+
   it('keeps one active interval and removes listeners and polling on cleanup', () => {
     useAppStore.setState({ repos: [githubRepo], preflightStatus: status() })
     const addEventListener = vi.spyOn(document, 'addEventListener')

@@ -262,11 +262,11 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       const connectionChanged =
         status.status !== null &&
         (previous?.status == null || previous.status.runtimeId !== status.status.runtimeId)
-      if (sessionEnded) {
-        bumpProviderRuntimeSessionGeneration()
-      }
+      const activeEnvironmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
       if (connectionChanged) {
         advanceRuntimeEnvironmentConnectionGeneration(environmentId)
+      }
+      if (activeEnvironmentId === environmentId && (sessionEnded || connectionChanged)) {
         bumpProviderRuntimeSessionGeneration()
       }
       next.set(environmentId, {

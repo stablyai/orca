@@ -13,6 +13,7 @@ import {
   type RuntimeStatusSlice,
   getRuntimeEnvironmentConnectionGeneration
 } from './runtime-status'
+import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), dismiss: vi.fn() }
@@ -376,6 +377,36 @@ describe('runtime-status slice', () => {
       checkedAt: 4
     })
     expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(2)
+  })
+
+  it('invalidates provider state only when the active runtime session changes', () => {
+    const store = createSliceStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-a' } } as never)
+    const initialKey = getProviderRuntimeContextKey({ activeRuntimeEnvironmentId: 'env-a' })
+
+    store.getState().setRuntimeEnvironmentStatus('env-b', {
+      status: makeStatus({ runtimeId: 'runtime-b' }),
+      checkedAt: 1
+    })
+    expect(getProviderRuntimeContextKey({ activeRuntimeEnvironmentId: 'env-a' })).toBe(initialKey)
+
+    store.getState().setRuntimeEnvironmentStatus('env-a', {
+      status: makeStatus({ runtimeId: 'runtime-a' }),
+      checkedAt: 2
+    })
+    const connectedKey = getProviderRuntimeContextKey({ activeRuntimeEnvironmentId: 'env-a' })
+    expect(connectedKey).not.toBe(initialKey)
+
+    store.getState().setRuntimeEnvironmentStatus('env-a', {
+      status: makeStatus({ runtimeId: 'runtime-a' }),
+      checkedAt: 3
+    })
+    expect(getProviderRuntimeContextKey({ activeRuntimeEnvironmentId: 'env-a' })).toBe(connectedKey)
+
+    store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 4 })
+    expect(getProviderRuntimeContextKey({ activeRuntimeEnvironmentId: 'env-a' })).not.toBe(
+      connectedKey
+    )
   })
 
   it('drops a recent compatibility failure once a status refresh succeeds', async () => {

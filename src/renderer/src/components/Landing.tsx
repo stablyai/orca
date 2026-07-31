@@ -235,11 +235,7 @@ export default function Landing(): React.JSX.Element {
   const hasGitHubProject = useMemo(() => hasGitHubBackedProject(repos), [repos])
   const showGitHubSupportFooter = repos.length === 0 || hasGitHubProject
 
-  // Why: the preflight slice routes to the active runtime environment via
-  // `preflight.check` RPC and only falls back to the local probe when no remote
-  // runtime is active. Calling the local preflight IPC directly here would
-  // always scan the client machine, so a remote runtime's landing banner
-  // reported the wrong host's git/gh state.
+  // Why: the runtime-aware slice probes the active remote host instead of the renderer host.
   const { preflightIssues } = useLandingPreflightRuntime()
 
   const createWorktreeShortcut = useShortcutKeyDetails('workspace.create')

@@ -11,10 +11,12 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const invalidatePreflightStatus = useAppStore((s) => s.invalidatePreflightStatus)
-  const activeRuntimeIdentity = useAppStore((s) => {
-    const environmentId = s.settings?.activeRuntimeEnvironmentId?.trim() ?? 'local'
-    const runtimeStatus =
-      environmentId === 'local' ? undefined : s.runtimeStatusByEnvironmentId.get(environmentId)
+  const activeRuntimeState = useAppStore((s) => {
+    const environmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
+    if (!environmentId) {
+      return 'local'
+    }
+    const runtimeStatus = s.runtimeStatusByEnvironmentId.get(environmentId)
     const reachability = runtimeStatus
       ? runtimeStatus.status === null
         ? 'unreachable'
@@ -35,7 +37,7 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
   )
 
   useEffect(() => {
-    if (activeRuntimeIdentity.endsWith(':unreachable')) {
+    if (activeRuntimeState !== 'local' && !activeRuntimeState.endsWith(':reachable')) {
       invalidatePreflightStatus()
       return
     }
@@ -52,7 +54,7 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
       document.removeEventListener('visibilitychange', handleWindowActive)
       window.removeEventListener('focus', handleWindowActive)
     }
-  }, [activeRuntimeIdentity, invalidatePreflightStatus, refreshPreflightStatus])
+  }, [activeRuntimeState, invalidatePreflightStatus, refreshPreflightStatus])
 
   useEffect(() => {
     if (preflightIssues.length === 0) {
