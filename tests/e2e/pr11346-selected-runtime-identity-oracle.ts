@@ -7,6 +7,13 @@ import type { Page } from '@stablyai/playwright-test'
 import type { AppState } from '../../src/renderer/src/store/types'
 import { expect } from './helpers/orca-app'
 
+export function configureIsolatedGitIdentity(homePath: string): void {
+  writeFileSync(
+    path.join(homePath, '.gitconfig'),
+    '[user]\n\tname = PR 11346 E2E\n\temail = pr11346@test.local\n'
+  )
+}
+
 function initializeGitRepo(repoPath: string, markerName: string): void {
   mkdirSync(repoPath, { recursive: true })
   execFileSync('git', ['init'], { cwd: repoPath, stdio: 'pipe' })

@@ -10,6 +10,7 @@ import {
 } from './helpers/paired-electron-client'
 import { waitForSessionReady } from './helpers/store'
 import {
+  configureIsolatedGitIdentity,
   createProjectFixtures,
   expectRuntimeActivation,
   injectSameIdLocalActivationCollision,
@@ -87,6 +88,7 @@ async function runSelectedRuntimeAddJourney(
     BrowserWindow.getAllWindows().some((window) => window.isVisible())
   )
   expect(serverVisible).toBe(visible)
+  configureIsolatedGitIdentity(await electronApp.evaluate(({ app }) => app.getPath('home')))
 
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const client = await launchPairedElectronClient(offer, testInfo, runtimeName)

@@ -2439,8 +2439,8 @@
           "platform": "macos",
           "command": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
           "result": "passed",
-          "durationSeconds": 19.4,
-          "summary": "The visible headed server and separate paired client passed the strengthened same-ID terminal-activation oracle. Runtime switch/Git/folder/Clone/Create/reconnect/nested-import measurements were 49/1503/3847/896/931/187/1261 ms."
+          "durationSeconds": 19.9,
+          "summary": "The visible headed server and separate paired client passed the strengthened same-ID terminal-activation oracle with a disposable runtime Git identity. Runtime switch/Git/folder/Clone/Create/reconnect/nested-import measurements were 43/1513/3841/1200/790/202/1312 ms."
         },
         {
           "date": "2026-07-31",
@@ -2448,8 +2448,8 @@
           "platform": "macos",
           "command": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
           "result": "passed",
-          "durationSeconds": 19.1,
-          "summary": "The hidden-window server and separate paired client passed the strengthened same-ID terminal-activation oracle. Runtime switch/Git/folder/Clone/Create/reconnect/nested-import measurements were 49/1499/3849/900/1166/231/1223 ms."
+          "durationSeconds": 19.7,
+          "summary": "The hidden-window server and separate paired client passed the strengthened same-ID terminal-activation oracle with a disposable runtime Git identity. Runtime switch/Git/folder/Clone/Create/reconnect/nested-import measurements were 51/1502/3843/880/939/200/1359 ms."
         }
       ],
       "runtimeBudget": {
@@ -2458,15 +2458,15 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "Deterministic contracts and the final visible plus hidden-window paired Electron runs passed locally. During expansion, hidden-window attempts exposed two harness-only assumptions after all authority and inventory assertions passed: exact project labels did not allow path disambiguation, and clicking the inner host label raced cmdk layout. The oracle now targets the host command item, accepts the rendered disambiguated label, and explicitly creates a first paired terminal while same-ID local/runtime worktrees remain present. CI soak history is not yet available."
+        "evidence": "Deterministic contracts and the final visible plus hidden-window paired Electron runs passed locally. During expansion, attempts exposed three harness-only assumptions: exact project labels did not allow path disambiguation, clicking the inner host label raced cmdk layout, and a disposable CI runtime had no Git author identity for Create. The oracle now targets the host command item, accepts the rendered disambiguated label, seeds only its isolated runtime home with a test Git identity, and explicitly creates a first paired terminal while same-ID local/runtime worktrees remain present. CI soak history is not yet available."
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The byte-identical focused oracle (SHA-256 6de18c140a86801460e58f52287e27a58b97f1576f9f387fa82e1bd4eb378f7b) fails 2/3 on review baseline aa6f945001a5f78a07663c854fabb95c55d8b40b and on the r5-disabled parent e21f4ca58e: local-first lookup returns /local/repo and folder activation has no runtime host. It passes 3/3 on the candidate. Main later advanced to 94cf2f1422f30fc309cb47c5e864a831d516fa8b without changing any of the candidate's 68 files or the focused oracle production boundary; the rebased disabled parent f247d961cab15237bc7fcf0598fe76007f78ec7c has the same stable patch ID as e21f4ca58e. The final paired spec and fixture have SHA-256 7088ee3661c5b605860c8869e120e411b62a55e60d5e1a4994a52d73c547dae3 and 138b08c66e728dcc8ee9c0a18d7587d0739b6200037e89f7fe780e278acd1639. With the final runtime-session owner fix disabled, the focused session test fails 3/43 and the hidden paired oracle deterministically creates the host terminal but reports null active client owner while same-ID local/runtime worktrees remain. The integrated candidate passes the same focused test and both headed/hidden paired oracles with exact runtime ownership, server inventory, local exclusion, preserved catalogs, visible rows, and zero direct SSH fallback. Earlier Active Server preference paths retain deterministic coverage but do not yet have a saved intentional-break artifact."
+        "evidence": "The byte-identical focused oracle (SHA-256 6de18c140a86801460e58f52287e27a58b97f1576f9f387fa82e1bd4eb378f7b) fails 2/3 on review baseline aa6f945001a5f78a07663c854fabb95c55d8b40b and on the r5-disabled parent e21f4ca58e: local-first lookup returns /local/repo and folder activation has no runtime host. It passes 3/3 on the candidate. Main later advanced to 94cf2f1422f30fc309cb47c5e864a831d516fa8b without changing any of the candidate's 68 files or the focused oracle production boundary; the rebased disabled parent f247d961cab15237bc7fcf0598fe76007f78ec7c has the same stable patch ID as e21f4ca58e. The final paired spec and fixture have SHA-256 bd6d9014d1bed2715397bcd2121d5d7e01792347b13ff14778ccf608bf98789c and d1d78a82f868e2f3152777550825c0ca2d4dc3cba5c6de548e066d2931751fc7. With the final runtime-session owner fix disabled, the focused session test fails 3/43 and the byte-identical hidden paired oracle deterministically creates the host terminal but reports null active client owner while same-ID local/runtime worktrees remain. The integrated candidate passes the same focused test and both headed/hidden paired oracles with exact runtime ownership, server inventory, local exclusion, preserved catalogs, visible rows, and zero direct SSH fallback. Earlier Active Server preference paths retain deterministic coverage but do not yet have a saved intentional-break artifact."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Preference writes are explicit user actions; transient routing adds no polling or provider fanout and retains one authoritative worktree refresh per completed add. Host-qualified owner indexes are WeakMap-cached and do not add subprocesses or network calls. The final headed journey measured 49 ms for three preference switches, 1,503 ms for Git add, 3,847 ms for folder add, 896 ms for Clone, 931 ms for Create with controlled exact-ID completion gates, 187 ms for disconnect/reconnect with overlapping catalog refreshes, and 1,261 ms for nested import. The final session-activation fix adds one execution-host string conversion per explicit terminal/browser activation and no provider call, scan, timer, or retry. Existing Zustand selector fan-out evidence remained 0 render invalidations across 5,000,000 selector runs."
+        "evidence": "Preference writes are explicit user actions; transient routing adds no polling or provider fanout and retains one authoritative worktree refresh per completed add. Host-qualified owner indexes are WeakMap-cached and do not add subprocesses or network calls. The final headed journey measured 43 ms for three preference switches, 1,513 ms for Git add, 3,841 ms for folder add, 1,200 ms for Clone, 790 ms for Create with controlled exact-ID completion gates, 202 ms for disconnect/reconnect with overlapping catalog refreshes, and 1,312 ms for nested import. The final session-activation fix adds one execution-host string conversion per explicit terminal/browser activation and no provider call, scan, timer, or retry. Existing Zustand selector fan-out evidence remained 0 render invalidations across 5,000,000 selector runs."
       },
       "promotionCriteria": [
         "Run the focused gate in soak across macOS, Linux, and Windows.",
