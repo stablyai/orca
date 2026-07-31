@@ -57,6 +57,7 @@ export function createAutomation(
     ),
     reuseSession: input.workspaceMode === 'existing' ? (input.reuseSession ?? false) : false,
     timezone: input.timezone,
+    agentArgs: input.agentArgs ?? null,
     rrule: input.rrule,
     dtstart: input.dtstart,
     enabled: input.enabled ?? true,

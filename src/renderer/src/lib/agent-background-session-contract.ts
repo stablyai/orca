@@ -10,6 +10,8 @@ export type LaunchAgentBackgroundSessionArgs = {
   prompt?: string
   launchSource?: LaunchSource
   title?: string
+  /** Override the global agent default args for this launch. Automations pass their own agentArgs here. */
+  agentArgs?: string | null
   onData?: (chunk: string) => void
   onExit?: (ptyId: string, code: number) => void
   onAgentStatus?: (payload: ParsedAgentStatusPayload) => void
