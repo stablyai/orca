@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process'
-import { pathToFileURL } from 'node:url'
+import { realpathSync } from 'node:fs'
 
 const JS_ENTRY_PATTERN = /\.[cm]?js$/i
 const WINDOWS_SHELL_ENTRY_PATTERN = /\.(?:cmd|bat)$/i
@@ -27,31 +27,37 @@ function withWindowsShell(command, args, platform) {
   return { command: needsShell ? `"${command}"` : command, args, shell: needsShell }
 }
 
+// Why: argv[1] keeps the symlinked path that import.meta.filename resolves away, so comparing
+// them raw would skip the whole build in silence behind a symlinked checkout.
+export function isEntryPoint(entryPath, moduleFilename) {
+  return Boolean(entryPath) && realpathSync(entryPath) === realpathSync(moduleFilename)
+}
+
+function runOrExit(command, args, options) {
+  const result = spawnSync(command, args, { stdio: 'inherit', ...options })
+
+  if (result.signal) {
+    process.kill(process.pid, result.signal)
+  }
+  // Why: a spawn that never starts (missing pnpm, non-executable npm_execpath) reports its
+  // cause only here, and exiting on status alone drops it.
+  if (result.error) {
+    console.error(`[native-build] could not run ${command}: ${result.error.message}`)
+    process.exit(1)
+  }
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1)
+  }
+}
+
 function runPnpmScript(scriptName) {
   const { command, args, shell } = resolvePnpmInvocation(scriptName, process.env.npm_execpath)
-  const result = spawnSync(command, args, { stdio: 'inherit', shell })
-
-  if (result.signal) {
-    process.kill(process.pid, result.signal)
-  }
-  if (result.status !== 0 || result.error) {
-    process.exit(result.status ?? 1)
-  }
+  runOrExit(command, args, { shell })
 }
 
-function runNodeScript(scriptPath) {
-  const result = spawnSync(process.execPath, [scriptPath], { stdio: 'inherit' })
-  if (result.signal) {
-    process.kill(process.pid, result.signal)
-  }
-  if (result.status !== 0 || result.error) {
-    process.exit(result.status ?? 1)
-  }
-}
-
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isEntryPoint(process.argv[1], import.meta.filename)) {
   if (process.platform === 'win32') {
-    runNodeScript('config/scripts/build-windows-cli-launcher.mjs')
+    runOrExit(process.execPath, ['config/scripts/build-windows-cli-launcher.mjs'])
     process.exit(0)
   }
 

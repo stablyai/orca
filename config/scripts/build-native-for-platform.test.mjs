@@ -1,5 +1,33 @@
+import { spawnSync } from 'node:child_process'
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { resolvePnpmInvocation } from './build-native-for-platform.mjs'
+import { isEntryPoint, resolvePnpmInvocation } from './build-native-for-platform.mjs'
+
+const sourceScriptPath = fileURLToPath(new URL('./build-native-for-platform.mjs', import.meta.url))
+
+// Why: running the script for real builds Swift on darwin and the CLI launcher on win32;
+// only linux reaches the cheap early-exit branch.
+const itLinux = process.platform === 'linux' ? it : it.skip
+
+// Why: linking a throwaway copy rather than config/scripts keeps cleanup from ever pointing
+// at the repo.
+function withSymlinkedCopy(assert) {
+  const root = mkdtempSync(join(tmpdir(), 'orca-native-entry-'))
+  try {
+    const realDir = join(root, 'real')
+    mkdirSync(realDir)
+    const realScript = join(realDir, 'build-native-for-platform.mjs')
+    copyFileSync(sourceScriptPath, realScript)
+    symlinkSync(realDir, join(root, 'link'), 'junction')
+
+    assert({ realScript, linkedScript: join(root, 'link', 'build-native-for-platform.mjs') })
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}
 
 describe('build:native pnpm invocation', () => {
   it('runs a JS npm_execpath through Node so the pinned pnpm version is kept', () => {
@@ -49,6 +77,29 @@ describe('build:native pnpm invocation', () => {
         args: ['run', 'build:computer-macos'],
         shell: true
       })
+    })
+  })
+})
+
+describe('build:native entry guard', () => {
+  it('matches an entry path reached through a symlinked directory', () => {
+    withSymlinkedCopy(({ realScript, linkedScript }) => {
+      expect(linkedScript).not.toBe(realScript)
+      expect(isEntryPoint(linkedScript, realScript)).toBe(true)
+    })
+  })
+
+  it('rejects a missing argv[1] and an unrelated entry path', () => {
+    expect(isEntryPoint(undefined, sourceScriptPath)).toBe(false)
+    expect(isEntryPoint(process.execPath, sourceScriptPath)).toBe(false)
+  })
+
+  itLinux('runs the build flow when spawned through a symlinked path', () => {
+    withSymlinkedCopy(({ linkedScript }) => {
+      const result = spawnSync(process.execPath, [linkedScript], { encoding: 'utf8' })
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toContain('[native-build] no macOS native computer build required')
     })
   })
 })
