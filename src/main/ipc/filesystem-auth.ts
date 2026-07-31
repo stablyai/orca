@@ -375,13 +375,16 @@ function isWorkspaceSymlinkSourceAuthorized(
 ): boolean {
   // Why: an in-workspace symlink already required write access to the root; following
   // it to an external target matches VS Code and the SSH relay (#1672). Only grant
-  // when the pre-realpath source lives inside a trusted root and realpath changed
-  // the path — plain `../` escapes still fail because source and target normalize
-  // to the same outside path (issue #11654 / #4556).
+  // when the pre-realpath source lives inside a trusted root/worktree and realpath
+  // changed the path — plain `../` escapes still fail because source and target
+  // normalize to the same outside path (issue #11654 / #4556).
+  // Why not isPathAllowed: that set also holds one-off authorizedExternalPaths; a
+  // single external grant must not transfer to arbitrary symlink targets.
   return Boolean(
     sourcePath &&
     sourcePath !== targetPath &&
-    (isPathAllowed(sourcePath, store) || isRegisteredWorktreePath(sourcePath))
+    (getAllowedRoots(store).some((root) => isDescendantOrEqual(sourcePath, resolve(root))) ||
+      isRegisteredWorktreePath(sourcePath))
   )
 }
 
@@ -406,13 +409,16 @@ async function isPathAllowedIncludingRegisteredWorktrees(
     return true
   }
 
+  // Why: early grant when registered worktree roots are already warm.
   if (isWorkspaceSymlinkSourceAuthorized(options.canonicalSourcePath, targetPath, store)) {
     return true
   }
 
   await ensureAuthorizedRootsCache(store)
 
-  // Why: linked worktrees are already git-trusted; reuse the cached root index so reads don't spawn `git worktree list` each time.
+  // Why: linked worktrees are already git-trusted; reuse the cached root index so
+  // reads don't spawn `git worktree list` each time. Re-check the symlink source
+  // after cache rebuild — isRegisteredWorktreePath can flip from false→true here.
   return (
     isRegisteredWorktreePath(targetPath) ||
     (await isPathAllowedByCanonicalRegisteredRoot(targetPath, options.canonicalSourcePath)) ||
