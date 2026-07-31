@@ -250,22 +250,25 @@ describe('PtyHandler negotiated source publication', () => {
     await spawn({})
     const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    handler.setSourcePublication(
-      stubPublication({
-        sealAndPublishExit: () => {
-          throw new Error('ledger delivery vanished')
-        }
-      })
-    )
+    try {
+      handler.setSourcePublication(
+        stubPublication({
+          sealAndPublishExit: () => {
+            throw new Error('ledger delivery vanished')
+          }
+        })
+      )
 
-    expect(() => exitCallback!({ exitCode: 7 })).not.toThrow()
+      expect(() => exitCallback!({ exitCode: 7 })).not.toThrow()
 
-    expect(exitFrames()).toHaveLength(1)
-    expect(exitFrames()[0].params).toMatchObject({ id: spawnResult.id, code: 7 })
-    expect(String(stderr.mock.calls.at(-1)?.[0])).toContain(
-      '[pty-handler] pty source exit publication failed'
-    )
-    stderr.mockRestore()
+      expect(exitFrames()).toHaveLength(1)
+      expect(exitFrames()[0].params).toMatchObject({ id: spawnResult.id, code: 7 })
+      expect(String(stderr.mock.calls.at(-1)?.[0])).toContain(
+        '[pty-handler] pty source exit publication failed'
+      )
+    } finally {
+      stderr.mockRestore()
+    }
   })
 
   it('completes the exit from the settled state without re-sealing the delivery', async () => {

@@ -152,41 +152,50 @@ describe('SshPtySourceCreditAdapter cleanup', () => {
 
     const rotating = adapter.open(ownerGrant(4, 4), 'pty-rotate', 'incarnation-4')!
     adapter.rotate(rotating, ownerGrant(5, 5), 0)
-    adapter.cancelIdentity(rotating, 'publication-owned')
+    const publicationOwned = adapter.open(ownerGrant(6, 6), 'pty-publication', 'incarnation-5')!
+    adapter.cancelIdentity(publicationOwned, 'publication-owned')
     expect(onCreditAvailable).toHaveBeenCalledTimes(3)
+    expect(adapter.snapshot(publicationOwned).state).toBe('closed')
   })
 
   it('swallows a throwing credit-available callback in cancel and in the grace timer', () => {
     vi.useFakeTimers()
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    const adapter = new SshPtySourceCreditAdapter(undefined, () => {
-      throw new Error('publication faulted')
-    })
-    const grant = ownerGrant(1, 1)
-    const canceled = adapter.open(grant, 'pty-1', 'incarnation-1')!
+    try {
+      const adapter = new SshPtySourceCreditAdapter(undefined, () => {
+        throw new Error('publication faulted')
+      })
+      const grant = ownerGrant(1, 1)
+      const canceled = adapter.open(grant, 'pty-1', 'incarnation-1')!
 
-    expect(() =>
-      adapter.cancel(
-        {
-          id: canceled.id,
-          deliveryToken: canceled.deliveryToken,
-          clientGeneration: canceled.clientGeneration,
-          ownerGeneration: canceled.ownerGeneration
-        },
-        grant
-      )
-    ).not.toThrow()
+      expect(() =>
+        adapter.cancel(
+          {
+            id: canceled.id,
+            deliveryToken: canceled.deliveryToken,
+            clientGeneration: canceled.clientGeneration,
+            ownerGeneration: canceled.ownerGeneration
+          },
+          grant
+        )
+      ).not.toThrow()
 
-    const expiring = adapter.open(grant, 'pty-2', 'incarnation-2')!
-    adapter.retainOrCloseOnDetach(grant)
-    expect(() => vi.advanceTimersByTime(PTY_CONSUMER_OWNER_GRACE_MS)).not.toThrow()
+      const expiring = adapter.open(grant, 'pty-2', 'incarnation-2')!
+      adapter.retainOrCloseOnDetach(grant)
+      expect(() => vi.advanceTimersByTime(PTY_CONSUMER_OWNER_GRACE_MS)).not.toThrow()
 
-    expect(adapter.snapshot(expiring).state).toBe('closed')
-    expect(stderr.mock.calls.map(([line]) => String(line))).toEqual([
-      expect.stringContaining('[pty-source-credit] credit-available notification failed for pty-1'),
-      expect.stringContaining('[pty-source-credit] credit-available notification failed for pty-2')
-    ])
-    stderr.mockRestore()
+      expect(adapter.snapshot(expiring).state).toBe('closed')
+      expect(stderr.mock.calls.map(([line]) => String(line))).toEqual([
+        expect.stringContaining(
+          '[pty-source-credit] credit-available notification failed for pty-1'
+        ),
+        expect.stringContaining(
+          '[pty-source-credit] credit-available notification failed for pty-2'
+        )
+      ])
+    } finally {
+      stderr.mockRestore()
+    }
   })
 
   it('returns the same bounded proof for duplicate token cancellation', () => {

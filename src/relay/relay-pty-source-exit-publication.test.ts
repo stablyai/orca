@@ -236,19 +236,25 @@ describe('sealAndPublishPtySourceExit settlement closure', () => {
     expect(scenario.capacityIds).toEqual(['pty-1'])
   })
 
-  it('logs and contains a ledger settlement fault instead of escaping the writer callback', () => {
+  it.each([
+    ['committed', { ok: true } as const],
+    ['rolled back', { ok: false, error: new Error('socket write failed') } as const]
+  ])('logs, contains and resumes after a %s ledger settlement fault', (_label, result) => {
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    const scenario = createInFlightScenario(closedSnapshot({ state: 'sealed-unsettled' }))
-    scenario.session.settleExitPublication.mockImplementation(() => {
-      throw new Error('PTY source delivery is not sealed')
-    })
+    try {
+      const scenario = createInFlightScenario(closedSnapshot({ state: 'sealed-unsettled' }))
+      scenario.session.settleExitPublication.mockImplementation(() => {
+        throw new Error('PTY source delivery is not sealed')
+      })
 
-    expect(() => scenario.settle({ ok: true })).not.toThrow()
+      expect(() => scenario.settle(result)).not.toThrow()
 
-    expect(String(stderr.mock.calls.at(-1)?.[0])).toContain(
-      '[pty-source-exit] exit settlement failed for pty-1'
-    )
-    expect(scenario.capacityIds).toEqual(['pty-1'])
-    stderr.mockRestore()
+      expect(String(stderr.mock.calls.at(-1)?.[0])).toContain(
+        '[pty-source-exit] exit settlement failed for pty-1'
+      )
+      expect(scenario.capacityIds).toEqual(['pty-1'])
+    } finally {
+      stderr.mockRestore()
+    }
   })
 })

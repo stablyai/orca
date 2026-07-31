@@ -106,10 +106,37 @@ describe('RelayPtySourceSendScheduler close handling', () => {
   })
 
   it('prunes a record whose tombstone was already evicted', () => {
-    const record = deliveryRecord()
+    const waiter = vi.fn()
+    const record = deliveryRecord({ sendWaiters: new Set([waiter]) })
     const harness = createScheduler(null, record)
 
     expect(() => harness.scheduler.onCreditAvailable('pty-1')).not.toThrow()
+
+    expect(waiter).toHaveBeenCalledOnce()
+    expect(record.sendWaiters.size).toBe(0)
+    expect(harness.deliveries.has('pty-1')).toBe(false)
+    expect(harness.capacityIds).toEqual(['pty-1'])
+  })
+
+  it('preserves a closed record after the legacy exit projection landed', () => {
+    const record = deliveryRecord({ legacyExitAccepted: true })
+    const harness = createScheduler(null, record)
+
+    harness.scheduler.onCreditAvailable('pty-1')
+
+    expect(harness.deliveries.get('pty-1')).toBe(record)
+    expect(harness.session.reserveSourceSend).not.toHaveBeenCalled()
+    expect(harness.capacityIds).toEqual(['pty-1'])
+  })
+
+  it('prunes a healthily published exit after its final credit closes the delivery', () => {
+    const record = deliveryRecord({
+      legacyExitAccepted: true,
+      sourceExitState: 'published'
+    })
+    const harness = createScheduler(null, record)
+
+    harness.scheduler.onCreditAvailable('pty-1')
 
     expect(harness.deliveries.has('pty-1')).toBe(false)
     expect(harness.capacityIds).toEqual(['pty-1'])

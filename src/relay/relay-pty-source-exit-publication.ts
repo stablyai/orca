@@ -84,6 +84,7 @@ export function sealAndPublishPtySourceExit(options: {
       counters.exitRolledBack++
     }
     let deliveryGone = false
+    let settlementFailed = false
     try {
       // Why: a client cancel or rotation can close the delivery while this frame is in
       // flight; settling a closed ledger entry throws out of a bare socket write/drain
@@ -94,13 +95,14 @@ export function sealAndPublishPtySourceExit(options: {
         session.settleExitPublication(record.identity, result)
       }
     } catch (err) {
+      settlementFailed = true
       process.stderr.write(
         `[pty-source-exit] exit settlement failed for ${params.id}: ${
           err instanceof Error ? (err.stack ?? err.message) : String(err)
         }\n`
       )
     } finally {
-      if (result.ok || deliveryGone) {
+      if (result.ok || deliveryGone || settlementFailed) {
         onCapacity(params.id)
       }
     }

@@ -73,6 +73,7 @@ export class RelayPtySourcePublication {
     if (mode === 'legacy-owner') {
       if (current) {
         this.session.cancelDelivery(current.identity, 'source-credit-disabled')
+        this.sender.wakeSendWaiters(current)
         this.deliveries.delete(id)
         this.onCapacity(id)
       }
@@ -85,6 +86,7 @@ export class RelayPtySourcePublication {
       this.deliveryClosedUnderRecord(current)
     ) {
       // Why: a canceled delivery can never resume as 'existing'; retire it so re-attach opens fresh.
+      this.sender.wakeSendWaiters(current)
       this.deliveries.delete(id)
       this.onCapacity(id)
       current = undefined
@@ -212,6 +214,7 @@ export class RelayPtySourcePublication {
     }
     if (!output.sourceAccepted && !appendPtySourceOutput(this.session, record, output)) {
       if (this.deliveryClosedUnderRecord(record)) {
+        this.sender.wakeSendWaiters(record)
         this.deliveries.delete(id)
         // Why: deferred — publish() can run inside flushPendingOutput's captured-queue drain,
         // where pendingOutputByPty is transiently empty; a synchronous capacity callback would
