@@ -658,6 +658,46 @@ async function runSelectedRuntimeAddJourney(
       nestedReposInGroup: true
     })
 
+    const terminalActivation = await client.page.evaluate(
+      async ({ environmentId, worktreeId }) => {
+        const bridge = (
+          window as unknown as {
+            __webRuntimeSessionE2E?: {
+              createTerminal: (
+                args: Record<string, unknown>
+              ) => Promise<{ status: string; message?: string }>
+            }
+          }
+        ).__webRuntimeSessionE2E
+        const store = window.__store
+        if (!bridge || !store) {
+          throw new Error('Runtime terminal activation bridge unavailable')
+        }
+        const outcome = await bridge.createTerminal({ environmentId, worktreeId })
+        const state = store.getState()
+        return {
+          activeHostId: state.activeWorkspaceExecutionHostId,
+          activeWorktreeId: state.activeWorktreeId,
+          outcome,
+          sameIdHosts: Object.values(state.worktreesByRepo)
+            .flat()
+            .filter((worktree) => worktree.id === worktreeId)
+            .map((worktree) => worktree.hostId ?? 'local')
+            .sort()
+        }
+      },
+      {
+        environmentId: client.environmentId,
+        worktreeId: gitCollision.runtimeWorktreeId
+      }
+    )
+    expect(terminalActivation).toEqual({
+      activeHostId: `runtime:${client.environmentId}`,
+      activeWorktreeId: gitCollision.runtimeWorktreeId,
+      outcome: { status: 'created' },
+      sameIdHosts: ['local', `runtime:${client.environmentId}`]
+    })
+
     const finalClientInventory = await listRuntimeInventory(clientLocalRuntime)
     expect(finalClientInventory.repos.map((repo) => repo.path)).toEqual(
       expect.not.arrayContaining([
