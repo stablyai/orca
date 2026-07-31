@@ -22157,6 +22157,128 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  it.each([
+    {
+      behavior: 'fills a missing renderer session',
+      hookAgentType: 'codex',
+      hookOffset: 0,
+      rendererSessionId: null,
+      expectedSessionId: 'hook-session'
+    },
+    {
+      behavior: 'replaces a stale renderer session at the same event timestamp',
+      hookAgentType: 'codex',
+      hookOffset: 0,
+      rendererSessionId: 'stale-renderer-session',
+      expectedSessionId: 'hook-session'
+    },
+    {
+      behavior: 'preserves a renderer session newer than the hook row',
+      hookAgentType: 'codex',
+      hookOffset: -1,
+      rendererSessionId: 'newer-renderer-session',
+      expectedSessionId: 'newer-renderer-session'
+    },
+    {
+      behavior: 'rejects a hook session owned by another agent',
+      hookAgentType: 'claude',
+      hookOffset: 1,
+      rendererSessionId: null,
+      expectedSessionId: null
+    }
+  ] as const)(
+    '$behavior',
+    async ({ hookAgentType, hookOffset, rendererSessionId, expectedSessionId }) => {
+      const leafId = '11111111-1111-4111-8111-111111111111'
+      const paneKey = `codex-tab:${leafId}`
+      const providerSession = {
+        key: 'session_id' as const,
+        id: 'hook-session'
+      }
+      const now = Date.now()
+      const runtime = new OrcaRuntimeService(store, undefined, {
+        getAgentStatusSnapshot: () => [
+          {
+            paneKey,
+            state: 'done',
+            prompt: '',
+            agentType: hookAgentType,
+            connectionId: null,
+            receivedAt: now + hookOffset,
+            stateStartedAt: now + hookOffset,
+            tabId: 'codex-tab',
+            worktreeId: TEST_WORKTREE_ID,
+            providerSession
+          }
+        ]
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [
+          {
+            worktree: TEST_WORKTREE_ID,
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 1,
+            activeGroupId: null,
+            activeTabId: `codex-tab::${leafId}`,
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: `codex-tab::${leafId}`,
+                parentTabId: 'codex-tab',
+                leafId,
+                title: 'Codex',
+                launchAgent: 'codex',
+                agentStatus: {
+                  state: 'working',
+                  prompt: 'Reply with MOBILE QA OK and nothing else.',
+                  updatedAt: now,
+                  stateStartedAt: now,
+                  agentType: 'codex',
+                  paneKey,
+                  stateHistory: [],
+                  ...(rendererSessionId
+                    ? {
+                        providerSession: {
+                          key: 'session_id' as const,
+                          id: rendererSessionId
+                        }
+                      }
+                    : {})
+                },
+                isActive: true
+              }
+            ]
+          }
+        ]
+      })
+
+      const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+      expect(result.tabs[0]).toEqual(
+        expect.objectContaining({
+          type: 'terminal',
+          agentStatus: expect.objectContaining({
+            state: 'working',
+            prompt: 'Reply with MOBILE QA OK and nothing else.',
+            agentType: 'codex'
+          })
+        })
+      )
+      if (expectedSessionId) {
+        expect(result.tabs[0]).toHaveProperty('agentStatus.providerSession', {
+          key: 'session_id',
+          id: expectedSessionId
+        })
+      } else {
+        expect(result.tabs[0]).not.toHaveProperty('agentStatus.providerSession')
+      }
+    }
+  )
+
   it('preserves authoritative OMP identity for Pi-compatible remote terminal snapshots', async () => {
     const runtime = new OrcaRuntimeService(store)
     const leafId = '11111111-1111-4111-8111-111111111111'

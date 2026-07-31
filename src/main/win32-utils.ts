@@ -7,6 +7,7 @@ export {
   getSpawnArgsForWindows,
   isWindowsBatchScript,
   WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR,
+  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL,
   UnsafeWindowsBatchArgumentsError
 } from '../shared/windows-batch-spawn'
 

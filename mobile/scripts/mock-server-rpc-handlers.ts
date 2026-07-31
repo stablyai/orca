@@ -13,11 +13,7 @@ import { handleMockGitRequest } from './mock-server-git-state'
 import { handleMockAccountRequest } from './mock-server-account-rpc'
 import { handleMockNativeChatRequest } from './mock-server-native-chat-scenario'
 import { handleMockSessionTabsRequest } from './mock-server-session-tabs-fixture'
-import {
-  createMockTerminals,
-  FAKE_SCROLLBACK,
-  STREAMING_CHUNKS
-} from './mock-server-terminal-fixtures'
+import { handleMockTerminalRequest } from './mock-server-terminal-stream'
 import { createMockRepos, createMockWorktrees, readScenarioNumber } from './mobile-lag-scenario'
 
 const MOCK_REPO_COUNT = readScenarioNumber('MOCK_REPO_COUNT', 2)
@@ -63,6 +59,8 @@ export type RpcResponse = {
   streaming?: true
   _meta: { runtimeId: string }
 }
+
+export type RpcRespond = (response: RpcResponse, shouldSend?: () => boolean) => void
 
 export const mockScenarioSummary = {
   repoCount: FAKE_REPOS.length,
@@ -111,13 +109,18 @@ export function handleRequest(
   send: (response: RpcResponse) => void,
   ws: WebSocket
 ): void {
-  const respond = (response: RpcResponse) => {
+  const respond: RpcRespond = (response, shouldSend) => {
+    const deliver = () => {
+      if (shouldSend?.() !== false) {
+        send(response)
+      }
+    }
     const delay = responseDelayFor(request.method)
     if (delay > 0) {
-      setTimeout(() => send(response), delay)
+      setTimeout(deliver, delay)
       return
     }
-    send(response)
+    deliver()
   }
 
   // Each returns false for methods it does not own; first owner wins.
@@ -126,7 +129,8 @@ export function handleRequest(
     handleMockFilePreviewRequest(request, respond, success, error) ||
     handleMockAccountRequest(request, respond, success, error) ||
     handleMockNativeChatRequest(request, respond, success, error, ws) ||
-    handleMockSessionTabsRequest(request, respond, success, terminalListWorktreeId)
+    handleMockSessionTabsRequest(request, respond, success, terminalListWorktreeId) ||
+    handleMockTerminalRequest(request, respond, success, ws, terminalListWorktreeId)
   ) {
     return
   }
@@ -278,44 +282,6 @@ export function handleRequest(
       respond(success(request.id, { ok: true }))
       break
     }
-
-    case 'terminal.list': {
-      const terminals = createMockTerminals(terminalListWorktreeId(request.params?.worktree))
-      respond(
-        success(request.id, {
-          terminals,
-          totalCount: terminals.length,
-          truncated: false
-        })
-      )
-      break
-    }
-
-    case 'terminal.subscribe': {
-      respond(success(request.id, { type: 'scrollback', lines: FAKE_SCROLLBACK, truncated: false }))
-
-      let chunkIndex = 0
-      const interval = setInterval(() => {
-        if (chunkIndex >= STREAMING_CHUNKS.length || ws.readyState !== ws.OPEN) {
-          clearInterval(interval)
-          if (ws.readyState === ws.OPEN) {
-            respond(success(request.id, { type: 'end' }))
-          }
-          return
-        }
-        respond(success(request.id, { type: 'data', chunk: STREAMING_CHUNKS[chunkIndex] }, true))
-        chunkIndex++
-      }, 500)
-      break
-    }
-
-    case 'terminal.send':
-      respond(success(request.id, { send: { handle: 'term-1', ok: true } }))
-      break
-
-    case 'terminal.unsubscribe':
-      respond(success(request.id, { unsubscribed: true }))
-      break
 
     case 'files.open':
     case 'files.openDiff':
