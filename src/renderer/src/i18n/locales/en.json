@@ -10089,7 +10089,9 @@
           "switchTo": "Switch to build",
           "alreadyRunning": "This is the build you are running.",
           "willSwitch": "{{value0}} → {{value1}}",
-          "webUnavailable": "Switching builds is only available in the desktop app."
+          "webUnavailable": "Switching builds is only available in the desktop app.",
+          "hourlyMacOnlyAria": "Hourly (macOS only)",
+          "hourlyMacOnly": "Hourly builds are produced only for macOS. Linux and Windows stay on Stable or RC."
         }
       },
       "right": {

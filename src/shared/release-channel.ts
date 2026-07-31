@@ -16,6 +16,18 @@ export function isReleaseChannel(value: unknown): value is ReleaseChannel {
   return typeof value === 'string' && RELEASE_CHANNELS.includes(value as ReleaseChannel)
 }
 
+/**
+ * Hourly builds are produced only by the macOS workflow, so the channel has
+ * nothing to offer elsewhere. Shared so the picker, the main-process check, and
+ * any future surface cannot drift on where it is available.
+ */
+export function isChannelSupportedOnPlatform(
+  channel: ReleaseChannel,
+  platform: NodeJS.Platform
+): boolean {
+  return channel !== 'hourly' || platform === 'darwin'
+}
+
 export function getReleaseRepoForChannel(channel: ReleaseChannel): string {
   return channel === 'hourly' ? HOURLY_RELEASE_REPO : MAIN_RELEASE_REPO
 }

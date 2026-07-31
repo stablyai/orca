@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Apple, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
@@ -8,9 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { SettingsSegmentedControl, SettingsSubsectionHeader } from './SettingsFormControls'
 import { Badge } from '../ui/badge'
 import { translate } from '@/i18n/i18n'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import {
   RELEASE_CHANNELS,
   getVersionChannel,
+  isChannelSupportedOnPlatform,
   parseHourlyVersionStamp,
   type ReleaseBuild,
   type ReleaseChannel
@@ -25,7 +27,7 @@ const CHANNEL_LABELS: Record<ReleaseChannel, string> = {
 const CHANNEL_DESCRIPTIONS: Record<ReleaseChannel, string> = {
   stable: 'Shipped releases. What everyone else is running.',
   rc: 'Release candidates cut ahead of each stable.',
-  hourly: 'Unvetted macOS builds from main, built every hour. No tests, no notarization.'
+  hourly: 'macOS only. Unvetted builds from main, built every hour. No tests, no notarization.'
 }
 
 function formatBuildLabel(build: ReleaseBuild): string {
@@ -54,8 +56,15 @@ export function ReleaseChannelSection(): React.JSX.Element {
   const [loading, setLoading] = useState(false)
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
 
+  const platform = getShortcutPlatform()
   const runningChannel = appVersion ? getVersionChannel(appVersion) : null
-  const activeChannel = releaseChannelOverride ?? runningChannel ?? 'stable'
+  const requestedChannel = releaseChannelOverride ?? runningChannel ?? 'stable'
+  // Why: a persisted 'hourly' can arrive on Linux/Windows — settings sync, or a
+  // profile carried over from a Mac. Fall back rather than rendering a selected
+  // segment the user cannot act on and a build list that can never install.
+  const activeChannel = isChannelSupportedOnPlatform(requestedChannel, platform)
+    ? requestedChannel
+    : 'stable'
   const busy = updateStatus.state === 'checking' || updateStatus.state === 'downloading'
 
   useEffect(() => {
@@ -170,10 +179,36 @@ export function ReleaseChannelSection(): React.JSX.Element {
             'auto.components.settings.ReleaseChannelSection.channelAriaLabel',
             'Update channel'
           )}
-          options={RELEASE_CHANNELS.map((channel) => ({
-            value: channel,
-            label: CHANNEL_LABELS[channel]
-          }))}
+          // Why disabled rather than hidden: a Linux/Windows dev who has heard
+          // about the hourly channel should see that it exists and why it is
+          // unavailable, instead of silently not finding it.
+          options={RELEASE_CHANNELS.map((channel) => {
+            const supported = isChannelSupportedOnPlatform(channel, platform)
+            return {
+              value: channel,
+              label: supported ? (
+                CHANNEL_LABELS[channel]
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  {CHANNEL_LABELS[channel]}
+                  <Apple className="size-3" aria-hidden="true" />
+                </span>
+              ),
+              disabled: !supported,
+              ariaLabel: supported
+                ? undefined
+                : translate(
+                    'auto.components.settings.ReleaseChannelSection.hourlyMacOnlyAria',
+                    'Hourly (macOS only)'
+                  ),
+              tooltip: supported
+                ? undefined
+                : translate(
+                    'auto.components.settings.ReleaseChannelSection.hourlyMacOnly',
+                    'Hourly builds are produced only for macOS. Linux and Windows stay on Stable or RC.'
+                  )
+            }
+          })}
         />
         <p className="text-xs text-muted-foreground">{CHANNEL_DESCRIPTIONS[activeChannel]}</p>
       </div>

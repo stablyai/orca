@@ -3,6 +3,7 @@ import {
   formatHourlyVersion,
   getReleaseRepoForChannel,
   getVersionChannel,
+  isChannelSupportedOnPlatform,
   isHourlyVersion,
   isReleaseChannel,
   parseHourlyVersionStamp,
@@ -55,6 +56,22 @@ describe('release channel', () => {
     expect(parseHourlyVersionStamp('1.4.160-hourly.202802290000')?.toISOString()).toBe(
       '2028-02-29T00:00:00.000Z'
     )
+  })
+
+  // Why: the hourly workflow is macOS-only, so the channel has no artifact to
+  // offer elsewhere. Both the picker and the main-process check read this, so a
+  // regression here would silently re-expose an uninstallable channel.
+  it('offers hourly only on macOS', () => {
+    expect(isChannelSupportedOnPlatform('hourly', 'darwin')).toBe(true)
+    expect(isChannelSupportedOnPlatform('hourly', 'linux')).toBe(false)
+    expect(isChannelSupportedOnPlatform('hourly', 'win32')).toBe(false)
+  })
+
+  it('offers stable and rc on every platform', () => {
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      expect(isChannelSupportedOnPlatform('stable', platform)).toBe(true)
+      expect(isChannelSupportedOnPlatform('rc', platform)).toBe(true)
+    }
   })
 
   it('accepts only known channels', () => {

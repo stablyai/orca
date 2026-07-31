@@ -45,7 +45,11 @@ import {
 } from './serve-update-handoff'
 import type { LocalBuildFeed } from './local-builds/local-build-feed-server'
 import { listReleaseBuilds, resolveTargetBuild } from './updater-release-builds'
-import type { ReleaseBuild, ReleaseChannel } from '../shared/release-channel'
+import {
+  isChannelSupportedOnPlatform,
+  type ReleaseBuild,
+  type ReleaseChannel
+} from '../shared/release-channel'
 
 type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
 type MissingManifestPrereleaseFallbackResult = { userInitiated: boolean }
@@ -1522,6 +1526,16 @@ export async function listAvailableReleaseBuilds(channel: ReleaseChannel): Promi
 async function checkForPinnedBuild(channel: ReleaseChannel, tag: string): Promise<void> {
   if (!app.isPackaged || is.dev) {
     sendStatus({ state: 'not-available', userInitiated: true })
+    return
+  }
+  // Why here as well as in the picker: the renderer disables the option, but IPC
+  // is reachable regardless, and there is no artifact to install off-macOS.
+  if (!isChannelSupportedOnPlatform(channel, process.platform)) {
+    sendStatus({
+      state: 'error',
+      message: 'Hourly builds are produced only for macOS.',
+      userInitiated: true
+    })
     return
   }
   if (currentStatus.state === 'checking' || currentStatus.state === 'downloading') {
