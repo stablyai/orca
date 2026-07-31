@@ -4907,7 +4907,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
 
     fetchWorktrees.mockClear()
     fetchWorktreeLineage.mockClear()
-    mockSettings.activeRuntimeEnvironmentId = 'env-1'
+    mockSettings.activeRuntimeEnvironmentId = null
     if (!runtimeOnResponse) {
       throw new Error('Expected runtime client event callbacks')
     }
@@ -4918,8 +4918,12 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1', undefined)
-    expect(fetchWorktreeLineage).toHaveBeenCalledWith(undefined)
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1', {
+      executionHostId: 'runtime:env-1'
+    })
+    expect(fetchWorktreeLineage).toHaveBeenCalledWith({
+      executionHostId: 'runtime:env-1'
+    })
   })
 })
 

@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import type { Repo, Worktree, TerminalTab } from '../../../shared/types'
 import type { AppState } from './types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
 import {
   getIndexedAllWorktrees as getCachedAllWorktrees,
@@ -170,10 +171,30 @@ export function getRepoMapFromState(state: Pick<AppState, 'repos'>): Map<string,
 // ─── Repos ──────────────────────────────────────────────────────────
 export const useRepos = () => useAppStore((s) => s.repos)
 export const useActiveRepo = () =>
-  useAppStore(useShallow((s) => s.repos.find((r) => r.id === s.activeRepoId) ?? null))
+  useAppStore(useShallow((s) => selectRepoByIdForActiveWorkspace(s, s.activeRepoId)))
 export const useRepoMap = () => useAppStore((s) => getCachedRepoMap(s.repos))
+
+export function selectRepoByIdForActiveWorkspace(
+  state: Pick<AppState, 'repos' | 'activeRepoId' | 'activeWorkspaceExecutionHostId'>,
+  repoId: string | null
+): Repo | null {
+  if (!repoId) {
+    return null
+  }
+  if (repoId === state.activeRepoId && state.activeWorkspaceExecutionHostId) {
+    return (
+      state.repos.find(
+        (repo) =>
+          repo.id === repoId &&
+          getRepoExecutionHostId(repo) === state.activeWorkspaceExecutionHostId
+      ) ?? null
+    )
+  }
+  return getCachedRepoMap(state.repos).get(repoId) ?? null
+}
+
 export const useRepoById = (repoId: string | null) =>
-  useAppStore((s) => (repoId ? (getCachedRepoMap(s.repos).get(repoId) ?? null) : null))
+  useAppStore((s) => selectRepoByIdForActiveWorkspace(s, repoId))
 export const useProjectHostSetupProjection = () =>
   useAppStore((s) => getProjectHostSetupProjectionFromState(s))
 
@@ -185,11 +206,21 @@ export const useAllWorktrees = () => useAppStore((s) => getCachedAllWorktrees(s.
 export const useWorktreeMap = () => useAppStore((s) => getCachedWorktreeMap(s.worktreesByRepo))
 export const useWorktreeById = (worktreeId: string | null) =>
   useAppStore((s) =>
-    worktreeId ? (getCachedWorktreeMap(s.worktreesByRepo).get(worktreeId) ?? null) : null
+    worktreeId
+      ? (s.getKnownWorktreeById(
+          worktreeId,
+          worktreeId === s.activeWorktreeId
+            ? (s.activeWorkspaceExecutionHostId ?? undefined)
+            : undefined
+        ) ?? null)
+      : null
   )
 export const useActiveWorktree = () => {
   const activeWorktreeId = useActiveWorktreeId()
   return useAppStore((s) =>
-    activeWorktreeId ? (s.getKnownWorktreeById(activeWorktreeId) ?? null) : null
+    activeWorktreeId
+      ? (s.getKnownWorktreeById(activeWorktreeId, s.activeWorkspaceExecutionHostId ?? undefined) ??
+        null)
+      : null
   )
 }

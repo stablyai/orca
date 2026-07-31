@@ -974,6 +974,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           ? {
               activeWorktreeId: null,
               activeWorkspaceKey: null,
+              activeWorkspaceExecutionHostId: null,
               activeTabId: null,
               activeBrowserTabId: null,
               activeFileId: null,
