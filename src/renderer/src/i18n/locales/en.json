@@ -11599,7 +11599,25 @@
           "useWithOrcaDescription": "Allow Orca to connect to the Codex Micro over USB.",
           "disabledDescription": "Turn on Use with Orca, then connect the Codex Micro by USB.",
           "checkingDevice": "Checking device",
-          "checkingDescription": "Reading the current connection state."
+          "checkingDescription": "Reading the current connection state.",
+          "controlMap": "Codex Micro control map",
+          "joystickDirections": "Joystick directions",
+          "controlAG00": "Top-left agent key",
+          "controlAG01": "Top-right agent key",
+          "controlAG02": "Middle-left agent key",
+          "controlAG03": "Middle-center-left agent key",
+          "controlAG04": "Middle-center-right agent key",
+          "controlAG05": "Middle-right agent key",
+          "controlACT06": "Lower-left command key",
+          "controlACT07": "Lower-center-left command key",
+          "controlACT08": "Lower-center-right command key",
+          "controlACT09": "Lower-right command key",
+          "controlACT10": "Touch control",
+          "controlACT11": "Wide command key",
+          "controlACT12": "Bottom-right command key",
+          "controlEncCc": "Dial · counterclockwise",
+          "controlEncCw": "Dial · clockwise",
+          "controlEncClk": "Dial · press"
         }
       },
       "right": {

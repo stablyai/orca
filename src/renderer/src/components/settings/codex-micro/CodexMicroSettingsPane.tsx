@@ -23,6 +23,7 @@ import {
   SettingsSwitch,
   SettingsSwitchRow
 } from '../SettingsFormControls'
+import { CodexMicroControlMap, codexMicroControlLabel } from './CodexMicroControlMap'
 import { translate } from '@/i18n/i18n'
 
 type Props = {
@@ -36,6 +37,8 @@ export function CodexMicroSettingsPane({ settings, updateSettings }: Props): Rea
   const device = normalizeCodexMicroSettings(settings.codexMicro)
   const [connection, setConnection] = useState<CodexMicroConnectionState | null>(null)
   const [actionFilter, setActionFilter] = useState('')
+  const [focusedControl, setFocusedControl] = useState<CodexMicroControlId | null>(null)
+  const [hoveredControl, setHoveredControl] = useState<CodexMicroControlId | null>(null)
 
   useEffect(() => {
     let active = true
@@ -55,6 +58,7 @@ export function CodexMicroSettingsPane({ settings, updateSettings }: Props): Rea
     updateSettings({ codexMicro: { ...device, ...updates } })
   }
   const writable = connection?.kind === 'connected'
+  const activeControl = hoveredControl ?? focusedControl
   const actionOptions = useMemo(() => {
     const query = actionFilter.trim().toLowerCase()
     return query
@@ -224,6 +228,16 @@ export function CodexMicroSettingsPane({ settings, updateSettings }: Props): Rea
             'Map buttons and dial gestures to existing Orca commands.'
           )}
         />
+        <Card className="p-4 shadow-xs">
+          <CodexMicroControlMap
+            activeControl={activeControl}
+            onActivate={(control) => {
+              setFocusedControl(control)
+              document.getElementById(`codex-control-${control}-select`)?.focus()
+            }}
+            onHover={setHoveredControl}
+          />
+        </Card>
         <Input
           value={actionFilter}
           onChange={(event) => setActionFilter(event.currentTarget.value)}
@@ -243,6 +257,10 @@ export function CodexMicroSettingsPane({ settings, updateSettings }: Props): Rea
               control={control}
               value={device.mappings[control]}
               options={actionOptions}
+              active={activeControl === control}
+              onFocus={() => setFocusedControl(control)}
+              onBlur={() => setFocusedControl((current) => (current === control ? null : current))}
+              onHover={(hovered) => setHoveredControl(hovered ? control : null)}
               onChange={(actionId) =>
                 updateDevice({
                   mappings: updateMapping(device.mappings, control, actionId)
@@ -260,17 +278,35 @@ function MappingSelect({
   control,
   value,
   options,
+  active,
+  onFocus,
+  onBlur,
+  onHover,
   onChange
 }: {
   control: CodexMicroControlId
   value: KeybindingActionId | undefined
   options: typeof KEYBINDING_DEFINITIONS
+  active: boolean
+  onFocus: () => void
+  onBlur: () => void
+  onHover: (hovered: boolean) => void
   onChange: (value: KeybindingActionId | undefined) => void
 }): React.JSX.Element {
   return (
-    <div className="flex items-center gap-3 rounded-md border border-border p-2">
-      <span id={`codex-control-${control}`} className="w-20 font-mono text-xs">
-        {control}
+    <div
+      data-active={active}
+      onFocusCapture={onFocus}
+      onBlurCapture={onBlur}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+      className={`flex items-center gap-3 rounded-md border border-border p-2 transition-colors ${
+        active ? 'bg-accent' : ''
+      }`}
+    >
+      <span id={`codex-control-${control}`} className="w-40 shrink-0">
+        <span className="block text-sm">{codexMicroControlLabel(control)}</span>
+        <span className="block font-mono text-xs text-muted-foreground">{control}</span>
       </span>
       <Select
         value={value ?? UNASSIGNED}
@@ -278,7 +314,11 @@ function MappingSelect({
           onChange(next === UNASSIGNED ? undefined : (next as KeybindingActionId))
         }
       >
-        <SelectTrigger className="min-w-0 flex-1" aria-labelledby={`codex-control-${control}`}>
+        <SelectTrigger
+          id={`codex-control-${control}-select`}
+          className="min-w-0 flex-1"
+          aria-labelledby={`codex-control-${control}`}
+        >
           <SelectValue
             placeholder={translate('auto.components.settings.codexMicro.unassigned', 'Unassigned')}
           />

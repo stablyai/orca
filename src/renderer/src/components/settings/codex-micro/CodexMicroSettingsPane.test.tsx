@@ -109,6 +109,44 @@ describe('CodexMicroSettingsPane layout', () => {
     await act(async () => root.unmount())
   })
 
+  it('renders descriptive physical labels and an accessible control map', () => {
+    const markup = renderToStaticMarkup(
+      <CodexMicroSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={() => {}} />
+    )
+
+    expect(markup).toContain('aria-label="Codex Micro control map"')
+    expect(markup).toContain('aria-label="Joystick directions"')
+    expect(markup).toContain('data-control-id="AG00"')
+    expect(markup).toContain('Top-left agent key')
+    expect(markup).toContain('Dial · clockwise')
+    expect(markup).toContain('>AG00<')
+  })
+
+  it('links diagram controls and mapping selectors through focus', async () => {
+    const { root, container } = await renderPane()
+    const diagramControl = container.querySelector<SVGGElement>('[data-control-id="ACT11"]')
+
+    expect(diagramControl).not.toBeNull()
+    await act(async () => diagramControl?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    const trigger = container.querySelector<HTMLButtonElement>('#codex-control-ACT11-select')
+    expect(document.activeElement).toBe(trigger)
+
+    for (const key of ['Enter', ' ']) {
+      await act(async () =>
+        diagramControl?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+      )
+      expect(document.activeElement).toBe(trigger)
+    }
+
+    const agentTrigger = container.querySelector<HTMLButtonElement>('#codex-control-AG00-select')
+    await act(async () => agentTrigger?.focus())
+    expect(container.querySelector('[data-control-id="AG00"]')?.getAttribute('data-active')).toBe(
+      'true'
+    )
+    await act(async () => root.unmount())
+  })
+
   it('shows only actions supported by each connection state', async () => {
     const { root, container } = await renderPane()
     const cases: [CodexMicroConnectionState, string[]][] = [
