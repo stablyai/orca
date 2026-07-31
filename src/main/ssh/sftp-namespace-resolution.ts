@@ -10,6 +10,7 @@ import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { redactRelayInstallMarkerTokens } from './ssh-relay-install-marker'
 
 export type SftpNamespacePathMapping = {
+  homeRelativeNamespaceRoot: string
   homeRelativePath: string
   shellProbePath: string
   homeRelativeProbePath: string
@@ -72,14 +73,13 @@ function assertMappingIdentity(shellAbsolutePath: string, mapping: SftpNamespace
     throw new Error('SFTP namespace transfer and marker must share one shell namespace prefix')
   }
 
-  const lockSegmentIndex = probeSegments.length - 2
-  const relayDir = probeSegments.slice(0, lockSegmentIndex).join('/')
+  const namespaceRoot = mapping.homeRelativeNamespaceRoot
   if (
-    lockSegmentIndex < 1 ||
-    probeSegments[lockSegmentIndex] !== '.install-lock' ||
-    (mapping.homeRelativePath !== relayDir && !mapping.homeRelativePath.startsWith(`${relayDir}/`))
+    (mapping.homeRelativePath !== namespaceRoot &&
+      !mapping.homeRelativePath.startsWith(`${namespaceRoot}/`)) ||
+    !mapping.homeRelativeProbePath.startsWith(`${namespaceRoot}/`)
   ) {
-    throw new Error('SFTP namespace marker must be inside the transfer relay install lock')
+    throw new Error('SFTP namespace transfer and marker must be inside one namespace root')
   }
 }
 
@@ -159,6 +159,7 @@ export async function resolveSftpTransferPath(
 ): Promise<string> {
   assertAbsolutePosixPath('transfer path', shellAbsolutePath)
   assertAbsolutePosixPath('marker path', mapping.shellProbePath)
+  assertHomeRelativePosixPath('relative namespace root', mapping.homeRelativeNamespaceRoot)
   assertHomeRelativePosixPath('relative transfer path', mapping.homeRelativePath)
   assertHomeRelativePosixPath('relative marker path', mapping.homeRelativeProbePath)
   assertMappingIdentity(shellAbsolutePath, mapping)

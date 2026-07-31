@@ -21,6 +21,7 @@ import {
   commandWithNodePath,
   listRelayBaseDirsCommand,
   listStaleRemoteUploadStagesCommand,
+  isRemoteUploadStagePath,
   makeRemoteDirectoryCommand,
   moveRemoteTreeCommand,
   promoteRemoteTreeContentsCommand,
@@ -195,6 +196,28 @@ describe('ssh remote command builders', () => {
     )
     expect(command).toContain('LastWriteTimeUtc -lt $cutoff')
     expect(command).toContain('upload-[0-9a-f]{8}-[0-9a-f]{4}')
+  })
+
+  it.each([
+    ['/home/u/.orca-remote/relay-1.0.0.upload-123e4567-e89b-12d3-a456-426614174000', true],
+    ['/home/u/important-repository', false],
+    ['/home/u/other/relay-1.0.0.upload-123e4567-e89b-12d3-a456-426614174000', false],
+    ['/home/u/.orca-remote/relay-1.0.0.upload-not-a-uuid', false],
+    ['/home/u/.orca-remote/relay-1.0.0.upload-123e4567-e89b-12d3-a456-426614174000\n/home/u', false]
+  ])('validates a POSIX stale-stage deletion target %j', (candidate, expected) => {
+    expect(isRemoteUploadStagePath(posix, '/home/u/.orca-remote/relay-1.0.0', candidate)).toBe(
+      expected
+    )
+  })
+
+  it('accepts a case-insensitive Windows stage path with native separators', () => {
+    expect(
+      isRemoteUploadStagePath(
+        windows,
+        'C:/Users/Me/.orca-remote/relay-1.0.0',
+        'c:\\users\\me\\.orca-remote\\relay-1.0.0.upload-123E4567-E89B-12D3-A456-426614174000'
+      )
+    ).toBe(true)
   })
 
   it.runIf(process.platform !== 'win32')(

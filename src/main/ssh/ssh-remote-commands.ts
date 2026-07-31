@@ -2,6 +2,7 @@ import type { RemoteHostPlatform } from './ssh-remote-platform'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
+  normalizeWindowsRemotePath,
   remoteBasename,
   remoteDirname
 } from './ssh-remote-platform'
@@ -147,7 +148,7 @@ export function listStaleRemoteUploadStagesCommand(
     return [
       `if [ -d ${parentArg} ]; then`,
       `find ${parentArg} -mindepth 1 -maxdepth 1 -type d -name ${shellEscape(pattern)} -mmin +${Math.ceil(staleSeconds / 60)} -print |`,
-      `while IFS= read -r d; do case "$d" in *.upload-????????-????-????-????-????????????) printf '%s\n' "$d" ;; *) continue ;; esac; done;`,
+      `while IFS= read -r d; do case "$d" in *.upload-????????-????-????-????-????????????) printf '%s\\n' "$d" ;; *) continue ;; esac; done;`,
       'fi'
     ].join(' ')
   }
@@ -162,6 +163,40 @@ export function listStaleRemoteUploadStagesCommand(
       '} | ForEach-Object { $_.FullName }',
       '}'
     ].join(' ')
+  )
+}
+
+export function isRemoteUploadStagePath(
+  host: RemoteHostPlatform,
+  remoteRelayDir: string,
+  candidatePath: string
+): boolean {
+  if (
+    !candidatePath ||
+    candidatePath.includes('\0') ||
+    candidatePath.includes('\r') ||
+    candidatePath.includes('\n')
+  ) {
+    return false
+  }
+  const candidate = isWindowsRemoteHost(host)
+    ? normalizeWindowsRemotePath(candidatePath)
+    : candidatePath
+  const expectedParent = remoteDirname(remoteRelayDir, host)
+  const candidateParent = remoteDirname(candidate, host)
+  const expectedPrefix = `${remoteBasename(remoteRelayDir, host)}.upload-`
+  const candidateBase = remoteBasename(candidate, host)
+  const sameParent = isWindowsRemoteHost(host)
+    ? candidateParent.toLowerCase() === expectedParent.toLowerCase()
+    : candidateParent === expectedParent
+  const comparableBase = isWindowsRemoteHost(host) ? candidateBase.toLowerCase() : candidateBase
+  const comparablePrefix = isWindowsRemoteHost(host) ? expectedPrefix.toLowerCase() : expectedPrefix
+  return (
+    sameParent &&
+    comparableBase.startsWith(comparablePrefix) &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(
+      comparableBase.slice(comparablePrefix.length)
+    )
   )
 }
 

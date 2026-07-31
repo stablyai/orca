@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-30",
+  "updatedAt": "2026-07-31",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -10,6 +10,111 @@
     }
   },
   "gates": [
+    {
+      "id": "ssh-relay.staged-upload-recovery",
+      "title": "SSH relay uploads remain retryable before the shared install lock",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "ssh-relay-install",
+      "layer": "ssh-transfer-install-contract",
+      "surfaces": [
+        "SSH relay first install",
+        "split shell and SFTP namespaces",
+        "system SSH transfer fallback",
+        "relay install retry after cancellation"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["ssh2", "system-ssh"],
+      "coveredPlatforms": ["macos", "linux"],
+      "coveredProviders": ["ssh2", "system-ssh"],
+      "coverageNotes": "Deterministic unit and real ssh2 SFTP-wire tests cover lock ordering, attempt-owned namespace identity, payload-only promotion, stale-stage cleanup, unconfirmed-transfer retention, split-SFTP redirection, system-SSH bypass, and simulated Windows commands. A throwaway linux-arm64 Docker sshd reached through a non-loopback LAN address proves cancellation leaves no shared install lock and an immediate retry launches the relay against a real Git repository.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/9828",
+        "https://github.com/stablyai/orca/pull/10207"
+      ],
+      "invariant": "A first-install relay transfer must complete in an attempt-owned staging namespace before acquiring the shared version install lock. Unconfirmed transfer or promotion retains only the attempt stage for bounded stale recovery; confirmed failure removes it. Split-SFTP hosts must prove the stage identity on the exact transfer session, and only payload contents may be promoted under the shared lock.",
+      "oracle": "Inject unconfirmed cancellation at uploadDirectory, require no shared .install-lock, retain one token-shaped attempt stage, and require an immediate independent deployment to install, launch, answer relay RPC, and read a real repository HEAD. Unit and wire contracts additionally require zero lock acquisition before upload settlement, canonical shell paths, verified SFTP redirection for the staged bundle and .version, final install-namespace ownership for package.json, promotion only after the lock, and no mapping on Windows or system SSH.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-deploy-staged-upload.test.ts src/main/ssh/ssh-relay-native-deps-install-staged-upload.test.ts src/main/ssh/ssh-relay-sftp-namespace-install.test.ts src/main/ssh/ssh-relay-install-namespace.test.ts src/main/ssh/sftp-namespace-resolution.test.ts src/main/ssh/ssh-connection-sftp-wire.test.ts --reporter=dot",
+        "ORCA_REVIEW_SSH_UPLOAD_CANCEL=1 ORCA_REVIEW_SSH_TARGET_HOST=<non-loopback-host> ORCA_REVIEW_SSH_IMAGE=<throwaway-sshd-image> ORCA_REVIEW_EXPECT_RECOVERY=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-upload-cancel.docker.test.ts --reporter=verbose"
+      ],
+      "testFiles": [
+        "src/main/ssh/ssh-relay-deploy-staged-upload.test.ts",
+        "src/main/ssh/ssh-relay-native-deps-install-staged-upload.test.ts",
+        "src/main/ssh/ssh-relay-sftp-namespace-install.test.ts",
+        "src/main/ssh/ssh-relay-install-namespace.test.ts",
+        "src/main/ssh/sftp-namespace-resolution.test.ts",
+        "src/main/ssh/ssh-connection-sftp-wire.test.ts",
+        "src/main/ssh/ssh-relay-upload-cancel.docker.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ssh/ssh-relay-deploy-staged-upload.test.ts",
+          "assertions": [
+            "waits for a deferred SFTP upload before acquiring the install lock",
+            "retries immediately after an unconfirmed upload termination instead of waiting on a fresh install lock"
+          ]
+        },
+        {
+          "file": "src/main/ssh/ssh-relay-sftp-namespace-install.test.ts",
+          "assertions": [
+            "redirects every first-install artifact transfer while shell commands stay canonical",
+            "leaves system-SSH connections unmapped and unprobed"
+          ]
+        },
+        {
+          "file": "src/main/ssh/ssh-relay-upload-cancel.docker.test.ts",
+          "assertions": ["keeps a cancelled pre-install upload from fencing the immediate retry"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-31",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-deploy-staged-upload.test.ts src/main/ssh/ssh-relay-native-deps-install-staged-upload.test.ts src/main/ssh/ssh-relay-sftp-namespace-install.test.ts src/main/ssh/ssh-relay-install-namespace.test.ts src/main/ssh/sftp-namespace-resolution.test.ts src/main/ssh/ssh-connection-sftp-wire.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 1.7,
+          "summary": "Focused staged-upload, namespace, and real ssh2 SFTP-wire contracts passed."
+        },
+        {
+          "date": "2026-07-31",
+          "runner": "local",
+          "platform": "linux",
+          "command": "ORCA_REVIEW_SSH_UPLOAD_CANCEL=1 ORCA_REVIEW_SSH_TARGET_HOST=<non-loopback-host> ORCA_REVIEW_SSH_IMAGE=<throwaway-sshd-image> ORCA_REVIEW_EXPECT_RECOVERY=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-upload-cancel.docker.test.ts --reporter=verbose",
+          "result": "passed",
+          "durationSeconds": 6.51,
+          "summary": "A throwaway linux-arm64 Docker sshd retained one attempt stage without a shared lock; immediate retry launched the relay, answered RPC, and read a real Git HEAD."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "focused unit, SFTP-wire, and local Docker SSH contracts"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Focused deterministic and Docker runs pass locally; CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical Docker oracle on latest main leaves a fresh shared .install-lock and blocks retry; the staged candidate leaves no shared lock and recovers immediately. Disabling staged ordering restores the blocked result."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Ordinary hosts add one stale-stage listing and one best-effort stage cleanup per first install. Split-SFTP first install retains the existing six identity probes across bundle, .version, and package.json transfers; no polling or shared-lock wait is added during upload."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak history.",
+        "Run live first-install cancellation and retry on Windows OpenSSH and a split-SFTP Synology-class host.",
+        "Keep exact lock-order, identity-probe, promotion, and cleanup assertions in the gate command."
+      ],
+      "knownGaps": [
+        "The live Docker target is Linux ARM64 with a unified namespace; split-SFTP behavior is covered by real ssh2 wire and deterministic deploy fixtures.",
+        "Windows and system-SSH behavior is command and transfer-contract coverage, not a live target.",
+        "The Docker oracle is opt-in because it requires a local image and a reachable non-loopback host address."
+      ],
+      "demotionRule": "Demote or quarantine if cancellation creates the shared install lock before transfer settlement, a split-SFTP transfer loses identity proof, cleanup removes an unconfirmed stage, or the focused gate flakes without a product or harness bug."
+    },
     {
       "id": "mobile-ui.drawer-close-continuity",
       "title": "Mobile drawers finish closing despite parent rerenders",

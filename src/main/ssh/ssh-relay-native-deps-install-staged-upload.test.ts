@@ -72,119 +72,12 @@ import {
   isRelayAlreadyInstalled
 } from './ssh-relay-versioned-install'
 import { acquireInstallLock } from './ssh-relay-install-lock'
-import type { SshConnection } from './ssh-connection'
-
-type SftpWriteCapture = {
-  paths: string[]
-  contents: Record<string, string>
-  execCallCountAtWrite: Record<string, number>
-}
-
-type ExecResponse = string | { reject: string }
-
-function makeMockConnection(capture: SftpWriteCapture): SshConnection {
-  const sftpCreate = (): unknown => ({
-    mkdir: vi.fn((_p: string, cb: (err: Error | null) => void) => cb(null)),
-    on: vi.fn(),
-    once: vi.fn(),
-    createWriteStream: vi.fn().mockImplementation((path: string) => {
-      capture.paths.push(path)
-      let buf = ''
-      let closeCb: (() => void) | undefined
-      const stub = {
-        on: vi.fn((event: string, cb: () => void) => {
-          if (event === 'close') {
-            closeCb = cb
-          }
-        }),
-        end: vi.fn((data?: string) => {
-          if (typeof data === 'string') {
-            buf += data
-          }
-          capture.contents[path] = buf
-          capture.execCallCountAtWrite[path] = vi.mocked(execCommand).mock.calls.length
-          if (closeCb) {
-            setTimeout(closeCb, 0)
-          }
-        })
-      }
-      return Object.assign(stub, { once: stub.on })
-    }),
-    end: vi.fn()
-  })
-  return {
-    canRunConcurrentExecCommands: vi.fn().mockReturnValue(false),
-    exec: vi.fn().mockResolvedValue({
-      on: vi.fn(),
-      stderr: { on: vi.fn() },
-      stdin: {},
-      stdout: { on: vi.fn() },
-      close: vi.fn()
-    }),
-    sftp: vi.fn().mockImplementation(() => Promise.resolve(sftpCreate()))
-  } as unknown as SshConnection
-}
-
-function makeExecResponses(opts: {
-  npmInstall: 'ok' | { reject: string }
-  probe: 'ok' | 'missing' | 'dir-gone' | { reject: string }
-  probeStdoutOverride?: string
-  repairProbe?: 'ok' | 'missing'
-  toolchainProbe?: string
-}): ExecResponse[] {
-  if (opts.npmInstall !== 'ok') {
-    return [
-      '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
-      '/home/u',
-      '',
-      '',
-      '',
-      '',
-      opts.npmInstall,
-      opts.toolchainProbe ?? 'HAVE make\nHAVE g++\nHAVE cc\nHAVE python3\nPKG apt-get'
-    ]
-  }
-  const probeSlot: ExecResponse =
-    opts.probeStdoutOverride !== undefined
-      ? opts.probeStdoutOverride
-      : opts.probe === 'ok'
-        ? 'ORCA-NPTY-PROBE-OK\n'
-        : opts.probe === 'missing'
-          ? 'MISSING\n'
-          : opts.probe === 'dir-gone'
-            ? { reject: 'cd: no such file or directory' }
-            : opts.probe
-  const slots: ExecResponse[] = [
-    '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
-    '/home/u',
-    '',
-    '',
-    '',
-    '',
-    opts.npmInstall,
-    '',
-    probeSlot
-  ]
-  if (typeof probeSlot === 'string') {
-    const probeOk = probeSlot.includes('ORCA-NPTY-PROBE-OK')
-    if (!probeOk) {
-      slots.push('')
-    }
-    slots.push('')
-    if (!probeOk) {
-      slots.push('')
-      slots.push('')
-      const repairProbe = opts.repairProbe === 'ok' ? 'ORCA-NPTY-PROBE-OK\n' : 'MISSING\n'
-      slots.push(repairProbe)
-      if (!repairProbe.includes('ORCA-NPTY-PROBE-OK')) {
-        slots.push('')
-      }
-      slots.push('')
-    }
-  }
-  slots.push('DEAD', 'READY')
-  return slots
-}
+import {
+  makeExecResponses,
+  makeMockConnection,
+  type ExecResponse,
+  type SftpWriteCapture
+} from './ssh-relay-native-deps-install-fixture'
 
 describe('installNativeDeps staged uploads', () => {
   const sftpCapture: SftpWriteCapture = {
@@ -195,7 +88,7 @@ describe('installNativeDeps staged uploads', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(execCommand).mockReset()
+    vi.mocked(execCommand).mockReset().mockResolvedValue('')
     vi.mocked(uploadDirectory).mockResolvedValue(undefined)
     sftpCapture.paths.length = 0
     for (const key of Object.keys(sftpCapture.contents)) {
@@ -275,7 +168,7 @@ describe('installNativeDeps staged uploads', () => {
     vi.useFakeTimers()
     try {
       const conn = makeMockConnection(sftpCapture)
-      feed(['__ORCA_REMOTE_PLATFORM__ Linux x86_64', '/home/u', '', ''])
+      feed(['__ORCA_REMOTE_PLATFORM__ Linux x86_64', '/home/u', '', '', ''])
       vi.mocked(acquireInstallLock).mockImplementationOnce(
         (_conn, _remoteDir, _host, options) =>
           new Promise<void>((_resolve, reject) => {
@@ -305,6 +198,8 @@ describe('installNativeDeps staged uploads', () => {
     vi.mocked(execCommand)
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       .mockResolvedValueOnce('/home/u')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('')
       .mockResolvedValueOnce('')
       .mockResolvedValueOnce('')
       .mockRejectedValueOnce(

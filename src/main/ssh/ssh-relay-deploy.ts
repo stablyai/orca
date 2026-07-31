@@ -16,10 +16,14 @@ import { writeRelayEndpointCredential } from './ssh-relay-endpoint-credential'
 import {
   createRelayInstallMarkerCommand,
   createRelayInstallNamespace,
+  createRelayUploadStageNamespace,
   makeRelayInstallDirectoryCommand,
+  makeRelayUploadStageDirectoryCommand,
   relayHomeRelativeDir,
   relaySftpNamespaceMapping,
-  type RelayInstallNamespace
+  relayUploadStageSftpNamespaceMapping,
+  type RelayInstallNamespace,
+  type RelayUploadStageNamespace
 } from './ssh-relay-install-namespace'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import {
@@ -47,6 +51,7 @@ import {
 } from './ssh-relay-build-toolchain'
 import {
   commandWithNodePath,
+  isRemoteUploadStagePath,
   listStaleRemoteUploadStagesCommand,
   makeRemoteExecutableCommand,
   promoteRemoteTreeContentsCommand,
@@ -347,15 +352,31 @@ async function deployAndLaunchRelayAttempt(
     launchNamespace = launchFence.sftpNamespace
     deploySignal?.throwIfAborted()
   } else {
-    const uploadStageDir = `${remoteRelayDir}.upload-${randomUUID()}`
-    let uploadStageReady = true
+    const uploadStageId = randomUUID()
+    const uploadStageDir = `${remoteRelayDir}.upload-${uploadStageId}`
+    const uploadStagePayloadDir = joinRemotePath(hostPlatform, uploadStageDir, 'payload')
+    const uploadStageNamespace = createUploadStageNamespaceIfSupported(
+      conn,
+      hostPlatform,
+      `${homeRelativeRelayDir}.upload-${uploadStageId}`
+    )
     let uploadStageCleanupAllowed = true
     onProgress?.('Uploading relay...')
     console.log('[ssh-relay] Uploading relay...')
     try {
       await recoverStaleUploadStages(conn, remoteRelayDir, hostPlatform, deploySignal)
       try {
-        await uploadRelay(conn, platform, uploadStageDir, fullVersion, hostPlatform, deploySignal)
+        await uploadRelay(
+          conn,
+          platform,
+          uploadStagePayloadDir,
+          fullVersion,
+          hostPlatform,
+          deploySignal,
+          uploadStageNamespace
+            ? { rootDir: uploadStageDir, namespace: uploadStageNamespace }
+            : undefined
+        )
       } catch (err) {
         if (isUnconfirmedSshCommandTermination(err)) {
           uploadStageCleanupAllowed = false
@@ -386,13 +407,19 @@ async function deployAndLaunchRelayAttempt(
             homeRelativeRelayDir,
             deploySignal
           )
-          await execHostCommand(
-            conn,
-            hostPlatform,
-            promoteRemoteTreeContentsCommand(hostPlatform, uploadStageDir, remoteRelayDir),
-            { signal: deploySignal }
-          )
-          uploadStageReady = false
+          try {
+            await execHostCommand(
+              conn,
+              hostPlatform,
+              promoteRemoteTreeContentsCommand(hostPlatform, uploadStagePayloadDir, remoteRelayDir),
+              { signal: deploySignal }
+            )
+          } catch (err) {
+            if (isUnconfirmedSshCommandTermination(err)) {
+              uploadStageCleanupAllowed = false
+            }
+            throw err
+          }
           console.log('[ssh-relay] Upload complete')
 
           onProgress?.('Installing native dependencies...')
@@ -416,9 +443,6 @@ async function deployAndLaunchRelayAttempt(
           })
         }
       } catch (err) {
-        if (isUnconfirmedSshCommandTermination(err)) {
-          uploadStageCleanupAllowed = false
-        }
         if (!isUnconfirmedSshCommandTermination(err)) {
           await abandonInstall(conn, remoteRelayDir, hostPlatform)
           ownsInstallLock = false
@@ -426,7 +450,7 @@ async function deployAndLaunchRelayAttempt(
         throw err
       }
     } finally {
-      if (uploadStageReady && uploadStageCleanupAllowed) {
+      if (uploadStageCleanupAllowed) {
         await execHostCommand(
           conn,
           hostPlatform,
@@ -490,7 +514,7 @@ async function uploadRelay(
   fullVersion: string,
   hostPlatform: RemoteHostPlatform,
   signal?: AbortSignal,
-  namespace?: RelayInstallNamespace
+  stage?: { rootDir: string; namespace: RelayUploadStageNamespace }
 ): Promise<void> {
   const localRelayDir = getLocalRelayPath(platform)
   if (!localRelayDir || !existsSync(localRelayDir)) {
@@ -500,18 +524,19 @@ async function uploadRelay(
     )
   }
 
-  // Why: the install-owner marker rides along with mkdir, so a standard install spends no extra exec channel on it.
   await execHostCommand(
     conn,
     hostPlatform,
-    makeRelayInstallDirectoryCommand(hostPlatform, remoteDir, namespace),
+    stage
+      ? makeRelayUploadStageDirectoryCommand(stage.namespace, hostPlatform, stage.rootDir)
+      : makeRelayInstallDirectoryCommand(hostPlatform, remoteDir),
     { signal }
   )
 
   await uploadRelayDirectory(conn, localRelayDir, remoteDir, hostPlatform, {
     signal,
-    sftpNamespace: namespace
-      ? relaySftpNamespaceMapping(namespace, hostPlatform, remoteDir)
+    sftpNamespace: stage
+      ? relayUploadStageSftpNamespaceMapping(stage.namespace, hostPlatform, stage.rootDir)
       : undefined
   })
 
@@ -532,8 +557,13 @@ async function uploadRelay(
     fullVersion,
     {
       signal,
-      sftpNamespace: namespace
-        ? relaySftpNamespaceMapping(namespace, hostPlatform, remoteDir, '.version')
+      sftpNamespace: stage
+        ? relayUploadStageSftpNamespaceMapping(
+            stage.namespace,
+            hostPlatform,
+            stage.rootDir,
+            '.version'
+          )
         : undefined
     }
   )
@@ -558,6 +588,9 @@ async function recoverStaleUploadStages(
     .map((line) => line.trim())
     .filter(Boolean)) {
     signal?.throwIfAborted()
+    if (!isRemoteUploadStagePath(hostPlatform, remoteRelayDir, stage)) {
+      continue
+    }
     await execHostCommand(conn, hostPlatform, removeRemoteTreeCommand(hostPlatform, stage), {
       signal
     }).catch(() => {})
@@ -580,6 +613,19 @@ function createInstallNamespaceIfSupported(
   const usesSystemSsh =
     typeof conn.usesSystemSshTransport === 'function' ? conn.usesSystemSshTransport() : false
   return usesSystemSsh ? undefined : createRelayInstallNamespace(homeRelativeRelayDir)
+}
+
+function createUploadStageNamespaceIfSupported(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  homeRelativeStageDir: string
+): RelayUploadStageNamespace | undefined {
+  if (isWindowsRemoteHost(hostPlatform)) {
+    return undefined
+  }
+  const usesSystemSsh =
+    typeof conn.usesSystemSshTransport === 'function' ? conn.usesSystemSshTransport() : false
+  return usesSystemSsh ? undefined : createRelayUploadStageNamespace(homeRelativeStageDir)
 }
 
 const NODE_PTY_VERSION = '1.1.0'

@@ -81,6 +81,7 @@ import {
   makeExecResponses,
   makeMockConnection,
   makeRepairToolchainSkipExecResponses,
+  makeStagedFirstInstallExecPrefix,
   type ExecResponse,
   type SftpWriteCapture
 } from './ssh-relay-native-deps-install-fixture'
@@ -96,7 +97,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // mockReset because clearAllMocks keeps queued mockResolvedValueOnce entries, so a leaked response would bleed into the next test.
-    vi.mocked(execCommand).mockReset()
+    vi.mocked(execCommand).mockReset().mockResolvedValue('')
     vi.mocked(uploadDirectory).mockResolvedValue(undefined)
     sftpCapture.paths.length = 0
     for (const k of Object.keys(sftpCapture.contents)) {
@@ -332,10 +333,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     // Why: rebuild degrades gracefully, but the post-rebuild probe must surface transport death, else a dead channel finalizes a half-repaired install.
     const conn = makeMockConnection(sftpCapture)
     feed([
-      '__ORCA_REMOTE_PLATFORM__ Linux x86_64', // uname
-      '/home/u', // $HOME
-      '', // mkdir remoteDir (uploadRelay)
-      '', // chmod +x node
+      ...makeStagedFirstInstallExecPrefix(),
       '', // npm install native deps
       '', // chmod prebuilds
       'MISSING\n', // first probe: require() fails
@@ -359,12 +357,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     vi.useFakeTimers()
     try {
       const conn = makeMockConnection(sftpCapture)
-      feed([
-        '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
-        '/home/u',
-        '', // mkdir remoteDir
-        '' // chmod +x node
-      ])
+      feed(makeStagedFirstInstallExecPrefix())
       let installSignal: AbortSignal | undefined
       vi.mocked(execCommand).mockImplementationOnce((_conn, command, options) => {
         expect(command).toContain('npm install')
@@ -722,12 +715,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     vi.useFakeTimers()
     try {
       const conn = makeMockConnection(sftpCapture)
-      feed([
-        '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
-        '/home/u',
-        '', // mkdir remoteDir
-        '' // chmod +x node
-      ])
+      feed(makeStagedFirstInstallExecPrefix())
       let installSignal: AbortSignal | undefined
       vi.mocked(execCommand).mockImplementationOnce((_conn, command, options) => {
         expect(command).toContain('npm install')
@@ -769,21 +757,19 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
 
   it('does not finalize or release a first-install lock after unconfirmed rebuild teardown', async () => {
     const conn = makeMockConnection(sftpCapture)
-    vi.mocked(execCommand)
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
-      .mockResolvedValueOnce('/home/u')
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('MISSING')
-      .mockResolvedValueOnce('rebuild diagnostics')
-      .mockResolvedValueOnce('')
-      .mockRejectedValueOnce(
-        Object.assign(new Error('rebuild termination was not confirmed'), {
-          sshChannelCloseConfirmed: false
-        })
-      )
+    feed([
+      ...makeStagedFirstInstallExecPrefix(),
+      '', // npm install
+      '', // chmod prebuilds
+      'MISSING',
+      'rebuild diagnostics',
+      '' // remove probe diagnostics
+    ])
+    vi.mocked(execCommand).mockRejectedValueOnce(
+      Object.assign(new Error('rebuild termination was not confirmed'), {
+        sshChannelCloseConfirmed: false
+      })
+    )
 
     await expect(deployAndLaunchRelay(conn)).rejects.toThrow(
       'rebuild termination was not confirmed'
@@ -797,10 +783,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     try {
       const conn = makeMockConnection(sftpCapture)
       feed([
-        '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
-        '/home/u',
-        '', // mkdir remoteDir
-        '', // chmod +x node
+        ...makeStagedFirstInstallExecPrefix(),
         '', // npm install
         '', // chmod prebuilds
         'MISSING',
