@@ -55,6 +55,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
         sessionId: 'session-a',
         transcriptPath,
         trustedCodexHomes: [homePath],
+        ...withoutHomeRanking,
         fileIsRegular: (filePath) => filePath === transcriptPath
       })
     ).resolves.toEqual({ homePath, transcriptPath })
@@ -120,6 +121,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
         sessionId: 'session-a',
         transcriptPath: plainPath,
         trustedCodexHomes: [homePath],
+        ...withoutHomeRanking,
         fileIsRegular: (filePath) => filePath === compressedPath
       })
     ).resolves.toEqual({ homePath, transcriptPath: compressedPath })
@@ -136,6 +138,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
         sessionId,
         transcriptPath: undefined,
         trustedCodexHomes: [homePath],
+        ...withoutHomeRanking,
         fileIsRegular: () => true,
         listSessionFiles: async function* (): AsyncIterable<string> {
           yield extendedEntry
@@ -148,6 +151,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
         sessionId,
         transcriptPath: undefined,
         trustedCodexHomes: [homePath],
+        ...withoutHomeRanking,
         fileIsRegular: () => true,
         listSessionFiles: async function* (): AsyncIterable<string> {
           yield `\\\\.\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-${sessionId}.jsonl`
@@ -347,6 +351,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
         transcriptPath:
           '\\\\?\\D:\\Other\\.codex\\sessions\\2026\\07\\20\\rollout-019f81b9-19a9-7651-a8d1-352d9420bd11.jsonl',
         trustedCodexHomes: ['C:\\Users\\Example\\.codex'],
+        ...withoutHomeRanking,
         fileIsRegular: () => true,
         listSessionFiles
       })
@@ -572,6 +577,14 @@ describe('claimsCodexRolloutLayout', () => {
   it('is true for a rollout under a home Orca no longer trusts, so resume cannot silently fall through to the selected account', () => {
     expect(
       claimsCodexRolloutLayout('/removed/account/home/sessions/2026/07/20/rollout-a.jsonl')
+    ).toBe(true)
+  })
+
+  it('is true for an ADS-shaped rollout that provenance trust rejects', () => {
+    expect(
+      claimsCodexRolloutLayout(
+        'C:\\Users\\example\\.codex\\sessions\\2026\\07\\20\\rollout-a:stream.jsonl'
+      )
     ).toBe(true)
   })
 
