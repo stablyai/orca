@@ -128,6 +128,9 @@ function buildTitleDerivedAgentRow(args: {
   now: number
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
 }): DashboardAgentRow | null {
+  if (!isTerminalLeafId(args.leafId)) {
+    return null
+  }
   const title = normalizeCompatibleAgentTitleForOwner(args.title, args.tab.launchAgent)
   const isClaudeAgentsTitle = isClaudeManagementTitle(title)
   // Why: `claude agents` is a live Claude Code Agent Teams surface, but the
@@ -135,14 +138,40 @@ function buildTitleDerivedAgentRow(args: {
   // the management/list screen as active work.
   const status = isClaudeAgentsTitle ? 'idle' : classifyTitleActivity(title)
   const label = isClaudeAgentsTitle ? 'Claude Code' : resolveTitleActivityLabel(title)
-  if (!status || !label) {
-    return null
-  }
-  if (!isTerminalLeafId(args.leafId)) {
-    return null
-  }
   const paneKey = makePaneKey(args.tab.id, args.leafId)
   const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
+  // Why (#11791): after SSH reconnect, OSC titles and hooks lag while the PTY is
+  // already live — blank/shell titles would hide OMP/Codex tabs from the card.
+  // launchAgent is explicit user intent to run an agent, so surface an idle row
+  // until title/hook evidence returns. Plain shell tabs without launchAgent stay hidden.
+  if (!status || !label) {
+    if (!args.tab.launchAgent) {
+      return null
+    }
+    const agentType = args.tab.launchAgent
+    const rowLabel = formatAgentTypeLabel(agentType)
+    const entry: AgentStatusEntry = {
+      paneKey,
+      state: 'working',
+      prompt: rowLabel,
+      updatedAt: args.now,
+      stateStartedAt: args.now,
+      stateHistory: [],
+      agentType,
+      terminalTitle: title,
+      lastAssistantMessage: 'Idle',
+      ...(orchestration ? { orchestration } : {})
+    }
+    return {
+      paneKey,
+      entry,
+      tab: args.tab,
+      agentType,
+      rowSource: 'live',
+      state: 'idle',
+      startedAt: 0
+    }
+  }
   const titleAgentType = isClaudeAgentsTitle ? 'claude' : resolveTitleDerivedAgentType(title, label)
   // Why: a braille spinner proves activity, not identity, so the resolver drops
   // it. Hook-less agents over SSH (Codex, #8711) surface only spinner+cwd titles;
