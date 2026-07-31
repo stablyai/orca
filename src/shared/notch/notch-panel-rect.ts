@@ -12,8 +12,11 @@ import {
   type NotchPresentation
 } from './notch-bar-geometry'
 
-export const EXPANDED_PANEL_WIDTH = 800
-export const EXPANDED_CONTENT_WIDTH = 784
+// Why 420 and not Moonglade's 800: the rows are one line of workspace + elapsed, so a wider
+// card is mostly empty — and every unpainted pixel of this window is transparent area sitting
+// over the system menu bar. Comfortably wider than the widest collapsed bar (~341).
+export const EXPANDED_PANEL_WIDTH = 420
+export const EXPANDED_CONTENT_WIDTH = 404
 export const EXPANDED_CURVE_GUTTER = 8
 /** Tallest card the panel must hold, before the list starts scrolling. */
 export const MENU_MAX_HEIGHT = 316
@@ -164,11 +167,12 @@ export function collapsedWindowRect(
   })
 }
 
-export const SESSION_ROW_HEIGHT = 52
-/** ~5 rows at SESSION_ROW_HEIGHT; longer lists scroll inside the card rather than growing it. */
-export const MAX_SESSION_LIST_HEIGHT = 300
-const LIST_TOP_PADDING = 6
-const LIST_BOTTOM_PADDING = 10
+/** Single line: dot, workspace, elapsed. */
+export const SESSION_ROW_HEIGHT = 30
+/** ~8 rows; longer lists scroll inside the card rather than growing it. */
+export const MAX_SESSION_LIST_HEIGHT = 240
+const LIST_TOP_PADDING = 4
+const LIST_BOTTOM_PADDING = 6
 
 export function sessionListHeight(rowCount: number): number {
   const rows = Math.max(0, Math.trunc(rowCount))

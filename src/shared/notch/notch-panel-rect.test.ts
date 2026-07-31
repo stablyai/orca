@@ -115,10 +115,10 @@ describe('narrow displays', () => {
   it('keeps the panel fully on a display narrower than the ideal width', () => {
     const metrics = computeNotchPanelMetrics({
       ...EXTERNAL,
-      bounds: { x: 0, y: 0, width: 640, height: 480 }
+      bounds: { x: 0, y: 0, width: 320, height: 480 }
     })
 
-    expect(metrics.panelWidth).toBe(640)
+    expect(metrics.panelWidth).toBe(320)
     expect(metrics.panelOriginX).toBe(0)
   })
 
@@ -176,7 +176,7 @@ describe('window rects', () => {
     expect(rect.width).toBe(EXPANDED_PANEL_WIDTH)
     expect(rect.y).toBe(0)
     // bar + list top pad + 3 rows + list bottom pad + panel bottom pad
-    expect(rect.height).toBe(38 + 6 + 3 * 52 + 10 + 8)
+    expect(rect.height).toBe(38 + 4 + 3 * 30 + 6 + 8)
   })
 
   it('does not reserve a full-height card for a single row', () => {
@@ -217,7 +217,7 @@ describe('expandedContentWidth', () => {
   })
 
   it('caps at the content width on a full-size panel', () => {
-    expect(expandedContentWidth(EXPANDED_PANEL_WIDTH)).toBe(784)
+    expect(expandedContentWidth(EXPANDED_PANEL_WIDTH)).toBe(404)
   })
 
   it('stays positive on a degenerate width', () => {
