@@ -77,8 +77,11 @@ import {
 } from '../../shared/agent-session-resume'
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
 import {
+  clearClaudePendingToolUses,
   forgetClaudePendingToolUses,
+  forgetClaudePendingToolUsesWhere,
   isClaudeToolUseUnaccountedFor,
+  moveClaudePendingToolUses,
   rememberClaudePendingToolUse,
   retireClaudeCompletedToolUse,
   takeClaudePendingToolUseId,
@@ -1604,6 +1607,7 @@ export class AgentHookServer {
       this.promptSentDedupeByPaneKey.delete(previousOwnerPaneKey)
       this.promptSentDedupeByPaneKey.set(toPaneKey, promptDedupe)
     }
+    moveClaudePendingToolUses(this.claudePendingToolUsesByPaneKey, previousOwnerPaneKey, toPaneKey)
     this.clearAssistantMessageRetry(previousOwnerPaneKey)
     this.clearCodexSubagentPoll(previousOwnerPaneKey)
     // Why: the live process keeps posting the physical source key after detach; persist a chain-safe mapping to the current owner.
@@ -2098,6 +2102,7 @@ export class AgentHookServer {
     this.closedAgentStatusPaneKeys.clear()
     this.connectionTimestampWatermarkById.clear()
     this.legacyPaneKeyAliases.clear()
+    clearClaudePendingToolUses(this.claudePendingToolUsesByPaneKey)
     clearAllListenerCaches(this.state)
     this.notifyStatusChangeListeners()
   }
@@ -2175,6 +2180,7 @@ export class AgentHookServer {
     }
     this.clearAssistantMessageRetry(resolvedPaneKey)
     this.clearCodexSubagentPoll(resolvedPaneKey)
+    forgetClaudePendingToolUses(this.claudePendingToolUsesByPaneKey, resolvedPaneKey)
     this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
     this.currentAuthorityObservations.delete(resolvedPaneKey)
     if (existing.payload.state === 'done') {
@@ -2248,6 +2254,7 @@ export class AgentHookServer {
       }
       this.clearAssistantMessageRetry(paneKey)
       this.clearCodexSubagentPoll(paneKey)
+      forgetClaudePendingToolUses(this.claudePendingToolUsesByPaneKey, paneKey)
       clearPaneCacheState(this.state, paneKey)
       this.runtimeObservedStatusPaneKeys.delete(paneKey)
       this.currentAuthorityObservations.delete(paneKey)
@@ -2284,6 +2291,11 @@ export class AgentHookServer {
         clearedAlias = true
       }
     }
+    // Why: a pane key is stable across a PTY restart, so the next agent process must not inherit the ids the
+    // previous one announced; aliases resolved above are cleared with it.
+    forgetClaudePendingToolUsesWhere(this.claudePendingToolUsesByPaneKey, (key) =>
+      paneKeys.has(key)
+    )
     const authorityChanged = this.revokeHydratedAuthorityForPaneKeys(paneKeys)
     if (clearedAlias) {
       this.notifyPaneKeyAliasPersistenceListener()
@@ -2717,6 +2729,10 @@ export class AgentHookServer {
     this.promptSentDedupeByPaneKey.clear()
   }
 
+  _resetClaudePendingToolUsesForTests(): void {
+    clearClaudePendingToolUses(this.claudePendingToolUsesByPaneKey)
+  }
+
   _resetConnectionTimestampWatermarksForTests(): void {
     this.connectionTimestampWatermarkById.clear()
   }
@@ -2738,5 +2754,6 @@ export const _internals = {
     clearAllListenerCaches(agentHookServer._getStateForTests())
     agentHookServer._resetPromptSentDedupeForTests()
     agentHookServer._resetConnectionTimestampWatermarksForTests()
+    agentHookServer._resetClaudePendingToolUsesForTests()
   }
 }
