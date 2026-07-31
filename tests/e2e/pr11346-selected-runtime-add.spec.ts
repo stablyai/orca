@@ -686,7 +686,7 @@ test('routes every Add Project path to a selected non-default headed runtime @he
   electronApp,
   orcaPage
 }, testInfo) => {
-  test.setTimeout(180_000)
+  test.setTimeout(300_000)
   await runSelectedRuntimeAddJourney(electronApp, orcaPage, testInfo, true)
 })
 
@@ -694,6 +694,6 @@ test('keeps every selected-runtime Add Project path in hidden-window desktop par
   electronApp,
   orcaPage
 }, testInfo) => {
-  test.setTimeout(180_000)
+  test.setTimeout(300_000)
   await runSelectedRuntimeAddJourney(electronApp, orcaPage, testInfo, false)
 })

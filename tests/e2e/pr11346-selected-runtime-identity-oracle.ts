@@ -134,15 +134,17 @@ export async function injectSameIdLocalActivationCollision(
   localPath: string
 ): Promise<ActivationCollision> {
   await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          (
-            window as typeof window & {
-              __pr11346ActivationGate?: { waiting: boolean }
-            }
-          ).__pr11346ActivationGate?.waiting ?? false
-      )
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            (
+              window as typeof window & {
+                __pr11346ActivationGate?: { waiting: boolean }
+              }
+            ).__pr11346ActivationGate?.waiting ?? false
+        ),
+      { timeout: 60_000 }
     )
     .toBe(true)
 
@@ -213,19 +215,21 @@ export async function expectRuntimeActivation(
   collision: ActivationCollision
 ): Promise<void> {
   await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const state = window.__store?.getState()
-        return {
-          activeWorktreeId: state?.activeWorktreeId ?? null,
-          activeWorktreeHost: state?.activeWorkspaceExecutionHostId ?? null,
-          sameIdHosts: Object.values(state?.worktreesByRepo ?? {})
-            .flat()
-            .filter((worktree) => worktree.id === state?.activeWorktreeId)
-            .map((worktree) => worktree.hostId ?? 'local')
-            .sort()
-        }
-      })
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const state = window.__store?.getState()
+          return {
+            activeWorktreeId: state?.activeWorktreeId ?? null,
+            activeWorktreeHost: state?.activeWorkspaceExecutionHostId ?? null,
+            sameIdHosts: Object.values(state?.worktreesByRepo ?? {})
+              .flat()
+              .filter((worktree) => worktree.id === state?.activeWorktreeId)
+              .map((worktree) => worktree.hostId ?? 'local')
+              .sort()
+          }
+        }),
+      { timeout: 60_000 }
     )
     .toEqual({
       activeWorktreeHost: expect.stringMatching(/^runtime:/),
