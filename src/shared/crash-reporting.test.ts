@@ -23,7 +23,7 @@ describe('crash-reporting shared helpers', () => {
     const longStack = [
       'Error: boom',
       ...Array.from(
-        { length: 80 },
+        { length: 200 },
         (_, index) => `at Component${index} (/Users/alice/project/src/file-${index}.tsx:1:1)`
       )
     ].join('\n')
@@ -48,6 +48,15 @@ describe('crash-reporting shared helpers', () => {
     expect(
       String(sanitizeCrashReportDetails({ error_stack: longStack }).error_stack).length
     ).toBeGreaterThan(240)
+    expect(String(sanitizeCrashReportDetails({ errorStack: longStack }).errorStack).length).toBe(
+      4_003
+    )
+    expect(
+      String(sanitizeCrashReportDetails({ componentStack: longStack }).componentStack).length
+    ).toBe(4_003)
+    expect(String(sanitizeCrashReportDetails({ description: longStack }).description).length).toBe(
+      243
+    )
   })
 
   it('sanitizes breadcrumb data and caps to the latest thirty entries', () => {

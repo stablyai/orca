@@ -44,7 +44,8 @@ import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import {
   getSettingsFocusedExecutionHostId,
-  parseExecutionHostId
+  parseExecutionHostId,
+  getRepoExecutionHostId
 } from '../../../shared/execution-host'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -179,7 +180,6 @@ import {
   readLinearBoardIssueDragData,
   writeLinearBoardIssueDragData
 } from '@/lib/linear-board-drag-payload'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import {
@@ -209,6 +209,7 @@ import {
   taskPageToGitHubApiPage
 } from '@/components/task-page-work-item-pagination'
 import { sortWorkItemsByNumber } from '../../../shared/work-items'
+import { getChecksLabel, getChecksPillTone } from '@/components/task-page-checks-pill'
 import LinearIssueAttributeFilterDropdowns from '@/components/linear-issue-attribute-filter-dropdowns'
 import { resolveLinearIssueAttributeFilterPrimaryTeam } from '@/components/linear-issue-attribute-filter-primary-team'
 import {
@@ -339,6 +340,7 @@ import {
   type JiraPrioritiesBySite
 } from './jira-issue-sorter'
 import { TaskPageJiraSortControls } from './task-page-jira-sort-controls'
+import { bindTaskPageJiraItemSourceContext } from './task-page-jira-item-source-context'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
@@ -2011,37 +2013,6 @@ function GHAssigneesCell({
   )
 }
 
-function getChecksLabel(item: GitHubWorkItem): string {
-  const summary = item.checksSummary
-  if (!summary) {
-    return 'Checks'
-  }
-  if (summary.total === 0) {
-    return 'No checks'
-  }
-  if (summary.failed > 0) {
-    return `${summary.failed} failing`
-  }
-  if (summary.pending > 0) {
-    return `${summary.pending} pending`
-  }
-  return `${summary.passed}/${summary.total} passed`
-}
-
-function getChecksPillTone(item: GitHubWorkItem): string {
-  const state = item.checksSummary?.state
-  if (state === 'success') {
-    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
-  }
-  if (state === 'failure') {
-    return 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'
-  }
-  if (state === 'pending') {
-    return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
-  }
-  return 'border-border/60 bg-background/70 text-muted-foreground'
-}
-
 function sameOptionalGitHubOwnerRepo(
   left: GitHubOwnerRepo | null | undefined,
   right: GitHubOwnerRepo | null | undefined
@@ -3216,7 +3187,7 @@ export default function TaskPage(): React.JSX.Element {
     selectedLinearWorkspaceId && selectedLinearWorkspaceId !== 'all'
       ? (linearWorkspaces.find((workspace) => workspace.id === selectedLinearWorkspaceId) ?? null)
       : null
-  const jiraSites = jiraStatus.sites ?? []
+  const jiraSites = useMemo(() => jiraStatus.sites ?? [], [jiraStatus.sites])
   const selectedJiraSiteId =
     jiraStatus.selectedSiteId ?? jiraStatus.activeSiteId ?? jiraSites[0]?.id ?? null
   const selectedJiraSite =
@@ -6584,10 +6555,12 @@ export default function TaskPage(): React.JSX.Element {
   const openComposerForItem = useCallback(
     (item: GitHubWorkItem): void => {
       const linkedWorkItem: LinkedWorkItemSummary = {
+        provider: 'github',
         type: item.type,
         number: item.number,
         title: item.title,
-        url: item.url
+        url: item.url,
+        ...(item.repoId ? { repoId: item.repoId } : {})
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
@@ -6650,10 +6623,12 @@ export default function TaskPage(): React.JSX.Element {
   const openComposerForGitLabItem = useCallback(
     (item: GitLabWorkItem): void => {
       const linkedWorkItem: LinkedWorkItemSummary = {
+        provider: 'gitlab',
         type: item.type,
         number: item.number,
         title: item.title,
-        url: item.url
+        url: item.url,
+        ...(item.repoId ? { repoId: item.repoId } : {})
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
@@ -7111,6 +7086,7 @@ export default function TaskPage(): React.JSX.Element {
     // Why: when a modal is open, let it own Esc dismissal.
     if (
       dialogWorkItem ||
+      selectedJiraIssue ||
       selectedLinearIssue ||
       newIssueOpen ||
       newLinearIssueOpen ||
@@ -7155,7 +7131,8 @@ export default function TaskPage(): React.JSX.Element {
     newIssueOpen,
     newLinearIssueOpen,
     newJiraIssueOpen,
-    selectedLinearIssue
+    selectedLinearIssue,
+    selectedJiraIssue
   ])
 
   useEffect(() => {
@@ -7896,6 +7873,21 @@ export default function TaskPage(): React.JSX.Element {
 
   const openComposerForJiraItem = useCallback(
     (issue: JiraIssue): void => {
+      const taskSourceContext = bindTaskPageJiraItemSourceContext({
+        issue,
+        sites: jiraSites,
+        sourceContext: jiraTaskSourceContext
+      })
+      if (!taskSourceContext) {
+        // Why: composer drops Jira items without matching source context — refuse rather than create unlinked.
+        toast.error(
+          translate(
+            'auto.components.TaskPage.jiraLinkSourceUnavailable',
+            'Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.'
+          )
+        )
+        return
+      }
       const linkedWorkItem: LinkedWorkItemSummary = {
         type: 'issue',
         provider: 'jira',
@@ -7906,12 +7898,12 @@ export default function TaskPage(): React.JSX.Element {
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
-        taskSourceContext: jiraTaskSourceContext,
+        taskSourceContext,
         prefilledName: getJiraIssueWorkspaceSeed(issue),
         telemetrySource: 'sidebar'
       })
     },
-    [jiraTaskSourceContext, openModal]
+    [jiraSites, jiraTaskSourceContext, openModal]
   )
 
   const handleUseJiraItem = useCallback(

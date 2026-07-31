@@ -32,6 +32,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import type { UiLanguage } from '../../../../shared/ui-language'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
+import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
 
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
@@ -55,6 +56,7 @@ export function AppearanceInterfaceSection({
   forceVisiblePrimary = false
 }: AppearanceInterfaceSectionProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
+  const pluginLanguagePacks = usePluginLanguagePacks()
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const zoomInKeyCombos = useShortcutKeyComboDetails('zoom.in')
   const zoomOutKeyCombos = useShortcutKeyComboDetails('zoom.out')
@@ -132,6 +134,11 @@ export function AppearanceInterfaceSection({
                   {UI_LANGUAGE_CHOICES.map((choice) => (
                     <SelectItem key={choice.value} value={choice.value}>
                       {getUiLanguageChoiceLabel(choice, translate)}
+                    </SelectItem>
+                  ))}
+                  {pluginLanguagePacks.map((pack) => (
+                    <SelectItem key={pack.id} value={pack.id}>
+                      {pack.locale} — {pack.pluginKey}
                     </SelectItem>
                   ))}
                 </SelectContent>

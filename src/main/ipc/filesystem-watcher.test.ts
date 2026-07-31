@@ -118,7 +118,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     const heldReservations = Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN }, () =>
       reserveWatcherChild()
     )
-    vi.mocked(createWslWatcher).mockImplementation(async () => {
+    vi.mocked(createWslWatcher).mockImplementation(async (_rootKey, worktreePath) => {
       const release = reserveWatcherChild()
       if (!release) {
         throw new WatcherChildCapacityError()
@@ -126,7 +126,8 @@ describe('registerFilesystemWatcherHandlers', () => {
       return {
         subscription: { unsubscribe: vi.fn(async () => release()) },
         listeners: new Map(),
-        batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 }
+        batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 },
+        rootPath: worktreePath
       }
     })
     const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }

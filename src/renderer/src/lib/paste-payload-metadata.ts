@@ -1,3 +1,5 @@
+import { yieldToEventLoop } from '../../../shared/event-loop-yield'
+
 export type PastePayloadMetadata = {
   byteLength: number
   exceededLimit: boolean
@@ -62,7 +64,7 @@ export async function measurePastePayloadMetadataWithYield(
     1,
     options.yieldAfterCodeUnits ?? PASTE_PAYLOAD_METADATA_YIELD_CODE_UNITS
   )
-  const yieldToEventLoop = options.yieldToEventLoop ?? defaultPastePayloadMetadataYield
+  const yieldBetweenBatches = options.yieldToEventLoop ?? yieldToEventLoop
   let nextYieldAt = yieldAfterCodeUnits
   let byteLength = 0
   let hasControlSequences = false
@@ -89,7 +91,7 @@ export async function measurePastePayloadMetadataWithYield(
       index += 1
     }
     if (index >= nextYieldAt) {
-      await yieldToEventLoop()
+      await yieldBetweenBatches()
       nextYieldAt = index + yieldAfterCodeUnits
     }
   }
@@ -148,8 +150,4 @@ function getUtf8ByteLengthForCodePoint(codePoint: number): number {
     return 3
   }
   return 4
-}
-
-function defaultPastePayloadMetadataYield(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0))
 }

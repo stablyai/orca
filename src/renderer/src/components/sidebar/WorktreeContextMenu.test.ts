@@ -12,9 +12,32 @@ import {
   hasWorktreeParentLink,
   isWorktreeParentPickerDisabled,
   planWorkspaceStatusAssignment,
-  selectMenuScopedMap
+  selectMenuScopedMap,
+  shouldRevealWorktreeDeveloperMenu
 } from './WorktreeContextMenu'
 import type { Worktree, WorktreeLineage, WorkspaceStatusDefinition } from '../../../../shared/types'
+
+describe('shouldRevealWorktreeDeveloperMenu', () => {
+  it('stays hidden for an ordinary right-click', () => {
+    expect(
+      shouldRevealWorktreeDeveloperMenu({ developerMenuRevealed: false, isMultiContext: false })
+    ).toBe(false)
+  })
+
+  it('reveals when Option/Alt was held at open time', () => {
+    expect(
+      shouldRevealWorktreeDeveloperMenu({ developerMenuRevealed: true, isMultiContext: false })
+    ).toBe(true)
+  })
+
+  // Why: the parking action targets one workspace, so it must not appear for a
+  // multi-select context even with the modifier held.
+  it('stays hidden for a multi-workspace selection', () => {
+    expect(
+      shouldRevealWorktreeDeveloperMenu({ developerMenuRevealed: true, isMultiContext: true })
+    ).toBe(false)
+  })
+})
 
 describe('selectMenuScopedMap (delete-teardown re-render guard)', () => {
   // Why: the closed menu wrapper must stay inert to delete teardown's high-churn

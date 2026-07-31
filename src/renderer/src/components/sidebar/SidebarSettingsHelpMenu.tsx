@@ -40,7 +40,12 @@ const CHANGELOG_URL = 'https://onorca.dev/changelog'
 const GITHUB_URL = 'https://github.com/stablyai/orca'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
 const X_URL = 'https://x.com/orca_build'
-const NO_UPDATE_CHECK_MODIFIERS = { ctrlKey: false, metaKey: false, shiftKey: false }
+const NO_UPDATE_CHECK_MODIFIERS = {
+  altKey: false,
+  ctrlKey: false,
+  metaKey: false,
+  shiftKey: false
+}
 
 function openExternalUrl(url: string): void {
   void window.api.shell.openUrl(url)
@@ -154,6 +159,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
 
   const handleCheckForUpdatesPointerDown = (event: React.PointerEvent): void => {
     updateCheckModifiersRef.current = {
+      altKey: event.altKey,
       ctrlKey: event.ctrlKey,
       metaKey: event.metaKey,
       shiftKey: event.shiftKey

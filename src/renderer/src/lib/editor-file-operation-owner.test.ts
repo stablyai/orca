@@ -5,6 +5,7 @@ import {
   captureEditorFileOperationProvenance,
   getEditorFileOperationContext
 } from './editor-file-operation-owner'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 const worktreeId = 'repo::/remote/repo'
 
@@ -37,6 +38,31 @@ beforeEach(() => {
 })
 
 describe('editor file operation owner', () => {
+  it('round-trips the synthetic local owner for floating workspace files', () => {
+    const provenance = captureEditorFileOperationProvenance(
+      useAppStore.getState(),
+      FLOATING_TERMINAL_WORKTREE_ID,
+      null,
+      true
+    )
+
+    expect(
+      getEditorFileOperationContext(
+        useAppStore.getState(),
+        {
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          runtimeEnvironmentId: null,
+          operationProvenance: provenance
+        },
+        '/tmp/orca/floating-workspace'
+      )
+    ).toMatchObject({
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      worktreePath: '/tmp/orca/floating-workspace',
+      expectedExecutionHostId: 'local'
+    })
+  })
+
   it('uses the explicit worktree owner instead of global runtime focus', () => {
     useAppStore.setState({
       worktreesByRepo: {

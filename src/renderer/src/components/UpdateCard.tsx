@@ -53,7 +53,7 @@ type ErrorCardModel = {
   explainer?: string
   /** Raw error text, shown only when the user expands "Show details". */
   detail?: string
-  releaseUrl: string
+  releaseUrl?: string
   /** Overrides the secondary button label (defaults to "Download Manually"). */
   manualLabel?: string
   primaryAction?: {
@@ -137,6 +137,7 @@ export function UpdateCard() {
   // Tracks card exit so the fade-out animation plays before unmount.
   const [exiting, setExiting] = useState(false)
   const changelog: ChangelogData | null = storeChangelog
+  const isLocalBuild = status.source === 'local'
 
   // Why: the 'error' variant carries no version, but the card needs it for the fallback URL and dismiss; cache from states that have it.
   const versionRef = useRef<string | null>(null)
@@ -324,79 +325,104 @@ export function UpdateCard() {
     status.state === 'error' && isWindowsSignatureCheckUnavailableFailure(status.message)
   const errorCard: ErrorCardModel | null =
     status.state === 'error'
-      ? isHttp2UpdateError
+      ? isLocalBuild
         ? {
-            variant: 'http1Compatibility',
-            title: translate('auto.components.UpdateCard.1339b82cee', 'HTTP/2 Download Blocked'),
-            summary: 'Orca can retry through HTTP/1.1 compatibility mode.',
-            explainer: translate(
-              'auto.components.UpdateCard.90559b14e3',
-              'This turns on a process-wide Electron networking switch after restart. Use it for corporate VPNs or proxies that reject HTTP/2 update downloads.'
-            ),
-            detail: compatibilitySetupError ?? status.message,
-            releaseUrl: releaseUrlForVersion(cachedVersion),
+            title: cachedVersion
+              ? translate('auto.components.UpdateCard.8cf17b10af', 'Local Build Error')
+              : translate('auto.components.UpdateCard.a4650b0dc4', 'Could Not Use Local Build'),
+            summary: cachedVersion
+              ? translate(
+                  'auto.components.UpdateCard.b1e390250d',
+                  'Could not complete the local build switch.'
+                )
+              : translate(
+                  'auto.components.UpdateCard.d29740d175',
+                  'The selected build could not be used.'
+                ),
+            detail: status.message,
             primaryAction: {
-              label: translate('auto.components.UpdateCard.933c6fdf5b', 'Enable & Restart'),
-              pendingLabel: 'Restarting...',
-              isPending: compatibilityRelaunching,
-              onClick: handleEnableHttp1Compatibility
+              label: translate('auto.components.UpdateCard.37d45c9ec1', 'Choose Another Build'),
+              onClick: () => {
+                void window.api.updater.check({ localBuild: true })
+              }
             }
           }
-        : isSignatureMismatchError
+        : isHttp2UpdateError
           ? {
-              // Security stop: installer signed by the wrong publisher — no retry, only a verified-download path.
-              variant: 'security',
-              title: translate('auto.components.UpdateCard.5b309b19f3', "Update Wasn't Installed"),
-              summary: translate(
-                'auto.components.UpdateCard.092f09fc14',
-                "The installer's publisher doesn't match Orca, so we stopped the update. Don't install this download; check official releases for a corrected version."
+              variant: 'http1Compatibility',
+              title: translate('auto.components.UpdateCard.1339b82cee', 'HTTP/2 Download Blocked'),
+              summary: 'Orca can retry through HTTP/1.1 compatibility mode.',
+              explainer: translate(
+                'auto.components.UpdateCard.90559b14e3',
+                'This turns on a process-wide Electron networking switch after restart. Use it for corporate VPNs or proxies that reject HTTP/2 update downloads.'
               ),
-              detail: status.message,
-              // Why: linking the rejected version would let users bypass the publisher check by re-running it.
-              releaseUrl: releaseUrlForVersion(null),
-              manualLabel: translate(
-                'auto.components.UpdateCard.c9ff9b9ec2',
-                'Check official releases'
-              )
+              detail: compatibilitySetupError ?? status.message,
+              releaseUrl: releaseUrlForVersion(cachedVersion),
+              primaryAction: {
+                label: translate('auto.components.UpdateCard.933c6fdf5b', 'Enable & Restart'),
+                pendingLabel: 'Restarting...',
+                isPending: compatibilityRelaunching,
+                onClick: handleEnableHttp1Compatibility
+              }
             }
-          : isSignatureCheckBlockedError
+          : isSignatureMismatchError
             ? {
+                // Security stop: installer signed by the wrong publisher — no retry, only a verified-download path.
+                variant: 'security',
                 title: translate(
-                  'auto.components.UpdateCard.e944c2de43',
-                  'Update Verification Blocked'
+                  'auto.components.UpdateCard.5b309b19f3',
+                  "Update Wasn't Installed"
                 ),
                 summary: translate(
-                  'auto.components.UpdateCard.a05992a26b',
-                  "The signature check couldn't run — usually because antivirus software blocked it. Retry the download, or get the installer from our official releases."
+                  'auto.components.UpdateCard.092f09fc14',
+                  "The installer's publisher doesn't match Orca, so we stopped the update. Don't install this download; check official releases for a corrected version."
                 ),
                 detail: status.message,
-                releaseUrl: releaseUrlForVersion(cachedVersion),
-                primaryAction: {
-                  label: translate('auto.components.UpdateCard.48565a32bc', 'Retry Download'),
-                  onClick: handleUpdate
+                // Why: linking the rejected version would let users bypass the publisher check by re-running it.
+                releaseUrl: releaseUrlForVersion(null),
+                manualLabel: translate(
+                  'auto.components.UpdateCard.c9ff9b9ec2',
+                  'Check official releases'
+                )
+              }
+            : isSignatureCheckBlockedError
+              ? {
+                  title: translate(
+                    'auto.components.UpdateCard.e944c2de43',
+                    'Update Verification Blocked'
+                  ),
+                  summary: translate(
+                    'auto.components.UpdateCard.a05992a26b',
+                    "The signature check couldn't run — usually because antivirus software blocked it. Retry the download, or get the installer from our official releases."
+                  ),
+                  detail: status.message,
+                  releaseUrl: releaseUrlForVersion(cachedVersion),
+                  primaryAction: {
+                    label: translate('auto.components.UpdateCard.48565a32bc', 'Retry Download'),
+                    onClick: handleUpdate
+                  }
                 }
-              }
-            : {
-                // Why: title is scoped to the failed operation so check-time (GitHub-side) failures don't read as an Orca bug.
-                title: cachedVersion ? 'Update Error' : 'Update Check Failed',
-                summary: cachedVersion
-                  ? 'Could not complete the update.'
-                  : 'Could not check for updates.',
-                detail: status.message,
-                releaseUrl: releaseUrlForVersion(cachedVersion),
-                // Why: check-time failures are often transient, so offer a Re-check instead of forcing manual download.
-                primaryAction: cachedVersion
-                  ? {
-                      label: translate('auto.components.UpdateCard.48565a32bc', 'Retry Download'),
-                      onClick: handleUpdate
-                    }
-                  : {
-                      label: translate('auto.components.UpdateCard.6b0085010d', 'Re-check'),
-                      onClick: () => {
-                        void window.api.updater.check({ includePrerelease: false })
+              : {
+                  // Why: title is scoped to the failed operation so check-time (GitHub-side) failures don't read as an Orca bug.
+                  title: cachedVersion ? 'Update Error' : 'Update Check Failed',
+                  summary: cachedVersion
+                    ? 'Could not complete the update.'
+                    : 'Could not check for updates.',
+                  detail: status.message,
+                  releaseUrl: releaseUrlForVersion(cachedVersion),
+                  // Why: check-time failures are often transient, so offer a Re-check instead of forcing manual download.
+                  primaryAction: cachedVersion
+                    ? {
+                        label: translate('auto.components.UpdateCard.48565a32bc', 'Retry Download'),
+                        onClick: handleUpdate
                       }
-                    }
-              }
+                    : {
+                        label: translate('auto.components.UpdateCard.6b0085010d', 'Re-check'),
+                        onClick: () => {
+                          void window.api.updater.check({ includePrerelease: false })
+                        }
+                      }
+                }
       : installError
         ? {
             title: translate('auto.components.UpdateCard.4cf109845a', 'Update Error'),
@@ -558,6 +584,7 @@ export function UpdateCard() {
           onMediaError={() => setMediaFailed(true)}
           onMediaLoad={() => setMediaLoaded(true)}
           onCollapse={handleCollapseWithAnimation}
+          showReleaseNotes={!isLocalBuild}
         />
       )
     }
@@ -568,9 +595,10 @@ export function UpdateCard() {
       return null
     }
 
-    const releaseUrl =
-      ('releaseUrl' in status ? status.releaseUrl : undefined) ??
-      releaseUrlForVersion(status.version)
+    const releaseUrl = isLocalBuild
+      ? undefined
+      : (('releaseUrl' in status ? status.releaseUrl : undefined) ??
+        releaseUrlForVersion(status.version))
 
     if (isRichMode && changelog) {
       return (
@@ -750,7 +778,7 @@ function SimpleCardContent({
   onClose
 }: {
   version: string
-  releaseUrl: string
+  releaseUrl?: string
   onUpdate: () => void
   onClose: () => void
 }) {
@@ -781,12 +809,14 @@ function SimpleCardContent({
         {translate('auto.components.UpdateCard.fdd4a364fa', "Sessions won't be interrupted.")}
       </p>
 
-      <button
-        className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground self-start"
-        onClick={() => void window.api.shell.openUrl(releaseUrl)}
-      >
-        {translate('auto.components.UpdateCard.44324ef542', 'Release notes')}
-      </button>
+      {releaseUrl && (
+        <button
+          className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground self-start"
+          onClick={() => void window.api.shell.openUrl(releaseUrl)}
+        >
+          {translate('auto.components.UpdateCard.44324ef542', 'Release notes')}
+        </button>
+      )}
 
       <Button
         variant="default"
@@ -811,7 +841,8 @@ function DownloadingContent({
   mediaLoaded,
   onMediaError,
   onMediaLoad,
-  onCollapse
+  onCollapse,
+  showReleaseNotes
 }: {
   version: string
   percent: number
@@ -822,6 +853,7 @@ function DownloadingContent({
   onMediaError: () => void
   onMediaLoad: () => void
   onCollapse: () => void
+  showReleaseNotes: boolean
 }) {
   const release = changelog?.release
   const showMedia =
@@ -877,18 +909,20 @@ function DownloadingContent({
             })}
       </p>
 
-      <button
-        className="text-xs text-muted-foreground underline hover:text-foreground self-start"
-        onClick={() =>
-          void window.api.shell.openUrl(
-            release ? release.releaseNotesUrl : releaseUrlForVersion(version)
-          )
-        }
-      >
-        {release
-          ? translate('auto.components.UpdateCard.aad383aecc', 'Read the full release notes')
-          : translate('auto.components.UpdateCard.44324ef542', 'Release notes')}
-      </button>
+      {showReleaseNotes && (
+        <button
+          className="text-xs text-muted-foreground underline hover:text-foreground self-start"
+          onClick={() =>
+            void window.api.shell.openUrl(
+              release ? release.releaseNotesUrl : releaseUrlForVersion(version)
+            )
+          }
+        >
+          {release
+            ? translate('auto.components.UpdateCard.aad383aecc', 'Read the full release notes')
+            : translate('auto.components.UpdateCard.44324ef542', 'Release notes')}
+        </button>
+      )}
 
       <div className="flex flex-col gap-2 mt-1">
         <Progress value={percent} className="h-1.5" />
@@ -918,7 +952,7 @@ function ErrorCardContent({
   summary: string
   explainer?: string
   detail?: string
-  releaseUrl: string
+  releaseUrl?: string
   manualLabel?: string
   primaryAction?: {
     label: string
@@ -1018,14 +1052,16 @@ function ErrorCardContent({
               : primaryAction.label}
           </Button>
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void window.api.shell.openUrl(releaseUrl)}
-          className="flex-1"
-        >
-          {manualLabel ?? translate('auto.components.UpdateCard.47126bcf57', 'Download Manually')}
-        </Button>
+        {releaseUrl && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void window.api.shell.openUrl(releaseUrl)}
+            className="flex-1"
+          >
+            {manualLabel ?? translate('auto.components.UpdateCard.47126bcf57', 'Download Manually')}
+          </Button>
+        )}
       </div>
     </div>
   )

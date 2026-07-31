@@ -103,6 +103,12 @@ export function reconnectRemoteRuntimeSharedControlConnection(environmentId: str
   sharedControlConnections.get(environmentId)?.connection.reconnectNow()
 }
 
+export function retryRemoteRuntimeSharedControlConnectionsNow(): void {
+  for (const { connection } of sharedControlConnections.values()) {
+    connection.retryNow()
+  }
+}
+
 function getSharedControlConnection(
   environmentId: string,
   pairing: PairingOffer

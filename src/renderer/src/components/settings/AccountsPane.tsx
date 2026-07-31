@@ -57,7 +57,10 @@ import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
-import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
+import {
+  markLiveCodexSessionsForRestart,
+  resolveCodexRestartPromptAccountLabel
+} from '@/lib/codex-session-restart'
 import {
   Dialog,
   DialogContent,
@@ -171,16 +174,6 @@ function getHostRuntimeLabel(): string {
   return navigator.userAgent.includes('Windows')
     ? 'Windows'
     : translate('auto.components.settings.AccountsPane.9baf45d071', 'This device')
-}
-
-function getCodexAccountLabel(
-  state: CodexRateLimitAccountsState,
-  accountId: string | null | undefined
-): string {
-  if (accountId == null) {
-    return 'System default'
-  }
-  return state.accounts.find((account) => account.id === accountId)?.email ?? 'Codex account'
 }
 
 // Why: the system-default row has no stored identity, so surface the real
@@ -745,9 +738,39 @@ export function AccountsPane({
           action === `reauth:${nextActiveAccountId}`) ||
         (action.startsWith('remove:') && previousActiveAccountId !== nextActiveAccountId)
       if (shouldPromptRestart) {
+        // Why: `add` creates the managed home against the machine's own distro,
+        // so the slot it wrote is the created account's — not this row's, which
+        // may still say "WSL default". Found by diffing the roster rather than
+        // by the row's active id, which resolves to null once two distro slots
+        // are filled and would send the notice to the wrong lane.
+        const newAccounts =
+          action === 'adding'
+            ? next.accounts.filter(
+                (account) => !codexAccounts.accounts.some((prior) => prior.id === account.id)
+              )
+            : []
+        // Why exactly one: an unloaded prior roster makes every account look new,
+        // and picking one of those would aim the notice at an unrelated lane.
+        // Falling back to the row is the pre-existing behaviour, not a new risk.
+        const addedAccount = newAccounts.length === 1 ? newAccounts[0] : undefined
         void markLiveCodexSessionsForRestart({
-          previousAccountLabel: getCodexAccountLabel(codexAccounts, previousActiveAccountId),
-          nextAccountLabel: getCodexAccountLabel(next, nextActiveAccountId)
+          previousAccountLabel: resolveCodexRestartPromptAccountLabel(
+            codexAccounts.accounts,
+            previousActiveAccountId
+          ),
+          nextAccountLabel: resolveCodexRestartPromptAccountLabel(
+            next.accounts,
+            nextActiveAccountId
+          ),
+          // Why: two accounts can share an email, so the labels alone cannot
+          // tell the store whether this switch lands back on the launch account.
+          previousAccountId: previousActiveAccountId ?? null,
+          nextAccountId: nextActiveAccountId ?? null,
+          // Why: the mutation wrote this row's slot only, so panes on any other
+          // lane still launch under the account they already had.
+          target: addedAccount ? getProviderAccountRuntime(addedAccount) : actionRuntime,
+          // Why: clearing a distro-less WSL row nulls every distro slot at once.
+          clearsEveryWslDistro: action === 'select:system'
         })
       }
     } catch (error) {

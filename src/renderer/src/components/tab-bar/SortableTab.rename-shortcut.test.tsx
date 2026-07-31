@@ -10,6 +10,7 @@ const storeState = vi.hoisted(
     agentStatusByPaneKey: Record<string, unknown>
     clearTabLaunchAgent: ReturnType<typeof vi.fn>
     ptyIdsByTabId: Record<string, string[]>
+    retainedAgentsByPaneKey: Record<string, unknown>
     renamingTabId: string | null
     keybindings: Record<string, unknown>
     repos: unknown[]
@@ -21,6 +22,7 @@ const storeState = vi.hoisted(
     agentStatusByPaneKey: {},
     clearTabLaunchAgent: vi.fn(),
     ptyIdsByTabId: {} as Record<string, string[]>,
+    retainedAgentsByPaneKey: {},
     renamingTabId: null as string | null,
     keybindings: {},
     repos: [],
@@ -92,6 +94,9 @@ vi.mock('lucide-react', () => ({
   },
   PanelBottomClose: function PanelBottomClose(props: Record<string, unknown>) {
     return { type: 'PanelBottomClose', props }
+  },
+  PanelLeftClose: function PanelLeftClose(props: Record<string, unknown>) {
+    return { type: 'PanelLeftClose', props }
   },
   PanelRightClose: function PanelRightClose(props: Record<string, unknown>) {
     return { type: 'PanelRightClose', props }

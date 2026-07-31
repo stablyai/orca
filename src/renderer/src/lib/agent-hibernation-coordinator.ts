@@ -15,6 +15,7 @@ import {
   getForegroundTerminalTabLastSeenAtById
 } from './foreground-terminal-tabs'
 import { getAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
+import { mergePendingTerminalInputActivity } from './terminal-input-activity-coalescing'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
@@ -72,7 +73,10 @@ function snapshotFromState(
       .map(([ptyId]) => ptyId),
     agentStatusByPaneKey: state.agentStatusByPaneKey,
     sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
-    lastTerminalInputAtByPaneKey: state.lastTerminalInputAtByPaneKey,
+    // Why: input stamps are coalesced, so planning must see the not-yet-flushed keystroke.
+    lastTerminalInputAtByPaneKey: mergePendingTerminalInputActivity(
+      state.lastTerminalInputAtByPaneKey
+    ),
     foregroundTerminalLastSeenAtByTabId: getForegroundTerminalTabLastSeenAtById(),
     now
   }

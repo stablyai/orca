@@ -36,6 +36,7 @@ import {
   isAgentSessionExecutionClaim,
   isAgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
+import { TerminalHistorySeedTransferRegistry } from './terminal-history-seed-transfer-registry'
 
 export type DaemonServerOptions = {
   socketPath: string
@@ -152,6 +153,7 @@ export class DaemonServer {
   private streamClientIdBySessionId = new Map<string, string>()
   private lastInputAtBySessionId = new Map<string, number>()
   private pendingPtySpawnPreparations = new Map<string, Set<PendingPtySpawnPreparation>>()
+  private historySeedTransfers = new TerminalHistorySeedTransferRegistry()
   private stopStreamBacklogProbe: () => void = () => {}
 
   // Why: bypass batching within this window so keystroke echo/redraws skip the daemon's fixed batch delay.
@@ -272,6 +274,7 @@ export class DaemonServer {
       })
     }
     this.streamDataBatcher.clear()
+    this.historySeedTransfers.dispose()
     this.pendingShutdownReplies.clear()
 
     for (const [, client] of this.clients) {
@@ -475,6 +478,7 @@ export class DaemonServer {
       if (previous) {
         // Why: reconnect reuses clientId before stale close fires; cancel the old owner's preflight at handoff.
         this.cancelPendingPtySpawnPreparationsForClient(hello.clientId)
+        this.historySeedTransfers.clearOwner(hello.clientId)
         this.recordFullyAuthenticatedDisconnect(previous.authenticatedPairEstablished)
         // Why: tear down the old sockets after installing the new owner so a stale close can't delete the replacement.
         previous.streamSocket?.destroy()
@@ -518,6 +522,7 @@ export class DaemonServer {
       // Why: a client that disconnects mid-preflight would otherwise still create
       // its daemon PTY, orphaning a durable, unattached session — cancel its preps (F4).
       this.cancelPendingPtySpawnPreparationsForClient(clientId)
+      this.historySeedTransfers.clearOwner(clientId)
       const wasFullyAuthenticated = client.authenticatedPairEstablished
       this.streamDataBatcher.clear(clientId)
       client.streamSocket?.destroy()
@@ -683,6 +688,31 @@ export class DaemonServer {
     const client = this.clients.get(clientId)
 
     switch (request.type) {
+      case 'startHistorySeedTransfer': {
+        if (!client?.authenticatedPairEstablished || client.streamSocket === null) {
+          throw new Error('Daemon client connection is incomplete; reconnect')
+        }
+        const transferId = this.historySeedTransfers.start(clientId, request.payload)
+        return { transferId }
+      }
+
+      case 'appendHistorySeedTransfer':
+        this.historySeedTransfers.append(
+          clientId,
+          request.payload.transferId,
+          request.payload.index,
+          request.payload.data
+        )
+        return {}
+
+      case 'finishHistorySeedTransfer':
+        this.historySeedTransfers.finish(clientId, request.payload.transferId)
+        return {}
+
+      case 'abortHistorySeedTransfer':
+        this.historySeedTransfers.abort(clientId, request.payload.transferId)
+        return {}
+
       case 'createOrAttach': {
         if (this.idleShutdownState !== 'running') {
           throw new Error('Daemon temporarily unavailable; reconnect')
@@ -704,6 +734,15 @@ export class DaemonServer {
             throw new Error('agent_session_identity_required')
           }
           await this.preparePtySpawnUnlessCanceled(p.sessionId, clientId)
+          if (p.historySeed !== undefined && p.historySeedTransferId !== undefined) {
+            throw new Error('Multiple terminal history seed sources')
+          }
+          const historySeedChunks =
+            p.historySeedTransferId !== undefined
+              ? this.historySeedTransfers.take(clientId, p.historySeedTransferId)
+              : p.historySeed !== undefined
+                ? [p.historySeed]
+                : undefined
           result = await this.host.createOrAttach({
             sessionId: p.sessionId,
             cols: p.cols,
@@ -719,7 +758,7 @@ export class DaemonServer {
             terminalWindowsWslDistro: p.terminalWindowsWslDistro,
             terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
             shellReadySupported: p.shellReadySupported,
-            historySeed: p.historySeed,
+            historySeedChunks,
             startupIngress: parsePtyStartupIngressIntent(p.startupIngress),
             ...(p.shellReadyTimeoutMs !== undefined
               ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
@@ -868,14 +907,20 @@ export class DaemonServer {
           return {}
         }
         // Reveal intentionally keeps the queued tail: main needs those bytes, and the normal flush/drain delivers them in order ahead of the marker.
-        const scanSeedAnsi = background ? '' : this.host.getPartialEscapeTailAnsi(sessionId)
+        const mode2031State = this.transientFactRelay.getMode2031ReplyScanState(sessionId)
+        const scanSeedAnsi = background
+          ? ''
+          : mode2031State.pendingSubscribe
+            ? mode2031State.tail
+            : this.host.getPartialEscapeTailAnsi(sessionId)
         this.streamDataBatcher.enqueueControlEvent(streamClientId, sessionId, {
           type: 'event',
           event: 'sessionBackgroundMarker',
           sessionId,
           payload: {
             background,
-            ...(scanSeedAnsi.length > 0 ? { scanSeedAnsi } : {})
+            ...(scanSeedAnsi.length > 0 ? { scanSeedAnsi } : {}),
+            ...(mode2031State.pendingSubscribe ? { mode2031PendingSubscribe: true as const } : {})
           }
         })
         return {}

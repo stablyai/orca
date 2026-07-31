@@ -6,8 +6,11 @@ import {
   callRuntimeRpc,
   clearRuntimeCompatibilityCacheForTests
 } from '../../runtime/runtime-rpc-client'
-import { createRuntimeStatusSlice, type RuntimeStatusSlice } from './runtime-status'
-import { getRuntimeEnvironmentConnectionGeneration } from './runtime-status'
+import {
+  createRuntimeStatusSlice,
+  type RuntimeStatusSlice,
+  getRuntimeEnvironmentConnectionGeneration
+} from './runtime-status'
 
 function createSliceStore() {
   return create<RuntimeStatusSlice>()((...a) => ({
@@ -369,5 +372,32 @@ describe('runtime-status slice', () => {
     expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.runtimeId).toBe(
       'runtime-a'
     )
+  })
+
+  // Why: skill discovery waits for the catalog to settle. A rejected read must
+  // release that wait without claiming the catalog is hydrated — host routing
+  // uses `runtimeEnvironmentCatalogHydrated` to fail closed on an unknown
+  // catalog, and an empty stale list must not be mistaken for "no runtimes".
+  it('settles but does not hydrate the catalog when the read fails', async () => {
+    const list = vi.fn().mockRejectedValue(new Error('unreadable environments.json'))
+    stubRuntimeEnvironmentApi({ getStatus: vi.fn(), list })
+    const store = createSliceStore()
+
+    await store.getState().hydrateRuntimeEnvironmentStatuses()
+
+    expect(store.getState().runtimeEnvironmentCatalogSettled).toBe(true)
+    expect(store.getState().runtimeEnvironmentCatalogHydrated).toBe(false)
+    expect(store.getState().runtimeEnvironments).toEqual([])
+  })
+
+  it('both settles and hydrates the catalog on a successful read', async () => {
+    const list = vi.fn().mockResolvedValue([])
+    stubRuntimeEnvironmentApi({ getStatus: vi.fn(), list })
+    const store = createSliceStore()
+
+    await store.getState().hydrateRuntimeEnvironmentStatuses()
+
+    expect(store.getState().runtimeEnvironmentCatalogSettled).toBe(true)
+    expect(store.getState().runtimeEnvironmentCatalogHydrated).toBe(true)
   })
 })

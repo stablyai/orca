@@ -2231,9 +2231,6 @@
   "auto.components.settings.DeveloperPermissionsPane.16381e040a": {
     "ko": "마이크"
   },
-  "auto.components.settings.DeveloperPermissionsPane.7ca17b62c8": {
-    "ko": "프로젝트, 워크트리 또는 심볼릭 링크된 파일이 macOS 보호 폴더에 닿을 때 권장됩니다."
-  },
   "auto.components.settings.DeveloperPermissionsPane.e119f0d66b": {
     "ko": "자동화"
   },

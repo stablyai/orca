@@ -32,9 +32,9 @@ function markdownAfterTextReplace(content: string, search: string, replacement: 
   })
 
   try {
-    let from: number | null = null
+    let from = -1
     editor.state.doc.descendants((node, pos) => {
-      if (from !== null || !node.isText || !node.text) {
+      if (from !== -1 || !node.isText || !node.text) {
         return
       }
       const index = node.text.indexOf(search)
@@ -42,7 +42,7 @@ function markdownAfterTextReplace(content: string, search: string, replacement: 
         from = pos + index
       }
     })
-    if (from === null) {
+    if (from === -1) {
       throw new Error(`Missing text: ${search}`)
     }
     editor.view.dispatch(editor.state.tr.insertText(replacement, from, from + search.length))
@@ -279,6 +279,31 @@ describe('rich markdown round trip', () => {
         '- [ ] [H-284](https://linear.app/acme/issue/H-284/child-two "Child two")'
       ].join('\n')
     )
+  })
+
+  it('preserves aligned task-item continuations before nested bullets', () => {
+    const input = [
+      '- [ ] Complete the provider action map used by the',
+      '      unchanged UI:',
+      '  - review creation and eligibility;',
+      '  - merge and auto-merge.',
+      '- [ ] Keep provider behavior explicit.'
+    ].join('\n')
+
+    expect(roundTripMarkdown(input)).toBe(
+      [
+        '- [ ] Complete the provider action map used by the',
+        '',
+        '  unchanged UI:',
+        '  - review creation and eligibility;',
+        '  - merge and auto-merge.',
+        '- [ ] Keep provider behavior explicit.'
+      ].join('\n')
+    )
+  })
+
+  it('preserves blank-separated indented code inside task items', () => {
+    expect(roundTripMarkdown('- [ ] Run this:\n\n      echo ok\n')).toContain('```')
   })
 
   it('preserves doc links', () => {

@@ -77,6 +77,26 @@ describe('resolveWorktreeOperationRouteResult', () => {
     ).toEqual({ kind: 'ambiguous' })
   })
 
+  it('resolves a host-stamped SSH worktree when its project also exists locally (#10634)', () => {
+    expect(
+      resolveWorktreeOperationRouteResult(
+        {
+          repos: [
+            { id: 'repo-1', executionHostId: 'local' },
+            { id: 'repo-1', connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' }
+          ],
+          worktreesByRepo: {
+            'repo-1': [worktree('ssh:ssh-1')]
+          }
+        },
+        WORKTREE_ID
+      )
+    ).toEqual({
+      kind: 'resolved',
+      route: { executionHostId: 'ssh:ssh-1', runtimeEnvironmentId: null }
+    })
+  })
+
   it('deduplicates identical projections from the same HUB', () => {
     expect(
       resolveWorktreeOperationRouteResult(

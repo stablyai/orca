@@ -21,13 +21,19 @@ import {
   normalizeAiVaultScopeForContext
 } from './ai-vault-scope-state'
 import { countAiVaultViewAdjustments } from './ai-vault-view-defaults'
-import { buildAiVaultProjectContext } from './ai-vault-session-projects'
+import {
+  buildAiVaultProjectContext,
+  buildAiVaultSessionProjectById
+} from './ai-vault-session-projects'
 import {
   resolveAiVaultSessionResumeActions,
   resolveAiVaultSessionResumeState
 } from './ai-vault-session-resume'
 import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-actions'
-import { useAiVaultSessionWorktreeMap } from './ai-vault-session-worktree'
+import {
+  useAiVaultSessionWorktreeMap,
+  withAiVaultCurrentWorktreeStatus
+} from './ai-vault-session-worktree'
 import { openAiVaultSessionLogInOrca } from './ai-vault-session-log-open'
 import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
@@ -136,27 +142,36 @@ export default function AiVaultPanel(): React.JSX.Element {
     scopePaths,
     executionHostScope
   )
+  // Deliberately blind to the active repo/worktree: rebuilding these ~500-entry
+  // maps on every worktree switch is what made switching visibly slow (#10841 era).
   const sessionProjectById = useMemo(
     () =>
-      buildAiVaultProjectContext({
+      buildAiVaultSessionProjectById({
         repos,
         worktrees: allWorktrees,
         projectHostSetupProjection,
-        activeRepo,
-        activeWorktree,
         sessions
-      }).sessionProjectById,
-    [activeRepo, activeWorktree, allWorktrees, projectHostSetupProjection, repos, sessions]
+      }),
+    [allWorktrees, projectHostSetupProjection, repos, sessions]
   )
   const sessionWorktreeById = useAiVaultSessionWorktreeMap({
     sessions,
     repos,
-    worktrees: allWorktrees,
-    activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null
+    worktrees: allWorktrees
   })
+  const effectiveActiveWorktreeId = activeWorktreeId ?? activeWorktree?.id ?? null
+  // `current` is stamped per row at read time so the map above stays cached.
+  const getSessionWorktreeInfo = useCallback(
+    (session: AiVaultSession) =>
+      withAiVaultCurrentWorktreeStatus(
+        sessionWorktreeById.get(session.id) ?? null,
+        effectiveActiveWorktreeId
+      ),
+    [effectiveActiveWorktreeId, sessionWorktreeById]
+  )
   const launchActions = useAiVaultSessionLaunchActions({
     activeWorktree: activeWorktree ?? null,
-    activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
+    activeWorktreeId: effectiveActiveWorktreeId,
     targetState: resumeTargetState,
     agentCmdOverrides
   })
@@ -242,20 +257,13 @@ export default function AiVaultPanel(): React.JSX.Element {
       resolveAiVaultSessionResumeState({
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
-        worktreeInfo: sessionWorktreeById.get(session.id) ?? null,
-        activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
+        worktreeInfo: getSessionWorktreeInfo(session),
+        activeWorktreeId: effectiveActiveWorktreeId,
         worktrees: allWorktrees,
         repos,
         targetState: resumeTargetState
       }),
-    [
-      activeWorktree?.id,
-      activeWorktreeId,
-      allWorktrees,
-      repos,
-      resumeTargetState,
-      sessionWorktreeById
-    ]
+    [allWorktrees, effectiveActiveWorktreeId, getSessionWorktreeInfo, repos, resumeTargetState]
   )
 
   const getSessionResumeActions = useCallback(
@@ -263,20 +271,13 @@ export default function AiVaultPanel(): React.JSX.Element {
       resolveAiVaultSessionResumeActions({
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
-        worktreeInfo: sessionWorktreeById.get(session.id) ?? null,
-        activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
+        worktreeInfo: getSessionWorktreeInfo(session),
+        activeWorktreeId: effectiveActiveWorktreeId,
         worktrees: allWorktrees,
         repos,
         targetState: resumeTargetState
       }),
-    [
-      activeWorktree?.id,
-      activeWorktreeId,
-      allWorktrees,
-      repos,
-      resumeTargetState,
-      sessionWorktreeById
-    ]
+    [allWorktrees, effectiveActiveWorktreeId, getSessionWorktreeInfo, repos, resumeTargetState]
   )
 
   const handleScopeChange = useCallback((nextScope: AiVaultScope) => {
@@ -355,7 +356,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         getSessionResumeActions={getSessionResumeActions}
         getOriginalPaneTarget={getOriginalPaneTarget}
         getSessionLiveState={getSessionLiveState}
-        getWorktreeInfo={(session) => sessionWorktreeById.get(session.id) ?? null}
+        getWorktreeInfo={getSessionWorktreeInfo}
         onToggleGroup={toggleGroup}
         onJumpToOriginalPane={jumpToOriginalPane}
         onJumpToWorktree={jumpToWorktree}

@@ -24,6 +24,20 @@ const { downloadArtifact } = electronRequire('@electron/get')
 const targetPlatform = getElectronTargetPlatform()
 const targetArch = getElectronTargetArch()
 const platformPath = getElectronPlatformPath(targetPlatform)
+const transientDownloadErrorCodes = new Set([
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ENETDOWN',
+  'ENETRESET',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'EPIPE',
+  'ETIMEDOUT',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_SOCKET'
+])
 
 try {
   // Why: Electron's own install.js can exit 0 while an async extract promise is
@@ -111,7 +125,7 @@ async function installElectronPackageBinary() {
   const extractDir = join(tempDir, 'extract')
 
   try {
-    const zipPath = await downloadArtifact({
+    const downloadOptions = {
       version: electronVersion,
       artifactName: 'electron',
       platform: targetPlatform,
@@ -120,7 +134,8 @@ async function installElectronPackageBinary() {
       force: true,
       tempDirectory: tempDir,
       ...(shouldUseRemoteChecksums() ? {} : { checksums: electronRequire('./checksums.json') })
-    })
+    }
+    const zipPath = await downloadElectronArtifactWithRetry(downloadOptions)
 
     // Why: CI has observed partial extracts directly under node_modules/electron
     // that leave only dist/locales. Verify in temp before replacing package dist.
@@ -143,6 +158,82 @@ async function installElectronPackageBinary() {
   } finally {
     rmSync(tempDir, { recursive: true, force: true })
   }
+}
+
+async function downloadElectronArtifactWithRetry(downloadOptions) {
+  const retryDelays = getDownloadRetryDelays()
+
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await downloadArtifact(downloadOptions)
+    } catch (error) {
+      const retryDelay = retryDelays[attempt]
+      if (retryDelay === undefined || !isTransientDownloadError(error)) {
+        throw error
+      }
+
+      console.warn(
+        `[electron-package] Transient Electron download failure (${formatDownloadError(error)}); ` +
+          `retrying in ${retryDelay}ms (${attempt + 2}/${retryDelays.length + 1}).`
+      )
+      rmSync(downloadOptions.cacheRoot, { recursive: true, force: true })
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, retryDelay))
+    }
+  }
+}
+
+function getDownloadRetryDelays() {
+  const configured = process.env.ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS
+  if (!configured) {
+    return [1_000, 3_000]
+  }
+
+  const delays = configured.split(',').map(Number)
+  if (delays.some((delay) => !Number.isSafeInteger(delay) || delay < 0)) {
+    throw new Error('ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS must contain non-negative integers')
+  }
+  return delays
+}
+
+function isTransientDownloadError(error) {
+  for (const candidate of getErrorChain(error)) {
+    if (transientDownloadErrorCodes.has(candidate?.code)) {
+      return true
+    }
+    const statusCode = candidate?.statusCode ?? candidate?.response?.statusCode
+    if (
+      statusCode === 408 ||
+      statusCode === 425 ||
+      statusCode === 429 ||
+      (statusCode >= 500 && statusCode < 600)
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+function getErrorChain(error) {
+  const errors = []
+  let candidate = error
+  while (candidate && errors.length < 5) {
+    errors.push(candidate)
+    candidate = candidate.cause
+  }
+  return errors
+}
+
+function formatDownloadError(error) {
+  for (const candidate of getErrorChain(error)) {
+    const statusCode = candidate?.statusCode ?? candidate?.response?.statusCode
+    if (statusCode) {
+      return `HTTP ${statusCode}`
+    }
+    if (candidate?.code) {
+      return candidate.code
+    }
+  }
+  return error instanceof Error ? error.message : String(error)
 }
 
 function extractElectronArchive(zipPath, extractDir) {

@@ -75,10 +75,8 @@ export function BrowserUseSkillSetupCard(props: {
       onBeforeOpenTerminal={handleBeforeOpenTerminal}
       showRecheckWhenInstalled={false}
       onRecheck={skill.refresh}
-      // Why: the local-host-only freshness scan cannot vouch for a WSL runtime,
-      // so fall back to the presence-only pill there (mirrors the settings cards).
       freshnessSkillName={
-        activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : ORCA_CLI_SKILL_NAME
+        activeSkillRuntime.canUseLocalSkillFreshness ? ORCA_CLI_SKILL_NAME : undefined
       }
     />
   )

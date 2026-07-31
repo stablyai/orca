@@ -23,8 +23,14 @@ export type RuntimeStatusSlice = {
   /** Saved remote Orca servers. Host pickers use this to show user-chosen names
    * instead of opaque runtime ids. */
   runtimeEnvironments: PublicKnownRuntimeEnvironment[]
-  /** True only after the saved-runtime catalog has loaded successfully. */
+  /** True only after the saved-runtime catalog has loaded successfully. Gates
+   * fail-closed host routing, so a failed read must NOT flip it. */
   runtimeEnvironmentCatalogHydrated: boolean
+  /** True once the catalog read has finished, successfully or not. Surfaces that
+   * only need to stop waiting (skill discovery) read this instead of
+   * `runtimeEnvironmentCatalogHydrated`, so a failed read degrades rather than
+   * leaving them pending for the whole session. */
+  runtimeEnvironmentCatalogSettled: boolean
   /** Keyed by runtime environment id. Fed into buildExecutionHostRegistry so
    * compat verdicts/blocked health show live in the sidebar host pickers. */
   runtimeStatusByEnvironmentId: Map<string, RuntimeEnvironmentStatus>
@@ -68,6 +74,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
 ) => ({
   runtimeEnvironments: [],
   runtimeEnvironmentCatalogHydrated: false,
+  runtimeEnvironmentCatalogSettled: false,
   runtimeStatusByEnvironmentId: new Map(),
   removedRuntimeEnvironmentIds: new Set(),
 
@@ -131,6 +138,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       return {
         runtimeEnvironments: environments,
         runtimeEnvironmentCatalogHydrated: true,
+        runtimeEnvironmentCatalogSettled: true,
         ...(statusesChanged ? { runtimeStatusByEnvironmentId: nextStatuses } : {}),
         ...(removedChanged ? { removedRuntimeEnvironmentIds: nextRemoved } : {})
       }
@@ -230,6 +238,10 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       environments = await window.api.runtimeEnvironments.list()
     } catch (err) {
       console.error('Failed to list runtime environments for status hydration:', err)
+      // Why: settled, not hydrated. Skill discovery must stop waiting and fall
+      // back to the local host, but host routing keeps failing closed on an
+      // unknown catalog rather than acting on a stale empty list.
+      set({ runtimeEnvironmentCatalogSettled: true })
       return
     }
     get().setRuntimeEnvironments(environments)

@@ -80,6 +80,7 @@ import {
   type ChromiumCookieSnapshot
 } from './chromium-cookie-snapshot'
 import { resolveChromiumCookiesPath } from './chromium-cookie-path'
+import { copyFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 
 // ---------------------------------------------------------------------------
 // Browser detection
@@ -595,7 +596,7 @@ async function importValidatedCookies(
           }
         }
         diag(
-          `  cookie.set FAILED: domain=${cookie.domain} name=${cookie.name} valLen=${val.length} badChar=${badInfo} err=${err}`
+          `  cookie.set FAILED: domain=${cookie.domain} name=${cookie.name} valLen=${val.length} badChar=${badInfo} err=${String(err)}`
         )
       }
     }
@@ -1018,7 +1019,7 @@ function getWindowsEncryptionKey(browser: DetectedBrowser): EncryptionKeyResult 
 
     return { key: Buffer.from(result, 'base64'), mode: 'aes-256-gcm' }
   } catch (err) {
-    diag(`  Windows DPAPI key extraction failed: ${err}`)
+    diag(`  Windows DPAPI key extraction failed: ${String(err)}`)
     return null
   }
 }
@@ -1338,7 +1339,7 @@ async function importCookiesFromFirefox(
     return importValidatedCookies(validated, rows.length, targetPartition)
   } catch (err) {
     rmSync(tmpDir, { recursive: true, force: true })
-    diag(`  Firefox import failed: ${err}`)
+    diag(`  Firefox import failed: ${String(err)}`)
     return {
       ok: false,
       reason: 'Could not import cookies from Firefox. Try closing Firefox first.'
@@ -1360,7 +1361,7 @@ async function importCookiesFromSafari(
   try {
     data = readFileSync(browser.cookiesPath)
   } catch (err) {
-    diag(`  Safari read failed: ${err}`)
+    diag(`  Safari read failed: ${String(err)}`)
     // Why: Safari's Cookies.binarycookies is in a sandbox container; reading it needs Full Disk Access.
     const isPermError =
       err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'EPERM'
@@ -1391,7 +1392,7 @@ async function importCookiesFromSafari(
 
     return importValidatedCookies(valid, cookies.length, targetPartition)
   } catch (err) {
-    diag(`  Safari import failed: ${err}`)
+    diag(`  Safari import failed: ${String(err)}`)
     return { ok: false, reason: 'Could not import cookies from Safari.' }
   }
 }
@@ -1449,17 +1450,24 @@ export async function importCookiesFromBrowser(
     stagingDir,
     `Cookies-${partitionSegment}-${Date.now()}-${randomUUID()}`
   )
+  // Why: #9355 — staging only backs the cold-restart replay for cookies the in-memory
+  // import rejects, so losing it must degrade that fallback rather than abort the import.
+  let stagingAvailable = false
   try {
     mkdirSync(stagingDir, { recursive: true })
-    copyFileSync(liveCookiesPath, stagingCookiesPath)
-  } catch {
+    copyFileWithWindowsRetry(liveCookiesPath, stagingCookiesPath)
+    stagingAvailable = true
+  } catch (err) {
+    const fsErr = err as NodeJS.ErrnoException
+    diag(
+      `  staging copy unavailable: code=${fsErr.code ?? 'unknown'} errno=${fsErr.errno ?? 'unknown'} syscall=${fsErr.syscall ?? 'unknown'} path=${liveCookiesPath} destination=${stagingCookiesPath}`
+    )
     // Why: copyFile is non-atomic and can leave a partial DB; delete it so failed imports retain no cookie data.
     try {
       unlinkSync(stagingCookiesPath)
     } catch {
       /* best-effort */
     }
-    return { ok: false, reason: 'Could not create staging cookie database.' }
   }
 
   let sourceSnapshot: ChromiumCookieSnapshot
@@ -1472,7 +1480,7 @@ export async function importCookiesFromBrowser(
     } catch {
       /* best-effort */
     }
-    diag(`  Chromium snapshot failed: ${err}`)
+    diag(`  Chromium snapshot failed: ${String(err)}`)
     return {
       ok: false,
       reason: `Could not copy ${browser.label} cookies database. Try closing ${browser.label} first.`
@@ -1481,6 +1489,21 @@ export async function importCookiesFromBrowser(
 
   let sourceDb: InstanceType<typeof DatabaseSync> | null = null
   let stagingDb: InstanceType<typeof DatabaseSync> | null = null
+  const closeStagingDb = (): void => {
+    try {
+      stagingDb?.close()
+    } catch {
+      /* best-effort */
+    }
+    stagingDb = null
+  }
+  const discardStagingFile = (): void => {
+    try {
+      unlinkSync(stagingCookiesPath)
+    } catch {
+      /* best-effort */
+    }
+  }
 
   try {
     // Why: Chromium timestamps (µs since 1601) can exceed Number.MAX_SAFE_INTEGER; readBigInts avoids precision loss.
@@ -1488,15 +1511,32 @@ export async function importCookiesFromBrowser(
       readOnly: true,
       readBigInts: true
     })
-    stagingDb = new DatabaseSync(stagingCookiesPath)
-
-    const targetColumnInfo = stagingDb
-      .prepare('PRAGMA table_info(cookies)')
-      .all() as ChromiumCookieColumnInfo[]
-    const targetCols: string[] = targetColumnInfo.map((r) => r.name)
-    const colList = targetCols.join(', ')
-
-    stagingDb.exec('DELETE FROM cookies')
+    let targetColumnInfo: ChromiumCookieColumnInfo[] | null = null
+    let colList: string | null = null
+    let placeholders: string | null = null
+    if (stagingAvailable) {
+      // Why: the staged file is Orca's own partition DB, also named "Cookies", so the same
+      // transient AV handle can make opening it throw — degrade instead of killing the import.
+      try {
+        stagingDb = new DatabaseSync(stagingCookiesPath)
+        targetColumnInfo = stagingDb
+          .prepare('PRAGMA table_info(cookies)')
+          .all() as ChromiumCookieColumnInfo[]
+        const targetCols: string[] = targetColumnInfo.map((r) => r.name)
+        colList = targetCols.join(', ')
+        placeholders = targetCols.map(() => '?').join(', ')
+        stagingDb.exec('DELETE FROM cookies')
+      } catch (err) {
+        diag(`  staging database unusable, restart fallback disabled: ${String(err)}`)
+        stagingAvailable = false
+        targetColumnInfo = null
+        colList = null
+        placeholders = null
+        closeStagingDb()
+        // Why: the copy holds real partition cookies; discard it now rather than at the exit branches.
+        discardStagingFile()
+      }
+    }
 
     const sourceRows = sourceDb.prepare('SELECT * FROM cookies ORDER BY rowid').all() as Record<
       string,
@@ -1508,13 +1548,8 @@ export async function importCookiesFromBrowser(
     diag(`  source has ${sourceRows.length} cookies`)
 
     if (sourceRows.length === 0) {
-      stagingDb.close()
-      stagingDb = null
-      try {
-        unlinkSync(stagingCookiesPath)
-      } catch {
-        /* best-effort */
-      }
+      closeStagingDb()
+      discardStagingFile()
       return { ok: false, reason: `No cookies found in ${browser.label}.` }
     }
 
@@ -1526,14 +1561,9 @@ export async function importCookiesFromBrowser(
       ? getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
       : null
     if (needsSourceKey && !sourceKey) {
-      stagingDb.close()
-      stagingDb = null
+      closeStagingDb()
       // Why: key denial happens after staging, so clean up the target DB copy or retries pile up.
-      try {
-        unlinkSync(stagingCookiesPath)
-      } catch {
-        /* best-effort */
-      }
+      discardStagingFile()
       return {
         ok: false,
         reason: `Could not access ${browser.label} encryption key. The OS may have denied access.`
@@ -1577,12 +1607,29 @@ export async function importCookiesFromBrowser(
 
     const decryptedCookies: DecryptedCookie[] = []
 
-    const placeholders = targetCols.map(() => '?').join(', ')
-    const insertStmt = stagingDb.prepare(
-      `INSERT OR REPLACE INTO cookies (${colList}) VALUES (${placeholders})`
-    )
+    // Why: staging only backs the cold-restart replay, so any failure writing it disables that
+    // fallback instead of aborting an import whose in-memory half still works.
+    let insertStmt: ReturnType<InstanceType<typeof DatabaseSync>['prepare']> | null = null
+    const disableStaging = (reason: string): void => {
+      diag(`  staging disabled, restart fallback unavailable: ${reason}`)
+      stagingAvailable = false
+      insertStmt = null
+      closeStagingDb()
+      discardStagingFile()
+    }
 
-    stagingDb.exec('BEGIN TRANSACTION')
+    if (stagingDb && colList && placeholders) {
+      try {
+        insertStmt = stagingDb.prepare(
+          `INSERT OR REPLACE INTO cookies (${colList}) VALUES (${placeholders})`
+        )
+        stagingDb.exec('BEGIN TRANSACTION')
+      } catch (err) {
+        disableStaging(String(err))
+      }
+    } else if (stagingAvailable) {
+      disableStaging('staged database exposed no cookies columns')
+    }
 
     for (const sourceRow of sourceRows) {
       const encRaw = sourceRow.encrypted_value
@@ -1637,17 +1684,35 @@ export async function importCookiesFromBrowser(
         expirationDate: expiresUtc > 0 ? expiresUtc : undefined
       })
 
-      const params = buildChromiumCookieInsertParams(targetColumnInfo, sourceRow, decryptedValue)
-      insertStmt.run(...params)
+      if (insertStmt && targetColumnInfo) {
+        try {
+          const params = buildChromiumCookieInsertParams(
+            targetColumnInfo,
+            sourceRow,
+            decryptedValue
+          )
+          insertStmt.run(...params)
+        } catch (err) {
+          disableStaging(String(err))
+        }
+      }
+      // Why: counts importable cookies, not staged rows — the summary must stay truthful when
+      // the optional staging DB is unavailable.
       imported++
     }
     diag(`  skipped ${integritySkipped} Google integrity cookies (SIDCC/STRP/AEC)`)
 
-    stagingDb.exec('COMMIT')
-    stagingDb.close()
-    stagingDb = null
-
-    diag(`  SQLite staging complete: ${imported} cookies, ${domainSet.size} domains`)
+    if (stagingDb) {
+      try {
+        stagingDb.exec('COMMIT')
+        closeStagingDb()
+        diag(`  SQLite staging complete: ${imported} cookies, ${domainSet.size} domains`)
+      } catch (err) {
+        disableStaging(String(err))
+      }
+    } else {
+      diag(`  staging skipped: ${imported} cookies will load in-memory only`)
+    }
 
     // Why: clear stale cookies first; mixing them with the imported set makes sites like Google reject the session.
     await targetSession.clearStorageData({ storages: ['cookies'] })
@@ -1684,16 +1749,27 @@ export async function importCookiesFromBrowser(
 
     diag(`  memory load: ${memoryLoaded} OK, ${memoryFailed} failed`)
 
-    if (memoryFailed > 0) {
+    let warning: BrowserCookieImportSummary['warning']
+    if (memoryFailed > 0 && stagingAvailable) {
       // Why: keep the staging DB so the failed cookies load from SQLite on next cold start, where CookieMonster skips validation.
       browserSessionRegistry.setPendingCookieImport(targetPartition, stagingCookiesPath)
       diag(`  staged at ${stagingCookiesPath} for ${memoryFailed} cookies that need restart`)
-    } else {
-      try {
-        unlinkSync(stagingCookiesPath)
-      } catch {
-        /* best-effort */
+    } else if (memoryFailed > 0) {
+      // Why: never register a path that was never written — cold start would replay a missing
+      // or partial DB over the live partition.
+      browserSessionRegistry.clearPendingCookieImport(targetPartition)
+      discardStagingFile()
+      diag(`  ${memoryFailed} cookies need a restart but staging is unavailable — skipped`)
+      // Why: the jar was already cleared, so silence here would report a lossy import as a clean success.
+      warning = {
+        code: 'restart-fallback-unavailable',
+        loadedCookies: memoryLoaded,
+        failedCookies: memoryFailed
       }
+    } else {
+      // Why: this import already rewrote the live session, so an older staged DB must not replay over it.
+      browserSessionRegistry.clearPendingCookieImport(targetPartition)
+      discardStagingFile()
       diag(`  all cookies loaded in-memory — no restart needed`)
     }
 
@@ -1709,7 +1785,8 @@ export async function importCookiesFromBrowser(
       totalCookies: sourceRows.length,
       importedCookies: imported,
       skippedCookies: skipped,
-      domains: [...domainSet].sort()
+      domains: [...domainSet].sort(),
+      ...(warning ? { warning } : {})
     }
 
     return { ok: true, profileId: '', summary }
@@ -1730,7 +1807,7 @@ export async function importCookiesFromBrowser(
     } catch {
       /* may not exist yet */
     }
-    diag(`  SQLite import failed: ${err}`)
+    diag(`  SQLite import failed: ${String(err)}`)
     return {
       ok: false,
       reason: reasonWithDiagLog(
@@ -1741,7 +1818,7 @@ export async function importCookiesFromBrowser(
     try {
       sourceSnapshot.cleanup()
     } catch (err) {
-      diag(`  Chromium snapshot cleanup failed: ${err}`)
+      diag(`  Chromium snapshot cleanup failed: ${String(err)}`)
     }
   }
 }

@@ -1,12 +1,12 @@
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import { networkInterfaces } from 'node:os'
-import QRCode from 'qrcode'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import { isTailnetIPv4Address } from '../../shared/tailnet-address'
 import type { DeviceEntry } from '../runtime/device-registry'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
+import { encodeMobilePairingQr, type MobilePairingQrResult } from '../runtime/mobile-pairing-qr'
 import {
   getWebSocketPort,
   inspectWindowsMobileFirewall,
@@ -27,6 +27,10 @@ function isUsableIPv6Address(address: string): boolean {
   return !/^fe[89ab][0-9a-f]:/i.test(address)
 }
 
+function isProxyFakeIpIPv4Address(address: string): boolean {
+  return /^198\.(?:18|19)\./.test(address)
+}
+
 // Why: the WebSocket transport advertises 0.0.0.0 as its endpoint, which isn't
 // connectable from a mobile device. We enumerate all non-internal IPv4 and
 // (non-link-local) IPv6 addresses so the user can choose which one to advertise
@@ -45,6 +49,10 @@ function getNetworkInterfaces(): NetworkInterface[] {
         continue
       }
       if (addr.family === 'IPv4') {
+        // 198.18.0.0/15 proxy fake IPs are only routable inside the desktop proxy.
+        if (isProxyFakeIpIPv4Address(addr.address)) {
+          continue
+        }
         result.push({ name, address: addr.address })
       } else if (addr.family === 'IPv6' && isUsableIPv6Address(addr.address)) {
         result.push({ name, address: addr.address })
@@ -86,6 +94,7 @@ export type MobileHandlerDependencies = {
   openWindowsNetworkSettings?: () => Promise<void>
   getRelayStatus?: () => RelayBrokerStatus
   consumePendingUnpairedDeviceAuthFailure?: (webContentsId: number) => boolean
+  encodePairingQr?: (pairingUrl: string) => Promise<MobilePairingQrResult>
 }
 
 export function registerMobileHandlers(
@@ -117,7 +126,12 @@ export function registerMobileHandlers(
       // ZeroTier) where the default LAN IP isn't reachable from the phone.
       const ip = args?.address ?? getDefaultPairingAddress()
       if (!ip) {
-        return { available: false as const }
+        return {
+          available: false as const,
+          reason: 'invalid_advertised_endpoint',
+          guidance:
+            'No reachable network address is available for pairing. Connect to Wi‑Fi or Tailscale, or pick an address manually.'
+        }
       }
 
       // Why: coalesce repeated QR regenerations onto a single never-scanned
@@ -134,24 +148,25 @@ export function registerMobileHandlers(
         name: `Mobile ${new Date().toLocaleDateString()}`
       })
       if (!offer.available) {
-        return { available: false as const }
+        // Why: surface Relay mint failures (and other pairing unavailability)
+        // so the UI can refuse a silent LAN QR under the Relay label.
+        return {
+          available: false as const,
+          reason: offer.reason,
+          guidance: offer.guidance,
+          ...(offer.relayFailure ? { relayFailure: offer.relayFailure } : {})
+        }
       }
 
-      const qrDataUrl = await QRCode.toDataURL(offer.pairingUrl, {
-        errorCorrectionLevel: 'M',
-        margin: 2,
-        width: 256
-      })
+      const qr = await (dependencies.encodePairingQr ?? encodeMobilePairingQr)(offer.pairingUrl)
 
       return {
         available: true as const,
-        qrDataUrl,
+        qrDataUrl: qr.ok ? qr.qrDataUrl : null,
+        ...(!qr.ok ? { qrError: qr.reason } : {}),
         pairingUrl: offer.pairingUrl,
         endpoint: offer.endpoint,
         deviceId: offer.deviceId,
-        // Why: an automatic request can degrade to a local-only offer when
-        // Relay provisioning fails; the UI needs the encoded mode to avoid
-        // labeling a LAN-only code as Relay.
         connectionMode: offer.connectionMode
       }
     }

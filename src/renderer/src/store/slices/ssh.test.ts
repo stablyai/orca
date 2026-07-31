@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import type { SshProviderEpoch } from '../../../../shared/ssh-types'
 import { createTestStore, makeTab, makeWorktree, TEST_REPO } from './store-test-helpers'
 
 describe('createSshSlice', () => {
@@ -12,6 +13,16 @@ describe('createSshSlice', () => {
     const removedPtyId = toAppSshPtyId(targetId, 'pty-live')
     const staleLastKnownPtyId = toAppSshPtyId(targetId, 'pty-last-known')
     const otherPtyId = toAppSshPtyId(otherTargetId, 'pty-other')
+    const removedAuthority = {
+      targetId,
+      providerEpoch: 'removed-epoch' as SshProviderEpoch,
+      connectionGeneration: 1
+    } as const
+    const otherAuthority = {
+      targetId: otherTargetId,
+      providerEpoch: 'other-epoch' as SshProviderEpoch,
+      connectionGeneration: 2
+    } as const
 
     store.setState({
       repos: [
@@ -114,7 +125,44 @@ describe('createSshSlice', () => {
         'tab-ssh': toAppSshPtyId(targetId, 'pty-1'),
         'tab-stale-encoded': toAppSshPtyId(targetId, 'pty-9'),
         'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
-      }
+      },
+      directSshPaneRetryByTabId: {
+        'tab-ssh': {
+          attemptId: 'removed-attempt',
+          authority: removedAuthority,
+          tabGeneration: 1,
+          startedAt: 10
+        },
+        'tab-stale-retry': {
+          attemptId: 'stale-removed-attempt',
+          authority: removedAuthority,
+          tabGeneration: 2,
+          startedAt: 11
+        },
+        'tab-other': {
+          attemptId: 'other-attempt',
+          authority: otherAuthority,
+          tabGeneration: 3,
+          startedAt: 12
+        }
+      } as never,
+      directSshLivePtyBindingByTabId: {
+        'tab-ssh': {
+          authority: removedAuthority,
+          tabGeneration: 1,
+          ptyId: removedPtyId
+        },
+        'tab-other': {
+          authority: otherAuthority,
+          tabGeneration: 3,
+          ptyId: otherPtyId
+        }
+      } as never,
+      directSshPaneRetryHistoryByTabId: {
+        'tab-ssh': { authority: removedAuthority, attemptedAt: [10] },
+        'tab-stale-retry': { authority: removedAuthority, attemptedAt: [11] },
+        'tab-other': { authority: otherAuthority, attemptedAt: [12] }
+      } as never
     })
 
     store.getState().clearRemovedSshTargetState(targetId)
@@ -139,6 +187,12 @@ describe('createSshSlice', () => {
     expect(state.pendingReconnectPtyIdByTabId).toEqual({
       'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
     })
+    expect(Object.keys(state.directSshPaneRetryByTabId)).toEqual(['tab-other'])
+    expect(Object.keys(state.directSshLivePtyBindingByTabId)).toEqual(['tab-other'])
+    expect(Object.keys(state.directSshPaneRetryHistoryByTabId)).toEqual(['tab-other'])
+    expect(state.directSshPaneRetryByTabId['tab-other']?.authority.targetId).toBe(otherTargetId)
+    expect(state.directSshLivePtyBindingByTabId['tab-other']?.ptyId).toBe(otherPtyId)
+    expect(state.directSshPaneRetryHistoryByTabId['tab-other']?.attemptedAt).toEqual([12])
     expect(state.tabsByWorktree[worktreeId][0]).toMatchObject({ id: 'tab-ssh', ptyId: null })
     expect('pendingActivationSpawn' in state.tabsByWorktree[worktreeId][0]).toBe(false)
     expect(state.ptyIdsByTabId['tab-ssh']).toEqual([])
@@ -161,6 +215,107 @@ describe('createSshSlice', () => {
       previousAccountLabel: 'Other old',
       nextAccountLabel: 'Other new'
     })
+  })
+
+  it("preserves another SSH target's terminal ledgers when repo ids collide", () => {
+    const store = createTestStore()
+    const removedTargetId = 'target-a'
+    const survivingTargetId = 'target-b'
+    const removedWorktreeId = 'shared::/srv/a/work'
+    const survivingWorktreeId = 'shared::/srv/b/work'
+    const removedPtyId = toAppSshPtyId(removedTargetId, 'pty-a')
+    const survivingPtyId = toAppSshPtyId(survivingTargetId, 'pty-b')
+    const removedAuthority = {
+      targetId: removedTargetId,
+      providerEpoch: 'epoch-a' as SshProviderEpoch,
+      connectionGeneration: 1
+    }
+    const survivingAuthority = {
+      targetId: survivingTargetId,
+      providerEpoch: 'epoch-b' as SshProviderEpoch,
+      connectionGeneration: 2
+    }
+    const survivingAttempt = {
+      attemptId: 'attempt-b',
+      authority: survivingAuthority,
+      tabGeneration: 4,
+      startedAt: 20
+    }
+    const survivingBinding = {
+      authority: survivingAuthority,
+      tabGeneration: 4,
+      ptyId: survivingPtyId
+    }
+    const survivingHistory = { authority: survivingAuthority, attemptedAt: [20] }
+
+    store.setState({
+      repos: [
+        {
+          ...TEST_REPO,
+          id: 'shared',
+          connectionId: removedTargetId,
+          executionHostId: 'ssh:target-a'
+        },
+        {
+          ...TEST_REPO,
+          id: 'shared',
+          connectionId: survivingTargetId,
+          executionHostId: 'ssh:target-b'
+        }
+      ],
+      worktreesByRepo: {
+        shared: [
+          makeWorktree({
+            id: removedWorktreeId,
+            repoId: 'shared',
+            hostId: 'ssh:target-a'
+          }),
+          makeWorktree({
+            id: survivingWorktreeId,
+            repoId: 'shared',
+            hostId: 'ssh:target-b'
+          })
+        ]
+      },
+      tabsByWorktree: {
+        [removedWorktreeId]: [
+          makeTab({ id: 'tab-a', worktreeId: removedWorktreeId, ptyId: removedPtyId })
+        ],
+        [survivingWorktreeId]: [
+          makeTab({ id: 'tab-b', worktreeId: survivingWorktreeId, ptyId: survivingPtyId })
+        ]
+      },
+      ptyIdsByTabId: { 'tab-a': [removedPtyId], 'tab-b': [survivingPtyId] },
+      lastKnownRelayPtyIdByTabId: { 'tab-a': removedPtyId, 'tab-b': survivingPtyId },
+      directSshPaneRetryByTabId: {
+        'tab-a': {
+          attemptId: 'attempt-a',
+          authority: removedAuthority,
+          tabGeneration: 3,
+          startedAt: 10
+        },
+        'tab-b': survivingAttempt
+      } as never,
+      directSshLivePtyBindingByTabId: {
+        'tab-a': { authority: removedAuthority, tabGeneration: 3, ptyId: removedPtyId },
+        'tab-b': survivingBinding
+      } as never,
+      directSshPaneRetryHistoryByTabId: {
+        'tab-a': { authority: removedAuthority, attemptedAt: [10] },
+        'tab-b': survivingHistory
+      } as never
+    })
+
+    store.getState().clearRemovedSshTargetState(removedTargetId)
+
+    const state = store.getState()
+    expect(state.tabsByWorktree[removedWorktreeId][0]?.ptyId).toBeNull()
+    expect(state.tabsByWorktree[survivingWorktreeId][0]?.ptyId).toBe(survivingPtyId)
+    expect(state.ptyIdsByTabId['tab-b']).toEqual([survivingPtyId])
+    expect(state.lastKnownRelayPtyIdByTabId['tab-b']).toBe(survivingPtyId)
+    expect(state.directSshPaneRetryByTabId['tab-b']).toBe(survivingAttempt)
+    expect(state.directSshLivePtyBindingByTabId['tab-b']).toBe(survivingBinding)
+    expect(state.directSshPaneRetryHistoryByTabId['tab-b']).toBe(survivingHistory)
   })
 
   it('keeps SSH target label references stable when refreshed metadata is unchanged', () => {
@@ -231,6 +386,31 @@ describe('createSshSlice', () => {
 
     expect(store.getState()).not.toBe(previousState)
     expect(store.getState().sshConnectionStates.get('ssh-1')?.connectionGeneration).toBe(2)
+  })
+
+  it('publishes an authoritative SSH provider epoch change', () => {
+    const store = createTestStore()
+    store.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      providerEpoch: 'provider-a' as never,
+      connectionGeneration: 1
+    })
+    const previousState = store.getState()
+
+    store.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      providerEpoch: 'provider-b' as never,
+      connectionGeneration: 1
+    })
+
+    expect(store.getState()).not.toBe(previousState)
+    expect(store.getState().sshConnectionStates.get('ssh-1')?.providerEpoch).toBe('provider-b')
   })
 
   it('publishes a connected-state folder capability change', () => {

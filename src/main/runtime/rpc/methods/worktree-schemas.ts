@@ -11,6 +11,9 @@ import {
   OptionalString,
   TriStateLinkedIssue
 } from '../schemas'
+import { TaskSourceContextSchema } from '../../../../shared/task-source-context-schema'
+import { WorkspaceLinkedItemSchema } from '../../../../shared/workspace-linked-item-schema'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
 
 const OptionalTuiAgent = z
   .unknown()
@@ -48,6 +51,11 @@ export const WorktreeDetectedListParams = z.object({
     .pipe(z.string().min(1, 'Missing repo selector'))
 })
 
+export const WorktreeTeardownMissingTerminalsParams = WorktreeDetectedListParams.extend({
+  worktreeIds: z.array(z.string().min(1)).max(10_000),
+  connectionId: z.string().nullable().optional()
+})
+
 export const WorktreePsParams = z.object({
   limit: OptionalFiniteNumber
 })
@@ -67,6 +75,26 @@ export const WorktreeActivate = WorktreeSelector.extend({
   notifyClients: OptionalBoolean,
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
 })
+
+/** Shared by WorktreeCreate and WorktreeSet so the two error messages cannot drift. */
+function assertLinkedWorkItemSourceContextMatch(
+  params: {
+    linkedWorkItem?: z.infer<typeof WorkspaceLinkedItemSchema> | null
+    linkedTaskSourceContext?: z.infer<typeof TaskSourceContextSchema> | null
+  },
+  ctx: z.RefinementCtx
+): void {
+  if (
+    params.linkedWorkItem &&
+    params.linkedTaskSourceContext &&
+    !isWorkspaceLinkedItemSourceContextMatch(params.linkedWorkItem, params.linkedTaskSourceContext)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Linked work item and source context identities must match'
+    })
+  }
+}
 
 export const WorktreeCreate = z
   .object({
@@ -88,6 +116,8 @@ export const WorktreeCreate = z
     linkedBitbucketPR: TriStateLinkedIssue,
     linkedAzureDevOpsPR: TriStateLinkedIssue,
     linkedGiteaPR: TriStateLinkedIssue,
+    linkedWorkItem: WorkspaceLinkedItemSchema.nullable().optional(),
+    linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
     comment: OptionalString,
     displayName: OptionalString,
     telemetrySource: z
@@ -160,6 +190,7 @@ export const WorktreeCreate = z
     cliProvenanceRequest: CliWorkspaceProvenanceRequest.optional()
   })
   .superRefine((params, ctx) => {
+    assertLinkedWorkItemSourceContextMatch(params, ctx)
     if ((params.parentWorkspace || params.parentWorktree) && params.noParent === true) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -189,7 +220,10 @@ export const WorktreePrefetchCreateBase = z.object({
 })
 
 export const WorktreeSet = WorktreeSelector.extend({
-  displayName: OptionalString,
+  // Why: '' is the blanking contract — "fall back to the branch/folder name".
+  // OptionalString coerced it to undefined, so on remote/SSH hosts clearing the
+  // name was dropped here and the old name came back on the next refresh.
+  displayName: OptionalPlainString,
   // Why: empty comments are meaningful metadata updates, so use the plain
   // string parser instead of OptionalString's empty-as-undefined behavior.
   comment: OptionalPlainString,
@@ -203,6 +237,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   linkedBitbucketPR: TriStateLinkedIssue,
   linkedAzureDevOpsPR: TriStateLinkedIssue,
   linkedGiteaPR: TriStateLinkedIssue,
+  linkedWorkItem: WorkspaceLinkedItemSchema.nullable().optional(),
+  linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
   isArchived: OptionalBoolean,
   isUnread: OptionalBoolean,
   isPinned: OptionalBoolean,
@@ -228,6 +264,7 @@ export const WorktreeSet = WorktreeSelector.extend({
   parentWorktree: OptionalString,
   noParent: OptionalBoolean
 }).superRefine((params, ctx) => {
+  assertLinkedWorkItemSourceContextMatch(params, ctx)
   if (params.parentWorktree && params.noParent === true) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

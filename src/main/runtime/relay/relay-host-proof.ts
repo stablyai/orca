@@ -3,6 +3,9 @@ import nacl from 'tweetnacl'
 
 const HOST_PROOF_TRANSCRIPT_DOMAIN = 'orca-relay-host-proof/v1'
 const HOST_CHALLENGE_PLAINTEXT_DOMAIN = 'orca-relay-host-challenge/v1'
+// Covers routine NTP drift without extending the signed challenge window.
+const RELAY_HOST_PROOF_CLOCK_SKEW_MS = 30_000
+const MAX_HOST_PROOF_CHALLENGE_WINDOW_MS = 10_000
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
 
@@ -102,9 +105,10 @@ function validateTranscript(
     context.previousGeneration === undefined ? new Uint8Array() : uint64(context.previousGeneration)
   return (
     issuedAt !== null &&
-    issuedAt <= now &&
-    now <= challenge.expiresAt &&
-    challenge.expiresAt - issuedAt <= 10_000 &&
+    issuedAt - RELAY_HOST_PROOF_CLOCK_SKEW_MS <= now &&
+    now - RELAY_HOST_PROOF_CLOCK_SKEW_MS <= challenge.expiresAt &&
+    issuedAt <= challenge.expiresAt &&
+    challenge.expiresAt - issuedAt <= MAX_HOST_PROOF_CHALLENGE_WINDOW_MS &&
     expiresAt === challenge.expiresAt &&
     equal(fields.get('protocol'), textEncoder.encode(HOST_PROOF_TRANSCRIPT_DOMAIN)) &&
     equal(fields.get('version'), new Uint8Array([1])) &&

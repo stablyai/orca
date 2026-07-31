@@ -20,6 +20,7 @@ import {
   getLineageRenderInfo
 } from './worktree-lineage-projection'
 import { computeRenderedSidebarWorktreeOrder } from './rendered-sidebar-worktree-order'
+import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 
 /**
  * Whether a worktree represents the repo's default-branch row that the
@@ -42,6 +43,18 @@ export function isCliCreatedWorkspace(worktree: Worktree): boolean {
   return worktree.cliProvenance?.kind === 'created-by-cli'
 }
 
+/**
+ * Whether a worktree sits on a detached HEAD (a commit, not a branch).
+ *
+ * Why the head check: folder workspaces and SSH-synthesized rows carry both an
+ * empty branch and an empty head, so branch-emptiness alone would sweep them
+ * into this filter. Requiring a real head keeps the predicate to genuine
+ * detached-HEAD checkouts, matching what DetachedHeadBadge renders on the card.
+ */
+export function isDetachedHeadWorkspace(worktree: Worktree): boolean {
+  return getWorktreeGitIdentityDisplay(worktree)?.kind === 'detached'
+}
+
 /** Inputs describing sidebar filter settings that the Clear Filters path owns. */
 export type SidebarFilterState = {
   showSleepingWorkspaces: boolean
@@ -49,6 +62,7 @@ export type SidebarFilterState = {
   hideDefaultBranchWorkspace: boolean
   hideAutomationGeneratedWorkspaces: boolean
   hideCliCreatedWorkspaces: boolean
+  hideDetachedHeadWorkspaces: boolean
   visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
   workspaceHostScope?: ExecutionHostScope
 }
@@ -69,6 +83,7 @@ export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
     state.hideDefaultBranchWorkspace ||
     state.hideAutomationGeneratedWorkspaces ||
     state.hideCliCreatedWorkspaces ||
+    state.hideDetachedHeadWorkspaces ||
     state.visibleWorkspaceHostIds != null ||
     (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE)
   )
@@ -82,6 +97,7 @@ export type ClearFilterActions = {
   resetHideDefaultBranchWorkspace: boolean
   resetHideAutomationGeneratedWorkspaces: boolean
   resetHideCliCreatedWorkspaces: boolean
+  resetHideDetachedHeadWorkspaces: boolean
   resetVisibleWorkspaceHostIds: boolean
 }
 
@@ -102,6 +118,7 @@ export function computeClearFilterActions(state: SidebarFilterState): ClearFilte
     resetHideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     resetHideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
     resetHideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
+    resetHideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
     resetVisibleWorkspaceHostIds:
       state.visibleWorkspaceHostIds != null ||
       (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE)
@@ -137,6 +154,7 @@ export function computeVisibleWorktreeIds(
     hideDefaultBranchWorkspace: boolean
     hideAutomationGeneratedWorkspaces: boolean
     hideCliCreatedWorkspaces: boolean
+    hideDetachedHeadWorkspaces: boolean
     repoMap: Map<string, Repo>
     workspaceHostScope: ExecutionHostScope
     visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
@@ -165,6 +183,10 @@ export function computeVisibleWorktreeIds(
 
   if (opts.hideCliCreatedWorkspaces) {
     all = all.filter((w) => !isCliCreatedWorkspace(w))
+  }
+
+  if (opts.hideDetachedHeadWorkspaces) {
+    all = all.filter((w) => !isDetachedHeadWorkspace(w))
   }
 
   const visibleHostIds =
@@ -347,6 +369,7 @@ export function getVisibleWorktreeIds(): string[] {
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
+    hideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
     repoMap,
     workspaceHostScope: state.workspaceHostScope,
     visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,

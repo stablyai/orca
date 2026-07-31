@@ -39,6 +39,28 @@ describe('RelayAuthCoordinator transient recovery', () => {
     expect(statuses.at(-1)).toBe('registered')
   })
 
+  it('does not retry initial relay setup before the server Retry-After window', async () => {
+    vi.useFakeTimers()
+    const broker = { closeNow: vi.fn() }
+    const openBroker = vi
+      .fn()
+      .mockRejectedValueOnce(new RelayHttpError('assignment', 503, 30_000))
+      .mockResolvedValueOnce(broker)
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker,
+      onStatus: vi.fn(),
+      random: () => 0.5
+    })
+
+    coordinator.reconcile()
+    await vi.advanceTimersByTimeAsync(29_999)
+    expect(openBroker).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(openBroker).toHaveBeenCalledTimes(2)
+    expect(coordinator.getActiveBroker()).toBe(broker)
+  })
+
   it('retries when cloud-session refresh fails before identity can be read', async () => {
     vi.useFakeTimers()
     const broker = { closeNow: vi.fn() }

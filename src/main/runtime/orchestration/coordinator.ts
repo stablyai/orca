@@ -242,6 +242,7 @@ export class Coordinator {
         case 'dispatch':
         case 'handoff':
         case 'merge_ready':
+        case 'question':
           break
       }
     }
@@ -255,6 +256,10 @@ export class Coordinator {
       if (!this.state.completedTasks.includes(result.taskId)) {
         this.state.completedTasks.push(result.taskId)
       }
+      return
+    }
+    if (result.action === 'failed' && !this.state.failedTasks.includes(result.taskId)) {
+      this.state.failedTasks.push(result.taskId)
     }
   }
 
@@ -362,7 +367,7 @@ export class Coordinator {
         terminals.push(created.handle)
         this.opts.onLog(`Created worker terminal ${created.handle}`)
       } catch (err) {
-        this.opts.onLog(`Failed to create terminal: ${err}`)
+        this.opts.onLog(`Failed to create terminal: ${String(err)}`)
         return
       }
     }
@@ -378,7 +383,7 @@ export class Coordinator {
       try {
         await this.dispatchTask(task, targetHandle)
       } catch (err) {
-        this.opts.onLog(`Failed to dispatch task ${task.id}: ${err}`)
+        this.opts.onLog(`Failed to dispatch task ${task.id}: ${String(err)}`)
       }
     }
   }

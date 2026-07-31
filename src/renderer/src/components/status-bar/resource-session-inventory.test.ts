@@ -8,7 +8,7 @@ import {
 import type { DaemonSession } from './resource-usage-merge-types'
 
 function session(id: string): DaemonSession {
-  return { id, cwd: '/workspace', title: id }
+  return { id, cwd: '/workspace', title: id, agentOwnership: 'absent' as const }
 }
 
 describe('resource session inventory', () => {

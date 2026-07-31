@@ -24,14 +24,34 @@ const updateCapableCallers = new Map<string, readonly string[]>([
     ['COMPUTER_USE_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
   ],
   [
-    // Why: the Linear settings section shares the update-target resolver so
-    // legacy-only installs keep the command and freshness identity aligned.
+    // Shared hook owns update-target resolution for Linear settings + Task Sources.
+    'src/renderer/src/components/settings/use-linear-agent-skill-setup.ts',
+    [
+      'getLinearAgentSkillUpdateTarget',
+      'updateTarget.command',
+      // The builder also reads the focused runtime environment, so memoizing
+      // either command on the runtime alone serves a stale Windows host command.
+      'const installCommand = activeSkillRuntime.installDisabledReason',
+      'const updateCommand = activeSkillRuntime.installDisabledReason'
+    ]
+  ],
+  [
     'src/renderer/src/components/settings/LinearAgentSkillPane.tsx',
-    ['getLinearAgentSkillUpdateTarget', 'installedCommand={updateCommand}']
+    ['installedCommand={skillSetup.updateCommand}']
+  ],
+  [
+    'src/renderer/src/components/settings/TaskSourceLinearSetup.tsx',
+    ['installedCommand={skillSetup.updateCommand}']
   ],
   [
     'src/renderer/src/components/settings/EphemeralVmsPane.tsx',
-    ['EPHEMERAL_VMS_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
+    [
+      'EPHEMERAL_VMS_SKILL_UPDATE_COMMAND',
+      'installedCommand={updateCommand}',
+      // An absent runtime must still resolve to the host so the Windows npx
+      // preflight applies, as it does on the sibling panes.
+      'const installCommand = activeSkillRuntime.installDisabledReason'
+    ]
   ],
   [
     'src/renderer/src/components/settings/CliSection.tsx',
@@ -61,24 +81,39 @@ const updateCapableCallers = new Map<string, readonly string[]>([
   ],
   [
     'src/renderer/src/components/settings/MobileEmulatorAgentControlRow.tsx',
-    ['ORCA_CLI_SKILL_UPDATE_COMMAND', 'installedCommand={cliSkillUpdateCommand}']
+    [
+      'ORCA_CLI_SKILL_UPDATE_COMMAND',
+      'installedCommand={cliSkillUpdateCommand}',
+      'terminalShellOverride={activeSkillRuntime.terminalShellOverride}',
+      // Detection here scans the local host only, so the command must stay host-built.
+      'buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND)',
+      'buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND)'
+    ]
   ]
 ])
 
 const installOnlyCallers = new Map<string, readonly string[]>([
   [
     'src/renderer/src/components/emulator-pane/MobileEmulatorAgentSetupGuideSteps.tsx',
-    ['showInstallWhenInstalled={!setup.cliSkillInstalled}']
+    [
+      // Detection here scans the local host only, so the command must stay host-built.
+      'buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND)',
+      'command={skillInstallCommand}',
+      'terminalShellOverride={activeSkillRuntime.terminalShellOverride}',
+      'showInstallWhenInstalled={!setup.cliSkillInstalled}'
+    ]
   ]
 ])
 
 const directPanelCallers = new Set([
   // BrowserUsePane and LinearAgentSkillSetupPrompt delegate through child setup
   // components that forward installedCommand and are validated separately above.
+  // use-linear-agent-skill-setup owns the update-target resolver but is not a panel host.
   ...[...updateCapableCallers.keys()].filter(
     (relativePath) =>
       relativePath !== 'src/renderer/src/components/settings/BrowserUsePane.tsx' &&
-      relativePath !== 'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx'
+      relativePath !== 'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx' &&
+      relativePath !== 'src/renderer/src/components/settings/use-linear-agent-skill-setup.ts'
   ),
   ...installOnlyCallers.keys()
 ])
@@ -127,6 +162,51 @@ describe('AgentSkillSetupPanel installed-command call sites', () => {
     expect(source).toContain('installedCommand={orchestrationUpdateCommand}')
     expect(source).not.toContain('Copy update command')
     expect(source).not.toContain('copyUpdateCommand')
+  })
+
+  it('routes the combined feature-tip install through runtime command setup', () => {
+    const source = readRepoFile(
+      'src/renderer/src/components/feature-tips/CliSkillSetupTerminal.tsx'
+    )
+
+    expect(source).toContain('buildSkillCommandForRuntime(')
+    expect(source).toContain('command={skillCommand}')
+    expect(source).toContain('shellOverride={activeSkillRuntime.terminalShellOverride}')
+    expect(source).not.toContain('command={ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}')
+    // This terminal auto-pastes with no install gate, so a repair-required runtime
+    // must fall back to the host rather than skip the Windows npx preflight.
+    expect(source).toContain(
+      'activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime'
+    )
+  })
+
+  it('keeps client freshness behind resolved local runtime authority', () => {
+    const expectedGates = new Map<string, string>([
+      [
+        'src/renderer/src/components/settings/use-local-cli-skill-freshness-name.ts',
+        "agentRuntime.runtime === 'host' && activeSkillRuntime.canUseLocalSkillFreshness"
+      ],
+      [
+        'src/renderer/src/components/settings/MobileEmulatorAgentControlRow.tsx',
+        'activeSkillRuntime.canUseLocalSkillFreshness ? ORCA_CLI_SKILL_NAME : undefined'
+      ],
+      [
+        'src/renderer/src/components/settings/Settings.tsx',
+        'useSkillFreshness(skillFreshnessApplies)'
+      ],
+      [
+        'src/renderer/src/components/skills/SkillFreshnessNudge.tsx',
+        'useSkillFreshness(activeSkillRuntime.canUseLocalSkillFreshness)'
+      ],
+      [
+        'src/renderer/src/components/skills/SkillFreshnessUpdateDialog.tsx',
+        'useSkillFreshness(activeSkillRuntime.canUseLocalSkillFreshness)'
+      ]
+    ])
+
+    for (const [relativePath, expectedGate] of expectedGates) {
+      expect(readRepoFile(relativePath), relativePath).toContain(expectedGate)
+    }
   })
 
   it('fails when a production caller can show the default Update action without installedCommand', () => {

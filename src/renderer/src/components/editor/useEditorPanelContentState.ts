@@ -329,7 +329,7 @@ export function useEditorPanelContentState({
           [file.id]: {
             kind: 'text',
             originalContent: '',
-            modifiedContent: `Error loading diff: ${err}`,
+            modifiedContent: `Error loading diff: ${String(err)}`,
             originalIsBinary: false,
             modifiedIsBinary: false
           }

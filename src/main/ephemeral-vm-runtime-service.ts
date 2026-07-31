@@ -120,6 +120,7 @@ export async function provisionEphemeralVmRuntime(
   const runtime = upsertEphemeralVmRuntime(args.userDataPath, {
     id: start.context.instanceId ?? start.context.recipeId,
     recipeId: args.recipe.id,
+    recipe: args.recipe,
     ...(args.repoId ? { repoId: args.repoId } : {}),
     ...(args.projectId ? { projectId: args.projectId } : {}),
     ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),

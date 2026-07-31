@@ -1751,6 +1751,60 @@ describe('RateLimitService', () => {
     )
   })
 
+  it('caches an outgoing weekly-only Codex account so the switcher keeps its inline bars', async () => {
+    const service = new RateLimitService()
+    service.setInactiveCodexAccountsResolver(() => [
+      { id: 'account-weekly', managedHomePath: '/tmp/account-weekly/home' }
+    ])
+
+    const weeklyOnly: ProviderRateLimits = {
+      provider: 'codex',
+      session: null,
+      weekly: { usedPercent: 76, windowMinutes: 10080, resetsAt: null, resetDescription: null },
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits)
+      .mockResolvedValueOnce(weeklyOnly)
+      .mockResolvedValueOnce(okProvider('codex', 40, Date.now()))
+
+    await service.refresh()
+    await service.refreshForCodexAccountChange('account-weekly')
+
+    expect(service.getState().inactiveCodexAccounts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          accountId: 'account-weekly',
+          rateLimits: expect.objectContaining({
+            session: null,
+            weekly: expect.objectContaining({ usedPercent: 76 })
+          })
+        })
+      ])
+    )
+  })
+
+  it('does not cache an outgoing Codex account that has no usage windows', async () => {
+    const service = new RateLimitService()
+    service.setInactiveCodexAccountsResolver(() => [
+      { id: 'account-empty', managedHomePath: '/tmp/account-empty/home' }
+    ])
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits)
+      .mockResolvedValueOnce(errorProvider('codex', 'codex not signed in'))
+      .mockResolvedValueOnce(okProvider('codex', 40, Date.now()))
+
+    await service.refresh()
+    await service.refreshForCodexAccountChange('account-empty')
+
+    expect(service.getState().inactiveCodexAccounts).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ accountId: 'account-empty' })])
+    )
+  })
+
   it('does not cache host Claude usage under an outgoing WSL account', async () => {
     const service = new RateLimitService()
     service.setInactiveClaudeAccountsResolver(() => [

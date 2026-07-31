@@ -6,6 +6,7 @@ import {
   buildSettingsProjectList,
   getSettingsProjectHostRepo,
   getSettingsProjectRepresentativeRepoId,
+  getSettingsTargetHostSelection,
   removeSettingsProjectFromAllHosts,
   resolveEffectiveProjectHost,
   resolveSettingsTargetRepoId
@@ -157,6 +158,26 @@ describe('deep-link resolution', () => {
       projectId: projects[0].projectId,
       hostId: 'runtime:home-mac'
     })
+  })
+
+  it('uses an explicit host when same-id repo rows collide', () => {
+    const sameIdProjects = buildSettingsProjectList([
+      makeRepo({ id: 'same-repo', gitRemoteIdentity: gitRemote }),
+      makeRepo({
+        id: 'same-repo',
+        gitRemoteIdentity: gitRemote,
+        executionHostId: 'ssh:server',
+        connectionId: 'server',
+        path: '/remote/repo'
+      })
+    ])
+
+    expect(getSettingsTargetHostSelection(sameIdProjects, 'same-repo', 'ssh:server')).toEqual(
+      expect.objectContaining({
+        projectId: sameIdProjects[0].projectId,
+        hostId: 'ssh:server'
+      })
+    )
   })
 
   it('parses a repoId from a host-specific subsection sectionId', () => {

@@ -64,6 +64,7 @@ const ptyExitSidecars = new Map<
   string,
   Set<(code: number, context: { hadPrimary: boolean }) => void>
 >()
+export const ptyWriteUnavailableHandlers = new Map<string, () => void>()
 let ptyDispatcherAttached = false
 
 let pushListenerUnsubscribes: (() => void)[] = []
@@ -167,6 +168,12 @@ function handleDispatchedPtyData(payload: {
 }
 
 function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
+  const unsubscribeWriteUnavailable = window.api.pty.onWriteUnavailable?.((payload) => {
+    ptyWriteUnavailableHandlers.get(payload.id)?.()
+  })
+  if (unsubscribeWriteUnavailable) {
+    unsubscribes.push(unsubscribeWriteUnavailable)
+  }
   unsubscribes.push(
     window.api.pty.onReplay((payload) => {
       if (bufferPtyShutdownReplayData(payload.id, payload.data)) {

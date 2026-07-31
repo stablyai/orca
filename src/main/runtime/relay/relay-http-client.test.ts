@@ -147,4 +147,38 @@ describe('relay HTTP client', () => {
     ).rejects.toThrow()
     expect(cancelledBodies).toBe(2)
   })
+
+  it('preserves a bounded Retry-After hint on assignment overload', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      async () => new Response(null, { status: 503, headers: { 'retry-after': '30' } })
+    )
+
+    await expect(
+      requestRelayAssignment({
+        directorUrl: 'https://relay.example',
+        relayToken: 'scoped-token',
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        fetch
+      })
+    ).rejects.toMatchObject({
+      operation: 'assignment',
+      statusCode: 503,
+      retryAfterMs: 30_000
+    })
+  })
+
+  it('caps an excessive Retry-After hint at five minutes', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      async () => new Response(null, { status: 503, headers: { 'retry-after': '999999' } })
+    )
+
+    await expect(
+      requestRelayAssignment({
+        directorUrl: 'https://relay.example',
+        relayToken: 'scoped-token',
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        fetch
+      })
+    ).rejects.toMatchObject({ retryAfterMs: 5 * 60_000 })
+  })
 })

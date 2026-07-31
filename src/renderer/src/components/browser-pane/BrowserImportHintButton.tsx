@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Import } from 'lucide-react'
 import { toast } from 'sonner'
+import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -89,7 +90,8 @@ export function BrowserImportHintButton({
       )
       if (result.ok) {
         const browser = detectedBrowsers.find((entry) => entry.family === browserFamily)
-        toast.success(
+        emitBrowserCookieImportToast(
+          result.summary,
           translate(
             'auto.components.browser.pane.BrowserImportHintButton.02e89014c5',
             'Imported {{value0}} cookies from {{value1}}{{value2}}.',
@@ -112,7 +114,8 @@ export function BrowserImportHintButton({
     setImportMenuOpen(false)
     const result = await importCookiesToProfile(effectiveProfileId)
     if (result.ok) {
-      toast.success(
+      emitBrowserCookieImportToast(
+        result.summary,
         translate(
           'auto.components.browser.pane.BrowserImportHintButton.d40d584769',
           'Imported {{value0}} cookies from file.',

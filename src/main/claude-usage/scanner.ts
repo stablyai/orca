@@ -124,8 +124,10 @@ function getSortedWorktreeEntries(
   return sorted
 }
 
+// Why setImmediate: setTimeout(0) is clamped to ~1ms, and this yields once per
+// 4-file batch, so a 7.5k-transcript scan spent ~2s parked on timers.
 async function yieldToEventLoop(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  await new Promise((resolve) => setImmediate(resolve))
 }
 
 async function walkJsonlFiles(dirPath: string): Promise<string[]> {

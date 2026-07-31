@@ -263,7 +263,7 @@ describe('resolveTabAgentFromSignals', () => {
   it('uses OpenCode native session titles to replace stale Claude launch identity', () => {
     expect(
       resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
+        hasObservedAgentSignal: false,
         isRemote: false,
         title: 'OC | Understand about the plugin',
         hookAgent: null,

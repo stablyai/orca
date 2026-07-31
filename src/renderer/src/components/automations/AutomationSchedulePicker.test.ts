@@ -1,6 +1,6 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import {
   AutomationCustomCronPanel,
@@ -9,9 +9,11 @@ import {
 } from './AutomationCustomCronPanel'
 import {
   AUTOMATION_SCHEDULE_PRESET_OPTIONS,
+  getAutomationSchedulePresetLabel,
   getSchedulePresetDraft
 } from './AutomationSchedulePicker'
 import { isValidAutomationCronSchedule } from '../../../../shared/automation-schedules'
+import { i18n } from '@/i18n/i18n'
 
 const BASE_DRAFT: AutomationDraft = {
   name: '',
@@ -33,8 +35,34 @@ const BASE_DRAFT: AutomationDraft = {
 }
 
 describe('AutomationSchedulePicker', () => {
-  it('offers custom cron as a selectable cadence', () => {
-    expect(AUTOMATION_SCHEDULE_PRESET_OPTIONS).toContainEqual(['custom', 'Custom cron'])
+  // Reset here, not after the assertion: a failed expect would otherwise leak the locale.
+  afterEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  it('provides an i18n key for every selectable cadence (#10043)', () => {
+    expect(AUTOMATION_SCHEDULE_PRESET_OPTIONS).toContainEqual([
+      'custom',
+      'Custom cron',
+      'auto.components.automations.AutomationSchedulePicker.ddba78647e'
+    ])
+    for (const [value, fallbackLabel, labelKey] of AUTOMATION_SCHEDULE_PRESET_OPTIONS) {
+      expect(value).not.toBe('')
+      expect(fallbackLabel).not.toBe('')
+      expect(labelKey).toMatch(
+        /^auto\.components\.automations\.AutomationSchedulePicker\.[0-9a-f]{10}$/
+      )
+    }
+  })
+
+  it.each([
+    ['zh', ['每小时', '每天', '工作日', '每周', '自定义 cron']],
+    ['ja', ['毎時', '毎日', '平日', '毎週', 'カスタム cron']],
+    ['ko', ['매시간', '매일', '평일', '매주', '사용자 지정 cron']],
+    ['es', ['Cada hora', 'Diario', 'Días laborables', 'Semanal', 'Cron personalizado']]
+  ])('translates every cadence option in %s', async (locale, labels) => {
+    await i18n.changeLanguage(locale)
+    expect(AUTOMATION_SCHEDULE_PRESET_OPTIONS.map(getAutomationSchedulePresetLabel)).toEqual(labels)
   })
 
   it('seeds custom cron from the current simple schedule', () => {

@@ -4,6 +4,7 @@ import type { E2EEKeypair } from '../e2ee-keypair'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 
 const RELAY_HTTP_REQUEST_DEADLINE_MS = 15_000
+const RELAY_RETRY_AFTER_MAX_MS = 5 * 60_000
 
 const RelayTokenResponseSchema = z
   .object({
@@ -33,10 +34,23 @@ export type RelayAssignment = z.infer<typeof AssignmentResponseSchema>
 export class RelayHttpError extends Error {
   constructor(
     readonly operation: 'token-exchange' | 'assignment',
-    readonly statusCode: number
+    readonly statusCode: number,
+    readonly retryAfterMs: number | null = null
   ) {
     super(`relay_${operation}_failed_${statusCode}`)
   }
+}
+
+function relayRetryAfterMs(value: string | null, nowMs = Date.now()): number | null {
+  if (!value) {
+    return null
+  }
+  const seconds = Number(value)
+  const delayMs = Number.isFinite(seconds) ? seconds * 1_000 : Date.parse(value) - nowMs
+  if (!Number.isFinite(delayMs) || delayMs <= 0) {
+    return null
+  }
+  return Math.min(RELAY_RETRY_AFTER_MAX_MS, Math.ceil(delayMs))
 }
 
 export function shouldRetryRelayConnectionError(error: unknown): boolean {
@@ -87,8 +101,9 @@ export async function exchangeRelayAuthorization(input: {
     body: JSON.stringify({ relayHostId, hostPublicKeyB64: input.keypair.publicKeyB64 })
   })
   if (!response.ok) {
+    const retryAfterMs = relayRetryAfterMs(response.headers.get('retry-after'))
     await cancelUnreadResponseBody(response)
-    throw new RelayHttpError('token-exchange', response.status)
+    throw new RelayHttpError('token-exchange', response.status, retryAfterMs)
   }
   const parsed = RelayTokenResponseSchema.safeParse(await response.json())
   if (!parsed.success) {
@@ -117,8 +132,9 @@ export async function requestRelayAssignment(input: {
     body: JSON.stringify({ v: 1, relayHostId: input.relayHostId })
   })
   if (!response.ok) {
+    const retryAfterMs = relayRetryAfterMs(response.headers.get('retry-after'))
     await cancelUnreadResponseBody(response)
-    throw new RelayHttpError('assignment', response.status)
+    throw new RelayHttpError('assignment', response.status, retryAfterMs)
   }
   const parsed = AssignmentResponseSchema.safeParse(await response.json())
   if (!parsed.success || !isAllowedRelayOrigin(parsed.data.cellUrl)) {

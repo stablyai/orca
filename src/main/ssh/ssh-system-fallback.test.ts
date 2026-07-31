@@ -276,7 +276,8 @@ describe('spawnSystemSsh', () => {
       })
     )
 
-    expect(args).toContain('deploy@fdpass-host')
+    expect(args).toContain('fdpass-host')
+    expect(args).not.toContain('deploy@fdpass-host')
     expect(args).not.toContain('resolved.example.com')
     expect(args).not.toContain('-p')
     expect(args).not.toContain('-i')
@@ -335,7 +336,7 @@ describe('spawnSystemSsh', () => {
     const standaloneControlIdx = args.indexOf('-S')
     expect(standaloneControlIdx).toBeGreaterThan(-1)
     expect(args[standaloneControlIdx + 1]).toBe('none')
-    expect(args.at(-2)).toBe('deploy@krb-host; touch /tmp/not-run')
+    expect(args.at(-2)).toBe('krb-host; touch /tmp/not-run')
     expect(args.at(-1)).toBe('echo ready')
   })
 
@@ -345,7 +346,7 @@ describe('spawnSystemSsh', () => {
     )
 
     expect(args).not.toContain('GSSAPIAuthentication=yes')
-    expect(args).toContain('deploy@krb-host')
+    expect(args).toContain('krb-host')
   })
 
   it('does not inject Orca ControlMaster flags when ssh config already owns muxing', () => {
@@ -359,7 +360,7 @@ describe('spawnSystemSsh', () => {
 
     expectNoOrcaControlMasterArgs(args)
     expect(args).not.toContain('-S')
-    expect(args).toContain('deploy@workbox')
+    expect(args).toContain('workbox')
   })
 
   it('injects Orca ControlMaster flags when ssh config only sets ControlPersist', () => {
@@ -402,7 +403,7 @@ describe('spawnSystemSsh', () => {
 
     expectNoOrcaControlMasterArgs(args)
     expect(args).not.toContain('-S')
-    expect(args).toContain('deploy@workbox')
+    expect(args).toContain('workbox')
   })
 
   it('does not inject Orca ControlMaster flags for unresolved legacy config aliases', () => {
@@ -410,7 +411,7 @@ describe('spawnSystemSsh', () => {
 
     expectNoOrcaControlMasterArgs(args)
     expect(args).not.toContain('-S')
-    expect(args).toContain('deploy@workbox')
+    expect(args).toContain('workbox')
   })
 
   it('can inject Orca ControlMaster flags for ssh-config targets with resolved config', () => {
@@ -448,7 +449,7 @@ describe('spawnSystemSsh', () => {
     // split it before /bin/sh receives it.
     const args = spawnMock.mock.calls[0][1] as string[]
     expect(args).toContain('--')
-    expect(args).toContain('deploy@fdpass-host')
+    expect(args).toContain('fdpass-host')
     const wrapped = args.at(-1)!
     expect(wrapped).not.toContain('\n')
     expect(wrapped).toContain('printf %b "$@"')
@@ -482,7 +483,7 @@ describe('spawnSystemSsh', () => {
     expect(standaloneControlIdx).toBe(-1)
     expectNoOrcaControlMasterArgs(args)
     expect(args).toContain('127.0.0.1:5173:127.0.0.1:3000')
-    expect(args[terminatorIdx + 1]).toBe('deploy@fdpass-host')
+    expect(args[terminatorIdx + 1]).toBe('fdpass-host')
     expect(spawnMock).toHaveBeenCalledWith(
       SYSTEM_SSH_PATH,
       expect.any(Array),
@@ -497,7 +498,7 @@ describe('spawnSystemSsh', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       SYSTEM_SSH_PATH,
-      expect.arrayContaining(['--', 'deploy@fdpass-host', 'echo hello']),
+      expect.arrayContaining(['--', 'fdpass-host', 'echo hello']),
       expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] })
     )
   })

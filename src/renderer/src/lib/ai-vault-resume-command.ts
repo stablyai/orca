@@ -23,6 +23,7 @@ import {
   resolveStartupShell
 } from '../../../shared/tui-agent-startup-shell'
 import type { AppState } from '@/store/types'
+import type { AiVaultSessionDragPayload } from '@/lib/ai-vault-session-drag'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
@@ -80,6 +81,43 @@ export function buildAiVaultResumeStartupForWorktree(
   args: AiVaultResumeWorktreeArgs
 ): AiVaultResumeStartup {
   return buildAiVaultResumeForWorktree(args)
+}
+
+/**
+ * Rebuilds a drag-drop resume startup under the account home the host
+ * substituted, or null when the payload cannot be repinned.
+ *
+ * Why: the drag payload's prebuilt command pins the session's recorded home,
+ * which the substitution just proved belongs to the wrong account. A null
+ * sessionCwd is a real value (session has no cwd; rebuild without a cd
+ * prefix); only an ABSENT sessionCwd — a payload from an older serializer —
+ * declines, because the original cwd is unrecoverable.
+ */
+export function buildAiVaultDropRepinStartup(args: {
+  state: AiVaultResumeWorktreeArgs['state']
+  payload: Pick<
+    AiVaultSessionDragPayload,
+    'agent' | 'sessionId' | 'sessionCwd' | 'sessionExecutionHostId' | 'sessionFilePath'
+  >
+  substituteCodexHome: string
+  worktreeId: string
+}): AiVaultResumeStartup | null {
+  if (args.payload.sessionCwd === undefined || !args.payload.sessionFilePath) {
+    return null
+  }
+  return buildAiVaultResumeStartupForWorktree({
+    state: args.state,
+    worktreeId: args.worktreeId,
+    session: {
+      agent: args.payload.agent,
+      sessionId: args.payload.sessionId,
+      cwd: args.payload.sessionCwd,
+      codexHome: args.substituteCodexHome,
+      executionHostId: args.payload.sessionExecutionHostId,
+      filePath: args.payload.sessionFilePath
+    },
+    commandOverride: args.state.settings?.agentCmdOverrides?.[args.payload.agent]
+  })
 }
 
 function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVaultResumeStartup {

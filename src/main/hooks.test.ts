@@ -292,6 +292,82 @@ describe('parseOrcaYaml', () => {
       ]
     })
   })
+
+  it('parses worktree.sharedDirectories from orca.yaml', () => {
+    const result = parseOrcaYaml(
+      ['worktree:', '  sharedDirectories:', '    - node_modules', '    - .cache'].join('\n')
+    )
+
+    expect(result?.worktree?.sharedDirectories).toEqual(['node_modules', '.cache'])
+  })
+
+  it('normalizes and dedupes sharedDirectories entries', () => {
+    const result = parseOrcaYaml(
+      [
+        'worktree:',
+        '  sharedDirectories:',
+        '    - node_modules/',
+        '    - ./node_modules',
+        '    - "  .cache  "'
+      ].join('\n')
+    )
+
+    expect(result?.worktree?.sharedDirectories).toEqual(['node_modules', '.cache'])
+  })
+
+  it('drops unsafe sharedDirectories entries', () => {
+    const result = parseOrcaYaml(
+      [
+        'worktree:',
+        '  sharedDirectories:',
+        '    - ../escape',
+        '    - /etc',
+        '    - .git',
+        '    - .git/hooks',
+        '    - cache/.git/hooks',
+        '    - node_modules'
+      ].join('\n')
+    )
+
+    expect(result?.worktree?.sharedDirectories).toEqual(['node_modules'])
+  })
+
+  // Why: `resolve()` collapses `.` when the link is created, but Git reports the
+  // collapsed path — keeping the raw entry would leave a link that every later
+  // comparison misses, which is the permanently-dirty worktree this feature fixes.
+  it('drops sharedDirectories entries that still need path collapsing', () => {
+    const result = parseOrcaYaml(
+      [
+        'worktree:',
+        '  sharedDirectories:',
+        '    - apps/./web/node_modules',
+        '    - apps//web/.cache',
+        '    - node_modules'
+      ].join('\n')
+    )
+
+    expect(result?.worktree?.sharedDirectories).toEqual(['node_modules'])
+  })
+
+  it('returns null when sharedDirectories is the only key and holds nothing usable', () => {
+    expect(parseOrcaYaml('worktree:\n  sharedDirectories: []\n')).toBeNull()
+    expect(parseOrcaYaml('worktree:\n  sharedDirectories: node_modules\n')).toBeNull()
+  })
+
+  it('keeps sharedDirectories alongside other orca.yaml keys', () => {
+    const result = parseOrcaYaml(
+      [
+        'scripts:',
+        '  setup: pnpm install',
+        'worktree:',
+        '  sharedDirectories:',
+        '    - .cache'
+      ].join('\n')
+    )
+
+    expect(result?.scripts.setup).toBe('pnpm install')
+    expect(result?.worktree?.sharedDirectories).toEqual(['.cache'])
+  })
 })
 
 describe('hasUnrecognizedOrcaYamlKeys', () => {
@@ -335,7 +411,10 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
         'environmentRecipes:',
         '  - id: cloud-sandbox',
         '    name: Cloud Sandbox',
-        '    create: ./scripts/orca-vm/start-cloud-sandbox.sh'
+        '    create: ./scripts/orca-vm/start-cloud-sandbox.sh',
+        'worktree:',
+        '  sharedDirectories:',
+        '    - node_modules'
       ].join('\n')
     )
 

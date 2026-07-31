@@ -58,6 +58,7 @@ import {
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-git-dispatch'
 import { checkIgnoredPaths } from '../git/check-ignored-paths'
+import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
@@ -196,9 +197,13 @@ export class RuntimeGitCommands {
         : provider.getStatus(target.worktree.path)
     }
     const gitOptions = localGitOptionsForTarget(target)
+    // Why: Git can't ignore a shared symlink under a directory-only rule, so tell
+    // status which untracked entries are Orca's own artifacts (issue #10451).
+    const sharedLinkPaths = target.repo ? getWorktreeSharedLinkPaths(target.repo) : []
+    const sharedOptions = sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {}
     return options
-      ? getGitStatus(target.worktree.path, { ...options, ...gitOptions })
-      : getGitStatus(target.worktree.path, gitOptions)
+      ? getGitStatus(target.worktree.path, { ...options, ...gitOptions, ...sharedOptions })
+      : getGitStatus(target.worktree.path, { ...gitOptions, ...sharedOptions })
   }
 
   async getRuntimeGitSubmoduleStatus(

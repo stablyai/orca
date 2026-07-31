@@ -44,7 +44,7 @@ export async function fetchGitHubPullRequestHeadRef(
   options: { localGitExecOptions?: LocalGitExecOptions } = {}
 ): Promise<string> {
   if (!isValidReviewHeadNumber(prNumber)) {
-    throw new Error(`Invalid pull request number: ${prNumber}`)
+    throw new Error(`Invalid pull request number: ${String(prNumber)}`)
   }
   if (!isSafeReviewHeadFetchRemote(remote)) {
     throw new Error('Pull request fetch remote must not start with "-".')

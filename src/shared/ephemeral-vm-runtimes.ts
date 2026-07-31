@@ -31,9 +31,25 @@ export type EphemeralVmRuntimeConnectionMode = z.infer<
   typeof EphemeralVmRuntimeConnectionModeSchema
 >
 
+const EphemeralVmRuntimeRecipeSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    create: z.string().min(1),
+    description: z.string().min(1).optional(),
+    suspend: z.string().min(1).optional(),
+    resume: z.string().min(1).optional(),
+    destroy: z.string().min(1).optional(),
+    destroyDisabled: z.boolean().optional()
+  })
+  .strict()
+
 export const EphemeralVmRuntimeRecordSchema = z.object({
   id: z.string().min(1),
   recipeId: z.string().min(1),
+  /** Immutable lifecycle commands used for this runtime even if its source
+   * pack is updated, disabled, or removed later. */
+  recipe: EphemeralVmRuntimeRecipeSchema.optional(),
   repoId: z.string().min(1).optional(),
   projectId: z.string().min(1).optional(),
   workspaceId: z.string().min(1).optional(),

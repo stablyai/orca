@@ -19,14 +19,16 @@ const mocks = vi.hoisted(() => ({
   generatePullRequestFieldsFromContext: vi.fn(),
   resolveCommitMessageSettings: vi.fn(),
   resolveHostedReviewBodyForGeneration: vi.fn(),
-  getSshGitProvider: vi.fn()
+  getSshGitProvider: vi.fn(),
+  getStatus: vi.fn()
 }))
 
 vi.mock('../git/status', async () => ({
   ...(await vi.importActual<typeof GitStatusModule>('../git/status')),
   abortMerge: mocks.abortMerge,
   abortRebase: mocks.abortRebase,
-  getStagedCommitContext: mocks.getStagedCommitContext
+  getStagedCommitContext: mocks.getStagedCommitContext,
+  getStatus: mocks.getStatus
 }))
 
 vi.mock('../git/checkout', () => ({
@@ -100,6 +102,7 @@ describe('RuntimeGitCommands', () => {
     mocks.resolveHostedReviewBodyForGeneration.mockReset()
     mocks.resolveHostedReviewBodyForGeneration.mockImplementation(async ({ body }) => body)
     mocks.getSshGitProvider.mockReset()
+    mocks.getStatus.mockReset()
     mocks.checkoutBranch.mockReset()
     mocks.listLocalBranches.mockReset()
   })
@@ -119,6 +122,45 @@ describe('RuntimeGitCommands', () => {
     await expect(commands.abortRuntimeGitMerge('id:wt-1')).resolves.toEqual({ ok: true })
 
     expect(mocks.abortMerge).toHaveBeenCalledWith(worktreePath, {})
+  })
+
+  // Why: a directory-only ignore rule (`node_modules/`) never matches the shared
+  // symlink, so Git reports it untracked forever. Runtime/CLI status has to tell
+  // getStatus which untracked entries are Orca's own (issue #10451); nothing else
+  // asserts this call site supplies them.
+  it('passes the repo shared link paths through local runtime status', async () => {
+    mocks.getStatus.mockResolvedValue({ entries: [], conflictOperation: 'none' })
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => ({
+        worktree: makeWorktree('/workspace/feature'),
+        repo: { path: '/workspace/repo', symlinkPaths: ['node_modules'] } as never
+      }),
+      getRuntimeSettings: () => ({}) as GlobalSettings
+    })
+
+    await commands.getRuntimeGitStatus('id:wt-1')
+
+    expect(mocks.getStatus).toHaveBeenCalledWith('/workspace/feature', {
+      sharedLinkPaths: ['node_modules']
+    })
+  })
+
+  it('does not resolve shared link paths for a remote runtime status', async () => {
+    const provider = { getStatus: vi.fn().mockResolvedValue({ entries: [] }) }
+    mocks.getSshGitProvider.mockReturnValue(provider)
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => ({
+        worktree: makeWorktree('/remote/repo'),
+        repo: { path: '/remote/repo', symlinkPaths: ['node_modules'] } as never,
+        connectionId: 'conn-1'
+      }),
+      getRuntimeSettings: () => ({}) as GlobalSettings
+    })
+
+    await commands.getRuntimeGitStatus('id:wt-1')
+
+    expect(provider.getStatus).toHaveBeenCalledWith('/remote/repo')
+    expect(mocks.getStatus).not.toHaveBeenCalled()
   })
 
   it('aborts a remote merge through the SSH git provider', async () => {

@@ -1,3 +1,4 @@
+import { awaitsCodexRestartAnswer } from './codex-restart-notice-state'
 import type { AppState } from '@/store/types'
 
 export type CodexRestartInputsState = Pick<AppState, 'ptyIdsByTabId' | 'codexRestartNoticeByPtyId'>
@@ -27,7 +28,10 @@ export const EMPTY_CODEX_RESTART_INPUTS: CodexRestartInputs = Object.freeze({
  * `useShallow` subscription skips re-renders on unrelated pty-lifecycle churn.
  */
 export function selectCodexRestartInputs(s: CodexRestartInputsState): CodexRestartInputs {
-  if (Object.keys(s.codexRestartNoticeByPtyId).length === 0) {
+  // Why: answered notices linger as launch-account memory for the life of the
+  // pty, so gating on mere existence would leave every chip permanently
+  // subscribed to that churn after a single dismissal.
+  if (!Object.values(s.codexRestartNoticeByPtyId).some(awaitsCodexRestartAnswer)) {
     return EMPTY_CODEX_RESTART_INPUTS
   }
   return {

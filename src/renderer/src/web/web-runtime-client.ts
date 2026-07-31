@@ -14,6 +14,8 @@ import {
   publicKeyFromBase64,
   publicKeyToBase64
 } from './web-e2ee'
+import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { createWebRuntimeUnauthorizedError } from './web-runtime-client-error'
 
 type WebRuntimeConnectionState =
   | 'disconnected'
@@ -450,7 +452,11 @@ export class WebRuntimeClient {
       try {
         const control = JSON.parse(raw) as { type?: unknown }
         if (control.type === 'e2ee_ready') {
-          this.sendEncrypted({ type: 'e2ee_auth', deviceToken: this.pairing.deviceToken })
+          this.sendEncrypted({
+            type: 'e2ee_auth',
+            deviceToken: this.pairing.deviceToken,
+            clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+          })
           return
         }
       } catch {
@@ -473,7 +479,7 @@ export class WebRuntimeClient {
         } else if (control.type === 'e2ee_error' || control.error?.code === 'unauthorized') {
           this.intentionallyClosed = true
           this.setState('auth-failed')
-          this.rejectAllPending('Unauthorized. Pair this web client again.')
+          this.rejectAllPending(createWebRuntimeUnauthorizedError())
           this.notifySubscriptionsError('unauthorized', 'Unauthorized. Pair this web client again.')
           this.ws?.close()
         }
@@ -525,7 +531,7 @@ export class WebRuntimeClient {
     if (isRuntimeFailureResponse(response) && response.error.code === 'unauthorized') {
       this.intentionallyClosed = true
       this.setState('auth-failed')
-      this.rejectAllPending('Unauthorized. Pair this web client again.')
+      this.rejectAllPending(createWebRuntimeUnauthorizedError())
       this.notifySubscriptionsError('unauthorized', 'Unauthorized. Pair this web client again.')
       this.ws?.close()
       return
@@ -579,7 +585,7 @@ export class WebRuntimeClient {
       return Promise.resolve()
     }
     if (this.state === 'auth-failed') {
-      return Promise.reject(new Error('Unauthorized. Pair this web client again.'))
+      return Promise.reject(createWebRuntimeUnauthorizedError())
     }
     if (this.intentionallyClosed) {
       return Promise.reject(new Error('Remote Orca runtime connection closed.'))
@@ -653,7 +659,7 @@ export class WebRuntimeClient {
         waiter.resolve()
       }
     } else if (next === 'auth-failed') {
-      this.rejectAllWaiters(new Error('Unauthorized. Pair this web client again.'))
+      this.rejectAllWaiters(createWebRuntimeUnauthorizedError())
     }
   }
 
@@ -662,8 +668,8 @@ export class WebRuntimeClient {
     return `web-rpc-${this.requestCounter}-${Date.now()}`
   }
 
-  private rejectAllPending(reason: string): void {
-    const error = new Error(reason)
+  private rejectAllPending(reason: string | Error): void {
+    const error = typeof reason === 'string' ? new Error(reason) : reason
     for (const [id, pending] of this.pending) {
       this.pending.delete(id)
       window.clearTimeout(pending.timeout)

@@ -1,5 +1,9 @@
 import { useAppStore } from '@/store'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import {
+  _resetTerminalInputQuarantineForTests,
+  armTerminalInputQuarantine
+} from './terminal-input-quarantine'
 
 // Why this module exists: a terminal pane can die renderer-side while its PTY
 // stays alive — a wedged xterm WriteBuffer (issue #2836), a disposed xterm
@@ -34,6 +38,12 @@ type RecoveryRequest = {
    *  registry doesn't own, and treating null as "proceed" would let a
    *  disconnected remote pane churn reconnects on every cooldown window. */
   requireAuthoritativeLiveness?: boolean
+  /** The provider rejected the write because its endpoint stopped accepting
+   *  writes, so re-attach MAY land on a *fresh* shell (a respawn; a transient
+   *  socket drop reconnects to the same sessions). Only this path can mangle the
+   *  in-flight line, and only it may quarantine input — a recovery that always
+   *  keeps the same live shell would have a legitimate command eaten. */
+  endpointReplaced?: boolean
 }
 
 // Why a cap exists: recovery must never loop. If the remounted pane wedges
@@ -261,7 +271,15 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
   // A remount replaces every pane xterm in the tab; a previously scheduled
   // retry would only re-remount the fresh, healthy panes.
   cancelPendingRecoveryRetry(request.tabId)
-  console.error(
+  if (request.endpointReplaced) {
+    // Why here and not at request time: arming before the remount is certain
+    // would suppress input on a pane that never recovered.
+    armTerminalInputQuarantine(request.tabId)
+  }
+  // warn, not error: this is the recovery succeeding, and the breadcrumb below is
+  // what diagnostics actually read. STA-2373 made this path routine (every daemon
+  // death remounts each live pane), so error level just floods the logs.
+  console.warn(
     `[terminal] recovering pane tab ${request.tabId} — ${request.reason} with a live PTY (${request.ptyId ?? 'unbound'}); remounting to rebuild the renderer`
   )
   recordRendererCrashBreadcrumb('terminal_pane_recovery_remount', {
@@ -280,4 +298,5 @@ export function _resetTerminalPaneRecoveryForTests(): void {
     clearTimeout(pendingRetry.timer)
   }
   pendingRetryByTabId.clear()
+  _resetTerminalInputQuarantineForTests()
 }

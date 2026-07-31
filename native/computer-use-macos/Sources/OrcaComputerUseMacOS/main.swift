@@ -729,12 +729,13 @@ final class Provider {
         let snapshot = try currentSnapshot(params: params)
         let button = params["mouseButton"]?.string ?? "left"
         let count = try positiveInteger(params["clickCount"]?.number, defaultValue: 1, name: "clickCount")
+        let modifiers = try KeyMap.parseModifiers(params["modifiers"]?.string)
         // Why: agents expect a click into a target app to make the next
         // keyboard action safe, even when the click uses an AX action path.
         recoverWindow(snapshot.app)
         if let elementIndex = try optionalInteger(params, "elementIndex") {
             let record = try element(snapshot, elementIndex)
-            if count <= 1, let actionName = try performClickAction(record: record, mouseButton: button) {
+            if modifiers.isEmpty, count <= 1, let actionName = try performClickAction(record: record, mouseButton: button) {
                 return actionMetadata(path: "accessibility", actionName: actionName)
             }
             if let point = center(record.localFrame, in: snapshot.windowBounds) {
@@ -742,7 +743,8 @@ final class Provider {
                     pid: snapshot.app.pid,
                     at: point,
                     button: mouseButton(button),
-                    count: count
+                    count: count,
+                    modifiers: modifiers
                 )
                 return actionMetadata(path: "synthetic", fallbackReason: "actionUnsupported")
             }
@@ -753,7 +755,8 @@ final class Provider {
             pid: snapshot.app.pid,
             at: point,
             button: mouseButton(button),
-            count: count
+            count: count,
+            modifiers: modifiers
         )
         return actionMetadata(path: "synthetic")
     }
@@ -2282,14 +2285,23 @@ private func resizePng(_ image: CGImage, scale: CGFloat) -> BoundedPNG? {
 }
 
 private enum Input {
-    static func click(pid: pid_t, at point: CGPoint, button: MouseButton, count: Int) throws {
+    static func click(
+        pid: pid_t,
+        at point: CGPoint,
+        button: MouseButton,
+        count: Int,
+        modifiers: [KeyModifier]
+    ) throws {
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             throw ProviderError.coded("accessibility_error", "failed to create event source")
         }
+        let flags = modifiers.reduce(into: CGEventFlags()) { result, modifier in
+            result.insert(modifier.flag)
+        }
         for _ in 0..<max(count, 1) {
-            try mouse(.mouseMoved, source: source, point: point, button: button.cgButton, pid: pid)
-            try mouse(button.downEvent, source: source, point: point, button: button.cgButton, pid: pid)
-            try mouse(button.upEvent, source: source, point: point, button: button.cgButton, pid: pid)
+            try mouse(.mouseMoved, source: source, point: point, button: button.cgButton, flags: flags, pid: pid)
+            try mouse(button.downEvent, source: source, point: point, button: button.cgButton, flags: flags, pid: pid)
+            try mouse(button.upEvent, source: source, point: point, button: button.cgButton, flags: flags, pid: pid)
         }
     }
 
@@ -2343,16 +2355,20 @@ private enum Input {
     static func pressKey(_ key: String, pid: pid_t) throws {
         let parsed = try KeyMap.parse(key)
         var flags = CGEventFlags()
+        var pressedModifiers: [KeyModifier] = []
+        defer {
+            for modifier in pressedModifiers.reversed() {
+                flags.remove(modifier.flag)
+                try? keyEvent(modifier.keyCode, down: false, flags: flags, pid: pid)
+            }
+        }
         for modifier in parsed.modifiers {
             flags.insert(modifier.flag)
             try keyEvent(modifier.keyCode, down: true, flags: flags, pid: pid)
+            pressedModifiers.append(modifier)
         }
         try keyEvent(parsed.keyCode, down: true, flags: flags, pid: pid)
         try keyEvent(parsed.keyCode, down: false, flags: flags, pid: pid)
-        for modifier in parsed.modifiers.reversed() {
-            try keyEvent(modifier.keyCode, down: false, flags: flags, pid: pid)
-            flags.remove(modifier.flag)
-        }
     }
 
     static func pasteText(_ text: String, pid: pid_t) throws {
@@ -2377,10 +2393,18 @@ private enum Input {
         try pressKey("cmd+v", pid: pid)
     }
 
-    private static func mouse(_ type: CGEventType, source: CGEventSource, point: CGPoint, button: CGMouseButton, pid: pid_t) throws {
+    private static func mouse(
+        _ type: CGEventType,
+        source: CGEventSource,
+        point: CGPoint,
+        button: CGMouseButton,
+        flags: CGEventFlags = [],
+        pid: pid_t
+    ) throws {
         guard let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: button) else {
             throw ProviderError.coded("accessibility_error", "failed to create mouse event")
         }
+        event.flags = flags
         event.postToPid(pid)
     }
 
@@ -2497,16 +2521,9 @@ private enum KeyMap {
         var modifiers: [KeyModifier] = []
         var keyName: String?
         for part in parts {
-            switch part {
-            case "cmd", "command", "meta", "super", "cmdorctrl", "commandorcontrol":
-                modifiers.append(KeyModifier(keyCode: 55, flag: .maskCommand))
-            case "ctrl", "control":
-                modifiers.append(KeyModifier(keyCode: 59, flag: .maskControl))
-            case "alt", "option":
-                modifiers.append(KeyModifier(keyCode: 58, flag: .maskAlternate))
-            case "shift":
-                modifiers.append(KeyModifier(keyCode: 56, flag: .maskShift))
-            default:
+            if let modifier = modifier(part) {
+                modifiers.append(modifier)
+            } else {
                 keyName = part
             }
         }
@@ -2514,6 +2531,38 @@ private enum KeyMap {
             throw ProviderError.coded("invalid_argument", "unsupported key '\(spec)'")
         }
         return ParsedKey(keyCode: keyCode, modifiers: modifiers)
+    }
+
+    static func parseModifiers(_ spec: String?) throws -> [KeyModifier] {
+        guard let spec else {
+            return []
+        }
+        let parts = spec.split(separator: "+", omittingEmptySubsequences: false)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        guard !parts.isEmpty, !parts.contains(where: \.isEmpty) else {
+            throw ProviderError.coded("invalid_argument", "click modifiers require modifier keys only")
+        }
+        return try parts.map { part in
+            guard let modifier = modifier(part) else {
+                throw ProviderError.coded("invalid_argument", "unsupported click modifier '\(part)'")
+            }
+            return modifier
+        }
+    }
+
+    private static func modifier(_ part: String) -> KeyModifier? {
+        switch part {
+        case "cmd", "command", "meta", "super", "win", "cmdorctrl", "commandorcontrol":
+            return KeyModifier(keyCode: 55, flag: .maskCommand)
+        case "ctrl", "control":
+            return KeyModifier(keyCode: 59, flag: .maskControl)
+        case "alt", "option":
+            return KeyModifier(keyCode: 58, flag: .maskAlternate)
+        case "shift":
+            return KeyModifier(keyCode: 56, flag: .maskShift)
+        default:
+            return nil
+        }
     }
 
     private static let codes: [String: CGKeyCode] = [
@@ -2530,9 +2579,12 @@ private enum KeyMap {
 }
 
 private final class AgentRuntime: NSObject, NSApplicationDelegate {
+    private static let unclaimedSessionDeadline: TimeInterval = 30
+
     private let socketPath: String
     private let token: String?
     private var listener: SocketListener?
+    private var unclaimedSessionTimeout: DispatchWorkItem?
 
     init(socketPath: String, token: String?) {
         self.socketPath = socketPath
@@ -2541,9 +2593,29 @@ private final class AgentRuntime: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
-            let listener = try SocketListener(socketPath: socketPath, token: token)
+            let timeout = DispatchWorkItem {
+                fputs("computer-use agent received no authenticated session before its deadline\n", stderr)
+                NSApp.terminate(nil)
+            }
+            unclaimedSessionTimeout = timeout
+            let listener = try SocketListener(
+                socketPath: socketPath,
+                token: token,
+                onSessionClaimed: {
+                    timeout.cancel()
+                },
+                onSessionClosed: {
+                    DispatchQueue.main.async {
+                        NSApp.terminate(nil)
+                    }
+                }
+            )
             self.listener = listener
             listener.start()
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + Self.unclaimedSessionDeadline,
+                execute: timeout
+            )
         } catch {
             fputs("failed to start computer-use socket: \(error)\n", stderr)
             NSApp.terminate(nil)
@@ -2551,6 +2623,8 @@ private final class AgentRuntime: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        unclaimedSessionTimeout?.cancel()
+        unclaimedSessionTimeout = nil
         listener?.stop()
     }
 }
@@ -3456,14 +3530,26 @@ private final class ButtonTarget: NSObject {
 private final class SocketListener: @unchecked Sendable {
     private let socketPath: String
     private let token: String?
+    private let onSessionClaimed: () -> Void
+    private let onSessionClosed: () -> Void
     private let provider = Provider()
     private let providerLock = NSLock()
+    private let sessionLock = NSLock()
+    private var sessionOwnership = AgentSessionOwnership()
+    private var lastConnectionID: UInt64 = 0
     private var socketFd: Int32 = -1
     private var isStopped = false
 
-    init(socketPath: String, token: String?) throws {
+    init(
+        socketPath: String,
+        token: String?,
+        onSessionClaimed: @escaping () -> Void,
+        onSessionClosed: @escaping () -> Void
+    ) throws {
         self.socketPath = socketPath
         self.token = token
+        self.onSessionClaimed = onSessionClaimed
+        self.onSessionClosed = onSessionClosed
         try bindSocket()
     }
 
@@ -3538,14 +3624,35 @@ private final class SocketListener: @unchecked Sendable {
                 }
                 continue
             }
+            guard let connectionID = allocateConnectionID() else {
+                fputs("computer-use socket exhausted connection identities\n", stderr)
+                close(fd)
+                continue
+            }
             Thread.detachNewThread { [weak self] in
-                self?.handleConnection(fd)
+                self?.handleConnection(fd, connectionID: connectionID)
             }
         }
     }
 
-    private func handleConnection(_ fd: Int32) {
-        defer { close(fd) }
+    private func allocateConnectionID() -> AgentSessionConnectionID? {
+        sessionLock.lock()
+        defer { sessionLock.unlock() }
+        guard lastConnectionID < UInt64.max else { return nil }
+        lastConnectionID += 1
+        return AgentSessionConnectionID(rawValue: lastConnectionID)
+    }
+
+    private func handleConnection(_ fd: Int32, connectionID: AgentSessionConnectionID) {
+        var registeredSession = false
+        var hangupMonitor: AuthenticatedConnectionHangupMonitor?
+        defer {
+            hangupMonitor?.cancel()
+            if registeredSession {
+                disconnectSession(connectionID)
+            }
+            close(fd)
+        }
         let authorizedPeer = peerProcessId(fd).map(isAuthorizedAgentPeer) == true
         let decoder = JSONDecoder()
         while let line = readLine(from: fd) {
@@ -3553,6 +3660,40 @@ private final class SocketListener: @unchecked Sendable {
                   let request = try? decoder.decode(Request.self, from: data)
             else {
                 continue
+            }
+            if !registeredSession && isAuthenticatedAgentSession(
+                expectedToken: token,
+                requestToken: request.token,
+                authorizedPeer: authorizedPeer
+            ) {
+                let monitor: AuthenticatedConnectionHangupMonitor
+                do {
+                    monitor = try AuthenticatedConnectionHangupMonitor(
+                        fileDescriptor: fd,
+                        onHangup: { [weak self] in
+                            self?.disconnectSession(connectionID)
+                        }
+                    )
+                } catch {
+                    fputs("computer-use owner monitor failed: \(error)\n", stderr)
+                    return
+                }
+                sessionLock.lock()
+                let registration = sessionOwnership.registerConnection(
+                    connectionID,
+                    authenticated: true
+                )
+                sessionLock.unlock()
+                guard registration != .rejected else {
+                    monitor.cancel()
+                    return
+                }
+                registeredSession = true
+                hangupMonitor = monitor
+                monitor.start()
+                if registration == .claimed {
+                    onSessionClaimed()
+                }
             }
             let response = handleRequest(
                 provider: provider,
@@ -3562,6 +3703,15 @@ private final class SocketListener: @unchecked Sendable {
                 authorizedPeer: authorizedPeer
             )
             writeJSON(response, to: fd)
+        }
+    }
+
+    private func disconnectSession(_ connectionID: AgentSessionConnectionID) {
+        sessionLock.lock()
+        let shouldTerminate = sessionOwnership.disconnect(connectionID)
+        sessionLock.unlock()
+        if shouldTerminate {
+            onSessionClosed()
         }
     }
 }

@@ -47,6 +47,7 @@ import { PaneIdentityRegistry } from './pane-identity-registry'
 import {
   closeManagedPane,
   detachManagedPaneForExternalMove,
+  retireManagedPanePreservingPty,
   splitManagedPane
 } from './pane-split-close'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
@@ -190,6 +191,22 @@ export class PaneManager {
     })
   }
 
+  retirePanePreservingPty(paneId: number): boolean {
+    return retireManagedPanePreservingPty({
+      paneId,
+      activePaneId: this.activePaneId,
+      panes: this.panes,
+      root: this.root,
+      styleOptions: this.styleOptions,
+      managerOptions: this.options,
+      getDragCallbacks: () => this.getDragCallbacks(),
+      releasePaneIdentity: (numericPaneId) => this.identities.release(numericPaneId),
+      setActivePaneId: (id) => {
+        this.activePaneId = id
+      }
+    })
+  }
+
   getPanes(): ManagedPane[] {
     return Array.from(this.panes.values()).map(toPublicPane)
   }
@@ -214,10 +231,6 @@ export class PaneManager {
 
   refreshAllPanes(): void {
     for (const pane of this.panes.values()) {
-      // Retained contexts repaint on resume without scaling recovery across hidden workspaces.
-      if (pane.webglAttachmentDeferred && pane.webglAddon) {
-        continue
-      }
       try {
         if (pane.terminal.rows > 0) {
           pane.terminal.refresh(0, pane.terminal.rows - 1)

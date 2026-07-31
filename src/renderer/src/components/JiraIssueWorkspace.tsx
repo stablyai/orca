@@ -755,8 +755,11 @@ export default function JiraIssueWorkspace({
                             </span>
                           </div>
                           <div className="px-3 py-2">
+                            {/* Why: Jira comment screenshots need the same preview
+                                affordance without changing compact comment typography. */}
                             <CommentMarkdown
                               content={comment.body}
+                              expandImages
                               className="text-[13px] leading-relaxed"
                             />
                           </div>

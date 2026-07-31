@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   getResourceUsageAllWorktrees,
+  getResourceUsageDeferredSshSessionIdsByTabId,
   getResourceUsagePtyIdsByTabId,
   getResourceUsageRepos,
   getResourceUsageRuntimePaneTitlesByTabId,
@@ -71,10 +72,20 @@ describe('resource usage open slices', () => {
     expect(closedLayouts).toBe(
       getResourceUsageTerminalLayoutsByTabId({ terminalLayoutsByTabId: {} }, false)
     )
+    const deferredSshSessionIdsByTabId = { 'tab-1': 'pty-deferred' }
+    const closedDeferred = getResourceUsageDeferredSshSessionIdsByTabId(
+      { deferredSshSessionIdsByTabId },
+      false
+    )
+    expect(closedDeferred).toBe(
+      getResourceUsageDeferredSshSessionIdsByTabId({ deferredSshSessionIdsByTabId: {} }, false)
+    )
+
     expect(closedTabs).toEqual({})
     expect(closedPtyIds).toEqual({})
     expect(closedLayouts).toEqual({})
     expect(closedTitles).toEqual({})
+    expect(closedDeferred).toEqual({})
   })
 
   it('returns live slices while the popover is open', () => {
@@ -99,6 +110,10 @@ describe('resource usage open slices', () => {
     expect(getResourceUsageRuntimePaneTitlesByTabId({ runtimePaneTitlesByTabId }, true)).toBe(
       runtimePaneTitlesByTabId
     )
+    const deferredSshSessionIdsByTabId = { 'tab-1': 'pty-deferred' }
+    expect(
+      getResourceUsageDeferredSshSessionIdsByTabId({ deferredSshSessionIdsByTabId }, true)
+    ).toBe(deferredSshSessionIdsByTabId)
   })
 
   it('gates repo and worktree slices only while closed', () => {

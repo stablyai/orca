@@ -39,4 +39,13 @@ describe('getRelativePathInsideRoot', () => {
   it('keeps POSIX path checks case-sensitive', () => {
     expect(getRelativePathInsideRoot('/Repo/Docs/Plan.md', '/repo')).toBeNull()
   })
+
+  it('matches a decomposed root against a composed file path', () => {
+    // Regression for #10832: a local copy of this comparison folded case but not
+    // Unicode, so macOS NFD roots missed their own NFC files entirely.
+    const composed = '/Users/ada/프로젝트'
+    expect(getRelativePathInsideRoot(`${composed}/Docs/Plan.md`, composed.normalize('NFD'))).toBe(
+      'Docs/Plan.md'
+    )
+  })
 })

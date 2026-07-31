@@ -378,9 +378,11 @@ export class RateLimitService {
     target?: CodexAccountSelectionTarget
   ): Promise<RateLimitState> {
     const nextTarget = normalizeCodexAccountSelectionTarget(target)
+    // Why: weekly-only plans report no session window, so gating on session alone
+    // dropped their snapshot and left the switcher's inline bars empty.
     if (
       outgoingAccountId &&
-      this.state.codex?.session &&
+      (this.state.codex?.session || this.state.codex?.weekly) &&
       this.isSameCodexTarget(this.codexFetchTarget, nextTarget)
     ) {
       this.inactiveCodexCache.set(outgoingAccountId, this.state.codex)

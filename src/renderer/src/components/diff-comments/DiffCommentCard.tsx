@@ -27,10 +27,10 @@ type Props = {
   url?: string
   onDelete?: () => void
   // Why: Monaco view zones have a fixed `heightInPx` set at insertion time
-  // and aren't auto-measured. While the user is in edit mode the textarea
-  // grows, so the parent decorator passes a callback we fire on resize and
-  // it re-syncs the zone height. Without this the editor inputs would clip.
+  // and aren't auto-measured. The parent decorator re-syncs that height when
+  // the rendered card wraps or grows so it cannot overlap following lines.
   onContentResize?: () => void
+  observeRenderedSize?: boolean
   onSubmitEdit?: (body: string) => Promise<boolean>
   headerActions?: ReactNode
 }
@@ -47,6 +47,7 @@ export function DiffCommentCard({
   url,
   onDelete,
   onContentResize,
+  observeRenderedSize,
   onSubmitEdit,
   headerActions
 }: Props): React.JSX.Element {
@@ -54,16 +55,51 @@ export function DiffCommentCard({
   const [draft, setDraft] = useState(body)
   const [submitting, setSubmitting] = useState(false)
   const mountedRef = useMountedRef()
+  const cardRef = useRef<HTMLDivElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const resizeAfterCloseRef = useRef(false)
+  const observesRenderedSize = observeRenderedSize === true && onContentResize !== undefined
 
-  // Why: stash `onContentResize` in a ref so the layout/resize effects only
-  // re-run on `editing` transitions. The decorator passes a fresh arrow every
-  // render; depending on it directly would re-fire the layout effect on every
-  // unrelated parent render and yank the caret to the textarea's end while
-  // the user is mid-edit.
+  // Why: stash `onContentResize` in a ref so resize effects do not depend on
+  // the decorator's fresh arrow each render. Re-running the edit layout effect
+  // would yank the caret to the textarea's end while the user is mid-edit.
   const onContentResizeRef = useRef(onContentResize)
   onContentResizeRef.current = onContentResize
+
+  useLayoutEffect(() => {
+    const card = cardRef.current
+    if (!card || !observesRenderedSize) {
+      return
+    }
+    onContentResizeRef.current?.()
+    let frameId: number | null = null
+    const notifyResize = (): void => {
+      if (frameId !== null) {
+        return
+      }
+      frameId = requestAnimationFrame(() => {
+        frameId = null
+        onContentResizeRef.current?.()
+      })
+    }
+    if (typeof ResizeObserver === 'undefined') {
+      return () => {
+        if (frameId !== null) {
+          cancelAnimationFrame(frameId)
+        }
+      }
+    }
+    // Why: narrow diff panes can wrap body/header text after Monaco's initial
+    // estimate; observe the real card height in either diff layout.
+    const observer = new ResizeObserver(() => notifyResize())
+    observer.observe(card)
+    return () => {
+      observer.disconnect()
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId)
+      }
+    }
+  }, [observesRenderedSize])
 
   // Why: focus + auto-grow the textarea on entering edit mode. Layout effect
   // so the height is set before the browser paints — a measurement pass on
@@ -138,7 +174,7 @@ export function DiffCommentCard({
   }
 
   return (
-    <div className="orca-diff-comment-card">
+    <div ref={cardRef} className="orca-diff-comment-card">
       <div className="orca-diff-comment-content-col">
         {/* Header Row */}
         <div className="orca-diff-comment-header">

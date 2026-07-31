@@ -6,9 +6,11 @@ import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers
 import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem'
 
 const tempHomes: string[] = []
+const tempRoot = process.platform === 'win32' ? tmpdir() : '/tmp'
 
 async function createTempHome(): Promise<string> {
-  const home = await mkdtemp(join(tmpdir(), 'orca-managed-hooks-'))
+  // Why: mkdir-p probes ancestors; macOS's per-user temp directory can contain hundreds of thousands of entries.
+  const home = await mkdtemp(join(tempRoot, 'orca-managed-hooks-'))
   tempHomes.push(home)
   return home
 }

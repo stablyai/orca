@@ -177,4 +177,25 @@ describe('buildWorktreeChecksReviewIndex', () => {
     expect(reviews.has(localWorktree)).toBe(false)
     expect(reviews.get(sshWorktree)).toMatchObject({ provider: 'github', number: 42 })
   })
+
+  it('skips a branch-less worktree instead of throwing', () => {
+    // Why: Cmd+J builds this index for every worktree before any query is typed,
+    // so a folder workspace (empty branch) or a partially hydrated row reaches it.
+    const branchless: Worktree = {
+      ...worktree,
+      id: 'worktree-folder',
+      branch: undefined as unknown as string,
+      displayName: undefined as unknown as string
+    }
+
+    const reviews = buildWorktreeChecksReviewIndex({
+      worktrees: [branchless],
+      repoByHostIdentity: new Map([[getRepoHostIdentity(repo), repo]]),
+      prCache: {},
+      hostedReviewCache: {},
+      settings: null
+    })
+
+    expect(reviews.has(branchless)).toBe(false)
+  })
 })

@@ -80,7 +80,6 @@ import {
   isWatcherProcessFailure,
   WatcherProcessFailure
 } from '../ipc/parcel-watcher-process-failure'
-import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
 import {
   rankRuntimeMobileFilePaths,
@@ -89,6 +88,7 @@ import {
 import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 import { toSshExecutionHostId } from '../../shared/execution-host'
+import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
 const MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT = 20_000
@@ -1286,7 +1286,7 @@ export class RuntimeFileCommands {
     callback: (events: FsChangeEvent[]) => void,
     onTerminalError: (error: Error) => void = () => undefined,
     signal?: AbortSignal
-  ): Promise<() => void> {
+  ): Promise<() => Promise<void>> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, '')
     const open = async (): Promise<{
       unsubscribe: () => Promise<void>
@@ -1728,8 +1728,7 @@ export class RuntimeFileCommands {
     const store = this.host.requireStore()
     const oldPath = await resolveAuthorizedPath(oldTarget.path, store, { preserveSymlink: true })
     const newPath = await resolveAuthorizedPath(newTarget.path, store, { preserveSymlink: true })
-    await assertNoClobberRenameDestinationAvailable(oldPath, newPath)
-    await rename(oldPath, newPath)
+    await renameLocalPathSerializedByDestination(oldPath, newPath)
     return { ok: true }
   }
 

@@ -8,6 +8,7 @@ import {
   getProjectHostSetupProjectionFromState,
   getWorktreeMapFromState,
   resetFloatingVisibleTabCountSelectorCacheForTest,
+  selectRepoByIdForActiveWorkspace,
   selectFloatingVisibleTabCount,
   selectFloatingWorkspaceHasUnread
 } from './selectors'
@@ -259,6 +260,32 @@ describe('store selectors', () => {
     })
     expect(getProjectHostSetupProjectionFromState({ repos })).toBe(projection)
     expect(getProjectHostSetupProjectionFromState({ repos: [...repos] })).not.toBe(projection)
+  })
+
+  it('does not fall back to a same-ID local repo when the active runtime row is absent', () => {
+    const local = makeRepo({
+      id: 'same-repo',
+      path: '/local/repo',
+      displayName: 'local',
+      executionHostId: 'local'
+    })
+    const runtime = makeRepo({
+      id: 'same-repo',
+      path: '/runtime/repo',
+      displayName: 'runtime',
+      executionHostId: toRuntimeExecutionHostId('env-1')
+    })
+    const activeState = {
+      activeRepoId: 'same-repo',
+      activeWorkspaceExecutionHostId: toRuntimeExecutionHostId('env-1')
+    }
+
+    expect(
+      selectRepoByIdForActiveWorkspace({ ...activeState, repos: [local, runtime] }, 'same-repo')
+    ).toBe(runtime)
+    expect(
+      selectRepoByIdForActiveWorkspace({ ...activeState, repos: [local] }, 'same-repo')
+    ).toBeNull()
   })
 
   it('prefers hydrated project host setup state when present', () => {
