@@ -53,10 +53,7 @@ function makeRpcChild() {
   return child
 }
 
-function respondToRpcRateLimitRead(
-  rpcChild: ReturnType<typeof makeRpcChild>,
-  rateLimits: unknown
-): void {
+function respondToRpcResult(rpcChild: ReturnType<typeof makeRpcChild>, result: unknown): void {
   rpcChild.stdin.write.mockImplementation((line: string) => {
     const msg = JSON.parse(line) as { id?: number; method?: string }
     if (msg.method === 'initialize') {
@@ -71,11 +68,18 @@ function respondToRpcRateLimitRead(
       setTimeout(() => {
         rpcChild.stdout.emit(
           'data',
-          Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { rateLimits } })}\n`)
+          Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result })}\n`)
         )
       }, 0)
     }
   })
+}
+
+function respondToRpcRateLimitRead(
+  rpcChild: ReturnType<typeof makeRpcChild>,
+  rateLimits: unknown
+): void {
+  respondToRpcResult(rpcChild, { rateLimits })
 }
 
 function makePtyTerm() {
@@ -308,6 +312,63 @@ describe('fetchCodexRateLimits', () => {
       status: 'ok',
       error: null
     })
+  })
+
+  it('falls back to PTY when RPC omits the required rate-limits snapshot', async () => {
+    const rpcChild = makeRpcChild()
+    const term = makePtyTerm()
+    childSpawnMock.mockReturnValue(rpcChild)
+    ptySpawnMock.mockReturnValue(term)
+    respondToRpcResult(rpcChild, { rateLimitsByLimitId: null })
+
+    const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(ptySpawnMock).toHaveBeenCalled()
+    term.emitData('>')
+    term.emitData('5h limit: 9%\nWeekly limit: 14%\n')
+    await vi.advanceTimersByTimeAsync(500)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      session: { usedPercent: 9 },
+      weekly: { usedPercent: 14 },
+      status: 'ok',
+      error: null
+    })
+  })
+
+  it('accepts an explicit null RPC rate-limits snapshot without starting PTY fallback', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    respondToRpcRateLimitRead(rpcChild, null)
+
+    const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      session: null,
+      weekly: null,
+      status: 'ok'
+    })
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('reports a malformed RPC snapshot when PTY fallback is disabled', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    respondToRpcResult(rpcChild, { rateLimits: [] })
+
+    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      status: 'error',
+      error: 'Invalid RPC rate-limit response'
+    })
+    expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
   it('does not start the PTY fallback when disabled for background account previews', async () => {

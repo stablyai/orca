@@ -83,7 +83,7 @@ type RateLimitResetCredits = {
 
 // Why: the Codex app-server wraps rate limit data as { rateLimits: { primary, secondary, ... } }.
 type RpcRateLimitsResponse = {
-  rateLimits?: CodexRateLimitWindowsSnapshot | null
+  rateLimits: CodexRateLimitWindowsSnapshot | null
   rateLimitResetCredits?: {
     availableCount?: number
     totalEarnedCount?: number
@@ -94,6 +94,18 @@ type RpcRateLimitsResponse = {
       grantedAt?: number | string | null
     }[]
   } | null
+}
+
+function isRpcRateLimitsResponse(value: unknown): value is RpcRateLimitsResponse {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !Object.prototype.hasOwnProperty.call(value, 'rateLimits')
+  ) {
+    return false
+  }
+  const rateLimits = (value as { rateLimits: unknown }).rateLimits
+  return rateLimits === null || (typeof rateLimits === 'object' && !Array.isArray(rateLimits))
 }
 
 type CodexAuthFile = {
@@ -754,14 +766,27 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
               return
             }
 
-            const wrapper = msg.result as RpcRateLimitsResponse | undefined
-            const result = wrapper?.rateLimits
+            if (!isRpcRateLimitsResponse(msg.result)) {
+              settle(
+                {
+                  provider: 'codex',
+                  session: null,
+                  weekly: null,
+                  updatedAt: Date.now(),
+                  error: 'Invalid RPC rate-limit response',
+                  status: 'error'
+                },
+                { kill: true }
+              )
+              return
+            }
+
+            const wrapper = msg.result
+            const result = wrapper.rateLimits
             const classifiedWindows = classifyCodexRateLimitWindows(result)
             const session = mapRpcWindow(classifiedWindows.session, CODEX_SESSION_WINDOW_MINUTES)
             const weekly = mapRpcWindow(classifiedWindows.weekly, CODEX_WEEKLY_WINDOW_MINUTES)
-            const rateLimitResetCredits = mapRpcRateLimitResetCredits(
-              wrapper?.rateLimitResetCredits
-            )
+            const rateLimitResetCredits = mapRpcRateLimitResetCredits(wrapper.rateLimitResetCredits)
 
             settle(
               {
