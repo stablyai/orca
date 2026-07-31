@@ -64,7 +64,7 @@ function ensureNodeRuntime() {
     if (!initial.ok) {
       printCheckError(initial)
     }
-    runPnpm(['rebuild', 'node-pty'])
+    rebuildPatchedNodePtyFromSource()
     verifyNodeRuntimeAfterRebuild()
     return
   }
@@ -74,8 +74,25 @@ function ensureNodeRuntime() {
     `[native-runtime] ${formatRuntimeLabel('node')} cannot load native modules; rebuilding ${failedModules.join(', ')} for Node.`
   )
   printCheckError(initial)
-  runPnpm(['rebuild', ...failedModules])
+  rebuildFailedNodeModules(failedModules)
   verifyNodeRuntimeAfterRebuild()
+}
+
+// Why: a broken build/Release makes node-pty fall back to a prebuild, and
+// `pnpm rebuild` cannot replace it for the same install-script reason.
+function rebuildFailedNodeModules(failedModules) {
+  const nodePtyNeedsSourceBuild =
+    failedModules.includes('node-pty') && requiresPatchedNodePtySourceBuild()
+  const pnpmModules = nodePtyNeedsSourceBuild
+    ? failedModules.filter((moduleName) => moduleName !== 'node-pty')
+    : failedModules
+
+  if (!nodePtyNeedsSourceBuild || pnpmModules.length > 0) {
+    runPnpm(['rebuild', ...pnpmModules])
+  }
+  if (nodePtyNeedsSourceBuild) {
+    rebuildPatchedNodePtyFromSource()
+  }
 }
 
 function verifyNodeRuntimeAfterRebuild() {
@@ -317,6 +334,33 @@ function getPatchedNodePtyRebuildReason() {
   return 'Patched node-pty build artifacts are missing; rebuilding native deps.'
 }
 
+// Why: node-pty's install script short-circuits on a shipped prebuild, so
+// `pnpm rebuild` never reaches its `node-gyp rebuild` fallback.
+function rebuildPatchedNodePtyFromSource() {
+  const nodeGypScript = resolveNodeGypScript()
+  if (!nodeGypScript) {
+    console.error('[native-runtime] Cannot locate node-gyp to rebuild node-pty from source.')
+    process.exit(1)
+  }
+
+  // Why: npm_config_build_from_source also forces a source build, but prebuild.js
+  // then deletes every platform's prebuilds, breaking supportedArchitectures.
+  runNodeScript([nodeGypScript, 'rebuild'], resolve(projectDir, 'node_modules', 'node-pty'))
+}
+
+function resolveNodeGypScript() {
+  // Why: CI overrides this when pnpm's bundled node-gyp is unusable (see computer-e2e.yml).
+  if (process.env.npm_config_node_gyp) {
+    return process.env.npm_config_node_gyp
+  }
+
+  try {
+    return require.resolve('node-gyp/bin/node-gyp.js')
+  } catch {
+    return null
+  }
+}
+
 function requiresPatchedNodePtySourceBuild() {
   if (process.platform === 'win32') {
     return false
@@ -356,9 +400,9 @@ function runPnpm(args) {
   }
 }
 
-function runNodeScript(args) {
+function runNodeScript(args, cwd = projectDir) {
   const result = spawnSync(process.execPath, args, {
-    cwd: projectDir,
+    cwd,
     stdio: 'inherit'
   })
 
