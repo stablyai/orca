@@ -68,9 +68,8 @@ export function readRawHooksFile(configPath: string): string | null {
 /** Read-modify-write a hooks settings file with a stale check: if another
  *  writer (the agent CLI itself, a second Orca instance) changed the file
  *  between our read and our replace, the attempt is discarded and re-run
- *  against the fresh content so no concurrent keys are lost. The final
- *  attempt drops the guard so install still converges under a pathological
- *  writer. `mutate` may return null to signal "nothing to change" — the file
+ *  against the fresh content so no concurrent keys are lost. `mutate` may
+ *  return null to signal "nothing to change" — the file
  *  is then left untouched (not created, not reformatted, no .bak roll).
  *  Returns the written (or unchanged) config, or null when the file is
  *  unparseable. */
@@ -91,8 +90,7 @@ export function updateHooksJsonWithRetry(
       // rewrites (and reformats) a user file Orca never touched.
       return config
     }
-    const options = attempt < maxAttempts ? { expectedDiskContent: baseline } : {}
-    if (writeHooksJson(configPath, next, options)) {
+    if (writeHooksJson(configPath, next, { expectedDiskContent: baseline })) {
       return next
     }
   }

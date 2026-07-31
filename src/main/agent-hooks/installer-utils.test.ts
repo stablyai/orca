@@ -227,7 +227,7 @@ describe('updateHooksJsonWithRetry', () => {
     expect(readFileSync(configPath, 'utf-8')).toBe('not json {{')
   })
 
-  it('drops the stale guard on the final attempt so the install converges', () => {
+  it('preserves a concurrent writer when every retry becomes stale', () => {
     writeFileSync(configPath, `${JSON.stringify({ v: 0 }, null, 2)}\n`, 'utf-8')
     let mutateCalls = 0
 
@@ -243,8 +243,8 @@ describe('updateHooksJsonWithRetry', () => {
     )
 
     expect(mutateCalls).toBe(2)
-    expect(result).not.toBeNull()
-    expect(JSON.parse(readFileSync(configPath, 'utf-8')).managed).toBe(true)
+    expect(result).toBeNull()
+    expect(JSON.parse(readFileSync(configPath, 'utf-8'))).toEqual({ v: 2 })
   })
 })
 
