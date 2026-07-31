@@ -241,9 +241,34 @@ describe('ensure-native-runtime', () => {
       }
     }
   )
+
+  it.skipIf(process.platform === 'win32')(
+    'fails loudly when npm_config_node_gyp points at a missing file',
+    () => {
+      const projectDir = mkTempProject()
+
+      try {
+        const outcome = runAgainstUpstreamLikeNodePty(projectDir, {
+          nodeGypOverridePath: join(projectDir, 'absent-node-gyp.cjs'),
+          createNodeGypOverride: false
+        })
+
+        expect(outcome.result.status).toBe(1)
+        expect(outcome.result.stderr).toContain('npm_config_node_gyp points at a missing file')
+        expect(existsSync(join(nodePtyDirOf(projectDir), 'build', 'Release', 'pty.node'))).toBe(
+          false
+        )
+      } finally {
+        rmSync(projectDir, { recursive: true, force: true })
+      }
+    }
+  )
 })
 
-function runAgainstUpstreamLikeNodePty(projectDir, { nodeGypOverridePath = null } = {}) {
+function runAgainstUpstreamLikeNodePty(
+  projectDir,
+  { nodeGypOverridePath = null, createNodeGypOverride = true } = {}
+) {
   const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.mjs')
   const logPath = join(projectDir, 'native-runtime.log')
   const binDir = join(projectDir, 'bin')
@@ -253,10 +278,10 @@ function runAgainstUpstreamLikeNodePty(projectDir, { nodeGypOverridePath = null 
   writeNodePtyPatchFile(projectDir)
   writePnpmRunningInstallScripts(binDir)
   // Why: omitting the resolvable copy proves the override is what got used.
-  if (nodeGypOverridePath) {
-    writeFileSync(nodeGypOverridePath, NODE_GYP_SHIM_SOURCE)
-  } else {
+  if (!nodeGypOverridePath) {
     writeFakeNodeGyp(projectDir)
+  } else if (createNodeGypOverride) {
+    writeFileSync(nodeGypOverridePath, NODE_GYP_SHIM_SOURCE)
   }
 
   const result = spawnSync(process.execPath, [scriptPath, '--runtime=node'], {
@@ -285,8 +310,9 @@ function envWithPrependedPath(binDir, extraEnv) {
       : 'PATH'
   const inherited = { ...process.env }
   // Why: CI exports npm_config_node_gyp job-wide, which would run the real
-  // node-gyp against these fixtures instead of the shim.
+  // node-gyp against these fixtures; build_from_source would steer prebuild.js.
   delete inherited.npm_config_node_gyp
+  delete inherited.npm_config_build_from_source
 
   return {
     ...inherited,

@@ -339,7 +339,12 @@ function getPatchedNodePtyRebuildReason() {
 function rebuildPatchedNodePtyFromSource() {
   const nodeGypScript = resolveNodeGypScript()
   if (!nodeGypScript) {
-    console.error('[native-runtime] Cannot locate node-gyp to rebuild node-pty from source.')
+    const override = process.env.npm_config_node_gyp
+    console.error(
+      override
+        ? `[native-runtime] npm_config_node_gyp points at a missing file: ${override}`
+        : '[native-runtime] Cannot locate node-gyp to rebuild node-pty from source.'
+    )
     process.exit(1)
   }
 
