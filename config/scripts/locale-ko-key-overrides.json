@@ -752,6 +752,21 @@
   "auto.components.contextual.tours.ContextualTourProgressDots.dcd6e6b03e": {
     "ko": "{{value1}}단계 중 {{value0}}단계"
   },
+  "auto.components.contextual.tours.ContextualTourOverlaySurface.complete": {
+    "ko": "완료"
+  },
+  "auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.body": {
+    "ko": "자동화는 일정에 따라 agent 작업을 실행합니다. 이 버튼을 눌러 자동화를 추가하세요."
+  },
+  "auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.title": {
+    "ko": "자동화란 무엇인가요?"
+  },
+  "auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.body": {
+    "ko": "실행 내역에서 자동화가 언제 실행되었는지, 어떤 일이 발생했는지, 출력을 어디서 확인할 수 있는지 볼 수 있습니다."
+  },
+  "auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.title": {
+    "ko": "결과 확인"
+  },
   "auto.components.crash.report.CrashReportDialog.88fea8e84e": {
     "ko": "보내지 않음"
   },

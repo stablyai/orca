@@ -13235,7 +13235,8 @@
             "4a9568f773": "Back",
             "4f86e2a10b": "Skip tour",
             "d974f32a83": "Dismiss tour",
-            "ffa4412b66": "next"
+            "ffa4412b66": "next",
+            "complete": "Done"
           },
           "ContextualTourProgressDots": {
             "7734cb8ad3": "of",
@@ -13245,7 +13246,17 @@
             "tour": {
               "overlay": {
                 "measurement": {
-                  "38b3155418": "Next"
+                  "38b3155418": "Next",
+                  "automations": {
+                    "intro": {
+                      "title": "What is an automation?",
+                      "body": "Automations run agent work on a schedule. Add an automation by clicking this button."
+                    },
+                    "results": {
+                      "title": "Find the results",
+                      "body": "Runs show when automations executed, what happened, and where to inspect their output."
+                    }
+                  }
                 }
               }
             }

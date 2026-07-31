@@ -89,6 +89,32 @@ export function measureContextualTourOverlayRenderState(args: {
   )
   const activeStep = args.tour.steps[args.activeStepIndex]
   const target = activeStep ? getMeasurableContextualTourTarget(activeStep.targetSelector) : null
+  const localizedTitle =
+    args.tour.id === 'automations' && args.activeStepIndex === 0
+      ? translate(
+          'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.title',
+          'What is an automation?'
+        )
+      : args.tour.id === 'automations' && args.activeStepIndex === 1
+        ? translate(
+            'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.title',
+            'Find the results'
+          )
+        : activeStep?.title
+  const localizedBody =
+    args.tour.id === 'automations' && args.activeStepIndex === 0
+      ? translate(
+          'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.body',
+          'Automations run agent work on a schedule. Add an automation by clicking this button.'
+        )
+      : args.tour.id === 'automations' && args.activeStepIndex === 1
+        ? translate(
+            'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.body',
+            'Runs show when automations executed, what happened, and where to inspect their output.'
+          )
+        : activeStep
+          ? getContextualTourStepCopy(activeStep)
+          : undefined
   const progress = getContextualTourDisplayProgress({
     tour: args.tour,
     visibleStepIndexes,
@@ -135,8 +161,11 @@ export function measureContextualTourOverlayRenderState(args: {
       rect: target.rect,
       targetElement: target.element,
       progress,
-      title: activeStep.title,
-      body: formatContextualTourStepCopy(getContextualTourStepCopy(activeStep), args.keybindings),
+      title: localizedTitle ?? activeStep.title,
+      body: formatContextualTourStepCopy(
+        localizedBody ?? getContextualTourStepCopy(activeStep),
+        args.keybindings
+      ),
       control: activeStep.control,
       primaryAction,
       secondaryAction,
