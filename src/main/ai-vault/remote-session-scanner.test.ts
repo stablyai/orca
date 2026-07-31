@@ -263,6 +263,13 @@ describe('scanRemoteAiVaultSessions', () => {
       messageGraphTranscript('openclaw-session', 'Canonical OpenClaw session'),
       40
     )
+    // Why: pruning must stop at the non-session subtrees only — recursion *inside* `sessions`
+    // still has to reach transcripts the agent files under a date directory.
+    provider.addFile(
+      `${openClawRoot}/main/sessions/2026-07/openclaw-nested-session.jsonl`,
+      messageGraphTranscript('openclaw-nested-session', 'Nested canonical OpenClaw session'),
+      42
+    )
     provider.addFile(
       `${openClawRoot}/main/agent/codex-home/sessions/nested.jsonl`,
       messageGraphTranscript('nested-session', 'Nested Codex home'),
@@ -277,11 +284,15 @@ describe('scanRemoteAiVaultSessions', () => {
     })
 
     expect(result.issues).toEqual([])
-    expect(result.sessions.map((session) => session.sessionId)).toEqual(['openclaw-session'])
+    expect(result.sessions.map((session) => session.sessionId).sort()).toEqual([
+      'openclaw-nested-session',
+      'openclaw-session'
+    ])
     expect(provider.readDirPaths.filter((path) => path.startsWith(openClawRoot))).toEqual([
       openClawRoot,
       `${openClawRoot}/main`,
-      `${openClawRoot}/main/sessions`
+      `${openClawRoot}/main/sessions`,
+      `${openClawRoot}/main/sessions/2026-07`
     ])
   })
 
