@@ -168,8 +168,7 @@ inside the disposable runtime and snapshot/commit that runtime layer.
 ## 5. Credentials
 
 - **Never** commit secrets or put them in `userData`, recipe JSON, comments, docs, or the state file.
-- **Git token:** read from env (`GH_TOKEN`/`GITHUB_TOKEN`), falling back to `gh auth token`. Pass to the
-  VM only via the provider's ephemeral `--env`. Inside the VM, use a `GIT_ASKPASS` helper with
+- **Git token:** read from env (`GH_TOKEN`/`GITHUB_TOKEN`), falling back to `gh auth token`. Pass it to the VM over stdin, not a provider CLI flag like `--env` — flags land in the provider process's argv, which is visible to `ps aux` on the host (see the worked Vercel example in §7f). Only use a provider's `--env`-style flag when its API injects the value directly into the guest's environment without ever putting it on a host-visible command line. Inside the VM, use a `GIT_ASKPASS` helper with
   `x-access-token` (not the token in the clone URL) and `GIT_TERMINAL_PROMPT=0` so a missing token fails
   fast instead of hanging. When you write the helper from inside `bash -lc` under `set -u`, escape the
   positional arg and the token (`\$1`, `\$GH_TOKEN`) so they land **literally** and resolve at git-runtime
@@ -495,15 +494,24 @@ ssh_opts=(-p "$ssh_port"); [ -n "$identity_file" ] && ssh_opts+=(-i "$identity_f
 ssh-keyscan -p "$ssh_port" "$host" >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
 
 # 1. ensure the repo is present and at the right commit on the host (NO orca serve here)
-# Why: stream the token via stdin to prevent exposing it in the local and remote process lists (ps aux).
-ssh "${ssh_opts[@]}" "$ssh_target" "bash -lc '
+# Why: stream the token via stdin to prevent exposing it in the local and remote process lists (ps
+# aux). The script body and its args are quoted with posix_quote (plain '...' escaping, not bash's
+# $'...'/%q form) so a POSIX /bin/sh on the remote — not just bash — parses it identically; passing
+# project_root/repo_url/repo_ref as $1/$2/$3 instead of interpolating them into the script text avoids
+# needing to backslash-escape every remote-side $GH_TOKEN/$(mktemp) against local expansion.
+posix_quote() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+remote_script='
+     set -euo pipefail
      read -r GH_TOKEN
      export GH_TOKEN GIT_TERMINAL_PROMPT=0
-     askpass="$(mktemp)"; printf "%s\n" "#!/usr/bin/env bash" "case \"\$1\" in *Username*) echo x-access-token;; *Password*) echo \"\$GH_TOKEN\";; esac" > "$askpass"; \
-     chmod 700 "$askpass"; export GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0; trap "rm -f \"\$GIT_ASKPASS\"" EXIT
-     [ -d \"$project_root/.git\" ] || git clone \"$repo_url\" \"$project_root\"
-     cd \"$project_root\" && git fetch origin \"$repo_ref\" && git checkout -B \"$repo_ref\" FETCH_HEAD
-
+     project_root="$1"; repo_url="$2"; repo_ref="$3"
+     askpass="$(mktemp)"; printf "%s\n" "#!/usr/bin/env bash" "case \"\$1\" in *Username*) echo x-access-token;; *Password*) echo \"\$GH_TOKEN\";; esac" > "$askpass"
+     chmod 700 "$askpass"; export GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0; trap '"'"'rm -f "$GIT_ASKPASS"'"'"' EXIT
+     [ -d "$project_root/.git" ] || git clone "$repo_url" "$project_root"
+     cd "$project_root" && git fetch origin "$repo_ref" && git checkout -B "$repo_ref" FETCH_HEAD
+'
+remote_cmd="bash -c $(posix_quote "$remote_script") bash $(posix_quote "$project_root") $(posix_quote "$repo_url") $(posix_quote "$repo_ref")"
+printf '%s\n' "$gh_token" | ssh "${ssh_opts[@]}" "$ssh_target" "$remote_cmd"
 
 # 2. print the SSH connection block (NO pairingCode, NO orca serve). host/port/username tell Orca's
 #    relay how to dial in; identityFile/jumpHost/proxyCommand/portForwards are emitted when set.

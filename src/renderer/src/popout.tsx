@@ -123,7 +123,7 @@ function PopoutRoot(): React.JSX.Element {
       >
         <TooltipProvider delayDuration={400}>
           <LinkRoutingPreferenceDialogProvider>
-            <DetachedTerminalPaneRoot tabId={detachedPaneTabId} />
+            <DetachedTerminalPaneRoot paneId={detachedPaneTabId} />
           </LinkRoutingPreferenceDialogProvider>
         </TooltipProvider>
       </RecoverableRenderErrorBoundary>

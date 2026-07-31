@@ -7,7 +7,7 @@ import { applyDetachedTerminalTabSeed } from './detached-terminal-pane-seed'
 import type { DetachedTerminalTabSeed } from '../../../../shared/types'
 
 type DetachedTerminalPaneRootProps = {
-  tabId: string
+  paneId: string
 }
 
 /** Flips the pop-out's PTY delivery interest on mount and back off on
@@ -29,7 +29,7 @@ function useDetachedRendererPtyDelivery(ptyId: string | null): void {
 }
 
 export function DetachedTerminalPaneRoot({
-  tabId
+  paneId
 }: DetachedTerminalPaneRootProps): React.JSX.Element | null {
   const [seed, setSeed] = useState<DetachedTerminalTabSeed | null>(null)
   const [activeSeedTabId, setActiveSeedTabId] = useState<string | null>(null)
@@ -55,7 +55,7 @@ export function DetachedTerminalPaneRoot({
   useEffect(() => {
     let disposed = false
     void window.api.pane
-      .getDetachedTabSeed(tabId)
+      .getDetachedTabSeed(paneId)
       .then((result) => {
         if (disposed) {
           return
@@ -76,7 +76,7 @@ export function DetachedTerminalPaneRoot({
     return () => {
       disposed = true
     }
-  }, [tabId])
+  }, [paneId])
   useEffect(() => {
     if (activeTitle) {
       document.title = activeTitle
@@ -122,11 +122,16 @@ export function DetachedTerminalPaneRoot({
     }
     const remaining = detachedTabs.filter((entry) => entry.tab.id !== activeSeedTab.tab.id)
     if (remaining.length === 0) {
-      // Last tab: kill the PTY so it doesn't leak, then close the window.
-      if (activeSeedTab.ptyId) {
-        void window.api.pty.kill(activeSeedTab.ptyId)
-      }
-      window.close()
+      // Last tab: kill the PTY and clear the manager's seed *before* closing
+      // the window, so the native close's park flow finds no seed to
+      // reintegrate — otherwise it reappears as an exited tab in the main
+      // window (window.close() doesn't wait for pending IPC to resolve).
+      void Promise.allSettled([
+        activeSeedTab.ptyId ? window.api.pty.kill(activeSeedTab.ptyId) : Promise.resolve(),
+        window.api.pane.removeTab(paneId, activeSeedTab.tab.id)
+      ]).finally(() => {
+        window.close()
+      })
       return
     }
     // Replace the seed so the closed tab is gone from local UI state.
@@ -136,8 +141,12 @@ export function DetachedTerminalPaneRoot({
       additionalTabs: remaining.slice(1).length > 0 ? remaining.slice(1) : undefined
     }
     setSeed(nextSeed)
+    // Kill the closed tab's PTY — only the last tab's kill was wired up before.
+    if (activeSeedTab.ptyId) {
+      void window.api.pty.kill(activeSeedTab.ptyId)
+    }
     // Notify the manager so the closed tab stays gone after reintegration.
-    void window.api.pane.removeTab(tabId, activeSeedTab.tab.id)
+    void window.api.pane.removeTab(paneId, activeSeedTab.tab.id)
     // Switch active tab to the first remaining entry without rebuilding the
     // entire store — only the active-tab tracking fields need to move.
     useAppStore.setState((state) => ({
@@ -159,7 +168,7 @@ export function DetachedTerminalPaneRoot({
       return
     }
     reintegratingRef.current = true
-    void window.api.pane.reintegrate(tabId).finally(() => {
+    void window.api.pane.reintegrate(paneId).finally(() => {
       window.close()
     })
   }
