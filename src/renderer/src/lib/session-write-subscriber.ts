@@ -187,26 +187,34 @@ export function createSessionWriteSubscriber({
         }
       }
     }
-    if (changedFields.length === 0) {
+    const hasNewRelevantChanges = changedFields.length > 0
+    if (!hasNewRelevantChanges && pendingChangedFields.size === 0) {
       return
     }
-    const next: Record<string, unknown> = {}
-    for (const key of SESSION_RELEVANT_FIELDS) {
-      next[key] = state[key]
+    if (hasNewRelevantChanges) {
+      const next: Record<string, unknown> = {}
+      for (const key of SESSION_RELEVANT_FIELDS) {
+        next[key] = state[key]
+      }
+      prev = next
+      for (const field of changedFields) {
+        pendingChangedFields.add(field)
+      }
     }
-    prev = next
-    for (const field of changedFields) {
-      pendingChangedFields.add(field)
-    }
+
     if (shouldSchedulePersist && !shouldSchedulePersist()) {
       if (timer !== null) {
         clearTimeout(timer)
         timer = null
       }
-      pendingChangedFields.clear()
+      // Why: remote-session apply suppresses scheduling temporarily; retaining the field set
+      // lets the next eligible store fire persist the coherent state without replaying mutations.
       return
     }
     if (timer !== null) {
+      if (!hasNewRelevantChanges) {
+        return
+      }
       clearTimeout(timer)
     }
     timer = setTimeout(() => {
@@ -225,16 +233,28 @@ export function createSessionWriteSubscriber({
         return
       }
       if (shouldSchedulePersist && !shouldSchedulePersist()) {
-        pendingChangedFields.clear()
+        // Why: the suppression window can outlive the debounce; keep pending work so a
+        // later unrelated store fire can arm one fresh timer without losing the change.
         return
       }
       const changed = new Set(pendingChangedFields)
-      pendingChangedFields.clear()
       const patch = buildWorkspaceSessionPatch(fresh, changed)
       if (Object.keys(patch).length === 0) {
+        pendingChangedFields.clear()
         return
       }
-      persist({ patch })
+      for (const field of changed) {
+        pendingChangedFields.delete(field)
+      }
+      try {
+        persist({ patch })
+      } catch (error) {
+        // Why: a synchronous persist failure must leave this exact field batch retryable.
+        for (const field of changed) {
+          pendingChangedFields.add(field)
+        }
+        throw error
+      }
     }, debounceMs)
   })
 

@@ -25,6 +25,7 @@ import {
   FLOATING_WORKSPACE_GUEST_CLOSE_EVENT,
   FLOATING_WORKSPACE_GUEST_SELECT_INDEX_EVENT
 } from '@/lib/floating-workspace-guest-bridge'
+import type { EnsureTerminalTabProjectionResult } from '@/store/slices/terminal-tab-projection'
 
 const { closeTerminalTabMock } = vi.hoisted(() => ({
   closeTerminalTabMock: vi.fn()
@@ -1798,6 +1799,15 @@ describe('useIpcEvents updater integration', () => {
         id: options?.id ?? 'tab-new'
       })
     )
+    const ensureTerminalTabProjection = vi.fn(
+      (_worktreeId: string, tabId: string): EnsureTerminalTabProjectionResult => ({
+        status: 'repaired',
+        tabId,
+        groupId: 'group-1',
+        removedProjectionCount: 0,
+        removedOrderOccurrenceCount: 0
+      })
+    )
     const setActiveView = vi.fn()
     const setActiveWorktree = vi.fn()
     const markWorktreeVisited = vi.fn()
@@ -1825,6 +1835,7 @@ describe('useIpcEvents updater integration', () => {
     const storeState = {
       setUpdateStatus: vi.fn(),
       createTab,
+      ensureTerminalTabProjection,
       setActiveView,
       setActiveWorktree,
       markWorktreeVisited,
@@ -2854,6 +2865,7 @@ describe('useIpcEvents updater integration', () => {
     focusRuntimeTerminalSurface.mockClear()
     focusTerminalTabSurface.mockClear()
     replyTerminalCreate.mockClear()
+    ensureTerminalTabProjection.mockClear()
     createTerminalListenerRef.current({
       requestId: 'req-adopt-pending',
       worktreeId: 'wt-2',
@@ -2875,6 +2887,13 @@ describe('useIpcEvents updater integration', () => {
         [pendingLeafId]: 'serve-cf39bedb-a33a-417c-9ab6-f304dc27a6c0'
       }
     })
+    expect(ensureTerminalTabProjection).toHaveBeenCalledWith('wt-2', pendingTabId)
+    expect(setTabLayout.mock.invocationCallOrder[0]).toBeLessThan(
+      ensureTerminalTabProjection.mock.invocationCallOrder[0]
+    )
+    expect(ensureTerminalTabProjection.mock.invocationCallOrder[0]).toBeLessThan(
+      replyTerminalCreate.mock.invocationCallOrder[0]
+    )
     expect(setActiveTab).not.toHaveBeenCalled()
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
     expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith(pendingTabId, pendingLeafId)
@@ -2890,6 +2909,66 @@ describe('useIpcEvents updater integration', () => {
         ptyId: 'serve-cf39bedb-a33a-417c-9ab6-f304dc27a6c0'
       }
     })
+    const projectionError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    ensureTerminalTabProjection.mockImplementationOnce(() => ({
+      status: 'skipped',
+      tabId: pendingTabId,
+      reason: 'duplicate-backing-tab'
+    }))
+    replyTerminalCreate.mockClear()
+    createTerminalListenerRef.current({
+      requestId: 'req-projection-skipped',
+      worktreeId: 'wt-2',
+      ptyId: 'serve-cf39bedb-a33a-417c-9ab6-f304dc27a6c0',
+      tabId: pendingTabId,
+      leafId: pendingLeafId
+    })
+    expect(projectionError).toHaveBeenCalledWith(
+      '[onCreateTerminal] Terminal projection repair skipped',
+      expect.objectContaining({
+        worktreeId: 'wt-2',
+        tabId: pendingTabId,
+        reason: 'duplicate-backing-tab'
+      })
+    )
+    expect(replyTerminalCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: 'req-projection-skipped',
+        tabId: pendingTabId,
+        title: 'Terminal 3'
+      })
+    )
+    expect(replyTerminalCreate).toHaveBeenCalledTimes(1)
+
+    projectionError.mockClear()
+    ensureTerminalTabProjection.mockImplementationOnce(() => {
+      throw new Error('projection unavailable')
+    })
+    replyTerminalCreate.mockClear()
+    createTerminalListenerRef.current({
+      requestId: 'req-projection-diagnostic',
+      worktreeId: 'wt-2',
+      ptyId: 'serve-cf39bedb-a33a-417c-9ab6-f304dc27a6c0',
+      tabId: pendingTabId,
+      leafId: pendingLeafId
+    })
+    expect(replyTerminalCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: 'req-projection-diagnostic',
+        tabId: pendingTabId,
+        title: 'Terminal 3'
+      })
+    )
+    expect(replyTerminalCreate).toHaveBeenCalledTimes(1)
+    expect(projectionError).toHaveBeenCalledWith(
+      '[onCreateTerminal] Terminal projection repair failed',
+      expect.objectContaining({
+        worktreeId: 'wt-2',
+        tabId: pendingTabId,
+        error: 'projection unavailable'
+      })
+    )
+    projectionError.mockRestore()
 
     storeState.tabsByWorktree = {
       'wt-2': [{ id: 'tab-existing', ptyId: 'pty-bg', title: 'Terminal 1' }]

@@ -107,6 +107,7 @@ globalThis.window = { api: mockApi }
 import {
   createTestStore,
   makeOpenFile,
+  makeTab,
   makeTabGroup,
   makeUnifiedTab,
   makeWorktree
@@ -1983,6 +1984,69 @@ describe('TabsSlice', () => {
       store.getState().reorderUnifiedTabs(groupId, [second.id, first.id, second.id, first.id])
 
       expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual([second.id, first.id])
+    })
+  })
+  describe('ensureTerminalTabProjection', () => {
+    it('preserves live backing state and survives the destructive activation reconcile path', () => {
+      const tab = makeTab({
+        id: 'legacy-live-tab',
+        worktreeId: WT,
+        ptyId: 'pty-live',
+        title: 'Terminal 3',
+        sortOrder: 2,
+        createdAt: 30,
+        pendingActivationSpawn: true
+      })
+      const terminalLayout = {
+        root: { type: 'leaf' as const, leafId: 'leaf-live' },
+        activeLeafId: 'leaf-live',
+        expandedLeafId: null,
+        ptyIdsByLeafId: { 'leaf-live': 'pty-live' }
+      }
+      store.setState({
+        activeView: 'settings',
+        activeWorktreeId: 'foreground-worktree',
+        worktreesByRepo: {
+          repo1: [makeWorktree({ id: WT, repoId: 'repo1' })]
+        },
+        tabsByWorktree: { [WT]: [tab] },
+        ptyIdsByTabId: { 'legacy-live-tab': ['pty-live'] },
+        terminalLayoutsByTabId: { 'legacy-live-tab': terminalLayout },
+        activeTabIdByWorktree: { [WT]: 'legacy-live-tab' },
+        unifiedTabsByWorktree: {},
+        groupsByWorktree: {},
+        activeGroupIdByWorktree: {},
+        layoutByWorktree: {}
+      })
+
+      const beforeBacking = store.getState().tabsByWorktree
+      const beforePtyIds = store.getState().ptyIdsByTabId
+      const beforeTerminalLayouts = store.getState().terminalLayoutsByTabId
+      expect(store.getState().ensureTerminalTabProjection(WT, 'legacy-live-tab').status).toBe(
+        'repaired'
+      )
+
+      const repaired = store.getState()
+      expect(repaired.unifiedTabsByWorktree[WT].map((item) => item.entityId)).toContain(
+        'legacy-live-tab'
+      )
+      expect(repaired.tabsByWorktree).toBe(beforeBacking)
+      expect(repaired.ptyIdsByTabId).toBe(beforePtyIds)
+      expect(repaired.terminalLayoutsByTabId).toBe(beforeTerminalLayouts)
+      expect(repaired.tabsByWorktree[WT][0].pendingActivationSpawn).toBe(true)
+      const repairedTabs = repaired.unifiedTabsByWorktree[WT]
+      const repairedGroups = repaired.groupsByWorktree[WT]
+      const repairedLayout = repaired.layoutByWorktree[WT]
+      const repairedActiveGroup = repaired.activeGroupIdByWorktree[WT]
+
+      repaired.setActiveWorktree(WT)
+
+      const reconciled = store.getState()
+      expect(reconciled.unifiedTabsByWorktree[WT]).toBe(repairedTabs)
+      expect(reconciled.groupsByWorktree[WT]).toBe(repairedGroups)
+      expect(reconciled.layoutByWorktree[WT]).toBe(repairedLayout)
+      expect(reconciled.activeGroupIdByWorktree[WT]).toBe(repairedActiveGroup)
+      expect(reconciled.groupsByWorktree[WT][0].tabOrder).toEqual(['legacy-live-tab'])
     })
   })
 

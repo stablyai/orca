@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 import type * as ReactModule from 'react'
 import type { TerminalPaneLayoutNode } from '../../../shared/types'
+import type { EnsureTerminalTabProjectionResult } from '@/store/slices/terminal-tab-projection'
 
 export type CreateTerminalRequest = {
   requestId?: string
@@ -44,6 +45,13 @@ export function createHarnessStoreState(
 ): HarnessStoreState {
   const state: HarnessStoreState = {
     createTab: vi.fn(() => ({ id: 'tab-minted' })),
+    ensureTerminalTabProjection: vi.fn(
+      (_worktreeId: string, tabId: string): EnsureTerminalTabProjectionResult => ({
+        status: 'unchanged',
+        tabId,
+        groupId: 'group-existing'
+      })
+    ),
     setActiveView: vi.fn(),
     setActiveWorktree: vi.fn(),
     markWorktreeVisited: vi.fn(),

@@ -8840,6 +8840,184 @@ describe('Store', () => {
     expect(session.tabsByWorktree.wt1[0].ptyId).toBe('remote-pty')
   })
 
+  it('sync-persists a fresh background binding without constructing renderer projection', async () => {
+    const store = await createStore()
+    const foregroundWorktreeId = 'repo::/foreground'
+    const targetWorktreeId = 'repo::/background'
+    const foregroundTab = makeTerminalTab({
+      id: 'foreground-tab',
+      worktreeId: foregroundWorktreeId,
+      ptyId: 'foreground-pty',
+      title: 'Foreground terminal',
+      createdAt: 10
+    })
+    const existingTargetTab = makeTerminalTab({
+      id: 'target-tab',
+      worktreeId: targetWorktreeId,
+      ptyId: 'target-pty',
+      title: 'Background terminal',
+      createdAt: 20
+    })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: 'repo',
+      activeWorktreeId: foregroundWorktreeId,
+      activeTabId: foregroundTab.id,
+      activeTabIdByWorktree: {
+        [foregroundWorktreeId]: foregroundTab.id,
+        [targetWorktreeId]: existingTargetTab.id
+      },
+      tabsByWorktree: {
+        [foregroundWorktreeId]: [foregroundTab],
+        [targetWorktreeId]: [existingTargetTab]
+      },
+      terminalLayoutsByTabId: {
+        [existingTargetTab.id]: {
+          root: { type: 'leaf', leafId: TEST_LEAF_2 },
+          activeLeafId: TEST_LEAF_2,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_2]: 'target-pty' }
+        }
+      },
+      unifiedTabs: {
+        [foregroundWorktreeId]: [
+          {
+            id: foregroundTab.id,
+            entityId: foregroundTab.id,
+            groupId: 'foreground-group',
+            worktreeId: foregroundWorktreeId,
+            contentType: 'terminal',
+            label: foregroundTab.title,
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: foregroundTab.createdAt
+          }
+        ]
+      },
+      tabGroups: {
+        [foregroundWorktreeId]: [
+          {
+            id: 'foreground-group',
+            worktreeId: foregroundWorktreeId,
+            activeTabId: foregroundTab.id,
+            tabOrder: [foregroundTab.id]
+          }
+        ]
+      },
+      tabGroupLayouts: {
+        [foregroundWorktreeId]: { type: 'leaf', groupId: 'foreground-group' }
+      },
+      activeGroupIdByWorktree: { [foregroundWorktreeId]: 'foreground-group' },
+      terminalTopologyRevisionByRepoId: { repo: 4 }
+    })
+    const projectionBytes = (session: WorkspaceSessionState): string =>
+      JSON.stringify({
+        unifiedTabs: session.unifiedTabs,
+        tabGroups: session.tabGroups,
+        tabGroupLayouts: session.tabGroupLayouts,
+        activeGroupIdByWorktree: session.activeGroupIdByWorktree
+      })
+    const projectionBefore = projectionBytes(store.getWorkspaceSession())
+    expect(store.getWorkspaceSession().unifiedTabs?.[foregroundWorktreeId]).toHaveLength(1)
+    const binding = {
+      worktreeId: targetWorktreeId,
+      tabId: 'fresh-tab',
+      leafId: TEST_LEAF_1,
+      ptyId: 'fresh-pty'
+    }
+
+    store.persistPtyBinding(binding)
+
+    const admitted = structuredClone(store.getWorkspaceSession())
+    expect(projectionBytes(admitted)).toBe(projectionBefore)
+    expect(admitted.unifiedTabs?.[targetWorktreeId]).toBeUndefined()
+    expect(admitted.tabGroups?.[targetWorktreeId]).toBeUndefined()
+    expect(admitted.tabGroupLayouts?.[targetWorktreeId]).toBeUndefined()
+    expect(admitted.activeGroupIdByWorktree?.[targetWorktreeId]).toBeUndefined()
+    expect(admitted.activeWorktreeId).toBe(foregroundWorktreeId)
+    expect(admitted.activeTabId).toBe(foregroundTab.id)
+    expect(admitted.activeTabIdByWorktree?.[targetWorktreeId]).toBe(existingTargetTab.id)
+
+    const freshTab = admitted.tabsByWorktree[targetWorktreeId][1]
+    expect(freshTab).toMatchObject({
+      id: binding.tabId,
+      worktreeId: targetWorktreeId,
+      ptyId: binding.ptyId,
+      title: 'Terminal 2',
+      defaultTitle: 'Terminal 2',
+      customTitle: null,
+      color: null,
+      sortOrder: 1,
+      pendingActivationSpawn: true
+    })
+    expect(freshTab.createdAt).toBeGreaterThan(existingTargetTab.createdAt)
+    expect(admitted.terminalLayoutsByTabId[binding.tabId]).toEqual({
+      root: { type: 'leaf', leafId: TEST_LEAF_1 },
+      activeLeafId: TEST_LEAF_1,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [TEST_LEAF_1]: binding.ptyId }
+    })
+    expect(admitted.terminalTopologyRevisionByRepoId?.repo).toBe(5)
+
+    const flushed = (readDataFile() as PersistedState).workspaceSession
+    const { pendingActivationSpawn: _flushedTransientSpawn, ...flushedDurableTab } =
+      flushed.tabsByWorktree[targetWorktreeId][1]
+    const { pendingActivationSpawn: _admittedTransientSpawn, ...admittedDurableTab } = freshTab
+    expect(flushedDurableTab).toEqual(admittedDurableTab)
+    expect(flushed.terminalLayoutsByTabId[binding.tabId]).toEqual(
+      admitted.terminalLayoutsByTabId[binding.tabId]
+    )
+    expect(projectionBytes(flushed)).toBe(projectionBefore)
+
+    const admittedBytes = JSON.stringify(admitted)
+    store.persistPtyBinding(binding)
+    expect(JSON.stringify(store.getWorkspaceSession())).toBe(admittedBytes)
+    expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo).toBe(5)
+
+    const reloaded = await createStore()
+    const reloadedSession = reloaded.getWorkspaceSession()
+    const reloadedFreshTab = reloadedSession.tabsByWorktree[targetWorktreeId][1]
+    expect(projectionBytes(reloadedSession)).toBe(projectionBefore)
+    expect(reloadedSession.unifiedTabs?.[targetWorktreeId]).toBeUndefined()
+    expect(reloadedSession.tabGroups?.[targetWorktreeId]).toBeUndefined()
+    expect(reloadedSession.tabGroupLayouts?.[targetWorktreeId]).toBeUndefined()
+    expect(reloadedSession.activeGroupIdByWorktree?.[targetWorktreeId]).toBeUndefined()
+    expect(reloadedSession.tabsByWorktree[targetWorktreeId]).toHaveLength(2)
+    expect(reloadedFreshTab).toMatchObject({
+      id: binding.tabId,
+      worktreeId: targetWorktreeId,
+      ptyId: binding.ptyId,
+      title: 'Terminal 2',
+      defaultTitle: 'Terminal 2',
+      sortOrder: 1,
+      createdAt: freshTab.createdAt
+    })
+    // Why: pendingActivationSpawn is an in-memory handoff flag and is intentionally absent after schema reload.
+    expect(reloadedFreshTab.pendingActivationSpawn).toBeUndefined()
+    expect(reloadedSession.terminalLayoutsByTabId[binding.tabId]).toEqual(
+      admitted.terminalLayoutsByTabId[binding.tabId]
+    )
+    expect(reloadedSession.terminalTopologyRevisionByRepoId?.repo).toBe(5)
+  })
+
+  it('seeds global and target terminal selection when a fresh binding has none', async () => {
+    const store = await createStore()
+    const targetWorktreeId = 'repo::/background'
+
+    store.persistPtyBinding({
+      worktreeId: targetWorktreeId,
+      tabId: 'fresh-tab',
+      leafId: TEST_LEAF_1,
+      ptyId: 'fresh-pty'
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.activeWorktreeId).toBe(targetWorktreeId)
+    expect(session.activeTabId).toBe('fresh-tab')
+    expect(session.activeTabIdByWorktree?.[targetWorktreeId]).toBe('fresh-tab')
+  })
+
   it('promotes an empty tab layout to a durable UUID root when persisting the first PTY binding', async () => {
     const store = await createStore()
     store.setWorkspaceSession({

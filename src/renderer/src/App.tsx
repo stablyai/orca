@@ -123,6 +123,7 @@ import {
   shouldPersistWorkspaceSession
 } from './lib/workspace-session'
 import { createSessionWriteSubscriber } from './lib/session-write-subscriber'
+import { repairLiveTerminalTabProjections } from './lib/terminal-tab-projection-repair'
 import { buildActiveViewUnloadPatch } from './lib/active-view-persist'
 import {
   buildWorkspaceSessionHostSnapshots,
@@ -1081,6 +1082,41 @@ function App(): React.JSX.Element {
           await timeRendererStartupStep('recover-legacy-worker-terminals-post-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
+          try {
+            const projectionRepair = await timeRendererStartupStep(
+              'repair-live-terminal-tab-projections',
+              () =>
+                repairLiveTerminalTabProjections({
+                  store: useAppStore,
+                  hasPty: (ptyId) => window.api.pty.hasPty(ptyId),
+                  signal: abortController.signal
+                })
+            )
+            const livenessAttemptCount =
+              projectionRepair.probedPtyCount + projectionRepair.deadlineSuppressedPtyCount
+            const inconclusiveProbeCount =
+              projectionRepair.unknownPtyCount +
+              projectionRepair.probeFailureCount +
+              projectionRepair.timedOutPtyCount +
+              projectionRepair.deadlineSuppressedPtyCount
+            if (livenessAttemptCount > 0 && inconclusiveProbeCount === livenessAttemptCount) {
+              console.error(
+                '[startup] Every live terminal projection liveness probe was inconclusive:',
+                projectionRepair
+              )
+            }
+            if (
+              projectionRepair.ready === false ||
+              projectionRepair.repairedTabCount > 0 ||
+              projectionRepair.unchangedTabCount > 0 ||
+              projectionRepair.skippedTabCount > 0
+            ) {
+              logRendererStartupDiagnostic('live-terminal-tab-projection-repair', projectionRepair)
+            }
+          } catch (error) {
+            // Why: projection chrome is recoverable on the next reveal/startup; never turn a live PTY restore into degraded no-save mode.
+            console.error('[startup] Live terminal tab projection repair failed:', error)
+          }
           syncZoomCSSVar()
           // Why (issue #1158): unlock the session writer only after hydration and all dependent steps succeeded, so a mid-startup throw can't serialize partially-mutated state to disk.
           actions.setHydrationSucceeded(true)

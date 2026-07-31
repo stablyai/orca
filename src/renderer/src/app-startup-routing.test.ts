@@ -132,26 +132,58 @@ describe('renderer startup runtime routing', () => {
     )
   })
 
-  it('waits for first-window startup services before terminal reconnect', () => {
+  it('waits for startup services and reconnect before repairing terminal projections', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
-    const servicesIndex = source.indexOf('await window.api.app.awaitFirstWindowStartupServices()')
+    const servicesIndex = source.indexOf("'first-window-services-await'")
     const preReconnectRecoveryIndex = source.indexOf(
-      'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()',
+      "'recover-legacy-worker-terminals-pre-reconnect'",
       servicesIndex
     )
-    const reconnectIndex = source.indexOf(
-      'actions.reconnectPersistedTerminals(abortController.signal)',
-      preReconnectRecoveryIndex
-    )
+    const reconnectIndex = source.indexOf("'reconnect-terminals'", preReconnectRecoveryIndex)
     const postReconnectRecoveryIndex = source.indexOf(
-      'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()',
+      "'recover-legacy-worker-terminals-post-reconnect'",
       reconnectIndex
+    )
+    const projectionRepairIndex = source.indexOf("'repair-live-terminal-tab-projections'")
+    const hydrationSuccessIndex = source.indexOf(
+      'actions.setHydrationSucceeded(true)',
+      projectionRepairIndex
+    )
+    const localFailureIndex = source.indexOf(
+      '[startup] Live terminal tab projection repair failed:',
+      projectionRepairIndex
     )
 
     expect(servicesIndex).toBeGreaterThanOrEqual(0)
     expect(preReconnectRecoveryIndex).toBeGreaterThan(servicesIndex)
     expect(reconnectIndex).toBeGreaterThan(preReconnectRecoveryIndex)
     expect(postReconnectRecoveryIndex).toBeGreaterThan(reconnectIndex)
+    expect(projectionRepairIndex).toBeGreaterThan(postReconnectRecoveryIndex)
+    expect(localFailureIndex).toBeGreaterThan(projectionRepairIndex)
+    expect(localFailureIndex).toBeLessThan(hydrationSuccessIndex)
+    expect(projectionRepairIndex).toBeLessThan(hydrationSuccessIndex)
+    expect(source.slice(servicesIndex, preReconnectRecoveryIndex)).toContain(
+      'window.api.app.awaitFirstWindowStartupServices()'
+    )
+    expect(source.slice(preReconnectRecoveryIndex, reconnectIndex)).toContain(
+      'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()'
+    )
+    expect(source.slice(reconnectIndex, postReconnectRecoveryIndex)).toContain(
+      'actions.reconnectPersistedTerminals(abortController.signal)'
+    )
+    expect(source.slice(postReconnectRecoveryIndex, projectionRepairIndex)).toContain(
+      'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()'
+    )
+    const repairBlock = source.slice(projectionRepairIndex, hydrationSuccessIndex)
+    expect(repairBlock).toContain('signal: abortController.signal')
+    expect(repairBlock).toContain('window.api.pty.hasPty(')
+    expect(repairBlock).toContain('repairLiveTerminalTabProjections({')
+    expect(repairBlock).toContain('store: useAppStore')
+    expect(repairBlock).toContain('projectionRepair.deadlineSuppressedPtyCount')
+    expect(repairBlock).toContain('projectionRepair.unchangedTabCount > 0')
+    expect(repairBlock).not.toContain('reconcileWorktreeTabModel')
+    expect(repairBlock).not.toContain('setActiveWorktree')
+    expect(repairBlock).not.toContain('activeWorktreeId')
   })
 
   it('keeps the persisted Automations view from starting its own bootstrap worktree scan', () => {

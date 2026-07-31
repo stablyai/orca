@@ -1577,6 +1577,23 @@ export function useIpcEvents(): void {
                 }
               }
             }
+            try {
+              const projectionResult = store.ensureTerminalTabProjection(worktreeId, tab.id)
+              if (projectionResult.status === 'skipped') {
+                console.error('[onCreateTerminal] Terminal projection repair skipped', {
+                  worktreeId,
+                  tabId: tab.id,
+                  reason: projectionResult.reason
+                })
+              }
+            } catch (error) {
+              // Why: the PTY is already host-bound; optional chrome repair must not turn a successful CLI spawn into an error reply.
+              console.error('[onCreateTerminal] Terminal projection repair failed', {
+                worktreeId,
+                tabId: tab.id,
+                error: error instanceof Error ? error.message : 'unknown'
+              })
+            }
             if (command) {
               store.queueTabStartupCommand(tab.id, {
                 command,

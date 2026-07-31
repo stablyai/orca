@@ -32,6 +32,10 @@ import {
   getOrphanTerminalIds,
   terminalTabHasReconnectablePty
 } from './terminal-orphan-helpers'
+import {
+  ensureTerminalTabProjection as buildTerminalTabProjectionPatch,
+  type EnsureTerminalTabProjectionResult
+} from './terminal-tab-projection'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -187,6 +191,11 @@ export type TabsSlice = {
   ) => Tab | null
   mergeGroupIntoSibling: (worktreeId: string, groupId: string) => string | null
   setTabGroupSplitRatio: (worktreeId: string, nodePath: string, ratio: number) => void
+  ensureTerminalTabProjection: (
+    worktreeId: string,
+    tabId: string,
+    targetGroupId?: string
+  ) => EnsureTerminalTabProjectionResult
   reconcileWorktreeTabModel: (worktreeId: string) => {
     renderableTabCount: number
     activeRenderableTabId: string | null
@@ -622,6 +631,21 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   groupsByWorktree: {},
   activeGroupIdByWorktree: {},
   layoutByWorktree: {},
+  ensureTerminalTabProjection: (worktreeId, tabId, targetGroupId) => {
+    let result!: EnsureTerminalTabProjectionResult
+    set((state) => {
+      const outcome = buildTerminalTabProjectionPatch(
+        state,
+        worktreeId,
+        tabId,
+        targetGroupId,
+        createBrowserUuid
+      )
+      result = outcome.result
+      return outcome.patch
+    })
+    return result
+  },
 
   createUnifiedTab: (worktreeId, contentType, init) => {
     const id = init?.id ?? createBrowserUuid()

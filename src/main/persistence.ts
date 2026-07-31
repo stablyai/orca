@@ -6327,7 +6327,8 @@ export class Store {
       tab.ptyId = args.ptyId
     } else {
       terminalMembershipChanged = true
-      // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
+      // Why: pty:spawn can beat the renderer's debounced writer; main sync-persists only
+      // legacy backing/binding/layout so hydration cannot prune it, while renderer alone owns projection.
       const nextTabs = [
         ...(tabs ?? []),
         createMinimalPersistedTerminalTab({

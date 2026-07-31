@@ -521,7 +521,7 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
-  it('updates its baseline without scheduling when shouldSchedulePersist returns false', () => {
+  it('retains its baseline while scheduling is suppressed', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let shouldSchedule = false
     const cleanup = createSessionWriteSubscriber({
@@ -537,11 +537,76 @@ describe('createSessionWriteSubscriber', () => {
     shouldSchedule = true
     useAppStore.setState({ activeTabId: 'tab-1' })
     vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.activeTabId).toBe('tab-1')
+    cleanup()
+  })
+
+  it('persists a coherent projection bundle after the first eligible write is dropped', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    let shouldSchedule = false
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: false,
+      ...makeTerminalSessionState('Terminal 1')
+    })
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      shouldSchedulePersist: () => shouldSchedule
+    })
+
+    useAppStore.setState({ hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    expect(persist).not.toHaveBeenCalled()
+
+    shouldSchedule = true
+    useAppStore.getState().setCacheTimerStartedAt('projection-replay', 1)
+    vi.advanceTimersByTime(100)
+    useAppStore.getState().setCacheTimerStartedAt('projection-replay', 2)
+    vi.advanceTimersByTime(60)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    const patch = persist.mock.calls[0][0].patch
+    expect(patch).toEqual(
+      expect.objectContaining({
+        unifiedTabs: expect.objectContaining({ 'wt-1': expect.any(Array) }),
+        tabGroups: expect.objectContaining({ 'wt-1': expect.any(Array) }),
+        tabGroupLayouts: expect.objectContaining({ 'wt-1': expect.any(Object) }),
+        activeGroupIdByWorktree: expect.objectContaining({ 'wt-1': 'group-1' })
+      })
+    )
+    expect(patch.unifiedTabs).toBeDefined()
+    expect(patch.tabGroups).toBeDefined()
+    expect(patch.tabGroupLayouts).toBeDefined()
+    expect(patch.activeGroupIdByWorktree).toBeDefined()
+    const persistedTab = patch.unifiedTabs!['wt-1'][0]
+    const persistedGroup = patch.tabGroups!['wt-1'][0]
+    expect(persistedTab).toMatchObject({
+      id: 'tab-1',
+      entityId: 'tab-1',
+      groupId: 'group-1',
+      label: 'Terminal 1'
+    })
+    expect(persistedGroup).toMatchObject({
+      id: 'group-1',
+      activeTabId: 'tab-1',
+      tabOrder: ['tab-1']
+    })
+    expect(patch.tabGroupLayouts!['wt-1']).toEqual({
+      type: 'leaf',
+      groupId: persistedGroup.id
+    })
+    expect(patch.activeGroupIdByWorktree!['wt-1']).toBe(persistedGroup.id)
+
+    useAppStore.getState().setCacheTimerStartedAt('projection-replay', 3)
+    vi.advanceTimersByTime(200)
     expect(persist).toHaveBeenCalledTimes(1)
     cleanup()
   })
 
-  it('cancels a pending debounce when shouldSchedulePersist returns false', () => {
+  it('retains pending fields when suppression cancels an armed debounce', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let shouldSchedule = true
     const cleanup = createSessionWriteSubscriber({
@@ -550,17 +615,54 @@ describe('createSessionWriteSubscriber', () => {
       shouldSchedulePersist: () => shouldSchedule
     })
 
-    useAppStore.setState({ workspaceSessionReady: true })
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
     vi.advanceTimersByTime(50)
     shouldSchedule = false
     useAppStore.setState({ activeTabId: 'remote-tab' })
     vi.advanceTimersByTime(200)
-
     expect(persist).not.toHaveBeenCalled()
+
+    shouldSchedule = true
+    useAppStore.getState().setCacheTimerStartedAt('cancelled-debounce-replay', 1)
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.activeTabId).toBe('remote-tab')
+    cleanup()
+  })
+  it('unions distinct relevant fields across one suppression window', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    let shouldSchedule = true
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      shouldSchedulePersist: () => shouldSchedule
+    })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    shouldSchedule = false
+    useAppStore.setState({ activeRepoId: 'repo-during-suppression' })
+    vi.advanceTimersByTime(200)
+    useAppStore.setState({ activeWorktreeId: 'worktree-during-suppression' })
+    vi.advanceTimersByTime(200)
+    expect(persist).not.toHaveBeenCalled()
+
+    shouldSchedule = true
+    useAppStore.getState().setCacheTimerStartedAt('union-replay', 1)
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch).toMatchObject({
+      activeRepoId: 'repo-during-suppression',
+      activeWorktreeId: 'worktree-during-suppression'
+    })
     cleanup()
   })
 
-  it('re-checks shouldSchedulePersist when a pending debounce fires', () => {
+  it('retains pending fields when suppression begins as the debounce fires', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let shouldSchedule = true
     const cleanup = createSessionWriteSubscriber({
@@ -577,8 +679,39 @@ describe('createSessionWriteSubscriber', () => {
     vi.advanceTimersByTime(50)
     shouldSchedule = false
     vi.advanceTimersByTime(200)
-
     expect(persist).not.toHaveBeenCalled()
+
+    shouldSchedule = true
+    useAppStore.getState().setCacheTimerStartedAt('expired-debounce-replay', 1)
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.activeWorktreeId).toBe('wt-before-remote-pull')
+    cleanup()
+  })
+
+  it('restarts a pending replay debounce only for a new relevant change', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    let shouldSchedule = false
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      shouldSchedulePersist: () => shouldSchedule
+    })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    shouldSchedule = true
+    useAppStore.getState().setCacheTimerStartedAt('pending-replay', 1)
+    vi.advanceTimersByTime(100)
+
+    useAppStore.setState({ activeTabId: 'new-relevant-tab' })
+    vi.advanceTimersByTime(60)
+    expect(persist).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(100)
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.activeTabId).toBe('new-relevant-tab')
     cleanup()
   })
 
