@@ -1,11 +1,5 @@
 import type { RemoteHostPlatform } from './ssh-remote-platform'
-import {
-  isWindowsRemoteHost,
-  joinRemotePath,
-  normalizeWindowsRemotePath,
-  remoteBasename,
-  remoteDirname
-} from './ssh-remote-platform'
+import { isWindowsRemoteHost, joinRemotePath, remoteDirname } from './ssh-remote-platform'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import { shellEscape } from './ssh-connection-utils'
 
@@ -132,71 +126,6 @@ export function listRelayBaseDirsCommand(host: RemoteHostPlatform, baseDir: stri
       'Get-ChildItem -LiteralPath $base -Directory | ForEach-Object { $_.Name }',
       '}'
     ].join(' ')
-  )
-}
-
-export function listStaleRemoteUploadStagesCommand(
-  host: RemoteHostPlatform,
-  remoteRelayDir: string,
-  staleSeconds: number
-): string {
-  const parent = remoteDirname(remoteRelayDir, host)
-  const base = remoteBasename(remoteRelayDir, host)
-  const pattern = `${base}.upload-*`
-  if (!isWindowsRemoteHost(host)) {
-    const parentArg = shellEscape(parent)
-    return [
-      `if [ -d ${parentArg} ]; then`,
-      `find ${parentArg} -mindepth 1 -maxdepth 1 -type d -name ${shellEscape(pattern)} -mmin +${Math.ceil(staleSeconds / 60)} -print |`,
-      `while IFS= read -r d; do case "$d" in *.upload-????????-????-????-????-????????????) printf '%s\\n' "$d" ;; *) continue ;; esac; done;`,
-      'fi'
-    ].join(' ')
-  }
-  return powerShellCommand(
-    [
-      `$parent = ${powerShellLiteral(parent)}`,
-      `$pattern = ${powerShellLiteral(pattern)}`,
-      `$cutoff = [DateTime]::UtcNow.AddSeconds(-${Math.max(1, Math.ceil(staleSeconds))})`,
-      'if (Test-Path -LiteralPath $parent -PathType Container) {',
-      'Get-ChildItem -LiteralPath $parent -Directory -Filter $pattern | Where-Object {',
-      "$_.LastWriteTimeUtc -lt $cutoff -and $_.Name -match '\\.upload-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'",
-      '} | ForEach-Object { $_.FullName }',
-      '}'
-    ].join(' ')
-  )
-}
-
-export function isRemoteUploadStagePath(
-  host: RemoteHostPlatform,
-  remoteRelayDir: string,
-  candidatePath: string
-): boolean {
-  if (
-    !candidatePath ||
-    candidatePath.includes('\0') ||
-    candidatePath.includes('\r') ||
-    candidatePath.includes('\n')
-  ) {
-    return false
-  }
-  const candidate = isWindowsRemoteHost(host)
-    ? normalizeWindowsRemotePath(candidatePath)
-    : candidatePath
-  const expectedParent = remoteDirname(remoteRelayDir, host)
-  const candidateParent = remoteDirname(candidate, host)
-  const expectedPrefix = `${remoteBasename(remoteRelayDir, host)}.upload-`
-  const candidateBase = remoteBasename(candidate, host)
-  const sameParent = isWindowsRemoteHost(host)
-    ? candidateParent.toLowerCase() === expectedParent.toLowerCase()
-    : candidateParent === expectedParent
-  const comparableBase = isWindowsRemoteHost(host) ? candidateBase.toLowerCase() : candidateBase
-  const comparablePrefix = isWindowsRemoteHost(host) ? expectedPrefix.toLowerCase() : expectedPrefix
-  return (
-    sameParent &&
-    comparableBase.startsWith(comparablePrefix) &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(
-      comparableBase.slice(comparablePrefix.length)
-    )
   )
 }
 

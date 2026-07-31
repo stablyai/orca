@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -150,6 +150,97 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
   afterAll(() => {
     stopTarget(fixture)
   })
+
+  it('aborts a live SFTP upload after remote bytes arrive without creating the shared lock', async () => {
+    const activeFixture = fixture as TargetFixture
+    const localRelayDir = join(process.cwd(), 'out', 'relay', 'linux-arm64')
+    const relayVersion = readFileSync(join(localRelayDir, '.version'), 'utf8').trim()
+    const relayJsSize = statSync(join(localRelayDir, 'relay.js')).size
+    const remoteRelayDir = `/root/.orca-remote/relay-${relayVersion}`
+    const connection = createConnection(activeFixture)
+    await connection.connect()
+    const sentinelPid = dockerExec(activeFixture, 'sleep 300 </dev/null >/dev/null 2>&1 & echo $!')
+    let releaseFirstWrite: () => void = () => {}
+    const firstWrite = new Promise<void>((resolve) => {
+      releaseFirstWrite = resolve
+    })
+    let acknowledgedBytes = 0
+    const openSftp = connection.sftp.bind(connection)
+    connection.sftp = vi.fn(async (signal) => {
+      const sftp = await openSftp(signal)
+      const createWriteStream = sftp.createWriteStream.bind(sftp)
+      sftp.createWriteStream = ((...args: Parameters<typeof createWriteStream>) => {
+        const [remotePath] = args
+        const stream = createWriteStream(...args)
+        if (!remotePath.endsWith('/payload/relay.js')) {
+          return stream
+        }
+        const writable = stream as typeof stream & {
+          _write: (
+            chunk: Buffer,
+            encoding: BufferEncoding,
+            callback: (error?: Error | null) => void
+          ) => void
+        }
+        const write = writable._write.bind(writable)
+        writable._write = (chunk, encoding, callback): void => {
+          write(chunk, encoding, (error) => {
+            if (error) {
+              callback(error)
+              return
+            }
+            acknowledgedBytes += chunk.length
+            releaseFirstWrite()
+          })
+        }
+        return stream
+      }) as typeof sftp.createWriteStream
+      return sftp
+    })
+
+    const deployment = deployAndLaunchRelay(connection, undefined, 60)
+    let barrierTimeout: ReturnType<typeof setTimeout>
+    try {
+      await Promise.race([
+        firstWrite,
+        new Promise<never>((_resolve, reject) => {
+          barrierTimeout = setTimeout(
+            () => reject(new Error('Timed out waiting for first remote SFTP chunk')),
+            30_000
+          )
+        })
+      ])
+    } finally {
+      clearTimeout(barrierTimeout!)
+    }
+    const partialRemoteBytes = Number(
+      dockerExec(
+        activeFixture,
+        "find /root/.orca-remote -type f -path '*.upload-*/payload/relay.js' -printf '%s\\n'"
+      )
+    )
+    const operationController = (
+      connection as unknown as { systemOperationAbortController: AbortController }
+    ).systemOperationAbortController
+    operationController.abort()
+
+    await expect(deployment).rejects.toMatchObject({ name: 'AbortError' })
+    const inventory = readInventory(activeFixture, remoteRelayDir)
+    const sentinelCommand = dockerExec(
+      activeFixture,
+      `tr '\\0' ' ' < /proc/${shellQuote(sentinelPid)}/cmdline`
+    )
+    await connection.disconnect()
+
+    console.log(
+      `[pr-10207-live-sftp-abort] ${JSON.stringify({ acknowledgedBytes, partialRemoteBytes, relayJsSize, inventory, sentinelPid, sentinelCommand })}`
+    )
+    expect(acknowledgedBytes).toBeGreaterThan(0)
+    expect(partialRemoteBytes).toBe(acknowledgedBytes)
+    expect(partialRemoteBytes).toBeLessThan(relayJsSize)
+    expect(inventory.installLock).toBe(false)
+    expect(sentinelCommand).toContain('sleep 300')
+  }, 180_000)
 
   it('keeps a cancelled pre-install upload from fencing the immediate retry', async () => {
     const activeFixture = fixture as TargetFixture

@@ -51,14 +51,18 @@ import {
 } from './ssh-relay-build-toolchain'
 import {
   commandWithNodePath,
-  isRemoteUploadStagePath,
-  listStaleRemoteUploadStagesCommand,
   makeRemoteExecutableCommand,
   promoteRemoteTreeContentsCommand,
   readRemoteHomeCommand,
   removeRemoteFileCommand,
   removeRemoteTreeCommand
 } from './ssh-remote-commands'
+import {
+  isRemoteUploadStagePath,
+  listStaleRemoteUploadStagesCommand,
+  MAX_STALE_UPLOAD_STAGE_CANDIDATES,
+  removeStaleRemoteUploadStagesCommand
+} from './ssh-relay-upload-stage-commands'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
@@ -580,21 +584,37 @@ async function recoverStaleUploadStages(
   const listing = await execHostCommand(
     conn,
     hostPlatform,
-    listStaleRemoteUploadStagesCommand(hostPlatform, remoteRelayDir, UPLOAD_STAGE_STALE_SECONDS),
+    listStaleRemoteUploadStagesCommand(
+      hostPlatform,
+      remoteRelayDir,
+      UPLOAD_STAGE_STALE_SECONDS,
+      MAX_STALE_UPLOAD_STAGE_CANDIDATES
+    ),
     { signal }
   ).catch(() => '')
-  for (const stage of String(listing ?? '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)) {
-    signal?.throwIfAborted()
-    if (!isRemoteUploadStagePath(hostPlatform, remoteRelayDir, stage)) {
-      continue
-    }
-    await execHostCommand(conn, hostPlatform, removeRemoteTreeCommand(hostPlatform, stage), {
-      signal
-    }).catch(() => {})
+  const stages = [
+    ...new Set(
+      String(listing ?? '')
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((stage) => isRemoteUploadStagePath(hostPlatform, remoteRelayDir, stage))
+    )
+  ].slice(0, MAX_STALE_UPLOAD_STAGE_CANDIDATES)
+  signal?.throwIfAborted()
+  if (stages.length === 0) {
+    return
   }
+  await execHostCommand(
+    conn,
+    hostPlatform,
+    removeStaleRemoteUploadStagesCommand(
+      hostPlatform,
+      remoteRelayDir,
+      stages,
+      UPLOAD_STAGE_STALE_SECONDS
+    ),
+    { signal }
+  ).catch(() => {})
 }
 
 /**

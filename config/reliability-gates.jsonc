@@ -27,15 +27,15 @@
       "providers": ["ssh2", "system-ssh"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": ["ssh2", "system-ssh"],
-      "coverageNotes": "Deterministic unit and real ssh2 SFTP-wire tests cover lock ordering, attempt-owned namespace identity, payload-only promotion, stale-stage cleanup, unconfirmed-transfer retention, split-SFTP redirection, system-SSH bypass, and simulated Windows commands. A throwaway linux-arm64 Docker sshd reached through a non-loopback LAN address proves cancellation leaves no shared install lock and an immediate retry launches the relay against a real Git repository.",
+      "coverageNotes": "Deterministic unit and real ssh2 SFTP-wire tests cover lock ordering, concurrent-install loss, attempt-owned namespace identity, payload-only promotion, constant-bounded stale-stage cleanup with remote age revalidation, cross-version isolation, unconfirmed-transfer retention, split-SFTP redirection, system-SSH bypass, and simulated Windows commands. A throwaway linux-arm64 Docker sshd reached through a non-loopback LAN address proves both real bytes-in-flight SFTP cancellation and injected unconfirmed cancellation leave no shared install lock; an immediate retry launches the relay against a real Git repository.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/9828",
         "https://github.com/stablyai/orca/pull/10207"
       ],
       "invariant": "A first-install relay transfer must complete in an attempt-owned staging namespace before acquiring the shared version install lock. Unconfirmed transfer or promotion retains only the attempt stage for bounded stale recovery; confirmed failure removes it. Split-SFTP hosts must prove the stage identity on the exact transfer session, and only payload contents may be promoted under the shared lock.",
-      "oracle": "Inject unconfirmed cancellation at uploadDirectory, require no shared .install-lock, retain one token-shaped attempt stage, and require an immediate independent deployment to install, launch, answer relay RPC, and read a real repository HEAD. Unit and wire contracts additionally require zero lock acquisition before upload settlement, canonical shell paths, verified SFTP redirection for the staged bundle and .version, final install-namespace ownership for package.json, promotion only after the lock, and no mapping on Windows or system SSH.",
+      "oracle": "Pause a real ssh2 SFTP relay.js write after one remotely acknowledged chunk, prove the remote file is partial, abort the live transfer, and require no shared .install-lock or foreign-process termination. Separately inject unconfirmed cancellation at uploadDirectory, retain one token-shaped attempt stage without the shared lock, and require an immediate independent deployment to install, launch, answer relay RPC, and read a real repository HEAD. Unit, shell, and wire contracts additionally require zero lock acquisition before upload settlement, one bounded stale listing plus at most one eight-target cleanup exec with an in-command age recheck, fresh and foreign paths surviving cleanup, canonical shell paths, verified SFTP redirection for the staged bundle and .version, final install-namespace ownership for package.json, promotion only after the lock, current cross-version isolation, and no mapping on Windows or system SSH.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-deploy-staged-upload.test.ts src/main/ssh/ssh-relay-native-deps-install-staged-upload.test.ts src/main/ssh/ssh-relay-sftp-namespace-install.test.ts src/main/ssh/ssh-relay-install-namespace.test.ts src/main/ssh/sftp-namespace-resolution.test.ts src/main/ssh/ssh-connection-sftp-wire.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-deploy-staged-upload.test.ts src/main/ssh/ssh-relay-native-deps-install-staged-upload.test.ts src/main/ssh/ssh-relay-sftp-namespace-install.test.ts src/main/ssh/ssh-relay-install-namespace.test.ts src/main/ssh/sftp-namespace-resolution.test.ts src/main/ssh/ssh-connection-sftp-wire.test.ts src/main/ssh/ssh-remote-commands.test.ts src/main/ssh/ssh-relay-cross-version-isolation.test.ts --reporter=dot",
         "ORCA_REVIEW_SSH_UPLOAD_CANCEL=1 ORCA_REVIEW_SSH_TARGET_HOST=<non-loopback-host> ORCA_REVIEW_SSH_IMAGE=<throwaway-sshd-image> ORCA_REVIEW_EXPECT_RECOVERY=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-upload-cancel.docker.test.ts --reporter=verbose"
       ],
       "testFiles": [
@@ -45,6 +45,8 @@
         "src/main/ssh/ssh-relay-install-namespace.test.ts",
         "src/main/ssh/sftp-namespace-resolution.test.ts",
         "src/main/ssh/ssh-connection-sftp-wire.test.ts",
+        "src/main/ssh/ssh-remote-commands.test.ts",
+        "src/main/ssh/ssh-relay-cross-version-isolation.test.ts",
         "src/main/ssh/ssh-relay-upload-cancel.docker.test.ts"
       ],
       "assertionRefs": [
@@ -52,8 +54,22 @@
           "file": "src/main/ssh/ssh-relay-deploy-staged-upload.test.ts",
           "assertions": [
             "waits for a deferred SFTP upload before acquiring the install lock",
+            "drops only its stage when a sibling finishes before the locked re-probe",
+            "removes stale upload stages before starting a fresh upload",
             "retries immediately after an unconfirmed upload termination instead of waiting on a fresh install lock"
           ]
+        },
+        {
+          "file": "src/main/ssh/ssh-remote-commands.test.ts",
+          "assertions": [
+            "lists only stale UUID upload stages in a real POSIX shell",
+            "rechecks stage age in one cleanup command before deleting nominated paths",
+            "rejects a batched cleanup target outside the exact relay parent and UUID prefix"
+          ]
+        },
+        {
+          "file": "src/main/ssh/ssh-relay-cross-version-isolation.test.ts",
+          "assertions": ["a v2 deploy never references the v1 install dir or v1 socket path"]
         },
         {
           "file": "src/main/ssh/ssh-relay-sftp-namespace-install.test.ts",
@@ -64,7 +80,10 @@
         },
         {
           "file": "src/main/ssh/ssh-relay-upload-cancel.docker.test.ts",
-          "assertions": ["keeps a cancelled pre-install upload from fencing the immediate retry"]
+          "assertions": [
+            "aborts a live SFTP upload after remote bytes arrive without creating the shared lock",
+            "keeps a cancelled pre-install upload from fencing the immediate retry"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -72,10 +91,10 @@
           "date": "2026-07-31",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-deploy-staged-upload.test.ts src/main/ssh/ssh-relay-native-deps-install-staged-upload.test.ts src/main/ssh/ssh-relay-sftp-namespace-install.test.ts src/main/ssh/ssh-relay-install-namespace.test.ts src/main/ssh/sftp-namespace-resolution.test.ts src/main/ssh/ssh-connection-sftp-wire.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-deploy-staged-upload.test.ts src/main/ssh/ssh-relay-native-deps-install-staged-upload.test.ts src/main/ssh/ssh-relay-sftp-namespace-install.test.ts src/main/ssh/ssh-relay-install-namespace.test.ts src/main/ssh/sftp-namespace-resolution.test.ts src/main/ssh/ssh-connection-sftp-wire.test.ts src/main/ssh/ssh-remote-commands.test.ts src/main/ssh/ssh-relay-cross-version-isolation.test.ts --reporter=dot",
           "result": "passed",
-          "durationSeconds": 1.7,
-          "summary": "Focused staged-upload, namespace, and real ssh2 SFTP-wire contracts passed."
+          "durationSeconds": 0.8,
+          "summary": "Eight focused staged-upload, bounded cleanup, cross-version, namespace, and real ssh2 SFTP-wire files passed with 125 tests and 5 platform skips."
         },
         {
           "date": "2026-07-31",
@@ -83,8 +102,8 @@
           "platform": "linux",
           "command": "ORCA_REVIEW_SSH_UPLOAD_CANCEL=1 ORCA_REVIEW_SSH_TARGET_HOST=<non-loopback-host> ORCA_REVIEW_SSH_IMAGE=<throwaway-sshd-image> ORCA_REVIEW_EXPECT_RECOVERY=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-upload-cancel.docker.test.ts --reporter=verbose",
           "result": "passed",
-          "durationSeconds": 6.51,
-          "summary": "A throwaway linux-arm64 Docker sshd retained one attempt stage without a shared lock; immediate retry launched the relay, answered RPC, and read a real Git HEAD."
+          "durationSeconds": 7.09,
+          "summary": "A throwaway linux-arm64 Docker sshd acknowledged 65,536 of 837,401 relay.js bytes before live SFTP abort, retained no shared lock, and preserved a foreign sleep sentinel. Injected unconfirmed cancellation then retained one attempt stage without a shared lock; immediate retry launched the relay, answered RPC, and read real Git HEAD 1625635ea7b3b0dc3ea83de48dce9ae278355a62."
         }
       ],
       "runtimeBudget": {
@@ -101,7 +120,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Ordinary hosts add one stale-stage listing and one best-effort stage cleanup per first install. Split-SFTP first install retains the existing six identity probes across bundle, .version, and package.json transfers; no polling or shared-lock wait is added during upload."
+        "evidence": "Ordinary hosts add one remotely eight-candidate-bounded stale-stage listing and at most one batched cleanup exec per first install; cleanup rechecks age remotely and never scales SSH exec count with parsed output. Split-SFTP first install retains the existing six identity probes across bundle, .version, and package.json transfers; no polling or shared-lock wait is added during upload."
       },
       "promotionCriteria": [
         "Collect 100 consecutive CI passes or 14 days of soak history.",

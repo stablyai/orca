@@ -20,8 +20,6 @@ import {
   commandInRemoteDirectory,
   commandWithNodePath,
   listRelayBaseDirsCommand,
-  listStaleRemoteUploadStagesCommand,
-  isRemoteUploadStagePath,
   makeRemoteDirectoryCommand,
   moveRemoteTreeCommand,
   promoteRemoteTreeContentsCommand,
@@ -30,6 +28,11 @@ import {
   readRemoteHomeCommand,
   relayLivenessProbeCommand
 } from './ssh-remote-commands'
+import {
+  isRemoteUploadStagePath,
+  listStaleRemoteUploadStagesCommand,
+  removeStaleRemoteUploadStagesCommand
+} from './ssh-relay-upload-stage-commands'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const posix = getRemoteHostPlatform('linux-x64')
@@ -181,7 +184,8 @@ describe('ssh remote command builders', () => {
     const command = listStaleRemoteUploadStagesCommand(
       posix,
       '/home/u/.orca-remote/relay-1.0.0',
-      2 * 60 * 60
+      2 * 60 * 60,
+      8
     )
     expect(command).toContain(
       "-mindepth 1 -maxdepth 1 -type d -name 'relay-1.0.0.upload-*' -mmin +120"
@@ -192,7 +196,7 @@ describe('ssh remote command builders', () => {
 
   it('uses remote mtime and UUID provenance for Windows stage collection', () => {
     const command = decodePowerShellCommand(
-      listStaleRemoteUploadStagesCommand(windows, 'C:/Users/me/relay-1.0.0', 2 * 60 * 60)
+      listStaleRemoteUploadStagesCommand(windows, 'C:/Users/me/relay-1.0.0', 2 * 60 * 60, 8)
     )
     expect(command).toContain('LastWriteTimeUtc -lt $cutoff')
     expect(command).toContain('upload-[0-9a-f]{8}-[0-9a-f]{4}')
@@ -231,26 +235,112 @@ describe('ssh remote command builders', () => {
         mkdirSync(staleStage)
         mkdirSync(freshStage)
         mkdirSync(malformedStage)
+        const excessStages = Array.from({ length: 10 }, (_, index) =>
+          join(
+            root,
+            `relay-1.0.0.upload-123e4567-e89b-12d3-a456-${String(index + 2).padStart(12, '0')}`
+          )
+        )
+        for (const stage of excessStages) {
+          mkdirSync(stage)
+        }
         const staleDate = new Date(Date.now() - 3 * 60 * 60_000)
         utimesSync(staleStage, staleDate, staleDate)
         utimesSync(malformedStage, staleDate, staleDate)
+        for (const stage of excessStages) {
+          utimesSync(stage, staleDate, staleDate)
+        }
 
         const command = listStaleRemoteUploadStagesCommand(
           posix,
           join(root, 'relay-1.0.0'),
-          2 * 60 * 60
+          2 * 60 * 60,
+          8
         )
         const output = execFileSync('/bin/sh', ['-c', command], { encoding: 'utf8' })
           .trim()
           .split(/\r?\n/)
           .filter(Boolean)
 
-        expect(output).toEqual([staleStage])
+        expect(output).toHaveLength(8)
+        expect([staleStage, ...excessStages]).toEqual(expect.arrayContaining(output))
+        expect(output).not.toContain(freshStage)
+        expect(output).not.toContain(malformedStage)
       } finally {
         rmSync(root, { recursive: true, force: true })
       }
     }
   )
+
+  it.runIf(process.platform !== 'win32')(
+    'rechecks stage age in one cleanup command before deleting nominated paths',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-upload-cleanup-'))
+      try {
+        const relayDir = join(root, 'relay-1.0.0')
+        const staleStage = `${relayDir}.upload-123e4567-e89b-12d3-a456-426614174000`
+        const freshStage = `${relayDir}.upload-123e4567-e89b-12d3-a456-426614174001`
+        mkdirSync(staleStage)
+        mkdirSync(freshStage)
+        const staleDate = new Date(Date.now() - 3 * 60 * 60_000)
+        utimesSync(staleStage, staleDate, staleDate)
+
+        await runShellCommand(
+          removeStaleRemoteUploadStagesCommand(
+            posix,
+            relayDir,
+            [staleStage, freshStage],
+            2 * 60 * 60
+          )
+        )
+
+        expect(existsSync(staleStage)).toBe(false)
+        expect(existsSync(freshStage)).toBe(true)
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it('rejects a batched cleanup target outside the exact relay parent and UUID prefix', () => {
+    expect(() =>
+      removeStaleRemoteUploadStagesCommand(
+        posix,
+        '/home/u/.orca-remote/relay-1.0.0',
+        ['/home/u/important-repository'],
+        2 * 60 * 60
+      )
+    ).toThrow('Invalid stale relay upload stage cleanup request')
+  })
+
+  it('enforces the cleanup batch bound inside the command owner', () => {
+    const relayDir = '/home/u/.orca-remote/relay-1.0.0'
+    const candidates = Array.from(
+      { length: 9 },
+      (_, index) => `${relayDir}.upload-123e4567-e89b-12d3-a456-${String(index).padStart(12, '0')}`
+    )
+    expect(() =>
+      removeStaleRemoteUploadStagesCommand(posix, relayDir, candidates, 2 * 60 * 60)
+    ).toThrow('Invalid stale relay upload stage cleanup request')
+  })
+
+  it('rechecks Windows stage age inside one literal-path cleanup command', () => {
+    const command = decodePowerShellCommand(
+      removeStaleRemoteUploadStagesCommand(
+        windows,
+        'C:/Users/me/relay-1.0.0',
+        [
+          'C:/Users/me/relay-1.0.0.upload-123e4567-e89b-12d3-a456-426614174000',
+          'C:/Users/me/relay-1.0.0.upload-123e4567-e89b-12d3-a456-426614174001'
+        ],
+        2 * 60 * 60
+      )
+    )
+    expect(command).toContain('LastWriteTimeUtc -lt $cutoff')
+    expect(command).toContain('Get-Item -LiteralPath $path')
+    expect(command).toContain('Remove-Item -LiteralPath $path')
+    expect(command.match(/Remove-Item/g)).toHaveLength(1)
+  })
 
   it('emits an explicit POSIX liveness result so GC can fail closed', () => {
     const command = relayLivenessProbeCommand(posix, '/home/u/.orca-remote/relay-0.1.0')

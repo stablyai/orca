@@ -194,6 +194,52 @@ describe('deployAndLaunchRelay staged uploads', () => {
     await deploy
   })
 
+  it('drops only its stage when a sibling finishes before the locked re-probe', async () => {
+    const conn = makeMockConnection()
+    const events: string[] = []
+    vi.mocked(isRelayAlreadyInstalled)
+      .mockReset()
+      .mockImplementationOnce(async () => {
+        events.push('initial-probe')
+        return false
+      })
+      .mockImplementationOnce(async () => {
+        events.push('locked-re-probe')
+        return true
+      })
+    vi.mocked(acquireInstallLock).mockImplementationOnce(async () => {
+      events.push('lock')
+    })
+    let socketProbe = 0
+    vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      if (command.includes('uname')) {
+        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      }
+      if (command === 'echo $HOME') {
+        return Promise.resolve('/home/user')
+      }
+      if (command.includes('test -S')) {
+        return Promise.resolve(socketProbe++ === 0 ? 'DEAD' : 'READY')
+      }
+      return Promise.resolve('')
+    })
+    conn.writeFile = vi.fn().mockResolvedValue(undefined)
+    conn.uploadDirectory = vi.fn().mockImplementation(async () => {
+      events.push('upload')
+    })
+
+    await deployAndLaunchRelay(conn)
+
+    expect(events).toEqual(['initial-probe', 'upload', 'lock', 'locked-re-probe'])
+    const commands = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
+    expect(commands.some((command) => command.includes('cp -a'))).toBe(false)
+    const uploadStageRemovals = commands.filter(
+      (command) => command.includes('.upload-') && command.includes('rm -rf')
+    )
+    expect(uploadStageRemovals).toHaveLength(1)
+    expect(uploadStageRemovals[0]).toMatch(/relay-0\.1\.0\+abcdef012345\.upload-[0-9a-f-]{36}'$/u)
+  })
+
   it('removes stale upload stages before starting a fresh upload', async () => {
     const conn = makeMockConnection()
     vi.mocked(isRelayAlreadyInstalled)
@@ -204,6 +250,11 @@ describe('deployAndLaunchRelay staged uploads', () => {
       '/home/user/.orca-remote/relay-0.1.0+abcdef012345.upload-123e4567-e89b-12d3-a456-426614174000'
     const staleStageB =
       '/home/user/.orca-remote/relay-0.1.0+abcdef012345.upload-123e4567-e89b-12d3-a456-426614174001'
+    const excessStages = Array.from(
+      { length: 99 },
+      (_, index) =>
+        `/home/user/.orca-remote/relay-0.1.0+abcdef012345.upload-123e4567-e89b-12d3-a456-${String(index + 2).padStart(12, '0')}`
+    )
     let socketProbe = 0
     vi.mocked(execCommand).mockImplementation((_conn, command) => {
       if (command.includes('uname')) {
@@ -213,7 +264,9 @@ describe('deployAndLaunchRelay staged uploads', () => {
         return Promise.resolve('/home/user')
       }
       if (command.includes('.upload-*')) {
-        return Promise.resolve(`${staleStageA}\n/home/user/important-repository\n${staleStageB}\n`)
+        return Promise.resolve(
+          `${staleStageA}\n/home/user/important-repository\n${staleStageB}\n${excessStages.join('\n')}\n`
+        )
       }
       if (command.includes('test -S')) {
         return Promise.resolve(socketProbe++ === 0 ? 'DEAD' : 'READY')
@@ -233,6 +286,12 @@ describe('deployAndLaunchRelay staged uploads', () => {
         commands.some((command) => command.includes(staleStageB) && command.includes('rm -rf'))
       ).toBe(true)
       expect(commands.some((command) => command.includes('important-repository'))).toBe(false)
+      const staleCleanupCommands = commands.filter(
+        (command) => command.includes('rm -rf "$d"') && command.includes('mmin +40')
+      )
+      expect(staleCleanupCommands).toHaveLength(1)
+      expect(staleCleanupCommands[0]).toContain(excessStages[5])
+      expect(staleCleanupCommands[0]).not.toContain(excessStages[6])
     })
 
     await deployAndLaunchRelay(conn)
