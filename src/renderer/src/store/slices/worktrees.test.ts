@@ -31,6 +31,8 @@ import {
   markHugeRepoWarningDismissed
 } from '@/lib/source-control-huge-repo-warning-dismissals'
 
+const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
+
 vi.mock('sonner', () => ({
   toast: {
     warning: vi.fn(),
@@ -39,6 +41,10 @@ vi.mock('sonner', () => ({
     error: vi.fn(),
     dismiss: vi.fn()
   }
+}))
+
+vi.mock('@/components/worktree-base-fallback-notice', () => ({
+  requestWorktreeBaseFallbackNotice
 }))
 
 const runtimeEnvironmentCall = vi.fn()
@@ -4102,6 +4108,24 @@ describe('createWorktree base status merge', () => {
       id: watcherWorktree.id,
       baseRef: 'refs/remotes/origin/main'
     })
+  })
+
+  it('requests a warning dialog when creation falls back to a local base', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    const baseFallback = {
+      requestedRef: 'origin/main',
+      localRef: 'main'
+    }
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt, baseFallback })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    expect(requestWorktreeBaseFallbackNotice).toHaveBeenCalledWith(baseFallback)
   })
 
   it.each([

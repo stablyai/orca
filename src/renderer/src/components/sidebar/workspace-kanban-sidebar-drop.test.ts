@@ -7,9 +7,11 @@ import {
   getWorkspaceKanbanSidebarDropGroups,
   getWorkspaceKanbanSidebarDropTarget,
   isWorkspaceKanbanSidebarDropPointInBoard,
+  registerWorkspaceKanbanSidebarDropGroups,
   resolveWorkspaceKanbanSidebarFullLaneDropIndex,
   updateWorkspaceKanbanSidebarDropTargetVisual
 } from './workspace-kanban-sidebar-drop'
+import { registerWorkspaceKanbanVirtualLaneLayout } from './workspace-kanban-virtual-lane-layout'
 
 const workspaceStatuses: WorkspaceStatusDefinition[] = [
   { id: 'todo', label: 'Todo' },
@@ -29,6 +31,7 @@ class FakeElement extends FakeNode {
     }
   }
   offsetParent: FakeElement | null = null
+  scrollTop = 0
   private readonly attributes = new Map<string, string>()
   private rect: Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom' | 'width' | 'height'> = {
     left: 0,
@@ -159,6 +162,7 @@ class FakeDocument {
 }
 
 let fakeDocument: FakeDocument
+let unregisterSidebarDropGroups: (() => void) | null = null
 
 function setRect(
   element: HTMLElement,
@@ -221,6 +225,8 @@ function worktree(args: {
 }
 
 afterEach(() => {
+  unregisterSidebarDropGroups?.()
+  unregisterSidebarDropGroups = null
   clearWorkspaceKanbanSidebarDropTargetVisual()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -247,6 +253,71 @@ describe('workspace kanban sidebar drop DOM bridge', () => {
     expect(getWorkspaceKanbanSidebarDropGroups()).toEqual([
       { key: 'doing', worktreeIds: ['doing-a', 'doing-b'] }
     ])
+  })
+
+  it('prefers complete registered groups and restores the DOM fallback on cleanup', () => {
+    appendBoard()
+    unregisterSidebarDropGroups = registerWorkspaceKanbanSidebarDropGroups([
+      { key: 'doing', worktreeIds: ['doing-a', 'doing-b', 'doing-c', 'doing-d'] }
+    ])
+
+    expect(getWorkspaceKanbanSidebarDropGroups()).toEqual([
+      { key: 'doing', worktreeIds: ['doing-a', 'doing-b', 'doing-c', 'doing-d'] }
+    ])
+
+    unregisterSidebarDropGroups()
+    unregisterSidebarDropGroups = null
+    expect(getWorkspaceKanbanSidebarDropGroups()).toEqual([
+      { key: 'doing', worktreeIds: ['doing-a', 'doing-b'] }
+    ])
+  })
+
+  it('uses the full virtual layout when the mounted card window is stale', () => {
+    const { lane } = appendBoard()
+    const laneScroll = document.createElement('div')
+    laneScroll.setAttribute('data-workspace-board-lane-scroll', '')
+    setRect(laneScroll, {
+      left: 0,
+      top: 0,
+      right: 200,
+      bottom: 220,
+      width: 200,
+      height: 220
+    })
+    const spacer = document.createElement('div')
+    setRect(spacer, {
+      left: 8,
+      top: -4260,
+      right: 192,
+      bottom: 220,
+      width: 184,
+      height: 4480
+    })
+    laneScroll.append(spacer)
+    lane.append(laneScroll)
+    setElementFromPoint(lane)
+    const unregister = registerWorkspaceKanbanVirtualLaneLayout({
+      scrollElement: laneScroll,
+      spacerElement: spacer,
+      getItemIds: () => Array.from({ length: 102 }, (_, index) => `doing-${index}`),
+      getMeasurements: () =>
+        Array.from({ length: 102 }, (_, index) => ({
+          index,
+          start: index * 44,
+          end: index * 44 + 36
+        }))
+    })
+
+    expect(getWorkspaceKanbanSidebarDropTarget(24, 210)).toMatchObject({
+      status: 'doing',
+      dropIndex: 102,
+      dropIndicatorY: 225,
+      cardRects: [
+        { top: 8, bottom: 48 },
+        { top: 56, bottom: 96 }
+      ]
+    })
+    unregister()
   })
 
   it('prefers the published full lane membership over the rendered card scan', () => {

@@ -56,6 +56,11 @@ describe('PtyHandler negotiated source publication', () => {
   let heldResponseSettlements: ((result: SinkWriteSettlement) => void)[]
   let adapter: SshPtyConsumerSessionAdapter
   let pausePty: ReturnType<typeof vi.fn>
+  let exitCallback: ((event: { exitCode: number }) => void) | undefined
+  let destroyPty: ReturnType<typeof vi.fn>
+  let holdDataSettlements: boolean
+  let heldDataSettlements: ((result: SinkWriteSettlement) => void)[]
+  let highWaterMark: number | undefined
 
   beforeEach(async () => {
     vi.useFakeTimers()
@@ -64,20 +69,28 @@ describe('PtyHandler negotiated source publication', () => {
     heldResponseId = null
     heldResponseSettlements = []
     dataCallback = undefined
+    exitCallback = undefined
+    holdDataSettlements = false
+    heldDataSettlements = []
+    highWaterMark = undefined
     pausePty = vi.fn()
+    destroyPty = vi.fn()
     mockPtySpawn.mockReset()
     mockPtySpawn.mockReturnValue({
       pid: process.pid,
       onData: vi.fn((callback: (data: string) => void) => {
         dataCallback = callback
       }),
-      onExit: vi.fn(),
+      onExit: vi.fn((callback: (event: { exitCode: number }) => void) => {
+        exitCallback = callback
+      }),
       write: vi.fn(),
       resize: vi.fn(),
       kill: vi.fn(),
       clear: vi.fn(),
       pause: pausePty,
-      resume: vi.fn()
+      resume: vi.fn(),
+      destroy: destroyPty
     })
     dispatcher = new RelayDispatcher(
       (data, settle) => {
@@ -86,10 +99,24 @@ describe('PtyHandler negotiated source publication', () => {
           heldResponseSettlements.push(settle)
           return true
         }
+        const frame = notification(data)
+        if (holdDataSettlements && frame?.method === 'pty.data') {
+          heldDataSettlements.push(settle)
+          return true
+        }
+        if (frame?.method === 'pty.exit') {
+          // Why: real sockets never settle inside write(); a synchronous settle would re-enter
+          // the legacy capacity path before the pending exit is retired.
+          queueMicrotask(() => settle({ ok: true }))
+          return true
+        }
         settle({ ok: true })
         return true
       },
-      { supportsWriteCallback: true },
+      {
+        supportsWriteCallback: true,
+        writableHighWaterMark: () => highWaterMark ?? 0
+      },
       endpointIdentity
     )
     handler = new PtyHandler(dispatcher)
@@ -131,6 +158,133 @@ describe('PtyHandler negotiated source publication', () => {
       .map(notification)
       .filter((frame): frame is Notification => frame?.method === 'pty.data')
   }
+
+  function exitFrames(): Notification[] {
+    return writes
+      .map(notification)
+      .filter((frame): frame is Notification => frame?.method === 'pty.exit')
+  }
+
+  async function cancelSourceDelivery(spawnResult: Record<string, unknown>): Promise<void> {
+    const activation = spawnResult.sourceActivation as Record<string, unknown>
+    dispatcher.feed(
+      requestFrame(9, 'pty.cancelDelivery', {
+        id: spawnResult.id,
+        clientGeneration: activation.clientGeneration,
+        ownerGeneration: activation.ownerGeneration,
+        deliveryToken: activation.deliveryToken
+      })
+    )
+    await vi.advanceTimersByTimeAsync(0)
+  }
+
+  function stubPublication(overrides: Partial<Record<string, unknown>>): RelayPtySourcePublication {
+    return {
+      accepts: () => true,
+      exitPublicationSettled: () => false,
+      sealAndPublishExit: () => false,
+      publish: () => false,
+      onCreditAvailable: () => {},
+      receivingActivation: () => undefined,
+      waitForPendingSend: async () => true,
+      activate: () => false,
+      getDebugSnapshot: () => ({}),
+      dispose: () => {},
+      ...overrides
+    } as unknown as RelayPtySourcePublication
+  }
+
+  it('publishes a single legacy exit after the owner cancels its delivery', async () => {
+    await spawn({})
+    const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
+    dataCallback!('prompt')
+    await vi.advanceTimersByTimeAsync(8)
+    await cancelSourceDelivery(spawnResult)
+    expect(publication.accepts(String(spawnResult.id))).toBe(false)
+
+    expect(() => exitCallback!({ exitCode: 0 })).not.toThrow()
+
+    expect(exitFrames()).toHaveLength(1)
+    expect(exitFrames()[0].params).toMatchObject({ id: spawnResult.id, code: 0 })
+    expect(destroyPty).toHaveBeenCalledOnce()
+
+    handler.handleSourcePublicationCapacity(String(spawnResult.id))
+    await vi.advanceTimersByTimeAsync(8)
+    expect(exitFrames()).toHaveLength(1)
+  })
+
+  it('drains buffered legacy output before the exit when capacity returns', async () => {
+    await spawn({})
+    const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
+    await cancelSourceDelivery(spawnResult)
+    holdDataSettlements = true
+
+    dataCallback!('first')
+    await vi.advanceTimersByTimeAsync(8)
+    expect(heldDataSettlements).toHaveLength(1)
+    // Why: shrinking the frame capacity makes the next chunk unpublishable, so it stays queued.
+    highWaterMark = 64
+    dataCallback!('second')
+    await vi.advanceTimersByTimeAsync(8)
+
+    expect(() => exitCallback!({ exitCode: 3 })).not.toThrow()
+    expect(exitFrames()).toHaveLength(0)
+
+    highWaterMark = undefined
+    holdDataSettlements = false
+    heldDataSettlements[0]({ ok: true })
+    await vi.advanceTimersByTimeAsync(8)
+
+    const frames = writes
+      .map(notification)
+      .filter(
+        (frame): frame is Notification =>
+          frame?.method === 'pty.data' || frame?.method === 'pty.exit'
+      )
+    expect(frames.map((frame) => frame.method)).toEqual(['pty.data', 'pty.data', 'pty.exit'])
+    expect(frames.map((frame) => frame.params.data)).toEqual(['first', 'second', undefined])
+    expect(frames.at(-1)!.params).toMatchObject({ id: spawnResult.id, code: 3 })
+  })
+
+  it('contains a source publication fault and still delivers the legacy exit', async () => {
+    await spawn({})
+    const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    try {
+      handler.setSourcePublication(
+        stubPublication({
+          sealAndPublishExit: () => {
+            throw new Error('ledger delivery vanished')
+          }
+        })
+      )
+
+      expect(() => exitCallback!({ exitCode: 7 })).not.toThrow()
+
+      expect(exitFrames()).toHaveLength(1)
+      expect(exitFrames()[0].params).toMatchObject({ id: spawnResult.id, code: 7 })
+      expect(String(stderr.mock.calls.at(-1)?.[0])).toContain(
+        '[pty-handler] pty source exit publication failed'
+      )
+    } finally {
+      stderr.mockRestore()
+    }
+  })
+
+  it('completes the exit from the settled state without re-sealing the delivery', async () => {
+    await spawn({})
+    const spawnResult = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
+    const sealAndPublishExit = vi.fn(() => true)
+    handler.setSourcePublication(
+      stubPublication({ exitPublicationSettled: () => true, sealAndPublishExit })
+    )
+
+    exitCallback!({ exitCode: 0 })
+    handler.handleSourcePublicationCapacity(String(spawnResult.id))
+
+    expect(sealAndPublishExit).not.toHaveBeenCalled()
+    expect(exitFrames()).toHaveLength(0)
+  })
 
   it('fences the first source frame behind immutable spawn and attach activation metadata', async () => {
     heldResponseId = 2

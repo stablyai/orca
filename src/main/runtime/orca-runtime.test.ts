@@ -8579,17 +8579,23 @@ describe('OrcaRuntimeService', () => {
       expect(batches[0].seq).toBeLessThan(batches[1].seq)
     })
 
-    it('emits nothing for chunks without derived facts', () => {
+    it('emits only agent-status facts for status-only chunks', () => {
       const { runtime, batches } = createSideEffectRuntime()
       syncSinglePty(runtime)
 
-      // Plain output, a BEL-terminated non-title OSC split across chunks, and an Orca status payload — none is a title/bell/agent fact.
+      // Plain output and a BEL-terminated non-title OSC stay fact-free.
       runtime.onPtyData('pty-1', 'plain output\r\n', 100)
       runtime.onPtyData('pty-1', '\x1b]7;file://host', 101)
       runtime.onPtyData('pty-1', '/tmp\x07', 102)
       runtime.onPtyData('pty-1', '\x1b]9999;{"state":"working","agentType":"codex"}\x07', 103)
 
-      expect(batches).toEqual([])
+      expect(batches).toHaveLength(1)
+      expect(batches[0].facts).toEqual([
+        {
+          kind: 'agent-status',
+          payload: expect.objectContaining({ state: 'working', agentType: 'codex' })
+        }
+      ])
     })
 
     it('emits the stale-working-title rewrite as between-chunk fact batches', async () => {
@@ -25026,6 +25032,117 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  it('keeps a live headed runtime-owned tab until its explicit close', async () => {
+    const ptyId = 'local-runtime-owned-pty'
+    const splitPtyId = 'local-runtime-owned-split-pty'
+    const tabId = 'runtime-session-tab'
+    const leafId = HEADLESS_LEAF_ID
+    const kill = vi.fn(() => true)
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: TEST_REPO_ID,
+      activeWorktreeId: TEST_WORKTREE_ID,
+      tabsByWorktree: {
+        [TEST_WORKTREE_ID]: [
+          {
+            id: tabId,
+            ptyId: null,
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Codex',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            launchAgent: 'codex'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        [tabId]: makeHeadlessTerminalLayout({ [leafId]: undefined })
+      }
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValueOnce({ id: ptyId }).mockResolvedValueOnce({ id: splitPtyId }),
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        {
+          id: ptyId,
+          cwd: TEST_WORKTREE_PATH,
+          title: 'Codex',
+          worktreeId: TEST_WORKTREE_ID
+        },
+        {
+          id: splitPtyId,
+          cwd: TEST_WORKTREE_PATH,
+          title: 'Codex',
+          worktreeId: TEST_WORKTREE_ID
+        }
+      ]
+    })
+    const publishRendererOmission = (snapshotVersion: number): void => {
+      runtime.syncWindowGraph(1, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [
+          {
+            worktree: TEST_WORKTREE_ID,
+            publicationEpoch: 'headed-runtime',
+            snapshotVersion,
+            activeGroupId: 'group-1',
+            activeTabId: null,
+            activeTabType: null,
+            tabs: []
+          }
+        ]
+      })
+    }
+    runtime.attachWindow(1)
+    publishRendererOmission(1)
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    })
+
+    const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      presentation: 'background',
+      persistHostSessionBinding: true,
+      tabId,
+      leafId,
+      launchAgent: 'codex'
+    })
+    const split = await runtime.splitTerminal(created.handle, { direction: 'vertical' })
+    publishRendererOmission(2)
+
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: `${tabId}::${leafId}`,
+          parentTabId: tabId,
+          ptyId,
+          status: 'ready',
+          terminal: created.handle
+        }),
+        expect.objectContaining({
+          parentTabId: tabId,
+          ptyId: splitPtyId,
+          status: 'ready',
+          terminal: split.handle
+        })
+      ])
+    )
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toHaveLength(2)
+
+    await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, tabId, { reason: 'user' })
+    publishRendererOmission(3)
+
+    expect(kill).toHaveBeenCalledWith(ptyId)
+    expect(kill).toHaveBeenCalledWith(splitPtyId)
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+  })
+
   it('publishes laptop-created remote runtime terminals to phone session tabs', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     const runtime = new OrcaRuntimeService(store)
@@ -29289,7 +29406,7 @@ describe('OrcaRuntimeService', () => {
           {
             tabId: 'tab-renderer',
             worktreeId: TEST_WORKTREE_ID,
-            leafId: 'pane:1',
+            leafId: HEADLESS_LEAF_ID,
             paneRuntimeId: 1,
             ptyId: 'pty-renderer',
             paneTitle: null
@@ -29306,10 +29423,12 @@ describe('OrcaRuntimeService', () => {
             tabs: [
               {
                 type: 'terminal',
-                id: 'tab-renderer::pane:1',
+                id: `tab-renderer::${HEADLESS_LEAF_ID}`,
                 parentTabId: 'tab-renderer',
-                leafId: 'pane:1',
+                leafId: HEADLESS_LEAF_ID,
+                ptyId: 'pty-renderer',
                 title: 'Terminal',
+                viewMode: 'chat',
                 isActive: false
               }
             ]
@@ -29350,6 +29469,86 @@ describe('OrcaRuntimeService', () => {
     )
     expect(focusTerminal).not.toHaveBeenCalled()
     expect(result.tab).toMatchObject({ parentTabId: 'tab-renderer', isActive: false })
+
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [
+        {
+          tabId: 'tab-renderer',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId: 'pty-renderer',
+          paneTitle: null
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 2,
+          activeGroupId: 'group-1',
+          activeTabId: null,
+          activeTabType: null,
+          tabs: []
+        }
+      ]
+    })
+
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([
+      expect.objectContaining({ parentTabId: 'tab-renderer', ptyId: 'pty-renderer' })
+    ])
+
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [
+        {
+          tabId: 'tab-renderer',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_SECOND_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId: 'pty-renderer',
+          paneTitle: null
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 3,
+          activeGroupId: 'group-1',
+          activeTabId: null,
+          activeTabType: null,
+          tabs: []
+        }
+      ]
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [
+        {
+          tabId: 'tab-renderer',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_SECOND_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId: 'pty-renderer',
+          paneTitle: null
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 4,
+          activeGroupId: 'group-1',
+          activeTabId: null,
+          activeTabType: null,
+          tabs: []
+        }
+      ]
+    })
+
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
   })
 
   it('dedupes concurrent mobile terminal creates that share a clientMutationId', async () => {

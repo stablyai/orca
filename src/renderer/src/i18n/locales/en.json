@@ -14328,6 +14328,12 @@
           },
           "undo": "Undo",
           "widthOption": "{{value0}} px"
+        },
+        "grab": {
+          "errorNotReady": "This page isn't ready for element selection yet.",
+          "errorNotAuthorized": "Browser access was denied.",
+          "errorAlreadyActive": "Element selection is already active.",
+          "errorInjectionFailed": "Could not start element selection on this page."
         }
       },
       "GitHubIssueWorkspaceLaunchButton": {
@@ -14353,6 +14359,11 @@
         "useManualTerminalWorktreeParking": {
           "cannotPark": "These terminals cannot be parked safely."
         }
+      },
+      "WorktreeBaseFallbackDialog": {
+        "title": "Workspace created from a local base",
+        "description": "The remote-tracking ref \"{{value0}}\" was unavailable, so Orca used local \"{{value1}}\" instead. This workspace may not include the latest remote changes.",
+        "dismiss": "Got it"
       }
     },
     "i18n": {

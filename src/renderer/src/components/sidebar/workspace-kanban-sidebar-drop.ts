@@ -29,6 +29,7 @@ const BOARD_SHEET_SELECTOR = '[data-workspace-board-sheet]'
 const EXTERNAL_DRAG_TARGET_ATTR = 'data-workspace-board-external-drag-target'
 
 let externalDragTargetElement: HTMLElement | null = null
+let logicalDropGroupsRegistration: { groups: readonly WorktreeDragGroup[] } | null = null
 
 function getWorkspaceKanbanBoardElement(): HTMLElement | null {
   return document.querySelector<HTMLElement>(BOARD_SELECTOR)
@@ -97,7 +98,26 @@ export function clearWorkspaceKanbanSidebarDropTargetVisual(): void {
   removeCardDropIndicator()
 }
 
+export function registerWorkspaceKanbanSidebarDropGroups(
+  groups: readonly WorktreeDragGroup[]
+): () => void {
+  const registration = { groups }
+  logicalDropGroupsRegistration = registration
+  return () => {
+    if (logicalDropGroupsRegistration === registration) {
+      logicalDropGroupsRegistration = null
+    }
+  }
+}
+
 export function getWorkspaceKanbanSidebarDropGroups(): WorktreeDragGroup[] {
+  if (logicalDropGroupsRegistration) {
+    return logicalDropGroupsRegistration.groups.map((group) => ({
+      key: group.key,
+      worktreeIds: [...group.worktreeIds]
+    }))
+  }
+
   const board = getWorkspaceKanbanBoardElement()
   if (!board) {
     return []

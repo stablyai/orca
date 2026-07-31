@@ -2290,6 +2290,7 @@ export type CreateWorktreeResult = {
   }
   defaultTabs?: WorktreeDefaultTabsLaunch
   warning?: string
+  baseFallback?: WorktreeCreateBaseFallback
   initialBaseStatus?: WorktreeBaseStatusEvent
   localBaseRefRefresh?: LocalBaseRefRefreshResult
   localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion
@@ -2302,6 +2303,11 @@ export type CreateWorktreeResult = {
     surface?: 'visible' | 'background'
   }
   timing?: WorktreeCreateTiming
+}
+
+export type WorktreeCreateBaseFallback = {
+  requestedRef: string
+  localRef: string
 }
 
 export type PreservedWorktreeBranch = {

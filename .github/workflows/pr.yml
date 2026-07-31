@@ -273,6 +273,58 @@ jobs:
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked
 
+      - name: Smoke packaged hang watchdog worker
+        run: xvfb-run --auto-servernum node config/scripts/smoke-packaged-hang-watchdog-worker.mjs --app-dir=dist/linux-unpacked
+
+  package_windows:
+    name: package (windows)
+    runs-on: windows-2022
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-windows-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-windows-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build package inputs
+        run: pnpm run build:release
+
+      - name: Prepare Electron native runtime
+        run: node config/scripts/ensure-native-runtime.mjs --runtime=electron
+
+      - name: Package unpacked app
+        env:
+          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
+        run: pnpm exec electron-builder --config config/electron-builder.config.cjs --dir
+
+      - name: Smoke packaged CLI
+        run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked
+
   # Why: regression specs under tests/e2e/** used to merge green without ever
   # running — e2e.yml only fired on schedule/release (#10518). Path-filter so
   # ordinary PRs stay light; any E2E suite change still gets a full shard run.
@@ -331,6 +383,7 @@ jobs:
       - shell_contracts
       - test
       - package
+      - package_windows
     runs-on: ubuntu-latest
 
     steps:
@@ -350,6 +403,7 @@ jobs:
           SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
           TEST: ${{ needs.test.result }}
           PACKAGE: ${{ needs.package.result }}
+          PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
         run: |
           for result in \
             "$STATIC_ANALYSIS" \
@@ -357,7 +411,8 @@ jobs:
             "$GIT_COMPATIBILITY" \
             "$SHELL_CONTRACTS" \
             "$TEST" \
-            "$PACKAGE"; do
+            "$PACKAGE" \
+            "$PACKAGE_WINDOWS"; do
             if [ "$result" != "success" ]; then
               exit 1
             fi

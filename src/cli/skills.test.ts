@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { delimiter } from 'node:path'
-import type * as CodexCliCommandModule from '../main/codex-cli/command'
+import type * as CodexCliCommandModule from '../shared/node-cli-command-resolution'
 
 const {
   detectCommandsMock,
@@ -19,12 +19,12 @@ const {
 
 // Why: agent detection probes the real machine, so pin it or every install
 // assertion depends on what the test runner happens to have installed.
-vi.mock('../main/ipc/local-agent-install-dir-detection', () => ({
+vi.mock('../shared/local-agent-install-dir-detection', () => ({
   detectCommandsInInstallDirs: detectCommandsMock
 }))
 
 // Why: override only the npx lookup so the real Windows .cmd rail still runs.
-vi.mock('../main/codex-cli/command', async (importOriginal) => ({
+vi.mock('../shared/node-cli-command-resolution', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexCliCommandModule>()),
   resolveCliCommand: resolveCliCommandMock
 }))

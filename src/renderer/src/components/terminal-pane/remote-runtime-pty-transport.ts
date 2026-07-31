@@ -157,6 +157,7 @@ export function createRemoteRuntimePtyTransport(
   const runtimeEnvironmentPairingRevision = getRuntimeEnvironmentRevision(runtimeEnvironmentId)
   let multiplexedStream: RemoteRuntimeMultiplexedTerminal | null = null
   let multiplexedStreamHandle: string | null = null
+  let desiredOutputPaused = false
   let desiredViewport: { cols: number; rows: number } | null = null
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   let resubscribeEpoch: number | null = null
@@ -164,6 +165,7 @@ export function createRemoteRuntimePtyTransport(
   let resubscribeRequestedRequiresReplacement = false
   let recoveryRequiresReplacement = false
   let stopWaitingForPublishedHandle: (() => void) | null = null
+  let settleHostSessionAttachRetry: ((retry: boolean) => void) | null = null
   let attachGeneration = 0
   let subscriptionGeneration = 0
 
@@ -213,6 +215,13 @@ export function createRemoteRuntimePtyTransport(
       subscriptionGeneration += 1
       closeMultiplexedStream()
     }
+    if (
+      recovery.currentPhase === 'disconnected' ||
+      recovery.currentPhase === 'disposed' ||
+      recovery.currentPhase === 'idle'
+    ) {
+      settleHostSessionAttachRetry?.(false)
+    }
     emitRecoveryState()
   })
   let lastRecoveryStateKey = ''
@@ -228,6 +237,7 @@ export function createRemoteRuntimePtyTransport(
   let agentSessionRequiresHostAuthorityReplay = false
   let terminalCreateUnknownOutcomeError: unknown = null
   let lastConnectOptions: Parameters<PtyTransport['connect']>[0] | null = null
+  let lastAttachOptions: Parameters<PtyTransport['attach']>[0] | null = null
   let resolvePaneUnavailable = false
   let recoveringPaneHandle: string | null = null
   const adoptExecutionMetadata = (terminal: {
@@ -397,7 +407,8 @@ export function createRemoteRuntimePtyTransport(
   }
 
   async function waitForHostSessionHandle(
-    hostTabId: string
+    hostTabId: string,
+    isCurrent: () => boolean
   ): Promise<string | null | undefined | false> {
     if (!worktreeId) {
       return undefined
@@ -425,7 +436,7 @@ export function createRemoteRuntimePtyTransport(
     }
 
     const startedAt = Date.now()
-    while (!destroyed) {
+    while (isCurrent()) {
       const remainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
       if (remainingMs <= 0) {
         return undefined
@@ -452,6 +463,63 @@ export function createRemoteRuntimePtyTransport(
             matchRequestedLeaf: false
           }).length > 0
         return siblingStillExists ? false : null
+      }
+    }
+    return undefined
+  }
+
+  function waitForHostSessionAttachRetry(recoveryEpoch: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      let settled = false
+      const settle = (retry: boolean): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        if (settleHostSessionAttachRetry === settle) {
+          settleHostSessionAttachRetry = null
+        }
+        resolve(retry)
+      }
+      settleHostSessionAttachRetry?.(false)
+      settleHostSessionAttachRetry = settle
+      if (!recovery.schedule(recoveryEpoch, () => settle(true))) {
+        settle(false)
+      }
+    })
+  }
+
+  async function waitForHostSessionHandleWithRecovery(
+    hostTabId: string,
+    isCurrent: () => boolean
+  ): Promise<string | null | undefined | false> {
+    let recoveryEpoch = recovery.isActive ? recovery.currentEpoch : undefined
+    while (isCurrent()) {
+      try {
+        const hostHandle = await waitForHostSessionHandle(hostTabId, isCurrent)
+        if (!isCurrent()) {
+          return undefined
+        }
+        if (recoveryEpoch !== undefined) {
+          if (!recovery.isCurrent(recoveryEpoch)) {
+            return undefined
+          }
+        }
+        return hostHandle
+      } catch (error) {
+        if (
+          !isRecoverableRemoteRuntimeConnectionError(toRemoteRuntimeClientErrorLike(error)) ||
+          !isCurrent()
+        ) {
+          throw error
+        }
+        if (recoveryEpoch !== undefined && !recovery.isCurrent(recoveryEpoch)) {
+          return undefined
+        }
+        recoveryEpoch ??= recovery.begin()
+        if (!(await waitForHostSessionAttachRetry(recoveryEpoch)) || !isCurrent()) {
+          return undefined
+        }
       }
     }
     return undefined
@@ -523,29 +591,27 @@ export function createRemoteRuntimePtyTransport(
   async function attachHostSessionMirror(
     options: { cols?: number; rows?: number },
     notifySpawn = true,
-    expectedAttachGeneration?: number
+    expectedAttachGeneration?: number,
+    expectedLifecycleEpoch?: number
   ): Promise<PtyConnectResult | undefined> {
     if (!tabId || !isWebTerminalSurfaceTabId(tabId)) {
       return undefined
     }
+    const isCurrent = (): boolean =>
+      !destroyed &&
+      (expectedAttachGeneration === undefined || expectedAttachGeneration === attachGeneration) &&
+      (expectedLifecycleEpoch === undefined || expectedLifecycleEpoch === lifecycleEpoch)
     const hostTabId = toHostSessionTabId(tabId)
-    const hostHandle = await waitForHostSessionHandle(hostTabId)
-    if (hostHandle === undefined || destroyed) {
+    const hostHandle = await waitForHostSessionHandleWithRecovery(hostTabId, isCurrent)
+    if (hostHandle === undefined || !isCurrent()) {
       return undefined
     }
     if (hostHandle === null) {
       storedCallbacks.onError?.('Remote terminal was closed.')
       return undefined
     }
-    if (
-      !hostHandle ||
-      destroyed ||
-      (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration)
-    ) {
-      if (
-        !destroyed &&
-        (expectedAttachGeneration === undefined || expectedAttachGeneration === attachGeneration)
-      ) {
+    if (!hostHandle || !isCurrent()) {
+      if (isCurrent()) {
         storedCallbacks.onError?.('Remote terminal was closed.')
       }
       return undefined
@@ -573,6 +639,9 @@ export function createRemoteRuntimePtyTransport(
       }
     }
 
+    if (!isCurrent() || recovery.currentPhase === 'disconnected') {
+      return undefined
+    }
     handle = hostHandle
     remotePtyId = toRemoteRuntimePtyId(hostHandle, currentRuntimeEnvironmentId)
     registerShutdownHandlers(remotePtyId)
@@ -592,12 +661,7 @@ export function createRemoteRuntimePtyTransport(
         throw error
       }
     }
-    if (
-      destroyed ||
-      !connected ||
-      !remotePtyId ||
-      (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration)
-    ) {
+    if (!connected || !remotePtyId || !isCurrent()) {
       return undefined
     }
 
@@ -1216,6 +1280,9 @@ export function createRemoteRuntimePtyTransport(
     if (!isRecoverableRemoteRuntimeConnectionError(toRemoteRuntimeClientErrorLike(error))) {
       return false
     }
+    if (recovery.currentPhase === 'disconnected') {
+      return true
+    }
     scheduleResubscribeAfterTransportClose()
     return true
   }
@@ -1412,10 +1479,22 @@ export function createRemoteRuntimePtyTransport(
             })
           }
         },
+        onOutputPauseCapability: () => {
+          if (isCurrentSubscription()) {
+            storedCallbacks.onOutputPauseChanged?.(
+              desiredOutputPaused,
+              nextStream.setOutputPaused(desiredOutputPaused)
+            )
+          }
+        },
         onSubscribed: () => {
           if (!isCurrentSubscription()) {
             return
           }
+          storedCallbacks.onOutputPauseChanged?.(
+            desiredOutputPaused,
+            nextStream.setOutputPaused(desiredOutputPaused)
+          )
           subscriptionAttached = true
           setAttachmentReady(true)
           connecting = false
@@ -1548,6 +1627,7 @@ export function createRemoteRuntimePtyTransport(
       const connectLifecycleEpoch = ++lifecycleEpoch
       const createEnvironmentId = currentRuntimeEnvironmentId
       lastConnectOptions = options
+      lastAttachOptions = null
       storedCallbacks = options.callbacks
       recoveryRequiresReplacement = false
       terminalEnded = false
@@ -1559,7 +1639,7 @@ export function createRemoteRuntimePtyTransport(
 
       try {
         if (isWebTerminalSurfaceTabId(tabId ?? '')) {
-          return await attachHostSessionMirror(options)
+          return await attachHostSessionMirror(options, true, undefined, connectLifecycleEpoch)
         }
 
         if (options.sessionId && !getRemoteRuntimeTerminalHandle(options.sessionId)) {
@@ -1762,12 +1842,13 @@ export function createRemoteRuntimePtyTransport(
     },
 
     attach(options) {
-      lifecycleEpoch += 1
+      const attachLifecycleEpoch = ++lifecycleEpoch
       const generation = ++attachGeneration
       cancelTerminalCreateRetryWait()
       recovery.cancel()
       recoveryRequiresReplacement = false
       clearPublishedHandleWait()
+      lastAttachOptions = options
       storedCallbacks = options.callbacks
       terminalEnded = false
       connecting = true
@@ -1798,7 +1879,7 @@ export function createRemoteRuntimePtyTransport(
       const persistedHandle = nextHandle
       void (async () => {
         if (isWebTerminalSurfaceTabId(tabId ?? '')) {
-          await attachHostSessionMirror(options, false, generation)
+          await attachHostSessionMirror(options, false, generation, attachLifecycleEpoch)
           return
         }
         if (!tabId || !leafId || !worktreeId) {
@@ -1845,10 +1926,15 @@ export function createRemoteRuntimePtyTransport(
         }
         await adoptResolvedHostPane(resolved, options, false, generation)
       })().catch((error) => {
-        if (generation !== attachGeneration || destroyed) {
+        if (
+          generation !== attachGeneration ||
+          attachLifecycleEpoch !== lifecycleEpoch ||
+          destroyed
+        ) {
           return
         }
         clearPendingViewportClaim()
+        recovery.cancel()
         handleRemoteTerminalError(error)
       })
     },
@@ -1967,6 +2053,16 @@ export function createRemoteRuntimePtyTransport(
       return true
     },
 
+    setOutputPaused(paused: boolean): boolean {
+      desiredOutputPaused = paused
+      if (!connected || !handle) {
+        return false
+      }
+      const supported = getCurrentMultiplexedStream(handle)?.setOutputPaused(paused) === true
+      storedCallbacks.onOutputPauseChanged?.(paused, supported)
+      return supported
+    },
+
     resize(cols: number, rows: number, meta): boolean {
       if (!connected || !handle) {
         return false
@@ -1998,6 +2094,23 @@ export function createRemoteRuntimePtyTransport(
     getRecoveryState,
 
     retryRecovery() {
+      if (
+        !destroyed &&
+        !terminalEnded &&
+        !connected &&
+        isWebTerminalSurfaceTabId(tabId ?? '') &&
+        recovery.currentPhase === 'disconnected'
+      ) {
+        recovery.cancel()
+        if (lastAttachOptions) {
+          transport.attach(lastAttachOptions)
+          return true
+        }
+        if (lastConnectOptions) {
+          void transport.connect(lastConnectOptions)
+          return true
+        }
+      }
       if (
         !destroyed &&
         !terminalEnded &&

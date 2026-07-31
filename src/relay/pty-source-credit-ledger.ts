@@ -25,6 +25,7 @@ import {
   createDeliveryCancellation,
   createDeliveryRecord,
   createReplacementDeliveryRecord,
+  matchingDeliverySnapshot,
   MAX_SOURCE_SPAN_DATA_BYTES,
   ptyOwnerKey,
   retainedDataBytesTotal,
@@ -248,16 +249,18 @@ export class RelayPtySourceCreditLedger {
     return Object.freeze({ cancellation, recovery: Object.freeze(replacement.spans.slice()) })
   }
 
+  // Why: callers that can legitimately race a close probe instead of throwing; an evicted
+  // tombstone reads as null and must be treated as closed.
+  snapshotIfKnown(identity: PtySourceDeliveryIdentity): PtySourceDeliverySnapshot | null {
+    return matchingDeliverySnapshot(this.deliveries, this.closedSnapshots, identity)
+  }
+
   snapshot(identity: PtySourceDeliveryIdentity): PtySourceDeliverySnapshot {
-    const active = this.deliveries.get(ptySourceDeliveryKey(identity))
-    if (active && samePtySourceDelivery(active.identity, identity)) {
-      return snapshotDeliveryRecord(active)
+    const snapshot = this.snapshotIfKnown(identity)
+    if (!snapshot) {
+      throw new Error('Unknown or stale PTY source delivery')
     }
-    const closed = this.closedSnapshots.get(ptySourceDeliveryKey(identity))
-    if (closed && samePtySourceDelivery(closed, identity)) {
-      return closed
-    }
-    throw new Error('Unknown or stale PTY source delivery')
+    return snapshot
   }
 
   retainedSourceSu = (): number => retainedSourceTotal(this.deliveries.values())

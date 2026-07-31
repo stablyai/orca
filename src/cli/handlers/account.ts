@@ -12,8 +12,11 @@ import {
   readActiveClaudeKeychainCredentialsStrict,
   writeActiveClaudeKeychainCredentials
 } from '../../main/claude-accounts/keychain'
-import { getVersionManagerBinPaths, resolveCliCommand } from '../../main/codex-cli/command'
-import { getSpawnArgsForWindows } from '../../main/win32-utils'
+import {
+  getVersionManagerBinPaths,
+  resolveCliCommand
+} from '../../shared/node-cli-command-resolution'
+import { getSpawnArgsForWindows } from '../../shared/windows-batch-spawn'
 import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '../../shared/types'

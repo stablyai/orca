@@ -8,6 +8,8 @@ const {
   getGuestWebContentsIdMock,
   getWebContentsIdByTabIdMock,
   getWorktreeIdForTabMock,
+  getAuthorizedGuestMock,
+  setGrabModeMock,
   openDevToolsMock,
   setAnnotationViewportBridgeMock,
   cancelDownloadMock,
@@ -22,6 +24,8 @@ const {
   getGuestWebContentsIdMock: vi.fn(),
   getWebContentsIdByTabIdMock: vi.fn(() => new Map()),
   getWorktreeIdForTabMock: vi.fn(),
+  getAuthorizedGuestMock: vi.fn(),
+  setGrabModeMock: vi.fn(),
   openDevToolsMock: vi.fn().mockResolvedValue(true),
   setAnnotationViewportBridgeMock: vi.fn().mockResolvedValue(true),
   cancelDownloadMock: vi.fn(),
@@ -53,6 +57,8 @@ vi.mock('../browser/browser-manager', () => ({
     getGuestWebContentsId: getGuestWebContentsIdMock,
     getWebContentsIdByTabId: getWebContentsIdByTabIdMock,
     getWorktreeIdForTab: getWorktreeIdForTabMock,
+    getAuthorizedGuest: getAuthorizedGuestMock,
+    setGrabMode: setGrabModeMock,
     openDevTools: openDevToolsMock,
     setAnnotationViewportBridge: setAnnotationViewportBridgeMock,
     cancelDownload: cancelDownloadMock
@@ -79,6 +85,9 @@ describe('registerBrowserHandlers', () => {
     getWebContentsIdByTabIdMock.mockReset()
     getWebContentsIdByTabIdMock.mockReturnValue(new Map())
     getWorktreeIdForTabMock.mockReset()
+    getAuthorizedGuestMock.mockReset()
+    setGrabModeMock.mockReset()
+    setGrabModeMock.mockResolvedValue(true)
     openDevToolsMock.mockReset()
     setAnnotationViewportBridgeMock.mockReset()
     cancelDownloadMock.mockReset()
@@ -329,6 +338,255 @@ describe('registerBrowserHandlers', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('waits for authorized registration even when an old guest is still live', async () => {
+    const guest = { id: 123 } as Electron.WebContents
+    getGuestWebContentsIdMock.mockReturnValue(122)
+    getAuthorizedGuestMock.mockReturnValueOnce(null).mockReturnValue(guest)
+    registerBrowserHandlers()
+    const sender = {
+      id: 91,
+      isDestroyed: () => false,
+      getType: () => 'window',
+      getURL: () => 'file:///renderer/index.html'
+    } as Electron.WebContents
+    const setGrabModeHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:setGrabMode'
+    )?.[1] as (
+      event: { sender: Electron.WebContents },
+      args: { browserPageId: string; enabled: boolean }
+    ) => Promise<unknown>
+    const registerHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:registerGuest'
+    )?.[1] as (
+      event: { sender: Electron.WebContents },
+      args: {
+        browserPageId: string
+        workspaceId: string
+        worktreeId: string
+        webContentsId: number
+      }
+    ) => boolean
+
+    const pendingResult = setGrabModeHandler({ sender }, { browserPageId: 'page-1', enabled: true })
+    await Promise.resolve()
+    expect(setGrabModeMock).not.toHaveBeenCalled()
+
+    expect(
+      registerHandler(
+        { sender },
+        {
+          browserPageId: 'page-1',
+          workspaceId: 'workspace-1',
+          worktreeId: 'worktree-1',
+          webContentsId: 123
+        }
+      )
+    ).toBe(true)
+
+    await expect(pendingResult).resolves.toEqual({ ok: true })
+    expect(setGrabModeMock).toHaveBeenCalledWith('page-1', true, guest)
+  })
+
+  it('returns not-ready when grab registration does not arrive', async () => {
+    vi.useFakeTimers()
+    try {
+      getGuestWebContentsIdMock.mockReturnValue(null)
+      getAuthorizedGuestMock.mockReturnValue(null)
+      registerBrowserHandlers()
+      const sender = {
+        id: 91,
+        isDestroyed: () => false,
+        getType: () => 'window',
+        getURL: () => 'file:///renderer/index.html'
+      } as Electron.WebContents
+      const setGrabModeHandler = handleMock.mock.calls.find(
+        ([channel]) => channel === 'browser:setGrabMode'
+      )?.[1] as (
+        event: { sender: Electron.WebContents },
+        args: { browserPageId: string; enabled: boolean }
+      ) => Promise<unknown>
+
+      const pendingResult = setGrabModeHandler(
+        { sender },
+        { browserPageId: 'page-1', enabled: true }
+      )
+      await vi.advanceTimersByTimeAsync(1_001)
+
+      await expect(pendingResult).resolves.toEqual({ ok: false, reason: 'not-ready' })
+      expect(setGrabModeMock).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not enable grab mode after a pending request is cancelled', async () => {
+    const guest = { id: 123 } as Electron.WebContents
+    let registered = false
+    getAuthorizedGuestMock.mockImplementation(() => (registered ? guest : null))
+    registerBrowserHandlers()
+    const sender = {
+      id: 91,
+      isDestroyed: () => false,
+      getType: () => 'window',
+      getURL: () => 'file:///renderer/index.html'
+    } as Electron.WebContents
+    const setGrabModeHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:setGrabMode'
+    )?.[1] as (
+      event: { sender: Electron.WebContents },
+      args: { browserPageId: string; enabled: boolean }
+    ) => Promise<unknown>
+    const registerHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:registerGuest'
+    )?.[1] as (
+      event: { sender: Electron.WebContents },
+      args: {
+        browserPageId: string
+        workspaceId: string
+        worktreeId: string
+        webContentsId: number
+      }
+    ) => boolean
+
+    const pendingEnable = setGrabModeHandler({ sender }, { browserPageId: 'page-1', enabled: true })
+    await expect(
+      setGrabModeHandler({ sender }, { browserPageId: 'page-1', enabled: false })
+    ).resolves.toEqual({ ok: true })
+
+    registered = true
+    expect(
+      registerHandler(
+        { sender },
+        {
+          browserPageId: 'page-1',
+          workspaceId: 'workspace-1',
+          worktreeId: 'worktree-1',
+          webContentsId: 123
+        }
+      )
+    ).toBe(true)
+
+    await expect(pendingEnable).resolves.toEqual({ ok: true })
+    expect(setGrabModeMock).not.toHaveBeenCalled()
+  })
+
+  it('coalesces a cancelled pending enable into one later enable', async () => {
+    const guest = { id: 123 } as Electron.WebContents
+    let registered = false
+    getAuthorizedGuestMock.mockImplementation(() => (registered ? guest : null))
+    registerBrowserHandlers()
+    const sender = {
+      id: 91,
+      isDestroyed: () => false,
+      getType: () => 'window',
+      getURL: () => 'file:///renderer/index.html'
+    } as Electron.WebContents
+    const setGrabModeHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:setGrabMode'
+    )?.[1] as (
+      event: { sender: Electron.WebContents },
+      args: { browserPageId: string; enabled: boolean }
+    ) => Promise<unknown>
+    const registerHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:registerGuest'
+    )?.[1] as (
+      event: { sender: Electron.WebContents },
+      args: {
+        browserPageId: string
+        workspaceId: string
+        worktreeId: string
+        webContentsId: number
+      }
+    ) => boolean
+
+    const firstEnable = setGrabModeHandler({ sender }, { browserPageId: 'page-1', enabled: true })
+    await setGrabModeHandler({ sender }, { browserPageId: 'page-1', enabled: false })
+    const latestEnable = setGrabModeHandler({ sender }, { browserPageId: 'page-1', enabled: true })
+
+    registered = true
+    registerHandler(
+      { sender },
+      {
+        browserPageId: 'page-1',
+        workspaceId: 'workspace-1',
+        worktreeId: 'worktree-1',
+        webContentsId: 123
+      }
+    )
+
+    await expect(Promise.all([firstEnable, latestEnable])).resolves.toEqual([
+      { ok: true },
+      { ok: true }
+    ])
+    expect(setGrabModeMock).toHaveBeenCalledTimes(1)
+    expect(setGrabModeMock).toHaveBeenCalledWith('page-1', true, guest)
+  })
+
+  it('serializes in-flight mode changes so a stale enable cannot tear down the latest one', async () => {
+    const guest = { id: 123 } as Electron.WebContents
+    let resolveFirstEnable!: (success: boolean) => void
+    const firstEnable = new Promise<boolean>((resolve) => {
+      resolveFirstEnable = resolve
+    })
+    getAuthorizedGuestMock.mockReturnValue(guest)
+    setGrabModeMock.mockReturnValueOnce(firstEnable).mockResolvedValue(true)
+    registerBrowserHandlers()
+    const sender = {
+      id: 91,
+      isDestroyed: () => false,
+      getType: () => 'window',
+      getURL: () => 'file:///renderer/index.html'
+    } as Electron.WebContents
+    const setGrabModeHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:setGrabMode'
+    )?.[1] as (
+      event: { sender: Electron.WebContents },
+      args: { browserPageId: string; enabled: boolean }
+    ) => Promise<unknown>
+
+    const staleEnable = setGrabModeHandler({ sender }, { browserPageId: 'page-1', enabled: true })
+    await vi.waitFor(() => {
+      expect(setGrabModeMock).toHaveBeenCalledTimes(1)
+    })
+    const disable = setGrabModeHandler({ sender }, { browserPageId: 'page-1', enabled: false })
+    const latestEnable = setGrabModeHandler({ sender }, { browserPageId: 'page-1', enabled: true })
+
+    resolveFirstEnable(true)
+    await expect(Promise.all([staleEnable, disable, latestEnable])).resolves.toEqual([
+      { ok: true },
+      { ok: true },
+      { ok: true }
+    ])
+
+    expect(setGrabModeMock.mock.calls).toEqual([
+      ['page-1', true, guest],
+      ['page-1', true, guest]
+    ])
+  })
+
+  it('distinguishes picker injection failure from guest readiness', async () => {
+    const guest = { id: 123 } as Electron.WebContents
+    getAuthorizedGuestMock.mockReturnValue(guest)
+    setGrabModeMock.mockResolvedValue(false)
+    registerBrowserHandlers()
+    const sender = {
+      id: 91,
+      isDestroyed: () => false,
+      getType: () => 'window',
+      getURL: () => 'file:///renderer/index.html'
+    } as Electron.WebContents
+    const setGrabModeHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:setGrabMode'
+    )?.[1] as (
+      event: { sender: Electron.WebContents },
+      args: { browserPageId: string; enabled: boolean }
+    ) => Promise<unknown>
+
+    await expect(
+      setGrabModeHandler({ sender }, { browserPageId: 'page-1', enabled: true })
+    ).resolves.toEqual({ ok: false, reason: 'injection-failed' })
   })
 
   it('resolves worktree and any-tab registration waiters when a guest registers', async () => {
