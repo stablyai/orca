@@ -91,4 +91,27 @@ describe('raceSftpFileTransferWithAbort', () => {
       vi.useRealTimers()
     }
   })
+
+  it('removes the close waiter when the teardown deadline expires', async () => {
+    vi.useFakeTimers()
+    try {
+      const controller = new AbortController()
+      const removeCloseListener = vi.fn()
+      const outcome = raceSftpFileTransferWithAbort(
+        new Promise<void>(() => {}),
+        controller.signal,
+        () => removeCloseListener
+      ).catch((error: Error) => error)
+
+      controller.abort()
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(outcome).resolves.toMatchObject({
+        sshTransferTeardownConfirmed: false
+      })
+      expect(removeCloseListener).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

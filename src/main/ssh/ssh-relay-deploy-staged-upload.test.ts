@@ -79,6 +79,10 @@ import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import { isRelayAlreadyInstalled } from './ssh-relay-versioned-install'
 import { acquireInstallLock } from './ssh-relay-install-lock'
+import {
+  RELAY_DEPLOY_TEARDOWN_TIMEOUT_MS,
+  RELAY_DEPLOY_TIMEOUT_MS
+} from './ssh-relay-deploy-timing'
 import type { SshConnection } from './ssh-connection'
 
 function makeMockConnection(): SshConnection {
@@ -106,6 +110,17 @@ function makeMockConnection(): SshConnection {
   } as unknown as SshConnection
 }
 
+function stageCommandResponse(command: string): string | undefined {
+  const marker = command.match(/\.sftp-namespace-[0-9a-f]{32}/u)?.[0]
+  if (command.includes('__ORCA_UPLOAD_STAGE_SLOT__') && marker) {
+    return `__ORCA_UPLOAD_STAGE_SLOT__${marker}:slot-0`
+  }
+  if (command.includes('__ORCA_UPLOAD_STAGE_PROMOTION__') && marker) {
+    return `__ORCA_UPLOAD_STAGE_PROMOTION__${marker}:PROMOTED`
+  }
+  return command.includes('.upload-stages') ? '' : undefined
+}
+
 describe('deployAndLaunchRelay staged uploads', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -125,10 +140,15 @@ describe('deployAndLaunchRelay staged uploads', () => {
     try {
       const conn = makeMockConnection()
       vi.mocked(isRelayAlreadyInstalled).mockReset().mockResolvedValue(true)
-      vi.mocked(execCommand)
-        .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
-        .mockResolvedValueOnce('/home/user')
-        .mockResolvedValueOnce('')
+      vi.mocked(execCommand).mockImplementation((_conn, command) => {
+        if (command.includes('uname')) {
+          return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+        }
+        if (command === 'echo $HOME') {
+          return Promise.resolve('/home/user')
+        }
+        return Promise.resolve(stageCommandResponse(command) ?? '')
+      })
       vi.mocked(isRelayAlreadyInstalled).mockResolvedValueOnce(false).mockResolvedValueOnce(false)
       let uploadSignal: AbortSignal | undefined
       conn.uploadDirectory = vi.fn((_localDir, _remoteDir, options) => {
@@ -155,6 +175,46 @@ describe('deployAndLaunchRelay staged uploads', () => {
     }
   })
 
+  it('joins the bounded teardown window when an aborted transfer never settles', async () => {
+    vi.useFakeTimers()
+    try {
+      const conn = makeMockConnection()
+      vi.mocked(isRelayAlreadyInstalled).mockReset().mockResolvedValue(false)
+      vi.mocked(execCommand).mockImplementation((_conn, command) => {
+        if (command.includes('uname')) {
+          return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+        }
+        if (command === 'echo $HOME') {
+          return Promise.resolve('/home/user')
+        }
+        return Promise.resolve(stageCommandResponse(command) ?? '')
+      })
+      let uploadSignal: AbortSignal | undefined
+      conn.uploadDirectory = vi.fn((_localDir, _remoteDir, options) => {
+        uploadSignal = options?.signal
+        return new Promise<void>(() => {})
+      })
+
+      const deployment = deployAndLaunchRelay(conn).catch((error: Error) => error)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(conn.uploadDirectory).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(RELAY_DEPLOY_TIMEOUT_MS)
+      expect(uploadSignal?.aborted).toBe(true)
+      expect(
+        await Promise.race([deployment.then(() => 'settled'), Promise.resolve('pending')])
+      ).toBe('pending')
+
+      await vi.advanceTimersByTimeAsync(RELAY_DEPLOY_TEARDOWN_TIMEOUT_MS)
+      await expect(deployment).resolves.toMatchObject({
+        message: 'Relay deployment timed out after 900s',
+        sshChannelCloseConfirmed: false,
+        sshTransferTeardownConfirmed: false
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('waits for a deferred SFTP upload before acquiring the install lock', async () => {
     const conn = makeMockConnection()
     vi.mocked(isRelayAlreadyInstalled)
@@ -163,6 +223,10 @@ describe('deployAndLaunchRelay staged uploads', () => {
       .mockResolvedValue(true)
     let socketProbe = 0
     vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      const stageResponse = stageCommandResponse(command)
+      if (stageResponse !== undefined) {
+        return Promise.resolve(stageResponse)
+      }
       if (command.includes('uname')) {
         return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       }
@@ -212,6 +276,10 @@ describe('deployAndLaunchRelay staged uploads', () => {
     })
     let socketProbe = 0
     vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      const stageResponse = stageCommandResponse(command)
+      if (stageResponse !== undefined) {
+        return Promise.resolve(stageResponse)
+      }
       if (command.includes('uname')) {
         return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       }
@@ -234,20 +302,28 @@ describe('deployAndLaunchRelay staged uploads', () => {
     const commands = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
     expect(commands.some((command) => command.includes('cp -a'))).toBe(false)
     const uploadStageRemovals = commands.filter(
-      (command) => command.includes('.upload-') && command.includes('rm -rf')
+      (command) => /\.sftp-namespace-[0-9a-f]{32}/u.test(command) && command.includes('rm -rf')
     )
     expect(uploadStageRemovals).toHaveLength(1)
-    expect(uploadStageRemovals[0]).toMatch(/relay-0\.1\.0\+abcdef012345\.upload-[0-9a-f-]{36}'$/u)
+    expect(uploadStageRemovals[0]).toContain('/.orca-remote/.upload-stages/claim-0')
   })
 
-  it('does not inspect or remove unconfirmed stages before a fresh upload', async () => {
+  it('runs bounded fixed-path recovery before a fresh upload', async () => {
     const conn = makeMockConnection()
+    const events: string[] = []
     vi.mocked(isRelayAlreadyInstalled)
       .mockReset()
       .mockResolvedValueOnce(false)
       .mockResolvedValue(true)
     let socketProbe = 0
     vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      if (command.includes('deleting_old=')) {
+        events.push('recover')
+      }
+      const stageResponse = stageCommandResponse(command)
+      if (stageResponse !== undefined) {
+        return Promise.resolve(stageResponse)
+      }
       if (command.includes('uname')) {
         return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       }
@@ -263,16 +339,16 @@ describe('deployAndLaunchRelay staged uploads', () => {
       return Promise.resolve('')
     })
     conn.writeFile = vi.fn().mockResolvedValue(undefined)
-    conn.uploadDirectory = vi.fn().mockResolvedValue(undefined)
+    conn.uploadDirectory = vi.fn().mockImplementation(async () => {
+      events.push('upload')
+    })
 
     await deployAndLaunchRelay(conn)
 
-    const commands = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
-    expect(commands.some((command) => command.includes('.upload-*'))).toBe(false)
-    expect(commands.some((command) => command.includes('.cleanup-'))).toBe(false)
+    expect(events.indexOf('recover')).toBeLessThan(events.indexOf('upload'))
   })
 
-  it('keeps installed reconnects independent of unconfirmed stage count', async () => {
+  it('launches before one bounded installed-path recovery exec', async () => {
     const conn = makeMockConnection()
     const events: string[] = []
     let socketProbe = 0
@@ -285,6 +361,13 @@ describe('deployAndLaunchRelay staged uploads', () => {
       }
     })
     vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      if (command.includes('deleting_old=')) {
+        events.push('recover')
+      }
+      const stageResponse = stageCommandResponse(command)
+      if (stageResponse !== undefined) {
+        return Promise.resolve(stageResponse)
+      }
       if (command.includes('uname')) {
         return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       }
@@ -304,13 +387,15 @@ describe('deployAndLaunchRelay staged uploads', () => {
       await deployAndLaunchRelay(conn)
     }
 
-    expect(events.filter((event) => event === 'launch-ready')).toHaveLength(12)
+    expect(events).toEqual(Array.from({ length: 12 }, () => ['launch-ready', 'recover']).flat())
     const commands = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
-    expect(commands.some((command) => command.includes('.upload-*'))).toBe(false)
-    expect(commands.some((command) => command.includes('.cleanup-'))).toBe(false)
+    const recoveryCommands = commands.filter((command) => command.includes('deleting_old='))
+    expect(recoveryCommands).toHaveLength(12)
+    expect(recoveryCommands.every((command) => command.includes('.upload-stages'))).toBe(true)
+    expect(recoveryCommands.every((command) => !command.includes('find "$pool"'))).toBe(true)
   })
 
-  it('does not enumerate unconfirmed stage paths during installation', async () => {
+  it('never enumerates arbitrary stage paths during installation', async () => {
     const conn = makeMockConnection()
     conn.uploadDirectory = vi.fn().mockResolvedValue(undefined)
     conn.writeFile = vi.fn().mockResolvedValue(undefined)
@@ -320,6 +405,10 @@ describe('deployAndLaunchRelay staged uploads', () => {
       .mockResolvedValue(true)
     let socketProbe = 0
     vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      const stageResponse = stageCommandResponse(command)
+      if (stageResponse !== undefined) {
+        return Promise.resolve(stageResponse)
+      }
       if (command.includes('uname')) {
         return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       }
@@ -338,19 +427,26 @@ describe('deployAndLaunchRelay staged uploads', () => {
     await deployAndLaunchRelay(conn)
 
     expect(conn.uploadDirectory).toHaveBeenCalledTimes(1)
-    expect(
-      vi.mocked(execCommand).mock.calls.some(([, command]) => command.includes('.upload-*'))
-    ).toBe(false)
+    const stageCommands = vi
+      .mocked(execCommand)
+      .mock.calls.map(([, command]) => command)
+      .filter((command) => command.includes('.upload-stages'))
+    expect(stageCommands.length).toBeGreaterThan(0)
+    expect(stageCommands.every((command) => !command.includes('-mindepth'))).toBe(true)
   })
 
   it('keeps the staging tree after an unconfirmed system SSH upload termination', async () => {
     const conn = makeMockConnection()
     vi.mocked(isRelayAlreadyInstalled).mockReset().mockResolvedValue(false)
-    vi.mocked(execCommand).mockImplementation((_conn, command) =>
-      Promise.resolve(
+    vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      const stageResponse = stageCommandResponse(command)
+      if (stageResponse !== undefined) {
+        return Promise.resolve(stageResponse)
+      }
+      return Promise.resolve(
         command.includes('uname') ? '__ORCA_REMOTE_PLATFORM__ Linux x86_64' : '/home/user'
       )
-    )
+    })
     conn.writeFile = vi.fn().mockResolvedValue(undefined)
     const termination = Object.assign(new Error('upload teardown unconfirmed'), {
       sshChannelCloseConfirmed: false
@@ -362,7 +458,10 @@ describe('deployAndLaunchRelay staged uploads', () => {
     expect(
       vi
         .mocked(execCommand)
-        .mock.calls.some(([, command]) => command.includes('upload-') && command.includes('rm -rf'))
+        .mock.calls.some(
+          ([, command]) =>
+            /\.sftp-namespace-[0-9a-f]{32}/u.test(command) && command.includes('rm -rf')
+        )
     ).toBe(false)
   })
 
@@ -390,6 +489,10 @@ describe('deployAndLaunchRelay staged uploads', () => {
       .mockResolvedValue(true)
     let socketProbe = 0
     vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      const stageResponse = stageCommandResponse(command)
+      if (stageResponse !== undefined) {
+        return Promise.resolve(stageResponse)
+      }
       if (command.includes('uname')) {
         return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       }
@@ -426,6 +529,10 @@ describe('deployAndLaunchRelay staged uploads', () => {
       .mockResolvedValue(true)
     let socketProbe = 0
     vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      const stageResponse = stageCommandResponse(command)
+      if (stageResponse !== undefined) {
+        return Promise.resolve(stageResponse)
+      }
       if (command.includes('uname')) {
         return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       }
@@ -447,7 +554,10 @@ describe('deployAndLaunchRelay staged uploads', () => {
     expect(
       vi
         .mocked(execCommand)
-        .mock.calls.some(([, command]) => command.includes('upload-') && command.includes('rm -rf'))
+        .mock.calls.some(
+          ([, command]) =>
+            /\.sftp-namespace-[0-9a-f]{32}/u.test(command) && command.includes('rm -rf')
+        )
     ).toBe(true)
 
     await deployAndLaunchRelay(conn)

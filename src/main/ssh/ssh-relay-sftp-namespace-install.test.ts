@@ -5,6 +5,7 @@
 
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RelayInstallMarkerModule from './ssh-relay-install-marker'
 
 vi.mock('electron', () => ({
   app: { getAppPath: () => '/mock/app' }
@@ -38,6 +39,11 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
 
 vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
+}))
+
+vi.mock('./ssh-relay-install-marker', async (importOriginal) => ({
+  ...(await importOriginal<typeof RelayInstallMarkerModule>()),
+  createRelayInstallMarkerFileName: () => '.sftp-namespace-00000000000000000000000000000000'
 }))
 
 vi.mock('./ssh-relay-versioned-install', () => ({
@@ -74,7 +80,10 @@ vi.mock('./ssh-connection-utils', () => ({
 
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand, uploadDirectory } from './ssh-relay-deploy-helpers'
-import { RELAY_DEPLOY_TIMEOUT_MS } from './ssh-relay-deploy-timing'
+import {
+  RELAY_DEPLOY_TEARDOWN_TIMEOUT_MS,
+  RELAY_DEPLOY_TIMEOUT_MS
+} from './ssh-relay-deploy-timing'
 import { parseUnameToRelayPlatform } from './relay-protocol'
 import {
   abandonInstall,
@@ -94,6 +103,9 @@ const RELAY_SUFFIX = '.orca-remote/relay-0.1.0+testhash'
 const SHELL_RELAY_DIR = `${SHELL_HOME}/${RELAY_SUFFIX}`
 const SFTP_RELAY_DIR = `${SFTP_HOME}/${RELAY_SUFFIX}`
 const MARKER_PATTERN = /\.sftp-namespace-[0-9a-f]{32}/
+const STAGE_OWNER = '.sftp-namespace-00000000000000000000000000000000'
+const STAGE_RESERVED = `__ORCA_UPLOAD_STAGE_SLOT__${STAGE_OWNER}:slot-0`
+const STAGE_PROMOTED = `__ORCA_UPLOAD_STAGE_PROMOTION__${STAGE_OWNER}:PROMOTED`
 
 type ConnectionOptions = {
   // '/homes/u' models a DSM host whose SFTP subsystem starts outside the shell home.
@@ -233,10 +245,11 @@ function feed(responses: string[]): void {
 const POSIX_FIRST_INSTALL = [
   '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
   SHELL_HOME,
-  '', // mkdir stage payload + attempt marker
+  '', // bounded stale-stage recovery
+  STAGE_RESERVED,
   '', // chmod staged node
   '', // final install namespace marker
-  '', // promote staged payload
+  STAGE_PROMOTED,
   '', // npm install native deps
   '', // chmod prebuilds
   'ORCA-NPTY-PROBE-OK\n',
@@ -250,9 +263,10 @@ const POSIX_FIRST_INSTALL = [
 const POSIX_SYSTEM_SSH_FIRST_INSTALL = [
   '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
   SHELL_HOME,
-  '', // mkdir stage payload
+  '', // bounded stale-stage recovery
+  STAGE_RESERVED,
   '', // chmod staged node
-  '', // promote staged payload
+  STAGE_PROMOTED,
   '', // npm install native deps
   '', // chmod prebuilds
   'ORCA-NPTY-PROBE-OK\n',
@@ -320,9 +334,7 @@ describe('relay install writes on a split SFTP namespace', () => {
     await deployAndLaunchRelay(conn)
 
     expect(capture.uploadTargets).toHaveLength(1)
-    expect(capture.uploadTargets[0]).toMatch(
-      /^\/homes\/u\/\.orca-remote\/relay-0\.1\.0\+testhash\.upload-[0-9a-f-]{36}\/payload$/
-    )
+    expect(capture.uploadTargets[0]).toBe('/homes/u/.orca-remote/.upload-stages/slot-0/payload')
     expect(capture.writePaths).toEqual([
       `${capture.uploadTargets[0]}/.version`,
       `${SFTP_RELAY_DIR}/package.json`
@@ -341,11 +353,14 @@ describe('relay install writes on a split SFTP namespace', () => {
     await deployAndLaunchRelay(conn)
 
     const markerCommands = execCommands().filter((command) => MARKER_PATTERN.test(command))
-    expect(markerCommands).toHaveLength(2)
-    expect(markerCommands[0]).toContain('mkdir')
-    expect(markerCommands[0]).toContain(`${SHELL_RELAY_DIR}.upload-`)
-    expect(markerCommands[0]).not.toContain('.install-lock')
-    expect(markerCommands[1]).toContain(`${SHELL_RELAY_DIR}/.install-lock`)
+    const reservation = markerCommands.find((command) =>
+      command.includes('__ORCA_UPLOAD_STAGE_SLOT__')
+    )
+    const installMarker = markerCommands.find((command) => command.includes('.install-lock'))
+    expect(reservation).toContain('mkdir')
+    expect(reservation).toContain('/.orca-remote/.upload-stages')
+    expect(reservation).not.toContain('.install-lock')
+    expect(installMarker).toContain(`${SHELL_RELAY_DIR}/.install-lock`)
   })
 
   it('probes one shared marker for every first-install artifact transfer', async () => {
@@ -359,7 +374,7 @@ describe('relay install writes on a split SFTP namespace', () => {
     expect(installMarker).toMatch(MARKER_PATTERN)
     expect(capture.lstatCalls).toHaveLength(6)
     for (const path of capture.lstatCalls.slice(0, 4)) {
-      expect(path).toContain('.upload-')
+      expect(path).toContain('.upload-stages')
       expect(path).toContain(stageMarker)
     }
     expect(capture.lstatCalls.slice(4)).toEqual([
@@ -377,7 +392,7 @@ describe('relay install writes on a split SFTP namespace', () => {
 
     await deployAndLaunchRelay(conn)
 
-    expect(capture.uploadTargets[0]).toContain(`${SHELL_RELAY_DIR}.upload-`)
+    expect(capture.uploadTargets[0]).toContain('/.orca-remote/.upload-stages/slot-0/payload')
     expect(capture.uploadTargets[0]).toMatch(/\/payload$/)
     expect(capture.writePaths).toEqual([
       `${capture.uploadTargets[0]}/.version`,
@@ -391,7 +406,7 @@ describe('relay install writes on a split SFTP namespace', () => {
 
     await deployAndLaunchRelay(conn)
 
-    expect(capture.uploadTargets[0]).toContain(`${SHELL_RELAY_DIR}.upload-`)
+    expect(capture.uploadTargets[0]).toContain('/.orca-remote/.upload-stages/slot-0/payload')
     expect(capture.uploadTargets[0]).toMatch(/\/payload$/)
     expect(capture.lstatCalls).toEqual([])
   })
@@ -405,7 +420,9 @@ describe('relay install writes on a split SFTP namespace', () => {
 
     await deployAndLaunchRelay(conn)
 
-    expect(capture.uploadTargets[0]).toContain(`/volume1/shared/${RELAY_SUFFIX}.upload-`)
+    expect(capture.uploadTargets[0]).toContain(
+      '/volume1/shared/.orca-remote/.upload-stages/slot-0/payload'
+    )
     expect(capture.uploadTargets[0]).toMatch(/\/payload$/)
   })
 
@@ -416,7 +433,7 @@ describe('relay install writes on a split SFTP namespace', () => {
     await deployAndLaunchRelay(conn)
 
     // The shipping path hands over shell paths plus a mapping; resolution happens on the write session.
-    expect(capture.uploadTargets[0]).toContain(`${SHELL_RELAY_DIR}.upload-`)
+    expect(capture.uploadTargets[0]).toContain('/.orca-remote/.upload-stages/slot-0/payload')
     expect(capture.uploadTargets[0]).toMatch(/\/payload$/)
     expect(capture.writePaths).toEqual([
       `${capture.uploadTargets[0]}/.version`,
@@ -427,13 +444,11 @@ describe('relay install writes on a split SFTP namespace', () => {
       (options) => options?.sftpNamespace
     )
     expect(mappings).toHaveLength(3)
-    expect(mappings[0]?.shellProbePath).toContain(`${SHELL_RELAY_DIR}.upload-`)
+    expect(mappings[0]?.shellProbePath).toContain('/.orca-remote/.upload-stages/slot-0/')
     expect(mappings[0]?.shellProbePath).toContain(stageMarker)
     expect(mappings[1]?.shellProbePath).toBe(mappings[0]?.shellProbePath)
     expect(mappings[2]?.shellProbePath).toBe(`${SHELL_RELAY_DIR}/.install-lock/${installMarker}`)
-    expect(mappings[0]?.homeRelativePath).toMatch(
-      /^\.orca-remote\/relay-0\.1\.0\+testhash\.upload-[0-9a-f-]{36}\/payload$/
-    )
+    expect(mappings[0]?.homeRelativePath).toBe('.orca-remote/.upload-stages/slot-0/payload')
     expect(mappings[1]?.homeRelativePath).toBe(`${mappings[0]?.homeRelativePath}/.version`)
     expect(mappings[2]?.homeRelativePath).toBe(`${RELAY_SUFFIX}/package.json`)
     expect(capture.realpathCalls).toEqual([])
@@ -446,12 +461,12 @@ describe('relay install writes on a split SFTP namespace', () => {
 
     await deployAndLaunchRelay(conn)
 
-    expect(execCommands().some((command) => MARKER_PATTERN.test(command))).toBe(false)
+    expect(execCommands().some((command) => MARKER_PATTERN.test(command))).toBe(true)
     expect(capture.realpathCalls).toEqual([])
     expect(capture.lstatCalls).toEqual([])
     expect(conn.sftp).not.toHaveBeenCalled()
     // System SSH never retargets: shell absolute paths, no mapping, no SFTP session.
-    expect(capture.uploadTargets[0]).toContain(`${SHELL_RELAY_DIR}.upload-`)
+    expect(capture.uploadTargets[0]).toContain('/.orca-remote/.upload-stages/slot-0/payload')
     expect(capture.uploadTargets[0]).toMatch(/\/payload$/)
     expect(capture.writePaths).toEqual([
       `${capture.uploadTargets[0]}/.version`,
@@ -467,22 +482,32 @@ describe('relay install writes on a split SFTP namespace', () => {
   it('leaves Windows hosts unmapped and unprobed', async () => {
     vi.mocked(parseUnameToRelayPlatform).mockReturnValue('win32-x64')
     const conn = makeConnection(capture)
-    feed([
-      '__ORCA_REMOTE_PLATFORM__ Windows AMD64',
-      'C:\\Users\\u',
-      '', // mkdir stage payload
-      '', // chmod staged node
-      '' // promote staged payload
-    ])
-    // Fail the install right after the package.json write; the launch path is not what this asserts.
-    vi.mocked(execCommand).mockRejectedValueOnce(new Error('npm install failed'))
+    vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      const decoded = decodeCommand(command)
+      if (decoded.includes('__ORCA_REMOTE_PLATFORM__')) {
+        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Windows AMD64')
+      }
+      if (decoded.includes('[Environment]::GetFolderPath')) {
+        return Promise.resolve('C:\\Users\\u')
+      }
+      if (decoded.includes('__ORCA_UPLOAD_STAGE_SLOT__')) {
+        return Promise.resolve(STAGE_RESERVED)
+      }
+      if (decoded.includes('__ORCA_UPLOAD_STAGE_PROMOTION__')) {
+        return Promise.resolve(STAGE_PROMOTED)
+      }
+      if (decoded.includes('npm install')) {
+        return Promise.reject(new Error('npm install failed'))
+      }
+      return Promise.resolve('')
+    })
 
     await expect(deployAndLaunchRelay(conn)).rejects.toThrow('npm install failed')
 
-    expect(execCommands().some((command) => MARKER_PATTERN.test(command))).toBe(false)
+    expect(execCommands().some((command) => MARKER_PATTERN.test(command))).toBe(true)
     expect(capture.realpathCalls).toEqual([])
-    expect(capture.writePaths[0]).toMatch(
-      /^C:\/Users\/u\/\.orca-remote\/relay-0\.1\.0\+testhash\.upload-[0-9a-f-]{36}\/payload\/\.version$/
+    expect(capture.writePaths[0]).toBe(
+      'C:/Users/u/.orca-remote/.upload-stages/slot-0/payload/.version'
     )
     expect(capture.writePaths[1]).toBe('C:/Users/u/.orca-remote/relay-0.1.0+testhash/package.json')
   })
@@ -507,6 +532,7 @@ describe('relay install writes on a split SFTP namespace', () => {
       const deploy = deployAndLaunchRelay(conn).catch((err: Error) => err)
       await vi.waitFor(() => expect(capture.realpathCalls).toHaveLength(1))
       await vi.advanceTimersByTimeAsync(RELAY_DEPLOY_TIMEOUT_MS)
+      await vi.advanceTimersByTimeAsync(RELAY_DEPLOY_TEARDOWN_TIMEOUT_MS)
       const result = await deploy
 
       expect((result as Error).message).toContain('Relay deployment timed out')
@@ -528,8 +554,8 @@ describe('relay install writes on a split SFTP namespace', () => {
       const deploy = deployAndLaunchRelay(conn).catch((err: Error) => err)
       await vi.waitFor(() => expect(capture.realpathCalls).toHaveLength(1))
       await vi.advanceTimersByTimeAsync(RELAY_DEPLOY_TIMEOUT_MS)
+      await vi.advanceTimersByTimeAsync(RELAY_DEPLOY_TEARDOWN_TIMEOUT_MS)
       await deploy
-      await vi.advanceTimersByTimeAsync(5_000)
 
       expect(vi.mocked(abandonInstall)).not.toHaveBeenCalled()
       expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
@@ -545,7 +571,7 @@ describe('relay repair writes on a split SFTP namespace', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(execCommand).mockReset()
+    vi.mocked(execCommand).mockReset().mockResolvedValue('')
     vi.mocked(uploadDirectory).mockResolvedValue(undefined)
     vi.mocked(parseUnameToRelayPlatform).mockReturnValue('linux-x64')
     vi.mocked(isRelayAlreadyInstalled).mockResolvedValue(true)

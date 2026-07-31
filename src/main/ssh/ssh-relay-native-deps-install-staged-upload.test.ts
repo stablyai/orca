@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RelayInstallMarkerModule from './ssh-relay-install-marker'
 
 vi.mock('electron', () => ({
   app: { getAppPath: () => '/mock/app' }
@@ -32,6 +33,11 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
 
 vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
+}))
+
+vi.mock('./ssh-relay-install-marker', async (importOriginal) => ({
+  ...(await importOriginal<typeof RelayInstallMarkerModule>()),
+  createRelayInstallMarkerFileName: () => '.sftp-namespace-00000000000000000000000000000000'
 }))
 
 vi.mock('./ssh-relay-versioned-install', () => ({
@@ -74,6 +80,7 @@ import {
 import { acquireInstallLock } from './ssh-relay-install-lock'
 import {
   makeExecResponses,
+  makeStagedFirstInstallExecPrefix,
   makeMockConnection,
   type ExecResponse,
   type SftpWriteCapture
@@ -168,7 +175,7 @@ describe('installNativeDeps staged uploads', () => {
     vi.useFakeTimers()
     try {
       const conn = makeMockConnection(sftpCapture)
-      feed(['__ORCA_REMOTE_PLATFORM__ Linux x86_64', '/home/u', '', ''])
+      feed(makeStagedFirstInstallExecPrefix())
       vi.mocked(acquireInstallLock).mockImplementationOnce(
         (_conn, _remoteDir, _host, options) =>
           new Promise<void>((_resolve, reject) => {
@@ -199,6 +206,9 @@ describe('installNativeDeps staged uploads', () => {
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       .mockResolvedValueOnce('/home/u')
       .mockResolvedValueOnce('')
+      .mockResolvedValueOnce(
+        '__ORCA_UPLOAD_STAGE_SLOT__.sftp-namespace-00000000000000000000000000000000:slot-0'
+      )
       .mockResolvedValueOnce('')
       .mockResolvedValueOnce('')
       .mockRejectedValueOnce(

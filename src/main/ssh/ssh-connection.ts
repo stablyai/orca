@@ -447,6 +447,7 @@ export class SshConnection {
           await raceSftpFileTransferWithAbort(transfer, linkedSignal.signal, (onClose) => {
             sftp.once('close', onClose)
             endSftp()
+            return () => sftp.removeListener('close', onClose)
           })
         } finally {
           endSftp()
@@ -545,6 +546,7 @@ export class SshConnection {
           await raceSftpFileTransferWithAbort(write, linkedSignal.signal, (onClose) => {
             sftp.once('close', onClose)
             endSftp()
+            return () => sftp.removeListener('close', onClose)
           })
         } finally {
           endSftp()

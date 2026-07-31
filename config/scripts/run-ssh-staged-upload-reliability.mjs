@@ -7,6 +7,7 @@ const defaultFiles = [
   'src/main/ssh/ssh-relay-native-deps-install-staged-upload.test.ts',
   'src/main/ssh/ssh-relay-sftp-namespace-install.test.ts',
   'src/main/ssh/ssh-relay-install-namespace.test.ts',
+  'src/main/ssh/ssh-relay-upload-stage-commands.test.ts',
   'src/main/ssh/sftp-namespace-resolution.test.ts',
   'src/main/ssh/ssh-connection-sftp-wire.test.ts',
   'src/main/ssh/ssh-remote-commands.test.ts',

@@ -1,6 +1,7 @@
 // Why: regression coverage for the install-probe contract — the "node-pty is not available" bug shipped because every guard layer was silent.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RelayInstallMarkerModule from './ssh-relay-install-marker'
 
 vi.mock('electron', () => ({
   app: { getAppPath: () => '/mock/app' }
@@ -34,6 +35,11 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
 
 vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
+}))
+
+vi.mock('./ssh-relay-install-marker', async (importOriginal) => ({
+  ...(await importOriginal<typeof RelayInstallMarkerModule>()),
+  createRelayInstallMarkerFileName: () => '.sftp-namespace-00000000000000000000000000000000'
 }))
 
 vi.mock('./ssh-relay-versioned-install', () => ({
@@ -519,8 +525,9 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     feed([
       '__ORCA_REMOTE_PLATFORM__ Windows AMD64',
       'C:\\Users\\u',
-      '', // mkdir stage payload
-      '', // promote staged payload
+      '', // bounded stale-stage recovery
+      '__ORCA_UPLOAD_STAGE_SLOT__.sftp-namespace-00000000000000000000000000000000:slot-0',
+      '__ORCA_UPLOAD_STAGE_PROMOTION__.sftp-namespace-00000000000000000000000000000000:PROMOTED',
       '', // npm install native deps
       'MISSING\n', // native process exit normalized by PowerShell command
       '', // npm rebuild native deps
@@ -598,7 +605,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     for (const k of Object.keys(sftpCapture.execCallCountAtWrite)) {
       delete sftpCapture.execCallCountAtWrite[k]
     }
-    vi.mocked(execCommand).mockReset()
+    vi.mocked(execCommand).mockReset().mockResolvedValue('')
 
     const conn2 = makeMockConnection(sftpCapture)
     feed(makeExecResponses({ npmInstall: 'ok', probe: 'ok' }))
@@ -745,11 +752,10 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       const deploy = deployAndLaunchRelay(conn).catch((err: Error) => err)
       await vi.waitFor(() => expect(installSignal).toBeDefined())
       await vi.advanceTimersByTimeAsync(RELAY_DEPLOY_TIMEOUT_MS)
+      await vi.advanceTimersByTimeAsync(5_000)
       const result = await deploy
       expect(result).toBeInstanceOf(Error)
       expect((result as Error).message).toContain('Relay deployment timed out')
-      await vi.advanceTimersByTimeAsync(5_000)
-
       expect(vi.mocked(abandonInstall)).not.toHaveBeenCalled()
       expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
     } finally {
@@ -818,11 +824,10 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       const deploy = deployAndLaunchRelay(conn).catch((err: Error) => err)
       await vi.waitFor(() => expect(rebuildSignal).toBeDefined())
       await vi.advanceTimersByTimeAsync(RELAY_DEPLOY_TIMEOUT_MS)
+      await vi.advanceTimersByTimeAsync(5_000)
       const result = await deploy
       expect(result).toBeInstanceOf(Error)
       expect((result as Error).message).toContain('Relay deployment timed out')
-      await vi.advanceTimersByTimeAsync(5_000)
-
       expect(vi.mocked(abandonInstall)).not.toHaveBeenCalled()
       expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
     } finally {

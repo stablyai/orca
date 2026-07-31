@@ -62,11 +62,12 @@ export function createRelayInstallNamespace(homeRelativeRelayDir: string): Relay
 }
 
 export function createRelayUploadStageNamespace(
-  homeRelativeStageDir: string
+  homeRelativeStageDir: string,
+  markerFileName = createRelayInstallMarkerFileName()
 ): RelayUploadStageNamespace {
   return {
     homeRelativeStageDir,
-    markerFileName: createRelayInstallMarkerFileName()
+    markerFileName
   }
 }
 

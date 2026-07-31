@@ -27,7 +27,7 @@ export function createLinkedSshFileTransferSignal(signals: readonly AbortSignal[
 export function raceSftpFileTransferWithAbort<T>(
   operation: Promise<T>,
   signal: AbortSignal,
-  closeSftp: (onClose: () => void) => void
+  closeSftp: (onClose: () => void) => (() => void) | void
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     let settled = false
@@ -40,6 +40,7 @@ export function raceSftpFileTransferWithAbort<T>(
         })
       | null = null
     let closeGraceTimer: ReturnType<typeof setTimeout> | null = null
+    let removeCloseListener: (() => void) | undefined
     const settle = (fn: typeof resolve | typeof reject, value: T | Error): void => {
       if (settled) {
         return
@@ -49,6 +50,8 @@ export function raceSftpFileTransferWithAbort<T>(
         clearTimeout(closeGraceTimer)
       }
       signal.removeEventListener('abort', onAbort)
+      removeCloseListener?.()
+      removeCloseListener = undefined
       fn(value as never)
     }
     const onAbort = (): void => {
@@ -59,7 +62,7 @@ export function raceSftpFileTransferWithAbort<T>(
         sshTransferTeardownConfirmed: false
       })
       closeGraceTimer = setTimeout(() => settle(reject, abortError!), 5_000)
-      closeSftp(() => {
+      const unregisterClose = closeSftp(() => {
         sftpClosed = true
         abortError!.sshChannelCloseConfirmed = true
         if (operationSettled) {
@@ -67,6 +70,7 @@ export function raceSftpFileTransferWithAbort<T>(
           settle(reject, abortError!)
         }
       })
+      removeCloseListener = typeof unregisterClose === 'function' ? unregisterClose : undefined
     }
     signal.addEventListener('abort', onAbort, { once: true })
     void operation.then(

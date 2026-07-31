@@ -9,6 +9,7 @@
 
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RelayInstallMarkerModule from './ssh-relay-install-marker'
 
 vi.mock('electron', () => ({
   app: { getAppPath: () => '/mock/app' }
@@ -42,6 +43,11 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
 
 vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
+}))
+
+vi.mock('./ssh-relay-install-marker', async (importOriginal) => ({
+  ...(await importOriginal<typeof RelayInstallMarkerModule>()),
+  createRelayInstallMarkerFileName: () => '.sftp-namespace-00000000000000000000000000000000'
 }))
 
 vi.mock('./ssh-connection-utils', () => ({
@@ -103,6 +109,16 @@ describe('cross-version isolation', () => {
     // The v2 client has fullVersion='0.1.0+222222222222' (from the fs mock above).
     //
     mockExec.mockImplementation((_conn, command) => {
+      if (command.includes('__ORCA_UPLOAD_STAGE_SLOT__')) {
+        return Promise.resolve(
+          '__ORCA_UPLOAD_STAGE_SLOT__.sftp-namespace-00000000000000000000000000000000:slot-0'
+        )
+      }
+      if (command.includes('__ORCA_UPLOAD_STAGE_PROMOTION__')) {
+        return Promise.resolve(
+          '__ORCA_UPLOAD_STAGE_PROMOTION__.sftp-namespace-00000000000000000000000000000000:PROMOTED'
+        )
+      }
       if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
         return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       }
@@ -130,7 +146,7 @@ describe('cross-version isolation', () => {
       if (command.includes('test -S') && command.includes('echo ALIVE || echo DEAD')) {
         return Promise.resolve('DEAD')
       }
-      if (command.startsWith("ls -1 '/home/u/.orca-remote'")) {
+      if (command.includes('__ORCA_RELAY_GC_FIND_STATUS__')) {
         return Promise.resolve('relay-0.1.0+111111111111\nrelay-0.1.0+222222222222\n')
       }
       if (command.includes('relay-0.1.0+111111111111/.install-lock')) {

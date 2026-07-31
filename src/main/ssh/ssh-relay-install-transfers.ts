@@ -95,6 +95,7 @@ async function runSftpFallbackTransfer(
       (onClose) => {
         sftp.once('close', onClose)
         endSftp()
+        return () => sftp.removeListener('close', onClose)
       }
     )
   } finally {

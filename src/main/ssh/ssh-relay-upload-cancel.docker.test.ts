@@ -13,6 +13,8 @@ import { execCommand } from './ssh-relay-deploy-helpers'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { acquireInstallLock } from './ssh-relay-install-lock'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
+import { listRelayBaseDirsCommand } from './ssh-remote-commands'
+import { gcOldRelayVersions } from './ssh-relay-versioned-install'
 import type { SshTarget } from '../../shared/ssh-types'
 
 const RUN_REVIEW_ORACLE = process.env.ORCA_REVIEW_SSH_UPLOAD_CANCEL === '1'
@@ -121,15 +123,14 @@ function createConnection(fixture: TargetFixture): SshConnection {
 }
 
 function readInventory(fixture: TargetFixture, remoteRelayDir: string): RemoteInventory {
-  const parent = remoteRelayDir.slice(0, remoteRelayDir.lastIndexOf('/'))
-  const base = remoteRelayDir.slice(remoteRelayDir.lastIndexOf('/') + 1)
+  const stagePool = '/root/.orca-remote/.upload-stages'
   const raw = dockerExec(
     fixture,
     [
       `lock=0; test -d ${shellQuote(`${remoteRelayDir}/.install-lock`)} && lock=1`,
       `files=0; test -d ${shellQuote(remoteRelayDir)} && files=$(find ${shellQuote(remoteRelayDir)} -type f ! -path '*/.install-lock/*' | wc -l | tr -d ' ')`,
       `printf 'LOCK=%s\\nFILES=%s\\n' "$lock" "$files"`,
-      `find ${shellQuote(parent)} -mindepth 1 -maxdepth 1 -type d -name ${shellQuote(`${base}.upload-*`)} -print 2>/dev/null || true`
+      `find ${shellQuote(stagePool)} -mindepth 1 -maxdepth 1 \\( -name 'slot-*' -o -name 'claim-*' -o -name 'delete-*' \\) -print 2>/dev/null | sort || true`
     ].join('; ')
   )
   const lines = raw.split(/\r?\n/)
@@ -216,7 +217,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     const partialRemoteBytes = Number(
       dockerExec(
         activeFixture,
-        "find /root/.orca-remote -type f -path '*.upload-*/payload/relay.js' -printf '%s\\n'"
+        "find /root/.orca-remote/.upload-stages -type f -path '*/slot-*/payload/relay.js' -printf '%s\\n'"
       )
     )
     const operationController = (
@@ -242,7 +243,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     expect(sentinelCommand).toContain('sleep 300')
   }, 180_000)
 
-  it('keeps cancellation retryable and leaves aged stages untouched on installed launch', async () => {
+  it('recovers cancellation with bounded safe reclamation and bounded real version GC', async () => {
     const activeFixture = fixture as TargetFixture
     const relayVersion = readFileSync(
       join(process.cwd(), 'out', 'relay', 'linux-arm64', '.version'),
@@ -262,11 +263,24 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     ).rejects.toBe(unconfirmedCancellation)
     await firstConnection.disconnect()
     const firstInventory = readInventory(activeFixture, remoteRelayDir)
+    const expected = process.env.ORCA_REVIEW_EXPECT_RECOVERY === '1' ? 'recovered' : 'blocked'
+    if (expected === 'recovered') {
+      const secondAbandonedConnection = createConnection(activeFixture)
+      await secondAbandonedConnection.connect()
+      secondAbandonedConnection.uploadDirectory = vi.fn().mockRejectedValue(unconfirmedCancellation)
+      await expect(deployAndLaunchRelay(secondAbandonedConnection, undefined, 60)).rejects.toBe(
+        unconfirmedCancellation
+      )
+      await secondAbandonedConnection.disconnect()
+    }
 
     const retryConnection = createConnection(activeFixture)
     await retryConnection.connect()
     let retryResult: 'blocked' | 'recovered'
     let finalInventory: RemoteInventory | undefined
+    let scaleEvidence:
+      | { gcDurationMs: number; listingBytes: number; scaleEntries: number }
+      | undefined
     if (firstInventory.installLock) {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), 1_500)
@@ -292,26 +306,36 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     )
     await retryConnection.disconnect()
 
-    const expected = process.env.ORCA_REVIEW_EXPECT_RECOVERY === '1' ? 'recovered' : 'blocked'
     if (expected === 'recovered') {
       const replacedStage = firstInventory.uploadStages[0]!
       const originalStage = `${replacedStage}.original`
       const foreignTarget = '/root/orca-pr10207-foreign-stage-target'
-      const symlinkStage = `${remoteRelayDir}.upload-123e4567-e89b-12d3-a456-ffffffffffff`
-      for (const stage of firstInventory.uploadStages) {
-        dockerExec(activeFixture, `touch -d '3 hours ago' ${shellQuote(stage)}`)
-      }
+      const stagePool = '/root/.orca-remote/.upload-stages'
+      const symlinkStage = `${stagePool}/slot-2`
+      const ownerMarker = '.orca-upload-owner'
+      const identityMarker = '.orca-upload-identity'
       dockerExec(
         activeFixture,
         [
           `mv ${shellQuote(replacedStage)} ${shellQuote(originalStage)}`,
-          `mkdir ${shellQuote(replacedStage)} ${shellQuote(foreignTarget)}`,
-          `touch -d '3 hours ago' ${shellQuote(replacedStage)} ${shellQuote(originalStage)}`,
+          `mkdir -p ${shellQuote(`${replacedStage}/payload`)} ${shellQuote(foreignTarget)}`,
+          `cp ${shellQuote(`${originalStage}/${ownerMarker}`)} ${shellQuote(`${replacedStage}/${ownerMarker}`)}`,
+          `cp ${shellQuote(`${originalStage}/${identityMarker}`)} ${shellQuote(`${replacedStage}/${identityMarker}`)}`,
+          `touch -d '3 hours ago' ${shellQuote(`${replacedStage}/${ownerMarker}`)} ${shellQuote(`${originalStage}/${ownerMarker}`)}`,
+          `printf foreign > ${shellQuote(`${replacedStage}/payload/foreign`)}`,
+          `printf alive > ${shellQuote(`${foreignTarget}/sentinel`)}`,
           `ln -s ${shellQuote(foreignTarget)} ${shellQuote(symlinkStage)}`,
-          `i=0; while [ "$i" -lt 1000 ]; do suffix=$(printf '%012d' "$i"); mkdir ${shellQuote(`${remoteRelayDir}.upload-123e4567-e89b-12d3-a456-`)}"$suffix"; i=$((i + 1)); done`
+          `i=0; while [ "$i" -lt 15197 ]; do mkdir ${shellQuote(`/root/.orca-remote/relay-${relayVersion}.upload-scale-`)}"$i"; i=$((i + 1)); done`
         ].join(' && ')
       )
       const adversarialInventory = readInventory(activeFixture, remoteRelayDir)
+
+      const reclaimableStage = `${stagePool}/slot-1`
+      dockerExec(
+        activeFixture,
+        `touch -d '3 hours ago' ${shellQuote(`${reclaimableStage}/${ownerMarker}`)}`
+      )
+
       const cleanupConnection = createConnection(activeFixture)
       await cleanupConnection.connect()
       const cleanedDeployment = await deployAndLaunchRelay(cleanupConnection, undefined, 60)
@@ -319,11 +343,37 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
       await expect(cleanupMux.request('session.resolveHome', { path: '~' })).resolves.toEqual({
         resolvedPath: '/root'
       })
+      const reclaimDeadline = Date.now() + 10_000
+      while (
+        dockerExec(
+          activeFixture,
+          `test -e ${shellQuote(reclaimableStage)} && echo PRESENT || true`
+        ) &&
+        Date.now() < reclaimDeadline
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      expect(
+        dockerExec(activeFixture, `test ! -e ${shellQuote(reclaimableStage)} && echo RECLAIMED`)
+      ).toBe('RECLAIMED')
+
+      const listing = await execCommand(
+        cleanupConnection,
+        listRelayBaseDirsCommand(getRemoteHostPlatform('linux-arm64'), '/root/.orca-remote')
+      )
+      const gcStartedAt = Date.now()
+      await gcOldRelayVersions(
+        cleanupConnection,
+        '/root',
+        remoteRelayDir,
+        getRemoteHostPlatform('linux-arm64')
+      )
+      const gcDurationMs = Date.now() - gcStartedAt
       finalInventory = readInventory(activeFixture, remoteRelayDir)
       expect(
         dockerExec(
           activeFixture,
-          `test -L ${shellQuote(symlinkStage)} && test -d ${shellQuote(foreignTarget)} && echo PRESERVED`
+          `test -L ${shellQuote(symlinkStage)} && test -d ${shellQuote(foreignTarget)} && test "$(cat ${shellQuote(`${foreignTarget}/sentinel`)})" = alive && echo PRESERVED`
         ).trim()
       ).toBe('PRESERVED')
       expect(
@@ -332,12 +382,25 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
           `test -d ${shellQuote(replacedStage)} && test -d ${shellQuote(originalStage)} && echo PRESERVED`
         ).trim()
       ).toBe('PRESERVED')
-      expect(finalInventory.uploadStages.sort()).toEqual(adversarialInventory.uploadStages.sort())
+      expect(finalInventory.uploadStages.sort()).toEqual(
+        adversarialInventory.uploadStages.filter((stage) => stage !== reclaimableStage).sort()
+      )
+      const listingBytes = Buffer.byteLength(listing)
+      expect(listingBytes).toBeLessThan(1_024)
+      expect(gcDurationMs).toBeLessThan(10_000)
+      const scaleEntries = Number(
+        dockerExec(
+          activeFixture,
+          `find /root/.orca-remote -mindepth 1 -maxdepth 1 -type d -name ${shellQuote(`relay-${relayVersion}.upload-scale-*`)} | wc -l`
+        )
+      )
+      expect(scaleEntries).toBe(15_197)
+      scaleEvidence = { gcDurationMs, listingBytes, scaleEntries }
       cleanupMux.dispose()
       await cleanupConnection.disconnect()
     }
     console.log(
-      `[pr-10207-oracle] ${JSON.stringify({ progress, firstInventory, retryResult, finalInventory: finalInventory ? { ...finalInventory, uploadStages: finalInventory.uploadStages.length } : undefined, repoHead: repoHead.trim() })}`
+      `[pr-10207-oracle] ${JSON.stringify({ progress, firstInventory, retryResult, finalInventory, scaleEvidence, repoHead: repoHead.trim() })}`
     )
     expect(progress).toContain('Uploading relay...')
     expect(repoHead.trim()).toMatch(/^[0-9a-f]{40}$/)
@@ -346,7 +409,11 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
       expect(firstInventory.installLock).toBe(false)
       expect(firstInventory.uploadStages.length).toBeGreaterThan(0)
       expect(finalInventory?.installLock).toBe(false)
-      expect(finalInventory!.uploadStages.length).toBeGreaterThan(1_000)
+      expect(finalInventory!.uploadStages).toEqual([
+        '/root/.orca-remote/.upload-stages/slot-0',
+        '/root/.orca-remote/.upload-stages/slot-0.original',
+        '/root/.orca-remote/.upload-stages/slot-2'
+      ])
     } else {
       expect(firstInventory.installLock).toBe(true)
       expect(firstInventory.payloadFiles).toBe(0)

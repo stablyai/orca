@@ -54,14 +54,17 @@ export function makeMockConnection(capture: SftpWriteCapture): SshConnection {
 
 export type ExecResponse = string | { reject: string }
 
+const STAGE_OWNER = '.sftp-namespace-00000000000000000000000000000000'
+
 export function makeStagedFirstInstallExecPrefix(): ExecResponse[] {
   return [
     '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
     '/home/u',
-    '', // mkdir stage payload + namespace marker
+    '', // bounded stale-stage recovery
+    `__ORCA_UPLOAD_STAGE_SLOT__${STAGE_OWNER}:slot-0`,
     '', // chmod staged node
     '', // final install namespace marker
-    '' // promote staged payload
+    `__ORCA_UPLOAD_STAGE_PROMOTION__${STAGE_OWNER}:PROMOTED`
   ]
 }
 
