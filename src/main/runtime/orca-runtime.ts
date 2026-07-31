@@ -69,7 +69,8 @@ import {
 import {
   hasCompatibleAgentTitleIdentity,
   normalizeCompatibleAgentStatusEntryForOwner,
-  normalizeCompatibleAgentTitleForOwner
+  normalizeCompatibleAgentTitleForOwner,
+  resolveCompatibleAgentTypeForOwner
 } from '../../shared/agent-title-owner'
 import { resolvePaneAgentOwner } from '../../shared/pane-agent-owner'
 import {
@@ -28674,6 +28675,9 @@ export class OrcaRuntimeService {
       const retainedAgentStatus = tab.agentStatus
         ? null
         : this.getFreshRetainedAgentStatusForMobileTab(paneKey, liveLeafPty ?? mobileStatusPty, tab)
+      const hookAgentStatus = tab.agentStatus
+        ? this.getHookAgentRowForPane(getHookRowsForPane(paneKey))
+        : null
       const leafTitle = leaf
         ? getLatestAgentCandidateTitle(
             { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
@@ -28691,7 +28695,11 @@ export class OrcaRuntimeService {
       const ownerAgent =
         resolvePaneAgentOwner({
           launchAgent,
-          hookAgent: tab.agentStatus?.agentType ?? retainedAgentStatus?.payload.agentType ?? null
+          hookAgent:
+            tab.agentStatus?.agentType ??
+            hookAgentStatus?.agentType ??
+            retainedAgentStatus?.payload.agentType ??
+            null
         }) ??
         liveLeafPty?.foregroundAgent ??
         pty?.foregroundAgent ??
@@ -28702,8 +28710,32 @@ export class OrcaRuntimeService {
       )
       const liveTitleEvidence = leafTitle ?? ptyTitle
       const liveTitleEvidenceClassification = classifyAgentTitle(liveTitleEvidence)
+      // Why: renderer status can precede hook session identity, leaving native chat with no transcript address.
+      const rendererStatusAgent =
+        resolveCompatibleAgentTypeForOwner(tab.agentStatus?.agentType, ownerAgent) ??
+        ownerAgent ??
+        undefined
+      const hookSessionAgent = resolveCompatibleAgentTypeForOwner(
+        hookAgentStatus?.providerSessionAgentType,
+        ownerAgent
+      )
+      const hookSessionMatchesRenderer =
+        !rendererStatusAgent || !hookSessionAgent || rendererStatusAgent === hookSessionAgent
+      const hookProviderSession =
+        hookAgentStatus?.providerSession &&
+        hookSessionMatchesRenderer &&
+        (!tab.agentStatus?.providerSession ||
+          (hookAgentStatus.providerSessionReceivedAt ?? -1) >= tab.agentStatus.updatedAt)
+          ? hookAgentStatus.providerSession
+          : tab.agentStatus?.providerSession
       const normalizedTabAgentStatus = tab.agentStatus
-        ? normalizeCompatibleAgentStatusEntryForOwner(tab.agentStatus, ownerAgent)
+        ? normalizeCompatibleAgentStatusEntryForOwner(
+            {
+              ...tab.agentStatus,
+              ...(hookProviderSession ? { providerSession: hookProviderSession } : {})
+            },
+            ownerAgent
+          )
         : null
       // Why: keep rich hook status on a live prompt/tool (authoritative even under a non-agent title), else interactivePrompt is lost.
       const hasLiveAgentSignal =
@@ -28942,6 +28974,8 @@ export class OrcaRuntimeService {
    *  read would keep offering native chat for what is now a plain shell. */
   private getHookAgentRowForPane(rows: readonly AgentStatusIpcPayload[]): {
     providerSession: AgentProviderSessionMetadata | null
+    providerSessionAgentType: string | null
+    providerSessionReceivedAt: number | null
     agentType: string | null
   } {
     let session: AgentStatusIpcPayload | null = null
@@ -28967,6 +29001,8 @@ export class OrcaRuntimeService {
     }
     return {
       providerSession: session?.providerSession ?? null,
+      providerSessionAgentType: session?.agentType ?? null,
+      providerSessionReceivedAt: session?.receivedAt ?? null,
       agentType: agent?.agentType ?? null
     }
   }

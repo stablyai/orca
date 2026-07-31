@@ -87,6 +87,7 @@ import {
   registerAppMenu,
   rebuildAppMenu
 } from './menu/register-app-menu'
+import { createGpuAccelerationAboutPanelOptions } from './menu/gpu-acceleration-about-panel'
 import {
   checkForRemoteServerUpdate,
   checkForUpdatesFromMenu,
@@ -359,10 +360,30 @@ const gpuCrashFallbackTracker = new GpuCrashFallbackTracker({
   threshold: DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD
 })
 let gpuFallbackActiveThisLaunch = false
+let gpuFeatureStatus: Electron.GPUFeatureStatus | null = null
 let localPtyStartupReady: Promise<void> = Promise.resolve()
 let localPtyProviderStartupReady: Promise<void> = Promise.resolve()
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 const isServeMode = process.argv.includes('--serve')
+
+function updateGpuAccelerationAboutPanel(): void {
+  app.setAboutPanelOptions(
+    createGpuAccelerationAboutPanelOptions({
+      appName: app.name,
+      appVersion: app.getVersion(),
+      platform: process.platform,
+      gpuFallbackActive: gpuFallbackActiveThisLaunch,
+      gpuFeatureStatus
+    })
+  )
+}
+
+app.on('gpu-info-update', () => {
+  gpuFeatureStatus = app.getGPUFeatureStatus()
+  if (app.isReady()) {
+    updateGpuAccelerationAboutPanel()
+  }
+})
 if (isServeMode) {
   reserveServeStdoutForReadiness()
 }
@@ -1968,6 +1989,7 @@ void app.whenReady().then(async () => {
   electronApp.setAppUserModelId(devInstanceIdentity.appUserModelId)
   // Why: setName drives the macOS safeStorage Keychain item name; use the stable appName (not per-branch `name`) so dev branches share one key and don't re-prompt.
   app.setName(devInstanceIdentity.appName)
+  updateGpuAccelerationAboutPanel()
 
   // Why: managed WSL launchers live outside the Windows app bundle, so keep their launcher/bridge contract synced across app updates.
   managedWslCliReconciliationStatus = 'pending'

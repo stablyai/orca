@@ -1894,6 +1894,7 @@ export default function SessionScreen() {
         setActiveHandle(active.terminal)
         subscribeToTerminal(active.terminal)
       } else if (active) {
+        // Why: an empty snapshot can transiently omit a live terminal; explicit close clears it on RPC success.
         const previous = activeHandleRef.current
         if (previous) {
           unsubscribeTerminal(previous)
@@ -4133,6 +4134,7 @@ export default function SessionScreen() {
         reason: 'user'
       })
       if (response.ok) {
+        const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {
           pendingBrowserFocusPageIdRef.current = null
         }
@@ -4143,14 +4145,16 @@ export default function SessionScreen() {
           initializedHandlesRef.current.delete(terminalHandle)
           clearTerminalLiveInputDefault(terminalHandle)
         }
-        setSessionTabs((prev) => prev.filter((candidate) => candidate.id !== tab.id))
+        sessionTabsRef.current = remainingTabs
+        setSessionTabs(remainingTabs)
         // Why: tombstone the closed tab and rely on the snapshot, not a blind refetch that often re-added the not-yet-closed tab.
         closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
         // Why: bulk close re-activates the anchor before awaiting each close;
         // the render-synced ref sees that switch while this closure would not,
         // so comparing against the ref keeps the anchor from being nulled out.
-        if (activeSessionTabIdRef.current === tab.id) {
+        if (activeSessionTabIdRef.current === tab.id || remainingTabs.length === 0) {
           activeSessionTabTypeRef.current = null
+          activeSessionTabIdRef.current = null
           setActiveSessionTabId(null)
           activeHandleRef.current = null
           setActiveHandle(null)

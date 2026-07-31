@@ -210,6 +210,91 @@ function appendBoard(): { board: HTMLElement; lane: HTMLElement; firstCard: HTML
   return { board, lane, firstCard }
 }
 
+const VIRTUAL_CARD_PITCH = 44
+const VIRTUAL_CARD_HEIGHT = 36
+// Scrolled past the head of the lane, so the mounted window starts mid-list.
+const VIRTUAL_SPACER_TOP = -350
+
+// A virtualized lane: only `windowRange` of the view is mounted, and the layout
+// registration carries the whole view — exactly what the virtualizer publishes.
+function appendVirtualBoard(args: {
+  fullLaneIds: readonly string[]
+  viewIds: readonly string[]
+  windowRange: readonly [number, number]
+  publishFullIds: boolean
+}): { lane: HTMLElement; unregister: () => void } {
+  const board = document.createElement('div')
+  board.setAttribute('data-workspace-board-selection-surface', '')
+  setRect(board, { left: 0, top: 0, right: 320, bottom: 240, width: 320, height: 240 })
+
+  const lane = document.createElement('section')
+  lane.setAttribute('data-workspace-status-drop-target', '')
+  lane.dataset.workspaceStatus = 'doing'
+  setRect(lane, { left: 0, top: 0, right: 200, bottom: 220, width: 200, height: 220 })
+  if (args.publishFullIds) {
+    lane.dataset.workspaceLaneFullIds = serializeWorkspaceLaneFullIds([...args.fullLaneIds]) ?? ''
+  }
+
+  const laneScroll = document.createElement('div')
+  laneScroll.setAttribute('data-workspace-board-lane-scroll', '')
+  setRect(laneScroll, { left: 0, top: 0, right: 200, bottom: 220, width: 200, height: 220 })
+
+  const totalSize = args.viewIds.length * VIRTUAL_CARD_PITCH
+  const spacer = document.createElement('div')
+  setRect(spacer, {
+    left: 8,
+    top: VIRTUAL_SPACER_TOP,
+    right: 192,
+    bottom: VIRTUAL_SPACER_TOP + totalSize,
+    width: 184,
+    height: totalSize
+  })
+
+  for (let index = args.windowRange[0]; index <= args.windowRange[1]; index++) {
+    const worktreeId = args.viewIds[index]!
+    const card = document.createElement('div')
+    card.setAttribute('data-workspace-board-card-id', worktreeId)
+    card.dataset.workspaceBoardCardId = worktreeId
+    card.dataset.workspaceBoardCardIndex = String(index)
+    const top = VIRTUAL_SPACER_TOP + index * VIRTUAL_CARD_PITCH
+    setRect(card, {
+      left: 8,
+      top,
+      right: 192,
+      bottom: top + VIRTUAL_CARD_HEIGHT,
+      width: 184,
+      height: VIRTUAL_CARD_HEIGHT
+    })
+    setVisible(card)
+    spacer.append(card)
+  }
+
+  laneScroll.append(spacer)
+  lane.append(laneScroll)
+  board.append(lane)
+  document.body.append(board)
+  setElementFromPoint(lane)
+
+  const unregister = registerWorkspaceKanbanVirtualLaneLayout({
+    scrollElement: laneScroll,
+    spacerElement: spacer,
+    getItemIds: () => args.viewIds,
+    getMeasurements: () =>
+      args.viewIds.map((_, index) => ({
+        index,
+        start: index * VIRTUAL_CARD_PITCH,
+        end: index * VIRTUAL_CARD_PITCH + VIRTUAL_CARD_HEIGHT
+      }))
+  })
+  return { lane, unregister }
+}
+
+// 40-member lane under a search that matches every other card.
+function searchedVirtualLaneIds(): { fullLaneIds: string[]; viewIds: string[] } {
+  const fullLaneIds = Array.from({ length: 40 }, (_, index) => `doing-${index}`)
+  return { fullLaneIds, viewIds: fullLaneIds.filter((_, index) => index % 2 === 0) }
+}
+
 function worktree(args: {
   id: string
   workspaceStatus: string
@@ -354,6 +439,74 @@ describe('workspace kanban sidebar drop DOM bridge', () => {
     // Why: a tracked target can be committed after the pointer left the lane,
     // so the translation must not depend on the current pointer position.
     expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('doing', 2)).toBe(4)
+  })
+
+  it('lands a virtualized searched lane drop where the indicator pointed', () => {
+    const { fullLaneIds, viewIds } = searchedVirtualLaneIds()
+    const { unregister } = appendVirtualBoard({
+      fullLaneIds,
+      viewIds,
+      windowRange: [8, 17],
+      publishFullIds: true
+    })
+
+    const target = getWorkspaceKanbanSidebarDropTarget(24, 210)
+    // The indicator sits between the mounted cards for view items 12 and 13,
+    // whose full-lane neighbours are doing-24 and doing-26.
+    expect(target).toMatchObject({ status: 'doing', dropIndex: 13, dropIndicatorY: 218 })
+    expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('doing', target.dropIndex)).toBe(26)
+
+    unregister()
+  })
+
+  it('translates virtualized searched lane drops above and below the mounted window', () => {
+    const { fullLaneIds, viewIds } = searchedVirtualLaneIds()
+    const { unregister } = appendVirtualBoard({
+      fullLaneIds,
+      viewIds,
+      windowRange: [8, 17],
+      publishFullIds: true
+    })
+
+    expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('doing', 0)).toBe(0)
+    expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('doing', 3)).toBe(6)
+    expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('doing', 19)).toBe(38)
+    expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('doing', 20)).toBe(39)
+
+    unregister()
+  })
+
+  it('passes a virtualized unfiltered lane drop index through untranslated', () => {
+    const { fullLaneIds } = searchedVirtualLaneIds()
+    const { unregister } = appendVirtualBoard({
+      fullLaneIds,
+      viewIds: fullLaneIds,
+      windowRange: [8, 17],
+      publishFullIds: false
+    })
+
+    expect(getWorkspaceKanbanSidebarDropGroups()).toEqual([
+      { key: 'doing', worktreeIds: fullLaneIds }
+    ])
+    expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('doing', 13)).toBe(13)
+
+    unregister()
+  })
+
+  it('still counts unlaid-out cards as lane members without a virtual layout', () => {
+    const { lane } = appendBoard()
+    const secondCard = lane.querySelectorAll<HTMLElement>('[data-workspace-board-card-id]')[1]!
+    secondCard.remove()
+    const hiddenCard = document.createElement('div')
+    hiddenCard.setAttribute('data-workspace-board-card-id', 'doing-hidden')
+    hiddenCard.dataset.workspaceBoardCardId = 'doing-hidden'
+    lane.append(hiddenCard, secondCard)
+    setElementFromPoint(lane)
+
+    expect(getWorkspaceKanbanSidebarDropGroups()).toEqual([
+      { key: 'doing', worktreeIds: ['doing-a', 'doing-hidden', 'doing-b'] }
+    ])
+    expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('doing', 1)).toBe(2)
   })
 
   it('passes the drop index through for a lane it cannot find', () => {

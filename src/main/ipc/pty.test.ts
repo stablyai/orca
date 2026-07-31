@@ -6736,6 +6736,17 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('settles a stale renderer process inspection as unavailable', async () => {
+    registerPtyHandlers(mainWindow as never)
+    setLocalPtyProvider({ hasPty: vi.fn(() => false) } as never)
+
+    await expect(handlers.get('pty:inspectProcess')!(null, { id: 'gone-pty' })).resolves.toEqual({
+      foregroundProcess: null,
+      hasChildProcesses: false,
+      unavailable: true
+    })
+  })
+
   // Why: daemon resize is fire-and-forget, so pty:getSize must report the APPLIED size, not the requested one (Claude-Code split-pane desync).
   describe('pty:getSize reports applied size, not requested size', () => {
     function setupProviderWithAppliedSize(args: {

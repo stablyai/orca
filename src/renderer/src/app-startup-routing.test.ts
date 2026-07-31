@@ -328,6 +328,18 @@ describe('renderer startup runtime routing', () => {
     )
   })
 
+  it('loads Linear agent setup implementation only after the prompt opens it', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx'),
+      'utf8'
+    )
+
+    expect(source).toContain("() => import('./LinearAgentSkillSetupDialog')")
+    expect(source).not.toContain("from './LinearAgentSkillSetupDialog'")
+    expect(source).toContain('const setupDialog = setupDialogOpen ? (')
+    expect(source).toContain('<Suspense fallback={null}>')
+  })
+
   it('does not eagerly import optional status-bar segments on startup', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/renderer/src/components/status-bar/StatusBar.tsx'),
