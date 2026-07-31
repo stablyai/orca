@@ -1254,6 +1254,9 @@ export async function fetchCodexRateLimits(
   // token_count event is the only usage signal left, so usage doesn't go completely
   // dark on an internal network.
   const usedPercent = await readLatestCodexSessionUsedPercent().catch(() => null)
+  if (options?.signal?.aborted) {
+    return abortedCodexRateLimitResult()
+  }
   if (usedPercent === null) {
     return result
   }
