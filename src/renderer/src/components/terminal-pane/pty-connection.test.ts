@@ -55,10 +55,10 @@ async function drainFakeTimerWork(limit = 20): Promise<void> {
 
 // Why: a reveal remount reads the still-live park watcher entry at connect time to
 // tell itself apart from an in-place reattach; the host disposes it a beat later.
-async function parkTabForReveal(tabId: string, ptyId: string): Promise<void> {
+async function parkTabForReveal(tabId: string, ptyId: string, worktreeId = 'wt-1'): Promise<void> {
   const { parkedWatchersByTabId } = await import('./terminal-parked-watcher-registry')
   parkedWatchersByTabId.set(tabId, {
-    worktreeId: 'wt-1',
+    worktreeId,
     tabPtyId: ptyId,
     paneIdByPtyId: new Map([[ptyId, 1]]),
     disposersByPtyId: new Map([[ptyId, () => {}]])
@@ -20241,6 +20241,62 @@ describe('connectPanePty', () => {
     expect(writes.join('')).toContain('DEEP_PAIRED_SCROLLBACK')
     expect(writes.join('')).toContain('current screen from initial subscribe')
     expect(transport.getPtyId).toHaveReturnedWith(remotePtyId)
+  })
+
+  it('restores a local main-model snapshot after a contentless park reattach', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const localPtyId = 'global-floating-terminal@@terminal-1'
+    const transport = createMockTransport(localPtyId)
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      transport.getPtyId.mockReturnValue(localPtyId)
+      return sessionId ? { id: localPtyId, isReattach: true } : null
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = vi.mocked(window.api.pty.getMainBufferSnapshot)
+    getMainBufferSnapshot.mockResolvedValue({
+      data: 'FLOATING-PARK-RESTORE-OK\r\n',
+      cols: 113,
+      rows: 32,
+      seq: 558,
+      source: 'headless'
+    })
+    await parkTabForReveal('tab-1', localPtyId, 'global-floating-terminal')
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'global-floating-terminal': [{ id: 'tab-1', ptyId: localPtyId }]
+      },
+      ptyIdsByTabId: { 'tab-1': [localPtyId] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_1 },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_1]: localPtyId }
+        }
+      }
+    }
+
+    const pane = createPane(1)
+    const { parseCallbacks, writes } = captureCallbackTerminalWrites(pane)
+    const deps = createDeps({
+      worktreeId: 'global-floating-terminal',
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: localPtyId }
+    })
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    for (let step = 0; step < 30; step += 1) {
+      parseCallbacks.shift()?.()
+      await flushAsyncTicks(2)
+    }
+
+    expect(getMainBufferSnapshot).toHaveBeenCalledOnce()
+    expect(getMainBufferSnapshot).toHaveBeenCalledWith(localPtyId, { scrollbackRows: 5000 })
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: localPtyId })
+    )
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, localPtyId)
+    expect(writes.join('')).toContain('FLOATING-PARK-RESTORE-OK')
   })
 
   it('falls back to relay replay when the SSH model snapshot stalls', async () => {

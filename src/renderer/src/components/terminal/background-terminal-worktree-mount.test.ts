@@ -205,10 +205,22 @@ describe('cold activation tab deferral', () => {
   const tabIds = (count: number): string[] =>
     Array.from({ length: count }, (_, index) => `tab-${index + 1}`)
 
-  it('enables deferral only for a positively resolved local execution host', () => {
+  it('enables deferral for local and snapshot-capable paired execution hosts', () => {
     expect(canDeferColdActivationTabsForHost({ executionHostId: 'local' })).toBe(true)
     expect(canDeferColdActivationTabsForHost({ executionHostId: 'ssh:ssh-1' })).toBe(false)
     expect(canDeferColdActivationTabsForHost({ executionHostId: 'runtime:runtime-1' })).toBe(false)
+    expect(
+      canDeferColdActivationTabsForHost({
+        executionHostId: 'runtime:runtime-1',
+        pairedRuntimeParkingEnvironmentIds: new Set(['runtime-1'])
+      })
+    ).toBe(true)
+    expect(
+      canDeferColdActivationTabsForHost({
+        executionHostId: 'runtime:runtime-1',
+        pairedRuntimeParkingEnvironmentIds: new Set(['runtime-2'])
+      })
+    ).toBe(false)
     expect(canDeferColdActivationTabsForHost({ executionHostId: null })).toBe(false)
   })
 
