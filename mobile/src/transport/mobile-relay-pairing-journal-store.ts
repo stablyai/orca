@@ -122,6 +122,22 @@ export async function clearMobileRelayPairingJournal(journalId: string): Promise
   return mutation
 }
 
+export async function clearMobileRelayPairingJournalForHost(hostId: string): Promise<void> {
+  const mutation = journalMutation.then(async () => {
+    const raw = await AsyncStorage.getItem(JOURNAL_STORAGE_KEY)
+    const current = raw ? parseMetadata(raw) : null
+    if (!current || current.host.id !== hostId) {
+      return
+    }
+    // Why: host removal invalidates automatic recovery, while a later pairing
+    // save stays ordered after this host-scoped cleanup.
+    await AsyncStorage.removeItem(JOURNAL_STORAGE_KEY)
+    await deletePairingKeychainItem(JOURNAL_SECRET_KEY)
+  })
+  journalMutation = mutation.catch(() => {})
+  return mutation
+}
+
 function parseMetadata(raw: string): MobileRelayPairingJournalMetadata | null {
   try {
     const result = MobileRelayPairingJournalMetadataSchema.safeParse(JSON.parse(raw))

@@ -3,6 +3,7 @@ import {
   encodePairingOffer,
   decodePairingOffer,
   parsePairingCode,
+  normalizePairingEndpoints,
   type PairingOffer
 } from './pairing'
 
@@ -47,6 +48,30 @@ describe('pairing offer', () => {
     }
 
     expect(decodePairingOffer(encodePairingOffer(proxiedOffer))).toEqual(proxiedOffer)
+  })
+
+  it('round-trips an ordered endpoints list with primary endpoint first', () => {
+    const multi: PairingOffer = {
+      ...offer,
+      endpoint: 'ws://100.64.1.20:6768',
+      endpoints: ['ws://100.64.1.20:6768', 'ws://192.168.1.10:6768']
+    }
+    const decoded = decodePairingOffer(encodePairingOffer(multi))
+    expect(decoded.endpoint).toBe('ws://100.64.1.20:6768')
+    expect(decoded.endpoints).toEqual(['ws://100.64.1.20:6768', 'ws://192.168.1.10:6768'])
+  })
+
+  it('omits endpoints from the payload when only one address is present', () => {
+    const url = encodePairingOffer({
+      ...offer,
+      endpoints: ['ws://192.168.1.10:6768']
+    })
+    const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!
+    const json = JSON.parse(
+      Buffer.from(code.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8')
+    )
+    expect(json.endpoints).toBeUndefined()
+    expect(json.endpoint).toBe('ws://192.168.1.10:6768')
   })
 
   it('encoded URL uses base64url (no +, /, or = characters)', () => {
@@ -94,6 +119,31 @@ describe('pairing offer', () => {
     const wrong = { v: 2, endpoint: 'ws://host:1234', deviceToken: 'tok' }
     const base64 = Buffer.from(JSON.stringify(wrong)).toString('base64')
     expect(() => decodePairingOffer(`orca://pair#${base64}`)).toThrow()
+  })
+
+  it('rejects oversized raw payloads even when the excess is in unknown fields', () => {
+    const oversized = { ...offer, ignored: 'x'.repeat(1_000) }
+    const base64 = Buffer.from(JSON.stringify(oversized)).toString('base64url')
+    expect(() => decodePairingOffer(`orca://pair#${base64}`)).toThrow(/safe QR payload limit/)
+  })
+})
+
+describe('normalizePairingEndpoints', () => {
+  it('falls back to a single endpoint when endpoints is absent', () => {
+    expect(normalizePairingEndpoints('ws://a:1')).toEqual(['ws://a:1'])
+  })
+
+  it('dedupes, keeps primary first, and caps at four', () => {
+    expect(
+      normalizePairingEndpoints('ws://a:1', [
+        'ws://a:1',
+        'ws://b:1',
+        'ws://b:1',
+        'ws://c:1',
+        'ws://d:1',
+        'ws://e:1'
+      ])
+    ).toEqual(['ws://a:1', 'ws://b:1', 'ws://c:1', 'ws://d:1'])
   })
 })
 

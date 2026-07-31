@@ -32,12 +32,14 @@ class NeverOpeningWebSocket {
   send(): void {}
   close(): void {
     this.readyState = 3
+    this.onclose?.()
   }
 }
 
 const originalWebSocket = globalThis.WebSocket
 
 afterEach(() => {
+  vi.useRealTimers()
   globalThis.WebSocket = originalWebSocket
 })
 
@@ -69,6 +71,19 @@ describe('mobile rpc-client connection logs', () => {
 
     expect(logs[0]?.detail).toBe('desktop.example:7443')
     expect(JSON.stringify(logs)).not.toContain('password')
+    client.close()
+  })
+
+  it('leaves retry ownership to the route supervisor', () => {
+    vi.useFakeTimers()
+    globalThis.WebSocket = NeverOpeningWebSocket as unknown as typeof WebSocket
+    const client = connect('ws://desktop.invalid', 'token', 'server-key', {
+      autoReconnect: false,
+      connectTimeoutMs: 100
+    })
+
+    vi.advanceTimersByTime(100)
+    expect(client.getState()).toBe('disconnected')
     client.close()
   })
 })

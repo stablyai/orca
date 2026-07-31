@@ -49,9 +49,9 @@ export function createMobileRelayPairingFixtures(now: number): PairingFixture[] 
       expected: { ...directOffer, relay }
     },
     {
-      name: 'offer-level endpoints are stripped',
+      name: 'malformed ordered endpoints are rejected',
       payload: { ...directOffer, endpoints: [{ kind: 'relay' }] },
-      expected: directOffer
+      expected: null
     },
     {
       name: 'runtime relay is invalid',

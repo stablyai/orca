@@ -2,12 +2,11 @@ import { Platform } from 'react-native'
 import {
   DeviceCredentialInstalledSchema,
   PairingGetEndpointsResultSchema,
-  type DeviceCredentialInstalled,
-  type MobileRelayEndpoint
+  type DeviceCredentialInstalled
 } from '../../../src/shared/mobile-relay-credential-contract'
 import { connect, type ConnectOptions } from './rpc-client'
 import { resolvePairingHostIdentity, saveHost } from './host-store'
-import type { HostProfile, PairingOffer, RpcResponse } from './types'
+import type { PairingOffer, RpcResponse } from './types'
 import {
   createMobileRelayPairingJournal,
   type MobileRelayPairingJournal
@@ -19,15 +18,19 @@ import {
 } from './mobile-relay-pairing-journal-store'
 import {
   promotePairingJournalCredential,
-  writeMobileRelayCredentialBundle
+  replaceMobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
 import {
   connectMobileRelayForPairing,
   type PairingCandidateClient
 } from './mobile-relay-physical-client'
-import { racePairingCandidates, type PairingCandidate } from './pairing-candidate-race'
 import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-director'
-import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
+import {
+  hostProfileFromPairingOffer,
+  relayHostProfileFromPairing
+} from './host-profile-from-pairing'
+import { relayWebSocketUrl } from './mobile-access-route-order'
+import { selectPreProfilePairingRoute } from './pre-profile-pairing-route-selection'
 
 export type PreProfilePairingAttempt = {
   readonly result: Promise<{ hostId: string }>
@@ -44,7 +47,7 @@ type Dependencies = {
   saveJournal: typeof saveMobileRelayPairingJournal
   updateJournal: typeof updateMobileRelayPairingJournal
   clearJournal: typeof clearMobileRelayPairingJournal
-  writeCredentialBundle: typeof writeMobileRelayCredentialBundle
+  writeCredentialBundle: typeof replaceMobileRelayCredentialBundle
   now: () => number
   platform: string
 }
@@ -58,7 +61,7 @@ const defaultDependencies: Dependencies = {
   saveJournal: saveMobileRelayPairingJournal,
   updateJournal: updateMobileRelayPairingJournal,
   clearJournal: clearMobileRelayPairingJournal,
-  writeCredentialBundle: writeMobileRelayCredentialBundle,
+  writeCredentialBundle: replaceMobileRelayCredentialBundle,
   now: Date.now,
   platform: Platform.OS
 }
@@ -70,10 +73,15 @@ export function startPreProfilePairing(args: {
   dependencies?: Partial<Dependencies>
 }): PreProfilePairingAttempt {
   const dependencies = { ...defaultDependencies, ...args.dependencies }
+  const pairingDeadlineAt = dependencies.now() + args.timeoutMs
   const clients = new Set<PairingCandidateClient>()
   let disposed = false
   let timedOut = false
   let timer: ReturnType<typeof setTimeout> | null = null
+  let rejectDeadline!: (error: Error) => void
+  const deadline = new Promise<never>((_resolve, reject) => {
+    rejectDeadline = reject
+  })
 
   const dispose = (): void => {
     if (disposed) {
@@ -93,25 +101,29 @@ export function startPreProfilePairing(args: {
   timer = setTimeout(() => {
     timedOut = true
     dispose()
+    rejectDeadline(new Error('mobile pairing timed out'))
   }, args.timeoutMs)
 
-  const result = runPairing(args.offer, args.connectOptions, dependencies, clients, () => disposed)
-    .catch((error: unknown) => {
-      if (timedOut) {
-        throw new Error('mobile pairing timed out')
-      }
-      throw error
-    })
-    .finally(() => {
-      if (timer) {
-        clearTimeout(timer)
-        timer = null
-      }
-      for (const client of clients) {
-        client.close()
-      }
-      clients.clear()
-    })
+  const operation = runPairing(
+    args.offer,
+    args.connectOptions,
+    dependencies,
+    clients,
+    () => disposed,
+    pairingDeadlineAt
+  )
+  // Why: closing sockets alone cannot cancel a stalled secure-store write;
+  // the caller still needs a deterministic terminal result at the deadline.
+  const result = Promise.race([operation, deadline]).finally(() => {
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+    for (const client of clients) {
+      client.close()
+    }
+    clients.clear()
+  })
 
   return {
     result,
@@ -127,15 +139,17 @@ async function runPairing(
   connectOptions: ConnectOptions | undefined,
   dependencies: Dependencies,
   clients: Set<PairingCandidateClient>,
-  isDisposed: () => boolean
+  isDisposed: () => boolean,
+  pairingDeadlineAt: number
 ): Promise<{ hostId: string }> {
   const now = dependencies.now()
   // Why: every pairing artifact must share the preserved host id so re-pairing
   // updates one card instead of publishing a second identity (STA-1840).
-  const { id: hostId, name: hostName } = await dependencies.resolveHostIdentity(
-    offer.publicKeyB64,
-    `host-${now}`
-  )
+  const {
+    id: hostId,
+    name: hostName,
+    publicationEpoch
+  } = await dependencies.resolveHostIdentity(offer.publicKeyB64, `host-${now}`)
   assertActive(isDisposed)
   let journal: MobileRelayPairingJournal | null = null
   if (offer.relay && dependencies.platform !== 'web') {
@@ -149,48 +163,32 @@ async function runPairing(
     assertActive(isDisposed)
   }
 
-  const directClient = dependencies.connectDirect(
-    offer.endpoint,
-    offer.deviceToken,
-    offer.publicKeyB64,
-    connectOptions
-  )
-  clients.add(directClient)
-  const candidates: PairingCandidate[] = [{ path: 'direct', client: directClient }]
-  if (journal) {
-    const relayClient = createRecoveringPairingRelayCandidate({
-      journal,
-      connect: (relay) =>
-        dependencies.connectRelay({
-          relay,
-          deviceToken: offer.deviceToken,
-          desktopPublicKeyB64: offer.publicKeyB64
-        }),
-      resolveDirector: (relay) => dependencies.resolveInviteDirector({ relay }),
-      persistMove: async (relay) => {
-        journal = {
-          ...journal!,
-          metadata: {
-            ...journal!.metadata,
-            relay: {
-              ...journal!.metadata.relay,
-              cellUrl: relay.cellUrl,
-              assignmentEpoch: relay.assignmentEpoch
-            }
-          }
-        }
-        await dependencies.updateJournal(journal.metadata.journalId, () => journal!.metadata)
-      },
-      now: dependencies.now
-    })
-    clients.add(relayClient)
-    candidates.push({ path: 'relay', client: relayClient })
-  }
-  const winner = await racePairingCandidates(candidates)
+  const selection = await selectPreProfilePairingRoute({
+    offer,
+    journal,
+    connectOptions,
+    dependencies,
+    clients,
+    isDisposed,
+    pairingDeadlineAt
+  })
+  const winner = selection.winner
+  journal = selection.journal
   assertActive(isDisposed)
 
   if (!journal) {
-    await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
+    assertActive(isDisposed)
+    await dependencies.saveHost(
+      hostProfileFromPairingOffer({
+        id: hostId,
+        name: hostName,
+        offer,
+        lastConnected: now,
+        lastGoodEndpoint: winner.url
+      }),
+      publicationEpoch
+    )
+    assertActive(isDisposed)
     return { hostId }
   }
 
@@ -203,16 +201,30 @@ async function runPairing(
     }
   }
   await dependencies.updateJournal(journal.metadata.journalId, () => journal!.metadata)
+  assertActive(isDisposed)
   const provision = await winner.client.sendRequest('pairing.provisionRelay', {
     reqId: journal.metadata.installReqId,
     newResumeTokenHash: journal.metadata.pendingResumeTokenHash
   })
+  assertActive(isDisposed)
   if (isMethodNotFound(provision)) {
     if (winner.path !== 'direct') {
       throw new Error('relay pairing RPC unavailable after relay path authentication')
     }
-    await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
+    assertActive(isDisposed)
+    await dependencies.saveHost(
+      hostProfileFromPairingOffer({
+        id: hostId,
+        name: hostName,
+        offer,
+        lastConnected: now,
+        lastGoodEndpoint: winner.url
+      }),
+      publicationEpoch
+    )
+    assertActive(isDisposed)
     await dependencies.clearJournal(journal.metadata.journalId)
+    assertActive(isDisposed)
     return { hostId }
   }
   const installed = DeviceCredentialInstalledSchema.parse(requireSuccess(provision))
@@ -223,52 +235,26 @@ async function runPairing(
       })
     )
   )
+  assertActive(isDisposed)
   assertCommittedInstall(endpoints.installStatus, installed)
   if (!endpoints.relay) {
     throw new Error('desktop returned no relay endpoint after credential install')
   }
   assertActive(isDisposed)
   await dependencies.writeCredentialBundle(promotePairingJournalCredential({ journal, installed }))
-  await dependencies.saveHost(relayHost(journal, endpoints.relay))
+  assertActive(isDisposed)
+  await dependencies.saveHost(
+    relayHostProfileFromPairing(
+      journal,
+      endpoints.relay,
+      winner.path === 'relay' ? relayWebSocketUrl(endpoints.relay) : winner.url
+    ),
+    publicationEpoch
+  )
+  assertActive(isDisposed)
   await dependencies.clearJournal(journal.metadata.journalId)
+  assertActive(isDisposed)
   return { hostId }
-}
-
-function baseHost(
-  offer: PairingOffer,
-  hostId: string,
-  name: string,
-  lastConnected: number
-): HostProfile {
-  return {
-    id: hostId,
-    name,
-    endpoint: offer.endpoint,
-    deviceToken: offer.deviceToken,
-    publicKeyB64: offer.publicKeyB64,
-    lastConnected
-  }
-}
-
-function relayHost(journal: MobileRelayPairingJournal, relay: MobileRelayEndpoint): HostProfile {
-  const host = journal.metadata.host
-  return {
-    ...host,
-    deviceToken: journal.secrets.deviceToken,
-    endpoints: [
-      { id: 'direct-primary', kind: 'lan', url: host.endpoint },
-      { id: 'relay-primary', kind: 'relay', url: relayWebSocketUrl(relay) }
-    ],
-    relayHostId: relay.relayHostId,
-    relay
-  }
-}
-
-function relayWebSocketUrl(relay: MobileRelayEndpoint): string {
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return url.toString()
 }
 
 function requireSuccess(response: RpcResponse): unknown {

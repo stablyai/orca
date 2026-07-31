@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { decodePairingUrl, extractPairingCodeFromUrl, parsePairingCode } from './pairing'
-import type { PairingOffer } from './types'
+import {
+  PAIRING_CODE_MAX_CHARACTERS,
+  PAIRING_DEVICE_TOKEN_MAX_CHARACTERS,
+  PairingOfferSchema,
+  normalizePairingEndpoints,
+  type PairingOffer
+} from './types'
 
 const offer: PairingOffer = {
   v: 2,
@@ -9,7 +15,7 @@ const offer: PairingOffer = {
   publicKeyB64: 'pubkey-xyz'
 }
 
-function encodeOffer(input: PairingOffer = offer): string {
+function encodeOffer(input: Record<string, unknown> = offer): string {
   return btoa(JSON.stringify(input)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
@@ -71,5 +77,47 @@ describe('pairing deep links', () => {
     const code = encodeOffer(proxiedOffer)
 
     expect(parsePairingCode(code)).toEqual(proxiedOffer)
+  })
+
+  it('rejects an oversized code before base64 decoding', () => {
+    const decode = vi.fn(() => {
+      throw new Error('must not decode')
+    })
+    vi.stubGlobal('atob', decode)
+    const oversized = 'A'.repeat(PAIRING_CODE_MAX_CHARACTERS + 1)
+
+    expect(parsePairingCode(oversized)).toBeNull()
+    expect(decodePairingUrl(`orca://pair?code=${oversized}`)).toBeNull()
+    expect(decode).not.toHaveBeenCalled()
+  })
+
+  it('accepts ordinary device tokens and rejects one over the field limit', () => {
+    expect(
+      PairingOfferSchema.safeParse({
+        ...offer,
+        deviceToken: 't'.repeat(32)
+      }).success
+    ).toBe(true)
+    expect(
+      PairingOfferSchema.safeParse({
+        ...offer,
+        deviceToken: 't'.repeat(PAIRING_DEVICE_TOKEN_MAX_CHARACTERS + 1)
+      }).success
+    ).toBe(false)
+  })
+
+  it('parses additive endpoints and normalizes legacy single-endpoint offers', () => {
+    const multi = {
+      ...offer,
+      endpoints: ['ws://100.102.47.57:6768', 'ws://192.168.1.10:6768']
+    }
+    expect(parsePairingCode(encodeOffer(multi))).toEqual(multi)
+    expect(normalizePairingEndpoints(offer.endpoint)).toEqual([offer.endpoint])
+    expect(normalizePairingEndpoints(multi.endpoint, multi.endpoints)).toEqual(multi.endpoints)
+  })
+
+  it('rejects oversized raw payloads even when the excess is in unknown fields', () => {
+    const oversized = encodeOffer({ ...offer, ignored: 'x'.repeat(1_000) })
+    expect(parsePairingCode(oversized)).toBeNull()
   })
 })

@@ -1,10 +1,4 @@
-import type {
-  RpcResponse,
-  RpcSuccess,
-  ConnectionState,
-  ConnectionLogLevel,
-  ConnectionLogSink
-} from './types'
+import type { RpcResponse, RpcSuccess, ConnectionState, ConnectionLogLevel } from './types'
 import {
   generateKeyPair,
   deriveSharedKey,
@@ -37,75 +31,23 @@ import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
-
-type PendingRequest = {
-  resolve: (response: RpcResponse) => void
-  reject: (error: Error) => void
-}
-
-type ConnectWaiter = {
-  resolve: () => void
-  reject: (error: Error) => void
-  timeout: ReturnType<typeof setTimeout> | null
-}
-
-export type SendRequestOptions = {
-  timeoutMs?: number
-  /** Spend `timeoutMs` across connect-wait AND the request instead of giving each
-   *  phase its own. Interactive chat writes need it: they run as sequential loops
-   *  under one shared budget, so a per-phase clock lets the composer sit `sending`
-   *  for a multiple of the stated ceiling. Off by default — the long-running
-   *  callers (worktree create, dictation finish, credit reset) sized their budgets
-   *  against the post-connect clock, and squeezing them to the floor after a slow
-   *  reconnect would fail sends that used to land. */
-  budgetSpansConnect?: boolean
-  /** Reject immediately when not connected — a send parked in the connect wait
-   *  replays stale terminal bytes into the PTY after reconnect. */
-  failWhenDisconnected?: boolean
-}
-
-type SubscribeOptions = {
-  onBinaryFrame?: (frame: BrowserScreencastFrame) => void
-}
-
-type StreamingListener = (result: unknown) => void
-
-type StreamRequest = {
-  method: string
-  params: unknown
-  listener: StreamingListener
-  onBinaryFrame?: (frame: BrowserScreencastFrame) => void
-  subscriptionId?: string
-  cancelled?: boolean
-  sent?: boolean
-}
-
-export type RpcClient = {
-  sendRequest: (
-    method: string,
-    params?: unknown,
-    options?: SendRequestOptions
-  ) => Promise<RpcResponse>
-  subscribe: (
-    method: string,
-    params: unknown,
-    onData: StreamingListener,
-    options?: SubscribeOptions
-  ) => () => void
-  updateTerminalSubscriptionViewport: (
-    terminal: string,
-    viewport: { cols: number; rows: number }
-  ) => void
-  getState: () => ConnectionState
-  // 0 means never failed (reset once the handshake authenticates); the UI escalates "Reconnecting…" to "Can't connect" past a threshold.
-  getReconnectAttempt: () => number
-  // Last 'connected' timestamp (ms epoch); null = never connected. Lets the UI tell "never reachable" from "transient blip".
-  getLastConnectedAt: () => number | null
-  onStateChange: (listener: (state: ConnectionState) => void) => () => void
-  // Why: app-resume hook — iOS/Android can kill the TCP path while backgrounded; call on AppState 'active' to recover.
-  notifyForeground: () => void
-  close: () => void
-}
+import { OrderedDialPass } from './ordered-endpoint-dial'
+import { normalizePairingEndpoints } from './types'
+import {
+  isStreamingSubscriptionReadyResult,
+  isTerminalSubscribedResult
+} from './rpc-client-subscription-result'
+import type {
+  ConnectOptions,
+  ConnectWaiter,
+  PendingRequest,
+  RpcClient,
+  SendRequestOptions,
+  StreamingListener,
+  StreamRequest,
+  SubscribeOptions
+} from './rpc-client-contract'
+export type { ConnectOptions, RpcClient, SendRequestOptions } from './rpc-client-contract'
 
 // Why: tiered backoff — fast early entries recover blips; the slow tail avoids burning a SYN every 4s on an unreachable desktop.
 const RECONNECT_DELAYS = [500, 1000, 2000, 4000, 8000, 15_000, 30_000, 60_000]
@@ -129,12 +71,6 @@ const WEBSOCKET_CONNECTING_STATE = 0
 // Why: RN auto-pongs pings natively, so JS needs an app-level probe to detect half-open sockets.
 const ACTIVITY_PROBE_INTERVAL_MS = 20_000
 
-export type ConnectOptions = {
-  onStateChange?: (state: ConnectionState) => void
-  // Fires for every lifecycle event so the UI can show where 'Connecting…' is stuck (e.g. broken Tailscale route).
-  onLog?: ConnectionLogSink
-}
-
 export function connect(
   endpoint: string,
   deviceToken: string,
@@ -148,6 +84,18 @@ export function connect(
       : (optionsOrLegacy ?? {})
   const onStateChange = options.onStateChange
   const onLog = options.onLog
+  const onDialSuccess = options.onDialSuccess
+  const autoReconnect = options.autoReconnect !== false
+  const connectTimeoutMs = options.connectTimeoutMs ?? CONNECT_TIMEOUT_MS
+  const preferredEndpoints = normalizePairingEndpoints(endpoint, options.endpoints)
+  const dialPass = new OrderedDialPass()
+  dialPass.lastGoodEndpoint = options.lastGoodEndpoint?.trim() || null
+  // Why: persisted last-good from a prior session must seed sticky so the
+  // first open prefers it (KTD2); otherwise cold dial ignores the hint.
+  if (dialPass.lastGoodEndpoint && preferredEndpoints.includes(dialPass.lastGoodEndpoint)) {
+    dialPass.stickyLastGood = true
+  }
+  let activeEndpoint = preferredEndpoints[0]!
   let logCounter = 0
   function emitLog(level: ConnectionLogLevel, message: string, detail?: string) {
     if (!onLog) {
@@ -226,7 +174,7 @@ export function connect(
       to: next,
       dweltMs: dwelt,
       attempt: reconnectAttempt,
-      endpoint: redactSocketEndpoint(endpoint)
+      endpoint: redactSocketEndpoint(activeEndpoint)
     })
     if (next === 'connected') {
       lastConnectedAt = Date.now()
@@ -235,6 +183,8 @@ export function connect(
       reconnectAttempt = 0
       // Why: a clean handshake proves the token is valid — reset the auth retry budget.
       authRejectionCount = 0
+      dialPass.markConnected(activeEndpoint)
+      onDialSuccess?.(activeEndpoint)
       for (const waiter of connectWaiters.splice(0)) {
         if (waiter.timeout) {
           clearTimeout(waiter.timeout)
@@ -285,16 +235,25 @@ export function connect(
     return `rpc-${++requestCounter}-${Date.now()}`
   }
 
-  function openConnection() {
+  function openConnection(opts: { continuePass?: boolean } = {}) {
     if (intentionallyClosed) {
       return
     }
+
+    activeEndpoint = !opts.continuePass
+      ? dialPass.begin(
+          preferredEndpoints,
+          dialPass.resolveOpenMode(lastConnectedAt, reconnectAttempt)
+        )
+      : dialPass.activeOrFallback(preferredEndpoints)
 
     const now = Date.now()
     wsConstructionCounter++
     console.log('[net] openConnection', {
       attempt: reconnectAttempt,
-      endpoint: redactSocketEndpoint(endpoint),
+      endpoint: redactSocketEndpoint(activeEndpoint),
+      passIndex: dialPass.index,
+      passLength: dialPass.order.length,
       // Why: diagnostic for RN/OkHttp pool corruption — high wsCount + repeated 1006 closes means process-state stuck.
       wsCount: wsConstructionCounter,
       msSinceLastConnected: lastConnectedAt != null ? now - lastConnectedAt : null,
@@ -307,10 +266,10 @@ export function connect(
     emitLog(
       'info',
       reconnectAttempt > 0 ? `Reconnecting (attempt ${reconnectAttempt + 1})` : 'Opening WebSocket',
-      redactSocketEndpoint(endpoint)
+      redactSocketEndpoint(activeEndpoint)
     )
 
-    ws = new WebSocket(endpoint)
+    ws = new WebSocket(activeEndpoint)
     const openingWs = ws
     let openingWsAuthenticated = false
     let openingWsLastInboundAt: number | null = null
@@ -321,12 +280,13 @@ export function connect(
       if (ws === openingWs && openingWs.readyState === WEBSOCKET_CONNECTING_STATE) {
         console.log('[net] connect-timeout fired (onopen never arrived)', {
           attempt: reconnectAttempt,
-          timeoutMs: CONNECT_TIMEOUT_MS
+          timeoutMs: connectTimeoutMs,
+          endpoint: redactSocketEndpoint(activeEndpoint)
         })
         emitLog(
           'error',
           'WebSocket connect timeout',
-          `No TCP/WS handshake within ${CONNECT_TIMEOUT_MS / 1000}s — endpoint unreachable?`
+          `No TCP/WS handshake within ${connectTimeoutMs / 1000}s — endpoint unreachable?`
         )
         openingWs.close()
         if (ws === openingWs) {
@@ -334,7 +294,7 @@ export function connect(
           handleSocketClosed(openingWs, { timedOut: true })
         }
       }
-    }, CONNECT_TIMEOUT_MS)
+    }, connectTimeoutMs)
 
     ws.onopen = () => {
       if (isStaleRpcSocketEvent(ws, openingWs, 'open', state, reconnectAttempt)) {
@@ -600,7 +560,7 @@ export function connect(
         state,
         attempt: reconnectAttempt,
         intentionallyClosed,
-        endpoint: redactSocketEndpoint(endpoint),
+        endpoint: redactSocketEndpoint(activeEndpoint),
         constructedAt: now,
         authenticated: openingWsAuthenticated,
         lastInboundAt: openingWsLastInboundAt
@@ -681,8 +641,37 @@ export function connect(
       streamCount: streamListeners.size,
       attempt: reconnectAttempt
     })
-    emitLog('warn', 'WebSocket closed', 'Will attempt to reconnect')
     rejectAllPending('Connection interrupted', { deliveryUnknown: true })
+
+    if (dialPass.active) {
+      // Why: auth retries stay on the rejecting address, but a later transport
+      // failure cannot prove the token is bad and must release healthy routes.
+      const nextEndpoint = dialPass.authPinnedEndpoint
+        ? dialPass.resumeAfterPinnedTransportFailure(preferredEndpoints)
+        : dialPass.advance()
+      if (nextEndpoint) {
+        activeEndpoint = nextEndpoint
+        emitLog(
+          'warn',
+          'WebSocket closed',
+          `Trying next endpoint (${dialPass.index + 1}/${dialPass.order.length})`
+        )
+        openConnection({ continuePass: true })
+        return
+      }
+    }
+
+    // Why: only clear sticky on an in-pass dial miss — a live-session drop must
+    // keep last-good sticky for the next reconnect (KTD2).
+    dialPass.endPass()
+    if (!autoReconnect) {
+      // Why: a supervised candidate is one physical attempt; letting it retry
+      // would compete with the supervisor's ordered route pass.
+      emitLog('warn', 'WebSocket closed')
+      setState('disconnected')
+      return
+    }
+    emitLog('warn', 'WebSocket closed', 'Will attempt to reconnect')
     setState('reconnecting')
     scheduleReconnect()
   }
@@ -690,11 +679,14 @@ export function connect(
   // Why: an auth rejection may be transient (issue #5200) — retry up to AUTH_RETRY_BUDGET times before latching auth-failed.
   function handleAuthRejection(reason: string, preserveRecovery = false): void {
     authRejectionCount++
+    // Why: token rejection is host-scoped; retry this address until a later
+    // transport failure proves it is unavailable rather than trying another IP.
+    dialPass.pinAuth(activeEndpoint)
     if (authRejectionCount < AUTH_RETRY_BUDGET) {
       console.log('[net] auth rejected — retrying handshake', {
         attempt: authRejectionCount,
         budget: AUTH_RETRY_BUDGET,
-        endpoint: redactSocketEndpoint(endpoint)
+        endpoint: redactSocketEndpoint(activeEndpoint)
       })
       emitLog(
         'warn',
@@ -724,8 +716,9 @@ export function connect(
     pendingBrowserScreencastRequestId = null
     console.log('[net] auth rejected — budget exhausted, latching auth-failed', {
       attempt: authRejectionCount,
-      endpoint: redactSocketEndpoint(endpoint)
+      endpoint: redactSocketEndpoint(activeEndpoint)
     })
+    dialPass.clearAuthPin()
     intentionallyClosed = true
     ws?.close()
     ws = null
@@ -1201,26 +1194,4 @@ export function connect(
       rejectAllPending('Client closed', { deliveryUnknown: true })
     }
   }
-}
-
-function isTerminalSubscribedResult(
-  value: unknown
-): value is { type: 'subscribed'; streamId: number } {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    (value as { type?: unknown }).type === 'subscribed' &&
-    typeof (value as { streamId?: unknown }).streamId === 'number'
-  )
-}
-
-function isStreamingSubscriptionReadyResult(
-  value: unknown
-): value is { type: 'ready'; subscriptionId: string } {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    (value as { type?: unknown }).type === 'ready' &&
-    typeof (value as { subscriptionId?: unknown }).subscriptionId === 'string'
-  )
 }

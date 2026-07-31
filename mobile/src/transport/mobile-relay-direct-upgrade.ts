@@ -14,8 +14,8 @@ import {
   type MobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
 import {
+  clearMobileRelayDirectUpgradeJournal,
   createMobileRelayDirectUpgradeJournal,
-  deleteMobileRelayDirectUpgradeJournal,
   readMobileRelayDirectUpgradeJournal,
   writeMobileRelayDirectUpgradeJournal,
   type MobileRelayDirectUpgradeJournal
@@ -31,7 +31,7 @@ export type MobileRelayDirectUpgradeResult = {
 type Dependencies = {
   readJournal: typeof readMobileRelayDirectUpgradeJournal
   writeJournal: typeof writeMobileRelayDirectUpgradeJournal
-  clearJournal: typeof deleteMobileRelayDirectUpgradeJournal
+  clearJournal: typeof clearMobileRelayDirectUpgradeJournal
   writeBundle: typeof writeMobileRelayCredentialBundle
   saveHost: typeof saveExistingHostRelayUpgrade
   deleteBundle: typeof deleteMobileRelayCredentialBundle
@@ -49,7 +49,7 @@ export async function upgradeDirectMobileRelay(args: {
   const dependencies: Dependencies = {
     readJournal: readMobileRelayDirectUpgradeJournal,
     writeJournal: writeMobileRelayDirectUpgradeJournal,
-    clearJournal: deleteMobileRelayDirectUpgradeJournal,
+    clearJournal: clearMobileRelayDirectUpgradeJournal,
     writeBundle: writeMobileRelayCredentialBundle,
     saveHost: saveExistingHostRelayUpgrade,
     deleteBundle: deleteMobileRelayCredentialBundle,

@@ -1,17 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { encodePairingOffer } from '../../shared/pairing'
-import type { PairingOffer } from '../../shared/mobile-relay-pairing-offer'
+import {
+  MAX_PAIRING_OFFER_JSON_BYTES,
+  type PairingOffer
+} from '../../shared/mobile-relay-pairing-offer'
 import { encodeMobilePairingQr } from './mobile-pairing-qr'
 
 // Keep every capacity probe in the same encoded payload family.
 const FIXED_INVITE_EXPIRES_AT = Date.now() + 5 * 60_000
 
-function pairingUrl(endpointLength: number, relay: boolean): string {
-  const prefix = 'wss://pair.example/'
+function largestPairingUrl(relay: boolean): string {
   const offer: PairingOffer = {
     v: 2,
-    endpoint: `${prefix}${'a'.repeat(Math.max(0, endpointLength - prefix.length))}`,
-    deviceToken: 'd'.repeat(43),
+    endpoint: 'wss://pair.example/runtime',
+    deviceToken: 'd',
     publicKeyB64: Buffer.alloc(32, 7).toString('base64'),
     scope: 'mobile',
     ...(relay
@@ -29,41 +31,31 @@ function pairingUrl(endpointLength: number, relay: boolean): string {
         }
       : {})
   }
-  return encodePairingOffer(offer)
-}
-
-async function discoverEndpointBoundary(relay: boolean): Promise<number> {
-  let passing = 1
-  let failing = 4_000
-  expect((await encodeMobilePairingQr(pairingUrl(passing, relay))).ok).toBe(true)
-  expect((await encodeMobilePairingQr(pairingUrl(failing, relay))).ok).toBe(false)
-  while (failing - passing > 1) {
-    const candidate = Math.floor((passing + failing) / 2)
-    if ((await encodeMobilePairingQr(pairingUrl(candidate, relay))).ok) {
-      passing = candidate
-    } else {
-      failing = candidate
+  let pairingUrl = encodePairingOffer(offer)
+  for (let length = 2; length <= MAX_PAIRING_OFFER_JSON_BYTES; length += 1) {
+    try {
+      pairingUrl = encodePairingOffer({ ...offer, deviceToken: 'd'.repeat(length) })
+    } catch {
+      break
     }
   }
-  return passing
+  return pairingUrl
 }
 
 describe('encodeMobilePairingQr', () => {
   it.each([
     ['direct', false],
     ['relay', true]
-  ] as const)(
-    'uses the real encoder at the adjacent %s-offer capacity boundary',
-    async (_, relay) => {
-      const boundary = await discoverEndpointBoundary(relay)
+  ] as const)('encodes the largest schema-valid %s offer', async (_, relay) => {
+    await expect(encodeMobilePairingQr(largestPairingUrl(relay))).resolves.toMatchObject({
+      ok: true
+    })
+  })
 
-      await expect(encodeMobilePairingQr(pairingUrl(boundary, relay))).resolves.toMatchObject({
-        ok: true
-      })
-      await expect(encodeMobilePairingQr(pairingUrl(boundary + 1, relay))).resolves.toEqual({
-        ok: false,
-        reason: 'encoding_failed'
-      })
-    }
-  )
+  it('rejects a payload above the real encoder capacity', async () => {
+    await expect(encodeMobilePairingQr(`orca://pair?code=${'a'.repeat(10_000)}`)).resolves.toEqual({
+      ok: false,
+      reason: 'encoding_failed'
+    })
+  })
 })

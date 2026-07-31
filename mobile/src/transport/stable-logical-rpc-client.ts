@@ -9,6 +9,8 @@ export class LogicalClientCutoverError extends Error {
   }
 }
 
+export class LogicalClientAuthenticationError extends Error {}
+
 // Why: instanceof can miss across bundle copies, so also match by message.
 export function isLogicalClientCutoverError(error: unknown): boolean {
   return (
@@ -34,6 +36,8 @@ export type StableLogicalRpcClient = RpcClient & {
   migrateTo(session: RpcClient, path: MobileConnectionPath, timeoutMs?: number): Promise<void>
   suspendActiveSession(): void
   getActivePath(): MobileConnectionPath
+  setActivePath(path: MobileConnectionPath): void
+  publishRouteOwnerState(state: ConnectionState, reconnectAttempt?: number): void
   getGeneration(): number
 }
 
@@ -52,6 +56,7 @@ export function createStableLogicalRpcClient(
   const pendingRequests = new Set<PendingRequest>()
   const stateListeners = new Set<(state: ConnectionState) => void>()
   let state = initialSession.getState()
+  let routeOwnerReconnectAttempt: number | null = null
 
   bindActiveState(initialSession, generation)
 
@@ -132,7 +137,7 @@ export function createStableLogicalRpcClient(
     },
 
     getState: () => state,
-    getReconnectAttempt: () => activeSession.getReconnectAttempt(),
+    getReconnectAttempt: () => routeOwnerReconnectAttempt ?? activeSession.getReconnectAttempt(),
     getLastConnectedAt: () => activeSession.getLastConnectedAt(),
     onStateChange(listener) {
       stateListeners.add(listener)
@@ -154,9 +159,8 @@ export function createStableLogicalRpcClient(
         record.disposePhysical?.()
       }
       subscriptions.clear()
-      // Why: let the physical close settle in-flight requests — it knows which
-      // frames were written and marks those delivery-unknown; a blanket local
-      // reject would erase that distinction.
+      // Why: the physical client preserves whether an in-flight frame was
+      // written, so let its close carry the correct delivery-ambiguity mark.
       activeSession.close()
       publishState('disconnected')
     },
@@ -172,9 +176,8 @@ export function createStableLogicalRpcClient(
         record.disposePhysical?.()
         record.disposePhysical = null
       }
-      // Why: let the physical close settle in-flight requests — it knows which
-      // frames were written and marks those delivery-unknown (a suspend can cut
-      // over a half-open relay whose sends may already be delivered).
+      // Why: suspend can cut over a written Relay send; only the physical
+      // client knows whether the failure must remain delivery-unknown.
       activeSession.close()
       publishState('disconnected')
     },
@@ -208,6 +211,7 @@ export function createStableLogicalRpcClient(
       generation = nextGeneration
       activeSession = nextSession
       activePath = path
+      routeOwnerReconnectAttempt = null
       suspended = false
       previousStateUnsubscribe?.()
       bindActiveState(nextSession, nextGeneration)
@@ -223,6 +227,15 @@ export function createStableLogicalRpcClient(
     },
 
     getActivePath: () => activePath,
+    setActivePath(path) {
+      activePath = path
+    },
+    publishRouteOwnerState(next, reconnectAttempt) {
+      if (reconnectAttempt !== undefined) {
+        routeOwnerReconnectAttempt = reconnectAttempt
+      }
+      publishState(next)
+    },
     getGeneration: () => generation
   }
 
@@ -277,7 +290,11 @@ function waitForAuthenticated(session: RpcClient, timeoutMs: number): Promise<vo
         resolve()
       } else if (state === 'auth-failed' || state === 'disconnected') {
         finish()
-        reject(new Error(`replacement session ${state}`))
+        reject(
+          state === 'auth-failed'
+            ? new LogicalClientAuthenticationError('replacement session auth-failed')
+            : new Error('replacement session disconnected')
+        )
       }
     })
     timer = setTimeout(() => {

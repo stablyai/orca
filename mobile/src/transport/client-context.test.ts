@@ -14,7 +14,8 @@ vi.mock('./host-logical-client', () => ({
   openHostLogicalClient: (...args: unknown[]) => connectMock(...args)
 }))
 vi.mock('./host-store', () => ({
-  loadHosts: () => loadHostsMock()
+  loadHosts: () => loadHostsMock(),
+  updateHostLastGoodEndpoint: vi.fn(async () => {})
 }))
 vi.mock('./connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: () => () => {}
@@ -58,6 +59,7 @@ const HOST = {
   id: 'host-1',
   name: 'Host 1',
   endpoint: 'ws://127.0.0.1:1',
+  endpoints: ['ws://127.0.0.1:1'],
   deviceToken: 'token',
   publicKeyB64: 'key',
   lastConnected: 0

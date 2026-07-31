@@ -8,7 +8,6 @@ import {
   usePairedMobileDevices
 } from '../mobile/paired-mobile-devices'
 import { useMobilePairingDevicePolling } from './mobile-pairing-device-polling'
-import type { MobileNetworkInterface } from './mobile-network-interface-selection'
 import { MobilePairingQrSection } from './MobilePairingQrSection'
 import { MobilePairedDevicesSection } from './MobilePairedDevicesSection'
 import { MobileAutoRestoreFitSection } from './MobileAutoRestoreFitSection'
@@ -23,7 +22,8 @@ import {
 } from '../../../../shared/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 import { useMobilePairingConnectionMode } from '../mobile/use-mobile-pairing-connection-mode'
-import { useMobilePairingAddressPreference } from '../mobile/use-mobile-pairing-address-preference'
+import { createMobilePairingQrRequest } from '../mobile/mobile-pairing-qr-request'
+import { useMobileSettingsRouteOrder } from './use-mobile-settings-route-order'
 export { getMobilePaneSearchEntries } from './mobile-pane-search'
 
 export function MobilePane(): React.JSX.Element {
@@ -36,8 +36,6 @@ export function MobilePane(): React.JSX.Element {
   const [endpoint, setEndpoint] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [qrEnlarged, setQrEnlarged] = useState(false)
-  const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
-  const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   const [deviceCountAtQr, setDeviceCountAtQr] = useState<number | null>(null)
   const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
@@ -95,19 +93,23 @@ export function MobilePane(): React.JSX.Element {
       setRotateNextQr(true)
     }
   }, [])
-  const invalidatePairingAddress = useCallback(() => invalidatePairing(), [invalidatePairing])
   const {
+    networkInterfaces,
     selectedAddress,
     selectedAddressIsCustom,
     customAddresses,
-    selectAddress: handleSelectedAddressChange,
-    selectCustomAddress: handleCustomAddressSelect,
-    removeCustomAddress: handleCustomAddressRemove,
-    selectAddressAfterRefresh
-  } = useMobilePairingAddressPreference({
-    networkInterfaces,
-    onSelectionInvalidated: invalidatePairingAddress
-  })
+    selectedAddresses,
+    relayPreferenceIndex,
+    advancedConnectionOrderEnabled,
+    refreshingNetworkInterfaces,
+    loadNetworkInterfaces,
+    handleSelectedAddressChange,
+    handleCustomAddressSelect,
+    handleCustomAddressRemove,
+    handleAddressesChange,
+    handleRouteOrderChange,
+    changeAdvancedConnectionOrderEnabled
+  } = useMobileSettingsRouteOrder({ mountedRef, invalidatePairing })
 
   // Why: a Relay QR minted while signed in must not linger on a now-signed-out
   // desktop — Generate is disabled in that state. Invalidate any pending relay
@@ -135,34 +137,6 @@ export function MobilePane(): React.JSX.Element {
       // Silently fail — device list is non-critical
     }
   }, [refreshDevices])
-
-  const loadNetworkInterfaces = useCallback(
-    async (opts: { notifyOnError?: boolean } = {}) => {
-      setRefreshingNetworkInterfaces(true)
-      try {
-        const result = await window.api.mobile.listNetworkInterfaces()
-        if (mountedRef.current) {
-          setNetworkInterfaces(result.interfaces)
-          selectAddressAfterRefresh(result.interfaces)
-        }
-      } catch {
-        if (opts.notifyOnError && mountedRef.current) {
-          toast.error(
-            translate(
-              'auto.components.settings.MobilePane.d714614dbf',
-              'Failed to refresh network interfaces'
-            )
-          )
-        }
-      } finally {
-        if (mountedRef.current) {
-          setRefreshingNetworkInterfaces(false)
-        }
-      }
-    },
-    [mountedRef, selectAddressAfterRefresh]
-  )
-
   const generateQR = useCallback(
     async (
       opts: {
@@ -180,11 +154,19 @@ export function MobilePane(): React.JSX.Element {
       setLoading(true)
       setQrError(false)
       try {
-        const result = await window.api.mobile.getPairingQR({
-          ...(selectedAddress ? { address: selectedAddress } : {}),
-          connectionMode: preferredMode,
-          ...(opts.rotate || rotateNextQr ? { rotate: true } : {})
-        })
+        const result = await window.api.mobile.getPairingQR(
+          createMobilePairingQrRequest({
+            addresses: advancedConnectionOrderEnabled
+              ? selectedAddresses
+              : selectedAddress
+                ? [selectedAddress]
+                : [],
+            connectionMode: preferredMode,
+            orderedRoutes: advancedConnectionOrderEnabled,
+            relayPreferenceIndex,
+            rotate: opts.rotate === true || rotateNextQr
+          })
+        )
         // Why: sign-out, a mode switch, or an address change bump the epoch.
         // A response for a superseded request must not paint a QR that no
         // longer matches the current selection.
@@ -243,11 +225,14 @@ export function MobilePane(): React.JSX.Element {
     },
     [
       clearCodeCopiedResetTimer,
+      advancedConnectionOrderEnabled,
       connectionMode,
       loadDevices,
       mountedRef,
+      relayPreferenceIndex,
       rotateNextQr,
       selectedAddress,
+      selectedAddresses,
       signedIn
     ]
   )
@@ -403,6 +388,12 @@ export function MobilePane(): React.JSX.Element {
         onSelectedAddressChange={handleSelectedAddressChange}
         onCustomAddressSelect={handleCustomAddressSelect}
         onCustomAddressRemove={handleCustomAddressRemove}
+        selectedAddresses={selectedAddresses}
+        onSelectedAddressesChange={handleAddressesChange}
+        relayPreferenceIndex={relayPreferenceIndex}
+        onRouteOrderChange={handleRouteOrderChange}
+        advancedConnectionOrderEnabled={advancedConnectionOrderEnabled}
+        onAdvancedConnectionOrderEnabledChange={changeAdvancedConnectionOrderEnabled}
         refreshingNetworkInterfaces={refreshingNetworkInterfaces}
         onRefreshNetworkInterfaces={() => void loadNetworkInterfaces({ notifyOnError: true })}
         loading={loading}
@@ -439,7 +430,10 @@ export function MobilePane(): React.JSX.Element {
         onClearCodeCopiedTimer={clearCodeCopiedResetTimer}
       />
 
-      <WindowsFirewallNotice pairingReady={pairingUrl != null} address={selectedAddress} />
+      <WindowsFirewallNotice
+        pairingReady={pairingUrl != null}
+        address={advancedConnectionOrderEnabled ? selectedAddresses[0] : selectedAddress}
+      />
 
       <MobilePairedDevicesSection
         devices={devices}

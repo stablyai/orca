@@ -198,7 +198,9 @@ Read on every request, so behaviour can be flipped mid-session without a restart
 
 1. Start Orca desktop with WebSocket transport enabled
 2. In Orca, go to Settings > Mobile and scan the QR code with this app
-3. The QR encodes the connection endpoint, device token, and TLS fingerprint
+3. The QR encodes the connection endpoint (plus optional ordered `endpoints` fallbacks), device token, and TLS fingerprint
+
+Desktop Mobile setup can advertise multiple network addresses in priority order (for example Tailscale first, LAN second). The offer keeps required `endpoint` as the primary URL for older clients and may include optional `endpoints[]` (additive — no protocol bump). New mobile stores that list and tries sticky last-good, then the ordered endpoints, on connect and reconnect. Hosts paired before this feature keep a single endpoint until you re-pair with a multi-address QR.
 
 ## Project Structure
 

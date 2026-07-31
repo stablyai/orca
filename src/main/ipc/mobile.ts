@@ -117,15 +117,26 @@ export function registerMobileHandlers(
       _event,
       args?: {
         address?: string
+        addresses?: string[]
         connectionMode?: MobilePairingConnectionMode
+        relayPreferenceIndex?: number
+        orderedRoutes?: boolean
         rotate?: boolean
       }
     ) => {
-      // Why: allow the caller to specify which network interface address to
-      // embed in the QR code. This supports overlay networks (Tailscale,
-      // ZeroTier) where the default LAN IP isn't reachable from the phone.
-      const ip = args?.address ?? getDefaultPairingAddress()
-      if (!ip) {
+      // Why: allow the caller to specify which network interface address(es) to
+      // embed in the QR code. Ordered `addresses` enables Tailscale→LAN failover;
+      // single `address` remains for back-compat callers.
+      const addresses =
+        args?.orderedRoutes && args.addresses && args.addresses.length > 0
+          ? args.addresses
+          : args?.address
+            ? [args.address]
+            : (() => {
+                const fallback = getDefaultPairingAddress()
+                return fallback ? [fallback] : []
+              })()
+      if (addresses.length === 0) {
         return {
           available: false as const,
           reason: 'invalid_advertised_endpoint',
@@ -142,8 +153,12 @@ export function registerMobileHandlers(
       // may have been exposed), we discard any pending token and mint a fresh
       // one so the new QR carries a different credential.
       const offer = await rpcServer.createMobilePairingOffer({
-        address: ip,
+        addresses,
         connectionMode: args?.connectionMode,
+        ...(args?.orderedRoutes === true ? { orderedRoutes: true } : {}),
+        ...(args?.orderedRoutes === true && args.relayPreferenceIndex !== undefined
+          ? { relayPreferenceIndex: args.relayPreferenceIndex }
+          : {}),
         rotate: args?.rotate,
         name: `Mobile ${new Date().toLocaleDateString()}`
       })
@@ -166,6 +181,7 @@ export function registerMobileHandlers(
         ...(!qr.ok ? { qrError: qr.reason } : {}),
         pairingUrl: offer.pairingUrl,
         endpoint: offer.endpoint,
+        endpoints: offer.endpoints,
         deviceId: offer.deviceId,
         connectionMode: offer.connectionMode
       }

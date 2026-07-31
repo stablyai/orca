@@ -554,6 +554,80 @@ describe('OrcaRuntimeRpcServer', () => {
     }
   })
 
+  it('creates a pairing offer with an ordered addresses list', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      webClientRoot: userDataPath
+    })
+
+    await server.start()
+
+    try {
+      const offer = server.createPairingOffer({
+        addresses: ['100.64.1.20', '192.168.1.10'],
+        name: 'Multi endpoint test'
+      })
+      expect(offer.available).toBe(true)
+      if (offer.available) {
+        expect(offer.endpoints).toHaveLength(2)
+        expect(offer.endpoint).toBe(offer.endpoints[0])
+        expect(offer.endpoint).toContain('100.64.1.20')
+        expect(offer.endpoints[1]).toContain('192.168.1.10')
+        const parsed = parsePairingCode(offer.pairingUrl)
+        expect(parsed?.endpoint).toBe(offer.endpoint)
+        expect(parsed?.endpoints).toEqual(offer.endpoints)
+      }
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('rejects unbounded pairing address inputs before creating a pending credential', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      expect(
+        server.createPairingOffer({
+          addresses: Array.from({ length: 5 }, (_, index) => `192.168.1.${index + 1}`)
+        })
+      ).toMatchObject({
+        available: false,
+        reason: 'invalid_advertised_endpoint',
+        guidance: expect.any(String)
+      })
+      expect(server.createPairingOffer({ address: 'a'.repeat(321) })).toMatchObject({
+        available: false,
+        reason: 'invalid_advertised_endpoint',
+        guidance: expect.any(String)
+      })
+      await expect(
+        server.createMobilePairingOffer({
+          addresses: Array.from({ length: 5 }, (_, index) => `10.0.0.${index + 1}`),
+          rotate: true
+        })
+      ).resolves.toMatchObject({
+        available: false,
+        reason: 'invalid_advertised_endpoint',
+        guidance: expect.any(String)
+      })
+      expect(server.getDeviceRegistry()?.listDevices()).toEqual([])
+    } finally {
+      await server.stop()
+    }
+  })
+
   it('includes a web client URL when the web bundle is served by the runtime', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
@@ -925,7 +999,7 @@ describe('OrcaRuntimeRpcServer', () => {
     }
   })
 
-  it('coalesces concurrent mobile Relay mints for the shared pending credential', async () => {
+  it('coalesces equivalent ordered Relay mints but supersedes an address-order change', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
@@ -957,28 +1031,49 @@ describe('OrcaRuntimeRpcServer', () => {
         }
       }
     })
+    const onDeviceRevokeQueued = vi.fn()
     server.setMobileRelayPairingProvider({
       createPairingRelay,
-      onDeviceRevokeQueued: vi.fn(),
+      onDeviceRevokeQueued,
       getEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     })
 
     await server.start()
     try {
-      const first = server.createMobilePairingOffer({ address: '100.64.1.20', rotate: true })
-      const second = server.createMobilePairingOffer({ address: '100.64.1.20', rotate: true })
+      const first = server.createMobilePairingOffer({
+        addresses: ['100.64.1.20', '192.168.1.20'],
+        orderedRoutes: true,
+        rotate: true
+      })
+      const second = server.createMobilePairingOffer({
+        addresses: ['100.64.1.20', '192.168.1.20'],
+        orderedRoutes: true,
+        rotate: true
+      })
       await vi.waitFor(() => expect(createPairingRelay).toHaveBeenCalledTimes(1))
+      const changed = server.createMobilePairingOffer({
+        addresses: ['100.64.1.20', '10.0.0.20'],
+        orderedRoutes: true,
+        rotate: true
+      })
       resolveFirst?.()
-      const [firstOffer, secondOffer] = await Promise.all([first, second])
-      expect(firstOffer.available).toBe(true)
-      expect(secondOffer.available).toBe(true)
-      if (!firstOffer.available || !secondOffer.available) {
+      const [firstOffer, secondOffer, changedOffer] = await Promise.all([first, second, changed])
+      expect(firstOffer).toMatchObject({
+        available: false,
+        relayFailure: { code: 'relay_request_superseded' }
+      })
+      expect(secondOffer).toEqual(firstOffer)
+      expect(changedOffer.available).toBe(true)
+      if (!changedOffer.available) {
         throw new Error('WebSocket pairing unavailable')
       }
-      expect(secondOffer.deviceId).toBe(firstOffer.deviceId)
-      expect(secondOffer.pairingUrl).toBe(firstOffer.pairingUrl)
-      expect(createPairingRelay).toHaveBeenCalledTimes(1)
+      expect(changedOffer.endpoints).toEqual([
+        expect.stringContaining('100.64.1.20'),
+        expect.stringContaining('10.0.0.20')
+      ])
+      expect(createPairingRelay).toHaveBeenCalledTimes(2)
+      expect(onDeviceRevokeQueued).toHaveBeenCalledOnce()
     } finally {
       await server.stop()
     }
@@ -1406,6 +1501,52 @@ describe('OrcaRuntimeRpcServer', () => {
     }
   })
 
+  it('fails closed and queues cleanup when Relay metadata exceeds the QR budget', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    const onDeviceRevokeQueued = vi.fn()
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: async (relayDeviceId) => ({
+        relay: {
+          v: 1,
+          directorUrl: `https://${'a'.repeat(180)}.example.com`,
+          cellUrl: `https://${'b'.repeat(180)}.example.com`,
+          assignmentEpoch: 7,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          inviteToken: 'A'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000,
+          e2eeFraming: 2
+        },
+        binding: {
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          relayDeviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        }
+      }),
+      onDeviceRevokeQueued,
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const offer = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(offer).toMatchObject({
+        available: false,
+        relayFailure: { code: 'relay_offer_encode_failed' }
+      })
+      expect(server.getDeviceRegistry()?.getPendingDevice('mobile')).toBeNull()
+      expect(onDeviceRevokeQueued).toHaveBeenCalledOnce()
+    } finally {
+      await server.stop()
+    }
+  })
+
   it('persists local-only pairing and never mints or later binds Relay', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const server = new OrcaRuntimeRpcServer({
@@ -1621,24 +1762,28 @@ describe('OrcaRuntimeRpcServer', () => {
       wsPort: 0
     })
     const onDeviceRevokeQueued = vi.fn()
+    const createPairingRelay = vi.fn(async (relayDeviceId: string) => ({
+      relay: {
+        v: 1 as const,
+        directorUrl: 'https://relay.example.com',
+        cellUrl: 'https://cell.example.com',
+        assignmentEpoch: 7,
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        inviteToken: 'A'.repeat(43),
+        inviteExpiresAt: Date.now() + 60_000,
+        e2eeFraming: 2 as const
+      },
+      binding: {
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        relayDeviceId,
+        ownerIdentityKey:
+          createPairingRelay.mock.calls.length >= 3
+            ? 'other-user\0profile\0org'
+            : 'user\0profile\0org'
+      }
+    }))
     server.setMobileRelayPairingProvider({
-      createPairingRelay: async (relayDeviceId) => ({
-        relay: {
-          v: 1,
-          directorUrl: 'https://relay.example.com',
-          cellUrl: 'https://cell.example.com',
-          assignmentEpoch: 7,
-          relayHostId: 'AbCdEf0123_-xyZ9',
-          inviteToken: 'A'.repeat(43),
-          inviteExpiresAt: Date.now() + 60_000,
-          e2eeFraming: 2
-        },
-        binding: {
-          relayHostId: 'AbCdEf0123_-xyZ9',
-          relayDeviceId,
-          ownerIdentityKey: 'user\0profile\0org'
-        }
-      }),
+      createPairingRelay,
       onDeviceRevokeQueued,
       getEndpoints: vi.fn(),
       provisionRelay: vi.fn()
@@ -1660,6 +1805,20 @@ describe('OrcaRuntimeRpcServer', () => {
       }
       expect(second.deviceId).toBe(first.deviceId)
       expect(onDeviceRevokeQueued).not.toHaveBeenCalled()
+
+      const third = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(third.available).toBe(true)
+      if (!third.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      expect(third.deviceId).toBe(first.deviceId)
+      expect(onDeviceRevokeQueued).toHaveBeenCalledOnce()
+      expect(onDeviceRevokeQueued).toHaveBeenCalledWith(
+        expect.objectContaining({ ownerIdentityKey: 'user\0profile\0org' })
+      )
+      expect(server.getDeviceRegistry()?.getDevice(third.deviceId)?.relayBinding).toEqual(
+        expect.objectContaining({ ownerIdentityKey: 'other-user\0profile\0org' })
+      )
     } finally {
       await server.stop()
     }
@@ -1718,6 +1877,77 @@ describe('OrcaRuntimeRpcServer', () => {
       await expect(server.revokeMobileDevice(second.deviceId)).resolves.toBe(true)
       expect(server.getDeviceRegistry()?.getDevice(second.deviceId)).toBeNull()
       expect(registryPresence).toEqual([true, true])
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('serializes overlapping Relay offer rotation before mutating the pending device', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    let releaseFirst: (() => void) | undefined
+    const firstBlocked = new Promise<void>((resolve) => void (releaseFirst = resolve))
+    const createPairingRelay = vi.fn(async (relayDeviceId: string) => {
+      if (createPairingRelay.mock.calls.length === 1) {
+        await firstBlocked
+      }
+      return {
+        relay: {
+          v: 1 as const,
+          directorUrl: 'https://relay.example.com',
+          cellUrl: 'https://cell.example.com',
+          assignmentEpoch: 7,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          inviteToken: 'A'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000,
+          e2eeFraming: 2 as const
+        },
+        binding: {
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          relayDeviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        }
+      }
+    })
+    const onDeviceRevokeQueued = vi.fn()
+    server.setMobileRelayPairingProvider({
+      createPairingRelay,
+      onDeviceRevokeQueued,
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const firstPromise = server.createMobilePairingOffer({ address: '100.64.1.20' })
+      await vi.waitFor(() => expect(createPairingRelay).toHaveBeenCalledOnce())
+      const secondPromise = server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        rotate: true
+      })
+      await Promise.resolve()
+      expect(createPairingRelay).toHaveBeenCalledOnce()
+
+      releaseFirst?.()
+      const first = await firstPromise
+      const second = await secondPromise
+      expect(first).toMatchObject({
+        available: false,
+        relayFailure: { code: 'relay_request_superseded' }
+      })
+      expect(second.available).toBe(true)
+      if (!second.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      expect(server.getDeviceRegistry()?.getDevice(second.deviceId)?.relayBinding).toEqual(
+        expect.objectContaining({ relayDeviceId: second.deviceId })
+      )
+      expect(onDeviceRevokeQueued).toHaveBeenCalledOnce()
     } finally {
       await server.stop()
     }

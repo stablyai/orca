@@ -27,7 +27,10 @@ import {
   type AuthenticatedMobileSocket,
   type MobileSocketTransportMetadata
 } from './rpc/mobile-socket-wiring'
-import type { PairingRelay } from '../../shared/mobile-relay-pairing-offer'
+import {
+  MAX_PAIRING_ENDPOINT_BYTES,
+  type PairingRelay
+} from '../../shared/mobile-relay-pairing-offer'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import {
   mobileRelayMintFailureFromUnknown,
@@ -44,7 +47,12 @@ import type {
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
 } from '../../shared/mobile-relay-credential-contract'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import {
+  encodePairingOffer,
+  MAX_PAIRING_ENDPOINTS,
+  normalizePairingEndpoints,
+  PAIRING_OFFER_VERSION
+} from '../../shared/pairing'
 import { resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
 import {
   decodeTerminalStreamFrame,
@@ -52,6 +60,29 @@ import {
 } from '../../shared/terminal-stream-protocol'
 
 const DEFAULT_WS_PORT = 6768
+
+function hasBoundedPairingAddressInput(address: unknown, addresses: unknown): boolean {
+  if (address != null && typeof address !== 'string') {
+    return false
+  }
+  if (
+    typeof address === 'string' &&
+    Buffer.byteLength(address, 'utf8') > MAX_PAIRING_ENDPOINT_BYTES
+  ) {
+    return false
+  }
+  if (addresses == null) {
+    return true
+  }
+  if (!Array.isArray(addresses) || addresses.length > MAX_PAIRING_ENDPOINTS) {
+    return false
+  }
+  return addresses.every(
+    (candidate) =>
+      typeof candidate === 'string' &&
+      Buffer.byteLength(candidate, 'utf8') <= MAX_PAIRING_ENDPOINT_BYTES
+  )
+}
 
 type OrcaRuntimeRpcServerOptions = {
   runtime: OrcaRuntimeService
@@ -89,6 +120,7 @@ type MobilePairingOfferAvailable = {
   available: true
   pairingUrl: string
   endpoint: string
+  endpoints: string[]
   deviceId: string
   webClientUrl: string | null
   /** Mode the offer actually encodes. */
@@ -96,6 +128,40 @@ type MobilePairingOfferAvailable = {
 }
 
 type MobilePairingOffer = PairingOfferUnavailable | MobilePairingOfferAvailable
+
+type MobilePairingOfferArgs = {
+  address?: string | null
+  /** Ordered advertise addresses; when set, takes precedence over `address`. */
+  addresses?: readonly string[] | null
+  connectionMode?: MobilePairingConnectionMode
+  relayPreferenceIndex?: number
+  orderedRoutes?: boolean
+  name?: string
+  rotate?: boolean
+}
+
+function mobileRelayPairingRequestKey(args: MobilePairingOfferArgs): string {
+  const orderedRoutes = args.orderedRoutes === true
+  const candidates =
+    orderedRoutes && args.addresses && args.addresses.length > 0
+      ? args.addresses
+      : [args.address ?? args.addresses?.[0] ?? null]
+  const seen = new Set<string | null>()
+  const addresses = candidates.flatMap((candidate) => {
+    const normalized = typeof candidate === 'string' ? candidate.trim() : null
+    if (seen.has(normalized)) {
+      return []
+    }
+    seen.add(normalized)
+    return [normalized]
+  })
+  return JSON.stringify({
+    orderedRoutes,
+    addresses,
+    relayPreferenceIndex: orderedRoutes ? (args.relayPreferenceIndex ?? null) : null,
+    name: args.name ?? null
+  })
+}
 
 type PairingIdentityInitialization =
   | { ok: true; deviceRegistry: DeviceRegistry; e2eeKeypair: E2EEKeypair }
@@ -491,7 +557,7 @@ export class OrcaRuntimeRpcServer {
   private mobileRelayPairingOfferQueue: Promise<void> = Promise.resolve()
   private mobileRelayPairingOfferInFlight: {
     generation: number
-    address: string | null
+    requestKey: string
     rotate: boolean
     request: Promise<MobilePairingOffer>
   } | null = null
@@ -569,6 +635,7 @@ export class OrcaRuntimeRpcServer {
     const current = this.deviceRegistry?.getDevice(deviceId)
     if (
       current?.scope !== 'mobile' ||
+      binding.relayDeviceId !== deviceId ||
       this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) === 'local-only'
     ) {
       return false
@@ -635,20 +702,32 @@ export class OrcaRuntimeRpcServer {
 
   createPairingOffer(args: {
     address?: string | null
+    /** Ordered advertise addresses; when set, takes precedence over `address`. */
+    addresses?: readonly string[] | null
     name?: string
     rotate?: boolean
     scope?: DeviceScope
+    routeOrder?: 1
   }):
     | PairingOfferUnavailable
     | {
         available: true
         pairingUrl: string
         endpoint: string
+        endpoints: string[]
         deviceId: string
         webClientUrl: string | null
       } {
     if (this.pairingInitializationFailure) {
       return this.pairingInitializationFailure
+    }
+    // Why: renderer/CLI inputs are untrusted; reject oversized collections
+    // before URL resolution or pending-credential mutation can amplify them.
+    if (!hasBoundedPairingAddressInput(args.address, args.addresses)) {
+      return pairingUnavailable(
+        'invalid_advertised_endpoint',
+        'Use at most four bounded pairing addresses.'
+      )
     }
     const rawEndpoint = this.getWebSocketEndpoint()
     if (!rawEndpoint) {
@@ -665,11 +744,22 @@ export class OrcaRuntimeRpcServer {
       return pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
     }
 
-    const advertised = resolveAdvertisedPairingEndpoint(rawEndpoint, args.address)
-    if (!advertised.ok) {
-      return pairingUnavailable(advertised.reason, advertised.guidance)
+    const addressList =
+      args.addresses && args.addresses.length > 0
+        ? [...args.addresses]
+        : args.address
+          ? [args.address]
+          : [null]
+    const resolved: string[] = []
+    for (const address of addressList) {
+      const advertised = resolveAdvertisedPairingEndpoint(rawEndpoint, address)
+      if (!advertised.ok) {
+        return pairingUnavailable(advertised.reason, advertised.guidance)
+      }
+      resolved.push(advertised.endpoint)
     }
-    const endpoint = advertised.endpoint
+    const endpoints = normalizePairingEndpoints(resolved[0]!, resolved)
+    const endpoint = endpoints[0]!
     const deviceName = args.name ?? `CLI ${new Date().toLocaleDateString()}`
     const scope = args.scope ?? 'runtime'
     let device: DeviceEntry
@@ -684,36 +774,34 @@ export class OrcaRuntimeRpcServer {
     const pairingUrl = encodePairingOffer({
       v: PAIRING_OFFER_VERSION,
       endpoint,
+      endpoints: endpoints.length > 1 ? endpoints : undefined,
       deviceToken: device.token,
       publicKeyB64,
-      scope
+      scope,
+      routeOrder: args.routeOrder
     })
     return {
       available: true,
       pairingUrl,
       endpoint,
+      endpoints,
       deviceId: device.deviceId,
       webClientUrl:
         this.webClientRoot && scope === 'runtime' ? createWebClientUrl(endpoint, pairingUrl) : null
     }
   }
 
-  async createMobilePairingOffer(args: {
-    address?: string | null
-    connectionMode?: MobilePairingConnectionMode
-    name?: string
-    rotate?: boolean
-  }): Promise<MobilePairingOffer> {
+  async createMobilePairingOffer(args: MobilePairingOfferArgs): Promise<MobilePairingOffer> {
     if (args.connectionMode === 'local-only') {
       this.mobilePairingOfferGeneration += 1
       return this.createMobilePairingOfferSerial(args, this.mobilePairingOfferGeneration)
     }
-    const address = args.address ?? null
+    const requestKey = mobileRelayPairingRequestKey(args)
     const rotate = args.rotate === true
     const inFlight = this.mobileRelayPairingOfferInFlight
     if (
       inFlight?.generation === this.mobilePairingOfferGeneration &&
-      inFlight.address === address &&
+      inFlight.requestKey === requestKey &&
       (inFlight.rotate || !rotate)
     ) {
       return inFlight.request
@@ -729,7 +817,7 @@ export class OrcaRuntimeRpcServer {
       () => undefined,
       () => undefined
     )
-    this.mobileRelayPairingOfferInFlight = { generation, address, rotate, request }
+    this.mobileRelayPairingOfferInFlight = { generation, requestKey, rotate, request }
     void request.then(
       () => {
         if (this.mobileRelayPairingOfferInFlight?.request === request) {
@@ -746,14 +834,15 @@ export class OrcaRuntimeRpcServer {
   }
 
   private async createMobilePairingOfferSerial(
-    args: {
-      address?: string | null
-      connectionMode?: MobilePairingConnectionMode
-      name?: string
-      rotate?: boolean
-    },
+    args: MobilePairingOfferArgs,
     generation: number
   ): Promise<MobilePairingOffer> {
+    if (!hasBoundedPairingAddressInput(args.address, args.addresses)) {
+      return pairingUnavailable(
+        'invalid_advertised_endpoint',
+        'Use at most four bounded pairing addresses.'
+      )
+    }
     // Why: the renderer is outside the trust boundary, so only an explicit local-only value may suppress Relay provisioning.
     const connectionMode = args.connectionMode === 'local-only' ? 'local-only' : 'automatic'
     const pending = this.deviceRegistry?.getPendingDevice('mobile')
@@ -772,10 +861,14 @@ export class OrcaRuntimeRpcServer {
         }
       }
     }
+    const orderedRoutes = args.orderedRoutes === true
     const direct = this.createPairingOffer({
-      ...args,
+      address: orderedRoutes ? args.address : (args.address ?? args.addresses?.[0]),
+      addresses: orderedRoutes ? args.addresses : undefined,
+      name: args.name,
       rotate: args.rotate || switchingPendingMode,
-      scope: 'mobile'
+      scope: 'mobile',
+      routeOrder: orderedRoutes ? 1 : undefined
     })
     if (!direct.available) {
       return direct
@@ -860,6 +953,35 @@ export class OrcaRuntimeRpcServer {
       }
       return this.relayPairingRequestSuperseded()
     }
+    const relayPreferenceIndex = Math.max(
+      0,
+      Math.min(
+        direct.endpoints.length,
+        Number.isInteger(args.relayPreferenceIndex)
+          ? args.relayPreferenceIndex!
+          : direct.endpoints.length
+      )
+    )
+    let pairingUrl: string
+    try {
+      pairingUrl = encodePairingOffer({
+        v: PAIRING_OFFER_VERSION,
+        endpoint: direct.endpoint,
+        endpoints: direct.endpoints.length > 1 ? direct.endpoints : undefined,
+        deviceToken: device.token,
+        publicKeyB64,
+        scope: 'mobile',
+        relay: relayPairing.relay,
+        ...(orderedRoutes ? { routeOrder: 1 as const, relayPreferenceIndex } : {})
+      })
+    } catch {
+      this.queueOrRetainRelayDeviceRevoke(device.deviceId, relayPairing.binding)
+      return refuseAutomaticWithoutRelay({
+        code: 'relay_offer_encode_failed',
+        stage: 'binding_failed',
+        message: 'Could not encode Relay pairing metadata'
+      })
+    }
     try {
       if (!this.setMobileRelayBinding(device.deviceId, relayPairing.binding)) {
         this.queueOrRetainRelayDeviceRevoke(device.deviceId, relayPairing.binding)
@@ -878,18 +1000,7 @@ export class OrcaRuntimeRpcServer {
         message: 'Could not store Relay binding for the pairing device'
       })
     }
-    return {
-      ...direct,
-      connectionMode: 'automatic',
-      pairingUrl: encodePairingOffer({
-        v: PAIRING_OFFER_VERSION,
-        endpoint: direct.endpoint,
-        deviceToken: device.token,
-        publicKeyB64,
-        scope: 'mobile',
-        relay: relayPairing.relay
-      })
-    }
+    return { ...direct, pairingUrl, connectionMode: 'automatic' }
   }
 
   private relayPairingRequestSuperseded(): PairingOfferUnavailable {

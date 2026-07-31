@@ -1,4 +1,6 @@
 import {
+  MAX_PAIRING_ENDPOINTS,
+  MAX_PAIRING_OFFER_JSON_BYTES,
   PAIRING_OFFER_VERSION,
   PairingOfferSchema,
   type PairingOffer
@@ -8,11 +10,49 @@ import {
   PAIRING_INPUT_MAX_CHARACTERS
 } from './mobile-pairing-protocol-limits'
 
-export { PAIRING_OFFER_VERSION, PairingOfferSchema }
+export {
+  MAX_PAIRING_ENDPOINTS,
+  MAX_PAIRING_OFFER_JSON_BYTES,
+  PAIRING_CODE_MAX_CHARACTERS,
+  PAIRING_INPUT_MAX_CHARACTERS,
+  PAIRING_OFFER_VERSION,
+  PairingOfferSchema
+}
 export type { PairingOffer }
 
+/** Preferred dial order: `endpoints` when present, else `[endpoint]`. Deduped + capped. */
+export function normalizePairingEndpoints(
+  endpoint: string,
+  endpoints?: readonly string[] | null
+): string[] {
+  const primary = endpoint.trim()
+  const raw = endpoints && endpoints.length > 0 ? [...endpoints] : [primary]
+  const seen = new Set<string>()
+  const ordered: string[] = []
+  for (const candidate of [primary, ...raw]) {
+    const value = candidate.trim()
+    if (!value || seen.has(value)) {
+      continue
+    }
+    seen.add(value)
+    ordered.push(value)
+    if (ordered.length >= MAX_PAIRING_ENDPOINTS) {
+      break
+    }
+  }
+  return ordered.length > 0 ? ordered : [primary]
+}
+
 export function encodePairingOffer(offer: PairingOffer): string {
-  const json = JSON.stringify(PairingOfferSchema.parse(offer))
+  const endpoints = normalizePairingEndpoints(offer.endpoint, offer.endpoints)
+  // Why: omit endpoints when length is 1 so legacy single-endpoint QR size
+  // and payloads stay unchanged for the common case.
+  const { endpoints: _omitEndpoints, ...rest } = offer
+  const normalized: PairingOffer =
+    endpoints.length > 1
+      ? { ...rest, endpoint: endpoints[0]!, endpoints }
+      : { ...rest, endpoint: endpoints[0]! }
+  const json = JSON.stringify(PairingOfferSchema.parse(normalized))
   const base64url = Buffer.from(json, 'utf-8')
     .toString('base64')
     .replace(/\+/g, '-')
@@ -83,10 +123,11 @@ export function parsePairingCode(input: string): PairingOffer | null {
 function decodePairingBase64(base64url: string): PairingOffer {
   if (
     base64url.length === 0 ||
-    base64url.length > PAIRING_CODE_MAX_CHARACTERS ||
+    base64url.length >
+      Math.min(PAIRING_CODE_MAX_CHARACTERS, Math.ceil((MAX_PAIRING_OFFER_JSON_BYTES * 4) / 3)) ||
     !/^[A-Za-z0-9+/_-]+={0,2}$/.test(base64url)
   ) {
-    throw new Error('Invalid pairing code')
+    throw new Error('Pairing offer exceeds the safe QR payload limit')
   }
   const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
   const json =
@@ -95,5 +136,8 @@ function decodePairingBase64(base64url: string): PairingOffer {
           Uint8Array.from(atob(base64), (character) => character.charCodeAt(0))
         )
       : Buffer.from(base64, 'base64').toString('utf-8')
+  if (new TextEncoder().encode(json).length > MAX_PAIRING_OFFER_JSON_BYTES) {
+    throw new Error('Pairing offer exceeds the safe QR payload limit')
+  }
   return PairingOfferSchema.parse(JSON.parse(json))
 }

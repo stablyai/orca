@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { MobileRelayEndpointSchema } from '../../../src/shared/mobile-relay-credential-contract'
+import type { HostProfile } from './types'
 
 export const MobileAccessEndpointSchema = z
   .object({
@@ -13,6 +14,8 @@ export const MobileRelayHostOverlaySchema = z
   .object({
     v: z.literal(2),
     hostId: z.string().min(1),
+    // Why: absence preserves the released direct/Relay strategy for old profiles.
+    routeOrder: z.literal(1).optional(),
     endpoints: z.array(MobileAccessEndpointSchema).min(1).max(16),
     relayHostId: z
       .string()
@@ -45,3 +48,14 @@ export const MobileRelayHostOverlaySchema = z
 
 export type MobileAccessEndpoint = z.infer<typeof MobileAccessEndpointSchema>
 export type MobileRelayHostOverlay = z.infer<typeof MobileRelayHostOverlaySchema>
+
+export function mobileRelayHostOverlayFromProfile(host: HostProfile): MobileRelayHostOverlay {
+  return MobileRelayHostOverlaySchema.parse({
+    v: 2,
+    hostId: host.id,
+    routeOrder: host.routeOrder,
+    endpoints: host.endpoints,
+    relayHostId: host.relayHostId,
+    relay: host.relay
+  })
+}

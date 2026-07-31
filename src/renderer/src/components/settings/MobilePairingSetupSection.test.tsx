@@ -219,4 +219,57 @@ describe('MobilePairingSetupSection', () => {
     await user.click(screen.getByRole('button', { name: 'Generate QR code' }))
     expect(onGenerateQr).toHaveBeenCalledOnce()
   })
+
+  it('keeps ordered routes behind Advanced and replaces the standard picker when enabled', () => {
+    const { rerender } = renderSection()
+    expect(screen.getByRole('combobox')).toBeVisible()
+    expect(screen.queryByRole('list', { name: 'Connection routes' })).toBeNull()
+
+    rerender(
+      <TooltipProvider>
+        <MobilePairingSetupSection
+          connectionMode="automatic"
+          connectionPathControl={<div />}
+          networkInterfaces={[LAN, TAILNET]}
+          customAddresses={[]}
+          selectedAddress={TAILNET.address}
+          selectedAddressIsCustom={false}
+          onSelectedAddressChange={vi.fn()}
+          onCustomAddressSelect={vi.fn()}
+          onCustomAddressRemove={vi.fn()}
+          selectedAddresses={[TAILNET.address, LAN.address]}
+          onSelectedAddressesChange={vi.fn()}
+          relayPreferenceIndex={1}
+          onRouteOrderChange={vi.fn()}
+          advancedConnectionOrderEnabled
+          onAdvancedConnectionOrderEnabledChange={vi.fn()}
+          refreshingNetworkInterfaces={false}
+          onRefreshNetworkInterfaces={vi.fn()}
+          loading={false}
+          hasQrCode={false}
+          onGenerateQr={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+
+    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(screen.getByRole('list', { name: 'Connection routes' })).toBeVisible()
+    expect(screen.getByText('Orca Relay')).toBeVisible()
+  })
+
+  it('links Advanced compatibility guidance to TestFlight and the latest Android APK', async () => {
+    const { user } = renderSection()
+    await user.click(screen.getByRole('button', { name: 'Advanced' }))
+    await user.click(screen.getByRole('button', { name: 'TestFlight' }))
+    await user.click(screen.getByRole('button', { name: 'latest Android APK' }))
+
+    expect(window.api.shell.openUrl).toHaveBeenNthCalledWith(
+      1,
+      'https://testflight.apple.com/join/YjeGMQBA'
+    )
+    expect(window.api.shell.openUrl).toHaveBeenNthCalledWith(
+      2,
+      'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.31/app-release.apk'
+    )
+  })
 })

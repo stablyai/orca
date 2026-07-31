@@ -165,6 +165,7 @@ describe('MobilePane pairing connection mode', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    window.localStorage.clear()
     _resetPairedMobileDevicesCacheForTests()
     mocks.latestPairedDevicesProps = null
     getPairingQR.mockReset().mockResolvedValue({
@@ -763,6 +764,7 @@ async function unmountMobilePaneRoots(): Promise<void> {
 describe('MobilePane', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.localStorage.clear()
     _resetPairedMobileDevicesCacheForTests()
     mocks.latestPairedDevicesProps = null
     mocks.getPairingQR.mockReset().mockResolvedValue({

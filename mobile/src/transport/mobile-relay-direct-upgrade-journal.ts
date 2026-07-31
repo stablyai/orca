@@ -70,6 +70,8 @@ export async function deleteMobileRelayDirectUpgradeJournal(hostId: string): Pro
   await deletePairingKeychainItem(journalKey(hostId))
 }
 
+export const clearMobileRelayDirectUpgradeJournal = deleteMobileRelayDirectUpgradeJournal
+
 function encodeBase64Url(value: Uint8Array): string {
   let binary = ''
   for (const byte of value) {

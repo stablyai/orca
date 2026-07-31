@@ -11,9 +11,11 @@ vi.mock('electron', () => ({
   shell: { openExternal: vi.fn() }
 }))
 
+const { toDataUrlMock } = vi.hoisted(() => ({ toDataUrlMock: vi.fn() }))
+
 vi.mock('qrcode', () => ({
   default: {
-    toDataURL: vi.fn().mockResolvedValue('data:image/png;base64,qr')
+    toDataURL: toDataUrlMock
   }
 }))
 
@@ -30,6 +32,7 @@ describe('registerMobileHandlers', () => {
     handlers.clear()
     handleMock.mockReset()
     networkInterfacesMock.mockReset()
+    toDataUrlMock.mockReset().mockResolvedValue('data:image/png;base64,qr')
     networkInterfacesMock.mockReturnValue({})
     handleMock.mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
       handlers.set(channel, handler)
@@ -91,7 +94,7 @@ describe('registerMobileHandlers', () => {
 
     await handlers.get('mobile:getPairingQR')?.(null, {})
     expect(createMobilePairingOffer).toHaveBeenCalledWith(
-      expect.objectContaining({ address: '192.168.50.238' })
+      expect.objectContaining({ addresses: ['192.168.50.238'] })
     )
   })
 
@@ -155,11 +158,47 @@ describe('registerMobileHandlers', () => {
     })
 
     expect(createMobilePairingOffer).toHaveBeenCalledWith({
-      address: '100.102.47.57',
+      addresses: ['100.102.47.57'],
       connectionMode: undefined,
       rotate: undefined,
       name: expect.stringMatching(/^Mobile /)
     })
+  })
+
+  it('passes ordered addresses through to pairing offer creation', async () => {
+    networkInterfacesMock.mockReturnValue({})
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
+      available: true,
+      pairingUrl: 'orca://pair#mobile-multi',
+      endpoint: 'ws://100.64.1.20:6768',
+      endpoints: ['ws://100.64.1.20:6768', 'ws://192.168.1.24:6768'],
+      deviceId: 'mobile-2'
+    })
+    registerMobileHandlers({ createMobilePairingOffer } as never)
+
+    await expect(
+      handlers.get('mobile:getPairingQR')?.(null, {
+        addresses: ['100.64.1.20', '192.168.1.24'],
+        orderedRoutes: true,
+        relayPreferenceIndex: 1
+      })
+    ).resolves.toMatchObject({
+      available: true,
+      endpoints: ['ws://100.64.1.20:6768', 'ws://192.168.1.24:6768']
+    })
+
+    expect(createMobilePairingOffer).toHaveBeenCalledWith({
+      addresses: ['100.64.1.20', '192.168.1.24'],
+      connectionMode: undefined,
+      orderedRoutes: true,
+      relayPreferenceIndex: 1,
+      rotate: undefined,
+      name: expect.stringMatching(/^Mobile /)
+    })
+    expect(toDataUrlMock).toHaveBeenCalledWith(
+      'orca://pair#mobile-multi',
+      expect.objectContaining({ width: 256, margin: 2, errorCorrectionLevel: 'M' })
+    )
   })
 
   it('forwards structured Relay mint failures to the renderer', async () => {

@@ -3,6 +3,7 @@ import type { PairingCandidateClient } from './mobile-relay-physical-client'
 import { RelayOuterError } from './mobile-relay-physical-client'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
+import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-crypto', () => ({
@@ -100,6 +101,23 @@ describe('recovering pairing relay candidate', () => {
     })
 
     await expect(candidate.sendRequest('status.get')).rejects.toEqual(new RelayOuterError(4404))
+    expect(resolveDirector).not.toHaveBeenCalled()
+  })
+
+  it('does not ask the director to reinterpret pinned E2EE authentication failure', async () => {
+    const authFailed = client(Promise.reject(new MobileE2EEAuthenticationError()))
+    const resolveDirector = vi.fn()
+    const candidate = createRecoveringPairingRelayCandidate({
+      journal,
+      connect: () => authFailed,
+      resolveDirector,
+      persistMove: vi.fn(),
+      now: () => 1
+    })
+
+    await expect(candidate.sendRequest('status.get')).rejects.toBeInstanceOf(
+      MobileE2EEAuthenticationError
+    )
     expect(resolveDirector).not.toHaveBeenCalled()
   })
 

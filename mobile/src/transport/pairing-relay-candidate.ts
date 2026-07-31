@@ -1,6 +1,7 @@
 import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import { RelayOuterError, type PairingCandidateClient } from './mobile-relay-physical-client'
+import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 
 export function createRecoveringPairingRelayCandidate(args: {
   journal: MobileRelayPairingJournal
@@ -83,6 +84,9 @@ function pairingRelayFromJournal(journal: MobileRelayPairingJournal): PairingRel
 }
 
 function isDirectorRecoverable(error: unknown): boolean {
+  if (error instanceof MobileE2EEAuthenticationError) {
+    return false
+  }
   if (!(error instanceof RelayOuterError)) {
     return true
   }

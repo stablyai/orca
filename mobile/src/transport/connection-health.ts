@@ -1,5 +1,7 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
-import type { ConnectionState } from './types'
+import type { ConnectionState, MobileAccessEndpoint } from './types'
+
+type ConnectionHealthEndpoint = string | MobileAccessEndpoint
 
 // Why: thresholds for escalating connection UX from neutral
 // "Reconnecting…" to alarming "host appears unreachable, re-pair?".
@@ -39,6 +41,29 @@ export type ConnectionVerdict =
     }
   | { kind: 'auth-failed'; label: string }
 
+/**
+ * Tailscale hint only when every remaining candidate is Tailscale (R6 / AE4).
+ * Mixed Tailscale+LAN lists must not latch "check Tailscale" after LAN works.
+ */
+export function shouldShowTailscaleHint(args: {
+  endpoint?: string | null
+  endpoints?: readonly ConnectionHealthEndpoint[] | null
+}): boolean {
+  const candidates =
+    args.endpoints && args.endpoints.length > 0
+      ? args.endpoints
+      : args.endpoint
+        ? [args.endpoint]
+        : []
+  if (candidates.length === 0) {
+    return false
+  }
+  return candidates.every((endpoint) => {
+    const url = typeof endpoint === 'string' ? endpoint : endpoint.url
+    return isTailscaleEndpoint(url)
+  })
+}
+
 // Why: the rpc-client's lastConnectedAt is a one-shot timestamp; we have
 // to recompute "are we currently stale" against now() each render.
 // Centralized so home + host-detail show identical verdicts.
@@ -49,11 +74,18 @@ export function classifyConnection(args: {
   // Optional pinned host endpoint — enables the Tailscale hint on
   // warning/unreachable verdicts. Callers without it get plain labels.
   endpoint?: string | null
+  /** Full preferred list when known — suppresses Tailscale hint if any non-TS remains. */
+  endpoints?: readonly ConnectionHealthEndpoint[] | null
   nowMs?: number
 }): ConnectionVerdict {
   const { state, reconnectAttempts, lastConnectedAt } = args
   const now = args.nowMs ?? Date.now()
-  const hint = isTailscaleEndpoint(args.endpoint) ? TAILSCALE_HINT : undefined
+  const hint = shouldShowTailscaleHint({
+    endpoint: args.endpoint,
+    endpoints: args.endpoints
+  })
+    ? TAILSCALE_HINT
+    : undefined
 
   // Why: auth-failed means the desktop no longer recognizes this pairing (e.g. it
   // lost its device registry) — retrying can't fix it, only re-pairing can, so say so.

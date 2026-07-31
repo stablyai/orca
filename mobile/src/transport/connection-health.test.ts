@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { classifyConnection, verdictDisplayLabel } from './connection-health'
+import {
+  classifyConnection,
+  shouldShowTailscaleHint,
+  verdictDisplayLabel
+} from './connection-health'
 
 describe('classifyConnection auth-failed verdict', () => {
   it('tells the user to re-pair instead of showing a generic auth error', () => {
@@ -68,6 +72,38 @@ describe('classifyConnection Tailscale hint', () => {
       nowMs: 1_000_000
     })
     expect(verdict).toEqual({ kind: 'normal', label: 'Connected' })
+  })
+
+  // AE4: mixed Tailscale+LAN must not latch Tailscale-unreachable after LAN works.
+  it('suppresses Tailscale hint when a non-Tailscale candidate remains', () => {
+    const verdict = classifyConnection({
+      ...base,
+      reconnectAttempts: 12,
+      endpoint: 'ws://100.65.9.106:6768',
+      endpoints: ['ws://100.65.9.106:6768', 'ws://192.168.1.50:6768']
+    })
+    expect(verdict.kind).toBe('unreachable')
+    expect('hint' in verdict && verdict.hint).toBeFalsy()
+  })
+
+  it('keeps Tailscale hint when every candidate is Tailscale', () => {
+    const verdict = classifyConnection({
+      ...base,
+      reconnectAttempts: 3,
+      endpoints: ['ws://100.65.9.106:6768', 'ws://my-desktop.tailnet-1234.ts.net:6768']
+    })
+    expect(verdict).toMatchObject({ kind: 'warning', hint: 'check Tailscale' })
+  })
+})
+
+describe('shouldShowTailscaleHint', () => {
+  it('is false for mixed lists even when primary is Tailscale', () => {
+    expect(
+      shouldShowTailscaleHint({
+        endpoint: 'ws://100.65.9.106:6768',
+        endpoints: ['ws://100.65.9.106:6768', 'ws://192.168.1.50:6768']
+      })
+    ).toBe(false)
   })
 })
 

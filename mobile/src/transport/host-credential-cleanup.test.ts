@@ -95,9 +95,9 @@ describe('host credential cleanup', () => {
     vi.useFakeTimers()
     const deleteCredential = vi.fn(() => new Promise<void>(() => undefined))
 
-    await expect(
-      scheduleHostCredentialCleanup('host-1', deleteCredential, 3_000)
-    ).resolves.toBeUndefined()
+    await expect(scheduleHostCredentialCleanup('host-1', deleteCredential, 3_000)).resolves.toBe(
+      true
+    )
     await flushMicrotasks()
 
     expect(storedPendingIds).toEqual(['host-1'])
@@ -197,7 +197,7 @@ describe('host credential cleanup', () => {
     const unsubscribe = subscribePendingHostCredentialCleanup(listener)
 
     readShouldFail = true
-    await scheduleHostCredentialCleanup('host-b', deleteCredential, 20)
+    await expect(scheduleHostCredentialCleanup('host-b', deleteCredential, 20)).resolves.toBe(false)
     await vi.waitFor(() => expect(deleteCredential).toHaveBeenCalledOnce())
     readShouldFail = false
 

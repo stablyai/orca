@@ -1,11 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Platform } from 'react-native'
-import {
-  HostProfileSchema,
-  StoredHostProfileSchema,
-  type HostProfile,
-  type StoredHostProfile
-} from './types'
+import { HostProfileSchema, type HostProfile, type StoredHostProfile } from './types'
 import { getNextHostNameFromHosts } from './host-names'
 import {
   deletePairingKeychainItem,
@@ -23,9 +18,14 @@ import {
   removeMobileRelayHostOverlays,
   saveMobileRelayHostOverlay
 } from './mobile-relay-host-overlay-store'
+import { createHostLastGoodEndpointUpdater } from './host-last-good-endpoint'
+import { HostPublicationEpochs } from './host-publication-epochs'
+import { mobileRelayHostOverlayFromProfile } from './mobile-relay-host-overlay'
 import { deleteMobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { deleteMobileRelayDirectUpgradeJournal } from './mobile-relay-direct-upgrade-journal'
 import { scheduleOrphanedMobileRelayCleanup } from './mobile-relay-orphan-cleanup'
+import { parseMobileStoredHostList } from './mobile-host-list-storage'
+import { storedHostProfileFromHost } from './stored-host-profile-from-host'
 
 const STORAGE_KEY = 'orca:hosts'
 // Why: SecureStore keys must match [A-Za-z0-9._-] (colons rejected), so use dots as the separator.
@@ -75,26 +75,11 @@ const tokenCache = new Map<string, string>()
 let inflightLoad: Promise<HostProfile[]> | null = null
 // Why: serialize RMW of the shared hosts JSON; without a queue concurrent writers drop writes (resurrect a removed host, drop a rename).
 let hostListMutation: Promise<void> = Promise.resolve()
+const hostPublicationEpochs = new HostPublicationEpochs()
 
-function parseStoredHosts(raw: string | null): StoredHostProfile[] | null {
-  if (!raw) {
-    return []
-  }
-  try {
-    const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) {
-      return null
-    }
-    return parsed.flatMap((item) => {
-      // Why: pre-v0.0.3 records stored deviceToken in AsyncStorage; drop them (users re-pair) rather than carry a migration shim.
-      if (item && typeof item === 'object' && 'deviceToken' in item) {
-        return []
-      }
-      const result = StoredHostProfileSchema.safeParse(item)
-      return result.success ? [result.data] : []
-    })
-  } catch {
-    return null
+function assertCurrentHostPublication(hostId: string, epoch: number): void {
+  if (hostPublicationEpochs.current(hostId) !== epoch || hostPublicationEpochs.isRemoved(hostId)) {
+    throw new MobileRelayUpgradeHostRemovedError('mobile host publication was superseded')
   }
 }
 
@@ -113,7 +98,7 @@ export async function loadHosts(): Promise<HostProfile[]> {
 
 async function doLoadHosts(): Promise<HostProfile[]> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY)
-  const storedHosts = parseStoredHosts(raw)
+  const storedHosts = parseMobileStoredHostList(raw)
   if (!storedHosts) {
     return []
   }
@@ -122,7 +107,8 @@ async function doLoadHosts(): Promise<HostProfile[]> {
   )
   await scheduleOrphanedMobileRelayCleanup({
     hostIds: overlayState.orphanHostIds,
-    deleteCredential: deleteHostCredentials
+    deleteCredential: deleteHostCredentials,
+    removeOverlayIfHostAbsent: removeMobileRelayHostOverlay
   })
   const overlays = overlayState.overlays
 
@@ -151,6 +137,7 @@ async function doLoadHosts(): Promise<HostProfile[]> {
       ...(overlay
         ? {
             endpoints: overlay.endpoints,
+            routeOrder: overlay.routeOrder,
             relayHostId: overlay.relayHostId,
             relay: overlay.relay
           }
@@ -163,19 +150,20 @@ async function doLoadHosts(): Promise<HostProfile[]> {
 export async function resolvePairingHostIdentity(
   publicKeyB64: string,
   newHostId: string
-): Promise<{ id: string; name: string }> {
+): Promise<{ id: string; name: string; publicationEpoch: number }> {
   // Why: one durable read both preserves an existing identity and names a new host, avoiding duplicate cards.
   await hostListMutation
   const hosts = await readStoredHostsForMutation()
   const match = hosts.find((host) => host.publicKeyB64 === publicKeyB64)
-  return match
+  const identity = match
     ? { id: match.id, name: match.name }
     : { id: newHostId, name: getNextHostNameFromHosts(hosts) }
+  return { ...identity, publicationEpoch: hostPublicationEpochs.beginPairing(identity.id) }
 }
 
 async function readStoredHostsForMutation(): Promise<StoredHostProfile[]> {
   try {
-    const parsed = parseStoredHosts(await AsyncStorage.getItem(STORAGE_KEY))
+    const parsed = parseMobileStoredHostList(await AsyncStorage.getItem(STORAGE_KEY))
     if (!parsed) {
       // Why: refuse to RMW over unreadable payload — treating it as [] would wipe the durable host list on the next write.
       throw new Error('host list storage unreadable')
@@ -195,38 +183,40 @@ async function mutateStoredHosts(
   const mutation = hostListMutation.then(async () => {
     const current = await readStoredHostsForMutation()
     const next = update(current)
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    if (next !== current) {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    }
   })
   hostListMutation = mutation.catch(() => {})
   return mutation
 }
 
-function toStored(host: HostProfile): StoredHostProfile {
-  return {
-    id: host.id,
-    name: host.name,
-    endpoint: host.endpoint,
-    publicKeyB64: host.publicKeyB64,
-    lastConnected: host.lastConnected
-  }
-}
-
 export class MobileRelayUpgradeHostRemovedError extends Error {}
 
-export async function saveHost(host: HostProfile): Promise<void> {
-  await persistHost(host, false)
+export async function saveHost(host: HostProfile, attemptEpoch?: number): Promise<void> {
+  const epoch = attemptEpoch ?? hostPublicationEpochs.beginPairing(host.id)
+  await persistHost(host, false, epoch)
+}
+
+export async function saveRecoveredPairingHost(host: HostProfile): Promise<void> {
+  await persistHost(host, false, hostPublicationEpochs.current(host.id))
 }
 
 export async function saveExistingHostRelayUpgrade(host: HostProfile): Promise<void> {
-  await persistHost(host, true)
+  await persistHost(host, true, hostPublicationEpochs.current(host.id))
 }
 
-async function persistHost(host: HostProfile, requireExisting: boolean): Promise<void> {
+async function persistHost(
+  host: HostProfile,
+  requireExisting: boolean,
+  publicationEpoch: number
+): Promise<void> {
   const validated = HostProfileSchema.parse(host)
-  const stored = toStored(validated)
+  const stored = storedHostProfileFromHost(validated)
   const duplicateHostIds = new Set<string>()
   let updatedExistingHost = false
   await mutateStoredHosts((hosts) => {
+    assertCurrentHostPublication(stored.id, publicationEpoch)
     const index = hosts.findIndex((h) => h.id === stored.id)
     for (const candidate of hosts) {
       if (candidate.id !== stored.id && candidate.publicKeyB64 === stored.publicKeyB64) {
@@ -246,17 +236,12 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
     }
     return [...hosts.filter(({ id }) => !duplicateHostIds.has(id)), stored]
   })
+  assertCurrentHostPublication(stored.id, publicationEpoch)
   // Why: write metadata before the keychain token so a crash leaves recoverable orphaned metadata, not an orphaned token that persists forever.
   await writeDeviceToken(stored.id, validated.deviceToken)
   tokenCache.set(stored.id, validated.deviceToken)
   if (validated.endpoints) {
-    await saveMobileRelayHostOverlay({
-      v: 2,
-      hostId: stored.id,
-      endpoints: validated.endpoints,
-      relayHostId: validated.relayHostId,
-      relay: validated.relay
-    })
+    await saveMobileRelayHostOverlay(mobileRelayHostOverlayFromProfile(validated))
   }
   const overlayRemovalIds = [...duplicateHostIds]
   if (!validated.endpoints && updatedExistingHost) {
@@ -277,6 +262,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
 }
 
 export async function removeHost(hostId: string): Promise<void> {
+  hostPublicationEpochs.beginRemoval(hostId)
   await mutateStoredHosts((hosts) => hosts.filter((h) => h.id !== hostId))
   tokenCache.delete(hostId)
   try {
@@ -336,10 +322,12 @@ export async function updateLastConnected(hostId: string): Promise<void> {
   }
 }
 
+export const updateHostLastGoodEndpoint = createHostLastGoodEndpointUpdater(mutateStoredHosts)
 /** Test-only: drain module mutation chain between cases. */
 export function resetHostStoreForTests(): void {
   hostListMutation = Promise.resolve()
   tokenCache.clear()
   inflightLoad = null
   resetPairingKeychainForTests()
+  hostPublicationEpochs.resetForTests()
 }

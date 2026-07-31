@@ -1,5 +1,5 @@
 import { isIP } from 'node:net'
-import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../../shared/mobile-pairing-protocol-limits'
+import { MAX_PAIRING_ENDPOINT_BYTES } from '../../shared/mobile-relay-pairing-offer'
 import { isPairingWildcardHostname, normalizePairingUrl } from '../../shared/network/pairing-url'
 
 export const INVALID_PAIRING_ENDPOINT_GUIDANCE =
@@ -97,7 +97,7 @@ function formatWebSocketUrl(url: URL): string {
 }
 
 function valid(endpoint: string): PairingEndpointResolution {
-  if (endpoint.length > PAIRING_ENDPOINT_MAX_CHARACTERS) {
+  if (Buffer.byteLength(endpoint, 'utf8') > MAX_PAIRING_ENDPOINT_BYTES) {
     return invalid()
   }
   return { ok: true, endpoint }

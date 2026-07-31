@@ -3,8 +3,10 @@ import type { PairingCandidateClient } from './mobile-relay-physical-client'
 export type PairingCandidate = {
   path: 'direct' | 'relay'
   client: PairingCandidateClient
+  url?: string
 }
 
+/** Preserve the released direct/Relay pairing strategy for offers without routeOrder. */
 export function racePairingCandidates(
   candidates: readonly PairingCandidate[]
 ): Promise<PairingCandidate> {
@@ -26,8 +28,7 @@ export function racePairingCandidates(
             return
           }
           selectionQueued = true
-          // Why: defer one microtask so simultaneous successes are visible and
-          // direct deterministically wins the exact tie regardless of callback order.
+          // Why: direct deterministically wins an exact tie, matching the released app.
           queueMicrotask(() => {
             if (settled) {
               return
