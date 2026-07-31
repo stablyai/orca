@@ -12,7 +12,7 @@ export type UpdateCheckState = {
 }
 
 export type UpdateCheckDecision =
-  | { kind: 'skip'; reason: 'not-android' | 'checked-recently' }
+  | { kind: 'skip'; reason: 'not-android' | 'disabled' | 'checked-recently' }
   | { kind: 'check' }
 
 export type UpdateVerdict =
@@ -22,6 +22,7 @@ export type UpdateVerdict =
 
 export function shouldCheckForUpdate(input: {
   platform: string
+  enabled: boolean
   state: UpdateCheckState
   nowMs: number
 }): UpdateCheckDecision {
@@ -29,6 +30,11 @@ export function shouldCheckForUpdate(input: {
   // user. Only the sideloaded Android APK has no such channel.
   if (input.platform !== 'android') {
     return { kind: 'skip', reason: 'not-android' }
+  }
+  // Why: opting out must stop the request itself, not just the prompt —
+  // otherwise "off" would still tell GitHub that this device launched the app.
+  if (!input.enabled) {
+    return { kind: 'skip', reason: 'disabled' }
   }
   const lastCheckedAtMs = input.state.lastCheckedAtMs
   if (

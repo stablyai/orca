@@ -5,13 +5,23 @@ const release = { version: '0.0.37', tag: 'mobile-android-v0.0.37', url: 'https:
 
 describe('shouldCheckForUpdate', () => {
   it('only runs on android, where sideloading leaves no update channel', () => {
-    expect(shouldCheckForUpdate({ platform: 'ios', state: {}, nowMs: 1000 })).toEqual({
+    expect(
+      shouldCheckForUpdate({ platform: 'ios', enabled: true, state: {}, nowMs: 1000 })
+    ).toEqual({
       kind: 'skip',
       reason: 'not-android'
     })
-    expect(shouldCheckForUpdate({ platform: 'android', state: {}, nowMs: 1000 })).toEqual({
+    expect(
+      shouldCheckForUpdate({ platform: 'android', enabled: true, state: {}, nowMs: 1000 })
+    ).toEqual({
       kind: 'check'
     })
+  })
+
+  it('makes no request at all when the user turned the check off', () => {
+    expect(
+      shouldCheckForUpdate({ platform: 'android', enabled: false, state: {}, nowMs: 1000 })
+    ).toEqual({ kind: 'skip', reason: 'disabled' })
   })
 
   it('checks at most once per interval', () => {
@@ -20,6 +30,7 @@ describe('shouldCheckForUpdate', () => {
     expect(
       shouldCheckForUpdate({
         platform: 'android',
+        enabled: true,
         state: { lastCheckedAtMs },
         nowMs: lastCheckedAtMs + UPDATE_CHECK_INTERVAL_MS - 1
       })
@@ -28,6 +39,7 @@ describe('shouldCheckForUpdate', () => {
     expect(
       shouldCheckForUpdate({
         platform: 'android',
+        enabled: true,
         state: { lastCheckedAtMs },
         nowMs: lastCheckedAtMs + UPDATE_CHECK_INTERVAL_MS
       })
@@ -38,6 +50,7 @@ describe('shouldCheckForUpdate', () => {
     expect(
       shouldCheckForUpdate({
         platform: 'android',
+        enabled: true,
         state: { lastCheckedAtMs: 5_000_000 },
         nowMs: 1_000
       })

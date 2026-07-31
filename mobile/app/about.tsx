@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, Pressable, Linking, Platform } from 'react-native'
+import { useCallback, useEffect, useState } from 'react'
+import { View, Text, StyleSheet, Pressable, Linking, Platform, Switch } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, Globe } from 'lucide-react-native'
@@ -6,6 +7,10 @@ import Svg, { Path } from 'react-native-svg'
 import Constants from 'expo-constants'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { colors, spacing, typography } from '../src/theme/mobile-theme'
+import {
+  loadAutomaticUpdateCheckEnabled,
+  saveAutomaticUpdateCheckEnabled
+} from '../src/storage/preferences'
 
 // Why: read version + native build identifier from expo-constants at
 // runtime so the About screen never drifts out of sync with app.json.
@@ -39,6 +44,24 @@ function XIcon({ size = 16, color = colors.textSecondary }) {
 export default function AboutScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const [updateCheckEnabled, setUpdateCheckEnabled] = useState(true)
+
+  useEffect(() => {
+    let disposed = false
+    void loadAutomaticUpdateCheckEnabled().then((enabled) => {
+      if (!disposed) {
+        setUpdateCheckEnabled(enabled)
+      }
+    })
+    return () => {
+      disposed = true
+    }
+  }, [])
+
+  const toggleUpdateCheck = useCallback((enabled: boolean) => {
+    setUpdateCheckEnabled(enabled)
+    void saveAutomaticUpdateCheckEnabled(enabled)
+  }, [])
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -80,6 +103,28 @@ export default function AboutScreen() {
           <Text style={styles.rowValue}>@orca_build</Text>
         </Pressable>
       </View>
+
+      {/* Why: Android installs as a sideloaded APK with no store to announce a
+          new build, so the check only exists there — an iOS toggle would
+          control nothing (TestFlight already notifies). */}
+      {Platform.OS === 'android' && (
+        <View style={styles.updateSection}>
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>Check for updates</Text>
+            <Switch
+              value={updateCheckEnabled}
+              onValueChange={toggleUpdateCheck}
+              trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
+              thumbColor={colors.textPrimary}
+            />
+          </View>
+          <Text style={styles.hint}>
+            {updateCheckEnabled
+              ? 'Asks GitHub once a day whether a newer APK was released.'
+              : "Off — Orca won't contact GitHub, and won't tell you about new releases."}
+          </Text>
+        </View>
+      )}
 
       <Text style={styles.versionText}>{getVersionLabel()}</Text>
     </View>
@@ -157,6 +202,18 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
     marginHorizontal: spacing.md
+  },
+  updateSection: {
+    backgroundColor: colors.bgPanel,
+    borderRadius: 12,
+    marginTop: spacing.lg,
+    paddingBottom: spacing.md
+  },
+  hint: {
+    paddingHorizontal: spacing.md + 2,
+    fontSize: typography.metaSize,
+    color: colors.textMuted,
+    lineHeight: 16
   },
   versionText: {
     marginTop: spacing.lg,

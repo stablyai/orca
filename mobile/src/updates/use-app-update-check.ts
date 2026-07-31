@@ -4,6 +4,7 @@ import Constants from 'expo-constants'
 import { fetchLatestAndroidRelease, type AndroidRelease } from './android-release-feed'
 import { evaluateUpdate, shouldCheckForUpdate } from './app-update-check'
 import { loadUpdateCheckState, saveUpdateCheckState } from './update-check-store'
+import { loadAutomaticUpdateCheckEnabled } from '../storage/preferences'
 
 export type AppUpdatePrompt = {
   release: AndroidRelease
@@ -26,9 +27,13 @@ export function useAppUpdateCheck(): {
       if (!currentVersion) {
         return
       }
-      const state = await loadUpdateCheckState()
+      const [enabled, state] = await Promise.all([
+        loadAutomaticUpdateCheckEnabled(),
+        loadUpdateCheckState()
+      ])
       const decision = shouldCheckForUpdate({
         platform: Platform.OS,
+        enabled,
         state,
         nowMs: Date.now()
       })

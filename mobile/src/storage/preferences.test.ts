@@ -10,6 +10,7 @@ import {
   clampHostSidebarWidth,
   loadDisabledTerminalLiveInputHandles,
   loadHostSidebarWidth,
+  loadAutomaticUpdateCheckEnabled,
   loadPushNotificationsEnabled,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
@@ -17,6 +18,7 @@ import {
   readDisabledTerminalLiveInputHandlesPreference,
   saveDisabledTerminalLiveInputHandles,
   saveHostSidebarWidth,
+  saveAutomaticUpdateCheckEnabled,
   savePushNotificationsEnabled,
   saveTerminalAutocompleteEnabled,
   saveTerminalLinkOpenMode
@@ -487,5 +489,32 @@ describe('terminal link open mode preference', () => {
     await saveTerminalLinkOpenMode('phone-browser')
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalLinkOpenMode', 'phone-browser')
+  })
+})
+
+describe('automatic update check preference', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
+  // Why: default-on, unlike notifications — a sideloaded APK has no store to
+  // announce a new build, so silence is the harmful default here.
+  it('defaults to on when never set', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    await expect(loadAutomaticUpdateCheckEnabled()).resolves.toBe(true)
+  })
+
+  it('honors an explicit opt-out and round-trips it', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('false')
+    await expect(loadAutomaticUpdateCheckEnabled()).resolves.toBe(false)
+
+    await saveAutomaticUpdateCheckEnabled(false)
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:automaticUpdateCheckEnabled', 'false')
+  })
+
+  it('keeps checking when storage is unreadable', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+    await expect(loadAutomaticUpdateCheckEnabled()).resolves.toBe(true)
   })
 })
