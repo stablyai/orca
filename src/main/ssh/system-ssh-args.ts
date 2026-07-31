@@ -50,9 +50,23 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
   }
 
   const useConfigHost = shouldUseOpenSshConfigHost(target)
+  const preserveResolvedEndpoint = shouldPreserveResolvedEndpoint(target, options)
+  const configHost = target.configHost || target.host
 
-  if (!useConfigHost && target.port !== 22) {
+  if (
+    (!useConfigHost && target.port !== 22) ||
+    (preserveResolvedEndpoint && target.port !== options?.resolvedConfig?.port)
+  ) {
     args.push('-p', String(target.port))
+  }
+
+  if (preserveResolvedEndpoint) {
+    if (target.host !== configHost) {
+      args.push('-o', `Hostname=${target.host}`)
+    }
+    if (target.username && target.username !== options?.resolvedConfig?.user) {
+      args.push('-l', target.username)
+    }
   }
 
   if (!useConfigHost && target.identityFile) {
@@ -81,10 +95,13 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
     args.push('-o', `ProxyCommand=${target.proxyCommand}`)
   }
 
-  const host = target.configHost || target.host
   // Why: OpenSSH owns User for config-backed aliases; imported fallback values
   // must not override a fresh wildcard, Include, or Match result.
-  const userHost = useConfigHost ? host : target.username ? `${target.username}@${host}` : host
+  const userHost = useConfigHost
+    ? configHost
+    : target.username
+      ? `${target.username}@${configHost}`
+      : configHost
   args.push('--', userHost)
 
   return args
@@ -177,6 +194,25 @@ function shouldUseOpenSshConfigHost(target: SshTarget): boolean {
     return false
   }
   return isOpenSshConfigBackedTarget(target)
+}
+
+function shouldPreserveResolvedEndpoint(
+  target: SshTarget,
+  options?: SystemSshBuildArgsOptions
+): boolean {
+  if (!shouldUseOpenSshConfigHost(target) || !options?.resolvedConfig) {
+    return false
+  }
+
+  // Why: wildcard-only proxy directives are omitted during import, so a fresh
+  // proxy resolution is the signal that the alias would otherwise lose its
+  // stored endpoint fields when OpenSSH reads the wildcard Host block.
+  const hasResolvedProxy =
+    options.resolvedConfig.proxyCommand != null ||
+    options.resolvedConfig.proxyJump != null ||
+    options.resolvedConfig.proxyUseFdpass === true
+  const hasImportedProxy = target.proxyCommand != null || target.jumpHost != null
+  return hasResolvedProxy && !hasImportedProxy
 }
 
 export function isOpenSshConfigBackedTarget(

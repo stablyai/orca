@@ -76,6 +76,24 @@ function createResolvedConfig(
   }
 }
 
+function buildWildcardArgs(
+  proxy: Pick<SystemSshResolvedConfig, 'proxyCommand' | 'proxyJump'>,
+  host = '10.0.0.5'
+): string[] {
+  return buildSshArgs(
+    createTarget({
+      source: 'ssh-config',
+      configHost: 'prod',
+      host,
+      port: 2222,
+      username: 'deploy'
+    }),
+    {
+      resolvedConfig: createResolvedConfig({ hostname: 'prod', port: 22, user: 'ops', ...proxy })
+    }
+  )
+}
+
 function expectNoOrcaControlMasterArgs(args: string[]): void {
   expect(args).not.toContain('ControlMaster=auto')
   expect(args.some((arg) => arg.startsWith('ControlPath='))).toBe(false)
@@ -275,6 +293,30 @@ describe('spawnSystemSsh', () => {
 
     expect(args.slice(0, 2)).toEqual(['-F', '/tmp/orca isolated/ssh_config'])
     expect(args).toContain('isolated-host')
+  })
+
+  it.each([
+    ['ProxyCommand', { proxyCommand: 'cloudflared access ssh --hostname %h' }],
+    ['ProxyJump', { proxyJump: 'bastion' }]
+  ] as const)('preserves the stored endpoint for wildcard %s system SSH', (_name, proxy) => {
+    const args = buildWildcardArgs(proxy)
+    expect(args).toEqual(
+      expect.arrayContaining(['-o', 'Hostname=10.0.0.5', '-p', '2222', '-l', 'deploy'])
+    )
+  })
+
+  it('keeps ControlMaster identity bound to the stored wildcard endpoint', () => {
+    if (process.platform === 'win32') {
+      return
+    }
+
+    const paths = ['10.0.0.5', '10.0.0.6'].map((host) =>
+      buildWildcardArgs({ proxyCommand: 'cloudflared access ssh --hostname %h' }, host).find(
+        (arg) => arg.startsWith('ControlPath=')
+      )
+    )
+
+    expect(paths[1]).not.toBe(paths[0])
   })
 
   it('passes explicit options for manual targets with implicit configHost', () => {
