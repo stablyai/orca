@@ -721,7 +721,18 @@ export class CdpWsProxy {
         return
       }
     }
-    this.forwardCommand(client, clientId, 'Input.insertText', params, effectiveSessionId)
+    // Why: forwardCommand only queues, so the focus borrow would end before Chromium
+    // processed the insert and the text would land in the user's window instead.
+    if (this.webContents.isDestroyed()) {
+      this.sendError(clientId, 'Browser tab is no longer available', client)
+      return
+    }
+    try {
+      const result = await this.sendDebuggerCommand('Input.insertText', params, effectiveSessionId)
+      this.sendResult(clientId, result, client)
+    } catch (err) {
+      this.sendError(clientId, err instanceof Error ? err.message : String(err), client)
+    }
   }
 
   private async handlePrintToPdf(

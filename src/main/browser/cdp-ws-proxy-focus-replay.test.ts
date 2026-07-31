@@ -409,4 +409,47 @@ describe('CdpWsProxy DOM.focus replay', () => {
 
     expect(getSendCommandMethods(mock)).not.toContain('Input.insertText')
   })
+
+  // Why: ending the borrow on queueing would hand focus back before Chromium
+  // processed the insert.
+  it('does not end the focus borrow before Input.insertText resolves', async () => {
+    let resolveInsert: ((value: Record<string, unknown>) => void) | undefined
+    const insertInFlight = new Promise<Record<string, unknown>>((resolve) => {
+      resolveInsert = resolve
+    })
+    mock.webContents.debugger.sendCommand.mockImplementation(async (...args: unknown[]) => {
+      const [method] = args as [string]
+      if (method === 'Input.insertText') {
+        return insertInFlight
+      }
+      return {}
+    })
+
+    const client = await connect(endpoint)
+    const pending = sendAndReceive(client, {
+      id: 40,
+      method: 'Input.insertText',
+      params: { text: 'slow insert' }
+    })
+
+    await vi.waitFor(() => {
+      expect(mock.webContents.hostWebContents.send).toHaveBeenCalledWith(
+        'ui:browserAgentInput',
+        expect.objectContaining({ phase: 'begin' })
+      )
+    })
+    expect(mock.webContents.hostWebContents.send).not.toHaveBeenCalledWith(
+      'ui:browserAgentInput',
+      expect.objectContaining({ phase: 'end' })
+    )
+
+    resolveInsert?.({})
+    await pending
+
+    expect(mock.webContents.hostWebContents.send).toHaveBeenCalledWith(
+      'ui:browserAgentInput',
+      expect.objectContaining({ phase: 'end' })
+    )
+    client.close()
+  })
 })

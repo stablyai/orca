@@ -177,8 +177,26 @@ describe('orca cli browser page targeting', () => {
       {
         url: 'https://example.com',
         worktree: undefined,
-        profileId: 'work'
+        profileId: 'work',
+        // Why: agent opens stay in the background unless --focus asks otherwise.
+        activate: false
       },
+      { timeoutMs: 60_000 }
+    )
+  })
+
+  it('asks tab create to focus the new tab only with --focus', async () => {
+    queueFixtures(callMock, okFixture('req_create', { browserPageId: 'page-4' }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['tab', 'create', '--url', 'https://example.com', '--worktree', 'all', '--focus', '--json'],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'browser.tabCreate',
+      expect.objectContaining({ activate: true }),
       { timeoutMs: 60_000 }
     )
   })
