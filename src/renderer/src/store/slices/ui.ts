@@ -851,6 +851,8 @@ export type UISlice = {
   dismissUsagePercentageDisplayChangeNotice: () => void
   usageEmptyStateDismissed: boolean
   dismissUsageEmptyState: () => void
+  nonOrcaWorktreeGuideDismissed: boolean
+  dismissNonOrcaWorktreeGuide: () => void
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   setGroupBy: (g: UISlice['groupBy']) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
@@ -1994,6 +1996,15 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ usageEmptyStateDismissed: true }).catch(console.error)
       return { usageEmptyStateDismissed: true }
     }),
+  nonOrcaWorktreeGuideDismissed: false,
+  dismissNonOrcaWorktreeGuide: () =>
+    set((s) => {
+      if (s.nonOrcaWorktreeGuideDismissed) {
+        return s
+      }
+      window.api.ui.set({ nonOrcaWorktreeGuideDismissed: true }).catch(console.error)
+      return { nonOrcaWorktreeGuideDismissed: true }
+    }),
 
   groupBy: 'repo',
   // Why: group keys are mode-specific, so clear collapsed state on mode switch — stale keys are meaningless and accumulate.
@@ -2548,6 +2559,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           ui.usagePercentageDisplayChangeNoticeDismissed === true,
         // Why: default false so existing users still see the CTA; only explicit dismissal persists true.
         usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
+        nonOrcaWorktreeGuideDismissed: ui.nonOrcaWorktreeGuideDismissed === true,
         // Why: stale acks are inert (paneKey reuse beats them via stateStartedAt); sanitizer bounds growth past HYDRATE_MAX_AGE_MS.
         acknowledgedAgentsByPaneKey: sanitizeAcknowledgedAgentsByPaneKey(
           ui.acknowledgedAgentsByPaneKey

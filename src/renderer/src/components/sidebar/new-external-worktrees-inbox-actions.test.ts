@@ -4,7 +4,8 @@ import type { Repo } from '../../../../shared/types'
 import {
   importNewExternalWorktreeInboxPaths,
   keepNewExternalWorktreeInboxHidden,
-  suppressNewExternalWorktreeInbox
+  suppressNewExternalWorktreeInbox,
+  undoExternalWorktreeImportPaths
 } from './new-external-worktrees-inbox-actions'
 
 const projectId = 'repo-1'
@@ -78,6 +79,53 @@ describe('new external worktree inbox actions', () => {
       externalWorktreeInboxBaselinePaths: ['/scratch/old', '/scratch/new']
     })
     expect(setInboxState).toHaveBeenLastCalledWith(projectId, null)
+  })
+
+  it('drops only the undone path from the import allowlist and keeps the baseline', async () => {
+    const updateRepo = vi.fn().mockResolvedValue(true)
+    const fetchWorktrees = vi.fn().mockResolvedValue(true)
+    const setInboxState = vi.fn()
+
+    await undoExternalWorktreeImportPaths({
+      projectId,
+      repo: {
+        externalWorktreeInboxBaselinePaths: ['/scratch/old', '/scratch/new'],
+        importedExternalWorktreePaths: ['/scratch/new/', '/scratch/keep']
+      },
+      worktreePaths: ['/scratch/new'],
+      updateRepo,
+      fetchWorktrees,
+      setInboxState
+    })
+
+    expect(updateRepo).toHaveBeenCalledWith(projectId, {
+      importedExternalWorktreePaths: ['/scratch/keep']
+    })
+    expect(fetchWorktrees).toHaveBeenCalledWith(projectId, { requireAuthoritative: true })
+    expect(setInboxState).toHaveBeenLastCalledWith(projectId, null)
+  })
+
+  it('restores the import allowlist and reports the undo failure when refresh fails', async () => {
+    const updateRepo = vi.fn().mockResolvedValue(true)
+    const fetchWorktrees = vi.fn().mockResolvedValue(false)
+    const setInboxState = vi.fn()
+
+    await undoExternalWorktreeImportPaths({
+      projectId,
+      repo: { importedExternalWorktreePaths: ['/scratch/new'] },
+      worktreePaths: ['/scratch/new'],
+      updateRepo,
+      fetchWorktrees,
+      setInboxState
+    })
+
+    expect(updateRepo).toHaveBeenNthCalledWith(2, projectId, {
+      importedExternalWorktreePaths: ['/scratch/new']
+    })
+    expect(setInboxState).toHaveBeenLastCalledWith(projectId, {
+      pending: false,
+      error: 'Could not undo the import. Try again.'
+    })
   })
 
   it('permanently suppresses the inbox and baselines the current batch', async () => {

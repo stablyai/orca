@@ -1239,6 +1239,7 @@ export type PreloadApi = {
           | 'externalWorktreeVisibilityPromptDismissedAt'
           | 'externalWorktreeInboxBaselinePaths'
           | 'importedExternalWorktreePaths'
+          | 'agentWorktreeVisibility'
           | 'projectGroupId'
           | 'projectGroupOrder'
           | 'forkSyncMode'

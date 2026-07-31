@@ -131,6 +131,7 @@ export type RepoUpdate = Partial<
     | 'externalWorktreeVisibilityPromptDismissedAt'
     | 'externalWorktreeInboxBaselinePaths'
     | 'importedExternalWorktreePaths'
+    | 'agentWorktreeVisibility'
     | 'projectGroupId'
     | 'projectGroupOrder'
   >

@@ -1,5 +1,8 @@
 import type { Repo } from '../../../../shared/types'
-import { mergeExternalWorktreeInboxPaths } from '../../../../shared/external-worktree-inbox'
+import {
+  areExternalWorktreeInboxPathsEqual,
+  mergeExternalWorktreeInboxPaths
+} from '../../../../shared/external-worktree-inbox'
 import { translate } from '@/i18n/i18n'
 
 export type NewExternalWorktreesInboxActionState = {
@@ -49,6 +52,13 @@ function newExternalWorktreeInboxSuppressError(): string {
   )
 }
 
+function externalWorktreeImportUndoError(): string {
+  return translate(
+    'auto.components.sidebar.newExternalWorktreesInboxActions.d5a8e3c740',
+    'Could not undo the import. Try again.'
+  )
+}
+
 function rollbackPathList(paths: readonly string[] | undefined): string[] {
   return [...(paths ?? [])]
 }
@@ -56,24 +66,19 @@ function rollbackPathList(paths: readonly string[] | undefined): string[] {
 async function refreshAfterRepoInboxUpdate(
   args: NewExternalWorktreesInboxActionDeps,
   updates: RepoExternalWorktreeInboxUpdate,
-  rollbackUpdates: RepoExternalWorktreeInboxUpdate
+  rollbackUpdates: RepoExternalWorktreeInboxUpdate,
+  failureError: string = newExternalWorktreeInboxImportError()
 ): Promise<boolean> {
   args.setInboxState(args.projectId, { pending: true, error: null })
   const updated = await args.updateRepo(args.projectId, updates)
   if (!updated) {
-    args.setInboxState(args.projectId, {
-      pending: false,
-      error: newExternalWorktreeInboxImportError()
-    })
+    args.setInboxState(args.projectId, { pending: false, error: failureError })
     return false
   }
   const refreshed = await args.fetchWorktrees(args.projectId, { requireAuthoritative: true })
   if (!refreshed) {
     await args.updateRepo(args.projectId, rollbackUpdates)
-    args.setInboxState(args.projectId, {
-      pending: false,
-      error: newExternalWorktreeInboxImportError()
-    })
+    args.setInboxState(args.projectId, { pending: false, error: failureError })
     return false
   }
   args.setInboxState(args.projectId, null)
@@ -121,6 +126,23 @@ export async function importNewExternalWorktreeInboxPaths(
         args.repo.externalWorktreeInboxBaselinePaths
       )
     }
+  )
+}
+
+// Why: keeps the inbox baseline, so undoing an import re-hides the worktree
+// without turning the notification back on for a path the user already judged.
+export async function undoExternalWorktreeImportPaths(
+  args: NewExternalWorktreesInboxActionDeps
+): Promise<void> {
+  const importedExternalWorktreePaths = (args.repo.importedExternalWorktreePaths ?? []).filter(
+    (importedPath) =>
+      !args.worktreePaths.some((target) => areExternalWorktreeInboxPathsEqual(importedPath, target))
+  )
+  await refreshAfterRepoInboxUpdate(
+    args,
+    { importedExternalWorktreePaths },
+    { importedExternalWorktreePaths: rollbackPathList(args.repo.importedExternalWorktreePaths) },
+    externalWorktreeImportUndoError()
   )
 }
 

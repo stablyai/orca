@@ -1,3 +1,7 @@
+export const GUIDED_ROW_ATTRIBUTE = 'data-guided-actions'
+
+// Why: the guided reveal lives in main.css rather than a variant here; Radix's
+// data-state cannot carry it, the trigger stacks two asChild wrappers.
 export const REPO_HEADER_ACTION_REVEAL_CLASS =
   'min-w-0 max-w-0 -ml-1.5 overflow-hidden opacity-0 focus:ml-0 focus:max-w-5 focus:opacity-100 group-hover:ml-0 group-hover:max-w-5 group-hover:opacity-100'
 

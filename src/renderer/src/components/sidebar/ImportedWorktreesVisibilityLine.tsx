@@ -25,6 +25,7 @@ type ImportedWorktreesVisibilityLineProps = {
   error: string | null
   onShow?: () => void
   onKeepHidden?: () => void
+  onManageVisibility?: () => void
   className?: string
 }
 
@@ -72,6 +73,10 @@ export function groupWorktreesByParentPath(
   return groups
 }
 
+// Why: interpolated so locales control where the link sits in the sentence;
+// U+0000 cannot appear in translated copy, so the split is unambiguous.
+const HERE_TOKEN = '\u0000'
+
 export default function ImportedWorktreesVisibilityLine({
   repoDisplayName,
   hiddenWorktrees,
@@ -80,6 +85,7 @@ export default function ImportedWorktreesVisibilityLine({
   error,
   onShow,
   onKeepHidden,
+  onManageVisibility,
   className
 }: ImportedWorktreesVisibilityLineProps): React.JSX.Element | null {
   const [isExpanded, setIsExpanded] = useState(false)
@@ -90,6 +96,16 @@ export default function ImportedWorktreesVisibilityLine({
   const visibleWorktreeGroups = worktreeGroups.slice(0, GROUP_LIMIT)
   const remainingGroupCount = Math.max(0, worktreeGroups.length - visibleWorktreeGroups.length)
   const keepHiddenAriaLabel = `Keep ${hiddenCount} discovered ${worktreeNoun} hidden for ${repoDisplayName}; recover from the project menu`
+
+  const recoveryLinkLabel = translate(
+    'auto.components.sidebar.ImportedWorktreesVisibilityLine.ae04372cb5',
+    'here'
+  )
+  const [recoveryBeforeLink, recoveryAfterLink] = translate(
+    'auto.components.sidebar.ImportedWorktreesVisibilityLine.8ce215fb39',
+    'You can always change this later from {{value0}}',
+    { value0: HERE_TOKEN }
+  ).split(HERE_TOKEN)
 
   if (hiddenCount === 0) {
     return null
@@ -256,10 +272,22 @@ export default function ImportedWorktreesVisibilityLine({
           ) : null}
           <div className="grid gap-1 px-1.5 pb-1 pt-1">
             <p className="rounded-md bg-worktree-sidebar-accent px-2 py-1 text-[10px] font-medium leading-4 text-worktree-sidebar-accent-foreground">
-              {translate(
-                'auto.components.sidebar.ImportedWorktreesVisibilityLine.9f4f14e821',
-                'Change this later from the project menu.'
+              {recoveryBeforeLink}
+              {onManageVisibility ? (
+                <Button
+                  type="button"
+                  variant="link"
+                  size="xs"
+                  disabled={pending}
+                  onClick={onManageVisibility}
+                  className="h-auto whitespace-normal p-0 text-left text-[10px] font-medium leading-4 text-worktree-sidebar-accent-foreground underline underline-offset-2"
+                >
+                  {recoveryLinkLabel}
+                </Button>
+              ) : (
+                <span className="underline underline-offset-2">{recoveryLinkLabel}</span>
               )}
+              {recoveryAfterLink}
             </p>
             <div className="flex min-w-0 items-center gap-1.5">
               {onKeepHidden ? (
@@ -287,8 +315,8 @@ export default function ImportedWorktreesVisibilityLine({
                   className="h-6 px-2 text-[11px] font-medium"
                 >
                   {translate(
-                    'auto.components.sidebar.ImportedWorktreesVisibilityLine.b7a87dc32f',
-                    'Show in worktree list'
+                    'auto.components.sidebar.ImportedWorktreesVisibilityLine.8fe0b27356',
+                    'Show all'
                   )}
                 </Button>
               ) : null}

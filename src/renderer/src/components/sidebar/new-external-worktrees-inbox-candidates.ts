@@ -5,6 +5,7 @@ import type {
   Worktree
 } from '../../../../shared/types'
 import { getNewExternalWorktreeInboxWorktrees } from '../../../../shared/external-worktree-inbox'
+import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { NewExternalWorktreesInboxCandidate } from './worktree-list-groups'
 
@@ -43,15 +44,21 @@ export function buildNewExternalWorktreesInboxCandidates(args: {
 export type NewExternalWorktreeInboxPreview = Pick<
   DetectedWorktree,
   'id' | 'displayName' | 'path' | 'branch'
->
+> & {
+  /** Repo-relative when the worktree sits inside the checkout, else the absolute path. */
+  displayPath: string
+}
 
 export function toNewExternalWorktreeInboxPreview(
-  worktree: DetectedWorktree
+  worktree: DetectedWorktree,
+  repoPath: string
 ): NewExternalWorktreeInboxPreview {
+  const relativePath = relativePathInsideRoot(repoPath, worktree.path)
   return {
     id: worktree.id,
     displayName: worktree.displayName,
     path: worktree.path,
+    displayPath: relativePath ? relativePath : worktree.path,
     branch: worktree.branch
   }
 }

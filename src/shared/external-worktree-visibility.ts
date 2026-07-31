@@ -67,3 +67,11 @@ export function effectiveExternalWorktreeVisibility(
   }
   return isLegacyRepoForVisibility ? 'show' : 'hide'
 }
+
+// Why: no legacy branch here. Agent scratch has always been hidden, so an absent
+// value means hide for every repo, new or migrated.
+export function effectiveAgentWorktreeVisibility(
+  repo: Pick<Repo, 'agentWorktreeVisibility'>
+): ExternalWorktreeVisibility {
+  return repo.agentWorktreeVisibility === 'show' ? 'show' : 'hide'
+}

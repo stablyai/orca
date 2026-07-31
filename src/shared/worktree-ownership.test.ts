@@ -409,6 +409,80 @@ describe('external worktree visibility policy', () => {
     ).toBe(false)
   })
 
+  it('never lets the non-Orca toggle reveal agent scratch, whatever its value (#9388)', () => {
+    for (const externalWorktreeVisibility of ['hide', 'show'] as const) {
+      expect(
+        shouldShowWorktree({
+          repo: makeRepo({ externalWorktreeVisibility }),
+          worktree: makeWorktree({ path: '/repos/app/.claude/worktrees/a', isMainWorktree: false }),
+          ownership: 'agent-scratch',
+          isLegacyRepoForVisibility: false,
+          isSelectedCheckout: false
+        })
+      ).toBe(false)
+    }
+  })
+
+  it('reveals agent scratch only through its own opt-in policy', () => {
+    const worktree = makeWorktree({
+      path: '/repos/app/.claude/worktrees/a',
+      isMainWorktree: false
+    })
+
+    expect(
+      shouldShowWorktree({
+        repo: makeRepo({ agentWorktreeVisibility: 'show' }),
+        worktree,
+        ownership: 'agent-scratch',
+        isLegacyRepoForVisibility: false,
+        isSelectedCheckout: false
+      })
+    ).toBe(true)
+    expect(
+      shouldShowWorktree({
+        repo: makeRepo({ agentWorktreeVisibility: 'hide' }),
+        worktree,
+        ownership: 'agent-scratch',
+        isLegacyRepoForVisibility: false,
+        isSelectedCheckout: false
+      })
+    ).toBe(false)
+  })
+
+  it('keeps an imported scratch path visible while the scratch policy hides the rest', () => {
+    const repo = makeRepo({
+      agentWorktreeVisibility: 'hide',
+      importedExternalWorktreePaths: ['/repos/app/.claude/worktrees/kept']
+    })
+
+    expect(
+      shouldShowWorktree({
+        repo,
+        worktree: makeWorktree({
+          path: '/repos/app/.claude/worktrees/kept',
+          isMainWorktree: false
+        }),
+        ownership: 'agent-scratch',
+        isLegacyRepoForVisibility: false,
+        isSelectedCheckout: false,
+        importedExternalWorktreePaths: repo.importedExternalWorktreePaths
+      })
+    ).toBe(true)
+    expect(
+      shouldShowWorktree({
+        repo,
+        worktree: makeWorktree({
+          path: '/repos/app/.claude/worktrees/other',
+          isMainWorktree: false
+        }),
+        ownership: 'agent-scratch',
+        isLegacyRepoForVisibility: false,
+        isSelectedCheckout: false,
+        importedExternalWorktreePaths: repo.importedExternalWorktreePaths
+      })
+    ).toBe(false)
+  })
+
   it('keeps unknown legacy rows visible for legacy repos after hiding external rows', () => {
     const repo = makeRepo({
       addedAt: EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT - 1,

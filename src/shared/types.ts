@@ -286,6 +286,9 @@ export type Repo = {
   externalWorktreeInboxBaselinePaths?: string[]
   /** External worktree paths explicitly imported while global visibility stays hide. */
   importedExternalWorktreePaths?: string[]
+  /** Opt-in repo policy for agent scratch worktrees; absent means hide (#9388 keeps the
+   *  non-Orca toggle from ever revealing them, so this is their own explicit switch). */
+  agentWorktreeVisibility?: ExternalWorktreeVisibility
   /** User permanently opted out of the new-external-worktree inbox for this repo. */
   externalWorktreeDiscoverySuppressedAt?: number
   /** Paths (relative to the primary checkout) that should be APFS clone-copied
@@ -3479,6 +3482,8 @@ export type PersistedUIState = {
   usagePercentageDisplayChangeNoticeDismissed?: boolean
   /** User-hidden empty-state usage CTA; permanently hides the "Connect AI accounts" prompt even if providers are later disconnected. */
   usageEmptyStateDismissed?: boolean
+  /** One-shot primer on the two kinds of non-Orca worktrees; the visibility dialog can reopen it on demand. */
+  nonOrcaWorktreeGuideDismissed?: boolean
   /** URL for new browser tabs; null = blank tab. */
   browserDefaultUrl?: string | null
   browserDefaultSearchEngine?: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null

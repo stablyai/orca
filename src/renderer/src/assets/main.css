@@ -3583,3 +3583,20 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);
 }
+
+/* Why: a programmatic reveal cannot use :hover, and the row actions are hidden by
+   width/opacity utilities; this mirrors the hover state for the whole cluster. */
+[data-guided-actions] [data-repo-header-action],
+[data-guided-actions][data-repo-header-action] {
+  margin-left: 0;
+  max-width: 1.25rem;
+  opacity: 1;
+}
+
+/* Why: the cluster wrapper is the ancestor that hides these buttons on desktop, and
+   its own reveal paths need hover or a non-portaled focus, neither of which a guided
+   reveal has. Restore pointer events too, or the shown cluster is not clickable. */
+[data-guided-actions] [data-repo-header-actions] {
+  opacity: 1;
+  pointer-events: auto;
+}

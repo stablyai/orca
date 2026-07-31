@@ -241,9 +241,10 @@ import { ProjectGroupDeleteDialog } from './ProjectGroupDeleteDialog'
 import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
-  effectiveExternalWorktreeVisibility,
-  isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../shared/worktree-ownership'
+  PROJECT_ACTIONS_TRIGGER_ATTRIBUTE,
+  PROJECT_ACTIONS_VISIBILITY_ITEM_ATTRIBUTE,
+  revealProjectActionsMenu
+} from './reveal-project-actions-menu'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 import ImportedWorktreesVisibilityLine from './ImportedWorktreesVisibilityLine'
@@ -622,14 +623,6 @@ function getSidebarRowRevealAncestorKeys(args: {
     }
   }
   return [...keys]
-}
-
-function getWorktreeVisibilityMenuLabel(repo: Repo): string {
-  const visibility = effectiveExternalWorktreeVisibility(
-    repo,
-    isLegacyRepoForExternalWorktreeVisibility(repo)
-  )
-  return visibility === 'show' ? 'Hide non-Orca worktrees' : 'Show hidden worktrees'
 }
 
 const SIDEBAR_POINTER_DRAG_THRESHOLD_PX = 4
@@ -4519,6 +4512,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                   size="icon-xs"
                                   className={REPO_HEADER_ACTION_BUTTON_CLASS}
                                   data-repo-header-action=""
+                                  {...{ [PROJECT_ACTIONS_TRIGGER_ATTRIBUTE]: row.repo.id }}
                                   aria-label={translate(
                                     'auto.components.sidebar.WorktreeList.609633a9e6',
                                     'Project actions for {{value0}}',
@@ -4582,6 +4576,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                             </DropdownMenuItem>
                             {row.repo && isGitRepoKind(row.repo) ? (
                               <DropdownMenuItem
+                                {...{ [PROJECT_ACTIONS_VISIBILITY_ITEM_ATTRIBUTE]: '' }}
                                 onSelect={() => {
                                   if (row.repo) {
                                     handleOpenWorktreeVisibility(row.repo.id)
@@ -4589,7 +4584,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                 }}
                               >
                                 <Eye className="size-3.5" />
-                                {getWorktreeVisibilityMenuLabel(row.repo)}
+                                {translate(
+                                  'auto.components.sidebar.WorktreeList.7b1e4d90c6',
+                                  'Manage non-Orca worktrees'
+                                )}
                               </DropdownMenuItem>
                             ) : null}
                             <DropdownMenuItem
@@ -4988,6 +4986,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         ? () => handleKeepImportedWorktreesHidden(row.repo.id)
                         : undefined
                     }
+                    onManageVisibility={() => {
+                      const repoId = row.repo.id
+                      if (
+                        !revealProjectActionsMenu(repoId, {
+                          onUnreachable: () => handleOpenWorktreeVisibility(repoId)
+                        })
+                      ) {
+                        handleOpenWorktreeVisibility(repoId)
+                      }
+                    }}
                   />
                 </div>
               )
@@ -5009,7 +5017,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 >
                   <NewExternalWorktreesInboxLine
                     repoDisplayName={row.repo.displayName}
-                    inboxWorktrees={row.inboxWorktrees.map(toNewExternalWorktreeInboxPreview)}
+                    inboxWorktrees={row.inboxWorktrees.map((worktree) =>
+                      toNewExternalWorktreeInboxPreview(worktree, row.repo.path)
+                    )}
                     pending={actionState?.pending ?? false}
                     error={actionState?.error ?? null}
                     onImportWorktree={(worktreeId) =>
@@ -5018,6 +5028,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     onKeepHidden={() => handleKeepNewExternalWorktreeInboxHidden(row.repo.id)}
                     onImportAll={() => handleImportAllNewExternalWorktrees(row.repo.id)}
                     onSuppress={() => handleOpenSuppressExternalWorktreeInbox(row.repo.id)}
+                    onManageVisibility={() => {
+                      const repoId = row.repo.id
+                      if (
+                        !revealProjectActionsMenu(repoId, {
+                          onUnreachable: () => handleOpenWorktreeVisibility(repoId)
+                        })
+                      ) {
+                        handleOpenWorktreeVisibility(repoId)
+                      }
+                    }}
                   />
                 </div>
               )
