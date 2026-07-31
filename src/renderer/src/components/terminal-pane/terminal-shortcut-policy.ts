@@ -52,6 +52,7 @@ const PUNCTUATION_CODE_MAP: Record<string, string> = {
 }
 
 export type TerminalShortcutAction =
+  | { type: 'sendReadlineLineBoundary'; data: string }
   | { type: 'copySelection' }
   | { type: 'toggleSearch' }
   | { type: 'clearActivePane' }
@@ -65,6 +66,15 @@ export type TerminalShortcutAction =
   | { type: 'scrollViewport'; position: 'top' | 'bottom' }
   | { type: 'sendInput'; data: string }
   | { type: 'switchInputSource' }
+
+const READLINE_LINE_BOUNDARY_INPUT_BY_CODE: Record<string, string> = {
+  KeyA: '\x01',
+  KeyE: '\x05'
+}
+
+function isPlainCtrlChord(event: TerminalShortcutEvent): boolean {
+  return event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey
+}
 
 /** Kitty keyboard protocol modifier field: 1 + shift(1) + alt(2). */
 function kittyAltModifiers(shiftKey: boolean): number {
@@ -197,6 +207,14 @@ export function resolveTerminalShortcutAction(
   ) {
     // Why: xterm.js collapses Ctrl+Enter to a bare CR, so forward kitty CSI-u (modifier 5 = Ctrl) so the chord reaches TUIs; no Windows fallback yet (#2418).
     return { type: 'sendInput', data: '\x1b[13;5u' }
+  }
+
+  // Why: `key` follows the input source; physical Ctrl+A/E are readline line boundaries. Kitty panes retain CSI-u.
+  const readlineLineBoundaryInput = isPlainCtrlChord(event)
+    ? READLINE_LINE_BOUNDARY_INPUT_BY_CODE[event.code ?? '']
+    : undefined
+  if (readlineLineBoundaryInput && isKittyKeyboardActivePane?.() !== true) {
+    return { type: 'sendReadlineLineBoundary', data: readlineLineBoundaryInput }
   }
 
   if (

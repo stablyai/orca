@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { cleanup, renderHook } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
@@ -31,6 +31,7 @@ function keyboardEvent(
 function createHarness(): {
   deps: KeyboardHandlersDeps
   editable: HTMLInputElement
+  sendInput: Mock
   startComposition: () => void
   terminalInput: HTMLTextAreaElement
   dispose: () => void
@@ -97,6 +98,7 @@ function createHarness(): {
   return {
     deps,
     editable,
+    sendInput,
     terminalInput,
     startComposition: () => {
       terminalElement.dispatchEvent(
@@ -161,6 +163,32 @@ describe('Windows IME keyboard ownership', () => {
     harness.terminalInput.dispatchEvent(redispatch)
 
     expect(redispatch.defaultPrevented).toBe(true)
+    hook.unmount()
+    harness.dispose()
+  })
+
+  it('does not send Ctrl+A/E while the terminal IME owns composition', () => {
+    const harness = createHarness()
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+    harness.startComposition()
+
+    for (const [key, code] of [
+      ['ㅁ', 'KeyA'],
+      ['ㄷ', 'KeyE']
+    ]) {
+      harness.terminalInput.dispatchEvent(
+        keyboardEvent('keydown', {
+          key,
+          code,
+          keyCode: 229,
+          timeStamp: 10,
+          ctrlKey: true,
+          isComposing: true
+        })
+      )
+    }
+
+    expect(harness.sendInput).not.toHaveBeenCalled()
     hook.unmount()
     harness.dispose()
   })

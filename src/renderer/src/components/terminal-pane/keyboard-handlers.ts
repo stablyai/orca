@@ -516,6 +516,13 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
+      if (
+        (e.isComposing || hasPendingImeComposition) &&
+        action.type === 'sendReadlineLineBoundary'
+      ) {
+        return
+      }
+
       if (action.type === 'switchInputSource') {
         // Why: the OS must receive its default action, while xterm must receive
         // none of the keydown, keypress, or keyup sequence.
@@ -524,7 +531,7 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
-      if (action.type === 'sendInput') {
+      if (action.type === 'sendInput' || action.type === 'sendReadlineLineBoundary') {
         e.preventDefault()
         e.stopImmediatePropagation()
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
