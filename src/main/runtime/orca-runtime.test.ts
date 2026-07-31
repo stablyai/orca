@@ -5342,7 +5342,14 @@ describe('OrcaRuntimeService', () => {
       getSettings: () => ({
         ...store.getSettings(),
         terminalWindowsShell: 'cmd.exe',
-        agentCmdOverrides: {}
+        agentCmdOverrides: {},
+        agentDefaultEnv: {
+          codex: {
+            ORCA_ORCH_ROLE: 'coordinator',
+            ORCA_ORCH_DEPTH: '0',
+            EXISTING_AGENT_ENV: 'preserved'
+          }
+        }
       }),
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
@@ -5418,7 +5425,8 @@ describe('OrcaRuntimeService', () => {
           command: "codex '--dangerously-bypass-approvals-and-sandbox' 'hi'",
           env: expect.objectContaining({
             ORCA_ORCH_ROLE: 'worker',
-            ORCA_ORCH_DEPTH: '1'
+            ORCA_ORCH_DEPTH: '1',
+            EXISTING_AGENT_ENV: 'preserved'
           }),
           worktreeId: result.worktree.id
         })
