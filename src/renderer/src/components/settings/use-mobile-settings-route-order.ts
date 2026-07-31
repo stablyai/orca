@@ -129,12 +129,7 @@ export function useMobileSettingsRouteOrder({
         }
       }
     },
-    [
-      advancedConnectionOrderEnabled,
-      invalidatePairing,
-      mountedRef,
-      selectAddressAfterRefresh
-    ]
+    [advancedConnectionOrderEnabled, invalidatePairing, mountedRef, selectAddressAfterRefresh]
   )
 
   const handleAddressesChange = useCallback(
