@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
-import { PAIRING_OFFER_VERSION, PairingOfferSchema } from '../../shared/mobile-relay-pairing-offer'
-import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../../shared/mobile-pairing-protocol-limits'
+import {
+  MAX_PAIRING_ENDPOINT_BYTES,
+  PAIRING_OFFER_VERSION,
+  PairingOfferSchema
+} from '../../shared/mobile-relay-pairing-offer'
 import { parseManualNetworkAddress } from '../../shared/network/manual-address'
 
 describe('resolveAdvertisedPairingEndpoint', () => {
@@ -82,7 +85,7 @@ describe('resolveAdvertisedPairingEndpoint', () => {
 
   it('matches the pairing-offer endpoint length boundary', () => {
     const prefix = 'wss://example.test/'
-    const atLimit = `${prefix}${'a'.repeat(PAIRING_ENDPOINT_MAX_CHARACTERS - prefix.length)}`
+    const atLimit = `${prefix}${'a'.repeat(MAX_PAIRING_ENDPOINT_BYTES - prefix.length)}`
     const aboveLimit = `${atLimit}a`
     const offer = (endpoint: string) => ({
       v: PAIRING_OFFER_VERSION,

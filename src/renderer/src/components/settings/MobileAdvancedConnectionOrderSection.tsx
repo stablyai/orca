@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -47,12 +47,13 @@ export function MobileAdvancedConnectionOrderSection({
     'auto.components.settings.MobileAdvancedConnectionOrderSection.enable',
     'Use custom connection order'
   )
-
-  useEffect(() => {
-    if (enabled) {
+  const handleEnabledChange = (): void => {
+    const nextEnabled = !enabled
+    if (nextEnabled) {
       setOpen(true)
     }
-  }, [enabled])
+    onEnabledChange(nextEnabled)
+  }
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className={cn(className)}>
@@ -120,7 +121,7 @@ export function MobileAdvancedConnectionOrderSection({
             control={
               <SettingsSwitch
                 checked={enabled}
-                onChange={() => onEnabledChange(!enabled)}
+                onChange={handleEnabledChange}
                 ariaLabel={enableLabel}
               />
             }

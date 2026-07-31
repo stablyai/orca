@@ -146,6 +146,7 @@ export function MobilePairingSetupSection({
               )}
         </p>
         <MobileAdvancedConnectionOrderSection
+          key={advancedConnectionOrderEnabled ? 'enabled' : 'disabled'}
           enabled={advancedConnectionOrderEnabled}
           onEnabledChange={onAdvancedConnectionOrderEnabledChange}
           connectionMode={connectionMode}
