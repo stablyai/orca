@@ -4,6 +4,12 @@ import { AGENT_STATUS_MAX_SUBAGENTS, type AgentSubagentSnapshot } from './agent-
  *  upsert so an over-long id can't gate the pane 'working' while being
  *  invisible in the emitted snapshots (which drop such ids). */
 const CLAUDE_SUBAGENT_ID_MAX_LENGTH = 64
+const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
+  'completed',
+  'failed',
+  'killed',
+  'cancelled'
+])
 
 /** Live subagents/teammates tracked for one Claude pane, keyed by the
  *  provider-assigned `agent_id` from SubagentStart/SubagentStop payloads.
@@ -183,9 +189,12 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       continue
     }
     const obj = item as Record<string, unknown>
+    // Why: future nonterminal labels must fail active; only explicit terminal states can safely retire work.
     if (
       (obj.type === 'shell' || obj.type === 'monitor') &&
-      (obj.status === 'running' || obj.status === 'pending')
+      typeof obj.status === 'string' &&
+      obj.status.length > 0 &&
+      !CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES.has(obj.status)
     ) {
       hasRunningShellOrMonitor = true
     }

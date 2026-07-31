@@ -65,10 +65,41 @@ describe('RelayAgentHookServer', () => {
       expect(envelope.connectionId).toBeNull()
       expect(envelope.payload.state).toBe('working')
       expect(envelope.payload.prompt).toBe('hi')
+      expect(envelope.claudeRunningShellOrMonitor).toBe(false)
       // Why: the relay forwards body env/version so Orca's warn-once
       // protocol diagnostics and remote-location marker survive the wire.
       expect(envelope.env).toBe('remote')
       expect(envelope.version).toBe('1')
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('forwards Claude background-work evidence with the normalized status', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      await fetch(`http://127.0.0.1:${port}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'Stop',
+            background_tasks: [{ id: 'shell-1', type: 'shell', status: 'running' }]
+          }
+        })
+      })
+
+      expect(forward.mock.calls[0][0]).toMatchObject({
+        claudeRunningShellOrMonitor: true,
+        payload: { state: 'working', agentType: 'claude' }
+      })
     } finally {
       server.stop()
     }

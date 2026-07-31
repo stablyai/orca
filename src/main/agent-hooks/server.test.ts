@@ -397,6 +397,43 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  it('does not infer an interrupt while Claude reports a background shell', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const state = server._getStateForTests()
+      const send = (payload: Record<string, unknown>): void => {
+        const event = normalizeHookPayload(state, 'claude', buildBody(payload), 'production')
+        if (!event) {
+          throw new Error('normalizeHookPayload rejected a known-good Claude fixture')
+        }
+        server.ingestRemote(event, 'conn-1')
+      }
+      send({ hook_event_name: 'UserPromptSubmit', prompt: 'run in background' })
+      send({
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'shell-1', type: 'shell', status: 'running' }]
+      })
+      const baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      expect(
+        server.inferInterrupt({
+          paneKey: PANE,
+          baselineUpdatedAt: baseline.receivedAt,
+          baselineStateStartedAt: baseline.stateStartedAt,
+          baselinePrompt: 'run in background',
+          baselineAgentType: 'claude',
+          intent: 'plain-escape'
+        })
+      ).toBe(false)
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('carries idle subagent rows through an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
