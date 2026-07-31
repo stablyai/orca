@@ -122,7 +122,18 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
         return translate('auto.components.status.bar.tooltip.b3c7d1f0e9', 'Cursor not signed in')
       case 'network':
         return translate('auto.components.status.bar.tooltip.f8f0f9d8cc', 'Network issue')
-      default:
+      case 'deferred-by-live-session':
+      case 'refreshable-credentials-without-token':
+      case 'delegated-refresh-required':
+      case 'keychain-unavailable':
+      case 'cli-unavailable':
+      case 'usage-unavailable':
+      case 'missing-scope':
+      case 'parse':
+      case 'rate-limited':
+      case 'server':
+      case 'unknown':
+      case undefined:
         break
     }
   }
@@ -211,7 +222,18 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
           'auto.components.status.bar.tooltip.80a4b8c2d6',
           'Cursor usage could not be refreshed because the network request failed.'
         )
-      default:
+      case 'deferred-by-live-session':
+      case 'refreshable-credentials-without-token':
+      case 'delegated-refresh-required':
+      case 'keychain-unavailable':
+      case 'cli-unavailable':
+      case 'usage-unavailable':
+      case 'missing-scope':
+      case 'parse':
+      case 'rate-limited':
+      case 'server':
+      case 'unknown':
+      case undefined:
         break
     }
   }
