@@ -4,6 +4,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import { createIdentityFilteredAgent } from './ssh-agent-identity-filter'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+import { hasOpenSshHostBlockMatch } from './ssh-g-host-block-match'
 import { isOpenSshConfigBackedTarget } from './system-ssh-args'
 
 // Why: ssh2 only tries keys that are explicitly provided. Users with keys in
@@ -88,7 +89,7 @@ function resolveExplicitPrivateKeyPaths(
   const resolvedIdentities = (resolved?.identityFile ?? []).filter(
     (identityFile) => !EXPANDED_DEFAULT_KEY_PATHS.includes(identityFile)
   )
-  if (isOpenSshConfigBackedTarget(target) && resolved) {
+  if (hasOpenSshHostBlockMatch(target, resolved)) {
     return resolvedIdentities
   }
   if (target.identityFile) {
@@ -98,7 +99,7 @@ function resolveExplicitPrivateKeyPaths(
 }
 
 function resolvePrivateKeyPaths(target: SshTarget, resolved: SshResolvedConfig | null): string[] {
-  if (isOpenSshConfigBackedTarget(target) && resolved) {
+  if (hasOpenSshHostBlockMatch(target, resolved) && resolved) {
     return resolved.identityFile
   }
   if (target.identityFile) {
@@ -175,7 +176,7 @@ export function findEncryptedPrivateKeyPath(keys: PrivateKeyFile[]): string | un
 }
 
 function resolveIdentityFilePaths(target: SshTarget, resolved: SshResolvedConfig | null): string[] {
-  if (isOpenSshConfigBackedTarget(target) && resolved) {
+  if (hasOpenSshHostBlockMatch(target, resolved) && resolved) {
     return resolved.identityFile
   }
   if (target.identityFile) {

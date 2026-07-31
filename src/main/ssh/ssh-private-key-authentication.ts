@@ -1,4 +1,11 @@
-import type { AnyAuthMethod, AuthenticationType, ConnectConfig, NextAuthHandler } from 'ssh2'
+import {
+  utils,
+  type AnyAuthMethod,
+  type AuthenticationType,
+  type ConnectConfig,
+  type NextAuthHandler,
+  type ParsedKey
+} from 'ssh2'
 import type { PrivateKeyFile } from './ssh-auth-resolution'
 
 const passphraseKeyPaths = new WeakMap<ConnectConfig, string>()
@@ -29,16 +36,35 @@ function buildAuthQueue(
   return queue
 }
 
+function isUsableAsEagerPrivateKey(key: PrivateKeyFile, passphrase?: string | Buffer): boolean {
+  const parsed = utils.parseKey(key.contents, passphrase) as ParsedKey | ParsedKey[] | Error
+  if (parsed instanceof Error) {
+    return false
+  }
+  // Why: ssh2 keeps only the first entry of a multi-key parse (client.js `privateKey[0]`).
+  const eager = Array.isArray(parsed) ? parsed[0] : parsed
+  return typeof eager?.isPrivateKey === 'function' && eager.isPrivateKey()
+}
+
+// Why: ssh2's Client.connect parses config.privateKey before any auth runs and
+// throws on an encrypted/unparseable one, so seeding it with the first candidate
+// would abort the connect instead of letting authHandler try the other keys.
+// Falling back to keys[0] keeps the passphrase prompt for an encrypted-only list.
+// `config.passphrase` is still unset here on the first connect — callers only fill
+// it after a prompt — so an encrypted key can only be picked on a retry pass.
+function selectEagerPrivateKey(config: ConnectConfig, keys: PrivateKeyFile[]): PrivateKeyFile {
+  return keys.find((key) => isUsableAsEagerPrivateKey(key, config.passphrase)) ?? keys[0]!
+}
+
 export function configurePrivateKeyAuthentication(
   config: ConnectConfig,
   keys: PrivateKeyFile[],
   passphraseKeyPath?: string
 ): void {
-  const firstKey = keys[0]
-  if (!firstKey) {
+  if (keys.length === 0) {
     return
   }
-  config.privateKey = firstKey.contents
+  config.privateKey = selectEagerPrivateKey(config, keys).contents
   if (passphraseKeyPath) {
     passphraseKeyPaths.set(config, passphraseKeyPath)
   }

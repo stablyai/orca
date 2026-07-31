@@ -12,7 +12,7 @@ import {
   resolveUnencryptedExplicitPrivateKeys
 } from './ssh-auth-resolution'
 import { configurePrivateKeyAuthentication } from './ssh-private-key-authentication'
-import { isOpenSshConfigBackedTarget } from './system-ssh-args'
+import { hasOpenSshHostBlockMatch } from './ssh-g-host-block-match'
 
 export { findDefaultKeyFile, resolveAgentSocket } from './ssh-auth-resolution'
 
@@ -183,10 +183,9 @@ export function buildConnectConfig(
 ): ConnectConfig {
   const effectiveHost = resolveEffectiveHost(target, resolved)
   const effectivePort = resolveEffectivePort(target, resolved)
-  const effectiveUser =
-    isOpenSshConfigBackedTarget(target) && resolved
-      ? (resolved.user ?? target.username)
-      : target.username || resolved?.user || ''
+  const effectiveUser = hasOpenSshHostBlockMatch(target, resolved)
+    ? (resolved?.user ?? target.username)
+    : target.username || resolved?.user || ''
 
   const config: Record<string, unknown> = {
     host: effectiveHost,
@@ -222,7 +221,7 @@ export function buildConnectConfig(
 }
 
 function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | null): string {
-  if (isOpenSshConfigBackedTarget(target) && resolved?.hostname) {
+  if (hasOpenSshHostBlockMatch(target, resolved) && resolved?.hostname) {
     return resolved.hostname
   }
   if (shouldUseResolvedEndpoint(target, resolved)) {
@@ -232,7 +231,7 @@ function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | n
 }
 
 function resolveEffectivePort(target: SshTarget, resolved: SshResolvedConfig | null): number {
-  if (isOpenSshConfigBackedTarget(target) && resolved) {
+  if (hasOpenSshHostBlockMatch(target, resolved) && resolved) {
     return resolved.port || target.port || 22
   }
   // Why: imported config aliases store 22 as the schema default even when an
@@ -263,7 +262,7 @@ export function resolveEffectiveProxy(
   target: SshTarget,
   resolved: SshResolvedConfig | null
 ): EffectiveProxy | undefined {
-  if (isOpenSshConfigBackedTarget(target) && resolved) {
+  if (hasOpenSshHostBlockMatch(target, resolved) && resolved) {
     if (resolved.proxyCommand) {
       return { kind: 'proxy-command', command: resolved.proxyCommand }
     }

@@ -180,6 +180,15 @@ function createTarget(overrides?: Partial<SshTarget>): SshTarget {
   }
 }
 
+const LOCAL_ACCOUNT = 'localdev'
+
+// Why: `ssh -G` echoes the local account as `user` for an alias with no Host block.
+function stubLocalAccount(): void {
+  vi.stubEnv('USER', LOCAL_ACCOUNT)
+  vi.stubEnv('LOGNAME', LOCAL_ACCOUNT)
+  vi.stubEnv('USERNAME', LOCAL_ACCOUNT)
+}
+
 function createResolvedConfig(overrides?: Partial<SshResolvedConfig>): SshResolvedConfig {
   return {
     hostname: 'example.com',
@@ -1188,6 +1197,30 @@ describe('SshConnection', () => {
     expect(conn.usesSystemSshTransport()).toBe(true)
   })
 
+  it('keeps the stored git username when the GitHub alias no longer has a Host block', async () => {
+    stubLocalAccount()
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(
+      createResolvedConfig({ hostname: 'github.com', user: LOCAL_ACCOUNT })
+    )
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(1, 'Invalid command: echo ORCA-SYSTEM-SSH-OK')
+    )
+    const conn = new SshConnection(
+      createTarget({
+        source: 'ssh-config',
+        configHost: 'github.com',
+        host: 'github.com',
+        username: 'git'
+      }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+  })
+
   it('accepts GitHub restricted-shell SSH probes with resolved host and target username', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(
       createResolvedConfig({ hostname: 'github.com', user: undefined })
@@ -1571,6 +1604,62 @@ describe('SshConnection', () => {
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(false)
     expect(spawnSystemSshCommandMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps the stored GSSAPI flag when the alias no longer has a Host block', async () => {
+    stubLocalAccount()
+    // `ssh -G krb-box` with no matching block: echoed alias, local user, port 22, GSSAPI off.
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({
+        hostname: 'krb-box',
+        user: LOCAL_ACCOUNT,
+        proxyUseFdpass: false,
+        gssapiAuthentication: false
+      })
+    )
+    const conn = new SshConnection(
+      createTarget({
+        source: 'ssh-config',
+        configHost: 'krb-box',
+        host: 'krb-box',
+        gssapiAuthentication: true
+      }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({ gssapiAuthentication: true }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      expect.objectContaining({ gssapiOnly: true, wrapCommand: false })
+    )
+  })
+
+  it('still probes GSSAPI from a distro-wide default when the alias has no Host block', async () => {
+    stubLocalAccount()
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({
+        hostname: 'krb-box',
+        user: LOCAL_ACCOUNT,
+        proxyUseFdpass: false,
+        gssapiAuthentication: true
+      })
+    )
+    const conn = new SshConnection(
+      createTarget({ source: 'ssh-config', configHost: 'krb-box', host: 'krb-box' }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'echo ORCA-SYSTEM-SSH-OK',
+      expect.objectContaining({ gssapiOnly: true, wrapCommand: false })
+    )
   })
 
   it('falls back to system SSH after an ssh2 auth failure when resolved config enables GSSAPI', async () => {

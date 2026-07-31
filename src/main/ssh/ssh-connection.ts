@@ -19,6 +19,7 @@ import {
 } from './ssh-system-fallback'
 import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
 import { removeControlSocketPath } from './ssh-control-socket'
+import { hasOpenSshHostBlockMatch } from './ssh-g-host-block-match'
 import { isOpenSshConfigBackedTarget } from './system-ssh-args'
 import {
   INITIAL_RETRY_ATTEMPTS,
@@ -85,8 +86,8 @@ function isGitHubRestrictedShellProbeSuccess(
   }
 
   const effectiveUser = (
-    isOpenSshConfigBackedTarget(target) && resolvedConfig
-      ? resolvedConfig.user?.trim() || target.username?.trim()
+    hasOpenSshHostBlockMatch(target, resolvedConfig)
+      ? resolvedConfig?.user?.trim() || target.username?.trim()
       : target.username?.trim() || resolvedConfig?.user?.trim()
   )?.toLowerCase()
   if (effectiveUser !== 'git') {
@@ -637,10 +638,12 @@ export class SshConnection {
       return
     }
     // Why: ssh2 lacks gssapi-with-mic; GSSAPIAuthentication hosts try Kerberos SSO via system OpenSSH first, then fall through to key/credential auth.
+    // Why: without Host-block evidence a resolved `no` is just the /etc/ssh default, so it must not discard the stored flag; a resolved `yes` still wins so distro-wide defaults keep working.
     if (
-      isOpenSshConfigBackedTarget(this.target) && resolved
-        ? resolved.gssapiAuthentication === true
-        : this.target.gssapiAuthentication === true
+      hasOpenSshHostBlockMatch(this.target, resolved)
+        ? resolved?.gssapiAuthentication === true
+        : this.target.gssapiAuthentication === true ||
+          (isOpenSshConfigBackedTarget(this.target) && resolved?.gssapiAuthentication === true)
     ) {
       try {
         await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved, true)

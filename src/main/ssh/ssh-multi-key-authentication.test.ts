@@ -72,6 +72,16 @@ function nextAuth(
   return result ?? false
 }
 
+function mockEncryptedKeyPaths(encryptedPaths: string[]): void {
+  vi.spyOn(utils, 'parseKey').mockImplementation((key, passphrase) => {
+    const path = Buffer.from(key as Buffer).toString()
+    if (!passphrase && encryptedPaths.some((encrypted) => path.includes(encrypted))) {
+      return new Error('Encrypted private OpenSSH key detected, but no passphrase given')
+    }
+    return { isPrivateKey: () => true } as ParsedKey
+  })
+}
+
 describe('ordered SSH private-key authentication', () => {
   beforeEach(() => {
     vi.stubEnv('SSH_AUTH_SOCK', '')
@@ -166,6 +176,56 @@ describe('ordered SSH private-key authentication', () => {
     )
 
     expect(getPassphrasePrivateKeyPath(config)).toBe('/keys/encrypted-second')
+  })
+
+  it('seeds ssh2 with the first parseable identity so an encrypted one keeps the fallback', () => {
+    mockEncryptedKeyPaths(['/keys/encrypted-first'])
+    const config = buildConnectConfig(
+      makeTarget(),
+      makeResolved({ identityFile: ['/keys/encrypted-first', '/keys/valid-second'] }),
+      { includeAgent: false, includePrivateKey: true }
+    )
+
+    // Why: ssh2's Client.connect parses config.privateKey up front and throws on
+    // an encrypted one, which would abort before authHandler tries the rest.
+    expect(config.privateKey).toEqual(Buffer.from('/keys/valid-second'))
+    expect(utils.parseKey(config.privateKey as Buffer)).not.toBeInstanceOf(Error)
+    expect(nextAuth(config, true)).toMatchObject({ type: 'none' })
+    expect(nextAuth(config, false)).toMatchObject({
+      type: 'publickey',
+      key: Buffer.from('/keys/encrypted-first')
+    })
+    expect(nextAuth(config, false)).toMatchObject({
+      type: 'publickey',
+      key: Buffer.from('/keys/valid-second')
+    })
+    expect(getPassphrasePrivateKeyPath(config)).toBe('/keys/encrypted-first')
+  })
+
+  it('falls back to the first identity when every candidate is encrypted', () => {
+    mockEncryptedKeyPaths(['/keys/encrypted-first', '/keys/encrypted-second'])
+    const config = buildConnectConfig(
+      makeTarget(),
+      makeResolved({ identityFile: ['/keys/encrypted-first', '/keys/encrypted-second'] }),
+      { includeAgent: false, includePrivateKey: true }
+    )
+
+    // Why: no parseable candidate means the eager parse must still throw, so the
+    // passphrase prompt fires instead of silently dropping to agent-only auth.
+    expect(config.privateKey).toEqual(Buffer.from('/keys/encrypted-first'))
+    expect(getPassphrasePrivateKeyPath(config)).toBe('/keys/encrypted-first')
+  })
+
+  it('still hands ssh2 an encrypted key when it is the only identity', () => {
+    mockEncryptedKeyPaths(['/keys/encrypted-only'])
+    const config = buildConnectConfig(
+      makeTarget(),
+      makeResolved({ identityFile: ['/keys/encrypted-only'] }),
+      { includeAgent: false, includePrivateKey: true }
+    )
+
+    expect(config.privateKey).toEqual(Buffer.from('/keys/encrypted-only'))
+    expect(getPassphrasePrivateKeyPath(config)).toBe('/keys/encrypted-only')
   })
 
   it('leaves config-host key authority to system OpenSSH', () => {
