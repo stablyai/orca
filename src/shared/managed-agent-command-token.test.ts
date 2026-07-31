@@ -33,6 +33,10 @@ describe('managed agent command tokens', () => {
     expect(hasPathSeparatorToken('codex')).toBe(false)
   })
 
+  it('accepts safe package-manager versioned override paths', () => {
+    expect(isSafeOverrideExecutableToken('/opt/homebrew/Cellar/node@24/bin/node')).toBe(true)
+  })
+
   it('rejects traversal, control characters, and shell syntax in override paths', () => {
     expect(isSafeOverrideExecutableToken('~/bin/codex')).toBe(true)
     expect(isSafeOverrideExecutableToken('C:\\Program Files\\Claude\\claude.exe')).toBe(true)
