@@ -92,6 +92,17 @@ async function listRuntimeInventory(client: RuntimeClient): Promise<{
   }
 }
 
+async function setActiveRuntimePreference(page: Page, environmentId: string | null): Promise<void> {
+  const selected = await page.evaluate(async (nextEnvironmentId) => {
+    const next = await window.api.settings.setActiveRuntimeEnvironmentPreference({
+      environmentId: nextEnvironmentId
+    })
+    window.__store?.setState({ settings: next })
+    return next.activeRuntimeEnvironmentId
+  }, environmentId)
+  expect(selected).toBe(environmentId)
+}
+
 async function runSelectedRuntimeAddJourney(
   electronApp: ElectronApplication,
   orcaPage: Page,
@@ -114,6 +125,7 @@ async function runSelectedRuntimeAddJourney(
   const clientLocalRuntime = new RuntimeClient(clientUserDataDir)
 
   try {
+    const measurements: Record<string, number> = {}
     if (visible) {
       await client.app.evaluate(({ BrowserWindow }) => {
         BrowserWindow.getAllWindows()[0]?.show()
@@ -124,30 +136,51 @@ async function runSelectedRuntimeAddJourney(
         )
       ).toBe(true)
     }
-    const settings = await client.page.evaluate(async () => {
-      const next = await window.api.settings.setActiveRuntimeEnvironmentPreference({
-        environmentId: null
-      })
-      window.__store?.setState({ settings: next })
-      return next
-    })
-    expect(settings.activeRuntimeEnvironmentId).toBeNull()
+    let startedAt = Date.now()
+    await setActiveRuntimePreference(client.page, null)
+    await setActiveRuntimePreference(client.page, client.environmentId)
+    await setActiveRuntimePreference(client.page, null)
+    measurements.runtimeSwitchMs = Date.now() - startedAt
 
     const initialServerInventory = await listRuntimeInventory(serverRuntime)
     const initialClientInventory = await listRuntimeInventory(clientLocalRuntime)
     expect(initialServerInventory.repos.map((repo) => repo.path)).not.toContain(fixture.gitPath)
     expect(initialClientInventory.repos.map((repo) => repo.path)).not.toContain(fixture.gitPath)
 
+    startedAt = Date.now()
     const gitDialog = await selectRuntimeHostAndOpenManualPath(client.page, runtimeName)
     await gitDialog.locator('#server-project-path').fill(fixture.gitPath)
     await gitDialog.getByRole('button', { name: /Add Git Project/i }).click()
     await expect(gitDialog).toBeHidden({ timeout: 30_000 })
+    measurements.gitAddMs = Date.now() - startedAt
 
+    startedAt = Date.now()
     const folderDialog = await selectRuntimeHostAndOpenManualPath(client.page, runtimeName)
     await folderDialog.locator('#server-project-path').fill(fixture.folderPath)
     await folderDialog.getByRole('button', { name: /Open as Folder/i }).click()
     await expect(folderDialog).toBeHidden({ timeout: 30_000 })
+    measurements.folderAddMs = Date.now() - startedAt
 
+    startedAt = Date.now()
+    await client.page.evaluate(async (environmentId) => {
+      await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
+      const response = await window.api.runtimeEnvironments.connect({
+        selector: environmentId,
+        timeoutMs: 15_000
+      })
+      if (!response.ok) {
+        throw new Error(response.error.message)
+      }
+      const store = window.__store
+      if (!store || !(await store.getState().refreshRuntimeEnvironmentStatus(environmentId))) {
+        throw new Error('Paired runtime did not recover after reconnect')
+      }
+    }, client.environmentId)
+    await setActiveRuntimePreference(client.page, client.environmentId)
+    await setActiveRuntimePreference(client.page, null)
+    measurements.reconnectMs = Date.now() - startedAt
+
+    startedAt = Date.now()
     const nestedDialog = await selectRuntimeHostAndOpenManualPath(client.page, runtimeName)
     await nestedDialog.locator('#server-project-path').fill(fixture.nestedParentPath)
     await nestedDialog.getByRole('button', { name: /Add Git Project/i }).click()
@@ -160,6 +193,7 @@ async function runSelectedRuntimeAddJourney(
     await expect(importDialog.getByText('nested-web', { exact: true }).first()).toBeVisible()
     await importDialog.getByRole('button', { name: 'Yes, import as group', exact: true }).click()
     await expect(importDialog).toBeHidden({ timeout: 30_000 })
+    measurements.nestedImportMs = Date.now() - startedAt
 
     const remoteBrowse = await client.page.evaluate(
       async ({ environmentId, rootPath }) => {
@@ -264,6 +298,8 @@ async function runSelectedRuntimeAddJourney(
     ]) {
       await expect(client.page.getByText(projectName, { exact: true }).first()).toBeVisible()
     }
+    expect(await client.getDirectSshAttemptTargetIds()).toEqual([])
+    console.info(`[pr11346-routing] ${JSON.stringify({ topology: runtimeName, ...measurements })}`)
     await client.page.screenshot({
       path: testInfo.outputPath(`${visible ? 'headed' : 'hidden-window'}-selected-runtime-add.png`),
       fullPage: true
