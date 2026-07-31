@@ -457,6 +457,104 @@ describe('useInstalledAgentSkill', () => {
     expect(latestState?.installed).toBe(false)
   })
 
+  it('drops an in-flight result and rescans when the active runtime is re-paired', async () => {
+    const retiredScan = deferred<SkillDiscoveryResult>()
+    const replacementScan = deferred<SkillDiscoveryResult>()
+    let skillScanCount = 0
+    const call = vi.fn(async (args: { method: string }) => {
+      const compatibility = createCompatibleRuntimeStatusResponseIfNeeded(args)
+      if (compatibility) {
+        return compatibility
+      }
+      const result =
+        skillScanCount++ === 0 ? await retiredScan.promise : await replacementScan.promise
+      return { id: 'skills', ok: true as const, result }
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover: vi.fn() }, runtimeEnvironments: { call } }
+    })
+    useAppStore.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-a' } as GlobalSettings,
+      runtimeEnvironmentCatalogSettled: true
+    })
+    useAppStore
+      .getState()
+      .setRuntimeEnvironments([{ id: 'env-a', createdAt: 1, pairingRevision: 1 } as never])
+
+    await renderProbe()
+    await flushMicrotasks()
+
+    await act(async () => {
+      useAppStore
+        .getState()
+        .setRuntimeEnvironments([{ id: 'env-a', createdAt: 1, pairingRevision: 2 } as never])
+    })
+    await flushMicrotasks()
+    expect(call.mock.calls.filter(([args]) => args.method === 'skills.discover')).toHaveLength(2)
+    expect(latestState?.installed).toBe(false)
+
+    retiredScan.resolve(discoveryResult([skill({ name: 'linear-tickets' })]))
+    await flushMicrotasks()
+
+    expect(latestState?.installed).toBe(false)
+
+    replacementScan.resolve(discoveryResult([]))
+    await flushMicrotasks()
+    expect(latestState?.installed).toBe(false)
+
+    await act(async () => {
+      useAppStore
+        .getState()
+        .setRuntimeEnvironments([{ id: 'env-a', createdAt: 1, pairingRevision: 2 } as never])
+      useAppStore.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 2 })
+    })
+    await flushMicrotasks()
+    expect(call.mock.calls.filter(([args]) => args.method === 'skills.discover')).toHaveLength(2)
+  })
+
+  it('does not rescan a removed active runtime before switching to local discovery', async () => {
+    const retiredScan = deferred<SkillDiscoveryResult>()
+    const localScan = deferred<SkillDiscoveryResult>()
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockReturnValue(localScan.promise)
+    const call = vi.fn(async (args: { method: string }) => {
+      const compatibility = createCompatibleRuntimeStatusResponseIfNeeded(args)
+      return compatibility ?? { id: 'skills', ok: true as const, result: await retiredScan.promise }
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover }, runtimeEnvironments: { call } }
+    })
+    useAppStore.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-a' } as GlobalSettings,
+      runtimeEnvironmentCatalogSettled: true
+    })
+    useAppStore
+      .getState()
+      .setRuntimeEnvironments([{ id: 'env-a', createdAt: 1, pairingRevision: 1 } as never])
+
+    await renderProbe()
+    await flushMicrotasks()
+
+    await act(async () => {
+      useAppStore.getState().setRuntimeEnvironments([])
+    })
+    await flushMicrotasks()
+
+    expect(call.mock.calls.filter(([args]) => args.method === 'skills.discover')).toHaveLength(1)
+    expect(discover).toHaveBeenCalledTimes(1)
+
+    retiredScan.resolve(discoveryResult([skill({ name: 'linear-tickets' })]))
+    localScan.resolve(discoveryResult([]))
+    await flushMicrotasks()
+
+    expect(latestState?.installed).toBe(false)
+    expect(call.mock.calls.filter(([args]) => args.method === 'skills.discover')).toHaveLength(1)
+    expect(discover).toHaveBeenCalledTimes(1)
+  })
+
   // Why: the skill INSTALL terminal routes through getSingleFocusedRuntimeEnvironmentId,
   // which refuses to guess an owner while several runtimes are saved. Scanning the
   // focused remote here would leave the badge stuck on "Not installed" forever,

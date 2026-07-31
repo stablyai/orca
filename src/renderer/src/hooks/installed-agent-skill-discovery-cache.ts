@@ -37,6 +37,10 @@ export function writeInstalledAgentSkillDiscoveryCache(
   }
 }
 
+export function evictInstalledAgentSkillDiscoveryCacheKey(key: string): void {
+  cachedDiscoveryByTarget.delete(key)
+}
+
 export function clearInstalledAgentSkillDiscoveryCache(): void {
   cachedDiscoveryByTarget.clear()
 }

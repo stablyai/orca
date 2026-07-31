@@ -15,6 +15,7 @@ vi.mock('@/runtime/runtime-skills-client', () => ({ discoverSkillsForRuntimeTarg
 
 const {
   discoverInstalledAgentSkills,
+  evictSkillDiscoveryForRuntimeEnvironments,
   getRuntimeScopedSkillDiscoveryKey,
   getSkillDiscoveryTargetKey,
   invalidateInstalledAgentSkillDiscovery,
@@ -267,6 +268,48 @@ describe('installed agent skill discovery lifecycle', () => {
     )
     await expect(discoverInstalledAgentSkills(false, undefined, LOCAL)).resolves.toEqual(result(3))
     expect(discover).toHaveBeenCalledTimes(3)
+  })
+
+  it('evicts only the retired environments, leaving other entries warm', async () => {
+    // Why: a flush would re-fire every mounted consumer's scan.
+    const discover = discoverSkillsForRuntimeTarget
+    discover.mockResolvedValueOnce(result(1))
+    discover.mockResolvedValueOnce(result(2))
+    discover.mockResolvedValueOnce(result(3))
+    await discoverInstalledAgentSkills(false, undefined, remote('env-a'))
+    await discoverInstalledAgentSkills(false, undefined, remote('env-b'))
+    await discoverInstalledAgentSkills(false, undefined, LOCAL)
+
+    evictSkillDiscoveryForRuntimeEnvironments(['env-a'])
+
+    await expect(discoverInstalledAgentSkills(false, undefined, remote('env-b'))).resolves.toEqual(
+      result(2)
+    )
+    await expect(discoverInstalledAgentSkills(false, undefined, LOCAL)).resolves.toEqual(result(3))
+    expect(discover).toHaveBeenCalledTimes(3)
+    discover.mockResolvedValueOnce(result(4))
+    await expect(discoverInstalledAgentSkills(false, undefined, remote('env-a'))).resolves.toEqual(
+      result(4)
+    )
+    expect(discover).toHaveBeenCalledTimes(4)
+  })
+
+  it('does not let a scan in flight at eviction time repopulate the retired entry', async () => {
+    // Why: VM teardown can race a scan already in flight.
+    const staleScan = deferred<SkillDiscoveryResult>()
+    const discover = discoverSkillsForRuntimeTarget
+    discover.mockReturnValueOnce(staleScan.promise)
+
+    const staleRequest = discoverInstalledAgentSkills(false, undefined, remote('env-a'))
+    evictSkillDiscoveryForRuntimeEnvironments(['env-a'])
+    staleScan.resolve(result(1))
+    await expect(staleRequest).resolves.toEqual(result(1))
+
+    discover.mockResolvedValueOnce(result(2))
+    await expect(discoverInstalledAgentSkills(false, undefined, remote('env-a'))).resolves.toEqual(
+      result(2)
+    )
+    expect(discover).toHaveBeenCalledTimes(2)
   })
 
   it('collapses one remote environment onto a single entry across client target shapes', async () => {

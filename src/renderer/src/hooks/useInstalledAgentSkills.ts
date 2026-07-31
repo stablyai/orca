@@ -16,8 +16,10 @@ import {
   resetSkillDiscoveryCacheForTests
 } from './installed-agent-skill-discovery'
 import {
+  INSTALLED_AGENT_SKILL_DISCOVERY_RUNTIME_REPLACED_EVENT,
   INSTALLED_AGENT_SKILLS_CHANGED_EVENT,
-  INSTALLED_AGENT_SKILLS_REFRESHED_EVENT
+  INSTALLED_AGENT_SKILLS_REFRESHED_EVENT,
+  type InstalledAgentSkillDiscoveryRuntimeReplacedDetail
 } from './installed-agent-skills-change-event'
 import { useActiveSkillDiscoveryRuntimeTarget } from './use-active-skill-discovery-runtime-target'
 import { useMountedRef } from './useMountedRef'
@@ -253,17 +255,32 @@ export function useInstalledAgentSkillNames(
     const refreshFromCompletedScan = (): void => {
       void refresh(false, false)
     }
+    const refreshReplacedRuntime = (event: Event): void => {
+      const { keys } = (event as CustomEvent<InstalledAgentSkillDiscoveryRuntimeReplacedDetail>)
+        .detail
+      if (keys.includes(discoveryTargetKey)) {
+        void refresh(false)
+      }
+    }
     // Why: skill install commands run outside React state, often in a terminal.
     // Refresh on focus and explicit install events so completion is detected.
     window.addEventListener('focus', refreshFromExternalChange)
     window.addEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refreshFromExternalChange)
     window.addEventListener(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT, refreshFromCompletedScan)
+    window.addEventListener(
+      INSTALLED_AGENT_SKILL_DISCOVERY_RUNTIME_REPLACED_EVENT,
+      refreshReplacedRuntime
+    )
     return () => {
       window.removeEventListener('focus', refreshFromExternalChange)
       window.removeEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refreshFromExternalChange)
       window.removeEventListener(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT, refreshFromCompletedScan)
+      window.removeEventListener(
+        INSTALLED_AGENT_SKILL_DISCOVERY_RUNTIME_REPLACED_EVENT,
+        refreshReplacedRuntime
+      )
     }
-  }, [enabled, refresh])
+  }, [discoveryTargetKey, enabled, refresh])
 
   const skills = useMemo(
     () => (enabled && resultForRender ? resultForRender.skills : []),

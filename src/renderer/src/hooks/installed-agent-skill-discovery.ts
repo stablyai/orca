@@ -1,9 +1,14 @@
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../../shared/skills'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { discoverSkillsForRuntimeTarget } from '@/runtime/runtime-skills-client'
-import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
+import {
+  INSTALLED_AGENT_SKILL_DISCOVERY_RUNTIME_REPLACED_EVENT,
+  INSTALLED_AGENT_SKILLS_CHANGED_EVENT,
+  type InstalledAgentSkillDiscoveryRuntimeReplacedDetail
+} from './installed-agent-skills-change-event'
 import {
   clearInstalledAgentSkillDiscoveryCache,
+  evictInstalledAgentSkillDiscoveryCacheKey,
   peekInstalledAgentSkillDiscoveryCache,
   readInstalledAgentSkillDiscoveryCache,
   resetInstalledAgentSkillDiscoveryCacheForTests,
@@ -36,6 +41,36 @@ export function invalidateInstalledAgentSkillDiscovery(): void {
   // reads may finish, but their generation can no longer repopulate the cache.
   pendingDiscoveryByTarget.clear()
   pendingDiscoverySatisfiesForcedRefreshByTarget.clear()
+}
+
+// Keyed eviction keeps surviving targets warm and this discovery module store-free.
+export function evictSkillDiscoveryForRuntimeEnvironments(environmentIds: readonly string[]): void {
+  for (const environmentId of environmentIds) {
+    const key = getRuntimeScopedSkillDiscoveryKey({ kind: 'environment', environmentId }, undefined)
+    evictInstalledAgentSkillDiscoveryCacheKey(key)
+    pendingDiscoveryByTarget.delete(key)
+    pendingDiscoverySatisfiesForcedRefreshByTarget.delete(key)
+  }
+}
+
+export function notifySkillDiscoveryRuntimeEnvironmentsReplaced(
+  environmentIds: readonly string[]
+): void {
+  if (
+    environmentIds.length > 0 &&
+    typeof window !== 'undefined' &&
+    typeof window.dispatchEvent === 'function'
+  ) {
+    const keys = environmentIds.map((environmentId) =>
+      getRuntimeScopedSkillDiscoveryKey({ kind: 'environment', environmentId }, undefined)
+    )
+    window.dispatchEvent(
+      new CustomEvent<InstalledAgentSkillDiscoveryRuntimeReplacedDetail>(
+        INSTALLED_AGENT_SKILL_DISCOVERY_RUNTIME_REPLACED_EVENT,
+        { detail: { keys } }
+      )
+    )
+  }
 }
 
 export function resetSkillDiscoveryCacheForTests(): void {
@@ -106,7 +141,8 @@ function startInstalledAgentSkillDiscovery(
   const normalizedTarget = normalizeSkillDiscoveryTarget(target)
   const discovery = discoverSkillsForRuntimeTarget(runtimeTarget, normalizedTarget)
     .then((result) => {
-      if (generation === discoveryGeneration) {
+      // Why: an evicted in-flight scan must not resurrect a retired entry.
+      if (generation === discoveryGeneration && pendingDiscoveryByTarget.get(key) === discovery) {
         writeInstalledAgentSkillDiscoveryCache(key, result)
       }
       return result
