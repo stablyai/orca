@@ -12,6 +12,9 @@ const {
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
 const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
+const {
+  installLinuxElectronNodeFlagFilterShim
+} = require('./scripts/install-linux-electron-node-flag-filter-shim.cjs')
 const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
@@ -168,6 +171,9 @@ module.exports = {
     // Fail packaging if any bundled native binary exceeds the supported floor.
     if (context.electronPlatformName === 'linux') {
       verifyLinuxGlibcFloor(context.appOutDir)
+      // Why: strip AppRun-injected --no-sandbox when ELECTRON_RUN_AS_NODE=1 so
+      // registered AppImage CLI wrappers do not die with exit 9 (issue #11609).
+      installLinuxElectronNodeFlagFilterShim(context.appOutDir, 'orca-ide')
     }
     const resourcesDir =
       context.electronPlatformName === 'darwin'
