@@ -11,12 +11,17 @@ import {
   type CodexMicroControlId
 } from '../../../../../shared/codex-micro-types'
 import { KEYBINDING_DEFINITIONS, type KeybindingActionId } from '../../../../../shared/keybindings'
-import { Badge } from '../../ui/badge'
 import { Button } from '../../ui/button'
+import { Card } from '../../ui/card'
 import { Input } from '../../ui/input'
 import { Slider } from '../../ui/slider'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
-import { SettingsRow, SettingsSegmentedControl, SettingsSwitch } from '../SettingsFormControls'
+import {
+  SettingsRow,
+  SettingsSegmentedControl,
+  SettingsSwitch,
+  SettingsSwitchRow
+} from '../SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 
 type Props = {
@@ -63,18 +68,7 @@ export function CodexMicroSettingsPane({ settings, updateSettings }: Props): Rea
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <Badge variant="secondary">
-          {translate('auto.components.settings.codexMicro.experimental', 'Experimental')}
-        </Badge>
-        <SettingsSwitch
-          checked={device.enabled}
-          onChange={() => updateDevice({ enabled: !device.enabled })}
-          ariaLabel={translate('auto.components.settings.codexMicro.useWithOrca', 'Use with Orca')}
-        />
-      </div>
-
-      <div className="rounded-lg border border-border bg-card p-4">
+      <Card className="gap-0 p-4 shadow-xs">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium">{connectionLabel(connection)}</p>
@@ -83,7 +77,9 @@ export function CodexMicroSettingsPane({ settings, updateSettings }: Props): Rea
             </p>
           </div>
           <div className="flex gap-2">
-            {connection.kind !== 'connected' && connection.kind !== 'connecting' ? (
+            {connection.kind !== 'disabled' &&
+            connection.kind !== 'connected' &&
+            connection.kind !== 'connecting' ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -114,9 +110,18 @@ export function CodexMicroSettingsPane({ settings, updateSettings }: Props): Rea
             <p>{connection.message}</p>
           </details>
         ) : null}
-      </div>
+      </Card>
 
       <div className="divide-y divide-border">
+        <SettingsSwitchRow
+          label={translate('auto.components.settings.codexMicro.useWithOrca', 'Use with Orca')}
+          description={translate(
+            'auto.components.settings.codexMicro.useWithOrcaDescription',
+            'Allow Orca to connect to the Codex Micro over USB.'
+          )}
+          checked={device.enabled}
+          onChange={() => updateDevice({ enabled: !device.enabled })}
+        />
         <SettingsRow
           label={translate('auto.components.settings.codexMicro.lighting', 'Lighting')}
           description={translate(
@@ -318,6 +323,12 @@ function connectionLabel(state: CodexMicroConnectionState): string {
 }
 
 function connectionDescription(state: CodexMicroConnectionState): string {
+  if (state.kind === 'disabled') {
+    return translate(
+      'auto.components.settings.codexMicro.disabledDescription',
+      'Enable Use with Orca, then connect the Codex Micro by USB.'
+    )
+  }
   if (state.kind === 'connected') {
     return `${state.firmware}${state.battery !== undefined ? ` · ${state.battery}%` : ''}`
   }

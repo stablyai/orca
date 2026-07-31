@@ -11595,7 +11595,9 @@
           "search": {
             "title": "Codex Micro",
             "description": "Connect Codex Micro, customize mappings, lighting, brightness, dial behavior, and firmware status."
-          }
+          },
+          "useWithOrcaDescription": "Allow Orca to connect to the Codex Micro over USB.",
+          "disabledDescription": "Enable Use with Orca, then connect the Codex Micro by USB."
         }
       },
       "right": {

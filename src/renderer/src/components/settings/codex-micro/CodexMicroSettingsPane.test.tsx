@@ -1,5 +1,133 @@
-import { describe, expect, it } from 'vitest'
-import { updateMapping } from './CodexMicroSettingsPane'
+// @vitest-environment happy-dom
+
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultSettings } from '../../../../../shared/constants'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { CodexMicroConnectionState } from '../../../../../shared/codex-micro-types'
+import { CodexMicroSettingsPane, updateMapping } from './CodexMicroSettingsPane'
+
+const retry = vi.fn()
+const release = vi.fn()
+let stateListener: ((state: CodexMicroConnectionState) => void) | undefined
+
+beforeEach(() => {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  retry.mockReset()
+  release.mockReset()
+  stateListener = undefined
+})
+
+afterEach(() => {
+  document.body.replaceChildren()
+})
+
+function installCodexMicroApi(initialState: CodexMicroConnectionState): void {
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      codexMicro: {
+        getState: vi.fn().mockResolvedValue(initialState),
+        subscribeState: vi.fn((listener: (state: CodexMicroConnectionState) => void) => {
+          stateListener = listener
+          return vi.fn()
+        }),
+        retry,
+        release
+      }
+    }
+  })
+}
+
+async function renderPane(
+  args: {
+    initialState?: CodexMicroConnectionState
+    updateSettings?: (updates: Partial<GlobalSettings>) => void
+  } = {}
+): Promise<{ root: Root; container: HTMLDivElement }> {
+  installCodexMicroApi(args.initialState ?? { kind: 'disabled' })
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root = createRoot(container)
+  await act(async () => {
+    root.render(
+      <CodexMicroSettingsPane
+        settings={getDefaultSettings('/tmp')}
+        updateSettings={args.updateSettings ?? vi.fn()}
+      />
+    )
+  })
+  return { root, container }
+}
+
+function connectionActions(container: HTMLElement): string[] {
+  return [...container.querySelectorAll('button')]
+    .map((button) => button.textContent?.trim())
+    .filter((text): text is string => text === 'Retry' || text === 'Release')
+}
+
+async function setConnection(state: CodexMicroConnectionState): Promise<void> {
+  if (!stateListener) {
+    throw new Error('Codex Micro state listener was not registered')
+  }
+  await act(async () => stateListener?.(state))
+}
+
+describe('CodexMicroSettingsPane layout', () => {
+  it('shows a visible ownership row without duplicating the section badge', () => {
+    const markup = renderToStaticMarkup(
+      <CodexMicroSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={() => {}} />
+    )
+
+    expect(markup).toContain('>Use with Orca<')
+    expect(markup).toContain('Allow Orca to connect to the Codex Micro over USB.')
+    expect(markup).not.toContain('>Experimental<')
+    expect(markup).toContain('data-slot="card"')
+    expect(markup).not.toContain('>Retry<')
+    expect(markup).toContain('Enable Use with Orca, then connect the Codex Micro by USB.')
+  })
+
+  it('keeps the ownership switch accessible and updates the enabled setting', async () => {
+    const updateSettings = vi.fn()
+    const { root, container } = await renderPane({ updateSettings })
+    const ownershipSwitch = container.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Use with Orca"]'
+    )
+
+    expect(ownershipSwitch).not.toBeNull()
+    expect(container.textContent).toContain('Use with Orca')
+    expect(container.textContent).toContain('Allow Orca to connect to the Codex Micro over USB.')
+
+    await act(async () => ownershipSwitch?.click())
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      codexMicro: expect.objectContaining({ enabled: true })
+    })
+    await act(async () => root.unmount())
+  })
+
+  it('shows only actions supported by each connection state', async () => {
+    const { root, container } = await renderPane()
+    const cases: [CodexMicroConnectionState, string[]][] = [
+      [{ kind: 'disabled' }, []],
+      [{ kind: 'disconnected' }, ['Retry']],
+      [{ kind: 'error', code: 'open-failed', message: 'Could not open device' }, ['Retry']],
+      [{ kind: 'conflict', code: 'busy', message: 'Device in use' }, ['Retry']],
+      [{ kind: 'permission-error', code: 'denied', message: 'Permission required' }, ['Retry']],
+      [{ kind: 'connecting' }, ['Release']],
+      [{ kind: 'connected', firmware: 'v0.4.1' }, ['Release']],
+      [{ kind: 'read-only', firmware: 'v0.5.0', reason: 'unknown-firmware' }, ['Retry', 'Release']]
+    ]
+
+    for (const [state, expected] of cases) {
+      await setConnection(state)
+      expect(connectionActions(container)).toEqual(expected)
+    }
+    await act(async () => root.unmount())
+  })
+})
 
 describe('CodexMicroSettingsPane mapping updates', () => {
   it('adds and explicitly removes mappings without mutating the prior snapshot', () => {
