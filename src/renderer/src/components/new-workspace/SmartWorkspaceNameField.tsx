@@ -394,11 +394,10 @@ export default function SmartWorkspaceNameField({
     link: NonNullable<ReturnType<typeof parseGitHubIssueOrPRLink>>
     matchingRepo: RepoOption | null
   } | null>(null)
-  // Why: Jira status is read lazily — mounting the composer must not cost an IPC/RPC round-trip,
-  // so only reach for it once the user opens the source picker, picks Jira, or pastes an issue URL.
+  // Why: read Jira status when the composer mounts so an already-configured source is available
+  // before users start typing, without showing Jira for hosts where it is not configured.
   const jiraConnection = useJiraSourceConnection({
-    enabled:
-      !disabled && !textOnly && (open || mode === 'jira' || isBlockingJiraUrlIntent(mode, value)),
+    enabled: !disabled && !textOnly && jiraSourceContext !== null,
     sourceContext: jiraSourceContext
   })
   const jiraConnectionStatus = jiraConnection.status
@@ -1624,7 +1623,7 @@ export default function SmartWorkspaceNameField({
             <TabsList
               ref={tabsListRef}
               variant="line"
-              className="h-7 w-full justify-start gap-4 px-0"
+              className="h-7 w-full justify-start gap-4 overflow-x-auto overflow-y-hidden px-0 scrollbar-sleek"
               onFocusCapture={(event) => {
                 // Why: Radix Tabs roving focus re-applies tabindex=0 to the active trigger (races React commits), so forward Tab to the input.
                 const previous = event.relatedTarget as HTMLElement | null
