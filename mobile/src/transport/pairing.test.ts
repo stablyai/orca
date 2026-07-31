@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { decodePairingUrl, extractPairingCodeFromUrl, parsePairingCode } from './pairing'
+import {
+  decodePairingUrl,
+  extractPairingCodeFromUrl,
+  parsePairingCode,
+  parsePairingInput,
+  parsePairingUrl
+} from './pairing'
 import type { PairingOffer } from './types'
 
 const offer: PairingOffer = {
@@ -60,6 +66,44 @@ describe('pairing deep links', () => {
     const code = encodeOffer()
 
     expect(parsePairingCode(`orca://pair?code=${code}`)).toEqual(offer)
+    expect(parsePairingCode(code)).toEqual(offer)
+  })
+
+  it('names the reason instead of a bare failure', () => {
+    const code = encodeOffer()
+
+    expect(parsePairingInput('')).toEqual({ ok: false, rejection: { reason: 'empty' } })
+    expect(parsePairingInput('orca://pairing?code=abc')).toEqual({
+      ok: false,
+      rejection: { reason: 'not-pairing-link' }
+    })
+    expect(parsePairingInput('orca://pair')).toEqual({
+      ok: false,
+      rejection: { reason: 'missing-code' }
+    })
+    expect(parsePairingInput('half of a code')).toEqual({
+      ok: false,
+      rejection: { reason: 'malformed-code' }
+    })
+    expect(parsePairingInput(`orca://pair?code=${code}`)).toEqual({ ok: true, offer })
+  })
+
+  it('reports an unsupported offer version with both versions', () => {
+    const futureCode = encodeOffer({ ...offer, v: 99 } as unknown as PairingOffer)
+
+    expect(parsePairingInput(futureCode)).toEqual({
+      ok: false,
+      rejection: { reason: 'unsupported-version', offerVersion: 99, supportedVersion: 2 }
+    })
+  })
+
+  it('rejects a bare code from the camera, which only trusts the pair route', () => {
+    const code = encodeOffer()
+
+    expect(parsePairingUrl(code)).toEqual({
+      ok: false,
+      rejection: { reason: 'not-pairing-link' }
+    })
     expect(parsePairingCode(code)).toEqual(offer)
   })
 

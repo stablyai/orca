@@ -12,7 +12,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, Clipboard as ClipboardIcon, QrCode } from 'lucide-react-native'
-import { decodePairingUrl, parsePairingCode } from '../src/transport/pairing'
+import { parsePairingInput, parsePairingUrl } from '../src/transport/pairing'
+import { pairingRejectionMessage } from '../src/transport/pairing-rejection-message'
 import {
   startPreProfilePairing,
   type PreProfilePairingAttempt
@@ -79,15 +80,15 @@ export default function PairScanScreen() {
       }
       processingRef.current = true
 
-      const offer = decodePairingUrl(data)
-      if (!offer) {
+      const result = parsePairingUrl(data)
+      if (!result.ok) {
         setStatus('error')
-        setErrorMessage('Not a valid Orca QR code')
+        setErrorMessage(pairingRejectionMessage(result.rejection, 'qr'))
         processingRef.current = false
         return
       }
 
-      void testAndSave(offer)
+      void testAndSave(result.offer)
     },
     [router]
   )
@@ -99,15 +100,15 @@ export default function PairScanScreen() {
     }
     processingRef.current = true
 
-    const offer = parsePairingCode(input)
-    if (!offer) {
+    const result = parsePairingInput(input)
+    if (!result.ok) {
       setStatus('error')
-      setErrorMessage('Not a valid pairing code — copy it from your computer and paste again')
+      setErrorMessage(pairingRejectionMessage(result.rejection, 'paste'))
       processingRef.current = false
       return
     }
 
-    void testAndSave(offer)
+    void testAndSave(result.offer)
   }, [])
 
   const handleCameraLayout = useCallback((event: LayoutChangeEvent) => {

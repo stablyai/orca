@@ -1,4 +1,5 @@
-import { parsePairingCode } from './pairing'
+import { parsePairingInput } from './pairing'
+import { pairingRejectionMessage } from './pairing-rejection-message'
 import type { PairingOffer } from './types'
 
 export type PairConfirmRouteState =
@@ -10,10 +11,14 @@ export function resolvePairConfirmRouteState(code: string | undefined): PairConf
     return { kind: 'error', offer: null, errorMessage: 'Missing pairing code' }
   }
 
-  const offer = parsePairingCode(code)
-  if (!offer) {
-    return { kind: 'error', offer: null, errorMessage: 'Not a valid pairing code' }
+  const result = parsePairingInput(code)
+  if (!result.ok) {
+    return {
+      kind: 'error',
+      offer: null,
+      errorMessage: pairingRejectionMessage(result.rejection, 'deep-link')
+    }
   }
 
-  return { kind: 'ready', offer, errorMessage: '' }
+  return { kind: 'ready', offer: result.offer, errorMessage: '' }
 }
