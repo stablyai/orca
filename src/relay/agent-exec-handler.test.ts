@@ -18,6 +18,14 @@ const execFileMock = vi.mocked(execFile)
 
 type AgentExecResult = { exitCode: number | null; timedOut: boolean }
 
+// Why: the guard appends its indexed config after inherited entries, so a
+// developer's own GIT_CONFIG_* shifts the expected count and indices.
+function inheritedEnvWithoutGitConfig(): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_CONFIG_'))
+  )
+}
+
 describe('AgentExecHandler', () => {
   beforeEach(() => {
     spawnMock.mockReset()
@@ -54,7 +62,7 @@ describe('AgentExecHandler', () => {
     expect(spawnMock).toHaveBeenCalledWith('agent', ['--flag', '42'], {
       cwd: '/repo',
       env: expect.objectContaining({
-        ...process.env,
+        ...inheritedEnvWithoutGitConfig(),
         GIT_TERMINAL_PROMPT: '0',
         GCM_INTERACTIVE: 'never'
       }),
@@ -93,7 +101,7 @@ describe('AgentExecHandler', () => {
     expect(spawnMock).toHaveBeenCalledWith('codex', ['exec'], {
       cwd: '/repo',
       env: expect.objectContaining({
-        ...process.env,
+        ...inheritedEnvWithoutGitConfig(),
         CODEX_HOME: '/managed/codex-home',
         PATH: '/managed/bin'
       }),
