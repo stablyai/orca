@@ -98,10 +98,9 @@ export function NativeChatComposerField({
   sessionOptionsSnapshot
 }: NativeChatComposerFieldProps): React.JSX.Element {
   return (
-    <div className="shrink-0 bg-background">
-      {/* Extra bottom padding keeps the input box off the window rim. */}
-      <div className="px-3 pt-2 pb-4 sm:px-4">
-        <div className="relative mx-auto w-full max-w-4xl">
+    <div className="shrink-0 border-t border-border/70 bg-background font-mono">
+      <div className="px-3 py-2 sm:px-4">
+        <div className="relative mx-auto w-full max-w-none">
           {autocomplete.mode === 'slash' || autocomplete.mode === 'skill' ? (
             <NativeChatPickerMenu
               autocomplete={autocomplete}
@@ -122,12 +121,10 @@ export function NativeChatComposerField({
           ) : null}
           <div
             data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
+            data-native-chat-composer="terminal"
             className={cn(
-              // Why: always-on hairline (token-level border, not focus ring) —
-              // no focus/click border flash. The box is a container, not a
-              // focus target.
-              'rounded-lg border border-border p-1.5 shadow-xs',
-              'bg-muted/50 dark:bg-input/40'
+              "relative border-l-2 border-primary/60 px-2 py-1 before:pointer-events-none before:absolute before:left-2 before:top-1 before:text-muted-foreground before:content-['›']",
+              'bg-transparent'
             )}
           >
             {imageAttachments.length > 0 ? (
@@ -166,7 +163,7 @@ export function NativeChatComposerField({
               ref={textareaRef}
               value={draft}
               disabled={disabled}
-              rows={2}
+              rows={1}
               onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
               onKeyDown={onKeyDown}
               onCompositionStart={onCompositionStart}
@@ -192,7 +189,7 @@ export function NativeChatComposerField({
               // keeps that gutter off the heavy native scrollbar. Both are layout-driven,
               // so re-wrap on window/pane resize is handled without a measure pass.
               className={cn(
-                'scrollbar-sleek min-h-12 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
+                'scrollbar-sleek min-h-10 w-full resize-none bg-transparent py-1 pl-4 pr-2 font-mono text-[13px] leading-6 outline-none pointer-coarse:min-h-12',
                 '[field-sizing:content] max-h-[calc(8lh+0.5rem)]',
                 'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
               )}

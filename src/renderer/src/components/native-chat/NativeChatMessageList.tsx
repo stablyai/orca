@@ -119,9 +119,9 @@ function TypingIndicatorRow(): React.JSX.Element {
   )
 }
 
-/** One message: its prose first, then a collapsible run folding all of the
- *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
- *  lifted card, assistant prose as body copy, reasoning de-emphasized. */
+/** One message: prose first, then a collapsible run folding its tool activity.
+ *  Prompts render as terminal input lines; agent output remains chrome-free
+ *  body copy, with reasoning de-emphasized. */
 function MessageRow({
   message,
   expandSignal,
@@ -152,24 +152,26 @@ function MessageRow({
     }
   }, [onScrollMessageToTop])
 
-  // Skip rows with nothing renderable so the transcript shows no empty/ghost
-  // bubble.
-  // After all hooks, so hook order stays unconditional.
+  // Skip rows with nothing renderable so the terminal transcript shows no
+  // empty prompt or response line. After all hooks, so hook order stays
+  // unconditional.
   if (markdown.length === 0 && !hasImages && tools.length === 0) {
     return null
   }
 
   if (isUser) {
-    // Why: an optimistic echo is rendered identically to a real user turn (no
-    // muting, no "Queued" label) so that when the real transcript turn lands and
-    // replaces it, there is no visible state change — the send just appears and
-    // stays. (A distinct "queued" treatment flickered normal→queued→normal as the
-    // transcript caught up.)
+    // Prompts stay in transcript order as a terminal input line rather than a
+    // chat bubble. The source Markdown still renders identically to agent prose.
     return (
-      <div ref={rowRef} className="flex flex-col items-end gap-0.5">
-        {/* User turns get a distinct muted fill (not the card/canvas color) so
-            the prompt reads apart from the assistant's body copy. */}
-        <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
+      <div
+        ref={rowRef}
+        data-native-chat-message-role="user"
+        className="flex max-w-full items-start gap-2 font-mono text-[13px] leading-6 text-foreground"
+      >
+        <span aria-hidden="true" className="select-none text-muted-foreground">
+          ›
+        </span>
+        <div className="min-w-0 flex-1">
           {markdown ? (
             <>
               <ImageAttachmentRefs blocks={prose} />
@@ -177,7 +179,7 @@ function MessageRow({
                 content={markdown}
                 variant="document"
                 enableMath
-                className="text-sm"
+                className="text-[13px] leading-6"
                 onLinkClick={onLinkClick}
                 allowFileUriLinks={allowFileUriLinks}
               />
@@ -185,15 +187,15 @@ function MessageRow({
           ) : (
             <ImageAttachmentRefs blocks={prose} />
           )}
+          {deliveryFailed ? (
+            <div className="text-[11px] text-destructive/80">
+              {translate(
+                'components.native-chat.launchPromptNotDelivered',
+                'Not delivered — check the terminal'
+              )}
+            </div>
+          ) : null}
         </div>
-        {deliveryFailed ? (
-          <div className="max-w-[85%] text-[11px] text-destructive/80">
-            {translate(
-              'components.native-chat.launchPromptNotDelivered',
-              'Not delivered — check the terminal'
-            )}
-          </div>
-        ) : null}
       </div>
     )
   }
@@ -205,8 +207,9 @@ function MessageRow({
   return (
     <div
       ref={rowRef}
+      data-native-chat-message-role={message.role}
       className={cn(
-        'group relative max-w-full text-sm leading-relaxed text-foreground',
+        'group relative max-w-full font-mono text-[13px] leading-6 text-foreground',
         // Reasoning is the agent thinking aloud — quieter, italic, like an aside.
         isReasoning && 'border-l-2 border-border/60 pl-3 italic text-muted-foreground',
         isSystem && 'text-xs text-muted-foreground'
@@ -225,7 +228,7 @@ function MessageRow({
           content={markdown}
           variant="document"
           enableMath
-          className="text-sm"
+          className="text-[13px] leading-6"
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}
         />
@@ -375,16 +378,15 @@ export function NativeChatMessageList({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="scrollbar-sleek h-full overflow-y-auto px-3 pt-10 pb-4 sm:px-4"
+        className="scrollbar-sleek h-full overflow-y-auto px-4 py-4"
       >
         <div
           ref={contentRef}
           // Why: same max width as the composer column; horizontal inset comes
           // from the scroll container so content aligns with the composer field.
-          className="mx-auto flex w-full max-w-4xl flex-col gap-5"
-          // Why: `zoom` scales the chat transcript's text and layout together,
-          // scoped to this container so the rest of the app is untouched. It's
-          // the desktop analog of the mobile pinch-zoom (Chromium/Electron only).
+          className="flex w-full max-w-none flex-col gap-3"
+          // Why: zoom scales the rendered terminal transcript without changing
+          // the surrounding terminal-pane chrome or the Raw xterm surface.
           style={{ zoom: fontScale }}
         >
           {hasMore ? (
