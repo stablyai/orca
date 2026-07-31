@@ -3683,7 +3683,12 @@
             "e2c6a4f917": "Run Grok to refresh",
             "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
             "f90b3d7a16": "Run Kimi to refresh",
-            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
+            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.",
+            "c4d8e2a1f0": "Sign in to Cursor",
+            "b3c7d1f0e9": "Cursor not signed in",
+            "a2b6c0d4e8": "Cursor sign-in expired. Sign in to Cursor on the computer running Orca, then refresh usage.",
+            "91a5b9c3d7": "Sign in to Cursor on the computer running Orca to view plan usage.",
+            "80a4b8c2d6": "Cursor usage could not be refreshed because the network request failed."
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -10598,7 +10603,10 @@
           "3325d996cb": "Refresh usage",
           "a8f3e2c1b4": "Plan usage",
           "b7e2d9f0a3": "Same plan usage % as the Cursor dashboard.",
-          "c6d1a8f4e2": "Resets {{when}}"
+          "c6d1a8f4e2": "Resets {{when}}",
+          "d5e0b7c3a1": "Plan {{pct}}%",
+          "e4f1c8d2b0": "Auto {{pct}}%",
+          "f3a2d9e1c7": "API {{pct}}%"
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",
