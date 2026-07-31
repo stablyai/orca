@@ -14267,6 +14267,12 @@
           },
           "undo": "元に戻す",
           "widthOption": "{{value0}} px"
+        },
+        "grab": {
+          "errorNotReady": "このページではまだ要素を選択できません。",
+          "errorNotAuthorized": "ブラウザーへのアクセスが拒否されました。",
+          "errorAlreadyActive": "要素の選択はすでに有効です。",
+          "errorInjectionFailed": "このページで要素の選択を開始できませんでした。"
         }
       },
       "pluginCatalog": {

@@ -177,7 +177,8 @@ describe('PR workflow parallelism', () => {
       'git_compatibility',
       'shell_contracts',
       'test',
-      'package'
+      'package',
+      'package_windows'
     ])
   })
 })

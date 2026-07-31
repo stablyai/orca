@@ -14267,6 +14267,12 @@
           },
           "undo": "Deshacer",
           "widthOption": "{{value0}} px"
+        },
+        "grab": {
+          "errorNotReady": "Esta página aún no está lista para seleccionar elementos.",
+          "errorNotAuthorized": "Se denegó el acceso al navegador.",
+          "errorAlreadyActive": "La selección de elementos ya está activa.",
+          "errorInjectionFailed": "No se pudo iniciar la selección de elementos en esta página."
         }
       },
       "pluginCatalog": {

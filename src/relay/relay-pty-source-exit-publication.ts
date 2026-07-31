@@ -27,6 +27,32 @@ export function sealAndPublishPtySourceExit(options: {
     }
     return published
   }
+  if (record.sourceExitState === 'pending') {
+    // Why: an exit frame is in flight; its settlement drives the next step.
+    return false
+  }
+  const probe = session.sourceDeliverySnapshotIfKnown(record.identity)
+  if (!probe || probe.state === 'closed' || probe.state === 'closing') {
+    if (probe?.exitPublished === true || record.sourceExitState === 'published') {
+      // Why: the delivery completed healthily — the owner already has the credit-mode exit.
+      if (deliveries.get(params.id) === record) {
+        deliveries.delete(params.id)
+      }
+      return true
+    }
+    // Why: the delivery was canceled out from under the record; never touch the sealed
+    // ledger — the exit flows as a legacy broadcast instead.
+    const published = record.legacyExitAccepted
+      ? dispatcher.tryNotifyPtyExitToMatchingClients(
+          (clientId) => session.deliveryMode(clientId) === 'source-owner',
+          params
+        )
+      : dispatcher.tryNotifyPtyExit(params)
+    if (published && deliveries.get(params.id) === record) {
+      deliveries.delete(params.id)
+    }
+    return published
+  }
   if (!record.sealed) {
     session.sealDelivery(record.identity)
     record.sealed = true
@@ -50,17 +76,33 @@ export function sealAndPublishPtySourceExit(options: {
   }
   record.sourceExitState = 'pending'
   const settle = onceSinkSettlement((result) => {
+    if (result.ok) {
+      record.sourceExitState = 'published'
+      counters.exitCommitted++
+    } else {
+      record.sourceExitState = 'idle'
+      counters.exitRolledBack++
+    }
+    let deliveryGone = false
+    let settlementFailed = false
     try {
-      session.settleExitPublication(record.identity, result)
-      if (result.ok) {
-        record.sourceExitState = 'published'
-        counters.exitCommitted++
-      } else {
-        record.sourceExitState = 'idle'
-        counters.exitRolledBack++
+      // Why: a client cancel or rotation can close the delivery while this frame is in
+      // flight; settling a closed ledger entry throws out of a bare socket write/drain
+      // callback (dispatcher-client-writer releaseEntry) straight into uncaughtException.
+      deliveryGone =
+        session.sourceDeliverySnapshotIfKnown(record.identity)?.state !== 'sealed-unsettled'
+      if (!deliveryGone) {
+        session.settleExitPublication(record.identity, result)
       }
+    } catch (err) {
+      settlementFailed = true
+      process.stderr.write(
+        `[pty-source-exit] exit settlement failed for ${params.id}: ${
+          err instanceof Error ? (err.stack ?? err.message) : String(err)
+        }\n`
+      )
     } finally {
-      if (result.ok) {
+      if (result.ok || deliveryGone || settlementFailed) {
         onCapacity(params.id)
       }
     }

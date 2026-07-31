@@ -16,11 +16,16 @@ export const CLIENT_EVENT_METHODS: readonly RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'runtime.clientEvents.subscribe',
     params: null,
-    handler: async (_params, { runtime, connectionId }, emit) => {
+    handler: async (_params, { runtime, connectionId, clientKind }, emit) => {
       await new Promise<void>((resolve) => {
-        const unsubscribe = runtime.onClientEvent((event) => {
-          emit(event)
-        })
+        // Why: mobile discards terminalSideEffects; excluding it stops the
+        // per-OSC batch frames from crossing the relay.
+        const unsubscribe = runtime.onClientEvent(
+          (event) => {
+            emit(event)
+          },
+          { consumesTerminalSideEffects: clientKind !== 'mobile' }
+        )
 
         const seq = ++clientEventSubscriptionSeq
         const subscriptionId = `runtime-client-events-${connectionId ?? 'inproc'}-${seq}`

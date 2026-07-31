@@ -41,8 +41,8 @@ function findElectronViteMainEntries(): Set<string> {
 describe('CLI imports of main-process modules', () => {
   // Why: electron-vite cleans out/main and emits only its declared entries, so a
   // `src/main/*` module the CLI imports but the config omits is deleted by the
-  // build that runs after `build:cli` — the command then dies at require time
-  // with "Cannot find module". Nothing else catches this before packaging.
+  // build that runs after `build:cli` — keep source-level feedback ahead of the
+  // final-artifact runtime verifier.
   it('has an electron-vite entry for every main module the CLI imports', () => {
     const entries = findElectronViteMainEntries()
     const missing = findMainImports().filter(({ module }) => !entries.has(module))
@@ -52,7 +52,7 @@ describe('CLI imports of main-process modules', () => {
 
   it('finds the imports it is meant to guard', () => {
     // Why: a broken matcher would make the guard above vacuously pass.
-    expect(findMainImports().length).toBeGreaterThanOrEqual(4)
-    expect(findElectronViteMainEntries().size).toBeGreaterThanOrEqual(4)
+    expect(findMainImports().length).toBeGreaterThanOrEqual(2)
+    expect(findElectronViteMainEntries().size).toBeGreaterThanOrEqual(2)
   })
 })

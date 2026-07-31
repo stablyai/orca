@@ -243,9 +243,8 @@ export const electronViteConfig: UserConfig = {
           // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
           // can't take down the main process (issue #7547).
           'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),
-          // Why: forked with ELECTRON_RUN_AS_NODE so it survives a deadlocked
-          // main thread (macOS 26 AppKit scene-update deadlock) and can record
-          // the stall for the next launch to report.
+          // Why: a worker thread survives the macOS 26 AppKit main-thread deadlock
+          // without paying for another Electron process.
           'main-thread-hang-watchdog-entry': resolve(
             'src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts'
           ),
@@ -260,16 +259,8 @@ export const electronViteConfig: UserConfig = {
           'agent-hooks/managed-agent-hook-controls': resolve(
             'src/main/agent-hooks/managed-agent-hook-controls.ts'
           ),
-          'ipc/local-agent-install-dir-detection': resolve(
-            'src/main/ipc/local-agent-install-dir-detection.ts'
-          ),
-          'ipc/tui-agent-detection-commands': resolve(
-            'src/main/ipc/tui-agent-detection-commands.ts'
-          ),
-          // Why: same rule — `orca account add` / `account list` import these.
-          'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts'),
-          'codex-cli/command': resolve('src/main/codex-cli/command.ts'),
-          'win32-utils': resolve('src/main/win32-utils.ts')
+          // Why: account import mutates the user's macOS Keychain from the CLI.
+          'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts')
         },
         // Why: Rolldown's SSR default is ESM, but Electron and sidecar launchers
         // consume these stable CommonJS paths.

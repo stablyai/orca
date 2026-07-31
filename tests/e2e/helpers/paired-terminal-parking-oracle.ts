@@ -10,6 +10,7 @@ import {
   startRendererLagProbe
 } from '../paired-runtime-retention-metrics'
 import { expect } from './orca-app'
+import { verifyHiddenPairedTerminalOutputSuppression } from './paired-terminal-hidden-output-oracle'
 import { createPairedTerminalParkingFixture } from './paired-terminal-parking-fixture'
 import { getTerminalContent, waitForActivePanePtyId } from './terminal'
 
@@ -133,17 +134,7 @@ export async function runPairedTerminalParkingOracle(
     }
     await expectHostTerminalsUnmounted(options.hostPage, seed.fallbackWorktreeId, remoteTabs)
 
-    await page.evaluate(() => window.__store?.getState().setActiveView('tasks'))
-    await expect
-      .poll(
-        () =>
-          page.evaluate(
-            (ids) => ids.filter((id) => window.__paneManagers?.has(id)).length,
-            remoteTabs.map((tab) => tab.tabId)
-          ),
-        { timeout: 10_000 }
-      )
-      .toBe(TARGET_WORKTREE_COUNT)
+    const hiddenFloodTokens = await verifyHiddenPairedTerminalOutputSuppression(page, remoteTabs)
     const baseline = await readPairedRetentionSample(
       page,
       remoteTabs.map((tab) => tab.tabId)
@@ -217,6 +208,8 @@ export async function runPairedTerminalParkingOracle(
     if (!evicted) {
       throw new Error('Ordinary parking did not unmount a paired terminal')
     }
+    const hiddenFloodToken =
+      hiddenFloodTokens[remoteTabs.findIndex((tab) => tab.tabId === evicted.tabId)]
     const parkedMarker = `WHILE_PARKED_${Date.now()}`
     await callRuntime(page, 'terminal.send', {
       terminal: evicted.terminal,
@@ -248,11 +241,18 @@ export async function runPairedTerminalParkingOracle(
     await restored.click()
     expect(await waitForActivePanePtyId(page, 30_000)).toBe(evicted.originalPtyId)
     await expect
-      .poll(() => getTerminalContent(page, 1_000_000), { timeout: 30_000 })
-      .toContain(`fill-${evicted.marker}-4000-`)
-    await expect
-      .poll(() => getTerminalContent(page, 1_000_000), { timeout: 30_000 })
-      .toContain(`LIVE:${parkedMarker}`)
+      .poll(
+        async () => {
+          const content = await getTerminalContent(page, 1_000_000)
+          return [
+            `flood-${hiddenFloodToken}-3999-`,
+            `FLOODED:${hiddenFloodToken}`,
+            `LIVE:${parkedMarker}`
+          ].map((marker) => content.split(marker).length - 1)
+        },
+        { timeout: 30_000 }
+      )
+      .toEqual([1, 1, 1])
     const liveMarker = `AFTER_RETENTION_${Date.now()}`
     await callRuntime(page, 'terminal.send', {
       terminal: evicted.terminal,

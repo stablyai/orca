@@ -1216,6 +1216,7 @@ type RuntimePtyWorktreeRecord = {
   incarnationId: PtyIncarnationId | null
   worktreeId: string
   connectionId: string | null
+  runtimeSessionOwned: boolean
   // Why: a Windows host can own both native and WSL panes; preamble command
   // selection must follow the pane that executes it, not process.platform.
   isWsl: boolean | null
@@ -1428,8 +1429,8 @@ type RuntimePtyTitleTrackerEntry = {
   lastMobileTitleGateKey: string | null
   chunkTouchedSessionTabs: boolean
   // Why: facts observed while applying a chunk are batched into one
-  // pty:sideEffect emission per chunk, preserving byte order (titles in
-  // sequence, then bell). Timer-fired facts emit immediately between chunks.
+  // pty:sideEffect emission per chunk, preserving status/title/bell order.
+  // Timer-fired facts emit immediately between chunks.
   pendingFacts: TerminalSideEffectFact[]
   // Why: Command Code lacks hooks, so its working/done state is scraped from
   // TUI output. Null when no side-effect consumer exists (headless serve) —
@@ -2725,6 +2726,10 @@ export class OrcaRuntimeService {
   private ptyController: RuntimePtyController | null = null
   private notifier: RuntimeNotifier | null = null
   private clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
+  // Why: mobile subscribers discard terminalSideEffects; exclude them from batch delivery and production.
+  private terminalSideEffectExcludedClientEventListeners = new Set<
+    (event: RuntimeClientEvent) => void
+  >()
   private nativeChatLaunchDraftResolutionByTabId = new Map<
     string,
     NativeChatLaunchDraftResolutionTombstone
@@ -4681,13 +4686,24 @@ export class OrcaRuntimeService {
     }
   }
 
-  onClientEvent(listener: (event: RuntimeClientEvent) => void): () => void {
+  onClientEvent(
+    listener: (event: RuntimeClientEvent) => void,
+    options?: { consumesTerminalSideEffects?: boolean }
+  ): () => void {
     this.clientEventListeners.add(listener)
+    if (options?.consumesTerminalSideEffects === false) {
+      this.terminalSideEffectExcludedClientEventListeners.add(listener)
+    }
     this.refreshTerminalSideEffectConsumerAvailability()
     return () => {
       this.clientEventListeners.delete(listener)
+      this.terminalSideEffectExcludedClientEventListeners.delete(listener)
       this.refreshTerminalSideEffectConsumerAvailability()
     }
+  }
+
+  private countTerminalSideEffectConsumingClientEventListeners(): number {
+    return this.clientEventListeners.size - this.terminalSideEffectExcludedClientEventListeners.size
   }
 
   getTerminalSleepClientEventSnapshot(): RuntimeClientEvent[] {
@@ -4747,9 +4763,25 @@ export class OrcaRuntimeService {
   }
 
   private emitClientEvent(event: RuntimeClientEvent): void {
+    // Why: mobile streams discard terminalSideEffects; skip excluded listeners so
+    // paired phones never receive the per-OSC batch frames over the relay. Filtered
+    // inside the delivery callback to keep live-Set iteration (a listener that
+    // unsubscribes mid-fan-out must not be delivered to) and stay allocation-free.
+    const skipExcluded =
+      event.type === 'terminalSideEffects' &&
+      this.terminalSideEffectExcludedClientEventListeners.size > 0
     // Why: a throwing subscriber here once escaped acquireWorktreeTerminalSpawn after it took the
     // per-worktree terminal mutation, leaking it and wedging that worktree's sleep until restart.
-    notifyRuntimeListeners(this.clientEventListeners, (listener) => listener(event), 'client-event')
+    notifyRuntimeListeners(
+      this.clientEventListeners,
+      (listener) => {
+        if (skipExcluded && this.terminalSideEffectExcludedClientEventListeners.has(listener)) {
+          return
+        }
+        listener(event)
+      },
+      'client-event'
+    )
   }
 
   notifyNativeChatLaunchDraftResolved(
@@ -5949,6 +5981,35 @@ export class OrcaRuntimeService {
       ].filter((ptyId): ptyId is string => typeof ptyId === 'string')
     )
     return boundPtyIds.some((ptyId) => persistedPtyIds.has(ptyId))
+  }
+
+  private hasLiveRuntimeSessionOwnedPtyBinding(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab
+  ): boolean {
+    const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
+    return pty?.connected === true && pty.runtimeSessionOwned
+  }
+
+  private clearRuntimeSessionOwnershipForMobileTab(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    parentTabId: string
+  ): void {
+    for (const tab of snapshot.tabs) {
+      if (tab.type !== 'terminal' || tab.parentTabId !== parentTabId) {
+        continue
+      }
+      const ptyIds = [tab.ptyId, ...Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {})].filter(
+        (ptyId): ptyId is string => typeof ptyId === 'string'
+      )
+      for (const ptyId of ptyIds) {
+        const pty = this.ptysById.get(ptyId)
+        if (pty?.worktreeId === worktreeId && pty.tabId === parentTabId) {
+          pty.runtimeSessionOwned = false
+        }
+      }
+    }
   }
 
   // Why: a tab needs authoritative runtime teardown (kill + de-persist + prune)
@@ -7409,6 +7470,7 @@ export class OrcaRuntimeService {
           this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
           this.store?.flushOrThrow?.()
         }
+        this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot!, tab.parentTabId)
         return { closed: true }
       }
       // Why: notifier implementations without the acknowledged relay may expose
@@ -7436,6 +7498,7 @@ export class OrcaRuntimeService {
         // parent tab id. Closing that parent should close the desktop tab, not
         // just whichever leaf happened to be first in the session snapshot.
         this.notifier?.closeTerminal(tab.parentTabId)
+        this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot!, tab.parentTabId)
       }
     } else if (tab.type === 'browser' && this.offscreenBrowserBackend) {
       // Why: headless browser tabs are offscreen WebContents with no renderer to
@@ -7580,6 +7643,7 @@ export class OrcaRuntimeService {
     options: { killPtys?: boolean } = {}
   ): void {
     const closedParentTabId = tab.parentTabId
+    this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, closedParentTabId)
     const projectedPtyIds = this.removePersistedHeadlessTerminalTab(worktreeId, closedParentTabId)
     // Why: local provider ids can be reused after restart, so a dormant
     // persisted id is not kill authority. SSH relay ids remain durable exact
@@ -8751,6 +8815,9 @@ export class OrcaRuntimeService {
     this.recordPtyWorktree(ptyId, worktreeId, {
       connected: true,
       connectionId,
+      ...(binding && this.pendingMobileTerminalCreatesByKey.has(`${worktreeId}::${binding.tabId}`)
+        ? { runtimeSessionOwned: true }
+        : {}),
       ...(isWsl !== undefined ? { isWsl } : {}),
       ...(binding && paneKey ? { tabId: binding.tabId, paneKey } : {}),
       ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
@@ -9131,6 +9198,9 @@ export class OrcaRuntimeService {
     titleTrackerEntry.chunkTouchedSessionTabs = false
     let retainedAgentStatusChanged = false
     try {
+      for (const payload of agentStatusChunk.payloads) {
+        titleTrackerEntry.pendingFacts.push({ kind: 'agent-status', payload })
+      }
       titleTrackerEntry.tracker.handleChunk(agentStatusChunk.cleanData, {
         titleScanData: titleInput
       })
@@ -9417,7 +9487,7 @@ export class OrcaRuntimeService {
         console.error('[runtime] terminal side-effect listener threw', { ptyId, err })
       }
     }
-    if (this.clientEventListeners.size > 0) {
+    if (this.countTerminalSideEffectConsumingClientEventListeners() > 0) {
       this.emitClientEvent({ type: 'terminalSideEffects', batch })
     }
   }
@@ -9585,33 +9655,23 @@ export class OrcaRuntimeService {
           this.retirePtyAgentLaunchAuthority(ptyId)
           this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
         },
-        // Why: headless serve still scans command completion to retire agent
-        // launch authority; other transient facts remain desktop-only.
-        ...(this.terminalSideEffectConsumerAvailable
-          ? {
-              onBell: () => {
-                this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
-              },
-              onPrLink: (link: TerminalGitHubPRLink) => {
-                this.recordTerminalSideEffectFact(ptyId, { kind: 'pr-link', link })
-              },
-              // Why: hidden-delivery-gated views never see the bytes, so main
-              // surfaces DECSET 2031 subscribes as facts; the theme reply is
-              // still sent by the renderer (query authority stays with the view).
-              onMode2031Subscribe: () => {
-                this.recordTerminalSideEffectFact(ptyId, { kind: '2031-subscribe' })
-              },
-              // Why: the gated view never sees the withdrawal bytes either, so the
-              // subscription registry it keeps for theme flips needs this fact to
-              // stay truthful.
-              onMode2031Unsubscribe: () => {
-                this.recordTerminalSideEffectFact(ptyId, { kind: '2031-unsubscribe' })
-              }
-            }
-          : {})
+        onBell: () => {
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
+        },
+        onPrLink: (link: TerminalGitHubPRLink) => {
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'pr-link', link })
+        },
+        // Why: hidden-delivery-gated views never see 2031 bytes; facts keep their theme registry truthful.
+        onMode2031Subscribe: () => {
+          this.recordTerminalSideEffectFact(ptyId, { kind: '2031-subscribe' })
+        },
+        onMode2031Unsubscribe: () => {
+          this.recordTerminalSideEffectFact(ptyId, { kind: '2031-unsubscribe' })
+        }
       },
       initialTitle !== null ? { initialTitle } : {}
     )
+    tracker.setTransientSideEffectScanningEnabled(this.terminalSideEffectConsumerAvailable)
     const entry: RuntimePtyTitleTrackerEntry = {
       tracker,
       applyingChunk: false,
@@ -9624,15 +9684,7 @@ export class OrcaRuntimeService {
       // self-arms on the Command Code banner; the spawn command (when main
       // saw one) mirrors the renderer detector's startupCommand fast-arm.
       commandCodeDetector: this.terminalSideEffectConsumerAvailable
-        ? createCommandCodeOutputStatusDetector({
-            startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
-            onWorking: (prompt) => {
-              this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-working', prompt })
-            },
-            onDone: (prompt) => {
-              this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-done', prompt })
-            }
-          })
+        ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
         : null
     }
     this.ptyTitleTrackersByPtyId.set(ptyId, entry)
@@ -9752,16 +9804,32 @@ export class OrcaRuntimeService {
 
   private refreshTerminalSideEffectConsumerAvailability(): void {
     const nextAvailable =
-      this.terminalSideEffectLocalConsumerAvailable || this.clientEventListeners.size > 0
+      this.terminalSideEffectLocalConsumerAvailable ||
+      this.countTerminalSideEffectConsumingClientEventListeners() > 0
     if (nextAvailable === this.terminalSideEffectConsumerAvailable) {
       return
     }
     this.terminalSideEffectConsumerAvailable = nextAvailable
-    // Why: optional bell/command/link scanners are selected when a tracker is
-    // created. Rebuild at the window boundary so pure headless output stays cheap.
-    for (const ptyId of [...this.ptyTitleTrackersByPtyId.keys()]) {
-      this.disposePtyTitleTracker(ptyId)
+    for (const [ptyId, entry] of this.ptyTitleTrackersByPtyId) {
+      entry.tracker.setTransientSideEffectScanningEnabled(nextAvailable)
+      entry.commandCodeDetector = nextAvailable
+        ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
+        : null
     }
+  }
+
+  private createTerminalSideEffectCommandCodeDetector(
+    ptyId: string
+  ): NonNullable<RuntimePtyTitleTrackerEntry['commandCodeDetector']> {
+    return createCommandCodeOutputStatusDetector({
+      startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
+      onWorking: (prompt) => {
+        this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-working', prompt })
+      },
+      onDone: (prompt) => {
+        this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-done', prompt })
+      }
+    })
   }
 
   private extractLastOsc7CwdForPty(
@@ -12777,6 +12845,7 @@ export class OrcaRuntimeService {
     this.agentDetector?.onExit(ptyId)
     if (pty) {
       pty.connected = false
+      pty.runtimeSessionOwned = false
       pty.disconnectedAt = Date.now()
       pty.lastExitCode = exitCode
       this.resolvePtyExitWaiters(pty, ptyId)
@@ -24164,6 +24233,9 @@ export class OrcaRuntimeService {
       })
       const pty = this.getOrCreatePtyWorktreeRecord(result.id)
       if (pty) {
+        if (launchOpts.persistHostSessionBinding) {
+          pty.runtimeSessionOwned = true
+        }
         if (launchOpts.title) {
           const observedAt = this.nextTitleObservationSequence()
           pty.title = launchOpts.title
@@ -25072,6 +25144,10 @@ export class OrcaRuntimeService {
       return null
     }
     const existing = this.findMobileTerminalSurface(worktreeId, tabId)
+    const pty = this.findLiveRegisteredPtyForRendererTab(worktreeId, tabId)
+    if (pty) {
+      pty.runtimeSessionOwned = true
+    }
     if (
       existing &&
       this.isReadyMobileTerminalSurface(existing) &&
@@ -25080,7 +25156,6 @@ export class OrcaRuntimeService {
       // Why: the renderer's ready publication already landed with the intended mode; only a pending shell needs the main-side rescue.
       return existing
     }
-    const pty = this.findLiveRegisteredPtyForRendererTab(worktreeId, tabId)
     const leafId = pty ? parsePaneKey(pty.paneKey ?? '')?.leafId : undefined
     if (!pty || !leafId) {
       return existing
@@ -25525,6 +25600,7 @@ export class OrcaRuntimeService {
     if (createdPty) {
       createdPty.tabId = parentTabId
       createdPty.paneKey = paneKey
+      createdPty.runtimeSessionOwned = pty.runtimeSessionOwned
     }
 
     try {
@@ -27399,6 +27475,7 @@ export class OrcaRuntimeService {
         | 'paneKey'
         | 'title'
         | 'connectionId'
+        | 'runtimeSessionOwned'
         | 'isWsl'
         | 'wslDistro'
         | 'incarnationId'
@@ -27423,6 +27500,7 @@ export class OrcaRuntimeService {
         incarnationId: state.incarnationId ?? null,
         worktreeId,
         connectionId,
+        runtimeSessionOwned: state.runtimeSessionOwned ?? false,
         isWsl: state.isWsl ?? null,
         wslDistro,
         tabId: state.tabId ?? null,
@@ -27479,6 +27557,9 @@ export class OrcaRuntimeService {
         pty.wslDistro = null
         this.wslDistroByPtyId.delete(ptyId)
       }
+    }
+    if (state.runtimeSessionOwned !== undefined) {
+      pty.runtimeSessionOwned = state.runtimeSessionOwned
     }
     if (state.isWsl !== undefined) {
       pty.isWsl = state.isWsl
@@ -28274,6 +28355,7 @@ export class OrcaRuntimeService {
     // are runtime-owned and preservable.
     return (
       this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch) ||
+      this.hasLiveRuntimeSessionOwnedPtyBinding(snapshot.worktree, tab) ||
       this.hasLiveOrPersistedServeOrSshOwnedPtyBinding(snapshot.worktree, tab)
     )
   }

@@ -8,6 +8,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../shared/agent-status-types'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionBrowserTab,
@@ -674,7 +675,8 @@ function remapHostAgentStatus(surface: TerminalSurface): AgentStatusEntry | null
   })
   return {
     ...normalizeCompatibleAgentStatusEntryForOwner(surface.agentStatus, ownerAgent),
-    paneKey
+    paneKey,
+    tabId: toWebTerminalSurfaceTabId(surface.parentTabId)
   }
 }
 
@@ -711,10 +713,23 @@ function buildMirroredAgentStatusPatch(
       continue
     }
     const existing = state.agentStatusByPaneKey[entry.paneKey]
-    // Why: an active web stream can report a fresher OSC 9999 status before the next host snapshot, so don't rewind it with an older host publication.
+    // Why: keep fresher OSC state while taking remapped ownership metadata from the authoritative host snapshot.
+    const hostIdentityPredatesCurrentTurn =
+      existing !== undefined &&
+      entry.state === 'done' &&
+      existing.state !== 'done' &&
+      existing.stateStartedAt > entry.stateStartedAt
     const nextEntry =
       existing && existing.updatedAt > entry.updatedAt
-        ? normalizeCompatibleAgentStatusEntryForOwner(existing, entry.agentType)
+        ? {
+            ...normalizeCompatibleAgentStatusEntryForOwner(existing, entry.agentType),
+            paneKey: entry.paneKey,
+            worktreeId: entry.worktreeId ?? existing.worktreeId,
+            tabId: entry.tabId,
+            providerSession:
+              existing.providerSession ??
+              (hostIdentityPredatesCurrentTurn ? undefined : entry.providerSession)
+          }
         : entry
     nextByPaneKey.set(entry.paneKey, nextEntry)
   }
@@ -1346,6 +1361,7 @@ function agentStatusEntryEqual(a: AgentStatusEntry | undefined, b: AgentStatusEn
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.interrupted === b.interrupted &&
     a.promptInteractionKey === b.promptInteractionKey &&
+    agentProviderSessionsEqual(a.agentType, a.providerSession, b.providerSession) &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
   )
 }

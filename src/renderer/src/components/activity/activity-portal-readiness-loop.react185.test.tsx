@@ -307,6 +307,8 @@ describe('Activity portal pane switching', () => {
   })
 
   it('releases a latched readiness once the terminal attaches', async () => {
+    // Drive rAF explicitly — wall-clock waits flake under CI load.
+    const frames = installAnimationFrameController()
     const target = document.createElement('div')
     document.body.append(target)
     const buildRoot = (mode: 'hidden' | 'sibling' | 'ready'): void => {
@@ -352,15 +354,22 @@ describe('Activity portal pane switching', () => {
     root = createRoot(document.createElement('div'))
     await act(async () => {
       root.render(<ActivityTerminalSlot />)
-      await new Promise((resolve) => setTimeout(resolve, 180))
     })
+    for (let frame = 0; frame < 40; frame += 1) {
+      if (frames.pending() === 0 && statuses.at(-1) === 'unavailable') {
+        break
+      }
+      await frames.flush()
+    }
     expect(statuses.at(-1)).toBe('unavailable')
 
     churning = false
     await act(async () => {
       buildRoot('ready')
-      await new Promise((resolve) => setTimeout(resolve, 40))
     })
+    for (let frame = 0; frame < 10 && statuses.at(-1) !== 'ready'; frame += 1) {
+      await frames.flush()
+    }
     expect(statuses.at(-1)).toBe('ready')
   })
 })

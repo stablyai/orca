@@ -53,6 +53,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/store/selectors', () => ({
+  getAllWorktreesFromState: () => Array.from(mocks.state.worktreeMap.values()),
   getWorktreeMapFromState: () => mocks.state.worktreeMap
 }))
 
@@ -138,6 +139,16 @@ describe('runWorktreeBatchDelete', () => {
     const started = runWorktreeBatchDelete(['main', 'wt-1'])
 
     expect(started).toBe(true)
+    expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', { worktreeId: 'wt-1' })
+  })
+
+  it('treats duplicate selected ids as one delete target', () => {
+    setWorktrees([{ id: 'wt-1' }])
+
+    const started = runWorktreeBatchDelete(['wt-1', 'wt-1'])
+
+    expect(started).toBe(true)
+    expect(mocks.state.clearWorktreeDeleteState).toHaveBeenCalledTimes(1)
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', { worktreeId: 'wt-1' })
   })
 

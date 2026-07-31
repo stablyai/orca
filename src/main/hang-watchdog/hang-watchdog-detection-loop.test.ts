@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createHangWatchdogChildLoop } from './hang-watchdog-child-loop'
+import { createHangWatchdogDetectionLoop } from './hang-watchdog-detection-loop'
 
 const TIMEOUT_MS = 45_000
 const CHECK_INTERVAL_MS = 5_000
@@ -8,7 +8,7 @@ function loopWithClock(startAt = 0) {
   let now = startAt
   const onHangDetected = vi.fn()
   const onHangResolved = vi.fn()
-  const loop = createHangWatchdogChildLoop({
+  const loop = createHangWatchdogDetectionLoop({
     timeoutMs: TIMEOUT_MS,
     checkIntervalMs: CHECK_INTERVAL_MS,
     now: () => now,
@@ -18,7 +18,7 @@ function loopWithClock(startAt = 0) {
   return { loop, onHangDetected, onHangResolved, advance: (ms: number) => (now += ms) }
 }
 
-describe('createHangWatchdogChildLoop', () => {
+describe('createHangWatchdogDetectionLoop', () => {
   it('does not fire while heartbeats keep arriving', () => {
     const { loop, onHangDetected, advance } = loopWithClock()
     for (let i = 0; i < 100; i++) {

@@ -44,6 +44,12 @@ import {
   requestServeUpdateHandoff
 } from './serve-update-handoff'
 import type { LocalBuildFeed } from './local-builds/local-build-feed-server'
+import { listReleaseBuilds, resolveTargetBuild } from './updater-release-builds'
+import {
+  isChannelSupportedOnPlatform,
+  type ReleaseBuild,
+  type ReleaseChannel
+} from '../shared/release-channel'
 
 type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
 type MissingManifestPrereleaseFallbackResult = { userInitiated: boolean }
@@ -140,9 +146,16 @@ let downloadInFlight = false
 /** Guards the macOS `activate` handler from reopening the old version while ShipIt replaces the .app bundle. */
 let quittingForUpdate = false
 let autoUpdater: ElectronAutoUpdater | null = null
-let activeUpdateSource: 'release' | 'local' = 'release'
+let activeUpdateSource: 'release' | 'local' | 'hourly' = 'release'
 let activeLocalBuildFeed: LocalBuildFeed | null = null
 let localBuildSelectionInProgress = false
+// Why: a dev channel/tag jump may target an older build, so it needs allowDowngrade
+// like local builds — but off a real release feed, not a loopback server.
+let pinnedBuildSelectionInProgress = false
+// Why: a pinned jump to a stable/rc tag keeps the 'release' source but is still a
+// deliberate downgrade, so newer-only gates must yield to it too.
+let isPinnedBuildActive = false
+let getReleaseChannelOverride: (() => ReleaseChannel | null) | null = null
 
 function getAutoUpdater(): ElectronAutoUpdater {
   if (!autoUpdater) {
@@ -167,9 +180,13 @@ function closeLocalBuildFeed(): void {
 function restoreReleaseUpdateSource(): void {
   closeLocalBuildFeed()
   activeUpdateSource = 'release'
+  isPinnedBuildActive = false
   if (autoUpdater) {
     autoUpdater.allowDowngrade = false
     autoUpdater.disableDifferentialDownload = false
+    // Why: a pinned jump forces allowPrerelease on; leaving it set would opt
+    // every later background check into the RC channel behind the user's back.
+    autoUpdater.allowPrerelease = includePrereleaseActive
   }
 }
 
@@ -265,7 +282,7 @@ function sendStatus(status: UpdateStatus): void {
   }
 
   const sourcedStatus: UpdateStatus =
-    activeUpdateSource === 'local' ? { ...status, source: 'local' } : status
+    activeUpdateSource === 'release' ? status : { ...status, source: activeUpdateSource }
   const decoratedStatus = decorateStatusWithActiveNudge(sourcedStatus)
 
   if (isUpdateCheckResultState(status.state)) {
@@ -316,6 +333,12 @@ function getUpdateCheckVariant(options?: UpdateCheckOptions): UpdateCheckVariant
     return 'perf'
   }
   if (options?.includePrerelease) {
+    return 'prerelease'
+  }
+  // Why: a persisted 'rc' override makes every routine check follow the RC series
+  // without the user re-holding shift; 'hourly' needs an explicit tag, so it is
+  // not a routine-check variant.
+  if (getReleaseChannelOverride?.() === 'rc') {
     return 'prerelease'
   }
   return 'default'
@@ -573,7 +596,10 @@ function getKnownReleaseUrl(): string | undefined {
 function hasInstallableDownloadedVersion(): boolean {
   return (
     availableVersion !== null &&
-    (activeUpdateSource === 'local' || compareVersions(availableVersion, app.getVersion()) > 0)
+    // Why: local builds and pinned dev jumps may intentionally move backwards.
+    (activeUpdateSource !== 'release' ||
+      isPinnedBuildActive ||
+      compareVersions(availableVersion, app.getVersion()) > 0)
   )
 }
 
@@ -821,6 +847,14 @@ async function sendCheckFailureStatus(
 ): Promise<void> {
   if (activeUpdateSource === 'local') {
     sendLocalBuildErrorAndRestore(message, userInitiated)
+    return
+  }
+  if (isPinnedBuildActive) {
+    // Why: a failed pinned jump must hand the feed back before surfacing the
+    // error, or the pin blocks background checks for the process lifetime.
+    clearAvailableUpdateContext()
+    restoreReleaseUpdateSource()
+    sendStatus({ state: 'error', message, userInitiated })
     return
   }
   const failureKey = getCheckFailureKey(message, userInitiated)
@@ -1266,7 +1300,14 @@ function retryPrereleaseFallbackAfterMissingManifest(
 function runBackgroundUpdateCheck(
   nudgeId: string | null = getPersistedPendingUpdateNudgeId()
 ): boolean {
-  if (activeUpdateSource === 'local' || localBuildSelectionInProgress) {
+  // Why: a pinned dev jump owns the feed until it settles; a background check
+  // would repoint it mid-flight and download the wrong build.
+  if (
+    activeUpdateSource !== 'release' ||
+    isPinnedBuildActive ||
+    localBuildSelectionInProgress ||
+    pinnedBuildSelectionInProgress
+  ) {
     return false
   }
   if (backgroundCheckLaunchPending || currentStatus.state === 'checking') {
@@ -1340,11 +1381,15 @@ export function checkForUpdatesFromMenu(options?: UpdateCheckOptions): void {
     void checkForLocalBuildFromMenu()
     return
   }
-  if (localBuildSelectionInProgress) {
+  if (options?.targetTag && options.channel) {
+    void checkForPinnedBuild(options.channel, options.targetTag)
+    return
+  }
+  if (localBuildSelectionInProgress || pinnedBuildSelectionInProgress) {
     return
   }
   if (
-    activeUpdateSource === 'local' &&
+    activeUpdateSource !== 'release' &&
     (currentStatus.state === 'checking' || currentStatus.state === 'downloading')
   ) {
     return
@@ -1466,12 +1511,93 @@ async function checkForLocalBuildFromMenu(): Promise<void> {
   }
 }
 
+export async function listAvailableReleaseBuilds(channel: ReleaseChannel): Promise<ReleaseBuild[]> {
+  return listReleaseBuilds(channel)
+}
+
+/**
+ * Pins the updater at one exact release tag and checks it, so a dev can move to
+ * any published build on any channel — including an older one.
+ *
+ * Unlike a routine check this sets `allowDowngrade`, because "jump to yesterday's
+ * hourly" is a downgrade by semver. The pin is torn down as soon as the attempt
+ * settles so ordinary background checks never inherit it.
+ */
+async function checkForPinnedBuild(channel: ReleaseChannel, tag: string): Promise<void> {
+  if (!app.isPackaged || is.dev) {
+    sendStatus({ state: 'not-available', userInitiated: true })
+    return
+  }
+  // Why here as well as in the picker: the renderer disables the option, but IPC
+  // is reachable regardless, and there is no artifact to install off-macOS.
+  if (!isChannelSupportedOnPlatform(channel, process.platform)) {
+    sendStatus({
+      state: 'error',
+      message: 'Hourly builds are produced only for macOS.',
+      userInitiated: true
+    })
+    return
+  }
+  if (currentStatus.state === 'checking' || currentStatus.state === 'downloading') {
+    return
+  }
+  if (localBuildSelectionInProgress || pinnedBuildSelectionInProgress) {
+    return
+  }
+  pinnedBuildSelectionInProgress = true
+  try {
+    const target = resolveTargetBuild(channel, tag)
+    if (compareVersions(target.version, app.getVersion()) === 0) {
+      sendStatus({ state: 'not-available', userInitiated: true })
+      return
+    }
+    closeLocalBuildFeed()
+    activeUpdateSource = channel === 'hourly' ? 'hourly' : 'release'
+    isPinnedBuildActive = true
+    clearPrereleaseFallbackContext()
+    clearPublishingWindowLastGoodCheck()
+    clearAvailableUpdateContext()
+    activeUpdateNudgeId = null
+    userInitiatedCheck = true
+    sendStatus({ state: 'checking', userInitiated: true })
+
+    const updater = getAutoUpdater()
+    // Why: an intentional jump to an older tag must not be filtered out as "not newer".
+    updater.allowDowngrade = true
+    updater.disableDifferentialDownload = true
+    updater.allowPrerelease = true
+    console.info(`[updater] pinned to ${channel} build ${target.tag} → ${target.feedUrl}`)
+    updater.setFeedURL({ provider: 'generic', url: target.feedUrl })
+    availableReleaseUrl = target.feedUrl
+    const attemptId = beginUpdateCheckAttempt()
+    markUpdateCheckLaunched(attemptId)
+    await updater.checkForUpdates()
+    handleSettledUpdateCheckPromise(attemptId)
+  } catch (error) {
+    userInitiatedCheck = false
+    clearAvailableUpdateContext()
+    restoreReleaseUpdateSource()
+    sendStatus({
+      state: 'error',
+      message: String((error as Error)?.message ?? error),
+      userInitiated: true
+    })
+  } finally {
+    pinnedBuildSelectionInProgress = false
+  }
+}
+
 export function isQuittingForUpdate(): boolean {
   return quittingForUpdate
 }
 
 export function quitAndInstall(): void {
-  if (localBuildSelectionInProgress || pendingQuitAndInstallTimer || quitAndInstallInProgress) {
+  if (
+    localBuildSelectionInProgress ||
+    pinnedBuildSelectionInProgress ||
+    pendingQuitAndInstallTimer ||
+    quitAndInstallInProgress
+  ) {
     return
   }
 
@@ -1562,14 +1688,18 @@ export function dismissNudge(): void {
 }
 
 /**
- * The user closed an offered update without taking it. For a local build that ends the session:
- * nothing will consume the local feed now, so release checks must stop being deferred.
+ * The user closed an offered update without taking it. For a local build or a
+ * pinned dev jump that ends the session: nothing will consume that feed now, so
+ * release checks must stop being deferred.
  */
 export function dismissAvailableUpdate(): void {
-  if (activeUpdateSource !== 'local' || localBuildSelectionInProgress) {
+  if (activeUpdateSource === 'release' && !isPinnedBuildActive) {
     return
   }
-  // Why: only an un-acted 'available' card is abandoned — 'downloading'/'downloaded' still need the local feed and allowDowngrade.
+  if (localBuildSelectionInProgress || pinnedBuildSelectionInProgress) {
+    return
+  }
+  // Why: only an un-acted 'available' card is abandoned — 'downloading'/'downloaded' still need the pinned feed and allowDowngrade.
   if (currentStatus.state !== 'available') {
     return
   }
@@ -1589,6 +1719,7 @@ export function setupAutoUpdater(
     getDismissedUpdateNudgeId?: () => string | null
     setPendingUpdateNudgeId?: (id: string | null) => void
     setDismissedUpdateNudgeId?: (id: string | null) => void
+    getReleaseChannelOverride?: () => ReleaseChannel | null
     installMode?: UpdateInstallMode
   }
 ): void {
@@ -1600,6 +1731,7 @@ export function setupAutoUpdater(
   _getDismissedUpdateNudgeId = opts?.getDismissedUpdateNudgeId ?? null
   _setPendingUpdateNudgeId = opts?.setPendingUpdateNudgeId ?? null
   _setDismissedUpdateNudgeId = opts?.setDismissedUpdateNudgeId ?? null
+  getReleaseChannelOverride = opts?.getReleaseChannelOverride ?? null
   updateInstallMode = opts?.installMode ?? 'interactive'
   lastInstallDeferralVersion = { download: null, install: null }
 
@@ -1669,6 +1801,9 @@ export function setupAutoUpdater(
     isQuitAndInstallHandoffActive,
     hasInstallableDownloadedVersion,
     isLocalBuildCheck: () => activeUpdateSource === 'local',
+    // Why: pinned jumps are deliberate, so update-available/-downloaded must not
+    // reject them for being older than the running version.
+    isPinnedBuildCheck: () => isPinnedBuildActive,
     shouldHandleUpdaterErrorEvent,
     performQuitAndInstall,
     clearUpdateAvailableEventPending,
@@ -1733,7 +1868,7 @@ export function setupAutoUpdater(
 }
 
 export function downloadUpdate(): void {
-  if (localBuildSelectionInProgress || downloadInFlight) {
+  if (localBuildSelectionInProgress || pinnedBuildSelectionInProgress || downloadInFlight) {
     return
   }
   // Why: allow retry from 'error' (availableVersion stays cached) so the error card's Retry Download button works.

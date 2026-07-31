@@ -14267,6 +14267,12 @@
           },
           "undo": "撤销",
           "widthOption": "{{value0}} px"
+        },
+        "grab": {
+          "errorNotReady": "此页面尚未准备好进行元素选择。",
+          "errorNotAuthorized": "浏览器访问被拒绝。",
+          "errorAlreadyActive": "元素选择已处于活动状态。",
+          "errorInjectionFailed": "无法在此页面上启动元素选择。"
         }
       },
       "pluginCatalog": {

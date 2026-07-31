@@ -14267,6 +14267,12 @@
           },
           "undo": "실행 취소",
           "widthOption": "{{value0}} px"
+        },
+        "grab": {
+          "errorNotReady": "이 페이지에서는 아직 요소를 선택할 수 없습니다.",
+          "errorNotAuthorized": "브라우저 접근이 거부되었습니다.",
+          "errorAlreadyActive": "요소 선택이 이미 활성화되어 있습니다.",
+          "errorInjectionFailed": "이 페이지에서 요소 선택을 시작할 수 없습니다."
         }
       },
       "pluginCatalog": {

@@ -41,7 +41,7 @@ vi.mock('../../main/claude-accounts/keychain', () => ({
   readActiveClaudeKeychainCredentialsStrict: readKeychainMock,
   writeActiveClaudeKeychainCredentials: writeKeychainMock
 }))
-vi.mock('../../main/codex-cli/command', () => ({
+vi.mock('../../shared/node-cli-command-resolution', () => ({
   getVersionManagerBinPaths: getVersionManagerBinPathsMock,
   resolveCliCommand: resolveCliCommandMock
 }))
@@ -49,7 +49,7 @@ vi.mock('../../main/codex-cli/command', () => ({
 import { ACCOUNT_HANDLERS } from './account'
 import type { HandlerContext } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'
-import { getCmdExePath } from '../../main/win32-utils'
+import { getCmdExePath } from '../../shared/windows-batch-spawn'
 import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 
 function successfulChild(): EventEmitter {

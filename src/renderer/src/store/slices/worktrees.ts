@@ -71,6 +71,7 @@ import {
 } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
+import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
@@ -3811,6 +3812,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             }
           })
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh)
+          if (result.baseFallback) {
+            requestWorktreeBaseFallbackNotice(result.baseFallback)
+          }
           showLocalBaseRefUpdateSuggestionToast(result.localBaseRefUpdateSuggestion, {
             updateSettings: get().updateSettings,
             getSettings: () => get().settings,

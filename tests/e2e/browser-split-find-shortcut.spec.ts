@@ -88,6 +88,17 @@ function browserAddressBar(page: Page, browserTabId: string) {
   )
 }
 
+async function focusBrowserAddressBar(page: Page, browserTabId: string): Promise<void> {
+  const browserOverlay = page.locator(`[data-browser-overlay-tab-id="${browserTabId}"]`)
+  const addressBar = browserAddressBar(page, browserTabId)
+  const addressBarForm = browserOverlay.locator(
+    'form:has(> [data-orca-browser-address-bar="true"])'
+  )
+  await expect(addressBarForm).toBeVisible()
+  await addressBarForm.click()
+  await expect(addressBar).toBeFocused()
+}
+
 function browserFindInput(page: Page) {
   return page.getByPlaceholder('Find in page...')
 }
@@ -200,9 +211,7 @@ test.describe('browser split Find shortcut', () => {
     await orcaPage.keyboard.press('Escape')
 
     await focusBrowserGroup(orcaPage, fixture.browserGroupId)
-    const browserAddress = browserAddressBar(orcaPage, fixture.browserTabId)
-    await expect(browserAddress).toBeVisible()
-    await browserAddress.click()
+    await focusBrowserAddressBar(orcaPage, fixture.browserTabId)
     await orcaPage.keyboard.press(`${modifier}+f`)
     await expect(browserFindInput(orcaPage)).toBeFocused()
     await expect(terminalFindInput(orcaPage)).toBeHidden()
@@ -243,9 +252,7 @@ test.describe('browser split Find shortcut', () => {
     const fixture = await createTerminalBrowserSplit(orcaPage)
     await focusBrowserGroup(orcaPage, fixture.browserGroupId)
     const addressBar = browserAddressBar(orcaPage, fixture.browserTabId)
-    await expect(addressBar).toBeVisible()
-    await addressBar.click()
-    await expect(addressBar).toBeFocused()
+    await focusBrowserAddressBar(orcaPage, fixture.browserTabId)
 
     await orcaPage.evaluate(() => {
       const store = window.__store
@@ -270,9 +277,7 @@ test.describe('browser split Find shortcut', () => {
     const fixture = await createTerminalBrowserSplit(orcaPage)
     await focusBrowserGroup(orcaPage, fixture.browserGroupId)
     const addressBar = browserAddressBar(orcaPage, fixture.browserTabId)
-    await expect(addressBar).toBeVisible()
-    await addressBar.click()
-    await expect(addressBar).toBeFocused()
+    await focusBrowserAddressBar(orcaPage, fixture.browserTabId)
 
     await orcaPage.evaluate(() => {
       const store = window.__store

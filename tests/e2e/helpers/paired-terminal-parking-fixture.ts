@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 const FILL_ROWS = 6_000
+const FLOOD_ROWS = 4_000
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`
@@ -30,6 +31,12 @@ export function createPairedTerminalParkingFixture(): {
       "process.stdin.setEncoding('utf8')",
       "process.stdin.on('data', (data) => {",
       '  for (const command of data.split(/\\r\\n|\\r|\\n/).filter(Boolean)) {',
+      "    if (command.startsWith('FLOOD:')) {",
+      "      const token = command.slice('FLOOD:'.length)",
+      `      for (let row = 0; row < ${FLOOD_ROWS}; row += 1) process.stdout.write(\`flood-${'${token}'}-${'${row}'}-${'x'.repeat(80)}\\r\\n\`)`,
+      '      process.stdout.write(`FLOODED:${token}\\r\\n`)',
+      '      continue',
+      '    }',
       "    if (command === 'FILL') {",
       `      for (let row = 0; row < ${FILL_ROWS}; row += 1) process.stdout.write(\`fill-${'${marker}'}-${'${row}'}-${'x'.repeat(80)}\\r\\n\`)`,
       '      process.stdout.write(`FILLED:${marker}\\r\\n`)',
