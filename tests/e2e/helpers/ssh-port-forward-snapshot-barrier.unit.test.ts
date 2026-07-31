@@ -30,31 +30,40 @@ describe('SSH port-forward snapshot barrier', () => {
         Promise.resolve(callback({ ipcMain: { _invokeHandlers: handlers } }, arg))
     } as unknown as ElectronApplication
 
+    let heldRequestStarted = false
     await installSshPortForwardSnapshotBarrier(app, 'target-1')
-    const wrappedHandler = handlers.get('ssh:listPortForwards')
-    expect(wrappedHandler).toBeTypeOf('function')
-    if (!wrappedHandler) {
-      throw new Error('Wrapped handler unavailable')
-    }
+    try {
+      const wrappedHandler = handlers.get('ssh:listPortForwards')
+      expect(wrappedHandler).toBeTypeOf('function')
+      if (!wrappedHandler) {
+        throw new Error('Wrapped handler unavailable')
+      }
 
-    const firstRequest = Promise.resolve(wrappedHandler({}, { targetId: 'target-1' }))
-    await vi.waitFor(() => expect(originalHandler).toHaveBeenCalledOnce())
-    const laterRequest = Promise.resolve(wrappedHandler({}, { targetId: 'target-1' }))
-    await expect(laterRequest).resolves.toEqual(['later-snapshot'])
-    expect(await readSshPortForwardSnapshotBarrier(app)).toEqual({
-      captured: false,
-      released: false
-    })
-
-    resolveFirstSnapshot(['held-snapshot'])
-    await vi.waitFor(async () => {
+      heldRequestStarted = true
+      const firstRequest = Promise.resolve(wrappedHandler({}, { targetId: 'target-1' }))
+      await vi.waitFor(() => expect(originalHandler).toHaveBeenCalledOnce())
+      const laterRequest = Promise.resolve(wrappedHandler({}, { targetId: 'target-1' }))
+      await expect(laterRequest).resolves.toEqual(['later-snapshot'])
       expect(await readSshPortForwardSnapshotBarrier(app)).toEqual({
-        captured: true,
+        captured: false,
         released: false
       })
-    })
-    await releaseSshPortForwardSnapshotBarrier(app)
-    await expect(firstRequest).resolves.toEqual(['held-snapshot'])
-    await restoreSshPortForwardSnapshotHandler(app)
+
+      resolveFirstSnapshot(['held-snapshot'])
+      await vi.waitFor(async () => {
+        expect(await readSshPortForwardSnapshotBarrier(app)).toEqual({
+          captured: true,
+          released: false
+        })
+      })
+      await releaseSshPortForwardSnapshotBarrier(app)
+      await expect(firstRequest).resolves.toEqual(['held-snapshot'])
+    } finally {
+      resolveFirstSnapshot(['cleanup-snapshot'])
+      if (heldRequestStarted) {
+        await releaseSshPortForwardSnapshotBarrier(app)
+      }
+      await restoreSshPortForwardSnapshotHandler(app)
+    }
   })
 })
