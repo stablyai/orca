@@ -28,20 +28,27 @@ describe('build:native pnpm invocation', () => {
       args: ['run', 'build:computer-macos'],
       shell: false
     })
-    expect(resolvePnpmInvocation('build:computer-macos', '', 'win32')).toEqual({
-      command: '"pnpm.cmd"',
-      args: ['run', 'build:computer-macos'],
-      shell: true
-    })
   })
 
-  it('shells out for a Windows .cmd npm_execpath that Node cannot spawn directly', () => {
-    const npmExecPath = 'C:\\Program Files\\nodejs\\pnpm.cmd'
+  // Why: build:native exits on win32 before it runs pnpm, so these pin the resolver
+  // contract only; they are not evidence that Windows reaches this code.
+  describe('win32 resolver contract, unreachable from the build:native entry path', () => {
+    it('quotes and shells out the pnpm.cmd fallback when npm_execpath is unset', () => {
+      expect(resolvePnpmInvocation('build:computer-macos', '', 'win32')).toEqual({
+        command: '"pnpm.cmd"',
+        args: ['run', 'build:computer-macos'],
+        shell: true
+      })
+    })
 
-    expect(resolvePnpmInvocation('build:computer-macos', npmExecPath, 'win32')).toEqual({
-      command: `"${npmExecPath}"`,
-      args: ['run', 'build:computer-macos'],
-      shell: true
+    it('quotes and shells out a .cmd npm_execpath that Node refuses to spawn', () => {
+      const npmExecPath = 'C:\\Program Files\\nodejs\\pnpm.cmd'
+
+      expect(resolvePnpmInvocation('build:computer-macos', npmExecPath, 'win32')).toEqual({
+        command: `"${npmExecPath}"`,
+        args: ['run', 'build:computer-macos'],
+        shell: true
+      })
     })
   })
 })

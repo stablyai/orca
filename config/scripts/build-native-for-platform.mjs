@@ -19,7 +19,8 @@ export function resolvePnpmInvocation(scriptName, npmExecPath, platform = proces
   return withWindowsShell(npmExecPath, runArgs, platform)
 }
 
-// Why: Node refuses to spawn .cmd/.bat without a shell (CVE-2024-27980); cmd.exe needs quoting.
+// Why: unreachable today (the entry path exits on win32 before runPnpmScript); kept so a
+// future Windows caller cannot reintroduce the CVE-2024-27980 .cmd/.bat spawn failure.
 function withWindowsShell(command, args, platform) {
   const needsShell = platform === 'win32' && WINDOWS_SHELL_ENTRY_PATTERN.test(command)
 
