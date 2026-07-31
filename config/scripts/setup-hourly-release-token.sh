@@ -1,35 +1,32 @@
 #!/usr/bin/env bash
 #
-# Provisions HOURLY_RELEASE_TOKEN, the secret hourly-mac-build.yml uses to publish
-# into stablyai/orca-hourly. GITHUB_TOKEN cannot be used: it is scoped to the repo
+# Provisions the credentials hourly-mac-build.yml uses to publish into
+# stablyai/orca-hourly. GITHUB_TOKEN cannot be used: it is scoped to the repo
 # running the workflow, and hourly artifacts are published to a different one.
 #
-# The token is read silently and never leaves this process except into `gh secret
-# set` over a pipe. It is never echoed, never passed as a command-line argument
-# (argv is world-readable via `ps`), and never written to disk or shell history.
+# A GitHub App is used rather than a PAT because its private key does not expire
+# — no yearly rotation — and it belongs to the org rather than to the person who
+# created it, so it survives that person leaving.
 #
-# Usage:  bash config/scripts/setup-hourly-release-token.sh
+# The key is read from a file and piped straight into `gh secret set`. It is never
+# echoed, never passed as a command-line argument (argv is world-readable via
+# `ps`), and never copied anywhere on disk.
+#
+# Usage:  bash config/scripts/setup-hourly-release-token.sh [path/to/key.pem]
 #
 set -euo pipefail
 
-# Guard: xtrace would echo the token to stderr on every expansion.
+# Guard: xtrace would echo the key to stderr on every expansion.
 set +x
 if [[ -o xtrace ]]; then
-  echo "Refusing to run with xtrace enabled; it would echo the token." >&2
+  echo "Refusing to run with xtrace enabled; it would echo the private key." >&2
   exit 1
 fi
 
 MAIN_REPO="stablyai/orca"
 HOURLY_REPO="stablyai/orca-hourly"
-SECRET_NAME="HOURLY_RELEASE_TOKEN"
-
-TOKEN=""
-# Scrub on every exit path, including Ctrl-C and failures.
-cleanup() {
-  TOKEN=""
-  unset TOKEN
-}
-trap cleanup EXIT INT TERM
+APP_ID_SECRET="HOURLY_RELEASE_APP_ID"
+APP_KEY_SECRET="HOURLY_RELEASE_APP_PRIVATE_KEY"
 
 fail() {
   echo "error: $*" >&2
@@ -39,7 +36,7 @@ fail() {
 command -v gh >/dev/null 2>&1 || fail "gh CLI not found. See https://cli.github.com"
 gh auth status >/dev/null 2>&1 || fail "Not logged in. Run: gh auth login"
 
-# Setting a repo secret requires admin; check before asking for a token.
+# Setting repo secrets requires admin; check before asking for anything.
 if [[ "$(gh api "repos/$MAIN_REPO" --jq '.permissions.admin' 2>/dev/null)" != "true" ]]; then
   fail "You need admin on $MAIN_REPO to set repository secrets."
 fi
@@ -48,72 +45,50 @@ gh api "repos/$HOURLY_REPO" --jq '.full_name' >/dev/null 2>&1 ||
 
 cat <<EOF
 
-Create a fine-grained personal access token
-───────────────────────────────────────────
-  1. Open:  https://github.com/settings/personal-access-tokens/new
-  2. Resource owner ........  stablyai
-  3. Repository access .....  Only select repositories  →  $HOURLY_REPO
-  4. Permissions ...........  Repository permissions  →  Contents: Read and write
-  5. Expiration ............  set a reminder; the hourly build breaks silently
-                              when this lapses
-  6. Generate, then paste it below.
-
-Grant nothing beyond Contents on $HOURLY_REPO. This token only needs to cut
-releases and prune old ones. It is never given access to $MAIN_REPO.
+Create a GitHub App (one time — the key never expires)
+──────────────────────────────────────────────────────
+  1. Open:  https://github.com/organizations/stablyai/settings/apps/new
+  2. Name ..................  orca-hourly-release
+     Homepage URL ..........  https://github.com/$HOURLY_REPO
+     Webhook ...............  UNCHECK "Active"
+  3. Repository permissions  ->  Contents: Read and write
+     (leave everything else alone)
+  4. "Where can this app be installed?"  ->  Only on this account
+  5. Create, then note the App ID shown at the top of the page.
+  6. Generate a private key (bottom of the page) — a .pem downloads.
+  7. Install App  ->  Only select repositories  ->  $HOURLY_REPO
 
 EOF
 
-# -s: no echo. -r: no backslash mangling. Prefer the controlling terminal over
-# stdin so a piped invocation cannot silently consume something else as the token.
-#
-# Why open /dev/tty rather than test it: `[[ -r /dev/tty ]]` passes on a mode
-# check even where there is no controlling terminal to attach to, so the read
-# then fails and the script would fall through having set nothing.
-if { exec 3</dev/tty; } 2>/dev/null; then
-  read -rsp "Paste token (input hidden): " TOKEN <&3 || fail "Could not read the token."
-  exec 3<&-
-elif [[ -t 0 ]]; then
-  read -rsp "Paste token (input hidden): " TOKEN || fail "Could not read the token."
-else
-  fail "No terminal available to read the token without echoing it.
-Run this script directly in a terminal, not through a pipe or an agent."
+read -rp "App ID (numeric): " APP_ID
+[[ "$APP_ID" =~ ^[0-9]+$ ]] || fail "App ID must be numeric, got: ${APP_ID:-<empty>}"
+
+KEY_PATH="${1:-}"
+if [[ -z "$KEY_PATH" ]]; then
+  read -rp "Path to the downloaded .pem: " KEY_PATH
 fi
-echo
+# Expand a leading ~ so a pasted path works without quoting rules.
+KEY_PATH="${KEY_PATH/#\~/$HOME}"
+[[ -r "$KEY_PATH" ]] || fail "Cannot read key file: $KEY_PATH"
+grep -q "BEGIN.*PRIVATE KEY" "$KEY_PATH" ||
+  fail "$KEY_PATH does not look like a PEM private key."
 
-[[ -n "$TOKEN" ]] || fail "No token entered."
+echo "Storing $APP_ID_SECRET in $MAIN_REPO..."
+printf '%s' "$APP_ID" | gh secret set "$APP_ID_SECRET" --repo "$MAIN_REPO" ||
+  fail "Could not set $APP_ID_SECRET."
 
-# Pass via env, never argv: command-line arguments are visible to any local user
-# through `ps`, environment of a child process is not.
-echo "Verifying token..."
-token_login="$(GH_TOKEN="$TOKEN" gh api user --jq '.login' 2>/dev/null)" ||
-  fail "Token rejected by GitHub. Check that you copied it completely."
-echo "  authenticates as: $token_login"
-
-# Prove Contents:write for real rather than trusting the checkbox — a draft
-# release is invisible in the releases atom feed, so this cannot disturb users.
-echo "Verifying write access to $HOURLY_REPO..."
-probe_tag="setup-probe-$(date -u +%Y%m%d%H%M%S)"
-probe_id="$(GH_TOKEN="$TOKEN" gh api -X POST "repos/$HOURLY_REPO/releases" \
-  -f tag_name="$probe_tag" -F draft=true \
-  -f name="token setup probe (safe to ignore)" --jq '.id' 2>/dev/null)" ||
-  fail "Token cannot create releases in $HOURLY_REPO. Re-check: Contents = Read and write, repository = $HOURLY_REPO."
-
-if ! GH_TOKEN="$TOKEN" gh api -X DELETE "repos/$HOURLY_REPO/releases/$probe_id" >/dev/null 2>&1; then
-  echo "  warning: could not delete probe draft release $probe_id; remove it manually." >&2
-else
-  echo "  create + delete release: ok"
-fi
-
-# Piped on stdin, so the value never appears in argv or in shell history.
-echo "Storing $SECRET_NAME in $MAIN_REPO..."
-printf '%s' "$TOKEN" | gh secret set "$SECRET_NAME" --repo "$MAIN_REPO" ||
-  fail "Could not set the secret."
-
-cleanup
+# Piped on stdin so the key never appears in argv or in shell history.
+echo "Storing $APP_KEY_SECRET in $MAIN_REPO..."
+gh secret set "$APP_KEY_SECRET" --repo "$MAIN_REPO" <"$KEY_PATH" ||
+  fail "Could not set $APP_KEY_SECRET."
 
 echo
-echo "Done. $SECRET_NAME is set on $MAIN_REPO."
+echo "Done. Both secrets are set on $MAIN_REPO."
 echo
-echo "Smoke-test the pipeline without waiting for the hour:"
+echo "Delete your local copy of the key — the workflow reads it from the secret,"
+echo "and a .pem sitting in ~/Downloads is a standing credential:"
+echo "  rm '$KEY_PATH'"
+echo
+echo "Smoke-test the pipeline without waiting for the hour (after this merges):"
 echo "  gh workflow run hourly-mac-build.yml --repo $MAIN_REPO -f force=true"
 echo "  gh run watch --repo $MAIN_REPO"

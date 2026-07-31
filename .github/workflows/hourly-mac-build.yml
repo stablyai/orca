@@ -15,9 +15,19 @@ name: Hourly macOS Dev Build
 # repo's releases atom feed exposes only its 10 newest entries, so 24 hourly
 # tags a day would evict every stable/RC entry and break updates for real users.
 #
-# Requires the HOURLY_RELEASE_TOKEN secret (write access to orca-hourly);
-# GITHUB_TOKEN is scoped to this repo and cannot publish there. Provision it with
-# `bash config/scripts/setup-hourly-release-token.sh`.
+# GITHUB_TOKEN is scoped to this repo and cannot publish there, so writes use a
+# GitHub App installed on orca-hourly with Contents: Read and write. Its private
+# key does not expire, unlike a PAT — nothing here needs yearly rotation, and the
+# credential belongs to the org rather than to whoever created it.
+#
+# Provision the two secrets with `bash config/scripts/setup-hourly-release-token.sh`:
+#   HOURLY_RELEASE_APP_ID           the App's numeric id
+#   HOURLY_RELEASE_APP_PRIVATE_KEY  the App's .pem private key
+#
+# Installation tokens live one hour, which is ample here: this job skips tests,
+# notarization, and Windows signing entirely, so a run is pack + upload and lands
+# well inside that. If one ever did overrun, the release is still an unpublished
+# draft at that point, so nothing user-visible breaks.
 
 on:
   schedule:
@@ -47,10 +57,11 @@ jobs:
   build-hourly-mac:
     if: github.repository == 'stablyai/orca'
     runs-on: blacksmith-6vcpu-macos-15
-    # Why 150: it must exceed the worst case the retry budgets below can produce
-    # (install 3x10 + publish 2x30 = 90, plus ~35 for checkout/build/verify), or
-    # the job is killed mid-retry and no cleanup step runs at all.
-    timeout-minutes: 150
+    # Why 120: it must exceed the worst case the retry budgets below can produce
+    # (install 3x10 + publish 2x25 = 80, plus ~30 for checkout/build/verify), or
+    # the job is killed mid-retry and no cleanup step runs at all. A typical run
+    # is far shorter — there is no notarization, Windows signing, or test phase.
+    timeout-minutes: 120
     env:
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
@@ -60,10 +71,19 @@ jobs:
           ref: main
           fetch-depth: 0
           # Why: this job only reads stablyai/orca and never pushes; every write
-          # goes to the hourly repo through HOURLY_RELEASE_TOKEN passed by env.
+          # goes to the hourly repo through a minted App token passed by env.
           # Not persisting the checkout credential shrinks the blast radius if a
           # build step is compromised (zizmor: artipacked).
           persist-credentials: false
+
+      - name: Mint hourly repo token
+        id: app_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
+          private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
+          owner: stablyai
+          repositories: orca-hourly
 
       # Why: main is often idle overnight. Rebuilding an unchanged commit burns a
       # runner hour and adds a redundant tag to the retention window.
@@ -71,7 +91,7 @@ jobs:
         id: freshness
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.HOURLY_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
           FORCED: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
         run: |
           set -euo pipefail
@@ -167,7 +187,7 @@ jobs:
         if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.HOURLY_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
           TAG: v${{ steps.hourly.outputs.version }}
           SHA: ${{ steps.freshness.outputs.head_sha }}
         run: |
@@ -200,17 +220,17 @@ jobs:
         if: steps.freshness.outputs.should_build == 'true'
         uses: nick-fields/retry@v4
         with:
-          # Why lower than the release pipeline's 3x45: hourly skips notarization,
-          # so an attempt is pack + upload only. Keeping the worst case at 60min
-          # lets it fit under the job timeout with room for the cleanup steps.
-          timeout_minutes: 30
+          # Why lower than the release pipeline's 3x45: that budget is sized for
+          # notarization and Windows signing, neither of which runs here. An attempt
+          # is pack + upload only.
+          timeout_minutes: 25
           max_attempts: 2
           retry_wait_seconds: 30
           command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_HOURLY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
         env:
           # Why: electron-builder's github publisher targets the repo named in the
           # config; the token must therefore carry write access to orca-hourly.
-          GH_TOKEN: ${{ secrets.HOURLY_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
           ORCA_HOURLY_BUILD_VERSION: ${{ steps.hourly.outputs.version }}
           ORCA_BUILD_COMMIT: ${{ steps.hourly.outputs.commit }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
@@ -224,7 +244,7 @@ jobs:
         if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.HOURLY_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
           TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
@@ -254,7 +274,7 @@ jobs:
         if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.HOURLY_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
           TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
@@ -272,7 +292,7 @@ jobs:
         if: failure() && steps.release.outputs.tag != '' && steps.publish_live.outcome != 'success'
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.HOURLY_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
           TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -uo pipefail
@@ -285,7 +305,7 @@ jobs:
         if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.HOURLY_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
         run: |
           set -euo pipefail
           # Why: --cleanup-tag so pruning does not leave orphan tags behind that
