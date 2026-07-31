@@ -20,6 +20,7 @@ import { buildCodexResetCreditExpectedScope } from '../../shared/codex-reset-cre
 import type { CodexResetCreditAttemptLedger } from '../../shared/codex-reset-credit-attempt-ledger'
 import { buildWslCodexAvailabilityArgs, buildWslCodexLoginArgs } from './wsl-codex-command'
 import type { readHookTrustEntries as ReadHookTrustEntries } from '../codex/config-toml-trust'
+import type { Store } from '../persistence'
 
 const testState = {
   userDataDir: '',
@@ -190,7 +191,10 @@ function createStore(settings: GlobalSettings) {
     }
     return applySettings(updates)
   }
-  const withSettingsPreview = <T>(updates: Partial<GlobalSettings>, action: () => T): T => {
+  const withSettingsPreview: Store['withCodexAccountSettingsPreview'] = <T>(
+    updates: Partial<GlobalSettings>,
+    action: () => T
+  ): T => {
     if (settingsPreviewActive) {
       throw new Error('Cannot nest Codex account settings previews')
     }
@@ -218,7 +222,7 @@ function createStore(settings: GlobalSettings) {
     getSettings: vi.fn(() => settings),
     updateSettings: vi.fn(updateSettings),
     updateCodexAccountSettingsAndFlush: vi.fn(updateSettings),
-    withCodexAccountSettingsPreview: vi.fn(withSettingsPreview),
+    withCodexAccountSettingsPreview: withSettingsPreview,
     getCodexResetCreditAttemptLedger: vi.fn(() => structuredClone(resetLedger)),
     replaceCodexResetCreditAttemptLedgerAndFlush: vi.fn((next: CodexResetCreditAttemptLedger) => {
       resetLedger = structuredClone(next)
@@ -229,7 +233,7 @@ function createStore(settings: GlobalSettings) {
         resetLedger = structuredClone(next)
       }
     )
-  }
+  } satisfies Partial<Store>
 }
 
 function failNextAccountRemovalPersistence(store: ReturnType<typeof createStore>): void {
@@ -2824,6 +2828,7 @@ describe('CodexAccountService config sync', () => {
     await expect(service.removeAccount('account-1')).resolves.toMatchObject({ accounts: [] })
     expect(existsSync(managedHomePath)).toBe(false)
     expect(store.updateCodexAccountSettingsAndFlush).toHaveBeenCalledOnce()
+    expect(store.updateCodexAccountSettingsAndResetLedgerAndFlush).not.toHaveBeenCalled()
     expect(() => store.getCodexResetCreditAttemptLedger()).toThrow(
       'Codex reset-credit attempt ledger is corrupt'
     )
@@ -3333,7 +3338,7 @@ describe('CodexAccountService config sync', () => {
     expect(consume).toHaveBeenCalledTimes(1)
   })
 
-  it('restores the selected runtime when account removal persistence fails', async () => {
+  it('restores the selected account when account removal persistence fails', async () => {
     const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
     const settings = createSettings({
       codexManagedAccounts: [
