@@ -124,6 +124,7 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import type { NativeChatLaunchDraft, NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import { resolveAgentPaneAuthorityKey } from './agent-pane-authority'
@@ -1525,6 +1526,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         targetGroupId: groupId,
         activate: true
       })
+      return
+    }
+    if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
       return
     }
     const terminal = get().createTab(worktreeId, groupId)

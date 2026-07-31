@@ -105,6 +105,7 @@ describe('release channel', () => {
       tag: `v${version}`,
       version,
       channel: 'hourly',
+      name: null,
       publishedAt: null,
       releaseUrl: `https://github.com/stablyai/orca-hourly/releases/tag/v${version}`
     })

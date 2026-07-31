@@ -28,7 +28,8 @@ import {
   registerPaneKeyTeardownListener,
   getLocalPtyProvider,
   getSshPtyProvider,
-  registerHeadlessPtyRuntime
+  registerHeadlessPtyRuntime,
+  type CodexHomeLaunchContext
 } from './ipc/pty'
 import {
   initDaemonPtyProvider,
@@ -98,7 +99,7 @@ import {
   resolveUpdateInstallMode
 } from './updater'
 import { configureRemoteServerUpdater } from './runtime/remote-server-updater'
-import type { TuiAgent, UpdateCheckOptions } from '../shared/types'
+import type { UpdateCheckOptions } from '../shared/types'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import {
   installServeSupervisorDisconnectQuit,
@@ -890,7 +891,7 @@ function startTerminalRuntimeStartupServices(): Promise<void> {
 function prepareCodexRuntimeHomeForLaunch(
   target?: CodexAccountSelectionTarget,
   launchEnv?: NodeJS.ProcessEnv,
-  launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
+  launchContext?: CodexHomeLaunchContext
 ): string | null {
   if (
     target?.runtime !== 'wsl' &&
@@ -922,14 +923,18 @@ function prepareCodexRuntimeHomeForLaunch(
     return true
   }
   let realHomeHooksPrepared = ensureRealHomeHooksIfSelected()
-  let runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv)
+  let runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv, {
+    unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
+  })
   if (runtimeHomePath === null && !realHomeHooksPrepared) {
-    // Why: a managed home can lose auth during launch prep, which clears its
-    // selection and falls through to real home. Establish hook capability for
-    // that newly selected lane, then re-resolve if the capability gate rejects it.
+    // Why: launch prep can reject an untrusted managed home and clear its
+    // selection. Establish hook capability for that newly selected lane, then
+    // re-resolve if the capability gate rejects it.
     realHomeHooksPrepared = ensureRealHomeHooksIfSelected()
     if (realHomeHooksPrepared) {
-      runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv)
+      runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv, {
+        unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
+      })
     }
   }
   if (runtimeHomePath === null && target?.runtime !== 'wsl') {

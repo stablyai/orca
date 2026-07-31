@@ -177,6 +177,7 @@ const SETTINGS_NAV_GROUP_BY_ID = new Map<string, SettingsNavGroupDefinition>(
 
 const SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID = 'shortcuts-escape-confirm'
 const SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS = 2200
+const SETTINGS_TARGET_HIGHLIGHT_MS = 3_000
 
 function getSettingsSectionId(
   pane: SettingsNavTarget,
@@ -372,6 +373,9 @@ function Settings(): React.JSX.Element {
     getInitialMountedSectionIds
   )
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
+  const [highlightedSettingsTargetId, setHighlightedSettingsTargetId] = useState<string | null>(
+    null
+  )
   const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
   const [sshHostAddIntentSignal, setSshHostAddIntentSignal] = useState(0)
   const [remoteServerAddIntentSignal, setRemoteServerAddIntentSignal] = useState(0)
@@ -445,6 +449,17 @@ function Settings(): React.JSX.Element {
       settingsMountedRef.current = false
     }
   }, [])
+
+  useEffect(() => {
+    if (!highlightedSettingsTargetId) {
+      return
+    }
+    const timeout = window.setTimeout(
+      () => setHighlightedSettingsTargetId(null),
+      SETTINGS_TARGET_HIGHLIGHT_MS
+    )
+    return () => window.clearTimeout(timeout)
+  }, [highlightedSettingsTargetId])
 
   const requestFontSuggestions = useCallback((): void => {
     if (installedFontsLoadedRef.current || installedFontsLoadPromiseRef.current) {
@@ -661,6 +676,11 @@ function Settings(): React.JSX.Element {
     }
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
+    setHighlightedSettingsTargetId(
+      settingsNavigationTarget.pane === 'developer-permissions'
+        ? (settingsNavigationTarget.sectionId ?? null)
+        : null
+    )
     // Why: ensure Appearance's nested status-bar section is open before scrolling so the row is visible.
     if (settingsNavigationTarget.pane === 'appearance') {
       const accordion = resolveAppearanceAccordionDeepLink(settingsNavigationTarget.sectionId)
@@ -1696,7 +1716,9 @@ function Settings(): React.JSX.Element {
                     searchEntries={getSectionSearchEntries('developer-permissions')}
                   >
                     {isSectionMounted('developer-permissions') ? (
-                      <DeveloperPermissionsPane />
+                      <DeveloperPermissionsPane
+                        highlightedSettingId={highlightedSettingsTargetId}
+                      />
                     ) : null}
                   </SettingsSection>
                 ) : null}

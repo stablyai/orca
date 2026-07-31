@@ -100,6 +100,9 @@ export type ReleaseBuild = {
   tag: string
   version: string
   channel: ReleaseChannel
+  /** The release's GitHub title. Null when it is absent or just repeats the tag,
+   *  so the picker can tell "the workflow named this" from "nobody did". */
+  name: string | null
   publishedAt: string | null
   releaseUrl: string
 }

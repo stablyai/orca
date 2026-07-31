@@ -170,7 +170,37 @@ jobs:
       - name: Compute hourly version
         id: hourly
         if: steps.freshness.outputs.should_build == 'true'
-        run: node config/scripts/hourly-build-version.mjs >>"$GITHUB_OUTPUT"
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          # Why read the highest number off existing titles rather than counting
+          # releases: the prune step trims to HOURLY_RETAIN_COUNT, so a count would
+          # roll backwards after three days and reissue numbers already in use. The
+          # maximum is always among the retained builds, because pruning drops the
+          # oldest. `capture(...)?` swallows the non-match on legacy titles, which
+          # were the raw tag, so the series simply starts at 01.
+          #
+          # Why drafts count here but not in the freshness check: that check asks
+          # "did this commit ship", where a draft is a no. This one asks "is the
+          # number free", where a stranded draft still holds one.
+          last_number="$(gh release list --repo "$HOURLY_REPO" --limit 200 --json name,isDraft \
+            --jq '[.[] | (.name // "") | capture(" • (?<n>[0-9]+) • ")? | .n | tonumber] | max // 0')"
+          build_number=$(( last_number + 1 ))
+          echo "Hourly build number $build_number (previous high: $last_number)"
+          ORCA_HOURLY_BUILD_NUMBER="$build_number" node config/scripts/hourly-build-version.mjs \
+            >"$RUNNER_TEMP/hourly-identity.txt"
+          # Why check rather than trust: the checkout above pins `ref: main`, but a
+          # workflow_dispatch runs this file from whatever branch was dispatched. A
+          # branch that edits this step while main still has the old script yields
+          # an empty name and an untitled release — silent, and only visible once
+          # someone opens the releases page. Fail here instead.
+          if ! grep -q '^name=' "$RUNNER_TEMP/hourly-identity.txt"; then
+            echo "::error::hourly-build-version.mjs emitted no release name; this workflow and main's copy of the script are out of sync."
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/hourly-identity.txt" >>"$GITHUB_OUTPUT"
 
       - name: Build app
         if: steps.freshness.outputs.should_build == 'true'
@@ -189,9 +219,12 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           TAG: v${{ steps.hourly.outputs.version }}
+          NAME: ${{ steps.hourly.outputs.name }}
           SHA: ${{ steps.freshness.outputs.head_sha }}
         run: |
           set -euo pipefail
+          # Kept at 12 even though the title shows 7: the freshness check above
+          # parses this back out of the body to decide whether main has moved.
           short_sha="${SHA:0:12}"
           # Why create it up front: electron-builder then uploads into a known tag
           # rather than inferring one from package.json.
@@ -205,7 +238,7 @@ jobs:
           # after the manifest is verified.
           gh release create "$TAG" \
             --repo "$HOURLY_REPO" \
-            --title "$TAG" \
+            --title "$NAME" \
             --draft \
             --notes "Automated hourly macOS dev build from commit \`$short_sha\`.
 
@@ -276,10 +309,14 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           TAG: ${{ steps.release.outputs.tag }}
+          NAME: ${{ steps.hourly.outputs.name }}
         run: |
           set -euo pipefail
-          gh release edit "$TAG" --repo "$HOURLY_REPO" --draft=false --prerelease
-          echo "Published $TAG"
+          # --title again: electron-builder resolves this draft by tag and may
+          # rewrite its title on upload. Re-asserting here means the name the
+          # picker reads is the one composed above, whatever it did in between.
+          gh release edit "$TAG" --repo "$HOURLY_REPO" --draft=false --prerelease --title "$NAME"
+          echo "Published $TAG as \"$NAME\""
 
       # Why: a draft left behind by a failed publish is invisible to users but still
       # holds its tag name, so the next run for the same minute would collide.

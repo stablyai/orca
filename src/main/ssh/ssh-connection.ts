@@ -440,11 +440,14 @@ export class SshConnection {
             const targetDir = await resolveSftpTransferPathIfMapped(sftp, remoteDir, options)
             linkedSignal.signal.throwIfAborted()
             const { uploadDirectory } = await import('./ssh-relay-deploy-helpers')
-            await uploadDirectory(sftp, localDir, targetDir)
+            await uploadDirectory(sftp, localDir, targetDir, localDir, {
+              signal: linkedSignal.signal
+            })
           })()
           await raceSftpFileTransferWithAbort(transfer, linkedSignal.signal, (onClose) => {
             sftp.once('close', onClose)
             endSftp()
+            return () => sftp.removeListener('close', onClose)
           })
         } finally {
           endSftp()
@@ -543,6 +546,7 @@ export class SshConnection {
           await raceSftpFileTransferWithAbort(write, linkedSignal.signal, (onClose) => {
             sftp.once('close', onClose)
             endSftp()
+            return () => sftp.removeListener('close', onClose)
           })
         } finally {
           endSftp()

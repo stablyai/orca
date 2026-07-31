@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Repo, TerminalTab, Worktree } from '../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
+import { isGitRepoKind } from '../../../shared/repo-kind'
 import type { AppState } from './types'
 import {
   getAllWorktreesFromState,
@@ -285,6 +286,120 @@ describe('store selectors', () => {
     ).toBe(runtime)
     expect(
       selectRepoByIdForActiveWorkspace({ ...activeState, repos: [local] }, 'same-repo')
+    ).toBeNull()
+  })
+
+  it('keeps the repo when a paired-hub worktree reports a different execution host', () => {
+    // Why: withRepoHostOwnership deliberately keeps an SSH worktree's own host while its repo stays hub-owned.
+    const repo = makeRepo({
+      id: 'hub-repo',
+      path: '/hub/repo',
+      displayName: 'hub',
+      executionHostId: toRuntimeExecutionHostId('hub-a')
+    })
+    const local = makeRepo({
+      id: 'hub-repo',
+      path: '/local/repo',
+      displayName: 'local',
+      executionHostId: 'local'
+    })
+    const activeState = {
+      activeRepoId: 'hub-repo',
+      activeWorkspaceExecutionHostId: toSshExecutionHostId('hub-private-target')
+    }
+
+    for (const repos of [[repo], [local, repo], [repo, local]]) {
+      expect(selectRepoByIdForActiveWorkspace({ ...activeState, repos }, 'hub-repo')).toBe(repo)
+    }
+    // Why: useGitStatusPolling gates every lane on this exact expression, so a null repo silently stops polling.
+    const activeRepo = selectRepoByIdForActiveWorkspace(
+      { ...activeState, repos: [repo] },
+      'hub-repo'
+    )
+    expect(activeRepo ? isGitRepoKind(activeRepo) : false).toBe(true)
+  })
+
+  it('fails a paired-hub repo fallback closed when rival HUB rows share the repo ID', () => {
+    const repoForHub = (environmentId: string) =>
+      makeRepo({
+        id: 'hub-repo',
+        path: `/hub/${environmentId}/repo`,
+        displayName: environmentId,
+        executionHostId: toRuntimeExecutionHostId(environmentId)
+      })
+
+    expect(
+      selectRepoByIdForActiveWorkspace(
+        {
+          repos: [repoForHub('hub-a'), repoForHub('hub-b')],
+          activeRepoId: 'hub-repo',
+          activeWorkspaceExecutionHostId: toSshExecutionHostId('shared-private-target')
+        },
+        'hub-repo'
+      )
+    ).toBeNull()
+  })
+
+  it('still prefers the host-matching row when one repo ID spans hosts', () => {
+    const hub = makeRepo({
+      id: 'shared-repo',
+      path: '/hub/repo',
+      displayName: 'hub',
+      executionHostId: toRuntimeExecutionHostId('hub-a')
+    })
+    const ssh = makeRepo({
+      id: 'shared-repo',
+      path: '/ssh/repo',
+      displayName: 'ssh',
+      executionHostId: toSshExecutionHostId('hub-private-target')
+    })
+
+    expect(
+      selectRepoByIdForActiveWorkspace(
+        {
+          repos: [hub, ssh],
+          activeRepoId: 'shared-repo',
+          activeWorkspaceExecutionHostId: toSshExecutionHostId('hub-private-target')
+        },
+        'shared-repo'
+      )
+    ).toBe(ssh)
+  })
+
+  it('keeps every non-paired-hub host mismatch failing closed', () => {
+    // Why: the paired-hub exemption is ssh-selection-over-runtime-repo only; anything else is a wrong host.
+    const runtime = makeRepo({
+      id: 'same-repo',
+      path: '/runtime/repo',
+      displayName: 'runtime',
+      executionHostId: toRuntimeExecutionHostId('env-1')
+    })
+    const ssh = makeRepo({
+      id: 'ssh-repo',
+      path: '/ssh/repo',
+      displayName: 'ssh',
+      executionHostId: toSshExecutionHostId('target-1')
+    })
+
+    expect(
+      selectRepoByIdForActiveWorkspace(
+        {
+          repos: [runtime],
+          activeRepoId: 'same-repo',
+          activeWorkspaceExecutionHostId: toRuntimeExecutionHostId('env-2')
+        },
+        'same-repo'
+      )
+    ).toBeNull()
+    expect(
+      selectRepoByIdForActiveWorkspace(
+        {
+          repos: [ssh],
+          activeRepoId: 'ssh-repo',
+          activeWorkspaceExecutionHostId: toSshExecutionHostId('target-2')
+        },
+        'ssh-repo'
+      )
     ).toBeNull()
   })
 

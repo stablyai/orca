@@ -541,6 +541,7 @@ import {
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { collectMemorySnapshot } from '../memory/collector'
 import { app, BrowserWindow, ipcMain, Notification } from 'electron'
+import { RendererPublicationThrottle } from '../window/renderer-publication-throttle'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
 import { BrowserError } from '../browser/cdp-bridge'
@@ -2640,6 +2641,8 @@ export class OrcaRuntimeService {
   private rendererGraphEpoch = 0
   private graphStatus: RuntimeGraphStatus = 'unavailable'
   private authoritativeWindowId: number | null = null
+  // Why: paired graph transactions need foreground timer cadence only until their publication settles.
+  private readonly rendererPublicationThrottle = new RendererPublicationThrottle()
   private tabs = new Map<string, RuntimeSyncedTab>()
   private mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
   // Why: renderer publication ordering must be judged against the renderer's
@@ -2689,6 +2692,7 @@ export class OrcaRuntimeService {
     string,
     {
       activate: boolean
+      paired: boolean
       selectIfNoActiveTab: boolean
       viewMode?: 'terminal' | 'chat'
     }
@@ -2804,6 +2808,7 @@ export class OrcaRuntimeService {
   // iterates them all. Listeners are cleaned up via subscriptionCleanups.
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
+  private readonly pairedRendererSessionOwnedPtyIds = new Set<string>()
   private wslDistroByPtyId = new Map<string, string>()
   private titleObservationSequence = 0
   private headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
@@ -5431,6 +5436,7 @@ export class OrcaRuntimeService {
       })
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId)
       await this.refreshMobileSessionPtyRecords(explicitWorktreeId)
+      this.restoreLivePairedRendererSessionOwnedMobileTerminals(explicitWorktreeId)
       return this.getMobileSessionTabsForWorktree(explicitWorktreeId, clientNavigationId)
     }
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
@@ -5440,6 +5446,7 @@ export class OrcaRuntimeService {
     })
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id)
     await this.refreshMobileSessionPtyRecords()
+    this.restoreLivePairedRendererSessionOwnedMobileTerminals(worktree.id)
     return this.getMobileSessionTabsForWorktree(worktree.id, clientNavigationId)
   }
 
@@ -6008,6 +6015,7 @@ export class OrcaRuntimeService {
         const pty = this.ptysById.get(ptyId)
         if (pty?.worktreeId === worktreeId && pty.tabId === parentTabId) {
           pty.runtimeSessionOwned = false
+          this.setPairedRendererSessionOwnership(pty.ptyId, false)
         }
       }
     }
@@ -6154,6 +6162,7 @@ export class OrcaRuntimeService {
       startupCwd?: string
       viewMode?: 'terminal' | 'chat'
       split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
+      notify?: boolean
     }
   ): void {
     if (
@@ -6262,7 +6271,9 @@ export class OrcaRuntimeService {
       tabs
     }
     this.mobileSessionTabsByWorktree.set(worktreeId, next)
-    this.notifyMobileSessionTabsChanged(worktreeId)
+    if (args.notify !== false) {
+      this.notifyMobileSessionTabsChanged(worktreeId)
+    }
   }
 
   private touchMobileSessionSnapshotsForPty(
@@ -6879,7 +6890,11 @@ export class OrcaRuntimeService {
     }
   }
 
-  private removePersistedHeadlessTerminalTab(worktreeId: string, parentTabId: string): string[] {
+  private removePersistedHeadlessTerminalTab(
+    worktreeId: string,
+    parentTabId: string,
+    options: { allowMissing?: boolean } = {}
+  ): string[] {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession) {
       throw new Error('workspace_session_unavailable')
@@ -6889,6 +6904,9 @@ export class OrcaRuntimeService {
       throw new Error('terminal_tab_pinned')
     }
     if (!result.closed) {
+      if (options.allowMissing) {
+        return []
+      }
       throw new Error('tab_not_found')
     }
     this.setWorkspaceSessionForWorktree(
@@ -7049,7 +7067,7 @@ export class OrcaRuntimeService {
           }
         }
         try {
-          await this.createHeadlessMobileSessionTerminal(worktreeId, targetsHost, undefined, {
+          await this.createRuntimeOwnedMobileSessionTerminal(worktreeId, targetsHost, undefined, {
             identity: {
               tabId: tab.parentTabId,
               leafId: tab.leafId,
@@ -7317,13 +7335,19 @@ export class OrcaRuntimeService {
       reason?: RuntimeSessionTabCloseReason
       expectedPublicationEpoch?: string
       expectedTerminalHandle?: string
+      clientNavigationId?: string
     } = {}
   ): Promise<RuntimeMobileSessionTabCloseResult> {
+    const graphEpoch = options.clientNavigationId ? this.captureReadyGraphEpoch() : null
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     const observedPtyIds = await this.refreshMobileSessionPtyRecords()
+    if (graphEpoch !== null) {
+      this.assertStableReadyGraph(graphEpoch)
+    }
+    this.restoreLivePairedRendererSessionOwnedMobileTerminals(worktreeId)
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (options.reason !== undefined && options.reason !== 'user' && observedPtyIds === null) {
       // Why: keep-on-unknown must also restore the mirror the caller already pruned.
@@ -7455,7 +7479,19 @@ export class OrcaRuntimeService {
       if (closingWholeParent && this.notifier?.closeTerminalTab) {
         // Why: whole-tab close is a lifecycle transaction. The renderer reply
         // arrives only after canonical retirement and a forced session flush.
-        await this.notifier.closeTerminalTab(tab.parentTabId)
+        const win = this.getAvailableAuthoritativeWindow()
+        if (win?.webContents.isDestroyed?.()) {
+          throw new Error('runtime_unavailable')
+        }
+        const releasePublicationThrottle =
+          options.clientNavigationId && win
+            ? this.rendererPublicationThrottle.acquire(win.webContents)
+            : () => {}
+        try {
+          await this.notifier.closeTerminalTab(tab.parentTabId)
+        } finally {
+          releasePublicationThrottle()
+        }
         const remainingSnapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
         const remainingTab = remainingSnapshot?.tabs.find(
           (candidate): candidate is RuntimeMobileSessionTerminalTab =>
@@ -7467,7 +7503,10 @@ export class OrcaRuntimeService {
           this.isRuntimeOwnedHeadlessMobileTab(worktreeId, remainingTab)
         ) {
           // Why: after relay recovery the renderer can acknowledge a tab it no longer mirrors; the HUB must still retire its SSH-owned surface.
-          this.closeHeadlessMobileTerminalTab(worktreeId, remainingSnapshot, remainingTab)
+          this.closeHeadlessMobileTerminalTab(worktreeId, remainingSnapshot, remainingTab, {
+            // Why: the renderer may already have durably removed the tab before acknowledging.
+            allowMissingPersistedTab: true
+          })
           this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
           this.store?.flushOrThrow?.()
         }
@@ -7641,11 +7680,13 @@ export class OrcaRuntimeService {
     worktreeId: string,
     snapshot: RuntimeMobileSessionTabsSnapshot,
     tab: RuntimeMobileSessionTerminalTab,
-    options: { killPtys?: boolean } = {}
+    options: { allowMissingPersistedTab?: boolean; killPtys?: boolean } = {}
   ): void {
     const closedParentTabId = tab.parentTabId
     this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, closedParentTabId)
-    const projectedPtyIds = this.removePersistedHeadlessTerminalTab(worktreeId, closedParentTabId)
+    const projectedPtyIds = this.removePersistedHeadlessTerminalTab(worktreeId, closedParentTabId, {
+      allowMissing: options.allowMissingPersistedTab
+    })
     // Why: local provider ids can be reused after restart, so a dormant
     // persisted id is not kill authority. SSH relay ids remain durable exact
     // identities even before pane metadata reconnects.
@@ -12847,6 +12888,7 @@ export class OrcaRuntimeService {
     if (pty) {
       pty.connected = false
       pty.runtimeSessionOwned = false
+      this.setPairedRendererSessionOwnership(pty.ptyId, false)
       pty.disconnectedAt = Date.now()
       pty.lastExitCode = exitCode
       this.resolvePtyExitWaiters(pty, ptyId)
@@ -24651,11 +24693,13 @@ export class OrcaRuntimeService {
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
       activate?: boolean
+      clientNavigationId?: string
       clientMutationId?: string
       signal?: AbortSignal
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
-    this.assertGraphReady()
+    const pairedCreate = Boolean(opts.clientNavigationId)
+    const graphEpoch = this.captureReadyGraphEpoch()
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
     const worktreeId = workspace.id
     const cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd)
@@ -24670,10 +24714,13 @@ export class OrcaRuntimeService {
       afterDesktopTabId = anchor.type === 'terminal' ? anchor.parentTabId : anchor.id
     }
     const startupCommand = await this.resolveMobileSessionTerminalCommand(workspace, opts)
-
+    this.assertStableReadyGraph(graphEpoch)
+    if (opts.signal?.aborted) {
+      throw new Error('client_disconnected')
+    }
     const win = this.getAvailableAuthoritativeWindow()
     if (!win) {
-      return await this.createHeadlessMobileSessionTerminal(
+      return await this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,
         opts.activate !== false,
         opts.afterTabId,
@@ -24686,142 +24733,155 @@ export class OrcaRuntimeService {
           launchAgent: startupCommand.launchAgent,
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
-          launchConfig: startupCommand.launchConfig
+          launchConfig: startupCommand.launchConfig,
+          signal: opts.signal
         }
       )
     }
-    const requestId = randomUUID()
-    const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        ipcMain.removeListener('terminal:tabCreateReply', handler)
-        opts.signal?.removeEventListener('abort', onAbort)
-        reject(new Error('Terminal creation timed out'))
-      }, 10_000)
-      // Why: a dead client connection cancels the wait; the renderer tab (and
-      // its shell) stays alive for the host and mirrors on reconnect (#7718).
-      const onAbort = (): void => {
-        clearTimeout(timer)
-        ipcMain.removeListener('terminal:tabCreateReply', handler)
-        reject(new Error('client_disconnected'))
-      }
-
-      const handler = (
-        event: Electron.IpcMainEvent,
-        r: { requestId: string; tabId?: string; title?: string; error?: string }
-      ): void => {
-        if (event.sender !== win.webContents || r.requestId !== requestId) {
-          return
-        }
-        clearTimeout(timer)
-        ipcMain.removeListener('terminal:tabCreateReply', handler)
-        opts.signal?.removeEventListener('abort', onAbort)
-        if (r.error) {
-          reject(new Error(r.error))
-        } else {
-          resolve({ tabId: r.tabId!, title: r.title ?? '' })
-        }
-      }
-      opts.signal?.addEventListener('abort', onAbort, { once: true })
-      ipcMain.on('terminal:tabCreateReply', handler)
-      win.webContents.send('terminal:requestTabCreate', {
-        requestId,
-        worktreeId,
-        afterTabId: afterDesktopTabId,
-        targetGroupId: opts.targetGroupId,
-        command: startupCommand.command,
-        cwd,
-        ...(startupCommand.env ? { env: startupCommand.env } : {}),
-        ...(startupCommand.envToDelete ? { envToDelete: startupCommand.envToDelete } : {}),
-        ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
-        ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
-        ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
-        startupCommandDelivery: startupCommand.startupCommandDelivery,
-        source: 'runtime-session',
-        activate: opts.activate
-      })
-    })
-
-    if (opts.activate !== false) {
-      this.notifier?.focusTerminal(reply.tabId, worktreeId, null)
+    if (win.webContents.isDestroyed?.()) {
+      throw new Error('runtime_unavailable')
     }
-    // Why: register the wait before the renderer's PTY spawn arrives so that
-    // spawn (registerPty) can publish the pty-backed surface main-side even if
-    // graph-sync is stalled (#7587). Removed in the finally below.
-    const pendingCreateKey = `${worktreeId}::${reply.tabId}`
-    // Why: a rescue publishes into the active group (opts.targetGroupId is not
-    // threaded); the renderer's reconciling publication then moves the tab to the
-    // requested group, so any wrong-group placement is cosmetic and stall-window-only.
-    this.pendingMobileTerminalCreatesByKey.set(pendingCreateKey, {
-      activate: opts.activate !== false,
-      selectIfNoActiveTab: true,
-      ...(opts.viewMode ? { viewMode: opts.viewMode } : {})
-    })
+    const releasePublicationThrottle = pairedCreate
+      ? this.rendererPublicationThrottle.acquire(win.webContents)
+      : () => {}
     try {
-      // Why: the PTY spawn and the tabCreate reply race on independent IPC
-      // channels; if the spawn already registered, publish immediately so the
-      // wait resolves without depending on a graph sync.
-      this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, reply.tabId)
-      const surface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
-        timeoutMs: MOBILE_TERMINAL_SURFACE_TIMEOUT_MS,
-        signal: opts.signal
-      })
-      if (this.isReadyMobileTerminalSurface(surface)) {
-        return surface
-      }
-      const readySurface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
-        timeoutMs: MOBILE_TERMINAL_READY_FALLBACK_MS,
-        requireReady: true,
-        signal: opts.signal
-      }).catch(() => null)
-      if (readySurface) {
-        return readySurface
-      }
-      if (opts.signal?.aborted) {
-        // Why: nobody awaits this create anymore; don't materialize or roll back — the renderer's own publication settles the tab.
-        throw new Error('client_disconnected')
-      }
-      const pendingSurface = this.findMobileTerminalSurface(worktreeId, reply.tabId)
-      if (!pendingSurface) {
-        throw new Error('Timed out waiting for terminal surface after creation')
-      }
-      // Why: a hidden renderer can publish the tab shell before the PTY spawns; reuse the same identity so later focus adopts instead of creating another tab.
-      return await this.createHeadlessMobileSessionTerminal(
-        worktreeId,
-        opts.activate !== false,
-        opts.afterTabId,
-        {
+      const requestId = randomUUID()
+      const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          ipcMain.removeListener('terminal:tabCreateReply', handler)
+          opts.signal?.removeEventListener('abort', onAbort)
+          reject(new Error('Terminal creation timed out'))
+        }, 10_000)
+        // Why: a dead client connection cancels the wait; the renderer tab (and
+        // its shell) stays alive for the host and mirrors on reconnect (#7718).
+        const onAbort = (): void => {
+          clearTimeout(timer)
+          ipcMain.removeListener('terminal:tabCreateReply', handler)
+          reject(new Error('client_disconnected'))
+        }
+
+        const handler = (
+          event: Electron.IpcMainEvent,
+          r: { requestId: string; tabId?: string; title?: string; error?: string }
+        ): void => {
+          if (event.sender !== win.webContents || r.requestId !== requestId) {
+            return
+          }
+          clearTimeout(timer)
+          ipcMain.removeListener('terminal:tabCreateReply', handler)
+          opts.signal?.removeEventListener('abort', onAbort)
+          if (r.error) {
+            reject(new Error(r.error))
+          } else {
+            resolve({ tabId: r.tabId!, title: r.title ?? '' })
+          }
+        }
+        opts.signal?.addEventListener('abort', onAbort, { once: true })
+        ipcMain.on('terminal:tabCreateReply', handler)
+        win.webContents.send('terminal:requestTabCreate', {
+          requestId,
+          worktreeId,
+          afterTabId: afterDesktopTabId,
+          targetGroupId: opts.targetGroupId,
           command: startupCommand.command,
           cwd,
-          env: startupCommand.env,
-          envToDelete: startupCommand.envToDelete,
+          ...(startupCommand.env ? { env: startupCommand.env } : {}),
+          ...(startupCommand.envToDelete ? { envToDelete: startupCommand.envToDelete } : {}),
+          ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
+          ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
+          ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           startupCommandDelivery: startupCommand.startupCommandDelivery,
-          identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
-          launchAgent: startupCommand.launchAgent,
-          viewMode: opts.viewMode,
-          targetGroupId: opts.targetGroupId,
-          launchConfig: startupCommand.launchConfig
-        }
-      )
-    } catch (error) {
-      // Why: publication latency (hidden renderer) can trip the surface timeout; rescue only when a live PTY backs the tab, else a ghost tab skips rollback (#7587).
-      if (this.findLiveRegisteredPtyForRendererTab(worktreeId, reply.tabId)) {
-        const rescued = this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, reply.tabId)
-        if (rescued) {
-          return rescued
-        }
+          source: 'runtime-session',
+          activate: opts.activate
+        })
+      })
+
+      if (opts.activate !== false) {
+        this.notifier?.focusTerminal(reply.tabId, worktreeId, null)
       }
-      // Why: don't roll back on a client disconnect or a live shell already backing the tab — that would kill a visible terminal ("tab dies after ~10s", #7718).
-      if (
-        isClientDisconnectedError(error) ||
-        this.hasLiveShellForRendererTab(worktreeId, reply.tabId)
-      ) {
+      // Why: register the wait before the renderer's PTY spawn arrives so that
+      // spawn (registerPty) can publish the pty-backed surface main-side even if
+      // graph-sync is stalled (#7587). Removed in the finally below.
+      const pendingCreateKey = `${worktreeId}::${reply.tabId}`
+      // Why: a rescue publishes into the active group (opts.targetGroupId is not
+      // threaded); the renderer's reconciling publication then moves the tab to the
+      // requested group, so any wrong-group placement is cosmetic and stall-window-only.
+      this.pendingMobileTerminalCreatesByKey.set(pendingCreateKey, {
+        activate: opts.activate !== false,
+        paired: pairedCreate,
+        selectIfNoActiveTab: true,
+        ...(opts.viewMode ? { viewMode: opts.viewMode } : {})
+      })
+      try {
+        // Why: the PTY spawn and the tabCreate reply race on independent IPC
+        // channels; if the spawn already registered, publish immediately so the
+        // wait resolves without depending on a graph sync.
+        this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, reply.tabId)
+        const surface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
+          timeoutMs: MOBILE_TERMINAL_SURFACE_TIMEOUT_MS,
+          signal: opts.signal
+        })
+        if (this.isReadyMobileTerminalSurface(surface)) {
+          return surface
+        }
+        const readySurface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
+          timeoutMs: MOBILE_TERMINAL_READY_FALLBACK_MS,
+          requireReady: true,
+          signal: opts.signal
+        }).catch(() => null)
+        if (readySurface) {
+          return readySurface
+        }
+        if (opts.signal?.aborted) {
+          // Why: nobody awaits this create anymore; don't materialize or roll back — the renderer's own publication settles the tab.
+          throw new Error('client_disconnected')
+        }
+        const pendingSurface = this.findMobileTerminalSurface(worktreeId, reply.tabId)
+        if (!pendingSurface) {
+          throw new Error('Timed out waiting for terminal surface after creation')
+        }
+        // Why: a hidden renderer can publish the tab shell before the PTY spawns; reuse the same identity so later focus adopts instead of creating another tab.
+        return await this.createRuntimeOwnedMobileSessionTerminal(
+          worktreeId,
+          opts.activate !== false,
+          opts.afterTabId,
+          {
+            command: startupCommand.command,
+            cwd,
+            env: startupCommand.env,
+            envToDelete: startupCommand.envToDelete,
+            startupCommandDelivery: startupCommand.startupCommandDelivery,
+            identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
+            launchAgent: startupCommand.launchAgent,
+            viewMode: opts.viewMode,
+            targetGroupId: opts.targetGroupId,
+            launchConfig: startupCommand.launchConfig,
+            signal: opts.signal
+          }
+        )
+      } catch (error) {
+        // Why: publication latency (hidden renderer) can trip the surface timeout; rescue only when a live PTY backs the tab, else a ghost tab skips rollback (#7587).
+        if (this.findLiveRegisteredPtyForRendererTab(worktreeId, reply.tabId)) {
+          const rescued = this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, reply.tabId)
+          if (rescued) {
+            return rescued
+          }
+        }
+        // Why: don't roll back on a client disconnect or a live shell already backing the tab — that would kill a visible terminal ("tab dies after ~10s", #7718).
+        if (
+          isClientDisconnectedError(error) ||
+          this.hasLiveShellForRendererTab(worktreeId, reply.tabId)
+        ) {
+          throw error
+        }
+        // Why: renderer made the tab but no live PTY backs it (real spawn/handle failure); roll it back so it can't linger as a ghost in mobile snapshots.
+        this.notifier?.closeTerminal(reply.tabId)
         throw error
+      } finally {
+        this.pendingMobileTerminalCreatesByKey.delete(pendingCreateKey)
       }
-      // Why: renderer made the tab but no live PTY backs it (real spawn/handle failure); roll it back so it can't linger as a ghost in mobile snapshots.
-      this.notifier?.closeTerminal(reply.tabId)
-      throw error
     } finally {
-      this.pendingMobileTerminalCreatesByKey.delete(pendingCreateKey)
+      releasePublicationThrottle()
     }
   }
 
@@ -24909,7 +24969,7 @@ export class OrcaRuntimeService {
     }
   }
 
-  private async createHeadlessMobileSessionTerminal(
+  private async createRuntimeOwnedMobileSessionTerminal(
     worktreeId: string,
     activate: boolean,
     afterTabId?: string,
@@ -24924,6 +24984,7 @@ export class OrcaRuntimeService {
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
       launchConfig?: SleepingAgentLaunchConfig
+      signal?: AbortSignal
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
@@ -24952,7 +25013,8 @@ export class OrcaRuntimeService {
           : {}),
       persistHostSessionBinding: true,
       // Why: this method publishes the authoritative snapshot below; skip the intermediate publish to avoid a wrong-group flash.
-      deferMobileSessionPublish: true
+      deferMobileSessionPublish: true,
+      signal: opts.signal
     })
     const livePty = this.getLivePtyForHandle(terminal.handle)
     if (!livePty) {
@@ -25148,6 +25210,9 @@ export class OrcaRuntimeService {
     const pty = this.findLiveRegisteredPtyForRendererTab(worktreeId, tabId)
     if (pty) {
       pty.runtimeSessionOwned = true
+      if (pending.paired) {
+        this.setPairedRendererSessionOwnership(pty.ptyId, true)
+      }
     }
     if (
       existing &&
@@ -25174,6 +25239,69 @@ export class OrcaRuntimeService {
       cb()
     }
     return this.findMobileTerminalSurface(worktreeId, tabId)
+  }
+
+  private restoreLivePairedRendererSessionOwnedMobileTerminals(
+    worktreeId: string | null,
+    options: { missingSnapshotOnly?: boolean; notify?: boolean } = {}
+  ): void {
+    for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
+      const pty = this.ptysById.get(ptyId)
+      if (
+        !pty?.connected ||
+        !pty.tabId ||
+        (worktreeId !== null && !runtimeWorktreeIdsEqual(pty.worktreeId, worktreeId))
+      ) {
+        continue
+      }
+      const targetWorktreeId = worktreeId ?? pty.worktreeId
+      const pane = parsePaneKey(pty.paneKey ?? '')
+      if (!pane || pane.tabId !== pty.tabId) {
+        continue
+      }
+      const existing = this.mobileSessionTabsByWorktree.get(targetWorktreeId)
+      if (existing && options.missingSnapshotOnly) {
+        continue
+      }
+      if (
+        existing?.tabs.some(
+          (tab) =>
+            tab.type === 'terminal' &&
+            (tab.ptyId === pty.ptyId ||
+              (tab.parentTabId === pty.tabId && tab.leafId === pane.leafId))
+        )
+      ) {
+        continue
+      }
+      if (!existing) {
+        this.mobileSessionTabsByWorktree.set(targetWorktreeId, {
+          worktree: targetWorktreeId,
+          publicationEpoch: `renderer-rescue:${Date.now().toString(36)}`,
+          snapshotVersion: 0,
+          activeGroupId: null,
+          activeTabId: null,
+          activeTabType: null,
+          tabGroups: [],
+          tabs: []
+        })
+      }
+      this.publishPtyBackedMobileSessionTerminal(targetWorktreeId, pty, {
+        tabId: pty.tabId,
+        leafId: pane.leafId,
+        title: null,
+        activate: false,
+        selectIfNoActiveTab: false,
+        notify: options.notify
+      })
+    }
+  }
+
+  private setPairedRendererSessionOwnership(ptyId: string, owned: boolean): void {
+    if (owned) {
+      this.pairedRendererSessionOwnedPtyIds.add(ptyId)
+    } else {
+      this.pairedRendererSessionOwnedPtyIds.delete(ptyId)
+    }
   }
 
   private findLiveRegisteredPtyForRendererTab(
@@ -25602,6 +25730,10 @@ export class OrcaRuntimeService {
       createdPty.tabId = parentTabId
       createdPty.paneKey = paneKey
       createdPty.runtimeSessionOwned = pty.runtimeSessionOwned
+      this.setPairedRendererSessionOwnership(
+        createdPty.ptyId,
+        this.pairedRendererSessionOwnedPtyIds.has(pty.ptyId)
+      )
     }
 
     try {
@@ -25617,6 +25749,7 @@ export class OrcaRuntimeService {
         splitTelemetrySource: opts.telemetrySource
       })
     } catch (error) {
+      this.setPairedRendererSessionOwnership(result.id, false)
       this.ptyController.kill?.(result.id)
       throw error
     }
@@ -27978,6 +28111,7 @@ export class OrcaRuntimeService {
   private dropDisconnectedPtyRecord(ptyId: string): void {
     // Why: pruning can remove a PTY without the normal exit callback.
     this.advancePtyLifecycleGeneration(ptyId)
+    this.pairedRendererSessionOwnedPtyIds.delete(ptyId)
     this.ptysById.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
     this.setupCompletionTokenByPtyId.delete(ptyId)
@@ -28110,6 +28244,10 @@ export class OrcaRuntimeService {
     // renderer resends before they replace an entry — so reference identity
     // before/after detects exactly the entries that actually changed.
     const before = new Map(this.mobileSessionTabsByWorktree)
+    this.restoreLivePairedRendererSessionOwnedMobileTerminals(null, {
+      missingSnapshotOnly: true,
+      notify: false
+    })
     const worktreeIdsToHydrate = this.getKnownWorkspaceSessionWorktreeIds()
     for (const snapshot of snapshots) {
       worktreeIdsToHydrate.add(snapshot.worktree)

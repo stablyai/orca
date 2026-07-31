@@ -323,6 +323,14 @@
             "f518e89aa5": "Project already exists in that profile",
             "f03ae7f27b": "Failed to transfer project"
           }
+        },
+        "runtime": {
+          "status": {
+            "runtimeHostDisconnectedDescription": "Check that Orca is running on this server and that your network connection is working, then try again.",
+            "runtimeHostUnreachableNamed": "Can't reach {{hostName}}",
+            "runtimeHostUnreachable": "Can't reach Orca server",
+            "tryAgain": "Try again"
+          }
         }
       }
     },
@@ -827,8 +835,8 @@
         "pasteTooLarge": "Paste is too large."
       },
       "useMacosTccPromptNotice": {
-        "title": "Reduce repeated macOS file-access prompts",
-        "description": "macOS attributes file access by your agents and terminal tools to Orca. Granting Full Disk Access reduces these prompts.",
+        "title": "Seeing “Orca would like to access…” prompts?",
+        "description": "Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.",
         "openSettings": "Open Settings",
         "dismiss": "Don't show again"
       }
@@ -4581,7 +4589,10 @@
           "setParentWorkspace": "Set Parent Worktree...",
           "workspaceSection": "Workspace",
           "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",
-          "deleteWorktree": "Delete Worktree"
+          "deleteWorktree": "Delete Worktree",
+          "sleepWithDescendants": "Sleep with Descendants ({{value0}})",
+          "sleepWithDescendantsDescription": "Close active panels in this workspace and every nested descendant to free up memory and CPU.",
+          "deleteWithDescendants": "Delete with Descendants…"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -5720,7 +5731,7 @@
           "e7bb06007c": "LAN",
           "4a73f5217a": "Apple Events for scripts that control other local apps.",
           "e119f0d66b": "Automation",
-          "7ca17b62c8": "macOS names Orca when the agents it runs read other apps' data, because Orca is the responsible process for terminal commands. Grant this to Orca and Orca Helper to reduce those prompts. Then quit Orca, end any surviving Orca Helper process, and reopen Orca.",
+          "7ca17b62c8": "macOS names Orca when the agents it runs read other apps' data, because Orca is the responsible process for terminal commands. Grant this to Orca to reduce those prompts. Then quit and reopen Orca.",
           "c566bca278": "Full Disk Access",
           "9f35980756": "Keystroke injection, window control, and UI automation tools.",
           "5b2f22ca2d": "Accessibility",

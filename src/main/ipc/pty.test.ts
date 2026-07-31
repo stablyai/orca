@@ -226,6 +226,7 @@ import {
   setPtyOwnership,
   setLocalPtyProvider,
   rebindLocalProviderListeners,
+  resolveCodexHomeAfterManagedAuthReadiness,
   unregisterSshPtyProvider,
   getLocalPtyProvider,
   isCurrentPtyExit,
@@ -269,6 +270,15 @@ const TEST_CODEX_HOME =
   process.platform === 'win32'
     ? 'C:\\Users\\test\\AppData\\Roaming\\orca\\codex-runtime-home\\home'
     : '/tmp/orca-codex-home'
+const TEST_CODEX_AUTH_JSON = JSON.stringify({
+  tokens: {
+    access_token: 'access',
+    id_token: 'e30.eyJlbWFpbCI6InVzZXJAZXhhbXBsZS5jb20ifQ.sig',
+    refresh_token: 'refresh',
+    account_id: 'account'
+  },
+  last_refresh: '2026-07-31T00:00:00Z'
+})
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -2768,6 +2778,70 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
     })
 
+    it('waits for managed Codex auth before spawning a local PTY', async () => {
+      vi.useFakeTimers()
+      let authReady = false
+      readFileSyncMock.mockImplementation((filePath: string) => {
+        if (!filePath.endsWith('auth.json')) {
+          return ''
+        }
+        if (!authReady) {
+          throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+        }
+        return TEST_CODEX_AUTH_JSON
+      })
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, undefined, () => TEST_CODEX_HOME, (() => ({
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            managedHomePath: TEST_CODEX_HOME,
+            managedHomeRuntime: 'host'
+          }
+        ]
+      })) as never)
+
+      const spawnPromise = handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        launchAgent: 'codex'
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(spawnMock).not.toHaveBeenCalled()
+
+      authReady = true
+      await vi.advanceTimersByTimeAsync(25)
+      await spawnPromise
+
+      expect(spawnMock.mock.calls.at(-1)?.[2].env).toMatchObject({
+        CODEX_HOME: TEST_CODEX_HOME,
+        ORCA_CODEX_HOME: TEST_CODEX_HOME
+      })
+    })
+
+    it('does not gate a bare local shell on managed Codex auth', async () => {
+      readFileSyncMock.mockImplementation((filePath: string) => {
+        if (filePath.endsWith('auth.json')) {
+          throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+        }
+        return ''
+      })
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, undefined, () => TEST_CODEX_HOME, (() => ({
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            managedHomePath: TEST_CODEX_HOME,
+            managedHomeRuntime: 'host'
+          }
+        ]
+      })) as never)
+
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      expect(spawnMock).toHaveBeenCalledOnce()
+    })
+
     it('leaves an inherited CODEX_HOME untouched for system default when the flag is OFF', async () => {
       // Why: flag OFF must stay byte-identical to today. With no managed home
       // selected (resolver null) and the real-home flag off, no CODEX_HOME
@@ -3015,6 +3089,371 @@ describe('registerPtyHandlers', () => {
           )
         ).env
       }
+
+      it('waits for managed Codex auth before spawning a daemon PTY', async () => {
+        vi.useFakeTimers()
+        let authReady = false
+        readFileSyncMock.mockImplementation((filePath: string) => {
+          if (!filePath.endsWith('auth.json')) {
+            return ''
+          }
+          if (!authReady) {
+            throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+          }
+          return TEST_CODEX_AUTH_JSON
+        })
+        const daemonSpawn = setupDaemonAdapter()
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, undefined, () => TEST_CODEX_HOME, (() => ({
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        })) as never)
+
+        const spawnPromise = handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          launchAgent: 'codex'
+        })
+        await vi.advanceTimersByTimeAsync(0)
+        expect(daemonSpawn).not.toHaveBeenCalled()
+
+        authReady = true
+        await vi.advanceTimersByTimeAsync(25)
+        await spawnPromise
+
+        expect(daemonSpawn.mock.calls.at(-1)?.[0].env).toMatchObject({
+          CODEX_HOME: TEST_CODEX_HOME,
+          ORCA_CODEX_HOME: TEST_CODEX_HOME
+        })
+      })
+
+      it('resolves valid managed Codex auth synchronously', () => {
+        readFileSyncMock.mockReturnValue(TEST_CODEX_AUTH_JSON)
+        const resolveCurrent = vi.fn(() => TEST_CODEX_HOME)
+        const resolveAfterUnavailable = vi.fn(() => null)
+        const settings = {
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        }
+
+        const resolution = resolveCodexHomeAfterManagedAuthReadiness({
+          selectedCodexHomePath: TEST_CODEX_HOME,
+          getSettings: () => settings as never,
+          target: { runtime: 'host' },
+          resolveCurrent,
+          resolveAfterUnavailable
+        })
+
+        expect(resolution).toBe(TEST_CODEX_HOME)
+        expect(resolveCurrent).not.toHaveBeenCalled()
+        expect(resolveAfterUnavailable).not.toHaveBeenCalled()
+      })
+
+      it('uses the current account when the original auth recovers after a switch', async () => {
+        vi.useFakeTimers()
+        const nextHome = '/managed/next/home'
+        let originalAuthReady = false
+        let selectedHome = TEST_CODEX_HOME
+        readFileSyncMock.mockImplementation((filePath: string) => {
+          if (filePath === join(TEST_CODEX_HOME, 'auth.json') && !originalAuthReady) {
+            throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+          }
+          if (filePath.endsWith('auth.json')) {
+            return TEST_CODEX_AUTH_JSON
+          }
+          return ''
+        })
+        const daemonSpawn = setupDaemonAdapter()
+        const resolveHome = vi.fn(() => selectedHome)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, undefined, resolveHome, (() => ({
+          codexManagedAccounts: [TEST_CODEX_HOME, nextHome].map((managedHomePath, index) => ({
+            id: `account-${index + 1}`,
+            managedHomePath,
+            managedHomeRuntime: 'host'
+          }))
+        })) as never)
+
+        const spawnPromise = handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          launchAgent: 'codex'
+        })
+        await vi.advanceTimersByTimeAsync(0)
+        selectedHome = nextHome
+        originalAuthReady = true
+        await vi.advanceTimersByTimeAsync(25)
+        await spawnPromise
+
+        expect(resolveHome).toHaveBeenCalledTimes(2)
+        expect(daemonSpawn.mock.calls[0]?.[0].env).toMatchObject({
+          CODEX_HOME: nextHome,
+          ORCA_CODEX_HOME: nextHome
+        })
+      })
+
+      it('does not gate a non-Codex daemon PTY on managed Codex auth', async () => {
+        readFileSyncMock.mockImplementation((filePath: string) => {
+          if (filePath.endsWith('auth.json')) {
+            throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+          }
+          return ''
+        })
+        const daemonSpawn = setupDaemonAdapter()
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, undefined, () => TEST_CODEX_HOME, (() => ({
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        })) as never)
+
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          launchAgent: 'claude'
+        })
+
+        expect(daemonSpawn).toHaveBeenCalledOnce()
+      })
+
+      it('does not gate a Codex daemon reattach on current managed auth', async () => {
+        readFileSyncMock.mockImplementation((filePath: string) => {
+          if (filePath.endsWith('auth.json')) {
+            throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+          }
+          return ''
+        })
+        const daemonSpawn = setupDaemonAdapter()
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, undefined, () => TEST_CODEX_HOME, (() => ({
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        })) as never)
+
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          launchAgent: 'codex',
+          sessionId: 'retained-codex'
+        })
+
+        expect(daemonSpawn).toHaveBeenCalledOnce()
+      })
+
+      it('does not gate a runtime-created Codex reattach on current managed auth', async () => {
+        type RuntimeSpawnController = {
+          spawn(args: {
+            cols: number
+            rows: number
+            launchAgent: 'codex'
+            sessionId: string
+          }): Promise<{ id: string }>
+        }
+        readFileSyncMock.mockImplementation((filePath: string) => {
+          if (filePath.endsWith('auth.json')) {
+            throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+          }
+          return ''
+        })
+        const daemonSpawn = setupDaemonAdapter()
+        const runtime = {
+          setPtyController: vi.fn(),
+          registerPty: vi.fn(),
+          noteTerminalSpawnCommand: vi.fn(),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never, () => TEST_CODEX_HOME, (() => ({
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        })) as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+
+        await controller.spawn({
+          cols: 80,
+          rows: 24,
+          launchAgent: 'codex',
+          sessionId: 'retained-runtime-codex'
+        })
+
+        expect(daemonSpawn).toHaveBeenCalledOnce()
+      })
+
+      it('falls back when managed Codex auth stays unavailable', async () => {
+        vi.useFakeTimers()
+        readFileSyncMock.mockImplementation((filePath: string) => {
+          if (filePath.endsWith('auth.json')) {
+            throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+          }
+          return ''
+        })
+        const daemonSpawn = setupDaemonAdapter()
+        const resolveHome = vi.fn(
+          (
+            _target?: unknown,
+            _env?: NodeJS.ProcessEnv,
+            context?: { unavailableManagedHomePath?: string }
+          ) => (context?.unavailableManagedHomePath ? null : TEST_CODEX_HOME)
+        )
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, undefined, resolveHome, (() => ({
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        })) as never)
+
+        const spawnPromise = handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          launchAgent: 'codex'
+        })
+        await vi.advanceTimersByTimeAsync(2_000)
+        await spawnPromise
+
+        expect(resolveHome).toHaveBeenCalledTimes(2)
+        expect(resolveHome.mock.calls[1]?.[2]).toMatchObject({
+          unavailableManagedHomePath: TEST_CODEX_HOME
+        })
+        expect(daemonSpawn).toHaveBeenCalledOnce()
+        expect(daemonSpawn.mock.calls[0]?.[0].env).not.toHaveProperty('CODEX_HOME')
+      })
+
+      it('rejects when account changes keep resolving unavailable managed homes', async () => {
+        vi.useFakeTimers()
+        const secondHome = '/managed/second/home'
+        const thirdHome = '/managed/third/home'
+        readFileSyncMock.mockImplementation((filePath: string) => {
+          if (filePath.endsWith('auth.json')) {
+            throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+          }
+          return ''
+        })
+        const daemonSpawn = setupDaemonAdapter()
+        const resolveHome = vi.fn(
+          (
+            _target?: unknown,
+            _env?: NodeJS.ProcessEnv,
+            context?: { unavailableManagedHomePath?: string }
+          ) =>
+            !context?.unavailableManagedHomePath
+              ? TEST_CODEX_HOME
+              : context.unavailableManagedHomePath === TEST_CODEX_HOME
+                ? secondHome
+                : thirdHome
+        )
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, undefined, resolveHome, (() => ({
+          codexManagedAccounts: [TEST_CODEX_HOME, secondHome, thirdHome].map(
+            (managedHomePath, index) => ({
+              id: `account-${index + 1}`,
+              managedHomePath,
+              managedHomeRuntime: 'host'
+            })
+          )
+        })) as never)
+
+        const spawnPromise = handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          launchAgent: 'codex'
+        })
+        const rejection = expect(spawnPromise).rejects.toThrow(
+          'The selected Codex account credentials are temporarily unavailable. Try opening the terminal again.'
+        )
+        await vi.advanceTimersByTimeAsync(4_000)
+        await rejection
+
+        expect(resolveHome.mock.calls.map((call) => call[2]?.unavailableManagedHomePath)).toEqual([
+          undefined,
+          TEST_CODEX_HOME,
+          secondHome
+        ])
+        expect(vi.getTimerCount()).toBe(0)
+        expect(daemonSpawn).not.toHaveBeenCalled()
+      })
+
+      it('falls back for a runtime-created Codex launch when auth stays unavailable', async () => {
+        type RuntimeSpawnController = {
+          spawn(args: { cols: number; rows: number; launchAgent: 'codex' }): Promise<{ id: string }>
+        }
+        vi.useFakeTimers()
+        readFileSyncMock.mockImplementation((filePath: string) => {
+          if (filePath.endsWith('auth.json')) {
+            throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+          }
+          return ''
+        })
+        const daemonSpawn = setupDaemonAdapter()
+        const resolveHome = vi.fn(
+          (
+            _target?: unknown,
+            _env?: NodeJS.ProcessEnv,
+            context?: { unavailableManagedHomePath?: string }
+          ) => (context?.unavailableManagedHomePath ? null : TEST_CODEX_HOME)
+        )
+        const runtime = {
+          setPtyController: vi.fn(),
+          registerPty: vi.fn(),
+          noteTerminalSpawnCommand: vi.fn(),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never, resolveHome, (() => ({
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              managedHomePath: TEST_CODEX_HOME,
+              managedHomeRuntime: 'host'
+            }
+          ]
+        })) as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+
+        const spawnPromise = controller.spawn({ cols: 80, rows: 24, launchAgent: 'codex' })
+        await vi.advanceTimersByTimeAsync(0)
+        expect(daemonSpawn).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(2_000)
+        await spawnPromise
+
+        expect(resolveHome).toHaveBeenCalledTimes(2)
+        expect(resolveHome.mock.calls[1]?.[2]).toMatchObject({
+          unavailableManagedHomePath: TEST_CODEX_HOME
+        })
+        expect(daemonSpawn).toHaveBeenCalledOnce()
+        expect(daemonSpawn.mock.calls[0]?.[0].env).not.toHaveProperty('CODEX_HOME')
+      })
 
       it('injects OpenCode plugin env (OPENCODE_CONFIG_DIR) on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
@@ -14574,6 +15013,70 @@ describe('registerPtyHandlers', () => {
     ])
   })
 
+  it('does not resume under another account when the origin auth stays unavailable', async () => {
+    vi.useFakeTimers()
+    const spawn = vi.fn(async () => ({ id: 'pty-must-not-spawn' }))
+    setLocalPtyProvider({
+      spawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    readFileSyncMock.mockImplementation((filePath: string) => {
+      if (filePath.endsWith('auth.json')) {
+        throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
+      }
+      return ''
+    })
+    const resolveHome = vi.fn(() => '/managed/current/home')
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      resolveHome,
+      (() => ({
+        codexManagedAccounts: [
+          { id: 'account-a', managedHomePath: '/managed/origin/home' },
+          { id: 'account-b', managedHomePath: '/managed/current/home' }
+        ]
+      })) as never,
+      undefined,
+      undefined,
+      {
+        prepareCodexSessionResume: async () => ({
+          outcome: 'resume' as const,
+          codexHomePath: '/managed/origin/home'
+        })
+      }
+    )
+
+    const launch = handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      command: 'codex resume session-a',
+      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+      launchAgent: 'codex',
+      resumeProviderSession: {
+        key: 'session_id',
+        id: 'session-a',
+        transcriptPath: '/managed/origin/home/sessions/2026/07/20/rollout-a.jsonl'
+      }
+    })
+    const rejection = expect(launch).rejects.toThrow(
+      'The Codex account credentials for this session are temporarily unavailable. Try opening the terminal again.'
+    )
+    await vi.advanceTimersByTimeAsync(2_000)
+    await rejection
+
+    expect(resolveHome).not.toHaveBeenCalled()
+    expect(spawn).not.toHaveBeenCalled()
+    expect(recordCodexPaneAccountMock).not.toHaveBeenCalled()
+  })
+
   it('records the origin account a resumed Codex pane is pinned to', async () => {
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({ id: 'pty-resumed' })),
@@ -14607,6 +15110,7 @@ describe('registerPtyHandlers', () => {
         })
       }
     )
+    readFileSyncMock.mockReturnValue(TEST_CODEX_AUTH_JSON)
 
     await handlers.get('pty:spawn')!(null, {
       cols: 80,
@@ -14625,6 +15129,7 @@ describe('registerPtyHandlers', () => {
     expect(recordCodexPaneAccountMock.mock.calls).toEqual([
       ['pty-resumed', { selectionKey: 'host', accountId: 'account-a' }]
     ])
+    expect(readFileSyncMock).toHaveBeenCalledWith('/managed/origin/home/auth.json', 'utf8')
     expect(forgetCodexPaneAccountMock).not.toHaveBeenCalled()
   })
 
@@ -14726,6 +15231,7 @@ describe('registerPtyHandlers', () => {
       }
     )
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+    readFileSyncMock.mockReturnValue(TEST_CODEX_AUTH_JSON)
 
     await controller.spawn({
       cols: 80,
@@ -14743,6 +15249,7 @@ describe('registerPtyHandlers', () => {
     expect(recordCodexPaneAccountMock.mock.calls).toEqual([
       ['pty-runtime-resumed', { selectionKey: 'host', accountId: 'account-a' }]
     ])
+    expect(readFileSyncMock).toHaveBeenCalledWith('/managed/origin/home/auth.json', 'utf8')
     expect(forgetCodexPaneAccountMock).not.toHaveBeenCalled()
   })
 

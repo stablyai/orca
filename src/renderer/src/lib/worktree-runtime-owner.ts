@@ -17,6 +17,7 @@ import {
   getRuntimeEnvironmentIdForFolderWorkspace
 } from './folder-workspace-runtime-owner'
 import {
+  resolveActiveWorkspaceRoute,
   resolveExplicitWorktreeOperationRouteResult,
   resolveWorktreeOperationRouteResult
 } from './worktree-operation-route'
@@ -62,9 +63,9 @@ export function getRuntimeEnvironmentIdForWorktree(
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return null
   }
-  const activeHost = parseExecutionHostId(getActiveWorkspaceExecutionHostId(state, worktreeId))
-  if (activeHost) {
-    return activeHost.kind === 'runtime' ? activeHost.environmentId : null
+  const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
+  if (activeRoute) {
+    return activeRoute.runtimeEnvironmentId
   }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
@@ -113,9 +114,9 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
   if (!worktreeId) {
     return null
   }
-  const activeHost = parseExecutionHostId(getActiveWorkspaceExecutionHostId(state, worktreeId))
-  if (activeHost) {
-    return activeHost.kind === 'runtime' ? activeHost.environmentId : null
+  const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
+  if (activeRoute) {
+    return activeRoute.runtimeEnvironmentId
   }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
