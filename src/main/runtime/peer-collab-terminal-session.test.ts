@@ -14,6 +14,7 @@ import { PeerClientService } from './peer-client-service'
 import type { PeerTerminalStreamEvent } from '../../shared/peer-terminal-stream-event'
 import type { RuntimeTerminalDriverState } from '../../shared/runtime-types'
 import * as relayHttpClient from './relay/relay-http-client'
+import { isPeerTerminalGranted } from './rpc/peer-terminal-grant-guard'
 
 const TEST_TERMINAL = 'term-1'
 const UNGRANTED_TERMINAL = 'term-2'
@@ -40,6 +41,7 @@ function buildFakeTerminalRuntime(): {
     // --- OrcaRuntimeRpcServer direct calls ---
     getRuntimeId: () => 'test-runtime',
     getStartedAt: () => 0,
+    getStatus: () => ({ graphStatus: 'ready' }),
     forgetClientNavigationState: () => {},
     cancelMobileDictationForConnection: () => {},
     onClientDisconnected: () => {},
@@ -256,6 +258,42 @@ function mintSecondPeerPairingUrl(
   return offer.pairingUrl
 }
 
+function makeClient(
+  clients: PeerClientService[],
+  pairingUrl: string,
+  displayName: string
+): PeerClientService {
+  const client = new PeerClientService()
+  clients.push(client)
+  const connected = client.connect(pairingUrl, displayName)
+  expect(connected).toEqual({ ok: true })
+  return client
+}
+
+async function connectedClient(
+  clients: PeerClientService[],
+  pairingUrl: string,
+  displayName: string
+): Promise<PeerClientService> {
+  const client = makeClient(clients, pairingUrl, displayName)
+  await waitFor(() => client.getStatus().state === 'connected')
+  return client
+}
+
+function subscribeAndAwait(
+  client: PeerClientService,
+  events: PeerTerminalStreamEvent[]
+): { requestId: string } {
+  const result = client.subscribeTerminal(TEST_TERMINAL, { cols: 80, rows: 24 }, (event) => {
+    events.push(event)
+  })
+  expect(result.ok).toBe(true)
+  if (!result.ok) {
+    throw new Error(result.reason)
+  }
+  return { requestId: result.requestId }
+}
+
 describe('peer-collab terminal session (host + 2 clients, real WS)', () => {
   const clients: PeerClientService[] = []
   const servers: OrcaRuntimeRpcServer[] = []
@@ -270,43 +308,12 @@ describe('peer-collab terminal session (host + 2 clients, real WS)', () => {
     vi.restoreAllMocks()
   })
 
-  function makeClient(pairingUrl: string, displayName: string): PeerClientService {
-    const client = new PeerClientService()
-    clients.push(client)
-    const connected = client.connect(pairingUrl, displayName)
-    expect(connected).toEqual({ ok: true })
-    return client
-  }
-
-  async function connectedClient(
-    pairingUrl: string,
-    displayName: string
-  ): Promise<PeerClientService> {
-    const client = makeClient(pairingUrl, displayName)
-    await waitFor(() => client.getStatus().state === 'connected')
-    return client
-  }
-
-  function subscribeAndAwait(
-    client: PeerClientService,
-    events: PeerTerminalStreamEvent[]
-  ): { requestId: string } {
-    const result = client.subscribeTerminal(TEST_TERMINAL, { cols: 80, rows: 24 }, (event) => {
-      events.push(event)
-    })
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      throw new Error(result.reason)
-    }
-    return { requestId: result.requestId }
-  }
-
   it('fans terminal output out to every subscribed client', async () => {
     const { server, runtime, pairingUrl } = await startPeerHost()
     servers.push(server)
 
-    const clientA = await connectedClient(pairingUrl, 'Client A')
-    const clientB = await connectedClient(mintSecondPeerPairingUrl(server), 'Client B')
+    const clientA = await connectedClient(clients, pairingUrl, 'Client A')
+    const clientB = await connectedClient(clients, mintSecondPeerPairingUrl(server), 'Client B')
     const eventsA: PeerTerminalStreamEvent[] = []
     const eventsB: PeerTerminalStreamEvent[] = []
     subscribeAndAwait(clientA, eventsA)
@@ -333,7 +340,7 @@ describe('peer-collab terminal session (host + 2 clients, real WS)', () => {
     const { server, runtime, pairingUrl } = await startPeerHost()
     servers.push(server)
 
-    const clientA = await connectedClient(pairingUrl, 'Client A')
+    const clientA = await connectedClient(clients, pairingUrl, 'Client A')
     const eventsA: PeerTerminalStreamEvent[] = []
     const { requestId } = subscribeAndAwait(clientA, eventsA)
     await waitFor(() => eventsA.some((e) => e.type === 'subscribed'))
@@ -349,8 +356,8 @@ describe('peer-collab terminal session (host + 2 clients, real WS)', () => {
     servers.push(server)
     server.setPeerInputFloorExclusive(true)
 
-    const clientA = await connectedClient(pairingUrl, 'Client A')
-    const clientB = await connectedClient(mintSecondPeerPairingUrl(server), 'Client B')
+    const clientA = await connectedClient(clients, pairingUrl, 'Client A')
+    const clientB = await connectedClient(clients, mintSecondPeerPairingUrl(server), 'Client B')
     const eventsA: PeerTerminalStreamEvent[] = []
     const eventsB: PeerTerminalStreamEvent[] = []
     const { requestId: requestIdA } = subscribeAndAwait(clientA, eventsA)
@@ -373,7 +380,7 @@ describe('peer-collab terminal session (host + 2 clients, real WS)', () => {
     const { server, runtime, pairingUrl } = await startPeerHost()
     servers.push(server)
 
-    const clientA = await connectedClient(pairingUrl, 'Client A')
+    const clientA = await connectedClient(clients, pairingUrl, 'Client A')
     const firstEvents: PeerTerminalStreamEvent[] = []
     const secondEvents: PeerTerminalStreamEvent[] = []
     // Same terminal, same client: the server keys the subscription by
@@ -403,8 +410,8 @@ describe('peer-collab terminal session (host + 2 clients, real WS)', () => {
     const { server, runtime, pairingUrl } = await startPeerHost()
     servers.push(server)
 
-    const clientA = await connectedClient(pairingUrl, 'Client A')
-    const clientB = await connectedClient(mintSecondPeerPairingUrl(server), 'Client B')
+    const clientA = await connectedClient(clients, pairingUrl, 'Client A')
+    const clientB = await connectedClient(clients, mintSecondPeerPairingUrl(server), 'Client B')
     const eventsA: PeerTerminalStreamEvent[] = []
     const eventsB: PeerTerminalStreamEvent[] = []
     subscribeAndAwait(clientA, eventsA)
@@ -421,6 +428,48 @@ describe('peer-collab terminal session (host + 2 clients, real WS)', () => {
 
     runtime.pushOutput(TEST_TERMINAL, 'still alive')
     await waitFor(() => eventsA.some((e) => e.type === 'output' && e.data === 'still alive'))
+  })
+
+  it('reports the subscribed terminal handle, not the raw composite subscription id', async () => {
+    const { server, runtime, pairingUrl } = await startPeerHost()
+    servers.push(server)
+
+    const clientA = await connectedClient(clients, pairingUrl, 'Client A')
+    const eventsA: PeerTerminalStreamEvent[] = []
+    subscribeAndAwait(clientA, eventsA)
+    await waitFor(() => eventsA.some((e) => e.type === 'subscribed'))
+    await waitFor(() => server.listConnectedPeerClients().length === 1)
+
+    const connectionId = server.listConnectedPeerClients()[0]?.connectionId
+    if (!connectionId) {
+      throw new Error('expected a connected peer client')
+    }
+    // Why: nativeChat.subscribe also keys by `nativeChat:${connectionId}:${token}`,
+    // a colon-bearing id that is not a terminal handle — it must never be
+    // reported as a subscribed terminal.
+    runtime.runtime.registerSubscriptionCleanup(
+      `nativeChat:${connectionId}:token-1`,
+      () => {},
+      connectionId
+    )
+
+    const [connected] = server.listConnectedPeerClients()
+    // Why: the RPC layer keys the subscription cleanup as `${terminal}:${clientId}`
+    // so per-client streams don't evict each other — this must resolve back to
+    // the bare handle for viewer badges/presence gating, never the composite id.
+    expect(connected?.subscribedTerminals).toEqual([TEST_TERMINAL])
+  })
+
+  it("persists the client's handshake display name to the device registry on connect", async () => {
+    const { server, pairingUrl, deviceId } = await startPeerHost()
+    servers.push(server)
+
+    await connectedClient(clients, pairingUrl, 'slowkuma-3')
+
+    await waitFor(
+      () => server.getDeviceRegistry()?.getDevice(deviceId)?.lastConnectedName === 'slowkuma-3'
+    )
+    expect(server.getDeviceRegistry()?.getDevice(deviceId)?.lastConnectedName).toBe('slowkuma-3')
   })
 })
 
@@ -678,5 +727,128 @@ describe('peer-collab grant enforcement', () => {
     expect(result.terminals).toEqual([
       expect.objectContaining({ handle: TEST_TERMINAL, title: 'resolved tab title' })
     ])
+  })
+})
+
+describe('peer-collab grant revocation mid-stream', () => {
+  const clients: PeerClientService[] = []
+  const servers: OrcaRuntimeRpcServer[] = []
+
+  afterEach(async () => {
+    for (const client of clients.splice(0)) {
+      client.destroy()
+    }
+    for (const server of servers.splice(0)) {
+      await server.stop()
+    }
+  })
+
+  it("(a) ends the revoked client's stream and stops further output once the grant is pulled", async () => {
+    const { server, runtime, pairingUrl, deviceId } = await startPeerHost()
+    servers.push(server)
+
+    const clientA = await connectedClient(clients, pairingUrl, 'Client A')
+    const eventsA: PeerTerminalStreamEvent[] = []
+    subscribeAndAwait(clientA, eventsA)
+    await waitFor(() => eventsA.some((e) => e.type === 'subscribed'))
+    await waitFor(() => runtime.activeSubscriptionCount() === 1)
+
+    server.setGrantedTerminals(deviceId, [])
+
+    await waitFor(() => eventsA.some((e) => e.type === 'error'))
+    await waitFor(() => eventsA.some((e) => e.type === 'end'))
+    await waitFor(() => runtime.activeSubscriptionCount() === 0)
+
+    eventsA.length = 0
+    runtime.pushOutput(TEST_TERMINAL, 'should never arrive')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(eventsA).toEqual([])
+  })
+
+  it('(b) drops an input frame the moment the grant is gone, even before subscription teardown runs', async () => {
+    const { server, runtime, pairingUrl, deviceId } = await startPeerHost()
+    servers.push(server)
+
+    const clientA = await connectedClient(clients, pairingUrl, 'Client A')
+    const eventsA: PeerTerminalStreamEvent[] = []
+    const { requestId } = subscribeAndAwait(clientA, eventsA)
+    await waitFor(() => eventsA.some((e) => e.type === 'subscribed'))
+
+    // Why: mutate the grant store directly (bypassing RuntimeRpc.setGrantedTerminals'
+    // own teardown) so this isolates the per-frame re-check from the subscription
+    // cleanup covered by test (a) — the guard alone must still block input.
+    server.getDeviceRegistry()?.setGrantedTerminals(deviceId, [])
+
+    expect(clientA.sendTerminalInput(requestId, 'should-be-dropped\n')).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(runtime.inputLog).toEqual([])
+  })
+
+  it("(c) leaves another still-granted client's stream and input untouched", async () => {
+    const { server, runtime, pairingUrl, deviceId } = await startPeerHost()
+    servers.push(server)
+
+    const clientA = await connectedClient(clients, pairingUrl, 'Client A')
+    const clientB = await connectedClient(clients, mintSecondPeerPairingUrl(server), 'Client B')
+    const eventsA: PeerTerminalStreamEvent[] = []
+    const eventsB: PeerTerminalStreamEvent[] = []
+    subscribeAndAwait(clientA, eventsA)
+    const { requestId: requestIdB } = subscribeAndAwait(clientB, eventsB)
+    await waitFor(() => eventsA.some((e) => e.type === 'subscribed'))
+    await waitFor(() => eventsB.some((e) => e.type === 'subscribed'))
+    await waitFor(() => runtime.activeSubscriptionCount() === 2)
+
+    server.setGrantedTerminals(deviceId, [])
+
+    await waitFor(() => eventsA.some((e) => e.type === 'end'))
+    await waitFor(() => runtime.activeSubscriptionCount() === 1)
+
+    eventsB.length = 0
+    runtime.pushOutput(TEST_TERMINAL, 'still for B')
+    await waitFor(() => eventsB.some((e) => e.type === 'output' && e.data === 'still for B'))
+
+    expect(clientB.sendTerminalInput(requestIdB, 'b-still-works\n')).toBe(true)
+    await waitFor(() => runtime.inputLog.some((entry) => entry.text === 'b-still-works\n'))
+  })
+
+  it('(d) is a peer-only mechanism — a non-peer connection is never subject to the grant check', () => {
+    // Why: the WS harness has no mobile-scope fixture, and mobile subscriptionIds
+    // never share a peer connectionId, so this exercises the actual gate
+    // (ctx.isPeerDevice) that keeps mobile/local streams structurally outside
+    // terminatePeerTerminalStreams' reach — it only ever iterates a peer
+    // deviceId's own connectionId.
+    expect(
+      isPeerTerminalGranted({ isPeerDevice: false, getGrantedTerminals: () => [] }, TEST_TERMINAL)
+    ).toBe(true)
+  })
+
+  it('cleans up a presence subscription for the same terminal alongside the terminal stream', async () => {
+    const { server, runtime, pairingUrl, deviceId } = await startPeerHost()
+    servers.push(server)
+
+    const clientA = await connectedClient(clients, pairingUrl, 'Client A')
+    const eventsA: PeerTerminalStreamEvent[] = []
+    subscribeAndAwait(clientA, eventsA)
+    await waitFor(() => eventsA.some((e) => e.type === 'subscribed'))
+    await waitFor(() => server.listConnectedPeerClients().length === 1)
+
+    const connectionId = server.listConnectedPeerClients()[0]?.connectionId
+    if (!connectionId) {
+      throw new Error('expected a connected peer client')
+    }
+    let presenceCleanedUp = false
+    runtime.runtime.registerSubscriptionCleanup(
+      `terminal-presence:${TEST_TERMINAL}:${connectionId}-1`,
+      () => {
+        presenceCleanedUp = true
+      },
+      connectionId
+    )
+    await waitFor(() => runtime.activeSubscriptionCount() === 2)
+
+    server.setGrantedTerminals(deviceId, [])
+
+    await waitFor(() => runtime.activeSubscriptionCount() === 0)
+    expect(presenceCleanedUp).toBe(true)
   })
 })

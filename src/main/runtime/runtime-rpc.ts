@@ -193,6 +193,19 @@ function longPollClassOf(request: RpcRequest): LongPollClass | null {
   return null
 }
 
+// Why: mirrors terminal-presence.ts's `terminal-presence:${terminal}:...` id
+// shape so a grant revoke can find a connection's presence sub for a handle;
+// kept next to setGrantedTerminals' only caller rather than exported broadly.
+function terminalHandleFromPresenceSubscriptionId(subscriptionId: string): string | null {
+  const prefix = 'terminal-presence:'
+  if (!subscriptionId.startsWith(prefix)) {
+    return null
+  }
+  const rest = subscriptionId.slice(prefix.length)
+  const lastColonIndex = rest.lastIndexOf(':')
+  return lastColonIndex === -1 ? null : rest.slice(0, lastColonIndex)
+}
+
 // Why: status.get has no per-connection context in the dispatcher, so stamp the scope here at the transport boundary.
 function injectDeviceScope(response: string, scope: DeviceScope): string {
   try {
@@ -402,24 +415,96 @@ export class OrcaRuntimeRpcServer {
     subscribedTerminals: string[]
     grantedTerminals: string[]
   }[] {
-    return this.peerConnections.list().map((entry) => ({
-      ...entry,
-      subscribedTerminals: this.runtime
-        .getSubscriptionIdsForConnection(entry.connectionId)
-        // Why: peer connections share the mobile RPC allowlist, which also grants
-        // accounts.subscribe/notifications.subscribe/runtime.clientEvents.subscribe/
-        // nativeChat.subscribe; their subscriptionIds are not terminal handles, so
-        // resolve against the live handle table instead of denying known prefixes,
-        // which would keep missing new non-terminal subscription types.
-        .filter((id) => this.runtime.resolveLiveLeafForHandle(id) !== null),
-      grantedTerminals: this.deviceRegistry?.getGrantedTerminals(entry.deviceId) ?? []
-    }))
+    const isLive = (handle: string): boolean =>
+      this.runtime.resolveLiveLeafForHandle(handle) !== null
+    return this.peerConnections.list().map((entry) => {
+      // Why: a restart mints fresh handles, so stored grants can name dead
+      // terminals; report only live ones. Pruning the stored copy happens on
+      // write (setGrantedTerminals), never from this read.
+      const liveGrants = (this.deviceRegistry?.getGrantedTerminals(entry.deviceId) ?? []).filter(
+        isLive
+      )
+      const subscribedTerminals = new Set<string>()
+      for (const subscriptionId of this.runtime.getSubscriptionIdsForConnection(
+        entry.connectionId
+      )) {
+        const handle = this.terminalHandleFromSubscriptionId(subscriptionId, isLive)
+        if (handle) {
+          subscribedTerminals.add(handle)
+        }
+      }
+      return {
+        ...entry,
+        subscribedTerminals: Array.from(subscribedTerminals),
+        grantedTerminals: liveGrants
+      }
+    })
+  }
+
+  // Why: subscription ids are either a bare terminal handle or `${handle}:${clientId}`; only trust the prefix if it resolves to a live terminal, since other subscribe methods mint colon-bearing ids too.
+  private terminalHandleFromSubscriptionId(
+    subscriptionId: string,
+    isLive: (handle: string) => boolean
+  ): string | null {
+    if (isLive(subscriptionId)) {
+      return subscriptionId
+    }
+    const colonIndex = subscriptionId.indexOf(':')
+    if (colonIndex === -1) {
+      return null
+    }
+    const candidate = subscriptionId.slice(0, colonIndex)
+    return isLive(candidate) ? candidate : null
   }
 
   // Why: host-side control surface for Phase 1 grant enforcement — the UI
   // calls this to change which terminals a paired peer device may see/use.
+  // Revocation must end an already-open stream, not just block future
+  // subscribes — see terminatePeerTerminalStreams below.
   setGrantedTerminals(deviceId: string, terminals: string[]): boolean {
-    return this.deviceRegistry?.setGrantedTerminals(deviceId, terminals) ?? false
+    const previous = this.deviceRegistry?.getGrantedTerminals(deviceId) ?? []
+    // Why: the write is the one point that may drop dead handles — a mid-reload
+    // empty handle table would otherwise delete grants that are about to
+    // reattach, so skip the prune until the graph reports ready.
+    const next =
+      this.runtime.getStatus().graphStatus === 'ready'
+        ? terminals.filter((handle) => this.runtime.resolveLiveLeafForHandle(handle) !== null)
+        : terminals
+    const ok = this.deviceRegistry?.setGrantedTerminals(deviceId, next) ?? false
+    if (ok) {
+      const revoked = previous.filter((handle) => !next.includes(handle))
+      if (revoked.length > 0) {
+        this.terminatePeerTerminalStreams(deviceId, revoked)
+      }
+    }
+    return ok
+  }
+
+  // Why: a grant revoke must kill the client's live view of that terminal
+  // immediately, not merely stop future subscribes — grant is access to the
+  // terminal, not just write permission. Finds this device's live connection
+  // and tears down every subscription — terminal stream and its presence
+  // sibling — scoped to a revoked handle; the stream's own cleanup
+  // (registered in terminal.ts) notices the missing grant and emits the
+  // peer_terminal_grant_revoked error before ending.
+  private terminatePeerTerminalStreams(deviceId: string, revokedHandles: string[]): void {
+    const connection = this.peerConnections.list().find((entry) => entry.deviceId === deviceId)
+    if (!connection) {
+      return
+    }
+    const revoked = new Set(revokedHandles)
+    const isLive = (handle: string): boolean =>
+      this.runtime.resolveLiveLeafForHandle(handle) !== null
+    for (const subscriptionId of this.runtime.getSubscriptionIdsForConnection(
+      connection.connectionId
+    )) {
+      const handle =
+        this.terminalHandleFromSubscriptionId(subscriptionId, isLive) ??
+        terminalHandleFromPresenceSubscriptionId(subscriptionId)
+      if (handle && revoked.has(handle)) {
+        this.runtime.cleanupSubscription(subscriptionId)
+      }
+    }
   }
 
   // Why: reverse-index of listConnectedPeerClients — given a terminal handle,
@@ -1016,6 +1101,14 @@ export class OrcaRuntimeRpcServer {
                   },
                   socket.ws
                 )
+                // Why: so the paired-devices list (host settings) can show what the
+                // client is calling itself instead of the pairing offer's date-based name.
+                if (socket.displayName) {
+                  this.deviceRegistry?.setLastConnectedName(
+                    socket.device.deviceId,
+                    socket.displayName
+                  )
+                }
               }
             },
             onClose: (socket, hasOtherConnections) => {

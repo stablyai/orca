@@ -14,6 +14,7 @@ type PeerCollabHostShareSectionProps = {
   pairingUrl: string | null
   endpoint: string | null
   loading: boolean
+  offerConsumed: boolean
   qrEnlarged: boolean
   codeCopied: boolean
   onGenerate: () => void
@@ -30,6 +31,7 @@ export function PeerCollabHostShareSection({
   pairingUrl,
   endpoint,
   loading,
+  offerConsumed,
   qrEnlarged,
   codeCopied,
   onGenerate,
@@ -80,14 +82,34 @@ export function PeerCollabHostShareSection({
         </p>
       </div>
 
-      <Button onClick={onGenerate} disabled={loading || !selectedAddress} size="sm">
-        {qrDataUrl != null
-          ? translate(
-              'auto.components.settings.PeerCollabSettingsPane.regenerate',
-              'Regenerate code'
-            )
-          : translate('auto.components.settings.PeerCollabSettingsPane.generate', 'Generate code')}
-      </Button>
+      <div className="space-y-2">
+        <Button onClick={onGenerate} disabled={loading || !selectedAddress} size="sm">
+          {qrDataUrl != null
+            ? translate(
+                'auto.components.settings.PeerCollabSettingsPane.regenerate',
+                'Regenerate code'
+              )
+            : translate(
+                'auto.components.settings.PeerCollabSettingsPane.generate',
+                'Generate code'
+              )}
+        </Button>
+        <p className="text-muted-foreground text-xs">
+          {translate(
+            'auto.components.settings.PeerCollabSettingsPane.singleUseCodeNotice',
+            'Each code admits one desktop and is cleared once that desktop connects. Generate a new code for every desktop you want to add.'
+          )}
+        </p>
+      </div>
+
+      {offerConsumed ? (
+        <p className="text-muted-foreground text-xs">
+          {translate(
+            'auto.components.settings.PeerCollabSettingsPane.offerConsumed',
+            'That code has been used and was cleared. Generate a new one to add another desktop.'
+          )}
+        </p>
+      ) : null}
 
       <MobilePairingQrSection
         qrDataUrl={qrDataUrl}

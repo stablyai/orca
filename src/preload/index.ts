@@ -4821,6 +4821,33 @@ const api = {
     }
   },
 
+  terminalHostPresence: {
+    subscribe: (args: {
+      terminal: string
+    }): Promise<{ ok: true; requestId: string } | { ok: false; reason: string }> =>
+      ipcRenderer.invoke('terminalHostPresence:subscribe', args),
+
+    unsubscribe: (args: { requestId: string }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('terminalHostPresence:unsubscribe', args),
+
+    send: (args: {
+      requestId: string
+      terminal: string
+      state: PeerPresenceState
+    }): Promise<{ ok: true }> => ipcRenderer.invoke('terminalHostPresence:send', args),
+
+    onEvent: (
+      callback: (payload: { requestId: string; event: PeerPresenceEvent }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload: { requestId: string; event: PeerPresenceEvent }
+      ): void => callback(payload)
+      ipcRenderer.on('terminalHostPresence:event', listener)
+      return () => ipcRenderer.removeListener('terminalHostPresence:event', listener)
+    }
+  },
+
   agentStatus: {
     /** Listen for agent status updates forwarded from native hook receivers. */
     onSet: (callback: (data: AgentStatusIpcPayload) => void): (() => void) => {

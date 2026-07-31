@@ -2147,6 +2147,75 @@ describe('OrcaRuntimeRpcServer', () => {
     ])
   })
 
+  it('reports only live granted handles and never prunes the stored copy from a read', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    let graphReady = false
+    const stubRuntime = {
+      getStatus: () => ({ graphStatus: graphReady ? 'ready' : 'unavailable' }),
+      getSubscriptionIdsForConnection: () => [],
+      resolveLiveLeafForHandle: (handle: string) =>
+        handle === 'term_live' ? { ptyId: 'pty-1' } : null
+    } as unknown as OrcaRuntimeService
+    const server = new OrcaRuntimeRpcServer({ runtime: stubRuntime, userDataPath })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const device = server['deviceRegistry']!.addDevice('peer-device', 'peer')
+    server['deviceRegistry']!.setGrantedTerminals(device.deviceId, ['term_live', 'term_dead'])
+    const peerConnections = (
+      server as unknown as {
+        peerConnections: {
+          add: (info: {
+            connectionId: string
+            deviceId: string
+            name: string
+            connectedAt: number
+          }) => void
+        }
+      }
+    ).peerConnections
+    peerConnections.add({
+      connectionId: 'conn-A',
+      deviceId: device.deviceId,
+      name: 'Peer A',
+      connectedAt: 1
+    })
+
+    expect(server.listConnectedPeerClients()[0]?.grantedTerminals).toEqual(['term_live'])
+    graphReady = true
+    expect(server.listConnectedPeerClients()[0]?.grantedTerminals).toEqual(['term_live'])
+    // Why: reads report the live subset but must leave the stored grants alone,
+    // so nothing is deleted by merely opening the settings pane.
+    expect(server.getDeviceRegistry()?.getGrantedTerminals(device.deviceId)).toEqual([
+      'term_live',
+      'term_dead'
+    ])
+  })
+
+  it('drops dead handles when grants are written, but not while the graph is unavailable', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    let graphReady = false
+    const stubRuntime = {
+      getStatus: () => ({ graphStatus: graphReady ? 'ready' : 'unavailable' }),
+      getSubscriptionIdsForConnection: () => [],
+      resolveLiveLeafForHandle: (handle: string) =>
+        handle === 'term_live' ? { ptyId: 'pty-1' } : null
+    } as unknown as OrcaRuntimeService
+    const server = new OrcaRuntimeRpcServer({ runtime: stubRuntime, userDataPath })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const device = server['deviceRegistry']!.addDevice('peer-device', 'peer')
+
+    // Why: mid-reload the handle table is briefly empty, so a write must keep
+    // handles that are about to reattach.
+    server.setGrantedTerminals(device.deviceId, ['term_live', 'term_dead'])
+    expect(server.getDeviceRegistry()?.getGrantedTerminals(device.deviceId)).toEqual([
+      'term_live',
+      'term_dead'
+    ])
+
+    graphReady = true
+    server.setGrantedTerminals(device.deviceId, ['term_live', 'term_dead'])
+    expect(server.getDeviceRegistry()?.getGrantedTerminals(device.deviceId)).toEqual(['term_live'])
+  })
+
   it('gates peer devices to the peer RPC allowlist, not the broader mobile surface', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()

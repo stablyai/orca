@@ -49,6 +49,7 @@ import { initObservability, shutdownObservability } from './observability'
 import { registerMobileHandlers } from './ipc/mobile'
 import { registerPeerCollabHandlers } from './ipc/peer-collab'
 import { registerPeerClientHandlers } from './ipc/peer-client'
+import { registerTerminalHostPresenceHandlers } from './ipc/terminal-host-presence'
 import { PeerClientService } from './runtime/peer-client-service'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce, track } from './telemetry/client'
 import { classifyError } from './telemetry/classify-error'
@@ -2774,6 +2775,7 @@ void app.whenReady().then(async () => {
   })
   registerPeerCollabHandlers(runtimeRpc, runtime)
   registerPeerClientHandlers(peerClientService, store)
+  registerTerminalHostPresenceHandlers(runtime)
   // Why: repeated direct auth failures otherwise look like a client that never connects; point users to re-pairing.
   runtimeRpc.setOnUnpairedDeviceAuthFailure(() => {
     // Why: runtime startup races renderer mount; retain the one-shot until the listener consumes it.

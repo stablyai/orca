@@ -25,6 +25,12 @@ export type DeviceEntry = {
   // Why: peer scope has no terminal access until the host explicitly grants
   // handles; absent/empty means no terminals are visible to that peer.
   grantedTerminalHandles?: string[]
+  // Why: peer scope only. `name` stays the pairing-offer's auto-generated
+  // "Peer <date>" label so it still works as a fallback (see runtime-rpc.ts's
+  // listConnectedPeerClients name resolution); the client's handshake-carried
+  // display name is kept separately so the paired-devices list can show it
+  // instead without losing that fallback.
+  lastConnectedName?: string
 }
 
 function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding | undefined {
@@ -162,6 +168,19 @@ export class DeviceRegistry {
     return true
   }
 
+  // Why: called on every peer handshake so the paired-devices list reflects
+  // the name the client is currently presenting, not the one-time pairing name.
+  setLastConnectedName(deviceId: string, name: string): boolean {
+    const device = this.devices.find((candidate) => candidate.deviceId === deviceId)
+    const trimmed = name.trim()
+    if (!device || device.scope !== 'peer' || !trimmed) {
+      return false
+    }
+    device.lastConnectedName = trimmed
+    this.save()
+    return true
+  }
+
   getGrantedTerminals(deviceId: string): string[] {
     const device = this.devices.find((candidate) => candidate.deviceId === deviceId)
     if (!device || device.scope !== 'peer') {
@@ -223,7 +242,9 @@ export class DeviceRegistry {
           ? device.grantedTerminalHandles.filter(
               (handle): handle is string => typeof handle === 'string'
             )
-          : []
+          : [],
+        lastConnectedName:
+          typeof device.lastConnectedName === 'string' ? device.lastConnectedName : undefined
       }))
     } catch {
       this.devices = []

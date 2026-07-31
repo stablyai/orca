@@ -61,7 +61,12 @@ export function registerPeerCollabHandlers(
         .filter((d) => d.scope === 'peer' && d.lastSeenAt > 0)
         .map((d) => ({
           deviceId: d.deviceId,
-          name: d.name,
+          // Why: prefer the handshake-submitted display name over the
+          // pairing-offer's auto-generated "Peer <date>" label, which just
+          // repeats the "Paired <date>" row already shown below it. Empty
+          // when the client has never sent one; the renderer shows a
+          // dedicated placeholder for that case instead of the redundant date name.
+          name: d.lastConnectedName ?? '',
           pairedAt: d.pairedAt,
           lastSeenAt: d.lastSeenAt
         }))

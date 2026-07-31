@@ -72,7 +72,15 @@ export function MobilePairedDevicesSection({
               className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
             >
               <div>
-                <div className="text-sm font-medium">{device.name}</div>
+                <div className="text-sm font-medium">
+                  {device.name ||
+                    (variant === 'peer'
+                      ? translate(
+                          'auto.components.settings.MobilePairedDevicesSection.unnamedDevice',
+                          'Unnamed device'
+                        )
+                      : device.name)}
+                </div>
                 <div className="text-muted-foreground text-xs">
                   {translate('auto.components.settings.MobilePane.254a6d09e4', 'Paired')}
                   {new Date(device.pairedAt).toLocaleDateString()}

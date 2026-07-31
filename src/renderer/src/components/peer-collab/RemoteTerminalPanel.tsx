@@ -9,6 +9,12 @@ import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-pref
 import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import {
+  approximateTerminalCellGeometry,
+  clientPointToTerminalCell,
+  resolveTerminalCellGeometry,
+  type TerminalCellGeometry
+} from '@/lib/terminal-cell-geometry'
 import { assignPeerPresenceColor } from '../../../../shared/peer-presence-color'
 import type {
   PeerPresenceCursor,
@@ -16,6 +22,7 @@ import type {
   PeerPresenceSelection,
   PeerPresenceState
 } from '../../../../shared/peer-presence-event'
+import { PEER_TERMINAL_GRANT_REVOKED_REASON } from '../../../../shared/peer-terminal-stream-event'
 import { RemoteTerminalPresenceOverlay } from './RemoteTerminalPresenceOverlay'
 
 const FALLBACK_COLS = 80
@@ -54,7 +61,10 @@ export function RemoteTerminalPanel({
   const [cellMetrics, setCellMetrics] = useState({
     cellWidth: 0,
     cellHeight: 0,
-    cols: FALLBACK_COLS
+    cols: FALLBACK_COLS,
+    rows: FALLBACK_ROWS,
+    originLeft: 0,
+    originTop: 0
   })
   const { terminalTheme, terminalMode } = useMemo(() => {
     if (!settings) {
@@ -107,9 +117,14 @@ export function RemoteTerminalPanel({
     let ownCursor: PeerPresenceCursor = null
     let ownSelection: PeerPresenceSelection = null
     let ownScroll: PeerPresenceScroll = { atBottom: true, scrollTop: 0 }
-    // Why: mousemove needs the current cell size synchronously; React state
+    // Why: mousemove needs the current cell geometry synchronously; React state
     // set via updateCellMetrics only reaches this closure on the next render.
-    let localCellMetrics = { cellWidth: 0, cellHeight: 0 }
+    let localCellMetrics: TerminalCellGeometry = {
+      cellWidth: 0,
+      cellHeight: 0,
+      originLeft: 0,
+      originTop: 0
+    }
 
     const terminal = new Terminal({
       ...buildDefaultTerminalOptions(),
@@ -147,15 +162,18 @@ export function RemoteTerminalPanel({
       return { cols: terminal.cols, rows: terminal.rows }
     }
 
-    // Why: xterm exposes no public pixel<->cell mapping, so the overlay
-    // approximates cell size from the rendered container against the current
-    // grid — good enough for a best-effort cursor/selection visualization.
     const updateCellMetrics = (): void => {
-      localCellMetrics = {
-        cellWidth: container.clientWidth / Math.max(1, terminal.cols),
-        cellHeight: container.clientHeight / Math.max(1, terminal.rows)
-      }
-      setCellMetrics({ ...localCellMetrics, cols: terminal.cols })
+      localCellMetrics =
+        resolveTerminalCellGeometry(terminal, container) ??
+        approximateTerminalCellGeometry(container, terminal.cols, terminal.rows)
+      setCellMetrics({
+        cellWidth: localCellMetrics.cellWidth,
+        cellHeight: localCellMetrics.cellHeight,
+        cols: terminal.cols,
+        rows: terminal.rows,
+        originLeft: localCellMetrics.originLeft,
+        originTop: localCellMetrics.originTop
+      })
     }
 
     const sendOwnPresence = (immediate: boolean): void => {
@@ -272,12 +290,14 @@ export function RemoteTerminalPanel({
         return
       }
       const rect = container.getBoundingClientRect()
-      const col = Math.floor((mouseEvent.clientX - rect.left) / localCellMetrics.cellWidth)
-      const row = Math.floor((mouseEvent.clientY - rect.top) / localCellMetrics.cellHeight)
-      ownCursor = {
-        col: Math.max(0, Math.min(terminal.cols - 1, col)),
-        row: Math.max(0, Math.min(terminal.rows - 1, row))
-      }
+      ownCursor = clientPointToTerminalCell(
+        mouseEvent.clientX,
+        mouseEvent.clientY,
+        rect,
+        localCellMetrics,
+        terminal.cols,
+        terminal.rows
+      )
       sendOwnPresence(false)
     }
     const handleMouseLeave = (): void => {
@@ -366,25 +386,46 @@ export function RemoteTerminalPanel({
       ) : null}
       {ended || errorReason ? (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/90 px-2.5 py-8 text-center text-[11px] text-muted-foreground">
-          {errorReason
+          {errorReason === PEER_TERMINAL_GRANT_REVOKED_REASON
             ? translate(
-                'auto.components.peer-collab.RemoteTerminalPanel.error',
-                'Could not open this terminal: {{reason}}',
-                { reason: errorReason }
+                'auto.components.peer-collab.RemoteTerminalPanel.grantRevoked',
+                'The host stopped sharing this terminal.'
               )
-            : translate(
-                'auto.components.peer-collab.RemoteTerminalPanel.ended',
-                'This terminal stream has ended.'
-              )}
+            : errorReason
+              ? translate(
+                  'auto.components.peer-collab.RemoteTerminalPanel.error',
+                  'Could not open this terminal: {{reason}}',
+                  { reason: errorReason }
+                )
+              : translate(
+                  'auto.components.peer-collab.RemoteTerminalPanel.ended',
+                  'This terminal stream has ended.'
+                )}
         </div>
       ) : null}
-      <div ref={containerRef} className="h-full w-full" />
-      {!ended && !errorReason ? (
-        <RemoteTerminalPresenceOverlay
-          participants={Array.from(remoteParticipants.values())}
-          metrics={cellMetrics}
-        />
-      ) : null}
+      {/* Why: an unpadded positioned wrapper around containerRef so the overlay
+          below shares containerRef's own coordinate space — cellMetrics.origin*
+          is measured relative to containerRef, and the outer root's p-1.5
+          padding would otherwise offset an overlay positioned against it. */}
+      <div className="relative h-full w-full">
+        <div ref={containerRef} className="h-full w-full" />
+        {!ended && !errorReason && cellMetrics.cellWidth > 0 ? (
+          <div
+            className="pointer-events-none absolute overflow-hidden"
+            style={{
+              left: cellMetrics.originLeft,
+              top: cellMetrics.originTop,
+              width: cellMetrics.cellWidth * cellMetrics.cols,
+              height: cellMetrics.cellHeight * cellMetrics.rows
+            }}
+          >
+            <RemoteTerminalPresenceOverlay
+              participants={Array.from(remoteParticipants.values())}
+              metrics={cellMetrics}
+            />
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }

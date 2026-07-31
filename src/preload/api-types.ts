@@ -3735,6 +3735,24 @@ export type PreloadApi = {
       callback: (payload: { requestId: string; event: PeerPresenceEvent }) => void
     ) => () => void
   }
+  // Why: mirrors peerClient's presence subscribe/send/onPresenceEvent, but for
+  // the host's own local terminal panes fanning through the same
+  // OrcaRuntimeService presence relay peer clients use, instead of over a
+  // network peer connection.
+  terminalHostPresence: {
+    subscribe: (args: {
+      terminal: string
+    }) => Promise<{ ok: true; requestId: string } | { ok: false; reason: string }>
+    unsubscribe: (args: { requestId: string }) => Promise<{ ok: true }>
+    send: (args: {
+      requestId: string
+      terminal: string
+      state: PeerPresenceState
+    }) => Promise<{ ok: true }>
+    onEvent: (
+      callback: (payload: { requestId: string; event: PeerPresenceEvent }) => void
+    ) => () => void
+  }
   speech: {
     getCatalog: () => Promise<SpeechModelManifest[]>
     getModelStates: () => Promise<SpeechModelState[]>

@@ -8,7 +8,8 @@ import {
   type RpcAnyMethod
 } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
-import { assertPeerTerminalGranted } from '../peer-terminal-grant-guard'
+import { assertPeerTerminalGranted, isPeerTerminalGranted } from '../peer-terminal-grant-guard'
+import { PEER_TERMINAL_GRANT_REVOKED_REASON } from '../../../../shared/peer-terminal-stream-event'
 import type { DriverState, OrcaRuntimeService } from '../../orca-runtime'
 import {
   TerminalStreamOpcode,
@@ -773,6 +774,17 @@ async function sendMobileResizeRestream(
   return true
 }
 
+// Why: client.type === 'desktop' is shared by peer-collab, the CLI, and the
+// remote-runtime desktop transport — only device.scope === 'peer'
+// (authenticated at the socket, not caller-declared) tells them apart, so
+// only genuine peer-collab clients feed the axis-wise min-size negotiation.
+function isNegotiatingPeerClient(
+  isPeerDevice: boolean | undefined,
+  client?: { type?: string; id?: string }
+): boolean {
+  return Boolean(isPeerDevice) && client?.type === 'desktop' && Boolean(client?.id)
+}
+
 async function updateViewportForClient(
   runtime: OrcaRuntimeService,
   ptyId: string,
@@ -782,7 +794,8 @@ async function updateViewportForClient(
   defaultType: 'mobile' | 'desktop',
   // Why: the one-shot RPC has no disconnect hook, so 'refresh' only updates a stream-owned floor; stream paths that own cleanup 'register'.
   registration: 'register' | 'refresh' = 'register',
-  claim = false
+  claim = false,
+  negotiate = false
 ): Promise<{ updated: boolean; applied: boolean }> {
   const type = client.type ?? defaultType
   if (type === 'mobile') {
@@ -791,7 +804,9 @@ async function updateViewportForClient(
   // Why: stream attachment observes geometry without taking control; a later claim frame makes it authoritative.
   const updated =
     registration === 'refresh'
-      ? await runtime.refreshRemoteDesktopViewer(
+      ? // Why: refresh only ever mutates an already-registered viewer entry and
+        // spreads its stored `negotiates` flag forward, so it takes no flag here.
+        await runtime.refreshRemoteDesktopViewer(
           ptyId,
           client.id,
           viewport.cols,
@@ -804,7 +819,8 @@ async function updateViewportForClient(
           client.id,
           viewport.cols,
           viewport.rows,
-          claim
+          claim,
+          negotiate
         )
   return { updated, applied: updated }
 }
@@ -2186,6 +2202,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           return
         }
         if (frame.opcode === TerminalStreamOpcode.Input) {
+          // Why: a grant revoked after subscribe must stop input immediately, not just block new subscribes.
+          if (!isPeerTerminalGranted({ isPeerDevice, getGrantedTerminals }, stream.terminal)) {
+            return
+          }
           const text = decodeTerminalStreamText(frame.payload)
           if (!text) {
             return
@@ -2196,7 +2216,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           // Mobile already has the higher-priority floor, so a rejected desktop claim must not suppress later phone input.
           const inputClaimTail = stream.isMobile ? Promise.resolve(true) : stream.desktopClaimTail
           void inputClaimTail.then((claimed) => {
-            if (!claimed || isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
+            if (
+              !claimed ||
+              isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client) ||
+              !isPeerTerminalGranted({ isPeerDevice, getGrantedTerminals }, stream.terminal)
+            ) {
               return
             }
             return sendTerminalStreamInput(runtime, {
@@ -2249,7 +2273,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                 { cols, rows },
                 stream.isMobile ? 'mobile' : 'desktop',
                 'register',
-                !stream.supportsDesktopViewportClaims
+                !stream.supportsDesktopViewportClaims,
+                isNegotiatingPeerClient(isPeerDevice, stream.client)
               )
               return stream.supportsDesktopViewportClaims
                 ? priorClaimed && result.applied
@@ -2272,6 +2297,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           const cols = viewport.cols
           const rows = viewport.rows
           stream.registeredRemoteDesktopDriver = true
+          const negotiateClaim = isNegotiatingPeerClient(isPeerDevice, stream.client)
           stream.desktopClaimTail = stream.desktopClaimTail
             .then(
               () =>
@@ -2281,7 +2307,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                   stream.client!.id,
                   cols,
                   rows,
-                  true
+                  true,
+                  negotiateClaim
                 ),
               () =>
                 runtime.updateRemoteDesktopViewer(
@@ -2290,7 +2317,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                   stream.client!.id,
                   cols,
                   rows,
-                  true
+                  true,
+                  negotiateClaim
                 )
             )
             .catch(() => false)
@@ -2417,7 +2445,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                 viewport,
                 'desktop',
                 'register',
-                !stream.supportsDesktopViewportClaims
+                !stream.supportsDesktopViewportClaims,
+                isNegotiatingPeerClient(isPeerDevice, stream.client)
               ).catch(() => {})
             }
           }
@@ -2634,7 +2663,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               viewport,
               'desktop',
               'register',
-              !stream.supportsDesktopViewportClaims
+              !stream.supportsDesktopViewportClaims,
+              isNegotiatingPeerClient(isPeerDevice, request.client)
             )
           }
           if (closed || streams.get(request.streamId) !== stream) {
@@ -2853,7 +2883,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               viewport,
               'desktop',
               'register',
-              !stream.supportsDesktopViewportClaims
+              !stream.supportsDesktopViewportClaims,
+              isNegotiatingPeerClient(isPeerDevice, stream.client)
             ).catch(() => {})
           }
           void runtime
@@ -2909,16 +2940,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         sendBinary,
         registerBinaryStreamHandler,
         signal,
-        isPeerDevice
+        isPeerDevice,
+        getGrantedTerminals
       } = ctx
       assertPeerTerminalGranted(ctx, params.terminal)
       let leaf = runtime.resolveLeafForHandle(params.terminal)
       const isMobile = params.client?.type === 'mobile'
-      // Why: client.type === 'desktop' is shared by peer-collab, the CLI, and
-      // the remote-runtime desktop transport — only device.scope === 'peer'
-      // (authenticated at the socket, not caller-declared) tells them apart.
-      const isPeer =
-        Boolean(isPeerDevice) && params.client?.type === 'desktop' && Boolean(params.client?.id)
+      const isPeer = isNegotiatingPeerClient(isPeerDevice, params.client)
       const serializerGenerationBeforeAnyMount = isMobile
         ? (runtime.getRendererTerminalSerializerGenerationForHandle?.(params.terminal) ?? 0)
         : 0
@@ -3057,7 +3085,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               params.viewport,
               'desktop',
               'register',
-              !supportsDesktopViewportClaims
+              !supportsDesktopViewportClaims,
+              isPeer
             )
           }
           if (closed || signal?.aborted) {
@@ -3159,6 +3188,20 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         () => {
           outputBatcher?.flush()
           outputBatcher?.dispose()
+          // Why: a grant revoked mid-stream (host turned off sharing) must tell the
+          // client why it lost the terminal instead of silently going dark; a normal
+          // unsubscribe/exit still has its grant, so this only fires on revoke. Must
+          // run before `closed = true` below, since sendFrame no-ops once closed.
+          if (
+            isPeer &&
+            !isPeerTerminalGranted({ isPeerDevice, getGrantedTerminals }, params.terminal)
+          ) {
+            sendFrame(
+              TerminalStreamOpcode.Error,
+              encodeTerminalStreamText(PEER_TERMINAL_GRANT_REVOKED_REASON)
+            )
+            emit({ type: 'error', message: PEER_TERMINAL_GRANT_REVOKED_REASON })
+          }
           closed = true
           unsubscribeData()
           unsubscribeResize()
@@ -3211,6 +3254,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             return
           }
           if (frame.opcode === TerminalStreamOpcode.Input) {
+            // Why: a grant revoked after subscribe must stop input immediately, not just block new subscribes.
+            if (!isPeerTerminalGranted({ isPeerDevice, getGrantedTerminals }, params.terminal)) {
+              return
+            }
             const text = decodeTerminalStreamText(frame.payload)
             if (!text) {
               return
@@ -3219,7 +3266,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               return
             }
             void desktopClaimTail.then(async (claimed) => {
-              if (!claimed || isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
+              if (
+                !claimed ||
+                isTerminalInputLockedForClient(runtime, ptyId, params.client) ||
+                !isPeerTerminalGranted({ isPeerDevice, getGrantedTerminals }, params.terminal)
+              ) {
                 return
               }
               // Why: peers only claim the floor when the host has turned on
@@ -3265,7 +3316,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                   { cols, rows },
                   'desktop',
                   'register',
-                  !supportsDesktopViewportClaims
+                  !supportsDesktopViewportClaims,
+                  isPeer
                 )
                 return supportsDesktopViewportClaims
                   ? priorClaimed && result.applied
@@ -3302,7 +3354,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                     clientId,
                     cols,
                     rows,
-                    true
+                    true,
+                    isPeer
                   ),
                 () =>
                   runtime.updateRemoteDesktopViewer(
@@ -3311,7 +3364,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                     clientId,
                     cols,
                     rows,
-                    true
+                    true,
+                    isPeer
                   )
               )
               .catch(() => false)
@@ -3719,7 +3773,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             viewport,
             'desktop',
             'register',
-            !supportsDesktopViewportClaims
+            !supportsDesktopViewportClaims,
+            isPeer
           ).catch(() => {})
         }
 

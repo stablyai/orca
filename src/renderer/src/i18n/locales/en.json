@@ -10192,11 +10192,14 @@
           "clientSavedPairingInvalid": "This pairing is no longer valid — the host may have revoked it.",
           "clientForgetHost": "Forget this host",
           "clientSavedHost": "Saved host: {{endpoint}}",
-          "clientReconnectSaved": "Reconnect"
+          "clientReconnectSaved": "Reconnect",
+          "offerConsumed": "That code has been used and was cleared. Generate a new one to add another desktop.",
+          "singleUseCodeNotice": "Each code admits one desktop and is cleared once that desktop connects. Generate a new code for every desktop you want to add."
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",
-          "lastSeen": "Last seen {{time}}"
+          "lastSeen": "Last seen {{time}}",
+          "unnamedDevice": "Unnamed device"
         }
       },
       "right": {
@@ -14503,6 +14506,7 @@
           "close": "Close"
         },
         "RemoteTerminalPanel": {
+          "grantRevoked": "The host stopped sharing this terminal.",
           "error": "Could not open this terminal: {{reason}}",
           "ended": "This terminal stream has ended.",
           "otherSubscribers": "Also watching: {{names}}"

@@ -28,6 +28,10 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
   const [endpoint, setEndpoint] = useState<string | null>(null)
+  // Why: a code backs exactly one client, so the displayed one is dropped once
+  // its device pairs — leaving it on screen invites handing out a dead code.
+  const [offerDeviceId, setOfferDeviceId] = useState<string | null>(null)
+  const [offerConsumed, setOfferConsumed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [qrEnlarged, setQrEnlarged] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
@@ -135,6 +139,8 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
           setQrDataUrl(result.qrDataUrl)
           setPairingUrl(result.pairingUrl)
           setEndpoint(result.endpoint)
+          setOfferDeviceId(result.deviceId)
+          setOfferConsumed(false)
           clearCodeCopiedResetTimer()
           setCodeCopied(false)
           void loadDevices()
@@ -172,7 +178,22 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
     setQrDataUrl(null)
     setPairingUrl(null)
     setEndpoint(null)
+    setOfferDeviceId(null)
+    setOfferConsumed(false)
   }, [])
+
+  // Why: the device turns up in the paired list the moment a client authenticates
+  // with the displayed code, which is the signal that the code is spent.
+  useEffect(() => {
+    if (!offerDeviceId || !devices.some((device) => device.deviceId === offerDeviceId)) {
+      return
+    }
+    setQrDataUrl(null)
+    setPairingUrl(null)
+    setEndpoint(null)
+    setOfferDeviceId(null)
+    setOfferConsumed(true)
+  }, [devices, offerDeviceId])
 
   const toggleExclusiveInputFloor = useCallback(async () => {
     const next = !exclusiveInputFloor
@@ -291,6 +312,7 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
         pairingUrl={pairingUrl}
         endpoint={endpoint}
         loading={loading}
+        offerConsumed={offerConsumed}
         qrEnlarged={qrEnlarged}
         codeCopied={codeCopied}
         onGenerate={() => void generateOffer({ rotate: qrDataUrl != null })}

@@ -9,3 +9,9 @@ export type PeerTerminalStreamEvent =
   | { type: 'metadata'; cwd: string | null }
   | { type: 'error'; message: string }
   | { type: 'end' }
+
+// Why: the `error` event's message when the host revoked this peer's grant
+// mid-stream (runtime-rpc.ts's terminatePeerTerminalStreams) — a stable code
+// shared with RemoteTerminalPanel so the client can show a specific reason
+// instead of the generic subscribe-failure message.
+export const PEER_TERMINAL_GRANT_REVOKED_REASON = 'peer_terminal_grant_revoked'

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -107,16 +107,20 @@ export function TerminalPaneViewerBadge({
               type="button"
               variant="ghost"
               size="xs"
-              className="pane-title-split-trigger"
+              className="pane-title-split-trigger pane-title-viewer-badge"
               aria-label={badgeLabel}
               onClick={(event) => event.stopPropagation()}
             >
               {viewers.length > 0 ? (
                 <Eye className="size-3" />
               ) : (
-                <EyeOff className="text-muted-foreground size-3" />
+                <Users className="text-muted-foreground size-3" />
               )}
-              <span className="tabular-nums">
+              <span
+                className={
+                  viewers.length > 0 ? 'tabular-nums' : 'text-muted-foreground tabular-nums'
+                }
+              >
                 {viewers.length > 0 ? viewers.length : connectedClients.length}
               </span>
             </Button>

@@ -57,7 +57,10 @@ export const TERMINAL_PRESENCE_METHODS: readonly RpcAnyMethod[] = [
         )
 
         const seq = ++presenceSubscriptionSeq
-        const subscriptionId = `terminal-presence-${connectionId ?? 'inproc'}-${seq}`
+        // Why: terminal is embedded (not just connectionId) so a grant revoke can
+        // find and tear down this connection's presence sub for that terminal —
+        // see RuntimeRpc.setGrantedTerminals.
+        const subscriptionId = `terminal-presence:${params.terminal}:${connectionId ?? 'inproc'}-${seq}`
         runtime.registerSubscriptionCleanup(
           subscriptionId,
           () => {

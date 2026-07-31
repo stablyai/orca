@@ -515,3 +515,134 @@ describe('remote desktop viewer width driver', () => {
     expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(true)
   })
 })
+
+// Why: peer-collab (`negotiate: true`) viewers size the shared PTY to the
+// axis-wise min across the host and every negotiating viewer, instead of the
+// legacy single-owner "latest claim wins" sizing exercised above. CLI/
+// remote-runtime-desktop and terminal-preview registrations never pass
+// `negotiate: true`, so they keep the legacy behavior untouched (see the last
+// two cases here).
+describe('peer-collab min-size negotiation', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('sizes cols to the narrower of host and a negotiating peer', async () => {
+    const { runtime } = createRuntime()
+    // Host starts at 150x40.
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-A', 'peer-A', 100, 40, true, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
+  })
+
+  it('sizes rows to the narrower of host and a negotiating peer', async () => {
+    const { runtime } = createRuntime()
+    // Host starts at 150x40; peer is wider but shorter.
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-A', 'peer-A', 180, 30, true, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 150, rows: 30 })
+  })
+
+  it('picks the narrower value per axis independently (cross case)', async () => {
+    const { runtime } = createRuntime()
+    // Host is 150x40. Peer is narrower in cols (100) but taller in rows (60):
+    // expect the peer's cols and the host's rows, not either party wholesale.
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-A', 'peer-A', 100, 60, true, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
+  })
+
+  it('recomputes the negotiated min as more negotiating peers join', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-A', 'peer-A', 100, 40, true, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
+
+    // A second, narrower peer joins — the min must shrink further.
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-B', 'peer-B', 80, 30, true, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 80, rows: 30 })
+  })
+
+  it('keeps the negotiated min when the host reclaims focus (no host takeover)', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-A', 'peer-A', 100, 40, true, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
+
+    // The host clicks/types and reclaims — its own (full) size must only feed
+    // the negotiation, not evict the peer or win outright (the regression).
+    await runtime.claimRemoteDesktopHost('pty-1', 150, 40)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
+    expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(true)
+  })
+
+  it('recomputes from remaining peers, then reverts to host size, as peers leave', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-A', 'peer-A', 100, 40, true, true)
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-B', 'peer-B', 80, 30, true, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 80, rows: 30 })
+
+    // The narrower peer leaves — the surviving peer's size is renegotiated.
+    await runtime.unregisterRemoteDesktopViewer('pty-1', 'peer-B')
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
+
+    // The last peer leaves — the PTY reverts to the host's own size.
+    await runtime.unregisterRemoteDesktopViewer('pty-1', 'peer-A')
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 150, rows: 40 })
+    expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(false)
+  })
+
+  it('recomputes the negotiated min when the dominating non-owner peer leaves', async () => {
+    const { runtime } = createRuntime()
+    // peer-A claims first (narrower, becomes owner); peer-B claims second
+    // (wider, becomes the new owner since claim always overwrites it) — the
+    // owner is not necessarily the most restrictive negotiator.
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-A', 'peer-A', 80, 30, true, true)
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-B', 'peer-B', 120, 50, true, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 80, rows: 30 })
+
+    // peer-A (non-owner) leaves — the min must relax toward the sole
+    // remaining negotiator, peer-B, even though it never held ownership
+    // (rows still capped by the 150x40 host, which is narrower than peer-B).
+    await runtime.unregisterRemoteDesktopViewer('pty-1', 'peer-A')
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 120, rows: 40 })
+  })
+
+  it('guards against a peer reporting an invalid viewport collapsing the PTY', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-A', 'peer-A', 100, 40, true, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
+
+    // A malformed/zero viewport is clamped to the PTY's supported floor
+    // (cols >= 20, rows >= 8) rather than collapsing the shared terminal.
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-B', 'peer-B', 0, -5, true, true)
+    const size = runtime.getTerminalSize('pty-1')
+    expect(size!.cols).toBeGreaterThanOrEqual(20)
+    expect(size!.rows).toBeGreaterThanOrEqual(8)
+  })
+
+  it('does not let a non-negotiating preview viewer shrink the negotiated size', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-A', 'peer-A', 100, 40, true, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
+
+    // Terminal-preview registers without `negotiate: true` (the default) even
+    // though it claims — its smaller viewport must not shrink the shared PTY.
+    await runtime.updateRemoteDesktopViewer(
+      'pty-1',
+      'dashboard-popout:9',
+      'dashboard-popout:9',
+      40,
+      10
+    )
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
+
+    // The preview leaving must not disturb the still-negotiated size either.
+    await runtime.unregisterRemoteDesktopViewer('pty-1', 'dashboard-popout:9')
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
+  })
+
+  it('legacy non-negotiating viewers (CLI/remote-runtime desktop) keep single-owner sizing', async () => {
+    const { runtime } = createRuntime()
+    // No `negotiate` argument — mirrors a CLI/remote-runtime-desktop client.
+    await runtime.updateRemoteDesktopViewer('pty-1', 'cli-A', 'cli-A', 100, 40, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
+
+    await runtime.updateRemoteDesktopViewer('pty-1', 'cli-B', 'cli-B', 80, 30, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 80, rows: 30 })
+  })
+})

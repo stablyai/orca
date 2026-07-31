@@ -2983,9 +2983,16 @@ export class OrcaRuntimeService {
   // Why: remote (relay/shared-control) desktop viewers of a PTY are keyed by
   // subscription, not client, because one client can open duplicate streams and
   // each stream must release only the width floor it registered.
+  // `negotiates` marks a viewer as a peer-collab participant whose viewport
+  // feeds the axis-wise min-size negotiation (see activeRemoteDesktopViewport);
+  // CLI/remote-runtime-desktop/preview viewers default to false and keep the
+  // legacy single-owner sizing so they are unaffected by this negotiation.
   private remoteDesktopViewers = new Map<
     string,
-    Map<string, { clientId: string; cols: number; rows: number; activity: number }>
+    Map<
+      string,
+      { clientId: string; cols: number; rows: number; activity: number; negotiates: boolean }
+    >
   >()
   private remoteDesktopOwners = new Map<string, string>()
   private remoteDesktopActivity = 0
@@ -13121,9 +13128,52 @@ export class OrcaRuntimeService {
     return viewers !== undefined && viewers.size > 0
   }
 
+  // Why: only viewers that have actually claimed at least once (activity > 0)
+  // count — a passive/hydration attachment must not pull the shared PTY into
+  // the negotiation (mirrors the existing owner-fallback rule below).
+  private negotiatingRemoteDesktopViewers(ptyId: string): { cols: number; rows: number }[] {
+    const viewers = this.remoteDesktopViewers.get(ptyId)
+    if (!viewers) {
+      return []
+    }
+    const result: { cols: number; rows: number }[] = []
+    for (const viewer of viewers.values()) {
+      if (viewer.negotiates && viewer.activity > 0 && viewer.cols > 0 && viewer.rows > 0) {
+        result.push({ cols: viewer.cols, rows: viewer.rows })
+      }
+    }
+    return result
+  }
+
+  private hasNegotiatingRemoteDesktopViewers(ptyId: string): boolean {
+    return this.negotiatingRemoteDesktopViewers(ptyId).length > 0
+  }
+
+  // Why: peer-collab participants (negotiates: true) size the shared PTY to
+  // the axis-wise min across the host and every negotiating viewer, so the
+  // narrower party never has content clipped. CLI/remote-runtime-desktop and
+  // the terminal-preview window (negotiates: false) keep the legacy
+  // single-owner behavior — their own recorded viewport is applied as-is.
   private activeRemoteDesktopViewport(ptyId: string): { cols: number; rows: number } | null {
     const owner = this.remoteDesktopOwners.get(ptyId)
-    return owner ? (this.remoteDesktopViewers.get(ptyId)?.get(owner) ?? null) : null
+    if (!owner) {
+      return null
+    }
+    const negotiating = this.negotiatingRemoteDesktopViewers(ptyId)
+    if (negotiating.length === 0) {
+      return this.remoteDesktopViewers.get(ptyId)?.get(owner) ?? null
+    }
+    const host = this.resolveRemoteDesktopHostReclaimTarget(ptyId)
+    let cols = host.cols > 0 ? host.cols : undefined
+    let rows = host.rows > 0 ? host.rows : undefined
+    for (const viewer of negotiating) {
+      cols = cols === undefined ? viewer.cols : Math.min(cols, viewer.cols)
+      rows = rows === undefined ? viewer.rows : Math.min(rows, viewer.rows)
+    }
+    if (cols === undefined || rows === undefined) {
+      return null
+    }
+    return clampTerminalViewport(cols, rows)
   }
 
   private resolveRemoteDesktopHostReclaimTarget(ptyId: string): { cols: number; rows: number } {
@@ -13203,13 +13253,17 @@ export class OrcaRuntimeService {
 
   // Why: attachment only records geometry. Passive hydration/reconnect must not
   // steal the shared PTY from the desktop where the user is actively working.
+  // `negotiate` marks this viewer as a peer-collab participant in the
+  // axis-wise min-size negotiation (default false preserves the legacy
+  // single-owner sizing for CLI/remote-runtime-desktop/preview viewers).
   async updateRemoteDesktopViewer(
     ptyId: string,
     subscriptionKey: string,
     clientId: string,
     cols: number,
     rows: number,
-    claim = true
+    claim = true,
+    negotiate = false
   ): Promise<boolean> {
     const viewport = clampTerminalViewport(cols, rows)
     if (claim) {
@@ -13219,7 +13273,7 @@ export class OrcaRuntimeService {
     if (!viewers) {
       viewers = new Map<
         string,
-        { clientId: string; cols: number; rows: number; activity: number }
+        { clientId: string; cols: number; rows: number; activity: number; negotiates: boolean }
       >()
       this.remoteDesktopViewers.set(ptyId, viewers)
     }
@@ -13228,6 +13282,7 @@ export class OrcaRuntimeService {
       prior &&
       prior.cols === viewport.cols &&
       prior.rows === viewport.rows &&
+      prior.negotiates === negotiate &&
       (!claim || this.remoteDesktopOwners.get(ptyId) === subscriptionKey)
     ) {
       if (claim && this.remoteDesktopOwners.get(ptyId) === subscriptionKey) {
@@ -13239,13 +13294,21 @@ export class OrcaRuntimeService {
       return true
     }
     const activity = claim ? ++this.remoteDesktopActivity : (prior?.activity ?? 0)
-    viewers.set(subscriptionKey, { clientId, cols: viewport.cols, rows: viewport.rows, activity })
+    viewers.set(subscriptionKey, {
+      clientId,
+      cols: viewport.cols,
+      rows: viewport.rows,
+      activity,
+      negotiates: negotiate
+    })
     this.bumpRemoteDesktopViewerRevision(ptyId)
     if (claim) {
       this.remoteDesktopOwners.set(ptyId, subscriptionKey)
       return this.applyRemoteDesktopLayout(ptyId)
     }
-    return true
+    // Why: a non-claiming (passive) registration can still change the min
+    // negotiation's inputs if a negotiating viewer is already driving the PTY.
+    return this.remoteDesktopOwners.has(ptyId) ? this.applyRemoteDesktopLayout(ptyId) : true
   }
 
   claimRemoteDesktopViewer(ptyId: string, subscriptionKey: string): Promise<boolean> {
@@ -13276,7 +13339,15 @@ export class OrcaRuntimeService {
     }
     const viewport = clampTerminalViewport(cols, rows)
     this.remoteDesktopHostReclaimTargets.set(ptyId, viewport)
-    this.remoteDesktopOwners.delete(ptyId)
+    // Why: with a negotiating (peer-collab) viewer still attached, the host's
+    // own size is only ONE input to the min negotiation — evicting the owner
+    // here would let the host's reclaim win outright and clip the peer again
+    // (the reported "click to type snaps back to host size" regression).
+    // Legacy CLI/remote-runtime-desktop viewers keep the old exclusive
+    // reclaim: the host regains sole control of the width floor.
+    if (!this.hasNegotiatingRemoteDesktopViewers(ptyId)) {
+      this.remoteDesktopOwners.delete(ptyId)
+    }
     this.bumpRemoteDesktopViewerRevision(ptyId)
     return this.applyRemoteDesktopLayout(ptyId)
   }
@@ -13295,8 +13366,16 @@ export class OrcaRuntimeService {
     }
     let changed = false
     let removedOwner = false
+    let removedNegotiator = false
     for (const subscriptionKey of subscriptionKeys) {
       removedOwner = this.remoteDesktopOwners.get(ptyId) === subscriptionKey || removedOwner
+      const existing = viewers.get(subscriptionKey)
+      // Why: a departing negotiating peer changes the min-size inputs even
+      // when it wasn't the recorded owner — the owner is just whoever claimed
+      // last, not necessarily the most restrictive negotiator.
+      if (existing?.negotiates && existing.activity > 0) {
+        removedNegotiator = true
+      }
       changed = viewers.delete(subscriptionKey) || changed
     }
     if (!changed) {
@@ -13319,7 +13398,9 @@ export class OrcaRuntimeService {
       }
     }
     this.bumpRemoteDesktopViewerRevision(ptyId)
-    return removedOwner ? this.applyRemoteDesktopLayout(ptyId) : Promise.resolve(true)
+    return removedOwner || removedNegotiator
+      ? this.applyRemoteDesktopLayout(ptyId)
+      : Promise.resolve(true)
   }
 
   // Why: the one-shot `terminal.updateViewport` RPC has no disconnect hook, so

@@ -1044,6 +1044,7 @@ describe('terminal multiplex RPC', () => {
         'desktop-1',
         300,
         150,
+        false,
         false
       )
       expect(handlers.has(5)).toBe(true)
@@ -1073,7 +1074,8 @@ describe('terminal multiplex RPC', () => {
           'desktop-1',
           96,
           32,
-          true
+          true,
+          false
         )
       )
       handlers.get(5)?.(
@@ -1113,6 +1115,7 @@ describe('terminal multiplex RPC', () => {
           'desktop-1',
           96,
           32,
+          false,
           false
         )
       )
@@ -1143,6 +1146,7 @@ describe('terminal multiplex RPC', () => {
           'desktop-1',
           88,
           28,
+          false,
           false
         )
       )
@@ -1194,6 +1198,7 @@ describe('terminal multiplex RPC', () => {
           'desktop-1',
           100,
           30,
+          false,
           false
         )
       )
@@ -1596,6 +1601,7 @@ describe('terminal multiplex RPC', () => {
           'desktop-1',
           88,
           33,
+          false,
           false
         )
       )
@@ -3669,7 +3675,8 @@ describe('terminal multiplex RPC', () => {
       'desktop-json-1',
       88,
       30,
-      true
+      true,
+      false
     )
 
     runtime.cleanupSubscription('terminal-1:desktop-json-1')
