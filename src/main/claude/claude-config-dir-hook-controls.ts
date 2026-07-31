@@ -3,7 +3,7 @@
 // agentStatusHooksEnabled-gated flow as the static per-agent services.
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import type { ClaudeHookService } from './hook-service'
-import { createClaudeConfigDirHookService } from './hook-service'
+import { createClaudeConfigDirHookService } from './claude-config-dir-hook-service'
 import {
   discoverLocalClaudeConfigDirNames,
   type LocalClaudeConfigDirFs

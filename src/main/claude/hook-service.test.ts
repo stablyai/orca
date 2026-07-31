@@ -30,7 +30,8 @@ vi.mock('electron', () => ({
 
 import type { SFTPWrapper } from 'ssh2'
 import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
-import { ClaudeHookService, createClaudeConfigDirHookService } from './hook-service'
+import { createClaudeConfigDirHookService } from './claude-config-dir-hook-service'
+import { ClaudeHookService } from './hook-service'
 import { OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
 
 const CLAUDE_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
