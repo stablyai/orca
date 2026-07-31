@@ -1,8 +1,11 @@
 import { EventEmitter } from 'node:events'
+import type { Mock } from 'vitest'
 import { vi } from 'vitest'
 
-export function makeDisposable(): { dispose: ReturnType<typeof vi.fn> } {
-  return { dispose: vi.fn() }
+type TestDisposable = { dispose: Mock<() => void> }
+
+export function makeDisposable(onDispose: () => void = () => undefined): TestDisposable {
+  return { dispose: vi.fn(onDispose) }
 }
 
 export function makeRpcChild() {
@@ -52,27 +55,31 @@ export function respondToRpcRateLimitRead(
 }
 
 export function makePtyTerm(): {
-  onData: ReturnType<typeof vi.fn>
-  onExit: ReturnType<typeof vi.fn>
+  onData: (callback: (data: string) => void) => ReturnType<typeof makeDisposable>
+  onExit: (callback: () => void) => ReturnType<typeof makeDisposable>
   write: ReturnType<typeof vi.fn>
   kill: ReturnType<typeof vi.fn>
   emitData: (data: string) => void
   emitExit: () => void
 } {
-  let dataHandler: ((data: string) => void) | null = null
-  let exitHandler: (() => void) | null = null
+  const dataHandlers = new Set<(data: string) => void>()
+  const exitHandlers = new Set<() => void>()
   return {
     onData: vi.fn((callback: (data: string) => void) => {
-      dataHandler = callback
-      return makeDisposable()
+      dataHandlers.add(callback)
+      return makeDisposable(() => {
+        dataHandlers.delete(callback)
+      })
     }),
     onExit: vi.fn((callback: () => void) => {
-      exitHandler = callback
-      return makeDisposable()
+      exitHandlers.add(callback)
+      return makeDisposable(() => {
+        exitHandlers.delete(callback)
+      })
     }),
     write: vi.fn(),
     kill: vi.fn(),
-    emitData: (data: string) => dataHandler?.(data),
-    emitExit: () => exitHandler?.()
+    emitData: (data: string) => dataHandlers.forEach((handler) => handler(data)),
+    emitExit: () => exitHandlers.forEach((handler) => handler())
   }
 }
