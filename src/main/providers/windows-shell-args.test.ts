@@ -121,12 +121,43 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(codexRestoreIndex).toBeGreaterThan(outputEncodingIndex)
     expect(codexRestoreIndex).toBeGreaterThan(ompWrapperIndex)
     expect(promptIndex).toBeGreaterThan(codexRestoreIndex)
-    expect(cwdRestoreIndex).toBeGreaterThan(promptIndex)
+    expect(cwdRestoreIndex).toBeGreaterThanOrEqual(0)
+    expect(cwdRestoreIndex).toBeLessThan(outputEncodingIndex)
     expect(command).toContain('Esc = [char]27')
     expect(command).toContain('Bel = [char]7')
     expect(command).toContain(')]133;D;$fakeExitCode$(')
     expect(command).toContain(')]133;C$(')
     expect(command).not.toContain('`e]133')
+  })
+
+  it('runs cwd restore and startup command outside the shell-integration guards', () => {
+    // Why: on a ConstrainedLanguage host (WDAC/AppLocker) the bootstrap bails,
+    // so both must sit outside its guarded block to survive.
+    const startupCommand = "& 'codex' '--no-alt-screen'"
+    const result = resolveWindowsShellLaunchArgs(
+      'powershell.exe',
+      'C:\\Users\\alice\\repo',
+      'C:\\Users\\alice',
+      undefined,
+      startupCommand
+    )
+
+    const command = decodePowerShellCommand(result)
+    const cwdRestoreIndex = command.indexOf(
+      expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice\\repo'")
+    )
+    const guardBlockIndex = command.indexOf('. {')
+    const languageModeGuardIndex = command.indexOf(
+      '$ExecutionContext.SessionState.LanguageMode -ne "FullLanguage"'
+    )
+
+    expect(cwdRestoreIndex).toBeGreaterThanOrEqual(0)
+    expect(guardBlockIndex).toBeGreaterThanOrEqual(0)
+    expect(languageModeGuardIndex).toBeGreaterThanOrEqual(0)
+    expect(cwdRestoreIndex).toBeLessThan(guardBlockIndex)
+    expect(guardBlockIndex).toBeLessThan(languageModeGuardIndex)
+    expect(command.lastIndexOf('}')).toBeLessThan(command.indexOf(startupCommand))
+    expect(command.trimEnd().endsWith(startupCommand)).toBe(true)
   })
 
   it('normalizes MSYS drive cwd before spawning native PowerShell', () => {

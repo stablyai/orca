@@ -31,6 +31,30 @@ describe('PowerShell OSC 133 bootstrap', () => {
     expect(script).not.toContain('NoProfile')
   })
 
+  it('isolates its early-return guards so they cannot abort the caller payload', () => {
+    // Why: a top-level `return` ends the whole -EncodedCommand script, taking
+    // the cwd restore and startup command callers append with it.
+    const script = getPowerShellOsc133Bootstrap()
+
+    expect(script.startsWith('. {\n')).toBe(true)
+    expect(script.trimEnd().endsWith('}')).toBe(true)
+
+    const blockStart = script.indexOf('. {')
+    const languageModeGuard = script.indexOf(
+      '$ExecutionContext.SessionState.LanguageMode -ne "FullLanguage"'
+    )
+    const reentryGuard = script.indexOf('Test-Path variable:global:__OrcaOsc133State')
+    expect(languageModeGuard).toBeGreaterThan(blockStart)
+    expect(reentryGuard).toBeGreaterThan(blockStart)
+
+    // Balanced braces: an unclosed block would swallow whatever callers append.
+    const depth = [...script].reduce(
+      (acc, char) => acc + (char === '{' ? 1 : char === '}' ? -1 : 0),
+      0
+    )
+    expect(depth).toBe(0)
+  })
+
   it('encodes commands as UTF-16LE base64 for PowerShell -EncodedCommand', () => {
     expect(encodePowerShellCommand('Write-Output ok')).toBe(
       Buffer.from('Write-Output ok', 'utf16le').toString('base64')

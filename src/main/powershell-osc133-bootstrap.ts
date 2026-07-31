@@ -69,7 +69,11 @@ if ($Global:__OrcaOsc133State.HasPSReadLine -and
 `
 
 export function getPowerShellOsc133Bootstrap(): string {
-  return POWERSHELL_OSC133_BOOTSTRAP
+  // Why: the guards above `return`, which at top level aborts the whole
+  // -EncodedCommand payload — including the cwd restore and startup command
+  // callers append. Dot-sourcing scopes `return` to the block while still
+  // running in the caller's scope, so $OutputEncoding stays global.
+  return `. {\n${POWERSHELL_OSC133_BOOTSTRAP}}\n`
 }
 
 export function isPowerShellExecutableName(shellName: string): boolean {
