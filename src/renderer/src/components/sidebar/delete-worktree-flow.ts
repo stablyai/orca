@@ -203,12 +203,14 @@ export function runWorktreeDeleteWithToast(
  * Shared funnel for the standard (non-folder) delete decision tree (WorktreeContextMenu,
  * MemoryStatusSegment); branches on the `skipDeleteWorktreeConfirm` preference.
  *
- * The missing-record guard is defense-in-depth: refuse to act if the record vanished
- * between render and click (concurrent delete or state reset).
+ * A matching caller snapshot preserves delayed context-menu deletes across transient list refreshes;
+ * without one, a missing record still fails closed.
  */
-export function runWorktreeDelete(worktreeId: string): void {
+export function runWorktreeDelete(worktreeId: string, targetSnapshot?: Worktree): void {
   const state = useAppStore.getState()
-  const target = getWorktreeMapFromState(state).get(worktreeId) ?? null
+  const target =
+    getWorktreeMapFromState(state).get(worktreeId) ??
+    (targetSnapshot?.id === worktreeId ? targetSnapshot : null)
   if (!target) {
     return
   }

@@ -141,6 +141,19 @@ describe('runWorktreeBatchDelete', () => {
     expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', { worktreeId: 'wt-1' })
   })
 
+  it('uses the clicked workspace snapshot if a refresh temporarily drops the row', () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([{ id: 'wt-1', displayName: 'one' }])
+    const target = mocks.state.worktreeMap.get('wt-1') as unknown as NonNullable<
+      Parameters<typeof runWorktreeDelete>[1]
+    >
+    setWorktrees([])
+
+    runWorktreeDelete('wt-1', target)
+
+    expect(mocks.state.removeWorktree).toHaveBeenCalledWith('wt-1', false)
+  })
+
   it('keeps batch deletes behind confirmation when confirmation is skipped', () => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: true }
     setWorktrees([
