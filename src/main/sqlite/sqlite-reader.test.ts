@@ -26,6 +26,13 @@ describe('SqliteDatabaseReader', () => {
       // sqlite_sequence exists because of the AUTOINCREMENT table, but is SQLite's bookkeeping, not user data.
       expect(names).not.toContain('sqlite_sequence')
       expect(names.filter((name) => name.startsWith('sqlite_'))).toEqual([])
+      // FTS5 keeps its index and content in shadow tables; those are implementation detail, not user data.
+      expect(names).toContain('docs')
+      expect(names.filter((name) => name.startsWith('docs_') && name !== 'docs_archive')).toEqual(
+        []
+      )
+      // ...but a user table that merely shares the prefix must survive.
+      expect(names).toContain('docs_archive')
       expect(tables.find((table) => table.name === 'people')?.columns).toEqual([
         'id',
         'name',

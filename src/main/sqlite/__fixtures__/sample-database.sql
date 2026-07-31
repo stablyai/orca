@@ -59,4 +59,7 @@ INSERT INTO autoinc (v) VALUES ('a');
 CREATE VIRTUAL TABLE docs USING fts5(title, body);
 INSERT INTO docs VALUES ('first', 'hello world');
 
+CREATE TABLE docs_archive (note TEXT);
+INSERT INTO docs_archive VALUES ('kept');
+
 INSERT INTO settings VALUES ('theme', 'dark'), ('locale', 'nl');

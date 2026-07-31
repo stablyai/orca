@@ -15,6 +15,33 @@ type ColumnRow = { name: string; pk: number; hidden: number }
 // hidden=1 is a virtual-table column that SELECT * omits (FTS5, RTREE); 2 and 3 are generated columns, which it returns.
 const HIDDEN_FROM_SELECT_STAR = 1
 
+const VIRTUAL_TABLE_MODULE = /^\s*create\s+virtual\s+table\s+.*?\busing\s+([a-z0-9_]+)/i
+
+// Suffixes each built-in module declares via xShadowName. Matching the owning module too, rather than the name prefix
+// alone, keeps a user table like `docs_archive` visible next to an fts5 `docs`.
+const SHADOW_SUFFIXES: Record<string, Set<string>> = {
+  fts3: new Set(['content', 'docsize', 'segdir', 'segments', 'stat']),
+  fts4: new Set(['content', 'docsize', 'segdir', 'segments', 'stat']),
+  fts5: new Set(['config', 'content', 'data', 'docsize', 'idx']),
+  rtree: new Set(['node', 'parent', 'rowid']),
+  rtree_i32: new Set(['node', 'parent', 'rowid'])
+}
+
+function parseVirtualTableModule(sql: string | null): string | null {
+  return VIRTUAL_TABLE_MODULE.exec(sql ?? '')?.[1]?.toLowerCase() ?? null
+}
+
+// A shadow table is a virtual table's private storage; showing it invites reading index internals as if they were data.
+function isShadowTable(name: string, modulesByTable: Map<string, string>): boolean {
+  const separator = name.lastIndexOf('_')
+  if (separator <= 0) {
+    return false
+  }
+  const module = modulesByTable.get(name.slice(0, separator))
+  // An unknown module gets the benefit of the doubt: showing an extra table beats hiding a real one.
+  return module !== undefined && (SHADOW_SUFFIXES[module]?.has(name.slice(separator + 1)) ?? false)
+}
+
 function quoteIdentifier(name: string): string {
   return `"${name.replaceAll('"', '""')}"`
 }
@@ -74,13 +101,21 @@ export class SqliteDatabaseReader {
     const db = new Database(filePath, { readonly: true, fileMustExist: true })
     try {
       // The sqlite_ prefix is reserved, so filtering it hides only SQLite's own bookkeeping (e.g. sqlite_sequence).
-      const names = (
-        db
-          .prepare(
-            "select name from sqlite_master where type = 'table' and name not like 'sqlite\\_%' escape '\\' order by name"
-          )
-          .all() as { name: string }[]
-      ).map((row) => row.name)
+      const rows = db
+        .prepare(
+          "select name, sql from sqlite_master where type = 'table' and name not like 'sqlite\\_%' escape '\\' order by name"
+        )
+        .all() as { name: string; sql: string | null }[]
+      const modulesByTable = new Map<string, string>()
+      for (const row of rows) {
+        const module = parseVirtualTableModule(row.sql)
+        if (module !== null) {
+          modulesByTable.set(row.name, module)
+        }
+      }
+      const names = rows
+        .filter((row) => !isShadowTable(row.name, modulesByTable))
+        .map((row) => row.name)
       return new SqliteDatabaseReader(db, names)
     } catch (err) {
       db.close()
