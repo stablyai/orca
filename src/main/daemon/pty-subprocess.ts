@@ -32,6 +32,7 @@ import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
+import { canonicalizeWindowsPathKey } from '../pty/windows-environment-path'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
 import {
@@ -559,8 +560,9 @@ function spawnDaemonPtyWithWindowsFallback(args: {
  */
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
   const size = normalizePtySize(opts.cols, opts.rows)
+  const inheritedEnv = stripInheritedBuildModeEnv(process.env)
   const env: Record<string, string> = {
-    ...mergeGitConfigEnvProtocol(stripInheritedBuildModeEnv(process.env), opts.env),
+    ...mergeGitConfigEnvProtocol(inheritedEnv, opts.env),
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Orca',
@@ -780,6 +782,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   })
 
   let proc: pty.IPty
+  canonicalizeWindowsPathKey(env, inheritedEnv, env)
   try {
     const spawned = spawnDaemonPtyWithWindowsFallback({
       shellPath,
