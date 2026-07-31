@@ -34797,10 +34797,13 @@ function buildTerminalWait(
   exitCode: number | null,
   blockedReason?: RuntimeTerminalWaitBlockedReason
 ): RuntimeTerminalWait {
+  const observedState =
+    blockedReason ?? (condition === 'tui-idle' && status === 'running' ? condition : status)
   return {
     handle,
     condition,
     satisfied: blockedReason === undefined,
+    observedState,
     status,
     exitCode,
     ...(blockedReason ? { blockedReason } : {})

@@ -30997,6 +30997,8 @@ describe('OrcaRuntimeService', () => {
     const result = await waitPromise
     expect(result.condition).toBe('tui-idle')
     expect(result.satisfied).toBe(true)
+    expect(result.status).toBe('running')
+    expect(result.observedState).toBe('tui-idle')
   })
 
   it('builds a compact worktree summary from persisted and live runtime state', async () => {

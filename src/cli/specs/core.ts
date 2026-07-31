@@ -217,7 +217,10 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Wait for a terminal condition',
     usage:
       'orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'for', 'timeout-ms']
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'for', 'timeout-ms'],
+    notes: [
+      'JSON output keeps status as the process-level terminal state and reports the matched wait condition in observedState.'
+    ]
   },
   {
     path: ['terminal', 'stop'],
