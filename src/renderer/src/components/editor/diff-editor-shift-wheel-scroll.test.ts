@@ -93,6 +93,22 @@ describe('installDiffEditorShiftWheelScroll', () => {
     dispose()
   })
 
+  it('scrolls the modified pane independently', () => {
+    const original = createPaneFixture()
+    const modified = createPaneFixture()
+    const dispose = installDiffEditorShiftWheelScroll({
+      getOriginalEditor: () => original,
+      getModifiedEditor: () => modified
+    })
+
+    const event = dispatchWheel(modified.input, { deltaY: 24, shiftKey: true })
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(modified.setScrollLeft).toHaveBeenCalledWith(34)
+    expect(original.setScrollLeft).not.toHaveBeenCalled()
+    dispose()
+  })
+
   it('removes both pane listeners when disposed', () => {
     const original = createPaneFixture()
     const modified = createPaneFixture()
