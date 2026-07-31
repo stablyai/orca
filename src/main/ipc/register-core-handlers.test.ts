@@ -47,6 +47,7 @@ const {
   setAgentBrowserBridgeRefMock,
   setTrustedBrowserRendererWebContentsIdMock,
   registerFilesystemWatcherHandlersMock,
+  registerSqliteDatabaseHandlersMock,
   registerAppHandlersMock,
   registerLinearHandlersMock,
   registerJiraHandlersMock,
@@ -112,6 +113,7 @@ const {
   setAgentBrowserBridgeRefMock: vi.fn(),
   setTrustedBrowserRendererWebContentsIdMock: vi.fn(),
   registerFilesystemWatcherHandlersMock: vi.fn(),
+  registerSqliteDatabaseHandlersMock: vi.fn(),
   registerAppHandlersMock: vi.fn(),
   registerLinearHandlersMock: vi.fn(),
   registerJiraHandlersMock: vi.fn(),
@@ -287,6 +289,10 @@ vi.mock('./filesystem-watcher', () => ({
   registerFilesystemWatcherHandlers: registerFilesystemWatcherHandlersMock
 }))
 
+vi.mock('./sqlite-database', () => ({
+  registerSqliteDatabaseHandlers: registerSqliteDatabaseHandlersMock
+}))
+
 vi.mock('./rate-limits', () => ({
   registerRateLimitHandlers: registerRateLimitHandlersMock
 }))
@@ -429,6 +435,7 @@ describe('registerCoreHandlers', () => {
     setAgentBrowserBridgeRefMock.mockReset()
     setTrustedBrowserRendererWebContentsIdMock.mockReset()
     registerFilesystemWatcherHandlersMock.mockReset()
+    registerSqliteDatabaseHandlersMock.mockReset()
     registerAppHandlersMock.mockReset()
     registerLinearHandlersMock.mockReset()
     registerJiraHandlersMock.mockReset()
@@ -557,6 +564,7 @@ describe('registerCoreHandlers', () => {
     expect(registerBrowserHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemWatcherHandlersMock).toHaveBeenCalled()
     expect(registerSpeechHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerSqliteDatabaseHandlersMock).toHaveBeenCalledWith(store)
 
     await expect(
       aiVaultOptions.scanRuntimeAiVaultSessions(

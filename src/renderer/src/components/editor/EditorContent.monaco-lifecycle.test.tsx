@@ -153,6 +153,7 @@ function props(activeFile: OpenFile, content: string) {
     isMermaid: false,
     isCsv: false,
     isNotebook: false,
+    isSqlite: false,
     mdViewMode: 'rich' as const,
     isChangesMode: false,
     sideBySide: false,

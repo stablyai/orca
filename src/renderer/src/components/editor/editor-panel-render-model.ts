@@ -159,6 +159,7 @@ export function getEditorPanelRenderModel({
     isMermaid: viewerLanguage === 'mermaid',
     isCsv: viewerLanguage === 'csv' || viewerLanguage === 'tsv',
     isNotebook: viewerLanguage === 'notebook',
+    isSqlite: viewerLanguage === 'sqlite',
     // Why: the preview renders the on-disk file, so diff surfaces only get it
     // when the modified side still exists on disk (canOpen excludes deleted
     // files and commit diffs whose content may not match the working tree).

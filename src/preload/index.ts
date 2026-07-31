@@ -9,6 +9,7 @@ import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
 } from '../shared/terminal-preview'
+import type { SqliteDatabaseOverview, SqliteTablePage } from '../shared/sqlite-database'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
@@ -2988,6 +2989,24 @@ const api = {
       ipcRenderer.invoke('notebook:runPythonCell', args)
   },
 
+  sqlite: {
+    openDatabase: (args: {
+      filePath: string
+      connectionId?: string
+    }): Promise<SqliteDatabaseOverview> => ipcRenderer.invoke('sqlite:openDatabase', args),
+    countTableRows: (args: {
+      filePath: string
+      table: string
+      connectionId?: string
+    }): Promise<number> => ipcRenderer.invoke('sqlite:countTableRows', args),
+    readTablePage: (args: {
+      filePath: string
+      table: string
+      offset: number
+      limit: number
+      connectionId?: string
+    }): Promise<SqliteTablePage> => ipcRenderer.invoke('sqlite:readTablePage', args)
+  },
   fs: {
     readDir: (args: {
       dirPath: string
