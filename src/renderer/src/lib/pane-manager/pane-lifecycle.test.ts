@@ -454,6 +454,9 @@ describe('openTerminal — addon and provider wiring', () => {
       fit: vi.fn()
     } as unknown as ManagedPaneInternal['fitAddon']
     const searchAddon = {} as unknown as ManagedPaneInternal['searchAddon']
+    const imageAddon = {
+      dispose: vi.fn()
+    } as unknown as ManagedPaneInternal['imageAddon']
     const serializeAddon = {} as unknown as ManagedPaneInternal['serializeAddon']
     const unicode11Addon = {} as unknown as ManagedPaneInternal['unicode11Addon']
     const webLinksAddon = {} as unknown as ManagedPaneInternal['webLinksAddon']
@@ -506,6 +509,8 @@ describe('openTerminal — addon and provider wiring', () => {
           events.push('loadAddon:fit')
         } else if (addon === searchAddon) {
           events.push('loadAddon:search')
+        } else if (addon === imageAddon) {
+          events.push('loadAddon:image')
         } else if (addon === serializeAddon) {
           events.push('loadAddon:serialize')
         } else if (addon === unicode11Addon) {
@@ -549,6 +554,7 @@ describe('openTerminal — addon and provider wiring', () => {
       fitResizeObserver: null,
       pendingObservedFitRafId: null,
       searchAddon,
+      imageAddon,
       serializeAddon,
       unicode11Addon,
       ligaturesAddon: null,
@@ -561,6 +567,16 @@ describe('openTerminal — addon and provider wiring', () => {
 
     return { pane, events, getRegisteredJoinHandler: () => registeredJoinHandler }
   }
+
+  it('loads image protocol support and releases its per-pane storage on dispose', () => {
+    const { pane, events } = createOpenTerminalHarness()
+
+    openTerminal(pane)
+
+    expect(events).toContain('loadAddon:image')
+    disposePane(pane, new Map([[pane.id, pane]]))
+    expect(pane.imageAddon!.dispose).toHaveBeenCalledTimes(1)
+  })
 
   // Why: CJK / emoji / ZWJ widths get baked into the buffer at the active
   // unicode version on write. If anything writes bytes through xterm before
