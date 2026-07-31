@@ -7,6 +7,7 @@ import {
 import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/terminal-lifecycle-diagnostics'
 import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-dispatcher'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { registerModuleSingletonSize } from '@/lib/module-singleton-size-registry'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { getSystemPrefersDark, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
@@ -82,6 +83,8 @@ type AgentStatusProjectionCache = {
 const registeredTabs = new Map<string, RegisteredTerminalTab>()
 // Why: registration time suppresses the "no live transport" warning during the async PTY-connect window; after the grace period it's a real stuck state.
 const tabRegisteredAt = new Map<string, number>()
+registerModuleSingletonSize('syncGraph.registeredTabs', registeredTabs)
+registerModuleSingletonSize('syncGraph.tabRegisteredAt', tabRegisteredAt)
 const NO_TRANSPORT_GRACE_MS = 10_000
 const EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE: AppState['activeBrowserTabIdByWorktree'] = {}
 const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
@@ -105,6 +108,12 @@ const mobileSessionSnapshotCacheByWorktree = new Map<
   string,
   { content: unknown; snapshot: RuntimeMobileSessionTabsSnapshot }
 >()
+// Why registered: retains a full session snapshot per worktree, so unbounded
+// growth here is heap, not just bookkeeping.
+registerModuleSingletonSize(
+  'syncGraph.mobileSnapshotCache',
+  mobileSessionSnapshotCacheByWorktree
+)
 
 // Structural equality under JSON-serialization semantics (undefined-valued
 // keys are absent), so version reuse matches a JSON fingerprint exactly

@@ -20,6 +20,7 @@ import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagn
 import { deliverPulledPtyModelRestoreMarkers } from './pty-model-restore-channel'
 import { getProcessedPtyCharTotals } from './terminal-pty-ack-gate'
 import { recordTerminalFreezeBreadcrumb } from './terminal-freeze-breadcrumbs'
+import { receivedPtyCharTotals } from './terminal-delivery-watchdog-size-registry'
 
 const WATCHDOG_INTERVAL_MS = 15_000
 // Why 2 ticks: one silent interval can be a probe racing an in-transit chunk;
@@ -43,7 +44,6 @@ type TerminalDeliveryWatchdogDeps = {
   hasAttachedPtys: () => boolean
 }
 
-const receivedPtyCharTotals = new Map<string, number>()
 let receivedPtyDataEventCount = 0
 let blackholePtyPushDelivery = false
 

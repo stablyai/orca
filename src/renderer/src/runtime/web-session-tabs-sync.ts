@@ -32,6 +32,7 @@ import type { OpenFile } from '../store/slices/editor'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '@/lib/terminal-pane-title-sanitization'
+import { registerModuleSingletonSize } from '@/lib/module-singleton-size-registry'
 import {
   getExplicitRuntimeEnvironmentIdForWorktree,
   getRuntimeSessionMirrorEnvironmentIds
@@ -105,6 +106,15 @@ const latestSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
 const replayableSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
 const lastHostTerminalTabCountByWorktree = new Map<string, number>()
 const hostSessionTabIdByLocalKey = new Map<string, string>()
+// Why registered: keyed by worktree/tab with no eviction pass, so SSH sessions
+// that churn worktrees would grow these silently.
+registerModuleSingletonSize('webTabsSync.latestSnapshots', latestSessionTabsSnapshotByWorktree)
+registerModuleSingletonSize(
+  'webTabsSync.replayableSnapshots',
+  replayableSessionTabsSnapshotByWorktree
+)
+registerModuleSingletonSize('webTabsSync.lastHostTabCounts', lastHostTerminalTabCountByWorktree)
+registerModuleSingletonSize('webTabsSync.hostTabIdByLocalKey', hostSessionTabIdByLocalKey)
 
 type TerminalSurface = RuntimeMobileSessionTerminalClientTab
 type ReadyTerminalSurface = RuntimeMobileSessionTerminalClientTab & { status: 'ready' }

@@ -226,6 +226,7 @@ import {
   type TaskSourceContext
 } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
+import { registerModuleSingletonSize } from '@/lib/module-singleton-size-registry'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { sortChecksBySeverity } from '../../../shared/pr-check-severity-order'
 import {
@@ -1475,6 +1476,10 @@ const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
 
 // Why: useSyncExternalStore snapshot stability relies on every cache write replacing the entry object identity (delete+set).
 const workItemDetailsCacheListeners = new Set<() => void>()
+registerModuleSingletonSize('prPage.workItemDetailsCache', workItemDetailsCache)
+// Why registered: a listener Set that only grows is a mounted-component leak,
+// and it retains every closure's captured props.
+registerModuleSingletonSize('prPage.workItemDetailsListeners', workItemDetailsCacheListeners)
 function subscribeWorkItemDetailsCache(listener: () => void): () => void {
   workItemDetailsCacheListeners.add(listener)
   return () => {
@@ -1659,6 +1664,10 @@ type PRFileContentCacheEntry = {
 }
 const prFileContentCache = new Map<string, PRFileContentCacheEntry>()
 let prFileContentCacheBytes = 0
+// Why registered: byte-capped, but the cap only holds if eviction actually runs;
+// reporting both entries and bytes proves it in a crash report rather than assuming.
+registerModuleSingletonSize('prPage.fileContentCache', prFileContentCache)
+registerModuleSingletonSize('prPage.fileContentCacheKB', () => prFileContentCacheBytes / 1024)
 
 function getUtf8ByteCount(value: string): number {
   let byteCount = 0

@@ -48,6 +48,8 @@ import {
   registerRendererMemoryProfileContributor,
   summarizeStateCollectionSizes
 } from '@/lib/renderer-memory-profile'
+import { walkNestedCollectionSizes } from '@/lib/nested-collection-size-walker'
+import { collectModuleSingletonSizes } from '@/lib/module-singleton-size-registry'
 
 export const useAppStore = create<AppState>()((...a) => {
   // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
@@ -103,6 +105,21 @@ registerHttpLinkStoreAccessor(() => useAppStore.getState())
 registerRendererMemoryProfileContributor('store', () =>
   summarizeStateCollectionSizes(useAppStore.getState(), 20)
 )
+
+// Why: the top-level summary above cannot see growth INSIDE a slice value, which
+// is why 53 heap-exhaustion reports named nothing. Diagnostics only — bounded
+// walk, no fix. See nested-collection-size-walker.ts.
+registerRendererMemoryProfileContributor('nested', () => {
+  const walk = walkNestedCollectionSizes(useAppStore.getState(), 12)
+  return {
+    ...walk.counts,
+    nodesVisited: walk.nodesVisited,
+    truncated: walk.truncated ? 1 : 0,
+    estimated: walk.estimated ? 1 : 0
+  }
+})
+
+registerRendererMemoryProfileContributor('singleton', collectModuleSingletonSizes)
 
 export type { AppState } from './types'
 
