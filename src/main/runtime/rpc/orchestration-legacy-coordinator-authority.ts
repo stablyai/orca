@@ -1,4 +1,5 @@
 import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
+import type { OrchestrationDb } from '../orchestration/db'
 import type { LegacyCompatibilityPrincipalRow } from '../orchestration/types'
 import type { LegacyCoordinatorAuthorityProof, RpcRequest } from './core'
 import {
@@ -20,8 +21,12 @@ export class LegacyCoordinatorAuthority {
   ): LegacyCoordinatorAuthorityProof | undefined {
     const db = this.runtime.getOrchestrationDb()
     const adoption = db.getLegacyAdoption()
-    const requestedRun = requestedRunId ?? adoption?.adopted_run_id
-    if (!adoption || requestedRun !== adoption.adopted_run_id) {
+    if (!adoption) {
+      return undefined
+    }
+    // Why: an unnamed Run means the caller's own binding; only an unbound caller can still mean the adopted Run.
+    const requestedRun = requestedRunId ?? boundRunId(db, request) ?? adoption.adopted_run_id
+    if (requestedRun !== adoption.adopted_run_id) {
       return undefined
     }
     const candidate = db.resolveLegacyCoordinatorCandidate({
@@ -31,10 +36,17 @@ export class LegacyCoordinatorAuthority {
     })
     if (!candidate) {
       if (request.orchestrationCompatibilityEvidence) {
+        const run = db.getRun(adoption.adopted_run_id)
+        // Why: an unclaimed adopted Run has no coordinator to fence — same rule as bindingMatches below.
+        if (
+          !run?.coordinator_pane_key &&
+          !db.getLegacyCoordinatorPrincipal(adoption.adopted_run_id)
+        ) {
+          return undefined
+        }
         const caller = this.runtime.verifyOrchestrationCompatibilityCaller(
           request.orchestrationCompatibilityEvidence
         )
-        const run = db.getRun(adoption.adopted_run_id)
         if (
           caller &&
           run?.coordinator_handle === caller.terminalHandle &&
@@ -167,4 +179,9 @@ export class LegacyCoordinatorAuthority {
       principal.process_incarnation === attestation.processIncarnation
     )
   }
+}
+
+function boundRunId(db: OrchestrationDb, request: RpcRequest): string | undefined {
+  const paneKey = request.orchestrationCompatibilityEvidence?.paneKey
+  return paneKey ? db.getCurrentRunForPane(paneKey)?.id : undefined
 }
