@@ -234,9 +234,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       }
       const ownsFieldState =
         pendingLiveInputHandleRef.current === handle &&
-        (sentLiveInputTextRef.current.length > 0 ||
-          heldLiveInputTextRef.current.length > 0 ||
-          ptyCursorCodePointRef.current > 0)
+        (sentLiveInputTextRef.current.length > 0 || heldLiveInputTextRef.current.length > 0)
       const payload = buildTerminalLiveQueuedControlPayload({
         state: readCursorState(),
         ownsFieldState,

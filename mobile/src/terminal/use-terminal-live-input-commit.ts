@@ -6,7 +6,6 @@ import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import type { TerminalLiveNativeSelection } from './terminal-live-selection-cursor'
 import {
   classifyTerminalLiveSelectionEvent,
-  isTerminalLiveFieldOwnedArrowKey,
   shouldApplyTerminalLiveCursorOnlySelectionMove
 } from './terminal-live-selection-event-routing'
 import { useTerminalLivePendingInputFlush } from './use-terminal-live-pending-input-flush'
@@ -220,11 +219,6 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       const heldText = ownsPendingState ? heldLiveInputTextRef.current : ''
       const sentText = ownsPendingState ? sentLiveInputTextRef.current : ''
       const decision = getTerminalLiveSpecialKeyDecision({ key, heldText, sentText })
-      // Why: physical arrows can emit keypress + selection; with field text the
-      // selection handler owns the single PTY step — never send here too.
-      if (isTerminalLiveFieldOwnedArrowKey(key) && (heldText.length > 0 || sentText.length > 0)) {
-        return
-      }
       switch (decision.kind) {
         case 'ignore':
         case 'local-edit':
