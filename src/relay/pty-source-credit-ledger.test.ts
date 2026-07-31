@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PtySourceDeliveryIdentity } from '../shared/pty-source-credit-contract'
 import { RelayPtySourceCreditLedger } from './pty-source-credit-ledger'
+import { CLOSED_DELIVERY_TOMBSTONE_LIMIT } from './pty-source-credit-record'
 
 function identity(
   deliveryToken = 'token-1',
@@ -499,6 +500,40 @@ describe('RelayPtySourceCreditLedger', () => {
 
     expect(() => ledger.snapshot(owners[0])).toThrow('stale')
     expect(ledger.snapshot(owners.at(-1)!)).toMatchObject({ state: 'closed' })
+  })
+
+  it('probes live, closed, cancelled and evicted deliveries without throwing', () => {
+    const ledger = new RelayPtySourceCreditLedger()
+    const live = identity('token-live', { id: 'pty-live' })
+    ledger.open(live, 8)
+    expect(ledger.snapshotIfKnown(live)).toMatchObject({ state: 'active', exitPublished: false })
+
+    const completed = identity('token-completed', { id: 'pty-completed' })
+    ledger.open(completed, 8)
+    ledger.seal(completed)
+    ledger.settleExitPublication(completed, { ok: true })
+    expect(ledger.snapshotIfKnown(completed)).toMatchObject({
+      state: 'closed',
+      exitPublished: true
+    })
+
+    const canceled = identity('token-canceled', { id: 'pty-canceled' })
+    ledger.open(canceled, 8)
+    ledger.cancel(canceled, 'client-request')
+    expect(ledger.snapshotIfKnown(canceled)).toMatchObject({
+      state: 'closed',
+      exitPublished: false
+    })
+
+    expect(ledger.snapshotIfKnown(identity('token-unknown'))).toBeNull()
+    expect(() => ledger.snapshot(identity('token-unknown'))).toThrow('stale')
+
+    for (let index = 0; index < CLOSED_DELIVERY_TOMBSTONE_LIMIT; index++) {
+      const evicting = identity(`token-evicting-${index}`, { id: `pty-evicting-${index}` })
+      ledger.open(evicting, 8)
+      ledger.cancel(evicting, 'test')
+    }
+    expect(ledger.snapshotIfKnown(canceled)).toBeNull()
   })
 
   it('rejects reopening a recently closed one-use token', () => {

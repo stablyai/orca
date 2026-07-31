@@ -100,6 +100,12 @@ export class RelayPtySourceSendScheduler {
     if (!record || record.restoreRequired) {
       return
     }
+    if (record.sourceExitState === 'pending') {
+      // Why: the credit-mode exit frame is in flight; pruning now diverts publishPendingExit
+      // into a duplicate legacy pty.exit, and pumping a closed delivery throws. The exit
+      // settlement (which fires onCapacity) resumes progress.
+      return
+    }
     if (this.pruneClosed(id, record)) {
       this.onCapacity(id)
       return
@@ -114,7 +120,10 @@ export class RelayPtySourceSendScheduler {
     let sealedUnsettled = 0
     let outstandingSourceUnits = 0
     for (const record of this.deliveries.values()) {
-      const snapshot = this.session.sourceDeliverySnapshot(record.identity)
+      const snapshot = this.session.sourceDeliverySnapshotIfKnown(record.identity)
+      if (!snapshot) {
+        continue
+      }
       outstandingSourceUnits += snapshot.sentEndSu - snapshot.creditedEndSu
       if (record.activating) {
         activating++
@@ -263,7 +272,10 @@ export class RelayPtySourceSendScheduler {
   }
 
   pruneClosed(id: string, record: RelayPtySourceDeliveryRecord): boolean {
-    if (this.session.sourceDeliverySnapshot(record.identity).state !== 'closed') {
+    // Why: an evicted tombstone probes null and must count as closed — this runs from paths
+    // (credit callbacks, write settlements) where a throw escapes every caller's try/catch.
+    const snapshot = this.session.sourceDeliverySnapshotIfKnown(record.identity)
+    if (snapshot && snapshot.state !== 'closed') {
       return false
     }
     if (this.deliveries.get(id) === record) {

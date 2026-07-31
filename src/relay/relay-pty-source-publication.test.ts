@@ -19,7 +19,9 @@ function requestFrame(id: number, method: string, params: Record<string, unknown
   return encodeJsonRpcFrame({ jsonrpc: '2.0', id, method, params }, id, 0)
 }
 
-function notification(buffer: Buffer): { method: string; params: Record<string, unknown> } | null {
+type Notification = { method: string; params: Record<string, unknown> }
+
+function notification(buffer: Buffer): Notification | null {
   if (buffer[0] !== MessageType.Regular) {
     return null
   }
@@ -52,17 +54,23 @@ describe('RelayPtySourcePublication', () => {
   async function createHarness(
     windowSu = 4,
     settleSourceImmediately = true,
-    highWaterMark?: number
+    highWaterMark?: number,
+    holdExitSettlement = false
   ) {
     const writes: Buffer[] = []
     const sourceSettlements: ((result: SinkWriteSettlement) => void)[] = []
+    const exitSettlements: ((result: SinkWriteSettlement) => void)[] = []
+    const capacityIds: string[] = []
     dispatcher = new RelayDispatcher(
       (data, onSettled) => {
         writes.push(Buffer.from(data))
         const frame = notification(data)
         if (frame?.method === 'pty.data' || frame?.method === 'pty.exit') {
           sourceSettlements.push(onSettled)
-          if (settleSourceImmediately) {
+          if (frame.method === 'pty.exit') {
+            exitSettlements.push(onSettled)
+          }
+          if (settleSourceImmediately && !(holdExitSettlement && frame.method === 'pty.exit')) {
             onSettled({ ok: true })
           }
         } else {
@@ -85,7 +93,7 @@ describe('RelayPtySourcePublication', () => {
     const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a', undefined, (id) =>
       publication.onCreditAvailable(id)
     )
-    publication = new RelayPtySourcePublication(dispatcher, adapter, () => {})
+    publication = new RelayPtySourcePublication(dispatcher, adapter, (id) => capacityIds.push(id))
     dispatcher.feed(
       requestFrame(1, 'pty.openClient', {
         protocolVersion: 1,
@@ -105,7 +113,7 @@ describe('RelayPtySourcePublication', () => {
       })
     ).toBe('opened')
     activationSettlements[0]({ ok: true })
-    return { adapter, publication, sourceSettlements, writes }
+    return { adapter, publication, sourceSettlements, exitSettlements, capacityIds, writes }
   }
 
   it('commits only from writer settlement and resumes exactly after cumulative ACK', async () => {
