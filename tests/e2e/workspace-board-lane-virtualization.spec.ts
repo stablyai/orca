@@ -366,12 +366,14 @@ test.describe('Workspace board lane virtualization', () => {
     const laneCards = lane.locator('[data-workspace-board-card-id]')
     await expect.poll(() => laneCards.count(), { timeout: 15_000 }).toBeGreaterThan(3)
     const laneScroll = lane.locator('[data-workspace-board-lane-scroll]')
+    const selectionSurface = orcaPage.locator('[data-workspace-board-selection-surface]')
     const box = await laneScroll.boundingBox()
-    if (!box) {
-      throw new Error('Expected the marquee lane to have a bounding box')
+    const selectionBox = await selectionSurface.boundingBox()
+    if (!box || !selectionBox) {
+      throw new Error('Expected the marquee lane and selection surface to have bounding boxes')
     }
 
-    await orcaPage.mouse.move(box.x + 2, box.y + 12)
+    await orcaPage.mouse.move(selectionBox.x + 4, box.y + 12)
     await orcaPage.mouse.down()
     await orcaPage.mouse.move(box.x + box.width - 18, box.y + 80, { steps: 4 })
     await expect
