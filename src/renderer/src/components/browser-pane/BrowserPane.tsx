@@ -25,6 +25,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CircleCheck,
+  CircleDot,
   Copy,
   CornerDownLeft,
   Crosshair,
@@ -117,6 +118,10 @@ import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../shared/b
 import { useGrabMode } from './useGrabMode'
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import { formatBrowserAnnotationsAsMarkdown } from './browser-annotation-output'
+import { useBrowserRecorder } from './useBrowserRecorder'
+import { formatBrowserRecorderStepsAsMarkdown } from './browser-recorder-output'
+import { summarizeBrowserGrabTarget } from './browser-recorder-types'
+import { BrowserRecorderTray } from './BrowserRecorderTray'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import { getBrowserPagesForWorkspace } from './browser-pane-page-selection'
 import BrowserAddressBar from './BrowserAddressBar'
@@ -2892,6 +2897,10 @@ function BrowserPagePane({
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const [findOpen, setFindOpen] = useState(false)
   const grab = useGrabMode(browserTab.id)
+  const recorder = useBrowserRecorder(browserTab.id)
+  const { recordStep: recordRecorderStep } = recorder
+  const [recorderCopied, setRecorderCopied] = useState(false)
+  const recorderCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const markup = useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
@@ -3087,6 +3096,13 @@ function BrowserPagePane({
       setPendingAnnotationPayload(grab.payload)
       return
     }
+    // Why: log every picked element while recording — the requirement is "where
+    // did the user click", so right-click picks are logged too, before the
+    // context-menu action (copy/screenshot) runs.
+    recordRecorderStep(
+      { kind: 'element-selected', element: summarizeBrowserGrabTarget(grab.payload.target) },
+      { pageUrl: grab.payload.page.sanitizedUrl, pageTitle: grab.payload.page.title }
+    )
     if (!grab.contextMenu) {
       const text = formatGrabPayloadAsText(grab.payload)
       void window.api.ui.writeClipboardText(text)
@@ -3099,6 +3115,7 @@ function BrowserPagePane({
     grab.contextMenu,
     grabIntent,
     recordFeatureInteraction,
+    recordRecorderStep,
     showGrabToast
   ])
 
@@ -3152,6 +3169,31 @@ function BrowserPagePane({
   useEffect(() => {
     browserTabUrlRef.current = browserTab.url
   }, [browserTab.url])
+
+  // Why: while recording, log every page change so the session shows where the
+  // user navigated and which page each later step happened on. The baseline is
+  // seeded per tab so the pre-existing URL is never logged as a navigation.
+  const recorderNavBaselineRef = useRef<{ tabId: string; url: string } | null>(null)
+  useEffect(() => {
+    const baseline = recorderNavBaselineRef.current
+    recorderNavBaselineRef.current = { tabId: browserTab.id, url: browserTab.url }
+    if (!baseline || baseline.tabId !== browserTab.id) {
+      return
+    }
+    if (baseline.url === browserTab.url) {
+      return
+    }
+    // Why: skip navigations INTO the blank tab placeholder (redirect chains can
+    // pass through about:blank); leaving blank for the first real page is a
+    // legitimate step the user performed.
+    if (browserTab.url === ORCA_BROWSER_BLANK_URL) {
+      return
+    }
+    recordRecorderStep(
+      { kind: 'navigation', fromUrl: baseline.url, toUrl: browserTab.url },
+      { pageUrl: browserTab.url, pageTitle: browserTab.title }
+    )
+  }, [browserTab.id, browserTab.title, browserTab.url, recordRecorderStep])
 
   useEffect(() => {
     activeLoadFailureRef.current = browserTab.loadError
@@ -4280,6 +4322,13 @@ function BrowserPagePane({
           }
           const payload = result.payload as BrowserGrabPayload
 
+          // Why: the C/S shortcut acts on the hovered element without a click,
+          // so the confirm effect never sees it — log it here instead.
+          recordRecorderStep(
+            { kind: 'element-selected', element: summarizeBrowserGrabTarget(payload.target) },
+            { pageUrl: payload.page.sanitizedUrl, pageTitle: payload.page.title }
+          )
+
           if (key === 's') {
             try {
               const ssResult = await window.api.browser.captureSelectionScreenshot({
@@ -4298,7 +4347,7 @@ function BrowserPagePane({
         })()
       }
     },
-    [grab, grabIntent, recordFeatureInteraction, showGrabToast]
+    [grab, grabIntent, recordFeatureInteraction, recordRecorderStep, showGrabToast]
   )
 
   useEffect(() => {
@@ -4386,6 +4435,15 @@ function BrowserPagePane({
         payload: createBrowserAnnotationPayload(payload)
       })
       recordFeatureInteraction('browser-annotations')
+      recordRecorderStep(
+        {
+          kind: 'annotation-added',
+          element: summarizeBrowserGrabTarget(payload.target),
+          comment,
+          intent
+        },
+        { pageUrl: payload.page.sanitizedUrl, pageTitle: payload.page.title }
+      )
       setPendingAnnotationPayload(null)
       setBrowserAnnotationTrayOpen(true)
       recordFeatureInteraction('browser-annotations')
@@ -4398,6 +4456,7 @@ function BrowserPagePane({
       grab,
       pendingAnnotationPayload,
       recordFeatureInteraction,
+      recordRecorderStep,
       showGrabToast
     ]
   )
@@ -4419,6 +4478,40 @@ function BrowserPagePane({
     setBrowserAnnotationsCopied(true)
     annotationCopyTimerRef.current = setTimeout(() => setBrowserAnnotationsCopied(false), 1400)
   }, [browserAnnotationsPrompt, recordFeatureInteraction])
+
+  const recorderPrompt = useMemo(
+    () =>
+      formatBrowserRecorderStepsAsMarkdown(recorder.steps, {
+        startedAt: recorder.startedAt ?? undefined
+      }),
+    [recorder.startedAt, recorder.steps]
+  )
+
+  const handleToggleBrowserRecorder = useCallback((): void => {
+    recordFeatureInteraction('browser-recorder')
+    recorder.toggle({ pageUrl: browserTab.url, pageTitle: browserTab.title })
+  }, [browserTab.title, browserTab.url, recordFeatureInteraction, recorder])
+
+  const handleCopyBrowserRecorderLog = useCallback((): void => {
+    if (!recorderPrompt) {
+      return
+    }
+    void window.api.ui.writeClipboardText(recorderPrompt)
+    recordFeatureInteraction('browser-recorder')
+    clearTimeout(recorderCopyTimerRef.current)
+    setRecorderCopied(true)
+    recorderCopyTimerRef.current = setTimeout(() => setRecorderCopied(false), 1400)
+  }, [recorderPrompt, recordFeatureInteraction])
+
+  const handleClearBrowserRecorderLog = useCallback((): void => {
+    if (recorder.stepCount === 0) {
+      return
+    }
+    clearTimeout(recorderCopyTimerRef.current)
+    setRecorderCopied(false)
+    recordFeatureInteraction('browser-recorder')
+    recorder.clear()
+  }, [recordFeatureInteraction, recorder])
 
   const handleAnnotationBannerSendOpenChange = useCallback(
     (open: boolean): void => {
@@ -5065,6 +5158,48 @@ function BrowserPagePane({
             </TooltipContent>
           </Tooltip>
 
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* Why: disabled <button> drops hover events, so wrap in a span so the tooltip trigger still fires. */}
+              <span className="inline-flex">
+                <Button
+                  size="icon"
+                  variant={recorder.recording ? 'default' : 'ghost'}
+                  className={cn(
+                    'relative h-8 w-8',
+                    recorder.recording &&
+                      'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                  )}
+                  onClick={handleToggleBrowserRecorder}
+                  aria-label={translate(
+                    'auto.components.browser.pane.BrowserPane.c220f1eac9',
+                    recorder.recording ? 'Stop recording' : 'Record browser actions'
+                  )}
+                  data-contextual-tour-target="browser-recorder-control"
+                >
+                  <CircleDot className="size-4" />
+                  {recorder.stepCount > 0 ? (
+                    <span className="absolute -top-1 -right-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground">
+                      {recorder.stepCount}
+                    </span>
+                  ) : null}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>
+              {recorder.recording
+                ? translate(
+                    'auto.components.browser.pane.BrowserPane.c2778b3d98',
+                    'Stop recording ({{value0}} steps)',
+                    { value0: recorder.stepCount }
+                  )
+                : translate(
+                    'auto.components.browser.pane.BrowserPane.c220f1eac9',
+                    'Record browser actions'
+                  )}
+            </TooltipContent>
+          </Tooltip>
+
           <MarkupDrawButton
             onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
             disabled={isBlankTab || grab.state !== 'idle'}
@@ -5629,6 +5764,15 @@ function BrowserPagePane({
                     ))}
                   </div>
                 </div>
+              ) : null}
+              {recorder.stepCount > 0 ? (
+                <BrowserRecorderTray
+                  steps={recorder.steps}
+                  recording={recorder.recording}
+                  copied={recorderCopied}
+                  onCopy={handleCopyBrowserRecorderLog}
+                  onClear={handleClearBrowserRecorderLog}
+                />
               ) : null}
               {/* Right-click context dropdown, positioned at the grabbed element's center. */}
               <DropdownMenu

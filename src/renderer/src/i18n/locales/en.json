@@ -13526,7 +13526,10 @@
             "6e776f9ef9": "Download failed",
             "756bfc25c9": "Open",
             "09a9489aa5": "Show",
-            "2a4c4b8e1f": "Copy"
+            "2a4c4b8e1f": "Copy",
+            "c220f1eac9": "Record browser actions",
+            "f039b073be": "Stop recording",
+            "c2778b3d98": "Stop recording ({{value0}} steps)"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",
@@ -13577,6 +13580,14 @@
                 }
               }
             }
+          },
+          "BrowserRecorderTray": {
+            "0292ce4993": "Recording — {{value0}} steps",
+            "91cd8adfdb": "Recorded session — {{value0}} steps",
+            "d101b4ca91": "Copied",
+            "5d4bb3794d": "Copy Log",
+            "0b9a88486c": "Clear recorded log",
+            "f23f6712a2": "Clear log"
           }
         }
       },

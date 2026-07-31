@@ -53,6 +53,7 @@ describe('feature interactions', () => {
       'browser-annotations',
       'browser-annotations-sent-to-agent',
       'browser-grab',
+      'browser-recorder',
       'markdown-file-created',
       'workspace-creation',
       'agent-browser-setup',
