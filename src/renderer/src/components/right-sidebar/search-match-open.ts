@@ -1,4 +1,6 @@
 import { detectLanguage } from '@/lib/language-detect'
+import { routeFileOpenToDefaultEditor } from '@/lib/default-editor-routing'
+import { getConnectionId } from '@/lib/connection-context'
 import type { FileSearchResultOwner } from '@/lib/file-search-result-owner'
 import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
 
@@ -9,7 +11,7 @@ export function cancelRevealFrame(frameRef: React.RefObject<number | null>): voi
   }
 }
 
-export function openMatchResult(params: {
+export async function openMatchResult(params: {
   resultOwner: FileSearchResultOwner | null
   fileResult: SearchFileResult
   match: SearchMatch
@@ -34,7 +36,7 @@ export function openMatchResult(params: {
   ) => void
   revealRafRef: React.RefObject<number | null>
   revealInnerRafRef: React.RefObject<number | null>
-}): void {
+}): Promise<void> {
   const {
     resultOwner,
     fileResult,
@@ -46,6 +48,16 @@ export function openMatchResult(params: {
   } = params
 
   if (!resultOwner) {
+    return
+  }
+
+  const routing = await routeFileOpenToDefaultEditor({
+    filePath: fileResult.filePath,
+    worktreeId: resultOwner.worktreeId,
+    runtimeEnvironmentId: resultOwner.runtimeEnvironmentId,
+    connectionId: getConnectionId(resultOwner.worktreeId) ?? null
+  })
+  if (routing !== 'builtin' && routing !== 'remote') {
     return
   }
 

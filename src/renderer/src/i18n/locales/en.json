@@ -8246,7 +8246,9 @@
             "e61157e926": "Editor Word Wrap",
             "005be5c699": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
             "editorFontFamily": "Editor Font Family",
-            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font."
+            "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
+            "defaultEditor": "Default Editor",
+            "defaultEditorDesc": "Editor used when opening files: Orca built-in, system default, or a custom command in a terminal."
           }
         },
         "git": {
@@ -10092,6 +10094,15 @@
           "webUnavailable": "Switching builds is only available in the desktop app.",
           "hourlyMacOnlyAria": "Hourly (macOS only)",
           "hourlyMacOnly": "Hourly builds are produced only for macOS. Linux and Windows stay on Stable or RC."
+        },
+        "DefaultEditorSetting": {
+          "title": "Default Editor",
+          "description": "Which editor opens files when you open them from the file tree, search, terminal links, or quick open.",
+          "builtin": "Orca built-in",
+          "system": "System default",
+          "custom": "Custom command",
+          "commandPlaceholder": "helix, vim, code -r, …",
+          "commandHint": "Runs in a new terminal tab with the file path appended."
         }
       },
       "right": {

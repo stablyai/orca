@@ -3,6 +3,9 @@ import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
+import { getConnectionId } from '@/lib/connection-context'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { routeFileOpenToDefaultEditor } from '@/lib/default-editor-routing'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import {
   CommandDialog,
@@ -67,7 +70,7 @@ export default function QuickOpen(): React.JSX.Element | null {
   )
 
   const handleSelect = useCallback(
-    (relativePath: string) => {
+    async (relativePath: string) => {
       if (!activeWorktreeId || !worktreePath) {
         return
       }
@@ -75,8 +78,20 @@ export default function QuickOpen(): React.JSX.Element | null {
       // the surface that was active before QuickOpen opened.
       skipReturnFocus()
       closeModal()
+      const filePath = joinPath(worktreePath, relativePath)
+      const store = useAppStore.getState()
+      const routing = await routeFileOpenToDefaultEditor({
+        filePath,
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(store, activeWorktreeId),
+        connectionId: getConnectionId(activeWorktreeId) ?? null
+      })
+      if (routing !== 'builtin' && routing !== 'remote') {
+        return
+      }
       openFile({
-        filePath: joinPath(worktreePath, relativePath),
+        filePath,
         relativePath,
         worktreeId: activeWorktreeId,
         language: detectLanguage(relativePath),

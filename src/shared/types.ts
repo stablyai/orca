@@ -2708,6 +2708,12 @@ export type GlobalSettings = {
   editorFontFamily?: string
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
+  /** How user-initiated file opens are handled: Orca's built-in editor, the OS
+   *  default application, or a user-provided terminal command. */
+  defaultEditorMode?: 'builtin' | 'system' | 'custom'
+  /** Shell command run in a new terminal tab when defaultEditorMode is
+   *  'custom'; the opened file path is appended as a quoted argument. */
+  defaultEditorCustomCommand?: string
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */

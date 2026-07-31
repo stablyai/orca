@@ -1,4 +1,5 @@
 import { detectLanguage } from '@/lib/language-detect'
+import { routeFileOpenToDefaultEditor } from '@/lib/default-editor-routing'
 import { toWorktreeRelativePath } from '@/lib/terminal-links'
 import type { RuntimeFileOperationArgs, statRuntimePath } from '@/runtime/runtime-file-client'
 import type { OpenFile } from '@/store/slices/editor'
@@ -41,6 +42,17 @@ export async function openAbsoluteTabEntryFile(args: {
   }
   args.operations.assertAbsolutePathAllowed()
 
+  const routing = await routeFileOpenToDefaultEditor({
+    filePath,
+    worktreeId: args.worktreeId,
+    worktreePath: args.worktreePath,
+    runtimeEnvironmentId: args.context.settings?.activeRuntimeEnvironmentId ?? null,
+    connectionId: args.context.connectionId ?? null,
+    groupId: args.groupId
+  })
+  if (routing !== 'builtin' && routing !== 'remote') {
+    return
+  }
   args.operations.openFile(
     {
       filePath,

@@ -56,6 +56,30 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('auto.components.settings.general.search.defaultEditor', 'Default Editor'),
+    description: translate(
+      'auto.components.settings.general.search.defaultEditorDesc',
+      'Editor used when opening files: Orca built-in, system default, or a custom command in a terminal.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.e1ee631696', 'editor'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.defaultEditorExternal',
+        'external'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.defaultEditorTerminal',
+        'terminal'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.defaultEditorHelix',
+        'helix'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.3ca5ab78a5', 'code'),
+      ...translateSearchKeyword('auto.components.settings.general.search.dbeb1f348e', 'command')
+    ]
+  },
+  {
     title: translate('auto.components.settings.general.search.2760c9933f', 'Default Diff View'),
     description: translate(
       'auto.components.settings.general.search.ecb9415c80',

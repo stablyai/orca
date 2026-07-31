@@ -28,8 +28,7 @@ function openResult(resultOwner: IntendedResultOwner) {
     revealInnerRafRef: { current: null }
   } satisfies Parameters<typeof openMatchResult>[0]
 
-  openMatchResult(params)
-  return { openFile, setPendingEditorReveal }
+  return { promise: openMatchResult(params), openFile, setPendingEditorReveal }
 }
 
 describe('openMatchResult', () => {
@@ -41,11 +40,12 @@ describe('openMatchResult', () => {
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
   })
 
-  it('opens with the remote owner captured by the search after the active worktree changes', () => {
-    const { openFile } = openResult({
+  it('opens with the remote owner captured by the search after the active worktree changes', async () => {
+    const { promise, openFile } = openResult({
       worktreeId: 'worktree-that-produced-results',
       runtimeEnvironmentId: 'runtime-that-produced-results'
     })
+    await promise
 
     expect(openFile).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -56,11 +56,12 @@ describe('openMatchResult', () => {
     )
   })
 
-  it('keeps an explicitly local result local when another runtime is active', () => {
-    const { openFile } = openResult({
+  it('keeps an explicitly local result local when another runtime is active', async () => {
+    const { promise, openFile } = openResult({
       worktreeId: 'local-worktree',
       runtimeEnvironmentId: null
     })
+    await promise
 
     expect(openFile).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -71,10 +72,10 @@ describe('openMatchResult', () => {
     )
   })
 
-  it('does not guess an owner for results without a committed search source', () => {
+  it('does not guess an owner for results without a committed search source', async () => {
     const openFile = vi.fn()
 
-    openMatchResult({
+    await openMatchResult({
       resultOwner: null,
       fileResult: {
         filePath: '/unresolved/repo/file.ts',

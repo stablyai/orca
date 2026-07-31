@@ -1,4 +1,5 @@
 import { detectLanguage } from '@/lib/language-detect'
+import { routeFileOpenToDefaultEditor } from '@/lib/default-editor-routing'
 import { joinPath } from '@/lib/path'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import {
@@ -139,6 +140,17 @@ async function openExistingFile(args: {
   }
   if (stat.isDirectory) {
     throw new Error(`Cannot open a directory: ${args.relativePath}`)
+  }
+  const routing = await routeFileOpenToDefaultEditor({
+    filePath,
+    worktreeId: args.worktreeId,
+    worktreePath: args.worktreePath,
+    runtimeEnvironmentId: args.context.settings?.activeRuntimeEnvironmentId ?? null,
+    connectionId: args.context.connectionId ?? null,
+    groupId: args.groupId
+  })
+  if (routing !== 'builtin' && routing !== 'remote') {
+    return
   }
   args.operations.openFile(
     {

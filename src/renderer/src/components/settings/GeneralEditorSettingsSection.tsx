@@ -19,6 +19,7 @@ import { translate } from '@/i18n/i18n'
 import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
+import { DefaultEditorSetting } from './DefaultEditorSetting'
 import {
   createAutoSaveDelayDraftState,
   resolveAutoSaveDelayDraftState,
@@ -229,6 +230,8 @@ export function GeneralEditorSettingsSection({
         fontSuggestions={fontSuggestions}
         onRequestFontSuggestions={onRequestFontSuggestions}
       />
+
+      <DefaultEditorSetting settings={settings} updateSettings={updateSettings} />
 
       <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
 

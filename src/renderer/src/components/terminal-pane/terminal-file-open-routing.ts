@@ -1,6 +1,7 @@
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
+import { routeFileOpenToDefaultEditor } from '@/lib/default-editor-routing'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import {
   isRemoteRuntimeFileOperation,
@@ -181,6 +182,21 @@ export function openDetectedFilePath(
       // activation path keeps those jumps in the same history stack as sidebar
       // and palette navigation before the editor opens the destination file.
       activateAndRevealWorktree(worktreeId)
+    }
+
+    // Why: Shift+Cmd/Ctrl keeps its explicit system-default escape hatch; plain
+    // clicks honor the Default Editor setting instead.
+    if (!openWithSystemDefault) {
+      const routing = await routeFileOpenToDefaultEditor({
+        filePath: mappedFilePath,
+        worktreeId: worktreeId || '',
+        worktreePath,
+        runtimeEnvironmentId,
+        connectionId: fileContext.connectionId ?? null
+      })
+      if (routing !== 'builtin' && routing !== 'remote') {
+        return
+      }
     }
 
     const language = detectLanguage(mappedFilePath)
