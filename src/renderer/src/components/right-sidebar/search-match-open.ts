@@ -1,5 +1,6 @@
 import { detectLanguage } from '@/lib/language-detect'
 import { routeFileOpenToDefaultEditor } from '@/lib/default-editor-routing'
+import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import type { FileSearchResultOwner } from '@/lib/file-search-result-owner'
 import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
@@ -54,6 +55,9 @@ export async function openMatchResult(params: {
   const routing = await routeFileOpenToDefaultEditor({
     filePath: fileResult.filePath,
     worktreeId: resultOwner.worktreeId,
+    worktreePath: resultOwner.worktreeId
+      ? (useAppStore.getState().getKnownWorktreeById(resultOwner.worktreeId)?.path ?? undefined)
+      : undefined,
     runtimeEnvironmentId: resultOwner.runtimeEnvironmentId,
     connectionId: getConnectionId(resultOwner.worktreeId) ?? null
   })

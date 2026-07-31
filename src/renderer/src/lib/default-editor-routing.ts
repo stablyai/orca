@@ -66,7 +66,9 @@ export function openCustomEditorTerminalTab(args: {
 }): boolean {
   const { command, filePath, worktreeId, worktreePath, groupId } = args
   const trimmed = command.trim()
-  if (!trimmed) {
+  // Why: an unresolved worktree (empty id) would create a stranded tab that
+  // belongs to no worktree; fall back to the built-in editor instead.
+  if (!trimmed || !worktreeId) {
     return false
   }
   const store = useAppStore.getState()

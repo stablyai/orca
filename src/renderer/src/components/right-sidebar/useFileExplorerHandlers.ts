@@ -3,6 +3,7 @@ import type React from 'react'
 import type { RefObject } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
 import { routeFileOpenToDefaultEditor } from '@/lib/default-editor-routing'
+import { useAppStore } from '@/store'
 import { toast } from 'sonner'
 import type { TreeNode } from './file-explorer-types'
 import { FILE_EXPLORER_DRAGGABLE_SELECTOR } from './file-explorer-drag-scroll-marker'
@@ -139,6 +140,9 @@ export async function activateFileExplorerNode(args: {
   const routing = await routeFileOpenToDefaultEditor({
     filePath: node.path,
     worktreeId: activeWorktreeId,
+    worktreePath: activeWorktreeId
+      ? (useAppStore.getState().getKnownWorktreeById(activeWorktreeId)?.path ?? undefined)
+      : undefined,
     runtimeEnvironmentId: fileRuntimeEnvironmentId ?? undefined,
     connectionId: connectionId ?? null
   })

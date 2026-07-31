@@ -171,6 +171,17 @@ describe('openCustomEditorTerminalTab', () => {
     ).toBe(false)
     expect(mockState.createTab).not.toHaveBeenCalled()
   })
+
+  it('refuses an empty worktree id so no stranded tab is created', () => {
+    expect(
+      openCustomEditorTerminalTab({
+        command: 'helix',
+        filePath: '/repo/a.ts',
+        worktreeId: ''
+      })
+    ).toBe(false)
+    expect(mockState.createTab).not.toHaveBeenCalled()
+  })
 })
 
 describe('routeFileOpenToDefaultEditor', () => {
