@@ -33,6 +33,7 @@ import {
 } from '../sidebar/worktree-agent-orchestration-batch'
 import {
   selectLivePtyIdsForWorktree,
+  selectPaneForegroundAgentsForWorktree,
   selectRuntimePaneTitlesForWorktree
 } from '../sidebar/worktree-card-status-inputs'
 import {
@@ -144,6 +145,7 @@ export function buildDashboardSnapshot(
         entries,
         retained: selectRetainedAgentEntriesForWorktree(state, worktreeId),
         runtimePaneTitlesByTabId: selectRuntimePaneTitlesForWorktree(state, worktreeId),
+        foregroundAgentsByPaneKey: selectPaneForegroundAgentsForWorktree(state, worktreeId),
         ptyIdsByTabId: selectLivePtyIdsForWorktree(state, worktreeId),
         terminalLayoutsByTabId,
         runtimeAgentOrchestrationByPaneKey:

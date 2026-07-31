@@ -1,6 +1,7 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentType,
@@ -25,6 +26,7 @@ import {
 import { buildSubagentChildRows } from './worktree-subagent-child-rows'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
 import { compareWorktreeAgentRows } from './worktree-agent-row-order'
+import { buildForegroundAgentRows } from './worktree-foreground-agent-rows'
 import {
   effectiveWorktreeAgentRowStartedAt,
   tabFromWorktreeAttributedStatusEntry
@@ -206,6 +208,7 @@ export function buildWorktreeAgentRows(args: {
   entries: AgentStatusEntry[]
   retained: RetainedAgentEntry[]
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
+  foregroundAgentsByPaneKey?: Record<string, PaneForegroundAgentEntry>
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
@@ -264,6 +267,7 @@ export function buildWorktreeAgentRows(args: {
   })
 
   rows.push(...buildTitleDerivedAgentRows({ ...args, seenPaneKeys }))
+  rows.push(...buildForegroundAgentRows(args, seenPaneKeys))
 
   // Why: orchestration workers can be attributed to a worktree by main before
   // their tab is present in this renderer. Keep those live rows visible in the

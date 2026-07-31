@@ -1,5 +1,8 @@
 import type { AppState } from '@/store/types'
 import type { TerminalPaneLayoutNode } from '../../../../shared/types'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import { collectLeafIdsInOrder } from '@/components/terminal-pane/terminal-layout-leaf-ids'
 
 // Why: these selectors return fresh maps whose top-level values preserve
 // underlying per-tab references, so callers must compare them shallowly.
@@ -61,5 +64,32 @@ export function selectTerminalLayoutRootsForWorktrees(
       out[tab.id] = state.terminalLayoutsByTabId[tab.id]?.root
     }
   }
+  return out
+}
+
+type WorktreePaneForegroundAgentState = {
+  tabsByWorktree?: Record<string, readonly { id: string }[]>
+  terminalLayoutsByTabId?: AppState['terminalLayoutsByTabId']
+  paneForegroundAgentByPaneKey?: AppState['paneForegroundAgentByPaneKey']
+}
+
+export function selectPaneForegroundAgentsForWorktree(
+  state: WorktreePaneForegroundAgentState,
+  worktreeId: string
+): Record<string, PaneForegroundAgentEntry> {
+  const out: Record<string, PaneForegroundAgentEntry> = {}
+  const layouts = state.terminalLayoutsByTabId ?? {}
+  const foregroundAgents = state.paneForegroundAgentByPaneKey ?? {}
+
+  for (const tab of state.tabsByWorktree?.[worktreeId] ?? []) {
+    for (const leafId of collectLeafIdsInOrder(layouts[tab.id]?.root)) {
+      const paneKey = makePaneKey(tab.id, leafId)
+      const foreground = foregroundAgents[paneKey]
+      if (foreground) {
+        out[paneKey] = foreground
+      }
+    }
+  }
+
   return out
 }

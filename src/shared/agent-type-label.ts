@@ -9,6 +9,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   gemini: 'Gemini',
   antigravity: 'Antigravity',
   amp: 'Amp',
+  kiro: 'Kiro',
   copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
   'mimo-code': 'MiMo Code',

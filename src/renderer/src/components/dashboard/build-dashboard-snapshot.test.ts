@@ -174,6 +174,30 @@ describe('buildDashboardSnapshot', () => {
     })
   })
 
+  it('publishes a process-only Kiro session as a neutral idle card', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        paneForegroundAgentByPaneKey: {
+          [PANE_KEY]: { agent: 'kiro', shellForeground: false }
+        }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards).toHaveLength(1)
+    expect(snapshot.cards[0]).toMatchObject({
+      paneKey: PANE_KEY,
+      agentType: 'kiro',
+      bucket: 'idle',
+      dotState: 'idle',
+      startedAt: 0,
+      stateChangedAt: 0,
+      unseen: false
+    })
+    expect(snapshot.cards[0].lastUserMessage).toBeUndefined()
+    expect(snapshot.cards[0].lastAgentMessage).toBeUndefined()
+  })
+
   it('maps a live working agent to the working bucket with a resolved ptyId', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({

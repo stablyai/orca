@@ -6,6 +6,7 @@ import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsuppor
 import { useAppStore } from '@/store'
 import {
   selectLivePtyIdsForWorktree,
+  selectPaneForegroundAgentsForWorktree,
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
@@ -65,6 +66,9 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
   const runtimePaneTitlesByTabId = useAppStore(
     useShallow((s) => (active ? selectRuntimePaneTitlesForWorktree(s, worktreeId) : {}))
   )
+  const foregroundAgentsByPaneKey = useAppStore(
+    useShallow((s) => (active ? selectPaneForegroundAgentsForWorktree(s, worktreeId) : {}))
+  )
   const ptyIdsByTabId = useAppStore(
     useShallow((s) => (active ? selectLivePtyIdsForWorktree(s, worktreeId) : {}))
   )
@@ -101,6 +105,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
         entries,
         retained,
         runtimePaneTitlesByTabId,
+        foregroundAgentsByPaneKey,
         ptyIdsByTabId,
         terminalLayoutsByTabId,
         runtimeAgentOrchestrationByPaneKey,
@@ -115,6 +120,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     migrationUnsupported,
     retained,
     runtimePaneTitlesByTabId,
+    foregroundAgentsByPaneKey,
     ptyIdsByTabId,
     terminalLayoutsByTabId,
     runtimeAgentOrchestrationByPaneKey,

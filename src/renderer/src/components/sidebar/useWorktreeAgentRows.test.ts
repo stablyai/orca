@@ -140,6 +140,74 @@ describe('buildWorktreeAgentRows', () => {
     expect(rows[0].agentType).toBe('codex')
   })
 
+  it('shows a Kiro session from foreground process identity without hooks or titles', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { title: 'Terminal 1' })],
+      entries: [],
+      retained: [],
+      foregroundAgentsByPaneKey: {
+        [PANE_KEY_1]: { agent: 'kiro', shellForeground: false }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-kiro'] },
+      terminalLayoutsByTabId: {
+        'tab-1': makeSinglePaneLayout(LEAF_ID_1)
+      },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      paneKey: PANE_KEY_1,
+      agentType: 'kiro',
+      state: 'idle',
+      startedAt: 0,
+      entry: {
+        prompt: 'Kiro',
+        stateStartedAt: 0,
+        lastAssistantMessage: 'Session active'
+      }
+    })
+  })
+
+  it('hides a foreground agent row after the pane returns to its shell', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { title: 'Terminal 1' })],
+      entries: [],
+      retained: [],
+      foregroundAgentsByPaneKey: {
+        [PANE_KEY_1]: { agent: 'kiro', shellForeground: true }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-shell'] },
+      now: 2000
+    })
+
+    expect(rows).toEqual([])
+  })
+
+  it('keeps a hook row authoritative over foreground process identity', () => {
+    const liveEntry = makeEntry(PANE_KEY_1, 1000, {
+      state: 'working',
+      agentType: 'claude'
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { title: 'Terminal 1' })],
+      entries: [liveEntry],
+      retained: [],
+      foregroundAgentsByPaneKey: {
+        [PANE_KEY_1]: { agent: 'kiro', shellForeground: false }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-kiro'] },
+      terminalLayoutsByTabId: {
+        'tab-1': makeSinglePaneLayout(LEAF_ID_1)
+      },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0].entry).toBe(liveEntry)
+    expect(rows[0].agentType).toBe('claude')
+  })
+
   it('prefers an unrelated live title over the launched tab agent for unknown rows', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent: 'omp', title: '\u280b Codex' })],

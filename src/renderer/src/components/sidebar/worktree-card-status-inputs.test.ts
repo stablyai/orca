@@ -5,8 +5,10 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../../shared/types'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   selectLivePtyIdsForWorktree,
+  selectPaneForegroundAgentsForWorktree,
   selectTerminalLayoutRootsForWorktree,
   selectTerminalLayoutRootsForWorktrees,
   selectRuntimePaneTitlesForWorktree
@@ -79,6 +81,40 @@ describe('worktree card status input selectors', () => {
         selectLivePtyIdsForWorktree(state, worktreeId),
         selectLivePtyIdsForWorktree(unrelatedUpdate, worktreeId)
       )
+    ).toBe(true)
+  })
+
+  it('selects foreground agents only for this worktree and stays shallow-stable', () => {
+    const worktreeId = 'repo1::/path/wt1'
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = makePaneKey('tab-1', leafId)
+    const foreground = { agent: 'kiro' as const, shellForeground: false }
+    const state = {
+      tabsByWorktree: {
+        [worktreeId]: [makeTab('tab-1', worktreeId)]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': makeLayout({ type: 'leaf', leafId }, 'pty-1')
+      },
+      paneForegroundAgentByPaneKey: {
+        [paneKey]: foreground
+      }
+    }
+    const unrelatedUpdate = {
+      ...state,
+      paneForegroundAgentByPaneKey: {
+        ...state.paneForegroundAgentByPaneKey,
+        [makePaneKey('tab-other', '22222222-2222-4222-8222-222222222222')]: {
+          agent: 'codex' as const,
+          shellForeground: false
+        }
+      }
+    }
+
+    const selected = selectPaneForegroundAgentsForWorktree(state, worktreeId)
+    expect(selected).toEqual({ [paneKey]: foreground })
+    expect(
+      shallow(selected, selectPaneForegroundAgentsForWorktree(unrelatedUpdate, worktreeId))
     ).toBe(true)
   })
 

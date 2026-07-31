@@ -25,6 +25,21 @@ describe('agent process recognition', () => {
     expect(isExpectedAgentProcess('/usr/local/bin/openclaude', 'claude')).toBe(false)
   })
 
+  it('recognizes the Kiro CLI foreground process', () => {
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/kiro-cli')).toEqual({
+      agent: 'kiro',
+      processName: 'kiro-cli'
+    })
+    expect(recognizeAgentProcess('/home/dev/.local/bin/kiro-cli')).toEqual({
+      agent: 'kiro',
+      processName: 'kiro-cli'
+    })
+    expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Local\Kiro\kiro-cli.exe`)).toEqual(
+      { agent: 'kiro', processName: 'kiro-cli' }
+    )
+    expect(isRecognizedAgentType('kiro-cli')).toBe(true)
+  })
+
   it('recognizes the Droid foreground process on Windows', () => {
     expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\droid.cmd`)).toEqual({
       agent: 'droid',
