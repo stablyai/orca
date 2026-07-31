@@ -150,7 +150,7 @@ export function Island({
               </button>
             </div>
             <div className="session session-hero">
-              <OrcaLogo state={leadState} size={18} />
+              <OrcaLogo state={leadState} size={14} />
               <div className="si">
                 <div className="srow">
                   <span className="sname">
@@ -175,7 +175,7 @@ export function Island({
           </div>
         ) : (
           <div className="island-compact">
-            <OrcaLogo state={leadState} size={16} />
+            <OrcaLogo state={leadState} size={13} />
             <span className={`idle-text ${total === 0 ? 'idle-text-muted' : ''}`}>{idleText}</span>
             {total > 0 ? <span className="idle-count">{total}</span> : null}
           </div>
