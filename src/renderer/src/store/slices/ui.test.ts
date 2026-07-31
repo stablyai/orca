@@ -3421,6 +3421,52 @@ describe('createUISlice space navigation', () => {
   })
 })
 
+describe('createUISlice peers navigation', () => {
+  it('returns to the previous view after opening the Peers page', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage({ preselectedRepoId: 'repo-1' })
+    store.getState().openPeersPage()
+
+    expect(store.getState().activeView).toBe('peers')
+    expect(store.getState().previousViewBeforePeers).toBe('tasks')
+
+    store.getState().closePeersPage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('keeps the original return target when Peers is reopened while already visible', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage()
+    store.getState().openPeersPage()
+    store.getState().openPeersPage()
+
+    expect(store.getState().previousViewBeforePeers).toBe('tasks')
+
+    store.getState().closePeersPage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('selects the target terminal when opening the Peers page with one', () => {
+    const store = createUIStore()
+
+    store.getState().openPeersPage({ handle: 'term-1', title: 'Term One' })
+
+    expect(store.getState().peersPageTarget).toEqual({ handle: 'term-1', title: 'Term One' })
+  })
+
+  it('restores a persisted peers view on hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'peers' }), 'startup')
+
+    expect(store.getState().activeView).toBe('peers')
+  })
+})
+
 describe('openDiffNotesSendMenuForActiveWorktree', () => {
   function stubDiffNotesStore(
     comments: { sentAt?: number }[],

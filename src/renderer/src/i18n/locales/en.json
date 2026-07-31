@@ -5106,6 +5106,12 @@
           "3b7ea51793": "Clear search",
           "7f1c2e94a5": "Search text is too long — the board is unfiltered",
           "9a4d0f6b21": "Too long"
+        },
+        "PeerTerminalsSection": {
+          "dd7ecb3f10": "Connected host",
+          "f966803cfd": "Peers",
+          "d5f6851245": "No terminals shared yet",
+          "4fd5f4c027": "Untitled terminal"
         }
       },
       "shared": {
@@ -14513,6 +14519,23 @@
         },
         "RemoteTerminalPresenceOverlay": {
           "scrolledUp": "scrolled up"
+        }
+      },
+      "peers": {
+        "PeersEmptyState": {
+          "f3a8c1d0e5": "Not connected to a host",
+          "b6d2e9f4a7": "No terminals shared yet",
+          "c9e4b7a1d3": "Pair with another Orca desktop to view its shared terminals here.",
+          "d1f6a3c8e2": "Ask the host to share a terminal with you, or check your pairing in Settings.",
+          "e2a5d8b9c4": "Open Settings"
+        },
+        "PeersPage": {
+          "a4c1e8f0b7": "Connected",
+          "b8d3a6c2e9": "Reconnecting",
+          "c2e9f5a1d8": "Disconnected",
+          "d7f2a9c4b6": "Remote Terminal",
+          "e5b8c1f3a2": "Close",
+          "f9a3d6e2b1": "Close · Esc"
         }
       }
     },

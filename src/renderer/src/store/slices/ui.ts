@@ -133,6 +133,7 @@ import { buildAgentNotificationId } from '../../../../shared/agent-notification-
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { getRepoHostIdentity } from './repo-host-identity'
+import type { RemoteTerminalTarget } from '../../components/peer-collab/remote-terminal-target'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -617,6 +618,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'peers'
   previousViewBeforeSettings:
     | 'terminal'
     | 'tasks'
@@ -625,6 +627,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'peers'
   previousViewBeforeActivity:
     | 'terminal'
     | 'settings'
@@ -633,6 +636,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'peers'
   previousViewBeforeAutomations:
     | 'terminal'
     | 'settings'
@@ -641,6 +645,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'mobile'
+    | 'peers'
   previousViewBeforeSpace:
     | 'terminal'
     | 'settings'
@@ -649,6 +654,7 @@ export type UISlice = {
     | 'automations'
     | 'skills'
     | 'mobile'
+    | 'peers'
   previousViewBeforeSkills:
     | 'terminal'
     | 'settings'
@@ -657,6 +663,7 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'mobile'
+    | 'peers'
   previousViewBeforeMobile:
     | 'terminal'
     | 'settings'
@@ -665,6 +672,16 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'peers'
+  previousViewBeforePeers:
+    | 'terminal'
+    | 'settings'
+    | 'tasks'
+    | 'activity'
+    | 'automations'
+    | 'space'
+    | 'skills'
+    | 'mobile'
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -745,6 +762,11 @@ export type UISlice = {
   closeSkillsPage: () => void
   openMobilePage: () => void
   closeMobilePage: () => void
+  /** The host terminal currently shown in the Peers page's RemoteTerminalPanel, if any. */
+  peersPageTarget: RemoteTerminalTarget | null
+  setPeersPageTarget: (target: RemoteTerminalTarget | null) => void
+  openPeersPage: (target?: RemoteTerminalTarget) => void
+  closePeersPage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -1233,6 +1255,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeSpace: 'terminal',
   previousViewBeforeSkills: 'terminal',
   previousViewBeforeMobile: 'terminal',
+  previousViewBeforePeers: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
@@ -1487,6 +1510,19 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   closeMobilePage: () =>
     set((state) => ({
       activeView: state.previousViewBeforeMobile
+    })),
+  peersPageTarget: null,
+  setPeersPageTarget: (target) => set({ peersPageTarget: target }),
+  openPeersPage: (target) =>
+    set((state) => ({
+      activeView: 'peers',
+      previousViewBeforePeers:
+        state.activeView === 'peers' ? state.previousViewBeforePeers : state.activeView,
+      peersPageTarget: target ?? state.peersPageTarget
+    })),
+  closePeersPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforePeers
     })),
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),

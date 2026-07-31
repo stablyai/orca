@@ -4,9 +4,11 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeTerminalListResult } from '../../../../shared/runtime-types'
 import type { PeerClientStatus } from '../../../../shared/peer-client-status'
-import type { RemoteTerminalDialogTarget } from '@/components/peer-collab/RemoteTerminalDialog'
-import { usePeerCollabSavedPairing, type SavedPeerPairing } from './use-peer-collab-saved-pairing'
-import { isTerminalListResult } from './peer-collab-terminal-list-guard'
+import {
+  usePeerCollabSavedPairing,
+  type SavedPeerPairing
+} from '../settings/use-peer-collab-saved-pairing'
+import { isTerminalListResult } from '../settings/peer-collab-terminal-list-guard'
 
 const HOST_TERMINALS_POLL_MS = 3000
 
@@ -23,13 +25,11 @@ export type PeerCollabClientConnectionHook = {
   disconnectAsClient: () => Promise<void>
   savedPairing: SavedPeerPairing | null
   forgetSavedPairing: () => Promise<void>
-  openRemoteTerminal: RemoteTerminalDialogTarget | null
-  setOpenRemoteTerminal: (target: RemoteTerminalDialogTarget | null) => void
 }
 
-// Why: isolates the peer-client connect/disconnect flow, its host-terminal poll, and the
-// remote-terminal dialog target from PeerCollabSettingsPane so the pane stays under the
-// tsx line budget as this feature grows.
+// Why: isolates the peer-client connect/disconnect flow and its host-terminal poll from any
+// one surface — both the Settings pane's connect form and the Peers page's terminal viewer
+// consume this same live state (client stays paired to exactly one host at a time).
 export function usePeerCollabClientConnection(): PeerCollabClientConnectionHook {
   const mountedRef = useMountedRef()
   const {
@@ -48,9 +48,6 @@ export function usePeerCollabClientConnection(): PeerCollabClientConnectionHook 
     lastErrorReason: null
   })
   const [clientConnectBusy, setClientConnectBusy] = useState(false)
-  const [openRemoteTerminal, setOpenRemoteTerminal] = useState<RemoteTerminalDialogTarget | null>(
-    null
-  )
 
   const loadHostTerminals = useCallback(async () => {
     try {
@@ -144,10 +141,7 @@ export function usePeerCollabClientConnection(): PeerCollabClientConnectionHook 
   }, [clientStatus.state, loadHostTerminals])
 
   useEffect(() => {
-    if (clientStatus.state === 'closed') {
-      // Why: a lost host connection leaves the stream dead — close the dialog instead of showing a frozen terminal.
-      setOpenRemoteTerminal(null)
-    } else if (clientStatus.state === 'connected') {
+    if (clientStatus.state === 'connected') {
       // Why: a fresh success may have just persisted a new saved pairing on the main side.
       void refreshSavedPairing()
     }
@@ -165,8 +159,6 @@ export function usePeerCollabClientConnection(): PeerCollabClientConnectionHook 
     connectSavedAsClient,
     disconnectAsClient,
     savedPairing,
-    forgetSavedPairing,
-    openRemoteTerminal,
-    setOpenRemoteTerminal
+    forgetSavedPairing
   }
 }

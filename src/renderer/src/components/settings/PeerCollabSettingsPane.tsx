@@ -8,7 +8,7 @@ import {
   type HostTerminalOption
 } from './PeerCollabConnectedClientsSection'
 import { PeerCollabClientConnectSection } from './PeerCollabClientConnectSection'
-import { usePeerCollabClientConnection } from './use-peer-collab-client-connection'
+import { usePeerCollabClientConnection } from '@/components/peer-collab/use-peer-collab-client-connection'
 import type { PairedDevice } from './MobilePairedDevicesSection'
 import {
   selectRefreshedNetworkAddress,
@@ -16,7 +16,7 @@ import {
 } from './mobile-network-interface-selection'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
-import { RemoteTerminalDialog } from '@/components/peer-collab/RemoteTerminalDialog'
+import { useAppStore } from '@/store'
 export { getPeerCollabSettingsPaneSearchEntries } from './peer-collab-settings-search'
 
 // Why: no push channel exists for peer connection changes yet, so the
@@ -56,10 +56,9 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
     connectSavedAsClient,
     disconnectAsClient,
     savedPairing,
-    forgetSavedPairing,
-    openRemoteTerminal,
-    setOpenRemoteTerminal
+    forgetSavedPairing
   } = usePeerCollabClientConnection()
+  const openPeersPage = useAppStore((s) => s.openPeersPage)
   const codeCopiedResetTimerRef = useRef<number | null>(null)
   const selectedAddressRef = useRef<string | undefined>(selectedAddress)
   const mountedRef = useMountedRef()
@@ -348,21 +347,10 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
         onConnect={() => void connectAsClient()}
         onDisconnect={() => void disconnectAsClient()}
         hostTerminals={hostTerminals}
-        onOpenTerminal={setOpenRemoteTerminal}
+        onOpenTerminal={(target) => openPeersPage(target)}
         savedPairing={savedPairing}
         onConnectSaved={() => void connectSavedAsClient()}
         onForgetSavedPairing={() => void forgetSavedPairing()}
-      />
-
-      <RemoteTerminalDialog
-        target={openRemoteTerminal}
-        hostLabel={clientStatus.endpoint ?? ''}
-        clientStatus={clientStatus}
-        onOpenChange={(open) => {
-          if (!open) {
-            setOpenRemoteTerminal(null)
-          }
-        }}
       />
     </div>
   )

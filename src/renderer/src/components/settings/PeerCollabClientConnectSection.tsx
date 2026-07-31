@@ -6,7 +6,7 @@ import { getPeerCollabClientSearchEntry } from './peer-collab-settings-search'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeTerminalListResult } from '../../../../shared/runtime-types'
 import type { PeerClientStatus, SavedPeerPairing } from '../../../../shared/peer-client-status'
-import type { RemoteTerminalDialogTarget } from '@/components/peer-collab/RemoteTerminalDialog'
+import type { RemoteTerminalTarget } from '@/components/peer-collab/remote-terminal-target'
 
 function peerClientStatusLabel(state: PeerClientStatus['state']): string {
   if (state === 'connecting') {
@@ -37,7 +37,7 @@ type PeerCollabClientConnectSectionProps = {
   onConnect: () => void
   onDisconnect: () => void
   hostTerminals: RuntimeTerminalListResult['terminals']
-  onOpenTerminal: (target: RemoteTerminalDialogTarget) => void
+  onOpenTerminal: (target: RemoteTerminalTarget) => void
   savedPairing: SavedPeerPairing | null
   onConnectSaved: () => void
   onForgetSavedPairing: () => void

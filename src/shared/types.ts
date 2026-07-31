@@ -3322,6 +3322,7 @@ export type TopLevelView =
   | 'space'
   | 'skills'
   | 'mobile'
+  | 'peers'
 
 export type PersistedUIState = {
   lastActiveRepoId: string | null

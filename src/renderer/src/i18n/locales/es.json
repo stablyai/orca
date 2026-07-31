@@ -5061,6 +5061,12 @@
           "3b7ea51793": "Borrar búsqueda",
           "7f1c2e94a5": "El texto de búsqueda es demasiado largo: el tablero no está filtrado",
           "9a4d0f6b21": "Demasiado largo"
+        },
+        "PeerTerminalsSection": {
+          "dd7ecb3f10": "Anfitrión conectado",
+          "f966803cfd": "Pares",
+          "d5f6851245": "Aún no se ha compartido ninguna terminal",
+          "4fd5f4c027": "Terminal sin título"
         }
       },
       "shared": {
@@ -14407,6 +14413,23 @@
         },
         "RemoteTerminalPresenceOverlay": {
           "scrolledUp": "desplazado hacia arriba"
+        }
+      },
+      "peers": {
+        "PeersEmptyState": {
+          "f3a8c1d0e5": "No estás conectado a un anfitrión",
+          "b6d2e9f4a7": "Aún no se ha compartido ninguna terminal",
+          "c9e4b7a1d3": "Empareja con otro escritorio de Orca para ver aquí sus terminales compartidas.",
+          "d1f6a3c8e2": "Pide al anfitrión que comparta una terminal contigo, o revisa tu emparejamiento en Configuración.",
+          "e2a5d8b9c4": "Abrir Configuración"
+        },
+        "PeersPage": {
+          "a4c1e8f0b7": "Conectado",
+          "b8d3a6c2e9": "Reconectando",
+          "c2e9f5a1d8": "Sin conexión",
+          "d7f2a9c4b6": "Terminal remota",
+          "e5b8c1f3a2": "Cerrar",
+          "f9a3d6e2b1": "Cerrar · Esc"
         }
       }
     },

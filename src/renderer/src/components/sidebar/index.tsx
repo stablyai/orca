@@ -6,6 +6,7 @@ import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
+import PeerTerminalsSection from './PeerTerminalsSection'
 import SidebarToolbar from './SidebarToolbar'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import { AgentDashboardDrawer } from '@/components/dashboard/AgentDashboardDrawer'
@@ -147,6 +148,8 @@ function Sidebar({
               onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
               onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
             />
+
+            <PeerTerminalsSection />
 
             <div className="relative shrink-0">
               <SetupScriptPromptCard />
