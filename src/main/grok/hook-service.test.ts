@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -16,6 +17,7 @@ vi.mock('os', async () => {
 })
 
 import { getGrokToolEventMatcherForTests, GrokHookService } from './hook-service'
+import { buildWindowsGrokHookScript } from './windows-grok-hook-script'
 import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
 
 const GROK_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
@@ -34,6 +36,70 @@ describe('GrokHookService', () => {
     vi.clearAllMocks()
     rmSync(homeDir, { recursive: true, force: true })
   })
+
+  // Why: #9358 / #9941 — empty GROK_HOME + parse-time %VAR:~n,m% / `"\"` broke
+  // every SessionStart/UserPromptSubmit on Windows outside Orca terminals.
+  it('guards Windows GROK_HOME substring checks when empty (#9358)', () => {
+    const script = buildWindowsGrokHookScript()
+    expect(script).toContain('set "ORCA_GROK_HOME="')
+    expect(script).toContain('if not defined GROK_HOME goto :orca_grok_home_ready')
+    expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME%"')
+    expect(script).toContain('%ORCA_GROK_HOME:~4096,1%')
+    expect(script).toContain(':orca_grok_home_ready')
+    // Trailing-backslash guard must not use the broken `"\"` comparison.
+    expect(script).toContain('findstr /r /c:"\\$"')
+    expect(script).not.toContain('if "%ORCA_GROK_HOME:~-1%"=="\\"')
+    expect(script).not.toMatch(/^if not "%GROK_HOME:~/m)
+    // Why: parenthesized `if defined (...)` still parse-expands the body early.
+    expect(script).not.toMatch(/if defined GROK_HOME \(/)
+  })
+
+  it.skipIf(process.platform !== 'win32')(
+    'generated grok-hook.cmd exits 0 when GROK_HOME is unset (#9358)',
+    () => {
+      const scriptPath = join(homeDir, 'grok-hook-unset.cmd')
+      writeFileSync(scriptPath, buildWindowsGrokHookScript(), 'utf8')
+      const result = spawnSync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/c', scriptPath], {
+        env: {
+          ...process.env,
+          GROK_HOME: '',
+          ORCA_AGENT_HOOK_PORT: '',
+          ORCA_AGENT_HOOK_TOKEN: '',
+          ORCA_PANE_KEY: ''
+        },
+        input: '{"hook_event_name":"SessionStart"}',
+        encoding: 'utf8'
+      })
+      expect(result.status, `stderr=${result.stderr}\nstdout=${result.stdout}`).toBe(0)
+      expect(`${result.stderr ?? ''}${result.stdout ?? ''}`).not.toMatch(
+        /syntax of the command is incorrect|命令语法不正确/i
+      )
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'generated grok-hook.cmd exits 0 with trailing-backslash GROK_HOME (#9358)',
+    () => {
+      const scriptPath = join(homeDir, 'grok-hook-slash.cmd')
+      writeFileSync(scriptPath, buildWindowsGrokHookScript(), 'utf8')
+      const trailing = `${join(homeDir, 'grok-home-with-slash')}\\`
+      const result = spawnSync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/c', scriptPath], {
+        env: {
+          ...process.env,
+          GROK_HOME: trailing,
+          ORCA_AGENT_HOOK_PORT: '',
+          ORCA_AGENT_HOOK_TOKEN: '',
+          ORCA_PANE_KEY: ''
+        },
+        input: '{"hook_event_name":"UserPromptSubmit"}',
+        encoding: 'utf8'
+      })
+      expect(result.status, `stderr=${result.stderr}\nstdout=${result.stdout}`).toBe(0)
+      expect(`${result.stderr ?? ''}${result.stdout ?? ''}`).not.toMatch(
+        /syntax of the command is incorrect|命令语法不正确/i
+      )
+    }
+  )
 
   it('installs a dedicated global Grok hook config and managed script', () => {
     const status = new GrokHookService().install()
@@ -89,11 +155,11 @@ describe('GrokHookService', () => {
     expect(script).toContain('/hook/grok')
     if (process.platform === 'win32') {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
+      expect(script).toContain('if not defined GROK_HOME goto :orca_grok_home_ready')
       expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME%"')
-      expect(script).toContain('%GROK_HOME:~4096,1%')
-      expect(script).toContain(
-        'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."'
-      )
+      expect(script).toContain('%ORCA_GROK_HOME:~4096,1%')
+      expect(script).toContain('findstr /r /c:"\\$"')
+      expect(script).not.toContain('if "%ORCA_GROK_HOME:~-1%"=="\\"')
       expect(script).toContain('--data-urlencode "grokHome=%ORCA_GROK_HOME%"')
     } else {
       // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
