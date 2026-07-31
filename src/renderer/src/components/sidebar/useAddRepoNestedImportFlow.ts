@@ -175,7 +175,10 @@ export function useAddRepoNestedImportFlow({
         }
         const completionOwner = nestedConnectionId === null ? nestedRuntimeEnvironmentId : undefined
         for (const projectId of importedRepoIds) {
-          await fetchWorktrees(projectId, worktreeRefreshOptions(completionOwner))
+          await fetchWorktrees(
+            projectId,
+            worktreeRefreshOptions(completionOwner, nestedConnectionId)
+          )
         }
         if (gen !== nestedImportGenRef.current) {
           return

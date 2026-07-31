@@ -2096,6 +2096,40 @@ describe('fetchWorktrees', () => {
     ])
   })
 
+  it('honors an explicit SSH owner before the repo catalog is hydrated', async () => {
+    const store = createTestStore()
+    const remote = makeWorktree({
+      id: 'repo-missing::/ssh/wt',
+      repoId: 'repo-missing',
+      path: '/ssh/wt',
+      hostId: 'local'
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-ambient' } as never,
+      repos: []
+    } as Partial<AppState>)
+    mockApi.worktrees.listDetected.mockImplementationOnce(async (args: ListDetectedWorktreesArgs) =>
+      qualifyDetectedResult(args, makeDetectedResult('repo-missing', [remote]))
+    )
+
+    await store.getState().fetchWorktrees('repo-missing', {
+      executionHostId: 'ssh:ssh-1',
+      requireAuthoritative: true
+    })
+
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'repo-missing',
+        executionHostId: 'ssh:ssh-1',
+        expectedAuthority: TEST_SSH_AUTHORITY
+      })
+    )
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['repo-missing']).toEqual([
+      { ...remote, hostId: 'ssh:ssh-1' }
+    ])
+  })
+
   it('stamps remote runtime worktrees with the owning repo runtime host', async () => {
     const store = createTestStore()
     // Why: a remote runtime returns worktrees from its own perspective, so their hostId arrives as the default "local".

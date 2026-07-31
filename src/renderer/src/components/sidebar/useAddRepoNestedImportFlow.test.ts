@@ -155,7 +155,7 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
     })
   })
 
-  it('keeps SSH import RPC local while worktree completion infers the SSH owner', async () => {
+  it('keeps SSH import and completion pinned when repo hydration is missing', async () => {
     const importedRepo: Repo = {
       ...folderRepo,
       id: 'ssh-app',
@@ -173,7 +173,7 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
     })
     const fetchWorktrees = vi.fn()
     const onGitRepoReady = vi.fn()
-    mocks.state.repos = [importedRepo]
+    mocks.state.repos = []
     const { handleImportNestedRepos } = useTestAddRepoNestedImportFlow({
       activeRuntimeEnvironmentId: null,
       nestedConnectionId: 'ssh-builder',
@@ -197,8 +197,9 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
       mode: 'group'
     })
     expect(fetchWorktrees).toHaveBeenCalledWith(importedRepo.id, {
-      requireAuthoritative: true
+      requireAuthoritative: true,
+      executionHostId: 'ssh:ssh-builder'
     })
-    expect(onGitRepoReady).toHaveBeenCalledWith(importedRepo.id, 'ssh_remote_path', undefined)
+    expect(onGitRepoReady).not.toHaveBeenCalled()
   })
 })
