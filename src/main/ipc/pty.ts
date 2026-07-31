@@ -1301,6 +1301,23 @@ function routesFreshSpawnsToLocalProvider(
   return (provider as FreshLocalFallbackProvider).routesFreshSpawnsToLocalProvider === true
 }
 
+function getAuthoritativeBufferSnapshotCapability(
+  provider: IPtyProvider | undefined,
+  ptyId: string
+): boolean | null {
+  if (!provider) {
+    return null
+  }
+  if (provider.canProvideAuthoritativeBufferSnapshot) {
+    try {
+      return provider.canProvideAuthoritativeBufferSnapshot(ptyId)
+    } catch {
+      return null
+    }
+  }
+  return routesFreshSpawnsToLocalProvider(provider) ? false : null
+}
+
 function beginPtySpawnForWorktree(
   worktreeId: string | undefined,
   cwd: string | undefined,
@@ -3816,7 +3833,9 @@ export function registerPtyHandlers(
           wslDistro: codexSelectionTarget.runtime === 'wsl' ? expectedWslDistro : null,
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
           networkProxySettings: getSettings?.(),
-          deferGitConfigGuardToDaemon: provider.supportsGitCredentialGuardHost?.(sessionId) === true
+          deferGitConfigGuardToDaemon:
+            provider.supportsGitCredentialGuardHost?.(isMintedSessionId ? undefined : sessionId) ===
+            true
         })
         stampWslOrchestrationCompatibilityHost(
           env,
@@ -5004,7 +5023,9 @@ export function registerPtyHandlers(
             agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
             networkProxySettings: getSettings?.(),
             deferGitConfigGuardToDaemon:
-              provider.supportsGitCredentialGuardHost?.(effectiveSessionId) === true
+              provider.supportsGitCredentialGuardHost?.(
+                isMintedSessionId ? undefined : effectiveSessionId
+              ) === true
           })
           stampWslOrchestrationCompatibilityHost(
             env,
@@ -6131,11 +6152,7 @@ export function registerPtyHandlers(
         // Why: degraded routing mixes preserved daemons with an in-process fallback; keep all panes mounted rather than guess ownership.
         capabilities.push({
           id: value,
-          authoritative: provider?.canProvideAuthoritativeBufferSnapshot
-            ? provider.canProvideAuthoritativeBufferSnapshot(value)
-            : provider && routesFreshSpawnsToLocalProvider(provider)
-              ? false
-              : null
+          authoritative: getAuthoritativeBufferSnapshotCapability(provider, value)
         })
       }
       // Why: cold deferral runs during render before hidden panes mount; this in-memory route lookup lets legacy PTYs mount in that pass.
@@ -6149,11 +6166,14 @@ export function registerPtyHandlers(
     const provider = parsedSshId
       ? sshProviders.get(parsedSshId.connectionId)
       : tryGetProviderForPty(args.id)
-    if (!provider?.hasPty) {
+    if (!provider) {
       return null
     }
     try {
-      return provider.hasPty(args.id)
+      const live = provider.probePtyLiveness
+        ? await provider.probePtyLiveness(args.id)
+        : provider.hasPty?.(args.id)
+      return typeof live === 'boolean' ? live : null
     } catch {
       // Why: liveness is only allowed to close panes on an authoritative false.
       return null

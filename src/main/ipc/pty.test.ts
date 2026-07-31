@@ -2839,8 +2839,10 @@ describe('registerPtyHandlers', () => {
     describe('daemon-active provider (parity with LocalPtyProvider)', () => {
       // Why: under the daemon, LocalPtyProvider.buildSpawnEnv never runs, so host-local env injection must happen in the pty:spawn handler instead.
 
+      type GitCredentialGuardSupport = boolean | ((sessionId?: string) => boolean)
+
       function setupDaemonAdapter(
-        supportsGitCredentialGuardHost = true,
+        supportsGitCredentialGuardHost: GitCredentialGuardSupport = true,
         reportedWslDistro?: string | null,
         supportsAgentSessionClaims = true,
         supportsAgentSessionCreateOperations = supportsAgentSessionClaims
@@ -2859,7 +2861,10 @@ describe('registerPtyHandlers', () => {
         )
         setLocalPtyProvider({
           spawn: daemonSpawn,
-          supportsGitCredentialGuardHost: () => supportsGitCredentialGuardHost,
+          supportsGitCredentialGuardHost: (sessionId?: string) =>
+            typeof supportsGitCredentialGuardHost === 'function'
+              ? supportsGitCredentialGuardHost(sessionId)
+              : supportsGitCredentialGuardHost,
           supportsAgentSessionClaims: () => supportsAgentSessionClaims,
           supportsAgentSessionCreateOperations: () => supportsAgentSessionCreateOperations,
           write: vi.fn(),
@@ -2878,6 +2883,7 @@ describe('registerPtyHandlers', () => {
         env: Record<string, string>
         envToDelete?: string[]
         isNewSession?: boolean
+        sessionId?: string
         shellOverride?: string
         terminalWindowsWslDistro?: string | null
         terminalWindowsPowerShellImplementation?: string
@@ -2938,12 +2944,13 @@ describe('registerPtyHandlers', () => {
         spawnArgs?: {
           cwd?: string
           worktreeId?: string
+          sessionId?: string
           shellOverride?: string
           command?: string
           launchAgent?: TuiAgent
           envToDelete?: string[]
         },
-        supportsGitCredentialGuardHost = true
+        supportsGitCredentialGuardHost: GitCredentialGuardSupport = true
       ): Promise<DaemonSpawnCall> {
         const daemonSpawn = setupDaemonAdapter(supportsGitCredentialGuardHost)
         const savedEnv: Record<string, string | undefined> = {}
@@ -3002,7 +3009,7 @@ describe('registerPtyHandlers', () => {
           command?: string
           launchAgent?: TuiAgent
         },
-        supportsGitCredentialGuardHost = true
+        supportsGitCredentialGuardHost: GitCredentialGuardSupport = true
       ): Promise<Record<string, string>> {
         return (
           await daemonSpawnAndGetOptions(
@@ -4052,6 +4059,28 @@ describe('registerPtyHandlers', () => {
         expect(env.GIT_CONFIG_KEY_2).toBe('credential.guiPrompt')
       })
 
+      it('uses a conservative guard for an unresolved caller-provided daemon session', async () => {
+        const supportsGuard = vi.fn(() => false)
+        const options = await daemonSpawnAndGetOptions(
+          {
+            GIT_CONFIG_COUNT: '1',
+            GIT_CONFIG_KEY_0: 'http.proxy',
+            GIT_CONFIG_VALUE_0: 'http://proxy.invalid'
+          },
+          undefined,
+          undefined,
+          undefined,
+          { sessionId: 'preserved-session', command: 'claude' },
+          supportsGuard
+        )
+
+        expect(supportsGuard).toHaveBeenCalledExactlyOnceWith('preserved-session')
+        expect(options.sessionId).toBe('preserved-session')
+        expect(options.env.GIT_CONFIG_COUNT).toBe('3')
+        expect(options.env.GIT_CONFIG_KEY_1).toBe('credential.interactive')
+        expect(options.env.GIT_CONFIG_KEY_2).toBe('credential.guiPrompt')
+      })
+
       it('passes the minted sessionId through to provider.spawn and host env setup', async () => {
         const daemonSpawn = setupDaemonAdapter()
         handlers.clear()
@@ -4069,6 +4098,25 @@ describe('registerPtyHandlers', () => {
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined, 'pi', {
           materializeDefaultHome: false
         })
+      })
+
+      it('queries fresh daemon capability without resolving the minted session id', async () => {
+        const supportsGuard = vi.fn((sessionId?: string) => {
+          if (sessionId) {
+            throw new Error('fresh id was resolved as an existing route')
+          }
+          return true
+        })
+        const daemonSpawn = setupDaemonAdapter(supportsGuard)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never)
+
+        await expect(
+          handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+        ).resolves.toBeDefined()
+
+        expect(supportsGuard).toHaveBeenCalledExactlyOnceWith(undefined)
+        expect(daemonSpawn).toHaveBeenCalledOnce()
       })
 
       it('respects a caller-provided sessionId instead of minting a new one', async () => {
@@ -6233,12 +6281,32 @@ describe('registerPtyHandlers', () => {
     ])
   })
 
+  it('reports unknown snapshot capability when session routing is unavailable', () => {
+    registerPtyHandlers(mainWindow as never)
+    setLocalPtyProvider({
+      canProvideAuthoritativeBufferSnapshot() {
+        throw new Error('daemon_session_routing_unavailable')
+      }
+    } as never)
+    const listener = onMock.mock.calls.find(
+      ([channel]) => channel === 'pty:getAuthoritativeBufferSnapshotCapabilitiesSync'
+    )?.[1] as ((event: { returnValue?: unknown }, args: { ids: unknown[] }) => void) | undefined
+    const event: { returnValue?: unknown } = {}
+
+    listener?.(event, { ids: ['ambiguous-pty'] })
+
+    expect(event.returnValue).toEqual([{ id: 'ambiguous-pty', authoritative: null }])
+  })
+
   it('checks single-PTY liveness without listing every session', async () => {
-    const hasPty = vi.fn((id: string) => id === 'live-pty')
+    const probePtyLiveness = vi.fn(async (id: string) => (id === 'live-pty' ? true : null))
+    const hasPty = vi.fn((_id: string): boolean => {
+      throw new Error('cached ownership is not authoritative')
+    })
     const listProcesses = vi.fn(async () => {
       throw new Error('listProcesses should not be called')
     })
-    setLocalPtyProvider({
+    const provider = {
       spawn: vi.fn(),
       write: vi.fn(),
       resize: vi.fn(),
@@ -6258,16 +6326,27 @@ describe('registerPtyHandlers', () => {
       listProcesses,
       attach: vi.fn(),
       hasPty,
+      probePtyLiveness,
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
-    } as never)
+    }
+    setLocalPtyProvider(provider as never)
     registerPtyHandlers(mainWindow as never)
 
     await expect(handlers.get('pty:hasPty')!(null, { id: 'live-pty' })).resolves.toBe(true)
-    await expect(handlers.get('pty:hasPty')!(null, { id: 'dead-pty' })).resolves.toBe(false)
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'uncertain-pty' })).resolves.toBe(null)
 
-    expect(hasPty).toHaveBeenCalledWith('live-pty')
-    expect(hasPty).toHaveBeenCalledWith('dead-pty')
+    expect(probePtyLiveness).toHaveBeenCalledTimes(2)
+    expect(probePtyLiveness).toHaveBeenNthCalledWith(1, 'live-pty')
+    expect(probePtyLiveness).toHaveBeenNthCalledWith(2, 'uncertain-pty')
+    expect(hasPty).not.toHaveBeenCalled()
+    expect(listProcesses).not.toHaveBeenCalled()
+
+    provider.probePtyLiveness = undefined as never
+    hasPty.mockImplementation((id: string) => id === 'cached-live-pty')
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'cached-pty' })).resolves.toBe(false)
+
+    expect(hasPty).toHaveBeenCalledExactlyOnceWith('cached-pty')
     expect(listProcesses).not.toHaveBeenCalled()
   })
 

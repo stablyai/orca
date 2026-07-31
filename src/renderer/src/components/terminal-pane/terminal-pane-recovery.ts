@@ -33,10 +33,8 @@ type RecoveryRequest = {
   /** Identifies the concrete mounted xterm making the request. Disposal
    *  invalidates delayed work even when the tab's recovery epoch is unchanged. */
   terminalRecoveryInstanceId?: number
-  /** Remote panes (runtime mirrors, app-SSH) must prove the PTY alive before
-   *  an input-undeliverable remount: pty:hasPty answers null for ids the local
-   *  registry doesn't own, and treating null as "proceed" would let a
-   *  disconnected remote pane churn reconnects on every cooldown window. */
+  /** Require a positive PTY liveness answer before an input-undeliverable
+   *  remount. Route uncertainty must preserve the retained terminal frame. */
   requireAuthoritativeLiveness?: boolean
   /** The provider rejected the write because its endpoint stopped accepting
    *  writes, so re-attach MAY land on a *fresh* shell (a respawn; a transient

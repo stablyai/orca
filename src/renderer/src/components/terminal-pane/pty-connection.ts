@@ -3943,11 +3943,9 @@ export function connectPanePty(
       reason: 'input-undeliverable',
       terminalRecoveryGeneration,
       terminalRecoveryInstanceId: terminalRecoveryInstance.id,
-      // Why: pty:hasPty answers null for ids the local registry doesn't own,
-      // and a disconnected remote pane would otherwise remount-churn on every
-      // cooldown window while typing. Local panes keep the lenient gate.
-      requireAuthoritativeLiveness:
-        Boolean(transport.getConnectionId?.()) || isRemoteRuntimePtyId(undeliverablePtyId),
+      // Why: null also represents an unavailable or ambiguous daemon route;
+      // remounting then destroys the only retained terminal frame.
+      requireAuthoritativeLiveness: true,
       // Why only the rejected path: it is the only one whose remount can land on
       // a fresh shell. A stalled-pipeline remount always reattaches to the same
       // shell, so its half-typed line is still on screen and intact.
@@ -7674,6 +7672,9 @@ export function connectPanePty(
         // Why: the transport already delivered the dead session's final frame + exit; treat as terminal state, not a failed reattach.
         return true
       }
+      if (connectResult?.routingUnavailable) {
+        return true
+      }
 
       const retryPtyId =
         connectResult?.id ??
@@ -8355,7 +8356,12 @@ export function connectPanePty(
                 finishReattachLiveDataDeferral(accepted, outputCallbacks.generation)
                 const gen = await preSignalPromise
                 if (typeof gen === 'number') {
-                  if (!accepted) {
+                  const routingUnavailable =
+                    result &&
+                    typeof result === 'object' &&
+                    'routingUnavailable' in result &&
+                    result.routingUnavailable === true
+                  if (!accepted || routingUnavailable) {
                     await window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
                   } else if (!isRemoteRuntimePtyId(pendingSessionId)) {
                     const settledPtyId =
@@ -8591,7 +8597,12 @@ export function connectPanePty(
           finishReattachLiveDataDeferral(accepted, outputCallbacks.generation)
           const gen = await preSignalPromise
           if (typeof gen === 'number') {
-            if (!accepted) {
+            const routingUnavailable =
+              result &&
+              typeof result === 'object' &&
+              'routingUnavailable' in result &&
+              result.routingUnavailable === true
+            if (!accepted || routingUnavailable) {
               await window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
             } else if (!isRemoteRuntimePtyId(deferredReattachSessionId)) {
               const settledPtyId =

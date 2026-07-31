@@ -1233,7 +1233,8 @@ const api = {
     management: {
       listSessions: () => ipcRenderer.invoke('pty:management:listSessions'),
       killAll: () => ipcRenderer.invoke('pty:management:killAll'),
-      killOne: (args: { sessionId: string }) => ipcRenderer.invoke('pty:management:killOne', args),
+      killOne: (args: { sessionId: string; protocolVersion: number; incarnationId?: string }) =>
+        ipcRenderer.invoke('pty:management:killOne', args),
       restart: () => ipcRenderer.invoke('pty:management:restart')
     }
   },

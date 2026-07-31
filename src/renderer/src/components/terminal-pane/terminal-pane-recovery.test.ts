@@ -415,6 +415,20 @@ describe('requestTerminalPaneRecovery', () => {
     expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
   })
 
+  it('preserves a local pane when authoritative liveness is unavailable', async () => {
+    mocks.hasPty.mockResolvedValue(null)
+
+    const result = await requestTerminalPaneRecovery({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      reason: 'input-undeliverable',
+      requireAuthoritativeLiveness: true
+    })
+
+    expect(result).toBe(false)
+    expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
+  })
+
   it('recovers a remote pane when liveness is authoritative true', async () => {
     mocks.hasPty.mockResolvedValue(true)
 

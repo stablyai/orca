@@ -1527,6 +1527,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await adapter.listProcesses()
       const firstIdentity = adapter.getLastAuthenticatedDaemonIdentity()
       expect(firstIdentity).not.toBeNull()
+      expect(adapter.matchesLastAuthenticatedDaemonIdentity(firstIdentity)).toBe(true)
       const identityChanges: {
         previous: NonNullable<typeof firstIdentity>
         current: NonNullable<typeof firstIdentity>
@@ -1568,6 +1569,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         }
       ])
       expect(adapter.getLastAuthenticatedDaemonIdentity()).toEqual(identityChanges[0]?.current)
+      expect(adapter.matchesLastAuthenticatedDaemonIdentity(firstIdentity)).toBe(false)
+      expect(
+        adapter.matchesLastAuthenticatedDaemonIdentity(identityChanges[0]?.current ?? null)
+      ).toBe(true)
     })
 
     it('isolates audit observation listeners from inventory and later listeners', async () => {

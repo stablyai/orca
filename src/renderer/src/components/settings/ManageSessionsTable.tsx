@@ -132,7 +132,7 @@ export function ManageSessionsTable({
                 const rowClickable = tabId !== null
                 return (
                   <tr
-                    key={session.sessionId}
+                    key={`${session.protocolVersion}:${session.incarnationId ?? ''}:${session.sessionId}`}
                     className={`border-t border-border/50 first:border-t-0 ${
                       rowClickable ? 'cursor-pointer hover:bg-accent/60' : ''
                     }`}

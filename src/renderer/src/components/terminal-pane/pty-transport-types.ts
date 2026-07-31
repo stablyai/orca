@@ -50,6 +50,8 @@ export type PtyConnectResult = {
   /** The requested session exited while it had no primary pane handler. Its
    *  buffered final data/exit were delivered, so callers must not fresh-spawn. */
   exitedBeforeAttach?: boolean
+  /** Ownership could not be proven, so the caller must retain its rendered frame. */
+  routingUnavailable?: true
   /** The provider adopted an existing session rather than creating a fresh one.
    *  Startup commands may be ignored; recovery still requires separate ownership evidence. */
   isReattach?: boolean

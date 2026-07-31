@@ -132,7 +132,9 @@ export function ManageSessionsSection(): React.JSX.Element {
       mutationInFlight.current = true
       try {
         const { success } = await window.api.pty.management.killOne({
-          sessionId: session.sessionId
+          sessionId: session.sessionId,
+          protocolVersion: session.protocolVersion,
+          ...(session.incarnationId ? { incarnationId: session.incarnationId } : {})
         })
         if (success) {
           toast.success(

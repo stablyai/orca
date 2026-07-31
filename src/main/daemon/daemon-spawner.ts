@@ -126,6 +126,10 @@ export function unlinkOwnedDaemonPidFile(
   })
 }
 
+export function unlinkUnchangedDaemonPidFile(pidPath: string, expectedContents: string): boolean {
+  return claimAndUnlinkOwnedFile(pidPath, (content) => content === expectedContents)
+}
+
 export function unlinkOwnedDaemonTokenFile(tokenPath: string, expectedToken: string): boolean {
   return claimAndUnlinkOwnedFile(tokenPath, (content) => content.trim() === expectedToken)
 }

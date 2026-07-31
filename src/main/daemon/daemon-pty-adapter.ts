@@ -301,6 +301,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return this.lastAuthenticatedIdentity ? { ...this.lastAuthenticatedIdentity } : null
   }
 
+  matchesLastAuthenticatedDaemonIdentity(identity: DaemonEndpointIdentity | null): boolean {
+    if (!identity || !this.lastAuthenticatedIdentity) {
+      return identity === this.lastAuthenticatedIdentity
+    }
+    return sameEndpointIdentity(identity, this.lastAuthenticatedIdentity)
+  }
+
   getLastAuditObservation(): DaemonAuditObservation | null {
     return this.lastAuditObservation
   }

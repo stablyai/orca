@@ -10,17 +10,27 @@ export class DaemonPtyAdapterSubscriptionFanout {
 
   constructor(
     private readonly adapters: readonly DaemonPtyAdapter[],
-    onAdapterExit: (id: string) => void
+    private readonly shouldForwardStreamEvent: (adapter: DaemonPtyAdapter, id: string) => boolean,
+    private readonly shouldForwardWriteUnavailable: (
+      adapter: DaemonPtyAdapter,
+      id: string
+    ) => boolean,
+    onAdapterExit: (adapter: DaemonPtyAdapter, id: string) => boolean
   ) {
     for (const adapter of adapters) {
       this.unsubscribers.push(
         adapter.onData((payload) => {
+          if (!shouldForwardStreamEvent(adapter, payload.id)) {
+            return
+          }
           for (const listener of this.dataListeners) {
             listener(payload)
           }
         }),
         adapter.onExit((payload) => {
-          onAdapterExit(payload.id)
+          if (!onAdapterExit(adapter, payload.id)) {
+            return
+          }
           for (const listener of this.exitListeners) {
             listener(payload)
           }
@@ -41,14 +51,28 @@ export class DaemonPtyAdapterSubscriptionFanout {
 
   onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
     return combineUnsubscribes(
-      this.adapters.map((adapter) => adapter.onBackgroundStreamEvent(callback))
+      this.adapters.map((adapter) =>
+        adapter.onBackgroundStreamEvent((payload) => {
+          if (this.shouldForwardStreamEvent(adapter, payload.id)) {
+            callback(payload)
+          }
+        })
+      )
     )
   }
 
   // Why: main subscribes on the routed provider, so without this the dead-endpoint
   // fan-out never reaches the renderer and only the written pane recovers (STA-2373).
   onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
-    return combineUnsubscribes(this.adapters.map((adapter) => adapter.onWriteUnavailable(callback)))
+    return combineUnsubscribes(
+      this.adapters.map((adapter) =>
+        adapter.onWriteUnavailable((payload) => {
+          if (this.shouldForwardWriteUnavailable(adapter, payload.id)) {
+            callback(payload)
+          }
+        })
+      )
+    )
   }
 
   onReplay(_callback: (payload: { id: string; data: string }) => void): () => void {

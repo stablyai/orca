@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { createServer, connect, type Server } from 'node:net'
+import { spawn } from 'node:child_process'
 import { DaemonServer } from './daemon-server'
 import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
 import {
@@ -409,15 +410,13 @@ describe('killStaleDaemon pid identity guards', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('does not SIGTERM when the saved startedAtMs mismatches the current process', async () => {
+  it('removes a stale pidfile without signaling a mismatched process', async () => {
     if (process.platform === 'win32') {
       return
     }
 
     // Why: seed a pid file that claims the daemon is `process.pid` (us) but
-    // was started 1 hour ago. Our real start time is "now," so startTimeMatches
-    // returns false and isDaemonProcess rejects. killStaleDaemon must not call
-    // process.kill in that case.
+    // was started 1 hour ago. The identity mismatch must not signal us.
     const bogusStartedAtMs = Date.now() - 60 * 60 * 1000
     writeFileSync(
       getDaemonPidPath(dir),
@@ -429,14 +428,289 @@ describe('killStaleDaemon pid identity guards', () => {
     // expected and not a real kill. We only care that no actual termination
     // signal is sent.
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    const pidPath = getDaemonPidPath(dir)
     try {
       await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toBe(false)
       const terminationSignals = killSpy.mock.calls.filter(
         ([, sig]) => sig === 'SIGTERM' || sig === 'SIGKILL'
       )
       expect(terminationSignals).toEqual([])
+      expect(existsSync(pidPath)).toBe(false)
     } finally {
       killSpy.mockRestore()
+    }
+  })
+
+  it('preserves the owned pidfile when SIGTERM is rejected', async () => {
+    if (process.platform === 'win32') {
+      return
+    }
+
+    const child = spawn(
+      process.execPath,
+      ['-e', 'setInterval(()=>{},1000)', 'daemon-entry', socketPath, tokenPath],
+      { stdio: 'ignore' }
+    )
+    const pidPath = getDaemonPidPath(dir)
+    const pidfile = serializeDaemonPidFile({
+      pid: child.pid!,
+      startedAtMs: null,
+      launchNonce: 'signal-rejected'
+    })
+    writeFileSync(pidPath, pidfile, { mode: 0o600 })
+    const realKill = process.kill.bind(process)
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
+      if (pid === child.pid && signal === 'SIGTERM') {
+        throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' })
+      }
+      return realKill(pid, signal)
+    })
+
+    try {
+      await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toBe(false)
+      expect(readFileSync(pidPath, 'utf8')).toBe(pidfile)
+      expect(child.exitCode).toBeNull()
+    } finally {
+      killSpy.mockRestore()
+      const exited =
+        child.exitCode === null
+          ? new Promise<void>((resolve) => child.once('exit', () => resolve()))
+          : Promise.resolve()
+      if (child.exitCode === null) {
+        child.kill('SIGKILL')
+      }
+      await exited
+    }
+  })
+
+  it('preserves the owned pidfile when SIGKILL is rejected', async () => {
+    if (process.platform === 'win32') {
+      return
+    }
+
+    const child = spawn(
+      process.execPath,
+      ['-e', 'setInterval(()=>{},1000)', 'daemon-entry', socketPath, tokenPath],
+      { stdio: 'ignore' }
+    )
+    const pidPath = getDaemonPidPath(dir)
+    const pidfile = serializeDaemonPidFile({
+      pid: child.pid!,
+      startedAtMs: null,
+      launchNonce: 'kill-rejected'
+    })
+    writeFileSync(pidPath, pidfile, { mode: 0o600 })
+    const realKill = process.kill.bind(process)
+    let observeSigterm!: () => void
+    const sigtermObserved = new Promise<void>((resolve) => {
+      observeSigterm = resolve
+    })
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
+      if (pid === child.pid && signal === 'SIGTERM') {
+        observeSigterm()
+        return true
+      }
+      if (pid === child.pid && signal === 'SIGKILL') {
+        throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' })
+      }
+      return realKill(pid, signal)
+    })
+
+    vi.useFakeTimers()
+    try {
+      const killing = killStaleDaemon(dir, socketPath, tokenPath)
+      await sigtermObserved
+      await vi.advanceTimersByTimeAsync(3_100)
+      await expect(killing).resolves.toBe(false)
+      expect(readFileSync(pidPath, 'utf8')).toBe(pidfile)
+      expect(child.exitCode).toBeNull()
+    } finally {
+      vi.useRealTimers()
+      killSpy.mockRestore()
+      const exited =
+        child.exitCode === null
+          ? new Promise<void>((resolve) => child.once('exit', () => resolve()))
+          : Promise.resolve()
+      if (child.exitCode === null) {
+        child.kill('SIGKILL')
+      }
+      await exited
+    }
+  })
+
+  it('preserves the owned pidfile when the post-SIGTERM liveness probe is rejected', async () => {
+    if (process.platform === 'win32') {
+      return
+    }
+
+    const child = spawn(
+      process.execPath,
+      ['-e', 'setInterval(()=>{},1000)', 'daemon-entry', socketPath, tokenPath],
+      { stdio: 'ignore' }
+    )
+    const pidPath = getDaemonPidPath(dir)
+    const pidfile = serializeDaemonPidFile({
+      pid: child.pid!,
+      startedAtMs: null,
+      launchNonce: 'probe-rejected'
+    })
+    writeFileSync(pidPath, pidfile, { mode: 0o600 })
+    const realKill = process.kill.bind(process)
+    let termAccepted = false
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
+      if (pid === child.pid && signal === 'SIGTERM') {
+        termAccepted = true
+        return true
+      }
+      if (pid === child.pid && signal === 0 && termAccepted) {
+        throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' })
+      }
+      return realKill(pid, signal)
+    })
+
+    try {
+      await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toBe(false)
+      expect(readFileSync(pidPath, 'utf8')).toBe(pidfile)
+      expect(child.exitCode).toBeNull()
+    } finally {
+      killSpy.mockRestore()
+      const exited =
+        child.exitCode === null
+          ? new Promise<void>((resolve) => child.once('exit', () => resolve()))
+          : Promise.resolve()
+      if (child.exitCode === null) {
+        child.kill('SIGKILL')
+      }
+      await exited
+    }
+  })
+
+  it('removes the unchanged pidfile when the pid changes ownership during escalation', async () => {
+    if (process.platform === 'win32') {
+      return
+    }
+
+    const replacementSocket = createServer((socket) => socket.end())
+    await new Promise<void>((resolve, reject) => {
+      replacementSocket.once('error', reject)
+      replacementSocket.listen(socketPath, () => {
+        replacementSocket.off('error', reject)
+        resolve()
+      })
+    })
+    const child = spawn(
+      process.execPath,
+      [
+        '-e',
+        "process.on('SIGTERM',()=>{process.title='replacement-process';process.send?.('replaced')});process.send?.('ready');setInterval(()=>{},1000)",
+        'daemon-entry',
+        socketPath,
+        tokenPath
+      ],
+      { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] }
+    )
+    await new Promise<void>((resolve, reject) => {
+      child.once('error', reject)
+      child.on('message', (message) => {
+        if (message === 'ready') {
+          resolve()
+        }
+      })
+    })
+    const pid = child.pid
+    expect(pid).toEqual(expect.any(Number))
+    const pidPath = getDaemonPidPath(dir)
+    writeFileSync(pidPath, serializeDaemonPidFile({ pid: pid!, startedAtMs: null }), {
+      mode: 0o600
+    })
+    const replacementObserved = new Promise<void>((resolve) => {
+      child.on('message', (message) => {
+        if (message === 'replaced') {
+          resolve()
+        }
+      })
+    })
+
+    vi.useFakeTimers()
+    try {
+      const killing = killStaleDaemon(dir, socketPath, tokenPath)
+      await replacementObserved
+      await vi.advanceTimersByTimeAsync(3_100)
+      await expect(killing).resolves.toBe(true)
+      expect(existsSync(pidPath)).toBe(false)
+      expect(existsSync(socketPath)).toBe(true)
+    } finally {
+      vi.useRealTimers()
+      const exited =
+        child.exitCode === null
+          ? new Promise<void>((resolve) => child.once('exit', () => resolve()))
+          : Promise.resolve()
+      if (child.exitCode === null) {
+        child.kill('SIGKILL')
+      }
+      await exited
+      await closeServer(replacementSocket)
+    }
+  })
+
+  it('preserves a replacement pidfile installed as the targeted process exits', async () => {
+    if (process.platform === 'win32') {
+      return
+    }
+
+    const replacementSocket = createServer((socket) => socket.end())
+    await new Promise<void>((resolve, reject) => {
+      replacementSocket.once('error', reject)
+      replacementSocket.listen(socketPath, () => {
+        replacementSocket.off('error', reject)
+        resolve()
+      })
+    })
+    const pidPath = getDaemonPidPath(dir)
+    const replacementPidfile = serializeDaemonPidFile({
+      pid: process.pid,
+      startedAtMs: null,
+      launchNonce: 'replacement'
+    })
+    const child = spawn(
+      process.execPath,
+      [
+        '-e',
+        "const fs=require('node:fs');const [pidPath,pidfile]=process.argv.slice(1);process.on('SIGTERM',()=>{fs.writeFileSync(pidPath,pidfile);process.exit(0)});process.send?.('ready');setInterval(()=>{},1000)",
+        pidPath,
+        replacementPidfile,
+        'daemon-entry',
+        socketPath,
+        tokenPath
+      ],
+      { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] }
+    )
+    await new Promise<void>((resolve, reject) => {
+      child.once('error', reject)
+      child.on('message', (message) => {
+        if (message === 'ready') {
+          resolve()
+        }
+      })
+    })
+    writeFileSync(
+      pidPath,
+      serializeDaemonPidFile({
+        pid: child.pid!,
+        startedAtMs: null,
+        launchNonce: 'target'
+      }),
+      { mode: 0o600 }
+    )
+
+    try {
+      await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toBe(true)
+      expect(readFileSync(pidPath, 'utf8')).toBe(replacementPidfile)
+    } finally {
+      if (child.exitCode === null) {
+        child.kill('SIGKILL')
+      }
+      await closeServer(replacementSocket)
     }
   })
 })

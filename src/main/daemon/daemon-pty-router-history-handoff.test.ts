@@ -111,6 +111,7 @@ describe('DaemonPtyRouter history handoff', () => {
     const request = vi.spyOn(client, 'request')
 
     await router.shutdown(sessionId, { immediate: true, keepHistory: true })
+    expect(router.getSessionRouteState(sessionId)).toBe('unavailable')
     const restored = await router.spawn({ sessionId, cols: 400, rows: 24 })
 
     expect(restored.coldRestore?.scrollback).toContain(marker)

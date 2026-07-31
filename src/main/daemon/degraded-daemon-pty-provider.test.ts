@@ -1,149 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
-import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
-import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type { DaemonIdentityChangeEvent } from './daemon-pty-adapter'
+import type { PtySpawnResult } from '../providers/types'
+import { createDaemonAdapter, createProvider } from './degraded-daemon-pty-provider-fixture'
 
-type ProviderMock = IPtyProvider & {
-  probePtyLiveness: (id: string) => Promise<boolean | null>
-  inspectProcess: (id: string) => Promise<PtyProcessInspection>
-  emitData: (id: string, data: string, sequenceChars?: number) => void
-  emitReplay: (id: string, data: string) => void
-  emitExit: (id: string, code: number) => void
-  triggerWriteUnavailable: (id: string) => void
-  onWriteUnavailable: (callback: (payload: { id: string }) => void) => () => void
-}
-
-function createProvider(
-  label: string,
-  sessions: string[] = [],
-  authoritativeOwnerListings = false
-): ProviderMock {
-  const dataListeners: ((payload: { id: string; data: string; sequenceChars?: number }) => void)[] =
-    []
-  const replayListeners: ((payload: { id: string; data: string }) => void)[] = []
-  const exitListeners: ((payload: { id: string; code: number }) => void)[] = []
-  const writeUnavailableListeners: ((payload: { id: string }) => void)[] = []
-  return {
-    spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
-      const id = opts.sessionId ?? `${label}-new`
-      sessions.push(id)
-      return { id }
-    }),
-    attach: vi.fn(async () => {}),
-    hasPty: vi.fn((id: string) => sessions.includes(id)),
-    probePtyLiveness: vi.fn(async (id: string) => sessions.includes(id)),
-    providesAgentSessionOwnerListings: vi.fn(() => authoritativeOwnerListings),
-    write: vi.fn(),
-    resize: vi.fn(),
-    shutdown: vi.fn(async (id: string) => {
-      const idx = sessions.indexOf(id)
-      if (idx !== -1) {
-        sessions.splice(idx, 1)
-      }
-    }),
-    sendSignal: vi.fn(async () => {}),
-    getCwd: vi.fn(async () => ''),
-    getInitialCwd: vi.fn(async () => ''),
-    clearBuffer: vi.fn(async () => {}),
-    acknowledgeDataEvent: vi.fn(),
-    hasChildProcesses: vi.fn(async () => false),
-    getForegroundProcess: vi.fn(async () => null),
-    inspectProcess: vi.fn(async () => ({ foregroundProcess: null, hasChildProcesses: false })),
-    confirmForegroundProcess: vi.fn(async () => `${label}-confirmed`),
-    serialize: vi.fn(async () => '{}'),
-    revive: vi.fn(async () => {}),
-    listProcesses: vi.fn(async () => sessions.map((id) => ({ id, cwd: '', title: label }))),
-    getDefaultShell: vi.fn(async () => '/bin/zsh'),
-    getProfiles: vi.fn(async () => []),
-    onData: vi.fn(
-      (callback: (payload: { id: string; data: string; sequenceChars?: number }) => void) => {
-        dataListeners.push(callback)
-        return () => {
-          const idx = dataListeners.indexOf(callback)
-          if (idx !== -1) {
-            dataListeners.splice(idx, 1)
-          }
-        }
-      }
-    ),
-    onReplay: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
-      replayListeners.push(callback)
-      return () => {
-        const idx = replayListeners.indexOf(callback)
-        if (idx !== -1) {
-          replayListeners.splice(idx, 1)
-        }
-      }
-    }),
-    onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
-      exitListeners.push(callback)
-      return () => {
-        const idx = exitListeners.indexOf(callback)
-        if (idx !== -1) {
-          exitListeners.splice(idx, 1)
-        }
-      }
-    }),
-    emitData: (id: string, data: string, sequenceChars?: number) => {
-      for (const listener of dataListeners) {
-        listener({ id, data, ...(sequenceChars === undefined ? {} : { sequenceChars }) })
-      }
-    },
-    emitReplay: (id: string, data: string) => {
-      for (const listener of replayListeners) {
-        listener({ id, data })
-      }
-    },
-    emitExit: (id: string, code: number) => {
-      for (const listener of exitListeners) {
-        listener({ id, code })
-      }
-    },
-    onWriteUnavailable: vi.fn((callback: (payload: { id: string }) => void) => {
-      writeUnavailableListeners.push(callback)
-      return () => {
-        const idx = writeUnavailableListeners.indexOf(callback)
-        if (idx !== -1) {
-          writeUnavailableListeners.splice(idx, 1)
-        }
-      }
-    }),
-    triggerWriteUnavailable: (id: string) => {
-      for (const listener of writeUnavailableListeners) {
-        listener({ id })
-      }
-    }
-  }
-}
-
-function createDaemonAdapter(
-  label: string,
-  sessions: string[] = []
-): DaemonPtyAdapter & ProviderMock {
-  return {
-    ...createProvider(label, sessions, true),
-    protocolVersion: 13,
-    listSessions: vi.fn(async () => []),
-    ackColdRestore: vi.fn(),
-    clearTombstone: vi.fn(),
-    reconcileOnStartup: vi.fn(async () => ({ alive: sessions, killed: [] })),
-    dispose: vi.fn(),
-    disconnectOnly: vi.fn(async () => {}),
-    getActiveSessionIds: vi.fn(() => []),
-    fanoutSyntheticExits: vi.fn()
-  } as unknown as DaemonPtyAdapter & ProviderMock
-}
-
-it('forwards dead-endpoint write-unavailable signals from the daemon adapters', () => {
+it('forwards dead-endpoint write-unavailable signals from exact daemon owners', async () => {
   // Why revert-sensitive: this provider is the live localProvider in degraded launch
   // mode and main subscribes on it, so without forwarding the STA-2373 fan-out reaches
   // no listener and sibling panes stay frozen.
-  const current = createDaemonAdapter('daemon')
-  const legacy = createDaemonAdapter('legacy')
+  const current = createDaemonAdapter('daemon', ['daemon-pane'])
+  const legacy = createDaemonAdapter('legacy', ['legacy-pane'])
   const fallback = createProvider('fallback')
   const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
   const recovered: string[] = []
+  await provider.discoverDaemonSessions()
 
   const unsubscribe = provider.onWriteUnavailable(({ id }) => recovered.push(id))
   current.triggerWriteUnavailable('daemon-pane')
@@ -153,6 +23,36 @@ it('forwards dead-endpoint write-unavailable signals from the daemon adapters', 
   unsubscribe()
   current.triggerWriteUnavailable('after-unsubscribe')
   expect(recovered).toEqual(['daemon-pane', 'legacy-pane'])
+})
+
+it('withholds degraded write-unavailable signals from a foreign daemon route', async () => {
+  const current = createDaemonAdapter('daemon', ['shared-pane'])
+  const legacy = createDaemonAdapter('legacy')
+  const fallback = createProvider('fallback')
+  const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+  const recovered: string[] = []
+  await provider.discoverDaemonSessions()
+  provider.onWriteUnavailable(({ id }) => recovered.push(id))
+
+  legacy.triggerWriteUnavailable('shared-pane')
+  current.triggerWriteUnavailable('shared-pane')
+
+  expect(recovered).toEqual(['shared-pane'])
+})
+
+it('withholds degraded write-unavailable signals for fallback collisions', async () => {
+  const sessionId = 'fallback-collision'
+  const current = createDaemonAdapter('daemon', [sessionId])
+  const fallback = createProvider('fallback')
+  const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+  await provider.spawn({ sessionId, isNewSession: true, cols: 80, rows: 24 })
+  await provider.discoverDaemonSessions()
+  const recovered: string[] = []
+  provider.onWriteUnavailable(({ id }) => recovered.push(id))
+
+  current.triggerWriteUnavailable(sessionId)
+
+  expect(recovered).toEqual([])
 })
 
 it('rejects completion inspection instead of borrowing the fallback provider', async () => {
@@ -228,20 +128,71 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(fallback.write).toHaveBeenCalledWith(fresh.id, 'new\n')
   })
 
-  it('routes a previously daemon-backed id to fallback after daemon exit removes the mapping', async () => {
+  it('fences existing ids after incomplete daemon discovery while allowing explicit fresh ids', async () => {
+    const sessionId = 'uncertain-session'
+    const current = createDaemonAdapter('daemon')
+    const legacy = createDaemonAdapter('legacy')
+    const fallback = createProvider('fallback')
+    vi.mocked(legacy.listProcesses).mockRejectedValueOnce(new Error('listing unavailable'))
+    vi.mocked(legacy.probePtyLiveness).mockResolvedValue(null)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+
+    await provider.discoverDaemonSessions()
+
+    await expect(provider.spawn({ sessionId, cols: 80, rows: 24 })).rejects.toThrow(
+      'daemon_session_routing_unavailable'
+    )
+    await expect(
+      provider.spawn({ sessionId: 'fresh-session', isNewSession: true, cols: 80, rows: 24 })
+    ).resolves.toMatchObject({ id: 'fresh-session' })
+    expect(fallback.spawn).toHaveBeenCalledExactlyOnceWith({
+      sessionId: 'fresh-session',
+      isNewSession: true,
+      cols: 80,
+      rows: 24
+    })
+    warn.mockRestore()
+  })
+
+  it('keeps cross-generation daemon collisions away from the fallback', async () => {
+    const sessionId = 'daemon-collision'
+    const current = createDaemonAdapter('current', [sessionId])
+    const legacy = createDaemonAdapter('legacy', [sessionId])
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+    const data = vi.fn()
+    provider.onData(data)
+
+    await provider.discoverDaemonSessions()
+    current.emitData(sessionId, 'current output')
+    legacy.emitData(sessionId, 'legacy output')
+
+    await expect(provider.spawn({ sessionId, cols: 80, rows: 24 })).rejects.toThrow(
+      'daemon_session_routing_unavailable'
+    )
+    expect(() => provider.pauseProducer(sessionId)).not.toThrow()
+    expect(() => provider.resumeProducer(sessionId)).not.toThrow()
+    expect(() => provider.setPtyBackgrounded(sessionId, true)).not.toThrow()
+    expect(data).not.toHaveBeenCalled()
+    expect(fallback.spawn).not.toHaveBeenCalled()
+    expect(fallback.pauseProducer).not.toHaveBeenCalled()
+    expect(fallback.resumeProducer).not.toHaveBeenCalled()
+    expect(fallback.setPtyBackgrounded).not.toHaveBeenCalled()
+  })
+
+  it('tombstones a previously daemon-backed id after its daemon exits', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback')
     const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
 
     await provider.discoverDaemonSessions()
     current.emitExit('daemon-session', 0)
-    await provider.spawn({ sessionId: 'daemon-session', cols: 80, rows: 24 })
+    await expect(
+      provider.spawn({ sessionId: 'daemon-session', cols: 80, rows: 24 })
+    ).rejects.toThrow('daemon_session_routing_unavailable')
 
-    expect(fallback.spawn).toHaveBeenCalledWith({
-      sessionId: 'daemon-session',
-      cols: 80,
-      rows: 24
-    })
+    expect(fallback.spawn).not.toHaveBeenCalled()
   })
 
   it('caches a provider discovered by hasPty before routing later operations', () => {
@@ -254,6 +205,23 @@ describe('DegradedDaemonPtyProvider', () => {
 
     expect(current.write).toHaveBeenCalledWith('daemon-session', 'kept-on-daemon\n')
     expect(fallback.write).not.toHaveBeenCalled()
+    expect(current.hasPty).toHaveBeenCalledExactlyOnceWith('daemon-session')
+  })
+
+  it('probes each daemon once before memoizing a unique owner', () => {
+    const current = createDaemonAdapter('current')
+    const legacy = createDaemonAdapter('legacy', ['legacy-session'])
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+
+    provider.write('legacy-session', 'first\n')
+    provider.resize('legacy-session', 100, 30)
+
+    expect(current.hasPty).toHaveBeenCalledExactlyOnceWith('legacy-session')
+    expect(legacy.hasPty).toHaveBeenCalledExactlyOnceWith('legacy-session')
+    expect(legacy.write).toHaveBeenCalledExactlyOnceWith('legacy-session', 'first\n')
+    expect(legacy.resize).toHaveBeenCalledExactlyOnceWith('legacy-session', 100, 30)
+    expect(fallback.hasPty).not.toHaveBeenCalled()
   })
 
   it('probes daemon owners without borrowing fallback liveness', async () => {
@@ -267,7 +235,49 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(fallback.probePtyLiveness).not.toHaveBeenCalled()
 
     vi.mocked(current.probePtyLiveness).mockResolvedValue(true)
+    await expect(provider.probePtyLiveness('unknown-session')).resolves.toBeNull()
+
+    vi.mocked(legacy.probePtyLiveness).mockResolvedValue(false)
     await expect(provider.probePtyLiveness('unknown-session')).resolves.toBe(true)
+  })
+
+  it('keeps fallback liveness unknown when daemon ownership appears during the probe', async () => {
+    const sessionId = 'fallback-probe-collision'
+    const current = createDaemonAdapter('current')
+    const fallback = createProvider('fallback')
+    let settleProbe!: (result: boolean | null) => void
+    fallback.probePtyLiveness = vi.fn(
+      () => new Promise<boolean | null>((resolve) => (settleProbe = resolve))
+    )
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    await provider.spawn({ sessionId, isNewSession: true, cols: 80, rows: 24 })
+
+    const liveness = provider.probePtyLiveness(sessionId)
+    current.emitData(sessionId, 'colliding daemon output')
+    settleProbe(false)
+
+    await expect(liveness).resolves.toBeNull()
+  })
+
+  it('discards fallback liveness after same-provider reuse of the session id', async () => {
+    const sessionId = 'reused-fallback-probe'
+    const current = createDaemonAdapter('current')
+    const fallback = createProvider('fallback')
+    let settleProbe!: (result: boolean | null) => void
+    fallback.probePtyLiveness = vi.fn(
+      () => new Promise<boolean | null>((resolve) => (settleProbe = resolve))
+    )
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    await provider.spawn({ sessionId, isNewSession: true, cols: 80, rows: 24 })
+
+    const staleLiveness = provider.probePtyLiveness(sessionId)
+    fallback.emitExit(sessionId, 0)
+    await provider.spawn({ sessionId, isNewSession: true, cols: 80, rows: 24 })
+    settleProbe(false)
+
+    await expect(staleLiveness).resolves.toBeNull()
+    provider.write(sessionId, 'replacement survives')
+    expect(fallback.write).toHaveBeenCalledExactlyOnceWith(sessionId, 'replacement survives')
   })
 
   it('routes authoritative recovery snapshots to the owning daemon', async () => {
@@ -294,13 +304,47 @@ describe('DegradedDaemonPtyProvider', () => {
     })
   })
 
-  it('forwards replay output from fallback and daemon providers', () => {
+  it('keeps colliding liveness unknown and acknowledges through the snapshot producer', async () => {
+    const sessionId = 'colliding-session'
+    const current = createDaemonAdapter('current')
+    const legacy = createDaemonAdapter('legacy', [sessionId])
+    const fallback = createProvider('fallback')
+    legacy.getBufferSnapshot = vi.fn(async () => ({
+      data: 'legacy frame',
+      cols: 80,
+      rows: 24,
+      seq: 1,
+      source: 'headless' as const
+    }))
+    const provider = new DegradedDaemonPtyProvider({
+      current,
+      legacy: [legacy],
+      fallback
+    })
+
+    await provider.discoverDaemonSessions()
+    await provider.getBufferSnapshot(sessionId)
+    current.emitData(sessionId, 'colliding current output')
+    expect(() => provider.hasPty(sessionId)).toThrow('daemon_session_routing_unavailable')
+    provider.ackColdRestore(sessionId)
+
+    expect(legacy.ackColdRestore).toHaveBeenCalledExactlyOnceWith(sessionId)
+    expect(current.ackColdRestore).not.toHaveBeenCalled()
+  })
+
+  it('forwards replay output from owned fallback and daemon providers', async () => {
     const current = createDaemonAdapter('daemon')
     const fallback = createProvider('fallback')
     const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
     const replaySpy = vi.fn()
 
     const unsubscribe = provider.onReplay(replaySpy)
+    await provider.spawn({
+      sessionId: 'fallback-session',
+      isNewSession: true,
+      cols: 80,
+      rows: 24
+    })
     current.emitReplay('daemon-session', 'daemon replay')
     fallback.emitReplay('fallback-session', 'fallback replay')
     unsubscribe()
@@ -315,6 +359,286 @@ describe('DegradedDaemonPtyProvider', () => {
       id: 'fallback-session',
       data: 'fallback replay'
     })
+  })
+
+  it('withholds replay output when daemon and fallback ids collide', async () => {
+    const sessionId = 'replay-collision'
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    const replay = vi.fn()
+    provider.onReplay(replay)
+    await provider.spawn({ sessionId, isNewSession: true, cols: 80, rows: 24 })
+
+    current.emitReplay(sessionId, 'daemon replay')
+    fallback.emitReplay(sessionId, 'fallback replay')
+
+    expect(replay).not.toHaveBeenCalled()
+  })
+
+  it('keeps a daemon survivor live when a colliding fallback exits first', async () => {
+    const sessionId = 'fallback-exits-first'
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    const data = vi.fn()
+    const exit = vi.fn()
+    provider.onData(data)
+    provider.onExit(exit)
+    await provider.spawn({ sessionId, isNewSession: true, cols: 80, rows: 24 })
+
+    current.emitData(sessionId, 'withheld collision')
+    fallback.emitExit(sessionId, 0)
+    current.emitData(sessionId, 'daemon survivor')
+
+    expect(exit).not.toHaveBeenCalled()
+    expect(data).toHaveBeenCalledExactlyOnceWith({
+      id: sessionId,
+      data: 'daemon survivor'
+    })
+  })
+
+  it('keeps a fallback survivor live when a colliding daemon exits first', async () => {
+    const sessionId = 'daemon-exits-first'
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    const data = vi.fn()
+    const exit = vi.fn()
+    provider.onData(data)
+    provider.onExit(exit)
+    await provider.spawn({ sessionId, isNewSession: true, cols: 80, rows: 24 })
+
+    current.emitData(sessionId, 'withheld collision')
+    current.emitExit(sessionId, 0)
+    fallback.emitData(sessionId, 'fallback survivor')
+    fallback.emitExit(sessionId, 0)
+
+    expect(data).toHaveBeenCalledExactlyOnceWith({
+      id: sessionId,
+      data: 'fallback survivor'
+    })
+    expect(exit).toHaveBeenCalledExactlyOnceWith({ id: sessionId, code: 0 })
+  })
+
+  it('releases a fallback survivor when the colliding daemon changes incarnation', async () => {
+    const sessionId = 'daemon-incarnation-collision'
+    const previous = { pid: 1, startedAtMs: 1, launchNonce: 'previous' }
+    const currentIdentity = { pid: 2, startedAtMs: 2, launchNonce: 'current' }
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    let identity = previous
+    let notifyIdentityChange!: (event: DaemonIdentityChangeEvent) => void
+    vi.mocked(current.getLastAuthenticatedDaemonIdentity).mockImplementation(() => identity)
+    vi.mocked(current.onDaemonIdentityChanged).mockImplementation((listener) => {
+      notifyIdentityChange = listener
+      return () => {}
+    })
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    const data = vi.fn()
+    provider.onData(data)
+    await provider.spawn({ sessionId, isNewSession: true, cols: 80, rows: 24 })
+
+    current.emitData(sessionId, 'withheld collision')
+    expect(() => provider.write(sessionId, 'withheld write')).toThrow(
+      'daemon_session_routing_unavailable'
+    )
+    identity = currentIdentity
+    notifyIdentityChange({ previous, current: currentIdentity })
+    fallback.emitData(sessionId, 'fallback survivor')
+    provider.write(sessionId, 'surviving write')
+
+    expect(data).toHaveBeenCalledExactlyOnceWith({
+      id: sessionId,
+      data: 'fallback survivor'
+    })
+    expect(fallback.write).toHaveBeenCalledExactlyOnceWith(sessionId, 'surviving write')
+  })
+
+  it('keeps a fallback collision fenced while another daemon owner survives', async () => {
+    const sessionId = 'two-daemon-fallback-collision'
+    const current = createDaemonAdapter('current')
+    const legacy = createDaemonAdapter('legacy')
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+    const data = vi.fn()
+    provider.onData(data)
+    await provider.spawn({ sessionId, isNewSession: true, cols: 80, rows: 24 })
+
+    current.emitData(sessionId, 'current collision')
+    legacy.emitData(sessionId, 'legacy collision')
+    current.emitExit(sessionId, 0)
+    fallback.emitData(sessionId, 'still colliding')
+
+    expect(() => provider.write(sessionId, 'blocked')).toThrow('daemon_session_routing_unavailable')
+    expect(data).not.toHaveBeenCalled()
+
+    legacy.emitExit(sessionId, 0)
+    fallback.emitData(sessionId, 'fallback survivor')
+    provider.write(sessionId, 'allowed')
+
+    expect(data).toHaveBeenCalledExactlyOnceWith({
+      id: sessionId,
+      data: 'fallback survivor'
+    })
+    expect(fallback.write).toHaveBeenCalledExactlyOnceWith(sessionId, 'allowed')
+  })
+
+  it('fences foreign events before a fresh fallback reply and keeps the fallback routable', async () => {
+    const sessionId = 'in-flight-fallback-spawn'
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    const data = vi.fn()
+    const exit = vi.fn()
+    provider.onData(data)
+    provider.onExit(exit)
+    let resolveSpawn!: (result: PtySpawnResult) => void
+    vi.mocked(fallback.spawn).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSpawn = resolve
+      })
+    )
+
+    const spawning = provider.spawn({ sessionId, isNewSession: true, cols: 80, rows: 24 })
+    current.emitData(sessionId, 'foreign daemon output')
+    current.emitExit(sessionId, 0)
+    fallback.emitData(sessionId, 'fallback first')
+    resolveSpawn({ id: sessionId })
+    await spawning
+    provider.write(sessionId, 'fallback input')
+
+    expect(data).toHaveBeenCalledExactlyOnceWith({
+      id: sessionId,
+      data: 'fallback first'
+    })
+    expect(exit).not.toHaveBeenCalled()
+    expect(fallback.write).toHaveBeenCalledExactlyOnceWith(sessionId, 'fallback input')
+    expect(current.write).not.toHaveBeenCalled()
+  })
+
+  it('keeps an in-flight fallback fenced across identity changes until confirmation', async () => {
+    const sessionId = 'in-flight-incarnation-collision'
+    const previous = { pid: 1, startedAtMs: 1, launchNonce: 'previous' }
+    const replacement = { pid: 2, startedAtMs: 2, launchNonce: 'replacement' }
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    let identity = previous
+    let notifyIdentityChange!: (event: DaemonIdentityChangeEvent) => void
+    vi.mocked(current.getLastAuthenticatedDaemonIdentity).mockImplementation(() => identity)
+    vi.mocked(current.onDaemonIdentityChanged).mockImplementation((listener) => {
+      notifyIdentityChange = listener
+      return () => {}
+    })
+    let resolveSpawn!: (result: PtySpawnResult) => void
+    vi.mocked(fallback.spawn).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSpawn = resolve
+      })
+    )
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    const data = vi.fn()
+    provider.onData(data)
+
+    const spawning = provider.spawn({ sessionId, isNewSession: true, cols: 80, rows: 24 })
+    current.emitData(sessionId, 'foreign daemon output')
+    identity = replacement
+    notifyIdentityChange({ previous, current: replacement })
+    fallback.emitData(sessionId, 'still fenced')
+
+    expect(data).not.toHaveBeenCalled()
+    expect(() => provider.write(sessionId, 'blocked input')).toThrow(
+      'daemon_session_routing_unavailable'
+    )
+
+    resolveSpawn({ id: sessionId })
+    await spawning
+    fallback.emitData(sessionId, 'fallback after confirmation')
+    provider.write(sessionId, 'fallback input')
+
+    expect(data).toHaveBeenCalledExactlyOnceWith({
+      id: sessionId,
+      data: 'fallback after confirmation'
+    })
+    expect(fallback.write).toHaveBeenCalledExactlyOnceWith(sessionId, 'fallback input')
+  })
+
+  it('drops an unconfirmed collision when fallback spawn fails', async () => {
+    const sessionId = 'rejected-fallback-collision'
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    let rejectSpawn!: (error: Error) => void
+    vi.mocked(fallback.spawn).mockReturnValueOnce(
+      new Promise((_, reject) => {
+        rejectSpawn = reject
+      })
+    )
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+
+    const spawning = provider.spawn({ sessionId, isNewSession: true, cols: 80, rows: 24 })
+    current.emitData(sessionId, 'foreign daemon output')
+    rejectSpawn(new Error('spawn failed'))
+
+    await expect(spawning).rejects.toThrow('spawn failed')
+    expect(provider.hasPty(sessionId)).toBe(false)
+  })
+
+  it('rejects unknown fallback output after unavailable tombstones are evicted', async () => {
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    const previous = { pid: 1, startedAtMs: 1, launchNonce: 'previous' }
+    const replacement = { pid: 2, startedAtMs: 2, launchNonce: 'replacement' }
+    let identity = previous
+    let notifyIdentityChange!: (event: DaemonIdentityChangeEvent) => void
+    vi.mocked(current.getLastAuthenticatedDaemonIdentity).mockImplementation(() => identity)
+    vi.mocked(current.onDaemonIdentityChanged).mockImplementation((listener) => {
+      notifyIdentityChange = listener
+      return () => {}
+    })
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+
+    for (let index = 0; index <= 1_000; index += 1) {
+      const sessionId = `evicted-${index}`
+      current.emitData(sessionId, 'frame')
+      current.emitExit(sessionId, 0)
+    }
+
+    const data = vi.fn()
+    provider.onData(data)
+    fallback.emitData('unknown-fallback', 'unsafe frame')
+
+    expect(data).not.toHaveBeenCalled()
+    expect(() => provider.write('unknown-fallback', 'unsafe input')).toThrow(
+      'daemon_session_routing_unavailable'
+    )
+
+    vi.mocked(fallback.spawn).mockImplementationOnce(async () => {
+      fallback.emitData('explicit-fallback', 'safe frame')
+      return { id: 'explicit-fallback' }
+    })
+    await provider.spawn({
+      sessionId: 'explicit-fallback',
+      isNewSession: true,
+      cols: 80,
+      rows: 24
+    })
+
+    expect(data).toHaveBeenCalledExactlyOnceWith({
+      id: 'explicit-fallback',
+      data: 'safe frame'
+    })
+
+    current.emitData('explicit-fallback', 'foreign frame')
+    identity = replacement
+    notifyIdentityChange({ previous, current: replacement })
+    fallback.emitData('explicit-fallback', 'surviving frame')
+    provider.write('explicit-fallback', 'safe input')
+
+    expect(data).toHaveBeenNthCalledWith(2, {
+      id: 'explicit-fallback',
+      data: 'surviving frame'
+    })
+    expect(fallback.write).toHaveBeenCalledExactlyOnceWith('explicit-fallback', 'safe input')
   })
 
   it('preserves explicit sequence accounting on daemon data events', () => {
@@ -368,8 +692,13 @@ describe('DegradedDaemonPtyProvider', () => {
     const current = createDaemonAdapter('daemon')
     const fallback = createProvider('fallback')
     const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
-    const stuck = await provider.spawn({ sessionId: 'stuck', cols: 80, rows: 24 })
-    await provider.spawn({ sessionId: 'ok', cols: 80, rows: 24 })
+    const stuck = await provider.spawn({
+      sessionId: 'stuck',
+      isNewSession: true,
+      cols: 80,
+      rows: 24
+    })
+    await provider.spawn({ sessionId: 'ok', isNewSession: true, cols: 80, rows: 24 })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.mocked(fallback.shutdown).mockImplementation(async (id: string) => {
       if (id === stuck.id) {
@@ -404,6 +733,29 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(exitSpy).toHaveBeenCalledWith({ id: 'current-session', code: -1 })
     expect(provider.getCurrentDaemonSessionIds()).toEqual([])
     expect(provider.hasPty('legacy-session')).toBe(true)
+  })
+
+  it('reconciles live owners before same-id tombstones regardless of adapter order', async () => {
+    const sessionId = 'reconciled-owner'
+    const current = createDaemonAdapter('current')
+    const legacy = createDaemonAdapter('legacy', [sessionId])
+    const fallback = createProvider('fallback')
+    vi.mocked(current.reconcileOnStartup).mockResolvedValue({
+      alive: [],
+      killed: [sessionId]
+    })
+    vi.mocked(legacy.reconcileOnStartup).mockResolvedValue({
+      alive: [sessionId],
+      killed: []
+    })
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+
+    await provider.reconcileOnStartup(new Set())
+    await provider.sendSignal(sessionId, 'SIGTERM')
+
+    expect(legacy.sendSignal).toHaveBeenCalledExactlyOnceWith(sessionId, 'SIGTERM')
+    expect(current.sendSignal).not.toHaveBeenCalled()
+    expect(fallback.sendSignal).not.toHaveBeenCalled()
   })
 
   it('keeps an exited legacy daemon poisoning listProcesses after construction', async () => {

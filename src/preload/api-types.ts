@@ -725,6 +725,7 @@ export type PreflightApi = {
 // Mirror of daemon's `DaemonSessionInfo` (src/main/daemon/types.ts); not imported — preload can't depend on main-only protocol types.
 export type PtyManagementSession = {
   sessionId: string
+  incarnationId?: string
   state: 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
   shellState: 'pending' | 'ready' | 'timed_out' | 'unsupported'
   isAlive: boolean
@@ -744,7 +745,11 @@ export type PtyManagementApi = {
     remainingCount: number
     killedSessionIds?: string[]
   }>
-  killOne: (args: { sessionId: string }) => Promise<{ success: boolean }>
+  killOne: (args: {
+    sessionId: string
+    protocolVersion: number
+    incarnationId?: string
+  }) => Promise<{ success: boolean }>
   restart: () => Promise<{ success: boolean }>
 }
 

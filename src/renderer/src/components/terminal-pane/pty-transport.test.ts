@@ -189,6 +189,29 @@ describe('createIpcPtyTransport', () => {
     expect(write).not.toHaveBeenCalled()
   })
 
+  it('returns an explicit retained-frame result when daemon routing is unavailable', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockRejectedValueOnce(
+      new Error(
+        "Error invoking remote method 'pty:spawn': daemon_session_routing_unavailable: owner unknown"
+      )
+    )
+    const onError = vi.fn()
+
+    const result = await createIpcPtyTransport({}).connect({
+      url: '',
+      sessionId: 'preserved-session',
+      callbacks: { onError }
+    })
+
+    expect(result).toEqual({
+      id: 'preserved-session',
+      routingUnavailable: true
+    })
+    expect(onError).toHaveBeenCalledWith('daemon_session_routing_unavailable: owner unknown')
+  })
+
   it('ignores a stale exit for a previous PTY after reconnecting the same transport', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>

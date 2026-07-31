@@ -44,6 +44,7 @@ import {
 } from '../../../../shared/agent-status-osc'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isDaemonSessionRoutingUnavailable } from '../../../../shared/daemon-session-routing-error'
 
 // Re-export public API so existing consumers keep working.
 export {
@@ -881,6 +882,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         return spawnResult.id
       } catch (err) {
         const msg = extractIpcErrorMessage(err, err instanceof Error ? err.message : String(err))
+        if (options.sessionId && isDaemonSessionRoutingUnavailable(msg)) {
+          storedCallbacks.onError?.(msg)
+          return {
+            id: options.sessionId,
+            routingUnavailable: true
+          } satisfies PtyConnectResult
+        }
         if (
           connectionId &&
           options.sessionId &&

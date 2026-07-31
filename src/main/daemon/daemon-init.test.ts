@@ -216,6 +216,8 @@ type MockAdapter = {
   shutdown: ReturnType<typeof vi.fn>
   dispose: ReturnType<typeof vi.fn>
   disconnectOnly: ReturnType<typeof vi.fn>
+  getLastAuthenticatedDaemonIdentity: ReturnType<typeof vi.fn>
+  onDaemonIdentityChanged: ReturnType<typeof vi.fn>
   onData: ReturnType<typeof vi.fn>
   onExit: ReturnType<typeof vi.fn>
   // Why: the router calls onData/onExit on each adapter; the stub returns a no-op unsubscribe so router subscription doesn't explode.
@@ -336,6 +338,8 @@ vi.mock('./daemon-pty-adapter', () => ({
     readonly shutdown: ReturnType<typeof vi.fn>
     readonly dispose: ReturnType<typeof vi.fn>
     readonly disconnectOnly: ReturnType<typeof vi.fn>
+    readonly getLastAuthenticatedDaemonIdentity: ReturnType<typeof vi.fn>
+    readonly onDaemonIdentityChanged: ReturnType<typeof vi.fn>
     readonly onData: ReturnType<typeof vi.fn>
     readonly onExit: ReturnType<typeof vi.fn>
     readonly callOrder: string[]
@@ -365,6 +369,8 @@ vi.mock('./daemon-pty-adapter', () => ({
           throw disconnectOnlyError
         }
       })
+      this.getLastAuthenticatedDaemonIdentity = vi.fn(() => null)
+      this.onDaemonIdentityChanged = vi.fn(() => () => {})
       this.onData = vi.fn(() => {
         if (routerSubscriptionError.current) {
           const error = routerSubscriptionError.current
