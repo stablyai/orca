@@ -35,6 +35,7 @@ type UseEditorPanelExternalContentEventsParams = {
   editorViewModeRef: MutableRefObject<EditorViewModeByFile>
   setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>
   setDiffContents: Dispatch<SetStateAction<Record<string, DiffContent>>>
+  requestDiffContentReload: (fileId: string) => void
 }
 
 const externalEventGenerations = new WeakMap<Event, number>()
@@ -60,7 +61,8 @@ export function useEditorPanelExternalContentEvents({
   openFilesRef,
   editorViewModeRef,
   setFileContents,
-  setDiffContents
+  setDiffContents,
+  requestDiffContentReload
 }: UseEditorPanelExternalContentEventsParams): void {
   useEffect(() => {
     const handler = (event: Event): void => {
@@ -90,6 +92,7 @@ export function useEditorPanelExternalContentEvents({
             externalEventGeneration: eventGeneration
           })
           if (editorViewModeRef.current[file.id] === 'changes') {
+            requestDiffContentReload(file.id)
             void loadDiffContent(file, {
               force: true,
               externalEventGeneration: eventGeneration
@@ -98,6 +101,7 @@ export function useEditorPanelExternalContentEvents({
             invalidatedDiffFileIds.push(file.id)
           }
         } else if (isReloadableSingleFileDiffTab(file)) {
+          requestDiffContentReload(file.id)
           void loadDiffContent(file, {
             force: true,
             externalEventGeneration: eventGeneration
@@ -122,7 +126,8 @@ export function useEditorPanelExternalContentEvents({
     isVisibleRef,
     loadDiffContent,
     loadFileContent,
-    openFilesRef
+    openFilesRef,
+    requestDiffContentReload
   ])
 
   useEffect(() => {

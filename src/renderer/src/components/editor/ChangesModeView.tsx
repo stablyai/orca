@@ -70,9 +70,12 @@ export function ChangesModeView({
   // HEAD-side blob in React state, but Monaco can keep painting the previous
   // diff if we reuse the same kept model identities. Rotate only the
   // original-side model identity so Monaco rebuilds the stale HEAD snapshot
-  // without throwing away the modified-side undo history.
+  // without throwing away the modified-side undo history. An explicit
+  // external reload nonce rotates both sides to discard stale undo content.
   const headContentSignature = getDiffContentSignature(dc.originalContent)
   const originalModelKey = `${diffViewStateKey}:original:${headContentSignature}`
+  const diffReloadNonce = activeFile.diffContentReloadNonce ?? 0
+  const modifiedModelKey = `${diffViewStateKey}:modified:${diffReloadNonce}`
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       {activeFile.conflict && <ConflictBanner file={activeFile} entry={activeConflictEntry} />}
@@ -86,9 +89,10 @@ export function ChangesModeView({
       )}
       <div className="flex min-h-0 flex-1 flex-col">
         <DiffViewer
-          key={viewStateScopeId}
+          key={`${viewStateScopeId}:${diffReloadNonce}`}
           modelKey={diffViewStateKey}
           originalModelKey={originalModelKey}
+          modifiedModelKey={modifiedModelKey}
           originalContent={dc.originalContent}
           modifiedContent={modifiedContent}
           largeDiffRenderLimit={dc.largeDiffRenderLimit}

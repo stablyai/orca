@@ -54,6 +54,9 @@ export function useEditorPanelContentState({
   const openFilesRef = useRef(openFiles)
   const editorViewModeRef = useRef(editorViewMode)
   const isVisibleRef = useRef(isVisible)
+  const requestDiffContentReload = useCallback((fileId: string): void => {
+    useAppStore.getState().requestDiffContentReload(fileId)
+  }, [])
   const selectedConflictReviewFile =
     activeFile?.mode === 'conflict-review' && activeFile.conflictReview?.selectedFileId
       ? (openFiles.find((file) => file.id === activeFile.conflictReview?.selectedFileId) ?? null)
@@ -220,7 +223,8 @@ export function useEditorPanelContentState({
     openFilesRef,
     editorViewModeRef,
     setFileContents,
-    setDiffContents
+    setDiffContents,
+    requestDiffContentReload
   })
   usePruneClosedEditorContent(
     openFiles,

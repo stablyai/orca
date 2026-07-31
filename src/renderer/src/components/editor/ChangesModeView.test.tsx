@@ -98,4 +98,39 @@ describe('ChangesModeView', () => {
     expect(diffViewerMock.latestProps?.largeDiffRenderLimit).toBe(largeDiffRenderLimit)
     expect(container.textContent).not.toContain('No uncommitted changes.')
   })
+
+  it('rotates the modified model only for an explicit external reload', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    const diff = {
+      kind: 'text' as const,
+      originalContent: 'head',
+      modifiedContent: 'worktree',
+      originalIsBinary: false as const,
+      modifiedIsBinary: false as const
+    }
+
+    await act(async () => {
+      root?.render(
+        <Suspense fallback={null}>
+          <ChangesModeView
+            activeFile={{ ...createOpenFile(), diffContentReloadNonce: 1 }}
+            dc={diff}
+            modifiedContent="worktree"
+            activeConflictEntry={null}
+            resolvedLanguage="plaintext"
+            sideBySide={false}
+            viewStateScopeId="file-1"
+            diffViewStateKey="file-1:changes"
+            onContentChange={vi.fn()}
+            onSave={vi.fn()}
+          />
+        </Suspense>
+      )
+    })
+
+    await vi.waitFor(() => expect(diffViewerMock.latestProps).not.toBeNull())
+    expect(diffViewerMock.latestProps?.modifiedModelKey).toBe('file-1:changes:modified:1')
+  })
 })
