@@ -632,19 +632,17 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   activeGroupIdByWorktree: {},
   layoutByWorktree: {},
   ensureTerminalTabProjection: (worktreeId, tabId, targetGroupId) => {
-    let result!: EnsureTerminalTabProjectionResult
-    set((state) => {
-      const outcome = buildTerminalTabProjectionPatch(
-        state,
-        worktreeId,
-        tabId,
-        targetGroupId,
-        createBrowserUuid
-      )
-      result = outcome.result
-      return outcome.patch
-    })
-    return result
+    const outcome = buildTerminalTabProjectionPatch(
+      get(),
+      worktreeId,
+      tabId,
+      targetGroupId,
+      createBrowserUuid
+    )
+    if (Object.keys(outcome.patch).length > 0) {
+      set(outcome.patch)
+    }
+    return outcome.result
   },
 
   createUnifiedTab: (worktreeId, contentType, init) => {

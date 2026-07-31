@@ -69,6 +69,7 @@ describe('createSessionWriteSubscriber', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.useRealTimers()
     useAppStore.setState(initialState, true)
   })
@@ -542,6 +543,159 @@ describe('createSessionWriteSubscriber', () => {
     expect(persist.mock.calls[0][0].patch.activeTabId).toBe('tab-1')
     cleanup()
   })
+  it('flushes retained fields when suppression lifts without another store notification', async () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    let shouldSchedule = false
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      shouldSchedulePersist: () => shouldSchedule,
+      debounceMs: 100
+    })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      activeTabId: 'self-scheduled-tab'
+    })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(persist).not.toHaveBeenCalled()
+
+    shouldSchedule = true
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.activeTabId).toBe('self-scheduled-tab')
+    cleanup()
+  })
+
+  it('restores the captured batch and retries after a synchronous persist failure', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const persist = vi
+      .fn<(payload: WorkspaceSessionWrite) => void>()
+      .mockImplementationOnce(() => {
+        throw new Error('disk unavailable')
+      })
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      debounceMs: 100
+    })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      activeTabId: 'sync-retry-tab'
+    })
+    vi.advanceTimersByTime(100)
+    expect(persist).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(1_000)
+
+    expect(persist).toHaveBeenCalledTimes(2)
+    expect(persist.mock.calls[1][0].patch.activeTabId).toBe('sync-retry-tab')
+    expect(consoleError).toHaveBeenCalledTimes(1)
+    cleanup()
+  })
+
+  it('restores the captured batch and retries after an async persist rejection', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const persist = vi
+      .fn<(payload: WorkspaceSessionWrite) => Promise<void>>()
+      .mockRejectedValueOnce(new Error('ipc unavailable'))
+      .mockResolvedValue(undefined)
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      debounceMs: 100
+    })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      activeTabId: 'async-retry-tab'
+    })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(persist).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(persist).toHaveBeenCalledTimes(2)
+    expect(persist.mock.calls[1][0].patch.activeTabId).toBe('async-retry-tab')
+    expect(consoleError).toHaveBeenCalledTimes(1)
+    cleanup()
+  })
+
+  it('does not retry or report an async rejection after cleanup', async () => {
+    let rejectPersist!: (reason?: unknown) => void
+    const persist = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectPersist = reject
+        })
+    )
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      debounceMs: 100
+    })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      activeTabId: 'disposed-retry-tab'
+    })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(persist).toHaveBeenCalledTimes(1)
+
+    cleanup()
+    rejectPersist(new Error('late rejection'))
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(consoleError).not.toHaveBeenCalled()
+  })
+
+  it('unions fresh changes into a failed in-flight batch without delaying their timer', async () => {
+    let rejectFirstPersist!: (reason?: unknown) => void
+    const firstPersist = new Promise<void>((_resolve, reject) => {
+      rejectFirstPersist = reject
+    })
+    const persist = vi
+      .fn<(payload: WorkspaceSessionWrite) => Promise<void>>()
+      .mockImplementationOnce(() => firstPersist)
+      .mockResolvedValue(undefined)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      debounceMs: 100
+    })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      activeTabId: 'in-flight-tab'
+    })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(persist).toHaveBeenCalledTimes(1)
+
+    useAppStore.setState({ activeRepoId: 'repo-during-write' })
+    rejectFirstPersist(new Error('first write failed'))
+    await vi.advanceTimersByTimeAsync(99)
+    expect(persist).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(persist).toHaveBeenCalledTimes(2)
+    expect(persist.mock.calls[1][0].patch).toMatchObject({
+      activeTabId: 'in-flight-tab',
+      activeRepoId: 'repo-during-write'
+    })
+    expect(consoleError).toHaveBeenCalledTimes(1)
+    cleanup()
+  })
 
   it('persists a coherent projection bundle after the first eligible write is dropped', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
@@ -703,13 +857,13 @@ describe('createSessionWriteSubscriber', () => {
     vi.advanceTimersByTime(200)
     shouldSchedule = true
     useAppStore.getState().setCacheTimerStartedAt('pending-replay', 1)
-    vi.advanceTimersByTime(100)
+    vi.advanceTimersByTime(50)
 
     useAppStore.setState({ activeTabId: 'new-relevant-tab' })
-    vi.advanceTimersByTime(60)
+    vi.advanceTimersByTime(149)
     expect(persist).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(100)
+    vi.advanceTimersByTime(1)
     expect(persist).toHaveBeenCalledTimes(1)
     expect(persist.mock.calls[0][0].patch.activeTabId).toBe('new-relevant-tab')
     cleanup()

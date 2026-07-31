@@ -1285,7 +1285,6 @@ function App(): React.JSX.Element {
         const state = useAppStore.getState()
         // Why: route each host's worktree-scoped slice to its own partition; return the local write so the remote-workspace upload chain below keeps its ordering.
         const localWrite = patchWorkspaceSessionByHost(window.api.session, patch, state)
-        void localWrite
         const hydratedTargetIds = Array.from(state.remoteWorkspaceHydratedTargetIds).filter(
           (targetId) => state.remoteWorkspaceSyncStatusByTargetId[targetId]?.phase !== 'conflict'
         )
@@ -1307,6 +1306,7 @@ function App(): React.JSX.Element {
               }
             })
         }
+        return localWrite
       }
     })
   }, [])

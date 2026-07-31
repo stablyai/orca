@@ -2048,6 +2048,35 @@ describe('TabsSlice', () => {
       expect(reconciled.activeGroupIdByWorktree[WT]).toBe(repairedActiveGroup)
       expect(reconciled.groupsByWorktree[WT][0].tabOrder).toEqual(['legacy-live-tab'])
     })
+    it('does not notify subscribers for unchanged or skipped projections', () => {
+      const tab = makeTab({
+        id: 'already-projected-tab',
+        worktreeId: WT,
+        ptyId: 'pty-live',
+        title: 'Terminal 1',
+        sortOrder: 0,
+        createdAt: 10
+      })
+      store.setState({
+        tabsByWorktree: { [WT]: [tab] },
+        unifiedTabsByWorktree: {},
+        groupsByWorktree: {},
+        activeGroupIdByWorktree: {},
+        layoutByWorktree: {}
+      })
+      expect(store.getState().ensureTerminalTabProjection(WT, tab.id).status).toBe('repaired')
+
+      const listener = vi.fn()
+      const unsubscribe = store.subscribe(listener)
+
+      expect(store.getState().ensureTerminalTabProjection(WT, tab.id).status).toBe('unchanged')
+      expect(store.getState().ensureTerminalTabProjection(WT, 'missing-tab')).toMatchObject({
+        status: 'skipped',
+        reason: 'missing-backing-tab'
+      })
+      expect(listener).not.toHaveBeenCalled()
+      unsubscribe()
+    })
   })
 
   describe('reconcileWorktreeTabModel', () => {
