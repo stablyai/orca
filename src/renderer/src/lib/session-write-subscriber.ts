@@ -165,6 +165,7 @@ export function createSessionWriteSubscriber({
   let timer: ReturnType<typeof setTimeout> | null = null
   let disposed = false
   let persistFailureReported = false
+  let persistInFlight = false
   // Why: the subscriber fires on every store update (agent status, usage
   // refreshes, runtime title ticks, …). Without this gate each fire reset
   // the debounce, and when it finally expired buildWorkspaceSessionPayload
@@ -223,7 +224,8 @@ export function createSessionWriteSubscriber({
     // stale values for that field.
     const fresh = store.getState()
     if (!shouldPersistWorkspaceSession(fresh)) {
-      pendingChangedFields.clear()
+      // Why: readiness/hydration reopening is itself a store update. Keep the
+      // observed batch so that update can schedule one fresh write.
       return
     }
     if (shouldSchedulePersist && !shouldSchedulePersist()) {
@@ -231,6 +233,11 @@ export function createSessionWriteSubscriber({
       // the gate with one owned timer guarantees the retained batch eventually
       // flushes after suppression lifts instead of depending on incidental UI work.
       scheduleFlush(suppressionRetryMs, false)
+      return
+    }
+    if (persistInFlight) {
+      // Why: IPC patch promises can settle out of order. Completion owns scheduling
+      // the next fresh batch so session partition writes stay serialized.
       return
     }
 
@@ -246,19 +253,30 @@ export function createSessionWriteSubscriber({
       pendingChangedFields.delete(field)
     }
 
+    persistInFlight = true
     let result: void | Promise<void>
     try {
       result = persist({ patch })
     } catch (error) {
+      persistInFlight = false
       // Why: synchronous adapters and async IPC writes share the same retry contract.
       restoreFailedBatch(changed, error)
       return
     }
-    void Promise.resolve(result).then(
+    if (result === undefined) {
+      persistInFlight = false
+      persistFailureReported = false
+      scheduleFlush(debounceMs, false)
+      return
+    }
+    void result.then(
       () => {
+        persistInFlight = false
         persistFailureReported = false
+        scheduleFlush(debounceMs, false)
       },
       (error) => {
+        persistInFlight = false
         // Why: the local IPC write owns durability. Restore the exact captured batch
         // on rejection so a transient failure cannot silently acknowledge lost state.
         restoreFailedBatch(changed, error)

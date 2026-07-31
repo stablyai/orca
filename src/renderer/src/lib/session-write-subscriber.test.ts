@@ -100,16 +100,26 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
-  it('re-checks the hydration gate when a pending debounce fires', () => {
+  it('retains a pending batch while the hydration gate closes and reopens', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
-    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      activeTabId: 'retained-through-gate'
+    })
     vi.advanceTimersByTime(50)
     useAppStore.setState({ hydrationSucceeded: false })
     vi.advanceTimersByTime(200)
 
     expect(persist).not.toHaveBeenCalled()
+
+    useAppStore.setState({ hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.activeTabId).toBe('retained-through-gate')
     cleanup()
   })
 
@@ -626,6 +636,43 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('serializes an in-flight write before flushing newer pending state', async () => {
+    let resolveFirstPersist!: () => void
+    const firstPersist = new Promise<void>((resolve) => {
+      resolveFirstPersist = resolve
+    })
+    const persist = vi
+      .fn<(payload: WorkspaceSessionWrite) => Promise<void>>()
+      .mockImplementationOnce(() => firstPersist)
+      .mockResolvedValue(undefined)
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      debounceMs: 100
+    })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      activeTabId: 'first-write-tab'
+    })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(persist).toHaveBeenCalledTimes(1)
+
+    useAppStore.setState({ activeRepoId: 'repo-after-first-write' })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(persist).toHaveBeenCalledTimes(1)
+
+    resolveFirstPersist()
+    await vi.advanceTimersByTimeAsync(99)
+    expect(persist).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(persist).toHaveBeenCalledTimes(2)
+    expect(persist.mock.calls[1][0].patch.activeRepoId).toBe('repo-after-first-write')
+    cleanup()
+  })
   it('does not retry or report an async rejection after cleanup', async () => {
     let rejectPersist!: (reason?: unknown) => void
     const persist = vi.fn(
