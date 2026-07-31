@@ -10,7 +10,6 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'codex',
   'grok',
   'copilot',
-  'bob',
   'opencode',
   'mimo-code',
   'ante',
@@ -27,6 +26,9 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'crush',
   'aug',
   'autohand',
+  // Why: the `bob` binary is also the Neovim version manager, so IBM Bob stays out of
+  // the auto-pick head where a false positive would be picked first.
+  'bob',
   'cline',
   'codebuff',
   'command-code',

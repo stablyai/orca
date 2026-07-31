@@ -66,8 +66,11 @@ describe('tui agent permissions', () => {
     )
   })
 
-  it('keeps IBM Bob out of the default yolo profile until explicitly supported', () => {
-    expect(YOLO_TUI_AGENT_ARGS.bob).toBeUndefined()
+  it('drives the IBM Bob yolo profile from its own --yolo flag', () => {
+    expect(YOLO_TUI_AGENT_ARGS.bob).toBe('--yolo')
+    expect(resolveTuiAgentPermissionMode({ agent: 'bob', agentArgs: '--yolo', agentEnv: {} })).toBe(
+      'yolo'
+    )
     expect(resolveTuiAgentPermissionMode({ agent: 'bob', agentArgs: '', agentEnv: {} })).toBe(
       'manual'
     )

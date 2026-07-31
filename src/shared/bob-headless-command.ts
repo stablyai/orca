@@ -1,91 +1,70 @@
-const BOB_HEADLESS_PROMPT_FLAGS = new Set(['--prompt', '-p'])
+import { getCommandTokenPathBasename } from './command-token-scanner'
+import { optionName } from './print-mode-headless-command'
+
+const BOB_ONE_SHOT_PROMPT_FLAGS = new Set(['--prompt', '-p'])
 const BOB_INTERACTIVE_PROMPT_FLAGS = new Set(['--prompt-interactive', '-i'])
+
+// Why: taken from Bob Shell 1.0.6's own option table, which hides `--auth-method`,
+// `--extensions`, `--fake-responses` and `--record-responses` from `bob --help`.
 const BOB_OPTIONS_WITH_VALUE = new Set([
-  '--chat-mode',
-  '--max-coins',
-  '--instance-id',
-  '--team-id',
-  '--model',
-  '-m',
-  '--approval-mode',
   '--allowed-mcp-server-names',
   '--allowed-tools',
+  '--approval-mode',
+  '--auth-method',
+  '--chat-mode',
+  '--delete-session',
+  '--extensions',
+  '-e',
+  '--fake-responses',
+  '--include-directories',
+  '--instance-id',
+  '--max-coins',
+  '--model',
+  '-m',
+  '--output-format',
+  '-o',
+  '--record-responses',
   '--resume',
   '-r',
-  '--delete-session',
-  '--include-directories',
-  '--output-format',
-  '-o'
+  '--team-id'
 ])
 
-const PROCESS_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
-
-function optionName(token: string): string {
-  const eq = token.indexOf('=')
-  return eq === -1 ? token : token.slice(0, eq)
-}
-
-function basename(token: string): string {
-  const name = token
-    .trim()
-    .replace(/^["']|["']$/g, '')
-    .split(/[\\/]/)
-    .pop()
-  return (name ?? '').toLowerCase().replace(PROCESS_EXTENSION_RE, '')
-}
+const BOB_EXECUTABLE_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1|js|mjs|cjs)$/i
 
 function isBobExecutableToken(token: string): boolean {
-  return basename(token) === 'bob'
+  const basename = getCommandTokenPathBasename(token.trim().replace(/^["']|["']$/g, ''))
+  return basename.toLowerCase().replace(BOB_EXECUTABLE_EXTENSION_RE, '') === 'bob'
 }
 
-function findBobExecutableIndex(tokens: readonly string[]): number {
-  const index = tokens.findIndex(isBobExecutableToken)
-  return index === -1 ? 0 : index
-}
-
-function isBobHeadlessPromptFlag(token: string): boolean {
-  const name = optionName(token)
-  return BOB_HEADLESS_PROMPT_FLAGS.has(name) || /^-p[^-]/.test(name)
-}
-
-function isBobInteractivePromptFlag(token: string): boolean {
-  const name = optionName(token)
-  return BOB_INTERACTIVE_PROMPT_FLAGS.has(name) || /^-i[^-]/.test(name)
-}
-
-function optionConsumesNextValue(token: string): boolean {
-  const name = optionName(token)
-  return name === token && BOB_OPTIONS_WITH_VALUE.has(name)
+// Why: Bob ships as a node script, so recognition also sees it as `node …/bob.js`.
+function bobArgumentStartIndex(tokens: readonly string[]): number {
+  const executableIndex = tokens.findIndex(isBobExecutableToken)
+  return executableIndex === -1 ? 1 : executableIndex + 1
 }
 
 export function isBobHeadlessOneShotCommand(tokens: readonly string[]): boolean {
-  const bobIndex = findBobExecutableIndex(tokens)
-
-  for (let index = bobIndex + 1; index < tokens.length; index += 1) {
+  for (let index = bobArgumentStartIndex(tokens); index < tokens.length; index += 1) {
     const token = tokens[index]
-    if (isBobHeadlessPromptFlag(token)) {
-      return true
-    }
-    if (isBobInteractivePromptFlag(token)) {
-      return false
-    }
-  }
-
-  for (let index = bobIndex + 1; index < tokens.length; index += 1) {
-    const token = tokens[index]
+    // Why: `--` ends option parsing, so what follows is the positional prompt.
     if (token === '--') {
       return index + 1 < tokens.length
     }
-    if (token.startsWith('-')) {
-      if (optionConsumesNextValue(token)) {
-        index += 1
-      }
-      continue
+    if (!token.startsWith('-')) {
+      // Why: positional prompts run one-shot, and `mcp`/`extensions` are management
+      // subcommands - neither leaves an interactive shell for Orca to host.
+      return true
     }
-    // Why: Bob positional prompts default to one-shot mode unless the command
-    // uses -i/--prompt-interactive, which the earlier pass already handled.
-    return true
+    const name = optionName(token)
+    if (BOB_ONE_SHOT_PROMPT_FLAGS.has(name) || /^-p[^-]/.test(name)) {
+      return true
+    }
+    if (BOB_INTERACTIVE_PROMPT_FLAGS.has(name) || /^-i[^-]/.test(name)) {
+      return false
+    }
+    // Why: `--flag value` consumes the next token, which is not a positional prompt.
+    if (name === token && BOB_OPTIONS_WITH_VALUE.has(name)) {
+      index += 1
+    }
   }
-
   return false
 }

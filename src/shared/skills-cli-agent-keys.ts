@@ -47,6 +47,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   grok: 'grok',
   devin: 'devin',
   ante: null,
+  // Why: the skills CLI ships no key for IBM Bob, and `bob` is another project's there.
+  bob: null,
   // Why: Orca detects trae by `traecli`, an alias only TRAE CN ships.
   trae: 'trae-cn'
 } satisfies Record<TuiAgent, string | null>

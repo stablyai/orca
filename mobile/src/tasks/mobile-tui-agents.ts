@@ -10,7 +10,6 @@ export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
   'codex',
   'grok',
   'copilot',
-  'bob',
   'opencode',
   'mimo-code',
   'ante',
@@ -27,6 +26,9 @@ export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
   'crush',
   'aug',
   'autohand',
+  // Why: mirrors the desktop order, which keeps IBM Bob out of the head because the
+  // `bob` binary collides with the Neovim version manager.
+  'bob',
   'cline',
   'codebuff',
   'command-code',
