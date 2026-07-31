@@ -2119,6 +2119,8 @@ export class SshRelaySession {
     }
     const checkpoints = recovery?.checkpointsByAppPtyId
     const relayPtyId = toRelaySshPtyId(this.targetId, appPtyId)
+    // Why: every checkpoint writer records app-id keys now, so the relay-id
+    // lookup (and its paired delete below) is a legacy guard only.
     const checkpoint = checkpoints?.get(appPtyId) ?? checkpoints?.get(relayPtyId)
     if (!checkpoint) {
       return Object.freeze({ status: 'checkpointUnavailable' })
@@ -2273,10 +2275,12 @@ export class SshRelaySession {
       (endSu, payload) => Math.max(endSu, payload.source?.sourceEndSu ?? endSu),
       acceptedRecovery.recoveryEndSu
     )
+    // Why: checkpoints are app-id keyed; a relay-id entry here would be shadowed
+    // by a staler app-id entry on the next sourceRecoveryRequest lookup.
     ptyConsumerRecoveryByTarget.get(this.targetId)?.checkpointsByAppPtyId.set(
-      relayPtyId,
+      appPtyId,
       Object.freeze({
-        id: relayPtyId,
+        id: appPtyId,
         providerGeneration: this.activePtyProviderGeneration!,
         clientGeneration: acceptedRecovery.clientGeneration,
         ownerGeneration: acceptedRecovery.ownerGeneration,

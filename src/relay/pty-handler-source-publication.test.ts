@@ -301,6 +301,34 @@ describe('PtyHandler negotiated source publication', () => {
     expect(adapter.getDebugSnapshot()).toMatchObject({ deliveryTokens: 1 })
   })
 
+  it('republishes the identical memoized span after a failed projection', async () => {
+    await spawn({})
+    const appendSpy = vi.spyOn(adapter, 'appendSource')
+    const projectSpy = vi
+      .spyOn(dispatcher, 'projectPtyDataToMatchingClients')
+      .mockReturnValueOnce(false)
+    // Why: a larger capacity result on the retry must not move the memoized span boundary.
+    const maxCharsSpy = vi.spyOn(dispatcher, 'maxLegacyPtyDataChars')
+    maxCharsSpy.mockReturnValueOnce(4).mockReturnValue(8)
+
+    dataCallback!('abcdefgh')
+    await vi.advanceTimersByTimeAsync(8)
+    expect(projectSpy).toHaveBeenCalledTimes(1)
+
+    handler.handleSourcePublicationCapacity('pty-1')
+    await vi.advanceTimersByTimeAsync(8)
+
+    // Retried projection carries the byte-identical span params.
+    expect(projectSpy.mock.calls[1][1]).toEqual(projectSpy.mock.calls[0][1])
+    const spans = appendSpy.mock.calls.map(([, input]) => input)
+    expect(spans.filter((span) => span.data === 'abcd')).toHaveLength(1)
+    expect(spans.map((span) => span.data).join('')).toBe('abcdefgh')
+    expect(spans.map((span) => [span.displayStart, span.displayEnd])).toEqual([
+      [0, 4],
+      [4, 8]
+    ])
+  })
+
   it('keeps the native PTY and V1 owner live when one subscriber saturates', async () => {
     await spawn({})
     const detached: number[] = []

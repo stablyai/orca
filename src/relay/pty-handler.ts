@@ -894,10 +894,15 @@ export class PtyHandler {
       ...(pending.rawLength === undefined ? {} : { rawLength: pending.rawLength }),
       ...(pending.transformed ? { transformed: true } : {})
     }
-    let chunkChars = pending.transformed
-      ? desiredChars
-      : (this.dispatcher.maxLegacyPtyDataChars?.(paramsWithoutData, pending.data, desiredChars) ??
-        desiredChars)
+    // Why: a failed publish may already have reserved this exact span (source-ledger append,
+    // partial legacy fan-out), so a retry must resend it verbatim and slice the remainder at
+    // the memo boundary — capacity and coalesced data can both have changed since. The capacity
+    // search is skipped on retry: its result is discarded, and publish re-checks capacity.
+    let chunkChars =
+      pending.transformed || pending.sourceChunk
+        ? desiredChars
+        : (this.dispatcher.maxLegacyPtyDataChars?.(paramsWithoutData, pending.data, desiredChars) ??
+          desiredChars)
     if (
       chunkChars > 0 &&
       chunkChars < pending.data.length &&
@@ -914,8 +919,8 @@ export class PtyHandler {
       this.pausePtyOutput(id)
       return false
     }
-    const chunk = pending.data.slice(0, chunkChars)
-    const remaining = pending.data.slice(chunkChars)
+    const chunk = pending.sourceChunk?.data ?? pending.data.slice(0, chunkChars)
+    const remaining = pending.data.slice(chunk.length)
     const chunkRawLength = pending.transformed
       ? pending.rawLength
       : pending.rawLength === undefined
@@ -938,10 +943,16 @@ export class PtyHandler {
       this.pausePtyOutput(id)
       return false
     }
-    if (remaining) {
+    // rawLength fallback is defensive only: transformed memos always carry rawLength (ingress meta).
+    const publishedRawLength = sourceChunk.rawLength ?? sourceChunk.data.length
+    const remainingRawLength = pending.transformed
+      ? (pending.rawLength ?? 0) - publishedRawLength
+      : remaining.length
+    if (remaining || (pending.transformed && remainingRawLength > 0)) {
       queue[0] = {
         data: remaining,
-        ...(pending.rawLength === undefined ? {} : { rawLength: remaining.length }),
+        ...(pending.transformed ? { transformed: true } : {}),
+        ...(pending.rawLength === undefined ? {} : { rawLength: remainingRawLength }),
         seq: pending.seq
       }
     } else {

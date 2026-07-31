@@ -1,10 +1,93 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { SshPtyOutputDataEvent } from './ssh-pty-output-intake'
 import {
   createSshPtyOutputIntakeHarness as createHarness,
   sshPtyOutputEvent as event
 } from './ssh-pty-output-intake-test-harness'
 
+// Production-shaped ids: bare relay id on the wire side, prefixed app id in intake.
+const APP_ID = 'ssh:conn@@pty-1'
+const prodEvent = (overrides: Partial<SshPtyOutputDataEvent> = {}): SshPtyOutputDataEvent =>
+  event({
+    id: APP_ID,
+    source: {
+      relayPtyId: 'pty-1',
+      spanId: 'span-a',
+      clientGeneration: 3,
+      ownerGeneration: 4,
+      deliveryToken: 'delivery-token-1',
+      sourceStartSu: 0,
+      sourceEndSu: 4
+    },
+    ...overrides
+  })
+
 describe('SshPtyOutputModelMigration', () => {
+  it('fences an in-flight admission when relay and app pty ids differ', async () => {
+    const harness = createHarness()
+    const first = harness.intake.acceptData(prodEvent({ data: 'aaaa' }))
+    harness.completions[0]!.resolve()
+    await first
+    const second = harness.intake.acceptData(
+      prodEvent({
+        data: 'bbbb',
+        source: {
+          relayPtyId: 'pty-1',
+          spanId: 'span-b',
+          clientGeneration: 3,
+          ownerGeneration: 4,
+          deliveryToken: 'delivery-token-1',
+          sourceStartSu: 4,
+          sourceEndSu: 8
+        }
+      })
+    )
+
+    const migration = harness.intake.beginGenerationMigration(1)
+    expect([...migration.byPty.keys()]).toEqual([APP_ID])
+    const result = migration.byPty.get(APP_ID)
+    await expect(Promise.race([result, Promise.resolve('pending')])).resolves.toBe('pending')
+    await expect(Promise.race([migration.completion, Promise.resolve('pending')])).resolves.toBe(
+      'pending'
+    )
+    expect(harness.intake.getAcceptedSourceCheckpoints(1)[0]).toMatchObject({
+      id: APP_ID,
+      acceptedSourceEndSu: 4
+    })
+
+    harness.completions[1]!.resolve()
+    await expect(second).resolves.toMatchObject({ sequence: 8 })
+    await expect(result).resolves.toMatchObject({
+      status: 'settled',
+      checkpoint: { id: APP_ID, acceptedSourceEndSu: 8 }
+    })
+    await migration.completion
+  })
+
+  it('targets the real pty on migration timeout with production-shaped ids', async () => {
+    vi.useFakeTimers()
+    try {
+      const resetModelForMigration = vi.fn()
+      const harness = createHarness({ resetModelForMigration })
+      const receipt = harness.intake.acceptData(prodEvent())
+      const migration = harness.intake.beginGenerationMigration(1, 10_000)
+
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      await expect(migration.byPty.get(APP_ID)).resolves.toEqual({
+        status: 'checkpoint-unavailable',
+        reason: 'timeout'
+      })
+      await expect(receipt).rejects.toThrow('ssh_model_migration_timeout')
+      expect(resetModelForMigration).toHaveBeenCalledOnce()
+      expect(resetModelForMigration).toHaveBeenCalledWith(1, APP_ID)
+      harness.completions[0]!.resolve()
+      await migration.completion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('fences a running source span before exporting its migration checkpoint', async () => {
     const harness = createHarness()
     const first = harness.intake.acceptData(
