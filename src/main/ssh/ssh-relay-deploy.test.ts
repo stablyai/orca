@@ -89,6 +89,7 @@ import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import { isRelayAlreadyInstalled } from './ssh-relay-versioned-install'
 import { acquireInstallLock } from './ssh-relay-install-lock'
+import * as DeployTiming from './ssh-relay-deploy-timing'
 import type { SshConnection } from './ssh-connection'
 import type * as SshRemoteNodeResolution from './ssh-remote-node-resolution'
 import {
@@ -584,7 +585,10 @@ describe('deployAndLaunchRelay', () => {
     await vi.advanceTimersByTimeAsync(301_000)
     expect(await Promise.race([promise, Promise.resolve('pending')])).toBe('pending')
 
-    await vi.advanceTimersByTimeAsync(600_000)
+    await vi.advanceTimersByTimeAsync(DeployTiming.RELAY_DEPLOY_TIMEOUT_MS - 301_000)
+    expect(await Promise.race([promise, Promise.resolve('pending')])).toBe('pending')
+
+    await vi.advanceTimersByTimeAsync(DeployTiming.RELAY_DEPLOY_TEARDOWN_TIMEOUT_MS)
 
     const result = await promise
     expect(result).toBeInstanceOf(Error)
@@ -600,9 +604,19 @@ describe('deployAndLaunchRelay', () => {
       vi.mocked(isRelayAlreadyInstalled).mockReset().mockResolvedValue(false)
       conn.uploadDirectory = vi.fn().mockResolvedValue(undefined)
       conn.writeFile = vi.fn().mockResolvedValue(undefined)
-      vi.mocked(execCommand)
-        .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
-        .mockResolvedValueOnce('/home/user')
+      vi.mocked(execCommand).mockImplementation((_conn, command) => {
+        if (command.includes('uname')) {
+          return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+        }
+        if (command === 'echo $HOME') {
+          return Promise.resolve('/home/user')
+        }
+        const marker = command.match(/\.sftp-namespace-[0-9a-f]{32}/u)?.[0]
+        if (command.includes('__ORCA_UPLOAD_STAGE_SLOT__') && marker) {
+          return Promise.resolve(`__ORCA_UPLOAD_STAGE_SLOT__${marker}:slot-0`)
+        }
+        return Promise.resolve('')
+      })
       vi.mocked(isRelayAlreadyInstalled).mockResolvedValueOnce(false)
       let lockSignal: AbortSignal | undefined
       vi.mocked(acquireInstallLock).mockImplementationOnce((_conn, _dir, _host, options) => {
@@ -614,9 +628,9 @@ describe('deployAndLaunchRelay', () => {
 
       const promise = deployAndLaunchRelay(conn).catch((err: Error) => err)
       await vi.advanceTimersByTimeAsync(0)
-      await vi.waitFor(() => expect(acquireInstallLock).toHaveBeenCalledTimes(1))
+      expect(acquireInstallLock).toHaveBeenCalledTimes(1)
 
-      await vi.advanceTimersByTimeAsync(900_000)
+      await vi.advanceTimersByTimeAsync(DeployTiming.RELAY_DEPLOY_TIMEOUT_MS)
 
       const result = await promise
       expect(result).toBeInstanceOf(Error)
