@@ -73,7 +73,7 @@ The sidebar entry is a **workspace**. The git checkout behind it is a **worktree
 
 `working-tree` is a third term, and English does not keep it clean: git's own vocabulary calls a worktree a "working tree" too, which is why `isMainWorktree` in `src/shared/types.ts` is documented as "the repo's main working tree". That overlap stays out of the catalogs, though — every translatable string carrying the term uses it as an adjective on a file ("no working-tree file is available to edit"), where what is missing is the file, not the worktree. Translate that meaning — the editable copy on disk — instead of transliterating a term a reader will not tell apart from `worktree`. Strings that match git stderr (`cannot remove a locked working tree`, `is not a working tree`) are matched, not shown, and must never be translated at all.
 
-The Korean rules that enforce all of this live in `config/scripts/locale-ko-phrase-fixes-round6.mjs`; add the equivalent guard when you touch another locale.
+The two halves live in different files. Lexical swaps — workspace, worktree, primary, default — are phrase-fix rules in `config/scripts/locale-ko-phrase-fixes-round6.mjs`. The `working-tree` paraphrase is not, because rewriting a meaning cannot be expressed as a term swap; it sits in `config/scripts/locale-ko-key-overrides.json` alongside the other strings whose machine translation was wrong beyond terminology. Add both kinds of guard when you touch another locale.
 
 ## Pull Requests
 

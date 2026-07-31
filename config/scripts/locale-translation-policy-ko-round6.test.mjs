@@ -94,8 +94,10 @@ describe('locale-translation-policy ko round 6', () => {
     ).toBe('기본 액션 클릭됨')
   })
 
-  it('never transliterates adjectival working-tree into a third loanword', () => {
-    // The UI strings that carry it describe a missing *file*, not a missing worktree.
+  it('ships the three working-tree strings without a third loanword', () => {
+    // These three keys carry key overrides, so this pins the shipped Korean end to end — the
+    // guarantee comes from the overrides, not from the phrase rules. The phrase-rule half of the
+    // contract is the next test, which uses a key no override matches.
     for (const key of [
       'auto.components.editor.ConflictComponents.da539359b6',
       'auto.components.editor.EditorContent.8b1a605bae',
@@ -113,8 +115,8 @@ describe('locale-translation-policy ko round 6', () => {
   })
 
   it('leaves an unmapped working-tree string for a human rather than rewriting it', () => {
-    // No phrase rule matches working-tree, so a new string surfaces untouched instead of
-    // silently acquiring the wrong term.
+    // No key override and no phrase rule matches working-tree, so a newly extracted string
+    // surfaces untouched for a human instead of silently acquiring the wrong term.
     const localeValue = '이 파일은 충돌 상태에 있지만 편집할 수 있는 작업 트리 파일이 없습니다.'
     expect(
       repairKo(
