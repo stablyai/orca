@@ -2635,6 +2635,33 @@ export function useIpcEvents(): void {
       string,
       { receivedForwardPush: boolean; receivedDetectedPush: boolean }
     >()
+    const hydrateSshPorts = (targetId: string, authority: DirectSshAuthority): void => {
+      const pendingPortHydration = {
+        receivedForwardPush: false,
+        receivedDetectedPush: false
+      }
+      pendingPortHydrationByTargetId.set(targetId, pendingPortHydration)
+      const isHydrationAuthorityCurrent = (): boolean =>
+        !directSshEffectStopped &&
+        directSshAuthoritiesEqual(currentDirectSshAuthority(targetId), authority)
+      const forwardHydration = window.api.ssh.listPortForwards({ targetId }).then((forwards) => {
+        // Why: if the session disconnected while awaiting the snapshot, applying it would resurrect a dead session's ports.
+        if (isHydrationAuthorityCurrent() && !pendingPortHydration.receivedForwardPush) {
+          useAppStore.getState().setPortForwards(targetId, forwards)
+        }
+      })
+      const detectedHydration = window.api.ssh.listDetectedPorts({ targetId }).then((detected) => {
+        if (isHydrationAuthorityCurrent() && !pendingPortHydration.receivedDetectedPush) {
+          useAppStore.getState().setDetectedPorts(targetId, detected)
+        }
+      })
+      // Why: one failed or stalled port stream must not block the other stream or later targets.
+      void Promise.allSettled([forwardHydration, detectedHydration]).then(() => {
+        if (pendingPortHydrationByTargetId.get(targetId) === pendingPortHydration) {
+          pendingPortHydrationByTargetId.delete(targetId)
+        }
+      })
+    }
     let applySshConnectionStateChange!: (
       targetId: string,
       state: SshConnectionState,
@@ -2672,40 +2699,6 @@ export function useIpcEvents(): void {
               state as SshConnectionState,
               'initial-hydration'
             )
-            // Why: ports arrive only via push events; on reattach to a live session fetch snapshots or the Ports panel shows empty.
-            if ((state as SshConnectionState).status === 'connected') {
-              const authority = currentDirectSshAuthority(target.id)
-              const pendingPortHydration = {
-                receivedForwardPush: false,
-                receivedDetectedPush: false
-              }
-              pendingPortHydrationByTargetId.set(target.id, pendingPortHydration)
-              const isHydrationAuthorityCurrent = (): boolean =>
-                !directSshEffectStopped &&
-                authority !== null &&
-                directSshAuthoritiesEqual(currentDirectSshAuthority(target.id), authority)
-              const forwardHydration = window.api.ssh
-                .listPortForwards({ targetId: target.id })
-                .then((forwards) => {
-                  // Why: if the session disconnected while awaiting the snapshot, applying it would resurrect a dead session's ports.
-                  if (isHydrationAuthorityCurrent() && !pendingPortHydration.receivedForwardPush) {
-                    useAppStore.getState().setPortForwards(target.id, forwards)
-                  }
-                })
-              const detectedHydration = window.api.ssh
-                .listDetectedPorts({ targetId: target.id })
-                .then((detected) => {
-                  if (isHydrationAuthorityCurrent() && !pendingPortHydration.receivedDetectedPush) {
-                    useAppStore.getState().setDetectedPorts(target.id, detected)
-                  }
-                })
-              // Why: one failed or stalled port stream must not block the other stream or later targets.
-              void Promise.allSettled([forwardHydration, detectedHydration]).then(() => {
-                if (pendingPortHydrationByTargetId.get(target.id) === pendingPortHydration) {
-                  pendingPortHydrationByTargetId.delete(target.id)
-                }
-              })
-            }
           }
         }
       } catch {
@@ -2765,7 +2758,7 @@ export function useIpcEvents(): void {
             latest?.targetId !== targetId ||
             !latest?.providerEpoch ||
             latest.connectionGeneration === undefined ||
-            sshStateWatermarkByTargetId.get(targetId) !== watermark
+            (sshStateWatermarkByTargetId.get(targetId) ?? 0) !== watermark
           ) {
             return
           }
@@ -2869,6 +2862,10 @@ export function useIpcEvents(): void {
         },
         { authority, previousAuthority, origin }
       )
+      // Why: initial connected state can be partial; hydrate only after reconciliation yields a complete authority.
+      if (origin === 'initial-hydration') {
+        hydrateSshPorts(targetId, authority)
+      }
     }
 
     let sshTargetStateEventId = 0

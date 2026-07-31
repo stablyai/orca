@@ -5543,6 +5543,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const targetId = 'target-ports'
     const secondTargetId = 'target-ports-second'
     const rejectingTargetId = 'target-ports-rejecting'
+    const partialTargetId = 'target-ports-partial'
     const connectedState = {
       targetId,
       status: 'connected' as const,
@@ -5560,6 +5561,18 @@ describe('useIpcEvents agent status snapshot integration', () => {
       ...connectedState,
       targetId: rejectingTargetId,
       providerEpoch: 'epoch-ports-rejecting'
+    }
+    const partialConnectedState = {
+      ...connectedState,
+      targetId: partialTargetId,
+      providerEpoch: null,
+      connectionGeneration: undefined
+    }
+    const reconciledPartialState = {
+      ...connectedState,
+      targetId: partialTargetId,
+      providerEpoch: 'epoch-ports-partial',
+      connectionGeneration: 4
     }
     const liveForward = {
       id: 'forward-live',
@@ -5582,6 +5595,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
       targetId: rejectingTargetId,
       localPort: 17862,
       remotePort: 7862
+    }
+    const partialTargetForward = {
+      ...liveForward,
+      id: 'forward-partial-target',
+      targetId: partialTargetId,
+      localPort: 17863,
+      remotePort: 7863
     }
     const detectedPort = {
       port: 7860,
@@ -5615,11 +5635,17 @@ describe('useIpcEvents agent status snapshot integration', () => {
       if (requestedTargetId === rejectingTargetId) {
         return Promise.resolve([rejectingTargetForward])
       }
+      if (requestedTargetId === partialTargetId) {
+        return Promise.resolve([partialTargetForward])
+      }
       return requestedTargetId === targetId ? forwardsSnapshot : secondForwardsSnapshot
     })
     const listDetectedPorts = vi.fn(({ targetId: requestedTargetId }: { targetId: string }) => {
       if (requestedTargetId === rejectingTargetId) {
         return Promise.reject(new Error('detected snapshot unavailable'))
+      }
+      if (requestedTargetId === partialTargetId) {
+        return Promise.resolve([])
       }
       return requestedTargetId === targetId ? detectedSnapshot : secondDetectedSnapshot
     })
@@ -5633,18 +5659,28 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const setDetectedPorts = vi.fn()
     const sshConnectionStates = new Map<
       string,
-      typeof connectedState | typeof secondConnectedState | typeof rejectingConnectedState
+      | typeof connectedState
+      | typeof secondConnectedState
+      | typeof rejectingConnectedState
+      | typeof partialConnectedState
+      | typeof reconciledPartialState
     >()
     const storeState = buildStoreState({
       sshTargetLabels: new Map([
         [targetId, 'Ports Target'],
         [secondTargetId, 'Second Ports Target'],
-        [rejectingTargetId, 'Rejecting Ports Target']
+        [rejectingTargetId, 'Rejecting Ports Target'],
+        [partialTargetId, 'Partial Ports Target']
       ]),
       sshConnectionStates,
       setSshConnectionState: (
         nextTargetId: string,
-        state: typeof connectedState | typeof secondConnectedState | typeof rejectingConnectedState
+        state:
+          | typeof connectedState
+          | typeof secondConnectedState
+          | typeof rejectingConnectedState
+          | typeof partialConnectedState
+          | typeof reconciledPartialState
       ) => {
         sshConnectionStates.set(nextTargetId, state)
       },
@@ -5670,6 +5706,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       invalidate: vi.fn(),
       stop: vi.fn()
     }
+    let partialTargetStateCalls = 0
 
     stubReactSyncEffect()
     stubAuxiliaryModules()
@@ -5710,18 +5747,26 @@ describe('useIpcEvents agent status snapshot integration', () => {
           listTargets: () =>
             Promise.resolve([
               { id: rejectingTargetId, label: 'Rejecting Ports Target' },
+              { id: partialTargetId, label: 'Partial Ports Target' },
               { id: targetId, label: 'Ports Target' },
               { id: secondTargetId, label: 'Second Ports Target' }
             ]),
           listRemovedTargetLabels: () => Promise.resolve({}),
-          getState: ({ targetId: requestedTargetId }: { targetId: string }) =>
-            Promise.resolve(
+          getState: ({ targetId: requestedTargetId }: { targetId: string }) => {
+            if (requestedTargetId === partialTargetId) {
+              partialTargetStateCalls += 1
+              return Promise.resolve(
+                partialTargetStateCalls === 1 ? partialConnectedState : reconciledPartialState
+              )
+            }
+            return Promise.resolve(
               requestedTargetId === rejectingTargetId
                 ? rejectingConnectedState
                 : requestedTargetId === targetId
                   ? connectedState
                   : secondConnectedState
-            ),
+            )
+          },
           listPortForwards,
           listDetectedPorts,
           onPortForwardsChanged: (
@@ -5746,13 +5791,20 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await vi.waitFor(() => {
       expect(forwardListener).toBeTypeOf('function')
       expect(detectedListener).toBeTypeOf('function')
-      expect(listPortForwards).toHaveBeenCalledTimes(3)
-      expect(listDetectedPorts).toHaveBeenCalledTimes(3)
+      expect(partialTargetStateCalls).toBe(2)
+      expect(sshConnectionStates.get(partialTargetId)).toEqual(reconciledPartialState)
+      expect(listPortForwards).toHaveBeenCalledTimes(4)
+      expect(listDetectedPorts).toHaveBeenCalledTimes(4)
       expect(
         setPortForwards.mock.calls.filter(
           ([requestedTargetId]) => requestedTargetId === rejectingTargetId
         )
       ).toEqual([[rejectingTargetId, [rejectingTargetForward]]])
+      expect(
+        setPortForwards.mock.calls.filter(
+          ([requestedTargetId]) => requestedTargetId === partialTargetId
+        )
+      ).toEqual([[partialTargetId, [partialTargetForward]]])
     })
     forwardListener?.({ targetId, forwards: [liveForward] })
     resolveForwards([])
@@ -5765,8 +5817,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       expect(
         setDetectedPorts.mock.calls.filter(([requestedTargetId]) => requestedTargetId === targetId)
       ).toEqual([[targetId, [detectedPort]]])
-      expect(listPortForwards).toHaveBeenCalledTimes(3)
-      expect(listDetectedPorts).toHaveBeenCalledTimes(3)
+      expect(listPortForwards).toHaveBeenCalledTimes(4)
+      expect(listDetectedPorts).toHaveBeenCalledTimes(4)
     })
     forwardListener?.({ targetId, forwards: [liveForward] })
     detectedListener?.({ targetId: secondTargetId, ports: [secondDetectedPort] })
