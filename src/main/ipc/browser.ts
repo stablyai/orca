@@ -4,6 +4,7 @@ import { BrowserWindow, ipcMain, webContents } from 'electron'
 import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { browserActionRecorder } from '../browser/browser-action-recorder'
 import {
   pickCookieFile,
   importCookiesFromFile,
@@ -208,8 +209,16 @@ export function registerBrowserHandlers(): void {
   ipcMain.removeHandler('browser:cancelGrab')
   ipcMain.removeHandler('browser:captureSelectionScreenshot')
   ipcMain.removeHandler('browser:extractHoverPayload')
+  ipcMain.removeHandler('browser:setRecorderEnabled')
   ipcMain.removeHandler('browser:activeTabChanged')
   ipcMain.removeHandler('browser:proceedCertificate')
+
+  // Why: the renderer's recorder toggle owns the session; main only captures
+  // while enabled and streams action records back over browser:recorder-action.
+  ipcMain.handle('browser:setRecorderEnabled', (_event, args: { enabled?: boolean }) => {
+    browserActionRecorder.setEnabled(args?.enabled === true)
+    return true
+  })
 
   ipcMain.handle(
     'browser:registerGuest',

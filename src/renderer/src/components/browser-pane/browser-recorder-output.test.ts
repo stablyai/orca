@@ -92,6 +92,72 @@ describe('formatBrowserRecorderStepsAsMarkdown', () => {
     expect(output).toContain('**Feedback:** Make the button green')
   })
 
+  it('renders an automation action with target, params, result, and DOM diff', () => {
+    const step = makeStep({
+      detail: {
+        kind: 'automation-action',
+        action: {
+          id: 'act-1',
+          method: 'browser.click',
+          target: { kind: 'selector', value: '#login-btn' },
+          params: { element: '#login-btn' },
+          page: {
+            browserPageId: 'page-1',
+            url: 'https://example.com/login',
+            title: 'Login'
+          },
+          startedAt: '2026-07-31T10:15:30.000Z',
+          durationMs: 42,
+          ok: true,
+          error: null,
+          urlAfter: 'https://example.com/dashboard',
+          titleAfter: 'Dashboard',
+          domDiff: {
+            urlChanged: true,
+            titleChanged: true,
+            textLengthDelta: 280,
+            interactiveDelta: 2,
+            inputsChanged: true,
+            changed: ['url', 'title', 'text', 'inputs', 'interactive']
+          }
+        }
+      }
+    })
+    const output = formatBrowserRecorderStepsAsMarkdown([step])
+    expect(output).toContain('### 1. Browser automation action')
+    expect(output).toContain('**Method:** `browser.click`')
+    expect(output).toContain('**Target:** selector `#login-btn`')
+    expect(output).toContain('**Params:** element=#login-btn')
+    expect(output).toContain('**Result:** ok (42ms)')
+    expect(output).toContain('**URL:** https://example.com/login → https://example.com/dashboard')
+    expect(output).toContain('**Title:** Login → Dashboard')
+    expect(output).toContain('**DOM changed:** url, title, text +280, interactive +2, inputs')
+  })
+
+  it('renders a failed automation action with its error', () => {
+    const step = makeStep({
+      detail: {
+        kind: 'automation-action',
+        action: {
+          id: 'act-2',
+          method: 'browser.click',
+          target: { kind: 'ref', value: '@e9' },
+          params: { element: '@e9' },
+          page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+          startedAt: '2026-07-31T10:15:31.000Z',
+          durationMs: 9,
+          ok: false,
+          error: 'element not found: @e9',
+          urlAfter: null,
+          titleAfter: null,
+          domDiff: null
+        }
+      }
+    })
+    const output = formatBrowserRecorderStepsAsMarkdown([step])
+    expect(output).toContain('**Result:** error (9ms) — element not found: @e9')
+  })
+
   it('escapes backtick runs in selectors so markdown stays valid', () => {
     const elementWithBackticks: BrowserRecorderElementSummary = {
       ...element,
@@ -129,5 +195,35 @@ describe('formatBrowserRecorderStepSummary', () => {
         })
       )
     ).toBe('Annotated button "Submit order"')
+    expect(
+      formatBrowserRecorderStepSummary(
+        makeStep({
+          detail: {
+            kind: 'automation-action',
+            action: {
+              id: 'act-3',
+              method: 'browser.type',
+              target: { kind: 'selector', value: '#email' },
+              params: { input: 'user@example.com' },
+              page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' },
+              startedAt: '2026-07-31T10:15:32.000Z',
+              durationMs: 12,
+              ok: true,
+              error: null,
+              urlAfter: null,
+              titleAfter: null,
+              domDiff: {
+                urlChanged: false,
+                titleChanged: false,
+                textLengthDelta: 0,
+                interactiveDelta: 0,
+                inputsChanged: true,
+                changed: ['inputs']
+              }
+            }
+          }
+        })
+      )
+    ).toBe('type #email ✓ (12ms) · inputs')
   })
 })

@@ -12,6 +12,7 @@ import type {
   BrowserGrabRect,
   BrowserGrabTarget
 } from '../../../../shared/browser-grab-types'
+import type { BrowserRecorderAutomationAction } from '../../../../shared/browser-recorder-automation'
 
 /** Compact element snapshot kept in the log (no screenshots, no full payloads). */
 export type BrowserRecorderElementSummary = {
@@ -29,6 +30,7 @@ export type BrowserRecorderStepKind =
   | 'navigation'
   | 'element-selected'
   | 'annotation-added'
+  | 'automation-action'
 
 export type BrowserRecorderStepDetail =
   | { kind: 'recording-started' }
@@ -40,6 +42,7 @@ export type BrowserRecorderStepDetail =
       comment: string
       intent: BrowserAnnotationIntent
     }
+  | { kind: 'automation-action'; action: BrowserRecorderAutomationAction }
 
 export type BrowserRecorderStep = {
   id: string

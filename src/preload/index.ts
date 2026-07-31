@@ -16,6 +16,7 @@ import type { TerminalPaneSplitSource } from '../shared/feature-education-teleme
 import type { TerminalTabCreateReply } from '../shared/terminal-reveal-identity'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
+import type { BrowserRecorderAutomationAction } from '../shared/browser-recorder-automation'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -2707,6 +2708,20 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('browser:grabActionShortcut', listener)
       return () => ipcRenderer.removeListener('browser:grabActionShortcut', listener)
+    },
+
+    setRecorderEnabled: (args: { enabled: boolean }): Promise<boolean> =>
+      ipcRenderer.invoke('browser:setRecorderEnabled', args),
+
+    onRecorderAction: (
+      callback: (action: BrowserRecorderAutomationAction) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        action: BrowserRecorderAutomationAction
+      ) => callback(action)
+      ipcRenderer.on('browser:recorder-action', listener)
+      return () => ipcRenderer.removeListener('browser:recorder-action', listener)
     },
 
     sessionListProfiles: (): Promise<unknown[]> =>

@@ -4489,7 +4489,11 @@ function BrowserPagePane({
 
   const handleToggleBrowserRecorder = useCallback((): void => {
     recordFeatureInteraction('browser-recorder')
+    const nextRecording = !recorder.recording
     recorder.toggle({ pageUrl: browserTab.url, pageTitle: browserTab.title })
+    // Why: main only captures automation actions while enabled; the renderer
+    // toggle is the single source of truth for the session.
+    void window.api.browser.setRecorderEnabled({ enabled: nextRecording })
   }, [browserTab.title, browserTab.url, recordFeatureInteraction, recorder])
 
   const handleCopyBrowserRecorderLog = useCallback((): void => {
@@ -4512,6 +4516,32 @@ function BrowserPagePane({
     recordFeatureInteraction('browser-recorder')
     recorder.clear()
   }, [recordFeatureInteraction, recorder])
+
+  // Why: fold main-process automation actions (click/type/goto/scroll/keypress/
+  // select/mouse*) into the session log; main only emits while recording is on.
+  useEffect(() => {
+    return window.api.browser.onRecorderAction((action) => {
+      if (action.page.browserPageId !== browserTab.id) {
+        return
+      }
+      recordRecorderStep(
+        { kind: 'automation-action', action },
+        { pageUrl: action.page.url, pageTitle: action.page.title }
+      )
+    })
+  }, [browserTab.id, recordRecorderStep])
+
+  // Why: recording is a per-pane session; leaving the pane must not leave the
+  // main-process recorder capturing actions into the void.
+  const recorderRecordingRef = useRef(recorder.recording)
+  recorderRecordingRef.current = recorder.recording
+  useEffect(() => {
+    return () => {
+      if (recorderRecordingRef.current) {
+        void window.api.browser.setRecorderEnabled({ enabled: false })
+      }
+    }
+  }, [browserTab.id])
 
   const handleAnnotationBannerSendOpenChange = useCallback(
     (open: boolean): void => {

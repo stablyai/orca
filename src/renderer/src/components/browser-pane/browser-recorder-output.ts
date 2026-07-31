@@ -3,6 +3,7 @@ import type {
   BrowserRecorderStep,
   BrowserRecorderStepDetail
 } from './browser-recorder-types'
+import type { BrowserRecorderAutomationAction } from '../../../../shared/browser-recorder-automation'
 
 // Why: log text comes from page DOM; avoid spreading every backtick run into
 // Math.max when generated markdown contains many fence characters.
@@ -159,6 +160,63 @@ export function formatBrowserRecorderStepDetail(
       lines.push(`**Intent:** ${detail.intent}`)
       lines.push(`**Feedback:** ${inlineText(detail.comment)}`)
       break
+    case 'automation-action':
+      lines.push(...formatAutomationActionLines(detail.action))
+      break
+  }
+  return lines
+}
+
+function formatAutomationActionLines(action: BrowserRecorderAutomationAction): string[] {
+  const lines: string[] = []
+  lines.push(`**Method:** ${inlineCode(action.method)}`)
+  if (action.target.kind !== 'none' && action.target.value) {
+    lines.push(`**Target:** ${action.target.kind} ${inlineCode(action.target.value)}`)
+  }
+  const paramEntries = Object.entries(action.params)
+  if (paramEntries.length > 0) {
+    lines.push(
+      `**Params:** ${paramEntries
+        .map(([key, value]) => `${key}=${inlineText(String(value ?? ''))}`)
+        .join(', ')}`
+    )
+  }
+  lines.push(
+    `**Result:** ${action.ok ? 'ok' : 'error'} (${action.durationMs}ms)${
+      action.error ? ` — ${inlineText(action.error)}` : ''
+    }`
+  )
+  if (action.urlAfter && action.urlAfter !== action.page.url) {
+    lines.push(`**URL:** ${inlineText(action.page.url)} → ${inlineText(action.urlAfter)}`)
+  } else if (action.urlAfter) {
+    lines.push(`**URL:** ${inlineText(action.urlAfter)}`)
+  }
+  if (action.titleAfter && action.titleAfter !== action.page.title) {
+    lines.push(`**Title:** ${inlineText(action.page.title)} → ${inlineText(action.titleAfter)}`)
+  }
+  if (action.domDiff && action.domDiff.changed.length > 0) {
+    const diff = action.domDiff
+    const parts: string[] = []
+    if (diff.urlChanged) {
+      parts.push('url')
+    }
+    if (diff.titleChanged) {
+      parts.push('title')
+    }
+    if (diff.textLengthDelta !== 0) {
+      parts.push(`text ${diff.textLengthDelta > 0 ? '+' : ''}${diff.textLengthDelta}`)
+    }
+    if (diff.interactiveDelta !== 0) {
+      parts.push(`interactive ${diff.interactiveDelta > 0 ? '+' : ''}${diff.interactiveDelta}`)
+    }
+    if (diff.inputsChanged) {
+      parts.push('inputs')
+    }
+    if (parts.length > 0) {
+      lines.push(`**DOM changed:** ${parts.join(', ')}`)
+    }
+  } else if (action.ok && action.domDiff) {
+    lines.push('**DOM changed:** none')
   }
   return lines
 }
@@ -173,6 +231,8 @@ function detailHeading(detail: BrowserRecorderStepDetail): string {
       return 'Selected element'
     case 'annotation-added':
       return 'Added annotation'
+    case 'automation-action':
+      return 'Browser automation action'
   }
 }
 
@@ -215,5 +275,20 @@ export function formatBrowserRecorderStepSummary(step: BrowserRecorderStep): str
       return `Selected ${elementLabel(step.detail.element)}`
     case 'annotation-added':
       return `Annotated ${elementLabel(step.detail.element)}`
+    case 'automation-action':
+      return formatAutomationActionSummary(step.detail.action)
   }
+}
+
+function formatAutomationActionSummary(action: BrowserRecorderAutomationAction): string {
+  const method = action.method.replace(/^browser\./, '')
+  const target =
+    action.target.kind !== 'none' && action.target.value ? ` ${action.target.value}` : ''
+  const result = action.ok ? '✓' : '✗'
+  const detail = action.ok
+    ? action.domDiff && action.domDiff.changed.length > 0
+      ? ` · ${action.domDiff.changed.join(',')}`
+      : ''
+    : ` · ${action.error ?? 'error'}`
+  return `${method}${target} ${result} (${action.durationMs}ms)${detail}`
 }

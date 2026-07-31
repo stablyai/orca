@@ -5,6 +5,7 @@ import {
   Copy,
   Crosshair,
   MessageSquarePlus,
+  MousePointerClick,
   Navigation,
   Trash2
 } from 'lucide-react'
@@ -24,6 +25,8 @@ function StepIcon({ step }: { step: BrowserRecorderStep }): React.JSX.Element {
       return <Crosshair className={className} />
     case 'annotation-added':
       return <MessageSquarePlus className={className} />
+    case 'automation-action':
+      return <MousePointerClick className={className} />
     case 'recording-started':
       return <CircleDot className={className} />
   }
