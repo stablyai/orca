@@ -15,7 +15,7 @@ async function withReader<T>(
   filePath: string,
   store: Store,
   connectionId: string | undefined,
-  run: (reader: SqliteDatabaseReader) => T
+  run: (reader: SqliteDatabaseReader) => T | Promise<T>
 ): Promise<T> {
   if (connectionId !== undefined) {
     throw new Error(SQLITE_REMOTE_UNSUPPORTED_MESSAGE)
@@ -23,7 +23,8 @@ async function withReader<T>(
   const resolved = await resolveAuthorizedPath(filePath, store)
   const reader = SqliteDatabaseReader.open(resolved)
   try {
-    return run(reader)
+    // Awaited so a future async callback cannot outlive the close below.
+    return await run(reader)
   } finally {
     reader.close()
   }

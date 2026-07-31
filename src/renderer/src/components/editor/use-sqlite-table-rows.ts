@@ -25,7 +25,7 @@ export function useSqliteTableRows(
   const [columns, setColumns] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const pending = useRef(new Set<number>())
-  // Mirrors `chunks` so loadChunk needs no state dependency; set inside the updater so an evicted chunk is never marked resident.
+  // Source of truth for what is cached; `chunks` only mirrors it into render, so residency and eviction can never disagree.
   const resident = useRef<ChunkState>(new Map())
   const lastRequested = useRef(0)
   // Drops a response for a table the user already switched away from.
@@ -58,20 +58,19 @@ export function useSqliteTableRows(
           return
         }
         setColumns((current) => (current.length > 0 ? current : page.columns))
-        setChunks((current) => {
-          const next = new Map(current)
-          next.set(chunkIndex, page.rows)
-          if (next.size > MAX_RESIDENT_CHUNKS) {
-            const furthest = [...next.keys()].sort(
-              (a, b) => Math.abs(b - lastRequested.current) - Math.abs(a - lastRequested.current)
-            )
-            for (const key of furthest.slice(0, next.size - MAX_RESIDENT_CHUNKS)) {
-              next.delete(key)
-            }
+        // Built from the ref, not from updater state, so residency is visible before React commits and no scroll re-requests this chunk.
+        const next = new Map(resident.current)
+        next.set(chunkIndex, page.rows)
+        if (next.size > MAX_RESIDENT_CHUNKS) {
+          const furthest = [...next.keys()].sort(
+            (a, b) => Math.abs(b - lastRequested.current) - Math.abs(a - lastRequested.current)
+          )
+          for (const key of furthest.slice(0, next.size - MAX_RESIDENT_CHUNKS)) {
+            next.delete(key)
           }
-          resident.current = next
-          return next
-        })
+        }
+        resident.current = next
+        setChunks(next)
         setError(null)
       } catch (err) {
         if (requestGeneration === generation.current) {

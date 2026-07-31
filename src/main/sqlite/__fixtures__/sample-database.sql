@@ -53,4 +53,10 @@ INSERT INTO table_key VALUES (7, 'seven'), (9, 'nine');
 CREATE TABLE "without rowid" (x TEXT DEFAULT 'without rowid');
 INSERT INTO "without rowid" VALUES ('present');
 
+CREATE TABLE autoinc (id INTEGER PRIMARY KEY AUTOINCREMENT, v TEXT);
+INSERT INTO autoinc (v) VALUES ('a');
+
+CREATE VIRTUAL TABLE docs USING fts5(title, body);
+INSERT INTO docs VALUES ('first', 'hello world');
+
 INSERT INTO settings VALUES ('theme', 'dark'), ('locale', 'nl');

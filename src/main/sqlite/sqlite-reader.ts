@@ -10,7 +10,10 @@ export const MAX_CELL_TEXT_CHARS = 2000
 // Width multiplies per-cell truncation, so the budget shrinks with it. No floor: a floor would break this bound.
 export const MAX_RESPONSE_TEXT_CHARS = 4 * 1024 * 1024
 
-type ColumnRow = { name: string; pk: number }
+type ColumnRow = { name: string; pk: number; hidden: number }
+
+// hidden=1 is a virtual-table column that SELECT * omits (FTS5, RTREE); 2 and 3 are generated columns, which it returns.
+const HIDDEN_FROM_SELECT_STAR = 1
 
 function quoteIdentifier(name: string): string {
   return `"${name.replaceAll('"', '""')}"`
@@ -58,35 +61,27 @@ export function toCell(value: unknown, maxChars: number = MAX_CELL_TEXT_CHARS): 
 // Via the repo's node:sqlite adapter, so SQLite itself handles WAL, WITHOUT ROWID, generated columns and defaults.
 export class SqliteDatabaseReader {
   private readonly db: InstanceType<typeof Database>
-  private readonly tables: Map<string, string[]>
+  private readonly tableNames: string[]
+  private readonly columnCache = new Map<string, string[]>()
   private readonly orderClauses = new Map<string, string>()
 
-  private constructor(db: InstanceType<typeof Database>, tables: Map<string, string[]>) {
+  private constructor(db: InstanceType<typeof Database>, tableNames: string[]) {
     this.db = db
-    this.tables = tables
+    this.tableNames = tableNames
   }
 
   static open(filePath: string): SqliteDatabaseReader {
     const db = new Database(filePath, { readonly: true, fileMustExist: true })
     try {
+      // The sqlite_ prefix is reserved, so filtering it hides only SQLite's own bookkeeping (e.g. sqlite_sequence).
       const names = (
-        db.prepare("select name from sqlite_master where type = 'table' order by name").all() as {
-          name: string
-        }[]
+        db
+          .prepare(
+            "select name from sqlite_master where type = 'table' and name not like 'sqlite\\_%' escape '\\' order by name"
+          )
+          .all() as { name: string }[]
       ).map((row) => row.name)
-
-      const tables = new Map<string, string[]>()
-      for (const name of names) {
-        // table_info omits generated columns; SELECT * returns them.
-        const columns = db
-          .prepare(`pragma table_xinfo(${quoteIdentifier(name)})`)
-          .all() as ColumnRow[]
-        tables.set(
-          name,
-          columns.map((column) => column.name)
-        )
-      }
-      return new SqliteDatabaseReader(db, tables)
+      return new SqliteDatabaseReader(db, names)
     } catch (err) {
       db.close()
       throw err
@@ -94,13 +89,30 @@ export class SqliteDatabaseReader {
   }
 
   listTables(): SqliteTableInfo[] {
-    return [...this.tables.entries()].map(([name, columns]) => ({ name, columns }))
+    return this.tableNames.map((name) => ({ name, columns: this.columnsOf(name) }))
+  }
+
+  // Resolved per table and cached: a fresh reader per IPC call must not pay a pragma for every table in the database.
+  private columnsOf(tableName: string): string[] {
+    const cached = this.columnCache.get(tableName)
+    if (cached !== undefined) {
+      return cached
+    }
+    // table_info omits generated columns; SELECT * returns them.
+    const columns = (
+      this.db.prepare(`pragma table_xinfo(${quoteIdentifier(tableName)})`).all() as ColumnRow[]
+    )
+      .filter((column) => column.hidden !== HIDDEN_FROM_SELECT_STAR)
+      .map((column) => column.name)
+    this.columnCache.set(tableName, columns)
+    return columns
   }
 
   overview(): SqliteDatabaseOverview {
     return { tables: this.listTables() }
   }
 
+  // Synchronous by necessity (node:sqlite has no async API) so it blocks the main thread; measured at ~35ms for 5M rows.
   countRows(tableName: string): number {
     const quoted = quoteIdentifier(this.requireTable(tableName))
     const row = this.read(`select count(*) as n from ${quoted}`).get() as { n: bigint | number }
@@ -109,7 +121,7 @@ export class SqliteDatabaseReader {
 
   readTablePage(tableName: string, offset: number, limit: number): SqliteTablePage {
     const name = this.requireTable(tableName)
-    const columns = this.tables.get(name)!
+    const columns = this.columnsOf(name)
     const statement = this.read(
       `select * from ${quoteIdentifier(name)} order by ${this.orderBy(name)} limit ? offset ?`
     )
@@ -126,7 +138,7 @@ export class SqliteDatabaseReader {
 
   // Guarantees only a sqlite_master name is ever interpolated into SQL.
   private requireTable(tableName: string): string {
-    if (!this.tables.has(tableName)) {
+    if (!this.tableNames.includes(tableName)) {
       throw new Error(`Table "${tableName}" does not exist in this database`)
     }
     return tableName

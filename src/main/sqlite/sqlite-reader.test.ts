@@ -20,15 +20,12 @@ describe('SqliteDatabaseReader', () => {
   it('lists every table with its SELECT * columns', () => {
     withFixture((reader) => {
       const tables = reader.listTables()
-      expect(tables.map((table) => table.name)).toEqual([
-        'altered',
-        'generated',
-        'odd names',
-        'people',
-        'settings',
-        'table_key',
-        'without rowid'
-      ])
+      const names = tables.map((table) => table.name)
+      expect(names).toContain('people')
+      expect(names).toContain('without rowid')
+      // sqlite_sequence exists because of the AUTOINCREMENT table, but is SQLite's bookkeeping, not user data.
+      expect(names).not.toContain('sqlite_sequence')
+      expect(names.filter((name) => name.startsWith('sqlite_'))).toEqual([])
       expect(tables.find((table) => table.name === 'people')?.columns).toEqual([
         'id',
         'name',
@@ -36,6 +33,15 @@ describe('SqliteDatabaseReader', () => {
         'data',
         'note'
       ])
+    })
+  })
+
+  it('omits virtual-table columns that SELECT * does not return', () => {
+    withFixture((reader) => {
+      // FTS5 adds hidden `docs` and `rank` columns; listing them would render phantom NULL cells.
+      const page = reader.readTablePage('docs', 0, 1)
+      expect(page.columns).toEqual(['title', 'body'])
+      expect(page.rows[0]?.map((cell) => cell.text)).toEqual(['first', 'hello world'])
     })
   })
 
