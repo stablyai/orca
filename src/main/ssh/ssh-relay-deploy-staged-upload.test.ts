@@ -79,6 +79,7 @@ import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import { isRelayAlreadyInstalled } from './ssh-relay-versioned-install'
 import { acquireInstallLock } from './ssh-relay-install-lock'
+import { STALE_UPLOAD_STAGE_OUTPUT_PREFIX } from './ssh-relay-upload-stage-commands'
 import type { SshConnection } from './ssh-connection'
 
 function makeMockConnection(): SshConnection {
@@ -265,7 +266,7 @@ describe('deployAndLaunchRelay staged uploads', () => {
       }
       if (command.includes('.upload-*')) {
         return Promise.resolve(
-          `${staleStageA}\n/home/user/important-repository\n${staleStageB}\n${excessStages.join('\n')}\n`
+          `${STALE_UPLOAD_STAGE_OUTPUT_PREFIX}${staleStageA}\n/home/user/important-repository\n${STALE_UPLOAD_STAGE_OUTPUT_PREFIX}${staleStageB}\n${excessStages.map((stage) => `${STALE_UPLOAD_STAGE_OUTPUT_PREFIX}${stage}`).join('\n')}\n`
         )
       }
       if (command.includes('test -S')) {
@@ -287,7 +288,7 @@ describe('deployAndLaunchRelay staged uploads', () => {
       ).toBe(true)
       expect(commands.some((command) => command.includes('important-repository'))).toBe(false)
       const staleCleanupCommands = commands.filter(
-        (command) => command.includes('rm -rf "$d"') && command.includes('mmin +40')
+        (command) => command.includes('rm -rf "$tombstone"') && command.includes('mmin +40')
       )
       expect(staleCleanupCommands).toHaveLength(1)
       expect(staleCleanupCommands[0]).toContain(excessStages[5])
@@ -295,6 +296,104 @@ describe('deployAndLaunchRelay staged uploads', () => {
     })
 
     await deployAndLaunchRelay(conn)
+  })
+
+  it('drains installed-version stale stages in bounded post-launch batches', async () => {
+    const conn = makeMockConnection()
+    const relayDir = '/home/user/.orca-remote/relay-0.1.0+abcdef012345'
+    const staleStages = Array.from(
+      { length: 19 },
+      (_, index) => `${relayDir}.upload-123e4567-e89b-12d3-a456-${String(index).padStart(12, '0')}`
+    )
+    const events: string[] = []
+    const cleanupCommands: string[] = []
+    let listingCall = 0
+    let socketProbe = 0
+    vi.mocked(waitForSentinel).mockImplementation(async () => {
+      events.push('launch-ready')
+      return {
+        write: vi.fn(),
+        onData: vi.fn(),
+        onClose: vi.fn()
+      }
+    })
+    vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      if (command.includes('uname')) {
+        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      }
+      if (command === 'echo $HOME') {
+        return Promise.resolve('/home/user')
+      }
+      if (command.includes('.upload-*')) {
+        events.push('cleanup-list')
+        const batch = staleStages.slice(listingCall * 8, (listingCall + 1) * 8)
+        listingCall += 1
+        return Promise.resolve(
+          batch.map((stage) => `${STALE_UPLOAD_STAGE_OUTPUT_PREFIX}${stage}`).join('\n')
+        )
+      }
+      if (command.includes('rm -rf "$tombstone"')) {
+        cleanupCommands.push(command)
+        return Promise.resolve('')
+      }
+      if (command.includes('ORCA-NATIVE')) {
+        return Promise.resolve('ORCA-NATIVE-DEPS-OK')
+      }
+      if (command.includes('test -S')) {
+        return Promise.resolve(socketProbe++ % 2 === 0 ? 'DEAD' : 'READY')
+      }
+      return Promise.resolve('')
+    })
+
+    for (let deployment = 1; deployment <= 3; deployment += 1) {
+      await deployAndLaunchRelay(conn)
+      await vi.waitFor(() => expect(cleanupCommands).toHaveLength(deployment))
+    }
+
+    expect(events.indexOf('launch-ready')).toBeLessThan(events.indexOf('cleanup-list'))
+    expect(listingCall).toBe(3)
+    expect(cleanupCommands).toHaveLength(3)
+    expect(
+      cleanupCommands.map((command) => staleStages.filter((stage) => command.includes(stage)))
+    ).toEqual([staleStages.slice(0, 8), staleStages.slice(8, 16), staleStages.slice(16)])
+  })
+
+  it('fails closed on stale-stage listing errors without blocking installation', async () => {
+    const conn = makeMockConnection()
+    conn.uploadDirectory = vi.fn().mockResolvedValue(undefined)
+    conn.writeFile = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(isRelayAlreadyInstalled)
+      .mockReset()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true)
+    let socketProbe = 0
+    vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      if (command.includes('uname')) {
+        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      }
+      if (command === 'echo $HOME') {
+        return Promise.resolve('/home/user')
+      }
+      if (command.includes('.upload-*')) {
+        return Promise.reject(new Error('find: permission denied'))
+      }
+      if (command.includes('test -S')) {
+        return Promise.resolve(socketProbe++ === 0 ? 'DEAD' : 'READY')
+      }
+      if (command.includes('ORCA-NATIVE')) {
+        return Promise.resolve('ORCA-NATIVE-DEPS-OK')
+      }
+      return Promise.resolve('')
+    })
+
+    await deployAndLaunchRelay(conn)
+
+    expect(conn.uploadDirectory).toHaveBeenCalledTimes(1)
+    expect(
+      vi
+        .mocked(execCommand)
+        .mock.calls.filter(([, command]) => command.includes('rm -rf "$tombstone"'))
+    ).toHaveLength(0)
   })
 
   it('keeps the staging tree after an unconfirmed system SSH upload termination', async () => {

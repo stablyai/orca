@@ -242,7 +242,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     expect(sentinelCommand).toContain('sleep 300')
   }, 180_000)
 
-  it('keeps a cancelled pre-install upload from fencing the immediate retry', async () => {
+  it('keeps cancellation retryable and drains its aged stage after an installed launch', async () => {
     const activeFixture = fixture as TargetFixture
     const relayVersion = readFileSync(
       join(process.cwd(), 'out', 'relay', 'linux-arm64', '.version'),
@@ -266,6 +266,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     const retryConnection = createConnection(activeFixture)
     await retryConnection.connect()
     let retryResult: 'blocked' | 'recovered'
+    let finalInventory: RemoteInventory | undefined
     if (firstInventory.installLock) {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), 1_500)
@@ -292,8 +293,29 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     await retryConnection.disconnect()
 
     const expected = process.env.ORCA_REVIEW_EXPECT_RECOVERY === '1' ? 'recovered' : 'blocked'
+    if (expected === 'recovered') {
+      for (const stage of firstInventory.uploadStages) {
+        dockerExec(activeFixture, `touch -d '3 hours ago' ${shellQuote(stage)}`)
+      }
+      const cleanupConnection = createConnection(activeFixture)
+      await cleanupConnection.connect()
+      const cleanedDeployment = await deployAndLaunchRelay(cleanupConnection, undefined, 60)
+      const cleanupMux = new SshChannelMultiplexer(cleanedDeployment.transport)
+      await expect(cleanupMux.request('session.resolveHome', { path: '~' })).resolves.toEqual({
+        resolvedPath: '/root'
+      })
+      await vi.waitFor(
+        () => {
+          finalInventory = readInventory(activeFixture, remoteRelayDir)
+          expect(finalInventory.uploadStages).toHaveLength(0)
+        },
+        { timeout: 10_000, interval: 100 }
+      )
+      cleanupMux.dispose()
+      await cleanupConnection.disconnect()
+    }
     console.log(
-      `[pr-10207-oracle] ${JSON.stringify({ progress, firstInventory, retryResult, repoHead: repoHead.trim() })}`
+      `[pr-10207-oracle] ${JSON.stringify({ progress, firstInventory, retryResult, finalInventory, repoHead: repoHead.trim() })}`
     )
     expect(progress).toContain('Uploading relay...')
     expect(repoHead.trim()).toMatch(/^[0-9a-f]{40}$/)
@@ -301,6 +323,8 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     if (expected === 'recovered') {
       expect(firstInventory.installLock).toBe(false)
       expect(firstInventory.uploadStages.length).toBeGreaterThan(0)
+      expect(finalInventory?.installLock).toBe(false)
+      expect(finalInventory?.uploadStages).toHaveLength(0)
     } else {
       expect(firstInventory.installLock).toBe(true)
       expect(firstInventory.payloadFiles).toBe(0)

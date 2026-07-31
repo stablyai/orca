@@ -31,6 +31,7 @@ import {
 import {
   isRemoteUploadStagePath,
   listStaleRemoteUploadStagesCommand,
+  parseStaleRemoteUploadStageListing,
   removeStaleRemoteUploadStagesCommand
 } from './ssh-relay-upload-stage-commands'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
@@ -191,7 +192,7 @@ describe('ssh remote command builders', () => {
       "-mindepth 1 -maxdepth 1 -type d -name 'relay-1.0.0.upload-*' -mmin +120"
     )
     expect(command).toContain('.upload-????????-????-????-????-????????????')
-    expect(command).toContain(`printf '%s\\n' "$d"`)
+    expect(command).toContain('__ORCA_STALE_UPLOAD_STAGE__')
   })
 
   it('uses remote mtime and UUID provenance for Windows stage collection', () => {
@@ -257,10 +258,11 @@ describe('ssh remote command builders', () => {
           2 * 60 * 60,
           8
         )
-        const output = execFileSync('/bin/sh', ['-c', command], { encoding: 'utf8' })
-          .trim()
-          .split(/\r?\n/)
-          .filter(Boolean)
+        const output = parseStaleRemoteUploadStageListing(
+          posix,
+          join(root, 'relay-1.0.0'),
+          execFileSync('/bin/sh', ['-c', command], { encoding: 'utf8' })
+        )
 
         expect(output).toHaveLength(8)
         expect([staleStage, ...excessStages]).toEqual(expect.arrayContaining(output))
@@ -338,7 +340,9 @@ describe('ssh remote command builders', () => {
     )
     expect(command).toContain('LastWriteTimeUtc -lt $cutoff')
     expect(command).toContain('Get-Item -LiteralPath $path')
-    expect(command).toContain('Remove-Item -LiteralPath $path')
+    expect(command).toContain('Move-Item -LiteralPath $path -Destination $tombstone')
+    expect(command).toContain('Get-Item -LiteralPath $tombstone')
+    expect(command).toContain('Remove-Item -LiteralPath $tombstone')
     expect(command.match(/Remove-Item/g)).toHaveLength(1)
   })
 

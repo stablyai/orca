@@ -689,19 +689,24 @@ describe('deployAndLaunchRelay', () => {
     const connA = makeMockConnection()
     const connB = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
-    mockExecCommand
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe A
-      .mockResolvedValueOnce('/home/user') // $HOME A
-      .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe A
-      .mockResolvedValueOnce('') // launch namespace marker A
-      .mockResolvedValueOnce('DEAD') // probe A
-      .mockResolvedValueOnce('READY') // poll A
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe B
-      .mockResolvedValueOnce('/home/user') // $HOME B
-      .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe B
-      .mockResolvedValueOnce('') // launch namespace marker B
-      .mockResolvedValueOnce('DEAD') // probe B
-      .mockResolvedValueOnce('READY') // poll B
+    mockExecCommand.mockImplementation((_conn, command) => {
+      if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
+        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      }
+      if (command === 'echo $HOME') {
+        return Promise.resolve('/home/user')
+      }
+      if (command.includes('ORCA-NATIVE')) {
+        return Promise.resolve('ORCA-NATIVE-DEPS-OK')
+      }
+      if (command.includes('process.stdout.write("READY")')) {
+        return Promise.resolve('READY')
+      }
+      if (command.includes('test -S')) {
+        return Promise.resolve('DEAD')
+      }
+      return Promise.resolve('')
+    })
 
     await deployAndLaunchRelay(connA, undefined, 300, 'target-a')
     await deployAndLaunchRelay(connB, undefined, 300, 'target-b')

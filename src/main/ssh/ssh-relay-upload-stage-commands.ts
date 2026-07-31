@@ -9,6 +9,8 @@ import {
 import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
 
 export const MAX_STALE_UPLOAD_STAGE_CANDIDATES = 8
+export const STALE_UPLOAD_STAGE_OUTPUT_PREFIX = '__ORCA_STALE_UPLOAD_STAGE__'
+const STALE_UPLOAD_STAGE_FIND_STATUS_PREFIX = '__ORCA_STALE_UPLOAD_STAGE_FIND_STATUS__'
 
 export function listStaleRemoteUploadStagesCommand(
   host: RemoteHostPlatform,
@@ -25,23 +27,45 @@ export function listStaleRemoteUploadStagesCommand(
     const parentArg = shellEscape(parent)
     return [
       `if [ -d ${parentArg} ]; then`,
-      `find ${parentArg} -mindepth 1 -maxdepth 1 -type d -name ${shellEscape(pattern)} -mmin +${Math.ceil(staleSeconds / 60)} -print |`,
-      `while IFS= read -r d; do case "$d" in *.upload-????????-????-????-????-????????????) printf '%s\\n' "$d"; count=$((\${count:-0} + 1)); [ "$count" -ge ${limit} ] && break ;; *) continue ;; esac; done;`,
-      'fi'
+      `{ find ${parentArg} -mindepth 1 -maxdepth 1 -type d -name ${shellEscape(pattern)} -mmin +${Math.ceil(staleSeconds / 60)} -print; status=$?; printf '${STALE_UPLOAD_STAGE_FIND_STATUS_PREFIX}%s\\n' "$status"; } |`,
+      `{ while IFS= read -r d; do case "$d" in ${STALE_UPLOAD_STAGE_FIND_STATUS_PREFIX}0) printf '%s' "$stages"; exit 0 ;; ${STALE_UPLOAD_STAGE_FIND_STATUS_PREFIX}*) exit 1 ;; *.upload-????????-????-????-????-????????????) count=$((\${count:-0} + 1)); if [ "$count" -le ${limit} ]; then stages="\${stages:-}${STALE_UPLOAD_STAGE_OUTPUT_PREFIX}$d
+"; fi ;; *) continue ;; esac; done;`,
+      'exit 1; };',
+      'list_status=$?; [ "$list_status" -eq 0 ] || exit "$list_status";',
+      'fi;',
+      'exit 0'
     ].join(' ')
   }
   return powerShellCommand(
     [
+      "$ErrorActionPreference = 'Stop'",
       `$parent = ${powerShellLiteral(parent)}`,
       `$pattern = ${powerShellLiteral(pattern)}`,
       `$cutoff = [DateTime]::UtcNow.AddSeconds(-${Math.max(1, Math.ceil(staleSeconds))})`,
       'if (Test-Path -LiteralPath $parent -PathType Container) {',
       'Get-ChildItem -LiteralPath $parent -Directory -Filter $pattern | Where-Object {',
       "$_.LastWriteTimeUtc -lt $cutoff -and $_.Name -match '\\.upload-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'",
-      `} | Select-Object -First ${limit} | ForEach-Object { $_.FullName }`,
+      `} | Select-Object -First ${limit} | ForEach-Object { '${STALE_UPLOAD_STAGE_OUTPUT_PREFIX}' + $_.FullName }`,
       '}'
     ].join(' ')
   )
+}
+
+export function parseStaleRemoteUploadStageListing(
+  host: RemoteHostPlatform,
+  remoteRelayDir: string,
+  listing: string
+): string[] {
+  return [
+    ...new Set(
+      listing
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith(STALE_UPLOAD_STAGE_OUTPUT_PREFIX))
+        .map((line) => line.slice(STALE_UPLOAD_STAGE_OUTPUT_PREFIX.length))
+        .filter((stage) => isRemoteUploadStagePath(host, remoteRelayDir, stage))
+    )
+  ].slice(0, MAX_STALE_UPLOAD_STAGE_CANDIDATES)
 }
 
 export function removeStaleRemoteUploadStagesCommand(
@@ -62,8 +86,15 @@ export function removeStaleRemoteUploadStagesCommand(
     return [
       `for d in ${candidates}; do`,
       '[ -d "$d" ] || continue;',
+      'tombstone="${d}.cleanup-$$";',
+      '[ ! -e "$tombstone" ] || continue;',
       `if find "$d" -prune -type d -mmin +${Math.ceil(staleSeconds / 60)} -print 2>/dev/null | grep -q .; then`,
-      'rm -rf "$d";',
+      'if mv "$d" "$tombstone"; then',
+      `if find "$tombstone" -prune -type d -mmin +${Math.ceil(staleSeconds / 60)} -print 2>/dev/null | grep -q .; then`,
+      'rm -rf "$tombstone";',
+      '[ ! -e "$tombstone" ] || [ -e "$d" ] || mv "$tombstone" "$d" || :;',
+      'elif [ ! -e "$d" ]; then mv "$tombstone" "$d" || :; fi;',
+      'fi;',
       'fi;',
       'done'
     ].join(' ')
@@ -74,9 +105,19 @@ export function removeStaleRemoteUploadStagesCommand(
       `$cutoff = [DateTime]::UtcNow.AddSeconds(-${Math.max(1, Math.ceil(staleSeconds))})`,
       `@(${candidates}) | ForEach-Object {`,
       '$path = $_',
+      '$tombstone = "$path.cleanup-$PID"',
       '$item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue',
-      'if (($null -ne $item) -and $item.PSIsContainer -and $item.LastWriteTimeUtc -lt $cutoff) {',
-      'Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue',
+      'if (($null -ne $item) -and $item.PSIsContainer -and $item.LastWriteTimeUtc -lt $cutoff -and -not (Test-Path -LiteralPath $tombstone)) {',
+      'Move-Item -LiteralPath $path -Destination $tombstone -ErrorAction SilentlyContinue',
+      '$claimed = Get-Item -LiteralPath $tombstone -Force -ErrorAction SilentlyContinue',
+      'if (($null -ne $claimed) -and $claimed.PSIsContainer -and $claimed.LastWriteTimeUtc -lt $cutoff) {',
+      'Remove-Item -LiteralPath $tombstone -Recurse -Force -ErrorAction SilentlyContinue',
+      'if ((Test-Path -LiteralPath $tombstone) -and -not (Test-Path -LiteralPath $path)) {',
+      'Move-Item -LiteralPath $tombstone -Destination $path -ErrorAction SilentlyContinue',
+      '}',
+      '} elseif (($null -ne $claimed) -and -not (Test-Path -LiteralPath $path)) {',
+      'Move-Item -LiteralPath $tombstone -Destination $path -ErrorAction SilentlyContinue',
+      '}',
       '}',
       '}'
     ].join('; ')

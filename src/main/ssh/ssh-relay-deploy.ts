@@ -58,9 +58,9 @@ import {
   removeRemoteTreeCommand
 } from './ssh-remote-commands'
 import {
-  isRemoteUploadStagePath,
   listStaleRemoteUploadStagesCommand,
   MAX_STALE_UPLOAD_STAGE_CANDIDATES,
+  parseStaleRemoteUploadStageListing,
   removeStaleRemoteUploadStagesCommand
 } from './ssh-relay-upload-stage-commands'
 import {
@@ -492,11 +492,18 @@ async function deployAndLaunchRelayAttempt(
   }
   console.log('[ssh-relay] Relay started successfully')
 
-  // Why: best-effort GC of unreferenced sibling version dirs; errors are swallowed so a GC failure never blocks connecting.
-  void gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform, {
-    windowsNodePath: launched.nodePath,
-    windowsSockNames: [relaySocketNameForInstanceId(relayInstanceId)]
-  }).catch(() => {})
+  // Why: serialize post-launch maintenance for hosts that allow only one SSH exec channel.
+  const staleStageRecovery = alreadyInstalled
+    ? recoverStaleUploadStages(conn, remoteRelayDir, hostPlatform, deploySignal).catch(() => {})
+    : Promise.resolve()
+  void staleStageRecovery
+    .then(() =>
+      gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform, {
+        windowsNodePath: launched.nodePath,
+        windowsSockNames: [relaySocketNameForInstanceId(relayInstanceId)]
+      })
+    )
+    .catch(() => {})
 
   return {
     transport: launched.transport,
@@ -592,14 +599,11 @@ async function recoverStaleUploadStages(
     ),
     { signal }
   ).catch(() => '')
-  const stages = [
-    ...new Set(
-      String(listing ?? '')
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter((stage) => isRemoteUploadStagePath(hostPlatform, remoteRelayDir, stage))
-    )
-  ].slice(0, MAX_STALE_UPLOAD_STAGE_CANDIDATES)
+  const stages = parseStaleRemoteUploadStageListing(
+    hostPlatform,
+    remoteRelayDir,
+    String(listing ?? '')
+  )
   signal?.throwIfAborted()
   if (stages.length === 0) {
     return
