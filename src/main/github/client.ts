@@ -1664,6 +1664,95 @@ export async function getRepoUpstream(
   }
 }
 
+type CreatePRTopology =
+  | { ok: true; targetRepo: GitHubApiRepository }
+  | Extract<CreateHostedReviewResult, { ok: false }>
+
+async function resolveCreatePRTopology(
+  repoPath: string,
+  headRepo: GitHubApiRepository,
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
+): Promise<CreatePRTopology> {
+  const localGitArgs = hostedReviewLocalGitOptionArgs(options)
+  const localGitOptions = localGitArgs[0] ?? {}
+  const upstreamRemote = await getGitHubApiRepositoryForRemote(
+    repoPath,
+    'upstream',
+    connectionId,
+    localGitOptions
+  )
+  const { ghOptions } = await resolveGitHubRepoExecution(
+    repoPath,
+    undefined,
+    connectionId,
+    localGitOptions
+  )
+
+  let data: { isFork?: boolean; parent?: { name?: string; owner?: { login?: string } } | null }
+  await acquire()
+  try {
+    const { stdout } = await ghExecFileAsync(
+      ['repo', 'view', githubRepositorySlugArg(headRepo), '--json', 'isFork,parent'],
+      {
+        ...ghOptions,
+        ...githubHostExecOptions(headRepo),
+        timeout: 10_000
+      }
+    )
+    data = JSON.parse(stdout) as typeof data
+  } catch {
+    return {
+      ok: false,
+      code: 'validation',
+      error: 'Create PR failed: GitHub fork ownership could not be verified.'
+    }
+  } finally {
+    release()
+  }
+
+  if (typeof data.isFork !== 'boolean') {
+    return {
+      ok: false,
+      code: 'validation',
+      error: 'Create PR failed: GitHub fork ownership could not be verified.'
+    }
+  }
+  if (!data.isFork) {
+    if (upstreamRemote && !sameOwnerRepo(upstreamRemote, headRepo)) {
+      return {
+        ok: false,
+        code: 'validation',
+        error: 'Create PR failed: the upstream remote is not the verified fork parent.'
+      }
+    }
+    return { ok: true, targetRepo: headRepo }
+  }
+
+  const owner = data.parent?.owner?.login
+  const repo = data.parent?.name
+  if (!owner || !repo) {
+    return {
+      ok: false,
+      code: 'validation',
+      error: 'Create PR failed: GitHub returned a fork without a parent repository.'
+    }
+  }
+  const parentRepo: GitHubApiRepository = {
+    owner,
+    repo,
+    ...(headRepo.host ? { host: headRepo.host } : {})
+  }
+  if (upstreamRemote && !sameOwnerRepo(upstreamRemote, parentRepo)) {
+    return {
+      ok: false,
+      code: 'validation',
+      error: 'Create PR failed: the upstream remote does not match the verified fork parent.'
+    }
+  }
+  return { ok: true, targetRepo: parentRepo }
+}
+
 function classifyCreatePRError(error: unknown): CreateHostedReviewResult {
   const { stderr, stdout } = extractExecError(error)
   const message = `${stderr}\n${stdout}`.trim()
@@ -1740,12 +1829,32 @@ function parseCreatePRPayload(stdout: string): { number: number; url: string } |
 async function findOpenPRByHeadBase(args: {
   repoPath: string
   repo: GitHubApiRepository
+  headRepo: GitHubApiRepository
   head: string
   base: string
   connectionId?: string | null
   options?: HostedReviewExecutionOptions
 }): Promise<{ number: number; url: string } | null> {
   const context = githubRepoContext(args.repoPath, args.connectionId)
+  const execOptions = {
+    ...ghRepoExecOptions(context),
+    ...(args.connectionId ? {} : getHostedReviewLocalGitOptions(args.options)),
+    ...githubHostExecOptions(args.repo)
+  }
+  if (!sameOwnerRepo(args.repo, args.headRepo)) {
+    const separator = args.head.indexOf(':')
+    if (separator <= 0 || separator === args.head.length - 1) {
+      return null
+    }
+    const existing = await getRestPRForBranch(
+      args.repo,
+      args.head.slice(0, separator),
+      args.head.slice(separator + 1),
+      execOptions,
+      { base: args.base, state: 'open' }
+    )
+    return existing ? { number: existing.number, url: existing.url } : null
+  }
   const { stdout } = await ghExecFileAsync(
     [
       'pr',
@@ -1763,11 +1872,7 @@ async function findOpenPRByHeadBase(args: {
       '--json',
       'number,url'
     ],
-    {
-      ...ghRepoExecOptions(context),
-      ...(args.connectionId ? {} : getHostedReviewLocalGitOptions(args.options)),
-      ...githubHostExecOptions(args.repo)
-    }
+    execOptions
   )
   const list = JSON.parse(stdout) as { number?: number; url?: string }[]
   if (list.length !== 1 || !list[0]?.number || !list[0]?.url) {
@@ -1856,7 +1961,11 @@ export async function createGitHubPullRequest(
     }
   }
 
-  const targetRepo = (await getRepoUpstream(repoPath, connectionId, options)) ?? headRepo
+  const topology = await resolveCreatePRTopology(repoPath, headRepo, connectionId, options)
+  if (!topology.ok) {
+    return topology
+  }
+  const targetRepo = topology.targetRepo
   const head =
     headRef && !sameOwnerRepo(targetRepo, headRepo) ? `${headRepo.owner}:${headRef}` : headRef
   // The runner host-qualifies --repo from options.host for GHES (#8312).
@@ -1906,6 +2015,7 @@ export async function createGitHubPullRequest(
         ? await findOpenPRByHeadBase({
             repoPath,
             repo: targetRepo,
+            headRepo,
             head,
             base,
             connectionId,
@@ -1930,6 +2040,7 @@ export async function createGitHubPullRequest(
         const existing = await findOpenPRByHeadBase({
           repoPath,
           repo: targetRepo,
+          headRepo,
           head,
           base,
           connectionId,
@@ -2369,11 +2480,17 @@ async function getRestPRForBranch(
   prRepo: GitHubApiRepository,
   headOwner: string,
   branchName: string,
-  ghOptions: ReturnType<typeof ghRepoExecOptions>
+  ghOptions: ReturnType<typeof ghRepoExecOptions>,
+  filters: { base?: string; state?: 'all' | 'open' } = {}
 ): Promise<PullRequestLookupData | null> {
   const head = encodeURIComponent(`${headOwner}:${branchName}`)
+  const base = filters.base ? `&base=${encodeURIComponent(filters.base)}` : ''
+  const state = filters.state ?? 'all'
   const { stdout } = await ghExecFileAsync(
-    ['api', `repos/${prRepo.owner}/${prRepo.repo}/pulls?head=${head}&state=all&per_page=1`],
+    [
+      'api',
+      `repos/${prRepo.owner}/${prRepo.repo}/pulls?head=${head}&state=${state}&per_page=1${base}`
+    ],
     { ...ghOptions, ...githubHostExecOptions(prRepo) }
   )
   const list = JSON.parse(stdout) as RestPullRequest[]

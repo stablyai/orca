@@ -184,6 +184,12 @@ describe('createGitHubPullRequest', () => {
     )
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify({
+        isFork: true,
+        parent: { name: 'orca', owner: { login: 'stablyai' } }
+      })
+    })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
         number: 5,
         url: 'https://github.com/fsdwen/orca/pull/5'
       })
@@ -202,9 +208,95 @@ describe('createGitHubPullRequest', () => {
       url: 'https://github.com/fsdwen/orca/pull/5'
     })
 
-    const [args] = ghExecFileAsyncMock.mock.calls[0]
+    const [args] = ghExecFileAsyncMock.mock.calls[1]
     expect(args[args.indexOf('--repo') + 1]).toBe('stablyai/orca')
     expect(args[args.indexOf('--head') + 1]).toBe('fsdwen:my-branch')
+  })
+
+  it('uses the GitHub parent for a plain clone of a fork', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'fsdwen', repo: 'orca' })
+    getOwnerRepoForRemoteMock.mockImplementation(async (_repoPath: string, remoteName: string) =>
+      remoteName === 'origin' ? { owner: 'fsdwen', repo: 'orca' } : null
+    )
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        isFork: true,
+        parent: { name: 'orca', owner: { login: 'stablyai' } }
+      })
+    })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ number: 8, url: 'https://github.com/stablyai/orca/pull/8' })
+    })
+
+    await expect(
+      createGitHubPullRequest('/repo-root', {
+        provider: 'github',
+        base: 'main',
+        head: 'my-branch',
+        title: 'Plain clone fork PR'
+      })
+    ).resolves.toMatchObject({ ok: true, number: 8 })
+
+    const [args] = ghExecFileAsyncMock.mock.calls[1]
+    expect(args[args.indexOf('--repo') + 1]).toBe('stablyai/orca')
+    expect(args[args.indexOf('--head') + 1]).toBe('fsdwen:my-branch')
+  })
+
+  it('looks up an existing fork PR through the REST head filter', async () => {
+    getOwnerRepoForRemoteMock.mockImplementation(async (_repoPath: string, remoteName: string) =>
+      remoteName === 'origin'
+        ? { owner: 'fsdwen', repo: 'orca' }
+        : { owner: 'stablyai', repo: 'orca' }
+    )
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        isFork: true,
+        parent: { name: 'orca', owner: { login: 'stablyai' } }
+      })
+    })
+    ghExecFileAsyncMock.mockRejectedValueOnce(
+      Object.assign(new Error('already exists'), {
+        stderr: 'a pull request for branch "my-branch" already exists'
+      })
+    )
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([{ number: 9, html_url: 'https://github.com/stablyai/orca/pull/9' }])
+    })
+
+    await expect(
+      createGitHubPullRequest('/repo-root', {
+        provider: 'github',
+        base: 'main',
+        head: 'my-branch',
+        title: 'Existing fork PR'
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      code: 'already_exists',
+      existingReview: { number: 9, url: 'https://github.com/stablyai/orca/pull/9' }
+    })
+
+    const [lookupArgs] = ghExecFileAsyncMock.mock.calls[2]
+    expect(lookupArgs[0]).toBe('api')
+    expect(lookupArgs[1]).toContain('head=fsdwen%3Amy-branch')
+    expect(lookupArgs[1]).toContain('base=main')
+    expect(ghExecFileAsyncMock.mock.calls[2][0]).not.toContain('pr')
+  })
+
+  it('fails closed when fork ownership cannot be verified', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'fsdwen', repo: 'orca' })
+    ghExecFileAsyncMock.mockRejectedValueOnce(new Error('temporary GitHub failure'))
+
+    await expect(
+      createGitHubPullRequest('/repo-root', {
+        provider: 'github',
+        base: 'main',
+        head: 'my-branch',
+        title: 'Unverified fork PR'
+      })
+    ).resolves.toMatchObject({ ok: false, code: 'validation' })
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('falls back to the origin repository when no upstream is available', async () => {
