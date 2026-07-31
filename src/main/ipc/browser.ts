@@ -194,6 +194,8 @@ function isTrustedBrowserRenderer(sender: Electron.WebContents): boolean {
 
 export function registerBrowserHandlers(): void {
   grabModeIntentByPageId.clear()
+  // Why: a stale in-flight chain from a prior registration would block new operations forever.
+  grabModeOperationByPageId.clear()
   ipcMain.removeHandler('browser:registerGuest')
   ipcMain.removeHandler('browser:unregisterGuest')
   ipcMain.removeHandler('browser:openDevTools')
@@ -264,6 +266,8 @@ export function registerBrowserHandlers(): void {
     }
     browserManager.unregisterGuest(args.browserPageId)
     grabModeIntentByPageId.delete(args.browserPageId)
+    // Why: don't let a reused browserPageId queue behind the destroyed guest's pending chain.
+    grabModeOperationByPageId.delete(args.browserPageId)
     return true
   })
 
