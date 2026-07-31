@@ -7,7 +7,7 @@ use serde_json::Value;
 
 const OUTPUT_METHODS: [&str; 2] = ["v.oai.rgbcfg", "v.oai.thstatus"];
 
-/// Cross-command state for one connected session: the monotonic request-id
+/// Cross-command state for one connected session: the bounded request-id
 /// counter and the per-method duplicate-snapshot baseline. A fresh
 /// `Session` per connection matches a fresh device handshake.
 #[derive(Default)]
@@ -24,8 +24,8 @@ impl Session {
     /// Handles one full `output_snapshot` command (`rgbcfg` plus six-slot
     /// `thstatus`). Each method that changed since the last accepted
     /// snapshot is sent exactly once, through the existing
-    /// known-firmware-gated `send_state_command` path, with its own
-    /// monotonic id. A method whose params are byte-identical to the last
+    /// known-firmware-gated `send_state_command` path, with its own request
+    /// id. A method whose params are byte-identical to the last
     /// accepted snapshot produces no HID write and reports `duplicate`.
     /// Returns every frame to emit, in order: one `snapshot_result` per
     /// method, plus any device events observed while awaiting each ack.
@@ -216,7 +216,7 @@ mod tests {
     }
 
     #[test]
-    fn ids_are_monotonic_across_methods_and_commands() {
+    fn ids_advance_across_methods_and_commands() {
         let transport = FakeTransport::new(vec![]);
         let mut parser = Report6Parser::new();
         let gate = RuntimeGate::new(FirmwareAccess::ReadWrite);

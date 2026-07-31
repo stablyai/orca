@@ -8,20 +8,32 @@ pub fn is_write_method(method: &str) -> bool {
     WRITE_METHODS.contains(&method)
 }
 
-/// Issues strictly increasing request IDs, starting at 1.
-#[derive(Debug, Default)]
+const RPC_ID_MAX_INCLUSIVE: u64 = 998;
+
+/// Issues request IDs in the firmware-supported 0..=998 range, starting at 1.
+#[derive(Debug)]
 pub struct RequestIdGenerator {
     next: u64,
 }
 
+impl Default for RequestIdGenerator {
+    fn default() -> Self {
+        Self { next: 1 }
+    }
+}
+
 impl RequestIdGenerator {
     pub fn new() -> Self {
-        Self { next: 1 }
+        Self::default()
     }
 
     pub fn next_id(&mut self) -> u64 {
-        let id = self.next.max(1);
-        self.next = id + 1;
+        let id = self.next;
+        self.next = if id == RPC_ID_MAX_INCLUSIVE {
+            0
+        } else {
+            id + 1
+        };
         id
     }
 }
@@ -95,10 +107,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn request_ids_increase_monotonically_from_one() {
+    fn request_ids_start_at_one_and_advance() {
         let mut generator = RequestIdGenerator::new();
         let ids: Vec<u64> = (0..5).map(|_| generator.next_id()).collect();
         assert_eq!(ids, vec![1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn request_ids_wrap_after_the_firmware_maximum() {
+        let mut generator = RequestIdGenerator::new();
+        for expected in 1..=998 {
+            assert_eq!(generator.next_id(), expected);
+        }
+        assert_eq!(generator.next_id(), 0);
+        assert_eq!(generator.next_id(), 1);
     }
 
     #[test]
