@@ -1,4 +1,4 @@
-import type { Page } from '@stablyai/playwright-test'
+import type { Locator, Page } from '@stablyai/playwright-test'
 import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { test, expect } from './helpers/orca-app'
@@ -15,27 +15,22 @@ function worktreeOption(page: Page, worktreeId: string) {
   return worktreeRow(page, worktreeId)
 }
 
-async function captureSidebarEvidence(page: Page, name: string): Promise<void> {
+async function captureEvidence(page: Page, name: string, locator?: Locator): Promise<void> {
   if (process.env.ORCA_CAPTURE_EVIDENCE !== '1') {
     return
   }
   const outputDir = resolve(process.cwd(), 'pr-evidence')
   mkdirSync(outputDir, { recursive: true })
-  await page
-    .locator('[data-worktree-sidebar]')
-    .first()
-    .screenshot({
-      path: resolve(outputDir, name)
-    })
+  const path = resolve(outputDir, name)
+  if (locator) {
+    await locator.screenshot({ path })
+    return
+  }
+  await page.screenshot({ path })
 }
 
-async function captureLineageMenuEvidence(page: Page, name: string): Promise<void> {
-  if (process.env.ORCA_CAPTURE_EVIDENCE !== '1') {
-    return
-  }
-  const outputDir = resolve(process.cwd(), 'pr-evidence')
-  mkdirSync(outputDir, { recursive: true })
-  await page.screenshot({ path: resolve(outputDir, name) })
+async function captureSidebarEvidence(page: Page, name: string): Promise<void> {
+  await captureEvidence(page, name, page.locator('[data-worktree-sidebar]').first())
 }
 
 test.describe('Worktree Lineage', () => {
@@ -268,7 +263,7 @@ test.describe('Worktree Lineage', () => {
     await expect(sleepSubtree).toBeVisible()
     await expect(sleepSubtree).toBeEnabled()
     await expect(orcaPage.getByRole('menuitem', { name: 'Delete with Descendants…' })).toBeVisible()
-    await captureLineageMenuEvidence(orcaPage, 'workspace-descendant-actions.png')
+    await captureEvidence(orcaPage, 'workspace-descendant-actions.png')
     await sleepSubtree.click()
 
     await expect

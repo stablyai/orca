@@ -605,24 +605,24 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     openModal
   ])
 
+  const sleepWorktreesAfterMenuClose = useCallback(
+    (worktreeIds: string[]) => {
+      setMenuOpenState(false)
+      // Let Radix tear down before sleeping can remount the virtualized sidebar.
+      window.setTimeout(() => {
+        void runSleepWorktrees(worktreeIds)
+      }, 50)
+    },
+    [setMenuOpenState]
+  )
+
   const handleCloseTerminals = useCallback(() => {
-    const worktreeIds = sleepableWorktrees.map((item) => item.id)
-    setMenuOpenState(false)
-    // Why: Sleep can remount the sidebar when it clears the active workspace.
-    // Let Radix finish closing the menu first so its focus/portal teardown
-    // cannot scroll the virtualized list during that remount.
-    window.setTimeout(() => {
-      void runSleepWorktrees(worktreeIds)
-    }, 50)
-  }, [setMenuOpenState, sleepableWorktrees])
+    sleepWorktreesAfterMenuClose(sleepableWorktrees.map((item) => item.id))
+  }, [sleepWorktreesAfterMenuClose, sleepableWorktrees])
 
   const handleSleepSubtree = useCallback(() => {
-    const worktreeIds = subtreeSleepableWorktrees.map((item) => item.id)
-    setMenuOpenState(false)
-    window.setTimeout(() => {
-      void runSleepWorktrees(worktreeIds)
-    }, 50)
-  }, [setMenuOpenState, subtreeSleepableWorktrees])
+    sleepWorktreesAfterMenuClose(subtreeSleepableWorktrees.map((item) => item.id))
+  }, [sleepWorktreesAfterMenuClose, subtreeSleepableWorktrees])
 
   const handleDelete = useCallback(() => {
     // Folder mode handled inline because it routes to a different modal;
