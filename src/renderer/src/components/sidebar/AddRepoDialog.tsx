@@ -74,7 +74,7 @@ export default React.memo(function AddRepoDialog({
     resetNestedImportFlow,
     trackNestedBackAction
   } = useAddRepoNestedReviewController({
-    reviewRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId,
+    reviewRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
     cancelNestedRepoScan,
     closeModal: closeForFolderHandoff,
     fetchWorktrees,
@@ -235,6 +235,7 @@ export default React.memo(function AddRepoDialog({
   const resetHostScopedState = useCallback(() => {
     setIsAdding(false)
     setAddProjectBusyLabel(null)
+    resetLocalFolderFlow()
     resetServerPathFlow()
     resetCloneFlow()
     resetCreateDefaultState()
@@ -245,6 +246,7 @@ export default React.memo(function AddRepoDialog({
     resetCreateDefaultState,
     resetCreateState,
     resetRemoteState,
+    resetLocalFolderFlow,
     resetServerPathFlow
   ])
 

@@ -449,7 +449,10 @@ function repoHostId(
   hostId?: ExecutionHostId | null
 ): ExecutionHostId {
   const repo = findRepoForHost(state.repos, repoId, { hostId, settings: state.settings })
-  return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+  if (repo) {
+    return getRepoExecutionHostId(repo)
+  }
+  return hostId && parseExecutionHostId(hostId) ? hostId : LOCAL_EXECUTION_HOST_ID
 }
 
 function repoHasExactlyOneExecutionHostOwner(
@@ -980,13 +983,25 @@ function replaceWorktreeInRepoLists(
 function settingsForRepoOwner(
   state: Pick<AppState, 'repos' | 'settings'>,
   repoId: string,
-  hostId?: ExecutionHostId | null
+  hostId?: ExecutionHostId | null,
+  honorMissingHostId = false
 ) {
   const repo = findRepoForHost(state.repos, repoId, { hostId, settings: state.settings })
-  if (!repo) {
-    return state.settings
+  if (repo) {
+    return settingsForKnownRepoOwner(state.settings, repo)
   }
-  return settingsForKnownRepoOwner(state.settings, repo)
+  const parsedHost = honorMissingHostId && hostId ? parseExecutionHostId(hostId) : null
+  if (parsedHost?.kind === 'runtime') {
+    return state.settings
+      ? { ...state.settings, activeRuntimeEnvironmentId: parsedHost.environmentId }
+      : ({ activeRuntimeEnvironmentId: parsedHost.environmentId } as AppState['settings'])
+  }
+  if (parsedHost?.kind === 'local' || parsedHost?.kind === 'ssh') {
+    return state.settings
+      ? { ...state.settings, activeRuntimeEnvironmentId: null }
+      : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
+  }
+  return state.settings
 }
 
 function settingsForKnownRepoOwner(
@@ -3126,7 +3141,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         hostId,
         settings: ownerState.settings
       })
-      const ownerSettings = settingsForRepoOwner(ownerState, repoId, hostId)
+      const ownerSettings = settingsForRepoOwner(
+        ownerState,
+        repoId,
+        hostId,
+        ownerWasMissingAtStart && (useLocalOwner || options?.executionHostId !== undefined)
+      )
       const settings =
         useLocalOwner && ownerSettings?.activeRuntimeEnvironmentId
           ? { ...ownerSettings, activeRuntimeEnvironmentId: null }

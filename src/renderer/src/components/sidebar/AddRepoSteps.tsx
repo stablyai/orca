@@ -22,7 +22,11 @@ export function useRemoteRepo(
   scanNestedRepos?: (
     path: string,
     connectionId?: string,
-    controls?: { scanId?: string; onProgress?: (scan: NestedRepoScanResult) => void }
+    controls?: {
+      scanId?: string
+      onProgress?: (scan: NestedRepoScanResult) => void
+      runtimeEnvironmentId?: string | null
+    }
   ) => Promise<NestedRepoScanResult | null>,
   showNestedRepoReview?: (
     scan: NestedRepoScanResult,
@@ -52,7 +56,7 @@ export function useRemoteRepo(
     setRemoteError(null)
     setIsAddingRemote(false)
     if (remoteNestedScanId) {
-      void cancelNestedRepoScan(remoteNestedScanId)
+      void cancelNestedRepoScan(remoteNestedScanId, { runtimeEnvironmentId: null })
     }
     setRemoteNestedScanId(null)
   }, [cancelNestedRepoScan, remoteNestedScanId])
@@ -61,7 +65,7 @@ export function useRemoteRepo(
     if (!remoteNestedScanId) {
       return
     }
-    void cancelNestedRepoScan(remoteNestedScanId)
+    void cancelNestedRepoScan(remoteNestedScanId, { runtimeEnvironmentId: null })
   }, [cancelNestedRepoScan, remoteNestedScanId])
 
   const handleOpenRemoteStep = useCallback(
@@ -146,6 +150,7 @@ export function useRemoteRepo(
       setRemoteNestedScanId(scanId)
       const scan = await scanNestedRepos?.(trimmedRemotePath, selectedTargetId, {
         scanId,
+        runtimeEnvironmentId: null,
         onProgress: (progressScan) => {
           if (
             gen !== remoteGenRef.current ||

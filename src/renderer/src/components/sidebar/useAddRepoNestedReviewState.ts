@@ -20,7 +20,10 @@ export function useAddRepoNestedReviewState({
   setStep
 }: {
   activeRuntimeEnvironmentId: string | null | undefined
-  cancelNestedRepoScan: (scanId: string) => Promise<unknown>
+  cancelNestedRepoScan: (
+    scanId: string,
+    options?: { runtimeEnvironmentId?: string | null }
+  ) => Promise<unknown>
   setStep: (step: AddRepoDialogStep) => void
 }): {
   nestedScan: NestedRepoScanResult | null
@@ -38,7 +41,7 @@ export function useAddRepoNestedReviewState({
   setNestedScanInProgress: Dispatch<SetStateAction<boolean>>
   getNestedRepoRuntimeKind: (connectionId: string | null) => NestedRepoTelemetryRuntimeKind
   showNestedRepoReview: (args: ShowNestedRepoReviewArgs) => void
-  setActiveNestedScanId: (scanId: string | null) => void
+  setActiveNestedScanId: (scanId: string | null, runtimeEnvironmentId?: string | null) => void
   handleStopNestedScan: () => void
   resetNestedRepoReviewState: () => void
 } {
@@ -57,6 +60,7 @@ export function useAddRepoNestedReviewState({
     string | null | undefined
   >(undefined)
   const nestedScanIdRef = useRef<string | null>(null)
+  const nestedScanRuntimeEnvironmentIdRef = useRef<string | null | undefined>(undefined)
 
   const getNestedRepoRuntimeKind = useCallback(
     (connectionId: string | null): NestedRepoTelemetryRuntimeKind => {
@@ -86,23 +90,31 @@ export function useAddRepoNestedReviewState({
     [setStep]
   )
 
-  const setActiveNestedScanId = useCallback((scanId: string | null): void => {
-    nestedScanIdRef.current = scanId
-    setNestedScanId(scanId)
-  }, [])
+  const setActiveNestedScanId = useCallback(
+    (scanId: string | null, runtimeEnvironmentId?: string | null): void => {
+      nestedScanIdRef.current = scanId
+      nestedScanRuntimeEnvironmentIdRef.current = scanId ? runtimeEnvironmentId : undefined
+      setNestedScanId(scanId)
+    },
+    []
+  )
 
   const handleStopNestedScan = useCallback(() => {
     const scanId = nestedScanIdRef.current
     if (!scanId) {
       return
     }
-    void cancelNestedRepoScan(scanId)
+    void cancelNestedRepoScan(scanId, {
+      runtimeEnvironmentId: nestedScanRuntimeEnvironmentIdRef.current
+    })
   }, [cancelNestedRepoScan])
 
   const resetNestedRepoReviewState = useCallback((): void => {
     const activeNestedScanId = nestedScanIdRef.current
     if (activeNestedScanId) {
-      void cancelNestedRepoScan(activeNestedScanId)
+      void cancelNestedRepoScan(activeNestedScanId, {
+        runtimeEnvironmentId: nestedScanRuntimeEnvironmentIdRef.current
+      })
     }
     setNestedScan(null)
     setNestedSelectedPaths(new Set())

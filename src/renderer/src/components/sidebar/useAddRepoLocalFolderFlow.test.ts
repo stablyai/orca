@@ -106,8 +106,17 @@ describe('useAddRepoLocalFolderFlow', () => {
 
     expect(pickFolders).toHaveBeenCalledTimes(1)
     expect(addRepoPath).toHaveBeenCalledTimes(2)
-    expect(addRepoPath).toHaveBeenNthCalledWith(1, '/projects/alpha')
-    expect(addRepoPath).toHaveBeenNthCalledWith(2, '/projects/beta')
+    expect(addRepoPath).toHaveBeenNthCalledWith(1, '/projects/alpha', undefined, {
+      runtimeEnvironmentId: null
+    })
+    expect(addRepoPath).toHaveBeenNthCalledWith(2, '/projects/beta', undefined, {
+      runtimeEnvironmentId: null
+    })
+    expect(scanNestedRepos).toHaveBeenCalledWith(
+      '/projects/alpha',
+      undefined,
+      expect.objectContaining({ runtimeEnvironmentId: null })
+    )
     expect(fetchWorktrees).toHaveBeenCalledWith('alpha', {
       requireAuthoritative: true,
       executionHostId: 'local'
@@ -152,7 +161,9 @@ describe('useAddRepoLocalFolderFlow', () => {
 
     expect(showNestedRepoReview).not.toHaveBeenCalled()
     expect(addRepoPath).toHaveBeenCalledTimes(1)
-    expect(addRepoPath).toHaveBeenCalledWith('/projects/later')
+    expect(addRepoPath).toHaveBeenCalledWith('/projects/later', undefined, {
+      runtimeEnvironmentId: null
+    })
     expect(scanNestedRepos).toHaveBeenCalledTimes(2)
     expect(onGitRepoReady).toHaveBeenCalledWith('later', 'local_folder_picker', null)
   })
@@ -187,7 +198,44 @@ describe('useAddRepoLocalFolderFlow', () => {
 
     expect(showNestedRepoReview).not.toHaveBeenCalled()
     expect(addRepoPath).toHaveBeenCalledTimes(1)
-    expect(addRepoPath).toHaveBeenCalledWith('/projects/git')
+    expect(addRepoPath).toHaveBeenCalledWith('/projects/git', undefined, {
+      runtimeEnvironmentId: null
+    })
     expect(onGitRepoReady).toHaveBeenCalledWith('git', 'local_folder_picker', null)
+  })
+
+  it('drops a local scan completion after host-scoped reset', async () => {
+    pickFolders.mockResolvedValue(['/projects/stale'])
+    let resolveScan!: (scan: NestedRepoScanResult) => void
+    scanNestedRepos.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveScan = resolve
+      })
+    )
+    const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+    const flow = useAddRepoLocalFolderFlow({
+      isOpen: true,
+      droppedLocalPath: '',
+      activeRuntimeEnvironmentId: null,
+      addRepoPath,
+      closeModal,
+      fetchWorktrees,
+      scanNestedRepos,
+      setActiveNestedScanId,
+      setNestedScanInProgress,
+      showNestedRepoReview,
+      onGitRepoReady,
+      setIsAdding,
+      setAddProjectBusyLabel
+    })
+
+    const adding = flow.handleBrowse()
+    await vi.waitFor(() => expect(scanNestedRepos).toHaveBeenCalled())
+    flow.resetLocalFolderFlow()
+    resolveScan(makeScan('/projects/stale'))
+    await adding
+
+    expect(addRepoPath).not.toHaveBeenCalled()
+    expect(onGitRepoReady).not.toHaveBeenCalled()
   })
 })

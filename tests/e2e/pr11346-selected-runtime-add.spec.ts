@@ -96,15 +96,15 @@ async function runSelectedRuntimeAddJourney(
   electronApp: ElectronApplication,
   orcaPage: Page,
   testInfo: TestInfo,
-  headful: boolean
+  visible: boolean
 ): Promise<void> {
-  const runtimeName = `PR 11346 ${headful ? 'headed' : 'headless'} runtime`
+  const runtimeName = `PR 11346 ${visible ? 'headed' : 'hidden-window'} runtime`
   const fixture = await createProjectFixtures()
   await waitForSessionReady(orcaPage)
   const serverVisible = await electronApp.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows().some((window) => window.isVisible())
   )
-  expect(serverVisible).toBe(headful)
+  expect(serverVisible).toBe(visible)
 
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const client = await launchPairedElectronClient(offer, testInfo, runtimeName)
@@ -114,7 +114,7 @@ async function runSelectedRuntimeAddJourney(
   const clientLocalRuntime = new RuntimeClient(clientUserDataDir)
 
   try {
-    if (headful) {
+    if (visible) {
       await client.app.evaluate(({ BrowserWindow }) => {
         BrowserWindow.getAllWindows()[0]?.show()
       })
@@ -257,8 +257,15 @@ async function runSelectedRuntimeAddJourney(
     expect(
       finalClientInventory.folderWorkspaces.map((workspace) => workspace.folderPath)
     ).not.toContain(fixture.folderPath)
+    for (const projectName of [
+      path.basename(fixture.gitPath),
+      path.basename(fixture.folderPath),
+      ...fixture.nestedRepoPaths.map((repoPath) => path.basename(repoPath))
+    ]) {
+      await expect(client.page.getByText(projectName, { exact: true }).first()).toBeVisible()
+    }
     await client.page.screenshot({
-      path: testInfo.outputPath(`${headful ? 'headed' : 'headless'}-selected-runtime-add.png`),
+      path: testInfo.outputPath(`${visible ? 'headed' : 'hidden-window'}-selected-runtime-add.png`),
       fullPage: true
     })
   } finally {
@@ -275,7 +282,7 @@ test('routes Add Project server paths to a selected non-default headed runtime @
   await runSelectedRuntimeAddJourney(electronApp, orcaPage, testInfo, true)
 })
 
-test('keeps selected runtime Add Project routing in headless paired parity', async ({
+test('keeps selected runtime Add Project routing in hidden-window desktop parity', async ({
   electronApp,
   orcaPage
 }, testInfo) => {

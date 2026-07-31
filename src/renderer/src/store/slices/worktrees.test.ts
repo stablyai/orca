@@ -2060,6 +2060,42 @@ describe('fetchWorktrees', () => {
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
   })
 
+  it('honors an explicit runtime owner before the repo catalog is hydrated', async () => {
+    const store = createTestStore()
+    const remote = makeWorktree({
+      id: 'repo-missing::/runtime/wt',
+      repoId: 'repo-missing',
+      path: '/runtime/wt',
+      hostId: 'local'
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: null } as never,
+      repos: []
+    } as Partial<AppState>)
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-missing-repo',
+      ok: true,
+      result: makeDetectedResult('repo-missing', [remote]),
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+
+    await store.getState().fetchWorktrees('repo-missing', {
+      executionHostId: 'runtime:env-1',
+      requireAuthoritative: true
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'worktree.detectedList',
+      params: { repo: 'repo-missing' },
+      timeoutMs: 15_000
+    })
+    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['repo-missing']).toEqual([
+      { ...remote, hostId: 'runtime:env-1', runtimeOwnerEnvironmentId: 'env-1' }
+    ])
+  })
+
   it('stamps remote runtime worktrees with the owning repo runtime host', async () => {
     const store = createTestStore()
     // Why: a remote runtime returns worktrees from its own perspective, so their hostId arrives as the default "local".

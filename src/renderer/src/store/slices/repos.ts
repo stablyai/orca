@@ -181,6 +181,10 @@ type NestedRepoScanControls = {
   runtimeEnvironmentId?: string | null
 }
 
+type NestedRepoScanCancelOptions = {
+  runtimeEnvironmentId?: string | null
+}
+
 export type FolderWorkspacePathStatusCacheEntry = {
   status: FolderWorkspacePathStatus
   checkedAt: number
@@ -1174,16 +1178,6 @@ function mergeFetchedProjectGroupCatalog(
   }
 }
 
-async function fetchProjectGroupsForTarget(
-  target: ReturnType<typeof getActiveRuntimeTarget>,
-  currentProjectGroups: readonly ProjectGroup[]
-): Promise<{ projectGroups: ProjectGroup[]; hostId: ReturnType<typeof getRuntimeTargetHostId> }> {
-  return mergeFetchedProjectGroupCatalog(
-    await fetchProjectGroupCatalogForTarget(target),
-    currentProjectGroups
-  )
-}
-
 async function fetchFolderWorkspaceCatalogForTarget(
   target: ReturnType<typeof getActiveRuntimeTarget>
 ): Promise<FetchedFolderWorkspaceCatalog> {
@@ -1569,7 +1563,7 @@ export type RepoSlice = {
     connectionId?: string,
     controls?: NestedRepoScanControls
   ) => Promise<NestedRepoScanResult | null>
-  cancelNestedRepoScan: (scanId: string) => Promise<boolean>
+  cancelNestedRepoScan: (scanId: string, options?: NestedRepoScanCancelOptions) => Promise<boolean>
   importNestedRepos: (args: {
     parentPath: string
     groupName: string
@@ -1927,11 +1921,14 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const target = getActiveRuntimeTarget(
         settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
       )
-      const { projectGroups } = await fetchProjectGroupsForTarget(target, [])
-      set({
-        projectGroups,
+      const catalog = await fetchProjectGroupCatalogForTarget(target)
+      set((current) => ({
+        projectGroups: mergeFetchedProjectGroupCatalog(
+          catalog,
+          options === undefined ? [] : current.projectGroups
+        ).projectGroups,
         folderWorkspacePathStatuses: {}
-      })
+      }))
     } catch (err) {
       console.error('Failed to fetch project groups:', err)
     }
@@ -1979,20 +1976,21 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
       )
       const catalog = await fetchFolderWorkspaceCatalogForTarget(target)
-      const current = get()
-      folderWorkspaceUpdates.recordCatalogReplacement(
-        getFolderWorkspaceCatalogReplacementIds(
+      set((current) => {
+        folderWorkspaceUpdates.recordCatalogReplacement(
+          getFolderWorkspaceCatalogReplacementIds(
+            catalog,
+            current.folderWorkspaces,
+            current.projectGroups
+          )
+        )
+        const { folderWorkspaces } = mergeFetchedFolderWorkspaceCatalog(
           catalog,
-          current.folderWorkspaces,
+          options === undefined ? [] : current.folderWorkspaces,
           current.projectGroups
         )
-      )
-      const { folderWorkspaces } = mergeFetchedFolderWorkspaceCatalog(
-        catalog,
-        [],
-        current.projectGroups
-      )
-      set({ folderWorkspaces, folderWorkspacePathStatuses: {} })
+        return { folderWorkspaces, folderWorkspacePathStatuses: {} }
+      })
     } catch (err) {
       console.error('Failed to fetch folder workspaces:', err)
     }
@@ -2155,9 +2153,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  cancelNestedRepoScan: async (scanId) => {
+  cancelNestedRepoScan: async (scanId, options) => {
     try {
-      const target = getActiveRuntimeTarget(get().settings)
+      const target = getActiveRuntimeTarget(
+        settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
+      )
       if (target.kind !== 'local') {
         return false
       }
@@ -2194,7 +2194,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           : undefined
       await get().fetchProjectGroups(catalogOptions)
       await get().fetchFolderWorkspaces(catalogOptions)
-      await get().fetchRepos(catalogOptions)
+      await (args.runtimeEnvironmentId
+        ? get().fetchRuntimeEnvironmentRepos(args.runtimeEnvironmentId)
+        : get().fetchRepos(catalogOptions))
       set({ folderWorkspacePathStatuses: {} })
       return result
     } catch (err) {

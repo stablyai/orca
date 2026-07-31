@@ -173,8 +173,9 @@ export function useAddRepoNestedImportFlow({
           }
           return
         }
+        const completionOwner = nestedConnectionId === null ? nestedRuntimeEnvironmentId : undefined
         for (const projectId of importedRepoIds) {
-          await fetchWorktrees(projectId, worktreeRefreshOptions(nestedRuntimeEnvironmentId))
+          await fetchWorktrees(projectId, worktreeRefreshOptions(completionOwner))
         }
         if (gen !== nestedImportGenRef.current) {
           return
@@ -201,7 +202,7 @@ export function useAddRepoNestedImportFlow({
             : activeRuntimeEnvironmentId?.trim()
               ? 'runtime_server_path'
               : 'local_folder_picker'
-          await onGitRepoReady(repo.id, source, nestedRuntimeEnvironmentId)
+          await onGitRepoReady(repo.id, source, completionOwner)
         }
       } catch (err) {
         if (gen === nestedImportGenRef.current) {

@@ -20,7 +20,10 @@ export function useAddRepoNestedReviewController({
 }: {
   activeRuntimeEnvironmentId: string | null | undefined
   reviewRuntimeEnvironmentId: string | null | undefined
-  cancelNestedRepoScan: (scanId: string) => Promise<unknown>
+  cancelNestedRepoScan: (
+    scanId: string,
+    options?: { runtimeEnvironmentId?: string | null }
+  ) => Promise<unknown>
   closeModal: () => void
   fetchWorktrees: (repoId: string, options?: WorktreeFetchOptions) => Promise<unknown>
   importNestedRepos: (args: {

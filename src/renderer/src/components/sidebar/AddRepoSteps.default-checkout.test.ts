@@ -188,4 +188,36 @@ describe('useRemoteRepo default-checkout handoff', () => {
     expect(mocks.getState).toHaveBeenCalledWith({ targetId: 'ssh-2' })
     expect(mocks.stateSetters[1]).toHaveBeenCalledWith('ssh-2')
   })
+
+  it('pins SSH nested scans and cancellation to the local provider', async () => {
+    const scanNestedRepos = vi.fn().mockResolvedValue(null)
+    mocks.addRemote.mockResolvedValue({ repo: makeRepo() })
+    mocks.fetchWorktrees.mockResolvedValue(true)
+    const { useRemoteRepo } = await import('./AddRepoSteps')
+
+    const result = useRemoteRepo(
+      mocks.fetchWorktrees,
+      vi.fn(),
+      vi.fn(),
+      mocks.onGitRepoReady,
+      scanNestedRepos
+    )
+    await result.handleAddRemoteRepo()
+
+    expect(scanNestedRepos).toHaveBeenCalledWith(
+      '/srv/repo',
+      'ssh-1',
+      expect.objectContaining({ runtimeEnvironmentId: null })
+    )
+
+    mocks.stateIndex = 0
+    mocks.stateValues = [[], 'ssh-1', '/srv/repo', null, false, 'scan-ssh']
+    const active = useRemoteRepo(mocks.fetchWorktrees, vi.fn(), vi.fn())
+    active.stopRemoteNestedScan()
+    active.resetRemoteState()
+
+    expect(mocks.storeState.cancelNestedRepoScan).toHaveBeenCalledWith('scan-ssh', {
+      runtimeEnvironmentId: null
+    })
+  })
 })

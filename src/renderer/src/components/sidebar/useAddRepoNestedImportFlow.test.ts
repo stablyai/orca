@@ -154,4 +154,51 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
       connectionId: 'ssh-builder'
     })
   })
+
+  it('keeps SSH import RPC local while worktree completion infers the SSH owner', async () => {
+    const importedRepo: Repo = {
+      ...folderRepo,
+      id: 'ssh-app',
+      path: scan.repos[0].path,
+      kind: 'git',
+      connectionId: 'ssh-builder'
+    }
+    const importNestedRepos = vi.fn().mockResolvedValue({
+      projects: [
+        { path: importedRepo.path, projectId: importedRepo.id, status: 'imported' as const }
+      ],
+      importedCount: 1,
+      alreadyKnownCount: 0,
+      failedCount: 0
+    })
+    const fetchWorktrees = vi.fn()
+    const onGitRepoReady = vi.fn()
+    mocks.state.repos = [importedRepo]
+    const { handleImportNestedRepos } = useTestAddRepoNestedImportFlow({
+      activeRuntimeEnvironmentId: null,
+      nestedConnectionId: 'ssh-builder',
+      nestedRuntimeEnvironmentId: null,
+      nestedRuntimeKind: 'ssh',
+      nestedSelectedPaths: new Set([importedRepo.path]),
+      importNestedRepos,
+      fetchWorktrees,
+      onGitRepoReady
+    })
+
+    await handleImportNestedRepos('group')
+
+    expect(importNestedRepos).toHaveBeenCalledWith({
+      parentPath: scan.selectedPath,
+      groupName: 'platform',
+      projectPaths: [importedRepo.path],
+      connectionId: 'ssh-builder',
+      scanId: 'scan-1',
+      runtimeEnvironmentId: null,
+      mode: 'group'
+    })
+    expect(fetchWorktrees).toHaveBeenCalledWith(importedRepo.id, {
+      requireAuthoritative: true
+    })
+    expect(onGitRepoReady).toHaveBeenCalledWith(importedRepo.id, 'ssh_remote_path', undefined)
+  })
 })
