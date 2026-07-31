@@ -91,38 +91,92 @@ describe('resolveRemoteNodePath', () => {
     }
   )
 
-  it('probes mise install directories', async () => {
+  it('probes mise directories from their environment variables', async () => {
     execCommandMock
-      .mockResolvedValueOnce('/home/u/.local/share/mise/installs/node/20/bin/node\n')
+      .mockResolvedValueOnce('/custom/mise/installs/node/20/bin/node\n')
       .mockResolvedValueOnce('v20.11.0\n')
 
     await resolveRemoteNodePath(conn)
 
     const callScript = execCommandMock.mock.calls[0]![1] as string
-    expect(callScript).toContain('"$HOME/.local/share/mise/installs/node"/*/bin/node')
+    expect(callScript).toContain('mise_data_dir=${MISE_DATA_DIR:-}')
+    expect(callScript).toContain(
+      'mise_installs_dir=${MISE_INSTALLS_DIR:-"$mise_data_dir/installs"}'
+    )
+    expect(callScript).toContain('mise_shims_dir=${MISE_SHIMS_DIR:-"$mise_data_dir/shims"}')
+    expect(callScript).toContain('"$mise_shims_dir/node"')
+    expect(callScript).toContain('"$mise_installs_dir/node"/*/bin/node')
   })
 
-  it('probes asdf install directories', async () => {
+  it('probes version-manager directories from their environment variables', async () => {
     execCommandMock
-      .mockResolvedValueOnce('/home/u/.asdf/installs/nodejs/20.11.0/bin/node\n')
+      .mockResolvedValueOnce('/custom/asdf/installs/nodejs/20.11.0/bin/node\n')
       .mockResolvedValueOnce('v20.11.0\n')
 
     await resolveRemoteNodePath(conn)
 
     const callScript = execCommandMock.mock.calls[0]![1] as string
-    expect(callScript).toContain('"$HOME/.asdf/installs/nodejs"/*/bin/node')
+    expect(callScript).toContain('fnm_dir=${FNM_DIR:-"$HOME/.fnm"}')
+    expect(callScript).toContain('asdf_data_dir=${ASDF_DATA_DIR:-"$HOME/.asdf"}')
+    expect(callScript).toContain('volta_home=${VOLTA_HOME:-"$HOME/.volta"}')
+    expect(callScript).toContain('n_prefix=${N_PREFIX:-/usr/local}')
+    expect(callScript).toContain('n_cache_prefix=${N_CACHE_PREFIX:-"$n_prefix"}')
+    expect(callScript).toContain('"$fnm_dir/node-versions"/*/installation/bin/node')
+    expect(callScript).toContain('"$asdf_data_dir/installs/nodejs"/*/bin/node')
+    expect(callScript).toContain('"$volta_home/bin/node"')
+    expect(callScript).toContain('"$n_prefix/bin/node"')
+    expect(callScript).toContain('"$n_cache_prefix/n/versions/node"/*/bin/node')
   })
 
-  it('probes volta bin directory', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('/home/u/.volta/bin/node\n')
-      .mockResolvedValueOnce('v20.11.0\n')
+  it.runIf(process.platform !== 'win32')(
+    'expands every custom version-manager directory in the path probe',
+    async () => {
+      execCommandMock
+        .mockResolvedValueOnce('/custom/mise-shims/node\n')
+        .mockResolvedValueOnce('v20.11.0\n')
+      await resolveRemoteNodePath(conn)
+      const callScript = execCommandMock.mock.calls[0]![1] as string
+      const root = mkdtempSync(path.join(os.tmpdir(), 'orca-node-manager-roots-'))
+      const paths = [
+        path.join(root, 'fnm/node-versions/v20/installation/bin/node'),
+        path.join(root, 'mise-shims/node'),
+        path.join(root, 'mise-installs/node/20/bin/node'),
+        path.join(root, 'asdf/installs/nodejs/20/bin/node'),
+        path.join(root, 'volta/bin/node'),
+        path.join(root, 'n/bin/node'),
+        path.join(root, 'n-cache/n/versions/node/20/bin/node')
+      ]
+      try {
+        for (const nodePath of paths) {
+          mkdirSync(path.dirname(nodePath), { recursive: true })
+          writeFileSync(nodePath, '#!/bin/sh\n')
+          chmodSync(nodePath, 0o755)
+        }
 
-    await resolveRemoteNodePath(conn)
+        const output = execFileSync('/bin/sh', ['-c', callScript], {
+          encoding: 'utf8',
+          env: {
+            HOME: root,
+            PATH: '/usr/bin:/bin',
+            FNM_DIR: path.join(root, 'fnm'),
+            MISE_DATA_DIR: path.join(root, 'unused-mise-data'),
+            MISE_INSTALLS_DIR: path.join(root, 'mise-installs'),
+            MISE_SHIMS_DIR: path.join(root, 'mise-shims'),
+            ASDF_DATA_DIR: path.join(root, 'asdf'),
+            VOLTA_HOME: path.join(root, 'volta'),
+            N_PREFIX: path.join(root, 'n'),
+            N_CACHE_PREFIX: path.join(root, 'n-cache')
+          }
+        })
 
-    const callScript = execCommandMock.mock.calls[0]![1] as string
-    expect(callScript).toContain('$HOME/.volta/bin/node')
-  })
+        for (const nodePath of paths) {
+          expect(output.split('\n')).toContain(nodePath)
+        }
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('respects a custom NVM_DIR instead of hardcoding $HOME/.nvm', async () => {
     execCommandMock
@@ -145,10 +199,10 @@ describe('resolveRemoteNodePath', () => {
     await resolveRemoteNodePath(conn)
 
     const callScript = execCommandMock.mock.calls[0]![1] as string
-    expect(callScript).toContain('"$HOME/.fnm/node-versions"/*/installation/bin/node')
+    expect(callScript).toContain('"$fnm_dir/node-versions"/*/installation/bin/node')
     expect(callScript).toContain('"$HOME/.local/share/fnm/node-versions"/*/installation/bin/node')
-    expect(callScript).toContain('"$HOME/.local/share/mise/installs/node"/*/bin/node')
-    expect(callScript).toContain('"$HOME/.asdf/installs/nodejs"/*/bin/node')
+    expect(callScript).toContain('"$mise_installs_dir/node"/*/bin/node')
+    expect(callScript).toContain('"$asdf_data_dir/installs/nodejs"/*/bin/node')
   })
 
   it('probes fnm XDG data directory installs', async () => {
@@ -185,32 +239,35 @@ describe('resolveRemoteNodePath', () => {
     expect(callScript.trimEnd()).toMatch(/\ntrue$/)
   })
 
-  it('expands tilde NVM_DIR assignments from shell dotfiles', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('/home/u/.nvm/versions/node/v20.11.0/bin/node\n')
-      .mockResolvedValueOnce('v20.11.0\n')
+  it.runIf(process.platform !== 'win32')(
+    'expands tilde NVM_DIR assignments from shell dotfiles',
+    async () => {
+      execCommandMock
+        .mockResolvedValueOnce('/home/u/.nvm/versions/node/v20.11.0/bin/node\n')
+        .mockResolvedValueOnce('v20.11.0\n')
 
-    await resolveRemoteNodePath(conn)
+      await resolveRemoteNodePath(conn)
 
-    const callScript = execCommandMock.mock.calls[0]![1] as string
-    const home = mkdtempSync(path.join(os.tmpdir(), 'orca-nvm-probe-'))
-    try {
-      const nodePath = path.join(home, 'tilde-nvm/versions/node/v20.11.0/bin/node')
-      mkdirSync(path.dirname(nodePath), { recursive: true })
-      writeFileSync(nodePath, '#!/bin/sh\nprintf "v20.11.0\\n"\n')
-      chmodSync(nodePath, 0o755)
-      writeFileSync(path.join(home, '.zshrc'), 'export NVM_DIR=~/tilde-nvm\n')
+      const callScript = execCommandMock.mock.calls[0]![1] as string
+      const home = mkdtempSync(path.join(os.tmpdir(), 'orca-nvm-probe-'))
+      try {
+        const nodePath = path.join(home, 'tilde-nvm/versions/node/v20.11.0/bin/node')
+        mkdirSync(path.dirname(nodePath), { recursive: true })
+        writeFileSync(nodePath, '#!/bin/sh\nprintf "v20.11.0\\n"\n')
+        chmodSync(nodePath, 0o755)
+        writeFileSync(path.join(home, '.zshrc'), 'export NVM_DIR=~/tilde-nvm\n')
 
-      const output = execFileSync('/bin/sh', ['-c', callScript], {
-        encoding: 'utf8',
-        env: { HOME: home, PATH: '/usr/bin:/bin' }
-      })
+        const output = execFileSync('/bin/sh', ['-c', callScript], {
+          encoding: 'utf8',
+          env: { HOME: home, PATH: '/usr/bin:/bin' }
+        })
 
-      expect(output.split('\n')).toContain(nodePath)
-    } finally {
-      rmSync(home, { recursive: true, force: true })
+        expect(output.split('\n')).toContain(nodePath)
+      } finally {
+        rmSync(home, { recursive: true, force: true })
+      }
     }
-  })
+  )
 
   it('joins probes with newlines, not ||, so a missing dir does not mask later probes', async () => {
     execCommandMock
