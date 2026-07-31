@@ -530,13 +530,14 @@ async function signMacComputerUseHelper(helperAppPath, packager) {
   })
 }
 
-async function signMacNotificationStatusHelper(helperPath, packager) {
-  if (!existsSync(helperPath)) {
-    if (isMacRelease) {
-      throw new Error(`Missing orca-notification-status helper at ${helperPath}`)
-    }
-    return
-  }
+/**
+ * Resolves the identity both nested Mach-O helpers sign with, then signs and verifies.
+ *
+ * Why shared: this logic existed twice and drifted immediately — orca-screen-geometry shipped
+ * packaged but unsigned while its sibling was signed, which notarization would have rejected.
+ * One copy means a third helper cannot repeat that.
+ */
+async function signNestedMacHelper(helperPath, packager, helperName) {
   const codeSigningInfo =
     isMacRelease && process.env.CSC_LINK && packager?.codeSigningInfo?.value
       ? await packager.codeSigningInfo.value
@@ -546,12 +547,8 @@ async function signMacNotificationStatusHelper(helperPath, packager) {
     findInstalledMacSigningIdentity(codeSigningInfo?.keychainFile) ??
     (isMacRelease ? null : '-')
   if (!identity) {
-    throw new Error('Missing signing identity for orca-notification-status helper')
+    throw new Error(`Missing signing identity for ${helperName} helper`)
   }
-  // Why: macOS keys notification records to the code-signing identifier; the
-  // binary embeds the app's CFBundleIdentifier in __TEXT,__info_plist so this
-  // (and any later) `codesign --force` derives the correct identifier. Sign
-  // before the outer Orca.app is sealed, like the computer-use helper.
   const args = ['--force', '--sign', identity]
   if (isMacRelease) {
     args.push('--options', 'runtime', '--timestamp')
@@ -559,6 +556,20 @@ async function signMacNotificationStatusHelper(helperPath, packager) {
   args.push(helperPath)
   execFileSync('codesign', args, { stdio: 'inherit' })
   execFileSync('codesign', ['--verify', '--strict', helperPath], { stdio: 'inherit' })
+}
+
+async function signMacNotificationStatusHelper(helperPath, packager) {
+  if (!existsSync(helperPath)) {
+    if (isMacRelease) {
+      throw new Error(`Missing orca-notification-status helper at ${helperPath}`)
+    }
+    return
+  }
+  // Why: macOS keys notification records to the code-signing identifier; the
+  // binary embeds the app's CFBundleIdentifier in __TEXT,__info_plist so this
+  // (and any later) `codesign --force` derives the correct identifier. Sign
+  // before the outer Orca.app is sealed, like the computer-use helper.
+  await signNestedMacHelper(helperPath, packager, 'orca-notification-status')
 }
 
 async function signMacScreenGeometryHelper(helperPath, packager) {
@@ -571,27 +582,10 @@ async function signMacScreenGeometryHelper(helperPath, packager) {
     )
   }
   chmodSync(helperPath, 0o755)
-  const codeSigningInfo =
-    isMacRelease && process.env.CSC_LINK && packager?.codeSigningInfo?.value
-      ? await packager.codeSigningInfo.value
-      : null
-  const identity =
-    process.env.CSC_NAME ??
-    findInstalledMacSigningIdentity(codeSigningInfo?.keychainFile) ??
-    (isMacRelease ? null : '-')
-  if (!identity) {
-    throw new Error('Missing signing identity for orca-screen-geometry helper')
-  }
   // Why sign at all: it is a nested Mach-O inside the bundle, and notarization rejects an
   // unsigned one. Unlike the notification helper it needs no bundle identity — it only reads
   // NSScreen — so it carries no embedded Info.plist and lives in Resources/bin.
-  const args = ['--force', '--sign', identity]
-  if (isMacRelease) {
-    args.push('--options', 'runtime', '--timestamp')
-  }
-  args.push(helperPath)
-  execFileSync('codesign', args, { stdio: 'inherit' })
-  execFileSync('codesign', ['--verify', '--strict', helperPath], { stdio: 'inherit' })
+  await signNestedMacHelper(helperPath, packager, 'orca-screen-geometry')
 }
 
 function codesignArgs(identity, targetPath) {
