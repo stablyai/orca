@@ -2825,7 +2825,7 @@ type FencedWorktreeMergeArgs = {
   repoId: string
   hostId: ExecutionHostId
   ownerWasMissingAtStart: boolean
-  allowMissingDirectSshOwner?: boolean
+  missingDirectSshOwnerReposSnapshot?: AppState['repos']
   requestStartedWorktrees: readonly Worktree[] | undefined
   setup?: ProjectHostSetup
   refresh: AdmittedDetectedWorktreeRefresh
@@ -2845,7 +2845,7 @@ function mergeFetchedWorktrees(
         args.repoId,
         args.hostId,
         args.ownerWasMissingAtStart &&
-          (!args.refresh.directSshAuthority || args.allowMissingDirectSshOwner === true)
+          (!args.refresh.directSshAuthority || s.repos === args.missingDirectSshOwnerReposSnapshot)
       )
     ) {
       return s
@@ -3178,7 +3178,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         repoId,
         hostId,
         ownerWasMissingAtStart,
-        allowMissingDirectSshOwner: ownerWasMissingAtStart && options?.executionHostId === hostId,
+        missingDirectSshOwnerReposSnapshot:
+          ownerWasMissingAtStart && options?.executionHostId === hostId
+            ? ownerState.repos
+            : undefined,
         requestStartedWorktrees,
         setup,
         refresh

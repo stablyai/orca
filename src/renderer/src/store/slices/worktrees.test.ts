@@ -2130,6 +2130,84 @@ describe('fetchWorktrees', () => {
     ])
   })
 
+  it('rejects a missing-owner SSH result after the repo catalog changes', async () => {
+    const store = createTestStore()
+    const remote = makeWorktree({
+      id: 'repo-missing::/ssh/wt',
+      repoId: 'repo-missing',
+      path: '/ssh/wt'
+    })
+    let release!: () => void
+    const started = new Promise<void>((resolve) => {
+      mockApi.worktrees.listDetected.mockImplementationOnce(
+        async (args: ListDetectedWorktreesArgs) => {
+          resolve()
+          await new Promise<void>((resume) => {
+            release = resume
+          })
+          return qualifyDetectedResult(args, makeDetectedResult('repo-missing', [remote]))
+        }
+      )
+    })
+
+    const refresh = store.getState().fetchWorktrees('repo-missing', {
+      executionHostId: 'ssh:ssh-1',
+      requireAuthoritative: true
+    })
+    await started
+    store.setState({ repos: [] })
+    release()
+
+    await expect(refresh).resolves.toBe(false)
+    expect(store.getState().worktreesByRepo['repo-missing']).toBeUndefined()
+  })
+
+  it('rejects a missing-owner SSH result after the provider reconnects', async () => {
+    const store = createTestStore()
+    const remote = makeWorktree({
+      id: 'repo-missing::/ssh/wt',
+      repoId: 'repo-missing',
+      path: '/ssh/wt'
+    })
+    let release!: () => void
+    const started = new Promise<void>((resolve) => {
+      mockApi.worktrees.listDetected.mockImplementationOnce(
+        async (args: ListDetectedWorktreesArgs) => {
+          resolve()
+          await new Promise<void>((resume) => {
+            release = resume
+          })
+          return qualifyDetectedResult(args, makeDetectedResult('repo-missing', [remote]))
+        }
+      )
+    })
+
+    const refresh = store.getState().fetchWorktrees('repo-missing', {
+      executionHostId: 'ssh:ssh-1',
+      requireAuthoritative: true
+    })
+    await started
+    store.setState({
+      sshConnectionStates: new Map([
+        [
+          TEST_SSH_AUTHORITY.targetId,
+          {
+            targetId: TEST_SSH_AUTHORITY.targetId,
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            providerEpoch: 'provider-ssh-2' as SshProviderEpoch,
+            connectionGeneration: TEST_SSH_AUTHORITY.connectionGeneration + 1
+          }
+        ]
+      ])
+    })
+    release()
+
+    await expect(refresh).resolves.toBe(false)
+    expect(store.getState().worktreesByRepo['repo-missing']).toBeUndefined()
+  })
+
   it('stamps remote runtime worktrees with the owning repo runtime host', async () => {
     const store = createTestStore()
     // Why: a remote runtime returns worktrees from its own perspective, so their hostId arrives as the default "local".
