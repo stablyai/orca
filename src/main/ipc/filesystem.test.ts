@@ -1019,22 +1019,27 @@ describe('registerFilesystemHandlers', () => {
     expect(folderDownloadSender.listenerCount('destroyed')).toBe(0)
   })
 
-  it('rejects readFile when the real path escapes allowed roots', async () => {
+  it('allows readFile when a workspace symlink resolves outside allowed roots (issue #11654)', async () => {
+    // Why: the symlink entry lives inside the authorized repo root; following it
+    // is permitted because creating the link already required write access.
     const linkPath = path.resolve('/workspace/repo/link.txt')
+    const externalTarget = path.resolve('/private/secret.txt')
     realpathMock.mockImplementation(async (targetPath: string) => {
       if (targetPath === linkPath) {
-        return path.resolve('/private/secret.txt')
+        return externalTarget
       }
       return targetPath
     })
+    statMock.mockResolvedValue({ size: 7, isDirectory: () => false, mtimeMs: 123 })
+    readFileMock.mockResolvedValue(Buffer.from('content'))
 
     registerFilesystemHandlers(store as never)
 
-    await expect(handlers.get('fs:readFile')!(null, { filePath: linkPath })).rejects.toThrow(
-      'Access denied: path resolves outside allowed directories'
+    await expect(handlers.get('fs:readFile')!(null, { filePath: linkPath })).resolves.toMatchObject(
+      { content: 'content' }
     )
 
-    expect(readFileMock).not.toHaveBeenCalled()
+    expect(readFileMock).toHaveBeenCalledWith(externalTarget)
   })
 
   it('allows readDir when a registered worktree resolves to a macOS canonical alias', async () => {
@@ -1132,28 +1137,31 @@ describe('registerFilesystemHandlers', () => {
     expect(listWorktreesMock).not.toHaveBeenCalled()
   })
 
-  it('rejects readFile when a symlink in a canonical alias worktree escapes the registered root', async () => {
+  it('allows readFile when a symlink in a canonical alias worktree resolves outside the registered root', async () => {
     const aliasWorktreePath = path.resolve('/var/folders/orca/worktrees/feature')
     const canonicalWorktreePath = path.resolve('/private/var/folders/orca/worktrees/feature')
     const aliasLinkPath = path.join(aliasWorktreePath, 'link.txt')
+    const externalTarget = path.resolve('/private/secret.txt')
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, aliasWorktreePath])
     realpathMock.mockImplementation(async (targetPath: string) => {
       if (targetPath === aliasWorktreePath) {
         return canonicalWorktreePath
       }
       if (targetPath === aliasLinkPath) {
-        return path.resolve('/private/secret.txt')
+        return externalTarget
       }
       return targetPath
     })
+    statMock.mockResolvedValue({ size: 7, isDirectory: () => false, mtimeMs: 123 })
+    readFileMock.mockResolvedValue(Buffer.from('content'))
 
     registerFilesystemHandlers(store as never)
 
-    await expect(handlers.get('fs:readFile')!(null, { filePath: aliasLinkPath })).rejects.toThrow(
-      'Access denied: path resolves outside allowed directories'
-    )
+    await expect(
+      handlers.get('fs:readFile')!(null, { filePath: aliasLinkPath })
+    ).resolves.toMatchObject({ content: 'content' })
 
-    expect(readFileMock).not.toHaveBeenCalled()
+    expect(readFileMock).toHaveBeenCalledWith(externalTarget)
   })
 
   it('does not enumerate worktrees when filesystem handlers register', () => {

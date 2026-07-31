@@ -1,5 +1,5 @@
 import type * as NodePath from 'node:path'
-import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -265,7 +265,7 @@ describe('filesystem-auth path containment', () => {
   })
 
   it.skipIf(process.platform === 'win32')(
-    'rejects missing descendants under a symlinked ancestor outside the repo',
+    'allows access to missing descendants under a symlinked ancestor outside the repo',
     async () => {
       const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-symlink-'))
       try {
@@ -278,6 +278,49 @@ describe('filesystem-auth path containment', () => {
 
         await expect(
           resolveAuthorizedPath(join(repoPath, 'linked-outside', 'new', 'file.ts'), store)
+        ).resolves.toBe(join(await realpath(outsidePath), 'new', 'file.ts'))
+      } finally {
+        await rm(tempRoot, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'allows opening an existing file through a workspace file symlink (issue #11654)',
+    async () => {
+      const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-symlink-file-'))
+      try {
+        const repoPath = join(tempRoot, 'repo')
+        const outsidePath = join(tempRoot, 'outside')
+        const externalFile = join(outsidePath, 'notes.md')
+        await mkdir(repoPath)
+        await mkdir(outsidePath)
+        await writeFile(externalFile, 'hello')
+        await symlink(externalFile, join(repoPath, 'notes.md'), 'file')
+        const store = makeStore([{ ...repo, id: 'repo-temp', path: repoPath }])
+
+        await expect(resolveAuthorizedPath(join(repoPath, 'notes.md'), store)).resolves.toBe(
+          await realpath(externalFile)
+        )
+      } finally {
+        await rm(tempRoot, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'still rejects plain path traversal that never passed through a workspace symlink',
+    async () => {
+      const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-escape-'))
+      try {
+        const repoPath = join(tempRoot, 'repo')
+        const outsideFile = join(tempRoot, 'secret.txt')
+        await mkdir(repoPath)
+        await writeFile(outsideFile, 'secret')
+        const store = makeStore([{ ...repo, id: 'repo-temp', path: repoPath }])
+
+        await expect(
+          resolveAuthorizedPath(join(repoPath, '..', 'secret.txt'), store)
         ).rejects.toThrow('Access denied')
       } finally {
         await rm(tempRoot, { recursive: true, force: true })

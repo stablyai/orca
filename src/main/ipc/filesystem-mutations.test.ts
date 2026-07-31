@@ -118,16 +118,22 @@ describe('registerFilesystemMutationHandlers', () => {
     ).rejects.toThrow("A file or folder named 'existing.ts' already exists in this location")
   })
 
-  it('rejects file creation outside allowed roots', async () => {
+  it('allows file creation through a workspace symlink to a path outside allowed roots', async () => {
+    // Why: the symlink entry is inside the authorized repo root, so following it
+    // to an external target is permitted (issue #11654 / #4556).
+    const externalTarget = path.resolve('/private/secret.ts')
     mockRealpath({
-      [path.resolve('/workspace/repo/link.ts')]: path.resolve('/private/secret.ts')
+      [path.resolve('/workspace/repo/link.ts')]: externalTarget
     })
 
-    await expect(
-      handlers.get('fs:createFile')!(null, { filePath: path.resolve('/workspace/repo/link.ts') })
-    ).rejects.toThrow('Access denied')
+    await handlers.get('fs:createFile')!(null, {
+      filePath: path.resolve('/workspace/repo/link.ts')
+    })
 
-    expect(writeFileMock).not.toHaveBeenCalled()
+    expect(writeFileMock).toHaveBeenCalledWith(externalTarget, '', {
+      encoding: 'utf-8',
+      flag: 'wx'
+    })
   })
 
   // ── fs:createDir ───────────────────────────────────────────────
@@ -149,16 +155,15 @@ describe('registerFilesystemMutationHandlers', () => {
     expect(mkdirMock).not.toHaveBeenCalled()
   })
 
-  it('rejects directory creation outside allowed roots', async () => {
+  it('allows directory creation through a workspace symlink to a path outside allowed roots', async () => {
+    const externalTarget = path.resolve('/etc/evil')
     mockRealpath({
-      [path.resolve('/workspace/repo/escape')]: path.resolve('/etc/evil')
+      [path.resolve('/workspace/repo/escape')]: externalTarget
     })
 
-    await expect(
-      handlers.get('fs:createDir')!(null, { dirPath: path.resolve('/workspace/repo/escape') })
-    ).rejects.toThrow('Access denied')
+    await handlers.get('fs:createDir')!(null, { dirPath: path.resolve('/workspace/repo/escape') })
 
-    expect(mkdirMock).not.toHaveBeenCalled()
+    expect(mkdirMock).toHaveBeenCalledWith(externalTarget, { recursive: true })
   })
 
   // ── fs:rename ──────────────────────────────────────────────────
@@ -310,22 +315,21 @@ describe('registerFilesystemMutationHandlers', () => {
     expect(renameMock).not.toHaveBeenCalled()
   })
 
-  it('rejects rename when parent directory escapes allowed roots', async () => {
-    // Why: the parent is still canonicalized (preserveSymlink only preserves
-    // the leaf). A symlinked ancestor that points outside allowed roots must
-    // still be rejected so callers cannot redirect rename through it.
+  it('allows rename through a symlinked parent directory that points outside allowed roots', async () => {
+    // Why: preserveSymlink keeps the leaf, but the parent is still canonicalized.
+    // When that parent is an in-workspace symlink to an external dir, follow it.
+    const oldPath = path.resolve('/workspace/repo/old.ts')
+    const externalParent = path.resolve('/private/escape-dir')
     mockRealpath({
-      [path.resolve('/workspace/repo/escape-dir')]: path.resolve('/private/escape-dir')
+      [path.resolve('/workspace/repo/escape-dir')]: externalParent
     })
 
-    await expect(
-      handlers.get('fs:rename')!(null, {
-        oldPath: path.resolve('/workspace/repo/old.ts'),
-        newPath: path.resolve('/workspace/repo/escape-dir/new.ts')
-      })
-    ).rejects.toThrow('Access denied')
+    await handlers.get('fs:rename')!(null, {
+      oldPath,
+      newPath: path.resolve('/workspace/repo/escape-dir/new.ts')
+    })
 
-    expect(renameMock).not.toHaveBeenCalled()
+    expect(renameMock).toHaveBeenCalledWith(oldPath, path.join(externalParent, 'new.ts'))
   })
 
   it('renames a symlink without following its target', async () => {

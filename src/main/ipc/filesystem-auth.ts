@@ -368,6 +368,23 @@ async function resolveAuthorizedMissingPath(resolvedTarget: string, store: Store
   }
 }
 
+function isWorkspaceSymlinkSourceAuthorized(
+  sourcePath: string | undefined,
+  targetPath: string,
+  store: Store
+): boolean {
+  // Why: an in-workspace symlink already required write access to the root; following
+  // it to an external target matches VS Code and the SSH relay (#1672). Only grant
+  // when the pre-realpath source lives inside a trusted root and realpath changed
+  // the path — plain `../` escapes still fail because source and target normalize
+  // to the same outside path (issue #11654 / #4556).
+  return Boolean(
+    sourcePath &&
+    sourcePath !== targetPath &&
+    (isPathAllowed(sourcePath, store) || isRegisteredWorktreePath(sourcePath))
+  )
+}
+
 async function isPathAllowedIncludingRegisteredWorktrees(
   targetPath: string,
   store: Store,
@@ -389,12 +406,17 @@ async function isPathAllowedIncludingRegisteredWorktrees(
     return true
   }
 
+  if (isWorkspaceSymlinkSourceAuthorized(options.canonicalSourcePath, targetPath, store)) {
+    return true
+  }
+
   await ensureAuthorizedRootsCache(store)
 
   // Why: linked worktrees are already git-trusted; reuse the cached root index so reads don't spawn `git worktree list` each time.
   return (
     isRegisteredWorktreePath(targetPath) ||
-    (await isPathAllowedByCanonicalRegisteredRoot(targetPath, options.canonicalSourcePath))
+    (await isPathAllowedByCanonicalRegisteredRoot(targetPath, options.canonicalSourcePath)) ||
+    isWorkspaceSymlinkSourceAuthorized(options.canonicalSourcePath, targetPath, store)
   )
 }
 
