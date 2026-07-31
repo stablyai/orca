@@ -3045,7 +3045,7 @@ export default function SessionScreen() {
 
     try {
       // Why: route composer submit through the live sender so revisioned queue identity applies when advertised.
-      if (!(await sendLiveTerminalInput(activeHandle, `${text}`))) {
+      if (!(await sendLiveTerminalInput(activeHandle, `${text}\r`))) {
         throw new Error('Terminal input was not accepted')
       }
     } catch {
