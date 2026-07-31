@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { GitHubProjectRow } from '../../../../shared/github-project-types'
+import { buildProjectWorkItem } from './ProjectViewWrapper'
 
 const COMPONENT_ROOT = __dirname
 
@@ -20,8 +21,7 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 }
 
 describe('ProjectViewWrapper GitHub source context boundary', () => {
-  it('builds project work items with a host-pinned repository identity', async () => {
-    const { buildProjectWorkItem } = await import('./ProjectViewWrapper')
+  it('builds project work items with a host-pinned repository identity', () => {
     const row: GitHubProjectRow = {
       id: 'PVTI_1',
       itemType: 'PULL_REQUEST',
