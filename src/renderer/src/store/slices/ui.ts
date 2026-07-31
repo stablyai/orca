@@ -36,7 +36,7 @@ import {
   normalizeManualRepoOrder
 } from '../../../../shared/manual-repo-order'
 import { isTopLevelView } from '../../../../shared/top-level-view'
-import type { ReleaseChannel } from '../../../../shared/release-channel'
+import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
   DEFAULT_USAGE_PERCENTAGE_DISPLAY,
@@ -2498,7 +2498,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           return DEFAULT_PET_ID
         })(),
         dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
-        releaseChannelOverride: ui.releaseChannelOverride ?? null,
+        // Why: a persisted value from a build that knew a different channel set
+        // would otherwise survive as-is; activeChannel only falls back on null,
+        // so an unknown string reaches listBuilds and the segmented control.
+        releaseChannelOverride: isReleaseChannel(ui.releaseChannelOverride)
+          ? ui.releaseChannelOverride
+          : null,
         updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
         osc52ClipboardDefaultOnNoticePending: ui.osc52ClipboardDefaultOnNoticePending === true,
         browserDefaultUrl: ui.browserDefaultUrl ?? null,

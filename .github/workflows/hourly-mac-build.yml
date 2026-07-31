@@ -47,7 +47,10 @@ jobs:
   build-hourly-mac:
     if: github.repository == 'stablyai/orca'
     runs-on: blacksmith-6vcpu-macos-15
-    timeout-minutes: 60
+    # Why 150: it must exceed the worst case the retry budgets below can produce
+    # (install 3x10 + publish 2x30 = 90, plus ~35 for checkout/build/verify), or
+    # the job is killed mid-retry and no cleanup step runs at all.
+    timeout-minutes: 150
     env:
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
@@ -56,6 +59,11 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          # Why: this job only reads stablyai/orca and never pushes; every write
+          # goes to the hourly repo through HOURLY_RELEASE_TOKEN passed by env.
+          # Not persisting the checkout credential shrinks the blast radius if a
+          # build step is compromised (zizmor: artipacked).
+          persist-credentials: false
 
       # Why: main is often idle overnight. Rebuilding an unchanged commit burns a
       # runner hour and adds a redundant tag to the retention window.
@@ -75,8 +83,10 @@ jobs:
             exit 0
           fi
           # The previous hourly records its source commit in the release body.
-          last_body="$(gh release list --repo "$HOURLY_REPO" --limit 1 --json tagName \
-            --jq '.[0].tagName // empty' 2>/dev/null || true)"
+          # Drafts are excluded: an unpublished leftover never shipped, so treating
+          # it as "the last build" would skip a build that never actually happened.
+          last_body="$(gh release list --repo "$HOURLY_REPO" --limit 20 --json tagName,isDraft \
+            --jq 'map(select(.isDraft | not)) | .[0].tagName // empty' 2>/dev/null || true)"
           if [[ -z "$last_body" ]]; then
             echo "should_build=true" >>"$GITHUB_OUTPUT"
             echo "No prior hourly release found; building $head_sha."
@@ -163,12 +173,20 @@ jobs:
         run: |
           set -euo pipefail
           short_sha="${SHA:0:12}"
-          # Why: create the release up front so electron-builder uploads into a
-          # known tag rather than inferring one from package.json.
+          # Why create it up front: electron-builder then uploads into a known tag
+          # rather than inferring one from package.json.
+          #
+          # Why --draft: everything between here and the manifest check is a window
+          # where the release exists but has no installable assets. A draft is
+          # absent from the releases list and from listReleaseBuilds, so a job that
+          # dies in that window — including a hard kill by the job timeout, which
+          # runs no cleanup step at all — leaves something invisible rather than a
+          # tag the picker offers and the download 404s on. It is flipped live only
+          # after the manifest is verified.
           gh release create "$TAG" \
             --repo "$HOURLY_REPO" \
             --title "$TAG" \
-            --prerelease \
+            --draft \
             --notes "Automated hourly macOS dev build from commit \`$short_sha\`.
 
           Built from [\`stablyai/orca@$short_sha\`](https://github.com/stablyai/orca/commit/$SHA).
@@ -182,8 +200,11 @@ jobs:
         if: steps.freshness.outputs.should_build == 'true'
         uses: nick-fields/retry@v4
         with:
-          timeout_minutes: 45
-          max_attempts: 3
+          # Why lower than the release pipeline's 3x45: hourly skips notarization,
+          # so an attempt is pack + upload only. Keeping the worst case at 60min
+          # lets it fit under the job timeout with room for the cleanup steps.
+          timeout_minutes: 30
+          max_attempts: 2
           retry_wait_seconds: 30
           command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_HOURLY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
         env:
@@ -210,18 +231,55 @@ jobs:
           assets="$(gh release view "$TAG" --repo "$HOURLY_REPO" --json assets --jq '.assets[].name')"
           echo "Published assets:"
           echo "$assets"
+          # Why exit 1 without deleting here: the release is still a draft, so it is
+          # already invisible to users, and the failure handler below owns cleanup.
+          # Deleting inline under `set -e` would also let the delete's exit code
+          # preempt this explicit failure.
           for required in latest-mac.yml; do
             if ! grep -qx "$required" <<<"$assets"; then
-              echo "::error::Hourly release $TAG is missing $required; the updater could not install it."
-              gh release delete "$TAG" --repo "$HOURLY_REPO" --yes --cleanup-tag
+              echo "::error::Hourly draft $TAG is missing $required; the updater could not install it."
               exit 1
             fi
           done
           if ! grep -q '\.zip$' <<<"$assets"; then
-            echo "::error::Hourly release $TAG has no ZIP artifact for the updater to download."
-            gh release delete "$TAG" --repo "$HOURLY_REPO" --yes --cleanup-tag
+            echo "::error::Hourly draft $TAG has no ZIP artifact for the updater to download."
             exit 1
           fi
+
+      # Why this is the last mutating step: publishing the draft is what makes the
+      # build visible to listReleaseBuilds. Doing it only after the manifest check
+      # means the picker can never offer a release whose assets are incomplete.
+      - name: Publish the verified release
+        id: publish_live
+        if: steps.freshness.outputs.should_build == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HOURLY_RELEASE_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --repo "$HOURLY_REPO" --draft=false --prerelease
+          echo "Published $TAG"
+
+      # Why: a draft left behind by a failed publish is invisible to users but still
+      # holds its tag name, so the next run for the same minute would collide.
+      #
+      # Why it is gated on publish_live not having succeeded: a later failure (the
+      # prune step) must not delete a release that already went live and that users
+      # may already be installing. A job killed by the outer timeout runs no steps
+      # at all — which is exactly why the release stays a draft until verified.
+      - name: Discard the draft release on failure
+        if: failure() && steps.release.outputs.tag != '' && steps.publish_live.outcome != 'success'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HOURLY_RELEASE_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -uo pipefail
+          # No --cleanup-tag: an unpublished draft never created a git tag.
+          echo "Run failed before publish; discarding draft $TAG"
+          gh release delete "$TAG" --repo "$HOURLY_REPO" --yes ||
+            echo "::warning::Could not discard draft $TAG; remove it manually."
 
       - name: Prune old hourly releases
         if: steps.freshness.outputs.should_build == 'true'
@@ -232,8 +290,10 @@ jobs:
           set -euo pipefail
           # Why: --cleanup-tag so pruning does not leave orphan tags behind that
           # keep showing up in tag lists with no release or assets attached.
-          stale="$(gh release list --repo "$HOURLY_REPO" --limit 200 --json tagName,createdAt \
-            --jq "sort_by(.createdAt) | reverse | .[${HOURLY_RETAIN_COUNT}:] | .[].tagName")"
+          # Drafts are excluded so retention counts shipped builds only; a stale
+          # draft is handled by the failure path, not by the retention window.
+          stale="$(gh release list --repo "$HOURLY_REPO" --limit 200 --json tagName,createdAt,isDraft \
+            --jq "map(select(.isDraft | not)) | sort_by(.createdAt) | reverse | .[${HOURLY_RETAIN_COUNT}:] | .[].tagName")"
           if [[ -z "$stale" ]]; then
             echo "Nothing to prune; at or under $HOURLY_RETAIN_COUNT retained builds."
             exit 0

@@ -204,7 +204,10 @@ export function registerAutoUpdaterHandlers({
         // Why: side effects must run after the guard so a concurrent 'error' during the fetch can't leave orphaned state.
         setAvailableVersion(info.version)
         setAvailableReleaseUrl(null)
-        if (!isLocalBuildCheck()) {
+        // Why: a pinned dev jump is not a release check. Letting it call
+        // recordCompletedUpdateCheck() would persist lastUpdateCheckAt and
+        // suppress the next real background check for a full day.
+        if (!isLocalBuildCheck() && !isPinnedBuildCheck()) {
           if (missingManifestFallback || publishingWindowLastGoodCheck) {
             // Why: last-good release is a temporary fallback; keep probing so users can move to the newest tag once it publishes.
             scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)

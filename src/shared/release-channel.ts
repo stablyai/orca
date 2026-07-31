@@ -12,6 +12,10 @@ export const MAIN_RELEASE_REPO = 'stablyai/orca'
 
 export const HOURLY_PRERELEASE_IDENTIFIER = 'hourly'
 
+export function isReleaseChannel(value: unknown): value is ReleaseChannel {
+  return typeof value === 'string' && RELEASE_CHANNELS.includes(value as ReleaseChannel)
+}
+
 export function getReleaseRepoForChannel(channel: ReleaseChannel): string {
   return channel === 'hourly' ? HOURLY_RELEASE_REPO : MAIN_RELEASE_REPO
 }
@@ -32,17 +36,27 @@ export function formatHourlyVersion(baseVersion: string, stamp: string): string 
 
 /** Returns the build's UTC timestamp, or null when the version isn't hourly. */
 export function parseHourlyVersionStamp(version: string): Date | null {
-  const match = normalizeTagToVersion(version).match(
-    /-hourly\.(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/
-  )
+  const normalized = normalizeTagToVersion(version)
+  // Why anchored on the whole version: an unanchored tail match also accepts
+  // garbage prefixes, so `not-a-version-hourly.202601010000` would parse.
+  const match = normalized.match(/^\d+\.\d+\.\d+-hourly\.(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/)
   if (!match) {
     return null
   }
-  const [, year, month, day, hour, minute] = match
-  const parsed = new Date(
-    Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute))
-  )
-  return Number.isNaN(parsed.getTime()) ? null : parsed
+  const [year, month, day, hour, minute] = match.slice(1).map(Number)
+  const parsed = new Date(Date.UTC(year, month - 1, day, hour, minute))
+  // Why the round-trip: Date.UTC silently rolls impossible dates forward, so a
+  // corrupt `...hourly.202602300000` would render as March 2 rather than fail.
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day ||
+    parsed.getUTCHours() !== hour ||
+    parsed.getUTCMinutes() !== minute
+  ) {
+    return null
+  }
+  return parsed
 }
 
 export function getVersionChannel(version: string): ReleaseChannel | null {

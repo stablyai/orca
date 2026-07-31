@@ -4,6 +4,7 @@ import {
   getReleaseRepoForChannel,
   getVersionChannel,
   isHourlyVersion,
+  isReleaseChannel,
   parseHourlyVersionStamp,
   sortReleaseBuildsNewestFirst,
   type ReleaseBuild
@@ -39,6 +40,29 @@ describe('release channel', () => {
     expect(isHourlyVersion('1.4.160-hourly.2026')).toBe(false)
     expect(isHourlyVersion('1.4.160-rc.3')).toBe(false)
     expect(parseHourlyVersionStamp('1.4.160-rc.3')).toBeNull()
+  })
+
+  // Why: an unanchored tail match also accepted garbage prefixes, and Date.UTC
+  // rolls impossible dates forward, so `...hourly.202602300000` rendered as
+  // March 2 rather than being rejected.
+  it('rejects a bad base version and impossible calendar stamps', () => {
+    expect(parseHourlyVersionStamp('not-a-version-hourly.202601010000')).toBeNull()
+    expect(parseHourlyVersionStamp('1.4-hourly.202601010000')).toBeNull()
+    expect(parseHourlyVersionStamp('1.4.160-hourly.202602300000')).toBeNull()
+    expect(parseHourlyVersionStamp('1.4.160-hourly.202613010000')).toBeNull()
+    expect(parseHourlyVersionStamp('1.4.160-hourly.202601012500')).toBeNull()
+    // Leap day 2028 is real and must still parse.
+    expect(parseHourlyVersionStamp('1.4.160-hourly.202802290000')?.toISOString()).toBe(
+      '2028-02-29T00:00:00.000Z'
+    )
+  })
+
+  it('accepts only known channels', () => {
+    expect(isReleaseChannel('hourly')).toBe(true)
+    expect(isReleaseChannel('stable')).toBe(true)
+    expect(isReleaseChannel('nightly')).toBe(false)
+    expect(isReleaseChannel(null)).toBe(false)
+    expect(isReleaseChannel(undefined)).toBe(false)
   })
 
   // Why: consecutive hourlies differ only in the timestamp tail, so semver

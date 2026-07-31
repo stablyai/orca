@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
@@ -70,11 +70,23 @@ export function ReleaseChannelSection(): React.JSX.Element {
     }
   }, [])
 
+  // Why: two loads can be in flight at once — activeChannel flips on mount when
+  // getVersion resolves, and rapid channel clicks stack requests. Without this
+  // guard a slower earlier request can land last and fill the list with builds
+  // from a channel the picker is no longer showing.
+  const latestRequestRef = useRef(0)
+
   const loadBuilds = useCallback(async (channel: ReleaseChannel): Promise<void> => {
+    const requestId = latestRequestRef.current + 1
+    latestRequestRef.current = requestId
+    const isStale = (): boolean => latestRequestRef.current !== requestId
     setLoading(true)
     setLoadError(null)
     try {
       const result = await window.api.updater.listBuilds(channel)
+      if (isStale()) {
+        return
+      }
       if (result.ok) {
         setBuilds(result.builds)
         setSelectedTag(result.builds[0]?.tag ?? null)
@@ -83,10 +95,17 @@ export function ReleaseChannelSection(): React.JSX.Element {
         setLoadError(result.message)
       }
     } catch (error) {
+      if (isStale()) {
+        return
+      }
       setBuilds(null)
       setLoadError(String((error as Error)?.message ?? error))
     } finally {
-      setLoading(false)
+      // Why: only the newest request owns the spinner; a superseded one clearing
+      // it would show "no builds" while the current load is still running.
+      if (!isStale()) {
+        setLoading(false)
+      }
     }
   }, [])
 
@@ -140,7 +159,13 @@ export function ReleaseChannelSection(): React.JSX.Element {
       <div className="space-y-2">
         <SettingsSegmentedControl<ReleaseChannel>
           value={activeChannel}
-          onChange={(channel) => setReleaseChannelOverride(channel)}
+          // Why: selecting the running build's own channel clears the override
+          // rather than pinning it. Without this there is no way back to "follow
+          // this build's channel", so a dev who merely looked at the panel would
+          // leave background checks pinned to whatever they last clicked.
+          onChange={(channel) =>
+            setReleaseChannelOverride(channel === runningChannel ? null : channel)
+          }
           ariaLabel={translate(
             'auto.components.settings.ReleaseChannelSection.channelAriaLabel',
             'Update channel'
