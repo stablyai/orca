@@ -15054,7 +15054,10 @@
           "a9d9dccf77": "Save",
           "777548c2d6": "Save Changes",
           "e8c2a14f70": "Once saved, runs automatically until paused.",
-          "ff5db28639": "existing"
+          "ff5db28639": "existing",
+          "9f1c2a4d88": "Agent args",
+          "7d5e8b3f01": "e.g. --yolo",
+          "2c4a9f6e01": "Extra agent launch arguments"
         },
         "AutomationEditorDialogHeader": {
           "31f9253920": "Use template",

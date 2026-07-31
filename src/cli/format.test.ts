@@ -184,6 +184,7 @@ describe('formatAutomationShow', () => {
       prompt: 'Run checks',
       precheck: null,
       agentId: 'codex',
+      agentArgs: null,
       projectId: 'repo-legacy',
       executionTargetType: 'local',
       executionTargetId: 'local',

@@ -204,6 +204,7 @@ export function formatAutomationShow(result: { automation: Automation }): string
     `id: ${automation.id}`,
     `name: ${automation.name}`,
     `provider: ${automation.agentId}`,
+    `agentArgs: ${automation.agentArgs ?? 'none'}`,
     `enabled: ${automation.enabled}`,
     `schedule: ${formatAutomationSchedule(automation.rrule)}`,
     `rrule: ${automation.rrule}`,

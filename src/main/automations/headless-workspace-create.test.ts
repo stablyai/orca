@@ -22,6 +22,7 @@ const automation: Automation = {
   prompt: 'Review changes',
   precheck: null,
   agentId: 'codex',
+  agentArgs: null,
   runContext: {
     kind: 'workspace-run',
     projectId: 'project-1',

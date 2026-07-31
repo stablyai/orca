@@ -51,6 +51,7 @@ const existingAutomation = {
   prompt: 'Review changes',
   precheck: null,
   agentId: 'codex',
+  agentArgs: null,
   projectId: 'repo-1',
   executionTargetType: 'local',
   executionTargetId: 'local',
