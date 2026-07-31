@@ -194,6 +194,9 @@ export function openDetectedFilePath(
         runtimeEnvironmentId,
         connectionId: fileContext.connectionId ?? null
       })
+      if (requestId !== latestOpenDetectedFilePathRequestId) {
+        return
+      }
       if (routing !== 'builtin' && routing !== 'remote') {
         return
       }
