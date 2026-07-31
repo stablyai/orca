@@ -655,7 +655,10 @@ function runLocalPlan(
           process.platform === 'win32'
             ? resolveCliCommand(binary, { pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null })
             : binary
-        const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, args)
+        const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, args, {
+          allowPowerShellShimFallback: true,
+          env: spawnEnv
+        })
         child = spawn(spawnCmd, spawnArgs, {
           cwd,
           env: spawnEnv,
