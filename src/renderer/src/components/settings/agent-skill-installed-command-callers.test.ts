@@ -180,6 +180,35 @@ describe('AgentSkillSetupPanel installed-command call sites', () => {
     )
   })
 
+  it('keeps client freshness behind resolved local runtime authority', () => {
+    const expectedGates = new Map<string, string>([
+      [
+        'src/renderer/src/components/settings/use-local-cli-skill-freshness-name.ts',
+        "agentRuntime.runtime === 'host' && activeSkillRuntime.canUseLocalSkillFreshness"
+      ],
+      [
+        'src/renderer/src/components/settings/MobileEmulatorAgentControlRow.tsx',
+        'activeSkillRuntime.canUseLocalSkillFreshness ? ORCA_CLI_SKILL_NAME : undefined'
+      ],
+      [
+        'src/renderer/src/components/settings/Settings.tsx',
+        'useSkillFreshness(skillFreshnessApplies)'
+      ],
+      [
+        'src/renderer/src/components/skills/SkillFreshnessNudge.tsx',
+        'useSkillFreshness(activeSkillRuntime.canUseLocalSkillFreshness)'
+      ],
+      [
+        'src/renderer/src/components/skills/SkillFreshnessUpdateDialog.tsx',
+        'useSkillFreshness(activeSkillRuntime.canUseLocalSkillFreshness)'
+      ]
+    ])
+
+    for (const [relativePath, expectedGate] of expectedGates) {
+      expect(readRepoFile(relativePath), relativePath).toContain(expectedGate)
+    }
+  })
+
   it('fails when a production caller can show the default Update action without installedCommand', () => {
     const productionCallers = findProductionPanelCallers(componentsRoot)
 

@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { defineConfig, type UserConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { createBootstrapFatalExitBanner } from './build-plugins/bootstrap-fatal-exit-banner'
 import { createPlainNodeEntryGuardPlugin } from './build-plugins/plain-node-entry-guard'
 import packageJson from './package.json' with { type: 'json' }
 
@@ -16,7 +17,6 @@ const BUNDLED_MAIN_DEPENDENCIES = new Set([
 const EXTERNAL_MAIN_DEPENDENCIES = Object.keys(packageJson.dependencies).filter(
   (dependency) => !BUNDLED_MAIN_DEPENDENCIES.has(dependency)
 )
-const BOOTSTRAP_FATAL_EXIT_GUARD_KEY = '__ORCA_BOOTSTRAP_FATAL_EXIT_GUARD__'
 
 function isExternalMainModule(source: string): boolean {
   if (isBuiltin(source) || source === 'electron' || source.startsWith('electron/')) {
@@ -167,32 +167,6 @@ function createStartupDiagnosticsBanner(chunkName: string): string {
       writeLine('[bootstrap] require-trace-install-error error=' + safeJson(String(error)))
     }
   }
-})();
-`
-}
-
-export function createBootstrapFatalExitBanner(): string {
-  // Why: Electron's pre-import error dialog can leave main resident and block NSIS replacement.
-  return `
-;(() => {
-  const guardKey = ${JSON.stringify(BOOTSTRAP_FATAL_EXIT_GUARD_KEY)}
-  if (typeof globalThis[guardKey] === 'function') {
-    return
-  }
-  let exitScheduled = false
-  const exitAfterBootstrapFailure = () => {
-    if (exitScheduled) {
-      return
-    }
-    exitScheduled = true
-    process.exitCode = 1
-    setImmediate(() => process.exit(1))
-  }
-  globalThis[guardKey] = () => {
-    process.off('uncaughtException', exitAfterBootstrapFailure)
-    delete globalThis[guardKey]
-  }
-  process.once('uncaughtException', exitAfterBootstrapFailure)
 })();
 `
 }

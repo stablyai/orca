@@ -1058,9 +1058,23 @@ export class PtyHandler {
         )
       }
     }
-    const published = this.dispatcher.tryNotifyPtyExit
-      ? this.dispatcher.tryNotifyPtyExit(exit)
-      : (this.dispatcher.notify('pty.exit', exit), true)
+    // Why: a retired record can already have projected this exit to the legacy subscribers, and
+    // the broadcast below would hand them a second copy.
+    let retiredExitPublished: boolean | null | undefined
+    try {
+      retiredExitPublished = this.sourcePublication?.publishExitAfterRetire?.(exit)
+    } catch (err) {
+      process.stderr.write(
+        `[pty-handler] retired pty exit publication failed for ${id}: ${
+          err instanceof Error ? (err.stack ?? err.message) : String(err)
+        }\n`
+      )
+    }
+    const published =
+      retiredExitPublished ??
+      (this.dispatcher.tryNotifyPtyExit
+        ? this.dispatcher.tryNotifyPtyExit(exit)
+        : (this.dispatcher.notify('pty.exit', exit), true))
     if (!published) {
       return
     }
