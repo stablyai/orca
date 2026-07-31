@@ -1293,6 +1293,8 @@ function mergeFetchedFolderWorkspaceCatalog(
 async function reconcileFailedFolderWorkspaceUpdate(args: {
   target: ReturnType<typeof getActiveRuntimeTarget>
   folderWorkspaceId: string
+  updateIdentity: string
+  ownerHostId: ExecutionHostId
   ticket: FolderWorkspaceUpdateTicket<FolderWorkspaceUpdateField>
   coordinator: FolderWorkspaceUpdateCoordinatorInstance
   set: Parameters<StateCreator<AppState>>[0]
@@ -1303,7 +1305,7 @@ async function reconcileFailedFolderWorkspaceUpdate(args: {
       args.target,
       args.get().projectGroups
     )
-    const latestFields = args.coordinator.latestFields(args.folderWorkspaceId, args.ticket)
+    const latestFields = args.coordinator.latestFields(args.updateIdentity, args.ticket)
     if (latestFields.length === 0) {
       return
     }
@@ -1313,11 +1315,16 @@ async function reconcileFailedFolderWorkspaceUpdate(args: {
     args.set((state) => ({
       folderWorkspaces: refreshed
         ? state.folderWorkspaces.map((workspace) =>
-            workspace.id === args.folderWorkspaceId
+            workspace.id === args.folderWorkspaceId &&
+            getFolderWorkspaceHostId(workspace, state.projectGroups) === args.ownerHostId
               ? mergeFolderWorkspaceUpdateResponse(workspace, refreshed, latestFields)
               : workspace
           )
-        : state.folderWorkspaces.filter((workspace) => workspace.id !== args.folderWorkspaceId),
+        : state.folderWorkspaces.filter(
+            (workspace) =>
+              workspace.id !== args.folderWorkspaceId ||
+              getFolderWorkspaceHostId(workspace, state.projectGroups) !== args.ownerHostId
+          ),
       ...(folderWorkspaceUpdateInvalidatesPathStatus(latestFields) || !refreshed
         ? { folderWorkspacePathStatuses: {} }
         : {})
@@ -1678,7 +1685,8 @@ export type RepoSlice = {
   ) => Promise<FolderWorkspacePathStatus | null>
   updateFolderWorkspace: (
     folderWorkspaceId: string,
-    updates: FolderWorkspaceUpdates
+    updates: FolderWorkspaceUpdates,
+    options?: { executionHostId?: ExecutionHostId }
   ) => Promise<boolean>
   deleteFolderWorkspace: (folderWorkspaceId: string) => Promise<boolean>
   updateProjectGroup: (
@@ -2528,15 +2536,26 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  updateFolderWorkspace: async (folderWorkspaceId, updates) => {
+  updateFolderWorkspace: async (folderWorkspaceId, updates, options) => {
     const folderWorkspaceUpdates = getFolderWorkspaceUpdateCoordinator(get)
     const state = get()
-    if (!findFolderWorkspaceOwner(state, folderWorkspaceId)) {
+    const executionHostId =
+      options?.executionHostId ??
+      (state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
+        ? (state.activeWorkspaceExecutionHostId ?? undefined)
+        : undefined)
+    if (!findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)) {
       return false
     }
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(state, folderWorkspaceId)
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(
+      state,
+      folderWorkspaceId,
+      executionHostId
+    )
     // Why: owner-scoped mutations must not follow whichever runtime happens to be focused.
     const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
+    const ownerHostId = executionHostId ?? getRuntimeTargetHostId(target)
+    const updateIdentity = `${ownerHostId}\0${folderWorkspaceId}`
     // Why: same gate as folderWorkspace.create — an older paired runtime would drop the Jira link silently.
     if (
       target.kind === 'environment' &&
@@ -2550,7 +2569,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       )
     }
     const updateTicket = folderWorkspaceUpdates.begin(
-      folderWorkspaceId,
+      updateIdentity,
       Object.keys(updates) as FolderWorkspaceUpdateField[]
     )
     try {
@@ -2569,6 +2588,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         await reconcileFailedFolderWorkspaceUpdate({
           target,
           folderWorkspaceId,
+          updateIdentity,
+          ownerHostId,
           ticket: updateTicket,
           coordinator: folderWorkspaceUpdates,
           set,
@@ -2576,12 +2597,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         })
         return false
       }
-      const latestFields = folderWorkspaceUpdates.latestFields(folderWorkspaceId, updateTicket)
-      const catalogChanged = folderWorkspaceUpdates.catalogChanged(folderWorkspaceId, updateTicket)
+      const latestFields = folderWorkspaceUpdates.latestFields(updateIdentity, updateTicket)
+      const catalogChanged = folderWorkspaceUpdates.catalogChanged(updateIdentity, updateTicket)
       if (latestFields.length > 0) {
         set((s) => ({
           folderWorkspaces: s.folderWorkspaces.map((workspace) =>
-            workspace.id === folderWorkspaceId
+            workspace.id === folderWorkspaceId &&
+            getFolderWorkspaceHostId(workspace, s.projectGroups) === ownerHostId
               ? mergeFolderWorkspaceUpdateResponse(workspace, updated, latestFields, {
                   rejectOlderResponse: catalogChanged
                 })
@@ -2598,6 +2620,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       await reconcileFailedFolderWorkspaceUpdate({
         target,
         folderWorkspaceId,
+        updateIdentity,
+        ownerHostId,
         ticket: updateTicket,
         coordinator: folderWorkspaceUpdates,
         set,
@@ -2605,7 +2629,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       })
       return false
     } finally {
-      folderWorkspaceUpdates.finish(folderWorkspaceId, updateTicket)
+      folderWorkspaceUpdates.finish(updateIdentity, updateTicket)
     }
   },
 
@@ -3228,6 +3252,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         )
         activateAndRevealWorktree(folderWorktree.id, {
           sidebarRevealBehavior: 'auto',
+          ...(executionHostId ? { executionHostId } : {}),
           ...(startup ? { startup } : {})
         })
       }
@@ -3406,6 +3431,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
                 activeView: 'terminal' as const,
                 activeWorktreeId: null,
                 activeWorkspaceKey: null,
+                activeWorkspaceExecutionHostId: null,
                 activeRepoId: null
               }
             : {})

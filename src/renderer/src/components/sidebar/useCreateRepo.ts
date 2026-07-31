@@ -212,7 +212,12 @@ export function useCreateRepo(
               worktree.hostId === ownerOptions.executionHostId
           )
         if (folderWorktree) {
-          activateAndRevealWorktree(folderWorktree.id, { sidebarRevealBehavior: 'auto' })
+          activateAndRevealWorktree(folderWorktree.id, {
+            sidebarRevealBehavior: 'auto',
+            ...(ownerOptions.executionHostId
+              ? { executionHostId: ownerOptions.executionHostId }
+              : {})
+          })
         }
         await markOnboardingProjectAdded('addedFolder')
         closeModal()

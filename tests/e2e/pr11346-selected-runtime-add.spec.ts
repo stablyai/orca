@@ -1,11 +1,7 @@
-import { execFileSync } from 'node:child_process'
-import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { mkdtemp } from 'node:fs/promises'
-import os from 'node:os'
+import { rmSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Locator, Page, TestInfo } from '@stablyai/playwright-test'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import type { AppState } from '../../src/renderer/src/store/types'
 import type { FolderWorkspace, ProjectGroup, Repo } from '../../src/shared/types'
 import { expect, test } from './helpers/orca-app'
 import {
@@ -13,227 +9,12 @@ import {
   launchPairedElectronClient
 } from './helpers/paired-electron-client'
 import { waitForSessionReady } from './helpers/store'
-
-function initializeGitRepo(repoPath: string, markerName: string): void {
-  mkdirSync(repoPath, { recursive: true })
-  execFileSync('git', ['init'], { cwd: repoPath, stdio: 'pipe' })
-  execFileSync('git', ['config', 'user.email', 'pr11346@test.local'], {
-    cwd: repoPath,
-    stdio: 'pipe'
-  })
-  execFileSync('git', ['config', 'user.name', 'PR 11346 E2E'], {
-    cwd: repoPath,
-    stdio: 'pipe'
-  })
-  writeFileSync(path.join(repoPath, markerName), `# ${path.basename(repoPath)} authority\n`)
-  execFileSync('git', ['add', markerName], { cwd: repoPath, stdio: 'pipe' })
-  execFileSync('git', ['commit', '-m', 'Initial remote fixture'], {
-    cwd: repoPath,
-    stdio: 'pipe'
-  })
-}
-
-async function createProjectFixtures(): Promise<{
-  catalogFolderPath: string
-  cloneParentPath: string
-  clonedRepoPath: string
-  createdRepoPath: string
-  createParentPath: string
-  folderPath: string
-  gitPath: string
-  localCloneCollisionPath: string
-  localCreateCollisionPath: string
-  nestedParentPath: string
-  nestedRepoPaths: string[]
-  reconnectCatalogPath: string
-  rootPath: string
-}> {
-  const rootPath = realpathSync(await mkdtemp(path.join(os.tmpdir(), 'orca-pr11346-headed-')))
-  const gitPath = path.join(rootPath, 'remote-git-project')
-  const folderPath = path.join(rootPath, 'remote-plain-folder')
-  const cloneParentPath = path.join(rootPath, 'remote-clones')
-  const createParentPath = path.join(rootPath, 'remote-created-projects')
-  const nestedParentPath = path.join(rootPath, 'remote-nested-projects')
-  const catalogFolderPath = path.join(nestedParentPath, 'catalog-workspace')
-  const reconnectCatalogPath = path.join(rootPath, 'reconnect-catalog')
-  const localCloneCollisionPath = path.join(rootPath, 'local-clone-collision')
-  const localCreateCollisionPath = path.join(rootPath, 'local-create-collision')
-  const nestedRepoPaths = ['nested-api', 'nested-web'].map((name) =>
-    path.join(nestedParentPath, name)
-  )
-  mkdirSync(folderPath)
-  mkdirSync(cloneParentPath)
-  mkdirSync(createParentPath)
-  writeFileSync(path.join(folderPath, 'REMOTE_FOLDER_MARKER.txt'), 'remote-folder-authority\n')
-  initializeGitRepo(gitPath, 'REMOTE_GIT_MARKER.md')
-  initializeGitRepo(localCloneCollisionPath, 'LOCAL_CLONE_COLLISION.md')
-  initializeGitRepo(localCreateCollisionPath, 'LOCAL_CREATE_COLLISION.md')
-  nestedRepoPaths.forEach((repoPath) => initializeGitRepo(repoPath, 'NESTED_REMOTE_MARKER.md'))
-  mkdirSync(catalogFolderPath)
-  mkdirSync(reconnectCatalogPath)
-  return {
-    catalogFolderPath,
-    cloneParentPath,
-    clonedRepoPath: path.join(cloneParentPath, path.basename(gitPath)),
-    createParentPath,
-    createdRepoPath: path.join(createParentPath, 'runtime-created-project'),
-    folderPath,
-    gitPath,
-    localCloneCollisionPath,
-    localCreateCollisionPath,
-    nestedParentPath,
-    nestedRepoPaths,
-    reconnectCatalogPath,
-    rootPath
-  }
-}
-
-type ActivationCollision = {
-  localWorktreeId: string
-  runtimeWorktreeId: string
-}
-
-async function installFinalActivationGate(page: Page, targetPath: string): Promise<void> {
-  await page.evaluate((pathToGate) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Renderer store unavailable')
-    }
-    const originalFetchWorktrees = store.getState().fetchWorktrees
-    let release!: () => void
-    const released = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    const gateWindow = window as typeof window & {
-      __pr11346ActivationGate?: {
-        originalFetchWorktrees: typeof originalFetchWorktrees
-        release: () => void
-        waiting: boolean
-      }
-    }
-    gateWindow.__pr11346ActivationGate = {
-      originalFetchWorktrees,
-      release,
-      waiting: false
-    }
-    store.setState({
-      fetchWorktrees: async (...args: Parameters<typeof originalFetchWorktrees>) => {
-        const result = await originalFetchWorktrees(...args)
-        const targetRepo = store
-          .getState()
-          .repos.find(
-            (repo) =>
-              repo.path === pathToGate && repo.executionHostId?.startsWith('runtime:') === true
-          )
-        if (targetRepo?.id === args[0]) {
-          gateWindow.__pr11346ActivationGate!.waiting = true
-          await released
-        }
-        return result
-      }
-    })
-  }, targetPath)
-}
-
-async function injectSameIdLocalActivationCollision(
-  page: Page,
-  targetPath: string,
-  localPath: string
-): Promise<ActivationCollision> {
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          (
-            window as typeof window & {
-              __pr11346ActivationGate?: { waiting: boolean }
-            }
-          ).__pr11346ActivationGate?.waiting ?? false
-      )
-    )
-    .toBe(true)
-
-  return page.evaluate(
-    ({ localCollisionPath, runtimePath }) => {
-      const store = window.__store
-      const gateWindow = window as typeof window & {
-        __pr11346ActivationGate?: {
-          originalFetchWorktrees: AppState['fetchWorktrees']
-          release: () => void
-        }
-      }
-      const gate = gateWindow.__pr11346ActivationGate
-      if (!store || !gate) {
-        throw new Error('Activation gate unavailable')
-      }
-      const state = store.getState()
-      const runtimeRepo = state.repos.find(
-        (repo) => repo.path === runtimePath && repo.executionHostId?.startsWith('runtime:') === true
-      )
-      if (!runtimeRepo) {
-        throw new Error(`Runtime repo unavailable for ${runtimePath}`)
-      }
-      const runtimeWorktree = state.worktreesByRepo[runtimeRepo.id]?.find(
-        (worktree) => worktree.hostId === runtimeRepo.executionHostId && worktree.isMainWorktree
-      )
-      if (!runtimeWorktree) {
-        throw new Error(`Runtime default checkout unavailable for ${runtimePath}`)
-      }
-      const localWorktree = {
-        ...runtimeWorktree,
-        id: `${runtimeRepo.id}::${localCollisionPath}`,
-        path: localCollisionPath,
-        hostId: 'local' as const,
-        runtimeOwnerEnvironmentId: null
-      }
-      store.setState({
-        repos: [
-          {
-            ...runtimeRepo,
-            path: localCollisionPath,
-            displayName: `Local collision for ${runtimeRepo.displayName}`,
-            executionHostId: 'local',
-            connectionId: null
-          },
-          ...state.repos
-        ],
-        worktreesByRepo: {
-          ...state.worktreesByRepo,
-          [runtimeRepo.id]: [localWorktree, ...(state.worktreesByRepo[runtimeRepo.id] ?? [])]
-        },
-        fetchWorktrees: gate.originalFetchWorktrees
-      })
-      gate.release()
-      delete gateWindow.__pr11346ActivationGate
-      return {
-        localWorktreeId: localWorktree.id,
-        runtimeWorktreeId: runtimeWorktree.id
-      }
-    },
-    { localCollisionPath: localPath, runtimePath: targetPath }
-  )
-}
-
-async function expectRuntimeActivation(page: Page, collision: ActivationCollision): Promise<void> {
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const state = window.__store?.getState()
-        return {
-          activeWorktreeId: state?.activeWorktreeId ?? null,
-          activeWorktreeHost:
-            Object.values(state?.worktreesByRepo ?? {})
-              .flat()
-              .find((worktree) => worktree.id === state?.activeWorktreeId)?.hostId ?? null
-        }
-      })
-    )
-    .toEqual({
-      activeWorktreeHost: expect.stringMatching(/^runtime:/),
-      activeWorktreeId: collision.runtimeWorktreeId
-    })
-  expect(collision.runtimeWorktreeId).not.toBe(collision.localWorktreeId)
-}
+import {
+  createProjectFixtures,
+  expectRuntimeActivation,
+  injectSameIdLocalActivationCollision,
+  installFinalActivationGate
+} from './pr11346-selected-runtime-identity-oracle'
 
 async function selectRuntimeHost(page: Page, runtimeName: string): Promise<Locator> {
   await page
@@ -242,9 +23,12 @@ async function selectRuntimeHost(page: Page, runtimeName: string): Promise<Locat
     .click()
   const dialog = page.getByRole('dialog', { name: /Add a project/i })
   await expect(dialog).toBeVisible()
-  await dialog.getByRole('combobox').click()
-  await page.locator('[cmdk-item]').filter({ hasText: runtimeName }).click()
-  await expect(dialog.getByRole('combobox')).toContainText(runtimeName)
+  const hostPicker = dialog.getByRole('combobox')
+  if (!(await hostPicker.textContent())?.includes(runtimeName)) {
+    await hostPicker.click()
+    await page.locator('[cmdk-item]').filter({ hasText: runtimeName }).click()
+  }
+  await expect(hostPicker).toContainText(runtimeName)
   return dialog
 }
 
@@ -335,16 +119,28 @@ async function runSelectedRuntimeAddJourney(
     expect(initialClientInventory.repos.map((repo) => repo.path)).not.toContain(fixture.gitPath)
 
     startedAt = Date.now()
+    await installFinalActivationGate(client.page, fixture.gitPath)
     const gitDialog = await selectRuntimeHostAndOpenManualPath(client.page, runtimeName)
     await gitDialog.locator('#server-project-path').fill(fixture.gitPath)
     await gitDialog.getByRole('button', { name: /Add Git Project/i }).click()
+    const gitCollision = await injectSameIdLocalActivationCollision(
+      client.page,
+      fixture.gitPath,
+      fixture.localCloneCollisionPath
+    )
     await expect(gitDialog).toBeHidden({ timeout: 30_000 })
     measurements.gitAddMs = Date.now() - startedAt
 
     startedAt = Date.now()
+    await installFinalActivationGate(client.page, fixture.folderPath)
     const folderDialog = await selectRuntimeHostAndOpenManualPath(client.page, runtimeName)
     await folderDialog.locator('#server-project-path').fill(fixture.folderPath)
     await folderDialog.getByRole('button', { name: /Open as Folder/i }).click()
+    const folderCollision = await injectSameIdLocalActivationCollision(
+      client.page,
+      fixture.folderPath,
+      fixture.localCreateCollisionPath
+    )
     await expect(folderDialog).toBeHidden({ timeout: 30_000 })
     measurements.folderAddMs = Date.now() - startedAt
 
@@ -601,24 +397,6 @@ async function runSelectedRuntimeAddJourney(
               parentPath: group.parentPath
             }))
         }
-        store.setState({
-          projectGroups: collided.projectGroups.filter(
-            (group) =>
-              !(
-                group.id === runtimeGroup.id &&
-                group.executionHostId === 'local' &&
-                group.parentPath === localGroup.parentPath
-              )
-          ),
-          folderWorkspaces: collided.folderWorkspaces.filter(
-            (workspace) =>
-              !(
-                workspace.id === runtimeFolder.id &&
-                workspace.executionHostId === 'local' &&
-                workspace.folderPath === localFolder.folderPath
-              )
-          )
-        })
         return result
       },
       {
@@ -652,6 +430,114 @@ async function runSelectedRuntimeAddJourney(
       ])
     })
 
+    const reversedFolderActivation = await client.page.evaluate(
+      ({ catalogFolderPath, runtimeEnvironmentId }) => {
+        const store = window.__store
+        if (!store) {
+          throw new Error('Renderer store unavailable')
+        }
+        const hostId = `runtime:${runtimeEnvironmentId}` as const
+        const state = store.getState()
+        const runtimeFolder = state.folderWorkspaces.find(
+          (workspace) =>
+            workspace.folderPath === catalogFolderPath && workspace.executionHostId === hostId
+        )
+        if (!runtimeFolder) {
+          throw new Error('Runtime folder unavailable for reversed activation')
+        }
+        const sameFolders = state.folderWorkspaces
+          .filter((workspace) => workspace.id === runtimeFolder.id)
+          .toReversed()
+        const sameGroups = state.projectGroups
+          .filter((group) => group.id === runtimeFolder.projectGroupId)
+          .toReversed()
+        store.setState({
+          folderWorkspaces: [
+            ...state.folderWorkspaces.filter((workspace) => workspace.id !== runtimeFolder.id),
+            ...sameFolders
+          ],
+          projectGroups: [
+            ...state.projectGroups.filter((group) => group.id !== runtimeFolder.projectGroupId),
+            ...sameGroups
+          ]
+        })
+        store.getState().setActiveFolderWorkspace(runtimeFolder.id, hostId)
+        const activated = store.getState()
+        return {
+          activeHostId: activated.activeWorkspaceExecutionHostId,
+          activePath: activated.getKnownWorktreeById(`folder:${runtimeFolder.id}`, hostId)?.path,
+          sameIdHosts: activated.folderWorkspaces
+            .filter((workspace) => workspace.id === runtimeFolder.id)
+            .map((workspace) => workspace.executionHostId)
+            .sort()
+        }
+      },
+      {
+        catalogFolderPath: fixture.catalogFolderPath,
+        runtimeEnvironmentId: client.environmentId
+      }
+    )
+    expect(reversedFolderActivation).toEqual({
+      activeHostId: `runtime:${client.environmentId}`,
+      activePath: fixture.catalogFolderPath,
+      sameIdHosts: ['local', `runtime:${client.environmentId}`]
+    })
+
+    const collisionReconnect = await client.page.evaluate(
+      async ({ catalogFolderPath, environmentId }) => {
+        const store = window.__store
+        if (!store) {
+          throw new Error('Renderer store unavailable')
+        }
+        const runtimeFolder = store
+          .getState()
+          .folderWorkspaces.find((workspace) => workspace.folderPath === catalogFolderPath)
+        if (!runtimeFolder) {
+          throw new Error('Runtime folder unavailable before collision reconnect')
+        }
+        const staleRequests = [
+          store.getState().fetchProjectGroups({ runtimeEnvironmentId: environmentId }),
+          store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: environmentId })
+        ]
+        await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
+        const response = await window.api.runtimeEnvironments.connect({
+          selector: environmentId,
+          timeoutMs: 15_000
+        })
+        if (!response.ok) {
+          throw new Error(response.error.message)
+        }
+        if (!(await store.getState().refreshRuntimeEnvironmentStatus(environmentId))) {
+          throw new Error('Paired runtime did not recover after collision reconnect')
+        }
+        await store.getState().fetchProjectGroups({ runtimeEnvironmentId: environmentId })
+        await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: environmentId })
+        await Promise.allSettled(staleRequests)
+        store.getState().setActiveFolderWorkspace(runtimeFolder.id, `runtime:${environmentId}`)
+        const state = store.getState()
+        return {
+          activeHostId: state.activeWorkspaceExecutionHostId,
+          folderHosts: state.folderWorkspaces
+            .filter((workspace) => workspace.id === runtimeFolder.id)
+            .map((workspace) => workspace.executionHostId)
+            .sort(),
+          groupHosts: state.projectGroups
+            .filter((group) => group.id === runtimeFolder.projectGroupId)
+            .map((group) => group.executionHostId)
+            .sort()
+        }
+      },
+      {
+        catalogFolderPath: fixture.catalogFolderPath,
+        environmentId: client.environmentId
+      }
+    )
+    expect(collisionReconnect).toEqual({
+      activeHostId: `runtime:${client.environmentId}`,
+      folderHosts: ['local', `runtime:${client.environmentId}`],
+      groupHosts: ['local', `runtime:${client.environmentId}`]
+    })
+
     const catalogAfterLocalRefresh = await client.page.evaluate(async () => {
       const store = window.__store
       if (!store) {
@@ -675,6 +561,7 @@ async function runSelectedRuntimeAddJourney(
     expect(catalogAfterLocalRefresh.folderWorkspaces).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          executionHostId: `runtime:${client.environmentId}`,
           folderPath: fixture.catalogFolderPath
         })
       ])
@@ -685,7 +572,9 @@ async function runSelectedRuntimeAddJourney(
         clonedRepoPath,
         createdRepoPath,
         environmentId,
+        folderCollisionId,
         folderPath,
+        gitCollisionId,
         gitPath,
         nestedParentPath,
         nestedRepoPaths
@@ -701,8 +590,20 @@ async function runSelectedRuntimeAddJourney(
           createdOwner:
             state?.repos.find((repo) => repo.path === createdRepoPath)?.executionHostId ?? null,
           folderKind: state?.repos.find((repo) => repo.path === folderPath)?.kind ?? null,
+          folderSameIdHosts:
+            Object.values(state?.worktreesByRepo ?? {})
+              .flat()
+              .filter((worktree) => worktree.id === folderCollisionId)
+              .map((worktree) => worktree.hostId ?? 'local')
+              .sort() ?? [],
           folderOwner:
             state?.repos.find((repo) => repo.path === folderPath)?.executionHostId ?? null,
+          gitSameIdHosts:
+            Object.values(state?.worktreesByRepo ?? {})
+              .flat()
+              .filter((worktree) => worktree.id === gitCollisionId)
+              .map((worktree) => worktree.hostId ?? 'local')
+              .sort() ?? [],
           gitOwner: state?.repos.find((repo) => repo.path === gitPath)?.executionHostId ?? null,
           nestedGroupOwner: nestedGroup?.executionHostId ?? null,
           nestedRepoOwners: nestedRepos.map((repo) => repo.executionHostId ?? null).sort(),
@@ -718,7 +619,9 @@ async function runSelectedRuntimeAddJourney(
         clonedRepoPath: fixture.clonedRepoPath,
         createdRepoPath: fixture.createdRepoPath,
         environmentId: client.environmentId,
+        folderCollisionId: folderCollision.runtimeWorktreeId,
         folderPath: fixture.folderPath,
+        gitCollisionId: gitCollision.runtimeWorktreeId,
         gitPath: fixture.gitPath,
         nestedParentPath: fixture.nestedParentPath,
         nestedRepoPaths: fixture.nestedRepoPaths
@@ -731,7 +634,9 @@ async function runSelectedRuntimeAddJourney(
       expectedOwner: `runtime:${client.environmentId}`,
       folderKind: 'folder',
       folderOwner: `runtime:${client.environmentId}`,
+      folderSameIdHosts: ['local', `runtime:${client.environmentId}`],
       gitOwner: `runtime:${client.environmentId}`,
+      gitSameIdHosts: ['local', `runtime:${client.environmentId}`],
       nestedGroupOwner: `runtime:${client.environmentId}`,
       nestedRepoOwners: [`runtime:${client.environmentId}`, `runtime:${client.environmentId}`],
       nestedReposInGroup: true

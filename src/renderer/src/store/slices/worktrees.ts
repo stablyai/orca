@@ -120,6 +120,7 @@ import type {
   SshExecutionHostId
 } from '../../../../shared/detected-worktree-provider-contract'
 import type { DirectSshAuthority } from '../../../../shared/ssh-types'
+import { findIndexedWorktreeOwnerForHost } from '@/lib/worktree-runtime-owner-index'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list UI hydration parity used before `worktree.detectedList` existed.
@@ -810,14 +811,29 @@ function applyDetectedWorktreeUpdates(
   return changed ? nextByRepo : detectedWorktreesByRepo
 }
 
+function folderWorkspaceMatchesHost(
+  workspace: Pick<FolderWorkspace, 'connectionId' | 'executionHostId'>,
+  executionHostId: ExecutionHostId
+): boolean {
+  return (
+    (parseExecutionHostId(workspace.executionHostId)?.id ??
+      (workspace.connectionId?.trim()
+        ? toSshExecutionHostId(workspace.connectionId)
+        : LOCAL_EXECUTION_HOST_ID)) === executionHostId
+  )
+}
+
 function findKnownWorktreeById(
   state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces'>,
-  worktreeId: string
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
 ): Worktree | DetectedWorktreeListResult['worktrees'][number] | undefined {
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     const folderWorkspace = state.folderWorkspaces.find(
-      (workspace) => workspace.id === workspaceScope.folderWorkspaceId
+      (workspace) =>
+        workspace.id === workspaceScope.folderWorkspaceId &&
+        (!executionHostId || folderWorkspaceMatchesHost(workspace, executionHostId))
     )
     if (!folderWorkspace) {
       return undefined
@@ -830,12 +846,25 @@ function findKnownWorktreeById(
     folderWorkspaceWorktreeCache.set(folderWorkspace, worktree)
     return worktree
   }
-  const visible = findWorktreeById(state.worktreesByRepo, worktreeId)
+  const visible = executionHostId
+    ? (findIndexedWorktreeOwnerForHost(
+        state.worktreesByRepo,
+        worktreeId,
+        executionHostId
+      ) as Worktree | null)
+    : findWorktreeById(state.worktreesByRepo, worktreeId)
   if (visible) {
     return visible
   }
   for (const result of Object.values(state.detectedWorktreesByRepo)) {
-    const detected = result.worktrees.find((worktree) => worktree.id === worktreeId)
+    const detected = result.worktrees.find(
+      (worktree) =>
+        worktree.id === worktreeId &&
+        (!executionHostId ||
+          worktreeMatchesHost(worktree, executionHostId, {
+            unhostedWorktreesMatchHost: executionHostId === LOCAL_EXECUTION_HOST_ID
+          }))
+    )
     if (detected) {
       return detected
     }
@@ -2718,6 +2747,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
       s.defaultTerminalTabsAppliedByWorktreeId
     ),
     activeWorktreeId: removedActive ? null : s.activeWorktreeId,
+    activeWorkspaceExecutionHostId: removedActive ? null : s.activeWorkspaceExecutionHostId,
     activeWorkspaceKey: (() => {
       if (s.activeWorkspaceKey && worktreeIdSet.has(s.activeWorkspaceKey)) {
         return null
@@ -3034,6 +3064,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   workspaceLineageByChildKey: {},
   activeWorktreeId: null,
   activeWorkspaceKey: null,
+  activeWorkspaceExecutionHostId: null,
   pendingWorktreeCreations: {},
   activePendingCreationId: null,
   renamingWorktreeId: null,
@@ -4232,6 +4263,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             return next
           })(),
           activeWorktreeId: removedActiveWorktree ? null : s.activeWorktreeId,
+          activeWorkspaceExecutionHostId: removedActiveWorktree
+            ? null
+            : s.activeWorkspaceExecutionHostId,
           activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId,
           openFiles: newOpenFiles,
           browserTabsByWorktree: nextBrowserTabsByWorktree,
@@ -5067,8 +5101,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           changed = true
         }
       }
-      const patch: { lastVisitedAtByWorktreeId?: Record<string, number>; activeWorktreeId?: null } =
-        {}
+      const patch: {
+        lastVisitedAtByWorktreeId?: Record<string, number>
+        activeWorktreeId?: null
+        activeWorkspaceExecutionHostId?: null
+      } = {}
       if (changed) {
         patch.lastVisitedAtByWorktreeId = next
       }
@@ -5085,6 +5122,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         const activeRepoWorktreeIds = validIdsByRepo.get(getRepoIdFromWorktreeId(activeId))
         if (activeRepoWorktreeIds && !activeRepoWorktreeIds.has(activeId)) {
           patch.activeWorktreeId = null
+          patch.activeWorkspaceExecutionHostId = null
         }
       }
       return Object.keys(patch).length > 0 ? patch : {}
@@ -5147,7 +5185,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     return remounted
   },
 
-  setActiveWorktree: (worktreeId) => {
+  setActiveWorktree: (worktreeId, executionHostId) => {
     const workspaceScope = worktreeId ? parseWorkspaceKey(worktreeId) : null
     if (worktreeId && shouldDeferActivationTerminalPrep()) {
       markInputQuietSchedulerInput()
@@ -5167,12 +5205,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         return {
           activeWorktreeId: null,
           activeWorkspaceKey: null,
+          activeWorkspaceExecutionHostId: null,
           // Why: clearing/activating a worktree must dismiss the background-creation panel so the user isn't stranded on it.
           activePendingCreationId: null
         }
       }
 
-      const worktree = findKnownWorktreeById(s, worktreeId)
+      const worktree = findKnownWorktreeById(s, worktreeId, executionHostId)
       shouldClearUnread = Boolean(worktree?.isUnread)
 
       // Why: Search lives under Explorer, so the files/search sub-route must switch with the worktree, not leak the prior one.
@@ -5339,6 +5378,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           : { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType }
       const hasStateChange =
         s.activeWorktreeId !== worktreeId ||
+        s.activeWorkspaceExecutionHostId !== (executionHostId ?? null) ||
         // Why: a pending-creation panel can show over the prior worktree; a non-null activePendingCreationId counts as a change.
         s.activePendingCreationId !== null ||
         s.activeFileId !== activeFileId ||
@@ -5363,6 +5403,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         activeWorkspaceKey: isWorkspaceKey(worktreeId)
           ? worktreeId
           : worktreeWorkspaceKey(worktreeId),
+        activeWorkspaceExecutionHostId: executionHostId ?? null,
         activePendingCreationId: null,
         activeFileId,
         activeBrowserTabId,
@@ -5436,7 +5477,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       get().refreshGitHubForWorktreeIfStale(worktreeId)
     }
 
-    if (!worktreeId || !get().getKnownWorktreeById(worktreeId)) {
+    if (!worktreeId || !get().getKnownWorktreeById(worktreeId, executionHostId)) {
       return
     }
 
@@ -5454,9 +5495,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
   },
 
-  setActiveFolderWorkspace: (folderWorkspaceId) => {
+  setActiveFolderWorkspace: (folderWorkspaceId, executionHostId) => {
     const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
-    const workspace = get().folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
+    const workspace = findKnownWorktreeById(get(), workspaceKey, executionHostId)
     if (!workspace) {
       return
     }
@@ -5542,6 +5583,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         activeRepoId: null,
         activeWorktreeId: workspaceKey,
         activeWorkspaceKey: workspaceKey,
+        activeWorkspaceExecutionHostId: executionHostId ?? null,
         activePendingCreationId: null,
         activeFileId,
         activeBrowserTabId,
@@ -5554,19 +5596,27 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         everActivatedWorktreeIds: nextEverActivated,
         folderWorkspaces: workspace.isUnread
           ? s.folderWorkspaces.map((entry) =>
-              entry.id === folderWorkspaceId ? { ...entry, isUnread: false } : entry
+              entry.id === folderWorkspaceId &&
+              (!executionHostId || folderWorkspaceMatchesHost(entry, executionHostId))
+                ? { ...entry, isUnread: false }
+                : entry
             )
           : s.folderWorkspaces
       }
     })
     if (workspace.isUnread) {
-      void get().updateFolderWorkspace(folderWorkspaceId, { isUnread: false })
+      void get().updateFolderWorkspace(
+        folderWorkspaceId,
+        { isUnread: false },
+        executionHostId ? { executionHostId } : undefined
+      )
     }
   },
 
   allWorktrees: () => Object.values(get().worktreesByRepo).flat(),
 
-  getKnownWorktreeById: (worktreeId) => findKnownWorktreeById(get(), worktreeId),
+  getKnownWorktreeById: (worktreeId, executionHostId) =>
+    findKnownWorktreeById(get(), worktreeId, executionHostId),
 
   purgeWorktreeTerminalState: (worktreeIds: string[]) => {
     const purgeableWorktreeIds = worktreeIds.filter((id) => id !== FLOATING_TERMINAL_WORKTREE_ID)

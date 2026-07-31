@@ -90,6 +90,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
             )
             activateAndRevealWorktree(folderWorktree.id, {
               sidebarRevealBehavior: 'auto',
+              executionHostId: ownerOptions.executionHostId,
               ...(startup ? { startup } : {})
             })
           }

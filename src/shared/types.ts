@@ -1119,6 +1119,7 @@ export type WorkspaceSessionState = {
   activeRepoId: string | null
   /** Scope-aware active owner for folder workspaces. Legacy worktree UI still reads activeWorktreeId. */
   activeWorkspaceKey?: WorkspaceKey | null
+  activeWorkspaceExecutionHostId?: ExecutionHostId | null
   activeWorktreeId: string | null
   activeTabId: string | null
   /** Keys may be legacy raw worktree IDs or canonical WorkspaceKey values. */

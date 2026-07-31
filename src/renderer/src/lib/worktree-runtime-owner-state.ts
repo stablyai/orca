@@ -26,6 +26,8 @@ export type WorktreeRuntimeOwnerState = {
   >[]
   projectGroups?: readonly Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>[]
   restoredRuntimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
+  activeWorktreeId?: string | null
+  activeWorkspaceExecutionHostId?: ExecutionHostId | null
   runtimeEnvironments?: readonly { id: string }[]
   runtimeEnvironmentCatalogHydrated?: boolean
   removedRuntimeEnvironmentIds?: ReadonlySet<string>

@@ -178,12 +178,12 @@ describe('finishProjectAddWithDefaultCheckout', () => {
 
   it('activates only the captured host default checkout when repo IDs collide', async () => {
     const localMain = makeWorktree({
-      id: 'repo-1::/local/repo',
+      id: 'repo-1::same-id',
       path: '/local/repo',
       hostId: 'local'
     })
     const runtimeMain = makeWorktree({
-      id: 'repo-1::/runtime/repo',
+      id: 'repo-1::same-id',
       path: '/runtime/repo',
       hostId: 'runtime:env-1'
     })
@@ -216,8 +216,9 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       setHideDefaultBranchWorkspace: vi.fn()
     })
 
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(runtimeMain.id)
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalledWith(localMain.id)
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(runtimeMain.id, {
+      executionHostId: 'runtime:env-1'
+    })
   })
 
   it('passes a contained selected path through as the initial terminal cwd', async () => {

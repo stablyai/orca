@@ -837,6 +837,7 @@ type WorkspaceHydrationPatch = Pick<
   | 'activeRepoId'
   | 'activeWorktreeId'
   | 'activeWorkspaceKey'
+  | 'activeWorkspaceExecutionHostId'
   | 'activeTabId'
   | 'activeTabIdByWorktree'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
@@ -930,6 +931,9 @@ function targetScopedWorkspaceHydrationPatch(
     activeRepoId: activeOutsideScope ? state.activeRepoId : hydrated.activeRepoId,
     activeWorktreeId: activeOutsideScope ? state.activeWorktreeId : hydrated.activeWorktreeId,
     activeWorkspaceKey: activeOutsideScope ? state.activeWorkspaceKey : hydrated.activeWorkspaceKey,
+    activeWorkspaceExecutionHostId: activeOutsideScope
+      ? state.activeWorkspaceExecutionHostId
+      : hydrated.activeWorkspaceExecutionHostId,
     activeTabId: activeOutsideScope ? state.activeTabId : hydrated.activeTabId,
     activeTabIdByWorktree: replaceHydratedRecordKeys(
       state.activeTabIdByWorktree,
@@ -3805,6 +3809,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
               ? (activeWorktreeId as WorkspaceKey)
               : worktreeWorkspaceKey(activeWorktreeId)
             : null
+      const activeWorkspaceExecutionHostId =
+        activeWorkspaceKey && session.activeWorkspaceExecutionHostId
+          ? session.activeWorkspaceExecutionHostId
+          : null
       const activeTabId =
         session.activeTabId && validTabIds.has(session.activeTabId) ? session.activeTabId : null
       const activeRepoId =
@@ -3941,6 +3949,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         activeRepoId,
         activeWorktreeId,
         activeWorkspaceKey,
+        activeWorkspaceExecutionHostId,
         activeTabId,
         activeTabIdByWorktree,
         restoredRuntimeHostIdByWorkspaceSessionKey:

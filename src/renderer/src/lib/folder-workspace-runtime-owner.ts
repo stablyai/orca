@@ -20,24 +20,54 @@ export type FolderWorkspaceRuntimeOwnerState = SingleRuntimeLegacyOwnerState & {
   >[]
   projectGroups?: readonly Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>[]
   restoredRuntimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
+  activeWorktreeId?: string | null
+  activeWorkspaceExecutionHostId?: ExecutionHostId | null
+}
+
+function getPreferredFolderExecutionHostId(
+  state: FolderWorkspaceRuntimeOwnerState,
+  folderWorkspaceId: string,
+  executionHostId?: ExecutionHostId
+): ExecutionHostId | undefined {
+  if (executionHostId) {
+    return executionHostId
+  }
+  return state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
+    ? (state.activeWorkspaceExecutionHostId ?? undefined)
+    : undefined
 }
 
 export function findFolderWorkspaceOwner(
   state: FolderWorkspaceRuntimeOwnerState,
-  folderWorkspaceId: string
+  folderWorkspaceId: string,
+  executionHostId?: ExecutionHostId
 ): Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId' | 'executionHostId'> | null {
-  return findIndexedFolderWorkspaceOwner(state.folderWorkspaces, folderWorkspaceId)
+  return findIndexedFolderWorkspaceOwner(
+    state.folderWorkspaces,
+    folderWorkspaceId,
+    getPreferredFolderExecutionHostId(state, folderWorkspaceId, executionHostId)
+  )
 }
 
 function findFolderProjectGroup(
   state: FolderWorkspaceRuntimeOwnerState,
-  folderWorkspaceId: string
+  folderWorkspaceId: string,
+  executionHostId?: ExecutionHostId
 ): Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'> | null {
-  const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId)
+  const preferredHostId = getPreferredFolderExecutionHostId(
+    state,
+    folderWorkspaceId,
+    executionHostId
+  )
+  const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId, preferredHostId)
   if (!folderWorkspace) {
     return null
   }
-  return findIndexedProjectGroupOwner(state.projectGroups, folderWorkspace.projectGroupId)
+  return findIndexedProjectGroupOwner(
+    state.projectGroups,
+    folderWorkspace.projectGroupId,
+    preferredHostId
+  )
 }
 
 function getRestoredRuntimeHostForFolderWorkspace(
@@ -55,10 +85,11 @@ function getRestoredRuntimeHostForFolderWorkspace(
 
 export function getRuntimeEnvironmentIdForFolderWorkspace(
   state: FolderWorkspaceRuntimeOwnerState,
-  folderWorkspaceId: string
+  folderWorkspaceId: string,
+  executionHostId?: ExecutionHostId
 ): string | null {
-  const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId)
-  const projectGroup = findFolderProjectGroup(state, folderWorkspaceId)
+  const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)
+  const projectGroup = findFolderProjectGroup(state, folderWorkspaceId, executionHostId)
   const parsed = parseExecutionHostId(
     folderWorkspace?.executionHostId ?? projectGroup?.executionHostId
   )
@@ -82,10 +113,11 @@ export function getRuntimeEnvironmentIdForFolderWorkspace(
 
 export function getExplicitRuntimeEnvironmentIdForFolderWorkspace(
   state: FolderWorkspaceRuntimeOwnerState,
-  folderWorkspaceId: string
+  folderWorkspaceId: string,
+  executionHostId?: ExecutionHostId
 ): string | null {
-  const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId)
-  const projectGroup = findFolderProjectGroup(state, folderWorkspaceId)
+  const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)
+  const projectGroup = findFolderProjectGroup(state, folderWorkspaceId, executionHostId)
   const parsed = parseExecutionHostId(
     folderWorkspace?.executionHostId ?? projectGroup?.executionHostId
   )
@@ -100,10 +132,16 @@ export function getExplicitRuntimeEnvironmentIdForFolderWorkspace(
 
 export function getExecutionHostIdForFolderWorkspace(
   state: FolderWorkspaceRuntimeOwnerState,
-  folderWorkspaceId: string
+  folderWorkspaceId: string,
+  executionHostId?: ExecutionHostId
 ): ExecutionHostId {
-  const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId)
-  const projectGroup = findFolderProjectGroup(state, folderWorkspaceId)
+  const preferredHostId = getPreferredFolderExecutionHostId(
+    state,
+    folderWorkspaceId,
+    executionHostId
+  )
+  const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId, preferredHostId)
+  const projectGroup = findFolderProjectGroup(state, folderWorkspaceId, preferredHostId)
   const parsed = parseExecutionHostId(
     folderWorkspace?.executionHostId ?? projectGroup?.executionHostId
   )
@@ -113,6 +151,9 @@ export function getExecutionHostIdForFolderWorkspace(
   const connectionId = folderWorkspace?.connectionId?.trim() || projectGroup?.connectionId?.trim()
   if (connectionId) {
     return toSshExecutionHostId(connectionId)
+  }
+  if (preferredHostId && folderWorkspace) {
+    return preferredHostId
   }
   const restoredRuntimeHost = getRestoredRuntimeHostForFolderWorkspace(state, folderWorkspaceId)
   if (restoredRuntimeHost) {

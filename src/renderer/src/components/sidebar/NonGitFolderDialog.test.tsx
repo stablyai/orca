@@ -191,7 +191,8 @@ describe('NonGitFolderDialog', () => {
 
     await vi.waitFor(() =>
       expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(sshWorktree.id, {
-        sidebarRevealBehavior: 'auto'
+        sidebarRevealBehavior: 'auto',
+        executionHostId: 'ssh:ssh-1'
       })
     )
     expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
