@@ -458,6 +458,13 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
     })
 
+    it('advertises Kitty image support to spawned terminals', async () => {
+      await provider.spawn({ cols: 80, rows: 24 })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.ORCA_IMAGE_PROTOCOL).toBe('kitty')
+    })
+
     it('does not inherit NODE_ENV from the Orca process env', async () => {
       // Why: NODE_ENV in Orca's process is Orca's build mode (electron-vite sets
       // `development` in dev runs); leaking it breaks `next build` and Vitest.

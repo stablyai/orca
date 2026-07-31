@@ -194,6 +194,8 @@ describe('createPtySubprocess', () => {
         name: 'xterm-256color'
       })
     )
+    const spawnEnv = spawnMock.mock.calls.at(-1)![2].env as Record<string, string>
+    expect(spawnEnv.ORCA_IMAGE_PROTOCOL).toBe('kitty')
   })
 
   it('appends Git prompt guards after the detached daemon inherited config', () => {

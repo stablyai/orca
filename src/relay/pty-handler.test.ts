@@ -2501,6 +2501,7 @@ describe('PtyHandler', () => {
     expect(spawnEnv.name).toBe('xterm-256color')
     expect(spawnEnv.env.TERM).toBe('xterm-256color')
     expect(spawnEnv.env.TERM_PROGRAM).toBe('Orca')
+    expect(spawnEnv.env.ORCA_IMAGE_PROTOCOL).toBe('kitty')
   })
 
   it('uses the safe terminal default when TERM is deleted without a custom value', async () => {
