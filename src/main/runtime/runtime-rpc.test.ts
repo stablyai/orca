@@ -2147,7 +2147,7 @@ describe('OrcaRuntimeRpcServer', () => {
     ])
   })
 
-  it('gates peer devices to the mobile RPC allowlist, not full runtime access', async () => {
+  it('gates peer devices to the peer RPC allowlist, not the broader mobile surface', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
     const server = new OrcaRuntimeRpcServer({
@@ -2173,10 +2173,84 @@ describe('OrcaRuntimeRpcServer', () => {
       const session = await authenticateMobileWsSession(offer.pairingUrl)
       const reader = createEncryptedWsResponseReader(session)
       try {
-        sendEncryptedWsRequest(session, { id: 'req-1', method: 'accounts.setActiveAccount' })
-        const response = await reader.next('req-1')
-        expect(response.ok).toBe(false)
-        expect((response.error as Record<string, unknown> | undefined)?.code).toBe('forbidden')
+        // Why: accounts.list and browser.goto are on the mobile allowlist but
+        // have nothing to do with terminal sharing — a peer must not reach them.
+        sendEncryptedWsRequest(session, { id: 'req-accounts', method: 'accounts.list' })
+        const accountsResponse = await reader.next('req-accounts')
+        expect(accountsResponse.ok).toBe(false)
+        expect((accountsResponse.error as Record<string, unknown> | undefined)?.code).toBe(
+          'forbidden'
+        )
+
+        sendEncryptedWsRequest(session, { id: 'req-browser', method: 'browser.goto' })
+        const browserResponse = await reader.next('req-browser')
+        expect(browserResponse.ok).toBe(false)
+        expect((browserResponse.error as Record<string, unknown> | undefined)?.code).toBe(
+          'forbidden'
+        )
+
+        // Why: terminal.list is one of the 7 methods peer-client-service.ts
+        // actually calls — it must still succeed under the peer-only allowlist.
+        sendEncryptedWsRequest(session, { id: 'req-terminal-list', method: 'terminal.list' })
+        const terminalListResponse = await reader.next('req-terminal-list')
+        expect(terminalListResponse.ok).toBe(true)
+      } finally {
+        reader.dispose()
+      }
+    } finally {
+      await server.stop()
+    }
+  }, 15_000)
+
+  it('rejects the peer-only presence and subscriber-listing methods for mobile-scoped devices', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+
+    try {
+      const offer = server.createPairingOffer({
+        address: '127.0.0.1',
+        name: 'phone-test',
+        scope: 'mobile'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+
+      const session = await authenticateMobileWsSession(offer.pairingUrl)
+      const reader = createEncryptedWsResponseReader(session)
+      try {
+        // Why: terminal.presence.* and terminal.listSubscribers exist only for
+        // peer-client-service.ts's participant display — the mobile app never
+        // calls them (grep confirms 0 hits in mobile/src), so they moved off
+        // the mobile allowlist onto the peer-only one.
+        sendEncryptedWsRequest(session, {
+          id: 'req-presence',
+          method: 'terminal.presence.subscribe'
+        })
+        const presenceResponse = await reader.next('req-presence')
+        expect(presenceResponse.ok).toBe(false)
+        expect((presenceResponse.error as Record<string, unknown> | undefined)?.code).toBe(
+          'forbidden'
+        )
+
+        sendEncryptedWsRequest(session, {
+          id: 'req-list-subscribers',
+          method: 'terminal.listSubscribers'
+        })
+        const listSubscribersResponse = await reader.next('req-list-subscribers')
+        expect(listSubscribersResponse.ok).toBe(false)
+        expect((listSubscribersResponse.error as Record<string, unknown> | undefined)?.code).toBe(
+          'forbidden'
+        )
       } finally {
         reader.dispose()
       }
