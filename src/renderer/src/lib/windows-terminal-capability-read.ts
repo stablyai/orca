@@ -4,6 +4,18 @@ import type { WindowsTerminalCapabilities } from './windows-terminal-capabilitie
 
 export type WindowsTerminalCapabilityLoadTarget = RuntimeClientTarget
 
+async function reconcileWslAvailability(
+  available: boolean,
+  distros: string[],
+  probe: () => Promise<boolean>
+): Promise<boolean> {
+  // A non-empty list can invalidate the negative cache after the parallel probe read it.
+  if (available || distros.length === 0) {
+    return available
+  }
+  return probe().catch(() => false)
+}
+
 export async function readWindowsTerminalCapabilities(
   target: WindowsTerminalCapabilityLoadTarget,
   sshConnectionId?: string | null
@@ -48,8 +60,11 @@ export async function readWindowsTerminalCapabilities(
           .then((status) => status.hostPlatform ?? null)
           .catch(() => null)
       ])
+    const reconciledWslAvailable = await reconcileWslAvailability(wslAvailable, wslDistros, () =>
+      window.api.wsl.isAvailable()
+    )
     return {
-      wslAvailable,
+      wslAvailable: reconciledWslAvailable,
       wslDistros,
       pwshAvailable,
       gitBashAvailable,
@@ -76,8 +91,13 @@ export async function readWindowsTerminalCapabilities(
         .then((status) => status.hostPlatform ?? null)
         .catch(() => null)
     ])
+  const reconciledWslAvailable = await reconcileWslAvailability(wslAvailable, wslDistros, () =>
+    callRuntimeRpc<boolean>(target, 'host.wsl.isAvailable', undefined, {
+      timeoutMs: 15_000
+    })
+  )
   return {
-    wslAvailable,
+    wslAvailable: reconciledWslAvailable,
     wslDistros,
     pwshAvailable,
     gitBashAvailable,
