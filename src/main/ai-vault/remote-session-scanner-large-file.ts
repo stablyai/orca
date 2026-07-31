@@ -65,10 +65,14 @@ export async function tryParseLargeRemoteSession(
   }
 }
 
+function toMegabytes(bytes: number): string {
+  return (bytes / 1024 / 1024).toFixed(1)
+}
+
 function assertRemoteSessionDownloadSize(sizeBytes: number): void {
   if (sizeBytes > MAX_REMOTE_SESSION_DOWNLOAD_BYTES) {
     throw new Error(
-      `Remote session transcript is too large to scan safely: ${(sizeBytes / 1024 / 1024).toFixed(1)}MB exceeds 256MB limit`
+      `Remote session transcript is too large to scan safely: ${toMegabytes(sizeBytes)}MB exceeds ${toMegabytes(MAX_REMOTE_SESSION_DOWNLOAD_BYTES)}MB limit`
     )
   }
 }

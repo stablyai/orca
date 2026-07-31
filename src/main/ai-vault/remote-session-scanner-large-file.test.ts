@@ -1,5 +1,25 @@
-import { describe, expect, it } from 'vitest'
-import { access, truncate, writeFile } from 'node:fs/promises'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as FsPromises from 'node:fs/promises'
+
+// Why: the oversized cases only need `stat` to *report* a size past the limit. Materializing a
+// real 256MB file leans on sparse-extension behavior that differs between POSIX and NTFS, so CI
+// cost would vary by platform. Mirrors node-bounded-file-reader.test.ts, which fakes the reported
+// size for the same reason.
+const { statSizeOverrides } = vi.hoisted(() => ({ statSizeOverrides: new Map<string, number>() }))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  return {
+    ...actual,
+    stat: async (path: Parameters<typeof actual.stat>[0]) => {
+      const stats = await actual.stat(path)
+      const override = statSizeOverrides.get(String(path))
+      return override === undefined ? stats : Object.assign(stats, { size: override })
+    }
+  }
+})
+
+import { access, writeFile } from 'node:fs/promises'
 import type { DirEntry } from '../../shared/types'
 import type { FileReadResult, FileStat, IFilesystemProvider } from '../providers/types'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
@@ -76,7 +96,7 @@ class LargeRemoteProvider implements IFilesystemProvider {
       await new Promise((resolve) => setImmediate(resolve))
       await writeFile(destinationPath, file.content, { flag: 'wx' })
       if (file.downloadedSizeBytes !== undefined) {
-        await truncate(destinationPath, file.downloadedSizeBytes)
+        statSizeOverrides.set(destinationPath, file.downloadedSizeBytes)
       }
     } finally {
       this.activeDownloads--
@@ -112,7 +132,11 @@ class LargeRemoteProvider implements IFilesystemProvider {
   watch = unsupported
 }
 
+const OVERSIZE_MESSAGE = `exceeds ${(MAX_REMOTE_SESSION_DOWNLOAD_BYTES / 1024 / 1024).toFixed(1)}MB limit`
+
 describe('large remote session scanning', () => {
+  beforeEach(() => statSizeOverrides.clear())
+
   it('downloads and line-parses large transcripts one at a time', async () => {
     const provider = new LargeRemoteProvider()
     provider.addFile(
@@ -183,7 +207,7 @@ describe('large remote session scanning', () => {
     const result = await scan(provider)
 
     expect(result.sessions).toEqual([])
-    expect(result.issues[0]?.message).toContain('exceeds 256MB limit')
+    expect(result.issues[0]?.message).toContain(OVERSIZE_MESSAGE)
     expect(provider.downloads).toEqual([])
   })
 
@@ -200,7 +224,7 @@ describe('large remote session scanning', () => {
     const result = await scan(provider)
 
     expect(result.sessions).toEqual([])
-    expect(result.issues[0]?.message).toContain('exceeds 256MB limit')
+    expect(result.issues[0]?.message).toContain(OVERSIZE_MESSAGE)
     expect(provider.downloads).toHaveLength(1)
     await expect(access(provider.downloads[0].destinationPath)).rejects.toThrow()
   })
