@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-29",
+  "updatedAt": "2026-07-30",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -2224,6 +2224,7 @@
         "Advanced Active Server setting",
         "saved server Connect and Disconnect",
         "remote workspace navigation",
+        "Add Project host selection, scan, import, and catalog refresh",
         "terminal reveal and create",
         "browser and mobile handoff",
         "app restart"
@@ -2232,12 +2233,15 @@
       "providers": ["local", "remote-runtime", "ssh", "wsl"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "remote-runtime", "ssh", "wsl"],
-      "coverageNotes": "Platform-neutral deterministic tests separate the durable Active Server preference from per-client connection, selected-workspace, browser-session, and execution-host routing. The composed regression models Local desktop -> connect/navigate Windows 2 -> reveal a local terminal -> restart. Multi-client browser host overrides, multi-server profile caches, generic settings IPC rejection, local and remote workspace ownership, and restart reset of transient routing are covered. Live desktop UI runs remain uncollected.",
+      "coverageNotes": "Platform-neutral deterministic tests separate the durable Active Server preference from per-client connection, selected-workspace, browser-session, Add Project, and execution-host routing. The composed regression models Local desktop -> connect/navigate Windows 2 -> reveal a local terminal -> restart. Multi-client browser host overrides, multi-server profile caches, generic settings IPC rejection, local and remote workspace ownership, Add Project owner capture and stale-result fencing, and restart reset of transient routing are covered. A visible macOS Orca desktop server plus a separate paired Electron client proves real Git, folder, nested import, runtime-switch, disconnect, and reconnect routing; hidden-window parity also passed. Live Linux, Windows, WSL, and SSH Add Project journeys remain uncollected.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/9687"],
-      "invariant": "Only an explicit user change in Settings > Remote Orca Servers > Advanced > Active Server may mutate activeRuntimeEnvironmentId. Connecting, pairing, disconnecting, selecting or revealing a workspace or terminal, browser/mobile handoff, remote navigation, and reconnect must use transient or target-owner routing and must never rewrite the durable preference. Generic settings mutation cannot bypass the dedicated preference IPC.",
-      "oracle": "Start with Active Server=Local desktop, connect and navigate Windows 2, then reveal a local terminal and assert it succeeds while the persisted preference remains local before and after restart. Repeat with multiple clients and servers, browser host switches, remote-owned and local-owned workspaces, pairing/connect/disconnect, and generic settings writes. Assert only the dedicated validated preference method changes activeRuntimeEnvironmentId and stale host-operation completions cannot overwrite the newly selected transient host.",
+      "invariant": "Only an explicit user change in Settings > Remote Orca Servers > Advanced > Active Server may mutate activeRuntimeEnvironmentId. Connecting, pairing, disconnecting, selecting or revealing a workspace or terminal, browser/mobile handoff, remote navigation, and reconnect must use transient or target-owner routing and must never rewrite the durable preference. Every Add Project scan, add, import, catalog refresh, and worktree refresh must stay on the host selected when that operation began, even if the durable preference changes or the repo catalog is not hydrated. Generic settings mutation cannot bypass the dedicated preference IPC.",
+      "oracle": "Start with Active Server=Local desktop, connect and navigate Windows 2, then reveal a local terminal and assert it succeeds while the persisted preference remains local before and after restart. Repeat with multiple clients and servers, browser host switches, remote-owned and local-owned workspaces, pairing/connect/disconnect, and generic settings writes. In a separate paired Electron client, select a non-default headed runtime and add a real Git repo, plain folder, and nested repos while switching the preference and disconnecting/reconnecting; require only the selected server inventory to change, exact runtime ownership in the client store, visible projects, and zero direct SSH fallback. Assert only the dedicated validated preference method changes activeRuntimeEnvironmentId and stale host-operation completions cannot overwrite the newly selected transient host.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents.test.ts src/renderer/src/web/web-preload-api.test.ts --maxWorkers=1"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents.test.ts src/renderer/src/web/web-preload-api.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/worktrees.test.ts",
+        "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
+        "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line"
       ],
       "testFiles": [
         "src/main/ipc/settings.test.ts",
@@ -2249,7 +2253,16 @@
         "src/renderer/src/components/status-bar/SshStatusSegment.test.ts",
         "src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts",
         "src/renderer/src/hooks/useIpcEvents.test.ts",
-        "src/renderer/src/web/web-preload-api.test.ts"
+        "src/renderer/src/web/web-preload-api.test.ts",
+        "src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts",
+        "src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts",
+        "src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts",
+        "src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts",
+        "src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts",
+        "src/renderer/src/store/slices/repos-project-groups.test.ts",
+        "src/renderer/src/store/slices/repos-selected-owner-routing.test.ts",
+        "src/renderer/src/store/slices/worktrees.test.ts",
+        "tests/e2e/pr11346-selected-runtime-add.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -2292,6 +2305,30 @@
             "generic web settings writes cannot mutate Active Server",
             "the dedicated web preference setter rejects unknown server identities without corrupting the saved choice"
           ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/repos-selected-owner-routing.test.ts",
+          "assertions": [
+            "merges explicit runtime groups and folders without erasing local siblings",
+            "keeps a selected-runtime import refresh across an overlapping local refresh",
+            "pins selected SSH scans and cancellation to local IPC over an ambient runtime"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/worktrees.test.ts",
+          "assertions": [
+            "honors an explicit runtime owner before the repo catalog is hydrated",
+            "honors an explicit SSH owner before the repo catalog is hydrated",
+            "rejects a missing-owner SSH result after the repo catalog changes",
+            "rejects a missing-owner SSH result after the provider reconnects"
+          ]
+        },
+        {
+          "file": "tests/e2e/pr11346-selected-runtime-add.spec.ts",
+          "assertions": [
+            "routes Add Project server paths to a selected non-default headed runtime @headful",
+            "keeps selected runtime Add Project routing in hidden-window desktop parity"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -2303,34 +2340,64 @@
           "result": "passed",
           "durationSeconds": 6.55,
           "summary": "Ten files and 282 tests passed, including the composed Local -> Windows 2 navigation -> local reveal -> restart regression, dedicated-only preference persistence, removed transient-host fallback, multi-client browser routing, late host-operation suppression, and web pairing/preference separation."
+        },
+        {
+          "date": "2026-07-30",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/worktrees.test.ts",
+          "result": "passed",
+          "durationSeconds": 2.69,
+          "summary": "Eight files and 290 tests passed, including selected runtime and SSH owner capture, catalog merge isolation, missing-catalog worktree routing, and catalog/provider generation fencing."
+        },
+        {
+          "date": "2026-07-30",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
+          "result": "passed",
+          "durationSeconds": 17.9,
+          "summary": "A visible isolated Orca desktop server and separate paired Electron client added one real Git repo, one plain folder, and two nested repos to the selected non-default runtime across preference switches and disconnect/reconnect, with zero local inventory writes or direct SSH fallback attempts."
+        },
+        {
+          "date": "2026-07-30",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+          "result": "passed",
+          "durationSeconds": 16.9,
+          "summary": "The hidden-window desktop-server parity journey passed with the same selected-runtime inventory and ownership assertions."
         }
       ],
       "runtimeBudget": {
-        "p95Seconds": 20,
-        "scope": "focused persistence and routing contract tests"
+        "p95Seconds": 180,
+        "scope": "focused persistence/routing contracts plus isolated paired Electron journeys"
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "New deterministic gate with no soak history."
+        "evidence": "Deterministic contracts and one visible plus one hidden-window paired Electron run passed locally; CI soak history is not yet available."
       },
       "redGreenEvidence": {
-        "status": "partial",
-        "evidence": "The user-observed local terminal reveal failure and unintended Active Server switch are encoded by deterministic routing and persistence tests; a saved intentional-break artifact is not yet attached."
+        "status": "complete",
+        "evidence": "For Add Project, current main and the candidate with its product routing disabled both fail the byte-identical headed oracle: the selected server retains only its seeded repo while the paired client completes the Git, folder, and nested adds through its local/default runtime. The candidate passes with exact selected-runtime inventory and client ownership. Earlier Active Server preference paths retain deterministic coverage but do not yet have a saved intentional-break artifact."
       },
       "performanceBudget": {
-        "required": false,
-        "evidence": "Preference writes are explicit user actions; transient routing adds no polling and uses existing host/worktree indexes."
+        "required": true,
+        "evidence": "Preference writes are explicit user actions; transient routing adds no polling and uses existing host/worktree indexes. The headed journey measured 51 ms for three preference switches, 1,478 ms for Git add, 924 ms for folder add, 58 ms for disconnect/reconnect, and 1,294 ms for nested import. Zustand fan-out remained 0 render invalidations across 5,000,000 selector runs."
       },
       "promotionCriteria": [
         "Run the focused gate in soak across macOS, Linux, and Windows.",
         "Attach a live Windows Local -> Windows 2 -> local reveal -> restart artifact.",
-        "Attach saved red/green evidence for generic settings mutation and transient connection routing."
+        "Attach saved red/green evidence for generic settings mutation and transient connection routing.",
+        "Run the paired Add Project journey on Linux and native Windows, plus live SSH and WSL hosts."
       ],
       "knownGaps": [
         "The exact journey is deterministic contract coverage, not a packaged Windows UI automation run.",
-        "Browser/mobile handoff is covered through transient routing state and preload contracts, not a live phone browser session."
+        "Browser/mobile handoff is covered through transient routing state and preload contracts, not a live phone browser session.",
+        "The paired Add Project journey is macOS-only; native Windows was unavailable.",
+        "SSH and WSL Add Project ownership is deterministic store/controller coverage, not a live host journey."
       ],
-      "demotionRule": "Demote or block release if any non-Advanced path mutates Active Server, if local reveal depends on the durable default instead of workspace ownership, or if transient host state survives restart."
+      "demotionRule": "Demote or block release if any non-Advanced path mutates Active Server, if local reveal or Add Project depends on the durable default instead of captured workspace/host ownership, if an Add Project operation reaches a different host after it begins, or if transient host state survives restart."
     },
     {
       "id": "terminal-geometry.visible-convergence",
