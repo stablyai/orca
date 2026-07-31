@@ -7836,7 +7836,7 @@
       "invariant": "For one connected SSH authority, a renderer snapshot may update Forwarded or Detected state only if no newer push for that target and stream arrived after the snapshot began. Active tunnels and persisted intent remain authoritative through scan refresh and reconnect until explicit removal or a real connection-lifecycle transition.",
       "oracle": "Hold empty initial Forwarded and Detected snapshot promises, publish live events, release the snapshots, and require each target and stream to preserve only its own newer push while applying unaffected snapshots. Reject one target's Detected snapshot and require its Forwarded snapshot plus later targets to hydrate independently. In headed Electron, hold an authoritative empty Forwarded snapshot across renderer reload, add a forward through the Ports panel, release and confirm the wrapped main handler resumed, then complete a later renderer-to-main listPortForwards round trip as the ordered hydration-continuation barrier. Before checking the Forwarded row, require main inventory, persisted intent, HTTP, remote process identity, and close warnings to prove the tunnel remained authoritative. Then forward two real Docker listeners, refresh detection, force an in-place relay-channel reconnect, perform a full transport reconnect, reject a bound local-port collision, remove one row, and require all signals to agree.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useIpcEvents.test.ts src/main/ssh/ssh-port-forward.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ipc/ssh.test.ts src/main/ssh/ssh-relay-session.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useIpcEvents.test.ts src/main/ssh/ssh-port-forward.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ipc/ssh.test.ts src/main/ssh/ssh-relay-session.test.ts tests/e2e/helpers/ssh-port-forward-snapshot-barrier.unit.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-port-forward-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 ORCA_SSH_FORCE_SYSTEM_TRANSPORT=1 ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-port-forward-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
@@ -7847,6 +7847,7 @@
         "src/main/ssh/system-ssh-forward-process.test.ts",
         "src/main/ipc/ssh.test.ts",
         "src/main/ssh/ssh-relay-session.test.ts",
+        "tests/e2e/helpers/ssh-port-forward-snapshot-barrier.unit.test.ts",
         "tests/e2e/ssh-port-forward-lifecycle.spec.ts"
       ],
       "assertionRefs": [
@@ -7878,6 +7879,10 @@
           "assertions": ["cleans up port forwards on reconnect"]
         },
         {
+          "file": "tests/e2e/helpers/ssh-port-forward-snapshot-barrier.unit.test.ts",
+          "assertions": ["holds only the first matching request while its snapshot is unresolved"]
+        },
+        {
           "file": "tests/e2e/ssh-port-forward-lifecycle.spec.ts",
           "assertions": ["keeps a user-forwarded listener live across scan refresh @headful"]
         }
@@ -7887,10 +7892,10 @@
           "date": "2026-07-30",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useIpcEvents.test.ts src/main/ssh/ssh-port-forward.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ipc/ssh.test.ts src/main/ssh/ssh-relay-session.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useIpcEvents.test.ts src/main/ssh/ssh-port-forward.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ipc/ssh.test.ts src/main/ssh/ssh-relay-session.test.ts tests/e2e/helpers/ssh-port-forward-snapshot-barrier.unit.test.ts --reporter=dot",
           "result": "passed",
-          "durationSeconds": 5.55,
-          "summary": "Five renderer and main-process lifecycle files passed with 214 tests, including deterministic stale-snapshot and rejected-stream isolation plus existing collision, delayed-exit, reconnect, persistence, re-registration, and unrelated-forward contracts."
+          "durationSeconds": 4.89,
+          "summary": "Six renderer, main-process, and barrier lifecycle files passed with 215 tests, including deterministic stale-snapshot, rejected-stream, and single-capture isolation plus existing collision, delayed-exit, reconnect, persistence, re-registration, and unrelated-forward contracts."
         },
         {
           "date": "2026-07-30",
@@ -7930,6 +7935,7 @@
       "promotionCriteria": [
         "Collect 100 consecutive focused CI passes or 14 days of soak history.",
         "Run the headed topology on Linux and Windows with their native system-SSH clients.",
+        "Re-run the headed snapshot barrier after Electron major-version upgrades.",
         "Keep the independent Forwarded and Detected freshness assertions and both transport runs green."
       ],
       "knownGaps": [

@@ -6,6 +6,7 @@ type InvokeHandler = (event: unknown, args?: { targetId?: string }) => unknown
 
 type SnapshotBarrierState = {
   targetId: string
+  captureClaimed: boolean
   captured: boolean
   released: boolean
   release: () => void
@@ -75,6 +76,7 @@ export async function installSshPortForwardSnapshotBarrier(
     })
     const state: SnapshotBarrierState = {
       targetId,
+      captureClaimed: false,
       captured: false,
       released: false,
       release,
@@ -84,9 +86,10 @@ export async function installSshPortForwardSnapshotBarrier(
     }
     scope.__sshPortForwardSnapshotBarrier = state
     handlers.set('ssh:listPortForwards', async (event, args) => {
-      if (state.captured || args?.targetId !== state.targetId) {
+      if (state.captureClaimed || args?.targetId !== state.targetId) {
         return state.originalHandler(event, args)
       }
+      state.captureClaimed = true
       const snapshot = await state.originalHandler(event, args)
       state.captured = true
       await barrier
