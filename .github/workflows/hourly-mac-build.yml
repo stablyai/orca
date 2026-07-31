@@ -288,8 +288,12 @@ jobs:
       # prune step) must not delete a release that already went live and that users
       # may already be installing. A job killed by the outer timeout runs no steps
       # at all — which is exactly why the release stays a draft until verified.
+      # Why cancelled() too: a run stopped from the Actions UI is not a failure(),
+      # so without it a manual cancel mid-publish would strand the draft.
       - name: Discard the draft release on failure
-        if: failure() && steps.release.outputs.tag != '' && steps.publish_live.outcome != 'success'
+        if: >-
+          (failure() || cancelled()) && steps.release.outputs.tag != '' &&
+          steps.publish_live.outcome != 'success'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}

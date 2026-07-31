@@ -16,12 +16,13 @@
 #
 set -euo pipefail
 
-# Guard: xtrace would echo the key to stderr on every expansion.
-set +x
+# Guard: xtrace would echo the key to stderr on every expansion. Test before
+# disabling, or the check reads the state this line just cleared and never fires.
 if [[ -o xtrace ]]; then
   echo "Refusing to run with xtrace enabled; it would echo the private key." >&2
   exit 1
 fi
+set +x
 
 MAIN_REPO="stablyai/orca"
 HOURLY_REPO="stablyai/orca-hourly"
