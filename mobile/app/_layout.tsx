@@ -12,6 +12,8 @@ import { getNotificationNavigationPath } from '../src/notifications/notification
 import { loadHosts } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
+import { useAppUpdateCheck } from '../src/updates/use-app-update-check'
+import { UpdateAvailableDrawer } from '../src/components/UpdateAvailableDrawer'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -35,6 +37,7 @@ Notifications.setNotificationHandler({
 export default function RootLayout() {
   const router = useRouter()
   const handledNotificationIdsRef = useRef<Set<string>>(new Set())
+  const { prompt: updatePrompt, dismiss: dismissUpdatePrompt } = useAppUpdateCheck()
 
   useEffect(() => {
     // Why: pairing publication is journaled across process death; startup must
@@ -193,6 +196,7 @@ export default function RootLayout() {
           <Stack.Screen name="about" options={{ headerShown: false }} />
           <Stack.Screen name="h" options={{ headerShown: false }} />
         </Stack>
+        <UpdateAvailableDrawer prompt={updatePrompt} onDismiss={dismissUpdatePrompt} />
       </View>
     </RpcClientProvider>
   )
