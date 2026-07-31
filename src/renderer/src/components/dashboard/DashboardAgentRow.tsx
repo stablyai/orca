@@ -44,6 +44,16 @@ function formatTimeAgo(ts: number, now: number): string {
   return `${days}d ago`
 }
 
+// Why: a fresh completion reads in seconds so a just-finished agent is visibly distinct from a minute-old one.
+function formatDoneTimeAgo(ts: number, now: number): string {
+  const delta = now - ts
+  if (delta < 60_000) {
+    const seconds = Math.max(0, Math.floor(delta / 1_000))
+    return `${seconds}s ago`
+  }
+  return formatTimeAgo(ts, now)
+}
+
 function stateDotTooltipLabel(agent: DashboardAgentRowData, dotState: AgentDotState): string {
   if (agent.entry.interrupted === true) {
     return 'Interrupted by user'
@@ -166,8 +176,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
 
   // Why: always show the chevron so the row's right edge doesn't flicker as content grows/shrinks.
 
-  const startedTimeAgo = startedAt !== null ? formatTimeAgo(startedAt, now) : null
-  const doneTimeAgo = doneAt !== null ? formatTimeAgo(doneAt, now) : null
+  const showCompletionTime = doneAt !== null && isUnvisited
+  const startedTimeAgo =
+    doneAt !== null && !showCompletionTime
+      ? null
+      : startedAt !== null
+        ? formatTimeAgo(startedAt, now)
+        : null
+  const doneTimeAgo = showCompletionTime ? formatDoneTimeAgo(doneAt, now) : null
   const relativeTimestamp = doneTimeAgo ?? startedTimeAgo
   const tsParts: string[] = []
   if (startedTimeAgo !== null) {

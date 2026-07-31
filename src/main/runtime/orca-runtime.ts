@@ -30,6 +30,7 @@ import {
   type TerminalTitleTracker
 } from '../../shared/terminal-output-side-effects'
 import { createCommandCodeOutputStatusDetector } from '../../shared/command-code-output-status'
+import { createKiroOutputStatusDetector } from '../../shared/kiro-output-status'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
@@ -1484,6 +1485,8 @@ type RuntimePtyTitleTrackerEntry = {
   // TUI output. Null when no side-effect consumer exists (headless serve) —
   // the scrape produces facts only.
   commandCodeDetector: { observe: (data: string) => boolean } | null
+  // Kiro also lacks hooks/status titles; its detector follows the same fact-only lifetime.
+  kiroDetector: { observe: (data: string) => boolean } | null
 }
 
 // Why: the full OSC 9999 payload flows through emitTerminalAgentStatusEvents and
@@ -9730,6 +9733,7 @@ export class OrcaRuntimeService {
       // detector's bounded recent-text window; the detector strips remaining
       // control sequences itself, exactly like the renderer byte path.
       titleTrackerEntry.commandCodeDetector?.observe(agentStatusChunk.cleanData)
+      titleTrackerEntry.kiroDetector?.observe(agentStatusChunk.cleanData)
     } finally {
       titleTrackerEntry.applyingChunk = false
       try {
@@ -10230,6 +10234,9 @@ export class OrcaRuntimeService {
       // saw one) mirrors the renderer detector's startupCommand fast-arm.
       commandCodeDetector: this.terminalSideEffectConsumerAvailable
         ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
+        : null,
+      kiroDetector: this.terminalSideEffectConsumerAvailable
+        ? this.createTerminalSideEffectKiroDetector(ptyId)
         : null
     }
     this.ptyTitleTrackersByPtyId.set(ptyId, entry)
@@ -10380,6 +10387,7 @@ export class OrcaRuntimeService {
       entry.commandCodeDetector = nextAvailable
         ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
         : null
+      entry.kiroDetector = nextAvailable ? this.createTerminalSideEffectKiroDetector(ptyId) : null
     }
   }
 
@@ -10393,6 +10401,27 @@ export class OrcaRuntimeService {
       },
       onDone: (prompt) => {
         this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-done', prompt })
+      }
+    })
+  }
+
+  private createTerminalSideEffectKiroDetector(
+    ptyId: string
+  ): NonNullable<RuntimePtyTitleTrackerEntry['kiroDetector']> {
+    const pty = this.ptysById.get(ptyId)
+    const knownKiroSession = [
+      pty?.lastOscTitle,
+      pty?.managementTitle,
+      ...this.getLeavesForPty(ptyId).map((leaf) => leaf.paneTitle)
+    ].some((title) => recognizeAgentProcess(title)?.agent === 'kiro')
+    return createKiroOutputStatusDetector({
+      startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
+      knownKiroSession,
+      onWorking: () => {
+        this.recordTerminalSideEffectFact(ptyId, { kind: 'kiro-working' })
+      },
+      onDone: () => {
+        this.recordTerminalSideEffectFact(ptyId, { kind: 'kiro-done' })
       }
     })
   }

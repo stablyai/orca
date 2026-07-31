@@ -17,6 +17,7 @@ import {
   isAgentTaskCompleteTrackingEnabledFromState
 } from './agent-task-complete-policy'
 import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
+import { createKiroOutputStatusDetector } from '../../../../shared/kiro-output-status'
 import { createOsc133CommandFinishedScanner } from '../../../../shared/terminal-osc133-command-finished'
 import {
   createParkedTerminalCommandStatusPolicy,
@@ -204,6 +205,16 @@ export function startParkedTerminalByteWatcher(
     paneId,
     paneKey
   })
+  const onKiroWorking = (): void => {
+    if (commandStatusPolicy.onKiroWorking()) {
+      sideEffectCallbacks.onAgentBecameWorking()
+    }
+  }
+  const onKiroDone = (): void => {
+    if (commandStatusPolicy.onKiroDone()) {
+      sideEffectCallbacks.onAgentBecameIdle('Kiro')
+    }
+  }
 
   // Why: with the authority switch on, the fact consumer is the single policy consumer — registering byte parsers too would double-fire bells.
   const mainSideEffectAuthority =
@@ -251,6 +262,17 @@ export function startParkedTerminalByteWatcher(
         onWorking: commandStatusPolicy.onCommandCodeWorking,
         onDone: commandStatusPolicy.onCommandCodeDone
       })
+  const kiroOutputStatusDetector = factSideEffectAuthority
+    ? null
+    : createKiroOutputStatusDetector({
+        knownKiroSession:
+          useAppStore.getState().paneForegroundAgentByPaneKey?.[paneKey]?.agent === 'kiro',
+        inFlightTurn:
+          useAppStore.getState().agentStatusByPaneKey?.[paneKey]?.agentType === 'kiro' &&
+          useAppStore.getState().agentStatusByPaneKey?.[paneKey]?.state === 'working',
+        onWorking: onKiroWorking,
+        onDone: onKiroDone
+      })
   const unregisterFactConsumer = factSideEffectAuthority
     ? registerTerminalSideEffectFactConsumer({
         ptyId,
@@ -260,6 +282,8 @@ export function startParkedTerminalByteWatcher(
           onCommandFinished: commandStatusPolicy.onCommandFinished,
           onCommandCodeWorking: commandStatusPolicy.onCommandCodeWorking,
           onCommandCodeDone: commandStatusPolicy.onCommandCodeDone,
+          onKiroWorking,
+          onKiroDone,
           onPrLink: (link) =>
             useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link),
           // Why (gate mode only): the 2031 subscribe arrives as a fact, but the reply stays here — query authority stays with the view/watcher (invariant 6).
@@ -287,6 +311,7 @@ export function startParkedTerminalByteWatcher(
     processor.processData(data, {})
     commandFinishedScanner?.scan(data)
     commandCodeOutputStatusDetector?.observe(data)
+    kiroOutputStatusDetector?.observe(data)
     if (observeTerminalGitHubPRLink) {
       for (const link of observeTerminalGitHubPRLink(data)) {
         useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link)

@@ -235,6 +235,7 @@ import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { isKnownTuiAgentTerminalStartupCommand } from './terminal-startup-command-classifier'
 import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
+import { createKiroOutputStatusDetector } from '../../../../shared/kiro-output-status'
 import type { PtyDataMeta } from './pty-dispatcher'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
@@ -2344,6 +2345,8 @@ export function connectPanePty(
         // renderer seeds also write), so main only emits scrape facts.
         onCommandCodeWorking: seedCommandCodeOutputWorkingStatus,
         onCommandCodeDone: scheduleCommandCodeOutputDoneStatus,
+        onKiroWorking: onKiroOutputWorking,
+        onKiroDone: onKiroOutputDone,
         ...(shouldOwnAgentStatusInRenderer
           ? { onAgentStatus: (payload) => handleRendererOwnedAgentStatus(payload) }
           : {}),
@@ -2932,6 +2935,26 @@ export function connectPanePty(
     // complete the row if no active status repaint arrives during this window.
     openCommandCodeDoneSettle(cacheKey, normalizedPrompt)
   }
+
+  const setKiroOutputStatus = (status: 'working' | 'done'): void => {
+    const currentEntry = useAppStore.getState().agentStatusByPaneKey[cacheKey]
+    if (
+      status === 'done' &&
+      (currentEntry?.agentType !== 'kiro' || currentEntry.state !== 'working')
+    ) {
+      return
+    }
+    handleRendererOwnedAgentStatus({
+      state: status,
+      prompt:
+        currentEntry?.agentType === 'kiro' && currentEntry.prompt.trim()
+          ? currentEntry.prompt
+          : 'Kiro',
+      agentType: 'kiro'
+    })
+  }
+  const onKiroOutputWorking = (): void => setKiroOutputStatus('working')
+  const onKiroOutputDone = (): void => setKiroOutputStatus('done')
 
   const observeTerminalGitHubPRLink = createTerminalGitHubPRLinkDetector()
   const reportPanePtyVisibility = (ptyId: string | null | undefined, visible: boolean): void => {
@@ -3704,6 +3727,19 @@ export function connectPanePty(
         inFlightTurn: readInFlightCommandCodeTurn(cacheKey),
         onWorking: seedCommandCodeOutputWorkingStatus,
         onDone: scheduleCommandCodeOutputDoneStatus
+      })
+  const kiroOutputStatusDetector = mainSideEffectAuthority
+    ? null
+    : createKiroOutputStatusDetector({
+        startupCommand: paneStartup?.command,
+        knownKiroSession:
+          paneStartup?.launchAgent === 'kiro' ||
+          useAppStore.getState().paneForegroundAgentByPaneKey?.[cacheKey]?.agent === 'kiro',
+        inFlightTurn:
+          useAppStore.getState().agentStatusByPaneKey?.[cacheKey]?.agentType === 'kiro' &&
+          useAppStore.getState().agentStatusByPaneKey?.[cacheKey]?.state === 'working',
+        onWorking: onKiroOutputWorking,
+        onDone: onKiroOutputDone
       })
   const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
   const hadExistingPaneTransportAtConnect = deps.paneTransportsRef.current.size > 0
@@ -7747,6 +7783,7 @@ export function connectPanePty(
         commandLifecycle.handlePtyData(data)
       }
       commandCodeOutputStatusDetector?.observe(data)
+      kiroOutputStatusDetector?.observe(data)
       // Why: split panes have visible-but-inactive panes the user watches; throttle only when the pane or whole document is hidden.
       const foreground =
         shouldWritePtyOutputForeground(deps.isVisibleRef.current) && meta?.background !== true

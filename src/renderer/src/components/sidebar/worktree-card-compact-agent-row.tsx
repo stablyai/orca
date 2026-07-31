@@ -28,6 +28,15 @@ function formatShortTimeAgo(ts: number, now: number): string {
   return `${Math.floor(hours / 24)}d`
 }
 
+function formatShortDoneTimeAgo(ts: number, now: number): string {
+  const delta = now - ts
+  if (delta < 60_000) {
+    const seconds = Math.max(0, Math.floor(delta / 1_000))
+    return `${seconds}s`
+  }
+  return formatShortTimeAgo(ts, now)
+}
+
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
   conversationName: string | null
@@ -61,10 +70,14 @@ function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
   return formatAgentTypeLabel(agent.agentType)
 }
 
-function getCompactAgentTime(agent: DashboardAgentRowData, now: number): string | null {
+function getCompactAgentTime(
+  agent: DashboardAgentRowData,
+  now: number,
+  isUnvisited: boolean
+): string | null {
   const doneAt = lastEnteredDoneAt(agent)
   if (doneAt !== null) {
-    return formatShortTimeAgo(doneAt, now)
+    return isUnvisited ? formatShortDoneTimeAgo(doneAt, now) : null
   }
   const startedAt = agent.startedAt > 0 ? agent.startedAt : agent.entry.stateStartedAt
   return startedAt > 0 ? formatShortTimeAgo(startedAt, now) : null
@@ -92,6 +105,7 @@ type CompactAgentRowProps = {
   onToggleChildAgents?: () => void
   reserveDisclosureGutter?: boolean
   isFocusedPane?: boolean
+  isUnvisited?: boolean
   hideIdentityIcon?: boolean
   cacheTimerActive?: boolean
 }
@@ -108,6 +122,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   onToggleChildAgents,
   reserveDisclosureGutter = false,
   isFocusedPane = false,
+  isUnvisited = false,
   hideIdentityIcon = false,
   cacheTimerActive = true
 }: CompactAgentRowProps) {
@@ -125,7 +140,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const isLineageChild = agent.lineage?.depth === 1
   const secondary = getCompactAgentSecondary(agent)
   const model = agent.entry.model?.trim() ?? ''
-  const shortTime = getCompactAgentTime(agent, now)
+  const shortTime = getCompactAgentTime(agent, now, isUnvisited)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
 
   const handleActivate = useCallback(
