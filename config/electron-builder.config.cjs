@@ -244,6 +244,16 @@ module.exports = {
         join(resourcesDir, '..', 'MacOS', 'orca-notification-status'),
         context.packager
       )
+      // Why: electron-builder only warns when an extraResources source is missing, so a
+      // forgotten build step used to ship silently — and the notch then degrades to its pill
+      // fallback on every MacBook with nothing surfaced. Fail the build instead.
+      const screenGeometryPath = join(resourcesDir, 'bin', 'orca-screen-geometry')
+      if (!existsSync(screenGeometryPath)) {
+        throw new Error(
+          `Missing orca-screen-geometry helper at ${screenGeometryPath} — run pnpm build:screen-geometry-macos`
+        )
+      }
+      chmodSync(screenGeometryPath, 0o755)
     }
   },
   win: {
@@ -324,6 +334,12 @@ module.exports = {
       {
         from: 'resources/darwin/bin/orca',
         to: 'bin/orca'
+      },
+      // Why: unlike the notification helper this one needs no bundle identity — it only reads
+      // NSScreen — so Resources/bin is fine and it avoids the Contents/MacOS signing dance.
+      {
+        from: 'native/screen-geometry-macos/.build/release/orca-screen-geometry',
+        to: 'bin/orca-screen-geometry'
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-darwin-${arch}',

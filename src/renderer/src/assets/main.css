@@ -698,6 +698,14 @@ html.native-shell .app-layout {
   height: 100%;
 }
 
+/* Why: the notch window is transparent, so the desktop must show through everywhere the bar and
+   its card don't paint. body's bg-background would otherwise fill the whole window — invisible
+   while collapsed (the window is exactly the bar) but an opaque slab once expanded. */
+html.notch-shell,
+html.notch-shell body {
+  background: transparent;
+}
+
 /* Tab-group split resize handle — wide hit area, visible center line. */
 .tab-group-split-resize-handle {
   flex-shrink: 0;

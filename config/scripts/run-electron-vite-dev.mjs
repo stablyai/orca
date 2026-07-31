@@ -242,6 +242,26 @@ function prepareMacDevElectronApp() {
     )
   }
 
+  // Why: without this the notch indicator silently degrades to its pill fallback in dev —
+  // NSScreen's notch geometry has no Electron API, so a missing helper means every MacBook
+  // renders as a centred capsule and the hardware-notch path is never exercised.
+  try {
+    execFileSync(
+      process.execPath,
+      // No --output: unpackaged builds resolve the helper from the repo's .build/release
+      // (see resolveHelperPath in src/main/notch/screen-geometry.ts), not from the bundle.
+      [
+        path.join(repoRoot, 'config', 'scripts', 'build-screen-geometry-macos.mjs'),
+        '--single-arch'
+      ],
+      { stdio: 'inherit' }
+    )
+  } catch (error) {
+    console.warn(
+      `[orca-dev] screen-geometry helper build failed (notch falls back to the pill): ${error?.message ?? error}`
+    )
+  }
+
   // Why: the plist edits above (and the copy itself) break the bundle's
   // ad-hoc seal, and macOS refuses Notification Center registration for
   // invalidly-signed apps — every dev notification fails with UNErrorDomain

@@ -3213,6 +3213,7 @@ export class Store {
             minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
             // Why: missing means default-on; round-trips unchanged on non-mac since darwin consumers gate the effect.
             showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
+            showNotchStatus: parsed.settings?.showNotchStatus === true,
             uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
@@ -5416,6 +5417,9 @@ export class Store {
     }
     if ('showMenuBarIcon' in updates) {
       sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
+    }
+    if ('showNotchStatus' in updates) {
+      sanitizedUpdates.showNotchStatus = updates.showNotchStatus === true
     }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)

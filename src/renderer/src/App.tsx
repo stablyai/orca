@@ -93,6 +93,7 @@ import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPoll
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
 import { useDashboardPopoutBridge } from './components/dashboard/useDashboardPopoutBridge'
+import { useNotchRevealBridge } from './components/notch/useNotchRevealBridge'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import {
   resolvePrimarySelectionMiddleClickPaste,
@@ -748,6 +749,7 @@ function App(): React.JSX.Element {
   useGlobalFileDrop()
   useAutoAckViewedAgent()
   useDashboardPopoutBridge(settings?.experimentalAgentDashboardPopout === true)
+  useNotchRevealBridge()
 
   useEffect(() => {
     return onOnboardingReopened(setOnboarding)

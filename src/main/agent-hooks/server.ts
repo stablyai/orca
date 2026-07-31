@@ -564,6 +564,9 @@ export class AgentHookServer {
   // plugin event bus (and future consumers) need an additive subscription
   // that also works in headless serve, where no window listener exists.
   private enrichedStatusListeners = new Set<(payload: EnrichedAgentHookEventPayload) => void>()
+  // Why: same reasoning as above for the clear path — the notch window must observe removals
+  // without stealing the single slot the main-window fanout owns.
+  private statusClearedListeners = new Set<PaneStatusClearListener>()
   // Why: set via start()'s userDataPath so the class has no direct Electron dependency (mockable in vitest node env).
   private endpointDir: string | null = null
   private endpointFilePathCache: string | null = null
@@ -640,6 +643,14 @@ export class AgentHookServer {
 
   setPaneStatusClearListener(listener: PaneStatusClearListener | null): void {
     this.onPaneStatusCleared = listener
+  }
+
+  /** Multi-subscriber tap on pane status clears (no replay), mirroring subscribeEnrichedStatus. */
+  subscribeStatusCleared(listener: PaneStatusClearListener): () => void {
+    this.statusClearedListeners.add(listener)
+    return () => {
+      this.statusClearedListeners.delete(listener)
+    }
   }
 
   /** Snapshot of cached statuses in IPC shape. Used by `agentStatus:getSnapshot` after tabs hydrate so the
@@ -1179,6 +1190,19 @@ export class AgentHookServer {
     }
   }
 
+  // Why: mirrors emitEnrichedStatus so a clear can never reach the main window while a
+  // second consumer keeps rendering the row it just removed.
+  private emitPaneStatusCleared(clear: AgentStatusClearIpcPayload): void {
+    this.onPaneStatusCleared?.(clear)
+    for (const listener of this.statusClearedListeners) {
+      try {
+        listener(clear)
+      } catch (err) {
+        console.error('[agent-hooks] status cleared listener threw', err)
+      }
+    }
+  }
+
   private clearAssistantMessageRetry(paneKey: string): void {
     const timer = this.assistantMessageRetryTimers.get(paneKey)
     if (!timer) {
@@ -1578,7 +1602,7 @@ export class AgentHookServer {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
       for (const paneKey of clearedStatusPaneKeys) {
-        this.onPaneStatusCleared?.({ paneKey })
+        this.emitPaneStatusCleared({ paneKey })
       }
     }
   }
@@ -2031,7 +2055,7 @@ export class AgentHookServer {
       this.notifyStatusChangeListeners()
     }
     // Why: always send the cutoff even with no matched entry — another host may have overwritten this pane's row.
-    this.onPaneStatusCleared?.({
+    this.emitPaneStatusCleared({
       transient: true,
       connectionId: normalizedConnectionId,
       clearedAt
@@ -2173,7 +2197,7 @@ export class AgentHookServer {
       this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
-      this.onPaneStatusCleared?.({ paneKey: resolvedPaneKey })
+      this.emitPaneStatusCleared({ paneKey: resolvedPaneKey })
     }
   }
 
