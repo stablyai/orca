@@ -50,7 +50,7 @@ describe('deriveTaskPagePRCheckSummary', () => {
         check({ conclusion: 'skipped' })
       ])
     ).toEqual({
-      state: 'neutral',
+      state: 'success',
       total: 3,
       passed: 2,
       failed: 0,

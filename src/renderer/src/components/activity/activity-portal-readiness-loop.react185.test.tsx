@@ -307,7 +307,6 @@ describe('Activity portal pane switching', () => {
   })
 
   it('releases a latched readiness once the terminal attaches', async () => {
-    // Drive rAF explicitly — wall-clock waits flake under CI load.
     const frames = installAnimationFrameController()
     const target = document.createElement('div')
     document.body.append(target)
@@ -334,20 +333,11 @@ describe('Activity portal pane switching', () => {
     }
     buildRoot('hidden')
 
-    let churning = true
-    let churns = 0
     const statuses: ActivityPortalReadinessStatus[] = []
 
     function ActivityTerminalSlot(): null {
       const status = useActivityTerminalPortalStatus(target, PANE_A.paneKey)
       statuses.push(status)
-      useLayoutEffect(() => {
-        if (!churning || churns > 30) {
-          return
-        }
-        churns += 1
-        buildRoot(status === 'unavailable' ? 'sibling' : 'hidden')
-      })
       return null
     }
 
@@ -355,21 +345,24 @@ describe('Activity portal pane switching', () => {
     await act(async () => {
       root.render(<ActivityTerminalSlot />)
     })
-    for (let frame = 0; frame < 40; frame += 1) {
-      if (frames.pending() === 0 && statuses.at(-1) === 'unavailable') {
-        break
-      }
+    await frames.flush()
+    expect(statuses.at(-1)).toBe('unavailable')
+
+    // Feed each observed DOM state separately so MutationObserver cannot coalesce the flips.
+    for (let flip = 0; flip < 9; flip += 1) {
+      await act(async () => {
+        buildRoot(flip % 2 === 0 ? 'sibling' : 'hidden')
+        await Promise.resolve()
+      })
       await frames.flush()
     }
     expect(statuses.at(-1)).toBe('unavailable')
 
-    churning = false
     await act(async () => {
       buildRoot('ready')
+      await Promise.resolve()
     })
-    for (let frame = 0; frame < 10 && statuses.at(-1) !== 'ready'; frame += 1) {
-      await frames.flush()
-    }
+    await frames.flush()
     expect(statuses.at(-1)).toBe('ready')
   })
 })

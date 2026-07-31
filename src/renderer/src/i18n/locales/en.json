@@ -10681,6 +10681,8 @@
                 "9ad98f2a17": "pending",
                 "5e52f4ef7f": "failing",
                 "02ca4f9074": "passing",
+                "checksUnresolvedChip": "unresolved",
+                "checksUnresolvedStripHint": "These checks finished without a pass or fail verdict.",
                 "e15a8b77ef": "No inline details are available for this check.",
                 "679bf2093c": "Copy log excerpt",
                 "d713f500b2": "Log excerpt",
