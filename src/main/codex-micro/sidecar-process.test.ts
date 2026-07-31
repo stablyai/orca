@@ -10,7 +10,7 @@ vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 class FakeChildProcess extends EventEmitter {
   stdout = new EventEmitter()
   stderr = new EventEmitter()
-  stdin = { write: vi.fn(), writtenBuffers: [] as Buffer[] }
+  stdin = { write: vi.fn(), destroy: vi.fn(), writtenBuffers: [] as Buffer[] }
   killed = false
   kill = vi.fn(() => {
     this.killed = true
@@ -109,6 +109,12 @@ describe('CodexMicroSidecarProcess', () => {
     proc.start()
     const staleChild = children[0]!
     proc.stop()
+    expect(staleChild.stdin.destroy).toHaveBeenCalledOnce()
+    expect(staleChild.stdout.listenerCount('data')).toBe(0)
+    expect(staleChild.stderr.listenerCount('data')).toBe(0)
+    expect(staleChild.listenerCount('close')).toBe(0)
+    expect(staleChild.listenerCount('error')).toBe(1)
+    expect(staleChild.kill).toHaveBeenCalledWith('SIGTERM')
     proc.start()
     expect(children.length).toBe(2)
 

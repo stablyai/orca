@@ -61,8 +61,11 @@ export class CodexMicroSidecarProcess extends EventEmitter {
       return
     }
     this.child = null
-    child.off('error', () => {})
+    child.stdout?.removeAllListeners()
+    child.stderr?.removeAllListeners()
+    child.removeAllListeners()
     child.on('error', ignoreStaleChildError)
+    child.stdin?.destroy()
     child.kill('SIGTERM')
   }
 

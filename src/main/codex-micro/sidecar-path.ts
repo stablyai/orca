@@ -30,8 +30,8 @@ export function resolveCodexMicroSidecarPath(options: ResolveOptions = {}): stri
   const dev = [
     join(process.cwd(), 'native/codex-micro/target/debug', BINARY_NAME),
     join(process.cwd(), 'native/codex-micro/target/release', BINARY_NAME),
-    resolve(__dirname, '../../../native/codex-micro/target/debug', BINARY_NAME),
-    resolve(__dirname, '../../../native/codex-micro/target/release', BINARY_NAME)
+    resolve(__dirname, '../../native/codex-micro/target/debug', BINARY_NAME),
+    resolve(__dirname, '../../native/codex-micro/target/release', BINARY_NAME)
   ]
   return dev.find(isExecutableFile) ?? null
 }

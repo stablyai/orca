@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import {
   SettingsRow,
   SettingsSegmentedControl,
+  SettingsSubsectionHeader,
   SettingsSwitch,
   SettingsSwitchRow
 } from '../SettingsFormControls'
@@ -33,7 +34,7 @@ const UNASSIGNED = '__unassigned__'
 
 export function CodexMicroSettingsPane({ settings, updateSettings }: Props): React.JSX.Element {
   const device = normalizeCodexMicroSettings(settings.codexMicro)
-  const [connection, setConnection] = useState<CodexMicroConnectionState>({ kind: 'disabled' })
+  const [connection, setConnection] = useState<CodexMicroConnectionState | null>(null)
   const [actionFilter, setActionFilter] = useState('')
 
   useEffect(() => {
@@ -53,7 +54,7 @@ export function CodexMicroSettingsPane({ settings, updateSettings }: Props): Rea
   const updateDevice = (updates: Partial<CodexMicroSettings>): void => {
     updateSettings({ codexMicro: { ...device, ...updates } })
   }
-  const writable = connection.kind === 'connected'
+  const writable = connection?.kind === 'connected'
   const actionOptions = useMemo(() => {
     const query = actionFilter.trim().toLowerCase()
     return query
@@ -71,13 +72,26 @@ export function CodexMicroSettingsPane({ settings, updateSettings }: Props): Rea
       <Card className="gap-0 p-4 shadow-xs">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-medium">{connectionLabel(connection)}</p>
+            <p className="text-sm font-medium">
+              {connection
+                ? connectionLabel(connection)
+                : translate(
+                    'auto.components.settings.codexMicro.checkingDevice',
+                    'Checking device'
+                  )}
+            </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {connectionDescription(connection)}
+              {connection
+                ? connectionDescription(connection)
+                : translate(
+                    'auto.components.settings.codexMicro.checkingDescription',
+                    'Reading the current connection state.'
+                  )}
             </p>
           </div>
           <div className="flex gap-2">
-            {connection.kind !== 'disabled' &&
+            {connection &&
+            connection.kind !== 'disabled' &&
             connection.kind !== 'connected' &&
             connection.kind !== 'connecting' ? (
               <Button
@@ -88,9 +102,9 @@ export function CodexMicroSettingsPane({ settings, updateSettings }: Props): Rea
                 {translate('auto.components.settings.codexMicro.retry', 'Retry')}
               </Button>
             ) : null}
-            {connection.kind === 'connecting' ||
-            connection.kind === 'connected' ||
-            connection.kind === 'read-only' ? (
+            {connection?.kind === 'connecting' ||
+            connection?.kind === 'connected' ||
+            connection?.kind === 'read-only' ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -101,7 +115,7 @@ export function CodexMicroSettingsPane({ settings, updateSettings }: Props): Rea
             ) : null}
           </div>
         </div>
-        {connection.kind === 'error' ? (
+        {connection && 'code' in connection ? (
           <details className="mt-3 text-xs text-muted-foreground">
             <summary className="cursor-pointer">
               {translate('auto.components.settings.codexMicro.diagnostics', 'Diagnostics')}
@@ -203,17 +217,13 @@ export function CodexMicroSettingsPane({ settings, updateSettings }: Props): Rea
       </div>
 
       <div className="space-y-3">
-        <div>
-          <h3 className="text-sm font-medium">
-            {translate('auto.components.settings.codexMicro.mappings', 'Control mappings')}
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.codexMicro.mappingsDescription',
-              'Map buttons and dial gestures to existing Orca commands.'
-            )}
-          </p>
-        </div>
+        <SettingsSubsectionHeader
+          title={translate('auto.components.settings.codexMicro.mappings', 'Control mappings')}
+          description={translate(
+            'auto.components.settings.codexMicro.mappingsDescription',
+            'Map buttons and dial gestures to existing Orca commands.'
+          )}
+        />
         <Input
           value={actionFilter}
           onChange={(event) => setActionFilter(event.currentTarget.value)}
@@ -326,7 +336,7 @@ function connectionDescription(state: CodexMicroConnectionState): string {
   if (state.kind === 'disabled') {
     return translate(
       'auto.components.settings.codexMicro.disabledDescription',
-      'Enable Use with Orca, then connect the Codex Micro by USB.'
+      'Turn on Use with Orca, then connect the Codex Micro by USB.'
     )
   }
   if (state.kind === 'connected') {

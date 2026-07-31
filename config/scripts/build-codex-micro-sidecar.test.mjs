@@ -3,7 +3,7 @@ import { chmod, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
-import test from 'node:test'
+import { test } from 'vitest'
 import { parse as parseYaml } from 'yaml'
 import {
   binaryNameForPlatform,
@@ -104,6 +104,7 @@ test('CI builds Ubuntu 20.04 sidecars before Linux release packaging', async () 
   const sidecarJob = release.jobs['build-codex-micro-linux']
   const releaseJob = release.jobs.build
   const prFloorJob = pr.jobs['codex-micro-linux-floor']
+  const prPackageJob = pr.jobs.package
   const pinnedRustAction = 'dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4'
 
   assert.equal(sidecarJob.container, 'ubuntu:20.04')
@@ -118,6 +119,17 @@ test('CI builds Ubuntu 20.04 sidecars before Linux release packaging', async () 
     "${{ startsWith(matrix.platform, 'linux-') && '1' || '' }}"
   )
   assert.equal(prFloorJob.container, 'ubuntu:20.04')
+  assert.deepEqual(prPackageJob.needs, ['code_paths', 'codex-micro-linux-floor'])
+  assert.ok(prFloorJob.steps.some(({ name }) => name === 'Upload sidecar'))
+  const prDownload = prPackageJob.steps.find(({ name }) => name === 'Download Codex Micro sidecar')
+  assert.equal(prDownload.uses, 'actions/download-artifact@v8')
+  assert.equal(prDownload.with.name, 'codex-micro-linux-x64-pr')
+  assert.equal(prDownload.with.path, 'native/codex-micro/dist/linux-x64')
+  assert.equal(
+    prPackageJob.steps.find(({ name }) => name === 'Build native components').env
+      .ORCA_CODEX_MICRO_PREBUILT,
+    '1'
+  )
   for (const job of [sidecarJob, prFloorJob]) {
     assert.match(job.steps.find(({ name }) => name === 'Install build tools').run, /\bbinutils\b/)
     const rust = job.steps.find(({ name }) => name === 'Setup Rust')

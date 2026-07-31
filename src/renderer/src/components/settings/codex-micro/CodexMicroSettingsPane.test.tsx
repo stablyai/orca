@@ -86,7 +86,8 @@ describe('CodexMicroSettingsPane layout', () => {
     expect(markup).not.toContain('>Experimental<')
     expect(markup).toContain('data-slot="card"')
     expect(markup).not.toContain('>Retry<')
-    expect(markup).toContain('Enable Use with Orca, then connect the Codex Micro by USB.')
+    expect(markup).toContain('Checking device')
+    expect(markup).not.toContain('>Not in use<')
   })
 
   it('keeps the ownership switch accessible and updates the enabled setting', async () => {
@@ -124,6 +125,18 @@ describe('CodexMicroSettingsPane layout', () => {
     for (const [state, expected] of cases) {
       await setConnection(state)
       expect(connectionActions(container)).toEqual(expected)
+      if ('code' in state) {
+        expect(container.textContent).toContain('Diagnostics')
+        expect(container.textContent).toContain(state.code)
+        expect(container.textContent).toContain(state.message)
+      } else {
+        expect(container.textContent).not.toContain('Diagnostics')
+      }
+      if (state.kind === 'disabled') {
+        expect(container.textContent).toContain(
+          'Turn on Use with Orca, then connect the Codex Micro by USB.'
+        )
+      }
     }
     await act(async () => root.unmount())
   })

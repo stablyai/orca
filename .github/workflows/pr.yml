@@ -620,7 +620,7 @@ jobs:
 
   package:
     name: package
-    needs: [code_paths]
+    needs: [code_paths, codex-micro-linux-floor]
     if: needs.code_paths.outputs.package == 'true'
     runs-on: ubuntu-latest
     # Let the serial Docker gates reach their own deadlines and report cleanup failures.
@@ -631,6 +631,12 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+
+      - name: Download Codex Micro sidecar
+        uses: actions/download-artifact@v8
+        with:
+          name: codex-micro-linux-x64-pr
+          path: native/codex-micro/dist/linux-x64
 
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
@@ -678,6 +684,8 @@ jobs:
         run: pnpm run build:web-from-renderer
 
       - name: Build native components
+        env:
+          ORCA_CODEX_MICRO_PREBUILT: '1'
         run: pnpm run build:native
 
       - name: Install Linux package tooling
@@ -859,6 +867,14 @@ jobs:
 
       - name: Build and verify sidecar
         run: node config/scripts/build-codex-micro-sidecar.mjs
+
+      - name: Upload sidecar
+        uses: actions/upload-artifact@v7
+        with:
+          name: codex-micro-linux-x64-pr
+          path: native/codex-micro/dist/linux-x64/codex-micro
+          if-no-files-found: error
+          retention-days: 1
 
   # Why: PR E2E is advisory and only validates changed specs; scheduled and
   # release runs retain full-suite coverage.
