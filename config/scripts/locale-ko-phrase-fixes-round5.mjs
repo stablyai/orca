@@ -1,3 +1,5 @@
+import { KO_PHRASE_FIXES_ROUND6 } from './locale-ko-phrase-fixes-round6.mjs'
+
 // Korean phrase fixes from high-visibility UI audit round 5.
 export const KO_PHRASE_FIXES_ROUND5 = [
   { pattern: /검토 필요/g, replacement: '리뷰 필요', whenEnIncludes: 'Needs review' },
@@ -56,5 +58,6 @@ export const KO_PHRASE_FIXES_ROUND5 = [
   { pattern: /표시하다/g, replacement: '표시', whenEnIncludes: 'display' },
   { pattern: /구성하다/g, replacement: '작성', whenEnIncludes: 'compose' },
   { pattern: /유지하다/g, replacement: '유지', whenEnIncludes: 'Keep' },
-  { pattern: /확인하다/g, replacement: '검증', whenEnIncludes: 'verify' }
+  { pattern: /확인하다/g, replacement: '검증', whenEnIncludes: 'verify' },
+  ...KO_PHRASE_FIXES_ROUND6
 ]

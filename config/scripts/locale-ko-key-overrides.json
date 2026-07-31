@@ -5047,5 +5047,29 @@
   },
   "auto.components.right.sidebar.AiVaultPanel.noAgentsSelected": {
     "ko": "선택된 에이전트가 없습니다"
+  },
+  "auto.components.settings.BaseRefPicker.773a5687a3": {
+    "ko": "주 브랜치 사용"
+  },
+  "auto.components.settings.BaseRefPicker.086ce7f369": {
+    "ko": "주 브랜치({{value0}})를 따르는 중"
+  },
+  "auto.components.settings.RepositoryPane.f88db4fece": {
+    "ko": "기본 워크트리 base"
+  },
+  "auto.components.settings.RepositoryPane.8984d06520": {
+    "ko": "워크트리를 생성할 때 기본으로 사용할 base 브랜치 또는 ref입니다."
+  },
+  "auto.components.linear-issue-attribute-filter-dropdowns.allWorkspacesBody": {
+    "ko": "상태, 담당자, 레이블 필터는 단일 Linear 워크스페이스의 ID를 사용합니다. 이 속성으로 필터링하려면 워크스페이스를 하나만 선택하세요."
+  },
+  "auto.store.slices.editor.dcb521ed29": {
+    "ko": "이 파일은 충돌 상태이지만 편집할 수 있는 사본이 디스크에 없습니다."
+  },
+  "auto.components.editor.EditorContent.8b1a605bae": {
+    "ko": "이 파일은 충돌 상태이지만 편집할 수 있는 사본이 디스크에 없습니다."
+  },
+  "auto.components.editor.ConflictComponents.da539359b6": {
+    "ko": "이 충돌에서 편집할 수 있는 파일이 디스크에 없습니다."
   }
 }
