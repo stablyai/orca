@@ -190,6 +190,10 @@ async function runSelectedRuntimeAddJourney(
           store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: environmentId })
         ]
         await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
+        store.getState().setRuntimeEnvironmentStatus(environmentId, {
+          status: null,
+          checkedAt: Date.now()
+        })
         const response = await window.api.runtimeEnvironments.connect({
           selector: environmentId,
           timeoutMs: 15_000
@@ -197,9 +201,10 @@ async function runSelectedRuntimeAddJourney(
         if (!response.ok) {
           throw new Error(response.error.message)
         }
-        if (!(await store.getState().refreshRuntimeEnvironmentStatus(environmentId))) {
-          throw new Error('Paired runtime did not recover after reconnect')
-        }
+        store.getState().setRuntimeEnvironmentStatus(environmentId, {
+          status: response.result,
+          checkedAt: Date.now()
+        })
         const groupResponse = await window.api.runtimeEnvironments.call({
           selector: environmentId,
           method: 'projectGroup.create',
@@ -230,6 +235,9 @@ async function runSelectedRuntimeAddJourney(
         await store.getState().fetchProjectGroups({ runtimeEnvironmentId: environmentId })
         await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: environmentId })
         await Promise.allSettled(oldRequests)
+        if (!(await store.getState().refreshRuntimeEnvironmentStatus(environmentId))) {
+          throw new Error('Paired runtime did not recover after reconnect')
+        }
         return {
           folder: store
             .getState()
@@ -500,6 +508,10 @@ async function runSelectedRuntimeAddJourney(
           store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: environmentId })
         ]
         await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
+        store.getState().setRuntimeEnvironmentStatus(environmentId, {
+          status: null,
+          checkedAt: Date.now()
+        })
         const response = await window.api.runtimeEnvironments.connect({
           selector: environmentId,
           timeoutMs: 15_000
@@ -507,12 +519,16 @@ async function runSelectedRuntimeAddJourney(
         if (!response.ok) {
           throw new Error(response.error.message)
         }
-        if (!(await store.getState().refreshRuntimeEnvironmentStatus(environmentId))) {
-          throw new Error('Paired runtime did not recover after collision reconnect')
-        }
+        store.getState().setRuntimeEnvironmentStatus(environmentId, {
+          status: response.result,
+          checkedAt: Date.now()
+        })
         await store.getState().fetchProjectGroups({ runtimeEnvironmentId: environmentId })
         await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: environmentId })
         await Promise.allSettled(staleRequests)
+        if (!(await store.getState().refreshRuntimeEnvironmentStatus(environmentId))) {
+          throw new Error('Paired runtime did not recover after collision reconnect')
+        }
         store.getState().setActiveFolderWorkspace(runtimeFolder.id, `runtime:${environmentId}`)
         const state = store.getState()
         return {
