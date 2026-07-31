@@ -577,9 +577,12 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     id: 'kimi',
     label: 'Kimi',
     binary: 'kimi',
-    promptDelivery: 'stdin',
-    buildArgs: ({ model, thinkingLevel }) => [
-      '--print',
+    // Why: kimi-code accepts the generation prompt only via --prompt/-p (Claude's
+    // --print is rejected). Deliver on argv so --prompt receives the text (#11669).
+    promptDelivery: 'argv',
+    buildArgs: ({ prompt, model, thinkingLevel }) => [
+      '--prompt',
+      prompt,
       '--quiet',
       ...(model && model !== 'default' ? ['--model', model] : []),
       ...(thinkingLevel === 'on'
