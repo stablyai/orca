@@ -2631,6 +2631,10 @@ export function useIpcEvents(): void {
     }
 
     const sshStateWatermarkByTargetId = new Map<string, number>()
+    const pendingPortHydrationByTargetId = new Map<
+      string,
+      { receivedForwardPush: boolean; receivedDetectedPush: boolean }
+    >()
     let applySshConnectionStateChange!: (
       targetId: string,
       state: SshConnectionState,
@@ -2671,19 +2675,36 @@ export function useIpcEvents(): void {
             // Why: ports arrive only via push events; on reattach to a live session fetch snapshots or the Ports panel shows empty.
             if ((state as SshConnectionState).status === 'connected') {
               const authority = currentDirectSshAuthority(target.id)
-              const [forwards, detected] = await Promise.all([
-                window.api.ssh.listPortForwards({ targetId: target.id }),
-                window.api.ssh.listDetectedPorts({ targetId: target.id })
-              ])
-              // Why: if the session disconnected while awaiting the snapshot, applying it would resurrect a dead session's ports.
-              if (
-                !directSshEffectStopped &&
-                authority &&
-                directSshAuthoritiesEqual(currentDirectSshAuthority(target.id), authority)
-              ) {
-                useAppStore.getState().setPortForwards(target.id, forwards)
-                useAppStore.getState().setDetectedPorts(target.id, detected)
+              const pendingPortHydration = {
+                receivedForwardPush: false,
+                receivedDetectedPush: false
               }
+              pendingPortHydrationByTargetId.set(target.id, pendingPortHydration)
+              const isHydrationAuthorityCurrent = (): boolean =>
+                !directSshEffectStopped &&
+                authority !== null &&
+                directSshAuthoritiesEqual(currentDirectSshAuthority(target.id), authority)
+              const forwardHydration = window.api.ssh
+                .listPortForwards({ targetId: target.id })
+                .then((forwards) => {
+                  // Why: if the session disconnected while awaiting the snapshot, applying it would resurrect a dead session's ports.
+                  if (isHydrationAuthorityCurrent() && !pendingPortHydration.receivedForwardPush) {
+                    useAppStore.getState().setPortForwards(target.id, forwards)
+                  }
+                })
+              const detectedHydration = window.api.ssh
+                .listDetectedPorts({ targetId: target.id })
+                .then((detected) => {
+                  if (isHydrationAuthorityCurrent() && !pendingPortHydration.receivedDetectedPush) {
+                    useAppStore.getState().setDetectedPorts(target.id, detected)
+                  }
+                })
+              // Why: one failed or stalled port stream must not block the other stream or later targets.
+              void Promise.allSettled([forwardHydration, detectedHydration]).then(() => {
+                if (pendingPortHydrationByTargetId.get(target.id) === pendingPortHydration) {
+                  pendingPortHydrationByTargetId.delete(target.id)
+                }
+              })
             }
           }
         }
@@ -2706,12 +2727,20 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ssh.onPortForwardsChanged(({ targetId, forwards }) => {
+        const pendingPortHydration = pendingPortHydrationByTargetId.get(targetId)
+        if (pendingPortHydration) {
+          pendingPortHydration.receivedForwardPush = true
+        }
         useAppStore.getState().setPortForwards(targetId, forwards)
       })
     )
 
     unsubs.push(
       window.api.ssh.onDetectedPortsChanged(({ targetId, ports }) => {
+        const pendingPortHydration = pendingPortHydrationByTargetId.get(targetId)
+        if (pendingPortHydration) {
+          pendingPortHydration.receivedDetectedPush = true
+        }
         useAppStore.getState().setDetectedPorts(targetId, ports)
       })
     )
