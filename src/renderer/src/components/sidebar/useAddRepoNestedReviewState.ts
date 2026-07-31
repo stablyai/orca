@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { NestedRepoTelemetryRuntimeKind } from '../../../../shared/nested-repo-telemetry'
 import type { NestedRepoScanResult } from '../../../../shared/types'
+import type { RuntimeRouteOptions } from '@/store/slices/repos'
 import { defaultProjectGroupNameForPath, type AddRepoDialogStep } from './add-repo-dialog-types'
 
 type ShowNestedRepoReviewArgs = {
@@ -19,7 +20,7 @@ export function useAddRepoNestedReviewState({
   setStep
 }: {
   activeRuntimeEnvironmentId: string | null | undefined
-  cancelNestedRepoScan: (scanId: string) => Promise<unknown>
+  cancelNestedRepoScan: (scanId: string, options?: RuntimeRouteOptions) => Promise<unknown>
   setStep: (step: AddRepoDialogStep) => void
 }): {
   nestedScan: NestedRepoScanResult | null
@@ -85,18 +86,24 @@ export function useAddRepoNestedReviewState({
     setNestedScanId(scanId)
   }, [])
 
+  // Why: the scan was routed to the dialog's host, so cancel has to resolve that
+  // same host or Stop silently no-ops against a different runtime.
+  const scanHostEnvironmentId = activeRuntimeEnvironmentId?.trim() || null
+
   const handleStopNestedScan = useCallback(() => {
     const scanId = nestedScanIdRef.current
     if (!scanId) {
       return
     }
-    void cancelNestedRepoScan(scanId)
-  }, [cancelNestedRepoScan])
+    void cancelNestedRepoScan(scanId, { runtimeEnvironmentId: scanHostEnvironmentId })
+  }, [cancelNestedRepoScan, scanHostEnvironmentId])
 
   const resetNestedRepoReviewState = useCallback((): void => {
     const activeNestedScanId = nestedScanIdRef.current
     if (activeNestedScanId) {
-      void cancelNestedRepoScan(activeNestedScanId)
+      void cancelNestedRepoScan(activeNestedScanId, {
+        runtimeEnvironmentId: scanHostEnvironmentId
+      })
     }
     setNestedScan(null)
     setNestedSelectedPaths(new Set())
@@ -107,7 +114,7 @@ export function useAddRepoNestedReviewState({
     setNestedScanInProgress(false)
     setNestedImportScanId(null)
     setActiveNestedScanId(null)
-  }, [cancelNestedRepoScan, setActiveNestedScanId])
+  }, [cancelNestedRepoScan, scanHostEnvironmentId, setActiveNestedScanId])
 
   return {
     nestedScan,

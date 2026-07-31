@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { Repo } from '../../../../shared/types'
+import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
+import type { useAddRepoServerPathFlow } from './useAddRepoServerPathFlow'
 
 const mocks = vi.hoisted(() => ({
   stateValues: [] as unknown[],
@@ -61,12 +62,47 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
   }
 }
 
+function makeScan(overrides: Partial<NestedRepoScanResult> = {}): NestedRepoScanResult {
+  return {
+    selectedPath: '/server/docs',
+    selectedPathKind: 'git_repo',
+    repos: [],
+    truncated: false,
+    timedOut: false,
+    stopped: false,
+    durationMs: 1,
+    maxDepth: 3,
+    maxRepos: 100,
+    timeoutMs: null,
+    ...overrides
+  }
+}
+
+function flowDeps(
+  runtimeEnvironmentId: string | null
+): Parameters<typeof useAddRepoServerPathFlow>[0] {
+  return {
+    addRepoPath: mocks.addRepoPath,
+    closeModal: mocks.closeModal,
+    fetchWorktrees: mocks.fetchWorktrees,
+    getNestedRepoRuntimeKind: mocks.getNestedRepoRuntimeKind,
+    runtimeEnvironmentId,
+    scanNestedRepos: mocks.scanNestedRepos,
+    setActiveNestedScanId: mocks.setActiveNestedScanId,
+    setNestedScanInProgress: mocks.setNestedScanInProgress,
+    showNestedRepoReview: mocks.showNestedRepoReview,
+    onGitRepoReady: mocks.onGitRepoReady,
+    setAddProjectBusyLabel: mocks.setAddProjectBusyLabel
+  }
+}
+
 describe('useAddRepoServerPathFlow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.stateIndex = 0
     mocks.stateSetters = []
     mocks.stateValues = ['/server/docs', false]
+    mocks.getNestedRepoRuntimeKind.mockReturnValue('local')
   })
 
   it('marks onboarding folder progress before closing server folder adds', async () => {
@@ -74,25 +110,49 @@ describe('useAddRepoServerPathFlow', () => {
     mocks.addRepoPath.mockResolvedValue(repo)
     const { useAddRepoServerPathFlow } = await import('./useAddRepoServerPathFlow')
 
-    const result = useAddRepoServerPathFlow({
-      addRepoPath: mocks.addRepoPath,
-      closeModal: mocks.closeModal,
-      fetchWorktrees: mocks.fetchWorktrees,
-      getNestedRepoRuntimeKind: mocks.getNestedRepoRuntimeKind,
-      scanNestedRepos: mocks.scanNestedRepos,
-      setActiveNestedScanId: mocks.setActiveNestedScanId,
-      setNestedScanInProgress: mocks.setNestedScanInProgress,
-      showNestedRepoReview: mocks.showNestedRepoReview,
-      onGitRepoReady: mocks.onGitRepoReady,
-      setAddProjectBusyLabel: mocks.setAddProjectBusyLabel
-    })
+    const result = useAddRepoServerPathFlow(flowDeps(null))
     await result.handleAddServerPath('folder')
 
-    expect(mocks.addRepoPath).toHaveBeenCalledWith('/server/docs', 'folder')
+    expect(mocks.addRepoPath).toHaveBeenCalledWith('/server/docs', 'folder', {
+      runtimeEnvironmentId: null
+    })
     expect(mocks.scanNestedRepos).not.toHaveBeenCalled()
     expect(mocks.fetchWorktrees).not.toHaveBeenCalled()
     expect(mocks.onGitRepoReady).not.toHaveBeenCalled()
     expect(mocks.markOnboardingProjectAdded).toHaveBeenCalledWith('addedFolder')
     expect(mocks.closeModal).toHaveBeenCalled()
+  })
+
+  // Why: the host path was browsed on the dialog's selected server, so adding it
+  // against the globally focused runtime registers it on the wrong filesystem and
+  // only fails later, when a terminal spawns into a cwd that does not exist.
+  it('routes folder adds to the host selected in the dialog', async () => {
+    mocks.addRepoPath.mockResolvedValue(makeRepo())
+    const { useAddRepoServerPathFlow } = await import('./useAddRepoServerPathFlow')
+
+    await useAddRepoServerPathFlow(flowDeps('env-1')).handleAddServerPath('folder')
+
+    expect(mocks.addRepoPath).toHaveBeenCalledWith('/server/docs', 'folder', {
+      runtimeEnvironmentId: 'env-1'
+    })
+  })
+
+  it('routes host-path git scans and adds to the host selected in the dialog', async () => {
+    const repo = makeRepo({ id: 'server-git', kind: 'git' })
+    mocks.getNestedRepoRuntimeKind.mockReturnValue('runtime')
+    mocks.scanNestedRepos.mockResolvedValue(makeScan())
+    mocks.addRepoPath.mockResolvedValue(repo)
+    const { useAddRepoServerPathFlow } = await import('./useAddRepoServerPathFlow')
+
+    await useAddRepoServerPathFlow(flowDeps('env-1')).handleAddServerPath('git')
+
+    expect(mocks.scanNestedRepos).toHaveBeenCalledWith('/server/docs', undefined, undefined, {
+      runtimeEnvironmentId: 'env-1'
+    })
+    expect(mocks.addRepoPath).toHaveBeenCalledWith('/server/docs', 'git', {
+      runtimeEnvironmentId: 'env-1'
+    })
+    expect(mocks.fetchWorktrees).toHaveBeenCalledWith('server-git', { requireAuthoritative: true })
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith('server-git', 'runtime_server_path')
   })
 })

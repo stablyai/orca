@@ -9,8 +9,9 @@ import {
   shouldEmitNestedRepoImportSubmitTelemetry,
   type NestedRepoTelemetryRuntimeKind
 } from '../../../../shared/nested-repo-telemetry'
+import type { AppState } from '@/store/types'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
-import type { NestedRepoScanResult, ProjectGroupImportResult } from '../../../../shared/types'
+import type { NestedRepoScanResult } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
 export function useAddRepoNestedImportFlow({
@@ -41,14 +42,7 @@ export function useAddRepoNestedImportFlow({
    *  nested dialog; store-modal mode routes it to the activeModal slot. */
   closeModal: () => void
   fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
-  importNestedRepos: (args: {
-    parentPath: string
-    groupName: string
-    projectPaths: string[]
-    connectionId?: string
-    scanId?: string
-    mode: 'group' | 'separate'
-  }) => Promise<ProjectGroupImportResult | null>
+  importNestedRepos: AppState['importNestedRepos']
   getNestedRepoRuntimeKind: (connectionId: string | null) => NestedRepoTelemetryRuntimeKind
   onGitRepoReady: (repoId: string, source: AddRepoExistingWorkspaceSource) => Promise<void>
   setIsAdding: (isAdding: boolean) => void
@@ -123,16 +117,21 @@ export function useAddRepoNestedImportFlow({
       )
       let resultTracked = false
       try {
-        const result = await importNestedRepos({
-          parentPath: nestedScan.selectedPath,
-          groupName: nestedGroupName,
-          // Why: Set insertion order can drift after deselect/reselect; import
-          // ordering should match the visible scan order users reviewed.
-          projectPaths: selectedProjectPaths,
-          ...(nestedConnectionId ? { connectionId: nestedConnectionId } : {}),
-          ...(nestedImportScanId ? { scanId: nestedImportScanId } : {}),
-          mode
-        })
+        const result = await importNestedRepos(
+          {
+            parentPath: nestedScan.selectedPath,
+            groupName: nestedGroupName,
+            // Why: Set insertion order can drift after deselect/reselect; import
+            // ordering should match the visible scan order users reviewed.
+            projectPaths: selectedProjectPaths,
+            ...(nestedConnectionId ? { connectionId: nestedConnectionId } : {}),
+            ...(nestedImportScanId ? { scanId: nestedImportScanId } : {}),
+            mode
+          },
+          // Why: the scan ran on the host picked in the dialog, so the import must
+          // land there instead of on the globally focused runtime (#6367).
+          { runtimeEnvironmentId: activeRuntimeEnvironmentId?.trim() || null }
+        )
         track(
           'add_repo_nested_import_result',
           buildNestedRepoImportResultTelemetry({

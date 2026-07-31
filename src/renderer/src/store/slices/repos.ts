@@ -1311,11 +1311,13 @@ function getRuntimeTargetCachePrefix(
   return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
 }
 
-type FolderWorkspacePathStatusRouteOptions = { runtimeEnvironmentId?: string | null }
-type AddRepoPathRouteOptions = { runtimeEnvironmentId?: string | null }
+/** Caller-owned host route. Surfaces that pick a host themselves (the Add
+ *  Project dialog's Host selector) must pass it so the action does not fall back
+ *  to the globally focused runtime. */
+export type RuntimeRouteOptions = { runtimeEnvironmentId?: string | null }
 
-function getFolderWorkspacePathStatusRouteSettings(
-  options: FolderWorkspacePathStatusRouteOptions | undefined,
+function getRuntimeRouteSettings(
+  options: RuntimeRouteOptions | undefined,
   fallbackSettings: GlobalSettings | null
 ): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined {
   return options && 'runtimeEnvironmentId' in options
@@ -1323,13 +1325,17 @@ function getFolderWorkspacePathStatusRouteSettings(
     : fallbackSettings
 }
 
-function getAddRepoPathRouteSettings(
-  options: AddRepoPathRouteOptions | undefined,
+function getConnectionScopedRuntimeTarget(
+  connectionId: string | null | undefined,
+  options: RuntimeRouteOptions | undefined,
   fallbackSettings: GlobalSettings | null
-): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined {
-  return options && 'runtimeEnvironmentId' in options
-    ? { activeRuntimeEnvironmentId: options.runtimeEnvironmentId ?? null }
-    : fallbackSettings
+): ReturnType<typeof getActiveRuntimeTarget> {
+  // Why: SSH work rides local IPC with its connectionId, and the runtime RPCs have
+  // no field to carry that id. Letting a focused runtime capture an SSH-scoped
+  // request silently retargets it at the runtime's own filesystem.
+  return connectionId?.trim()
+    ? { kind: 'local' }
+    : getActiveRuntimeTarget(getRuntimeRouteSettings(options, fallbackSettings))
 }
 
 function folderWorkspaceUpdateInvalidatesPathStatus(
@@ -1546,7 +1552,7 @@ export type RepoSlice = {
   addRepoPath: (
     path: string,
     kind?: 'git' | 'folder',
-    options?: AddRepoPathRouteOptions
+    options?: RuntimeRouteOptions
   ) => Promise<Repo | null>
   setupProjectExistingFolder: (
     args: ProjectHostSetupExistingFolderArgs
@@ -1561,21 +1567,25 @@ export type RepoSlice = {
     args: ProjectHostSetupDeleteArgs
   ) => Promise<ProjectHostSetupDeleteResult | null>
   setupProjectClone: (args: ProjectHostSetupCloneArgs) => Promise<ProjectHostSetupResult | null>
-  addNonGitFolder: (path: string, options?: AddRepoPathRouteOptions) => Promise<Repo | null>
+  addNonGitFolder: (path: string, options?: RuntimeRouteOptions) => Promise<Repo | null>
   scanNestedRepos: (
     path: string,
     connectionId?: string,
-    controls?: NestedRepoScanControls
+    controls?: NestedRepoScanControls,
+    options?: RuntimeRouteOptions
   ) => Promise<NestedRepoScanResult | null>
-  cancelNestedRepoScan: (scanId: string) => Promise<boolean>
-  importNestedRepos: (args: {
-    parentPath: string
-    groupName: string
-    projectPaths: string[]
-    connectionId?: string
-    scanId?: string
-    mode: 'group' | 'separate'
-  }) => Promise<ProjectGroupImportResult | null>
+  cancelNestedRepoScan: (scanId: string, options?: RuntimeRouteOptions) => Promise<boolean>
+  importNestedRepos: (
+    args: {
+      parentPath: string
+      groupName: string
+      projectPaths: string[]
+      connectionId?: string
+      scanId?: string
+      mode: 'group' | 'separate'
+    },
+    options?: RuntimeRouteOptions
+  ) => Promise<ProjectGroupImportResult | null>
   createProjectGroup: (name: string) => Promise<ProjectGroup | null>
   createFolderWorkspace: (
     args: {
@@ -1588,19 +1598,19 @@ export type RepoSlice = {
       createdWithAgent?: FolderWorkspace['createdWithAgent']
       pendingFirstAgentMessageRename?: boolean
     },
-    options?: FolderWorkspacePathStatusRouteOptions
+    options?: RuntimeRouteOptions
   ) => Promise<FolderWorkspace | null>
   getFolderWorkspacePathStatusCacheKey: (
     request: FolderWorkspacePathStatusRequest,
-    options?: FolderWorkspacePathStatusRouteOptions
+    options?: RuntimeRouteOptions
   ) => string
   getFreshFolderWorkspacePathStatus: (
     request: FolderWorkspacePathStatusRequest,
-    options?: FolderWorkspacePathStatusRouteOptions
+    options?: RuntimeRouteOptions
   ) => FolderWorkspacePathStatus | null
   fetchFolderWorkspacePathStatus: (
     request: FolderWorkspacePathStatusRequest,
-    options?: { force?: boolean } & FolderWorkspacePathStatusRouteOptions
+    options?: { force?: boolean } & RuntimeRouteOptions
   ) => Promise<FolderWorkspacePathStatus | null>
   updateFolderWorkspace: (
     folderWorkspaceId: string,
@@ -2140,7 +2150,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   getFolderWorkspacePathStatusCacheKey: (request, options) =>
     `${getRuntimeTargetCachePrefix(
-      getFolderWorkspacePathStatusRouteSettings(options, get().settings)
+      getRuntimeRouteSettings(options, get().settings)
     )}:${getFolderWorkspacePathStatusScopeKey(request)}`,
 
   getFreshFolderWorkspacePathStatus: (request, options) => {
@@ -2163,9 +2173,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       return freshCachedStatus
     }
     try {
-      const target = getActiveRuntimeTarget(
-        getFolderWorkspacePathStatusRouteSettings(options, get().settings)
-      )
+      const target = getActiveRuntimeTarget(getRuntimeRouteSettings(options, get().settings))
       const status =
         target.kind === 'local'
           ? await window.api.folderWorkspaces.getPathStatus(request)
@@ -2194,9 +2202,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  scanNestedRepos: async (path, connectionId, controls) => {
+  scanNestedRepos: async (path, connectionId, controls, options) => {
     try {
-      const target = getActiveRuntimeTarget(get().settings)
+      const target = getConnectionScopedRuntimeTarget(connectionId, options, get().settings)
       if (target.kind === 'local') {
         const unsubscribe =
           controls?.scanId && controls.onProgress
@@ -2233,9 +2241,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  cancelNestedRepoScan: async (scanId) => {
+  cancelNestedRepoScan: async (scanId, options) => {
     try {
-      const target = getActiveRuntimeTarget(get().settings)
+      // Why: only local scans stream and can be cancelled, so cancel must resolve
+      // the same host the scan was routed to, not whichever runtime holds focus.
+      const target = getActiveRuntimeTarget(getRuntimeRouteSettings(options, get().settings))
       if (target.kind !== 'local') {
         return false
       }
@@ -2246,9 +2256,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  importNestedRepos: async (args) => {
+  importNestedRepos: async (args, options) => {
     try {
-      const target = getActiveRuntimeTarget(get().settings)
+      const target = getConnectionScopedRuntimeTarget(args.connectionId, options, get().settings)
       const result =
         target.kind === 'local'
           ? await window.api.projectGroups.importNested(args)
@@ -2264,9 +2274,20 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               },
               { timeoutMs: 60_000 }
             )
-      await get().fetchProjectGroups()
-      await get().fetchFolderWorkspaces()
-      await get().fetchRepos()
+      const importedOffFocusedHost =
+        getRuntimeTargetHostId(target) !==
+        getRuntimeTargetHostId(getActiveRuntimeTarget(get().settings))
+      if (importedOffFocusedHost) {
+        // Why: single-host hydration replaces the catalogs with the focused host's
+        // slice, so a cross-host import would drop the repos it just created.
+        await get().fetchProjectGroupsForAllHosts()
+        await get().fetchFolderWorkspacesForAllHosts()
+        await get().fetchReposForAllHosts()
+      } else {
+        await get().fetchProjectGroups()
+        await get().fetchFolderWorkspaces()
+        await get().fetchRepos()
+      }
       set({ folderWorkspacePathStatuses: {} })
       return result
     } catch (err) {
@@ -2313,9 +2334,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   createFolderWorkspace: async (args, options) => {
     try {
       // Why: a new folder has no owner yet, so creation follows the caller-selected path-status host.
-      const target = getActiveRuntimeTarget(
-        getFolderWorkspacePathStatusRouteSettings(options, get().settings)
-      )
+      const target = getActiveRuntimeTarget(getRuntimeRouteSettings(options, get().settings))
       if (
         target.kind === 'environment' &&
         (args.linkedTask?.provider === 'jira' || args.linkedTaskSourceContext?.provider === 'jira')
@@ -2652,7 +2671,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   addRepoPath: async (path, kind = 'git', options) => {
     try {
-      const target = getActiveRuntimeTarget(getAddRepoPathRouteSettings(options, get().settings))
+      const target = getActiveRuntimeTarget(getRuntimeRouteSettings(options, get().settings))
       let repo: Repo
       try {
         if (target.kind === 'local') {

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
 import type { NestedRepoScanResult, ProjectGroupImportResult, Repo } from '../../../../shared/types'
+import type { AppState } from '@/store/types'
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
@@ -135,6 +136,45 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
         found_count: 1,
         selected_count: 0
       })
+    )
+  })
+
+  // Why: the review list came from a scan of the dialog's selected host, so the
+  // import has to land there rather than on the globally focused runtime (#6367).
+  it('imports nested repos on the host that produced the scan', async () => {
+    const importNestedRepos = vi.fn<AppState['importNestedRepos']>().mockResolvedValue(null)
+    const { handleImportNestedRepos } = useTestAddRepoNestedImportFlow({
+      activeRuntimeEnvironmentId: 'env-1',
+      nestedSelectedPaths: new Set(['/workspace/platform/app']),
+      importNestedRepos
+    })
+
+    await handleImportNestedRepos('group')
+
+    expect(importNestedRepos).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parentPath: '/workspace/platform',
+        projectPaths: ['/workspace/platform/app'],
+        mode: 'group'
+      }),
+      { runtimeEnvironmentId: 'env-1' }
+    )
+  })
+
+  it('keeps the connection id on SSH nested imports', async () => {
+    const importNestedRepos = vi.fn<AppState['importNestedRepos']>().mockResolvedValue(null)
+    const { handleImportNestedRepos } = useTestAddRepoNestedImportFlow({
+      nestedConnectionId: 'ssh-builder',
+      nestedRuntimeKind: 'ssh',
+      nestedSelectedPaths: new Set(['/workspace/platform/app']),
+      importNestedRepos
+    })
+
+    await handleImportNestedRepos('group')
+
+    expect(importNestedRepos).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: 'ssh-builder' }),
+      { runtimeEnvironmentId: null }
     )
   })
 
