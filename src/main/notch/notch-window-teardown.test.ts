@@ -110,8 +110,13 @@ vi.mock('../appkit-scene-mutation', () => ({
 const EMPTY_SUMMARY = { counts: { working: 0, attention: 0, done: 0 }, sessions: [] }
 
 let mod: typeof NotchWindowModule
+const realPlatform = process.platform
 
 beforeEach(async () => {
+  // Why: createNotchWindow returns null off darwin, so without this the whole suite silently
+  // asserts nothing on Linux/Windows CI — `created` stays empty and the ordering expectations
+  // fail. Pin it rather than skip, so the teardown contract is exercised on every host.
+  Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
   created = []
   order.length = 0
   appHandlers.clear()
@@ -120,6 +125,7 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
+  Object.defineProperty(process, 'platform', { value: realPlatform, configurable: true })
   vi.restoreAllMocks()
 })
 

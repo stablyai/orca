@@ -25,9 +25,9 @@ function sanitizePaneKeys(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []
   }
-  return value
-    .filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
-    .slice(0, MAX_ACK_PANE_KEYS)
+  // Why isNonEmptyString and not a bare length check: it also caps each key, so a renderer
+  // cannot satisfy the count bound with 512 multi-megabyte strings.
+  return value.filter(isNonEmptyString).slice(0, MAX_ACK_PANE_KEYS)
 }
 
 function isNonEmptyString(value: unknown): value is string {

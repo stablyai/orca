@@ -15,7 +15,7 @@ import {
 export const EXPANDED_PANEL_WIDTH = 800
 export const EXPANDED_CONTENT_WIDTH = 784
 export const EXPANDED_CURVE_GUTTER = 8
-/** Tallest card the panel must hold: three rows plus every vertical inset. */
+/** Tallest card the panel must hold, before the list starts scrolling. */
 export const MENU_MAX_HEIGHT = 316
 export const EXPANDED_BOTTOM_PADDING = 8
 /** Open, the pill detaches further — a card glued to the edge reads as a notch again. */
@@ -165,7 +165,7 @@ export function collapsedWindowRect(
 }
 
 export const SESSION_ROW_HEIGHT = 52
-/** Three full rows fit without the row under the pointer shifting; longer lists scroll. */
+/** ~5 rows at SESSION_ROW_HEIGHT; longer lists scroll inside the card rather than growing it. */
 export const MAX_SESSION_LIST_HEIGHT = 300
 const LIST_TOP_PADDING = 6
 const LIST_BOTTOM_PADDING = 10

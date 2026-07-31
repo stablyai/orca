@@ -244,16 +244,10 @@ module.exports = {
         join(resourcesDir, '..', 'MacOS', 'orca-notification-status'),
         context.packager
       )
-      // Why: electron-builder only warns when an extraResources source is missing, so a
-      // forgotten build step used to ship silently — and the notch then degrades to its pill
-      // fallback on every MacBook with nothing surfaced. Fail the build instead.
-      const screenGeometryPath = join(resourcesDir, 'bin', 'orca-screen-geometry')
-      if (!existsSync(screenGeometryPath)) {
-        throw new Error(
-          `Missing orca-screen-geometry helper at ${screenGeometryPath} — run pnpm build:screen-geometry-macos`
-        )
-      }
-      chmodSync(screenGeometryPath, 0o755)
+      await signMacScreenGeometryHelper(
+        join(resourcesDir, 'bin', 'orca-screen-geometry'),
+        context.packager
+      )
     }
   },
   win: {
@@ -558,6 +552,39 @@ async function signMacNotificationStatusHelper(helperPath, packager) {
   // binary embeds the app's CFBundleIdentifier in __TEXT,__info_plist so this
   // (and any later) `codesign --force` derives the correct identifier. Sign
   // before the outer Orca.app is sealed, like the computer-use helper.
+  const args = ['--force', '--sign', identity]
+  if (isMacRelease) {
+    args.push('--options', 'runtime', '--timestamp')
+  }
+  args.push(helperPath)
+  execFileSync('codesign', args, { stdio: 'inherit' })
+  execFileSync('codesign', ['--verify', '--strict', helperPath], { stdio: 'inherit' })
+}
+
+async function signMacScreenGeometryHelper(helperPath, packager) {
+  // Why fail rather than warn: electron-builder only logs when an extraResources source is
+  // missing, so a forgotten build step shipped silently and the notch degraded to its pill
+  // fallback on every MacBook with nothing surfaced.
+  if (!existsSync(helperPath)) {
+    throw new Error(
+      `Missing orca-screen-geometry helper at ${helperPath} — run pnpm build:screen-geometry-macos`
+    )
+  }
+  chmodSync(helperPath, 0o755)
+  const codeSigningInfo =
+    isMacRelease && process.env.CSC_LINK && packager?.codeSigningInfo?.value
+      ? await packager.codeSigningInfo.value
+      : null
+  const identity =
+    process.env.CSC_NAME ??
+    findInstalledMacSigningIdentity(codeSigningInfo?.keychainFile) ??
+    (isMacRelease ? null : '-')
+  if (!identity) {
+    throw new Error('Missing signing identity for orca-screen-geometry helper')
+  }
+  // Why sign at all: it is a nested Mach-O inside the bundle, and notarization rejects an
+  // unsigned one. Unlike the notification helper it needs no bundle identity — it only reads
+  // NSScreen — so it carries no embedded Info.plist and lives in Resources/bin.
   const args = ['--force', '--sign', identity]
   if (isMacRelease) {
     args.push('--options', 'runtime', '--timestamp')
