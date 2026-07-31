@@ -4558,6 +4558,7 @@ export class OrcaRuntimeService {
 
   private getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId {
     const scope = parseWorkspaceKey(worktreeId)
+    let preferredHostId: ExecutionHostId
     if (scope?.type === 'folder') {
       const workspace = this.store
         ?.getFolderWorkspaces?.()
@@ -4566,11 +4567,28 @@ export class OrcaRuntimeService {
         throw new Error('folder_workspace_not_found')
       }
       const connectionId = this.resolveFolderWorkspaceConnectionId(workspace)
-      return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+      preferredHostId = connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+    } else {
+      const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
+      const repo = this.store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
+      preferredHostId = repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
     }
-    const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
-    const repo = this.store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
-    return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+    const getWorkspaceSession = this.store?.getWorkspaceSession
+    const persistedHostIds = this.store?.getWorkspaceSessionHostIds?.()
+    if (
+      !getWorkspaceSession ||
+      !persistedHostIds ||
+      Object.hasOwn(getWorkspaceSession(preferredHostId).tabsByWorktree, worktreeId)
+    ) {
+      return preferredHostId
+    }
+    const persistedOwners = persistedHostIds.filter(
+      (hostId) =>
+        hostId !== preferredHostId &&
+        Object.hasOwn(getWorkspaceSession(hostId).tabsByWorktree, worktreeId)
+    )
+    // Why: relay restarts can leave the catalog pointing at an obsolete runtime partition while the durable tab owner remains unique.
+    return persistedOwners.length === 1 ? persistedOwners[0]! : preferredHostId
   }
 
   private getWorkspaceSessionForWorktree(worktreeId: string): WorkspaceSessionState | null {
@@ -25765,30 +25783,24 @@ export class OrcaRuntimeService {
       if (options.deadline !== undefined && Date.now() >= options.deadline) {
         break
       }
-      const stop = (): boolean | Promise<boolean> => {
+      const stop = async (): Promise<boolean> => {
         if (options.deadline !== undefined && Date.now() >= options.deadline) {
           return false
         }
-        if (options.stopPty) {
-          // Why: destructive worktree cleanup must not let its cross-surface
-          // dedupe treat fire-and-forget controller.kill as physical exit.
-          // Why: the RPC deadline makes shutdown/list RPCs settle before the sweep
-          // deadline so a wedged daemon yields the accurate stop failure; no deadline
-          // (non-destructive) keeps the provider default RPC timeout.
+        // Why: terminal.stop is a durable lifecycle receipt; wait for provider exit so onPtyExit de-persists the tab before returning.
+        if (this.ptyController?.stopAndWait) {
           if (options.deadline !== undefined) {
-            return (
-              this.ptyController?.stopAndWait?.(ptyId, {
-                deadlineMs: teardownRpcDeadline(options.deadline)
-              }) ?? false
-            )
+            return await this.ptyController.stopAndWait(ptyId, {
+              deadlineMs: teardownRpcDeadline(options.deadline)
+            })
           }
-          return this.ptyController?.stopAndWait?.(ptyId) ?? false
+          return await this.ptyController.stopAndWait(ptyId)
         }
         return Boolean(this.ptyController?.kill(ptyId))
       }
       const stopResult = options.stopPty
         ? await options.stopPty(ptyId, stop)
-        : { stopped: stop(), owner: true }
+        : { stopped: await stop(), owner: true }
       if (stopResult.owner && stopResult.stopped) {
         stopped += 1
       }
