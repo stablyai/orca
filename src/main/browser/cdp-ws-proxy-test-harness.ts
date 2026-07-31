@@ -25,7 +25,12 @@ export type MockWebContents = {
   webContents: {
     debugger: MockDebugger
     isDestroyed: () => boolean
+    id: number
     focus: Mock<() => void>
+    hostWebContents: {
+      isDestroyed: Mock<() => boolean>
+      send: Mock<(channel: string, phase: string) => void>
+    }
     printToPDF: Mock<() => Promise<Buffer>>
     reload: Mock<() => void>
     reloadIgnoringCache: Mock<() => void>
@@ -71,7 +76,10 @@ export function createMockWebContents(): MockWebContents {
     webContents: {
       debugger: debuggerObj,
       isDestroyed: () => destroyed,
+      id: 1,
       focus: vi.fn(),
+      // Why: the proxy lends DOM focus to the guest by messaging its host renderer.
+      hostWebContents: { isDestroyed: vi.fn(() => false), send: vi.fn() },
       printToPDF: vi.fn(async () => Buffer.from('%PDF-test')),
       reload: vi.fn(),
       reloadIgnoringCache: vi.fn(),

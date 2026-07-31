@@ -3210,6 +3210,43 @@ function BrowserPagePane({
       window.removeEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
   }, [browserTab.id, focusAddressBarNow, focusWebviewNow, isActive])
 
+  // Why: agent CDP input only reaches the guest while it holds DOM focus, but taking
+  // focus outright hijacks whatever the user is typing into — and skipping it lets the
+  // keystrokes land in their terminal instead. Lend focus for the input, hand it back.
+  // Why: deliberately not gated on isActive — the whole point is that agents drive
+  // background tabs while the user works elsewhere, which is exactly when the
+  // keystrokes used to leak into their terminal.
+  useEffect(() => {
+    let borrowedFrom: HTMLElement | null = null
+    return window.api.ui.onBrowserAgentInput(({ phase, guestId }) => {
+      const webview = webviewRef.current
+      if (!webview) {
+        return
+      }
+      // Why: every pane hears this, so only the one hosting the addressed guest may
+      // act; getWebContentsId() throws until the guest attaches.
+      let ownGuestId: number | null = null
+      try {
+        ownGuestId = webview.getWebContentsId()
+      } catch {
+        return
+      }
+      if (ownGuestId !== guestId) {
+        return
+      }
+      if (phase === 'begin') {
+        const active = document.activeElement as HTMLElement | null
+        // Why: only remember a real prior owner. Recording the guest itself would
+        // strand focus on the browser pane once the agent is done.
+        borrowedFrom = active && active !== webview ? active : null
+        focusWebviewNow()
+        return
+      }
+      borrowedFrom?.focus?.()
+      borrowedFrom = null
+    })
+  }, [focusWebviewNow])
+
   // Cmd/Ctrl+F — find in page (renderer path: focus on browser chrome)
   // Why: unlike bare C/S grab shortcuts, Cmd+F should always open find even from the address bar (matches Chrome/Safari).
   useEffect(() => {

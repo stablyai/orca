@@ -60,9 +60,12 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     const url = getOptionalStringFlag(flags, 'url')
     const profileId = getOptionalStringFlag(flags, 'profile')
     const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+    // Why: TabCreate documents "agent/automation opens stay background", but the CLI
+    // never sent `activate`, so every agent-created tab surfaced the browser pane and
+    // took focus from whatever the user was working in. Mirror `tab switch`: opt-in.
     const result = await client.call<{ browserPageId: string }>(
       'browser.tabCreate',
-      { url, worktree, profileId },
+      { url, worktree, profileId, activate: flags.has('focus') },
       { timeoutMs: 60_000 }
     )
     printResult(result, json, (v) => `Created tab ${v.browserPageId}`)

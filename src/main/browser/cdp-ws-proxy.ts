@@ -8,6 +8,9 @@ import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 
 const LIFECYCLE_PRIMING_TIMEOUT_MS = 1_000
+// Why: one animation frame is enough for the renderer to move DOM focus onto the
+// guest; longer stalls every agent keystroke, shorter races the focus handoff.
+const FOCUS_HANDOFF_FRAME_MS = 16
 
 export class CdpWsProxy {
   // Why: holds each session's last DOM.focus params to replay right before the next
@@ -397,8 +400,33 @@ export class CdpWsProxy {
     // every eval steals the user's foreground window while background automation
     // is running.
     if (msg.method === 'Input.insertText' && !this.webContents.isDestroyed()) {
-      this.webContents.focus()
-      void this.forwardInsertText(client, clientId, msg.params ?? {}, effectiveSessionId)
+      void this.withBorrowedFocus(
+        () => this.forwardInsertText(client, clientId, msg.params ?? {}, effectiveSessionId),
+        true
+      )
+      return
+    }
+    // Why: key events need the same native focus as insertText, and mouse presses
+    // take it on their own. Both went out unguarded before, so agent input either
+    // leaked into the user's window or left focus parked on the browser pane.
+    if (msg.method === 'Input.dispatchKeyEvent' && !this.webContents.isDestroyed()) {
+      this.forwardInputCommand(client, clientId, msg.method, msg.params ?? {}, msg.sessionId, true)
+      return
+    }
+    if (msg.method === 'Input.dispatchMouseEvent' && !this.webContents.isDestroyed()) {
+      // Why: presses move focus onto the guest, so they need the borrow/return pair.
+      // Moves and wheels never take focus — borrowing for them would create the very
+      // focus hop this guards against.
+      const mouseEventType = (msg.params as { type?: unknown } | undefined)?.type
+      const takesFocus = mouseEventType === 'mousePressed' || mouseEventType === 'mouseReleased'
+      this.forwardInputCommand(
+        client,
+        clientId,
+        msg.method,
+        msg.params ?? {},
+        msg.sessionId,
+        takesFocus
+      )
       return
     }
     // Why: agent-browser waits for network idle to detect navigation completion.
@@ -440,6 +468,75 @@ export class CdpWsProxy {
 
   private isActiveClient(client: WebSocket): boolean {
     return this.client === client && client.readyState === WebSocket.OPEN
+  }
+
+  // Why: CDP input only reaches an Electron <webview> guest while its host window
+  // holds native keyboard focus. Without it Chromium routes the event to whichever
+  // window actually has focus — the user's — so agent keystrokes land in whatever
+  // they are typing into while the CDP call still reports success. Borrow focus for
+  // the duration of the command and hand it straight back, so background automation
+  // neither loses its input nor parks itself in the user's foreground.
+  // Why: the guest lives inside a renderer <webview>, so only the renderer can move
+  // DOM focus onto it — webContents.focus() from main does nothing here. Tell the
+  // host renderer to lend focus to the guest for the input, then take it back.
+  private notifyAgentInput(phase: 'begin' | 'end'): void {
+    try {
+      const host = (this.webContents as unknown as { hostWebContents?: WebContents })
+        .hostWebContents
+      if (host && !host.isDestroyed()) {
+        // Why: the host renders every open tab's pane, so name the guest. Without it
+        // a background tab would grab focus on another tab's agent input.
+        host.send('ui:browserAgentInput', { phase, guestId: this.webContents.id })
+      }
+    } catch {
+      // Why: offscreen/headless guests have no host renderer to lend focus. The
+      // handoff is a courtesy to the user's window, never a reason to drop input.
+    }
+  }
+
+  private async withBorrowedFocus<T>(run: () => Promise<T>, acquire: boolean): Promise<T> {
+    // Why: events that never touch focus (mouse moves, wheels) must not announce a
+    // borrow — the renderer would have nothing to give back and the pairing would
+    // only add a needless focus hop.
+    if (!acquire) {
+      return await run()
+    }
+    this.notifyAgentInput('begin')
+    // Why: the renderer moves focus on its own tick; give it one frame to land before
+    // the event goes out, otherwise the input races ahead of the focus it needs.
+    await new Promise((resolve) => setTimeout(resolve, FOCUS_HANDOFF_FRAME_MS))
+    try {
+      return await run()
+    } finally {
+      this.notifyAgentInput('end')
+    }
+  }
+
+  // Why: input commands must return focus once the event has landed, so they cannot
+  // reuse forwardCommand's fire-and-forget dispatch.
+  private forwardInputCommand(
+    client: WebSocket,
+    clientId: number,
+    method: string,
+    params: Record<string, unknown>,
+    msgSessionId: string | undefined,
+    acquireFocus: boolean
+  ): void {
+    if (this.webContents.isDestroyed()) {
+      this.sendError(clientId, 'Browser tab is no longer available', client)
+      return
+    }
+    const sessionId = this.resolveDebuggerSessionId(msgSessionId)
+    void this.withBorrowedFocus(
+      () => this.sendDebuggerCommand(method, params, sessionId),
+      acquireFocus
+    )
+      .then((result) => {
+        this.sendResult(clientId, result, client)
+      })
+      .catch((err: Error) => {
+        this.sendError(clientId, err.message, client)
+      })
   }
 
   private sendDebuggerCommand(

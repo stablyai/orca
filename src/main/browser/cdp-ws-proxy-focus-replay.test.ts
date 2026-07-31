@@ -10,7 +10,13 @@ import {
 } from './cdp-ws-proxy-test-harness'
 
 vi.mock('electron', () => ({
-  webContents: { fromId: vi.fn() }
+  webContents: { fromId: vi.fn() },
+  // Why: input forwarding borrows native focus and hands it back, so it asks the
+  // window layer who held focus. No window in tests means nothing to restore.
+  BrowserWindow: {
+    getFocusedWindow: vi.fn(() => null),
+    fromWebContents: vi.fn(() => null)
+  }
 }))
 
 // Why: the proxy focuses the guest webContents natively before Input.insertText,
@@ -49,7 +55,10 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(focusResponse.id).toBe(14)
     expect(insertResponse.id).toBe(15)
     expect(insertResponse.result).toEqual({})
-    expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
+    expect(mock.webContents.hostWebContents.send).toHaveBeenCalledWith(
+      'ui:browserAgentInput',
+      expect.objectContaining({ phase: 'begin' })
+    )
     expect(getSendCommandCalls(mock)).toEqual([
       ['Page.enable', {}],
       ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
@@ -109,7 +118,10 @@ describe('CdpWsProxy DOM.focus replay', () => {
 
     expect(insertResponse.id).toBe(20)
     expect(insertResponse.result).toEqual({})
-    expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
+    expect(mock.webContents.hostWebContents.send).toHaveBeenCalledWith(
+      'ui:browserAgentInput',
+      expect.objectContaining({ phase: 'begin' })
+    )
     expect(getSendCommandCalls(mock)).toEqual([
       ['Page.enable', {}],
       ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
@@ -152,7 +164,10 @@ describe('CdpWsProxy DOM.focus replay', () => {
     })
     expect(insertResponse.id).toBe(22)
     expect(insertResponse.result).toEqual({})
-    expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
+    expect(mock.webContents.hostWebContents.send).toHaveBeenCalledWith(
+      'ui:browserAgentInput',
+      expect.objectContaining({ phase: 'begin' })
+    )
     expect(getSendCommandCalls(mock)).toEqual([
       ['Page.enable', {}],
       ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
@@ -194,7 +209,10 @@ describe('CdpWsProxy DOM.focus replay', () => {
       id: 24,
       error: { code: -32000, message: 'Focus target went stale' }
     })
-    expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
+    expect(mock.webContents.hostWebContents.send).toHaveBeenCalledWith(
+      'ui:browserAgentInput',
+      expect.objectContaining({ phase: 'begin' })
+    )
     expect(getSendCommandCalls(mock)).toEqual([
       ['Page.enable', {}],
       ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
@@ -269,7 +287,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
     expect(insertResponse.result).toEqual({})
     // Why: both Page.bringToFront and Input.insertText natively call focus(),
     // independent of the (now-cleared) DOM.focus replay.
-    expect(mock.webContents.focus).toHaveBeenCalledTimes(2)
+    expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',

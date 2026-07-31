@@ -11,7 +11,13 @@ import {
 } from './cdp-ws-proxy-test-harness'
 
 vi.mock('electron', () => ({
-  webContents: { fromId: vi.fn() }
+  webContents: { fromId: vi.fn() },
+  // Why: input forwarding borrows native focus and hands it back, so it asks the
+  // window layer who held focus. No window in tests means nothing to restore.
+  BrowserWindow: {
+    getFocusedWindow: vi.fn(() => null),
+    fromWebContents: vi.fn(() => null)
+  }
 }))
 
 describe('CdpWsProxy', () => {
@@ -399,7 +405,10 @@ describe('CdpWsProxy', () => {
       params: { text: 'hello' }
     })
 
-    expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
+    expect(mock.webContents.hostWebContents.send).toHaveBeenCalledWith(
+      'ui:browserAgentInput',
+      expect.objectContaining({ phase: 'begin' })
+    )
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
       'Page.addScriptToEvaluateOnNewDocument',

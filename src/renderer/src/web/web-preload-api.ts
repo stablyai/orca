@@ -2720,6 +2720,9 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     replyTabClose: () => {},
     onNewTerminalTab: () => noopUnsubscribe,
     onFocusBrowserAddressBar: () => noopUnsubscribe,
+    // Why: the web client streams a remote viewport instead of hosting a <webview>,
+    // so there is no local guest to lend DOM focus to.
+    onBrowserAgentInput: () => noopUnsubscribe,
     onFindInBrowserPage: () => noopUnsubscribe,
     onReloadBrowserPage: () => noopUnsubscribe,
     onBrowserHistoryNavigate: () => noopUnsubscribe,

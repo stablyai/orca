@@ -3666,6 +3666,16 @@ const api = {
       ipcRenderer.on('ui:focusBrowserAddressBar', listener)
       return () => ipcRenderer.removeListener('ui:focusBrowserAddressBar', listener)
     },
+    onBrowserAgentInput: (
+      callback: (detail: { phase: 'begin' | 'end'; guestId: number }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        detail: { phase: 'begin' | 'end'; guestId: number }
+      ): void => callback(detail)
+      ipcRenderer.on('ui:browserAgentInput', listener)
+      return () => ipcRenderer.removeListener('ui:browserAgentInput', listener)
+    },
     onFindInBrowserPage: browserFindSubscriptions.subscribe,
     onReloadBrowserPage: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
