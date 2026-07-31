@@ -17,11 +17,12 @@ afterEach(() => {
 })
 
 describe('getManagedStatusLineScript (posix)', () => {
-  it('guards on rate_limits before sourcing the endpoint or spawning curl', () => {
+  it('guards on rate_limits or context_window before sourcing the endpoint or spawning curl', () => {
     stubPlatform('darwin')
     const script = getManagedStatusLineScript('local')
     expect(script).toBe(getManagedStatusLineScript('posix'))
     const guardIndex = script.indexOf('*\'"rate_limits"\'*')
+    expect(script).toContain('*\'"context_window"\'*')
     const endpointIndex = script.indexOf('ORCA_AGENT_HOOK_ENDPOINT')
     const curlIndex = script.indexOf('curl -sS')
     expect(guardIndex).toBeGreaterThan(-1)
@@ -40,12 +41,12 @@ describe('getManagedStatusLineScript (posix)', () => {
 })
 
 describe('getManagedStatusLineScript (win32 local)', () => {
-  it('guards on rate_limits via findstr before the endpoint call and curl spawn', () => {
+  it('guards on rate_limits or context_window via findstr before the endpoint call and curl spawn', () => {
     stubPlatform('win32')
     const script = getManagedStatusLineScript('local')
     const captureIndex = script.indexOf('more.com')
     // Why: the \"-escaped needle makes findstr match the quoted JSON key, not any path containing rate_limits.
-    const guardIndex = script.indexOf('findstr.exe" /c:\\"rate_limits\\"')
+    const guardIndex = script.indexOf('findstr.exe" /c:\\"rate_limits\\" /c:\\"context_window\\"')
     const endpointIndex = script.indexOf('call "%ORCA_AGENT_HOOK_ENDPOINT%"')
     const curlIndex = script.indexOf('curl.exe')
     expect(captureIndex).toBeGreaterThan(-1)
@@ -345,11 +346,22 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
     expect(readFileSync(stampPathFor(dir, 'legacy-tab-b_1'), 'utf8')).toBe('1')
   })
 
-  it('never touches curl or the stamp for payloads without rate_limits', async () => {
+  it('never touches curl or the stamp for payloads without rate_limits or context_window', async () => {
     const { scriptPath, dir, curlLog, dateLog } = makeHarness()
     await runScript(scriptPath, dir, '{"model":{"id":"claude-fable-5"}}')
     expect(lineCount(curlLog)).toBe(0)
     expect(lineCount(dateLog)).toBe(0)
     expect(() => readFileSync(stampPathFor(dir), 'utf8')).toThrow()
+  })
+
+  it('posts for a context_window-only payload (Vertex AI / internal-proxy backends lack rate_limits)', async () => {
+    const { scriptPath, dir, curlLog, payloadLog } = makeHarness()
+    const payload = JSON.stringify({
+      cost: { total_duration_ms: 1_000 },
+      context_window: { used_percentage: 42 }
+    })
+    await runScript(scriptPath, dir, payload)
+    expect(lineCount(curlLog)).toBe(1)
+    expect(readFileSync(payloadLog, 'utf8')).toBe(payload)
   })
 })

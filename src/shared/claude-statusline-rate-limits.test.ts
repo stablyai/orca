@@ -64,12 +64,33 @@ describe('parseClaudeStatusLineBody', () => {
     expect(parsed?.sevenDay).toEqual({ used_percentage: 8, resets_at: undefined })
   })
 
-  it('returns null when rate_limits is absent or empty', () => {
-    expect(
-      parseClaudeStatusLineBody(formBody({ context_window: { used_percentage: 8 } }))
-    ).toBeNull()
+  it('returns null when rate_limits and context_window are both absent or empty', () => {
     expect(parseClaudeStatusLineBody(formBody({ rate_limits: {} }))).toBeNull()
     expect(parseClaudeStatusLineBody(formBody({ rate_limits: null }))).toBeNull()
+    expect(parseClaudeStatusLineBody(formBody({ context_window: {} }))).toBeNull()
+  })
+
+  it('falls back to context_window as the session window when rate_limits is absent', () => {
+    // Why: Vertex AI / internal-proxy deployments never receive rate_limits (Claude.ai-subscription
+    // billing only), but Claude Code still reports local context window usage regardless of backend.
+    const parsed = parseClaudeStatusLineBody(
+      formBody({ context_window: { used_percentage: 8, resets_at: undefined } })
+    )
+    expect(parsed).toEqual({
+      configDir: null,
+      fiveHour: { used_percentage: 8, resets_at: undefined },
+      sevenDay: null
+    })
+  })
+
+  it('prefers rate_limits over context_window when both are present', () => {
+    const parsed = parseClaudeStatusLineBody(
+      formBody({
+        rate_limits: { five_hour: { used_percentage: 23.5 } },
+        context_window: { used_percentage: 91 }
+      })
+    )
+    expect(parsed?.fiveHour).toEqual({ used_percentage: 23.5, resets_at: undefined })
   })
 
   it('rejects malformed bodies without throwing', () => {

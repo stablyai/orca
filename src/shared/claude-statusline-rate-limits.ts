@@ -75,11 +75,18 @@ export function parseClaudeStatusLineBody(body: unknown): ClaudeStatusLineRateLi
     return null
   }
   const rateLimits = (payload as { rate_limits?: unknown }).rate_limits
-  if (typeof rateLimits !== 'object' || rateLimits === null) {
-    return null
+  let fiveHour: ClaudeStatusLineWindow | null = null
+  let sevenDay: ClaudeStatusLineWindow | null = null
+  if (typeof rateLimits === 'object' && rateLimits !== null) {
+    fiveHour = parseWindow((rateLimits as { five_hour?: unknown }).five_hour)
+    sevenDay = parseWindow((rateLimits as { seven_day?: unknown }).seven_day)
   }
-  const fiveHour = parseWindow((rateLimits as { five_hour?: unknown }).five_hour)
-  const sevenDay = parseWindow((rateLimits as { seven_day?: unknown }).seven_day)
+  if (!fiveHour && !sevenDay) {
+    // Why: rate_limits is Claude.ai-subscription-billing only — Vertex AI and internal-proxy
+    // deployments never receive it, but Claude Code still reports local context window usage
+    // regardless of backend. Fall back to it so the usage bar stays live instead of going dark.
+    fiveHour = parseWindow((payload as { context_window?: unknown }).context_window)
+  }
   if (!fiveHour && !sevenDay) {
     return null
   }
