@@ -141,6 +141,7 @@ import {
 } from './remote-browser-keyboard'
 import {
   consumeBrowserFocusRequest,
+  createAgentInputFocusBorrow,
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   type BrowserFocusRequestDetail
 } from './browser-focus'
@@ -3217,7 +3218,18 @@ function BrowserPagePane({
   // background tabs while the user works elsewhere, which is exactly when the
   // keystrokes used to leak into their terminal.
   useEffect(() => {
-    let borrowedFrom: HTMLElement | null = null
+    const borrow = createAgentInputFocusBorrow<HTMLElement>({
+      captureOwner: () => {
+        const active = document.activeElement as HTMLElement | null
+        // Why: only remember a real prior owner. Recording the guest itself would
+        // strand focus on the browser pane once the agent is done.
+        return active && active !== webviewRef.current ? active : null
+      },
+      focusGuest: () => {
+        focusWebviewNow()
+      },
+      restore: (owner) => owner?.focus?.()
+    })
     return window.api.ui.onBrowserAgentInput(({ phase, guestId }) => {
       const webview = webviewRef.current
       if (!webview) {
@@ -3234,16 +3246,7 @@ function BrowserPagePane({
       if (ownGuestId !== guestId) {
         return
       }
-      if (phase === 'begin') {
-        const active = document.activeElement as HTMLElement | null
-        // Why: only remember a real prior owner. Recording the guest itself would
-        // strand focus on the browser pane once the agent is done.
-        borrowedFrom = active && active !== webview ? active : null
-        focusWebviewNow()
-        return
-      }
-      borrowedFrom?.focus?.()
-      borrowedFrom = null
+      borrow(phase)
     })
   }, [focusWebviewNow])
 

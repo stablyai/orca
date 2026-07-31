@@ -841,4 +841,62 @@ describe('CdpWsProxy', () => {
     resolveCommand!({})
     client.close()
   })
+
+  it('announces a focus borrow around Input.dispatchKeyEvent', async () => {
+    const client = await connect(endpoint)
+
+    await sendAndReceive(client, {
+      id: 90,
+      method: 'Input.dispatchKeyEvent',
+      params: { type: 'keyDown', key: 'a' }
+    })
+
+    expect(mock.webContents.hostWebContents.send).toHaveBeenCalledWith(
+      'ui:browserAgentInput',
+      expect.objectContaining({ phase: 'begin' })
+    )
+    expect(mock.webContents.hostWebContents.send).toHaveBeenCalledWith(
+      'ui:browserAgentInput',
+      expect.objectContaining({ phase: 'end' })
+    )
+    expect(getSendCommandMethods(mock)).toContain('Input.dispatchKeyEvent')
+    client.close()
+  })
+
+  it('borrows focus for a mouse press', async () => {
+    const client = await connect(endpoint)
+
+    await sendAndReceive(client, {
+      id: 91,
+      method: 'Input.dispatchMouseEvent',
+      params: { type: 'mousePressed', x: 1, y: 1 }
+    })
+
+    expect(mock.webContents.hostWebContents.send).toHaveBeenCalledWith(
+      'ui:browserAgentInput',
+      expect.objectContaining({ phase: 'begin' })
+    )
+    client.close()
+  })
+
+  // Why: only the press takes focus. Borrowing for the release would add a frame of
+  // latency to every click for nothing.
+  it('does not borrow focus for a mouse release or move', async () => {
+    const client = await connect(endpoint)
+
+    await sendAndReceive(client, {
+      id: 92,
+      method: 'Input.dispatchMouseEvent',
+      params: { type: 'mouseReleased', x: 1, y: 1 }
+    })
+    await sendAndReceive(client, {
+      id: 93,
+      method: 'Input.dispatchMouseEvent',
+      params: { type: 'mouseMoved', x: 2, y: 2 }
+    })
+
+    expect(mock.webContents.hostWebContents.send).not.toHaveBeenCalled()
+    expect(getSendCommandMethods(mock)).toContain('Input.dispatchMouseEvent')
+    client.close()
+  })
 })

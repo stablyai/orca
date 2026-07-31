@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   consumeBrowserFocusRequest,
+  createAgentInputFocusBorrow,
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest,
   requestBrowserFocus
@@ -53,5 +54,70 @@ describe('browser-focus', () => {
     vi.advanceTimersByTime(30_000)
 
     expect(consumeBrowserFocusRequest('page-stale')).toBeNull()
+  })
+})
+
+describe('createAgentInputFocusBorrow', () => {
+  function makeBorrow() {
+    const owner = { id: 'terminal-input' }
+    const calls: string[] = []
+    let captured = 0
+    const borrow = createAgentInputFocusBorrow<typeof owner>({
+      captureOwner: () => {
+        captured += 1
+        // Why: mirrors the pane — once the guest holds focus there is no prior owner
+        // left to capture, so a nested begin would record null.
+        return captured === 1 ? owner : null
+      },
+      focusGuest: () => calls.push('focus-guest'),
+      restore: (o) => calls.push(`restore:${o ? o.id : 'null'}`)
+    })
+    return { borrow, calls }
+  }
+
+  it('returns focus to the original owner for a single borrow', () => {
+    const { borrow, calls } = makeBorrow()
+
+    borrow('begin')
+    borrow('end')
+
+    expect(calls).toEqual(['focus-guest', 'restore:terminal-input'])
+  })
+
+  it('restores the outermost owner when borrows nest', () => {
+    const { borrow, calls } = makeBorrow()
+
+    // A single typed character: keyDown/char/keyUp each announce their own pair.
+    borrow('begin')
+    borrow('begin')
+    borrow('begin')
+    borrow('end')
+    borrow('end')
+    borrow('end')
+
+    expect(calls.filter((c) => c.startsWith('restore'))).toEqual(['restore:terminal-input'])
+  })
+
+  it('does not restore while an inner borrow is still open', () => {
+    const { borrow, calls } = makeBorrow()
+
+    borrow('begin')
+    borrow('begin')
+    borrow('end')
+
+    expect(calls.some((c) => c.startsWith('restore'))).toBe(false)
+  })
+
+  it('ignores an unmatched end so the next borrow still restores', () => {
+    const { borrow, calls } = makeBorrow()
+
+    // A command already in flight when the listener mounted.
+    borrow('end')
+    calls.length = 0
+
+    borrow('begin')
+    borrow('end')
+
+    expect(calls).toEqual(['focus-guest', 'restore:terminal-input'])
   })
 })

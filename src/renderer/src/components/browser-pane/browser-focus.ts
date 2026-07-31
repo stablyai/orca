@@ -80,3 +80,47 @@ export function consumeBrowserFocusRequest(pageId: string): BrowserFocusTarget |
   clearExpiredRequestCleanupTimerIfIdle()
   return pending.target
 }
+
+export type AgentInputBorrowPhase = 'begin' | 'end'
+
+export type AgentInputFocusBorrowHandlers<T> = {
+  /** The element focus should return to, or null when the guest already owns it. */
+  captureOwner: () => T | null
+  focusGuest: () => void
+  restore: (owner: T | null) => void
+}
+
+/**
+ * Tracks the nesting of agent input focus borrows.
+ *
+ * Why: one agent action nests borrows — typing a single character sends
+ * keyDown/char/keyUp, and each announces its own begin/end pair. Recording the
+ * owner on every begin would overwrite it with null the second time around (the
+ * guest already holds focus by then) and focus would never return to the user.
+ * Only the outermost begin captures, and only the outermost end restores.
+ */
+export function createAgentInputFocusBorrow<T>(
+  handlers: AgentInputFocusBorrowHandlers<T>
+): (phase: AgentInputBorrowPhase) => void {
+  let owner: T | null = null
+  let depth = 0
+  return (phase) => {
+    if (phase === 'begin') {
+      if (depth === 0) {
+        owner = handlers.captureOwner()
+      }
+      depth += 1
+      handlers.focusGuest()
+      return
+    }
+    // Why: an 'end' with no matching 'begin' (a command already in flight when this
+    // listener mounted) must not drive the counter negative and swallow the next
+    // real restore.
+    depth = Math.max(0, depth - 1)
+    if (depth > 0) {
+      return
+    }
+    handlers.restore(owner)
+    owner = null
+  }
+}

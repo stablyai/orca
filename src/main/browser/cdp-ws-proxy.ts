@@ -414,11 +414,12 @@ export class CdpWsProxy {
       return
     }
     if (msg.method === 'Input.dispatchMouseEvent' && !this.webContents.isDestroyed()) {
-      // Why: presses move focus onto the guest, so they need the borrow/return pair.
-      // Moves and wheels never take focus — borrowing for them would create the very
-      // focus hop this guards against.
+      // Why: only the press moves focus onto the guest, so only it needs the
+      // borrow/return pair. Releases, moves and wheels never take focus — borrowing
+      // for them would add a frame of latency to every click and, worse, create the
+      // very focus hop this guards against.
       const mouseEventType = (msg.params as { type?: unknown } | undefined)?.type
-      const takesFocus = mouseEventType === 'mousePressed' || mouseEventType === 'mouseReleased'
+      const takesFocus = mouseEventType === 'mousePressed'
       this.forwardInputCommand(
         client,
         clientId,
