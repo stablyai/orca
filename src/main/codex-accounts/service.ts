@@ -10,7 +10,8 @@ import type {
   CodexManagedAccount,
   CodexManagedAccountSummary,
   CodexRateLimitAccountsState,
-  CodexSystemDefaultIdentity
+  CodexSystemDefaultIdentity,
+  GlobalSettings
 } from '../../shared/types'
 import type {
   CodexRateLimitResetOutcome,
@@ -79,6 +80,12 @@ type ResolvedCodexIdentity = {
   providerAccountId: string | null
   workspaceLabel: string | null
   workspaceAccountId: string | null
+}
+
+type CodexLoginSnapshot = {
+  authJson: string | null | undefined
+  activeCodexManagedAccountId: GlobalSettings['activeCodexManagedAccountId']
+  activeCodexManagedAccountIdsByRuntime: GlobalSettings['activeCodexManagedAccountIdsByRuntime']
 }
 
 type CanonicalCodexConfig = {
@@ -852,16 +859,27 @@ export class CodexAccountService {
     const account = this.requireAccount(accountId)
     const managedHomePath = this.ensureManagedHomeForReauthentication(account)
     const accountTarget = getCodexSelectionTargetForAccount(account)
+    const loginSnapshot = this.captureLoginSnapshot(managedHomePath)
     const selectedAccountId = getSelectedCodexAccountIdForTarget(
       this.store.getSettings(),
       accountTarget
     )
 
     this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath, undefined, account.id)
-    await this.runCodexLogin(managedHomePath)
-    const identity = this.readIdentityFromHome(managedHomePath, account.id)
+    await this.runCodexLogin(managedHomePath, loginSnapshot)
+    let identity: ResolvedCodexIdentity
+    try {
+      identity = this.readIdentityFromHome(managedHomePath, account.id)
+    } catch (error) {
+      this.restoreLoginSnapshotOrThrow(managedHomePath, loginSnapshot, error)
+      throw error
+    }
     if (!identity.email) {
-      throw new Error('Codex login completed, but Orca could not resolve the account email.')
+      const error = new Error(
+        'Codex login completed, but Orca could not resolve the account email.'
+      )
+      this.restoreLoginSnapshotOrThrow(managedHomePath, loginSnapshot, error)
+      throw error
     }
 
     const settings = this.store.getSettings()
@@ -1625,17 +1643,82 @@ export class CodexAccountService {
     }
   }
 
-  private async runCodexLogin(managedHomePath: string): Promise<void> {
+  private captureLoginSnapshot(managedHomePath: string): CodexLoginSnapshot {
+    const settings = this.store.getSettings()
+    return {
+      authJson: parseWslUncPath(managedHomePath)
+        ? undefined
+        : readLoginAuthSnapshot(join(managedHomePath, 'auth.json')),
+      activeCodexManagedAccountId: settings.activeCodexManagedAccountId,
+      activeCodexManagedAccountIdsByRuntime: structuredClone(
+        settings.activeCodexManagedAccountIdsByRuntime
+      )
+    }
+  }
+
+  private restoreLoginSnapshot(managedHomePath: string, snapshot: CodexLoginSnapshot): void {
+    const authJsonPath = join(managedHomePath, 'auth.json')
+    let firstError: unknown
+    if (snapshot.authJson !== undefined) {
+      try {
+        if (snapshot.authJson === null) {
+          rmSync(authJsonPath, { force: true })
+        } else {
+          writeFileAtomically(authJsonPath, snapshot.authJson, { mode: 0o600 })
+        }
+      } catch (error) {
+        firstError = error
+      }
+    }
+
+    try {
+      const settings = this.store.getSettings()
+      if (
+        settings.activeCodexManagedAccountId !== snapshot.activeCodexManagedAccountId ||
+        JSON.stringify(settings.activeCodexManagedAccountIdsByRuntime) !==
+          JSON.stringify(snapshot.activeCodexManagedAccountIdsByRuntime)
+      ) {
+        this.store.updateSettings({
+          activeCodexManagedAccountId: snapshot.activeCodexManagedAccountId,
+          activeCodexManagedAccountIdsByRuntime: snapshot.activeCodexManagedAccountIdsByRuntime
+        })
+      }
+    } catch (error) {
+      firstError ??= error
+    }
+    if (firstError) {
+      throw firstError
+    }
+  }
+
+  private restoreLoginSnapshotOrThrow(
+    managedHomePath: string,
+    snapshot: CodexLoginSnapshot,
+    originalError: unknown
+  ): void {
+    try {
+      this.restoreLoginSnapshot(managedHomePath, snapshot)
+    } catch (rollbackError) {
+      throw new Error(
+        `${originalError instanceof Error ? originalError.message : 'Codex login failed'} Credential restoration failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+        { cause: originalError }
+      )
+    }
+  }
+
+  private async runCodexLogin(
+    managedHomePath: string,
+    snapshot?: CodexLoginSnapshot
+  ): Promise<void> {
     const wslInfo = parseWslUncPath(managedHomePath)
     if (wslInfo) {
       this.assertWslCodexCliAvailable(wslInfo)
     }
+    const loginSnapshot = snapshot ?? this.captureLoginSnapshot(managedHomePath)
     // Why: reauthentication starts with an existing auth.json. Only new auth
     // bytes prove this login completed; existence alone would kill the
     // Windows OAuth flow five seconds after it opened.
-    const initialAuthSnapshot = wslInfo
-      ? null
-      : readLoginAuthSnapshot(join(managedHomePath, 'auth.json'))
+    const initialAuthSnapshot = loginSnapshot.authJson
 
     await new Promise<void>((resolvePromise, rejectPromise) => {
       const spawnConfig = wslInfo
@@ -1679,6 +1762,7 @@ export class CodexAccountService {
       let authWatchInterval: ReturnType<typeof setInterval> | null = null
       let postAuthExitTimeout: ReturnType<typeof setTimeout> | null = null
       let loginTreeKilledAfterAuth = false
+      let failureError: Error | null = null
       const authJsonPath = join(managedHomePath, 'auth.json')
       const cleanupListeners = (): void => {
         if (timeout) {
@@ -1710,10 +1794,8 @@ export class CodexAccountService {
 
       const timeoutError = new Error('Codex sign-in took too long to finish. Please try again.')
       timeout = setTimeout(() => {
+        failureError = timeoutError
         killLoginProcessTree(child)
-        settle(() => {
-          rejectPromise(timeoutError)
-        })
       }, LOGIN_TIMEOUT_MS)
 
       // Why: on Windows the codex login CLI can linger after writing auth.json,
@@ -1737,17 +1819,15 @@ export class CodexAccountService {
       }
 
       const onError = (error: Error): void => {
-        settle(() => {
-          const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
-          // Why: ENOENT is ambiguous — missing codex binary or missing node in PATH; a resolved full path implies node is missing.
-          const isBareCommand = spawnConfig.codexCommand === 'codex'
-          const message = isEnoent
-            ? isBareCommand
-              ? 'Codex CLI not found.'
-              : 'Codex CLI found but could not run — Node.js may not be in your PATH.'
-            : error.message
-          rejectPromise(new Error(message))
-        })
+        const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
+        // Why: ENOENT is ambiguous — missing codex binary or missing node in PATH; a resolved full path implies node is missing.
+        const isBareCommand = spawnConfig.codexCommand === 'codex'
+        const message = isEnoent
+          ? isBareCommand
+            ? 'Codex CLI not found.'
+            : 'Codex CLI found but could not run — Node.js may not be in your PATH.'
+          : error.message
+        failureError = new Error(message)
       }
 
       const onClose = (code: number | null): void => {
@@ -1755,18 +1835,32 @@ export class CodexAccountService {
           // Why: the post-auth tree kill is a success path — auth.json already
           // exists and codex only failed to exit on its own, so the forced
           // non-zero exit must not surface as a login failure.
-          if (code === 0 || (loginTreeKilledAfterAuth && existsSync(authJsonPath))) {
+          if (
+            !failureError &&
+            (code === 0 || (loginTreeKilledAfterAuth && existsSync(authJsonPath)))
+          ) {
             resolvePromise()
             return
           }
           const trimmedOutput = output.trim()
-          rejectPromise(
+          const error =
+            failureError ??
             new Error(
               trimmedOutput
                 ? `Codex login failed: ${trimmedOutput}`
                 : `Codex login exited with code ${code ?? 'unknown'}.`
             )
-          )
+          try {
+            this.restoreLoginSnapshot(managedHomePath, loginSnapshot)
+            rejectPromise(error)
+          } catch (rollbackError) {
+            rejectPromise(
+              new Error(
+                `${error.message} Credential restoration failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+                { cause: error }
+              )
+            )
+          }
         })
       }
 
