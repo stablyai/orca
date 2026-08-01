@@ -7050,7 +7050,9 @@
           "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
           "7ddd66fede": "Editor Word Wrap",
-          "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling."
+          "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
+          "collapseUnchangedTitle": "Collapse Unchanged Regions",
+          "collapseUnchangedDescription": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
