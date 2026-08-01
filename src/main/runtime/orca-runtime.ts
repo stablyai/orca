@@ -10338,6 +10338,7 @@ export class OrcaRuntimeService {
     return retainedChanged
   }
 
+  /** Updates the latest hook snapshot and reports whether Runtime clients need a refresh. */
   private retainAgentRowSnapshot(
     ptyId: string,
     paneKey: string,

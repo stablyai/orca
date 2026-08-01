@@ -537,6 +537,7 @@ export type ToolSnapshot = {
   clearLastAssistantMessage?: boolean
 }
 
+/** Merges event-local tool metadata with the pane cache and clears ephemeral interactions. */
 function resolveToolState(
   state: HookListenerState,
   paneKey: string,
@@ -734,6 +735,7 @@ function hasAnyOwnField(record: Record<string, unknown>, keys: readonly string[]
   return keys.some((key) => hasOwnField(record, key))
 }
 
+/** Marks extracted metadata as an explicit tool update for cache-merging semantics. */
 function toolUpdate(
   fields: Pick<ToolSnapshot, 'toolName' | 'toolInput' | 'interactivePrompt' | 'interaction'>,
   options?: { hasToolInputField?: boolean }
@@ -1648,6 +1650,7 @@ function extractAmpToolFields(
   return {}
 }
 
+/** Extracts OpenCode activity, questions, and permission state without leaking opaque IDs. */
 function extractOpenCodeToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
@@ -3484,6 +3487,7 @@ function normalizeCodexEvent(
   })
 }
 
+/** Normalizes OpenCode-family hook events into their public agent-status payload. */
 function normalizeOpenCodeFamilyEvent(
   source: 'opencode' | 'mimo-code',
   state: HookListenerState,
