@@ -21,6 +21,7 @@ import {
   formatLinearProjectListRows,
   linearProjectListWarningLines
 } from '../shared/linear-project-list-format'
+import { padEndToEastAsianDisplayWidth } from '../shared/east-asian-display-width'
 
 export function formatLinearIssue(result: LinearIssueContextResult): string {
   const issue = result.issue
@@ -80,7 +81,7 @@ export function formatLinearTeamList(result: LinearTeamListResult): string {
   return result.teams
     .map((team) => {
       const workspace = team.workspace ? ` ${team.workspace.name}` : ''
-      return `${team.key.padEnd(10)} ${team.name}${workspace}`
+      return `${padEndToEastAsianDisplayWidth(team.key, 10)} ${team.name}${workspace}`
     })
     .join('\n')
 }
@@ -90,7 +91,10 @@ export function formatLinearTeamMembers(result: LinearTeamMembersResult): string
     return `No Linear members found for ${result.team.key}.`
   }
   return result.members
-    .map((member) => `${(member.displayName ?? 'unknown').padEnd(24)} ${member.id ?? ''}`)
+    .map(
+      (member) =>
+        `${padEndToEastAsianDisplayWidth(member.displayName ?? 'unknown', 24)} ${member.id ?? ''}`
+    )
     .join('\n')
 }
 
@@ -99,7 +103,10 @@ export function formatLinearTeamStates(result: LinearTeamStatesResult): string {
     return `No Linear workflow states found for ${result.team.key}.`
   }
   return result.states
-    .map((state) => `${state.name.padEnd(24)} ${(state.type ?? '').padEnd(12)} ${state.id}`)
+    .map(
+      (state) =>
+        `${padEndToEastAsianDisplayWidth(state.name, 24)} ${padEndToEastAsianDisplayWidth(state.type ?? '', 12)} ${state.id}`
+    )
     .join('\n')
 }
 
@@ -107,7 +114,9 @@ export function formatLinearTeamLabels(result: LinearTeamLabelsResult): string {
   if (result.labels.length === 0) {
     return `No Linear labels found for ${result.team.key}.`
   }
-  return result.labels.map((label) => `${label.name.padEnd(24)} ${label.id}`).join('\n')
+  return result.labels
+    .map((label) => `${padEndToEastAsianDisplayWidth(label.name, 24)} ${label.id}`)
+    .join('\n')
 }
 
 export function formatLinearIssueList(result: LinearIssueListResult): string {
@@ -233,7 +242,7 @@ export function printLinearProjectListWarnings(result: LinearProjectListResult):
 function formatSearchRow(issue: LinearSearchIssueSummary): string {
   const state = issue.state?.name ?? 'unknown'
   const assignee = issue.assignee?.displayName ?? 'unassigned'
-  return `${issue.identifier.padEnd(10)} ${state.padEnd(14)} ${assignee.padEnd(18)} ${issue.title}`
+  return `${padEndToEastAsianDisplayWidth(issue.identifier, 10)} ${padEndToEastAsianDisplayWidth(state, 14)} ${padEndToEastAsianDisplayWidth(assignee, 18)} ${issue.title}`
 }
 
 function formatPriority(priority: number | null | undefined): string {

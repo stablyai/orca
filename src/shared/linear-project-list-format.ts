@@ -1,4 +1,5 @@
 import type { LinearProjectListResult } from './linear-agent-result-types'
+import { padEndToEastAsianDisplayWidth } from './east-asian-display-width'
 
 // Why: non-JSON project output aligns ids with the existing compact Linear tables.
 const LINEAR_PROJECT_NAME_COLUMN_WIDTH = 28
@@ -18,7 +19,7 @@ export function formatLinearProjectListRows(result: LinearProjectListResult): st
           .filter(Boolean)
           .join(',') || 'no-teams'
       const workspace = project.workspaceName ? ` ${project.workspaceName}` : ''
-      return `${project.name.padEnd(LINEAR_PROJECT_NAME_COLUMN_WIDTH)} ${project.id} ${teams}${workspace}`
+      return `${padEndToEastAsianDisplayWidth(project.name, LINEAR_PROJECT_NAME_COLUMN_WIDTH)} ${project.id} ${teams}${workspace}`
     })
     .join('\n')
 }
