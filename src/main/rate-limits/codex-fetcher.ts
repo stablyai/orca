@@ -634,11 +634,10 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
     let rpcId = 0
 
     const codexArgs = ['-s', 'read-only', '-a', 'untrusted', 'app-server']
-    const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
     const wslCodex = options?.codexHomePath
       ? buildWslCodexCommand(options.codexHomePath, codexArgs, {
           isolateRpcStdio: true,
-          proxyEnv
+          proxyEnv: buildConfiguredProxyEnv(options?.networkProxySettings)
         })
       : null
     // Why: cold WSL startup + app-server init can exceed the host RPC budget, causing a false "unavailable" on launch.
