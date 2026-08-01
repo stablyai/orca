@@ -663,6 +663,7 @@ import { isCodexBackfillIndexPending } from '../codex/codex-state-db'
     // killed claimer blocks the index for up to 15 min). Skip; the service's
     // normal refetch cadence picks rate limits up once the index completes.
     return {
+      provider: 'codex',
       session: null,
       weekly: null,
       updatedAt: Date.now(),
@@ -672,8 +673,10 @@ import { isCodexBackfillIndexPending } from '../codex/codex-state-db'
   }
 ```
 
-(Mirror the exact `ProviderRateLimits` unavailable shape the file already
-returns at `:757`/`:1186`.)
+(This is the exact `ProviderRateLimits` unavailable shape the file already
+returns at `:757`/`:1186` — `provider: 'codex'` is a required field of
+`ProviderRateLimits` (`src/shared/rate-limit-types.ts:48-58`); omitting it
+fails Step 8's `pnpm typecheck` gate.)
 
 - [ ] **Step 8: Run tests + typecheck, then commit**
 
@@ -1183,6 +1186,13 @@ import {
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
 
+// Timer discipline (load-bearing): flush the initial status() microtask with
+// `await vi.advanceTimersByTimeAsync(0)` — never vi.runOnlyPendingTimersAsync(),
+// which fires EVERY pending timer regardless of delay, including the
+// 15-minute fail-open setTimeout the gate arms immediately, and would clear
+// the gate prematurely in every still-pending test. Time-dependent behavior
+// (re-poll, max wait) is advanced explicitly with the exact constant.
+
 function createApi(initial: { pending: boolean; lastWatermark: string | null }): {
   api: Parameters<typeof waitForCodexBackfillGate>[0]['api']
   emit: (status: { pending: boolean; lastWatermark: string | null }) => void
@@ -1209,7 +1219,7 @@ it('clears immediately when not pending', async () => {
   const { api } = createApi({ pending: false, lastWatermark: null })
   const onClear = vi.fn()
   waitForCodexBackfillGate({ api, onWaiting: vi.fn(), onClear })
-  await vi.runOnlyPendingTimersAsync()
+  await vi.advanceTimersByTimeAsync(0)
   expect(onClear).toHaveBeenCalledTimes(1)
 })
 
@@ -1221,7 +1231,7 @@ it('waits while pending, then clears once on the completion event', async () => 
   const onWaiting = vi.fn()
   const onClear = vi.fn()
   waitForCodexBackfillGate({ api, onWaiting, onClear })
-  await vi.runOnlyPendingTimersAsync()
+  await vi.advanceTimersByTimeAsync(0)
   expect(onWaiting).toHaveBeenCalledWith({ lastWatermark: 'sessions/2026/07/02/rollout-x.jsonl' })
   expect(onClear).not.toHaveBeenCalled()
 
@@ -1235,7 +1245,7 @@ it('re-polls as a belt over a missed event', async () => {
   const { api } = createApi({ pending: true, lastWatermark: null })
   const onClear = vi.fn()
   waitForCodexBackfillGate({ api, onWaiting: vi.fn(), onClear })
-  await vi.runOnlyPendingTimersAsync()
+  await vi.advanceTimersByTimeAsync(0)
   ;(api!.status as ReturnType<typeof vi.fn>).mockResolvedValue({
     pending: false,
     lastWatermark: null
@@ -1258,7 +1268,7 @@ it('fails open when the api is missing or the query rejects', async () => {
     onWaiting: vi.fn(),
     onClear: onClearError
   })
-  await vi.runOnlyPendingTimersAsync()
+  await vi.advanceTimersByTimeAsync(0)
   expect(onClearError).toHaveBeenCalledTimes(1)
 })
 
@@ -1266,7 +1276,7 @@ it('dispose cancels silently without onClear', async () => {
   const { api, emit } = createApi({ pending: true, lastWatermark: null })
   const onClear = vi.fn()
   const dispose = waitForCodexBackfillGate({ api, onWaiting: vi.fn(), onClear })
-  await vi.runOnlyPendingTimersAsync()
+  await vi.advanceTimersByTimeAsync(0)
   dispose()
   emit({ pending: false, lastWatermark: null })
   expect(onClear).not.toHaveBeenCalled()
@@ -1279,7 +1289,7 @@ it('fails open after the max wait even if still pending', async () => {
   const { api } = createApi({ pending: true, lastWatermark: null })
   const onClear = vi.fn()
   waitForCodexBackfillGate({ api, onWaiting: vi.fn(), onClear })
-  await vi.runOnlyPendingTimersAsync()
+  await vi.advanceTimersByTimeAsync(0)
   expect(onClear).not.toHaveBeenCalled()
   await vi.advanceTimersByTimeAsync(CODEX_BACKFILL_GATE_MAX_WAIT_MS)
   expect(onClear).toHaveBeenCalledTimes(1)
