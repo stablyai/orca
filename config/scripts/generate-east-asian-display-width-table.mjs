@@ -43,34 +43,63 @@ async function loadUnicode11Provider() {
   return provider
 }
 
-function collectRanges(provider, targetWidth) {
-  const ranges = []
-  let start = null
+/**
+ * Both width classes in a single pass. This script runs on every `pnpm lint`,
+ * so the 1.1M-code-point sweep is walked once and `wcwidth` is asked once per
+ * code point rather than once per class.
+ */
+function collectWidthRanges(provider) {
+  const targets = [0, 2]
+  const ranges = new Map(targets.map((target) => [target, []]))
+  const openStart = new Map(targets.map((target) => [target, null]))
+
   for (let codePoint = 0; codePoint <= MAX_CODE_POINT; codePoint += 1) {
     // Why: lone surrogates are not characters; probing them would split a range
     // that is otherwise contiguous across the gap.
     const isSurrogate = codePoint >= SURROGATE_START && codePoint <= SURROGATE_END
-    const matches = !isSurrogate && provider.wcwidth(codePoint) === targetWidth
-    if (matches && start === null) {
-      start = codePoint
-    } else if (!matches && start !== null && !isSurrogate) {
-      ranges.push([start, codePoint - 1])
-      start = null
+    const width = isSurrogate ? -1 : provider.wcwidth(codePoint)
+    for (const target of targets) {
+      const start = openStart.get(target)
+      if (width === target && start === null) {
+        openStart.set(target, codePoint)
+      } else if (width !== target && start !== null && !isSurrogate) {
+        ranges.get(target).push([start, codePoint - 1])
+        openStart.set(target, null)
+      }
     }
   }
-  if (start !== null) {
-    ranges.push([start, MAX_CODE_POINT])
+
+  for (const target of targets) {
+    const start = openStart.get(target)
+    if (start !== null) {
+      ranges.get(target).push([start, MAX_CODE_POINT])
+    }
   }
-  return ranges
+  return { zeroRanges: ranges.get(0), doubleRanges: ranges.get(2) }
 }
+
+// Why: fill to the formatter's print width so regenerating is a no-op instead
+// of fighting oxfmt over the wrapping on every run.
+const PRINT_WIDTH = 100
+const INDENT = '  '
 
 function formatRanges(ranges) {
   const numbers = ranges.flat().map((value) => `0x${value.toString(16)}`)
   const lines = []
-  for (let index = 0; index < numbers.length; index += 8) {
-    lines.push(`  ${numbers.slice(index, index + 8).join(', ')},`)
+  let current = []
+  for (const number of numbers) {
+    const candidate = [...current, number]
+    if (current.length > 0 && `${INDENT}${candidate.join(', ')},`.length > PRINT_WIDTH) {
+      lines.push(`${INDENT}${current.join(', ')},`)
+      current = [number]
+      continue
+    }
+    current = candidate
   }
-  return lines.join('\n').replace(/,$/, '')
+  if (current.length > 0) {
+    lines.push(`${INDENT}${current.join(', ')}`)
+  }
+  return lines.join('\n')
 }
 
 function parseCommittedRanges(source, exportName) {
@@ -110,15 +139,15 @@ ${formatRanges(doubleRanges)}
 
 async function main() {
   const provider = await loadUnicode11Provider()
-  const contents = renderFile(provider, collectRanges(provider, 0), collectRanges(provider, 2))
+  const { zeroRanges, doubleRanges } = collectWidthRanges(provider)
 
   if (process.argv.includes('--check')) {
     // Why: compare the code points rather than the file bytes, so oxfmt owning
     // the line wrapping cannot make a correct table look stale.
     const committed = readFileSync(OUTPUT_PATH, 'utf8')
     const expected = {
-      ZERO_WIDTH_CODE_POINT_RANGES: collectRanges(provider, 0).flat(),
-      DOUBLE_WIDTH_CODE_POINT_RANGES: collectRanges(provider, 2).flat()
+      ZERO_WIDTH_CODE_POINT_RANGES: zeroRanges.flat(),
+      DOUBLE_WIDTH_CODE_POINT_RANGES: doubleRanges.flat()
     }
     for (const [exportName, values] of Object.entries(expected)) {
       const actual = parseCommittedRanges(committed, exportName)
@@ -134,7 +163,7 @@ async function main() {
     return
   }
 
-  writeFileSync(OUTPUT_PATH, contents)
+  writeFileSync(OUTPUT_PATH, renderFile(provider, zeroRanges, doubleRanges))
   console.log(`Wrote ${OUTPUT_PATH}`)
 }
 
