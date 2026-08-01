@@ -31,14 +31,20 @@ function markdownFenceFor(value: string): string {
 }
 
 export function hasFullAgentSessionContext(source: AgentSessionContinuationSource): boolean {
-  return Boolean(source.transcriptPath?.trim())
+  const path = source.transcriptPath?.trim()
+  return Boolean(path && !isSyntheticOpenCodeTranscriptPath(source.sourceAgent, path))
 }
 
 export function buildAgentSessionContinuationPrompt(
   source: AgentSessionContinuationSource,
   mode: AgentSessionContinuationContextMode
 ): string | null {
-  const transcriptPath = source.transcriptPath?.trim() || null
+  const candidateTranscriptPath = source.transcriptPath?.trim() || null
+  const transcriptPath =
+    candidateTranscriptPath &&
+    !isSyntheticOpenCodeTranscriptPath(source.sourceAgent, candidateTranscriptPath)
+      ? candidateTranscriptPath
+      : null
   const capturedTranscript = transcriptPath
     ? null
     : buildBoundedSessionTranscript(source.capturedText)
@@ -79,6 +85,10 @@ export function buildAgentSessionContinuationPrompt(
     '',
     'Briefly state where the previous session stopped. If work remains, continue it. If the prior task appears complete, say so and wait for my next instruction. Ask me only if the session context and workspace do not provide enough information to proceed.'
   ].join('\n')
+}
+
+function isSyntheticOpenCodeTranscriptPath(agent: TuiAgent | null, path: string): boolean {
+  return agent === 'opencode' && path.includes('#')
 }
 
 function buildContextSection(args: {

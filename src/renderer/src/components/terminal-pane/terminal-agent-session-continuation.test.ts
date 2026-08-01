@@ -64,6 +64,21 @@ describe('buildAgentSessionContinuationPrompt', () => {
     )
     expect(buildAgentSessionContinuationPrompt(source, 'full')).toBeNull()
   })
+
+  it('uses bounded preview context for synthetic OpenCode SQLite paths', () => {
+    const source = {
+      capturedText: 'user: fix the parser\n\nassistant: parser fix is incomplete',
+      sourceAgent: 'opencode' as const,
+      transcriptPath: '/home/u/.local/share/opencode/opencode.db#ses_123',
+      lastPrompt: 'fix the parser'
+    }
+
+    const prompt = buildAgentSessionContinuationPrompt(source, 'focused')
+
+    expect(prompt).toContain('bounded recent terminal capture')
+    expect(prompt).toContain('user: fix the parser')
+    expect(prompt).not.toContain('opencode.db#ses_123')
+  })
 })
 
 describe('prepareAgentSessionContinuationFromPane', () => {
