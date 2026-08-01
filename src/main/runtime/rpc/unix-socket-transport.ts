@@ -9,9 +9,9 @@ import { chmodSync, existsSync, rmSync } from 'node:fs'
 import type { RpcMessageContext, RpcTransport } from './transport'
 
 const MAX_RUNTIME_RPC_MESSAGE_BYTES = 1024 * 1024
-const RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS = 30_000
+export const RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS = 30_000
 const MAX_RUNTIME_RPC_CONNECTIONS = 32
-const DEFAULT_KEEPALIVE_INTERVAL_MS = 10_000
+export const DEFAULT_KEEPALIVE_INTERVAL_MS = 10_000
 
 export type UnixSocketTransportOptions = {
   endpoint: string
@@ -21,6 +21,9 @@ export type UnixSocketTransportOptions = {
   // the client honours them, the client-side idle timer. Tests override this
   // to avoid waiting 10 s for a frame.
   keepaliveIntervalMs?: number
+  // Why: tests use a short real idle window to exercise socket teardown without
+  // waiting 30 s; production leaves this at RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS.
+  idleTimeoutMs?: number
 }
 
 type MessageHandler = (
@@ -33,14 +36,16 @@ export class UnixSocketTransport implements RpcTransport {
   private readonly endpoint: string
   private readonly kind: 'unix' | 'named-pipe'
   private readonly keepaliveIntervalMs: number
+  private readonly idleTimeoutMs: number
   private server: Server | null = null
   private messageHandler: MessageHandler | null = null
   private readonly activeSockets = new Set<Socket>()
 
-  constructor({ endpoint, kind, keepaliveIntervalMs }: UnixSocketTransportOptions) {
+  constructor({ endpoint, kind, keepaliveIntervalMs, idleTimeoutMs }: UnixSocketTransportOptions) {
     this.endpoint = endpoint
     this.kind = kind
     this.keepaliveIntervalMs = keepaliveIntervalMs ?? DEFAULT_KEEPALIVE_INTERVAL_MS
+    this.idleTimeoutMs = idleTimeoutMs ?? RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS
   }
 
   onMessage(handler: MessageHandler): void {
@@ -116,7 +121,7 @@ export class UnixSocketTransport implements RpcTransport {
 
     socket.setEncoding('utf8')
     socket.setNoDelay(true)
-    socket.setTimeout(RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS, () => {
+    socket.setTimeout(this.idleTimeoutMs, () => {
       socket.destroy()
     })
     socket.on('error', () => {
