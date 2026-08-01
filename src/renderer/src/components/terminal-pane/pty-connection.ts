@@ -178,6 +178,7 @@ import {
   parsePaneKey
 } from '../../../../shared/stable-pane-id'
 import {
+  findUniqueAdoptableRebuiltPaneRecord,
   getProviderSessionClaimKey,
   isPassiveCompletedHibernationEvidence
 } from '@/lib/sleeping-agent-pane-ownership'
@@ -1199,24 +1200,10 @@ export function connectPanePty(
     if (!selectedLegacyMatch) {
       // A crash can remove the persisted terminal layout before the workspace
       // session is written. On the next launch the tab gets a new stable leaf
-      // UUID, while the sleeping record still points at the old UUID. When
-      // exactly one stable record belongs to this tab/worktree, adopt it;
-      // multiple records remain ambiguous and must not resume in the wrong pane.
-      const rebuiltLeafMatches = Object.entries(state.sleepingAgentSessionsByPaneKey).filter(
-        ([paneKey, record]) => {
-          const parsed = parsePaneKey(paneKey)
-          return (
-            parsed?.tabId === deps.tabId &&
-            record.worktreeId === deps.worktreeId &&
-            (!record.tabId || record.tabId === deps.tabId)
-          )
-        }
-      )
-      if (rebuiltLeafMatches.length !== 1) {
-        return null
-      }
-      const [paneKey, record] = rebuiltLeafMatches[0]
-      return { paneKey, record }
+      // UUID, while the sleeping record still points at the old UUID. Adopt
+      // the tab's unique actively-resumable record; completed/interrupted or
+      // ambiguous candidates fail closed rather than resume in the wrong pane.
+      return findUniqueAdoptableRebuiltPaneRecord(state, deps.worktreeId, deps.tabId)
     }
     const [paneKey, record] = selectedLegacyMatch
     return { paneKey, record }

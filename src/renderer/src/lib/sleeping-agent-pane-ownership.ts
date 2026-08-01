@@ -1,5 +1,8 @@
 import type { useAppStore } from '@/store'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import {
+  isResumableTuiAgent,
+  type SleepingAgentSessionRecord
+} from '../../../shared/agent-session-resume'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -16,6 +19,53 @@ export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): 
 
 export function isPassiveCompletedHibernationEvidence(record: SleepingAgentSessionRecord): boolean {
   return record.origin !== 'quit' && record.origin !== 'live' && record.state === 'done'
+}
+
+// Why: re-leafed adoption may only relaunch sessions that would legitimately
+// auto-resume; completed/interrupted rows must neither relaunch nor block a
+// live sibling's adoption by inflating the candidate count.
+function isAdoptableRebuiltPaneRecord(record: SleepingAgentSessionRecord): boolean {
+  return record.state !== 'done' && record.interrupted !== true && isResumableTuiAgent(record.agent)
+}
+
+/**
+ * After a crash removed a tab's terminal layout, the rebuilt pane mounts a
+ * fresh leaf UUID while sleeping records still point at the old one. Returns
+ * the single record that pane may adopt by tab/worktree identity, or null when
+ * candidates are absent or ambiguous (including any legacy-numeric-key record
+ * on the tab, whose selection connectPanePty resolves separately).
+ */
+export function findUniqueAdoptableRebuiltPaneRecord(
+  state: AppStoreState,
+  worktreeId: string,
+  tabId: string
+): { paneKey: string; record: SleepingAgentSessionRecord } | null {
+  const entries = Object.entries(state.sleepingAgentSessionsByPaneKey)
+  const hasLegacyCandidate = entries.some(([paneKey, record]) => {
+    const legacy = parseLegacyNumericPaneKey(paneKey)
+    return (
+      legacy?.tabId === tabId &&
+      record.worktreeId === worktreeId &&
+      (!record.tabId || record.tabId === tabId)
+    )
+  })
+  if (hasLegacyCandidate) {
+    return null
+  }
+  const matches = entries.filter(([paneKey, record]) => {
+    const parsed = parsePaneKey(paneKey)
+    return (
+      parsed?.tabId === tabId &&
+      record.worktreeId === worktreeId &&
+      (!record.tabId || record.tabId === tabId) &&
+      isAdoptableRebuiltPaneRecord(record)
+    )
+  })
+  if (matches.length !== 1) {
+    return null
+  }
+  const [paneKey, record] = matches[0]
+  return { paneKey, record }
 }
 
 function getLegacyPaneTabId(record: SleepingAgentSessionRecord): string | null {
@@ -144,11 +194,14 @@ export function recordPaneIsOwnedByPreservedPane(
     // quit/live recovery row. The tab will mount a fresh leaf and
     // connectPanePty can adopt that row by its stable tab/worktree identity;
     // let the preserved tab own recovery so activation does not fork a second
-    // resume tab first. Worktree-sleep records intentionally keep the old
-    // behavior and launch a new tab when their layout is gone.
+    // resume tab first. Ownership holds only when this record is the pane's
+    // unique adoptable candidate — otherwise adoption fails closed and
+    // activation must keep the old fork-a-new-tab recovery. Worktree-sleep
+    // records intentionally keep the old behavior when their layout is gone.
     if (!hasMatchingStablePaneLayout(tabId, stable.leafId, state.terminalLayoutsByTabId)) {
       return (
         (record.origin === 'quit' || record.origin === 'live') &&
+        findUniqueAdoptableRebuiltPaneRecord(state, record.worktreeId, tabId)?.record === record &&
         paneWillConnectOnActivation(record.worktreeId, tabId, state)
       )
     }

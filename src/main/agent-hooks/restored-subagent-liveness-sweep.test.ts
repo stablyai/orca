@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -131,6 +131,63 @@ describe('restored subagent liveness sweep', () => {
         stateStartedAt: reconciledAt
       })
       now.mockRestore()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('synchronously persists a reconciled done row for a resumable session', async () => {
+    const first = new AgentHookServer()
+    await first.start({ env: 'production', userDataPath: dir })
+    const env = first.buildPtyEnv()
+    const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+      },
+      body: JSON.stringify({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        env: 'production',
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: 'review the PR',
+          session_id: 'claude-reconcile-checkpoint'
+        }
+      })
+    })
+    expect(response.ok).toBe(true)
+    first.ingestTerminalStatus({
+      paneKey: PANE,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      connectionId: null,
+      payload: {
+        state: 'working',
+        prompt: 'drain the roster',
+        agentType: 'claude',
+        subagents: [WORKING_CHILD]
+      }
+    })
+    first.flushStatusPersistSync()
+    first.stop()
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath: dir })
+    try {
+      expect(await sweepWith(server, { persistedPtyIdByPaneKey: { [PANE]: PTY } })).toBe(1)
+
+      // The durable file must flip before the trailing debounce: a crash in
+      // that window would otherwise relaunch the completed turn on restart.
+      const persisted = JSON.parse(
+        readFileSync(join(dir, 'agent-hooks', 'last-status.json'), 'utf8')
+      ) as { entries: Record<string, { payload: { state: string } }> }
+      expect(persisted.entries[PANE]).toMatchObject({
+        payload: { state: 'done' },
+        providerSession: { key: 'session_id', id: 'claude-reconcile-checkpoint' }
+      })
     } finally {
       server.stop()
     }

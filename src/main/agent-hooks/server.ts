@@ -1098,10 +1098,10 @@ export class AgentHookServer {
       this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
       if (needsImmediateResumableStatusCheckpoint(previous, enriched)) {
         this.flushStatusPersistSync()
-        this.scheduleStatusPersist()
-      } else {
-        this.scheduleStatusPersist()
       }
+      // Why: the sync write is fail-open; the trailing retry stays armed so a
+      // transient filesystem error still gets another persistence attempt.
+      this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
       this.emitEnrichedStatus(enriched)
       return enriched
@@ -1215,12 +1215,10 @@ export class AgentHookServer {
     this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
     if (needsImmediateResumableStatusCheckpoint(previous, enriched)) {
       this.flushStatusPersistSync()
-      // Why: the sync write is fail-open; leave the trailing retry armed so a
-      // transient filesystem error still gets another persistence attempt.
-      this.scheduleStatusPersist()
-    } else {
-      this.scheduleStatusPersist()
     }
+    // Why: the sync write is fail-open; the trailing retry stays armed so a
+    // transient filesystem error still gets another persistence attempt.
+    this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
     this.emitEnrichedStatus(enriched)
     return enriched
@@ -2278,6 +2276,7 @@ export class AgentHookServer {
       })
     )
     let changedPanes = 0
+    let needsImmediateCheckpoint = false
     for (const [index, candidate] of candidates.entries()) {
       const { paneKey, entry: enriched } = candidate
       if (
@@ -2314,8 +2313,16 @@ export class AgentHookServer {
         payload: { ...enriched.payload, state, subagents }
       }
       this.state.lastStatusByPaneKey.set(paneKey, reconciled)
+      if (needsImmediateResumableStatusCheckpoint(enriched, reconciled)) {
+        needsImmediateCheckpoint = true
+      }
     }
     if (changedPanes > 0) {
+      // Why: a reconciled done row replaces a durable resumable 'working' row;
+      // an abrupt exit before the debounce fires must not relaunch that turn.
+      if (needsImmediateCheckpoint) {
+        this.flushStatusPersistSync()
+      }
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
     }
