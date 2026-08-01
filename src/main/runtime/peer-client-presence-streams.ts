@@ -5,6 +5,11 @@ import type { PeerClientRpcChannel } from './peer-client-rpc-channel'
 type PeerPresenceStreamEntry = {
   onEvent: (event: PeerPresenceEvent) => void
   subscriptionId: string | null
+  // Why: an unsubscribe can arrive before the host's `ready` carries the
+  // subscriptionId (quick panel close, StrictMode remount); it is recorded here
+  // and honored the moment the id is known, else the host keeps the
+  // subscription open for the life of the connection.
+  cancelled: boolean
 }
 
 export type PeerClientPresenceStreamsDeps = {
@@ -41,7 +46,7 @@ export class PeerClientPresenceStreams {
     if (!sent) {
       return { ok: false, reason: 'connection_interrupted' }
     }
-    this.byRequestId.set(id, { onEvent, subscriptionId: null })
+    this.byRequestId.set(id, { onEvent, subscriptionId: null, cancelled: false })
     return { ok: true, requestId: id }
   }
 
@@ -50,12 +55,14 @@ export class PeerClientPresenceStreams {
     if (!entry) {
       return
     }
-    this.byRequestId.delete(requestId)
-    if (entry.subscriptionId) {
-      void this.deps.rpc.sendRequest('terminal.presence.unsubscribe', {
-        subscriptionId: entry.subscriptionId
-      })
+    if (!entry.subscriptionId) {
+      entry.cancelled = true
+      return
     }
+    this.byRequestId.delete(requestId)
+    void this.deps.rpc.sendRequest('terminal.presence.unsubscribe', {
+      subscriptionId: entry.subscriptionId
+    })
   }
 
   // Why: fire-and-forget — the caller throttles to ~60Hz and must never
@@ -75,7 +82,9 @@ export class PeerClientPresenceStreams {
 
   endAll(): void {
     for (const entry of this.byRequestId.values()) {
-      entry.onEvent({ type: 'end' })
+      if (!entry.cancelled) {
+        entry.onEvent({ type: 'end' })
+      }
     }
     this.byRequestId.clear()
   }
@@ -98,6 +107,16 @@ export class PeerClientPresenceStreams {
     }
     if (result.type === 'ready') {
       entry.subscriptionId = result.subscriptionId
+      if (entry.cancelled) {
+        this.unsubscribe(id)
+        return true
+      }
+    }
+    if (entry.cancelled) {
+      if (result.type === 'end') {
+        this.byRequestId.delete(id)
+      }
+      return true
     }
     entry.onEvent(result)
     if (result.type === 'end') {

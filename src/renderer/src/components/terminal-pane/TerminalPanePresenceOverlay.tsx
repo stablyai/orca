@@ -188,15 +188,21 @@ export function TerminalPanePresenceOverlay({
     })
 
     void (async () => {
-      const result = await window.api.terminalHostPresence.subscribe({ terminal: handle })
-      if (disposed) {
-        if (result.ok) {
-          void window.api.terminalHostPresence.unsubscribe({ requestId: result.requestId })
+      try {
+        const result = await window.api.terminalHostPresence.subscribe({ terminal: handle })
+        if (disposed) {
+          if (result.ok) {
+            void window.api.terminalHostPresence.unsubscribe({ requestId: result.requestId })
+          }
+          return
         }
-        return
-      }
-      if (result.ok) {
-        requestId = result.requestId
+        if (result.ok) {
+          requestId = result.requestId
+        }
+      } catch (error) {
+        // Why: a rejected subscribe IPC otherwise surfaces as an unhandled
+        // rejection while presence for this pane silently stays off.
+        console.warn('[presence] host presence subscribe failed:', error)
       }
     })()
 

@@ -1,5 +1,4 @@
 import { ipcMain, BrowserWindow } from 'electron'
-import { userInfo } from 'node:os'
 import type { Store } from '../persistence'
 import {
   readSavedPeerPairings,
@@ -8,26 +7,12 @@ import {
   type PeerClientManager,
   type PeerClientManagerConnectResult
 } from '../runtime/peer-client-manager'
-import { getOrcaProfileListState } from '../orca-profiles/profile-index-store'
+import { resolveDefaultPeerDisplayName } from './peer-client-display-name'
+import { PeerClientSenderLifetime } from './peer-client-sender-lifetime'
 import { parsePairingCode } from '../../shared/pairing'
 import type { PeerTerminalStreamEvent } from '../../shared/peer-terminal-stream-event'
 import type { PeerPresenceEvent, PeerPresenceState } from '../../shared/peer-presence-event'
 import type { PeerClientStatusWithHost } from '../../shared/peer-client-status'
-
-// Why: mirrors the account-name-then-OS-username fallback so a first-time
-// connect dialog can prefill without the user typing anything.
-function resolveDefaultPeerDisplayName(): string {
-  const { activeProfileId, profiles } = getOrcaProfileListState()
-  const active = profiles.find((profile) => profile.id === activeProfileId)
-  if (active?.kind === 'cloud-linked') {
-    return active.cloud?.displayName || active.name
-  }
-  try {
-    return userInfo().username
-  } catch {
-    return active?.name ?? 'Orca'
-  }
-}
 
 function savedPairingCodes(store: Store): string[] {
   const settings = store.getSettings()
@@ -46,6 +31,7 @@ export function registerPeerClientHandlers(manager: PeerClientManager, store: St
   // which host's service owns a later unsubscribe/input/resize call.
   const terminalHosts = new Map<string, string>()
   const presenceHosts = new Map<string, string>()
+  const senderLifetime = new PeerClientSenderLifetime()
 
   ipcMain.handle('peerClient:getDefaultDisplayName', () => ({
     name: store.getSettings().peerCollabDisplayName || resolveDefaultPeerDisplayName()
@@ -195,6 +181,11 @@ export function registerPeerClientHandlers(manager: PeerClientManager, store: St
       if (result.ok) {
         requestId = result.requestId
         terminalHosts.set(requestId, args.hostId)
+        const boundRequestId = requestId
+        senderLifetime.bind(sender, boundRequestId, () => {
+          service.unsubscribeTerminal(boundRequestId)
+          terminalHosts.delete(boundRequestId)
+        })
       }
       return result
     }
@@ -204,6 +195,7 @@ export function registerPeerClientHandlers(manager: PeerClientManager, store: St
     const hostId = terminalHosts.get(args.requestId)
     manager.getService(hostId ?? '')?.unsubscribeTerminal(args.requestId)
     terminalHosts.delete(args.requestId)
+    senderLifetime.release(args.requestId)
     return { ok: true }
   })
 
@@ -231,6 +223,11 @@ export function registerPeerClientHandlers(manager: PeerClientManager, store: St
       if (result.ok) {
         requestId = result.requestId
         presenceHosts.set(requestId, args.hostId)
+        const boundRequestId = requestId
+        senderLifetime.bind(sender, boundRequestId, () => {
+          service.unsubscribePresence(boundRequestId)
+          presenceHosts.delete(boundRequestId)
+        })
       }
       return result
     }
@@ -240,6 +237,7 @@ export function registerPeerClientHandlers(manager: PeerClientManager, store: St
     const hostId = presenceHosts.get(args.requestId)
     manager.getService(hostId ?? '')?.unsubscribePresence(args.requestId)
     presenceHosts.delete(args.requestId)
+    senderLifetime.release(args.requestId)
     return { ok: true }
   })
 
@@ -319,11 +317,13 @@ export function registerPeerClientHandlers(manager: PeerClientManager, store: St
       for (const [requestId, entryHostId] of terminalHosts) {
         if (entryHostId === hostId) {
           terminalHosts.delete(requestId)
+          senderLifetime.release(requestId)
         }
       }
       for (const [requestId, entryHostId] of presenceHosts) {
         if (entryHostId === hostId) {
           presenceHosts.delete(requestId)
+          senderLifetime.release(requestId)
         }
       }
     }

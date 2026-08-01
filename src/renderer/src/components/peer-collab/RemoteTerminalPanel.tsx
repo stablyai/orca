@@ -296,37 +296,51 @@ export function RemoteTerminalPanel({
     refitRef.current = refit
 
     void (async () => {
-      const { cols, rows } = proposeFit()
-      updateCellMetrics()
-      ownClientId = (await window.api.peerClient.getClientId({ hostId })).clientId
-      const [terminalResult, presenceResult] = await Promise.all([
-        window.api.peerClient.subscribeTerminal({ hostId, terminal: terminalHandle, cols, rows }),
-        window.api.peerClient.subscribePresence({ hostId, terminal: terminalHandle })
-      ])
-      if (presenceResult.ok) {
-        presenceRequestId = presenceResult.requestId
-      }
-      if (disposed) {
-        // Component unmounted while the IPC round-trip was pending: the host already
-        // created the subscription, so tear it down instead of leaking it.
-        if (terminalResult.ok) {
-          void window.api.peerClient.unsubscribeTerminal({ requestId: terminalResult.requestId })
-        }
+      try {
+        const { cols, rows } = proposeFit()
+        updateCellMetrics()
+        ownClientId = (await window.api.peerClient.getClientId({ hostId })).clientId
+        const [terminalResult, presenceResult] = await Promise.all([
+          window.api.peerClient.subscribeTerminal({ hostId, terminal: terminalHandle, cols, rows }),
+          window.api.peerClient.subscribePresence({ hostId, terminal: terminalHandle })
+        ])
         if (presenceResult.ok) {
-          void window.api.peerClient.unsubscribePresence({ requestId: presenceResult.requestId })
+          presenceRequestId = presenceResult.requestId
         }
-        return
+        if (disposed) {
+          // Component unmounted while the IPC round-trip was pending: the host already
+          // created the subscription, so tear it down instead of leaking it.
+          if (terminalResult.ok) {
+            void window.api.peerClient.unsubscribeTerminal({ requestId: terminalResult.requestId })
+          }
+          if (presenceResult.ok) {
+            void window.api.peerClient.unsubscribePresence({ requestId: presenceResult.requestId })
+          }
+          return
+        }
+        if (!terminalResult.ok) {
+          // Why: the host would otherwise keep a presence subscriber for a
+          // terminal this client never opened.
+          if (presenceResult.ok) {
+            presenceRequestId = null
+            void window.api.peerClient.unsubscribePresence({ requestId: presenceResult.requestId })
+          }
+          setErrorReason(terminalResult.reason)
+          return
+        }
+        requestId = terminalResult.requestId
+        requestIdRef.current = requestId
+        // Sync now: the sibling hidden-negotiation effect may have already run and
+        // found requestIdRef null, so it never told the host this subscriber is hidden.
+        void window.api.peerClient.setTerminalStreamHidden({ requestId, hidden: hiddenRef.current })
+        terminal.focus()
+      } catch (error) {
+        // Why: a rejected subscribe IPC otherwise surfaces as an unhandled
+        // rejection with the panel silently stuck on "connecting".
+        if (!disposed) {
+          setErrorReason(error instanceof Error ? error.message : 'subscribe_failed')
+        }
       }
-      if (!terminalResult.ok) {
-        setErrorReason(terminalResult.reason)
-        return
-      }
-      requestId = terminalResult.requestId
-      requestIdRef.current = requestId
-      // Sync now: the sibling hidden-negotiation effect may have already run and
-      // found requestIdRef null, so it never told the host this subscriber is hidden.
-      void window.api.peerClient.setTerminalStreamHidden({ requestId, hidden: hiddenRef.current })
-      terminal.focus()
     })()
 
     return () => {

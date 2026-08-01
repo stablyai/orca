@@ -18,17 +18,31 @@ let sharedTimer: number | null = null
 let sharedPollPromise: Promise<void> | null = null
 const subscribers = new Set<(clients: ConnectedPeerClient[]) => void>()
 
+// Why: bounds the shared-promise dedupe — an IPC call that never settles would
+// otherwise pin sharedPollPromise and stop every later poll for the session.
+const CONNECTED_CLIENTS_POLL_TIMEOUT_MS = 5000
+
 async function pollSharedClients(): Promise<void> {
   if (sharedPollPromise) {
     return sharedPollPromise
   }
   sharedPollPromise = (async () => {
-    const result = await window.api?.peerCollab?.listConnectedClients()
-    if (result) {
-      sharedClients = result.clients
-      for (const subscriber of subscribers) {
-        subscriber(sharedClients)
+    try {
+      const result = await Promise.race([
+        window.api?.peerCollab?.listConnectedClients(),
+        new Promise<undefined>((resolve) =>
+          window.setTimeout(() => resolve(undefined), CONNECTED_CLIENTS_POLL_TIMEOUT_MS)
+        )
+      ])
+      if (result) {
+        sharedClients = result.clients
+        for (const subscriber of subscribers) {
+          subscriber(sharedClients)
+        }
       }
+    } catch {
+      // Why: a failed poll keeps the last known list; callers fire-and-forget,
+      // so a rejection here would only surface as an unhandled rejection.
     }
   })()
   try {

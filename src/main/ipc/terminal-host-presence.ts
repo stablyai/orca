@@ -3,7 +3,10 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { PeerPresenceEvent, PeerPresenceState } from '../../shared/peer-presence-event'
 
 let sessionSeq = 0
-const activeSessions = new Map<string, { terminal: string; unsubscribe: () => void }>()
+const activeSessions = new Map<
+  string,
+  { terminal: string; unsubscribe: () => void; releaseSenderBinding: () => void }
+>()
 
 // Why: bridges the host's own terminal panes into the presence fan-out peer
 // clients already use (OrcaRuntimeService.onPeerPresence/dispatchPeerPresence),
@@ -12,6 +15,23 @@ const activeSessions = new Map<string, { terminal: string; unsubscribe: () => vo
 // rejects streaming methods, and terminal.presence.subscribe is one) since the
 // host call is already in-process and doesn't need peer-grant checks.
 export function registerTerminalHostPresenceHandlers(runtime: OrcaRuntimeService): void {
+  function endSession(requestId: string): void {
+    const session = activeSessions.get(requestId)
+    if (!session) {
+      return
+    }
+    session.unsubscribe()
+    session.releaseSenderBinding()
+    // Why: tell every other viewer the host's own cursor/selection is gone,
+    // mirroring terminal.presence.subscribe's cleanup for peer clients.
+    runtime.dispatchPeerPresence(session.terminal, requestId, {
+      type: 'left',
+      terminal: session.terminal,
+      clientId: 'host'
+    })
+    activeSessions.delete(requestId)
+  }
+
   ipcMain.handle('terminalHostPresence:subscribe', (event, args: { terminal: string }) => {
     const sender = event.sender
     const sessionId = `host-presence-${++sessionSeq}`
@@ -24,23 +44,20 @@ export function registerTerminalHostPresenceHandlers(runtime: OrcaRuntimeService
         }
       }
     )
-    activeSessions.set(sessionId, { terminal: args.terminal, unsubscribe })
+    // Why: a window reload or close never sends the explicit unsubscribe, which
+    // would leave this session in the fan-out for the life of the process.
+    const onDestroyed = (): void => endSession(sessionId)
+    sender.once('destroyed', onDestroyed)
+    activeSessions.set(sessionId, {
+      terminal: args.terminal,
+      unsubscribe,
+      releaseSenderBinding: () => sender.removeListener('destroyed', onDestroyed)
+    })
     return { ok: true as const, requestId: sessionId }
   })
 
   ipcMain.handle('terminalHostPresence:unsubscribe', (_event, args: { requestId: string }) => {
-    const session = activeSessions.get(args.requestId)
-    if (session) {
-      session.unsubscribe()
-      // Why: tell every other viewer the host's own cursor/selection is gone,
-      // mirroring terminal.presence.subscribe's cleanup for peer clients.
-      runtime.dispatchPeerPresence(session.terminal, args.requestId, {
-        type: 'left',
-        terminal: session.terminal,
-        clientId: 'host'
-      })
-      activeSessions.delete(args.requestId)
-    }
+    endSession(args.requestId)
     return { ok: true }
   })
 

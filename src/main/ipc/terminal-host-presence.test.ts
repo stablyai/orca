@@ -10,10 +10,15 @@ vi.mock('electron', () => ({
 
 import { registerTerminalHostPresenceHandlers } from './terminal-host-presence'
 
-type Handler = (
-  event: { sender: { send: ReturnType<typeof vi.fn>; isDestroyed: () => boolean } },
-  args: unknown
-) => unknown
+type FakeSender = {
+  send: ReturnType<typeof vi.fn>
+  isDestroyed: () => boolean
+  once: (channel: string, listener: () => void) => void
+  removeListener: (channel: string, listener: () => void) => void
+  emitDestroyed: () => void
+}
+
+type Handler = (event: { sender: FakeSender }, args: unknown) => unknown
 
 // Why: minimal fan-out stand-in, mirroring terminal-presence.test.ts's fake runtime.
 function makeFakeRuntime(): {
@@ -62,8 +67,30 @@ function findHandler(channel: string): Handler {
   return call[1] as Handler
 }
 
-function makeSender(): { sender: { send: ReturnType<typeof vi.fn>; isDestroyed: () => boolean } } {
-  return { sender: { send: vi.fn(), isDestroyed: () => false } }
+function makeSender(destroyed = false): { sender: FakeSender } {
+  const destroyedListeners = new Set<() => void>()
+  return {
+    sender: {
+      send: vi.fn(),
+      isDestroyed: () => destroyed,
+      once: (channel, listener) => {
+        if (channel === 'destroyed') {
+          destroyedListeners.add(listener)
+        }
+      },
+      removeListener: (channel, listener) => {
+        if (channel === 'destroyed') {
+          destroyedListeners.delete(listener)
+        }
+      },
+      emitDestroyed: () => {
+        for (const listener of destroyedListeners) {
+          destroyedListeners.delete(listener)
+          listener()
+        }
+      }
+    }
+  }
 }
 
 const sampleState: PeerPresenceState = {
@@ -157,7 +184,7 @@ describe('registerTerminalHostPresenceHandlers', () => {
     const subscribe = findHandler('terminalHostPresence:subscribe')
     const send = findHandler('terminalHostPresence:send')
 
-    const destroyedEvent = { sender: { send: vi.fn(), isDestroyed: () => true } }
+    const destroyedEvent = makeSender(true)
     subscribe(destroyedEvent, { terminal: 'term-1' })
     const otherEvent = makeSender()
     const otherResult = subscribe(otherEvent, { terminal: 'term-1' }) as {
@@ -168,5 +195,30 @@ describe('registerTerminalHostPresenceHandlers', () => {
     send({} as never, { requestId: otherResult.requestId, terminal: 'term-1', state: sampleState })
 
     expect(destroyedEvent.sender.send).not.toHaveBeenCalled()
+  })
+
+  it('tears the session down when the owning sender is destroyed without unsubscribing', () => {
+    handleMock.mockClear()
+    const { runtime, listeners } = makeFakeRuntime()
+    registerTerminalHostPresenceHandlers(runtime)
+    const subscribe = findHandler('terminalHostPresence:subscribe')
+
+    const hostEvent = makeSender()
+    const otherEvent = makeSender()
+    subscribe(hostEvent, { terminal: 'term-1' })
+    const otherResult = subscribe(otherEvent, { terminal: 'term-1' }) as {
+      ok: true
+      requestId: string
+    }
+    expect(listeners.size).toBe(2)
+
+    // Why: a window reload or close never sends the explicit unsubscribe.
+    hostEvent.sender.emitDestroyed()
+
+    expect(listeners.size).toBe(1)
+    expect(otherEvent.sender.send).toHaveBeenCalledWith('terminalHostPresence:event', {
+      requestId: otherResult.requestId,
+      event: { type: 'left', terminal: 'term-1', clientId: 'host' }
+    })
   })
 })
