@@ -28,8 +28,9 @@ Below, `ORCA` is a placeholder for the executable you resolved. Substitute it be
 running anything; do not create a shell variable or run `ORCA` literally. This works the
 same way in POSIX shells, PowerShell, and cmd.exe.
 
-If the selected executable cannot run, report its exact error and stop. Do not fall through
-to another executable, which could silently target a different Orca build.
+If the selected executable cannot run, do not fall through to another executable, which
+could silently target a different Orca build. In a managed sandbox, follow the recovery
+below before reporting failure; otherwise, report the exact error and stop.
 
 ## Managed sandboxes
 

@@ -101,6 +101,9 @@ describe('orca-linear install stubs', () => {
       expect(stub).toContain('orca-ide')
       expect(stub).toContain('GNOME Orca screen reader')
       expect(stub).not.toMatch(/^orca /mu)
+      expect(stub.replace(/\s+/gu, ' ')).toContain(
+        'In a managed sandbox, follow the recovery below before reporting failure; otherwise, report the exact error and stop.'
+      )
     })
 
     it(`gives an older ${name} binary a bounded fallback instead of a dead end`, () => {
