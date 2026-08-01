@@ -1650,6 +1650,21 @@ function extractOpenCodeToolFields(
       interactivePrompt: deriveInteractivePrompt('AskUserQuestion', toolInputSource)
     }
   }
+  if (eventName === 'PermissionRequest') {
+    const toolName = readFirstString(hookPayload, ['tool_name', 'name']) ?? 'OpenCode'
+    const rawInput =
+      hookPayload.tool_input ?? hookPayload.input ?? hookPayload.tool ?? stripHookEnvelopeKeys(hookPayload)
+    const toolInput =
+      deriveToolInputPreview(toolName, rawInput) ?? deriveFallbackToolInputPreview(rawInput)
+    return toolUpdate(
+      {
+        toolName,
+        toolInput,
+        interactivePrompt: deriveInteractivePrompt(toolName, rawInput, eventName)
+      },
+      { hasToolInputField: true }
+    )
+  }
   return {}
 }
 

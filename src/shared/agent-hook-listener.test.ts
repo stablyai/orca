@@ -372,6 +372,28 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.interactivePrompt).toBe(JSON.stringify(properties))
   })
 
+  it('captures tool metadata for the OpenCode PermissionRequest route', () => {
+    const event = normalizeHookPayload(
+      state,
+      'opencode',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PermissionRequest',
+          tool_name: 'Bash',
+          tool_input: { command: 'touch /tmp/zeddeck-test' }
+        }
+      },
+      'production'
+    )
+    expect(event?.payload.state).toBe('waiting')
+    expect(event?.payload.toolName).toBe('Bash')
+    expect(event?.payload.toolInput).toBe('touch /tmp/zeddeck-test')
+    expect(event?.payload.interactivePrompt).toBe(
+      JSON.stringify({ approval: { tool: 'Bash', summary: 'touch /tmp/zeddeck-test' } })
+    )
+  })
+
   it('maps Pi tool_call ask_user_question to blocked with interactivePrompt', () => {
     const questions = {
       questions: [
