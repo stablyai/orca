@@ -104,7 +104,7 @@ describe('resolveEntryContextPressure', () => {
   it('lets a lower soft cap bind the effective limit', () => {
     const snapshot = resolveEntryContextPressure(entry(), {
       ...config,
-      softLimits: { 'claude-opus-4-6': 120_000 }
+      softLimits: { 'model:claude-opus-4-6': 120_000 }
     })
     expect(snapshot?.limitTokens).toBe(120_000)
     expect(snapshot?.limitSource).toBe('soft-cap')

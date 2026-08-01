@@ -450,7 +450,7 @@ describe('ExperimentalPane', () => {
     const settings = {
       ...getDefaultSettings('/tmp'),
       experimentalContextPressure: true,
-      contextPressureSoftLimits: { codex: 100_000 }
+      contextPressureSoftLimits: { 'agent:codex': 100_000 }
     }
     const { root, container } = await renderExperimentalPane({ updateSettings, settings })
     const section = container.querySelector('#experimental-context-pressure')
@@ -480,16 +480,24 @@ describe('ExperimentalPane', () => {
     }
 
     await act(async () => {
-      setInputValue(draftKeyInput, ' CODEX ')
+      setInputValue(draftKeyInput, ' AGENT:CODEX ')
       setInputValue(draftTokensInput, '200000')
     })
     expect(confirmAddButton.disabled).toBe(true)
     expect(section.querySelector('[role="alert"]')?.textContent).toContain('already exists')
 
+    // Unprefixed keys are ambiguous (model vs agent) and must be rejected inline.
+    await act(async () => {
+      setInputValue(draftKeyInput, ' claude-opus-5 ')
+      setInputValue(draftTokensInput, '200000')
+    })
+    expect(confirmAddButton.disabled).toBe(true)
+    expect(section.querySelector('[role="alert"]')?.textContent).toContain('Use global')
+
     // Why: incomplete/invalid drafts must stay unpersistable.
     expect(confirmAddButton.disabled).toBe(true)
     await act(async () => {
-      setInputValue(draftKeyInput, '  claude-opus-5  ')
+      setInputValue(draftKeyInput, '  model:claude-opus-5  ')
     })
     await act(async () => {
       setInputValue(draftTokensInput, '400000.5')
@@ -504,11 +512,11 @@ describe('ExperimentalPane', () => {
       confirmAddButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(updateSettings).toHaveBeenCalledWith({
-      contextPressureSoftLimits: { codex: 100_000, 'claude-opus-5': 400_000 }
+      contextPressureSoftLimits: { 'agent:codex': 100_000, 'model:claude-opus-5': 400_000 }
     })
 
     const removeButton = section.querySelector<HTMLButtonElement>(
-      'button[aria-label="Remove soft limit for codex"]'
+      'button[aria-label="Remove soft limit for agent:codex"]'
     )
     if (!removeButton) {
       throw new Error('Soft-limit remove button was not rendered')
@@ -525,7 +533,7 @@ describe('ExperimentalPane', () => {
     const settings = {
       ...getDefaultSettings('/tmp'),
       experimentalContextPressure: true,
-      contextPressureSoftLimits: { codex: 100_000, 'model:claude-opus-5': 200_000 }
+      contextPressureSoftLimits: { 'agent:codex': 100_000, 'model:claude-opus-5': 200_000 }
     }
     const { root, container } = await renderExperimentalPane({ updateSettings, settings })
     const keyInput = Array.from(container.querySelectorAll<HTMLInputElement>('input')).find(
@@ -536,7 +544,7 @@ describe('ExperimentalPane', () => {
     }
 
     await act(async () => {
-      setInputValue(keyInput, ' CODEX ')
+      setInputValue(keyInput, ' AGENT:CODEX ')
       keyInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
     })
 

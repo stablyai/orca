@@ -5473,13 +5473,14 @@ describe('Store', () => {
     // Soft limits: positive finite integer caps only; junk entries dropped, non-object emptied.
     const updated = store.updateSettings({
       contextPressureSoftLimits: {
-        'claude-opus-5': 400_000.9,
-        codex: -1,
-        gemini: Number.NaN,
+        'model:claude-opus-5': 400_000.9,
+        'agent:codex': -1,
+        'agent:gemini': Number.NaN,
+        'claude-opus-5': 100_000,
         '': 5
       }
     })
-    expect(updated.contextPressureSoftLimits).toEqual({ 'claude-opus-5': 400_000 })
+    expect(updated.contextPressureSoftLimits).toEqual({ 'model:claude-opus-5': 400_000 })
     expect(
       store.updateSettings({ contextPressureSoftLimits: 'claude=1' as never })
         .contextPressureSoftLimits
@@ -5492,7 +5493,7 @@ describe('Store', () => {
         contextPressureWarnPercent: 0,
         contextPressureCriticalPercent: 'high',
         contextPressureSoftLimits: {
-          ' Claude-Opus-5 ': 400_000.9,
+          ' Model:Claude-Opus-5 ': 400_000.9,
           codex: -1
         }
       }
@@ -5501,7 +5502,7 @@ describe('Store', () => {
     const settings = (await createStore()).getSettings()
     expect(settings.contextPressureWarnPercent).toBe(1)
     expect(settings.contextPressureCriticalPercent).toBe(90)
-    expect(settings.contextPressureSoftLimits).toEqual({ 'claude-opus-5': 400_000 })
+    expect(settings.contextPressureSoftLimits).toEqual({ 'model:claude-opus-5': 400_000 })
   })
 
   it('orders context-pressure thresholds on load', async () => {
