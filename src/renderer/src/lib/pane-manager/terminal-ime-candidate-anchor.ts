@@ -1,4 +1,8 @@
 import type { Terminal } from '@xterm/xterm'
+import {
+  approximateTerminalCellGeometry,
+  resolveTerminalCellGeometry
+} from '../terminal-cell-geometry'
 import { resolveCursorAgentImeAnchor } from './terminal-ime-anchor'
 
 /**
@@ -10,27 +14,24 @@ import { resolveCursorAgentImeAnchor } from './terminal-ime-anchor'
  * force-sync after xterm's own composition handlers so the OS sees the corrected
  * location before it opens the candidate window.
  *
- * Cell dimensions are derived from the public .xterm-screen element's bounds
- * (xterm sizes that element to cols*cellWidth × rows*cellHeight) rather than
- * poking `_core._renderService.dimensions` — keeps us on the public API surface
- * so upgrades don't silently regress the fix.
+ * Cell dimensions come from the shared terminal-cell-geometry resolver (the
+ * public .xterm-screen bounds, same source as the presence overlays), with the
+ * container-size approximation as the pre-first-paint fallback so a composition
+ * starting before .xterm-screen is measurable still gets an anchor.
  *
  * Returns the installed handler so the caller can remove it on dispose, or null
  * when the terminal has not opened its DOM yet.
  */
 export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => void) | null {
-  if (!terminal.element || !terminal.textarea) {
+  const container = terminal.element
+  if (!container || !terminal.textarea) {
     return null
   }
-  const screenElement = terminal.element.querySelector<HTMLElement>('.xterm-screen')
   const textarea = terminal.textarea
   const handler = (): void => {
-    if (!screenElement) {
-      return
-    }
-    const rect = screenElement.getBoundingClientRect()
-    const cellWidth = rect.width / terminal.cols
-    const cellHeight = rect.height / terminal.rows
+    const { cellWidth, cellHeight } =
+      resolveTerminalCellGeometry(terminal, container) ??
+      approximateTerminalCellGeometry(container, terminal.cols, terminal.rows)
     if (!(cellWidth > 0) || !(cellHeight > 0)) {
       return
     }

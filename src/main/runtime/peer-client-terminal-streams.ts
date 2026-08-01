@@ -301,6 +301,19 @@ function dispatchTerminalFrame(entry: PeerTerminalStreamEntry, frame: TerminalSt
     }
     case TerminalStreamOpcode.Error: {
       entry.onEvent({ type: 'error', message: decodeTerminalStreamText(frame.payload) })
+      break
     }
+    case TerminalStreamOpcode.Input:
+    case TerminalStreamOpcode.Resize:
+    case TerminalStreamOpcode.Subscribe:
+    case TerminalStreamOpcode.Unsubscribe:
+    case TerminalStreamOpcode.SnapshotRequest:
+    case TerminalStreamOpcode.Ack:
+    case TerminalStreamOpcode.ClaimViewport:
+    case TerminalStreamOpcode.OutputSpan:
+    case TerminalStreamOpcode.SetOutputPaused:
+      // Opcodes this peer client never consumes (client→host frames and
+      // span-mode extensions); a misdirected frame is dropped.
+      break
   }
 }

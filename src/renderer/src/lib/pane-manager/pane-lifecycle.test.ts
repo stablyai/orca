@@ -682,10 +682,13 @@ describe('openTerminal — addon and provider wiring', () => {
       buffer: { active: { cursorX: 3, cursorY: 2, baseY: 0, getLine: vi.fn(() => undefined) } }
     })
     const screenElement = {
-      getBoundingClientRect: vi.fn(() => ({ width: 800, height: 480 }) as DOMRect),
+      getBoundingClientRect: vi.fn(() => ({ left: 0, top: 0, width: 800, height: 480 }) as DOMRect),
       addEventListener: vi.fn(),
       removeEventListener: vi.fn()
     }
+    Object.assign(pane.terminal.element!, {
+      getBoundingClientRect: vi.fn(() => ({ left: 0, top: 0, width: 800, height: 480 }) as DOMRect)
+    })
     vi.mocked(pane.terminal.element!.querySelector).mockImplementation((selector: string) =>
       selector === '.xterm-screen' ? (screenElement as never) : null
     )
@@ -709,7 +712,7 @@ describe('openTerminal — addon and provider wiring', () => {
       buffer: { active: { cursorX: 3, cursorY: 2, baseY: 0, getLine: vi.fn(() => undefined) } }
     })
     vi.mocked(pane.terminal.element!.querySelector).mockReturnValue(null)
-    Object.assign(pane.container, { clientWidth: 800, clientHeight: 480 })
+    Object.assign(pane.terminal.element!, { clientWidth: 800, clientHeight: 480 })
 
     openTerminal(pane)
     pane.compositionHandler!()

@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
-import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
-import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
+import { useRemoteTerminalTheme } from './use-remote-terminal-theme'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {
@@ -59,7 +57,6 @@ export function RemoteTerminalPanel({
   // Why: read inside the async subscribe IIFE, which resolves after this render.
   const hiddenRef = useRef(hidden)
   hiddenRef.current = hidden
-  const systemPrefersDark = useSystemPrefersDark()
   const [ended, setEnded] = useState(false)
   const [errorReason, setErrorReason] = useState<string | null>(null)
   const [remoteCwd, setRemoteCwd] = useState<string | null>(null)
@@ -75,17 +72,7 @@ export function RemoteTerminalPanel({
     originLeft: 0,
     originTop: 0
   })
-  const { terminalTheme, terminalMode } = useMemo(() => {
-    if (!settings) {
-      return { terminalTheme: null, terminalMode: 'dark' as const }
-    }
-    const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
-    const theme = composeActiveTerminalTheme(
-      appearance.theme ?? getBuiltinTheme(appearance.themeName),
-      settings
-    )
-    return { terminalTheme: theme, terminalMode: appearance.mode }
-  }, [settings, systemPrefersDark])
+  const { terminalTheme, terminalMode } = useRemoteTerminalTheme(settings)
 
   useEffect(() => {
     setEnded(false)
@@ -195,6 +182,8 @@ export function RemoteTerminalPanel({
         return
       }
       switch (event.type) {
+        case 'subscribed':
+          return // ack only — the snapshot that follows carries the renderable state
         case 'snapshot':
           terminal.resize(event.cols, event.rows)
           terminal.reset()

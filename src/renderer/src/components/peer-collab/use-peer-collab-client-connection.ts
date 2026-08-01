@@ -158,7 +158,13 @@ export function usePeerCollabClientConnection(): PeerCollabClientConnectionHook 
   )
 
   useEffect(() => {
-    void window.api.peerClient.getStatuses().then((statuses) => {
+    // Why: host components (Sidebar, Terminal) mount this hook in environments
+    // whose window.api mock predates peer collab — degrade to inert, not crash.
+    const peerClient = window.api?.peerClient
+    if (!peerClient) {
+      return
+    }
+    void peerClient.getStatuses().then((statuses) => {
       if (!mountedRef.current) {
         return
       }
@@ -170,12 +176,12 @@ export function usePeerCollabClientConnection(): PeerCollabClientConnectionHook 
         return next
       })
     })
-    void window.api.peerClient.getDefaultDisplayName().then(({ name }) => {
+    void peerClient.getDefaultDisplayName().then(({ name }) => {
       if (mountedRef.current) {
         setClientDisplayName(name)
       }
     })
-    void window.api.peerClient.getHostNames().then(({ names }) => {
+    void peerClient.getHostNames().then(({ names }) => {
       if (mountedRef.current) {
         setHostNames(names)
       }
@@ -183,7 +189,7 @@ export function usePeerCollabClientConnection(): PeerCollabClientConnectionHook 
   }, [mountedRef])
 
   useEffect(() => {
-    return window.api.peerClient.onStatusChanged((status: PeerClientStatusWithHost) => {
+    return window.api?.peerClient?.onStatusChanged((status: PeerClientStatusWithHost) => {
       setStatusesByHost((prev) => ({ ...prev, [status.hostId]: status }))
     })
   }, [])

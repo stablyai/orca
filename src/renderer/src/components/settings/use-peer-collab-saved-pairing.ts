@@ -19,8 +19,12 @@ export function usePeerCollabSavedPairing(): PeerCollabSavedPairingHook {
   const [savedPairings, setSavedPairings] = useState<SavedPeerPairing[]>([])
 
   const refresh = useCallback(async () => {
-    const saved = await window.api.peerClient.listSavedPairings()
-    setSavedPairings(saved)
+    // Why: mounted from host surfaces whose test window.api mock predates peer
+    // collab — degrade to an empty list, not a crash.
+    const saved = await window.api?.peerClient?.listSavedPairings()
+    if (saved) {
+      setSavedPairings(saved)
+    }
   }, [])
 
   useEffect(() => {
