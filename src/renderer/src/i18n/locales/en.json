@@ -10089,7 +10089,7 @@
           "description": "Switch update channels or jump to any published build, including older ones. Downgrades are allowed and unvetted builds can be broken.",
           "devOnly": "Dev only",
           "channelAriaLabel": "Update channel",
-          "hourlyWarning": "Hourly builds are macOS-only, ship straight from main with no test gate, and are signed but not notarized. Keep a stable build handy.",
+          "hourlyWarning": "Hourly builds are macOS-only and ship straight from main with no test gate. Keep a stable build handy.",
           "loadingBuilds": "Loading builds…",
           "noBuilds": "No builds found",
           "refresh": "Refresh build list",

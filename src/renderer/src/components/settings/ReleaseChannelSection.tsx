@@ -27,7 +27,7 @@ const CHANNEL_LABELS: Record<ReleaseChannel, string> = {
 const CHANNEL_DESCRIPTIONS: Record<ReleaseChannel, string> = {
   stable: 'Shipped releases. What everyone else is running.',
   rc: 'Release candidates cut ahead of each stable.',
-  hourly: 'macOS only. Unvetted builds from main, built every hour. No tests, no notarization.'
+  hourly: 'macOS only. Unvetted builds from main, built every hour. No tests.'
 }
 
 function formatBuildLabel(build: ReleaseBuild): string {
@@ -226,7 +226,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.ReleaseChannelSection.hourlyWarning',
-              'Hourly builds are macOS-only, ship straight from main with no test gate, and are signed but not notarized. Keep a stable build handy.'
+              'Hourly builds are macOS-only and ship straight from main with no test gate. Keep a stable build handy.'
             )}
           </p>
         </div>
