@@ -2024,7 +2024,10 @@ export class AgentHookServer {
           if (statusLineEvent) {
             this.onClaudeStatusLine?.(statusLineEvent)
           }
-          const contextReading = parseClaudeStatusLineContextUsage(body)
+          // Feature-off skips the second parse of the same body (relay parity).
+          const contextReading = this.contextPressureEnabled
+            ? parseClaudeStatusLineContextUsage(body)
+            : null
           if (contextReading) {
             this.applyPaneContextUsage(
               contextReading.paneKey,
