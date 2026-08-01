@@ -2798,6 +2798,11 @@
             "retryingBody": "Orca는 최대 1분간 재시도합니다. 연결이 복원되면 이 터미널이 재개됩니다.",
             "disconnectedBody": "자동 재시도가 중지되었습니다. 이 터미널 세션을 재개하려면 다시 연결하세요.",
             "reconnectButton": "다시 연결"
+          },
+          "CodexIndexingOverlay": {
+            "indexing": "Indexing Codex session history…",
+            "progressThrough": "Indexed through {{value0}}. Codex will start automatically when indexing finishes.",
+            "autoStart": "Codex will start automatically when indexing finishes."
           }
         }
       },

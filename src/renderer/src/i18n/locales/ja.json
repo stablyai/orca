@@ -2798,6 +2798,11 @@
             "retryingBody": "Orcaは最大1分間再試行します。接続が復元されると、このターミナルが再開されます。",
             "disconnectedBody": "自動再試行が停止しました。このターミナルセッションを再開するには再接続してください。",
             "reconnectButton": "再接続"
+          },
+          "CodexIndexingOverlay": {
+            "indexing": "Indexing Codex session history…",
+            "progressThrough": "Indexed through {{value0}}. Codex will start automatically when indexing finishes.",
+            "autoStart": "Codex will start automatically when indexing finishes."
           }
         }
       },

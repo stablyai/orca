@@ -105,6 +105,7 @@ import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-optio
 import { connectPanePty } from './pty-connection'
 import type { PtyTransport } from './pty-transport'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
+import type { CodexIndexingPaneState } from './codex-backfill-spawn-gate'
 import {
   reconcileMissingSessions,
   type ReconcilableBinding
@@ -275,6 +276,9 @@ type UseTerminalPaneLifecycleDeps = {
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   onPtyRecoveryStateRef?: React.RefObject<
     (paneId: number, state: PtyTransportRecoveryState | null) => void
+  >
+  onCodexIndexingStateRef?: React.RefObject<
+    (paneId: number, state: CodexIndexingPaneState | null) => void
   >
   clearTabPtyId: (tabId: string, ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
@@ -609,6 +613,7 @@ export function useTerminalPaneLifecycle({
   onAgentExitedRef,
   onPtyErrorRef,
   onPtyRecoveryStateRef,
+  onCodexIndexingStateRef,
   clearTabPtyId,
   consumeSuppressedPtyExit,
   isPtyShutdownPending,
@@ -799,6 +804,7 @@ export function useTerminalPaneLifecycle({
       onAgentExitedRef,
       onPtyErrorRef,
       onPtyRecoveryStateRef,
+      onCodexIndexingStateRef,
       clearTabPtyId,
       consumeSuppressedPtyExit,
       isPtyShutdownPending,

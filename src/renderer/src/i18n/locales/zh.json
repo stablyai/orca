@@ -2798,6 +2798,11 @@
             "retryingBody": "Orca 将重试最多一分钟。如果连接恢复，此终端将恢复。",
             "disconnectedBody": "自动重试已停止。重新连接以恢复此终端会话。",
             "reconnectButton": "重新连接"
+          },
+          "CodexIndexingOverlay": {
+            "indexing": "Indexing Codex session history…",
+            "progressThrough": "Indexed through {{value0}}. Codex will start automatically when indexing finishes.",
+            "autoStart": "Codex will start automatically when indexing finishes."
           }
         }
       },

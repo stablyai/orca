@@ -185,6 +185,8 @@ import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-rec
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
+import { CodexIndexingOverlay } from './CodexIndexingOverlay'
+import type { CodexIndexingPaneState } from './codex-backfill-spawn-gate'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
@@ -586,6 +588,22 @@ function TerminalPane(
       )
     }
   )
+  const [codexIndexingStatesByPaneId, setCodexIndexingStatesByPaneId] = useState<
+    Record<number, CodexIndexingPaneState>
+  >({})
+  const onCodexIndexingStateRef = useRef((paneId: number, state: CodexIndexingPaneState | null) => {
+    setCodexIndexingStatesByPaneId((previous) => {
+      if (state === null) {
+        if (!(paneId in previous)) {
+          return previous
+        }
+        const next = { ...previous }
+        delete next[paneId]
+        return next
+      }
+      return { ...previous, [paneId]: state }
+    })
+  })
 
   const setTabPaneExpanded = useAppStore((store) => store.setTabPaneExpanded)
   const setTabCanExpandPane = useAppStore((store) => store.setTabCanExpandPane)
@@ -1452,6 +1470,7 @@ function TerminalPane(
     onAgentExitedRef,
     onPtyErrorRef,
     onPtyRecoveryStateRef,
+    onCodexIndexingStateRef,
     clearTabPtyId,
     consumeSuppressedPtyExit: useAppStore((store) => store.consumeSuppressedPtyExit),
     isPtyShutdownPending: useAppStore((store) => store.isPtyShutdownPending),
@@ -1656,6 +1675,7 @@ function TerminalPane(
         onAgentExitedRef,
         onPtyErrorRef,
         onPtyRecoveryStateRef,
+        onCodexIndexingStateRef,
         clearTabPtyId,
         consumeSuppressedPtyExit: useAppStore.getState().consumeSuppressedPtyExit,
         isPtyShutdownPending: useAppStore.getState().isPtyShutdownPending,
@@ -2989,6 +3009,16 @@ function TerminalPane(
             )
           )
         : null}
+      {/* Why: portal into the pane so the indexing notice stacks above the xterm canvas. */}
+      {managedPanes.map((pane) =>
+        codexIndexingStatesByPaneId[pane.id]
+          ? createPortal(
+              <CodexIndexingOverlay state={codexIndexingStatesByPaneId[pane.id]} />,
+              pane.container,
+              `codex-indexing-${pane.id}`
+            )
+          : null
+      )}
       <DaemonActionDialog api={daemonActions} />
       {isActive && (
         <TerminalSessionStateSaveFailureDialog

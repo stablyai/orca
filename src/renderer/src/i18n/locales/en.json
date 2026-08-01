@@ -2821,6 +2821,11 @@
             "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",
             "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
             "reconnectButton": "Reconnect"
+          },
+          "CodexIndexingOverlay": {
+            "indexing": "Indexing Codex session history…",
+            "progressThrough": "Indexed through {{value0}}. Codex will start automatically when indexing finishes.",
+            "autoStart": "Codex will start automatically when indexing finishes."
           }
         }
       },
