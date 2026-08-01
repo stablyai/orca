@@ -49,7 +49,7 @@ describe('Claude background task status', () => {
     ).toBe('working')
   })
 
-  it('fails unknown or partial task statuses active but ignores terminal and malformed entries', () => {
+  it('fails unknown, partial, or malformed task entries active but ignores terminal entries', () => {
     for (const status of ['queued', undefined]) {
       expect(
         readClaudeBackgroundAgentTasks({
@@ -72,6 +72,9 @@ describe('Claude background task status', () => {
         hasRunningNonAgentTask: true
       })
     }
+    expect(
+      readClaudeBackgroundAgentTasks({ background_tasks: [null, 'shell'] }).hasRunningNonAgentTask
+    ).toBe(true)
 
     for (const backgroundTasks of [
       [{ id: 'shell-1', type: 'shell', status: 'completed' }],
@@ -93,7 +96,6 @@ describe('Claude background task status', () => {
       [{ id: 'shell-1', type: 'shell', status: 'canceled' }],
       [{ id: 'shell-1', type: 'shell', status: 'timed_out' }],
       [{ id: 'agent-1', type: ' Subagent ', status: 'running' }],
-      [null, 'shell'],
       { id: 'shell-1', type: 'shell', status: 'running' }
     ]) {
       expect(
@@ -218,7 +220,7 @@ describe('Claude background task status', () => {
     expect(
       claudeEvent(state, SOURCE_PANE, {
         hook_event_name: 'Stop',
-        session_crons: []
+        background_tasks: []
       })?.state
     ).toBe('done')
     expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(false)
@@ -271,25 +273,35 @@ describe('Claude background task status', () => {
   it('ignores child-attributed inventories for lead-owned background work', () => {
     const state = createHookListenerState()
     claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'SubagentStop',
+      hook_event_name: 'Stop',
       agent_id: 'child-1',
-      background_tasks: [RUNNING_SHELL]
+      background_tasks: [RUNNING_SHELL],
+      session_crons: [{ id: 'cron-1' }]
     })
     expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
+    expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(false)
 
     claudeEvent(state, SOURCE_PANE, {
       hook_event_name: 'Stop',
-      background_tasks: [RUNNING_SHELL]
+      background_tasks: [RUNNING_SHELL],
+      session_crons: [{ id: 'cron-1' }]
     })
     claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'SubagentStop',
+      hook_event_name: 'Stop',
       agent_id: 'child-1',
-      background_tasks: []
+      background_tasks: [],
+      session_crons: []
     })
     expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
+    expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(true)
 
-    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop', background_tasks: [] })
+    claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'Stop',
+      background_tasks: [],
+      session_crons: []
+    })
     expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
+    expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(false)
   })
 
   it('retains live child rows when an agent inventory is partial or has a future status', () => {

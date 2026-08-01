@@ -2673,6 +2673,13 @@ function normalizeClaudeEvent(
     } else {
       state.claudeActiveSessionCronPaneKeys.delete(paneKey)
     }
+  } else if (
+    eventAgentId === undefined &&
+    (eventName === 'Stop' || eventName === 'StopFailure') &&
+    backgroundTasks.present
+  ) {
+    // Why: current Claude may omit an empty cron inventory while still emitting background_tasks.
+    state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   }
   const stateName = reportedStateName
 

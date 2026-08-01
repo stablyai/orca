@@ -54,6 +54,7 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) {
       truncated = true
+      hasRunningNonAgentTask = true
       continue
     }
     const obj = item as Record<string, unknown>
