@@ -1,3 +1,4 @@
+import { CONTINUE_ACTION_KEY_OVERRIDES } from './locale-continue-action-key-overrides.mjs'
 import { CROSS_LOCALE_KEY_OVERRIDES } from './locale-cross-locale-key-overrides.mjs'
 import { KO_KEY_OVERRIDES } from './locale-ko-key-overrides.mjs'
 import { MACOS_TCC_KEY_OVERRIDES } from './locale-macos-tcc-key-overrides.mjs'
@@ -12,6 +13,9 @@ export function mergeLocaleKeyOverrides(base) {
     merged[key] = { ...merged[key], ...overrides }
   }
   for (const [key, overrides] of Object.entries(MACOS_TCC_KEY_OVERRIDES)) {
+    merged[key] = { ...merged[key], ...overrides }
+  }
+  for (const [key, overrides] of Object.entries(CONTINUE_ACTION_KEY_OVERRIDES)) {
     merged[key] = { ...merged[key], ...overrides }
   }
   return merged

@@ -1,4 +1,4 @@
-import { JA_PHRASE_FIXES_ROUND6 } from './locale-ja-phrase-fixes-round6.mjs'
+import { JA_WORKSPACE_WORKTREE_FIXES } from './workspace-worktree-phrase-fixes.mjs'
 
 // Japanese phrase fixes from high-visibility UI audit rounds 1–4.
 // Why: keep locale-phrase-fixes.mjs under max-lines while preserving repair coverage.
@@ -242,7 +242,16 @@ export const JA_PHRASE_FIXES = [
   { pattern: /入力してください/g, replacement: '入力', whenEnIncludes: 'Enter' },
   { pattern: /追加してください/g, replacement: '追加', whenEnIncludes: 'Add' },
   { pattern: /試してください/g, replacement: '試す', whenEnIncludes: 'Try' },
+  // MT writes AIエージェント with no space, so the エージェント→agent brand revert leaves "AIagent".
+  // CJK_LATIN_SPACED_TERMS cannot carry "AI" (it would split any Latin word ending in AI), so
+  // split the pair here, then re-space it off the preceding Japanese.
+  { pattern: /AI(agents?)(?![A-Za-z])/g, replacement: 'AI $1', whenEnMatches: /\bAI agents?\b/i },
+  {
+    pattern: /([぀-ヿ㐀-鿿])(?=AI agents?(?![A-Za-z]))/g,
+    replacement: '$1 ',
+    whenEnMatches: /\bAI agents?\b/i
+  },
   // Why: JP engineers use "Issue" in Latin, not katakana. Runs last so all *→イシュー fixes above normalize to Issue.
   { pattern: /イシュー/g, replacement: 'Issue', whenEnIncludes: 'issue' },
-  ...JA_PHRASE_FIXES_ROUND6
+  ...JA_WORKSPACE_WORKTREE_FIXES
 ]

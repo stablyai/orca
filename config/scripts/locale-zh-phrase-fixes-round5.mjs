@@ -1,4 +1,4 @@
-import { ZH_PHRASE_FIXES_ROUND6 } from './locale-zh-phrase-fixes-round6.mjs'
+import { ZH_WORKSPACE_WORKTREE_FIXES } from './workspace-worktree-phrase-fixes.mjs'
 
 // Chinese phrase fixes from high-visibility UI audit round 5.
 export const ZH_PHRASE_FIXES_ROUND5 = [
@@ -56,5 +56,5 @@ export const ZH_PHRASE_FIXES_ROUND5 = [
     replacement: '显示 Orca Mobile 按钮',
     whenEnIncludes: 'Show Orca Mobile Button'
   },
-  ...ZH_PHRASE_FIXES_ROUND6
+  ...ZH_WORKSPACE_WORKTREE_FIXES
 ]

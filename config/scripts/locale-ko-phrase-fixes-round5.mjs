@@ -1,4 +1,4 @@
-import { KO_PHRASE_FIXES_ROUND6 } from './locale-ko-phrase-fixes-round6.mjs'
+import { KO_WORKSPACE_WORKTREE_FIXES } from './workspace-worktree-phrase-fixes.mjs'
 
 // Korean phrase fixes from high-visibility UI audit round 5.
 export const KO_PHRASE_FIXES_ROUND5 = [
@@ -59,5 +59,5 @@ export const KO_PHRASE_FIXES_ROUND5 = [
   { pattern: /구성하다/g, replacement: '작성', whenEnIncludes: 'compose' },
   { pattern: /유지하다/g, replacement: '유지', whenEnIncludes: 'Keep' },
   { pattern: /확인하다/g, replacement: '검증', whenEnIncludes: 'verify' },
-  ...KO_PHRASE_FIXES_ROUND6
+  ...KO_WORKSPACE_WORKTREE_FIXES
 ]

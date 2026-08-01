@@ -327,6 +327,11 @@ export const LOCALE_VALUE_OVERRIDES = {
     'No speech detected.': '未检测到语音。',
     'No enabled AI agent was detected on this workspace host.':
       '此工作区主机上未检测到已启用的 AI 代理。',
+    // Lead with 此工作区主机上 so 检测到 keeps its 未 prefix; the detected→已检测 phrase fix
+    // rewrites any other 检测到 into the "Detected" status label and breaks the sentence.
+    'No enabled Agents were detected on this workspace host.':
+      '此工作区主机上未检测到已启用的 Agents。',
+    '{{agent}} was not detected on this workspace host.': '此工作区主机上未检测到 {{agent}}。',
     'The selected agent was not detected on this workspace host.':
       '此工作区主机上未检测到所选代理。',
     'No agents detected on your PATH. Pick one to install later, or continue with a blank terminal.':

@@ -11714,7 +11714,7 @@
       },
       "mobile": {
         "MobileHero": {
-          "a8fb43cf1c": "Continue",
+          "a8fb43cf1c": "继续",
           "3f90dbd274": "完成",
           "b622eba64d": "返回",
           "65b3f2e8bc": "生成…",
@@ -14520,8 +14520,8 @@
       }
     },
     "agentSessionContinuation": {
-      "continueInNewSession": "在新会话中Continue…",
-      "dialogTitle": "在新会话中Continue",
+      "continueInNewSession": "在新会话中继续…",
+      "dialogTitle": "在新会话中继续",
       "dialogDescription": "从当前进度启动一个新的 Agent 会话，原会话保持不变。",
       "untitledSession": "当前会话",
       "originalAgent": "原 Agent：{{agent}}",
@@ -14529,7 +14529,7 @@
       "selectAgent": "选择 Agent",
       "detectingAgents": "正在此工作区主机上检测 Agents…",
       "detectionFailed": "无法检测此工作区主机上的 Agents。",
-      "noAgents": "未在此工作区主机上已检测已启用的 Agents。",
+      "noAgents": "此工作区主机上未检测到已启用的 Agents。",
       "context": "上下文",
       "modeFocused": "聚焦续接（推荐）",
       "modeFocusedDescription": "使用最新进度和当前工作区，仅在需要时读取更早的会话细节。",
@@ -14540,7 +14540,7 @@
       "starting": "正在启动…",
       "noContext": "没有可用于在新会话中继续的上下文。",
       "agentDisabled": "{{agent}} 已在 Agent 设置中停用。",
-      "agentUnavailable": "未在此工作区主机上已检测 {{agent}}。",
+      "agentUnavailable": "此工作区主机上未检测到 {{agent}}。",
       "sent": "已将会话上下文发送到新的 {{agent}} 会话。",
       "deliveryFailed": "新的 {{agent}} 会话已启动，但无法发送上下文。",
       "launchFailed": "无法启动新的 {{agent}} 会话。"

@@ -1,4 +1,8 @@
 import { CJK_LATIN_SPACED_TERMS } from './locale-cjk-latin-spaced-terms.mjs'
+import {
+  isContinueActionContext,
+  isContinueActionValue
+} from './locale-continue-action-exemptions.mjs'
 import { isLocalizedProseTermContext } from './locale-prose-term-exemptions.mjs'
 import { isScreenCursorContext } from './locale-screen-cursor-exemptions.mjs'
 import { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
@@ -354,6 +358,10 @@ export function shouldPreserveEnglishValue(enValue, key = '') {
   if (isEnglishOnlyKey(key)) {
     return true
   }
+  // Why: the "Continue" button label is the action, not the Continue agent — keep it translatable.
+  if (isContinueActionValue(enValue, key)) {
+    return false
+  }
   return NEVER_TRANSLATE_VALUES.has(enValue)
 }
 
@@ -381,6 +389,10 @@ function applyBrandMistranslationFixes(enValue, localeValue, locale, key = '') {
     // Why: terminal/theme "Cursor" labels name the on-screen カーソル, not the Cursor product —
     // skip the revert so カーソル survives for these settings.
     if (isScreenCursorContext(brand, enValue, key)) {
+      continue
+    }
+    // Why: "Continue in New Session" names the action — skip the revert so 继续/続ける survive.
+    if (isContinueActionContext(brand, enValue, key)) {
       continue
     }
     if (isLocalizedProseTermContext(brand, key)) {
