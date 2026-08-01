@@ -3,6 +3,7 @@ import {
   buildAgentStartupPlan,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
+import { inlineAgentDraftFitsPlatform } from '../../../shared/agent-draft-platform-limit'
 
 type StartupPlanBase = Omit<
   Parameters<typeof buildAgentStartupPlan>[0],
@@ -39,6 +40,27 @@ export function planLaunchAgentStartupPrompt(args: {
   })
 
   if (hasPrompt && promptDelivery === 'submit-after-ready') {
+    if (base.agent === 'opencode') {
+      const inlinePlan = buildAgentStartupPlan({
+        ...base,
+        prompt,
+        allowEmptyPromptLaunch: false
+      })
+      if (
+        inlinePlan &&
+        inlineAgentDraftFitsPlatform({
+          command: inlinePlan.launchCommand,
+          env: inlinePlan.env,
+          platform: base.platform
+        })
+      ) {
+        return {
+          startupPlan: inlinePlan,
+          pasteDraftAfterLaunch: null,
+          submitPastedPrompt: false
+        }
+      }
+    }
     // Why: multi-line generated prompts are too large for a shell argv, so launch clean then paste+submit in the TUI.
     return pasteAfterReady(true)
   }
