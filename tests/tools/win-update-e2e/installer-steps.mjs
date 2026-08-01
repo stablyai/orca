@@ -85,7 +85,7 @@ export function silentInstall(setupExe, { timeoutMs = 180_000, installDir = null
   // no other flags for a per-user install. /D, when present, MUST be last.
   const args = ['/S']
   if (installDir) {
-    args.push(`/D=${installDir}`)
+    args.push(`/D=${String(installDir)}`)
   }
   const proc = spawnSync(setupExe, args, { encoding: 'utf8' })
   if (proc.error) {

@@ -217,7 +217,7 @@ export async function captureFailureDiagnostics(page, dir, label) {
  *  An expected tab id prevents post-restore probes from accepting another tab. */
 export async function waitForTerminalReady(page, timeoutMs = 60_000, terminalTabId = null) {
   const selector = terminalTabId
-    ? `[data-terminal-tab-id="${terminalTabId}"]:visible`
+    ? `[data-terminal-tab-id="${String(terminalTabId)}"]:visible`
     : TERMINAL_SURFACE_VISIBLE
   const surface = page.locator(selector).first()
   await surface.waitFor({ state: 'visible', timeout: timeoutMs })
@@ -399,7 +399,7 @@ export async function focusActiveTerminal(page, terminalTabId = null) {
   // focusing so typed commands actually reach the shell.
   await dismissKnownOverlays(page)
   const selector = terminalTabId
-    ? `[data-terminal-tab-id="${terminalTabId}"]:visible`
+    ? `[data-terminal-tab-id="${String(terminalTabId)}"]:visible`
     : TERMINAL_SURFACE_VISIBLE
   const surface = page.locator(selector).first()
   const click = surface.click({ position: { x: 24, y: 24 }, timeout: 15_000 })
