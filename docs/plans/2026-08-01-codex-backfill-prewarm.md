@@ -129,6 +129,16 @@ export function buildCodexBackfillGateWrapper(params: {
   shellPlatform: 'posix' | 'win32'
   toShellViewPath?: (hostPath: string) => string // WSL translation (hooks.ts:484-516 precedent); default identity
 }): CodexBackfillGateWrapper
+
+/** Why: the wrapper flavor follows the PANE's shell, never the host platform — a win32-host WSL pane runs
+ * bash, so a PowerShell wrapper could neither read the gated-command env across the WSL boundary nor
+ * Test-Path a distro-visible sentinel (precedent: hooks.ts:493-495, "WSL worktrees are Linux fs even
+ * though process.platform is 'win32'"). */
+export function resolveCodexBackfillGateShellPlatform(params: {
+  hostPlatform: string // pass process.platform
+  paneIsWsl: boolean
+}): 'posix' | 'win32'
+// implementation: params.hostPlatform === 'win32' && !params.paneIsWsl ? 'win32' : 'posix'
 ```
 
 Posix wrapper `command` (ONE line, built with the setup wrapper's own quoting helpers; nonce-suffixed sentinel like `:44`):
@@ -141,7 +151,7 @@ win32: mirror the `-EncodedCommand` builder at `:202-254` (`Test-Path` poll + `R
 
 Nesting note: in wait-for-setup mode the original command is already the setup polling wrapper — composition is gate wrapper → (sentinel) → evals setup wrapper → (setup marker) → evals codex. The two env vars are distinct by construction and env is inherited at eval time; no re-plumbing needed.
 
-Tests: posix command is a single line and evals the env var; env round-trips a command containing single quotes AND newlines verbatim; `releaseFilePath` is under `<home>/.orca/` and nonce-unique per call; `toShellViewPath` is applied to the `ORCA_BACKFILL_RELEASE_FILE` env value but NOT to the returned host-view `releaseFilePath`; win32 command uses `-EncodedCommand` whose base64/UTF-16LE payload decodes to a Test-Path poll + Invoke-Expression + fail-open exec.
+Tests: posix command is a single line and evals the env var; env round-trips a command containing single quotes AND newlines verbatim; `releaseFilePath` is under `<home>/.orca/` and nonce-unique per call; `toShellViewPath` is applied to the `ORCA_BACKFILL_RELEASE_FILE` env value but NOT to the returned host-view `releaseFilePath`; win32 command uses `-EncodedCommand` whose base64/UTF-16LE payload decodes to a Test-Path poll + Invoke-Expression + fail-open exec; `resolveCodexBackfillGateShellPlatform` truth table (deterministic on every dev/CI platform — this is the executable pin for the WSL-pane shape): `{ hostPlatform: 'win32', paneIsWsl: false }` → `'win32'`; `{ hostPlatform: 'win32', paneIsWsl: true }` → `'posix'`; `{ hostPlatform: 'linux' | 'darwin', paneIsWsl: false }` → `'posix'`.
 
 Also modify `resolveSetupAgentSequenceLaunchCommand` (`src/shared/setup-agent-sequencing.ts:17-23`): one-line extension so it also resolves the launch command from env `ORCA_BACKFILL_GATED_COMMAND` when present (agent-kind detection at `pty.ts:1077-1110` keeps recognizing gated codex spawns; a gated setup wrapper resolves through both hops). Add a test beside the function's existing ones.
 
@@ -577,7 +587,7 @@ git commit -m "feat(codex): add backfill spawn-hold decision, gate wrapper, and 
 - Test: `src/main/ipc/pty.test.ts`
 
 **Interfaces:**
-- Consumes (Task 1): `shouldHoldCodexSpawnForBackfill`, `createCodexBackfillPaneHoldRegistry`, `CodexBackfillPaneHoldState`, `buildCodexBackfillGateWrapper` + `ORCA_BACKFILL_GATED_COMMAND_ENV` / `ORCA_BACKFILL_RELEASE_FILE_ENV`. Consumes existing: `getSystemCodexHomePath` (same import as `codex-backfill-status.ts`), `registerPaneKeyTeardownListener` (`pty.ts:273`), `node:fs` for the release sentinel.
+- Consumes (Task 1): `shouldHoldCodexSpawnForBackfill`, `createCodexBackfillPaneHoldRegistry`, `CodexBackfillPaneHoldState`, `buildCodexBackfillGateWrapper`, `resolveCodexBackfillGateShellPlatform` + `ORCA_BACKFILL_GATED_COMMAND_ENV` / `ORCA_BACKFILL_RELEASE_FILE_ENV`. Consumes existing: `getSystemCodexHomePath` (same import as `codex-backfill-status.ts`), `registerPaneKeyTeardownListener` (`pty.ts:273`), `toLinuxPath` (`src/main/wsl.ts:78-92` — the same translation the hooks precedent uses at `hooks.ts:521`; distro-agnostic, assumes the `/mnt` automount), `node:fs` for the release sentinel.
 - Produces (Task 4 relies on): IPC pull channel `'codexBackfill:paneHoldStatus'` (invoke with `paneKey: string`, returns `CodexBackfillPaneHoldState | null`) and push channel `'codexBackfill:paneHoldChanged'` (payload `CodexBackfillPaneHoldState`), broadcast on the same window webContents the pty handlers already use.
 
 **Placement notes (read before coding):**
@@ -694,10 +704,18 @@ if (
   })
 ) {
   // Why: deliver via the gate wrapper through the proven startup path — never a raw deferred pty write (#11828).
+  // Why: a win32-host WSL pane runs bash — pick the wrapper by the PANE's shell, never process.platform
+  // (hooks.ts:493-495 precedent); PowerShell there could neither read the gated env nor see the sentinel.
+  const codexPaneIsWsl = codexSelectionTarget.runtime === 'wsl' || Boolean(expectedWslDistro)
   const gate = buildCodexBackfillGateWrapper({
     originalCommand: spawnOptions.command,
     codexHomePath: codexBackfillGateHome,
-    shellPlatform: process.platform === 'win32' ? 'win32' : 'posix'
+    shellPlatform: resolveCodexBackfillGateShellPlatform({
+      hostPlatform: process.platform,
+      paneIsWsl: codexPaneIsWsl
+    }),
+    // Why: the sentinel is a host-view Windows path; the WSL bash poll sees it through the /mnt automount.
+    ...(codexPaneIsWsl && process.platform === 'win32' ? { toShellViewPath: toLinuxPath } : {})
   })
   spawnOptions.command = gate.command
   spawnOptions.env = { ...spawnOptions.env, ...gate.env }
@@ -750,7 +768,7 @@ Adaptation notes for the implementer (verify against the real file, keep semanti
 - Ensure-arm guard: in the `agentSessionEnsure` arm, additionally require the ensure disposition to be `'created'` (see `claimed-agent-pty-owner.ts:143-149` / the `disposition: 'adopted'` callback path at `pty.ts:3724-3733`) before beginning the hold — `result.isReattach` alone does not cover a daemon-side adopt returned through the spawn callback. Locate the disposition on the ensure result the arm already has in scope.
 - Match `registerPaneKeyTeardownListener`'s exact signature at `pty.ts:273` (it registers a GLOBAL listener — filter by paneKey); keep the returned unregister function alongside the hold so a normal release doesn't leak the listener. Also dispose the hold from the pty exit path if the file has a natural per-pty cleanup list (`ptyCleanupCallbacks`-style). On dispose, best-effort `fs.rmSync(params.releaseFilePath, { force: true })` is optional hygiene (the wrapper deletes the sentinel itself after seeing it).
 - The sentinel lives under the gate home's `.orca/` directory — the same directory family Orca already writes into codex homes (hooks.json injection precedent). Unit tests MUST point the gate home at a temp dir.
-- WSL translation: after the UNC passthrough, a gated home is always a native host path. If a gated spawn can still carry `expectedWslDistro` (win32 host, native-path injected home), pass `toShellViewPath` to `buildCodexBackfillGateWrapper` using the `hooks.ts:484-516` translation so the distro shell can see the sentinel; if translation is unavailable for that shape, skip the hold (fail open) rather than gate a pane that can never see its release file.
+- WSL translation: the integration snippet above already handles the WSL-pane shape — `codexPaneIsWsl` (from the in-scope `codexSelectionTarget.runtime` / `expectedWslDistro`) forces the POSIX wrapper via `resolveCodexBackfillGateShellPlatform` and, on a win32 host, passes `toShellViewPath: toLinuxPath` (`src/main/wsl.ts:78-92`, the hooks precedent's own translation at `hooks.ts:521`) so the distro bash polls the sentinel through the `/mnt` automount. Env delivery into the distro shell rides the same spawn-env path the production setup-sequencing wrapper already proves on WSL panes. Belt: if the implementer finds a WSL shape whose gate home cannot be `/mnt`-translated, skip the hold (fail open) rather than gate a pane that can never see its release file. Note the reachable gated WSL shape is narrow by construction — `resolveCodexBackfillGateHome` already returns `null` for distro-default homes (`wslDistro` set, no injected home) and `\\wsl$` UNC homes; only a host-native injected home survives to this point.
 - `commandDelivery`/startup-delivery fields stay VALID (a real command still exists) — do not touch them.
 - Place the replacement AFTER `reservePaneSpawn` on the renderer path so duplicate spawn requests coalesce onto the held pane.
 
@@ -1078,7 +1096,7 @@ git commit -m "feat(codex): expose per-pane backfill hold state to the renderer 
 - Modify: `src/renderer/src/components/terminal-pane/CodexIndexingOverlay.tsx`, `src/renderer/src/components/terminal-pane/TerminalPane.tsx`, `src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts` (import updates only)
 - Delete: `src/renderer/src/components/terminal-pane/codex-backfill-spawn-gate.ts`, `src/renderer/src/components/terminal-pane/codex-backfill-spawn-gate.test.ts`
 - Modify: `launch-ai-vault-session.ts` (+ its unit tests; locate with `git -C <worktree> grep -ln 'launchAiVaultSessionInNewTab' -- src/renderer`) — Step 6b closes the validated launchAgent detection gap
-- Test: the branch-owned pty-connection gate tests (locate with `git -C <worktree> grep -l 'shouldGateCodexSpawnOnBackfill\|waitForCodexBackfillGate' -- 'src/renderer/**/*.test.ts'`)
+- Test: `src/renderer/src/components/terminal-pane/pty-connection.test.ts` — the branch-owned `describe('codex backfill spawn gate (#11828)')` block at ~`:23614-:23786` (last block in the file; 6 tests; local helper `stubCodexBackfillApi` at ~`:23615`). Locate it by CONTENT, not identifiers: `git -C <worktree> grep -n 'codex backfill spawn gate (#11828)' -- src/renderer`. (An identifier grep for `shouldGateCodexSpawnOnBackfill`/`waitForCodexBackfillGate` misses this block entirely — those names never appear in it (the predicate is a private closure; the tests stub `window.api.codexBackfill` and exercise behavior) and returns only `codex-backfill-spawn-gate.test.ts`, which this task deletes.)
 
 **Interfaces:**
 - Consumes (Task 4): `subscribeToCodexBackfillPaneHold`.
@@ -1096,7 +1114,7 @@ Update every importer to the new module: `CodexIndexingOverlay.tsx`, `TerminalPa
 
 - [ ] **Step 2: Write/adjust the failing pane tests**
 
-In the branch-owned pty-connection test file(s) found above, replace the park-behavior tests with subscription-behavior tests. Required cases (reuse the file's existing pane/connection harness and stub `window.api.codexBackfill` as in Task 4's test):
+In the `describe('codex backfill spawn gate (#11828)')` block of `pty-connection.test.ts` located above, replace the park-behavior coverage with subscription-behavior tests. The block today holds 6 tests: one park→resume test that also asserts overlay state via `onCodexIndexingStateRef` (DELETE it — parking no longer exists after Step 4, so it is a guaranteed failure) and five pass-through pins (non-codex, not-pending, reattach, SSH, WSL — KEEP them; post-refactor every spawn proceeds immediately, so they remain valid regressions pins that the renderer never defers). Extend the block's local `stubCodexBackfillApi` helper (~`:23615`) — it currently stubs only `status`/`onStatusChanged` — to also stub the Task 4 `paneHoldStatus`/`onPaneHoldChanged` surface. Required NEW cases (reuse the file's existing pane/connection harness):
 
 1. **Adopted pane shows the overlay** (THE np-task-8 gap): drive a pane through the adoption arm (`existingPtyId` attach); emit `{ paneKey: <that pane's key>, phase: 'indexing', lastWatermark: 'w1' }` on the stubbed `onPaneHoldChanged`; assert the pane's `onCodexIndexingStateRef` sink received `{ lastWatermark: 'w1' }`.
 2. **Fresh-spawned pane shows and clears the overlay**: fresh-spawn arm; emit indexing then `phase: 'launched'`; assert the sink received the state then `null`.
@@ -1106,8 +1124,8 @@ In the branch-owned pty-connection test file(s) found above, replace the park-be
 
 - [ ] **Step 3: Run to verify the new tests fail**
 
-Run: `pnpm exec vitest run <the pty-connection test file(s)>`
-Expected: FAIL — parking still exists and no subscription is installed.
+Run: `pnpm exec vitest run src/renderer/src/components/terminal-pane/pty-connection.test.ts -t 'codex backfill spawn gate (#11828)'`
+Expected: FAIL — the five NEW subscription tests fail (no subscription is installed yet); the five kept pass-through pins still pass. (The deleted park→resume test is already gone from the file.)
 
 - [ ] **Step 4: Implement the refactor in `pty-connection.ts`**
 
@@ -1125,7 +1143,7 @@ const disposeCodexBackfillPaneHold = subscribeToCodexBackfillPaneHold(paneKey, (
 
 - [ ] **Step 5: Run the renderer tests**
 
-Run: `pnpm exec vitest run <the pty-connection test file(s)> src/renderer/src/components/terminal-pane/codex-backfill-pane-hold.test.ts`
+Run: `pnpm exec vitest run src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/codex-backfill-pane-hold.test.ts`
 Expected: PASS.
 
 - [ ] **Step 6: Delete the superseded gate module and verify nothing references it**
