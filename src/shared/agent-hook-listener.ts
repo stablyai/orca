@@ -2628,7 +2628,8 @@ function normalizeClaudeEvent(
   }
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
   // Why: only a turn boundary may declare an interrupt or carry a prior one forward; any other event starts a fresh turn and drops it.
-  const isTurnBoundary = eventName === 'Stop' || eventName === 'StopFailure'
+  const isTurnBoundary =
+    eventName === 'Stop' || eventName === 'StopFailure' || eventName === 'SessionEnd'
   const interrupted =
     isTurnBoundary &&
     ((eventAgentId === undefined && hookPayload['is_interrupt'] === true) ||

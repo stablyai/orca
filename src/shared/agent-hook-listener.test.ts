@@ -1355,6 +1355,44 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.lastAssistantMessage).toBeUndefined()
   })
 
+  it('normalizes Claude SessionEnd to done after a permission wait', () => {
+    normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'deploy production' }
+      },
+      'production'
+    )
+    const waiting = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'PermissionRequest', tool_name: 'Bash' }
+      },
+      'production'
+    )
+    expect(waiting?.payload.state).toBe('waiting')
+
+    const ended = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionEnd', reason: 'prompt_input_exit' }
+      },
+      'production'
+    )
+
+    expect(ended?.payload).toMatchObject({
+      state: 'done',
+      prompt: 'deploy production',
+      agentType: 'claude'
+    })
+  })
+
   it('normalizes Devin documented lifecycle events', () => {
     const started = normalizeHookPayload(
       state,
