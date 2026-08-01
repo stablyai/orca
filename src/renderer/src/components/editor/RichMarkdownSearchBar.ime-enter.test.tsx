@@ -29,6 +29,52 @@ afterEach(() => {
   container.remove()
 })
 
+type BarSpies = {
+  onReplaceCurrent?: () => void
+  onClose?: () => void
+  onMoveToMatch?: (direction: 1 | -1) => void
+}
+
+function renderFields(spies: BarSpies): {
+  searchInput: HTMLInputElement
+  replaceInput: HTMLInputElement
+} {
+  act(() => {
+    root.render(
+      <RichMarkdownSearchBar
+        activeMatchIndex={0}
+        isOpen
+        isReplaceMode
+        matchCase={false}
+        matchCount={2}
+        query="배포"
+        replaceQuery="릴리스"
+        replaceDisabled={false}
+        searchInputRef={createRef<HTMLInputElement>()}
+        wholeWord={false}
+        onClose={spies.onClose ?? vi.fn()}
+        onMoveToMatch={spies.onMoveToMatch ?? vi.fn()}
+        onQueryChange={vi.fn()}
+        onReplaceAll={vi.fn()}
+        onReplaceCurrent={spies.onReplaceCurrent ?? vi.fn()}
+        onReplaceQueryChange={vi.fn()}
+        onToggleMatchCase={vi.fn()}
+        onToggleReplaceMode={vi.fn()}
+        onToggleWholeWord={vi.fn()}
+      />
+    )
+  })
+  const inputs = [...container.querySelectorAll('input')]
+  // Why: the two rows are distinguished by their values, not by order-dependent
+  // selectors that would silently pick the wrong field if the layout changes.
+  const searchInput = inputs.find((candidate) => candidate.value === '배포')
+  const replaceInput = inputs.find((candidate) => candidate.value === '릴리스')
+  if (!searchInput || !replaceInput) {
+    throw new Error('search bar fields not rendered')
+  }
+  return { searchInput, replaceInput }
+}
+
 function renderBar(spies: { onReplaceCurrent: () => void; onClose: () => void }): HTMLInputElement {
   act(() => {
     root.render(
@@ -126,6 +172,71 @@ describe('RichMarkdownSearchBar replace-field IME guard', () => {
     const input = renderBar({ onReplaceCurrent: vi.fn(), onClose })
 
     pressKey(input, 'Escape')
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('RichMarkdownSearchBar search-field IME guard', () => {
+  it('does not move to the next match on the Enter that commits a composition', () => {
+    const onMoveToMatch = vi.fn()
+    const { searchInput } = renderFields({ onMoveToMatch })
+
+    pressKey(searchInput, 'Enter', { isComposing: true })
+
+    expect(onMoveToMatch).not.toHaveBeenCalled()
+  })
+
+  it('does not move to the previous match on a composing Shift+Enter', () => {
+    const onMoveToMatch = vi.fn()
+    const { searchInput } = renderFields({ onMoveToMatch })
+
+    pressKey(searchInput, 'Enter', { isComposing: true, shiftKey: true })
+
+    expect(onMoveToMatch).not.toHaveBeenCalled()
+  })
+
+  it('does not move on an Enter reported as keyCode 229', () => {
+    const onMoveToMatch = vi.fn()
+    const { searchInput } = renderFields({ onMoveToMatch })
+
+    pressKey(searchInput, 'Enter', { keyCode: 229 })
+
+    expect(onMoveToMatch).not.toHaveBeenCalled()
+  })
+
+  it('does not close the bar on the Escape that cancels a composition', () => {
+    const onClose = vi.fn()
+    const { searchInput } = renderFields({ onClose })
+
+    pressKey(searchInput, 'Escape', { isComposing: true })
+
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('still moves to the next match on a plain Enter', () => {
+    const onMoveToMatch = vi.fn()
+    const { searchInput } = renderFields({ onMoveToMatch })
+
+    pressKey(searchInput, 'Enter')
+
+    expect(onMoveToMatch).toHaveBeenCalledWith(1)
+  })
+
+  it('still moves to the previous match on a plain Shift+Enter', () => {
+    const onMoveToMatch = vi.fn()
+    const { searchInput } = renderFields({ onMoveToMatch })
+
+    pressKey(searchInput, 'Enter', { shiftKey: true })
+
+    expect(onMoveToMatch).toHaveBeenCalledWith(-1)
+  })
+
+  it('still closes the bar on a plain Escape', () => {
+    const onClose = vi.fn()
+    const { searchInput } = renderFields({ onClose })
+
+    pressKey(searchInput, 'Escape')
 
     expect(onClose).toHaveBeenCalledTimes(1)
   })

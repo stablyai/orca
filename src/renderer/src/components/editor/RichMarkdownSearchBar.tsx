@@ -112,6 +112,12 @@ export function RichMarkdownSearchBar({
               value={query}
               onChange={(event) => onQueryChange(event.target.value)}
               onKeyDown={(event) => {
+                // Why: while a CJK candidate is composing, Enter only confirms it
+                // and Escape only cancels it — moving to the next match or closing
+                // the bar here would act on a keystroke aimed at the IME.
+                if (isImeCompositionKeyDown(event)) {
+                  return
+                }
                 if (event.key === 'Enter' && event.shiftKey) {
                   event.preventDefault()
                   onMoveToMatch(-1)
