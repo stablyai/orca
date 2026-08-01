@@ -121,7 +121,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',
       'Pass --activate when the CLI caller intentionally wants to reveal the new worktree in the app.',
       'Passing --run-hooks is kept as a legacy alias for --setup run and reveals the worktree.',
-      'Pass --mutation-id from a prior response-loss warning when retrying the same create.'
+      'Pass --mutation-id from a prior response-loss warning only when retrying the same create inputs; changing inputs with the same id reuses the original result.'
     ],
     examples: [
       'orca worktree create --name agent-task --agent codex --prompt "hi" --json',

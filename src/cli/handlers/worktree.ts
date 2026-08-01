@@ -212,7 +212,14 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const setupDecision = getOptionalSetupDecision(flags)
     const worktreeName = getRequiredStringFlag(flags, 'name')
     // Why: route retries into the runtime's existing dedupe window; fresh commands get fresh ids.
-    const clientMutationId = getOptionalStringFlag(flags, 'mutation-id') ?? randomUUID()
+    const explicitMutationId = getOptionalStringFlag(flags, 'mutation-id')
+    if (explicitMutationId && explicitMutationId.length > 128) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--mutation-id must be 128 characters or fewer'
+      )
+    }
+    const clientMutationId = explicitMutationId ?? randomUUID()
     const noParent = flags.get('no-parent') === true
     const envParentWorkspace =
       !noParent && !explicitParentWorkspace && !explicitParentWorktree

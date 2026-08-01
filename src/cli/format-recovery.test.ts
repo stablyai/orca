@@ -50,6 +50,22 @@ describe('CLI error recovery', () => {
     expect(output).not.toContain('Orca is not running')
   })
 
+  it('does not add the not-running hint to a completion warning without next steps', () => {
+    const output = formatCliError(
+      new RuntimeClientError(
+        'runtime_unavailable',
+        'The browser.tabCreate operation may have completed.',
+        {
+          requestPhase: 'awaiting_response',
+          mutationMayHaveCompleted: true
+        }
+      )
+    )
+
+    expect(output).toContain('may have completed')
+    expect(output).not.toContain('Orca is not running')
+  })
+
   it('prints did-you-mean next steps for an unknown-command error carrying data', () => {
     const error = new RuntimeClientError('invalid_argument', 'Unknown command: worktree remov', {
       suggestions: ['worktree rm'],

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { RuntimeClientError } from '../runtime-client'
 
 const callMock = vi.hoisted(() => vi.fn())
 
@@ -74,5 +75,43 @@ describe('worktree create mutation identity', () => {
       'worktree.create',
       expect.objectContaining({ clientMutationId: 'retry-7410' })
     )
+  })
+
+  it('includes the sent id in response-loss retry guidance', async () => {
+    callMock.mockRejectedValue(
+      new RuntimeClientError('runtime_unavailable', 'The runtime closed before responding.', {
+        requestPhase: 'awaiting_response',
+        mutationMayHaveCompleted: true
+      })
+    )
+
+    await expect(
+      invoke(
+        new Map<string, string | boolean>([
+          ['repo', 'id:repo'],
+          ['name', 'slow-create'],
+          ['no-parent', true],
+          ['mutation-id', 'retry-7410']
+        ])
+      )
+    ).rejects.toMatchObject({
+      data: {
+        nextSteps: expect.arrayContaining([expect.stringContaining('--mutation-id retry-7410')])
+      }
+    })
+  })
+
+  it('rejects mutation ids longer than the runtime schema limit', async () => {
+    await expect(
+      invoke(
+        new Map<string, string | boolean>([
+          ['repo', 'id:repo'],
+          ['name', 'slow-create'],
+          ['no-parent', true],
+          ['mutation-id', 'x'.repeat(129)]
+        ])
+      )
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(callMock).not.toHaveBeenCalled()
   })
 })

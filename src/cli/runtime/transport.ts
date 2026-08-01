@@ -87,7 +87,7 @@ export async function sendRequest<TResult>(
         ok: false,
         error: new RuntimeClientError(
           'runtime_unavailable',
-          'The Orca runtime closed the connection before responding. The operation may have completed; verify state before retrying.',
+          'The Orca runtime closed the connection before responding. Restart Orca and try again.',
           { requestPhase: requestSent ? 'awaiting_response' : 'not_sent', method }
         )
       })
@@ -184,6 +184,7 @@ export async function sendRequest<TResult>(
       }
     })
     socket.on('connect', () => {
+      // Why: this marks bytes accepted by the client socket, not server acknowledgement.
       socket.write(
         `${JSON.stringify({
           id: requestId,

@@ -86,6 +86,10 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
     }
   }
   if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
+    const data = error.data && typeof error.data === 'object' ? error.data : undefined
+    if ((data as { mutationMayHaveCompleted?: unknown } | undefined)?.mutationMayHaveCompleted) {
+      return message
+    }
     return `${message}\nOrca is not running. Run 'orca open' first.`
   }
   // Why: error-specific recovery must win over the generic computer fallback.

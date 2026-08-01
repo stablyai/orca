@@ -140,6 +140,10 @@ export type MobilePairingConnectionContext = Readonly<{
 // Why: keepalive frames count as socket activity, resetting both idle timers so long-polls outlive the 30s/60s idle caps. See §3.1.
 const KEEPALIVE_INTERVAL_MS = 10_000
 
+// Why: slow non-abortable dispatches may outlive the idle window, but liveness
+// must not hold a client connection forever when the underlying operation hangs.
+export const SLOW_DISPATCH_KEEPALIVE_MAX_MS = 5 * 60_000
+
 // Why: cap long-polls at half the 32-slot connection budget so they can't starve short RPCs; overflow → runtime_busy. See §7 risk #2.
 const LONG_POLL_CAP = 16
 
@@ -1293,10 +1297,12 @@ export class OrcaRuntimeRpcServer {
     if (rejection) {
       return this.buildError(request.id, 'runtime_busy', rejection)
     }
-    if (longPoll || isSlowDispatchMethod(request.method)) {
+    if (longPoll) {
+      context?.startKeepalive()
+    } else if (isSlowDispatchMethod(request.method)) {
       // Why: slow I/O-bound methods need liveness frames but are not long polls.
       // Keep them outside capacity admission and abort-signal wiring.
-      context?.startKeepalive()
+      context?.startKeepalive(SLOW_DISPATCH_KEEPALIVE_MAX_MS)
     }
 
     try {

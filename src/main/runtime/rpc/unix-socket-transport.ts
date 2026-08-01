@@ -163,11 +163,12 @@ export class UnixSocketTransport implements RpcTransport {
   }
 
   // Why: the keepalive timer is opt-in per request via `startKeepalive()`.
-  // Short RPCs never call it and pay no timer overhead; only long-poll
-  // handlers (e.g. orchestration.check --wait) arm it. See §3.1.
+  // Short RPCs never call it and pay no timer overhead; slow dispatches can
+  // also arm it with a bounded duration. See §3.1.
   private dispatchMessage(socket: Socket, rawMessage: string, inflight: Set<() => void>): void {
     let replied = false
     let keepaliveTimer: NodeJS.Timeout | null = null
+    let keepaliveExpiryTimer: NodeJS.Timeout | null = null
     // Why: each dispatch needs its own abort signal and keepalive timer
     // cleanup. Socket close runs every cleanup without touching sibling
     // dispatches that already replied on the same connection.
@@ -181,6 +182,10 @@ export class UnixSocketTransport implements RpcTransport {
       if (keepaliveTimer) {
         clearInterval(keepaliveTimer)
         keepaliveTimer = null
+      }
+      if (keepaliveExpiryTimer) {
+        clearTimeout(keepaliveExpiryTimer)
+        keepaliveExpiryTimer = null
       }
       if (abort) {
         abortController.abort()
@@ -201,7 +206,7 @@ export class UnixSocketTransport implements RpcTransport {
       }
     }
 
-    const startKeepalive = (): void => {
+    const startKeepalive = (maxDurationMs?: number): void => {
       if (keepaliveTimer || replied) {
         return
       }
@@ -215,6 +220,18 @@ export class UnixSocketTransport implements RpcTransport {
       // Why: don't hold the process open solely on the keepalive interval.
       if (typeof keepaliveTimer.unref === 'function') {
         keepaliveTimer.unref()
+      }
+      if (maxDurationMs !== undefined) {
+        keepaliveExpiryTimer = setTimeout(() => {
+          if (keepaliveTimer) {
+            clearInterval(keepaliveTimer)
+            keepaliveTimer = null
+          }
+          keepaliveExpiryTimer = null
+        }, maxDurationMs)
+        if (typeof keepaliveExpiryTimer.unref === 'function') {
+          keepaliveExpiryTimer.unref()
+        }
       }
     }
 

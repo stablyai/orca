@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { readRuntimeMetadata } from './runtime-metadata'
 import type { RpcResponse } from './rpc/core'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { OrcaRuntimeRpcServer, SLOW_DISPATCH_KEEPALIVE_MAX_MS } from './runtime-rpc'
 import {
   DEFAULT_KEEPALIVE_INTERVAL_MS,
   RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS
@@ -141,8 +141,8 @@ describe('slow local RPC dispatches', () => {
 
     expect(createResult).toMatchObject({ ok: true })
     expect(waitResult).toMatchObject({ ok: true })
-    expect(createKeepalive).toHaveBeenCalledTimes(1)
-    expect(waitKeepalive).toHaveBeenCalledTimes(1)
+    expect(createKeepalive).toHaveBeenCalledWith(SLOW_DISPATCH_KEEPALIVE_MAX_MS)
+    expect(waitKeepalive).toHaveBeenCalledWith()
     expect(signals.get('worktree.create')).toBeUndefined()
     expect(signals.get('terminal.wait')).toBe(waitAbort.signal)
     expect(RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS).toBe(30_000)

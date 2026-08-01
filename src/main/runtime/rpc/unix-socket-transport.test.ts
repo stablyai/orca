@@ -74,4 +74,28 @@ describe('UnixSocketTransport', () => {
     vi.advanceTimersByTime(500)
     expect(socket.writes).toHaveLength(1)
   })
+
+  it('stops a bounded keepalive without affecting the socket idle policy', () => {
+    const transport = new UnixSocketTransport({
+      endpoint: '/tmp/orca-runtime-rpc-test.sock',
+      kind: 'unix',
+      keepaliveIntervalMs: 100
+    })
+    const socket = new FakeSocket()
+
+    transport.onMessage((_msg, _reply, context) => {
+      context?.startKeepalive(250)
+    })
+
+    ;(transport as unknown as UnixSocketTransportInternals).handleConnection(
+      socket as unknown as Socket
+    )
+    socket.emit('data', '{"id":"bounded","method":"worktree.create"}\n')
+
+    vi.advanceTimersByTime(300)
+    expect(socket.writes).toHaveLength(2)
+
+    vi.advanceTimersByTime(300)
+    expect(socket.writes).toHaveLength(2)
+  })
 })
