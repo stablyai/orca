@@ -1,1550 +1,1630 @@
-# Codex State-DB Backfill Pre-warm Implementation Plan
+# Codex Backfill Prewarm — State-First Startup Ordering + Pane Indexing UX (#11828 continuation)
 
 > **For agentic workers:** This plan is executed task-by-task by the
 > workflow's execute stage: a fresh implementer per task, with a spec +
 > quality review after each task. Steps use checkbox (`- [ ]`) syntax
 > for tracking.
 
-**Goal:** Fix GitHub issue #11828 — Codex panes deterministically fail with a misleading
-"local database appears to be damaged" error when Orca's managed `CODEX_HOME` contains a
-large session history, because Codex 0.146's one-time state-DB index takes longer than the
-~30s Codex waits at startup, and a pane's Codex never lives long enough to finish it.
+**Goal:** Make the already-shipped #11828 fix (background codex state-DB prewarm +
+pane-side backfill-error toast) actually run in the reporter's exact scenario, by
+deferring the short-budget startup trust-grant codex until the session index is
+complete, and by gating fresh codex panes behind an "Indexing Codex session
+history…" state instead of launching them into a guaranteed failure.
 
-**Architecture:** Two independent halves. (A) **Pre-warm (main process):** after the
-existing Codex session migration chain (backfill → index-heal), supervise a hidden headless
-`codex app-server` process against **each local Codex home panes actually use** — first the
-system home (`systemCodexHomePath`, what fresh panes run on while the real-home lane is
-selected), then the managed home (used by resume-pinned panes) — until the `backfill_state`
-row in `state_<N>.sqlite` reads `complete`, so the one-time index finishes in the background
-instead of dying in 30s pane slices. (B) **Surfacing (renderer):** detect Codex's
-backfill-timeout failure signature in codex-pane output and overlay an accurate explanation
-via the existing `TerminalErrorToast`, replacing the misleading "damaged database" story.
+**Architecture:** Three moves. (1) **State-first startup ordering (main):** before
+any code path spawns the 10s-budget trust-grant `codex app-server` against the real
+`~/.codex`, do a cheap read-only check of `backfill_state` in that home's newest
+`state_<N>.sqlite`; when the index is pending, park the real-home hook lane in a new
+non-latching `'pending-index'` state instead of spawning a codex that is doomed to
+time out and latch the lane `'unavailable'` (which today silently disables the
+migration scheduler and therefore the prewarm — the exact deadlock the previous E2E
+proved). (2) **Retry after prewarm (main):** when the scheduler-chained prewarm
+resolves, re-run the deferred trust grant and re-evaluate the lane; genuine
+(non-backfill) grant failures keep today's `'unavailable'` semantics. (3) **Pane
+gating UX (renderer):** a fresh local codex pane asks main (new IPC channel) whether
+its target home's backfill is pending; while pending it shows a spinner overlay
+("Indexing Codex session history…", with a cheap progress hint from the backfill
+cursor) and auto-spawns codex when the index completes. The existing output-scanning
+detector + amber toast stays as the fallback net for races at the completion
+boundary.
 
-**Tech Stack:** Electron main process (TypeScript, Node 24), `node:sqlite` via the existing
-`SyncDatabase` adapter, `node:child_process`, React renderer, Vitest 4.
+**Tech Stack:** Electron main process (TypeScript, Node), `node:sqlite` via the
+existing `SyncDatabase` adapter, Electron IPC (`ipcMain.handle` / `webContents.send`
+/ preload `contextBridge`), React renderer, Vitest.
 
 ## Global Constraints
 
-- PR targets `main` (explicit user requirement); working branch stays a `danshapiro/...`-style feature branch.
-- Cross-platform (macOS / Linux / Windows): paths via `path.join`; Windows spawns via `getSpawnArgsForWindows` from `src/main/win32-utils.ts` + `windowsHide: true` (AGENTS.md).
-- SSH use case: the pre-warm targets only **local** Codex homes — the system home and the managed home, the two homes local panes actually use (same scope as the existing local-only session backfill/heal); WSL, SSH, and per-account lanes are out of scope for half A (ledger AD-3) and get only the renderer-side detector, which works for any pane because it scans pane output. State this in code comments where relevant.
-- Comments: concise 1-line `// Why:` for non-obvious decisions only (AGENTS.md).
-- NEVER add a `max-lines` lint disable; budgets are 300 lines per `.ts`, 400 per `.tsx`, 800 per test file — split files instead (AGENTS.md).
-- No vague filenames (`utils`, `helpers`, `common`) — name after the domain concept.
-- Tests: Vitest 4, co-located `foo.test.ts` next to `foo.ts`; run one file with `pnpm test <path>`.
-- Never open the Codex state DB for writing — read-only `SyncDatabase` opens only. Never delete, rewrite, or reset any `state_*.sqlite` (companion issue #11830 covers interrupted-index corruption; do not make it worse).
-- Tests and smoke checks must never touch the user's real `~/.codex` or the real managed home `~/.local/share/orca/codex-runtime-home/home` — temp dirs (`mkdtempSync`) only. Read-only inspection of the real homes is allowed for verification.
-- Gates before PR: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.
-- The state-DB filename is schema-versioned (`state_5.sqlite` today); all code must discover the newest `state_<N>.sqlite` rather than hard-coding `5`.
+- PR targets `main` (the workflow controller opens it after this branch is done).
+- Branch: `codex-backfill-prewarm`, worktree
+  `/home/dan/code/orca/.orca/worktrees/orca/codex-indexing-issues-11828/.worktrees/codex-backfill-prewarm`,
+  fork point `e058429e1` (v1.4.162). All commands below run from that worktree root.
+- Cross-platform (macOS / Linux / Windows): paths via `path.join` only; no
+  hardcoded POSIX-only paths in product code (AGENTS.md).
+- SSH / remote / folder-workspace use cases: the pane gate applies ONLY to fresh
+  **local** spawns; remote-runtime and SSH panes must fail open (spawn immediately)
+  because their codex home is on the remote host and main's reader is local-fs only.
+- Comments are concise WHY-only. No `max-lines` lint disables — new logic goes in
+  focused sibling modules, not inline growth of `pty-connection.ts` (8,872 lines).
+- No vague `util`/`helper` filenames.
+- Renderer strings rendered as JSX go through `translate(key, englishFallback)` from
+  `@/i18n/i18n` with keys under `auto.components.terminal.pane.<Component>.<leaf>`;
+  after adding strings run `pnpm run sync:localization-catalog` (lint gates on
+  catalog parity). Never call `translate()` at module top level.
+- All read access to real codex state DBs outside tests is read-only
+  (`readonly: true` sqlite); #11830 forbids adding writes/repairs.
+- Known pre-existing `pnpm test` failures on this machine (proven at merge base
+  `e058429e1`, NOT to be fixed here): 7 failures across
+  `src/main/startup/configure-process.test.ts`, `src/main/daemon/pty-subprocess.test.ts`,
+  `src/main/providers/local-pty-provider.test.ts`,
+  `src/main/agent-hooks/managed-hook-timeout.test.ts` (plus 2 load-flakes that pass
+  in isolation). Branch-owned tests must pass 100%.
+- E2E safety: NEVER write to the user's real `~/.codex` or
+  `~/.local/share/orca/codex-runtime-home` (both currently `status=complete`;
+  read-only `mode=ro` sqlite checks only). Sandboxed E2E uses `cp -a` real copies
+  (never hardlinks) into a `mktemp -d` HOME and is fully deleted afterward.
 
 ---
 
 ## Background for implementers (zero-context summary)
 
-- Orca gives Codex panes a managed `CODEX_HOME` (Linux: `~/.local/share/orca/codex-runtime-home/home`, built by `getOrcaManagedCodexHomePath()` in `src/main/codex/codex-home-paths.ts` = `join(getOrcaUserDataPath(), 'codex-runtime-home', 'home')`). That home ends up containing the user's full session history under `sessions/YYYY/MM/DD/rollout-*.jsonl` (hardlinked; reporter: 4,836 files / 15 GB).
-- Codex ≥ 0.146 keeps a SQLite state DB at `<CODEX_HOME>/state_<N>.sqlite` with a table:
-  ```sql
-  CREATE TABLE backfill_state (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      status TEXT NOT NULL,
-      last_watermark TEXT,
-      last_success_at INTEGER,
-      updated_at INTEGER NOT NULL
-  );
-  ```
-  On first launch Codex indexes the entire session history ("state db backfill").
-- **Verified Codex 0.146 internals** (openai/codex tag `rust-v0.146.0` + live runs; see the
-  Stage-2 assumption ledger `load-bearing-ledger.md` in the workflow logs dir):
-  - `status` is a closed enum: `pending` / `running` / `complete`; Codex's startup gate is
-    exactly `status == 'complete'` on row `id = 1` of the newest `state_<N>.sqlite`
-    (0.146 pins `state_5.sqlite`).
-  - Exactly one process at a time **claims** the backfill via an atomic in-DB lease
-    (`UPDATE ... WHERE status != 'complete' AND (status != 'running' OR updated_at <= now - 900s)`);
-    the lease is renewed at every 200-file checkpoint, which also persists a resume watermark.
-  - The **claimer blocks inside init and runs the whole index with no internal time limit**
-    (a pane whose codex wins the claim looks hung until the index finishes).
-    **Non-claimants** wait ~30s, print
-    `timed out waiting for state db backfill ... after 30s (status: running)` and
-    `Codex couldn't start because its local database appears to be damaged.` to **stderr**
-    (wording stable since 0.129, `rollout/src/state_db.rs:171`), then exit.
-  - Killing a claimer mid-index does **not** corrupt the DB (`integrity_check` verified), but
-    leaves a stale `running` lease: **every** codex start against that home fails at ~30s for
-    up to 900s, after which a new claimer steals the lease and resumes from the watermark.
-  - Headless `codex -s read-only -a untrusted app-server` with a scoped `CODEX_HOME`, stdin
-    held open, and no handshake creates the state DB and drives the backfill to completion
-    (verified live); it exits on stdin EOF, and exits ~30s after start if it fails to claim.
-  - An external read-only SQLite connection can poll `backfill_state` while codex actively
-    writes (verified: hundreds of polls, zero busy errors; only a <1s transient
-    "unable to open database file" at DB-creation instant — the poller must tolerate it).
-  - Measured throughput ~21-27 MB/s ⇒ the reporter-scale 15 GB history indexes in ~10-13 min.
-- **Which home do panes use?** When `isHostSystemDefaultRealHome() === true` (the migration
-  scheduler's eligibility gate, `src/main/index.ts:2082-2089`), **fresh panes run on the real
-  `~/.codex`** — `prepareForCodexLaunch` returns null (`src/main/codex-accounts/runtime-home-service.ts:175-181`);
-  only **resume-pinned** panes (`src/main/codex/codex-pane-launch-account.ts:19-23`) use the
-  managed home. The existing index-heal stage already pins `CODEX_HOME: systemCodexHomePath`
-  for the same reason (`src/main/codex/codex-session-index-heal.ts:261-275`). The prewarm
-  therefore targets **both** homes: system home first, then the managed home. Gate-false
-  lanes (shared managed mirror, per-account, WSL) never run the scheduler and get only the
-  renderer toast (accepted; ledger AD-3).
-- **Binary note:** panes resolve `codex` via the user's login shell (or
-  `settings.agentCmdOverrides`), while the prewarm uses `resolveCodexCommand()`; divergence
-  is accepted (ledger AD-2) — in the common case both resolve the same binary, and a mismatch
-  degrades to a no-op prewarm, never corruption.
-- The existing maintenance hook is `createCodexSessionMigrationScheduler` (`src/main/codex/codex-session-migration-scheduler.ts`, 87 lines), wired in `src/main/index.ts:2082-2103`, which chains `startBackfill` → `startIndexHeal` 15s after startup and on host-system-default selection. We chain the pre-warm as a third stage.
-- The exemplar for spawning the Codex CLI from main is `src/main/rate-limits/codex-fetcher.ts:568-591` (uses `resolveCodexCommand()` from `src/main/codex-cli/command.ts:202`, `getSpawnArgsForWindows`, `windowsHide: true`, scoped `CODEX_HOME` env — never mutates `process.env`).
-- SQLite reads use `SyncDatabase` (`src/main/sqlite/sync-database.ts`):
-  ```ts
-  class SyncDatabase {
-    constructor(path: SqlitePath, options: { readonly?: boolean; fileMustExist?: boolean; timeout?: number } = {})
-    exec(sql: string): void
-    prepare(sql: string): StatementSync
-    pragma(sql: string, options?: { simple?: boolean }): unknown
-    close(): void
-  }
-  export default SyncDatabase
-  ```
-- Renderer: incoming pane bytes flow through `dataCallback` in
-  `src/renderer/src/components/terminal-pane/pty-connection.ts:7217`, which already hosts a
-  band of string scanners at `:7275-7308`. Errors surface via `reportError(message)`
-  (`pty-connection.ts:4448`) → `TerminalPane.tsx` `setTerminalError` → `TerminalErrorToast`
-  overlay (`TerminalErrorToast.tsx`, renders `error` with `whiteSpace: 'pre-wrap'`).
-  The pane's launch agent is known via `resolveExpectedLaunchTuiAgent()`
-  (`pty-connection.ts:1967`, returns `TuiAgent | null`).
+**Already on this branch (tasks 1–7 of the previous plan — do not redo):**
+- `src/main/codex/codex-state-db.ts` — read-only backfill status reader
+  (`readCodexStateDbBackfillStatus(home)`, `findNewestCodexStateDbPath`,
+  `countCodexSessionFilesUpTo`).
+- `src/main/codex/codex-state-db-prewarm.ts` — dual-home prewarm supervisor
+  (`startCodexStateDbPrewarmInBackground`): spawns a headless
+  `codex app-server` with `CODEX_HOME=<home>` and babysits it until
+  `backfill_state.status = 'complete'` (poll 5s, fast-exit budget 5×10s, 60-min
+  deadline). Targets the system home (`~/.codex`) first, then the managed home.
+- `src/main/codex/codex-session-migration-scheduler.ts` — chains
+  backfill → index-heal → prewarm; runs on a 15s startup timer and on
+  host-default account selection; `requestRun()` silently no-ops when
+  `isEligible()` is false.
+- `src/renderer/src/components/terminal-pane/codex-backfill-error-detector.ts` +
+  `TerminalErrorToast.tsx` — pane-output scanner for codex's
+  `timed out waiting for state db backfill` line, surfaced as an amber
+  informational toast (`CODEX_BACKFILL_INDEXING_NOTICE`).
 
-## File Structure
+**The proven blocker (previous run's E2E, sandboxed 15 GB unindexed home):** at
+startup `ensureRealHomeCodexHookState` → `installRealHomeCodexHook`
+(`src/main/codex/codex-real-home-hook-install.ts`) spawns a trust-grant
+`codex app-server` with a 10s budget (`NATIVE_GRANT_TIMEOUT_MS`,
+`src/main/codex/codex-trust-grant-host.ts:20`). Against an unindexed large home
+that codex itself hits the #11828 backfill wait and times out
+(`CodexAppServerTimeoutError`, collapsed to `{lane:'fallback', reason:'error'}`).
+The failure latches the module lane `'unavailable'`
+(`codex-real-home-hook-install.ts:219-223`);
+`isRealHomeCodexHookLaneUsable()` (`:55-56`, `currentLane !== 'unavailable'`) goes
+false; `runtime-home-service.ts:446-447` `isHostSystemDefaultRealHome() =
+selected && realHomeLaneGate()` goes false; the scheduler's `isEligible()`
+(`src/main/index.ts:2084`) goes false — so the prewarm NEVER runs, and the killed
+trust-grant codex leaves a stale `'running'` lease in `backfill_state`.
 
-| File | Status | Responsibility |
-|---|---|---|
-| `src/main/codex/codex-state-db.ts` | Create | Locate newest `state_<N>.sqlite` in a Codex home; read `backfill_state.status` read-only; bounded session-file count |
-| `src/main/codex/codex-state-db.test.ts` | Create | Unit tests with real temp SQLite fixtures |
-| `src/main/codex/codex-state-db-prewarm.ts` | Create | Supervise a headless codex until the index completes; decision gate, respawn budget, deadline; background single-flight wrapper |
-| `src/main/codex/codex-state-db-prewarm.test.ts` | Create | Loop tests with injected deps + fake timers |
-| `src/main/codex/codex-session-migration-scheduler.ts` | Modify | Chain `startStateDbPrewarm` after index-heal |
-| `src/main/codex/codex-session-migration-scheduler.test.ts` | Modify | Chaining/stop-propagation tests |
-| `src/main/index.ts` (~:2082-2103) | Modify | Pass `startCodexStateDbPrewarmInBackground` to the scheduler |
-| `src/renderer/src/components/terminal-pane/codex-backfill-error-detector.ts` | Create | Rolling-buffer detector for the backfill-timeout signature; user-facing notice text |
-| `src/renderer/src/components/terminal-pane/codex-backfill-error-detector.test.ts` | Create | Chunk-split / ANSI / one-shot tests |
-| `src/renderer/src/components/terminal-pane/TerminalErrorToast.tsx` | Modify | `isCodexBackfillIndexingNotice` classifier; informational (amber) styling; no daemon-restart/file-an-issue framing for this notice |
-| `src/renderer/src/components/terminal-pane/TerminalErrorToast.test.ts` | Modify | Classifier tests |
-| `src/renderer/src/components/terminal-pane/pty-connection.ts` | Modify | Instantiate detector; observe codex-pane data; raise `reportError` |
-| `src/renderer/src/components/terminal-pane/pty-connection.test.ts` | Modify | Integration tests: codex pane surfaces notice; non-codex pane does not |
+**Adjudicated design decision (implement exactly this):** check backfill state
+BEFORE spawning the trust-grant codex; if pending, defer into `'pending-index'`
+(non-latching, scheduler stays eligible); let the scheduler + prewarm run (the
+prewarm already spawns on a stale `'running'` lease — codex adopts idle indexes;
+stale leases expire ≤15 min — add an explicit unit test); on prewarm completion
+re-run the trust grant; gate fresh codex panes on the same pending check with an
+indexing overlay and auto-start.
+
+**"Pending" definition (one refinement, mirrored from the prewarm's own spawn
+gate):** the grant codex is only doomed when the backfill would outlive its 10s
+budget, i.e. when an index run is already tracked as unfinished, or when there is
+no index yet AND the session history is large. So: `incomplete` → pending;
+`missing`/`not-tracked` → pending only when the home has ≥ 100 rollout files
+(the prewarm's `PREWARM_MIN_SESSION_FILES` threshold — below it, codex indexes
+within its own 30s startup wait and the prewarm leg itself is a `not-needed`
+no-op that could never clear a deferral); `unreadable` → NOT pending (fail open,
+keep today's behavior; #11830 territory); `complete` → not pending. This keeps
+fresh-install behavior (empty `~/.codex`) unchanged.
 
 ---
 
-### Task 1: Codex state-DB status reader (`codex-state-db.ts`)
+## File Structure
+
+| File | Task | Responsibility |
+|---|---|---|
+| `src/main/codex/codex-state-db.ts` (modify) | 1 | + `lastWatermark` on the `incomplete` variant; + `isCodexBackfillIndexPending()`; + `BACKFILL_PENDING_MIN_SESSION_FILES` |
+| `src/main/codex/codex-state-db-prewarm.ts` (modify) | 1 | `PREWARM_MIN_SESSION_FILES` re-exported from the shared constant (DRY) |
+| `src/main/codex/codex-real-home-hook-install.ts` (modify) | 2, 3 | `'pending-index'` lane + defer-before-grant; `retryRealHomeCodexHookAfterIndex()` |
+| `src/main/index.ts` (modify) | 3, 4 | wrap `startStateDbPrewarm` to retry the deferred grant + broadcast status |
+| `src/shared/codex-backfill-status-types.ts` (create) | 4 | `CodexBackfillGateStatus` shared payload type |
+| `src/main/ipc/codex-backfill-status.ts` (create) | 4 | `codexBackfill:status` handler, `codexBackfill:statusChanged` broadcast, home resolution |
+| `src/main/ipc/register-core-handlers.ts` (modify) | 4 | register the new handler |
+| `src/preload/index.ts`, `src/preload/api-types.ts`, `src/renderer/src/web/web-preload-api.ts` (modify) | 4 | `window.api.codexBackfill` (invoke + subscription + web stub) |
+| `src/renderer/src/components/terminal-pane/codex-backfill-spawn-gate.ts` (create) | 5 | renderer-side wait logic (query + subscribe + repoll, fail-open) |
+| `src/renderer/src/components/terminal-pane/pty-connection.ts` (modify) | 5 | defer fresh local codex spawns behind the gate in `runDeferredConnect` |
+| `src/renderer/src/components/terminal-pane/pty-connection-types.ts` (modify) | 5 | `onCodexIndexingStateRef` dep |
+| `src/renderer/src/components/terminal-pane/CodexIndexingOverlay.tsx` (create) | 6 | spinner/status overlay + progress formatting |
+| `src/renderer/src/components/terminal-pane/TerminalPane.tsx` (modify) | 6 | indexing state map + ref handler + portal render |
+| `src/renderer/src/i18n/locales/*.json` (modify, generated) | 6 | catalog entries via `pnpm run sync:localization-catalog` |
+| Tests (colocated `*.test.ts` / `*.test.tsx`) | 1–6 | per task below |
+
+---
+
+### Task 1: Backfill pending-check + progress cursor in `codex-state-db.ts`
 
 **Files:**
-- Create: `src/main/codex/codex-state-db.ts`
+- Modify: `src/main/codex/codex-state-db.ts`
+- Modify: `src/main/codex/codex-state-db-prewarm.ts` (constant re-export only)
 - Test: `src/main/codex/codex-state-db.test.ts`
 
 **Interfaces:**
-- Consumes: `SyncDatabase` from `src/main/sqlite/sync-database.ts` (see Background).
-- Produces (used by Task 2):
-  ```ts
-  export type CodexStateDbBackfillStatus =
-    | { kind: 'complete'; stateDbPath: string }
-    | { kind: 'incomplete'; stateDbPath: string; status: string }
-    | { kind: 'missing' }
-    | { kind: 'not-tracked'; stateDbPath: string }
-    | { kind: 'unreadable'; stateDbPath: string; error: string }
-  export function findNewestCodexStateDbPath(codexHomePath: string): string | null
-  export function readCodexStateDbBackfillStatus(codexHomePath: string): CodexStateDbBackfillStatus
-  export function countCodexSessionFilesUpTo(sessionsRoot: string, limit: number): number
-  ```
+- Consumes: existing exports of the same module
+  (`findNewestCodexStateDbPath(codexHomePath: string): string | null`,
+  `readCodexStateDbBackfillStatus(codexHomePath: string): CodexStateDbBackfillStatus`,
+  `countCodexSessionFilesUpTo(sessionsRoot: string, limit: number): number`).
+- Produces (later tasks rely on these exact shapes):
+  - `CodexStateDbBackfillStatus`'s `incomplete` variant becomes
+    `{ kind: 'incomplete'; stateDbPath: string; status: string; lastWatermark: string | null }`.
+  - `export const BACKFILL_PENDING_MIN_SESSION_FILES = 100`
+  - `export function isCodexBackfillIndexPending(codexHomePath: string): boolean`
+  - `codex-state-db-prewarm.ts` keeps exporting `PREWARM_MIN_SESSION_FILES` (same
+    value, now aliased to the shared constant) so its existing tests keep passing.
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `src/main/codex/codex-state-db.test.ts`:
+Extend `src/main/codex/codex-state-db.test.ts`. This file uses REAL sqlite DBs in
+a tmpdir (no mocks) — reuse its existing DB-creation helper if one exists; the
+schema it creates for `backfill_state` is
+`(id INTEGER PRIMARY KEY CHECK (id = 1), status TEXT NOT NULL, last_watermark TEXT, last_success_at INTEGER, updated_at INTEGER NOT NULL)`.
+Add:
 
 ```ts
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import SyncDatabase from '../sqlite/sync-database'
 import {
-  countCodexSessionFilesUpTo,
-  findNewestCodexStateDbPath,
+  BACKFILL_PENDING_MIN_SESSION_FILES,
+  isCodexBackfillIndexPending,
   readCodexStateDbBackfillStatus
 } from './codex-state-db'
 
-let home: string
+// Reuse the file's existing tmp-home setup; `home` below is a fresh tmpdir per test.
 
-beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'orca-codex-state-db-'))
-})
-
-afterEach(() => {
-  rmSync(home, { recursive: true, force: true })
-})
-
-function createStateDb(name: string, status?: string): string {
-  const dbPath = join(home, name)
-  const db = new DatabaseSync(dbPath)
-  if (status !== undefined) {
-    db.exec(
-      `CREATE TABLE backfill_state (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        status TEXT NOT NULL,
-        last_watermark TEXT,
-        last_success_at INTEGER,
-        updated_at INTEGER NOT NULL
-      )`
-    )
-    db.prepare('INSERT INTO backfill_state (id, status, updated_at) VALUES (1, ?, ?)').run(
-      status,
-      Date.now()
-    )
-  }
+function writeStateDb(home: string, status: string, lastWatermark: string | null): void {
+  const db = new SyncDatabase(join(home, 'state_5.sqlite'))
+  db.exec(
+    'CREATE TABLE backfill_state (id INTEGER PRIMARY KEY CHECK (id = 1), status TEXT NOT NULL, last_watermark TEXT, last_success_at INTEGER, updated_at INTEGER NOT NULL)'
+  )
+  db.prepare(
+    'INSERT INTO backfill_state (id, status, last_watermark, last_success_at, updated_at) VALUES (1, ?, ?, NULL, 0)'
+  ).run(status, lastWatermark)
   db.close()
-  return dbPath
 }
 
-describe('findNewestCodexStateDbPath', () => {
-  it('returns null when the home has no state db', () => {
-    expect(findNewestCodexStateDbPath(home)).toBeNull()
-  })
+function seedSessionFiles(home: string, count: number): void {
+  const dir = join(home, 'sessions', '2026', '07', '01')
+  mkdirSync(dir, { recursive: true })
+  for (let i = 0; i < count; i++) {
+    writeFileSync(join(dir, `rollout-${i}.jsonl`), '{}\n')
+  }
+}
 
-  it('returns null when the home directory does not exist', () => {
-    expect(findNewestCodexStateDbPath(join(home, 'nope'))).toBeNull()
-  })
-
-  it('picks the highest schema version', () => {
-    createStateDb('state_5.sqlite', 'complete')
-    const newest = createStateDb('state_12.sqlite', 'running')
-    createStateDb('state_9.sqlite', 'complete')
-    expect(findNewestCodexStateDbPath(home)).toBe(newest)
-  })
-
-  it('ignores non-matching filenames like state_5.sqlite-wal', () => {
-    createStateDb('state_5.sqlite', 'complete')
-    writeFileSync(join(home, 'state_6.sqlite-wal'), '')
-    writeFileSync(join(home, 'logs_2.sqlite'), '')
-    expect(findNewestCodexStateDbPath(home)).toBe(join(home, 'state_5.sqlite'))
+it('exposes the backfill cursor on incomplete status', () => {
+  writeStateDb(home, 'running', 'sessions/2026/07/02/rollout-x.jsonl')
+  const status = readCodexStateDbBackfillStatus(home)
+  expect(status).toEqual({
+    kind: 'incomplete',
+    stateDbPath: join(home, 'state_5.sqlite'),
+    status: 'running',
+    lastWatermark: 'sessions/2026/07/02/rollout-x.jsonl'
   })
 })
 
-describe('readCodexStateDbBackfillStatus', () => {
-  it('reports missing when no state db exists', () => {
-    expect(readCodexStateDbBackfillStatus(home)).toEqual({ kind: 'missing' })
-  })
-
-  it('reports complete', () => {
-    const dbPath = createStateDb('state_5.sqlite', 'complete')
-    expect(readCodexStateDbBackfillStatus(home)).toEqual({ kind: 'complete', stateDbPath: dbPath })
-  })
-
-  it('reports incomplete with the raw status for running/pending', () => {
-    const dbPath = createStateDb('state_5.sqlite', 'running')
-    expect(readCodexStateDbBackfillStatus(home)).toEqual({
-      kind: 'incomplete',
-      stateDbPath: dbPath,
-      status: 'running'
-    })
-  })
-
-  it('reports not-tracked when the backfill_state table is absent', () => {
-    const dbPath = createStateDb('state_5.sqlite')
-    expect(readCodexStateDbBackfillStatus(home)).toEqual({ kind: 'not-tracked', stateDbPath: dbPath })
-  })
-
-  it('reports unreadable for a corrupt file', () => {
-    const dbPath = join(home, 'state_5.sqlite')
-    writeFileSync(dbPath, 'this is not a sqlite database at all')
-    const result = readCodexStateDbBackfillStatus(home)
-    expect(result.kind).toBe('unreadable')
-  })
+it('reports null cursor when last_watermark is NULL', () => {
+  writeStateDb(home, 'pending', null)
+  const status = readCodexStateDbBackfillStatus(home)
+  expect(status).toMatchObject({ kind: 'incomplete', lastWatermark: null })
 })
 
-describe('countCodexSessionFilesUpTo', () => {
-  it('returns 0 for a missing sessions root', () => {
-    expect(countCodexSessionFilesUpTo(join(home, 'sessions'), 10)).toBe(0)
-  })
+it('pending: true for any incomplete status regardless of history size', () => {
+  writeStateDb(home, 'running', null)
+  expect(isCodexBackfillIndexPending(home)).toBe(true)
+})
 
-  it('counts nested .jsonl files and stops at the limit', () => {
-    const day = join(home, 'sessions', '2026', '07', '31')
-    mkdirSync(day, { recursive: true })
-    for (let i = 0; i < 7; i += 1) {
-      writeFileSync(join(day, `rollout-${i}.jsonl`), '')
-    }
-    writeFileSync(join(day, 'not-a-session.txt'), '')
-    expect(countCodexSessionFilesUpTo(join(home, 'sessions'), 100)).toBe(7)
-    expect(countCodexSessionFilesUpTo(join(home, 'sessions'), 3)).toBe(3)
-  })
+it('pending: false for complete', () => {
+  writeStateDb(home, 'complete', null)
+  expect(isCodexBackfillIndexPending(home)).toBe(false)
+})
+
+it('pending: true for a missing state db over a large history', () => {
+  seedSessionFiles(home, BACKFILL_PENDING_MIN_SESSION_FILES)
+  expect(isCodexBackfillIndexPending(home)).toBe(true)
+})
+
+it('pending: false for a missing state db over a small history', () => {
+  seedSessionFiles(home, BACKFILL_PENDING_MIN_SESSION_FILES - 1)
+  expect(isCodexBackfillIndexPending(home)).toBe(false)
+})
+
+it('pending: false (fail open) when the state db is unreadable', () => {
+  writeFileSync(join(home, 'state_5.sqlite'), 'not a database')
+  seedSessionFiles(home, BACKFILL_PENDING_MIN_SESSION_FILES)
+  expect(isCodexBackfillIndexPending(home)).toBe(false)
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+Also update any existing `incomplete`-variant assertions in this file to include
+`lastWatermark` (add the field to expected objects, or switch to `toMatchObject`).
 
-Run: `pnpm test src/main/codex/codex-state-db.test.ts`
-Expected: FAIL — `Cannot find module './codex-state-db'` (or equivalent resolve error).
+- [ ] **Step 2: Run tests to verify the new ones fail**
 
-- [ ] **Step 3: Write the implementation**
+Run: `pnpm exec vitest run src/main/codex/codex-state-db.test.ts --config config/vitest.config.ts`
+(if the test file's top comment prescribes a different repro command, use that).
+Expected: new tests FAIL (`isCodexBackfillIndexPending` not exported;
+`lastWatermark` missing).
 
-Create `src/main/codex/codex-state-db.ts`:
+- [ ] **Step 3: Implement**
+
+In `src/main/codex/codex-state-db.ts`:
 
 ```ts
-import { readdirSync } from 'node:fs'
-import { join } from 'node:path'
-import SyncDatabase from '../sqlite/sync-database'
-
-// Why: Codex versions its state DB filename per schema (state_5.sqlite today); never hardcode the number.
-const STATE_DB_FILE_PATTERN = /^state_(\d+)\.sqlite$/
-
 export type CodexStateDbBackfillStatus =
   | { kind: 'complete'; stateDbPath: string }
-  | { kind: 'incomplete'; stateDbPath: string; status: string }
+  | { kind: 'incomplete'; stateDbPath: string; status: string; lastWatermark: string | null }
   | { kind: 'missing' }
   | { kind: 'not-tracked'; stateDbPath: string }
   | { kind: 'unreadable'; stateDbPath: string; error: string }
+```
 
-export function findNewestCodexStateDbPath(codexHomePath: string): string | null {
-  let entries: string[]
-  try {
-    entries = readdirSync(codexHomePath)
-  } catch {
-    return null
-  }
-  let best: { version: number; name: string } | null = null
-  for (const name of entries) {
-    const match = STATE_DB_FILE_PATTERN.exec(name)
-    if (!match) continue
-    const version = Number(match[1])
-    if (!best || version > best.version) {
-      best = { version, name }
-    }
-  }
-  return best ? join(codexHomePath, best.name) : null
-}
+In `readCodexStateDbBackfillStatus`, widen the SELECT and the return:
 
-/**
- * Reads Codex's session-index backfill status from the newest state DB in the
- * given Codex home. Strictly read-only: never creates, writes, or repairs the
- * DB (#11830 covers corruption from interrupted indexes; we must not add to it).
- */
-export function readCodexStateDbBackfillStatus(codexHomePath: string): CodexStateDbBackfillStatus {
-  const stateDbPath = findNewestCodexStateDbPath(codexHomePath)
-  if (!stateDbPath) {
-    return { kind: 'missing' }
-  }
-  let db: SyncDatabase | null = null
-  try {
-    db = new SyncDatabase(stateDbPath, { readonly: true, fileMustExist: true })
-    const table = db
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'backfill_state'")
-      .get()
-    if (!table) {
-      return { kind: 'not-tracked', stateDbPath }
-    }
-    const row = db.prepare('SELECT status FROM backfill_state WHERE id = 1').get() as
-      | { status?: unknown }
-      | undefined
+```ts
+    const row = db
+      .prepare('SELECT status, last_watermark FROM backfill_state WHERE id = 1')
+      .get() as { status?: unknown; last_watermark?: unknown } | undefined
     if (!row || typeof row.status !== 'string') {
       return { kind: 'not-tracked', stateDbPath }
     }
     return row.status === 'complete'
       ? { kind: 'complete', stateDbPath }
-      : { kind: 'incomplete', stateDbPath, status: row.status }
-  } catch (error) {
-    return {
-      kind: 'unreadable',
-      stateDbPath,
-      error: error instanceof Error ? error.message : String(error)
-    }
-  } finally {
-    try {
-      db?.close()
-    } catch {
-      // Why: close() failure must not mask the status we already computed.
-    }
-  }
-}
-
-/** Counts rollout .jsonl files under a sessions root, stopping early at `limit`. */
-export function countCodexSessionFilesUpTo(sessionsRoot: string, limit: number): number {
-  let count = 0
-  const stack = [sessionsRoot]
-  while (stack.length > 0 && count < limit) {
-    const dir = stack.pop() as string
-    let entries
-    try {
-      entries = readdirSync(dir, { withFileTypes: true })
-    } catch {
-      continue
-    }
-    for (const entry of entries) {
-      if (count >= limit) break
-      if (entry.isDirectory()) {
-        stack.push(join(dir, entry.name))
-      } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
-        count += 1
-      }
-    }
-  }
-  return count
-}
+      : {
+          kind: 'incomplete',
+          stateDbPath,
+          status: row.status,
+          // Why: the backfill cursor (a sessions/... rollout path) is the only cheap
+          // progress signal codex exposes; panes show it while they wait (#11828).
+          lastWatermark: typeof row.last_watermark === 'string' ? row.last_watermark : null
+        }
 ```
 
-Note: match `SyncDatabase`'s actual option names against `src/main/sqlite/sync-database.ts`
-before finishing (`readonly`, `fileMustExist`, `timeout`). If `.get()`'s return type differs,
-cast via `unknown` — no `any`.
-
-- [ ] **Step 4: Run tests to verify they pass**
-
-Run: `pnpm test src/main/codex/codex-state-db.test.ts`
-Expected: PASS (12 tests).
-
-- [ ] **Step 5: Typecheck and commit**
-
-```bash
-pnpm tc:node
-git add src/main/codex/codex-state-db.ts src/main/codex/codex-state-db.test.ts
-git commit -m "feat(codex): add read-only codex state-db backfill status reader"
-```
-
----
-
-### Task 2: Pre-warm supervisor (`codex-state-db-prewarm.ts`)
-
-**Files:**
-- Create: `src/main/codex/codex-state-db-prewarm.ts`
-- Test: `src/main/codex/codex-state-db-prewarm.test.ts`
-- Read for reference (do not modify): `src/main/rate-limits/codex-fetcher.ts:568-591`, `src/main/win32-utils.ts`, `src/main/codex/codex-home-paths.ts`, `src/main/codex/codex-session-backfill-types.ts`
-
-**Interfaces:**
-- Consumes (from Task 1): `readCodexStateDbBackfillStatus(codexHomePath): CodexStateDbBackfillStatus`, `countCodexSessionFilesUpTo(sessionsRoot, limit): number`.
-- Consumes (existing): `resolveCodexCommand()` from `src/main/codex-cli/command.ts` (returns `string`, fails open to `'codex'`); `getOrcaManagedCodexHomePath()` from `./codex-home-paths`; `getSpawnArgsForWindows` from `src/main/win32-utils.ts` (copy the exact call shape from `codex-fetcher.ts:576-591`); `CodexSessionBackfillOptions` (has optional `shouldStop?: () => boolean`) from `./codex-session-backfill-types`.
-- Produces (used by Task 3):
-  ```ts
-  export type CodexStateDbPrewarmOutcome =
-    | 'completed' | 'already-complete' | 'not-needed' | 'skipped-unreadable'
-    | 'stopped' | 'gave-up' | 'codex-unavailable'
-  export type CodexStateDbPrewarmSummary = {
-    outcome: CodexStateDbPrewarmOutcome
-    spawnCount: number
-    elapsedMs: number
-  }
-  export async function runCodexStateDbPrewarm(
-    codexHomePath: string,
-    options?: CodexSessionBackfillOptions,
-    depsOverride?: Partial<CodexStateDbPrewarmDeps>
-  ): Promise<CodexStateDbPrewarmSummary>
-  // Prewarms the system home (fresh real-home-lane panes) then the managed home
-  // (resume-pinned panes); returns one summary per home prewarmed.
-  export function startCodexStateDbPrewarmInBackground(
-    options?: CodexSessionBackfillOptions,
-    systemCodexHomePathOverride?: string
-  ): Promise<CodexStateDbPrewarmSummary[] | null>
-  ```
-
-- [ ] **Step 1: Smoke-verify the headless command assumption (no code yet)**
-
-The design assumes a headless `codex app-server` initializes/creates the state DB and runs
-the backfill machinery. Verify against the real Codex binary on this machine, in a **temp**
-home (never the real homes):
-
-```bash
-SMOKE_HOME=$(mktemp -d)
-# Why sleep|: app-server reads JSON-RPC on stdin; piping sleep holds stdin open so it idles.
-sleep 60 | CODEX_HOME="$SMOKE_HOME" codex -s read-only -a untrusted app-server >/dev/null 2>&1 &
-sleep 15
-ls -la "$SMOKE_HOME"
-sqlite3 "$SMOKE_HOME"/state_*.sqlite "select status from backfill_state;" || true
-wait; rm -rf "$SMOKE_HOME"
-```
-
-Expected: a `state_<N>.sqlite` exists and `backfill_state.status` prints `complete`
-(empty sessions index instantly). Record the observed filename and status in the commit
-message body for this task.
-
-> Already verified during plan validation (2026-07-31, codex 0.146.0, live temp-home runs +
-> openai/codex `rust-v0.146.0` source): `state_5.sqlite` created; `pending→running→complete`
-> unattended; `-s read-only -a untrusted` does not block the DB writes; app-server exits on
-> stdin EOF; a non-claimant exits ~30s after start. This step is now a cheap sanity re-run.
-- If no state DB appears, retry with plain `codex app-server` (no `-s`/`-a` flags) and use
-  whichever variant works as `PREWARM_CODEX_ARGS`.
-- If neither variant creates the state DB, HALT this task and report the blocker — the
-  pre-warm command choice must be re-designed; do not guess.
-
-- [ ] **Step 2: Write the failing tests**
-
-Create `src/main/codex/codex-state-db-prewarm.test.ts`:
+Append:
 
 ```ts
-import { EventEmitter } from 'node:events'
-import type { ChildProcess } from 'node:child_process'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CodexStateDbBackfillStatus } from './codex-state-db'
-import {
-  PREWARM_FAST_EXIT_MS,
-  PREWARM_MAX_SPAWNS,
-  PREWARM_MIN_SESSION_FILES,
-  PREWARM_POLL_INTERVAL_MS,
-  PREWARM_SPAWN_RETRY_DELAY_MS,
-  runCodexStateDbPrewarm,
-  type CodexStateDbPrewarmDeps
-} from './codex-state-db-prewarm'
-
-type FakeChild = ChildProcess & { kill: ReturnType<typeof vi.fn> }
-
-function createFakeChild(): FakeChild {
-  const child = new EventEmitter() as unknown as FakeChild
-  child.kill = vi.fn(() => true)
-  return child
-}
-
-const incomplete: CodexStateDbBackfillStatus = {
-  kind: 'incomplete',
-  stateDbPath: '/tmp/home/state_5.sqlite',
-  status: 'running'
-}
-const complete: CodexStateDbBackfillStatus = {
-  kind: 'complete',
-  stateDbPath: '/tmp/home/state_5.sqlite'
-}
-
-function createDeps(overrides: Partial<CodexStateDbPrewarmDeps> = {}): {
-  deps: Partial<CodexStateDbPrewarmDeps>
-  children: FakeChild[]
-  spawnProcess: ReturnType<typeof vi.fn>
-} {
-  const children: FakeChild[] = []
-  const spawnProcess = vi.fn(() => {
-    const child = createFakeChild()
-    children.push(child)
-    return child
-  })
-  const deps: Partial<CodexStateDbPrewarmDeps> = {
-    resolveCommand: () => 'codex',
-    spawnProcess: spawnProcess as unknown as CodexStateDbPrewarmDeps['spawnProcess'],
-    readBackfillStatus: vi.fn(() => incomplete),
-    countSessionFiles: vi.fn(() => PREWARM_MIN_SESSION_FILES),
-    logger: { warn: vi.fn(), info: vi.fn() },
-    // Why inject now/sleep: the implementation's defaultDeps capture the NATIVE Date.now
-    // reference at module load, which vi.useFakeTimers() (installed in beforeEach) does
-    // NOT replace — leaving default now() on the real wall clock while the tests advance
-    // a fake one. These call-time wrappers read the faked globalThis.Date/setTimeout, so
-    // the fake clock governs both elapsed-time measurement and every wait.
-    now: () => Date.now(),
-    sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
-    ...overrides
-  }
-  return { deps, children, spawnProcess }
-}
-
-beforeEach(() => {
-  vi.useFakeTimers()
-})
-
-describe('runCodexStateDbPrewarm', () => {
-  it('skips without spawning when the index is already complete', async () => {
-    const { deps, spawnProcess } = createDeps({ readBackfillStatus: vi.fn(() => complete) })
-    const result = await runCodexStateDbPrewarm('/tmp/home', {}, deps)
-    expect(result.outcome).toBe('already-complete')
-    expect(spawnProcess).not.toHaveBeenCalled()
-  })
-
-  it('skips when there is no state db and the session history is small', async () => {
-    const { deps, spawnProcess } = createDeps({
-      readBackfillStatus: vi.fn(() => ({ kind: 'missing' }) as CodexStateDbBackfillStatus),
-      countSessionFiles: vi.fn(() => 3)
-    })
-    const result = await runCodexStateDbPrewarm('/tmp/home', {}, deps)
-    expect(result.outcome).toBe('not-needed')
-    expect(spawnProcess).not.toHaveBeenCalled()
-  })
-
-  it('skips with a warning when the state db is unreadable', async () => {
-    const warn = vi.fn()
-    const { deps, spawnProcess } = createDeps({
-      readBackfillStatus: vi.fn(
-        () =>
-          ({ kind: 'unreadable', stateDbPath: '/tmp/home/state_5.sqlite', error: 'locked' }) as CodexStateDbBackfillStatus
-      ),
-      logger: { warn, info: vi.fn() }
-    })
-    const result = await runCodexStateDbPrewarm('/tmp/home', {}, deps)
-    expect(result.outcome).toBe('skipped-unreadable')
-    expect(spawnProcess).not.toHaveBeenCalled()
-    expect(warn).toHaveBeenCalled()
-  })
-
-  it('supervises a codex child until the status flips to complete, then kills it', async () => {
-    const statuses = [incomplete, incomplete, incomplete, complete]
-    const readBackfillStatus = vi.fn(() => statuses.shift() ?? complete)
-    const { deps, children } = createDeps({ readBackfillStatus })
-    const task = runCodexStateDbPrewarm('/tmp/home', {}, deps)
-    await vi.advanceTimersByTimeAsync(PREWARM_POLL_INTERVAL_MS * 4)
-    const result = await task
-    expect(result.outcome).toBe('completed')
-    expect(result.spawnCount).toBe(1)
-    expect(children[0].kill).toHaveBeenCalled()
-  })
-
-  it('respawns on fast child deaths and gives up after the fast-failure budget', async () => {
-    const { deps, children, spawnProcess } = createDeps()
-    const task = runCodexStateDbPrewarm('/tmp/home', {}, deps)
-    for (let i = 0; i < PREWARM_MAX_SPAWNS; i += 1) {
-      // Why one poll then exit: the exit event lands 5s (one PREWARM_POLL_INTERVAL_MS)
-      // after spawn — under the 10s PREWARM_FAST_EXIT_MS threshold — so each death is a
-      // fast failure and must burn the budget.
-      await vi.advanceTimersByTimeAsync(PREWARM_POLL_INTERVAL_MS)
-      children[children.length - 1].emit('exit', 1, null)
-      await vi.advanceTimersByTimeAsync(PREWARM_SPAWN_RETRY_DELAY_MS + PREWARM_POLL_INTERVAL_MS)
-    }
-    const result = await task
-    expect(result.outcome).toBe('gave-up')
-    expect(spawnProcess).toHaveBeenCalledTimes(PREWARM_MAX_SPAWNS)
-  })
-
-  it('treats ~30s claim-blocked exits as expected and keeps respawning past the budget', async () => {
-    // Why: verified codex 0.146 behavior — a non-claimant app-server exits ~30s after
-    // start (foreign or stale backfill lease, self-healing within 900s); such exits
-    // must NOT count toward PREWARM_MAX_SPAWNS.
-    const statuses: CodexStateDbBackfillStatus[] = []
-    const readBackfillStatus = vi.fn(() => statuses.shift() ?? incomplete)
-    const { deps, children, spawnProcess } = createDeps({ readBackfillStatus })
-    const task = runCodexStateDbPrewarm('/tmp/home', {}, deps)
-    for (let i = 0; i < PREWARM_MAX_SPAWNS + 2; i += 1) {
-      await vi.advanceTimersByTimeAsync(PREWARM_FAST_EXIT_MS * 3)
-      children[children.length - 1].emit('exit', 1, null)
-      await vi.advanceTimersByTimeAsync(PREWARM_SPAWN_RETRY_DELAY_MS)
-    }
-    expect(spawnProcess.mock.calls.length).toBeGreaterThan(PREWARM_MAX_SPAWNS)
-    statuses.push(complete)
-    await vi.advanceTimersByTimeAsync(PREWARM_POLL_INTERVAL_MS)
-    const result = await task
-    expect(result.outcome).toBe('completed')
-  })
-
-  it('stops and kills the child when shouldStop flips true', async () => {
-    const { deps, children } = createDeps()
-    let stop = false
-    const task = runCodexStateDbPrewarm('/tmp/home', { shouldStop: () => stop }, deps)
-    await vi.advanceTimersByTimeAsync(PREWARM_POLL_INTERVAL_MS)
-    stop = true
-    await vi.advanceTimersByTimeAsync(PREWARM_POLL_INTERVAL_MS)
-    const result = await task
-    expect(result.outcome).toBe('stopped')
-    expect(children[0].kill).toHaveBeenCalled()
-  })
-
-  it('reports codex-unavailable when the first spawn errors (ENOENT)', async () => {
-    const { deps, children } = createDeps()
-    const task = runCodexStateDbPrewarm('/tmp/home', {}, deps)
-    await vi.advanceTimersByTimeAsync(0)
-    children[0].emit('error', new Error('spawn codex ENOENT'))
-    await vi.advanceTimersByTimeAsync(PREWARM_POLL_INTERVAL_MS)
-    const result = await task
-    expect(result.outcome).toBe('codex-unavailable')
-  })
-})
-```
-
-Adjust timer-advance amounts if the loop shape needs it, but keep the assertions.
-
-- [ ] **Step 3: Run tests to verify they fail**
-
-Run: `pnpm test src/main/codex/codex-state-db-prewarm.test.ts`
-Expected: FAIL — module not found.
-
-- [ ] **Step 4: Write the implementation**
-
-Create `src/main/codex/codex-state-db-prewarm.ts`:
-
-```ts
-import { spawn, type ChildProcess } from 'node:child_process'
-import { join } from 'node:path'
-import { resolveCodexCommand } from '../codex-cli/command'
-import { getOrcaManagedCodexHomePath } from './codex-home-paths'
-import type { CodexSessionBackfillOptions } from './codex-session-backfill-types'
-import {
-  countCodexSessionFilesUpTo,
-  readCodexStateDbBackfillStatus,
-  type CodexStateDbBackfillStatus
-} from './codex-state-db'
-
-// Why: mirrors codex-fetcher's headless invocation; app-server idles on stdin and runs
-// Codex's startup state-db backfill without needing a TUI or a model turn.
-export const PREWARM_CODEX_ARGS: readonly string[] = ['-s', 'read-only', '-a', 'untrusted', 'app-server']
-// Why: small histories index within Codex's own 30s startup wait; only pre-warm large ones.
-export const PREWARM_MIN_SESSION_FILES = 100
-export const PREWARM_POLL_INTERVAL_MS = 5_000
-export const PREWARM_SPAWN_RETRY_DELAY_MS = 2_000
-// Why: verified codex 0.146 — a non-claimant app-server exits ~30s after start (another
-// process holds the backfill lease, or a stale lease <=900s after an unclean kill). Those
-// exits are expected and self-heal; only children dying before codex's own 30s gate
-// (< PREWARM_FAST_EXIT_MS) count as failures.
-export const PREWARM_FAST_EXIT_MS = 10_000
-export const PREWARM_MAX_SPAWNS = 5 // budget for fast failures only; deadline bounds the rest
-// Why: reporter's 15 GB history took ~25 min; 60 min bounds pathological cases.
-export const PREWARM_MAX_TOTAL_MS = 60 * 60_000
-
-export type CodexStateDbPrewarmOutcome =
-  | 'completed'
-  | 'already-complete'
-  | 'not-needed'
-  | 'skipped-unreadable'
-  | 'stopped'
-  | 'gave-up'
-  | 'codex-unavailable'
-
-export type CodexStateDbPrewarmSummary = {
-  outcome: CodexStateDbPrewarmOutcome
-  spawnCount: number
-  elapsedMs: number
-}
-
-export type CodexStateDbPrewarmDeps = {
-  resolveCommand: () => string
-  spawnProcess: typeof spawn
-  readBackfillStatus: (codexHomePath: string) => CodexStateDbBackfillStatus
-  countSessionFiles: (sessionsRoot: string, limit: number) => number
-  now: () => number
-  sleep: (ms: number) => Promise<void>
-  logger: Pick<Console, 'warn' | 'info'>
-}
-
-const defaultDeps: CodexStateDbPrewarmDeps = {
-  resolveCommand: () => resolveCodexCommand(),
-  spawnProcess: spawn,
-  readBackfillStatus: readCodexStateDbBackfillStatus,
-  countSessionFiles: countCodexSessionFilesUpTo,
-  now: Date.now,
-  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  logger: console
-}
+// Why 100: mirrors the prewarm's spawn gate — below it codex indexes inside its own
+// 30s startup wait, so neither the trust grant nor a pane needs to be deferred.
+export const BACKFILL_PENDING_MIN_SESSION_FILES = 100
 
 /**
- * Keeps a hidden headless codex alive against `codexHomePath` until Codex's
- * one-time session index (backfill_state in state_<N>.sqlite) reads complete.
- * Without this, panes only give the index 30s slices and it never finishes
- * on large histories (#11828). Local homes only — SSH remotes are out of scope.
+ * True when launching codex against this home would hit the #11828 backfill wait:
+ * an unfinished index run is tracked, or no index exists yet over a large history.
+ * Unreadable DBs report false — deferral must never be the thing that hides #11830.
  */
-export async function runCodexStateDbPrewarm(
-  codexHomePath: string,
-  options: CodexSessionBackfillOptions = {},
-  depsOverride: Partial<CodexStateDbPrewarmDeps> = {}
-): Promise<CodexStateDbPrewarmSummary> {
-  const deps: CodexStateDbPrewarmDeps = { ...defaultDeps, ...depsOverride }
-  const startedAt = deps.now()
-  const finish = (outcome: CodexStateDbPrewarmOutcome, spawnCount: number): CodexStateDbPrewarmSummary => ({
-    outcome,
-    spawnCount,
-    elapsedMs: deps.now() - startedAt
-  })
-  const shouldStop = (): boolean => options.shouldStop?.() === true
-
-  const status = deps.readBackfillStatus(codexHomePath)
-  if (status.kind === 'complete') return finish('already-complete', 0)
-  if (status.kind === 'not-tracked') return finish('not-needed', 0)
-  if (status.kind === 'unreadable') {
-    // Why: never spawn against a DB we cannot even read — #11830's corruption path.
-    deps.logger.warn(
-      `[codex-state-db-prewarm] state db unreadable at ${status.stateDbPath}; skipping prewarm: ${status.error}`
+export function isCodexBackfillIndexPending(codexHomePath: string): boolean {
+  const status = readCodexStateDbBackfillStatus(codexHomePath)
+  if (status.kind === 'incomplete') {
+    return true
+  }
+  if (status.kind === 'missing' || status.kind === 'not-tracked') {
+    return (
+      countCodexSessionFilesUpTo(
+        join(codexHomePath, 'sessions'),
+        BACKFILL_PENDING_MIN_SESSION_FILES
+      ) >= BACKFILL_PENDING_MIN_SESSION_FILES
     )
-    return finish('skipped-unreadable', 0)
   }
-  if (
-    status.kind === 'missing' &&
-    deps.countSessionFiles(join(codexHomePath, 'sessions'), PREWARM_MIN_SESSION_FILES) <
-      PREWARM_MIN_SESSION_FILES
-  ) {
-    return finish('not-needed', 0)
-  }
-
-  deps.logger.info(
-    `[codex-state-db-prewarm] pre-warming codex session index at ${codexHomePath} (this can take minutes on large histories)`
-  )
-  const deadline = startedAt + PREWARM_MAX_TOTAL_MS
-  let spawnCount = 0
-  let fastFailureCount = 0
-  while (true) {
-    if (shouldStop()) return finish('stopped', spawnCount)
-    if (deps.now() >= deadline || fastFailureCount >= PREWARM_MAX_SPAWNS) {
-      deps.logger.warn(
-        `[codex-state-db-prewarm] giving up after ${spawnCount} spawn(s); index still incomplete`
-      )
-      return finish('gave-up', spawnCount)
-    }
-    const child = spawnPrewarmCodex(codexHomePath, deps)
-    const spawnedAt = deps.now()
-    spawnCount += 1
-    let childDown = false
-    let spawnFailed = false
-    // Why capture the timestamp inside the listeners: lifetime must be measured at the
-    // exit event itself. Measuring at the next poll wakeup quantizes lifetime to 5s
-    // multiples, so a genuine crash in the 5-10s window would read as >=10s and be
-    // misclassified as an expected claim-blocked exit — respawning a crashing codex
-    // every few seconds until the 60-min deadline.
-    let exitedAt = spawnedAt
-    child.once('error', (error) => {
-      childDown = true
-      spawnFailed = true
-      exitedAt = deps.now()
-      deps.logger.warn('[codex-state-db-prewarm] codex spawn failed:', error)
-    })
-    child.once('exit', () => {
-      childDown = true
-      exitedAt = deps.now()
-    })
-
-    while (!childDown) {
-      await deps.sleep(PREWARM_POLL_INTERVAL_MS)
-      if (shouldStop()) {
-        terminate(child)
-        return finish('stopped', spawnCount)
-      }
-      const polled = deps.readBackfillStatus(codexHomePath)
-      if (polled.kind === 'complete') {
-        terminate(child)
-        deps.logger.info('[codex-state-db-prewarm] codex session index complete')
-        return finish('completed', spawnCount)
-      }
-      if (deps.now() >= deadline) {
-        terminate(child)
-        return finish('gave-up', spawnCount)
-      }
-    }
-    if (spawnFailed && spawnCount === 1) {
-      // Why: first spawn ENOENT means no usable codex binary; retries cannot help.
-      return finish('codex-unavailable', spawnCount)
-    }
-    // Why: claim-blocked exits (~30s, verified) are expected — respawn until the
-    // deadline; only fast deaths burn the failure budget, measured at the exit event
-    // (exitedAt), never at poll detection.
-    if (exitedAt - spawnedAt < PREWARM_FAST_EXIT_MS) {
-      fastFailureCount += 1
-    }
-    await deps.sleep(PREWARM_SPAWN_RETRY_DELAY_MS)
-  }
-}
-
-function terminate(child: ChildProcess): void {
-  try {
-    // Why: app-server exits promptly on stdin EOF once initialized — try that first.
-    child.stdin?.end()
-    if (process.platform === 'win32') {
-      // Why: child.kill() only reaches the .cmd/cmd.exe wrapper on Windows and orphans
-      // codex.exe — kill the tree. Reuse (extract if needed) the existing
-      // killCodexAppServerProcessTree() from src/main/codex/codex-app-server-session.ts:58-91.
-      killCodexAppServerProcessTree(child)
-      return
-    }
-    // Why: a mid-index claimer blocks in init before the stdin transport runs, so EOF
-    // alone may not stop it. SIGTERM never corrupts the DB (verified), but leaves a
-    // stale backfill lease: codex starts against this home fail at ~30s for <=900s,
-    // then the next claimer resumes from the watermark.
-    child.kill()
-  } catch {
-    // Why: the child may exit between the poll and the kill.
-  }
-}
-
-function spawnPrewarmCodex(codexHomePath: string, deps: CodexStateDbPrewarmDeps): ChildProcess {
-  // NOTE: copy the exact getSpawnArgsForWindows call shape from
-  // src/main/rate-limits/codex-fetcher.ts:576-591 (win32 .cmd/.bat launchers).
-  const command = deps.resolveCommand()
-  return deps.spawnProcess(command, [...PREWARM_CODEX_ARGS], {
-    cwd: codexHomePath,
-    // Why: hold stdin open so app-server idles instead of exiting on stdin EOF; never write to it.
-    stdio: ['pipe', 'ignore', 'ignore'],
-    windowsHide: true,
-    env: { ...process.env, CODEX_HOME: codexHomePath }
-  })
-}
-
-/**
- * Prewarms both local homes panes actually use, in order:
- * 1. the system home (fresh panes on the real-home lane read it — same target the
- *    index-heal stage pins; resolve the default exactly the way index-heal does when
- *    the override is undefined), then
- * 2. the managed home (resume-pinned panes read it).
- * Why both: with the real-home lane selected, fresh panes get NO managed CODEX_HOME
- * (runtime-home-service.ts:175-181 returns null) — see ledger A10/AD-3.
- */
-async function runDualHomePrewarm(
-  options: CodexSessionBackfillOptions,
-  systemCodexHomePathOverride?: string
-): Promise<CodexStateDbPrewarmSummary[]> {
-  // NOTE: reuse the exact system-home fallback resolution the index-heal stage uses
-  // (see src/main/codex/codex-session-index-heal.ts) when the override is undefined.
-  const systemHome = systemCodexHomePathOverride ?? resolveDefaultSystemCodexHomePath()
-  const managedHome = getOrcaManagedCodexHomePath()
-  const homes = [systemHome, managedHome].filter(
-    (home, index, all): home is string => typeof home === 'string' && all.indexOf(home) === index
-  )
-  const summaries: CodexStateDbPrewarmSummary[] = []
-  for (const home of homes) {
-    if (options.shouldStop?.() === true) break
-    summaries.push(await runCodexStateDbPrewarm(home, options))
-  }
-  return summaries
-}
-
-let backgroundPrewarmTask: Promise<CodexStateDbPrewarmSummary[] | null> | null = null
-
-/** Single-flight background wrapper matching the migration-scheduler MigrationRun shape. */
-export function startCodexStateDbPrewarmInBackground(
-  options: CodexSessionBackfillOptions = {},
-  systemCodexHomePathOverride?: string
-): Promise<CodexStateDbPrewarmSummary[] | null> {
-  if (backgroundPrewarmTask) return backgroundPrewarmTask
-  const task = runDualHomePrewarm(options, systemCodexHomePathOverride)
-    .catch((error: unknown) => {
-      console.warn('[codex-state-db-prewarm] Background prewarm failed:', error)
-      return null
-    })
-    .finally(() => {
-      if (backgroundPrewarmTask === task) backgroundPrewarmTask = null
-    })
-  backgroundPrewarmTask = task
-  return task
+  return false
 }
 ```
 
-Implementation notes (do these while writing, they are part of this step):
-- Timing discipline: every elapsed-time read in the supervisor goes through `deps.now()`
-  and every wait through `deps.sleep()` — never a captured `Date.now` reference or a bare
-  `setTimeout` — and child lifetime is taken from `exitedAt` (recorded inside the
-  `exit`/`error` listeners), never recomputed at poll detection. The tests inject
-  fake-clock `now`/`sleep` and depend on both properties.
-- Wire `getSpawnArgsForWindows` exactly as `codex-fetcher.ts:576-591` does (import from
-  `src/main/win32-utils.ts`) so Windows `.cmd`/`.bat` shims spawn correctly; keep `windowsHide: true`.
-- If the smoke check in Step 1 selected different args, set `PREWARM_CODEX_ARGS` accordingly.
-- Confirm `CodexSessionBackfillOptions` in `codex-session-backfill-types.ts` really carries
-  `shouldStop?: () => boolean`; if the field name differs, use the actual name everywhere in
-  this plan's code (Tasks 2-3).
-- `killCodexAppServerProcessTree` lives in `src/main/codex/codex-app-server-session.ts:58-91`
-  (`taskkill /pid <pid> /t /f`); export it (or extract a shared helper) rather than copying —
-  bare `child.kill()` on Windows only kills the `.cmd`/`cmd.exe` wrapper (repo documents this
-  in `codex-accounts/service.ts:204` and `commit-message-text-generation.ts:493`).
-- Resolve the default system home (when the override is undefined) the same way the
-  index-heal stage does — find and reuse its helper, do not invent a new path.
-- Keep the file under 300 lines; if the dual-home wrapper pushes it over, split the
-  supervisor loop and the wrapper into two domain-named files.
-
-- [ ] **Step 5: Run tests to verify they pass**
-
-Run: `pnpm test src/main/codex/codex-state-db-prewarm.test.ts`
-Expected: PASS (8 tests).
-
-- [ ] **Step 6: Typecheck and commit**
-
-```bash
-pnpm tc:node
-git add src/main/codex/codex-state-db-prewarm.ts src/main/codex/codex-state-db-prewarm.test.ts
-git commit -m "feat(codex): supervise headless codex to pre-warm managed-home session index"
-```
-
-Include the Step 1 smoke observations in the commit body.
-
----
-
-### Task 3: Chain pre-warm into the migration scheduler and wire it in `index.ts`
-
-**Files:**
-- Modify: `src/main/codex/codex-session-migration-scheduler.ts` (87 lines; chain logic at ~:26-69)
-- Modify: `src/main/codex/codex-session-migration-scheduler.test.ts`
-- Modify: `src/main/index.ts:2082-2103` (the `createCodexSessionMigrationScheduler` call)
-
-**Interfaces:**
-- Consumes (from Task 2): `startCodexStateDbPrewarmInBackground(options, systemCodexHomePathOverride?): Promise<CodexStateDbPrewarmSummary[] | null>` — matches the scheduler's `MigrationRun` type `(options: CodexSessionBackfillOptions, systemCodexHomePathOverride?: string) => Promise<unknown>`. Unlike the original sketch, the wrapper genuinely uses `systemCodexHomePathOverride`: it prewarms the system home first, then the managed home (ledger A10/AD-3).
-- Produces: `createCodexSessionMigrationScheduler` gains a required arg `startStateDbPrewarm: MigrationRun`; chain order is backfill → index-heal → prewarm, with stop-propagation.
-
-- [ ] **Step 1: Write the failing tests**
-
-In `src/main/codex/codex-session-migration-scheduler.test.ts`, first add
-`startStateDbPrewarm: vi.fn(async () => null)` to every existing scheduler construction
-(follow the file's existing factory/arg style), then add these cases (adapt helper names to
-the file's existing ones — it already has helpers to flush the chain):
+In `src/main/codex/codex-state-db-prewarm.ts`, replace the literal
+`export const PREWARM_MIN_SESSION_FILES = 100` with:
 
 ```ts
-it('runs the state-db prewarm after backfill and index-heal complete', async () => {
-  const order: string[] = []
-  const scheduler = createCodexSessionMigrationScheduler({
-    isEligible: () => true,
-    isQuitting: () => false,
-    resolveSystemCodexHomePathOverride: () => undefined,
-    startBackfill: vi.fn(async () => {
-      order.push('backfill')
-      return null
-    }),
-    startIndexHeal: vi.fn(async () => {
-      order.push('heal')
-      return null
-    }),
-    startStateDbPrewarm: vi.fn(async () => {
-      order.push('prewarm')
-      return null
-    }),
-    initialDelayMs: 0
-  })
-  scheduler.requestRun()
-  await vi.waitFor(() => expect(order).toEqual(['backfill', 'heal', 'prewarm']))
-})
-
-it('skips the prewarm when the backfill run was stopped', async () => {
-  const startStateDbPrewarm = vi.fn(async () => null)
-  const startIndexHeal = vi.fn(async () => null)
-  // Why a deferred first result: the scheduler auto-reruns after a stopped backfill
-  // (`rerunRequested || stoppedBackfill`), so an always-stopped mock would rerun forever.
-  // Reuse the test file's existing release/deferred pattern for this.
-  let releaseBackfill: ((result: { stopped: boolean }) => void) | undefined
-  const startBackfill = vi.fn(
-    () =>
-      new Promise<{ stopped: boolean }>((resolve) => {
-        releaseBackfill = resolve
-      })
-  )
-  const scheduler = createCodexSessionMigrationScheduler({
-    isEligible: () => true,
-    isQuitting: () => false,
-    resolveSystemCodexHomePathOverride: () => undefined,
-    startBackfill,
-    startIndexHeal,
-    startStateDbPrewarm,
-    initialDelayMs: 0
-  })
-  scheduler.requestRun()
-  await vi.waitFor(() => expect(startBackfill).toHaveBeenCalledOnce())
-  // Why { stopped: true }: the exact shape isStoppedMigrationResult() recognizes;
-  // existing tests in this file already use it.
-  releaseBackfill?.({ stopped: true })
-  // Settlement barrier: the stopped result makes the scheduler rerun, and the rerun's
-  // startBackfill call only happens after the first run's whole promise chain
-  // (including any wrongly-wired prewarm stage) has settled via its .finally. Waiting
-  // for the SECOND call therefore proves the chain finished — a bare
-  // `waitFor(() => expect(...).not.toHaveBeenCalled())` would resolve on its first
-  // check, before the chain settles, and pass against a broken implementation.
-  await vi.waitFor(() => expect(startBackfill).toHaveBeenCalledTimes(2))
-  expect(startIndexHeal).not.toHaveBeenCalled()
-  expect(startStateDbPrewarm).not.toHaveBeenCalled()
-  // The second (rerun) backfill promise stays pending; the test ends here without
-  // releasing it, matching how the file's other deferred tests finish.
-})
+import { BACKFILL_PENDING_MIN_SESSION_FILES } from './codex-state-db'
+// Why alias: the trust-grant deferral and the prewarm must agree on what "large
+// enough to stall codex" means, or one can defer forever waiting on the other.
+export const PREWARM_MIN_SESSION_FILES = BACKFILL_PENDING_MIN_SESSION_FILES
 ```
 
-Important: read the existing test file first and reuse its established way of (a) building
-scheduler args, (b) representing a "stopped" migration result (`{ stopped: true }` is what
-`isStoppedMigrationResult` recognizes and what existing tests use), and (c) deferring a
-backfill result via a captured `release...` resolver. Note the file has NO chain-flush
-helper and `requestRun()` returns void, so the rerun barrier above is the only reliable
-settlement proof — do not replace it with fixed `await Promise.resolve()` drains.
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-Run: `pnpm test src/main/codex/codex-session-migration-scheduler.test.ts`
-Expected: FAIL, specifically: the ordering test fails with `order` ending as
-`['backfill', 'heal']` (no `'prewarm'`). Vitest transforms with esbuild and does NOT
-typecheck, so the not-yet-accepted `startStateDbPrewarm` property produces no error at test
-runtime — the arg-type error surfaces at Step 5's `pnpm tc:node` instead. The stopped-case
-test PASSES at this point: before the implementation exists nothing can call
-`startStateDbPrewarm`, so its not-called assertions cannot red-fail; its value is (1) the
-`startIndexHeal` negative, which pins existing stop-propagation behavior, and (2) regression
-protection once the prewarm stage lands, made meaningful by the rerun settlement barrier.
-All pre-existing tests must still pass after adding `startStateDbPrewarm: vi.fn(async () =>
-null)` to their constructions.
-
-- [ ] **Step 3: Implement the scheduler change**
-
-In `codex-session-migration-scheduler.ts`:
-
-1. Add `startStateDbPrewarm: MigrationRun` to the `createCodexSessionMigrationScheduler` args type.
-2. Extend the chain (currently `startBackfill → startIndexHeal`) so the heal stage's result
-   gates the prewarm:
-
-```ts
-const task = args
-  .startBackfill({ shouldStop }, systemCodexHomePathOverride)
-  .then((result) => {
-    stoppedBackfill = isStoppedMigrationResult(result)
-    if (stoppedBackfill || shouldStop()) {
-      return
-    }
-    return args.startIndexHeal({ shouldStop }, systemCodexHomePathOverride).then((healResult) => {
-      if (isStoppedMigrationResult(healResult) || shouldStop()) {
-        return
-      }
-      // Why: prewarm last — it babysits a codex process for minutes and must never
-      // delay the session backfill/heal walks it depends on.
-      return args.startStateDbPrewarm({ shouldStop }, systemCodexHomePathOverride).then(() => undefined)
-    })
-  })
-  .catch((error: unknown) => {
-    console.warn('[codex-session-migration] Background session migration failed:', error)
-  })
-  .then(() => undefined)
-```
-
-Preserve the existing `rerunRequested || stoppedBackfill` re-run logic untouched.
-
-- [ ] **Step 4: Wire in `src/main/index.ts`**
-
-At the `createCodexSessionMigrationScheduler` call (~:2082-2097), add the import and arg:
-
-```ts
-import { startCodexStateDbPrewarmInBackground } from './codex/codex-state-db-prewarm'
-```
-
-```ts
-  const codexSessionMigration = createCodexSessionMigrationScheduler({
-    isEligible: () => codexRuntimeHome?.isHostSystemDefaultRealHome() === true,
-    isQuitting: () => isQuitting,
-    resolveSystemCodexHomePathOverride: () =>
-      resolveHostCodexSessionSourceHome(store!.getSettings()),
-    startBackfill: startCodexSessionBackfillInBackground,
-    startIndexHeal: startCodexSessionIndexHealInBackground,
-    // Why: #11828 — finish Codex's one-time session index in the background so panes
-    // don't die in 30s slices against a large managed-home history.
-    startStateDbPrewarm: startCodexStateDbPrewarmInBackground
-  })
-```
-
-Match the surrounding style exactly; do not reorder existing properties.
-
-Quit behavior (verify while wiring, part of this step): the scheduler's `shouldStop` must
-flip when the app quits (its existing `isQuitting` wiring) so the prewarm's 5s poll
-terminates the child; note that `app.exit(0)` paths skip `before-quit` (`src/main/ipc/app.ts:286`)
-and the repo's explicit quit hooks live at `src/main/index.ts:2810-2831` — if the scheduler
-is not already stopped from that path, add the stop call there. An orphan that survives quit
-self-exits on stdin EOF after init; a mid-index orphan finishes the index then exits
-(benign — verified lease semantics, ledger A11/A2).
-
-- [ ] **Step 5: Run tests to verify they pass**
-
-Run: `pnpm test src/main/codex/codex-session-migration-scheduler.test.ts`
-Expected: PASS (existing tests plus the 2 new ones).
-
-Run: `pnpm tc:node`
-Expected: no errors (proves the `index.ts` wiring typechecks).
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/main/codex/codex-session-migration-scheduler.ts src/main/codex/codex-session-migration-scheduler.test.ts src/main/index.ts
-git commit -m "fix(codex): chain state-db prewarm after session backfill and index heal (#11828)"
-```
-
----
-
-### Task 4: Renderer backfill-failure detector module
-
-**Files:**
-- Create: `src/renderer/src/components/terminal-pane/codex-backfill-error-detector.ts`
-- Test: `src/renderer/src/components/terminal-pane/codex-backfill-error-detector.test.ts`
-
-**Interfaces:**
-- Produces (used by Tasks 5-6):
-  ```ts
-  export const CODEX_BACKFILL_TIMEOUT_SIGNATURE = 'timed out waiting for state db backfill'
-  export const CODEX_BACKFILL_INDEXING_NOTICE: string // starts with 'Codex is still indexing your session history'
-  export type CodexBackfillErrorDetector = { observe(chunk: string): string | null }
-  export function createCodexBackfillErrorDetector(): CodexBackfillErrorDetector
-  ```
-
-- [ ] **Step 1: Write the failing tests**
-
-Create `codex-backfill-error-detector.test.ts`:
-
-```ts
-import { describe, expect, it } from 'vitest'
-import {
-  CODEX_BACKFILL_INDEXING_NOTICE,
-  createCodexBackfillErrorDetector
-} from './codex-backfill-error-detector'
-
-const FAILURE_OUTPUT =
-  'state db backfill is running at /home/dan/.local/share/orca/codex-runtime-home/home; ' +
-  'waiting up to 30s before retrying startup initialization\r\n' +
-  "Codex couldn't start because its local database appears to be damaged.\r\n" +
-  'timed out waiting for state db backfill at ' +
-  '/home/dan/.local/share/orca/codex-runtime-home/home/state_5.sqlite after 30s (status: running)\r\n'
-
-describe('createCodexBackfillErrorDetector', () => {
-  it('fires the notice when the timeout signature appears in one chunk', () => {
-    const detector = createCodexBackfillErrorDetector()
-    expect(detector.observe(FAILURE_OUTPUT)).toBe(CODEX_BACKFILL_INDEXING_NOTICE)
-  })
-
-  it('fires when the signature is split across chunks', () => {
-    const detector = createCodexBackfillErrorDetector()
-    const mid = Math.floor(FAILURE_OUTPUT.length / 2)
-    expect(detector.observe(FAILURE_OUTPUT.slice(0, mid))).toBeNull()
-    expect(detector.observe(FAILURE_OUTPUT.slice(mid))).toBe(CODEX_BACKFILL_INDEXING_NOTICE)
-  })
-
-  it('fires despite interleaved ANSI escapes', () => {
-    const detector = createCodexBackfillErrorDetector()
-    const noisy = FAILURE_OUTPUT.replace(/state db/g, '\u001b[31mstate\u001b[0m db')
-    expect(detector.observe(noisy)).toBe(CODEX_BACKFILL_INDEXING_NOTICE)
-  })
-
-  it('fires at most once', () => {
-    const detector = createCodexBackfillErrorDetector()
-    expect(detector.observe(FAILURE_OUTPUT)).toBe(CODEX_BACKFILL_INDEXING_NOTICE)
-    expect(detector.observe(FAILURE_OUTPUT)).toBeNull()
-  })
-
-  it('stays silent for ordinary output and for the non-fatal waiting line alone', () => {
-    const detector = createCodexBackfillErrorDetector()
-    expect(detector.observe('hello world\r\n')).toBeNull()
-    expect(
-      detector.observe('state db backfill is running at /x; waiting up to 30s before retrying\r\n')
-    ).toBeNull()
-  })
-
-  it('does not fire on a generic damaged-database error without the backfill timeout', () => {
-    const detector = createCodexBackfillErrorDetector()
-    expect(
-      detector.observe("Codex couldn't start because its local database appears to be damaged.\r\n")
-    ).toBeNull()
-  })
-})
-```
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-Run: `pnpm test src/renderer/src/components/terminal-pane/codex-backfill-error-detector.test.ts`
-Expected: FAIL — module not found.
-
-- [ ] **Step 3: Write the implementation**
-
-Create `codex-backfill-error-detector.ts`:
-
-```ts
-// Why: 'database appears to be damaged' alone can be a real corruption; only the
-// backfill-timeout line is unambiguous for the #11828 large-history startup race.
-export const CODEX_BACKFILL_TIMEOUT_SIGNATURE = 'timed out waiting for state db backfill'
-
-export const CODEX_BACKFILL_INDEXING_NOTICE = [
-  'Codex is still indexing your session history and could not start yet.',
-  'Codex reports this as a damaged local database, but the database is fine — its one-time session index takes a while on a large history and Codex only waits 30 seconds at startup.',
-  // Why the hedged phrasing: not every configuration gets the background prewarm
-  // (ledger AD-3); leaving a codex pane open also finishes the index (codex resumes
-  // the claim itself), so the advice must be honest for all lanes.
-  'Orca finishes the index in the background when it can; leaving one Codex pane open also lets Codex finish it. Retry in a few minutes.'
-].join('\n')
-
-// Why: strip CSI/OSC escapes so a redraw-heavy TUI cannot split the signature text.
-const ANSI_ESCAPE_PATTERN = /\u001b(?:\[[0-9;?]*[ -/]*[@-~]|\][^\u0007\u001b]*(?:\u0007|\u001b\\)?)/g
-const DETECTOR_BUFFER_MAX_CHARS = 4096
-
-export type CodexBackfillErrorDetector = { observe(chunk: string): string | null }
-
-/** One-shot scanner over a pane's output stream for Codex's backfill-timeout failure. */
-export function createCodexBackfillErrorDetector(): CodexBackfillErrorDetector {
-  let tail = ''
-  let armed = true
-  return {
-    observe(chunk: string): string | null {
-      if (!armed) return null
-      const normalized = (tail + chunk).replace(ANSI_ESCAPE_PATTERN, '').replace(/\r/g, '')
-      tail = normalized.slice(-DETECTOR_BUFFER_MAX_CHARS)
-      if (!tail.includes(CODEX_BACKFILL_TIMEOUT_SIGNATURE)) return null
-      armed = false
-      return CODEX_BACKFILL_INDEXING_NOTICE
-    }
-  }
-}
-```
+(The prewarm already imports from `./codex-state-db`; keep imports merged.)
+If the `incomplete`-variant change breaks compilation anywhere else, the fix is
+mechanical: those sites only read `kind`/`status`.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `pnpm test src/renderer/src/components/terminal-pane/codex-backfill-error-detector.test.ts`
-Expected: PASS (7 tests).
+Run: `pnpm exec vitest run src/main/codex/codex-state-db.test.ts src/main/codex/codex-state-db-prewarm.test.ts --config config/vitest.config.ts`
+Expected: PASS (both files — the prewarm suite proves the alias kept behavior).
+Also run: `pnpm typecheck` — expected exit 0.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/renderer/src/components/terminal-pane/codex-backfill-error-detector.ts src/renderer/src/components/terminal-pane/codex-backfill-error-detector.test.ts
-git commit -m "feat(terminal): detect codex state-db backfill timeout in pane output"
+git add src/main/codex/codex-state-db.ts src/main/codex/codex-state-db.test.ts src/main/codex/codex-state-db-prewarm.ts
+git commit -m "feat(codex): expose backfill cursor and pending-index check from state db reader (#11828)"
 ```
 
 ---
 
-### Task 5: Toast classifier and informational styling
+### Task 2: Defer the trust grant behind the index — `'pending-index'` lane
 
 **Files:**
-- Modify: `src/renderer/src/components/terminal-pane/TerminalErrorToast.tsx`
-- Modify: `src/renderer/src/components/terminal-pane/TerminalErrorToast.test.ts`
+- Modify: `src/main/codex/codex-real-home-hook-install.ts`
+- Test: `src/main/codex/codex-real-home-hook-install.test.ts`
 
 **Interfaces:**
-- Consumes (from Task 4): the notice's stable first line `'Codex is still indexing your session history'`.
+- Consumes: `isCodexBackfillIndexPending(codexHomePath: string): boolean` (Task 1);
+  module-internal `getSystemCodexHomePath()` (already imported from
+  `./codex-home-paths`); existing module state `currentLane`, `installRetryAfterMs`.
 - Produces:
-  ```ts
-  export function isCodexBackfillIndexingNotice(error: string): boolean
-  ```
+  - `export type RealHomeCodexHookLane = 'pending' | 'pending-index' | 'installed' | 'unavailable' | 'removed'`
+  - `ensureRealHomeCodexHookState(...)` returns `'pending-index'` (and spawns no
+    grant codex, mutates no user files) while the system home's backfill is pending
+    and the lane is not already `'installed'`.
+  - `isRealHomeCodexHookLaneUsable()` stays `currentLane !== 'unavailable'` —
+    `'pending-index'` is usable by construction (scheduler stays eligible; panes
+    keep routing to the real home; that is the point).
+  - Exact deferral log line (Task 8's E2E greps for it):
+    `[codex-real-home-hooks] deferring trust grant until codex session index completes`
 
 - [ ] **Step 1: Write the failing tests**
 
-Add to `TerminalErrorToast.test.ts` (match the file's existing import/describe style — it
-already tests the other pure classifier exports):
+In `src/main/codex/codex-real-home-hook-install.test.ts`. The suite already mocks
+`node:os` `homedir` → tmpdir and the whole `./codex-hook-trust-grant` module
+(`grantMock`); `_internals.setLaneForTesting('pending')` runs in `beforeEach`.
+Add a hoisted mock for the pending check, defaulting to `false` so every existing
+test is unaffected:
 
 ```ts
-import { CODEX_BACKFILL_INDEXING_NOTICE } from './codex-backfill-error-detector'
-// add isCodexBackfillIndexingNotice to the existing import from './TerminalErrorToast'
+const { pendingMock } = vi.hoisted(() => ({ pendingMock: vi.fn<() => boolean>() }))
 
-describe('isCodexBackfillIndexingNotice', () => {
-  it('recognizes the codex indexing notice', () => {
-    expect(isCodexBackfillIndexingNotice(CODEX_BACKFILL_INDEXING_NOTICE)).toBe(true)
+vi.mock('./codex-state-db', () => ({
+  isCodexBackfillIndexPending: pendingMock
+}))
+```
+
+In the existing `beforeEach`, add `pendingMock.mockReturnValue(false)`.
+New tests:
+
+```ts
+import { existsSync } from 'node:fs'
+import { isRealHomeCodexHookLaneUsable } from './codex-real-home-hook-install'
+
+describe('backfill deferral (#11828)', () => {
+  it('defers the grant while the system home backfill is pending', () => {
+    pendingMock.mockReturnValue(true)
+    grantSucceeds()
+
+    const lane = ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('pending-index')
+    expect(grantMock).not.toHaveBeenCalled()
+    // Why: deferral must be side-effect free — no half-installed hook entry.
+    expect(existsSync(getRealHooksJsonPath())).toBe(false)
+    expect(pendingMock).toHaveBeenCalledWith(join(fakeHomeDir, '.codex'))
   })
 
-  it('recognizes it inside an accumulated multi-error string', () => {
-    expect(isCodexBackfillIndexingNotice(`something else\n${CODEX_BACKFILL_INDEXING_NOTICE}`)).toBe(true)
+  it('keeps the lane usable (scheduler-eligible) while pending-index', () => {
+    pendingMock.mockReturnValue(true)
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    expect(isRealHomeCodexHookLaneUsable()).toBe(true)
   })
 
-  it('rejects unrelated errors', () => {
-    expect(isCodexBackfillIndexingNotice('SSH connection is not active')).toBe(false)
-    expect(isCodexBackfillIndexingNotice('node-pty: posix_spawn failed: ENOENT')).toBe(false)
+  it('grants normally once the backfill completes', () => {
+    pendingMock.mockReturnValue(true)
+    grantSucceeds()
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+
+    pendingMock.mockReturnValue(false)
+    const lane = ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('installed')
+    expect(grantMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not defer an already-installed lane', () => {
+    // Why: an installed lane holds a valid grant ledger; repeat ensures skip the
+    // RPC and spawn nothing, so there is no doomed codex to avoid.
+    grantSucceeds()
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    pendingMock.mockReturnValue(true)
+
+    const lane = ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('installed')
+  })
+
+  it('still sweeps on opt-out while pending-index', () => {
+    pendingMock.mockReturnValue(true)
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+
+    const lane = ensureRealHomeCodexHookState({ hooksEnabled: false, userDataPath: userDataDir })
+
+    expect(lane).toBe('removed')
   })
 })
 ```
 
+(Adapt helper names — `grantSucceeds`, `getRealHooksJsonPath`, `fakeHomeDir`,
+`userDataDir` — to the file's existing helpers; they exist verbatim today.)
+
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `pnpm test src/renderer/src/components/terminal-pane/TerminalErrorToast.test.ts`
-Expected: FAIL — `isCodexBackfillIndexingNotice` is not exported.
+Run: `pnpm exec vitest run src/main/codex/codex-real-home-hook-install.test.ts --config config/vitest.config.ts`
+Expected: new tests FAIL (`'pending-index'` not a lane value; grant still spawns).
+Existing tests must still PASS (the `pendingMock` default keeps them on today's path).
 
 - [ ] **Step 3: Implement**
 
-In `TerminalErrorToast.tsx`:
+In `src/main/codex/codex-real-home-hook-install.ts`:
 
-1. Add the classifier next to the existing exported classifiers
-   (`isSshReconnectOwnedTerminalError`, `shouldOfferDaemonRestart`):
+1. Import the check: `import { isCodexBackfillIndexPending } from './codex-state-db'`.
+2. Extend the union and its doc comment (at `:41`):
 
 ```ts
-/** True when the pane error is Orca's informational codex-indexing notice (#11828). */
-export function isCodexBackfillIndexingNotice(error: string): boolean {
-  return error.includes('Codex is still indexing your session history')
-}
+/**
+ * ...existing lane docs...
+ * - 'pending-index': the target home's codex session index is not complete, so the
+ *   10s grant codex would die in the #11828 backfill wait. Non-latching: routing
+ *   and the migration scheduler treat it as usable; the grant re-runs after the
+ *   prewarm finishes the index.
+ */
+export type RealHomeCodexHookLane =
+  | 'pending'
+  | 'pending-index'
+  | 'installed'
+  | 'unavailable'
+  | 'removed'
 ```
 
-2. Use it in the render: the component currently picks between an amber (SSH) palette and a
-   red default palette, and the red path frames the message as a failure (file-an-issue /
-   daemon-restart affordances). Route `isCodexBackfillIndexingNotice(error)` to the **amber
-   informational treatment**: amber palette, no "file an issue"-style suffix, and no daemon
-   restart button (add `&& !isCodexBackfillIndexingNotice(error)` to the same condition that
-   already gates the restart affordance alongside the SSH check). Keep the dismiss button.
-   Follow the exact conditional structure already in the file — this is a two-to-three-line
-   change to existing ternaries, not a redesign.
+3. In `ensureRealHomeCodexHookState` (`:92`), insert the deferral as the FIRST
+   check, before the `'unavailable'` cooldown gate:
+
+```ts
+  // Why: #11828 — against an unindexed large home the 10s grant codex hits the
+  // backfill wait and dies, and its failure used to latch 'unavailable', which
+  // silently disabled the very scheduler/prewarm that would finish the index.
+  // Skip when already installed: a valid grant ledger spawns nothing anyway.
+  if (
+    args.hooksEnabled &&
+    currentLane !== 'installed' &&
+    isCodexBackfillIndexPending(getSystemCodexHomePath())
+  ) {
+    if (currentLane !== 'pending-index') {
+      console.info(
+        '[codex-real-home-hooks] deferring trust grant until codex session index completes'
+      )
+    }
+    currentLane = 'pending-index'
+    return currentLane
+  }
+```
+
+No other changes: `isRealHomeCodexHookLaneUsable()` already returns true for any
+non-`'unavailable'` lane; the `installRetryAfterMs` cooldown only consults
+`currentLane === 'unavailable'` so `'pending-index'` bypasses it; the three
+genuine-failure `return 'unavailable'` sites (`:131`, `:137`, catch at `:110`) and
+the grant-failure latch (`:219-223`) are untouched — genuine failures keep today's
+semantics.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `pnpm test src/renderer/src/components/terminal-pane/TerminalErrorToast.test.ts`
-Expected: PASS (existing tests plus 3 new).
+Run: `pnpm exec vitest run src/main/codex/codex-real-home-hook-install.test.ts --config config/vitest.config.ts`
+Expected: PASS (all, including pre-existing tests). Also `pnpm typecheck` → exit 0.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/renderer/src/components/terminal-pane/TerminalErrorToast.tsx src/renderer/src/components/terminal-pane/TerminalErrorToast.test.ts
-git commit -m "feat(terminal): render codex indexing notice as informational toast"
+git add src/main/codex/codex-real-home-hook-install.ts src/main/codex/codex-real-home-hook-install.test.ts
+git commit -m "fix(codex): defer real-home trust grant while the session index is pending (#11828)"
 ```
 
 ---
 
-### Task 6: Wire the detector into `pty-connection.ts`
+### Task 3: Re-run the deferred grant when the prewarm completes (+ stale-lease proof)
 
 **Files:**
-- Modify: `src/renderer/src/components/terminal-pane/pty-connection.ts` (detector instance near the other per-connection scanners; observation in `dataCallback`'s scanner band at ~:7275-7308)
-- Modify: `src/renderer/src/components/terminal-pane/pty-connection.test.ts`
+- Modify: `src/main/codex/codex-real-home-hook-install.ts` (one new export)
+- Modify: `src/main/index.ts` (`startStateDbPrewarm` wiring at `~:2092`)
+- Test: `src/main/codex/codex-real-home-hook-install.test.ts`
+- Test: `src/main/codex/codex-state-db-prewarm.test.ts` (stale-lease case)
 
 **Interfaces:**
-- Consumes (from Task 4): `createCodexBackfillErrorDetector()`.
-- Consumes (existing, all already in scope inside `pty-connection.ts`):
-  - `dataCallback(data: string, meta?: PtyDataMeta, streamGeneration?)` at `:7217` — the per-pane incoming-data handler with an existing band of string scanners at `:7275-7308` (`scanForShellReadyMarker`, `observeStartupDraftPasteReadiness`, `observeTerminalGitHubPRLink`, `commandCodeOutputStatusDetector.observe`).
-  - `resolveExpectedLaunchTuiAgent(): TuiAgent | null` at `:1967` — `'codex'` identifies codex panes.
-  - `reportError(message: string)` at `:4448` — routes to `TerminalPane`'s error state (the toast); do NOT call `deps.onPtyErrorRef` directly (reportError carries the disposed/worktree-fence guards).
-- Produces: user-visible behavior — a codex pane whose output contains the backfill-timeout signature shows the informational toast.
+- Consumes: `ensureRealHomeCodexHookState`, `'pending-index'` lane (Task 2);
+  `startCodexStateDbPrewarmInBackground(options, systemCodexHomePathOverride?):
+  Promise<CodexStateDbPrewarmSummary[] | null>`; in `index.ts` scope: `store`,
+  `app.getPath('userData')`, `isAgentStatusHooksEnabled` (all already used at
+  `index.ts:2503-2510`).
+- Produces:
+  - `export function retryRealHomeCodexHookAfterIndex(args: { hooksEnabled: boolean; userDataPath: string }): RealHomeCodexHookLane`
+    — no-op (returns current lane) unless the lane is `'pending-index'`.
+  - `index.ts` scheduler arg becomes a closure that re-runs the grant after every
+    prewarm resolution (Task 4 extends the same closure with a broadcast).
 
 - [ ] **Step 1: Write the failing tests**
 
-In `pty-connection.test.ts`: find the canonical data-callback test at ~`:2283` — it mocks
-`./pty-transport`, captures `callbacks.onData` from `transport.connect.mockImplementation`,
-and invokes it with a literal string. Copy that test's full setup (connection construction,
-transport mock, any store seeding) for two new tests, adjusting only what is listed below.
-Also find how existing tests in this file mark a pane as a codex launch (search the file for
-`launchAgent` and `'codex'`) and reuse that exact mechanism.
+In `codex-real-home-hook-install.test.ts`:
 
 ```ts
-import { CODEX_BACKFILL_INDEXING_NOTICE } from './codex-backfill-error-detector'
+import { retryRealHomeCodexHookAfterIndex } from './codex-real-home-hook-install'
 
-const CODEX_BACKFILL_FAILURE_OUTPUT =
-  "Codex couldn't start because its local database appears to be damaged.\r\n" +
-  'timed out waiting for state db backfill at /x/state_5.sqlite after 30s (status: running)\r\n'
+describe('retryRealHomeCodexHookAfterIndex', () => {
+  it('re-runs the grant only from pending-index', () => {
+    pendingMock.mockReturnValue(true)
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    pendingMock.mockReturnValue(false)
+    grantSucceeds()
 
-it('surfaces the codex indexing notice when a codex pane hits the backfill timeout', async () => {
-  // setup: copy from the canonical onData test at ~:2283, with the pane marked as a
-  // codex launch (launchAgent 'codex') and an onPtyError spy captured the way the
-  // file's existing error tests capture it.
-  onData(CODEX_BACKFILL_FAILURE_OUTPUT.slice(0, 40))
-  onData(CODEX_BACKFILL_FAILURE_OUTPUT.slice(40))
-  expect(onPtyError).toHaveBeenCalledWith(expect.anything(), CODEX_BACKFILL_INDEXING_NOTICE)
-  expect(onPtyError).toHaveBeenCalledTimes(1)
-})
+    const lane = retryRealHomeCodexHookAfterIndex({ hooksEnabled: true, userDataPath: userDataDir })
 
-it('does not surface the notice for non-codex panes', async () => {
-  // setup: same, but with no codex launch agent (plain shell pane).
-  onData(CODEX_BACKFILL_FAILURE_OUTPUT)
-  expect(onPtyError).not.toHaveBeenCalled()
+    expect(lane).toBe('installed')
+    expect(grantMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('is a no-op when the lane is not pending-index', () => {
+    _internals.setLaneForTesting('unavailable')
+
+    const lane = retryRealHomeCodexHookAfterIndex({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('unavailable')
+    expect(grantMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps unavailable semantics for a genuine failure on retry', () => {
+    pendingMock.mockReturnValue(true)
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    pendingMock.mockReturnValue(false)
+    grantUnavailable()
+
+    const lane = retryRealHomeCodexHookAfterIndex({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('unavailable')
+  })
 })
 ```
 
-These two bodies are the required assertions; the surrounding setup must mirror the file's
-existing tests verbatim (that file is 800-line-budget-exempt via the test budget — it is a
-`.test.ts`, budget 800, and already large; if the ratchet complains, put the two tests in a
-new co-located file `pty-connection-codex-backfill.test.ts` using the same setup imports).
+In `codex-state-db-prewarm.test.ts` — the explicit stale-lease proof the design
+decision demands. Follow the file's existing `createDeps` DI pattern
+(`readBackfillStatus`, `countSessionFiles`, fake children, fake timers):
+
+```ts
+it('spawns and supervises past a stale running lease left by a killed codex (#11828)', async () => {
+  // Why: the previous E2E proved a killed 10s trust-grant codex leaves
+  // backfill_state = 'running'; the prewarm must treat that as incomplete and
+  // spawn anyway (codex adopts idle indexes; stale leases expire <=15 min).
+  const statuses: CodexStateDbBackfillStatus[] = [
+    { kind: 'incomplete', stateDbPath: '/x/state_5.sqlite', status: 'running', lastWatermark: null },
+    { kind: 'incomplete', stateDbPath: '/x/state_5.sqlite', status: 'running', lastWatermark: null },
+    { kind: 'complete', stateDbPath: '/x/state_5.sqlite' }
+  ]
+  const readBackfillStatus = vi.fn(() => statuses[Math.min(readBackfillStatus.mock.calls.length - 1, statuses.length - 1)])
+  const { deps, spawnProcess } = createDeps({ readBackfillStatus })
+
+  const summaryPromise = runCodexStateDbPrewarm('/x', {}, deps)
+  await advanceUntilResolved(summaryPromise) // use the file's existing fake-timer advance helper
+
+  const summary = await summaryPromise
+  expect(spawnProcess).toHaveBeenCalledTimes(1)
+  expect(summary.outcome).toBe('completed')
+})
+```
+
+(Adapt the status-sequencing and timer-advance mechanics to the file's existing
+helpers — several tests there already sequence `readBackfillStatus` returns; mirror
+the closest one. The assertion that matters: `status: 'running'` → spawn happens →
+outcome `completed`.)
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `pnpm test src/renderer/src/components/terminal-pane/pty-connection.test.ts`
-Expected: the two new tests FAIL (no notice raised); existing tests still pass.
+Run: `pnpm exec vitest run src/main/codex/codex-real-home-hook-install.test.ts src/main/codex/codex-state-db-prewarm.test.ts --config config/vitest.config.ts`
+Expected: retry tests FAIL (export missing). The stale-lease test may already PASS
+(the prewarm treats any `incomplete` as spawn-worthy today) — that is fine; it
+pins the behavior the design decision depends on. Note the observed result.
 
-- [ ] **Step 3: Implement the wiring**
+- [ ] **Step 3: Implement**
 
-In `pty-connection.ts`:
-
-1. Import and instantiate one detector per connection, next to where the other scanner
-   state (e.g. `commandCodeOutputStatusDetector`) is created:
+In `codex-real-home-hook-install.ts`, after `ensureRealHomeCodexHookState`:
 
 ```ts
-import { createCodexBackfillErrorDetector } from './codex-backfill-error-detector'
+/**
+ * Re-runs a trust grant that Task-2 deferral parked behind the codex session
+ * index (#11828). No-op for every other lane; a genuine grant failure on the
+ * retry latches 'unavailable' exactly like a startup failure would.
+ */
+export function retryRealHomeCodexHookAfterIndex(args: {
+  hooksEnabled: boolean
+  userDataPath: string
+}): RealHomeCodexHookLane {
+  if (currentLane !== 'pending-index') {
+    return currentLane
+  }
+  return ensureRealHomeCodexHookState(args)
+}
 ```
 
+In `src/main/index.ts`: add `retryRealHomeCodexHookAfterIndex` to the existing
+import from `./codex/codex-real-home-hook-install` (`:191-193`), and replace the
+scheduler arg `startStateDbPrewarm: startCodexStateDbPrewarmInBackground` (`:2092`)
+with:
+
 ```ts
-const codexBackfillErrorDetector = createCodexBackfillErrorDetector()
+    // Why: #11828 — a trust grant deferred behind the session index must run as
+    // soon as the prewarm finishes, not wait minutes for the next pane launch.
+    startStateDbPrewarm: (options, override) =>
+      startCodexStateDbPrewarmInBackground(options, override).then((summaries) => {
+        retryRealHomeCodexHookAfterIndex({
+          hooksEnabled: isAgentStatusHooksEnabled(store!.getSettings()),
+          userDataPath: app.getPath('userData')
+        })
+        return summaries
+      }),
 ```
 
-2. In `dataCallback`, at the end of the existing scanner band (immediately after the
-   `commandCodeOutputStatusDetector.observe` call at ~`:7308` — later insertion points sit
-   behind early returns):
+(The closure's shape still matches the scheduler's
+`MigrationRun = (options, systemCodexHomePathOverride?) => Promise<unknown>`.
+Retrying unconditionally on resolve is safe: `retryRealHomeCodexHookAfterIndex`
+no-ops off-lane, and if the prewarm gave up while still pending, the ensure call
+re-defers to `'pending-index'`.)
+
+- [ ] **Step 4: Run tests + typecheck**
+
+Run: `pnpm exec vitest run src/main/codex/codex-real-home-hook-install.test.ts src/main/codex/codex-state-db-prewarm.test.ts src/main/codex/codex-session-migration-scheduler.test.ts --config config/vitest.config.ts`
+Expected: PASS. Run `pnpm typecheck` → exit 0 (proves the index.ts closure matches
+`MigrationRun`).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/main/codex/codex-real-home-hook-install.ts src/main/codex/codex-real-home-hook-install.test.ts src/main/codex/codex-state-db-prewarm.test.ts src/main/index.ts
+git commit -m "fix(codex): re-run deferred trust grant when the state-db prewarm completes (#11828)"
+```
+
+---
+
+### Task 4: `codexBackfill` IPC channel (main handler + broadcast + preload + web stub)
+
+**Files:**
+- Create: `src/shared/codex-backfill-status-types.ts`
+- Create: `src/main/ipc/codex-backfill-status.ts`
+- Test: `src/main/ipc/codex-backfill-status.test.ts`
+- Modify: `src/main/ipc/register-core-handlers.ts` (registration, near
+  `registerCodexConfigSyncHandlers(...)` at `~:149`)
+- Modify: `src/main/index.ts` (broadcast from the Task-3 prewarm closure)
+- Modify: `src/preload/index.ts`, `src/preload/api-types.ts`,
+  `src/renderer/src/web/web-preload-api.ts`
+
+**Interfaces:**
+- Consumes: `isCodexBackfillIndexPending`, `readCodexStateDbBackfillStatus`
+  (Task 1); `getSystemCodexHomePath()`, `getOrcaManagedCodexHomePath()` from
+  `src/main/codex/codex-home-paths`; a runtime-home slice
+  `{ isHostSystemDefaultRealHome(): boolean }` (the `CodexRuntimeHomeService`
+  instance — same object `register-core-handlers.ts` already passes to
+  `registerCodexConfigSyncHandlers`).
+- Produces (Task 5 relies on these exactly):
+  - `export type CodexBackfillGateStatus = { pending: boolean; lastWatermark: string | null }`
+  - IPC channels `codexBackfill:status` (invoke → `CodexBackfillGateStatus`) and
+    `codexBackfill:statusChanged` (broadcast, payload `CodexBackfillGateStatus`)
+  - `window.api.codexBackfill.status(): Promise<CodexBackfillGateStatus>`
+  - `window.api.codexBackfill.onStatusChanged(cb): () => void`
+  - main exports: `getCodexBackfillGateStatus(runtimeHome)`,
+    `registerCodexBackfillStatusHandlers(runtimeHome)`,
+    `broadcastCodexBackfillStatusChanged(getWindows, status)`
+
+- [ ] **Step 1: Write the failing test**
+
+`src/main/ipc/codex-backfill-status.test.ts` (node env; mock the codex modules,
+test the pure resolution — registration glue mirrors `codex-config-sync.ts` and
+stays untested like its peers):
 
 ```ts
-// Why: #11828 — codex exits with a misleading "damaged database" error while its
-// one-time session index runs; translate it to what is actually happening.
-if (resolveExpectedLaunchTuiAgent() === 'codex') {
-  const codexBackfillNotice = codexBackfillErrorDetector.observe(data)
-  if (codexBackfillNotice) {
-    reportError(codexBackfillNotice)
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+
+const { pendingMock, readMock, systemHomeMock, managedHomeMock } = vi.hoisted(() => ({
+  pendingMock: vi.fn<() => boolean>(),
+  readMock: vi.fn(),
+  systemHomeMock: vi.fn(() => '/real/.codex'),
+  managedHomeMock: vi.fn<() => string | null>(() => '/managed/home')
+}))
+
+vi.mock('../codex/codex-state-db', () => ({
+  isCodexBackfillIndexPending: pendingMock,
+  readCodexStateDbBackfillStatus: readMock
+}))
+vi.mock('../codex/codex-home-paths', () => ({
+  getSystemCodexHomePath: systemHomeMock,
+  getOrcaManagedCodexHomePath: managedHomeMock
+}))
+
+import { getCodexBackfillGateStatus } from './codex-backfill-status'
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  managedHomeMock.mockReturnValue('/managed/home')
+})
+
+describe('getCodexBackfillGateStatus', () => {
+  it('reports pending with the cursor for the system home on the real-home lane', () => {
+    pendingMock.mockReturnValue(true)
+    readMock.mockReturnValue({
+      kind: 'incomplete',
+      stateDbPath: '/real/.codex/state_5.sqlite',
+      status: 'running',
+      lastWatermark: 'sessions/2026/07/02/rollout-x.jsonl'
+    })
+
+    const status = getCodexBackfillGateStatus({ isHostSystemDefaultRealHome: () => true })
+
+    expect(pendingMock).toHaveBeenCalledWith('/real/.codex')
+    expect(status).toEqual({ pending: true, lastWatermark: 'sessions/2026/07/02/rollout-x.jsonl' })
+  })
+
+  it('targets the managed home off the real-home lane', () => {
+    pendingMock.mockReturnValue(false)
+
+    const status = getCodexBackfillGateStatus({ isHostSystemDefaultRealHome: () => false })
+
+    expect(pendingMock).toHaveBeenCalledWith('/managed/home')
+    expect(status).toEqual({ pending: false, lastWatermark: null })
+  })
+
+  it('fails open when no managed home path resolves', () => {
+    managedHomeMock.mockReturnValue(null)
+
+    const status = getCodexBackfillGateStatus({ isHostSystemDefaultRealHome: () => false })
+
+    expect(status).toEqual({ pending: false, lastWatermark: null })
+    expect(pendingMock).not.toHaveBeenCalled()
+  })
+})
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pnpm exec vitest run src/main/ipc/codex-backfill-status.test.ts --config config/vitest.config.ts`
+Expected: FAIL (module does not exist).
+
+- [ ] **Step 3: Implement**
+
+`src/shared/codex-backfill-status-types.ts`:
+
+```ts
+/**
+ * Why a narrow shape: the pane only needs go/no-go plus a cheap progress hint;
+ * the full CodexStateDbBackfillStatus union stays a main-process concern.
+ */
+export type CodexBackfillGateStatus = {
+  pending: boolean
+  /** Backfill cursor (a sessions/... rollout path) while pending; null otherwise. */
+  lastWatermark: string | null
+}
+```
+
+`src/main/ipc/codex-backfill-status.ts`:
+
+```ts
+import { ipcMain } from 'electron'
+import type { BrowserWindow } from 'electron'
+import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { isCodexBackfillIndexPending, readCodexStateDbBackfillStatus } from '../codex/codex-state-db'
+import type { CodexBackfillGateStatus } from '../../shared/codex-backfill-status-types'
+
+/** The read-only lane slice this channel needs from CodexRuntimeHomeService. */
+type CodexHomeLaneResolver = {
+  isHostSystemDefaultRealHome: () => boolean
+}
+
+/**
+ * Status of the codex home a FRESH local pane would read: the real ~/.codex on
+ * the real-home lane, else the managed twin. Resume-pinned panes can differ;
+ * the output-scanning detector remains their fallback net (#11828).
+ */
+export function getCodexBackfillGateStatus(
+  runtimeHome: CodexHomeLaneResolver
+): CodexBackfillGateStatus {
+  const home = runtimeHome.isHostSystemDefaultRealHome()
+    ? getSystemCodexHomePath()
+    : getOrcaManagedCodexHomePath()
+  if (!home || !isCodexBackfillIndexPending(home)) {
+    return { pending: false, lastWatermark: null }
+  }
+  const status = readCodexStateDbBackfillStatus(home)
+  return {
+    pending: true,
+    lastWatermark: status.kind === 'incomplete' ? status.lastWatermark : null
+  }
+}
+
+/** Registers the read-only gate query fresh codex panes check before spawning. */
+export function registerCodexBackfillStatusHandlers(runtimeHome: CodexHomeLaneResolver): void {
+  ipcMain.removeHandler('codexBackfill:status')
+  ipcMain.handle('codexBackfill:status', (): CodexBackfillGateStatus =>
+    getCodexBackfillGateStatus(runtimeHome)
+  )
+}
+
+export function broadcastCodexBackfillStatusChanged(
+  getWindows: () => BrowserWindow[],
+  status: CodexBackfillGateStatus
+): void {
+  for (const window of getWindows()) {
+    if (window.isDestroyed() || window.webContents.isDestroyed()) {
+      continue
+    }
+    window.webContents.send('codexBackfill:statusChanged', status)
   }
 }
 ```
 
-Keep the observe call cheap-path-first exactly as shown (agent check before observe) so
-non-codex panes pay nothing.
+`src/main/ipc/register-core-handlers.ts` — next to the
+`registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)` call (`~:149`):
 
-Detection scope (validated; document in a brief comment if natural): this covers **visible,
-Orca-launched** codex panes — `tab.launchAgent` is set at tab creation, pre-spawn, so there
-is no agent-resolution race. Accepted misses (ledger AD-4): hidden/background panes receive
-no renderer bytes (`pty-connection.ts:7405`, hidden-delivery gate `:5875-5904`), flood-dropped
-chunks are restored via snapshot (bypassing `dataCallback`), and manually-typed `codex` in a
-plain shell pane has no `launchAgent`. The prewarm (half A) still fixes those homes whether
-or not the toast fires.
+```ts
+registerCodexBackfillStatusHandlers(codexAccounts.runtimeHomeService)
+```
 
-- [ ] **Step 4: Run tests to verify they pass**
+(plus the import at the top; if the runtime-home service reference is named
+differently there, use exactly what `registerCodexConfigSyncHandlers` receives.)
 
-Run: `pnpm test src/renderer/src/components/terminal-pane/pty-connection.test.ts`
-Expected: PASS, including the two new tests.
+`src/main/index.ts` — extend the Task-3 closure so waiting panes learn about
+completion immediately (import `BrowserWindow` is already imported in index.ts;
+add imports for the two new functions):
 
-Also run the neighboring suites to catch regressions:
-`pnpm test src/renderer/src/components/terminal-pane/`
+```ts
+    startStateDbPrewarm: (options, override) =>
+      startCodexStateDbPrewarmInBackground(options, override).then((summaries) => {
+        retryRealHomeCodexHookAfterIndex({
+          hooksEnabled: isAgentStatusHooksEnabled(store!.getSettings()),
+          userDataPath: app.getPath('userData')
+        })
+        // Why: waiting panes auto-start the moment the index completes instead of
+        // waiting out their slow re-poll interval.
+        if (codexRuntimeHome) {
+          broadcastCodexBackfillStatusChanged(
+            () => BrowserWindow.getAllWindows(),
+            getCodexBackfillGateStatus(codexRuntimeHome)
+          )
+        }
+        return summaries
+      }),
+```
+
+`src/preload/index.ts` — add a top-level namespace (import the shared type):
+
+```ts
+  codexBackfill: {
+    /** Go/no-go for launching codex into a fresh local pane (#11828 index gate). */
+    status: (): Promise<CodexBackfillGateStatus> => ipcRenderer.invoke('codexBackfill:status'),
+    onStatusChanged: (callback: (status: CodexBackfillGateStatus) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        status: CodexBackfillGateStatus
+      ): void => callback(status)
+      ipcRenderer.on('codexBackfill:statusChanged', listener)
+      return () => ipcRenderer.removeListener('codexBackfill:statusChanged', listener)
+    }
+  } satisfies PreloadApi['codexBackfill'],
+```
+
+`src/preload/api-types.ts`:
+
+```ts
+  codexBackfill: {
+    /** Go/no-go for launching codex into a fresh local pane (#11828 index gate). */
+    status: () => Promise<CodexBackfillGateStatus>
+    onStatusChanged: (callback: (status: CodexBackfillGateStatus) => void) => () => void
+  }
+```
+
+`src/renderer/src/web/web-preload-api.ts`:
+
+```ts
+    // Why: the web client's panes run on remote hosts whose codex homes this
+    // browser cannot inspect; never-pending keeps those spawns ungated.
+    codexBackfill: {
+      status: () => Promise.resolve({ pending: false, lastWatermark: null }),
+      onStatusChanged: () => () => {}
+    },
+```
+
+- [ ] **Step 4: Run tests + typecheck**
+
+Run: `pnpm exec vitest run src/main/ipc/codex-backfill-status.test.ts --config config/vitest.config.ts`
 Expected: PASS.
+Run: `pnpm typecheck` → exit 0 (proves preload impl, api-types, and the web stub
+all satisfy the same `PreloadApi['codexBackfill']`).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/renderer/src/components/terminal-pane/pty-connection.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts
-git commit -m "fix(terminal): explain codex backfill-timeout startup failures in the pane (#11828)"
+git add src/shared/codex-backfill-status-types.ts src/main/ipc/codex-backfill-status.ts src/main/ipc/codex-backfill-status.test.ts src/main/ipc/register-core-handlers.ts src/main/index.ts src/preload/index.ts src/preload/api-types.ts src/renderer/src/web/web-preload-api.ts
+git commit -m "feat(codex): expose backfill gate status to the renderer over IPC (#11828)"
 ```
-
-(If Step 1 created `pty-connection-codex-backfill.test.ts`, add that path instead.)
 
 ---
 
-### Task 7: Full gates and on-machine end-to-end verification
+### Task 5: Renderer spawn gate — defer fresh local codex spawns while pending
 
 **Files:**
-- No new source files. Read-only inspection of real homes; disposable sandboxed HOME +
-  user-data dir (the repo's E2E isolation lane).
+- Create: `src/renderer/src/components/terminal-pane/codex-backfill-spawn-gate.ts`
+- Test: `src/renderer/src/components/terminal-pane/codex-backfill-spawn-gate.test.ts`
+- Modify: `src/renderer/src/components/terminal-pane/pty-connection.ts`
+- Modify: `src/renderer/src/components/terminal-pane/pty-connection-types.ts`
+- Test (extend): `src/renderer/src/components/terminal-pane/pty-connection.test.ts`
 
 **Interfaces:**
-- Consumes: everything above, plus the real environment on this machine (WSL2; managed home `/home/dan/.local/share/orca/codex-runtime-home/home`; real `~/.codex` with ~4.8k rollout files, 15 GB — hardlink-shared with the managed home).
+- Consumes: `window.api.codexBackfill` (Task 4 shape); inside `connectPanePty`:
+  `resolveExpectedLaunchTuiAgent(): TuiAgent | null` (`pty-connection.ts:~1968`),
+  `runDeferredConnect` (`:~4410`), `runtimeEnvironmentId` (already in scope near
+  the transport selection at `:~3733-3754`), `deps.onPtyErrorRef`-style dep refs.
+- Produces (Task 6 relies on these exactly):
+  - `export type CodexIndexingPaneState = { lastWatermark: string | null }`
+  - `export const CODEX_BACKFILL_GATE_REPOLL_MS = 20_000`
+  - `export function waitForCodexBackfillGate(args: { api: CodexBackfillGateApi | undefined; onWaiting: (state: CodexIndexingPaneState) => void; onClear: () => void; repollMs?: number }): () => void`
+    (returns a dispose that cancels silently — no `onClear`)
+  - `PtyConnectionDeps` gains
+    `onCodexIndexingStateRef?: React.RefObject<(paneId: number, state: CodexIndexingPaneState | null) => void>`
 
-- [ ] **Step 1: Run all four gates**
+- [ ] **Step 1: Write the failing gate-module tests**
 
-```bash
-pnpm lint && pnpm typecheck && pnpm test && pnpm build
+`codex-backfill-spawn-gate.test.ts` (node env, fake timers):
+
+```ts
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  CODEX_BACKFILL_GATE_REPOLL_MS,
+  waitForCodexBackfillGate
+} from './codex-backfill-spawn-gate'
+
+beforeEach(() => vi.useFakeTimers())
+afterEach(() => vi.useRealTimers())
+
+function createApi(initial: { pending: boolean; lastWatermark: string | null }): {
+  api: Parameters<typeof waitForCodexBackfillGate>[0]['api']
+  emit: (status: { pending: boolean; lastWatermark: string | null }) => void
+  unsubscribed: () => boolean
+} {
+  let listener: ((s: { pending: boolean; lastWatermark: string | null }) => void) | null = null
+  let unsubscribed = false
+  return {
+    api: {
+      status: vi.fn(() => Promise.resolve(initial)),
+      onStatusChanged: (cb) => {
+        listener = cb
+        return () => {
+          unsubscribed = true
+        }
+      }
+    },
+    emit: (status) => listener?.(status),
+    unsubscribed: () => unsubscribed
+  }
+}
+
+it('clears immediately when not pending', async () => {
+  const { api } = createApi({ pending: false, lastWatermark: null })
+  const onClear = vi.fn()
+  waitForCodexBackfillGate({ api, onWaiting: vi.fn(), onClear })
+  await vi.runOnlyPendingTimersAsync()
+  expect(onClear).toHaveBeenCalledTimes(1)
+})
+
+it('waits while pending, then clears once on the completion event', async () => {
+  const { api, emit, unsubscribed } = createApi({
+    pending: true,
+    lastWatermark: 'sessions/2026/07/02/rollout-x.jsonl'
+  })
+  const onWaiting = vi.fn()
+  const onClear = vi.fn()
+  waitForCodexBackfillGate({ api, onWaiting, onClear })
+  await vi.runOnlyPendingTimersAsync()
+  expect(onWaiting).toHaveBeenCalledWith({ lastWatermark: 'sessions/2026/07/02/rollout-x.jsonl' })
+  expect(onClear).not.toHaveBeenCalled()
+
+  emit({ pending: false, lastWatermark: null })
+  emit({ pending: false, lastWatermark: null })
+  expect(onClear).toHaveBeenCalledTimes(1)
+  expect(unsubscribed()).toBe(true)
+})
+
+it('re-polls as a belt over a missed event', async () => {
+  const { api } = createApi({ pending: true, lastWatermark: null })
+  const onClear = vi.fn()
+  waitForCodexBackfillGate({ api, onWaiting: vi.fn(), onClear })
+  await vi.runOnlyPendingTimersAsync()
+  ;(api!.status as ReturnType<typeof vi.fn>).mockResolvedValue({
+    pending: false,
+    lastWatermark: null
+  })
+  await vi.advanceTimersByTimeAsync(CODEX_BACKFILL_GATE_REPOLL_MS)
+  expect(onClear).toHaveBeenCalledTimes(1)
+})
+
+it('fails open when the api is missing or the query rejects', async () => {
+  const onClearMissing = vi.fn()
+  waitForCodexBackfillGate({ api: undefined, onWaiting: vi.fn(), onClear: onClearMissing })
+  expect(onClearMissing).toHaveBeenCalledTimes(1)
+
+  const onClearError = vi.fn()
+  waitForCodexBackfillGate({
+    api: {
+      status: () => Promise.reject(new Error('ipc down')),
+      onStatusChanged: () => () => {}
+    },
+    onWaiting: vi.fn(),
+    onClear: onClearError
+  })
+  await vi.runOnlyPendingTimersAsync()
+  expect(onClearError).toHaveBeenCalledTimes(1)
+})
+
+it('dispose cancels silently without onClear', async () => {
+  const { api, emit } = createApi({ pending: true, lastWatermark: null })
+  const onClear = vi.fn()
+  const dispose = waitForCodexBackfillGate({ api, onWaiting: vi.fn(), onClear })
+  await vi.runOnlyPendingTimersAsync()
+  dispose()
+  emit({ pending: false, lastWatermark: null })
+  expect(onClear).not.toHaveBeenCalled()
+})
 ```
 
-Expected: all pass. Fix any failures before proceeding (no lint disables; split files if
-`max-lines` trips).
+- [ ] **Step 2: Run gate tests to verify they fail**
 
-- [ ] **Step 2: Confirm the no-op path against the real managed home (read-only)**
+Run: `pnpm exec vitest run src/renderer/src/components/terminal-pane/codex-backfill-spawn-gate.test.ts --config config/vitest.config.ts`
+Expected: FAIL (module does not exist).
 
-```bash
-sqlite3 "file:$HOME/.local/share/orca/codex-runtime-home/home/state_5.sqlite?mode=ro" \
-  "select status from backfill_state;"
+- [ ] **Step 3: Implement the gate module**
+
+`src/renderer/src/components/terminal-pane/codex-backfill-spawn-gate.ts`:
+
+```ts
+import type { CodexBackfillGateStatus } from '../../../../shared/codex-backfill-status-types'
+
+export type CodexIndexingPaneState = { lastWatermark: string | null }
+
+export type CodexBackfillGateApi = {
+  status: () => Promise<CodexBackfillGateStatus>
+  onStatusChanged: (callback: (status: CodexBackfillGateStatus) => void) => () => void
+}
+
+// Why: belt over the push event — a pane whose subscription raced the single
+// statusChanged broadcast must not stay parked forever.
+export const CODEX_BACKFILL_GATE_REPOLL_MS = 20_000
+
+/**
+ * Defers a fresh local codex spawn while the target home's session index is
+ * incomplete (#11828). Reports progress via onWaiting while deferred, then calls
+ * onClear exactly once. Fails open (immediate onClear) when the API is absent
+ * (web build) or errors — an IPC failure must never park a pane.
+ * Returns a dispose that cancels silently (no onClear) for pane teardown.
+ */
+export function waitForCodexBackfillGate(args: {
+  api: CodexBackfillGateApi | undefined
+  onWaiting: (state: CodexIndexingPaneState) => void
+  onClear: () => void
+  repollMs?: number
+}): () => void {
+  const api = args.api
+  if (!api || typeof api.status !== 'function' || typeof api.onStatusChanged !== 'function') {
+    args.onClear()
+    return () => {}
+  }
+  let settled = false
+  let repollTimer: ReturnType<typeof setInterval> | null = null
+  let unsubscribe: (() => void) | null = null
+  const cancel = (): void => {
+    settled = true
+    unsubscribe?.()
+    unsubscribe = null
+    if (repollTimer !== null) {
+      clearInterval(repollTimer)
+      repollTimer = null
+    }
+  }
+  const clear = (): void => {
+    if (settled) {
+      return
+    }
+    cancel()
+    args.onClear()
+  }
+  const handleStatus = (status: CodexBackfillGateStatus): void => {
+    if (settled) {
+      return
+    }
+    if (status.pending) {
+      args.onWaiting({ lastWatermark: status.lastWatermark })
+    } else {
+      clear()
+    }
+  }
+  unsubscribe = api.onStatusChanged(handleStatus)
+  const poll = (): void => {
+    api.status().then(handleStatus, clear)
+  }
+  repollTimer = setInterval(poll, args.repollMs ?? CODEX_BACKFILL_GATE_REPOLL_MS)
+  poll()
+  return cancel
+}
 ```
 
-Expected: `complete` (this machine's index finished on 2026-07-31). Also check the
-**system home** leg the dual-home prewarm now covers (read-only):
-`sqlite3 "file:$HOME/.codex/state_5.sqlite?mode=ro" "select status from backfill_state;" || true`.
-This is the `already-complete` pre-warm path: with **both** homes reading `complete`,
-launching the built app against real data must NOT spawn a codex child. Verify by launching
-`pnpm dev`, waiting ~30s, and checking `pgrep -af 'codex.*app-server'` shows nothing spawned
-by Orca; console shows no `[codex-state-db-prewarm] pre-warming` line. Quit the app.
-If the real `~/.codex` state DB is NOT complete (or missing with a large history), the
-system-home prewarm leg WILL spawn codex against it — that is exactly the shipped
-production behavior (same class of action as the existing index-heal stage, which already
-spawns codex with `CODEX_HOME: systemCodexHomePath`); record the observation instead of
-treating it as a violation, and let it run to completion.
+Run the Step-2 command again. Expected: PASS.
 
-- [ ] **Step 3: Full repro E2E in a disposable sandboxed HOME (the actual #11828 scenario)**
+- [ ] **Step 4: Write the failing `pty-connection` integration tests**
 
-This reproduces the reporter's exact failure and proves both halves of the fix. It takes
-tens of minutes of wall-clock time while the index runs; that is expected.
+Extend `pty-connection.test.ts`, following its existing seams
+(`createMockTransport()`, `transportFactoryQueue.push(transport)`,
+`createDeps({ startup: { command: 'codex', launchAgent: 'codex' } })`,
+`await flushAsyncTicks()`; `window.api` is stubbed via
+`Object.defineProperty(window, 'api', { configurable: true, value: {...} })` —
+extend that stub with a controllable `codexBackfill`):
 
-Design note — why the sandbox wraps `HOME`, not just the user-data dir. Under the
-home-lane model (Key Context above), the migration scheduler runs ONLY when
-`isHostSystemDefaultRealHome()` is true — the same lane in which fresh codex panes read
-the **real** `~/.codex`. A sandbox that only redirects the user-data dir therefore can
-never show both halves at once: the prewarm would target the sandbox twin while every
-pane reads the (complete) real home. The only configuration where the prewarm AND the
-panes hit the same incomplete home — which is also exactly the reporter's situation — is
-one where the "real" home itself is disposable: fake `HOME` via the repo's E2E isolation
-lane and seed the large session history into `<sandbox home>/.codex`. The sandbox twin
-(`<userData>/codex-runtime-home/home`) stays empty, so its prewarm leg is a `not-needed`
-no-op; the twin-targeting leg is covered by Task 2's unit tests, and the system-home leg
-exercised here is the one production hits in the reporter's lane. Two mechanism facts
-(verified in source): `ORCA_USER_DATA_PATH` CANNOT create the sandbox — startup
-overwrites it (`src/main/startup/configure-process.ts:182-185`); the supported redirect
-is `ORCA_E2E_USER_DATA_DIR` + `ORCA_E2E_HOME_DIR`, which refuses to start unless
-`os.homedir()` already equals the E2E home (`configure-process.ts:141-158`) — hence the
-`HOME=` override in the launch env. This runs on Linux/WSL2 (this machine), where
-`os.homedir()` follows `$HOME`.
+```ts
+describe('codex backfill spawn gate (#11828)', () => {
+  function stubCodexBackfillApi(initial: { pending: boolean; lastWatermark: string | null }): {
+    emit: (status: { pending: boolean; lastWatermark: string | null }) => void
+  } {
+    let listener: ((s: { pending: boolean; lastWatermark: string | null }) => void) | null = null
+    window.api.codexBackfill = {
+      status: vi.fn(() => Promise.resolve(initial)),
+      onStatusChanged: (cb: (s: { pending: boolean; lastWatermark: string | null }) => void) => {
+        listener = cb
+        return () => {}
+      }
+    } as never
+    return { emit: (status) => listener?.(status) }
+  }
+
+  it('defers a fresh codex spawn while the backfill is pending, then spawns on clear', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const { emit } = stubCodexBackfillApi({ pending: true, lastWatermark: 'sessions/2026/07/02/r.jsonl' })
+    const deps = createDeps({ startup: { command: 'codex', launchAgent: 'codex' } })
+    deps.onCodexIndexingStateRef = { current: vi.fn() }
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(transport.connect).not.toHaveBeenCalled()
+    expect(deps.onCodexIndexingStateRef.current).toHaveBeenCalledWith(expect.anything(), {
+      lastWatermark: 'sessions/2026/07/02/r.jsonl'
+    })
+
+    emit({ pending: false, lastWatermark: null })
+    await flushAsyncTicks()
+
+    expect(deps.onCodexIndexingStateRef.current).toHaveBeenCalledWith(expect.anything(), null)
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not gate non-codex panes', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    stubCodexBackfillApi({ pending: true, lastWatermark: null })
+    const deps = createDeps()
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+  })
+
+  it('spawns immediately when the backfill is not pending', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    stubCodexBackfillApi({ pending: false, lastWatermark: null })
+    const deps = createDeps({ startup: { command: 'codex', launchAgent: 'codex' } })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not gate a reattach to an existing pty', async () => {
+    // Why: a reattach joins a live codex process; only fresh spawns can hit the
+    // backfill wait. Use the harness's restored-pty seam (restoredPtyIdByLeafId +
+    // restoredLeafId, as the branch's session-restore tests do).
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    stubCodexBackfillApi({ pending: true, lastWatermark: null })
+    const deps = createDeps({ startup: { command: 'codex', launchAgent: 'codex' } })
+    // Adapt to the harness's exact reattach fixture — mirror an existing
+    // reattach test in this file for the deps shape.
+    deps.restoredPtyIdByLeafId = { [deps.restoredLeafId ?? 'leaf-1']: 'pty-existing' }
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+  })
+})
+```
+
+(Where this sketch names harness pieces — `createPane`, `createManager`,
+`createDeps`, reattach fixtures — mirror the closest existing test in the file;
+they all exist today. The behavioral assertions are the contract:
+gated = `transport.connect` withheld until clear; ungated = called once,
+immediately.)
+
+Run: `pnpm exec vitest run src/renderer/src/components/terminal-pane/pty-connection.test.ts --config config/vitest.config.ts`
+Expected: the 4 new tests FAIL (no gate exists); all pre-existing tests PASS —
+**if any pre-existing test starts failing because `window.api.codexBackfill` is
+undefined in its stub, that is the fail-open path working; do not "fix" it by
+requiring the API.**
+
+- [ ] **Step 5: Integrate the gate into `pty-connection.ts`**
+
+1. `pty-connection-types.ts` — next to `onPtyRecoveryStateRef` (`:66-68`):
+
+```ts
+  /** Pane-level codex indexing wait state (#11828 spawn gate); null clears it. */
+  onCodexIndexingStateRef?: React.RefObject<
+    (paneId: number, state: CodexIndexingPaneState | null) => void
+  >
+```
+
+with `import type { CodexIndexingPaneState } from './codex-backfill-spawn-gate'`.
+
+2. `pty-connection.ts` — import
+`{ waitForCodexBackfillGate } from './codex-backfill-spawn-gate'`. Near the other
+connect-state locals (by `connectStarted` / `startupGridSettledForConnect`):
+
+```ts
+  let codexBackfillGateCleared = false
+  let codexBackfillGateDispose: (() => void) | null = null
+  // Why: only a fresh LOCAL spawn launches a new codex against a home main can
+  // inspect; reattaches join a live process and remote homes are unreachable.
+  const shouldGateCodexSpawnOnBackfill = (): boolean =>
+    !runtimeEnvironmentId &&
+    !hasRestoredPtyForThisLeaf &&
+    resolveExpectedLaunchTuiAgent() === 'codex'
+```
+
+For `hasRestoredPtyForThisLeaf`, use the exact fresh-vs-reattach discriminator the
+surrounding code already uses for the `:5056` connect (the restored pty id for
+this pane's leaf, e.g. `deps.restoredPtyIdByLeafId?.[deps.restoredLeafId ?? '']`
+or the local variable `connectPanePty` derives from it — locate it where
+`transport.connect` chooses reattach; do NOT invent a new signal). The Step-4
+reattach test pins the required behavior.
+
+3. In `runDeferredConnect` (`:~4410`), add a second deferral clause after the
+startup-grid clause and before `connectStarted = true`, mirroring the existing
+idiom exactly:
+
+```ts
+    if (!codexBackfillGateCleared && shouldGateCodexSpawnOnBackfill()) {
+      cancelScheduledConnectFrame()
+      if (connectFallbackTimer !== null) {
+        clearTimeout(connectFallbackTimer)
+        connectFallbackTimer = null
+      }
+      codexBackfillGateDispose = waitForCodexBackfillGate({
+        api: window.api.codexBackfill,
+        onWaiting: (state) => deps.onCodexIndexingStateRef?.current?.(pane.id, state),
+        onClear: () => {
+          codexBackfillGateDispose = null
+          codexBackfillGateCleared = true
+          deps.onCodexIndexingStateRef?.current?.(pane.id, null)
+          runDeferredConnect()
+        }
+      })
+      return
+    }
+```
+
+4. In the binding's dispose/cleanup path (where `disposed = true` is set and
+frames/timers are cancelled), add:
+
+```ts
+    codexBackfillGateDispose?.()
+    codexBackfillGateDispose = null
+    deps.onCodexIndexingStateRef?.current?.(pane.id, null)
+```
+
+Keep the addition to `pty-connection.ts` to roughly these ~30 lines; all other
+logic stays in the sibling module (no `max-lines` growth beyond this).
+
+- [ ] **Step 6: Run tests to verify they pass**
+
+Run: `pnpm exec vitest run src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/codex-backfill-spawn-gate.test.ts --config config/vitest.config.ts`
+Expected: PASS (all, including every pre-existing pty-connection test).
+Run `pnpm typecheck` → exit 0.
+
+- [ ] **Step 7: Commit**
 
 ```bash
-REAL_HOME="$HOME"                                 # capture before overriding
-E2E_ROOT=$(mktemp -d /tmp/orca-e2e-11828.XXXXXX)  # mktemp -d => private 0700 dir
+git add src/renderer/src/components/terminal-pane/codex-backfill-spawn-gate.ts src/renderer/src/components/terminal-pane/codex-backfill-spawn-gate.test.ts src/renderer/src/components/terminal-pane/pty-connection.ts src/renderer/src/components/terminal-pane/pty-connection-types.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts
+git commit -m "feat(terminal): gate fresh codex spawns behind the session-index backfill (#11828)"
+```
+
+---
+
+### Task 6: Pane indexing overlay UI + i18n
+
+**Files:**
+- Create: `src/renderer/src/components/terminal-pane/CodexIndexingOverlay.tsx`
+- Test: `src/renderer/src/components/terminal-pane/CodexIndexingOverlay.test.tsx`
+- Modify: `src/renderer/src/components/terminal-pane/TerminalPane.tsx`
+- Modify (generated): `src/renderer/src/i18n/locales/en.json` + `es/ja/ko/zh`
+  via `pnpm run sync:localization-catalog`
+
+**Interfaces:**
+- Consumes: `CodexIndexingPaneState` (Task 5); `translate` from `@/i18n/i18n`;
+  `Loader2` from `lucide-react`; `createPortal` + `managedPanes` +
+  `pane.container` (the exact pattern `TerminalPane.tsx:2975-2991` uses for
+  `TerminalSshReconnectOverlay`); dep-wiring sites where `onPtyRecoveryStateRef`
+  is passed into `connectPanePty` deps (`TerminalPane.tsx:~1453` and `~1657`).
+- Produces:
+  - `export function CodexIndexingOverlay({ state }: { state: CodexIndexingPaneState }): React.JSX.Element`
+  - `export function formatCodexIndexingProgress(lastWatermark: string | null): string | null`
+
+- [ ] **Step 1: Write the failing tests**
+
+`CodexIndexingOverlay.test.tsx` (component tests need the pragma on line 1):
+
+```tsx
+// @vitest-environment happy-dom
+import { render, screen } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
+import { CodexIndexingOverlay, formatCodexIndexingProgress } from './CodexIndexingOverlay'
+
+describe('formatCodexIndexingProgress', () => {
+  it('extracts the date from a rollout cursor path', () => {
+    expect(
+      formatCodexIndexingProgress('sessions/2026/07/02/rollout-2026-07-02T07-08-32.jsonl')
+    ).toBe('2026-07-02')
+  })
+
+  it('handles Windows separators', () => {
+    expect(formatCodexIndexingProgress('sessions\\2026\\07\\02\\rollout-x.jsonl')).toBe(
+      '2026-07-02'
+    )
+  })
+
+  it('returns null for null or unrecognized cursors', () => {
+    expect(formatCodexIndexingProgress(null)).toBeNull()
+    expect(formatCodexIndexingProgress('something-else')).toBeNull()
+  })
+})
+
+describe('CodexIndexingOverlay', () => {
+  it('shows the indexing headline and auto-start hint', () => {
+    render(<CodexIndexingOverlay state={{ lastWatermark: null }} />)
+    expect(screen.getByText('Indexing Codex session history…')).toBeTruthy()
+    expect(
+      screen.getByText('Codex will start automatically when indexing finishes.')
+    ).toBeTruthy()
+  })
+
+  it('shows a progress date when the cursor is parseable', () => {
+    render(
+      <CodexIndexingOverlay
+        state={{ lastWatermark: 'sessions/2026/07/02/rollout-x.jsonl' }}
+      />
+    )
+    expect(
+      screen.getByText(
+        'Indexed through 2026-07-02. Codex will start automatically when indexing finishes.'
+      )
+    ).toBeTruthy()
+  })
+})
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `pnpm exec vitest run src/renderer/src/components/terminal-pane/CodexIndexingOverlay.test.tsx --config config/vitest.config.ts`
+Expected: FAIL (module does not exist).
+
+- [ ] **Step 3: Implement the component**
+
+`src/renderer/src/components/terminal-pane/CodexIndexingOverlay.tsx`:
+
+```tsx
+import { Loader2 } from 'lucide-react'
+import { translate } from '@/i18n/i18n'
+import type { CodexIndexingPaneState } from './codex-backfill-spawn-gate'
+
+/** Extracts a YYYY-MM-DD hint from the backfill cursor (sessions/YYYY/MM/DD/rollout-*.jsonl). */
+export function formatCodexIndexingProgress(lastWatermark: string | null): string | null {
+  const match = /sessions[/\\](\d{4})[/\\](\d{2})[/\\](\d{2})[/\\]/.exec(lastWatermark ?? '')
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : null
+}
+
+/** In-pane wait state while the codex session index finishes (#11828 spawn gate). */
+export function CodexIndexingOverlay({
+  state
+}: {
+  state: CodexIndexingPaneState
+}): React.JSX.Element {
+  const progressDate = formatCodexIndexingProgress(state.lastWatermark)
+  return (
+    <div className="absolute inset-x-3 bottom-3 z-50 flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+      <Loader2 className="size-4 shrink-0 animate-spin" />
+      <div className="min-w-0">
+        <div>
+          {translate(
+            'auto.components.terminal.pane.CodexIndexingOverlay.indexing',
+            'Indexing Codex session history…'
+          )}
+        </div>
+        <div>
+          {progressDate
+            ? translate(
+                'auto.components.terminal.pane.CodexIndexingOverlay.progressThrough',
+                'Indexed through {{value0}}. Codex will start automatically when indexing finishes.',
+                { value0: progressDate }
+              )
+            : translate(
+                'auto.components.terminal.pane.CodexIndexingOverlay.autoStart',
+                'Codex will start automatically when indexing finishes.'
+              )}
+        </div>
+      </div>
+    </div>
+  )
+}
+```
+
+Run the Step-2 command again. Expected: PASS.
+
+- [ ] **Step 4: Wire `TerminalPane.tsx`**
+
+Next to the existing `onPtyRecoveryStateRef` state/handler (`:~582-588`):
+
+```tsx
+  const [codexIndexingStatesByPaneId, setCodexIndexingStatesByPaneId] = useState<
+    Record<number, CodexIndexingPaneState>
+  >({})
+  const onCodexIndexingStateRef = useRef(
+    (paneId: number, state: CodexIndexingPaneState | null) => {
+      setCodexIndexingStatesByPaneId((previous) => {
+        if (state === null) {
+          if (!(paneId in previous)) {
+            return previous
+          }
+          const next = { ...previous }
+          delete next[paneId]
+          return next
+        }
+        return { ...previous, [paneId]: state }
+      })
+    }
+  )
+```
+
+Pass `onCodexIndexingStateRef` into BOTH `connectPanePty` dep sites (the same two
+places `onPtyRecoveryStateRef` is wired, `:~1453` and `:~1657`).
+
+Render next to the SSH-overlay portal block (`:~2975`) — same portal pattern
+(anything not portaled into `pane.container` paints UNDER the xterm WebGL canvas):
+
+```tsx
+      {/* Why: portal into the pane so the indexing notice stacks above the xterm canvas. */}
+      {managedPanes.map((pane) =>
+        codexIndexingStatesByPaneId[pane.id]
+          ? createPortal(
+              <CodexIndexingOverlay state={codexIndexingStatesByPaneId[pane.id]} />,
+              pane.container,
+              `codex-indexing-${pane.id}`
+            )
+          : null
+      )}
+```
+
+- [ ] **Step 5: Sync the i18n catalogs**
+
+```bash
+pnpm run sync:localization-catalog
+```
+
+Expected: the three `CodexIndexingOverlay` keys land in all five locale JSONs
+(non-English seeded with English until translated — the repo's standard flow).
+
+- [ ] **Step 6: Run tests + lint + typecheck**
+
+Run: `pnpm exec vitest run src/renderer/src/components/terminal-pane/CodexIndexingOverlay.test.tsx src/renderer/src/components/terminal-pane/pty-connection.test.ts --config config/vitest.config.ts`
+Expected: PASS.
+Run: `pnpm lint && pnpm typecheck` → both exit 0 (lint includes
+`verify:localization-catalog`, proving Step 5).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/renderer/src/components/terminal-pane/CodexIndexingOverlay.tsx src/renderer/src/components/terminal-pane/CodexIndexingOverlay.test.tsx src/renderer/src/components/terminal-pane/TerminalPane.tsx src/renderer/src/i18n/locales
+git commit -m "feat(terminal): show an indexing overlay while a codex pane waits for the backfill (#11828)"
+```
+
+---
+
+### Task 7: Full gates
+
+**Files:** none new — verification only. Fix regressions this branch caused; do
+NOT touch the known pre-existing failures.
+
+- [ ] **Step 1: Run all four gates, individually (to attribute failures)**
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+Expected: `lint`, `typecheck`, `build` exit 0. `pnpm test` is expected to show
+ONLY the 7 known pre-existing failures (Global Constraints) plus possibly the 2
+known load-flakes; anything else is a branch regression — fix it.
+
+- [ ] **Step 2: Prove branch-owned tests pass 100%**
+
+```bash
+pnpm exec vitest run --config config/vitest.config.ts \
+  src/main/codex/codex-state-db.test.ts \
+  src/main/codex/codex-state-db-prewarm.test.ts \
+  src/main/codex/codex-session-migration-scheduler.test.ts \
+  src/main/codex/codex-real-home-hook-install.test.ts \
+  src/main/ipc/codex-backfill-status.test.ts \
+  src/renderer/src/components/terminal-pane/codex-backfill-error-detector.test.ts \
+  src/renderer/src/components/terminal-pane/codex-backfill-spawn-gate.test.ts \
+  src/renderer/src/components/terminal-pane/CodexIndexingOverlay.test.tsx \
+  src/renderer/src/components/terminal-pane/TerminalErrorToast.test.ts \
+  src/renderer/src/components/terminal-pane/pty-connection.test.ts
+```
+
+Expected: 0 failures.
+
+- [ ] **Step 3: Commit any fixes**
+
+Only if Steps 1–2 forced changes; scoped messages, e.g.
+`git commit -m "fix(codex): address gate findings for backfill ordering"`.
+No empty commits.
+
+---
+
+### Task 8: Sandboxed reporter-shape E2E (the actual #11828 scenario, end to end)
+
+**Files:** none — disposable sandboxed HOME + read-only inspection of real homes.
+This re-runs the previous run's E2E with the fix for its HALT; it takes tens of
+minutes of wall clock while the 15 GB index runs. **LET IT RUN — poll, do not
+time out at a few minutes** (prewarm deadline is 60 min; 15 GB measured 10–13 min
+on this machine).
+
+**Safety protocol (identical to the proven previous run — violations are HALT):**
+real homes (`~/.codex`, `~/.local/share/orca/codex-runtime-home`) get read-only
+`mode=ro` sqlite / `ls` / `stat` access ONLY; the sandbox gets real copies
+(`cp -a`, never `cp -al` — verify inodes differ); full cleanup afterward.
+
+- [ ] **Step 1: Set up the sandbox**
+
+```bash
+REAL_HOME="$HOME"
+E2E_ROOT=$(mktemp -d /tmp/orca-e2e-11828.XXXXXX)   # private 0700 dir
 E2E_DATA="$E2E_ROOT/userdata"
 E2E_HOME="$E2E_DATA/home"
 mkdir -p "$E2E_HOME/.codex"
-# Why cp -a (real copies, NOT cp -al hardlinks): codex has a compression path that can
-# replace rollout .jsonl files (openai/codex rollout/src/compression.rs — ledger A14);
-# plain copies make it impossible for the E2E to touch ~/.codex originals. The 15 GB copy
-# takes a few minutes and needs the disk space — that is the accepted cost of safety.
+# Real copies, NOT hardlinks (codex can rewrite rollout files); takes minutes for 15 GB.
 cp -a "$REAL_HOME/.codex/sessions" "$E2E_HOME/.codex/sessions"
-# Why seed credentials/config: codex must be able to start inside the sandbox, and the
-# real-home hook trust-grant must not mark the lane 'unavailable' (which would silently
-# disable the scheduler — see the eligibility HALT below). Both copies live only in the
-# 0700 temp dir and are deleted at cleanup.
+# Verify no hardlinks into ~/.codex: pick any copied file; link count must be 1
+# and its inode must differ from the original's.
+find "$E2E_HOME/.codex/sessions" -name '*.jsonl' | head -1 | xargs stat -c '%h %i'
+# Seed credentials/config so codex can start inside the sandbox.
 cp "$REAL_HOME/.codex/auth.json" "$E2E_HOME/.codex/auth.json"
 cp "$REAL_HOME/.codex/config.toml" "$E2E_HOME/.codex/config.toml" 2>/dev/null || true
-# Do NOT copy state_*.sqlite: the sandbox home must look like the reporter's — a large
-# session history with no completed index — so the system-home prewarm leg spawns.
-# Launch from the dev shell so the inherited PATH resolves codex and node (the
-# home-rooted fallback probes in src/main/codex-cli/command.ts find nothing under a
-# fake HOME).
+# Do NOT copy state_*.sqlite — the sandbox must look like the reporter's home:
+# a large session history with no completed index.
+ls "$E2E_HOME/.codex"   # expect: sessions/ auth.json config.toml — nothing else
+```
+
+- [ ] **Step 2: Launch from the dev shell (inherited PATH resolves codex/node)**
+
+```bash
 env -u CODEX_HOME -u ORCA_CODEX_HOME -u ZDOTDIR -u BASH_ENV \
   HOME="$E2E_HOME" USERPROFILE="$E2E_HOME" \
   ORCA_E2E_USER_DATA_DIR="$E2E_DATA" ORCA_E2E_HOME_DIR="$E2E_HOME" \
@@ -1552,91 +1632,111 @@ env -u CODEX_HOME -u ORCA_CODEX_HOME -u ZDOTDIR -u BASH_ENV \
   pnpm dev
 ```
 
-Observe and record (in the task's final report) each of:
-1. Within ~60s of app start, the console logs
-   `[codex-state-db-prewarm] pre-warming codex session index at $E2E_HOME/.codex ...`
-   and a codex child exists whose environment has `CODEX_HOME=$E2E_HOME/.codex`
-   (find candidates with `pgrep -af 'app-server'`, then confirm via
-   `tr '\0' '\n' </proc/<pid>/environ | grep '^CODEX_HOME='`). The log line plus the
-   exact `CODEX_HOME` value are the discriminators — Orca's rate-limits fetcher spawns
-   an identical `codex ... app-server` command line, so `pgrep` output alone proves
-   nothing. The dual-home prewarm's managed leg (the empty twin at
-   `$E2E_DATA/codex-runtime-home/home`) is a `not-needed` no-op here; only the
-   system-home leg spawns. If a run is interrupted mid-index, expect codex starts
-   against the sandbox home to fail for up to 15 minutes (stale backfill lease,
-   verified behavior) before resuming.
-2. While it runs, open a Codex pane in the app — on the real-home lane the pane's
-   `CODEX_HOME` stays unset and the pane inherits the faked `HOME`, so its codex reads
-   the same in-progress `$E2E_HOME/.codex`: after ~30s the pane shows Codex's failure
-   output AND the amber toast beginning "Codex is still indexing your session history…".
-   A plain shell pane shows no toast. (If the pane instead reports
-   `codex: command not found`, the sandbox HOME lost the shell-init PATH — re-run the
-   launch with the real `codex`/`node` bin dirs prepended to `PATH`; record that
-   adjustment.)
-3. Poll until done (many minutes):
+(Capture output to a log file. If a codex pane later reports
+`codex: command not found`, re-launch with the real `codex`/`node` bin dirs
+prepended to `PATH` and record the adjustment.)
+
+- [ ] **Step 3: Observe and record each of (this run's SUCCESS CRITERIA)**
+
+1. **Trust grant deferred, lane NOT latched.** Within ~60s the log contains
+   `[codex-real-home-hooks] deferring trust grant until codex session index completes`
+   and contains NO `CodexAppServerTimeoutError` and NO
+   `[codex-real-home-hooks] trust grant unavailable` line.
+2. **Scheduler + prewarm run.** After the ~15s scheduler timer:
+   `[codex-state-db-prewarm] pre-warming codex session index at $E2E_HOME/.codex (this can take minutes on large histories)`
+   appears, and a codex child exists with `CODEX_HOME=$E2E_HOME/.codex`
+   (find candidates with `pgrep -af 'app-server'`, confirm via
+   `tr '\0' '\n' </proc/<pid>/environ | grep '^CODEX_HOME='` — the env value is
+   the discriminator; other Orca instances spawn identical command lines).
+3. **Pane shows the indexing state instead of dying.** While the index runs, open
+   a Codex pane in the app: the pane shows the
+   "Indexing Codex session history…" overlay and codex is NOT launched into the
+   failure (no "damaged database" output). A plain shell pane spawns normally
+   with no overlay. (The amber toast from the previous half of the fix should NOT
+   appear on this path — it remains only as the race fallback.)
+4. **Index completes; grant retried; pane auto-starts.** Poll every ~60s
+   (up to 75 min):
    `sqlite3 "file:$E2E_HOME/.codex/state_5.sqlite?mode=ro" "select status from backfill_state;"`
-   flips to `complete`, the console logs `[codex-state-db-prewarm] codex session index complete`,
-   and the prewarm child is gone (no process with `CODEX_HOME=$E2E_HOME/.codex` remains).
-4. Open a new Codex pane: it starts normally (no damaged-database error, no toast).
-5. Quit and relaunch with the same env block: no new prewarm spawn — the sandbox home's
-   state DB now reads `complete` (step-2 no-op behavior) and the empty twin leg is still
-   `not-needed`.
+   flips to `complete`; the log shows
+   `[codex-state-db-prewarm] codex session index complete`, then a successful
+   trust grant (`[codex-trust-grant] granted ... via codex app-server`, and no
+   `trust grant unavailable` latch); the waiting pane's overlay clears and codex
+   starts in it (TUI renders).
+5. **Steady state.** A new Codex pane starts normally (no overlay, no toast).
+   Quit and relaunch with the same env block: no deferral line, no new prewarm
+   spawn (`backfill_state` now reads `complete`).
 
-If observation 1 never happens, capture the `[codex-session-migration]` console lines and
-the scheduler eligibility state and HALT with that evidence — do not fake the
-observations. Likeliest cause in this sandbox: the real-home hook trust-grant marked the
-lane `'unavailable'` (`isRealHomeCodexHookLaneUsable()` gate goes false, dropping the app
-to the managed lane) — that is evidence to report, not to work around.
+Notes: if the run inherits a stale `'running'` lease (e.g. from an interrupted
+attempt), the prewarm spawning anyway and codex adopting the index within ≤15 min
+is the DOCUMENTED behavior Task 3's unit test pins — record it, keep waiting, do
+not treat it as failure. If any observation genuinely cannot be produced, capture
+the relevant log lines + scheduler eligibility state and HALT with the evidence —
+do not fake observations.
 
-Cleanup:
-
-```bash
-rm -rf "$E2E_ROOT"   # plain copies (incl. the auth.json copy); ~/.codex originals are unaffected
-```
-
-- [ ] **Step 4: Commit any fixes from the verification**
-
-If steps 1-3 forced code changes, re-run the relevant unit tests and gates, then commit with
-messages scoped to what changed, e.g.:
+- [ ] **Step 4: Clean up (mandatory, verify)**
 
 ```bash
-git add -A
-git commit -m "fix(codex): address prewarm e2e findings"
+# Kill the E2E app processes by PID (verify with pgrep that nothing references the sandbox),
+# then:
+rm -rf "$E2E_ROOT"
+ls -d /tmp/orca-e2e-11828.* 2>/dev/null   # expect: none
+# Real homes untouched (read-only checks):
+sqlite3 "file:$HOME/.local/share/orca/codex-runtime-home/home/state_5.sqlite?mode=ro" "select status from backfill_state;"   # complete
+sqlite3 "file:$HOME/.codex/state_5.sqlite?mode=ro" "select status from backfill_state;"                                      # complete
+du -sh "$HOME/.codex/sessions"   # still ~15G
 ```
 
-If nothing changed, skip the commit — do not create an empty one.
+- [ ] **Step 5: Commit any fixes from the verification**
+
+If Steps 1–4 forced code changes, re-run the affected unit tests and the four
+gates, then commit scoped, e.g.
+`git commit -m "fix(codex): address startup-ordering e2e findings (#11828)"`.
+If nothing changed, skip the commit.
 
 ---
 
 ## Self-review record
 
-- **Spec coverage:** (a) pre-warm the state DB for the homes panes actually use →
-  Tasks 1-3 (dual-home: system home first — the home fresh real-home-lane panes read — then
-  the managed home for resume-pinned panes; chained onto the same scheduler, re-run every app
-  start and on host-default selection, resumable because it keys off `backfill_state` rather
-  than a marker — also covers future `state_<N>` schema bumps via newest-file discovery);
-  (b) surface the real story instead of the misleading error → Tasks 4-6; PR against `main`
-  + repo conventions → Global Constraints; "don't make #11830 worse" → read-only DB access
-  everywhere, no spawning against unreadable DBs, fast-failure-only respawn budget +
-  deadline, stdin-EOF-first termination with Windows tree-kill; WSL2/repro machine
-  specifics → Task 7.
-- **No silent deferrals:** both user-facing outcomes are proven against production behavior
-  in Task 7 (real 15 GB history — as safe copies, real codex binary, real panes); mocks exist
-  only in unit tests. The headless `app-server` assumption set was verified against the real
-  binary and openai/codex source during Stage-2 validation; Task 2 Step 1 remains as a cheap
-  sanity re-run with its HALT rule intact.
-- **Type consistency:** `CodexStateDbBackfillStatus` kinds (`complete | incomplete | missing |
-  not-tracked | unreadable`) match between Tasks 1-2; `startCodexStateDbPrewarmInBackground`
-  (now returning `CodexStateDbPrewarmSummary[] | null`) matches the scheduler's
-  `MigrationRun` shape (`Promise<unknown>`) in Task 3; `CODEX_BACKFILL_INDEXING_NOTICE`
-  first line ('Codex is still indexing your session history') is unchanged by the Stage-2
-  text edit, so `isCodexBackfillIndexingNotice` in Task 5 and the tests in Task 6 still match.
-- **Stage-2 load-bearing validation (2026-07-31):** 15 assumptions validated against live
-  codex 0.146.0 runs, openai/codex `rust-v0.146.0` source, and this repo — 8 verified,
-  6 falsified (A3 stale-lease behavior, A9 pane binary resolution, A10 home-lane targeting,
-  A11 Windows/quit termination, A13 hidden-pane detection scope, A14 rollout-file
-  immutability), 1 accepted (A12 silent background indexing; measured 10-13 min for 15 GB).
-  All falsifications are planned around in this revision: dual-home prewarm, fast-exit-only
-  respawn budget, lease-aware supervision, tree-kill/quit-stop termination, honest toast
-  text, detection-scope note, `cp -a` E2E. Full evidence: `load-bearing-ledger.md` +
-  `reports/` in the workflow logs dir (`.worktrees/.the-usual-logs/codex-backfill-prewarm/`).
+- **Spec coverage:** design decision (1) state-first ordering + non-latching
+  `'pending-index'` → Tasks 1–2 (defer happens inside
+  `ensureRealHomeCodexHookState`, so ALL its call sites — startup `index.ts:2503`,
+  per-pane launch prep `:847`/`:973` — stop spawning doomed codexes);
+  (2) scheduler/prewarm run while pending + stale-lease handling verified →
+  Task 2 (lane stays usable ⇒ `isEligible()` stays true) + Task 3's explicit
+  stale-`running`-lease unit test; (3) grant re-run on prewarm completion with
+  genuine failures keeping `'unavailable'` → Task 3 (the `installRetryAfterMs`
+  throttle trap is avoided by construction: it only applies when the lane is
+  already `'unavailable'`, and `retryRealHomeCodexHookAfterIndex` only acts from
+  `'pending-index'`); (4) pane UX: no doomed launch + indexing spinner/status with
+  cheap progress + auto-start + detector/toast kept as fallback → Tasks 4–6
+  (detector and toast untouched); unit tests for ordering/pending-lane and pane
+  gating → Tasks 1–6; full gates with the pre-existing-failure carve-out → Task 7;
+  sandboxed reporter-shape E2E with the new success criteria, LET-IT-RUN polling,
+  and real-home safety → Task 8.
+- **No silent deferrals:** both user-facing outcomes are proven against production
+  behavior in Task 8 (real 15 GB history as safe copies, real codex binary, real
+  panes); mocks/stubs exist only in unit tests, and each mocked seam
+  (`isCodexBackfillIndexPending`, `codexBackfill` IPC, transports) has its real
+  counterpart exercised by Task 8's observations 1–5. No requirement was moved to
+  known-limitations/future-work; there are no unresolved coverage gaps. Two scope
+  notes that are behavior-preserving refinements, not reductions: small-history
+  homes don't defer (the grant codex isn't doomed there — documented in
+  Background); resume-pinned panes reading the managed home are gated against the
+  fresh-pane home, with the existing detector+toast as their net (documented in
+  `getCodexBackfillGateStatus`'s doc comment).
+- **Placeholder scan:** every code step carries concrete code; the only
+  "adapt to existing helpers" notes point at named, existing harness pieces
+  (`createDeps`, `createMockTransport`, `grantSucceeds`, timer-advance helpers)
+  with the behavioral contract pinned by explicit assertions — no TBDs, no
+  "similar to Task N" references.
+- **Type consistency:** `isCodexBackfillIndexPending(codexHomePath: string): boolean`
+  (T1 → T2, T4); `incomplete` variant `{ kind; stateDbPath; status; lastWatermark }`
+  (T1 → T4); `RealHomeCodexHookLane` with `'pending-index'` (T2 → T3);
+  `retryRealHomeCodexHookAfterIndex(args): RealHomeCodexHookLane` (T3 → index.ts);
+  `CodexBackfillGateStatus = { pending; lastWatermark }` (T4 → T5 preload/gate/web
+  stub); `waitForCodexBackfillGate` / `CodexIndexingPaneState` /
+  `CODEX_BACKFILL_GATE_REPOLL_MS` (T5 → T5 integration, T6);
+  `onCodexIndexingStateRef` dep (T5 types → T6 wiring); overlay exports
+  `CodexIndexingOverlay` / `formatCodexIndexingProgress` (T6). Scheduler
+  `MigrationRun` shape `(options, override?) => Promise<unknown>` is preserved by
+  the T3/T4 closure. All checked; names match across tasks.
