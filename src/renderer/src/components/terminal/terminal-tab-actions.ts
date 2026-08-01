@@ -12,9 +12,10 @@ import {
 } from '@/runtime/web-session-tabs-sync'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
-import type {
-  TerminalTabCloseReason,
-  TerminalTabRetirementPlan
+import {
+  classifyTerminalRetirementWorktree,
+  type TerminalTabCloseReason,
+  type TerminalTabRetirementPlan
 } from '@/store/slices/terminal-tab-retirement'
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
 import { getTerminalIncarnationHandle } from './terminal-close-incarnation'
@@ -73,10 +74,19 @@ export function closeTerminalTab(
     return
   }
   const { worktreeId: owningWorktreeId, terminalTabId } = target
+  // Why: an unresolved owner used to abort the whole close, so the tab strip's X did nothing at
+  // all — no prune, no error, no toast — whenever the tab's worktree row was missing from the
+  // owner catalogs (startup, a failed runtime-environment list, a removed runtime). Provider
+  // teardown already fails closed per PTY inside the retirement plan (unroutablePtyIds), so the
+  // only safe thing this gate can still add is skipping the host-directed close, never the local
+  // prune the user asked for.
   const worktreeRoute = resolveTerminalWorktreeRoute(state, owningWorktreeId)
   if (!worktreeRoute) {
-    options?.onCancel?.()
-    return
+    // Why: log the worktree SHAPE, never the id — worktree ids embed absolute paths.
+    console.warn('[terminal-close] closing locally; tab has no resolvable owner', {
+      tabId: terminalTabId,
+      worktreeKind: classifyTerminalRetirementWorktree(owningWorktreeId)
+    })
   }
 
   // Why: a pinned tab routes through the confirmation guard instead of closing
@@ -101,7 +111,7 @@ export function closeTerminalTab(
     return
   }
 
-  const runtimeEnvironmentId = worktreeRoute.runtimeEnvironmentId
+  const runtimeEnvironmentId = worktreeRoute?.runtimeEnvironmentId ?? null
   if (runtimeEnvironmentId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (options?.reason === 'pty-exit') {
       // Why: stream exit is not host-tab closure; the HUB snapshot decides whether reconnect restores or removes this tab.
@@ -233,12 +243,16 @@ export function activateTerminalTab(tabId: string): void {
     Object.entries(s.tabsByWorktree).find(([, worktreeTabs]) =>
       worktreeTabs.some((tab) => tab.id === tabId)
     )?.[0] ?? null
-  const worktreeRoute = resolveTerminalWorktreeRoute(s, owningWorktreeId)
-  if (!worktreeRoute) {
+  // Why this stays a hard return: no owning worktree means the tab is in no strip at all, so
+  // there is nothing to select — distinct from an owner that exists but cannot be routed.
+  if (!owningWorktreeId) {
     return
   }
-  const runtimeEnvironmentId = worktreeRoute.runtimeEnvironmentId
-  if (owningWorktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+  // Why: same fail-closed shape as the close path — an unresolved owner must only skip the
+  // host-directed activation, never the local selection the user just clicked.
+  const worktreeRoute = resolveTerminalWorktreeRoute(s, owningWorktreeId)
+  const runtimeEnvironmentId = worktreeRoute?.runtimeEnvironmentId ?? null
+  if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     // Why: activation needs to update the host's active tab as well as the
     // local optimistic state, otherwise the next host snapshot snaps back.
     void activateWebRuntimeSessionTab({

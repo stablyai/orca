@@ -7,6 +7,7 @@ import {
   pickNeighbor,
   pickNextActiveTab,
   pushRecentTabId,
+  reconstructGroupForOrphanedTab,
   sanitizeRecentTabIds,
   updateGroup,
   patchTab
@@ -146,6 +147,44 @@ describe('pickNextActiveTab', () => {
 
   it('falls back to left neighbor when closing the rightmost and MRU is empty', () => {
     expect(pickNextActiveTab(['a', 'b', 'c'], undefined, 'c')).toBe('b')
+  })
+})
+
+describe('reconstructGroupForOrphanedTab', () => {
+  // Why: `tabOrder` is documented as canonical *visual* order, but reordering rewrites sortOrder in
+  // place without moving the array element — so building it from array order would be wrong for any
+  // group the user has ever dragged. The current caller discards this order, which is exactly why
+  // it needs pinning here: the contract, not the caller, is what a future caller will rely on.
+  it('orders the stand-in group visually, not by backing-array position', () => {
+    const tabs = [
+      makeTab({ id: 'c', worktreeId: 'w1', groupId: 'gone', sortOrder: 2 }),
+      makeTab({ id: 'a', worktreeId: 'w1', groupId: 'gone', sortOrder: 0 }),
+      makeTab({ id: 'b', worktreeId: 'w1', groupId: 'gone', sortOrder: 1 })
+    ]
+
+    const group = reconstructGroupForOrphanedTab(tabs, 'w1', tabs[1])
+
+    expect(group.tabOrder).toEqual(['a', 'b', 'c'])
+    expect(group.id).toBe('gone')
+    expect(group.activeTabId).toBe('a')
+  })
+
+  it('breaks a sortOrder tie by creation time', () => {
+    const tabs = [
+      makeTab({ id: 'newer', worktreeId: 'w1', groupId: 'gone', sortOrder: 0, createdAt: 200 }),
+      makeTab({ id: 'older', worktreeId: 'w1', groupId: 'gone', sortOrder: 0, createdAt: 100 })
+    ]
+
+    expect(reconstructGroupForOrphanedTab(tabs, 'w1', tabs[0]).tabOrder).toEqual(['older', 'newer'])
+  })
+
+  it('ignores tabs belonging to other groups', () => {
+    const tabs = [
+      makeTab({ id: 'mine', worktreeId: 'w1', groupId: 'gone', sortOrder: 1 }),
+      makeTab({ id: 'theirs', worktreeId: 'w1', groupId: 'other', sortOrder: 0 })
+    ]
+
+    expect(reconstructGroupForOrphanedTab(tabs, 'w1', tabs[0]).tabOrder).toEqual(['mine'])
   })
 })
 

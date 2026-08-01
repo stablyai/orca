@@ -22,6 +22,7 @@ import {
   patchTab,
   pickNextActiveTab,
   pushRecentTabId,
+  reconstructGroupForOrphanedTab,
   sanitizeRecentTabIds,
   updateGroup
 } from './tab-group-state'
@@ -888,10 +889,15 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       return null
     }
     const { tab, worktreeId } = found
-    const group = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
-    if (!group) {
-      return null
-    }
+    const groupRecord = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
+    // Why: a tab whose group record is gone (host snapshot desync, or a collapse that dropped the
+    // group while the tab still pointed at it) used to dead-end here, and every close path funnels
+    // through this action — so the tab stayed in the strip forever, unclosable even across
+    // restarts. Rebuild a stand-in group from the tabs that still reference the id so the close
+    // completes; the phantom group is never written back to `groupsByWorktree`.
+    const group =
+      groupRecord ??
+      reconstructGroupForOrphanedTab(state.unifiedTabsByWorktree[worktreeId] ?? [], worktreeId, tab)
 
     if (tab.contentType === 'terminal' && !opts?.terminalRetirementHandled) {
       const dedupedGroupOrder = dedupeTabOrder(group.tabOrder)
@@ -950,6 +956,25 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         )
         nextLayoutByWorktree = collapsedState.layoutByWorktree
         nextActiveGroupIdByWorktree = collapsedState.activeGroupIdByWorktree
+      }
+      // Why: the tab strip renders `activeGroupIdByWorktree`'s group, so a phantom id left pointing
+      // at nothing would render empty once its last orphan closes even though real groups remain.
+      if (
+        !groupRecord &&
+        nextActiveGroupIdByWorktree[worktreeId] === group.id &&
+        !nextTabs.some((item) => item.groupId === group.id) &&
+        nextGroups.length > 0
+      ) {
+        // Why prefer a populated group: nextGroups[0] can itself be an empty split, which would
+        // re-create the very empty strip this branch exists to avoid. Same policy as
+        // selectHydratedActiveGroupId.
+        const repointTarget =
+          nextGroups.find((candidate) => nextTabs.some((item) => item.groupId === candidate.id)) ??
+          nextGroups[0]
+        nextActiveGroupIdByWorktree = {
+          ...nextActiveGroupIdByWorktree,
+          [worktreeId]: repointTarget.id
+        }
       }
       const shouldDeactivateWorktree =
         current.activeWorktreeId === worktreeId &&
