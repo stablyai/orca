@@ -64,7 +64,8 @@ function validateGrant(
     !Number.isSafeInteger(grant.ownerGeneration) ||
     grant.ownerGeneration! <= 0 ||
     typeof grant.ownerLease !== 'string' ||
-    grant.ownerLease.length === 0
+    grant.ownerLease.length === 0 ||
+    grant.ownerLease.length > 512
   ) {
     throw new Error('Remote relay did not grant an authenticated PTY session owner')
   }

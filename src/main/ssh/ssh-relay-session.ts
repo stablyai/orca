@@ -55,8 +55,6 @@ import {
   installSshPtySourceAckPublisher,
   installSshPtySourceCancellationPublisher
 } from '../ipc/ssh-pty-output-intake-registry'
-import type { SshPtyAcceptedSourceCheckpoint } from '../ipc/ssh-pty-output-source-obligations'
-import type { SshPtyOutputMigrationResult } from '../ipc/ssh-pty-output-model-migration'
 import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider,
@@ -102,6 +100,14 @@ import type {
 } from '../../shared/pty-source-recovery-contract'
 import { SshPtyRecoveryRetentionBudget } from './ssh-pty-recovery-retention-budget'
 import { SshPtyRetiredSourceDeliveries } from './ssh-pty-retired-source-deliveries'
+import {
+  claimSshPtyConsumerRecovery,
+  detachSshPtyConsumerRecovery,
+  forgetSshPtyConsumerRecovery,
+  getSshPtyConsumerRecovery,
+  rememberSshPtyConsumerRecovery,
+  removeSshPtyConsumerOwnerRecovery
+} from './ssh-pty-consumer-recovery'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
 
@@ -227,33 +233,6 @@ function normalizeRelayGracePeriodSeconds(graceTimeSeconds: number | undefined):
       )
 }
 
-type PtyConsumerRecovery = {
-  clientInstanceId: string
-  detached: boolean
-  serverBuildId?: string
-  owner?: SshPtyConsumerOwnerState
-  checkpointsByAppPtyId: Map<string, SshPtyAcceptedSourceCheckpoint>
-  modelMigrationsByAppPtyId: Map<string, Promise<SshPtyOutputMigrationResult>>
-}
-
-const ptyConsumerRecoveryByTarget = new Map<string, PtyConsumerRecovery>()
-
-function ptyConsumerRecoveryForTarget(targetId: string): PtyConsumerRecovery {
-  const current = ptyConsumerRecoveryByTarget.get(targetId)
-  if (current?.detached) {
-    current.detached = false
-    return current
-  }
-  const created = {
-    clientInstanceId: randomUUID(),
-    detached: false,
-    checkpointsByAppPtyId: new Map<string, SshPtyAcceptedSourceCheckpoint>(),
-    modelMigrationsByAppPtyId: new Map<string, Promise<SshPtyOutputMigrationResult>>()
-  }
-  ptyConsumerRecoveryByTarget.set(targetId, created)
-  return created
-}
-
 export class SshRelaySession {
   private _state: RelaySessionState = 'idle'
   private mux: SshChannelMultiplexer | null = null
@@ -305,7 +284,7 @@ export class SshRelaySession {
       platform: string
     ) => void
   ) {
-    this.ptyConsumerClientInstanceId = ptyConsumerRecoveryForTarget(targetId).clientInstanceId
+    this.ptyConsumerClientInstanceId = claimSshPtyConsumerRecovery(targetId, store).clientInstanceId
   }
 
   refreshEnvironment(
@@ -654,7 +633,7 @@ export class SshRelaySession {
     this.store.markSshRemotePtyLeases(this.targetId, 'terminated')
     this.currentConnection = null
     this._state = 'disposed'
-    ptyConsumerRecoveryByTarget.delete(this.targetId)
+    forgetSshPtyConsumerRecovery(this.targetId, this.ptyConsumerClientInstanceId, this.store)
   }
 
   detach(): void {
@@ -669,10 +648,7 @@ export class SshRelaySession {
     this.store.markSshRemotePtyLeases(this.targetId, 'detached')
     this.currentConnection = null
     this._state = 'disposed'
-    const recovery = ptyConsumerRecoveryByTarget.get(this.targetId)
-    if (recovery?.clientInstanceId === this.ptyConsumerClientInstanceId) {
-      recovery.detached = true
-    }
+    detachSshPtyConsumerRecovery(this.targetId, this.ptyConsumerClientInstanceId)
   }
 
   // ── Private ───────────────────────────────────────────────────────
@@ -729,7 +705,7 @@ export class SshRelaySession {
       this.remoteCliBridgeEnv ?? undefined,
       providerGeneration
     )
-    const consumerOwnerState = this.negotiatedPtyConsumerOwner()
+    const consumerOwnerState = this.activePtyConsumerOwner()
     if (consumerOwnerState) {
       ptyProvider.setPtyDeliveryPauseAdapter?.(({ id, providerGeneration: generation, paused }) => {
         if (
@@ -836,13 +812,20 @@ export class SshRelaySession {
     return true
   }
 
-  private negotiatedPtyConsumerOwner(serverBuildId?: string): SshPtyConsumerOwnerState | null {
+  private activePtyConsumerOwner(): SshPtyConsumerOwnerState | null {
     const state = this.ptyConsumerSessionState
-    if (state && state.mode !== 'legacy-fallback') {
-      return state as SshPtyConsumerOwnerState
+    return state && state.mode !== 'legacy-fallback' ? state : null
+  }
+
+  private recoverablePtyConsumerOwner(
+    serverBuildId: string | undefined
+  ): SshPtyConsumerOwnerState | null {
+    const active = this.activePtyConsumerOwner()
+    if (active) {
+      return active
     }
-    const recovery = ptyConsumerRecoveryByTarget.get(this.targetId)
-    return !serverBuildId || recovery?.serverBuildId === serverBuildId
+    const recovery = getSshPtyConsumerRecovery(this.targetId)
+    return serverBuildId && recovery?.serverBuildId === serverBuildId
       ? (recovery?.owner ?? null)
       : null
   }
@@ -851,7 +834,7 @@ export class SshRelaySession {
     mux: SshChannelMultiplexer,
     serverBuildId: string | undefined
   ): Promise<SshPtyConsumerSessionState> {
-    const previousOwner = this.negotiatedPtyConsumerOwner(serverBuildId)
+    const previousOwner = this.recoverablePtyConsumerOwner(serverBuildId)
     const options = {
       clientInstanceId: this.ptyConsumerClientInstanceId,
       expectedServerBuildId: serverBuildId,
@@ -877,7 +860,7 @@ export class SshRelaySession {
       ) {
         throw error
       }
-      const recovery = ptyConsumerRecoveryByTarget.get(this.targetId)
+      const recovery = getSshPtyConsumerRecovery(this.targetId)
       if (recovery) {
         delete recovery.owner
         recovery.checkpointsByAppPtyId.clear()
@@ -893,27 +876,23 @@ export class SshRelaySession {
           )
         }
       }
+      removeSshPtyConsumerOwnerRecovery(this.targetId, this.ptyConsumerClientInstanceId, this.store)
       this.ptyConsumerSessionState = null
       return openSshPtyConsumerSession(mux, options)
     }
   }
 
   private rememberPtyConsumerRecovery(serverBuildId: string | undefined): void {
-    const owner = this.negotiatedPtyConsumerOwner()
+    const owner = this.activePtyConsumerOwner()
     if (!owner || !serverBuildId) {
       return
     }
-    const previous = ptyConsumerRecoveryByTarget.get(this.targetId)
-    ptyConsumerRecoveryByTarget.set(this.targetId, {
+    rememberSshPtyConsumerRecovery({
+      targetId: this.targetId,
       clientInstanceId: this.ptyConsumerClientInstanceId,
-      detached: false,
       serverBuildId,
       owner,
-      checkpointsByAppPtyId:
-        previous?.checkpointsByAppPtyId ?? new Map<string, SshPtyAcceptedSourceCheckpoint>(),
-      modelMigrationsByAppPtyId:
-        previous?.modelMigrationsByAppPtyId ??
-        new Map<string, Promise<SshPtyOutputMigrationResult>>()
+      store: this.store
     })
   }
 
@@ -1228,7 +1207,7 @@ export class SshRelaySession {
     this.ptyRecoveryNotificationCleanups = []
     if (this.activePtyProviderGeneration !== null) {
       const providerGeneration = this.activePtyProviderGeneration
-      if (reason === 'connection_lost' && this.negotiatedPtyConsumerOwner()?.outputFlowControl) {
+      if (reason === 'connection_lost' && this.activePtyConsumerOwner()?.outputFlowControl) {
         this.beginPtyModelMigration(providerGeneration, outputGenerationReason)
       } else {
         closeSshPtyOutputGeneration(providerGeneration, outputGenerationReason)
@@ -1361,7 +1340,7 @@ export class SshRelaySession {
         return
       }
       const pending = this.pendingPtyReattaches.get(payload.id)
-      if (pending && this.negotiatedPtyConsumerOwner()?.outputFlowControl) {
+      if (pending && this.activePtyConsumerOwner()?.outputFlowControl) {
         if (pending.livePassthrough) {
           void this.acceptPtyData(payload).catch(() => {})
           return
@@ -1403,7 +1382,7 @@ export class SshRelaySession {
   }
 
   private acceptPtyData(payload: SshPtyDataPayload): Promise<unknown> {
-    const consumerOwner = this.negotiatedPtyConsumerOwner()
+    const consumerOwner = this.activePtyConsumerOwner()
     const offeredSource = payload.source
     if (
       offeredSource &&
@@ -1677,10 +1656,10 @@ export class SshRelaySession {
     this.retiredSourceDeliveries.activate(relayPtyId)
     clearProviderPtyState(payload.id)
     deletePtyOwnership(payload.id)
-    ptyConsumerRecoveryByTarget.get(this.targetId)?.checkpointsByAppPtyId.delete(payload.id)
-    ptyConsumerRecoveryByTarget
-      .get(this.targetId)
-      ?.checkpointsByAppPtyId.delete(toRelaySshPtyId(this.targetId, payload.id))
+    getSshPtyConsumerRecovery(this.targetId)?.checkpointsByAppPtyId.delete(payload.id)
+    getSshPtyConsumerRecovery(this.targetId)?.checkpointsByAppPtyId.delete(
+      toRelaySshPtyId(this.targetId, payload.id)
+    )
     this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
     if (deliveryHandled) {
       return
@@ -2103,10 +2082,10 @@ export class SshRelaySession {
   private async sourceRecoveryRequest(
     appPtyId: string
   ): Promise<PtySourceRecoveryRequest | undefined> {
-    if (!this.negotiatedPtyConsumerOwner()?.outputFlowControl) {
+    if (!this.activePtyConsumerOwner()?.outputFlowControl) {
       return undefined
     }
-    const recovery = ptyConsumerRecoveryByTarget.get(this.targetId)
+    const recovery = getSshPtyConsumerRecovery(this.targetId)
     const migration = recovery?.modelMigrationsByAppPtyId.get(appPtyId)
     if (migration) {
       const outcome = await migration
@@ -2136,7 +2115,7 @@ export class SshRelaySession {
   }
 
   private beginPtyModelMigration(providerGeneration: number, closeReason: string): void {
-    const recovery = ptyConsumerRecoveryByTarget.get(this.targetId)
+    const recovery = getSshPtyConsumerRecovery(this.targetId)
     if (!recovery) {
       closeSshPtyOutputGeneration(providerGeneration, closeReason)
       return
@@ -2150,7 +2129,7 @@ export class SshRelaySession {
       const fence = previous ? previous.then(() => result) : result
       recovery.modelMigrationsByAppPtyId.set(ptyId, fence)
       void fence.then((outcome) => {
-        const current = ptyConsumerRecoveryByTarget.get(this.targetId)
+        const current = getSshPtyConsumerRecovery(this.targetId)
         if (current?.modelMigrationsByAppPtyId.get(ptyId) !== fence) {
           return
         }
@@ -2179,7 +2158,7 @@ export class SshRelaySession {
   ): Promise<boolean> {
     const recovery = attachResult.sourceRecovery
     const pendingRecovery = recovery?.status === 'pending' ? recovery : undefined
-    const owner = this.negotiatedPtyConsumerOwner()
+    const owner = this.activePtyConsumerOwner()
     if (
       !owner?.outputFlowControl ||
       !pendingRecovery ||
@@ -2277,7 +2256,7 @@ export class SshRelaySession {
     )
     // Why: checkpoints are app-id keyed; a relay-id entry here would be shadowed
     // by a staler app-id entry on the next sourceRecoveryRequest lookup.
-    ptyConsumerRecoveryByTarget.get(this.targetId)?.checkpointsByAppPtyId.set(
+    getSshPtyConsumerRecovery(this.targetId)?.checkpointsByAppPtyId.set(
       appPtyId,
       Object.freeze({
         id: appPtyId,
@@ -2417,8 +2396,8 @@ export class SshRelaySession {
     if (!identity || !recovery || this.sameSourceDelivery(identity, recovery)) {
       this.sourceIdentityByRelayPtyId.delete(relayPtyId)
     }
-    ptyConsumerRecoveryByTarget.get(this.targetId)?.checkpointsByAppPtyId.delete(appPtyId)
-    ptyConsumerRecoveryByTarget.get(this.targetId)?.checkpointsByAppPtyId.delete(relayPtyId)
+    getSshPtyConsumerRecovery(this.targetId)?.checkpointsByAppPtyId.delete(appPtyId)
+    getSshPtyConsumerRecovery(this.targetId)?.checkpointsByAppPtyId.delete(relayPtyId)
     this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'detached')
   }
 
