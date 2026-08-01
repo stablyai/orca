@@ -30,6 +30,7 @@ import {
   type AgentHookRelayEnvelope,
   type AgentHookSource
 } from '../shared/agent-hook-relay'
+import { timingSafeTokenCompare } from '../shared/timing-safe-token-compare'
 
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 
@@ -258,7 +259,7 @@ export class RelayAgentHookServer {
       res.end()
       return
     }
-    if (req.headers['x-orca-agent-hook-token'] !== this.token) {
+    if (!timingSafeTokenCompare(this.token, req.headers['x-orca-agent-hook-token'])) {
       res.writeHead(403)
       res.end()
       return

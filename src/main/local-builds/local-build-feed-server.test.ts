@@ -26,8 +26,13 @@ describe('startLocalBuildFeed', () => {
         fetch(`${feed.url}orca-macos-arm64.zip`).then((response) => response.text())
       ).resolves.toBe('zip')
       const baseUrl = new URL(feed.url)
+      const token = baseUrl.pathname.split('/')[1]!
+      const wrongToken = `${token.slice(0, -1)}${token.at(-1) === '0' ? '1' : '0'}`
       await expect(
         fetch(`${baseUrl.origin}/latest-mac.yml`).then((response) => response.status)
+      ).resolves.toBe(404)
+      await expect(
+        fetch(`${baseUrl.origin}/${wrongToken}/latest-mac.yml`).then((response) => response.status)
       ).resolves.toBe(404)
     } finally {
       await feed.close()

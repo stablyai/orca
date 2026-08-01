@@ -442,7 +442,7 @@ export class DaemonServer {
       return
     }
 
-    if (!timingSafeTokenCompare(this.token, String(hello.token ?? ''))) {
+    if (!timingSafeTokenCompare(this.token, hello.token)) {
       this.log.log('client-hello-rejected', { reason: 'invalid-token', role: hello.role })
       socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Invalid token' }))
       socket.destroy()

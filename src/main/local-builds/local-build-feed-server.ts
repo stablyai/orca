@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { createServer, type Server } from 'node:http'
 import type { LocalBuildCandidate } from './local-build-candidate'
+import { timingSafeTokenCompare } from '../../shared/timing-safe-token-compare'
 
 export type LocalBuildFeed = {
   url: string
@@ -15,7 +16,6 @@ function closeServer(server: Server): Promise<void> {
 
 export async function startLocalBuildFeed(candidate: LocalBuildCandidate): Promise<LocalBuildFeed> {
   const token = randomBytes(24).toString('hex')
-  const prefix = `/${token}/`
   const server = createServer((request, response) => {
     if (request.method !== 'GET' || !request.url) {
       response.writeHead(404).end()
@@ -28,11 +28,13 @@ export async function startLocalBuildFeed(candidate: LocalBuildCandidate): Promi
       response.writeHead(400).end()
       return
     }
-    if (!pathname.startsWith(prefix)) {
+    const tokenEnd = pathname.indexOf('/', 1)
+    const requestToken = tokenEnd < 0 ? '' : pathname.slice(1, tokenEnd)
+    if (!timingSafeTokenCompare(token, requestToken)) {
       response.writeHead(404).end()
       return
     }
-    const filename = pathname.slice(prefix.length)
+    const filename = pathname.slice(tokenEnd + 1)
     if (filename === 'latest-mac.yml') {
       response.writeHead(200, {
         'Cache-Control': 'no-store',
@@ -79,7 +81,7 @@ export async function startLocalBuildFeed(candidate: LocalBuildCandidate): Promi
   }
   let closed = false
   return {
-    url: `http://127.0.0.1:${address.port}${prefix}`,
+    url: `http://127.0.0.1:${address.port}/${token}/`,
     close: async () => {
       if (closed) {
         return

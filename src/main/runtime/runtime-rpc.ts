@@ -1350,8 +1350,6 @@ export class OrcaRuntimeRpcServer {
     if (typeof request.authToken !== 'string' || request.authToken.length === 0) {
       return { error: this.buildError(request.id, 'unauthorized', 'Missing auth token') }
     }
-    // Why: constant-time compare prevents a local CLI client from inferring
-    // how many leading token bytes match via response timing.
     if (!timingSafeTokenCompare(this.authToken, request.authToken)) {
       return { error: this.buildError(request.id, 'unauthorized', 'Invalid auth token') }
     }
@@ -1390,7 +1388,11 @@ export class OrcaRuntimeRpcServer {
       typeof (request as Record<string, unknown>).deviceToken === 'string'
         ? ((request as Record<string, unknown>).deviceToken as string)
         : null
-    if (authenticatedDeviceToken && requestToken && requestToken !== authenticatedDeviceToken) {
+    if (
+      authenticatedDeviceToken &&
+      requestToken &&
+      !timingSafeTokenCompare(authenticatedDeviceToken, requestToken)
+    ) {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Device token mismatch')))
       return
     }

@@ -19,7 +19,7 @@ describe('timingSafeTokenCompare', () => {
     expect(timingSafeTokenCompare('abcdef', 'abcdef0123456789')).toBe(false)
   })
 
-  it('returns false when both tokens are empty but differ in type', () => {
+  it('returns true when both tokens are empty', () => {
     expect(timingSafeTokenCompare('', '')).toBe(true)
   })
 
@@ -37,5 +37,12 @@ describe('timingSafeTokenCompare', () => {
   it('handles hex tokens of different lengths without throwing', () => {
     expect(() => timingSafeTokenCompare('a1b2c3', 'a1b2c3d4e5f6')).not.toThrow()
     expect(timingSafeTokenCompare('a1b2c3', 'a1b2c3d4e5f6')).toBe(false)
+  })
+
+  it('rejects non-string values without coercion', () => {
+    const token = '550e8400-e29b-41d4-a716-446655440000'
+    expect(timingSafeTokenCompare(token, [token])).toBe(false)
+    expect(timingSafeTokenCompare('1234', 1234)).toBe(false)
+    expect(timingSafeTokenCompare('', null)).toBe(false)
   })
 })

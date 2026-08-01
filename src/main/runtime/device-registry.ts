@@ -10,6 +10,7 @@ import type { DeviceScope } from '../../shared/runtime-types'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import type { RelayDeviceBinding } from './relay/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import { timingSafeTokenCompare } from '../../shared/timing-safe-token-compare'
 
 export type { DeviceScope }
 
@@ -164,7 +165,13 @@ export class DeviceRegistry {
   }
 
   validateToken(token: string): DeviceEntry | null {
-    return this.devices.find((d) => d.token === token) ?? null
+    let match: DeviceEntry | null = null
+    for (const device of this.devices) {
+      if (timingSafeTokenCompare(device.token, token)) {
+        match ??= device
+      }
+    }
+    return match
   }
 
   updateLastSeen(deviceId: string): void {

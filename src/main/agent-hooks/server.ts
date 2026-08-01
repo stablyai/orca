@@ -1959,11 +1959,7 @@ export class AgentHookServer {
         return
       }
 
-      // Why: constant-time compare prevents a local caller from inferring how
-      // many leading header bytes match via response timing.
-      if (
-        !timingSafeTokenCompare(this.token, String(req.headers['x-orca-agent-hook-token'] ?? ''))
-      ) {
+      if (!timingSafeTokenCompare(this.token, req.headers['x-orca-agent-hook-token'])) {
         res.writeHead(403)
         res.end()
         return

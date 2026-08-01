@@ -1,6 +1,7 @@
 import type { DesktopMobileE2EEV2Session } from './mobile-e2ee-v2-desktop-session'
 import { publicKeyFromBase64 } from './e2ee-crypto'
 import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime-request-frames'
+import { timingSafeTokenCompare } from '../../../shared/timing-safe-token-compare'
 
 export type MobileE2EEAuth = {
   type: 'e2ee_auth'
@@ -46,7 +47,7 @@ export function authenticateMobileE2EE<TDevice extends { deviceToken: string }>(
     return { ok: false, code: 'bad_auth' }
   }
   const device = args.resolveDevice(auth.deviceToken)
-  return device?.deviceToken === auth.deviceToken
+  return device && timingSafeTokenCompare(device.deviceToken, auth.deviceToken)
     ? { ok: true, device, auth }
     : { ok: false, code: 'unauthorized' }
 }
