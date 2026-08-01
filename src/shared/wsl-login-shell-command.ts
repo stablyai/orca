@@ -17,9 +17,34 @@ export function escapeWslShCommandForWindows(command: string): string {
   return escaped
 }
 
-export function buildWslLoginShellCommand(command: string): string {
-  const quotedCommand = quotePosixShell(command)
+export function getWslLoginShellOuterArgs(
+  isolateStartupStdio = false
+): ['sh', '-c'] | ['sh', '-lc'] {
+  return isolateStartupStdio ? ['sh', '-c'] : ['sh', '-lc']
+}
+
+export function buildWslLoginShellCommand(
+  command: string,
+  options: { isolateStartupStdio?: boolean } = {}
+): string {
+  const quotedCommand = quotePosixShell(
+    options.isolateStartupStdio
+      ? [
+          'exec 0<&3',
+          'exec 1>&4',
+          'exec 2>&5',
+          'exec 3<&-',
+          'exec 4>&-',
+          'exec 5>&-',
+          command
+        ].join('\n')
+      : command
+  )
+  const startupIsolation = options.isolateStartupStdio
+    ? ['exec 3<&0', 'exec 4>&1', 'exec 5>&2', 'exec </dev/null >/dev/null 2>/dev/null']
+    : []
   return [
+    ...startupIsolation,
     '_orca_wsl_shell=$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)',
     'if [ -z "$_orca_wsl_shell" ] || [ ! -x "$_orca_wsl_shell" ]; then',
     '  _orca_wsl_shell="${SHELL:-/bin/bash}"',

@@ -37,6 +37,7 @@ import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } f
 import {
   buildWslLoginShellCommand,
   escapeWslShCommandForWindows,
+  getWslLoginShellOuterArgs,
   quotePosixShell
 } from '../../shared/wsl-login-shell-command'
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../shared/git-output-locale'
@@ -230,15 +231,17 @@ function resolveCommand(
     : `${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
 
   if (options.useWslLoginShell) {
+    const isolateStartupStdio = command === 'git'
+    const [outerShell, outerFlag] = getWslLoginShellOuterArgs(isolateStartupStdio)
     return {
       binary: 'wsl.exe',
       args: [
         '-d',
         wsl.distro,
         '--',
-        'sh',
-        '-lc',
-        escapeWslShCommandForWindows(buildWslLoginShellCommand(shellCmd))
+        outerShell,
+        outerFlag,
+        escapeWslShCommandForWindows(buildWslLoginShellCommand(shellCmd, { isolateStartupStdio }))
       ],
       cwd: undefined,
       wsl

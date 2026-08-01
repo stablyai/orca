@@ -7,6 +7,7 @@ import {
   buildWslInteractiveLoginShellCommand,
   buildWslLoginShellCommand,
   escapeWslShCommandForWindows,
+  getWslLoginShellOuterArgs,
   quotePosixShell
 } from './wsl-login-shell-command'
 
@@ -65,6 +66,32 @@ describe('wsl login shell command helpers', () => {
     expect(command).toContain('exec "$_orca_wsl_shell" -ilc')
     expect(command).toContain('exec /bin/sh -lc')
     expect(command).toContain("printf '\\''hello'\\''")
+  })
+
+  it('keeps ordinary helper output byte-identical and selects the isolated outer shell', () => {
+    const command = "printf 'hello'"
+
+    expect(buildWslLoginShellCommand(command)).toBe(
+      buildWslLoginShellCommand(command, { isolateStartupStdio: false })
+    )
+    expect(getWslLoginShellOuterArgs()).toEqual(['sh', '-lc'])
+    expect(getWslLoginShellOuterArgs(true)).toEqual(['sh', '-c'])
+  })
+
+  it('parks all caller descriptors before startup and restores them for the payload', () => {
+    const command = buildWslLoginShellCommand("printf 'payload'", {
+      isolateStartupStdio: true
+    })
+
+    expect(command.indexOf('exec 3<&0')).toBeLessThan(command.indexOf('getent passwd'))
+    expect(command).toContain('exec </dev/null >/dev/null 2>/dev/null')
+    expect(command).toContain('exec 0<&3')
+    expect(command).toContain('exec 1>&4')
+    expect(command).toContain('exec 2>&5')
+    expect(command).toContain('exec 3<&-')
+    expect(command).toContain('exec 4>&-')
+    expect(command).toContain('exec 5>&-')
+    expectValidShSyntax(command)
   })
 
   it.skipIf(process.platform === 'win32')(

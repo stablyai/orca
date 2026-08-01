@@ -487,7 +487,7 @@ describe('runner execFile timeout handling', () => {
 
       expect(execFileMock).toHaveBeenCalledWith(
         'wsl.exe',
-        ['-d', 'Ubuntu', '--', 'sh', '-lc', expect.any(String)],
+        ['-d', 'Ubuntu', '--', 'sh', '-c', expect.any(String)],
         expect.objectContaining({ cwd: undefined }),
         expect.any(Function)
       )
@@ -524,6 +524,7 @@ describe('runner execFile timeout handling', () => {
       const shellCommand = execFileMock.mock.calls[0]?.[1]?.[5] as string
       expect(shellCommand).toContain('/mnt/c/repo')
       expect(shellCommand).toContain("'ssh' '-G' '--' 'github-work'")
+      expect(shellCommand).not.toContain('exec 3<&0')
     })
   })
 
@@ -594,6 +595,10 @@ describe('runner execFile timeout handling', () => {
 
       const shellCommand = spawnMock.mock.calls[0]?.[1]?.[5] as string
       expect(shellCommand).toContain(String.raw`'\''codex; touch /tmp/pwned'\'' '\''--version'\''`)
+      expect(spawnMock.mock.calls[0]?.[1]).toEqual(
+        expect.arrayContaining(['sh', '-lc', expect.any(String)])
+      )
+      expect(shellCommand).not.toContain('exec 3<&0')
     })
   })
 })
