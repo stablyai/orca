@@ -20,6 +20,7 @@ import {
 } from '../../../../shared/terminal-quick-commands'
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import { getAgentLabel } from '@/lib/agent-catalog'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { TabBarQuickCommandItem } from './TabBarQuickCommandItem'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -158,7 +159,11 @@ export function TabBarQuickCommandsMenu({
   )
   const handleSearchKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === 'Enter' && selectedCommand) {
+      // Why: Enter and the arrows belong to the IME while a CJK candidate is
+      // composing — running the highlighted command here would execute one the
+      // user never picked, and moving the selection would fight the candidate list.
+      const imeComposing = isImeCompositionKeyDown(event)
+      if (event.key === 'Enter' && selectedCommand && !imeComposing) {
         // Why: cmdk does not submit the highlighted item from CommandInput
         // inside a DropdownMenu — mirror other searchable menus and run it here.
         event.preventDefault()
@@ -168,6 +173,7 @@ export function TabBarQuickCommandsMenu({
       }
       if (
         (event.key === 'ArrowDown' || event.key === 'ArrowUp') &&
+        !imeComposing &&
         filteredVisibleCommands.length > 0
       ) {
         event.preventDefault()
