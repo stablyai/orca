@@ -192,6 +192,8 @@ describe('removeWorktreeOp', () => {
       '/repo-feature$ rev-parse --git-common-dir',
       `${resolvedRepoPath()}$ worktree list --porcelain -z`,
       `${resolvedRepoPath()}$ worktree remove /repo-feature`,
+      `${resolvedRepoPath()}$ symbolic-ref --quiet refs/remotes/origin/HEAD`,
+      `${resolvedRepoPath()}$ rev-parse --verify --quiet refs/remotes/origin/main`,
       `${resolvedRepoPath()}$ branch -d -- feature/test`
     ])
   })
@@ -233,6 +235,8 @@ describe('removeWorktreeOp', () => {
       `${resolvedRepoPath()}$ worktree remove /repo-feature`,
       '/repo-feature$ status --porcelain --untracked-files=all',
       `${resolvedRepoPath()}$ worktree remove --force /repo-feature`,
+      `${resolvedRepoPath()}$ symbolic-ref --quiet refs/remotes/origin/HEAD`,
+      `${resolvedRepoPath()}$ rev-parse --verify --quiet refs/remotes/origin/main`,
       `${resolvedRepoPath()}$ branch -d -- feature/test`
     ])
   })
@@ -435,6 +439,132 @@ describe('removeWorktreeOp', () => {
       `${resolvedRepoPath()}$ worktree list --porcelain -z`,
       `${resolvedRepoPath()}$ worktree remove /repo-feature`
     ])
+  })
+
+  it('never deletes a trunk branch the removed worktree drifted onto', async () => {
+    const calls: string[] = []
+    let listCount = 0
+    const git = vi.fn<GitExec>(async (args, cwd) => {
+      calls.push(`${cwd}$ ${args.join(' ')}`)
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        listCount += 1
+        return {
+          stdout:
+            listCount === 1
+              ? worktreeList(
+                  { path: '/repo', branch: 'dev_charles' },
+                  { path: '/repo-feature', branch: 'main' }
+                )
+              : worktreeList({ path: '/repo', branch: 'dev_charles' }),
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).resolves.toEqual({
+      preservedBranch: { branchName: 'main', head: '1', reason: 'default-branch' }
+    })
+
+    expect(calls).toContain(`${resolvedRepoPath()}$ worktree remove /repo-feature`)
+    expect(git).not.toHaveBeenCalledWith(['branch', '-d', '--', 'main'], expect.any(String))
+    expect(git).not.toHaveBeenCalledWith(['branch', '-D', '--', 'main'], expect.any(String))
+  })
+
+  it('reports the kept branch when the desktop flags a drifted checkout', async () => {
+    let listCount = 0
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        listCount += 1
+        return {
+          stdout:
+            listCount === 1
+              ? worktreeList(
+                  { path: '/repo', branch: 'dev_charles' },
+                  { path: '/repo-feature', branch: 'release/1.2' }
+                )
+              : worktreeList({ path: '/repo', branch: 'dev_charles' }),
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      removeWorktreeWithCapabilityCache(git, {
+        worktreePath: '/repo-feature',
+        deleteBranch: false,
+        branchRetention: 'checkout-drift'
+      })
+    ).resolves.toEqual({
+      preservedBranch: { branchName: 'release/1.2', head: '1', reason: 'checkout-drift' }
+    })
+    expect(git).not.toHaveBeenCalledWith(['branch', '-d', '--', 'release/1.2'], expect.any(String))
+  })
+
+  it('keeps an older desktop deleteBranch:false silent, with no drift reason', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return {
+          stdout: worktreeList(
+            { path: '/repo', branch: 'main' },
+            { path: '/repo-feature', branch: 'feature/test' }
+          ),
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      removeWorktreeWithCapabilityCache(git, {
+        worktreePath: '/repo-feature',
+        deleteBranch: false
+      })
+    ).resolves.toEqual({})
+  })
+
+  it('never deletes the origin/HEAD default branch after removing its worktree', async () => {
+    let listCount = 0
+    const git = vi.fn<GitExec>(async (args, _cwd) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'refs/remotes/origin/develop\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        listCount += 1
+        return {
+          stdout:
+            listCount === 1
+              ? worktreeList(
+                  { path: '/repo', branch: 'dev_charles' },
+                  { path: '/repo-feature', branch: 'develop' }
+                )
+              : worktreeList({ path: '/repo', branch: 'dev_charles' }),
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+
+    expect(git).toHaveBeenCalledWith(['worktree', 'remove', '/repo-feature'], expect.any(String))
+    expect(git).not.toHaveBeenCalledWith(['branch', '-d', '--', 'develop'], expect.any(String))
+    expect(git).not.toHaveBeenCalledWith(['branch', '-D', '--', 'develop'], expect.any(String))
   })
 
   it('keeps the branch when Git reports another SSH worktree still uses it', async () => {

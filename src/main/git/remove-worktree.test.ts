@@ -198,13 +198,117 @@ branch refs/heads/feature/test
       }
     })
 
-    await removeWorktree('/repo', '/repo-feature', false, { deleteBranch: false })
+    await removeWorktree('/repo', '/repo-feature', false, { branchRetention: 'preexisting-branch' })
 
     const calls = getGitCalls()
     expect(calls).toContain('git worktree remove /repo-feature')
     expect(calls).not.toContain('git worktree prune')
     expect(calls).not.toContain('git branch -d -- feature/test')
     expect(calls).not.toContain('git branch -D -- feature/test')
+  })
+
+  it('never deletes a trunk branch the removed worktree drifted onto', async () => {
+    // The primary checkout sits on a feature branch, so nothing would stop
+    // `git branch -d main` after removal — the protected-branch guard must.
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/dev_charles
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/main
+`
+      },
+      'git worktree list --porcelain#2': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/dev_charles
+`
+      }
+    })
+
+    await expect(removeWorktree('/repo', '/repo-feature')).resolves.toEqual({
+      preservedBranch: { branchName: 'main', head: 'def456', reason: 'default-branch' }
+    })
+
+    const calls = getGitCalls()
+    expect(calls).toContain('git worktree remove /repo-feature')
+    expect(calls).not.toContain('git branch -d -- main')
+    expect(calls).not.toContain('git branch -D -- main')
+  })
+
+  it('reports the kept branch when the checkout drifted off the branch Orca created', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/dev_charles
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/release/1.2
+`
+      }
+    })
+
+    await expect(
+      removeWorktree('/repo', '/repo-feature', false, { branchRetention: 'checkout-drift' })
+    ).resolves.toEqual({
+      preservedBranch: { branchName: 'release/1.2', head: 'def456', reason: 'checkout-drift' }
+    })
+
+    const calls = getGitCalls()
+    expect(calls).toContain('git worktree remove /repo-feature')
+    expect(calls).not.toContain('git branch -d -- release/1.2')
+    // Why: drift is decided from metadata, so it must not pay for the default-branch probes.
+    expect(calls).not.toContain('git symbolic-ref --quiet refs/remotes/origin/HEAD')
+  })
+
+  it('still force-deletes the just-created branch when creation rollback names a trunk', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/dev_charles
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/main
+`
+      }
+    })
+
+    await removeWorktree('/repo', '/repo-feature', true, { forceBranchDelete: true })
+
+    // Rollback owns the branch it just created; the guard must not strand it.
+    expect(getGitCalls()).toContain('git branch -D -- main')
+  })
+
+  it('never deletes the origin/HEAD default branch after removing its worktree', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/dev_charles
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/develop
+`
+      },
+      'git symbolic-ref --quiet refs/remotes/origin/HEAD': {
+        stdout: 'refs/remotes/origin/develop\n'
+      }
+    })
+
+    await removeWorktree('/repo', '/repo-feature')
+
+    const calls = getGitCalls()
+    expect(calls).toContain('git worktree remove /repo-feature')
+    expect(calls).not.toContain('git branch -d -- develop')
+    expect(calls).not.toContain('git branch -D -- develop')
   })
 
   it('skips branch deletion when another worktree still points at the branch', async () => {
@@ -298,6 +402,8 @@ branch refs/heads/main
       // The cleanliness probe that decides whether the checkout may be renamed aside.
       'git status --porcelain --untracked-files=all',
       'git worktree remove /repo-feature',
+      'git symbolic-ref --quiet refs/remotes/origin/HEAD',
+      'git rev-parse --verify --quiet refs/remotes/origin/main',
       'git branch -d -- feature/test',
       'git worktree prune',
       'git branch -d -- feature/test'

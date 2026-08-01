@@ -105,6 +105,8 @@ describe('relay worktree path parsing', () => {
       `${resolvedRepoPath()}$ worktree list --porcelain -z`,
       `${resolvedRepoPath()}$ worktree list --porcelain`,
       `${resolvedRepoPath()}$ worktree remove /repo-feature`,
+      `${resolvedRepoPath()}$ symbolic-ref --quiet refs/remotes/origin/HEAD`,
+      `${resolvedRepoPath()}$ rev-parse --verify --quiet refs/remotes/origin/main`,
       `${resolvedRepoPath()}$ branch -d -- feature/test`
     ])
   })

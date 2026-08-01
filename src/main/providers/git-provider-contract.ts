@@ -14,6 +14,7 @@ import type {
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
+import type { WorktreeBranchRetention } from '../../shared/worktree-branch-deletion-policy'
 import type { GitProviderStatusOptions } from './git-provider-status-options'
 
 export type { GitProviderStatusOptions } from './git-provider-status-options'
@@ -82,7 +83,11 @@ export type IGitProvider = {
   removeWorktree(
     worktreePath: string,
     force?: boolean,
-    options?: { deleteBranch?: boolean; forceBranchDelete?: boolean }
+    options?: {
+      deleteBranch?: boolean
+      branchRetention?: WorktreeBranchRetention
+      forceBranchDelete?: boolean
+    }
   ): Promise<RemoveWorktreeResult>
   renameCurrentBranch?(worktreePath: string, newBranch: string): Promise<void>
   forceDeletePreservedBranch?(

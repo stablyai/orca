@@ -9521,7 +9521,7 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/feature-wt',
       false,
       expect.objectContaining({
-        deleteBranch: false,
+        branchRetention: 'preexisting-branch',
         knownRemovedWorktree: expect.objectContaining({
           branch: 'feature',
           head: 'feature',

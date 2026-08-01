@@ -24,7 +24,9 @@ const ORCA_OWNED_PROVENANCE_META_KEYS = [
   'orcaCreationWorkspaceLayout',
   'automationProvenance',
   'cliProvenance',
-  'creatorProvenance'
+  'creatorProvenance',
+  // Why: a spoofed createdBranch could re-enable branch deletion for a drifted checkout.
+  'createdBranch'
 ] as const
 type UnregisteredOrcaCleanupMeta = Pick<
   WorktreeMeta,

@@ -674,6 +674,8 @@ export type WorktreeMeta = {
   baseRef?: string
   /** True when Orca checked out a pre-existing local branch that delete must not prune. */
   preserveBranchOnDelete?: boolean
+  /** Branch Orca created, kept in sync by auto-rename. Delete prunes the checkout only while it still matches. */
+  createdBranch?: string
   /** See {@link Worktree.pushTarget}. Persisted so refreshed worktree lists keep the target. */
   pushTarget?: GitPushTarget
   /** Explicit marker stamped when Orca creates the worktree. */
@@ -2381,6 +2383,8 @@ export type WorktreeCreateBaseFallback = {
 export type PreservedWorktreeBranch = {
   branchName: string
   head?: string
+  /** Why Orca kept it. Absent means Git refused a safe delete (unmerged work). */
+  reason?: 'default-branch' | 'checkout-drift'
 }
 
 export type RemoveWorktreeResult = {

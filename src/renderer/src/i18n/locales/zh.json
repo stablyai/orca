@@ -5122,6 +5122,14 @@
           "3b7ea51793": "清除搜索",
           "7f1c2e94a5": "搜索文本过长 — 看板未被筛选",
           "9a4d0f6b21": "过长"
+        },
+        "DeleteWorktreeTargetPreview": {
+          "checkedOutBranch": "分支：{{value0}}"
+        },
+        "preserved.branch.toast": {
+          "defaultBranchKept": "分支「{{value0}}」是本仓库的默认分支,Orca 已保留它。",
+          "driftedBranchKeptNamed": "工作区「{{value1}}」当时检出的是分支「{{value0}}」,而非 Orca 为它创建的分支,因此 Orca 保留了该分支。",
+          "driftedBranchKept": "分支「{{value0}}」不是 Orca 为该工作区创建的分支,因此已保留。"
         }
       },
       "shared": {

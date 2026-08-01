@@ -114,7 +114,7 @@ describe('local Windows worktree removal recovery (live Git)', () => {
             repoPath,
             localWorktreeGitOptions: {},
             registeredWorktree: { branch: 'refs/heads/feature/churn', head },
-            deleteBranch: false,
+            branchRetention: 'preexisting-branch',
             closeWatcher: async () => {}
           })
         ).resolves.toEqual({})

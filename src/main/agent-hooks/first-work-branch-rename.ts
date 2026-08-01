@@ -53,6 +53,8 @@ export type FirstWorkBranchRenameDeps = {
   canRenameOrcaCreatedBranch: (worktreeId: string) => boolean
   /** Persist a new sidebar display name for the worktree. */
   setDisplayName: (worktreeId: string, displayName: string) => void
+  /** Keep meta.createdBranch in sync so delete-time branch cleanup still recognizes Orca's branch. */
+  recordRenamedBranch: (worktreeId: string, newBranch: string) => void
   /** Align the on-disk folder with the new branch leaf (best-effort, local-only). */
   renameWorktreeFolder?: (worktreeId: string, newLeaf: string) => Promise<boolean>
   /** Record (or clear with null) an auto-rename failure for the sidebar "rename failed" badge; `failureOutput` carries bounded CLI output for on-demand display. */
@@ -278,6 +280,7 @@ async function runAutoRename(
   await (provider
     ? provider.renameCurrentBranch(worktreePath, newBranch)
     : renameCurrentBranch(exec, newBranch))
+  deps.recordRenamedBranch(worktreeId, newBranch)
 
   // resolveUniqueBranchName may append a collision suffix (`-2`, …), so derive names from the resolved leaf, not the slug.
   const newBranchLeaf = newBranch.slice(newBranch.lastIndexOf('/') + 1)

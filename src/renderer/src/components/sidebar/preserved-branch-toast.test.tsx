@@ -86,6 +86,41 @@ describe('showPreservedBranchToast', () => {
     )
   })
 
+  it('explains a kept default branch and offers no one-click trunk deletion', () => {
+    const result: RemoveWorktreeResult = {
+      preservedBranch: { branchName: 'main', head: 'abc123', reason: 'default-branch' }
+    }
+
+    showPreservedBranchToast(result, { displayName: 'Fix auth', isMainWorktree: false }, vi.fn())
+    const body = renderToastBody()
+
+    expect(body.textContent).toContain("this repository's default branch")
+    expect(body.textContent).not.toContain('Force Delete Branch')
+    expect(toast.warning).toHaveBeenCalledWith(
+      'Worktree deleted, branch kept',
+      expect.not.objectContaining({ duration: Infinity })
+    )
+  })
+
+  it('names the drifted checkout and still offers recovery', () => {
+    const onForceDelete = vi.fn()
+    const result: RemoveWorktreeResult = {
+      preservedBranch: { branchName: 'develop', head: 'def456', reason: 'checkout-drift' }
+    }
+
+    showPreservedBranchToast(
+      result,
+      { displayName: 'Fix auth', isMainWorktree: false },
+      onForceDelete
+    )
+    const body = renderToastBody()
+
+    expect(body.textContent).toContain('not the branch Orca created')
+    expect(body.textContent).toContain('develop')
+    clickButton(body, 'Force Delete Branch')
+    expect(onForceDelete).toHaveBeenCalledWith('develop', 'def456')
+  })
+
   it('does not show the force-delete action without the preserved head', () => {
     const result: RemoveWorktreeResult = {
       preservedBranch: {

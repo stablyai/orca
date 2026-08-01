@@ -10,6 +10,7 @@ import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
 import { planWorktreeSortOrderUpdates } from '../../shared/worktree-sort-order-update'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
+import { resolveWorktreeBranchRetention } from '../../shared/worktree-branch-deletion-policy'
 import { TaskSourceContextSchema } from '../../shared/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../shared/workspace-linked-item-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../shared/workspace-linked-item-source-context'
@@ -2629,7 +2630,10 @@ export function registerWorktreeHandlers(
             throw new Error(`Refusing to delete unregistered worktree path: ${worktreePath}`)
           }
           const canonicalWorktreePath = registeredWorktree.path
-          const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
+          const branchRetention = resolveWorktreeBranchRetention(
+            removedMeta,
+            registeredWorktree.branch
+          )
 
           // Why: a Git lock must block before archive hooks or linked-path cleanup mutate the workspace; dirty-file force is separate.
           try {
@@ -2659,7 +2663,7 @@ export function registerWorktreeHandlers(
               repoPath: repo.path,
               localWorktreeGitOptions,
               registeredWorktree,
-              deleteBranch
+              branchRetention
             })
             await cleanupUnusedWorktreePushTargetRemote(
               repo.path,
@@ -2723,7 +2727,10 @@ export function registerWorktreeHandlers(
               }
             }
 
-            const remoteRemoveOptions = !deleteBranch ? { deleteBranch } : {}
+            // Why both keys: `deleteBranch` is what older relays understand; `branchRetention` adds
+            // the reason newer ones report back. An old relay ignores it and still keeps the branch.
+            const remoteRemoveOptions =
+              branchRetention === 'delete' ? {} : { deleteBranch: false, branchRetention }
             const removalGate = await withWorktreeRemoveStageSpan(
               'watcher_gate',
               'remote',
@@ -2853,7 +2860,7 @@ export function registerWorktreeHandlers(
 
             try {
               const removeOptions = {
-                ...(!deleteBranch ? { deleteBranch } : {}),
+                ...(branchRetention === 'delete' ? {} : { branchRetention }),
                 // Why: reuse the authoritative worktree list already computed here instead of rescanning siblings on the hot delete path.
                 knownRemovedWorktree: refreshedRegisteredWorktree,
                 ...(hasLocalWorktreeGitOptions ? localWorktreeGitOptions : {})
@@ -2878,7 +2885,7 @@ export function registerWorktreeHandlers(
                 repoPath: repo.path,
                 localWorktreeGitOptions,
                 registeredWorktree: refreshedRegisteredWorktree,
-                deleteBranch,
+                branchRetention,
                 closeWatcher: (worktreePath) => runtime.closeFileWatchersForRemoval(worktreePath)
               })
               if (recoveredRemovalResult) {

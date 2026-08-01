@@ -1,10 +1,15 @@
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { RemoveWorktreeResult, Worktree } from '../../../../shared/types'
+import type {
+  PreservedWorktreeBranch,
+  RemoveWorktreeResult,
+  Worktree
+} from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 
 type PreservedBranchWorktree = Pick<Worktree, 'displayName' | 'isMainWorktree'>
+type PreservedBranchReason = PreservedWorktreeBranch['reason']
 
 type PreservedBranchToastBodyProps = {
   description: string
@@ -25,8 +30,31 @@ function getPreservedBranchTitle(isWorkspace: boolean): string {
 function getPreservedBranchDescription(
   branch: string,
   targetName: string | undefined,
-  isWorkspace: boolean
+  isWorkspace: boolean,
+  reason: PreservedBranchReason
 ): string {
+  // Why separate copy: Git refusing an unmerged delete and Orca declining to touch a branch
+  // are different events, and the unmerged wording would misinform in the other two cases.
+  if (reason === 'default-branch') {
+    return translate(
+      'auto.components.sidebar.preserved.branch.toast.defaultBranchKept',
+      'Branch "{{value0}}" is this repository\'s default branch, so Orca kept it.',
+      { value0: branch }
+    )
+  }
+  if (reason === 'checkout-drift') {
+    return targetName
+      ? translate(
+          'auto.components.sidebar.preserved.branch.toast.driftedBranchKeptNamed',
+          'Workspace "{{value1}}" had branch "{{value0}}" checked out, which is not the branch Orca created for it, so Orca kept the branch.',
+          { value0: branch, value1: targetName }
+        )
+      : translate(
+          'auto.components.sidebar.preserved.branch.toast.driftedBranchKept',
+          'Branch "{{value0}}" is not the branch Orca created for this workspace, so Orca kept it.',
+          { value0: branch }
+        )
+  }
   if (!targetName) {
     return translate(
       'auto.store.slices.worktrees.78e08cd877',
@@ -92,16 +120,25 @@ export function showPreservedBranchToast(
   const targetName = worktree?.displayName?.trim()
   const expectedHead = preservedBranch.head
   const toastId = preservedBranchToastId(branch, expectedHead)
-  const forceDeleteLabel = expectedHead
+  // Why no force button for the default branch: one click away from the exact trunk deletion
+  // this guard exists to prevent. Deleting it stays a deliberate act outside Orca.
+  const offerForceDelete = !!expectedHead && preservedBranch.reason !== 'default-branch'
+  const forceDeleteLabel = offerForceDelete
     ? translate('auto.store.slices.worktrees.e50495aae6', 'Force Delete Branch')
     : undefined
-  const description = getPreservedBranchDescription(branch, targetName, isWorkspace)
-  const forceDelete = expectedHead
-    ? (): void => {
-        onForceDelete(branch, expectedHead)
-        toast.dismiss(toastId)
-      }
-    : undefined
+  const description = getPreservedBranchDescription(
+    branch,
+    targetName,
+    isWorkspace,
+    preservedBranch.reason
+  )
+  const forceDelete =
+    offerForceDelete && expectedHead
+      ? (): void => {
+          onForceDelete(branch, expectedHead)
+          toast.dismiss(toastId)
+        }
+      : undefined
 
   toast.warning(getPreservedBranchTitle(isWorkspace), {
     id: toastId,
@@ -113,6 +150,7 @@ export function showPreservedBranchToast(
       />
     ),
     dismissible: true,
-    ...(expectedHead ? { duration: Infinity } : {})
+    // Why: only a toast carrying an action may not auto-dismiss before it is used.
+    ...(offerForceDelete ? { duration: Infinity } : {})
   })
 }

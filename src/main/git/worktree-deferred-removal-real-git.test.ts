@@ -58,7 +58,7 @@ describe('deferred worktree removal against the real Git binary', () => {
   it('clears the registration and deletes the renamed checkout in the background', async () => {
     const trashRoot = getWorktreeTrashRoot(worktreePath)
 
-    await removeWorktree(repoPath, worktreePath, false, { deleteBranch: false })
+    await removeWorktree(repoPath, worktreePath, false, { branchRetention: 'preexisting-branch' })
 
     // The user-visible removal is complete: nothing on disk, nothing registered.
     expect(existsSync(worktreePath)).toBe(false)
@@ -75,7 +75,7 @@ describe('deferred worktree removal against the real Git binary', () => {
     const siblingPath = join(workspaceRoot, 'repo', 'sibling')
     await git(['worktree', 'add', '-q', siblingPath, '-b', 'sibling'], repoPath)
 
-    await removeWorktree(repoPath, worktreePath, false, { deleteBranch: false })
+    await removeWorktree(repoPath, worktreePath, false, { branchRetention: 'preexisting-branch' })
 
     expect(await git(['worktree', 'list'], repoPath)).toContain(siblingPath)
     expect(existsSync(siblingPath)).toBe(true)

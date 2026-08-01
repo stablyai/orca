@@ -3,10 +3,29 @@ import { LoaderCircle } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { Worktree } from '../../../../shared/types'
 import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
+import { translate } from '@/i18n/i18n'
 
 type DeleteState = {
   isDeleting?: boolean
   error?: string | null
+}
+
+// Why: the card name can drift from the actual checkout (e.g. an agent switched
+// the worktree onto another branch), and delete prunes the checked-out branch.
+function CheckedOutBranchLine({ branch }: { branch: string }): JSX.Element | null {
+  const shortBranch = branch.replace(/^refs\/heads\//, '')
+  if (!shortBranch) {
+    return null
+  }
+  return (
+    <div className="mt-0.5 break-all text-muted-foreground">
+      {translate(
+        'auto.components.sidebar.DeleteWorktreeTargetPreview.checkedOutBranch',
+        'Branch: {{value0}}',
+        { value0: shortBranch }
+      )}
+    </div>
+  )
 }
 
 export function DeleteWorktreeTargetPreview({
@@ -34,6 +53,7 @@ export function DeleteWorktreeTargetPreview({
                   <div className="min-w-0 flex-1">
                     <div className="break-all font-medium text-foreground">{item.displayName}</div>
                     <div className="mt-0.5 break-all text-muted-foreground">{item.path}</div>
+                    <CheckedOutBranchLine branch={item.branch} />
                     <DeleteWorktreeDirtyChangeHint
                       changeCount={dirtyChangeCountsByWorktreeId.get(item.id)}
                     />
@@ -59,6 +79,7 @@ export function DeleteWorktreeTargetPreview({
     <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
       <div className="break-all font-medium text-foreground">{worktree.displayName}</div>
       <div className="mt-1 break-all text-muted-foreground">{worktree.path}</div>
+      <CheckedOutBranchLine branch={worktree.branch} />
       <DeleteWorktreeDirtyChangeHint changeCount={dirtyChangeCountsByWorktreeId.get(worktree.id)} />
     </div>
   ) : null

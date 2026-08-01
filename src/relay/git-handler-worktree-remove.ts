@@ -1,6 +1,8 @@
 import * as path from 'node:path'
-import type { RemoveWorktreeResult } from '../shared/types'
+import type { PreservedWorktreeBranch, RemoveWorktreeResult } from '../shared/types'
 import { assertWorktreeUnlockedForRemoval } from '../shared/worktree-removal'
+import { isRepoDefaultBranch, normalizeLocalBranchRef } from '../shared/git-default-base-ref'
+import type { WorktreeBranchRetention } from '../shared/worktree-branch-deletion-policy'
 import { isSubmoduleWorktreeRemovalRefusal } from '../shared/worktree-submodule-removal'
 import { deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure } from './git-handler-branch-cleanup'
 import type { GitExec } from './git-handler-ops'
@@ -30,8 +32,14 @@ function isBranchCheckedOutInWorktreeError(error: unknown): boolean {
   )
 }
 
-function normalizeLocalBranchRef(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '')
+function preservedBranchResult(
+  branchName: string,
+  branchHead: string,
+  reason: NonNullable<PreservedWorktreeBranch['reason']>
+): RemoveWorktreeResult {
+  return {
+    preservedBranch: { branchName, ...(branchHead ? { head: branchHead } : {}), reason }
+  }
 }
 
 function isPosixAbsolutePath(value: string): boolean {
@@ -122,6 +130,20 @@ async function deleteRelayBranchAfterWorktreeRemoval(
   }
 }
 
+// Why not a plain param read: older desktops send only `deleteBranch`, so the retention
+// reason has to degrade to the boolean both sides have always understood.
+function readBranchRetention(params: Record<string, unknown>): WorktreeBranchRetention {
+  const retention = params.branchRetention
+  if (
+    retention === 'delete' ||
+    retention === 'preexisting-branch' ||
+    retention === 'checkout-drift'
+  ) {
+    return retention
+  }
+  return params.deleteBranch === false ? 'preexisting-branch' : 'delete'
+}
+
 export async function removeWorktreeOp(
   git: GitExec,
   params: Record<string, unknown>,
@@ -129,7 +151,7 @@ export async function removeWorktreeOp(
 ): Promise<RemoveWorktreeResult> {
   const worktreePath = params.worktreePath as string
   const force = params.force as boolean | undefined
-  const deleteBranch = params.deleteBranch !== false
+  const branchRetention = readBranchRetention(params)
   const forceBranchDelete = params.forceBranchDelete === true
 
   let repoPath = worktreePath
@@ -178,8 +200,21 @@ export async function removeWorktreeOp(
   if (!branchName) {
     return {}
   }
-  if (!deleteBranch) {
+  if (branchRetention === 'preexisting-branch') {
     return {}
+  }
+  if (branchRetention === 'checkout-drift') {
+    return preservedBranchResult(branchName, branchHead, 'checkout-drift')
+  }
+  // Mirrors the local guard in deleteBranchAfterWorktreeRemoval: never prune a trunk.
+  if (
+    !forceBranchDelete &&
+    (await isRepoDefaultBranch((argv) => git(argv, repoPath), branchName))
+  ) {
+    console.warn(
+      `relay removeWorktree: kept default branch "${branchName}" after removing its worktree`
+    )
+    return preservedBranchResult(branchName, branchHead, 'default-branch')
   }
 
   // Why: SSH worktree deletion should mirror local deletion. Dropping the

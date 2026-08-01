@@ -54,11 +54,13 @@ export function makeBranchRenameDeps(
   deps: FirstWorkBranchRenameDeps
   onRenamed: VitestMock
   setDisplayName: VitestMock
+  recordRenamedBranch: VitestMock
   renameWorktreeFolder: VitestMock
   setRenameError: VitestMock
 } {
   const onRenamed = mockFn()
   const setDisplayName = mockFn()
+  const recordRenamedBranch = mockFn()
   const renameWorktreeFolder = mockFn(async () => false)
   const setRenameError = mockFn()
   const settings = { autoRenameBranchFromWork: true } as unknown as GlobalSettings
@@ -66,6 +68,7 @@ export function makeBranchRenameDeps(
   return {
     onRenamed,
     setDisplayName,
+    recordRenamedBranch,
     renameWorktreeFolder,
     setRenameError,
     deps: {
@@ -75,6 +78,7 @@ export function makeBranchRenameDeps(
       getCurrentDisplayName: () => 'Nautilus-8',
       canRenameOrcaCreatedBranch: () => true,
       setDisplayName,
+      recordRenamedBranch,
       renameWorktreeFolder,
       setRenameError,
       resolveWorktreeIdForTab: () => WORKTREE_ID,

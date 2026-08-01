@@ -32,6 +32,7 @@ import {
 } from '../git/max-buffer-overflow'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { gitExecMutatesRepository } from '../../shared/git-exec-mutation'
+import type { WorktreeBranchRetention } from '../../shared/worktree-branch-deletion-policy'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -740,7 +741,11 @@ export class SshGitProvider implements IGitProvider {
   async removeWorktree(
     worktreePath: string,
     force?: boolean,
-    options?: { deleteBranch?: boolean; forceBranchDelete?: boolean }
+    options?: {
+      deleteBranch?: boolean
+      branchRetention?: WorktreeBranchRetention
+      forceBranchDelete?: boolean
+    }
   ): Promise<RemoveWorktreeResult> {
     return this.runWithDiffDedupeClear(
       async () =>

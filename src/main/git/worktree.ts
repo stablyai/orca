@@ -18,9 +18,12 @@ import type {
   GitWorktreeInfo,
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion,
+  PreservedWorktreeBranch,
   RemoveWorktreeResult
 } from '../../shared/types'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
+import { isRepoDefaultBranch, normalizeLocalBranchRef } from '../../shared/git-default-base-ref'
+import type { WorktreeBranchRetention } from '../../shared/worktree-branch-deletion-policy'
 import { isSubmoduleWorktreeRemovalRefusal } from '../../shared/worktree-submodule-removal'
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
@@ -65,7 +68,7 @@ export type AddWorktreeOptions = GitWorktreeExecOptions & {
 }
 
 export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
-  deleteBranch?: boolean
+  branchRetention?: WorktreeBranchRetention
   forceBranchDelete?: boolean
   knownRemovedWorktree?: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'>
 }
@@ -138,10 +141,6 @@ function isBranchCheckedOutInWorktreeError(error: unknown): boolean {
   return /cannot delete branch .*(?:used by worktree|checked out)|branch .*is checked out/i.test(
     getErrorText(error)
   )
-}
-
-function normalizeLocalBranchRef(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '')
 }
 
 function parseRemoteTrackingLocalBaseRef(
@@ -1071,7 +1070,7 @@ export async function addSparseWorktree(
       }
       try {
         await removeWorktree(repoPath, worktreePath, true, {
-          deleteBranch: !options.checkoutExistingBranch,
+          branchRetention: options.checkoutExistingBranch ? 'preexisting-branch' : 'delete',
           // Why: failed-creation rollback — the fresh branch has no user commits, so force-delete rather than orphan it.
           forceBranchDelete: !options.checkoutExistingBranch,
           ...(options.wslDistro ? { wslDistro: options.wslDistro } : {})
@@ -1168,8 +1167,13 @@ async function performRemoveWorktree(
   if (!branchName) {
     return {}
   }
-  if (options.deleteBranch === false) {
+  const retention = options.branchRetention ?? 'delete'
+  if (retention === 'preexisting-branch') {
+    // Orca never owned this branch, and the user knows it pre-existed — keeping it needs no notice.
     return {}
+  }
+  if (retention === 'checkout-drift') {
+    return preservedBranchResult(branchName, branchHead, 'checkout-drift')
   }
 
   // Why its own span: branch cleanup can reach the network (`fetch --prune`), so a stall here reads as
@@ -1255,12 +1259,35 @@ async function clearGitRegistrationForMissingWorktree(
   }
 }
 
+function preservedBranchResult(
+  branchName: string,
+  branchHead: string,
+  reason: NonNullable<PreservedWorktreeBranch['reason']>
+): RemoveWorktreeResult {
+  return {
+    preservedBranch: { branchName, ...(branchHead ? { head: branchHead } : {}), reason }
+  }
+}
+
 async function deleteBranchAfterWorktreeRemoval(
   repoPath: string,
   branchName: string,
   branchHead: string,
   options: RemoveWorktreeOptions
 ): Promise<RemoveWorktreeResult> {
+  // Last line of defense: metadata-level checks can be bypassed (external worktrees have no
+  // meta), and deleting a shared trunk is never recoverable UX. Skipped for failed-creation
+  // rollback, which must be able to drop the branch it just created.
+  if (
+    !options.forceBranchDelete &&
+    (await isRepoDefaultBranch(
+      (argv) => gitExecFileAsync(argv, gitExecOptions(repoPath, options)),
+      branchName
+    ))
+  ) {
+    console.warn(`[git] Kept default branch "${branchName}" after removing its worktree`)
+    return preservedBranchResult(branchName, branchHead, 'default-branch')
+  }
   try {
     // Why: also drop the now-orphaned branch so delete-worktree leaves none; `-d` (not `-D`) preserves
     // unmerged work, and forceBranchDelete opts into `-D` for failed-creation rollback.

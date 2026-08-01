@@ -1805,6 +1805,8 @@ describe('removeWorktree', () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // clean probe before the rename attempt
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // symbolic-ref origin/HEAD (protected-branch probe)
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // rev-parse origin/main (protected-branch probe)
     // Git refuses to delete an unmerged branch with `-d`.
     gitExecFileAsyncMock.mockRejectedValueOnce(new Error('not fully merged')) // branch -d
 
@@ -1837,6 +1839,8 @@ describe('removeWorktree', () => {
   it('reuses known removed worktree metadata instead of relisting before removal', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // clean probe before the rename attempt
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // symbolic-ref origin/HEAD (protected-branch probe)
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // rev-parse origin/main (protected-branch probe)
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -d succeeds
 
     await removeWorktree('/repo', '/repo-feature', false, {
@@ -1849,6 +1853,8 @@ describe('removeWorktree', () => {
     expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toEqual([
       ['status', '--porcelain', '--untracked-files=all'],
       ['worktree', 'remove', '/repo-feature'],
+      ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main'],
       ['branch', '-d', '--', 'feature/test']
     ])
   })
@@ -1857,6 +1863,8 @@ describe('removeWorktree', () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // clean probe before the rename attempt
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // symbolic-ref origin/HEAD (protected-branch probe)
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // rev-parse origin/main (protected-branch probe)
     gitExecFileAsyncMock.mockRejectedValueOnce(
       new Error("error: cannot delete branch 'feature/test' used by worktree at '/repo-stale'")
     ) // branch -d hits stale worktree metadata
@@ -1869,6 +1877,8 @@ describe('removeWorktree', () => {
       ['worktree', 'list', '--porcelain', '-z'],
       ['status', '--porcelain', '--untracked-files=all'],
       ['worktree', 'remove', '/repo-feature'],
+      ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main'],
       ['branch', '-d', '--', 'feature/test'],
       ['worktree', 'prune'],
       ['branch', '-d', '--', 'feature/test']

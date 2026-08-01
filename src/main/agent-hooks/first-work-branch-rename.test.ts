@@ -105,6 +105,12 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     expect(renameWorktreeFolder).toHaveBeenCalledWith(WORKTREE_ID, 'fix-auth')
   })
 
+  it('records the renamed branch so delete-time cleanup still matches it', async () => {
+    const { deps, recordRenamedBranch } = makeDeps()
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    expect(recordRenamedBranch).toHaveBeenCalledWith(WORKTREE_ID, 'you/fix-auth')
+  })
+
   it('keeps branch and display rename working when folder rename is disabled', async () => {
     const { deps, onRenamed, setDisplayName } = makeDeps({ renameWorktreeFolder: undefined })
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)

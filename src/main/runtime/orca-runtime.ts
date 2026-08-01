@@ -386,6 +386,7 @@ import {
   getProjectHostSetupWorktreeMeta
 } from '../../shared/project-host-setup-projection'
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
+import { resolveWorktreeBranchRetention } from '../../shared/worktree-branch-deletion-policy'
 import { clampLinearIssueListLimit } from '../../shared/linear-issue-read-limits'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
@@ -22384,6 +22385,7 @@ export class OrcaRuntimeService {
       orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
       ...displayNameMeta,
       baseRef: metadataBaseRef,
+      createdBranch: branchName,
       ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
       ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
       ...(sparseDirectories.length > 0
@@ -24597,7 +24599,10 @@ export class OrcaRuntimeService {
           throw new Error(`Refusing to delete unregistered worktree path: ${removalTarget.path}`)
         }
         const canonicalWorktreePath = registeredWorktree.path
-        const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
+        const branchRetention = resolveWorktreeBranchRetention(
+          removedMeta,
+          registeredWorktree.branch
+        )
 
         // Why: a Git lock must block before archive hooks or linked-path cleanup
         // mutate the workspace; dirty-file force is a separate permission.
@@ -24623,7 +24628,7 @@ export class OrcaRuntimeService {
             repoPath: repo.path,
             localWorktreeGitOptions,
             registeredWorktree,
-            deleteBranch
+            branchRetention
           })
           await cleanupUnusedWorktreePushTargetRemote(
             repo.path,
@@ -24648,7 +24653,10 @@ export class OrcaRuntimeService {
           return removalResult ?? {}
         }
         if (repo.connectionId) {
-          const remoteRemoveOptions = !deleteBranch ? { deleteBranch } : {}
+          // Why both keys: older relays only understand `deleteBranch`; `branchRetention` adds the
+          // reason newer ones report back. An old relay ignores it and still keeps the branch.
+          const remoteRemoveOptions =
+            branchRetention === 'delete' ? {} : { deleteBranch: false, branchRetention }
           const removalGate = await this.acquireFileWatcherRemoval(
             canonicalWorktreePath,
             repo.connectionId
@@ -24781,7 +24789,7 @@ export class OrcaRuntimeService {
 
           try {
             const removeOptions = {
-              ...(!deleteBranch ? { deleteBranch } : {}),
+              ...(branchRetention === 'delete' ? {} : { branchRetention }),
               // Why: removal already validated the Git row under the selected
               // project runtime; keep branch cleanup on that same canonical row.
               knownRemovedWorktree: refreshedRegisteredWorktree,
@@ -24801,7 +24809,7 @@ export class OrcaRuntimeService {
               repoPath: repo.path,
               localWorktreeGitOptions,
               registeredWorktree: refreshedRegisteredWorktree,
-              deleteBranch,
+              branchRetention,
               closeWatcher: (worktreePath) => this.closeFileWatchersForRemoval(worktreePath)
             })
             if (recoveredRemovalResult) {

@@ -5372,6 +5372,11 @@
                 "d42f1f14e0_one": "Retry {{count}} Branch",
                 "d42f1f14e0_other": "Retry {{count}} Branches"
               }
+            },
+            "toast": {
+              "defaultBranchKept": "Branch \"{{value0}}\" is this repository's default branch, so Orca kept it.",
+              "driftedBranchKeptNamed": "Workspace \"{{value1}}\" had branch \"{{value0}}\" checked out, which is not the branch Orca created for it, so Orca kept the branch.",
+              "driftedBranchKept": "Branch \"{{value0}}\" is not the branch Orca created for this workspace, so Orca kept it."
             }
           }
         },
@@ -5386,6 +5391,9 @@
           "a0f9863597": "Force Delete {{count}} Branches",
           "a0f9863597_one": "Force Delete {{count}} Branch",
           "a0f9863597_other": "Force Delete {{count}} Branches"
+        },
+        "DeleteWorktreeTargetPreview": {
+          "checkedOutBranch": "Branch: {{value0}}"
         }
       },
       "shared": {

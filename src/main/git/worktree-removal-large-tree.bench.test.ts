@@ -63,7 +63,7 @@ describeBench('worktree removal on a large checkout', () => {
 
   it('returns from removeWorktree without waiting for the recursive delete', async () => {
     const startedAt = Date.now()
-    await removeWorktree(repoPath, worktreePath, false, { deleteBranch: false })
+    await removeWorktree(repoPath, worktreePath, false, { branchRetention: 'preexisting-branch' })
     const userVisibleMs = Date.now() - startedAt
 
     const trashRoot = getWorktreeTrashRoot(worktreePath)

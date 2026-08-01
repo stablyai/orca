@@ -62,7 +62,7 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
         repoPath: 'C:/repo',
         localWorktreeGitOptions: {},
         registeredWorktree: { branch: 'refs/heads/delete-e2e-held-cwd', head: 'abc123' },
-        deleteBranch: true,
+        branchRetention: 'delete',
         closeWatcher: vi.fn().mockResolvedValue(undefined)
       })
 
@@ -96,7 +96,7 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
         repoPath: 'C:/repo',
         localWorktreeGitOptions: {},
         registeredWorktree: { branch: 'refs/heads/delete-e2e-held-cwd', head: 'abc123' },
-        deleteBranch: true,
+        branchRetention: 'delete',
         closeWatcher: vi.fn().mockResolvedValue(undefined)
       })
 
@@ -128,7 +128,7 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
           repoPath: 'C:/repo',
           localWorktreeGitOptions: {},
           registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
-          deleteBranch: true,
+          branchRetention: 'delete',
           closeWatcher: vi.fn().mockRejectedValue(watcherError)
         })
       ).rejects.toBe(watcherError)
@@ -149,7 +149,7 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
         repoPath: 'C:/repo',
         localWorktreeGitOptions: {},
         registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
-        deleteBranch: false,
+        branchRetention: 'preexisting-branch',
         closeWatcher: vi.fn().mockResolvedValue(undefined)
       })
 
@@ -180,7 +180,7 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
           repoPath: 'C:/repo',
           localWorktreeGitOptions: {},
           registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
-          deleteBranch: false,
+          branchRetention: 'preexisting-branch',
           closeWatcher: vi.fn().mockResolvedValue(undefined)
         })
       ).resolves.toBeUndefined()
@@ -202,7 +202,7 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
           repoPath: 'C:/repo',
           localWorktreeGitOptions: {},
           registeredWorktree: { branch: 'refs/heads/delete-e2e-held-cwd', head: 'abc123' },
-          deleteBranch: true,
+          branchRetention: 'delete',
           closeWatcher: vi.fn().mockResolvedValue(undefined)
         })
       ).resolves.toBeUndefined()
@@ -230,7 +230,7 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
           repoPath: 'C:/repo',
           localWorktreeGitOptions: {},
           registeredWorktree,
-          deleteBranch: true,
+          branchRetention: 'delete',
           closeWatcher
         })
       ).rejects.toThrow('Worktree is locked by Git. Lock reason: active agent')
@@ -268,7 +268,7 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
             repoPath: 'C:/repo',
             localWorktreeGitOptions: { wslDistro: 'Ubuntu' },
             registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
-            deleteBranch: true,
+            branchRetention: 'delete',
             closeWatcher
           })
         ).resolves.toBeUndefined()
@@ -295,7 +295,7 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
           repoPath: 'C:/repo',
           localWorktreeGitOptions: {},
           registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
-          deleteBranch: true,
+          branchRetention: 'delete',
           closeWatcher
         })
       ).resolves.toBeUndefined()
@@ -326,7 +326,7 @@ describe('removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval', () => {
           locked: true,
           lockReason: 'active agent'
         },
-        deleteBranch: true
+        branchRetention: 'delete'
       })
     ).rejects.toThrow('Worktree is locked by Git')
 
@@ -350,7 +350,7 @@ describe('removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval', () => {
         repoPath: 'C:/repo',
         localWorktreeGitOptions: {},
         registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
-        deleteBranch: true
+        branchRetention: 'delete'
       })
     ).rejects.toThrow('Git still has stale worktree registration')
   })

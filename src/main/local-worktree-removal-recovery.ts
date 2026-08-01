@@ -1,5 +1,6 @@
 import type { GitWorktreeInfo, RemoveWorktreeResult } from '../shared/types'
 import { assertWorktreeUnlockedForRemoval } from '../shared/worktree-removal'
+import type { WorktreeBranchRetention } from '../shared/worktree-branch-deletion-policy'
 import { areWorktreePathsEqual, formatWorktreeRemovalError } from './ipc/worktree-logic'
 import { gitExecFileAsync } from './git/runner'
 import { listWorktreesStrict, type GitWorktreeExecOptions } from './git/worktree'
@@ -12,7 +13,7 @@ type LocalWindowsRemovalRecoveryArgs = {
   repoPath: string
   localWorktreeGitOptions: GitWorktreeExecOptions
   registeredWorktree: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'>
-  deleteBranch: boolean
+  branchRetention: WorktreeBranchRetention
   closeWatcher: (worktreePath: string) => Promise<void>
 }
 
@@ -23,9 +24,9 @@ type StaleLocalWorktreeRegistrationArgs = Omit<
 
 function preservedBranchResult(
   registeredWorktree: Pick<GitWorktreeInfo, 'branch' | 'head'>,
-  deleteBranch: boolean
+  branchRetention: WorktreeBranchRetention
 ): RemoveWorktreeResult {
-  if (!deleteBranch || !registeredWorktree.branch || !registeredWorktree.head) {
+  if (branchRetention !== 'delete' || !registeredWorktree.branch || !registeredWorktree.head) {
     return {}
   }
   return {
@@ -83,7 +84,7 @@ async function removeRequiredGitWorktreeRegistration(
       cwd: args.repoPath,
       ...args.localWorktreeGitOptions
     })
-    result = preservedBranchResult(args.registeredWorktree, args.deleteBranch)
+    result = preservedBranchResult(args.registeredWorktree, args.branchRetention)
   } catch (error) {
     removalError = error
   }
@@ -104,7 +105,7 @@ async function removeRequiredGitWorktreeRegistration(
   }
   // Why: if Git detached the row before reporting its filesystem error, keep
   // the branch rather than guessing whether the normal branch cleanup ran.
-  return result ?? preservedBranchResult(args.registeredWorktree, args.deleteBranch)
+  return result ?? preservedBranchResult(args.registeredWorktree, args.branchRetention)
 }
 
 export async function recoverLocalWindowsWorktreeRemoval(
