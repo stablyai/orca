@@ -25,6 +25,7 @@ function getRuntimeBindingAuthority(
   if (route) {
     return JSON.stringify(captureWorktreeOperationGenerationSnapshot(route))
   }
+  // Why: only environment targets carry a connection generation; other targets rely on the terminal_handle_stale path to drop a rebound handle.
   const generation =
     runtimeTarget.kind === 'environment'
       ? getRuntimeEnvironmentConnectionGeneration(runtimeTarget.environmentId)
