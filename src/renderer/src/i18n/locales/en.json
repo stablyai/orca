@@ -13250,6 +13250,14 @@
               }
             }
           }
+        },
+        "RichMarkdownTableToolbar": {
+          "insertRowAbove": "Insert row above",
+          "insertRowBelow": "Insert row below",
+          "deleteRow": "Delete current row",
+          "insertColumnLeft": "Insert column left",
+          "insertColumnRight": "Insert column right",
+          "deleteColumn": "Delete current column"
         }
       },
       "diff": {

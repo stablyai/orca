@@ -17,6 +17,12 @@ export type RichMarkdownContextMenuCommand =
   | 'task-list'
   | 'image'
   | 'divider'
+  | 'insert-row-above'
+  | 'insert-row-below'
+  | 'delete-row'
+  | 'insert-column-left'
+  | 'insert-column-right'
+  | 'delete-column'
 
 export type RichMarkdownContextMenuCommandPayload = {
   command: RichMarkdownContextMenuCommand

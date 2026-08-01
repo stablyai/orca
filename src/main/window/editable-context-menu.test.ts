@@ -89,6 +89,7 @@ describe('buildEditableContextMenuTemplate', () => {
       'Format',
       'Paragraph',
       'Insert',
+      'Table',
       'separator',
       'cut',
       'copy',
@@ -140,8 +141,25 @@ describe('buildEditableContextMenuTemplate', () => {
       y: 34
     })
 
-    template[8].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
+    const tableMenu = template[5].submenu as Electron.MenuItemConstructorOptions[]
+    expect(tableMenu.map((item) => item.label ?? item.type)).toEqual([
+      'Insert row above',
+      'Insert row below',
+      'Delete current row',
+      'separator',
+      'Insert column left',
+      'Insert column right',
+      'Delete current column'
+    ])
+    tableMenu[0].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
+    expect(send).toHaveBeenLastCalledWith(richMarkdownContextMenuCommandChannel, {
+      command: 'insert-row-above',
+      x: 12,
+      y: 34
+    })
+
     template[9].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
+    template[10].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: false })
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: true })
   })

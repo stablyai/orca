@@ -3,6 +3,7 @@ import type {
   RichMarkdownContextMenuCommand,
   RichMarkdownContextMenuCommandPayload
 } from '../../../../shared/rich-markdown-context-menu'
+import { runRichMarkdownTableAction } from './rich-markdown-table-actions'
 
 export function runRichMarkdownContextCommand({
   command,
@@ -69,6 +70,14 @@ export function runRichMarkdownContextCommand({
       return
     case 'divider':
       editor.chain().focus().setHorizontalRule().run()
+      return
+    case 'insert-row-above':
+    case 'insert-row-below':
+    case 'delete-row':
+    case 'insert-column-left':
+    case 'insert-column-right':
+    case 'delete-column':
+      runRichMarkdownTableAction(editor, command)
   }
 }
 

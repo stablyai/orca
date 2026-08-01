@@ -84,6 +84,18 @@ function buildMarkdownMenuTemplate(
         markdownCommandItem('Code block', 'code-block', webContents, point)
       ]
     },
+    {
+      label: 'Table',
+      submenu: [
+        markdownCommandItem('Insert row above', 'insert-row-above', webContents, point),
+        markdownCommandItem('Insert row below', 'insert-row-below', webContents, point),
+        markdownCommandItem('Delete current row', 'delete-row', webContents, point),
+        { type: 'separator' },
+        markdownCommandItem('Insert column left', 'insert-column-left', webContents, point),
+        markdownCommandItem('Insert column right', 'insert-column-right', webContents, point),
+        markdownCommandItem('Delete current column', 'delete-column', webContents, point)
+      ]
+    },
     { type: 'separator' },
     { role: 'cut' },
     { role: 'copy' },
