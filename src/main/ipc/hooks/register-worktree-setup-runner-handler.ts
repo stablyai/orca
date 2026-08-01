@@ -5,7 +5,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { getEffectiveHooks } from '../../hooks'
+import { getSetupCommandSource } from '../../hooks'
 import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import { createSetupRunnerScript } from '../../worktree-runner-script'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
@@ -14,7 +14,9 @@ import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 type PrepareSetupRunnerResult = {
   status: 'ok' | 'error'
   setup: ReturnType<typeof createSetupRunnerScript> | null
-  reason?: 'no-setup-configured' | 'folder-repo' | 'runner-failed'
+  setupScript?: string
+  setupScriptSource?: 'yaml' | 'local' | 'both'
+  reason?: 'no-setup-configured' | 'folder-repo' | 'remote-host' | 'runner-failed'
   message?: string
 }
 
@@ -30,6 +32,16 @@ export function registerWorktreeSetupRunnerHandler(context: WorktreeIpcContext):
     ): PrepareSetupRunnerResult => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
       if (!repo) {
+        const matches = store.getRepos().filter((entry) => entry.id === args.repoId)
+        if (matches.length > 1) {
+          return {
+            status: 'error',
+            setup: null,
+            reason: 'runner-failed',
+            message:
+              'This project exists on multiple hosts; retry from the workspace list of the host that owns it.'
+          }
+        }
         throw new Error(`Repo not found: ${args.repoId}`)
       }
       if (isFolderRepo(repo)) {
@@ -40,17 +52,16 @@ export function registerWorktreeSetupRunnerHandler(context: WorktreeIpcContext):
         return {
           status: 'error',
           setup: null,
-          reason: 'runner-failed',
+          reason: 'remote-host',
           message:
             'Run setup script is not yet supported for remote worktrees. Create a new worktree to run setup on that host, or open a local clone.'
         }
       }
 
-      let setupScript: string | undefined
+      let commandSource: ReturnType<typeof getSetupCommandSource>
       try {
         // Prefer the worktree's orca.yaml so branch-specific setup matches create.
-        const hooks = getEffectiveHooks(repo, args.worktreePath)
-        setupScript = hooks?.scripts.setup?.trim()
+        commandSource = getSetupCommandSource(repo, args.worktreePath)
       } catch (error) {
         return {
           status: 'error',
@@ -60,6 +71,7 @@ export function registerWorktreeSetupRunnerHandler(context: WorktreeIpcContext):
         }
       }
 
+      const setupScript = commandSource?.command.trim()
       if (!setupScript) {
         return { status: 'ok', setup: null, reason: 'no-setup-configured' }
       }
@@ -71,7 +83,7 @@ export function registerWorktreeSetupRunnerHandler(context: WorktreeIpcContext):
           setupScript,
           getLocalProjectWorktreeGitOptions(store, repo)
         )
-        return { status: 'ok', setup }
+        return { status: 'ok', setup, setupScript, setupScriptSource: commandSource?.source }
       } catch (error) {
         return {
           status: 'error',

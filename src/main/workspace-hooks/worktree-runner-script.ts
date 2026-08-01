@@ -1,5 +1,5 @@
-import { mkdirSync, writeFileSync, chmodSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { mkdirSync, writeFileSync, chmodSync, renameSync, rmSync } from 'node:fs'
+import { dirname, isAbsolute, join } from 'node:path'
 import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-startup-policy'
 import { nativeWindowsPathToPosixShellPath } from '../../shared/setup-runner-command'
 import { scriptDeclaresPosixShell } from '../../shared/setup-script-shebang'
@@ -99,23 +99,36 @@ async function createWorktreeRunnerScript(args: {
       : null
   let runnerScriptPath = fromLink ?? getGitPath(worktreePath, gitRelPath)
 
+  // A main worktree's --git-path is worktree-relative. fs calls must not resolve it from the app cwd.
+  if (!isAbsolute(runnerScriptPath) && !runnerScriptPath.startsWith('/')) {
+    runnerScriptPath = join(worktreePath, runnerScriptPath)
+  }
+
   // Convert WSL Git's Linux path to a path Windows filesystem calls can reach.
   if (wslWorktree && !fromLink) {
     const wslInfo = getHookWslContext(worktreePath, runtimeTarget)
-    if (wslInfo?.distro) {
+    if (wslInfo?.distro && runnerScriptPath.startsWith('/')) {
       runnerScriptPath = toWindowsWslPath(runnerScriptPath.trim(), wslInfo.distro)
     }
   }
 
   mkdirSync(dirname(runnerScriptPath), { recursive: true })
 
-  if (runnerShell.family === 'cmd') {
-    writeFileSync(runnerScriptPath, buildWindowsRunnerScript(script), 'utf-8')
-  } else {
-    writeFileSync(runnerScriptPath, buildPosixRunnerScript(script), 'utf-8')
-    if (!nativeWindowsWorktree) {
-      chmodSync(runnerScriptPath, 0o755)
-    }
+  const runnerContent =
+    runnerShell.family === 'cmd' ? buildWindowsRunnerScript(script) : buildPosixRunnerScript(script)
+  // A manual re-run can overwrite a script bash is still reading by byte offset.
+  // rename swaps the inode so the running shell keeps its own copy.
+  const tmpRunnerPath = `${runnerScriptPath}.tmp`
+  writeFileSync(tmpRunnerPath, runnerContent, 'utf-8')
+  if (runnerShell.family !== 'cmd' && !nativeWindowsWorktree) {
+    chmodSync(tmpRunnerPath, 0o755)
+  }
+  try {
+    renameSync(tmpRunnerPath, runnerScriptPath)
+  } catch {
+    // Windows can refuse to replace a runner cmd.exe still holds open.
+    writeFileSync(runnerScriptPath, runnerContent, 'utf-8')
+    rmSync(tmpRunnerPath, { force: true })
   }
 
   // WSL bash needs Linux spellings for environment paths.

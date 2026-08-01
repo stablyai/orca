@@ -43,27 +43,27 @@ const setupLaunch = {
   envVars: { ORCA_ROOT_PATH: '/repo', ORCA_WORKTREE_PATH: '/repo-feature' }
 }
 
+type MockRepo = {
+  id: string
+  kind?: 'git' | 'folder'
+  connectionId?: string | null
+  executionHostId?: string | null
+}
+
 function mockStore(overrides?: {
-  worktree?: { id: string; repoId: string; path: string } | null
-  repo?: {
-    id: string
-    kind?: 'git' | 'folder'
-    connectionId?: string | null
-    executionHostId?: string | null
-  } | null
+  worktree?: { id: string; repoId: string; path: string; hostId?: string } | null
+  repos?: MockRepo[]
 }): void {
   const worktree =
     overrides && 'worktree' in overrides
       ? overrides.worktree
       : { id: 'wt-1', repoId: 'repo-1', path: '/repo-feature' }
-  const repo =
-    overrides && 'repo' in overrides
-      ? overrides.repo
-      : { id: 'repo-1', kind: 'git' as const, connectionId: null }
+  const repos = overrides?.repos ?? [{ id: 'repo-1', kind: 'git' as const, connectionId: null }]
 
   getState.mockReturnValue({
     getKnownWorktreeById: (id: string) => (worktree && worktree.id === id ? worktree : undefined),
-    repos: repo ? [repo] : []
+    repos,
+    settings: undefined
   })
 }
 
@@ -72,7 +72,12 @@ describe('runWorktreeSetupScript', () => {
     vi.clearAllMocks()
     mockStore()
     ensureHooksConfirmed.mockResolvedValue('run')
-    prepareSetupRunner.mockResolvedValue({ status: 'ok', setup: setupLaunch })
+    prepareSetupRunner.mockResolvedValue({
+      status: 'ok',
+      setup: setupLaunch,
+      setupScript: 'pnpm install',
+      setupScriptSource: 'yaml'
+    })
     activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'tab-1' })
     globalThis.window = {
       api: {
@@ -93,8 +98,37 @@ describe('runWorktreeSetupScript', () => {
     expect(prepareSetupRunner).not.toHaveBeenCalled()
   })
 
+  it('skips when the repo row is gone', async () => {
+    mockStore({ repos: [] })
+
+    const result = await runWorktreeSetupScript('wt-1')
+
+    expect(result).toEqual({ status: 'skipped', reason: 'repo-missing' })
+    expect(toastError).toHaveBeenCalled()
+    expect(prepareSetupRunner).not.toHaveBeenCalled()
+  })
+
+  it('resolves the repo row by the worktree host when repo ids are duplicated', async () => {
+    mockStore({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo-feature', hostId: 'local' },
+      repos: [
+        { id: 'repo-1', kind: 'git', connectionId: 'ssh-target' },
+        { id: 'repo-1', kind: 'git', connectionId: null }
+      ]
+    })
+
+    const result = await runWorktreeSetupScript('wt-1')
+
+    expect(result).toEqual({ status: 'launched', primaryTabId: 'tab-1' })
+    expect(prepareSetupRunner).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      worktreePath: '/repo-feature',
+      hostId: 'local'
+    })
+  })
+
   it('skips folder repos without preparing a runner', async () => {
-    mockStore({ repo: { id: 'repo-1', kind: 'folder' } })
+    mockStore({ repos: [{ id: 'repo-1', kind: 'folder' }] })
 
     const result = await runWorktreeSetupScript('wt-1')
 
@@ -104,7 +138,7 @@ describe('runWorktreeSetupScript', () => {
   })
 
   it('rejects SSH repos before the trust gate with a visible toast', async () => {
-    mockStore({ repo: { id: 'repo-1', kind: 'git', connectionId: 'ssh-target' } })
+    mockStore({ repos: [{ id: 'repo-1', kind: 'git', connectionId: 'ssh-target' }] })
 
     const result = await runWorktreeSetupScript('wt-1')
 
@@ -116,7 +150,7 @@ describe('runWorktreeSetupScript', () => {
 
   it('rejects runtime-host repos even without a connectionId', async () => {
     mockStore({
-      repo: { id: 'repo-1', kind: 'git', connectionId: null, executionHostId: 'runtime:env-1' }
+      repos: [{ id: 'repo-1', kind: 'git', connectionId: null, executionHostId: 'runtime:env-1' }]
     })
 
     const result = await runWorktreeSetupScript('wt-1')
@@ -126,13 +160,80 @@ describe('runWorktreeSetupScript', () => {
     expect(prepareSetupRunner).not.toHaveBeenCalled()
   })
 
+  it('rejects worktrees owned by a non-local host even when the repo row is local', async () => {
+    mockStore({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo-feature', hostId: 'ssh:box' },
+      repos: [
+        { id: 'repo-1', kind: 'git', connectionId: null },
+        { id: 'repo-1', kind: 'git', connectionId: 'box' }
+      ]
+    })
+
+    const result = await runWorktreeSetupScript('wt-1')
+
+    expect(result).toEqual({ status: 'skipped', reason: 'remote-host' })
+    expect(prepareSetupRunner).not.toHaveBeenCalled()
+  })
+
+  it('maps an IPC remote-host rejection to an info toast', async () => {
+    prepareSetupRunner.mockResolvedValue({
+      status: 'error',
+      setup: null,
+      reason: 'remote-host',
+      message: 'Run setup script is not yet supported for remote worktrees.'
+    })
+
+    const result = await runWorktreeSetupScript('wt-1')
+
+    expect(result).toEqual({ status: 'skipped', reason: 'remote-host' })
+    expect(toastInfo).toHaveBeenCalledWith(expect.stringContaining('not yet supported'))
+    expect(toastError).not.toHaveBeenCalled()
+  })
+
+  it('confirms trust against the script returned by the runner preparation', async () => {
+    const result = await runWorktreeSetupScript('wt-1')
+
+    expect(prepareSetupRunner).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      worktreePath: '/repo-feature',
+      hostId: 'local'
+    })
+    expect(ensureHooksConfirmed).toHaveBeenCalledWith(
+      expect.anything(),
+      'repo-1',
+      'setup',
+      'local',
+      undefined,
+      { scriptContentOverride: 'pnpm install' }
+    )
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      setup: setupLaunch,
+      executionHostId: 'local'
+    })
+    expect(result).toEqual({ status: 'launched', primaryTabId: 'tab-1' })
+  })
+
+  it('skips the trust prompt for user-owned local Settings scripts', async () => {
+    prepareSetupRunner.mockResolvedValue({
+      status: 'ok',
+      setup: setupLaunch,
+      setupScript: 'pnpm install',
+      setupScriptSource: 'local'
+    })
+
+    const result = await runWorktreeSetupScript('wt-1')
+
+    expect(ensureHooksConfirmed).not.toHaveBeenCalled()
+    expect(result).toEqual({ status: 'launched', primaryTabId: 'tab-1' })
+  })
+
   it('stops when setup trust is declined', async () => {
     ensureHooksConfirmed.mockResolvedValue('skip')
 
     const result = await runWorktreeSetupScript('wt-1')
 
     expect(result).toEqual({ status: 'skipped', reason: 'trust-skipped' })
-    expect(prepareSetupRunner).not.toHaveBeenCalled()
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
   it('toasts when no setup script is configured', async () => {
@@ -164,15 +265,22 @@ describe('runWorktreeSetupScript', () => {
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
-  it('prepares the runner and launches via activateAndRevealWorktree', async () => {
+  it('surfaces rejected preparation IPC calls as errors', async () => {
+    prepareSetupRunner.mockRejectedValue(new Error('ipc unavailable'))
+
     const result = await runWorktreeSetupScript('wt-1')
 
-    expect(prepareSetupRunner).toHaveBeenCalledWith({
-      repoId: 'repo-1',
-      worktreePath: '/repo-feature',
-      hostId: 'local'
-    })
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', { setup: setupLaunch })
-    expect(result).toEqual({ status: 'launched', primaryTabId: 'tab-1' })
+    expect(result).toEqual({ status: 'error', message: 'ipc unavailable' })
+    expect(toastError).toHaveBeenCalled()
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  it('reports activation failures with a toast', async () => {
+    activateAndRevealWorktree.mockReturnValue(false)
+
+    const result = await runWorktreeSetupScript('wt-1')
+
+    expect(result).toEqual({ status: 'skipped', reason: 'activation-failed' })
+    expect(toastError).toHaveBeenCalled()
   })
 })

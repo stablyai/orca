@@ -2,9 +2,10 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { translate } from '@/i18n/i18n'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { getWorktreeExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 
 export type RunWorktreeSetupScriptResult =
   | { status: 'launched'; primaryTabId: string | null }
@@ -41,7 +42,14 @@ export async function runWorktreeSetupScript(
     return { status: 'skipped', reason: 'worktree-missing' }
   }
 
-  const repo = state.repos.find((entry) => entry.id === worktree.repoId)
+  // Why: duplicate repo ids across hosts are a supported state; resolve the row the
+  // worktree actually belongs to instead of taking the first id match.
+  const matchingRepos = state.repos.filter((entry) => entry.id === worktree.repoId)
+  const repo = worktree.hostId
+    ? findRepoForHost(matchingRepos, worktree.repoId, { hostId: worktree.hostId })
+    : matchingRepos.length === 1
+      ? matchingRepos[0]
+      : findRepoForHost(matchingRepos, worktree.repoId, { settings: state.settings })
   if (!repo) {
     toast.error(
       translate('auto.lib.runWorktreeSetupScript.repoMissing', 'Project is no longer available.')
@@ -59,9 +67,9 @@ export async function runWorktreeSetupScript(
     return { status: 'skipped', reason: 'folder-repo' }
   }
 
-  // Why: reject before the trust gate — a remote-host trust fetch can fail and end the
-  // flow silently, hiding the main process's explicit unsupported message.
-  const hostId = getRepoExecutionHostId(repo)
+  // Why: reject before any trust or IPC work — the worktree's own host wins over the
+  // repo fallback, and a remote-host trust fetch can fail and end the flow silently.
+  const hostId = getWorktreeExecutionHostId(worktree, repo)
   if (hostId !== LOCAL_EXECUTION_HOST_ID) {
     toast.info(
       translate(
@@ -70,12 +78,6 @@ export async function runWorktreeSetupScript(
       )
     )
     return { status: 'skipped', reason: 'remote-host' }
-  }
-
-  // Why: same trust gate as create — shared orca.yaml setup must be confirmed before run.
-  const trust = await ensureHooksConfirmed(useAppStore.getState(), repo.id, 'setup', hostId)
-  if (trust !== 'run') {
-    return { status: 'skipped', reason: 'trust-skipped' }
   }
 
   let prepared: Awaited<ReturnType<typeof window.api.hooks.prepareSetupRunner>>
@@ -99,6 +101,10 @@ export async function runWorktreeSetupScript(
 
   if (prepared.status === 'error') {
     const message = prepared.message ?? 'Could not prepare the setup script.'
+    if (prepared.reason === 'remote-host') {
+      toast.info(message)
+      return { status: 'skipped', reason: 'remote-host' }
+    }
     toast.error(
       translate(
         'auto.lib.runWorktreeSetupScript.runnerFailed',
@@ -128,7 +134,27 @@ export async function runWorktreeSetupScript(
     return { status: 'skipped', reason: 'no-setup-configured' }
   }
 
-  const activation = activateAndRevealWorktree(worktreeId, { setup: prepared.setup })
+  // Why: confirm the exact script the runner will execute — the worktree's orca.yaml can
+  // differ from the repo root the generic trust inspection reads. Purely local Settings
+  // scripts are user-owned and need no repo trust.
+  if (prepared.setupScriptSource !== 'local') {
+    const trust = await ensureHooksConfirmed(
+      useAppStore.getState(),
+      repo.id,
+      'setup',
+      hostId,
+      undefined,
+      { scriptContentOverride: prepared.setupScript ?? '' }
+    )
+    if (trust !== 'run') {
+      return { status: 'skipped', reason: 'trust-skipped' }
+    }
+  }
+
+  const activation = activateAndRevealWorktree(worktreeId, {
+    setup: prepared.setup,
+    executionHostId: hostId
+  })
   if (!activation) {
     toast.error(
       translate(

@@ -24,7 +24,9 @@ export type HooksApi = {
   }) => Promise<{
     status: 'ok' | 'error'
     setup: WorktreeSetupLaunch | null
-    reason?: 'no-setup-configured' | 'folder-repo' | 'runner-failed'
+    setupScript?: string
+    setupScriptSource?: 'yaml' | 'local' | 'both'
+    reason?: 'no-setup-configured' | 'folder-repo' | 'remote-host' | 'runner-failed'
     message?: string
   }>
   /** `wakeWslDistro`: a launch, a user act that may start the repo's stopped WSL distro. */

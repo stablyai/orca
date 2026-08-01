@@ -235,9 +235,19 @@ export async function ensureHooksConfirmed(
   scriptKind: HookScriptKind,
   hostId?: ExecutionHostId,
   runtimeOwnerEnvironmentId?: string | null,
-  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
+  // Callers pass either the cancel function (then an abort signal) or the exact script to confirm.
+  isCancelledOrOptions:
+    | (() => boolean)
+    | {
+        /** Confirm this exact script instead of re-inspecting the repo root. */
+        scriptContentOverride?: string
+      }
+    | undefined = NEVER_CANCEL_TRUST_CHECK,
   signal?: AbortSignal
 ): Promise<'run' | 'skip'> {
+  const options = typeof isCancelledOrOptions === 'function' ? undefined : isCancelledOrOptions
+  const isCancelled =
+    typeof isCancelledOrOptions === 'function' ? isCancelledOrOptions : NEVER_CANCEL_TRUST_CHECK
   return enqueueTrustPrompt(async () => {
     if (isCancelled() || signal?.aborted) {
       return 'skip'
@@ -249,7 +259,9 @@ export async function ensureHooksConfirmed(
 
     let scriptContent = ''
     try {
-      if (scriptKind === 'issueCommand') {
+      if (options?.scriptContentOverride !== undefined) {
+        scriptContent = options.scriptContentOverride.trim()
+      } else if (scriptKind === 'issueCommand') {
         // Only shared orca.yaml needs repo trust; user-owned overrides do not. Pass hostId to disambiguate same-ID repos, as checkRuntimeHooks does.
         // A launch is a user act: it may start the repo's stopped WSL distro.
         const result = await readRuntimeIssueCommand(
