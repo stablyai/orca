@@ -686,4 +686,27 @@ describe('peer-collab min-size negotiation', () => {
     await runtime.updateRemoteDesktopViewer('pty-1', 'cli-B', 'cli-B', 80, 30, true)
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 80, rows: 30 })
   })
+
+  // Why: `negotiates: false` doubles as the hidden-panel signal (see the two
+  // hidden-peer cases above), so a non-negotiating OWNER must stay out of the
+  // min on purpose — including it would let a hidden pane's stale viewport pin
+  // the PTY for every participant. The accepted trade-off is that a narrow
+  // legacy owner (CLI) can be clipped while negotiating peers are attached; it
+  // regains its own size the moment the last negotiator leaves.
+  it('excludes a non-negotiating owner from the min while peers negotiate, then restores it', async () => {
+    const { runtime } = createRuntime()
+    // A narrow CLI viewer claims ownership (negotiates: false).
+    await runtime.updateRemoteDesktopViewer('pty-1', 'cli-A', 'cli-A', 60, 20, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 60, rows: 20 })
+
+    // A negotiating peer joins — the min spans host (150x40) and the peer
+    // only; the CLI owner's 60x20 must not drag the shared PTY down.
+    await runtime.updateRemoteDesktopViewer('pty-1', 'peer-A', 'peer-A', 100, 40, true, true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 40 })
+
+    // The last negotiator leaves — the owner's legacy single-owner sizing
+    // applies again as-is.
+    await runtime.unregisterRemoteDesktopViewer('pty-1', 'peer-A')
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 60, rows: 20 })
+  })
 })
