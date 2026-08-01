@@ -11872,6 +11872,16 @@ export class OrcaRuntimeService {
     })
   }
 
+  // Why: subscription ids are guessable strings, so an untrusted connection may
+  // only tear down subscriptions it registered itself.
+  cleanupSubscriptionOwnedBy(subscriptionId: string, connectionId: string): boolean {
+    if (this.subscriptionConnectionByEntry.get(subscriptionId) !== connectionId) {
+      return false
+    }
+    this.cleanupSubscription(subscriptionId)
+    return true
+  }
+
   retrySubscriptionCleanupAfter(
     subscriptionId: string,
     cleanupOwner: () => void | Promise<void>,

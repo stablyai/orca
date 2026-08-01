@@ -3832,11 +3832,22 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.unsubscribe',
     params: TerminalUnsubscribe,
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, connectionId, isPeerDevice }) => {
+      // Why: subscription ids are guessable, so a peer may only tear down
+      // subscriptions its own connection registered.
+      const cleanup = (subscriptionId: string): void => {
+        if (isPeerDevice) {
+          if (connectionId) {
+            runtime.cleanupSubscriptionOwnedBy(subscriptionId, connectionId)
+          }
+          return
+        }
+        runtime.cleanupSubscription(subscriptionId)
+      }
       // Why: older builds send a bare-handle subscriptionId, so also try the reconstructed `${terminal}:${clientId}` composite key.
-      runtime.cleanupSubscription(params.subscriptionId)
+      cleanup(params.subscriptionId)
       if (params.client && !params.subscriptionId.includes(':')) {
-        runtime.cleanupSubscription(`${params.subscriptionId}:${params.client.id}`)
+        cleanup(`${params.subscriptionId}:${params.client.id}`)
       }
       return { unsubscribed: true }
     }

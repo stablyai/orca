@@ -228,4 +228,43 @@ describe('terminal.presence subscribe/send/unsubscribe', () => {
       )
     ).rejects.toThrow('peer_terminal_not_granted')
   })
+
+  it('rejects oversized presence fields at the schema boundary', () => {
+    // Why: send fans out to every subscriber, so unbounded fields would let one
+    // peer amplify oversized payloads to all viewers.
+    const send = findMethod('terminal.presence.send')
+    const oversized = {
+      terminal: 'term-1',
+      state: {
+        participant: { clientId: 'client-a', name: 'x'.repeat(81), color: '#111' },
+        cursor: null,
+        selection: null,
+        scroll: { atBottom: true, scrollTop: 0 }
+      }
+    }
+    expect(send.params?.safeParse(oversized).success).toBe(false)
+  })
+
+  it('scopes peer presence.unsubscribe to subscriptions owned by the calling connection', async () => {
+    const unsubscribe = findMethod('terminal.presence.unsubscribe')
+    const cleanupSubscription = vi.fn()
+    const cleanupSubscriptionOwnedBy = vi.fn(() => false)
+    const runtime = {
+      cleanupSubscription,
+      cleanupSubscriptionOwnedBy
+    } as unknown as RpcContext['runtime']
+
+    await unsubscribe.handler(
+      { subscriptionId: 'terminal-presence:term-1:conn-other-1' },
+      { runtime, connectionId: 'conn-a', isPeerDevice: true } as unknown as RpcContext,
+      vi.fn()
+    )
+
+    // Why: a peer must never reach the unscoped teardown path with an id it does not own.
+    expect(cleanupSubscription).not.toHaveBeenCalled()
+    expect(cleanupSubscriptionOwnedBy).toHaveBeenCalledWith(
+      'terminal-presence:term-1:conn-other-1',
+      'conn-a'
+    )
+  })
 })

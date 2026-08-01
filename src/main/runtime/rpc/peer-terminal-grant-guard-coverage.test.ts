@@ -34,6 +34,7 @@ const GUARDED_TERMINAL_METHOD_PARAMS: Record<string, Record<string, unknown>> = 
   'terminal.setDisplayMode': { terminal: UNGRANTED_TERMINAL, mode: 'auto' },
   'terminal.restoreFit': { terminal: UNGRANTED_TERMINAL },
   'terminal.getDisplayMode': { terminal: UNGRANTED_TERMINAL },
+  'terminal.listSubscribers': { terminal: UNGRANTED_TERMINAL },
   'terminal.updateViewport': {
     terminal: UNGRANTED_TERMINAL,
     client: { id: 'client-1' },
@@ -64,6 +65,19 @@ describe('peer terminal grant guard coverage', () => {
     const declaredMethods = new Set(TERMINAL_METHODS.map((m) => m.name))
     for (const methodName of Object.keys(GUARDED_TERMINAL_METHOD_PARAMS)) {
       expect(declaredMethods.has(methodName)).toBe(true)
+    }
+    // Why: the reverse direction — a new method whose schema declares a
+    // `terminal` param must land in the guarded map (or be excluded here with
+    // a reason), otherwise this suite silently stops covering it.
+    for (const method of TERMINAL_METHODS) {
+      const shape = (method.params as { shape?: Record<string, unknown> }).shape
+      if (!shape || !('terminal' in shape)) {
+        continue
+      }
+      expect(
+        method.name in GUARDED_TERMINAL_METHOD_PARAMS,
+        `${method.name} declares a terminal param but is not covered by this suite`
+      ).toBe(true)
     }
   })
 

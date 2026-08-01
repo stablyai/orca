@@ -76,10 +76,19 @@ export class PeerClientRpcChannel {
       return false
     }
     this.pending.delete(id)
+    // Why: `error` comes from the remote host; a missing or malformed shape
+    // must not make consumers dereference undefined.
+    const rawError = message.error as { code?: unknown; message?: unknown } | null | undefined
     pending.resolve(
       message.ok
         ? { ok: true, result: message.result }
-        : { ok: false, error: message.error as { code: string; message: string } }
+        : {
+            ok: false,
+            error: {
+              code: typeof rawError?.code === 'string' ? rawError.code : 'unknown_error',
+              message: typeof rawError?.message === 'string' ? rawError.message : 'Request failed'
+            }
+          }
     )
     return true
   }

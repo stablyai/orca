@@ -5,36 +5,43 @@ import { assertPeerTerminalGranted } from '../peer-terminal-grant-guard'
 
 let presenceSubscriptionSeq = 0
 
+// Why: presence.send fans each payload out to every other subscriber, so
+// unbounded fields would let one peer amplify oversized payloads to all viewers.
+const presenceCell = z.number().int().min(-1_000_000).max(1_000_000)
+
 const TerminalPresenceSubscribeParams = z.object({
-  terminal: requiredString('Missing terminal handle'),
-  clientId: requiredString('Missing client ID')
+  terminal: requiredString('Missing terminal handle').pipe(z.string().max(256)),
+  clientId: requiredString('Missing client ID').pipe(z.string().max(128))
 })
 
 const PeerPresenceStateParams = z.object({
   participant: z.object({
-    clientId: requiredString('Missing client ID'),
-    name: requiredString('Missing participant name'),
-    color: requiredString('Missing participant color')
+    clientId: requiredString('Missing client ID').pipe(z.string().max(128)),
+    name: requiredString('Missing participant name').pipe(z.string().max(80)),
+    color: requiredString('Missing participant color').pipe(z.string().max(32))
   }),
-  cursor: z.object({ col: z.number(), row: z.number() }).nullable(),
+  cursor: z.object({ col: presenceCell, row: presenceCell }).nullable(),
   selection: z
     .object({
-      startCol: z.number(),
-      startRow: z.number(),
-      endCol: z.number(),
-      endRow: z.number()
+      startCol: presenceCell,
+      startRow: presenceCell,
+      endCol: presenceCell,
+      endRow: presenceCell
     })
     .nullable(),
-  scroll: z.object({ atBottom: z.boolean(), scrollTop: z.number() })
+  scroll: z.object({
+    atBottom: z.boolean(),
+    scrollTop: z.number().finite().min(-1_000_000_000).max(1_000_000_000)
+  })
 })
 
 const TerminalPresenceSendParams = z.object({
-  terminal: requiredString('Missing terminal handle'),
+  terminal: requiredString('Missing terminal handle').pipe(z.string().max(256)),
   state: PeerPresenceStateParams
 })
 
 const TerminalPresenceUnsubscribeParams = z.object({
-  subscriptionId: requiredString('Missing subscriptionId')
+  subscriptionId: requiredString('Missing subscriptionId').pipe(z.string().max(512))
 })
 
 // Why: presence rides the existing JSON-RPC multiplexed channel (like
@@ -101,7 +108,15 @@ export const TERMINAL_PRESENCE_METHODS: readonly RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.presence.unsubscribe',
     params: TerminalPresenceUnsubscribeParams,
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, connectionId, isPeerDevice }) => {
+      // Why: the id is a guessable string, so a peer may only tear down
+      // subscriptions its own connection registered.
+      if (isPeerDevice) {
+        if (connectionId) {
+          runtime.cleanupSubscriptionOwnedBy(params.subscriptionId, connectionId)
+        }
+        return { unsubscribed: true }
+      }
       runtime.cleanupSubscription(params.subscriptionId)
       return { unsubscribed: true }
     }

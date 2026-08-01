@@ -158,13 +158,15 @@ export class DeviceRegistry {
     return true
   }
 
-  setGrantedTerminals(deviceId: string, terminals: string[]): boolean {
+  setGrantedTerminals(deviceId: string, terminals: readonly string[]): boolean {
     const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
     if (index < 0 || this.devices[index]?.scope !== 'peer') {
       return false
     }
+    // Why: copy at the boundary — a caller mutating its array afterwards must not
+    // change authorization state behind save()'s back.
     const nextDevices = this.devices.map((device, candidateIndex) =>
-      candidateIndex === index ? { ...device, grantedTerminalHandles: terminals } : device
+      candidateIndex === index ? { ...device, grantedTerminalHandles: [...terminals] } : device
     )
     this.save(nextDevices)
     this.devices = nextDevices
@@ -192,7 +194,7 @@ export class DeviceRegistry {
     if (!device || device.scope !== 'peer') {
       return []
     }
-    return device.grantedTerminalHandles ?? []
+    return [...(device.grantedTerminalHandles ?? [])]
   }
 
   getMobilePairingConnectionMode(deviceId: string): MobilePairingConnectionMode | null {
