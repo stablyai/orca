@@ -8,6 +8,7 @@ import {
   probeActiveAgentNoteTarget,
   sendNotesToActiveAgentSession
 } from './active-agent-note-send'
+import { clearActiveAgentTerminalBindingCacheForTests } from './active-agent-note-terminal-binding'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../shared/types'
@@ -90,6 +91,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 
 describe('active agent note send', () => {
   beforeEach(() => {
+    clearActiveAgentTerminalBindingCacheForTests()
     testState.appState = {
       activeWorktreeId: 'wt-1',
       activeTabType: 'terminal',
@@ -372,6 +374,74 @@ describe('active agent note send', () => {
       },
       { timeoutMs: 15000 }
     )
+  })
+
+  it('clears a stale pane binding and re-resolves the reminted handle once', async () => {
+    let listCount = 0
+    const methods: string[] = []
+    testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
+      methods.push(method)
+      if (method === 'terminal.list') {
+        listCount += 1
+        return {
+          terminals: [
+            {
+              handle: listCount === 1 ? 'term-old-runtime' : 'term-new-runtime',
+              worktreeId: 'wt-1',
+              worktreePath: '/repo',
+              branch: 'main',
+              tabId: 'tab-9',
+              leafId: OTHER_LEAF_ID,
+              title: 'Codex',
+              connected: true,
+              writable: true,
+              lastOutputAt: 1,
+              preview: ''
+            }
+          ],
+          totalCount: 1,
+          truncated: false
+        }
+      }
+      if (method === 'terminal.agentStatus') {
+        if (params.terminal === 'term-old-runtime') {
+          throw new testState.RuntimeRpcCallError({
+            error: { code: 'terminal_handle_stale', message: 'terminal_handle_stale' }
+          })
+        }
+        return { agentStatus: { handle: 'term-new-runtime', isRunningAgent: true, status: null } }
+      }
+      if (method === 'terminal.send') {
+        expect(params.terminal).toBe('term-new-runtime')
+        return {
+          send: {
+            handle: 'term-new-runtime',
+            accepted: true,
+            bytesWritten: typeof params.text === 'string' ? params.text.length : 1
+          }
+        }
+      }
+      throw new Error(`unexpected method ${method}`)
+    })
+
+    await expect(
+      sendNotesToActiveAgentSession({
+        worktreeId: 'wt-1',
+        prompt: 'notes',
+        noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
+      })
+    ).resolves.toEqual({ status: 'sent' })
+
+    expect(listCount).toBe(2)
+    expect(methods).toEqual([
+      'terminal.list',
+      'terminal.agentStatus',
+      'terminal.list',
+      'terminal.agentStatus',
+      'terminal.send',
+      'terminal.agentStatus',
+      'terminal.send'
+    ])
   })
 
   it('maps active-focused guarded paste permission refusal to permission', async () => {
@@ -1068,7 +1138,7 @@ describe('active agent note send', () => {
         noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
       })
     ).resolves.toEqual({ status: 'no-agent' })
-    expect(methods).toEqual(['terminal.list', 'terminal.agentStatus', 'terminal.send'])
+    expect(methods).toEqual(['terminal.agentStatus', 'terminal.send'])
   })
 
   it('maps explicit target first-write refusal to not-writable', async () => {
