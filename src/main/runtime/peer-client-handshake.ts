@@ -23,7 +23,10 @@ export type PeerClientHandshakeDeps = {
   // Why: post-handshake decrypted JSON envelopes (RPC replies, stream messages).
   onMessage: (message: Record<string, unknown>) => void
   onBinaryMessage: (raw: Buffer) => void
-  onClosed: (code: number) => void
+  // Why: transportError carries the socket-level cause (EHOSTUNREACH, ECONNREFUSED,
+  // ETIMEDOUT) — the close code alone collapses every transport failure into 1006,
+  // leaving the user with no way to tell a blocked network from a dead host.
+  onClosed: (code: number, transportError: string | null) => void
 }
 
 // Why: owns the v1 e2ee_hello/e2ee_auth handshake and the resulting shared
@@ -69,6 +72,7 @@ export class PeerClientHandshake {
     this.state = 'awaiting_ready'
     const socket = this.deps.createSocket(offer.endpoint)
     this.ws = socket
+    let transportError: string | null = null
 
     socket.once('open', () => {
       if (this.ws !== socket) {
@@ -97,8 +101,9 @@ export class PeerClientHandshake {
       this.handleText(raw.toString(), offer)
     })
 
-    socket.once('error', () => {
+    socket.once('error', (error) => {
       // Why: 'close' always follows 'error' on ws sockets and is where reconnect is scheduled.
+      transportError = error.message
     })
 
     socket.once('close', (code) => {
@@ -111,7 +116,7 @@ export class PeerClientHandshake {
         clearTimeout(this.timer)
         this.timer = null
       }
-      this.deps.onClosed(code)
+      this.deps.onClosed(code, transportError)
     })
   }
 

@@ -40,6 +40,8 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
   const [devices, setDevices] = useState<PairedDevice[]>([])
   const [connectedClients, setConnectedClients] = useState<ConnectedPeerClient[]>([])
   const [exclusiveInputFloor, setExclusiveInputFloorState] = useState(false)
+  const [hostEnabled, setHostEnabledState] = useState(false)
+  const [clientEnabled, setClientEnabledState] = useState(false)
   // Why: distinct from `hostTerminals` in usePeerCollabClientConnection, which is the
   // *remote* host's terminals seen while connected as a peer client; this is this
   // desktop's own terminals, used for the grant picker when acting as the host.
@@ -209,27 +211,77 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
     }
   }, [exclusiveInputFloor, mountedRef])
 
+  const toggleHostEnabled = useCallback(async () => {
+    const next = !hostEnabled
+    setHostEnabledState(next)
+    try {
+      const result = await window.api.peerCollab.setHostEnabled({ enabled: next })
+      if (mountedRef.current) {
+        setHostEnabledState(result.enabled)
+      }
+    } catch {
+      if (mountedRef.current) {
+        setHostEnabledState(!next)
+      }
+    }
+  }, [hostEnabled, mountedRef])
+
+  const toggleClientEnabled = useCallback(async () => {
+    const next = !clientEnabled
+    setClientEnabledState(next)
+    try {
+      const result = await window.api.peerClient.setClientEnabled({ enabled: next })
+      if (mountedRef.current) {
+        setClientEnabledState(result.enabled)
+      }
+    } catch {
+      if (mountedRef.current) {
+        setClientEnabledState(!next)
+      }
+    }
+  }, [clientEnabled, mountedRef])
+
   useEffect(() => {
     void loadNetworkInterfaces()
     void loadDevices()
-    void loadConnectedClients()
-    void loadOwnTerminals()
     void window.api.peerCollab.getExclusiveInputFloor().then(({ enabled }) => {
       if (mountedRef.current) {
         setExclusiveInputFloorState(enabled)
       }
     })
-  }, [loadNetworkInterfaces, loadDevices, loadConnectedClients, loadOwnTerminals, mountedRef])
+    void window.api.peerCollab.getHostEnabled().then(({ enabled }) => {
+      if (mountedRef.current) {
+        setHostEnabledState(enabled)
+      }
+    })
+    void window.api.peerClient.getClientEnabled().then(({ enabled }) => {
+      if (mountedRef.current) {
+        setClientEnabledState(enabled)
+      }
+    })
+  }, [loadNetworkInterfaces, loadDevices, mountedRef])
 
+  // Why: connected-clients/host-terminals polling only matters while the host
+  // share feature is on — stop it (and clear stale state) the moment it's off.
   useEffect(() => {
+    if (!hostEnabled) {
+      setConnectedClients([])
+      return
+    }
+    void loadConnectedClients()
     const timer = window.setInterval(() => void loadConnectedClients(), CONNECTED_CLIENTS_POLL_MS)
     return () => window.clearInterval(timer)
-  }, [loadConnectedClients])
+  }, [hostEnabled, loadConnectedClients])
 
   useEffect(() => {
+    if (!hostEnabled) {
+      setOwnTerminals([])
+      return
+    }
+    void loadOwnTerminals()
     const timer = window.setInterval(() => void loadOwnTerminals(), CONNECTED_CLIENTS_POLL_MS)
     return () => window.clearInterval(timer)
-  }, [loadOwnTerminals])
+  }, [hostEnabled, loadOwnTerminals])
 
   async function revokeDevice(deviceId: string) {
     try {
@@ -304,6 +356,8 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
   return (
     <div className="space-y-6">
       <PeerCollabHostShareSection
+        hostEnabled={hostEnabled}
+        onToggleHostEnabled={() => void toggleHostEnabled()}
         networkInterfaces={networkInterfaces}
         selectedAddress={selectedAddress}
         onSelectedAddressChange={handleSelectedAddressChange}
@@ -320,24 +374,30 @@ export function PeerCollabSettingsPane(): React.JSX.Element {
         onClearCodeCopiedTimer={clearCodeCopiedResetTimer}
       />
 
-      <PeerCollabDevicesSection
-        devices={devices}
-        hasQrCode={qrDataUrl != null}
-        onRevokeDevice={(deviceId) => void revokeDevice(deviceId)}
-        // Why: reuses the already-polled connectedClients so "connected now" doesn't need its own poll.
-        connectedDeviceIds={new Set(connectedClients.map((client) => client.deviceId))}
-      />
+      {hostEnabled ? (
+        <PeerCollabDevicesSection
+          devices={devices}
+          hasQrCode={qrDataUrl != null}
+          onRevokeDevice={(deviceId) => void revokeDevice(deviceId)}
+          // Why: reuses the already-polled connectedClients so "connected now" doesn't need its own poll.
+          connectedDeviceIds={new Set(connectedClients.map((client) => client.deviceId))}
+        />
+      ) : null}
 
-      <PeerCollabConnectedClientsSection
-        exclusiveInputFloor={exclusiveInputFloor}
-        onToggleExclusiveInputFloor={() => void toggleExclusiveInputFloor()}
-        connectedClients={connectedClients}
-        onDisconnectClient={(deviceId, revoke) => void disconnectClient(deviceId, revoke)}
-        hostTerminals={ownTerminals}
-        onSetGrantedTerminals={(deviceId, handles) => void setGrantedTerminals(deviceId, handles)}
-      />
+      {hostEnabled ? (
+        <PeerCollabConnectedClientsSection
+          exclusiveInputFloor={exclusiveInputFloor}
+          onToggleExclusiveInputFloor={() => void toggleExclusiveInputFloor()}
+          connectedClients={connectedClients}
+          onDisconnectClient={(deviceId, revoke) => void disconnectClient(deviceId, revoke)}
+          hostTerminals={ownTerminals}
+          onSetGrantedTerminals={(deviceId, handles) => void setGrantedTerminals(deviceId, handles)}
+        />
+      ) : null}
 
       <PeerCollabClientConnectSection
+        clientEnabled={clientEnabled}
+        onToggleClientEnabled={() => void toggleClientEnabled()}
         clientPairingCode={clientPairingCode}
         onClientPairingCodeChange={setClientPairingCode}
         clientDisplayName={clientDisplayName}

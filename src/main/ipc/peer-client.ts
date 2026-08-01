@@ -40,6 +40,9 @@ export function registerPeerClientHandlers(service: PeerClientService, store: St
   ipcMain.handle(
     'peerClient:connect',
     (_event, args: { pairingCode: string; displayName: string }): PeerClientConnectResult => {
+      if (store.getSettings().peerCollabClientEnabled !== true) {
+        return { ok: false, reason: 'client_disabled' }
+      }
       const displayName = args.displayName.trim()
       if (displayName) {
         store.updateSettings({ peerCollabDisplayName: displayName })
@@ -52,6 +55,18 @@ export function registerPeerClientHandlers(service: PeerClientService, store: St
   ipcMain.handle('peerClient:disconnect', () => {
     service.disconnect()
     return { ok: true }
+  })
+
+  ipcMain.handle('peerClient:getClientEnabled', () => ({
+    enabled: store.getSettings().peerCollabClientEnabled === true
+  }))
+
+  ipcMain.handle('peerClient:setClientEnabled', (_event, args: { enabled: boolean }) => {
+    store.updateSettings({ peerCollabClientEnabled: args.enabled })
+    if (!args.enabled) {
+      service.disconnect()
+    }
+    return { enabled: args.enabled }
   })
 
   ipcMain.handle('peerClient:getSavedPairing', (): SavedPeerPairing | null => {
@@ -68,6 +83,9 @@ export function registerPeerClientHandlers(service: PeerClientService, store: St
   })
 
   ipcMain.handle('peerClient:connectSaved', (): PeerClientConnectResult => {
+    if (store.getSettings().peerCollabClientEnabled !== true) {
+      return { ok: false, reason: 'client_disabled' }
+    }
     const savedCode = store.getSettings().peerCollabSavedPairingCode
     if (!savedCode) {
       return { ok: false, reason: 'no_saved_pairing' }

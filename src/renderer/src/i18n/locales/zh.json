@@ -10127,7 +10127,14 @@
           "clientSavedHost": "已保存的主机：{{endpoint}}",
           "clientReconnectSaved": "重新连接",
           "offerConsumed": "该配对码已被使用并清除。要添加另一台桌面端，请生成新的配对码。",
-          "singleUseCodeNotice": "每个配对码只接纳一台桌面端，该桌面端连接后即被清除。每要添加一台桌面端，就生成一个新配对码。"
+          "singleUseCodeNotice": "每个配对码只接纳一台桌面端，该桌面端连接后即被清除。每要添加一台桌面端，就生成一个新配对码。",
+          "clientTransportError": "连接失败：{{reason}}",
+          "clientLocalNetworkHint": "在 macOS 上，请在“系统设置 → 隐私与安全性 → 本地网络”中允许此应用。",
+          "clientEnabledLabel": "允许连接到其他桌面",
+          "clientEnabledDescription": "开启后可将此桌面作为 peer client 连接到另一台 Orca。",
+          "clientHostDisabled": "host 已关闭共享，因此你已断开连接。",
+          "hostEnabledLabel": "允许其他桌面连接",
+          "hostEnabledDescription": "开启后，其他 Orca 桌面可以与此电脑配对并查看终端。关闭后，当前已连接的桌面会立即断开。"
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",

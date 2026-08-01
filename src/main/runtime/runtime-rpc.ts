@@ -32,7 +32,10 @@ import {
   MOBILE_RPC_METHOD_ALLOWLIST,
   PEER_RPC_METHOD_ALLOWLIST
 } from './rpc/scoped-rpc-method-allowlists'
-import { PEER_DUPLICATE_CONNECTION_CLOSE_CODE } from '../../shared/peer-connection-close-codes'
+import {
+  PEER_DUPLICATE_CONNECTION_CLOSE_CODE,
+  PEER_HOSTING_DISABLED_CLOSE_CODE
+} from '../../shared/peer-connection-close-codes'
 import type { PairingRelay } from '../../shared/mobile-relay-pairing-offer'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import {
@@ -82,6 +85,7 @@ export type PairingOfferUnavailableReason =
   | 'e2ee_key_unavailable'
   | 'invalid_advertised_endpoint'
   | 'relay_mint_failed'
+  | 'peer_hosting_disabled'
 
 export type PairingOfferUnavailable = {
   available: false
@@ -118,6 +122,8 @@ const DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE =
   'The pairing registry is unavailable. Verify that the Orca data directory is writable.'
 const E2EE_KEY_UNAVAILABLE_GUIDANCE =
   'The E2EE identity is unavailable. Verify that the Orca data directory is writable.'
+const PEER_HOSTING_DISABLED_GUIDANCE =
+  'Peer hosting is turned off in Settings. Enable it to let another Orca desktop connect.'
 
 type MobileRelayPairingProvider = {
   createPairingRelay(
@@ -237,6 +243,9 @@ export class OrcaRuntimeRpcServer {
   private readonly askLongPollCap: number
   private readonly relayRevokeOutbox: RelayRevokeOutbox
   private readonly peerConnections = new PeerConnectionRegistry()
+  // Why: default off — peer scope is gated separately from the shared
+  // WebSocket transport, which mobile also depends on and must stay up.
+  private peerHostingEnabled = false
   private deviceRegistry: DeviceRegistry | null = null
   private e2eeKeypair: E2EEKeypair | null = null
   private pairingInitializationFailure: PairingOfferUnavailable | null = null
@@ -396,6 +405,17 @@ export class OrcaRuntimeRpcServer {
     return true
   }
 
+  // Why: host/client on-off toggle backend — flipping to false must drop
+  // every currently-live peer socket immediately, not just block new ones.
+  // The registry's WS close handler removes each entry from peerConnections
+  // itself, so no extra bookkeeping is needed here.
+  setPeerHostingEnabled(enabled: boolean): void {
+    this.peerHostingEnabled = enabled
+    if (!enabled) {
+      this.peerConnections.closeAll(PEER_HOSTING_DISABLED_CLOSE_CODE, 'Peer hosting disabled')
+    }
+  }
+
   // Why: the WS close (and its onReady/onClose pair above) is the source of
   // truth for peerConnections; closing the socket here lets that same path
   // clean up the registry entry instead of duplicating removal logic.
@@ -552,6 +572,9 @@ export class OrcaRuntimeRpcServer {
       } {
     if (this.pairingInitializationFailure) {
       return this.pairingInitializationFailure
+    }
+    if (args.scope === 'peer' && !this.peerHostingEnabled) {
+      return pairingUnavailable('peer_hosting_disabled', PEER_HOSTING_DISABLED_GUIDANCE)
     }
     const rawEndpoint = this.getWebSocketEndpoint()
     if (!rawEndpoint) {
@@ -1067,6 +1090,12 @@ export class OrcaRuntimeRpcServer {
             },
             onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket.ws),
             onReady: (socket) => {
+              // Why: hosting toggle is peer-scope only — mobile keeps connecting
+              // regardless of this desktop's peer-collab host setting.
+              if (socket.device.scope === 'peer' && !this.peerHostingEnabled) {
+                socket.ws.close(PEER_HOSTING_DISABLED_CLOSE_CODE, 'Peer hosting disabled')
+                return
+              }
               // Why: a pairing code pasted into a second client reuses the same
               // deviceId (see PeerConnectionRegistry.findLiveConnectionByDevice);
               // reject the duplicate here so one deviceId never backs two live

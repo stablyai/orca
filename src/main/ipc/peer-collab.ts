@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { Store } from '../persistence'
 import { encodePairingQrDataUrl } from './pairing-qr-code'
 import { getDefaultPairingAddress } from './mobile'
 
@@ -12,8 +13,23 @@ import { getDefaultPairingAddress } from './mobile'
 // they are structurally local-only.
 export function registerPeerCollabHandlers(
   rpcServer: OrcaRuntimeRpcServer,
-  runtime: OrcaRuntimeService
+  runtime: OrcaRuntimeService,
+  store: Store
 ): void {
+  // Why: restores the host toggle across restarts — rpcServer's in-memory
+  // default is always off until this runs.
+  rpcServer.setPeerHostingEnabled(store.getSettings().peerCollabHostEnabled === true)
+
+  ipcMain.handle('peerCollab:getHostEnabled', () => ({
+    enabled: store.getSettings().peerCollabHostEnabled === true
+  }))
+
+  ipcMain.handle('peerCollab:setHostEnabled', (_event, args: { enabled: boolean }) => {
+    store.updateSettings({ peerCollabHostEnabled: args.enabled })
+    rpcServer.setPeerHostingEnabled(args.enabled)
+    return { enabled: args.enabled }
+  })
+
   ipcMain.handle(
     'peerCollab:getPairingOffer',
     async (_event, args?: { address?: string; rotate?: boolean }) => {

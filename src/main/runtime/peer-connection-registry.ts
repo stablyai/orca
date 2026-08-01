@@ -47,4 +47,12 @@ export class PeerConnectionRegistry {
     }
     return null
   }
+
+  // Why: hosting-disabled toggle must drop every live peer socket at once;
+  // the WS 'close' handler removes each entry from this registry itself.
+  closeAll(code: number, reason: string): void {
+    for (const entry of this.connections.values()) {
+      entry.ws.close(code, reason)
+    }
+  }
 }

@@ -9,7 +9,10 @@ import {
   UNAUTHORIZED_CLOSE_CODE,
   type HandshakeState
 } from './peer-client-handshake'
-import { PEER_DUPLICATE_CONNECTION_CLOSE_CODE } from '../../shared/peer-connection-close-codes'
+import {
+  PEER_DUPLICATE_CONNECTION_CLOSE_CODE,
+  PEER_HOSTING_DISABLED_CLOSE_CODE
+} from '../../shared/peer-connection-close-codes'
 import { PeerClientRpcChannel } from './peer-client-rpc-channel'
 import { PeerClientTerminalStreams } from './peer-client-terminal-streams'
 import { PeerClientPresenceStreams } from './peer-client-presence-streams'
@@ -67,11 +70,12 @@ export class PeerClientService {
       getDisplayName: () => this.displayName,
       onAuthenticated: () => {
         this.reconnectAttempt = 0
+        this.lastErrorReason = null
         this.setState('connected')
       },
       onMessage: (message) => this.handleReadyMessage(message),
       onBinaryMessage: (raw) => this.terminalStreams.handleBinaryMessage(raw),
-      onClosed: (code) => this.handleSocketClosed(code)
+      onClosed: (code, transportError) => this.handleSocketClosed(code, transportError)
     })
 
     this.rpc = new PeerClientRpcChannel({
@@ -251,7 +255,7 @@ export class PeerClientService {
     this.rpc.resolve(message.id, message as { ok: boolean; result?: unknown; error?: unknown })
   }
 
-  private handleSocketClosed(code: number): void {
+  private handleSocketClosed(code: number, transportError: string | null = null): void {
     this.rpc.rejectAll(new Error('Connection closed'))
     this.terminalStreams.endAll()
     this.presenceStreams.endAll()
@@ -273,6 +277,19 @@ export class PeerClientService {
       this.intentionallyClosed = true
       this.setState('closed')
       return
+    }
+    if (code === PEER_HOSTING_DISABLED_CLOSE_CODE) {
+      // Why: the host turned peer hosting off — retrying is pointless until
+      // the user flips it back on, so latch closed instead of reconnecting.
+      this.lastErrorReason = 'host_disabled'
+      this.intentionallyClosed = true
+      this.setState('closed')
+      return
+    }
+    // Why: kept while reconnecting so the UI can say what actually failed —
+    // otherwise every transport failure shows as a bare endless "Reconnecting".
+    if (transportError) {
+      this.lastErrorReason = transportError
     }
     this.scheduleReconnect()
   }

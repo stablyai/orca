@@ -10127,7 +10127,14 @@
           "clientSavedHost": "저장된 호스트: {{endpoint}}",
           "clientReconnectSaved": "다시 접속",
           "offerConsumed": "그 코드는 사용되어 지워졌습니다. 데스크톱을 더 추가하려면 새 코드를 만드세요.",
-          "singleUseCodeNotice": "코드 하나는 데스크톱 하나만 받아들이고, 그 데스크톱이 접속하면 지워집니다. 추가할 데스크톱마다 새 코드를 만드세요."
+          "singleUseCodeNotice": "코드 하나는 데스크톱 하나만 받아들이고, 그 데스크톱이 접속하면 지워집니다. 추가할 데스크톱마다 새 코드를 만드세요.",
+          "clientTransportError": "연결 실패: {{reason}}",
+          "clientLocalNetworkHint": "macOS에서는 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 이 앱을 허용하세요.",
+          "clientEnabledLabel": "다른 데스크톱에 연결 허용",
+          "clientEnabledDescription": "이 데스크톱을 다른 Orca에 peer client로 연결하려면 켜세요.",
+          "clientHostDisabled": "host가 공유를 중단하여 연결이 끊어졌습니다.",
+          "hostEnabledLabel": "다른 데스크톱의 접속 허용",
+          "hostEnabledDescription": "켜면 다른 Orca 데스크톱이 이 컴퓨터와 페어링하고 터미널을 볼 수 있습니다. 끄면 접속 중인 데스크톱이 즉시 끊어집니다."
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",

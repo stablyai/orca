@@ -2773,7 +2773,7 @@ void app.whenReady().then(async () => {
       return true
     }
   })
-  registerPeerCollabHandlers(runtimeRpc, runtime)
+  registerPeerCollabHandlers(runtimeRpc, runtime, store)
   registerPeerClientHandlers(peerClientService, store)
   registerTerminalHostPresenceHandlers(runtime)
   // Why: repeated direct auth failures otherwise look like a client that never connects; point users to re-pairing.

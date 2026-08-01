@@ -3681,6 +3681,8 @@ export type PreloadApi = {
       terminals: { handle: string; title: string | null; tabId: string }[]
     }>
     setGrantedTerminals: (args: { deviceId: string; handles: string[] }) => Promise<{ ok: boolean }>
+    getHostEnabled: () => Promise<{ enabled: boolean }>
+    setHostEnabled: (args: { enabled: boolean }) => Promise<{ enabled: boolean }>
   }
   // Why: the client side of peer collaboration — connecting to another Orca
   // desktop's peerCollab pairing offer. Kept as a separate namespace from
@@ -3734,6 +3736,8 @@ export type PreloadApi = {
     onPresenceEvent: (
       callback: (payload: { requestId: string; event: PeerPresenceEvent }) => void
     ) => () => void
+    getClientEnabled: () => Promise<{ enabled: boolean }>
+    setClientEnabled: (args: { enabled: boolean }) => Promise<{ enabled: boolean }>
   }
   // Why: mirrors peerClient's presence subscribe/send/onPresenceEvent, but for
   // the host's own local terminal panes fanning through the same

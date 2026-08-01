@@ -4721,7 +4721,13 @@ const api = {
     setGrantedTerminals: (args: {
       deviceId: string
       handles: string[]
-    }): Promise<{ ok: boolean }> => ipcRenderer.invoke('peerCollab:setGrantedTerminals', args)
+    }): Promise<{ ok: boolean }> => ipcRenderer.invoke('peerCollab:setGrantedTerminals', args),
+
+    getHostEnabled: (): Promise<{ enabled: boolean }> =>
+      ipcRenderer.invoke('peerCollab:getHostEnabled'),
+
+    setHostEnabled: (args: { enabled: boolean }): Promise<{ enabled: boolean }> =>
+      ipcRenderer.invoke('peerCollab:setHostEnabled', args)
   },
 
   peerClient: {
@@ -4818,7 +4824,13 @@ const api = {
       ): void => callback(payload)
       ipcRenderer.on('peerClient:presenceEvent', listener)
       return () => ipcRenderer.removeListener('peerClient:presenceEvent', listener)
-    }
+    },
+
+    getClientEnabled: (): Promise<{ enabled: boolean }> =>
+      ipcRenderer.invoke('peerClient:getClientEnabled'),
+
+    setClientEnabled: (args: { enabled: boolean }): Promise<{ enabled: boolean }> =>
+      ipcRenderer.invoke('peerClient:setClientEnabled', args)
   },
 
   terminalHostPresence: {

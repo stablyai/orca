@@ -10127,7 +10127,14 @@
           "clientSavedHost": "Anfitrión guardado: {{endpoint}}",
           "clientReconnectSaved": "Reconectar",
           "offerConsumed": "Ese código ya se usó y se ha borrado. Genera uno nuevo para añadir otro escritorio.",
-          "singleUseCodeNotice": "Cada código admite un escritorio y se borra en cuanto ese escritorio se conecta. Genera un código nuevo por cada escritorio que quieras añadir."
+          "singleUseCodeNotice": "Cada código admite un escritorio y se borra en cuanto ese escritorio se conecta. Genera un código nuevo por cada escritorio que quieras añadir.",
+          "clientTransportError": "Error de conexión: {{reason}}",
+          "clientLocalNetworkHint": "En macOS, permite esta app en Ajustes del Sistema → Privacidad y seguridad → Red local.",
+          "clientEnabledLabel": "Permitir conectarse a otros escritorios",
+          "clientEnabledDescription": "Actívalo para conectar este escritorio a otro Orca como client de par.",
+          "clientHostDisabled": "El host desactivó la compartición, así que se te desconectó.",
+          "hostEnabledLabel": "Permitir que otros escritorios se conecten",
+          "hostEnabledDescription": "Actívalo para que otros escritorios Orca puedan emparejarse y ver terminales en este equipo. Al desactivarlo, cualquier escritorio conectado se desconecta de inmediato."
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",

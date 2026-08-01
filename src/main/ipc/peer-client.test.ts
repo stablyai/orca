@@ -26,8 +26,11 @@ import {
   makePeerPairingOffer
 } from '../runtime/peer-client-test-harness'
 
+// Why: the client toggle defaults off (see registerPeerClientHandlers' connect
+// gate); existing tests exercise connect behavior itself, so seed it on here
+// and cover the off case with its own dedicated store/test below.
 function makeFakeStore(): Store {
-  const settings = {} as GlobalSettings
+  const settings = { peerCollabClientEnabled: true } as GlobalSettings
   return {
     getSettings: () => settings,
     updateSettings: (updates: Partial<GlobalSettings>) => Object.assign(settings, updates)
@@ -190,5 +193,73 @@ describe('registerPeerClientHandlers saved pairing', () => {
 
     handlers2.get('peerClient:forgetSavedPairing')!(undefined)
     expect(store.getSettings().peerCollabSavedPairingCode).toBeUndefined()
+  })
+})
+
+describe('registerPeerClientHandlers client on/off toggle', () => {
+  const services: PeerClientService[] = []
+
+  afterEach(() => {
+    handleMock.mockClear()
+    for (const service of services.splice(0)) {
+      service.destroy()
+    }
+  })
+
+  function makeDisabledStore(): Store {
+    const settings = {} as GlobalSettings
+    return {
+      getSettings: () => settings,
+      updateSettings: (updates: Partial<GlobalSettings>) => Object.assign(settings, updates)
+    } as unknown as Store
+  }
+
+  it('rejects connect with client_disabled while the client toggle is off (default)', () => {
+    const store = makeDisabledStore()
+    const service = new PeerClientService()
+    services.push(service)
+    registerPeerClientHandlers(service, store)
+    const handlers = captureHandlers()
+
+    const result = handlers.get('peerClient:connect')!(undefined, {
+      pairingCode: 'anything',
+      displayName: 'Tester'
+    })
+    expect(result).toEqual({ ok: false, reason: 'client_disabled' })
+  })
+
+  it('rejects connectSaved with client_disabled while the client toggle is off', () => {
+    const store = makeDisabledStore()
+    store.updateSettings({ peerCollabSavedPairingCode: 'saved-code' })
+    const service = new PeerClientService()
+    services.push(service)
+    registerPeerClientHandlers(service, store)
+    const handlers = captureHandlers()
+
+    const result = handlers.get('peerClient:connectSaved')!(undefined)
+    expect(result).toEqual({ ok: false, reason: 'client_disabled' })
+  })
+
+  it('disconnects the live service when the toggle is switched off', async () => {
+    const { server, endpoint } = await startPeerTestServer()
+    const serverKeys = generateKeyPair()
+    serveOnePeerConnection(server, serverKeys, 'peer-token-abc')
+
+    const store = makeFakeStore()
+    const service = new PeerClientService()
+    services.push(service)
+    registerPeerClientHandlers(service, store)
+    const handlers = captureHandlers()
+
+    const code = makePeerPairingOffer(endpoint, serverKeys, 'peer-token-abc')
+    handlers.get('peerClient:connect')!(undefined, { pairingCode: code, displayName: 'Tester' })
+    await waitForPeerClientState(service, 'connected')
+
+    const setResult = handlers.get('peerClient:setClientEnabled')!(undefined, { enabled: false })
+    expect(setResult).toEqual({ enabled: false })
+    await waitForPeerClientState(service, 'closed')
+    expect(store.getSettings().peerCollabClientEnabled).toBe(false)
+
+    await new Promise<void>((resolve) => server.close(() => resolve()))
   })
 })

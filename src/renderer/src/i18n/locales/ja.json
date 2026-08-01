@@ -10127,7 +10127,14 @@
           "clientSavedHost": "保存されたホスト: {{endpoint}}",
           "clientReconnectSaved": "再接続",
           "offerConsumed": "そのコードは使用済みのため消去されました。別のデスクトップを追加するには新しいコードを生成してください。",
-          "singleUseCodeNotice": "コード 1 つにつきデスクトップ 1 台のみ接続でき、接続した時点で消去されます。追加するデスクトップごとに新しいコードを生成してください。"
+          "singleUseCodeNotice": "コード 1 つにつきデスクトップ 1 台のみ接続でき、接続した時点で消去されます。追加するデスクトップごとに新しいコードを生成してください。",
+          "clientTransportError": "接続に失敗しました: {{reason}}",
+          "clientLocalNetworkHint": "macOS では、システム設定 → プライバシーとセキュリティ → ローカルネットワークでこのアプリを許可してください。",
+          "clientEnabledLabel": "他のデスクトップへの接続を許可",
+          "clientEnabledDescription": "このデスクトップを他の Orca に peer client として接続する場合はオンにします。",
+          "clientHostDisabled": "host が共有を停止したため、接続が切断されました。",
+          "hostEnabledLabel": "他のデスクトップからの接続を許可",
+          "hostEnabledDescription": "オンにすると、他の Orca デスクトップがこのコンピューターとペアリングしてターミナルを表示できます。オフにすると、接続中のデスクトップは即座に切断されます。"
         },
         "MobilePairedDevicesSection": {
           "connectedNow": "Connected now",

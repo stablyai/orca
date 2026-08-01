@@ -224,6 +224,7 @@ async function startPeerHost(
     wsPort: 0
   })
   await server.start()
+  server.setPeerHostingEnabled(true)
   const offer = server.createPairingOffer({
     address: '127.0.0.1',
     name: 'peer',
@@ -529,6 +530,50 @@ describe('peer-collab duplicate pairing-code connection', () => {
 
     expect(clientB.getStatus().lastErrorReason).toBeNull()
     expect(server.listConnectedPeerClients().length).toBe(1)
+  })
+})
+
+describe('peer-collab host on/off toggle', () => {
+  const clients: PeerClientService[] = []
+  const servers: OrcaRuntimeRpcServer[] = []
+
+  afterEach(async () => {
+    for (const client of clients.splice(0)) {
+      client.destroy()
+    }
+    for (const server of servers.splice(0)) {
+      await server.stop()
+    }
+  })
+
+  it('rejects a peer connection with the hosting-disabled close code while hosting is off', async () => {
+    const { server, pairingUrl } = await startPeerHost()
+    servers.push(server)
+    server.setPeerHostingEnabled(false)
+
+    const client = new PeerClientService()
+    clients.push(client)
+    expect(client.connect(pairingUrl, 'Client A')).toEqual({ ok: true })
+    await waitFor(() => client.getStatus().state === 'closed')
+
+    expect(client.getStatus().lastErrorReason).toBe('host_disabled')
+    expect(server.listConnectedPeerClients().length).toBe(0)
+  })
+
+  it('drops a live peer connection immediately when hosting is switched off', async () => {
+    const { server, pairingUrl } = await startPeerHost()
+    servers.push(server)
+
+    const client = new PeerClientService()
+    clients.push(client)
+    expect(client.connect(pairingUrl, 'Client A')).toEqual({ ok: true })
+    await waitFor(() => client.getStatus().state === 'connected')
+
+    server.setPeerHostingEnabled(false)
+    await waitFor(() => client.getStatus().state === 'closed')
+
+    expect(client.getStatus().lastErrorReason).toBe('host_disabled')
+    expect(server.listConnectedPeerClients().length).toBe(0)
   })
 })
 

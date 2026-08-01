@@ -2,11 +2,14 @@ import { SearchableSetting } from './SearchableSetting'
 import { Button } from '../ui/button'
 import { NetworkInterfacePicker } from '../mobile/NetworkInterfacePicker'
 import { MobilePairingQrSection } from './MobilePairingQrSection'
+import { SettingsSwitchRow } from './SettingsFormControls'
 import { getPeerCollabOverviewSearchEntry } from './peer-collab-settings-search'
 import type { MobileNetworkInterface } from './mobile-network-interface-selection'
 import { translate } from '@/i18n/i18n'
 
 type PeerCollabHostShareSectionProps = {
+  hostEnabled: boolean
+  onToggleHostEnabled: () => void
   networkInterfaces: MobileNetworkInterface[]
   selectedAddress: string | undefined
   onSelectedAddressChange: (address: string) => void
@@ -24,6 +27,8 @@ type PeerCollabHostShareSectionProps = {
 }
 
 export function PeerCollabHostShareSection({
+  hostEnabled,
+  onToggleHostEnabled,
   networkInterfaces,
   selectedAddress,
   onSelectedAddressChange,
@@ -46,6 +51,19 @@ export function PeerCollabHostShareSection({
       keywords={getPeerCollabOverviewSearchEntry().keywords}
       className="space-y-5"
     >
+      <SettingsSwitchRow
+        label={translate(
+          'auto.components.settings.PeerCollabSettingsPane.hostEnabledLabel',
+          'Allow other desktops to connect'
+        )}
+        description={translate(
+          'auto.components.settings.PeerCollabSettingsPane.hostEnabledDescription',
+          'Turn this on so other Orca desktops can pair with and view terminals on this computer. Turning it off immediately disconnects any desktop currently connected.'
+        )}
+        checked={hostEnabled}
+        onChange={onToggleHostEnabled}
+      />
+
       <div className="space-y-1">
         <h3 className="text-sm font-medium">
           {translate(
@@ -72,6 +90,7 @@ export function PeerCollabHostShareSection({
           networkInterfaces={networkInterfaces}
           selectedAddress={selectedAddress}
           onSelectedAddressChange={onSelectedAddressChange}
+          disabled={!hostEnabled}
           className="min-w-[220px] justify-between font-normal"
         />
         <p className="text-xs text-muted-foreground">
@@ -83,7 +102,11 @@ export function PeerCollabHostShareSection({
       </div>
 
       <div className="space-y-2">
-        <Button onClick={onGenerate} disabled={loading || !selectedAddress} size="sm">
+        <Button
+          onClick={onGenerate}
+          disabled={loading || !selectedAddress || !hostEnabled}
+          size="sm"
+        >
           {qrDataUrl != null
             ? translate(
                 'auto.components.settings.PeerCollabSettingsPane.regenerate',
@@ -102,7 +125,7 @@ export function PeerCollabHostShareSection({
         </p>
       </div>
 
-      {offerConsumed ? (
+      {offerConsumed && hostEnabled ? (
         <p className="text-muted-foreground text-xs">
           {translate(
             'auto.components.settings.PeerCollabSettingsPane.offerConsumed',
@@ -111,17 +134,19 @@ export function PeerCollabHostShareSection({
         </p>
       ) : null}
 
-      <MobilePairingQrSection
-        qrDataUrl={qrDataUrl}
-        pairingUrl={pairingUrl}
-        endpoint={endpoint}
-        qrEnlarged={qrEnlarged}
-        codeCopied={codeCopied}
-        onQrEnlargedChange={onQrEnlargedChange}
-        onCodeCopiedChange={onCodeCopiedChange}
-        onClearCodeCopiedTimer={onClearCodeCopiedTimer}
-        variant="peer"
-      />
+      {hostEnabled ? (
+        <MobilePairingQrSection
+          qrDataUrl={qrDataUrl}
+          pairingUrl={pairingUrl}
+          endpoint={endpoint}
+          qrEnlarged={qrEnlarged}
+          codeCopied={codeCopied}
+          onQrEnlargedChange={onQrEnlargedChange}
+          onCodeCopiedChange={onCodeCopiedChange}
+          onClearCodeCopiedTimer={onClearCodeCopiedTimer}
+          variant="peer"
+        />
+      ) : null}
     </SearchableSetting>
   )
 }

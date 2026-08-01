@@ -323,24 +323,6 @@ export function buildSettingsNavigationMetadata({
       ],
       group: 'workflows'
     },
-    ...(showDesktopOnlySettings
-      ? [
-          {
-            id: 'peer-collab',
-            title: translate(
-              'auto.hooks.useSettingsNavigationMetadata.peerCollabTitle',
-              'Peer Collaboration'
-            ),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.peerCollabDescription',
-              'Share terminals with other Orca desktops over your local network.'
-            ),
-            icon: Users,
-            searchEntries: getPeerCollabSettingsPaneSearchEntries(),
-            group: 'setup'
-          }
-        ]
-      : []),
     {
       id: 'tasks',
       title: translate('auto.hooks.useSettingsNavigationMetadata.85f4fd7710', 'Task Sources'),
@@ -513,6 +495,24 @@ export function buildSettingsNavigationMetadata({
       group: 'remote',
       badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
     },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'peer-collab',
+            title: translate(
+              'auto.hooks.useSettingsNavigationMetadata.peerCollabTitle',
+              'Peer Collaboration'
+            ),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.peerCollabDescription',
+              'Share terminals with other Orca desktops over your local network.'
+            ),
+            icon: Users,
+            searchEntries: getPeerCollabSettingsPaneSearchEntries(),
+            group: 'remote'
+          }
+        ]
+      : []),
     ...(showDesktopOnlySettings && isMac
       ? [
           {

@@ -2017,6 +2017,7 @@ describe('OrcaRuntimeRpcServer', () => {
     })
 
     await server.start()
+    server.setPeerHostingEnabled(true)
 
     try {
       const offer = server.createPairingOffer({
@@ -2062,6 +2063,7 @@ describe('OrcaRuntimeRpcServer', () => {
     })
 
     await server.start()
+    server.setPeerHostingEnabled(true)
 
     try {
       const offer = server.createPairingOffer({
@@ -2227,6 +2229,7 @@ describe('OrcaRuntimeRpcServer', () => {
     })
 
     await server.start()
+    server.setPeerHostingEnabled(true)
 
     try {
       const offer = server.createPairingOffer({

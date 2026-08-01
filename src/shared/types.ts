@@ -2855,6 +2855,10 @@ export type GlobalSettings = {
   showMobileButton?: boolean
   /** Display name a peer client presents when connecting to another Orca desktop; reused as the default on the next connection. */
   peerCollabDisplayName?: string
+  /** Gates whether this desktop accepts incoming peer connections as a host; off by default, read with a strict === true check. */
+  peerCollabHostEnabled?: boolean
+  /** Gates whether this desktop may connect out to another Orca as a peer client; off by default, read with a strict === true check. */
+  peerCollabClientEnabled?: boolean
   /** The pairing code from the last successful peer-client connection, persisted so the app can reconnect after a restart without re-pasting it. Single slot (PeerClientService only ever holds one host connection at a time). Cleared only by explicit "forget this host", never by a plain disconnect. Contains the host-issued device token, so treat it as a credential (same plaintext-at-rest tradeoff as the host's own device registry). */
   peerCollabSavedPairingCode?: string
   /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */
