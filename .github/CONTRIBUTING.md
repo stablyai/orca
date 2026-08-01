@@ -58,8 +58,6 @@ CI enforces this for `src/preload/` and `src/shared/` — see `docs/preload-type
 
 Locale catalogs in `src/renderer/src/i18n/locales/` are generated. Fix copy in `config/scripts/locale-*-phrase-fixes*.mjs` (term swaps) or `locale-<code>-key-overrides.json` (meaning rewrites), then run `pnpm repair:locale-catalog --locale <code>`. Hand edits to catalogs are overwritten.
 
-Keep **workspace** and **worktree** distinct — they are different objects. Same for **primary** vs **default**. Paraphrase adjectival **working-tree** (editable file on disk); do not transliterate it as worktree.
-
 ## Pull Requests
 
 Each pull request should:
