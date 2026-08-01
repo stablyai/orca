@@ -15685,6 +15685,7 @@ describe('registerPtyHandlers', () => {
       command?: string
       launchAgent?: TuiAgent
       connectionId?: string
+      env?: Record<string, string>
     }): Promise<{ paneKey: string }> {
       const paneKey = makePaneKey(args.tabId, args.leafId)
       handlers.clear()
@@ -15702,7 +15703,7 @@ describe('registerPtyHandlers', () => {
         ...(args.connectionId ? { connectionId: args.connectionId } : {}),
         tabId: args.tabId,
         leafId: args.leafId,
-        env: { ORCA_PANE_KEY: paneKey }
+        env: { ORCA_PANE_KEY: paneKey, ...args.env }
       })
       return { paneKey }
     }
@@ -15747,6 +15748,39 @@ describe('registerPtyHandlers', () => {
             phase: 'indexing',
             lastWatermark: BACKFILL_WATERMARK
           })
+        } finally {
+          vi.useRealTimers()
+        }
+      }
+    )
+
+    posixOnlyIt(
+      'delivers the wrapper as one bash -lc command word that a fish pane shell can parse',
+      async () => {
+        vi.useFakeTimers()
+        const mockProc = createMockProc()
+        spawnMock.mockReturnValue(mockProc.proc)
+        const tempHome = '/tmp/orca-backfill-home-fish'
+        markBackfillPending(tempHome)
+        try {
+          await spawnCodexPane({
+            tabId: 'tab-backfill-fish',
+            leafId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+            selectedCodexHome: tempHome,
+            env: { SHELL: '/usr/bin/fish' }
+          })
+
+          mockProc.emitData(SHELL_READY_MARKER)
+          await Promise.resolve()
+          vi.advanceTimersByTime(250)
+          await Promise.resolve()
+          const writes = mockProc.proc.write.mock.calls.map(([data]) => String(data)).join('')
+          // Why: the wrapper is typed into the pane's OWN interactive shell. A bare bash poll loop
+          // is a parse error on fish/nushell — fail-closed, codex never launches. Only a single
+          // quoted `bash -lc '<script>'` command word parses in every supported shell, keeping the
+          // bash-isms (and the fail-open eval) inside bash.
+          expect(writes).toMatch(/bash -lc '[^']*eval " \$ORCA_BACKFILL_GATED_COMMAND"[^']*'/)
+          expect(writes).not.toContain(GATED_CODEX_COMMAND)
         } finally {
           vi.useRealTimers()
         }

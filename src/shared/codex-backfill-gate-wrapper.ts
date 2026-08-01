@@ -48,15 +48,30 @@ export function buildCodexBackfillGateWrapper(params: {
   }
 }
 
-// Why: the PTY launch path feeds this through an interactive shell; one line avoids `quote>` prompts.
+// Why: the PTY launch path types this line into the pane's own interactive shell, which may be
+// fish/nushell/dash (all supported by shell-process-detection.ts) — none of which parse the bash
+// poll loop, so injecting it bare would fail CLOSED (parse error, codex never launches). Wrapping
+// it as `bash -lc '<script>'` makes the outer line a single quoted command word that every
+// supported shell parses identically (buildPosixSetupCommand precedent in setup-agent-sequencing),
+// while the bash-isms only ever reach bash. One line avoids `quote>` continuation prompts.
 function buildPosixGateCommand(): string {
-  return [
+  const script = [
     `deadline=$((SECONDS+${CODEX_BACKFILL_GATE_WRAPPER_DEADLINE_S}));`,
     `while [ ! -e "$${ORCA_BACKFILL_RELEASE_FILE_ENV}" ] && [ "$SECONDS" -lt "$deadline" ]; do sleep 1; done;`,
     // Why: fail open — on deadline expiry the held command still runs; never the setup wrapper's exit 124.
     `rm -f -- "$${ORCA_BACKFILL_RELEASE_FILE_ENV}" 2>/dev/null;`,
     `eval " $${ORCA_BACKFILL_GATED_COMMAND_ENV}"`
   ].join(' ')
+  return `bash -lc ${quotePosixArg(script)}`
+}
+
+// Why: mirrors setup-agent-sequencing's quotePosixArg; kept local rather than imported because
+// setup-agent-sequencing already consumes this module's gated-command env name (avoid a cycle).
+function quotePosixArg(value: string): string {
+  if (/^[A-Za-z0-9_./:-]+$/.test(value)) {
+    return value
+  }
+  return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
 function buildWin32GateCommand(): string {

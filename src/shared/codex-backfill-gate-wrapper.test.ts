@@ -19,6 +19,10 @@ describe('buildCodexBackfillGateWrapper', () => {
     const wrapper = buildCodexBackfillGateWrapper(baseParams)
 
     expect(wrapper.command).not.toContain('\n')
+    // Why: the wrapper is typed into the pane's OWN interactive shell, which may be fish/nushell/
+    // dash; only a `bash -lc '<script>'` envelope (one quoted command word, no embedded quotes)
+    // parses in all of them — a bare bash poll loop is a fail-closed parse error on fish/nu.
+    expect(wrapper.command).toMatch(/^bash -lc '[^']*'$/)
     expect(wrapper.command).toContain(
       `deadline=$((SECONDS+${CODEX_BACKFILL_GATE_WRAPPER_DEADLINE_S}))`
     )
