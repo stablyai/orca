@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   getConnectionId: vi.fn(),
   getConnectionIdForFile: vi.fn(),
   isWorktreeConnectionResolved: vi.fn(() => true),
+  requestDiffContentReload: vi.fn(),
   getState: vi.fn()
 }))
 
@@ -151,11 +152,13 @@ describe('useEditorPanelContentState', () => {
     mocks.getConnectionIdForFile.mockReturnValue(undefined)
     mocks.isWorktreeConnectionResolved.mockReset()
     mocks.isWorktreeConnectionResolved.mockReturnValue(true)
+    mocks.requestDiffContentReload.mockReset()
     mocks.getState.mockReset()
     mocks.getState.mockReturnValue({
       settings: null,
       openFiles: [],
-      setLastKnownDiskSignature: vi.fn()
+      setLastKnownDiskSignature: vi.fn(),
+      requestDiffContentReload: mocks.requestDiffContentReload
     })
   })
 

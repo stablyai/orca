@@ -100,7 +100,7 @@ describe('useDiffViewerLargeDiffLifecycle', () => {
     expect(onEnterFallback).not.toHaveBeenCalled()
   })
 
-  it('resets the owning diff widget before disposing a superseded model', async () => {
+  it('disposes a superseded modified model once through the production lifecycle path', async () => {
     const modelKey = 'diff-tab'
     const paths = ['modified-v1', 'modified-v2'].map((modifiedModelKey) =>
       getDiffViewerMonacoModelPaths({

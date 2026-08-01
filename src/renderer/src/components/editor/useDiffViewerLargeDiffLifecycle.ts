@@ -59,25 +59,36 @@ export function useDiffViewerLargeDiffLifecycle({
     if (supersededModelPaths.length === 0) {
       return
     }
-    const diffEditor = diffEditorRef.current
-    if (diffEditor) {
-      const originalModel = monaco.editor.getModel(
-        monaco.Uri.parse(currentDiffModelPaths.originalModelPath)
-      )
-      const modifiedModel = monaco.editor.getModel(
-        monaco.Uri.parse(currentDiffModelPaths.modifiedModelPath)
-      )
-      if (!originalModel || !modifiedModel) {
-        return
+    const synchronizeAndDispose = (): boolean => {
+      const diffEditor = diffEditorRef.current
+      if (diffEditor) {
+        const originalModel = monaco.editor.getModel(
+          monaco.Uri.parse(currentDiffModelPaths.originalModelPath)
+        )
+        const modifiedModel = monaco.editor.getModel(
+          monaco.Uri.parse(currentDiffModelPaths.modifiedModelPath)
+        )
+        if (!originalModel || !modifiedModel) {
+          return false
+        }
+        const activeModels = diffEditor.getModel()
+        if (activeModels?.original !== originalModel || activeModels.modified !== modifiedModel) {
+          // Why: @monaco-editor/react swaps the two child models separately, but
+          // Monaco's diff widget must release its old pair before either is disposed.
+          diffEditor.setModel({ original: originalModel, modified: modifiedModel })
+        }
       }
-      const activeModels = diffEditor.getModel()
-      if (activeModels?.original !== originalModel || activeModels.modified !== modifiedModel) {
-        // Why: @monaco-editor/react swaps the two child models separately, but
-        // Monaco's diff widget must release its old pair before either is disposed.
-        diffEditor.setModel({ original: originalModel, modified: modifiedModel })
-      }
+      disposeUnattachedMonacoModelPaths(monaco, supersededModelPaths)
+      return true
     }
-    disposeUnattachedMonacoModelPaths(monaco, supersededModelPaths)
+
+    if (synchronizeAndDispose()) {
+      return
+    }
+    // Why: the child DiffEditor creates a path-swapped model after this parent
+    // effect; defer cleanup until both replacement models exist.
+    const disposeTimer = window.setTimeout(synchronizeAndDispose, 0)
+    return () => window.clearTimeout(disposeTimer)
   }, [currentDiffModelPaths, diffEditorRef])
 
   useEffect(() => {
