@@ -31,9 +31,17 @@ function isProxyFakeIpIPv4Address(address: string): boolean {
   return /^198\.(?:18|19)\./.test(address)
 }
 
+// Why: 169.254.0.0/16 is IPv4 link-local (APIPA), self-assigned when DHCP fails.
+// Like fe80::/10 it never reaches a phone, and Windows hands them out freely to
+// idle adapters — Bluetooth, VPN tunnels, disconnected Ethernet — so without this
+// a host can offer several dead addresses ranked alongside its real LAN one.
+function isLinkLocalIPv4Address(address: string): boolean {
+  return address.startsWith('169.254.')
+}
+
 // Why: the WebSocket transport advertises 0.0.0.0 as its endpoint, which isn't
-// connectable from a mobile device. We enumerate all non-internal IPv4 and
-// (non-link-local) IPv6 addresses so the user can choose which one to advertise
+// connectable from a mobile device. We enumerate all non-internal, non-link-local
+// IPv4 and IPv6 addresses so the user can choose which one to advertise
 // in the QR code (e.g. LAN vs Tailscale). IPv6 must be included so pairing works
 // on IPv6-only hosts (e.g. a headless `orca serve` reachable only over IPv6),
 // where an IPv4-only scan returns nothing and the UI reports "no interfaces".
@@ -51,6 +59,9 @@ function getNetworkInterfaces(): NetworkInterface[] {
       if (addr.family === 'IPv4') {
         // 198.18.0.0/15 proxy fake IPs are only routable inside the desktop proxy.
         if (isProxyFakeIpIPv4Address(addr.address)) {
+          continue
+        }
+        if (isLinkLocalIPv4Address(addr.address)) {
           continue
         }
         result.push({ name, address: addr.address })
