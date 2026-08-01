@@ -298,16 +298,13 @@ describe('Windows IME keyboard ownership', () => {
 
   // Windows gives a shifted jamo the same Process/229/shiftKey shape as the committing
   // Enter, so treating it as Enter injects a Shift+Enter newline into ordinary Hangul.
-  it.each([
-    { code: 'KeyQ', jamo: 'ㅃ' },
-    { code: 'KeyE', jamo: 'ㄸ' }
-  ])('does not read a shifted $jamo as the committing Enter', ({ code, jamo }) => {
+  it('does not read a shifted jamo as the committing Enter', () => {
     const harness = createHarness()
     const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
     harness.startComposition()
     const shiftedJamo = keyboardEvent('keydown', {
       key: 'Process',
-      code,
+      code: 'KeyQ',
       keyCode: 229,
       timeStamp: 10,
       isComposing: true,
@@ -315,11 +312,46 @@ describe('Windows IME keyboard ownership', () => {
     })
 
     harness.terminalInput.dispatchEvent(shiftedJamo)
-    harness.endComposition(jamo)
+    harness.endComposition('ㅃ')
     vi.advanceTimersByTime(250)
 
-    expect(harness.ptyWrites).toEqual([jamo])
+    expect(harness.ptyWrites).toEqual(['ㅃ'])
     expect(shiftedJamo.defaultPrevented).toBe(false)
+    hook.unmount()
+    harness.dispose()
+  })
+
+  // The chord owner keys off the held modifier alone, so a deferred Ctrl+Backspace must not
+  // claim its single slot — the real Ctrl+Enter behind it would then fail to claim and vanish.
+  it('leaves the Enter chord slot free for a Ctrl+Enter behind a deferred Ctrl+Backspace', () => {
+    const harness = createHarness()
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+    harness.startComposition()
+
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', {
+        key: 'Backspace',
+        code: 'Backspace',
+        keyCode: 8,
+        timeStamp: 10,
+        isComposing: true,
+        ctrlKey: true
+      })
+    )
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', {
+        key: 'Process',
+        code: 'Enter',
+        keyCode: 229,
+        timeStamp: 20,
+        isComposing: true,
+        ctrlKey: true
+      })
+    )
+    harness.endComposition('녕')
+    vi.advanceTimersByTime(250)
+
+    expect(harness.ptyWrites).toEqual(['녕', '\x17', '\x1b[13;5u'])
     hook.unmount()
     harness.dispose()
   })

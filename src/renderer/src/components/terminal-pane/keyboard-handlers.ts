@@ -444,16 +444,13 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
-      const modifiedEnterChord = isWindows ? getModifiedEnterChord(e) : null
-      // Why: the chord owner tracks Enter chords only, while the deferral covers every
-      // key the IME re-dispatches — Ctrl/Cmd+Backspace, Cmd+Delete and the word-motion
-      // arrows double the same way Enter does.
-      const isRedispatchedEnter = e.key === 'Enter' && e.keyCode === 13
+      // Why: the chord owner tracks Enter chords only, while the deferral covers every key
+      // the IME re-dispatches.
+      const modifiedEnterChord =
+        isWindows && e.key === 'Enter' && e.keyCode === 13 ? getModifiedEnterChord(e) : null
       if (
         !e.isComposing &&
-        ((isRedispatchedEnter &&
-          modifiedEnterChord &&
-          modifiedEnterChordOwner.absorb(modifiedEnterChord)) ||
+        ((modifiedEnterChord && modifiedEnterChordOwner.absorb(modifiedEnterChord)) ||
           (isTerminalImeRedispatchableKey(e) && deferredNewlineSender.absorbRedispatchedEnter(e)))
       ) {
         // Chromium can drop the modifier when re-dispatching the committing press.
@@ -757,6 +754,9 @@ export function useTerminalKeyboardShortcuts({
         heldImeEnterModifiers.delete(kind)
         modifiedEnterChordOwner.release({ kind, code: e.code, timeStamp: e.timeStamp })
       }
+      // Why: only Enter releases its absorb credit here. Releasing on the other IME-owned
+      // keys risks clearing a credit before the re-dispatch that needs it, and a stale one
+      // self-heals — clearCreditsForCode drops it on the next press of the same code.
       if (e.key !== 'Enter') {
         return
       }

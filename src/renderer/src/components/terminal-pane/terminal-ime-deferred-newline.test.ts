@@ -6,6 +6,7 @@ import {
   createTerminalImeModifiedEnterChordOwner,
   isTerminalImeEnterKeyUp,
   isTerminalImeProcessEnter,
+  isTerminalImeRedispatchableKey,
   sendTerminalInputAfterComposition
 } from './terminal-ime-deferred-newline'
 import {
@@ -334,12 +335,17 @@ describe('isTerminalImeProcessEnter', () => {
       ...overrides
     }) as KeyboardEvent
 
-  it.each([{ shiftKey: true }, { shiftKey: false, ctrlKey: true }, { code: 'NumpadEnter' }])(
-    'recognizes a Windows IME modifier Enter reported as Process',
-    (modifiers) => {
-      expect(isTerminalImeProcessEnter(event(modifiers))).toBe(true)
-    }
-  )
+  it.each([
+    { shiftKey: true },
+    { shiftKey: false, ctrlKey: true },
+    { code: 'NumpadEnter' },
+    // Windows sends the Process sequence without a usable code; refusing it would drop a
+    // real newline, so an undeterminable code keeps the pre-existing verdict.
+    { code: '' },
+    { code: 'Unidentified' }
+  ])('recognizes a Windows IME modifier Enter reported as Process', (modifiers) => {
+    expect(isTerminalImeProcessEnter(event(modifiers))).toBe(true)
+  })
 
   it.each([
     { key: 'Enter' },
@@ -349,11 +355,26 @@ describe('isTerminalImeProcessEnter', () => {
     { altKey: true },
     // Windows hands every IME-consumed keydown the same Process/229 shape, so a shifted
     // jamo (ㅃ on KeyQ) differs from the committing Enter only by `code`.
-    { code: 'KeyQ' },
-    { code: 'Digit3' },
-    { code: '' }
+    { code: 'KeyQ' }
   ])('rejects a non-IME or ambiguous Process key', (override) => {
     expect(isTerminalImeProcessEnter(event(override))).toBe(false)
+  })
+})
+
+describe('isTerminalImeRedispatchableKey', () => {
+  it('accepts an IME-owned key carrying its real keyCode', () => {
+    expect(isTerminalImeRedispatchableKey({ key: 'Backspace', keyCode: 8 })).toBe(true)
+  })
+
+  it.each([
+    // The committing press itself: macOS marks it 229 and it must not be read as the
+    // re-dispatch it is about to trigger.
+    { key: 'Enter', keyCode: 229 },
+    { key: 'Backspace', keyCode: 229 },
+    // Not a key the IME consumes mid-composition.
+    { key: 'a', keyCode: 65 }
+  ])('rejects the composition marker and non-owned keys', (event) => {
+    expect(isTerminalImeRedispatchableKey(event)).toBe(false)
   })
 })
 

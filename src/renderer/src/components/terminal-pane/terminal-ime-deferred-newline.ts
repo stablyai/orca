@@ -114,11 +114,14 @@ export function isTerminalImeProcessEnter(
   >
 ): boolean {
   // Why: Windows reports every IME-consumed keydown as Process/229, so a shifted jamo
-  // (ㅃ, ㄲ) matches the modifier check too; only `code` tells it apart from Enter.
+  // (ㅃ, ㄲ) matches the modifier check too; `code` is the only field telling them apart.
+  // An absent code stays accepted — Windows sends this sequence with a blank one, per the
+  // chord owner's "blank codes" case in this module's test.
+  const { code } = event
   return (
     event.key === 'Process' &&
     event.keyCode === 229 &&
-    (event.code === 'Enter' || event.code === 'NumpadEnter') &&
+    (!code || code === 'Unidentified' || code === 'Enter' || code === 'NumpadEnter') &&
     getTerminalImeModifiedEnterKind(event) !== null
   )
 }
