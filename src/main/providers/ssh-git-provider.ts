@@ -198,8 +198,19 @@ export class SshGitProvider implements IGitProvider {
   async undoLastCommit(
     worktreePath: string
   ): Promise<{ success: boolean; message?: string; error?: string }> {
-    const result = await this.mux.request('git.undoLastCommit', { worktreePath })
-    return result as { success: boolean; message?: string; error?: string }
+    return this.runWithDiffDedupeClear(async () => {
+      try {
+        const result = await this.mux.request('git.undoLastCommit', { worktreePath })
+        return result as { success: boolean; message?: string; error?: string }
+      } catch (error) {
+        if (isJsonRpcMethodNotFoundError(error)) {
+          throw new Error(
+            'This SSH host is running an older Orca relay that cannot undo the last commit. Reconnect to deploy the latest relay, then try again.'
+          )
+        }
+        throw error
+      }
+    })
   }
 
   async getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null> {

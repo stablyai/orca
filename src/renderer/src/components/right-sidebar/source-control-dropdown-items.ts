@@ -20,6 +20,7 @@ export type DropdownActionInputs = PrimaryActionInputs & {
   worktreeId?: string | null
   conflictOperation?: GitConflictOperation
   isPullRequestOperationActive?: boolean
+  isUndoInFlight?: boolean
   rebaseBaseRef?: string | null
 }
 
@@ -528,7 +529,6 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     hint: canPushAndCreate ? undefined : createBlockedHint,
     disabled: !canPushAndCreate
   }
-
   const undoLastCommitItem: DropdownItem = {
     kind: 'undo_last_commit',
     label: translate(
@@ -536,7 +536,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       'Undo Last Commit'
     ),
     title: 'Undo the most recent commit, keeping all changes staged',
-    disabled: globalBusy || !worktreeId
+    disabled: globalBusy || !worktreeId || inputs.isUndoInFlight
   }
 
   const entries: DropdownEntry[] = [

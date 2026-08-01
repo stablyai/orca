@@ -10970,12 +10970,7 @@
                   "226b85a3a7": "フェッチ",
                   "323bb614aa": "Commit と同期",
                   "2b8e6595fd": "Commit",
-                  "04d709801d": "Fetch from remote without merging"
-                },
-                "undo_last_commit": "最後のコミットを元に戻す"
-              },
-              "primary": {
-                "action": {
+                  "undo_last_commit": "最後のコミットを元に戻す",
                   "ed93b4f14f": "Commit",
                   "946a8a05ea": "このブランチの {{value0}} を作成します",
                   "e7ffa46946": "{{value0}} を作成する",
@@ -11018,7 +11013,8 @@
                   "e9b5d1f470": "Check out a branch before creating a {{value0}}.",
                   "f0c6e2a581": "This branch is not ready for a {{value0}} yet.",
                   "8f9a0b1c2d": "コミットするものがありません。ブランチは最新です。",
-                  "h3i4j5k607": "Checking whether this branch can create a {{value0}}…"
+                  "h3i4j5k607": "Checking whether this branch can create a {{value0}}…",
+                  "04d709801d": "Fetch from remote without merging"
                 }
               }
             }

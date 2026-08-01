@@ -534,7 +534,13 @@ export class GitHandler {
       await this.git(['reset', '--soft', 'HEAD~1'], worktreePath)
       return { success: true, message: messageResult.stdout.trim() }
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'Undo failed' }
+      const errorMessage =
+        typeof error === 'object' && error !== null && 'stderr' in error
+          ? (error as { stderr: string }).stderr
+          : error instanceof Error
+            ? error.message
+            : 'Undo failed'
+      return { success: false, error: errorMessage }
     } finally {
       this.clearGitMutationReadCaches()
     }

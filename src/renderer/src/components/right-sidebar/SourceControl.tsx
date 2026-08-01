@@ -801,6 +801,8 @@ function SourceControlInner(): React.JSX.Element {
   const pendingCommentEditorRevealFrameIdsRef = useRef<number[]>([])
   // Why: setState is async, so a double-click can pass the isCommitting guard before re-render; a synchronously-flipped ref gives a true single-flight lock.
   const commitInFlightRef = useRef<Record<string, boolean>>({})
+  // Why: same per-worktree single-flight lock as commitInFlightRef, but for undo.
+  const undoInFlightRef = useRef<Record<string, boolean>>({})
   const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktreeInstanceId = activeWorktree?.instanceId
@@ -1079,6 +1081,9 @@ function SourceControlInner(): React.JSX.Element {
   const isAbortingOperation = abortOperationInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   const confirmAction = useConfirmationDialog()
   const isCommitting = commitInFlightByWorktree[activeWorktreeId ?? ''] ?? false
+  // Why: same per-worktree shape as commitInFlightByWorktree.
+  const [undoInFlightByWorktree, setUndoInFlightByWorktree] = useState<Record<string, boolean>>({})
+  const isUndoInFlight = undoInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   // Why: per-worktree shape (like commit) so navigating worktrees mid-generation never cancels the in-flight request.
   const generateInFlightRef = useRef<Record<string, boolean>>({})
   const [generateInFlightByWorktree, setGenerateInFlightByWorktree] = useState<
@@ -1981,6 +1986,7 @@ function SourceControlInner(): React.JSX.Element {
     setCommitInFlightByWorktree((prev) => pruneRecord(prev))
     setAbortOperationInFlightByWorktree((prev) => pruneRecord(prev))
     setGenerateInFlightByWorktree((prev) => pruneRecord(prev))
+    setUndoInFlightByWorktree((prev) => pruneRecord(prev))
     setGenerateErrors((prev) => pruneRecord(prev))
     setCreatePrIntentInFlightByWorktree((prev) => pruneRecord(prev))
     setCreatePrIntentNotices((prev) => pruneRecord(prev))
@@ -2157,23 +2163,41 @@ function SourceControlInner(): React.JSX.Element {
 
   const handleUndoLastCommit = useCallback(async (): Promise<void> => {
     if (!activeWorktreeId || !worktreePath || isExecutingBulk) return
-    const result = await undoLastCommitRuntimeGit({
-      settings: activeRepoSettings,
-      worktreeId: activeWorktreeId,
-      worktreePath,
-      connectionId: getConnectionId(activeWorktreeId) ?? undefined
-    })
-    if (!result.success) {
-      setCommitErrorForWorktree(activeWorktreeId, result.error ?? 'Undo failed')
-      return
+    if (undoInFlightRef.current[activeWorktreeId]) return
+    undoInFlightRef.current[activeWorktreeId] = true
+    setUndoInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
+    setCommitErrorForWorktree(activeWorktreeId, null)
+    try {
+      const result = await undoLastCommitRuntimeGit({
+        settings: activeRepoSettings,
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        connectionId: getConnectionId(activeWorktreeId) ?? undefined
+      })
+      if (!result.success) {
+        setCommitErrorForWorktree(activeWorktreeId, result.error ?? 'Undo failed')
+        return
+      }
+      if (result.message !== undefined) {
+        updateCommitDrafts((drafts) => {
+          const current = drafts[activeWorktreeId]
+          if (current !== undefined && current.trim() !== result.message?.trim()) {
+            return drafts
+          }
+          return { ...drafts, [activeWorktreeId]: result.message ?? '' }
+        })
+      }
+      await refreshActiveGitStatusAfterMutation()
+      void refreshGitHistoryRef.current()
+    } catch (error) {
+      setCommitErrorForWorktree(
+        activeWorktreeId,
+        error instanceof Error ? error.message : 'Undo failed'
+      )
+    } finally {
+      setUndoInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
+      undoInFlightRef.current[activeWorktreeId] = false
     }
-    if (result.message !== undefined) {
-      updateCommitDrafts((drafts) => ({
-        ...drafts,
-        [activeWorktreeId]: result.message ?? ''
-      }))
-    }
-    await refreshActiveGitStatusAfterMutation()
   }, [
     activeWorktreeId,
     worktreePath,
@@ -2181,7 +2205,8 @@ function SourceControlInner(): React.JSX.Element {
     isExecutingBulk,
     refreshActiveGitStatusAfterMutation,
     updateCommitDrafts,
-    setCommitErrorForWorktree
+    setCommitErrorForWorktree,
+    refreshGitHistoryRef
   ])
 
   const handleGenerate = useCallback(
@@ -4343,6 +4368,7 @@ function SourceControlInner(): React.JSX.Element {
         hasCurrentBranch: Boolean(branchName),
         canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget,
         rebaseBaseRef: effectiveBaseRef,
+        isUndoInFlight,
         worktreeId: activeWorktreeId
       }),
     [
@@ -4352,6 +4378,7 @@ function SourceControlInner(): React.JSX.Element {
       hasUnstagedChanges,
       hasPartiallyStagedChanges,
       isCommitting,
+      isUndoInFlight,
       conflictOperation,
       isAbortingOperation,
       isRemoteOperationActive,
