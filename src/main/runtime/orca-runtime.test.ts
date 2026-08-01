@@ -17093,6 +17093,94 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledOnce()
   })
 
+  it('resolves a reserved grid handle through the exact leaf in a desynced renderer tab', async () => {
+    const existingLeafId = '11111111-1111-4111-8111-111111111111'
+    const createdLeafId = '22222222-2222-4222-8222-222222222222'
+    const existingPtyId = 'pty-grid-existing'
+    const createdPtyId = 'pty-grid-created'
+    const existingLayout = addOrchestrationTerminalGridLeaf(null, {
+      leafId: existingLeafId,
+      ptyId: existingPtyId,
+      title: 'Existing worker',
+      activate: true
+    })
+    const createdLayout = addOrchestrationTerminalGridLeaf(existingLayout, {
+      leafId: createdLeafId,
+      ptyId: createdPtyId,
+      title: 'Created worker',
+      activate: false
+    })
+    const webContents = { send: vi.fn() }
+    const runtime = new OrcaRuntimeService(store)
+    const existingHandle = runtime.createPreAllocatedTerminalHandle()
+    runtime.registerPreAllocatedHandleForPty(existingPtyId, existingHandle)
+    runtime.registerPty(existingPtyId, TEST_WORKTREE_ID)
+    runtime.onPtySpawned(existingPtyId)
+    let reservedHandle = ''
+    webContents.send.mockImplementation(
+      (_channel: string, payload: { requestId: string; terminalHandle?: string }): void => {
+        reservedHandle = payload.terminalHandle ?? ''
+        runtime.registerPreAllocatedHandleForPty(createdPtyId, reservedHandle)
+        runtime.syncWindowGraph(1, {
+          tabs: [
+            {
+              tabId: 'tab-grid-desynced',
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Grid',
+              activeLeafId: existingLeafId,
+              layoutMode: 'orchestration-grid',
+              layout: createdLayout.root
+            }
+          ],
+          leaves: [
+            {
+              tabId: 'tab-grid-desynced',
+              worktreeId: TEST_WORKTREE_ID,
+              leafId: existingLeafId,
+              paneRuntimeId: 1,
+              ptyId: existingPtyId,
+              paneTitle: null
+            },
+            {
+              tabId: 'tab-grid-desynced',
+              worktreeId: TEST_WORKTREE_ID,
+              leafId: createdLeafId,
+              paneRuntimeId: 2,
+              ptyId: createdPtyId,
+              paneTitle: null
+            }
+          ]
+        })
+        ipcMain.emit(
+          'terminal:tabCreateReply',
+          { sender: webContents },
+          {
+            requestId: payload.requestId,
+            tabId: 'tab-grid-desynced',
+            leafId: createdLeafId,
+            title: 'Created worker'
+          }
+        )
+      }
+    )
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents
+    })
+
+    const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      rendererBacked: true,
+      placement: 'orchestration-grid',
+      title: 'Created worker'
+    })
+
+    expect(reservedHandle).toMatch(/^term_/)
+    expect(created.handle).toBe(reservedHandle)
+    expect(created.handle).not.toBe(existingHandle)
+  })
+
   it('bounds successful renderer handle reservations and promptly releases failed creates', async () => {
     vi.useFakeTimers()
     try {

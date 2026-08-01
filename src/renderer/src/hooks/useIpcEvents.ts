@@ -1465,14 +1465,8 @@ export function useIpcEvents(): void {
             if (leafId && ptyId) {
               const launchPaneKey = tryMakePaneKey(tab.id, leafId)
               if (splitFromLeafId) {
-                // Why: runtime split PTYs already carry the parent tab's paneKey, so reuse the tab instead of minting a collision tab.
-                store.updateTabPtyId(tab.id, ptyId)
-                const existingLayout = store.terminalLayoutsByTabId?.[tab.id]
-                const sourcePtyId = existingLayout?.ptyIdsByLeafId?.[splitFromLeafId]
-                store.setTabLayout(
+                const isOrchestrationGrid = placement === 'orchestration-grid'
                 let committedLayout: TerminalLayoutSnapshot | undefined
-                // Why: a hidden surface can accumulate multiple appends; each
-                // consumer must derive its split from the prior committed action.
                 queueTerminalSurfaceAction(
                   tab.id,
                   () => {
@@ -1484,7 +1478,6 @@ export function useIpcEvents(): void {
                       const actionShouldActivate = actionPresentation === 'focused'
                       const actionShouldSurfaceOwner = actionPresentation !== 'background'
                       const existingLayout = actionStore.terminalLayoutsByTabId?.[tab.id]
-                      const isOrchestrationGrid = placement === 'orchestration-grid'
                       const currentLeafIds = collectTerminalLayoutLeafIds(existingLayout?.root)
                       const currentGridSourceLeafIds = isOrchestrationGrid
                         ? getOrchestrationGridAppendSourceLeafIds(existingLayout?.root)
@@ -1594,9 +1587,14 @@ export function useIpcEvents(): void {
                           window.api.ui.replyTerminalCreate({
                             requestId,
                             tabId: tab.id,
-                            leafId,
-                            layout: committedLayout,
-                            title: title ?? tab.title
+                            ...(isOrchestrationGrid
+                              ? {
+                                  leafId,
+                                  ...(committedLayout ? { layout: committedLayout } : {})
+                                }
+                              : {}),
+                            title: title ?? tab.title,
+                            ...(identity ? { identity } : {})
                           })
                         },
                         onCancelled: (reason, error) => {
@@ -1904,12 +1902,13 @@ export function useIpcEvents(): void {
                       : {})
                   }
                 : undefined
+            let committedLayout: TerminalLayoutSnapshot | undefined
             const replyAfterConsumption = (): void => {
               window.api.ui.replyTerminalCreate({
                 requestId: data.requestId,
                 tabId: tab.id,
                 leafId: gridLeafId,
-                layout: committedGridLayout,
+                ...(committedLayout ? { layout: committedLayout } : {}),
                 title: data.title ?? tab.title
               })
             }
@@ -1967,7 +1966,7 @@ export function useIpcEvents(): void {
                   const split = dispatchAcknowledgedTerminalPaneSplit(detail)
                   registerSplit(split)
                   actionStore.setTabLayout(tab.id, nextGridLayout)
-                  committedGridLayout = nextGridLayout
+                  committedLayout = nextGridLayout
                   return () => {
                     // Why: renderer-backed appends share the same commit boundary;
                     // rejected splits must not schedule activation persistence.
@@ -1991,6 +1990,7 @@ export function useIpcEvents(): void {
             requestId: data.requestId,
             tabId: tab.id,
             ...(gridLeafId ? { leafId: gridLeafId } : {}),
+            ...(initialGridLayout ? { layout: initialGridLayout } : {}),
             title: data.title ?? tab.title
           })
         } catch (err) {

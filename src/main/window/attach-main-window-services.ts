@@ -7,7 +7,6 @@ import type { Store } from '../persistence'
 import type {
   CreateWorktreeResult,
   ReleaseBuildListResult,
-  TerminalLayoutSnapshot,
   UpdateCheckOptions,
   WorktreeStartupLaunch
 } from '../../shared/types'
@@ -386,19 +385,8 @@ function registerRuntimeWindowLifecycle(
           ipcMain.removeListener('terminal:tabCreateReply', handler)
           reject(new Error('Terminal reveal timed out'))
         }, 10_000)
-        const handler = (
-          event: Electron.IpcMainEvent,
-          reply: {
-            requestId: string
-            tabId?: string
-            leafId?: string
-            layout?: TerminalLayoutSnapshot
-            title?: string
-            error?: string
-          }
-        ): void => {
-          // Why: requestId is renderer-supplied; only the targeted main window
-          // may satisfy the reveal and provide the tab handle.
+        const handler = (event: Electron.IpcMainEvent, reply: TerminalTabCreateReply): void => {
+          // Why: requestId is renderer-supplied, so only the targeted main window may satisfy the reveal.
           if (event.sender !== mainWindow.webContents || reply.requestId !== requestId) {
             return
           }

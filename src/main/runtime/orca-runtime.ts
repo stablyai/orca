@@ -26286,16 +26286,7 @@ export class OrcaRuntimeService {
             reject(new Error('Terminal creation timed out'))
           }, 10_000)
 
-          const handler = (
-            event: Electron.IpcMainEvent,
-            r: {
-              requestId: string
-              tabId?: string
-              leafId?: string
-              title?: string
-              error?: string
-            }
-          ): void => {
+          const handler = (event: Electron.IpcMainEvent, r: TerminalTabCreateReply): void => {
             if (event.sender !== win.webContents || r.requestId !== requestId) {
               return
             }
@@ -26319,6 +26310,9 @@ export class OrcaRuntimeService {
             cwd,
             ...(launchOpts.env ? { env: launchOpts.env } : {}),
             ...(launchOpts.launchConfig ? { launchConfig: launchOpts.launchConfig } : {}),
+            ...(launchOpts.resumeProviderSession
+              ? { resumeProviderSession: launchOpts.resumeProviderSession }
+              : {}),
             ...(launchOpts.launchToken ? { launchToken: launchOpts.launchToken } : {}),
             ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
             ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
@@ -26327,14 +26321,14 @@ export class OrcaRuntimeService {
             title: launchOpts.title,
             activate: presentation === 'focused',
             ...(presentation ? { presentation } : {}),
+            ...ownerSurfacing(opts.surfaceOwner !== false),
             ...(launchOpts.placement ? { placement: launchOpts.placement } : {})
           })
         }
       )
 
-      // Why: the renderer created the tab immediately, but the graph sync that
-      // populates this.leaves may not have arrived yet. Wait for the leaf to
-      // appear so we can return a valid handle the caller can use right away.
+      // Why: the renderer created the tab immediately, but graph sync may not
+      // have published the leaf yet.
       const handle = await this.waitForTerminalHandle(reply.tabId, reply.leafId)
       if (rendererTerminalHandle && handle !== rendererTerminalHandle) {
         throw new Error('Terminal renderer registered an unexpected handle')
