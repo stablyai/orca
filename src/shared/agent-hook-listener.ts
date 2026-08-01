@@ -31,7 +31,6 @@ import {
   claudeRosterToSnapshots,
   claudeTeammateIdMatchesName,
   foldClaudeBackgroundTasksIntoRoster,
-  hasActiveClaudeNonAgentBackgroundWork,
   idleClaudeTeammateByName,
   readClaudeBackgroundAgentTasks,
   reapRestoredClaudeSubagentsWithoutLiveAgent,
@@ -2610,14 +2609,16 @@ function normalizeClaudeEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
   const eventAgentId = readString(hookPayload, 'agent_id')
-  const preservesInterruptedBoundary =
-    eventName === 'Stop' ||
-    eventName === 'StopFailure' ||
+  if (
     eventName === 'SubagentStart' ||
     eventName === 'SubagentStop' ||
     eventName === 'TeammateIdle'
+  ) {
+    return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
+  }
+  const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
+  const preservesInterruptedBoundary = eventName === 'Stop' || eventName === 'StopFailure'
   const interrupted =
     ((eventName === 'Stop' || eventName === 'StopFailure') &&
       eventAgentId === undefined &&
@@ -2626,14 +2627,6 @@ function normalizeClaudeEvent(
       ? true
       : undefined
   const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
-
-  if (
-    eventName === 'SubagentStart' ||
-    eventName === 'SubagentStop' ||
-    eventName === 'TeammateIdle'
-  ) {
-    return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
-  }
   if (backgroundTasks.present && eventAgentId === undefined) {
     updateClaudeRunningNonAgentTask(
       state,
@@ -2662,9 +2655,11 @@ function normalizeClaudeEvent(
   if (!reportedStateName) {
     return null
   }
-  const hasActiveNonAgentBackgroundWork =
+  const sessionCrons = hookPayload['session_crons']
+  const hasActiveSessionCron =
     (eventName === 'Stop' || eventName === 'StopFailure') &&
-    hasActiveClaudeNonAgentBackgroundWork(hookPayload)
+    Array.isArray(sessionCrons) &&
+    sessionCrons.length > 0
 
   const stateName = reportedStateName
 
@@ -2742,7 +2737,7 @@ function normalizeClaudeEvent(
 
   // Why: preserve upstream cron gating while the pane cache carries task evidence across child lifecycle events.
   const effectiveState =
-    stateName === 'done' && hasActiveNonAgentBackgroundWork
+    stateName === 'done' && hasActiveSessionCron
       ? 'working'
       : resolveClaudePaneState(state, paneKey, { state: stateName, interrupted })
 
