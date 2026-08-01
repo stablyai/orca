@@ -3097,6 +3097,7 @@ export function useIpcEvents(): void {
         toolInput: data.toolInput,
         // Why: the live AskUserQuestion prompt rides this field; omitting it drops the native question card on web/mobile.
         interactivePrompt: data.interactivePrompt,
+        interaction: data.interaction,
         lastAssistantMessage: data.lastAssistantMessage,
         interrupted: data.interrupted,
         // Why: same trap as interactivePrompt — this rebuild is a field whitelist, so subagent child rows vanish if omitted.

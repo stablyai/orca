@@ -10372,6 +10372,7 @@ export class OrcaRuntimeService {
       (previous.payload.agentType ?? null) !== (payload.agentType ?? null) ||
       (previous.payload.toolName ?? null) !== (payload.toolName ?? null) ||
       (previous.payload.interactivePrompt ?? null) !== (payload.interactivePrompt ?? null) ||
+      previous.payload.interaction?.kind !== payload.interaction?.kind ||
       (previous.payload.interrupted ?? false) !== (payload.interrupted ?? false)
     )
   }
@@ -17293,6 +17294,7 @@ export class OrcaRuntimeService {
         lastAssistantMessage: string | null
         toolName: string | null
         toolInput: string | null
+        interaction: ParsedAgentStatusPayload['interaction'] | null
         interrupted: boolean
         stateStartedAt: number
         updatedAt: number
@@ -17313,6 +17315,7 @@ export class OrcaRuntimeService {
         lastAssistantMessage: payload.lastAssistantMessage ?? null,
         toolName: payload.toolName ?? null,
         toolInput: payload.toolInput ?? null,
+        interaction: payload.interaction ?? null,
         interrupted: payload.interrupted ?? false,
         stateStartedAt: snapshot.stateStartedAt,
         updatedAt: snapshot.updatedAt
@@ -17339,6 +17342,7 @@ export class OrcaRuntimeService {
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
         toolName: entry.toolName ?? null,
         toolInput: entry.toolInput ?? null,
+        interaction: entry.interaction ?? null,
         interrupted: entry.interrupted ?? false,
         stateStartedAt: entry.stateStartedAt,
         updatedAt: entry.receivedAt,
@@ -17404,6 +17408,7 @@ export class OrcaRuntimeService {
         lastAssistantMessage: src.lastAssistantMessage,
         toolName: src.toolName,
         toolInput: src.toolInput,
+        interaction: src.interaction,
         interrupted: src.interrupted,
         stateStartedAt: src.stateStartedAt,
         updatedAt: src.updatedAt,

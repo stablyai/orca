@@ -743,6 +743,7 @@ export type RuntimeWorktreeAgentRow = {
   lastAssistantMessage: string | null
   toolName: string | null
   toolInput: string | null
+  interaction: AgentStatusEntry['interaction'] | null
   interrupted: boolean
   /** When the current `state` was first reported (ms). Drives "Xm ago". */
   stateStartedAt: number

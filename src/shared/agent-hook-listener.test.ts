@@ -372,6 +372,32 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.interactivePrompt).toBe(JSON.stringify(properties))
   })
 
+  it('exposes an OpenCode PermissionRequest as a generic interaction', () => {
+    const event = normalizeHookPayload(
+      state,
+      'opencode',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PermissionRequest',
+          id: 'opaque-request-id',
+          sessionID: 'opaque-session-id'
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload).toMatchObject({
+      state: 'waiting',
+      agentType: 'opencode',
+      interaction: { kind: 'permission' }
+    })
+    expect(event?.payload.toolName).toBeUndefined()
+    expect(event?.payload.toolInput).toBeUndefined()
+    expect(event?.payload.interactivePrompt).toBeUndefined()
+    expect(JSON.stringify(event?.payload)).not.toContain('opaque-')
+  })
+
   it('maps Pi tool_call ask_user_question to blocked with interactivePrompt', () => {
     const questions = {
       questions: [

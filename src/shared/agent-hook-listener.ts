@@ -529,6 +529,8 @@ export type ToolSnapshot = {
   toolInput?: string
   /** Full JSON of an AskUserQuestion tool input; set only on its own event and NOT inherited (resolveToolState) so no stale prompt lingers. */
   interactivePrompt?: string
+  /** Structured human interaction; event-scoped like interactivePrompt. */
+  interaction?: ParsedAgentStatusPayload['interaction']
   hasToolUpdate?: boolean
   hasToolInputField?: boolean
   lastAssistantMessage?: string
@@ -565,6 +567,8 @@ function resolveToolState(
     toolInput,
     // Why: don't inherit previous.interactivePrompt — valid only for its one AskUserQuestion event; carrying it forward leaves a stale live card.
     interactivePrompt: update.interactivePrompt,
+    // Why: an interaction is live only for the event that reported it; later activity clears it.
+    interaction: update.interaction,
     lastAssistantMessage: update.clearLastAssistantMessage
       ? undefined
       : (update.lastAssistantMessage ?? previous.lastAssistantMessage)
@@ -731,7 +735,7 @@ function hasAnyOwnField(record: Record<string, unknown>, keys: readonly string[]
 }
 
 function toolUpdate(
-  fields: Pick<ToolSnapshot, 'toolName' | 'toolInput' | 'interactivePrompt'>,
+  fields: Pick<ToolSnapshot, 'toolName' | 'toolInput' | 'interactivePrompt' | 'interaction'>,
   options?: { hasToolInputField?: boolean }
 ): ToolSnapshot {
   return {
@@ -1663,6 +1667,11 @@ function extractOpenCodeToolFields(
       hasToolUpdate: true,
       interactivePrompt: deriveInteractivePrompt('AskUserQuestion', toolInputSource)
     }
+  }
+  if (eventName === 'PermissionRequest') {
+    // Why: OpenCode exposes only opaque request/session identifiers here. Publish
+    // the permission kind without fabricating tool details or leaking identifiers.
+    return { ...clearActiveToolFieldsUpdate(), interaction: { kind: 'permission' } }
   }
   return {}
 }
@@ -3512,6 +3521,7 @@ function normalizeOpenCodeFamilyEvent(
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
+    interaction: snapshot.interaction,
     lastAssistantMessage: snapshot.lastAssistantMessage
   })
 }

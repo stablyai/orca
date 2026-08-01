@@ -59,6 +59,15 @@ describe('parseAgentStatusPayload', () => {
     }
   })
 
+  it('accepts only known structured interaction kinds', () => {
+    expect(
+      normalizeAgentStatusPayload({ state: 'waiting', interaction: { kind: 'permission' } })
+    ).toMatchObject({ interaction: { kind: 'permission' } })
+    expect(
+      normalizeAgentStatusPayload({ state: 'waiting', interaction: { kind: 'question' } })
+    ).toMatchObject({ interaction: undefined })
+  })
+
   it('returns null for invalid state', () => {
     expect(parseAgentStatusPayload('{"state":"running"}')).toBeNull()
     expect(parseAgentStatusPayload('{"state":"idle"}')).toBeNull()

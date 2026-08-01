@@ -32,6 +32,7 @@ function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
         toolName: entry.toolName ?? null,
         toolInput: entry.toolInput ?? null,
         interactivePrompt: entry.interactivePrompt ?? null,
+        interaction: entry.interaction ?? null,
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
         interrupted: entry.interrupted ?? null
       }))
@@ -78,6 +79,7 @@ describe('mobile agent-status projection equivalence', () => {
         toolName: undefined,
         toolInput: undefined,
         interactivePrompt: undefined,
+        interaction: undefined,
         lastAssistantMessage: undefined,
         interrupted: undefined
       })
@@ -108,6 +110,7 @@ describe('mobile agent-status projection equivalence', () => {
           updatedAt: 1740000000000 + BUCKET_MS * 3 * (round + 1),
           state: round % 2 === 0 ? 'done' : 'working',
           prompt: `changed prompt round ${round}`,
+          interaction: round % 2 === 0 ? { kind: 'permission' } : undefined,
           lastAssistantMessage: `answer round ${round}`
         })
       }

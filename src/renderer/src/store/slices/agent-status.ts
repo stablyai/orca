@@ -1918,6 +1918,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // Why: full untruncated AskUserQuestion JSON so mobile/web can render the live prompt
           // card; parseAgentStatusPayload clears it on tool/state change.
           interactivePrompt: payload.interactivePrompt,
+          interaction: payload.interaction,
           lastAssistantMessage: payload.lastAssistantMessage,
           // Why: reused panes can start non-orchestrated work; only final done rows keep the
           // previous lineage fallback so completed children stay grouped.
