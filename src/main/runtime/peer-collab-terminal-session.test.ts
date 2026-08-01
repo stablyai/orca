@@ -770,6 +770,29 @@ describe('peer-collab grant enforcement', () => {
     expect(result.ok).toBe(false)
   })
 
+  it('rejects terminal.updateViewport from a peer that does not declare a desktop client type', async () => {
+    const { server, pairingUrl } = await startPeerHost({ grantedTerminals: [TEST_TERMINAL] })
+    servers.push(server)
+    const client = new PeerClientService()
+    clients.push(client)
+    expect(client.connect(pairingUrl, 'Client A')).toEqual({ ok: true })
+    await waitFor(() => client.getStatus().state === 'connected')
+
+    // Why: the handler defaults client.type to 'mobile', so a peer omitting it
+    // would reach updateMobileViewport's phone-fit override on the host terminal.
+    const rpc = (
+      client as unknown as {
+        rpc: { sendRequest: (m: string, p: unknown) => Promise<{ ok: boolean }> }
+      }
+    ).rpc
+    const result = await rpc.sendRequest('terminal.updateViewport', {
+      terminal: TEST_TERMINAL,
+      client: { id: 'spoofed' },
+      viewport: { cols: 40, rows: 20 }
+    })
+    expect(result.ok).toBe(false)
+  })
+
   it('rejects terminal.send for a terminal the peer was not granted', async () => {
     const { client } = await connectedUngrantedClient()
     // Why: PeerClientService only exposes input via an established subscribe

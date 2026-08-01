@@ -1670,8 +1670,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     name: 'terminal.updateViewport',
     params: TerminalUpdateViewport,
     handler: async (params, ctx) => {
-      const { runtime } = ctx
+      const { runtime, isPeerDevice } = ctx
       assertPeerTerminalGranted(ctx, params.terminal)
+      // Why: client.type defaults to 'mobile' below, so a peer omitting or
+      // spoofing it would reach updateMobileViewport's phone-fit override.
+      if (isPeerDevice && params.client.type !== 'desktop') {
+        throw new Error('peer_terminal_update_viewport_requires_desktop_client')
+      }
       // Why: a stale handle must fail with terminal_handle_stale, not write viewport state to the wrong PTY (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
