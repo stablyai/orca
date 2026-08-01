@@ -229,6 +229,24 @@ describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
     ).toBe(true)
   })
 
+  it('lets an unmarked Escape through so a drifted flag cannot strand vim in insert mode', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(event({ key: 'Escape', code: 'Escape' }), composing)
+    ).toBe(false)
+  })
+
+  it.each([
+    ['isComposing', { isComposing: true }],
+    ['the Process marker', { key: 'Process', keyCode: 229 }]
+  ])('still suppresses an Escape the IME marks with %s', (_label, marker) => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Escape', code: 'Escape', ...marker }),
+        composing
+      )
+    ).toBe(true)
+  })
+
   it('does not suppress ordinary text keys solely because composition is active', () => {
     expect(
       shouldSuppressTerminalImeKeyboardEvent(event({ key: 'a', code: 'KeyA' }), composing)
