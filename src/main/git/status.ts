@@ -2066,7 +2066,12 @@ export async function undoLastCommit(
     )
     return { success: true, message: message.trim() }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Undo failed'
+    const errorMessage =
+      typeof error === 'object' && error !== null && 'stderr' in error
+        ? (error as { stderr: string }).stderr
+        : error instanceof Error
+          ? error.message
+          : 'Undo failed'
     return { success: false, error: errorMessage }
   } finally {
     invalidateGitReadCaches()
