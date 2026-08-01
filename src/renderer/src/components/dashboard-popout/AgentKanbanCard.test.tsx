@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
@@ -102,26 +102,83 @@ describe('AgentKanbanCard', () => {
     expect(container.querySelector('.lucide-message-circle-question-mark')).toBeNull()
   })
 
+  it('shows review metadata and expands grouped subagents without opening the terminal', () => {
+    const onOpenTerminal = vi.fn()
+    renderCard({
+      card: card({
+        review: { number: 11012, state: 'open' },
+        subagents: [
+          { id: 'child-1', name: 'Review loop', dotState: 'working' },
+          { id: 'child-2', name: 'Smoke tests', dotState: 'done' }
+        ]
+      }),
+      now: 2_000,
+      onOpenTerminal
+    })
+
+    expect(screen.getByText('#11012')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Open review #11012' })).toBeInTheDocument()
+    expect(screen.queryByText('Review loop')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '2 subagents' }))
+    expect(screen.getByText('Review loop')).toBeInTheDocument()
+    expect(screen.getByText('Smoke tests')).toBeInTheDocument()
+    expect(onOpenTerminal).not.toHaveBeenCalled()
+  })
+
+  it('opens the terminal from the footer while keeping subagent disclosure isolated', () => {
+    const onOpenTerminal = vi.fn()
+    renderCard({
+      card: card({
+        conversationName: 'Dashboard review',
+        review: { number: 11042, state: 'open' },
+        subagents: [{ id: 'child-1', name: 'Review loop', dotState: 'working' }]
+      }),
+      now: 61_000,
+      onOpenTerminal
+    })
+
+    fireEvent.click(screen.getByText('#11042'))
+    expect(onOpenTerminal).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: '1 subagent' }))
+    expect(onOpenTerminal).toHaveBeenCalledTimes(1)
+  })
+
+  it('labels one subagent accessibly and never renders a workspace-status dot', () => {
+    renderCard({
+      card: card({
+        workspaceStatusId: 'in-review',
+        workspaceStatusLabel: 'In review',
+        workspaceStatusColor: 'emerald',
+        subagents: [{ id: 'child-1', name: 'Review loop', dotState: 'working' }]
+      }),
+      now: 2_000
+    })
+
+    expect(screen.getByRole('button', { name: '1 subagent' })).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: 'In review' })).not.toBeInTheDocument()
+  })
+
   it('tints attention amber and done green, leaving every other state neutral', () => {
     const { container: attention } = renderCard({
       card: card({ bucket: 'attention', dotState: 'waiting' }),
       now: 2_000
     })
-    expect(attention.querySelector('button')?.className).toContain('border-amber-500/40')
+    expect(attention.firstElementChild?.className).toContain('border-amber-500/40')
 
     cleanup()
     const { container: done } = renderCard({
       card: card({ bucket: 'idle', dotState: 'done' }),
       now: 2_000
     })
-    expect(done.querySelector('button')?.className).toContain('border-emerald-500/40')
+    expect(done.firstElementChild?.className).toContain('border-emerald-500/40')
 
     cleanup()
     const { container: idle } = renderCard({
       card: card({ bucket: 'idle', dotState: 'idle' }),
       now: 2_000
     })
-    const idleClassName = idle.querySelector('button')?.className ?? ''
+    const idleClassName = idle.firstElementChild?.className ?? ''
     expect(idleClassName).toContain('border-border/60')
     expect(idleClassName).not.toContain('emerald')
     expect(idleClassName).not.toContain('amber')
@@ -133,10 +190,9 @@ describe('AgentKanbanCard', () => {
       now: 2_000
     })
 
-    const [header, footer] = [
-      container.querySelector('button')!.firstElementChild!,
-      container.querySelector('button')!.lastElementChild!
-    ]
+    const cardElement = container.firstElementChild!
+    const header = cardElement.querySelector('button')!.firstElementChild!
+    const footer = cardElement.lastElementChild!
     expect(header).toHaveTextContent('Sparse-checkout parser')
     expect(header).not.toHaveTextContent('dashboard-review')
     expect(footer).toHaveTextContent('dashboard-review')
@@ -166,7 +222,10 @@ describe('AgentKanbanCard', () => {
 
   it('skips structured-clone rerenders until visible card data or its age changes', () => {
     const onOpenTerminal = vi.fn()
-    const initial = card({ startedAt: 1_000 })
+    const initial = card({
+      startedAt: 1_000,
+      subagents: [{ id: 'child-1', name: 'Review loop', dotState: 'working' }]
+    })
     const repoIcon: RepoIcon = { type: 'lucide', name: 'Rocket' }
     const { rerender } = render(
       <TooltipProvider>
@@ -185,7 +244,7 @@ describe('AgentKanbanCard', () => {
     rerender(
       <TooltipProvider>
         <AgentKanbanCard
-          card={{ ...initial }}
+          card={{ ...initial, subagents: initial.subagents?.map((subagent) => ({ ...subagent })) }}
           repoIcon={{ ...repoIcon }}
           now={62_000}
           onOpenTerminal={onOpenTerminal}
@@ -197,7 +256,7 @@ describe('AgentKanbanCard', () => {
     rerender(
       <TooltipProvider>
         <AgentKanbanCard
-          card={{ ...initial }}
+          card={{ ...initial, subagents: initial.subagents?.map((subagent) => ({ ...subagent })) }}
           repoIcon={{ ...repoIcon }}
           now={121_500}
           onOpenTerminal={onOpenTerminal}

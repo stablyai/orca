@@ -207,6 +207,27 @@ export async function withWorktreeSpan<T>(
   )
 }
 
+/** Closed set so a typo can't silently mint an orphan span name. */
+export type WorktreeRemoveStage =
+  | 'archive_hook'
+  | 'cache_invalidation'
+  | 'git_remove'
+  | 'metadata_purge'
+  | 'pty_sweep'
+  | 'watcher_gate'
+
+/** Wrap one stage of a worktree removal. Children share the parent's `kind` so `kind`-filtered
+ *  views keep the whole tree, and `worktree.flow` separates the folder/remote/local removal paths. */
+export async function withWorktreeRemoveStageSpan<T>(
+  stage: WorktreeRemoveStage,
+  flow: 'folder' | 'remote' | 'local',
+  fn: () => Promise<T>
+): Promise<T> {
+  return withSpan(`worktree.remove.${stage}`, fn, {
+    attributes: { kind: 'worktree', 'worktree.flow': flow }
+  })
+}
+
 export type PtySpanArgs = {
   readonly stage: 'spawn' | 'exit' | 'recover'
   readonly shell?: string

@@ -80,7 +80,7 @@ export type SessionOptions = {
   subprocess: SubprocessHandle
   shellReadySupported: boolean
   shellReadyTimeoutMs?: number
-  historySeed?: string
+  historySeedChunks?: readonly string[]
   scrollback?: number
   wslDistro?: string
   // Fired once the session reaches a terminal state so the owner (TerminalHost) can reap it; without
@@ -146,8 +146,12 @@ export class Session {
       // the authoritative responder and a daemon reply would race ahead and clobber it. See HeadlessEmulator.
     })
     // Why: seed recovery must precede listener registration; shells can emit their prompt synchronously once onData subscribes.
+    // Why the every() short-circuit is safe: writeSync only fails emulator-wide (disposed / no sync write API), so later
+    // chunks could not land either — and writing them past a dropped chunk would seed a torn stream.
     this._historySeeded =
-      opts.historySeed === undefined ? undefined : this.emulator.writeSync(opts.historySeed)
+      opts.historySeedChunks === undefined
+        ? undefined
+        : opts.historySeedChunks.every((chunk) => this.emulator.writeSync(chunk))
 
     if (opts.shellReadySupported) {
       this._shellState = 'pending'

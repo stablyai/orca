@@ -1,5 +1,8 @@
 import type { FolderWorkspace, FolderWorkspaceLinkedTask, ProjectGroup } from './types'
 import { isTuiAgent } from './tui-agent-config'
+import { normalizeStoredTaskSourceContext } from './task-source-context'
+import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
+import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'
 
 export function normalizeFolderWorkspaceName(
   name: string | null | undefined,
@@ -12,47 +15,7 @@ export function normalizeFolderWorkspaceName(
 export function normalizeFolderWorkspaceLinkedTask(
   value: unknown
 ): FolderWorkspaceLinkedTask | null {
-  if (!value || typeof value !== 'object') {
-    return null
-  }
-  const raw = value as Partial<FolderWorkspaceLinkedTask>
-  if (
-    raw.provider !== 'github' &&
-    raw.provider !== 'gitlab' &&
-    raw.provider !== 'linear' &&
-    raw.provider !== 'jira'
-  ) {
-    return null
-  }
-  if (raw.type !== 'issue' && raw.type !== 'pr' && raw.type !== 'mr') {
-    return null
-  }
-  if (
-    typeof raw.number !== 'number' ||
-    !Number.isFinite(raw.number) ||
-    typeof raw.title !== 'string' ||
-    raw.title.trim().length === 0 ||
-    typeof raw.url !== 'string' ||
-    raw.url.trim().length === 0
-  ) {
-    return null
-  }
-  return {
-    provider: raw.provider,
-    type: raw.type,
-    number: raw.number,
-    title: raw.title.trim(),
-    url: raw.url.trim(),
-    ...(typeof raw.linearIdentifier === 'string' && raw.linearIdentifier.trim().length > 0
-      ? { linearIdentifier: raw.linearIdentifier.trim() }
-      : {}),
-    ...(typeof raw.jiraIdentifier === 'string' && raw.jiraIdentifier.trim().length > 0
-      ? { jiraIdentifier: raw.jiraIdentifier.trim() }
-      : {}),
-    ...(typeof raw.repoId === 'string' && raw.repoId.trim().length > 0
-      ? { repoId: raw.repoId.trim() }
-      : {})
-  }
+  return normalizeWorkspaceLinkedItem(value)
 }
 
 export function normalizeFolderWorkspaces(
@@ -94,6 +57,8 @@ export function normalizeFolderWorkspaces(
       continue
     }
     const now = Date.now()
+    const linkedTask = normalizeWorkspaceLinkedItem(raw.linkedTask)
+    const linkedTaskSourceContext = normalizeStoredTaskSourceContext(raw.linkedTaskSourceContext)
     seen.add(raw.id)
     workspaces.push({
       id: raw.id,
@@ -106,7 +71,13 @@ export function normalizeFolderWorkspaces(
           : raw.connectionId === null
             ? null
             : (group?.connectionId ?? null),
-      linkedTask: normalizeFolderWorkspaceLinkedTask(raw.linkedTask),
+      linkedTask,
+      linkedTaskSourceContext: isWorkspaceLinkedItemSourceContextMatch(
+        linkedTask,
+        linkedTaskSourceContext
+      )
+        ? linkedTaskSourceContext
+        : null,
       comment: typeof raw.comment === 'string' ? raw.comment : '',
       isArchived: raw.isArchived === true,
       isUnread: raw.isUnread === true,

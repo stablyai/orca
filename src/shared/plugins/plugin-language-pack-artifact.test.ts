@@ -35,6 +35,9 @@ describe('plugin language-pack artifacts', () => {
 
   it.each([
     'PluginConsentDialog',
+    // The provenance badge and install-error copy carry the trust decision.
+    'PluginConsentProvenance',
+    'pluginError',
     'PluginKeybindingConsentPreview',
     'PluginMarketplaceListingRow',
     'PluginMarketplacePreviewDialog',
@@ -52,6 +55,33 @@ describe('plugin language-pack artifacts', () => {
         })
       )
     ).toMatchObject({ ok: false, error: expect.stringContaining('protected security copy') })
+  })
+
+  it('forges no trust badge: the community→Official swap is refused', () => {
+    expect(
+      parsePluginLanguagePackArtifact(
+        JSON.stringify({
+          auto: {
+            components: {
+              settings: { PluginConsentProvenance: { community: 'Official' } }
+            }
+          }
+        })
+      )
+    ).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('auto.components.settings.PluginConsentProvenance')
+    })
+  })
+
+  it('still lets language packs translate non-plugin settings copy', () => {
+    expect(
+      parsePluginLanguagePackArtifact(
+        JSON.stringify({
+          auto: { components: { settings: { AppearanceSection: { title: 'Apariencia' } } } }
+        })
+      ).ok
+    ).toBe(true)
   })
 
   it.each([

@@ -25,6 +25,7 @@ import {
   parseGlabAuthStatusHosts,
   resolveIssueSource
 } from './gl-utils'
+import { rememberGlabKnownHost, rememberGlabKnownHosts } from './gitlab-known-host-probe'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 
 describe('gitlab project ref resolution', () => {
@@ -501,6 +502,90 @@ describe('getGlabKnownHosts', () => {
       timeout: 10_000,
       wslDistro: 'Debian'
     })
+  })
+
+  it('preserves a native auth refresh while an older native probe is in flight', async () => {
+    let resolveProbe!: (value: { stdout: string; stderr: string }) => void
+    glabExecFileAsyncMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveProbe = resolve
+        })
+    )
+
+    const staleProbe = getGlabKnownHosts()
+    rememberGlabKnownHost('gitlab.refreshed.test')
+    resolveProbe({ stdout: 'Logged in to gitlab.com as user\n', stderr: '' })
+
+    await expect(staleProbe).resolves.toEqual(['gitlab.com', 'gitlab.refreshed.test'])
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'gitlab.refreshed.test'])
+  })
+
+  it('preserves a native auth refresh when an older native probe fails', async () => {
+    let rejectProbe!: (error: Error) => void
+    glabExecFileAsyncMock.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectProbe = reject
+        })
+    )
+
+    const staleProbe = getGlabKnownHosts()
+    rememberGlabKnownHost('gitlab.refreshed.test')
+    rejectProbe(new Error('stale auth probe failed'))
+
+    await expect(staleProbe).resolves.toEqual(['gitlab.com', 'gitlab.refreshed.test'])
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'gitlab.refreshed.test'])
+  })
+
+  it('keeps a remembered native host out of WSL and SSH caches', async () => {
+    glabExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'Logged in to native.test as user\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'Logged in to wsl.test as user\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'Logged in to ssh.test as user\n', stderr: '' })
+
+    await Promise.all([
+      getGlabKnownHosts(),
+      getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' }),
+      getGlabKnownHosts('conn-1')
+    ])
+    rememberGlabKnownHost('gitlab.refreshed.test')
+
+    await expect(getGlabKnownHosts()).resolves.toEqual([
+      'gitlab.com',
+      'native.test',
+      'gitlab.refreshed.test'
+    ])
+    await expect(getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' })).resolves.toEqual([
+      'gitlab.com',
+      'wsl.test'
+    ])
+    await expect(getGlabKnownHosts('conn-1')).resolves.toEqual(['gitlab.com', 'ssh.test'])
+  })
+
+  it('batch-normalizes and deduplicates hosts in first-seen order per execution context', async () => {
+    rememberGlabKnownHosts([' Native-B.test ', 'native-a.test', 'NATIVE-B.TEST'])
+    rememberGlabKnownHosts(['WSL-B.test', ' wsl-a.test ', 'wsl-b.test'], undefined, {
+      wslDistro: 'Ubuntu'
+    })
+    rememberGlabKnownHosts(['SSH-B.test', 'ssh-a.test', ' ssh-b.test '], 'conn-batch')
+
+    await expect(getGlabKnownHosts()).resolves.toEqual([
+      'gitlab.com',
+      'native-b.test',
+      'native-a.test'
+    ])
+    await expect(getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' })).resolves.toEqual([
+      'gitlab.com',
+      'wsl-b.test',
+      'wsl-a.test'
+    ])
+    await expect(getGlabKnownHosts('conn-batch')).resolves.toEqual([
+      'gitlab.com',
+      'ssh-b.test',
+      'ssh-a.test'
+    ])
+    expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('recognizes a self-hosted host on a non-default port', async () => {

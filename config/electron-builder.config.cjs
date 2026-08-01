@@ -14,10 +14,16 @@ const {
 const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
 const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
+const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
 
-const isMacRelease = process.env.ORCA_MAC_RELEASE === '1'
+// Why: hourly dev builds must carry the *release* identity — same bundle id and
+// Developer ID signature — or Squirrel.Mac refuses to swap them over an installed
+// Orca. Only notarization is skipped, which in-place updates never check.
+const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
+const isMacRelease = process.env.ORCA_MAC_RELEASE === '1' || isMacHourly
 const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
 const localBuildVersion = isMacRelease ? undefined : process.env.ORCA_LOCAL_BUILD_VERSION
+const hourlyBuildVersion = isMacHourly ? process.env.ORCA_HOURLY_BUILD_VERSION : undefined
 const appId = 'com.stablyai.orca'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
@@ -64,7 +70,11 @@ const winSpeechNativeResource = {
 module.exports = {
   appId,
   productName: 'Orca',
-  ...(localBuildVersion ? { extraMetadata: { version: localBuildVersion } } : {}),
+  ...(hourlyBuildVersion
+    ? { extraMetadata: { version: hourlyBuildVersion } }
+    : localBuildVersion
+      ? { extraMetadata: { version: localBuildVersion } }
+      : {}),
   directories: {
     buildResources: 'resources/build'
   },
@@ -83,12 +93,17 @@ module.exports = {
     '!skill-guides{,/**/*}',
     '!skill-stubs{,/**/*}',
     '!tests{,/**/*}',
+    // Why: examples/ is plugin authoring documentation with no runtime consumer —
+    // bundled plugins ship via extraResources from resources/plugins/launch/. It also
+    // carries hostile-panel, the adversarial fixture the containment tests point at,
+    // which must never reach a user's install.
+    '!examples{,/**/*}',
     // Why: pr-evidence/ is a local e2e screenshot output (ORCA_CAPTURE_EVIDENCE);
     // it is gitignored, but exclude it defensively so a stray local capture at
     // package time never bloats app.asar.
     '!pr-evidence{,/**/*}',
     '!Casks{,/**/*}',
-    '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md}',
+    '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md,ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md,ORCHESTRATION_STRUCTURED_OUTPUT_DESIGN.md}',
     '!out/**/*.test.js',
     // Why: Vite's manifest is only used to project the paired web client.
     '!out/renderer/.vite{,/**/*}',
@@ -136,6 +151,7 @@ module.exports = {
     'out/main/agent-hooks/**',
     'out/main/antigravity/**',
     'out/main/claude/**',
+    'out/main/claude-accounts/keychain.js',
     'out/main/codex/**',
     'out/main/copilot/**',
     'out/main/cursor/**',
@@ -143,7 +159,6 @@ module.exports = {
     'out/main/gemini/**',
     'out/main/grok/**',
     'out/main/hermes/**',
-    'out/main/win32-utils.js',
     'out/main/daemon-entry.js',
     'out/main/plugin-host-entry.js',
     'out/main/computer-sidecar.js',
@@ -173,7 +188,7 @@ module.exports = {
           )
         : join(context.appOutDir, 'resources')
     if (!existsSync(resourcesDir)) {
-      return
+      throw new Error(`Missing packaged resources directory: ${resourcesDir}`)
     }
     if (context.electronPlatformName === 'darwin') {
       const architectureByEnum = { 1: 'x64', 3: 'arm64' }
@@ -203,7 +218,16 @@ module.exports = {
     // arm64=3, universal=4 (universal contains the host slice, so run it).
     const archEnumByNodeArch = { ia32: 0, x64: 1, armv7l: 2, arm64: 3 }
     const hostArchEnum = archEnumByNodeArch[process.arch]
-    if (context.arch === hostArchEnum || context.arch === 4) {
+    const canExecuteTargetArch = context.arch === hostArchEnum || context.arch === 4
+    verifySkillsCliRuntime(join(resourcesDir, 'app.asar.unpacked', 'out'), resourcesDir, {
+      executeCommands: canExecuteTargetArch
+    })
+    if (!canExecuteTargetArch) {
+      console.log(
+        `[verify-skills-cli-runtime] skipped command probes on cross-arch slice (target ${context.arch}, host ${process.arch})`
+      )
+    }
+    if (canExecuteTargetArch) {
       verifyPackagedDaemonEntryBoots(resourcesDir)
     } else {
       // Why: a cross-arch slice can't be booted by the host Node, but the
@@ -306,7 +330,11 @@ module.exports = {
     // explicit release path so production artifacts remain strict while dev
     // artifacts do not fail with broken ad-hoc launch behavior.
     hardenedRuntime: isMacRelease,
-    notarize: isMacRelease,
+    // Why: Squirrel.Mac validates the replacement bundle's signature, not its
+    // notarization, so hourly builds stay installable while skipping the ~10min
+    // notary round trip 24x a day. A manually-downloaded hourly zip will be
+    // Gatekeeper-quarantined — that is the accepted tradeoff for a dev channel.
+    notarize: isMacRelease && !isMacHourly,
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('darwin'),
@@ -446,8 +474,11 @@ module.exports = {
   publish: {
     provider: 'github',
     owner: 'stablyai',
-    repo: 'orca',
-    releaseType: 'release'
+    // Why: hourly tags must never enter the main repo's releases atom feed — it
+    // exposes only the 10 newest entries, so 24 hourly tags a day would evict
+    // every stable/RC entry and strand users on a feed with nothing to install.
+    repo: isMacHourly ? 'orca-hourly' : 'orca',
+    releaseType: isMacHourly ? 'prerelease' : 'release'
   }
 }
 

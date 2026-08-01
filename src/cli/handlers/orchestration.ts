@@ -21,11 +21,15 @@ import type {
 } from '../../shared/orchestration-worker-output'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import type { RuntimeTerminalRead } from '../../shared/runtime-types'
+import { orchestrationMigrationData } from '../../shared/orchestration-rpc-contract'
+import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../shared/orchestration-run-pagination'
 import {
-  ORCHESTRATION_LEGACY_RUN_ID,
-  orchestrationMigrationData,
-  orchestrationSkillRecoveryData
-} from '../../shared/orchestration-rpc-contract'
+  formatMessageReadOnlyTag,
+  formatOrchestrationCheckText,
+  prepareOrchestrationCheckOutput,
+  type LegacyCompatibilityResult,
+  type OrchestrationMessageSummary as MessageSummary
+} from '../../shared/orchestration-check-output'
 
 // Why: 15 s is well under Claude Code's ~2 min Bash-tool silence budget while keeping log volume low. See design doc §3.4.
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
@@ -75,43 +79,6 @@ const TASK_STATUS_VALUES = [
   'blocked'
 ] as const
 
-type MessageSummary = {
-  id: string
-  run_id?: string
-  from_handle: string
-  to_handle?: string
-  subject: string
-  type?: string
-  body?: string
-  payload?: string | null
-  read?: number
-}
-
-function formatMessageReadOnlyTag(message: MessageSummary): string {
-  return message.run_id === ORCHESTRATION_LEGACY_RUN_ID ? ' [legacy, read-only]' : ''
-}
-
-function isLegacyReadOnlyMessage(message: MessageSummary): boolean {
-  return message.run_id === ORCHESTRATION_LEGACY_RUN_ID
-}
-
-function formatLegacyAwareCheckMessages(messages: MessageSummary[]): string {
-  return messages
-    .map((message) => {
-      const lines = [
-        `${message.id}${formatMessageReadOnlyTag(message)} [${message.type ?? 'status'}] from=${message.from_handle} "${message.subject}"`
-      ]
-      if (message.body) {
-        lines.push(message.body)
-      }
-      if (message.payload) {
-        lines.push(`[payload] ${message.payload}`)
-      }
-      return lines.join('\n')
-    })
-    .join('\n\n')
-}
-
 type LifecycleSendRejection = {
   action: 'rejected'
   code: string
@@ -131,6 +98,40 @@ type OrchestrationSendResult =
       }
       lifecycle?: { action: 'completed' | 'failed' }
     }
+
+function resolveCompatibilityCliCommand(): 'orca' | 'orca-ide' | 'orca-dev' {
+  const configured = process.env.ORCA_CLI_COMMAND
+  if (configured === 'orca' || configured === 'orca-ide' || configured === 'orca-dev') {
+    return configured
+  }
+  return process.platform === 'linux' ? 'orca-ide' : 'orca'
+}
+
+function resolvePackagedWindowsCompatibilityCommand(): 'orca' | 'orca-ide' | undefined {
+  if (process.env.ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER !== '1') {
+    return undefined
+  }
+  const command = process.env.ORCA_CLI_COMMAND
+  if (command === 'orca' || command === 'orca-ide') {
+    return command
+  }
+  throw new RuntimeClientError(
+    'invalid_argument',
+    'The packaged Orca launcher did not provide a valid resume command. No question was created.'
+  )
+}
+
+async function flushStdout(): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    process.stdout.write('', (error) => {
+      if (error) {
+        reject(error)
+      } else {
+        resolve()
+      }
+    })
+  })
+}
 
 function getOptionalStructuredMessagePayload(
   flags: Map<string, string | boolean>
@@ -447,7 +448,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       run: { id: string; objective: string; consumer_generation: number }
     }>(client, flags, 'orchestration.runUse', {
       id: getRequiredStringFlag(flags, 'id'),
-      from
+      from,
+      ...(flags.has('takeover-legacy') ? { takeoverLegacy: true } : {})
     })
     printResult(result, json, (r) => `Using Run ${r.run.id}: ${r.run.objective}`)
   },
@@ -462,19 +464,25 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     )
   },
 
-  'orchestration run-list': async ({ client, json }) => {
+  'orchestration run-list': async ({ flags, client, json }) => {
     const result = await client.call<{
       runs: { id: string; objective: string; legacy: number }[]
-    }>('orchestration.runList', {})
-    printResult(result, json, (r) =>
-      r.runs.length === 0
-        ? 'No Runs found.'
-        : r.runs
-            .map(
-              (run) => `${run.id}${run.legacy ? ' [legacy, inspect only]' : ''} ${run.objective}`
-            )
-            .join('\n')
-    )
+      nextCursor: string | null
+    }>('orchestration.runList', {
+      limit: getOptionalPositiveIntegerFlag(flags, 'limit') ?? ORCHESTRATION_RUN_PAGE_LIMIT,
+      cursor: getOptionalStringFlag(flags, 'cursor')
+    })
+    printResult(result, json, (r) => {
+      const rows =
+        r.runs.length === 0
+          ? 'No Runs found.'
+          : r.runs
+              .map(
+                (run) => `${run.id}${run.legacy ? ' [legacy, inspect only]' : ''} ${run.objective}`
+              )
+              .join('\n')
+      return r.nextCursor ? `${rows}\nMore Runs: --cursor ${r.nextCursor}` : rows
+    })
   },
 
   'orchestration run-show': async ({ flags, client, json }) => {
@@ -503,13 +511,6 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       rejectLifecycleGroupRecipient(type, to)
     }
     const outcome = getOptionalStringFlag(flags, 'outcome')
-    if (type === 'worker_done' && outcome === undefined && !flags.has('payload')) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'worker_done requires --outcome succeeded or --outcome failed. No effects were applied.',
-        orchestrationSkillRecoveryData()
-      )
-    }
     if (type !== 'worker_done' && outcome !== undefined) {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -596,6 +597,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       timedOut?: boolean
       cancelled?: boolean
       connectionLost?: boolean
+      legacyCompatibility?: LegacyCompatibilityResult
     }
     let result: Awaited<ReturnType<typeof client.call<CheckResult>>>
     try {
@@ -608,6 +610,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         all: flags.has('all') ? true : undefined,
         types: getOptionalStringFlag(flags, 'types'),
         format: flags.has('format') ? true : undefined,
+        inject: flags.has('inject') ? true : undefined,
+        compatibilityCliCommand: resolveCompatibilityCliCommand(),
         run: getOptionalStringFlag(flags, 'run'),
         ack: getOptionalStringFlag(flags, 'ack'),
         wait: wait ? true : undefined,
@@ -644,31 +648,25 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         }
       }
     }
-    printResult(result, json, (r) => {
-      if (r.formatted) {
-        return r.messages.some(isLegacyReadOnlyMessage)
-          ? formatLegacyAwareCheckMessages(r.messages)
-          : r.formatted
-      }
-      if (r.count === 0) {
-        if (r.timedOut) {
-          return 'Wait timed out; no messages were consumed.'
-        }
-        if (r.cancelled) {
-          return r.connectionLost
-            ? 'Wait cancelled because the connection closed; no messages were consumed.'
-            : 'Wait cancelled; no messages were consumed.'
-        }
-        return 'No messages.'
-      }
-      const rendered = r.messages
-        .map(
-          (m) =>
-            `${m.id}${formatMessageReadOnlyTag(m)} [${m.type ?? 'status'}] from=${m.from_handle} "${m.subject}"`
-        )
-        .join('\n')
-      return r.deliveryId ? `Delivery ${r.deliveryId}\n${rendered}` : rendered
-    })
+    result = {
+      ...result,
+      result: prepareOrchestrationCheckOutput(result.result, terminal, flags.has('format'))
+    }
+    printResult(result, json, (r) => formatOrchestrationCheckText(r, terminal))
+    const compatibilityAck = result.result.legacyCompatibility?.ackMessageIds
+    if (compatibilityAck && compatibilityAck.length > 0) {
+      await flushStdout()
+      await client.call('orchestration.check', {
+        terminal,
+        compatibilityAck: JSON.stringify({
+          messageIds: compatibilityAck,
+          types: getOptionalStringFlag(flags, 'types')
+            ?.split(',')
+            .map((type) => type.trim())
+            .filter(Boolean)
+        })
+      })
+    }
   },
 
   'orchestration reply': async ({ flags, client, cwd, json }) => {
@@ -988,6 +986,8 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       timeoutMs?: number
       cancelled?: boolean
       connectionLost?: boolean
+      answerMessageId?: string | null
+      legacyCompatibility?: LegacyCompatibilityResult
     }>(
       client,
       flags,
@@ -999,7 +999,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         resume,
         options: getOptionalStringFlag(flags, 'options'),
         timeoutMs: parsedTimeoutMs === undefined ? undefined : timeoutMs,
-        from
+        from,
+        compatibilityCliCommand: resolveCompatibilityCliCommand(),
+        compatibilityWindowsCommand: resolvePackagedWindowsCompatibilityCommand()
       },
       // Why: extend past timeoutMs so the RPC transport's 60s default doesn't abort before the runtime's own timeout resolves.
       {
@@ -1010,8 +1012,24 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     // Why: bypass printResult so --json emits a bare JSON object (no envelope) pipeable via `jq -r .answer`, unlike other verbs.
     if (json) {
       console.log(JSON.stringify(result.result))
+    } else if (result.result.legacyCompatibility?.resumeRequired) {
+      console.log(`Question ${result.result.messageId} committed.`)
+      console.log(`Resume with: ${result.result.legacyCompatibility.resumeCommand}`)
     } else if (result.result.answer !== null) {
       console.log(result.result.answer)
+    }
+    if (result.result.legacyCompatibility?.resumeRequired) {
+      await flushStdout()
+      process.exitCode = 75
+      return
+    }
+    const answerAck = result.result.legacyCompatibility?.answerAcknowledgement
+    if (answerAck && result.result.answer !== null) {
+      await flushStdout()
+      await client.call('orchestration.check', {
+        terminal: from,
+        compatibilityQuestionAck: JSON.stringify(answerAck)
+      })
     }
     if (result.result.timedOut) {
       if (!json) {
@@ -1075,13 +1093,15 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     )
   },
 
-  'orchestration gate-create': async ({ flags, client, json }) => {
+  'orchestration gate-create': async ({ flags, client, cwd, json }) => {
     const result = await callMutation<{
       gate: { id: string; task_id: string; status: string }
     }>(client, flags, 'orchestration.gateCreate', {
       task: getRequiredStringFlag(flags, 'task'),
       question: getRequiredStringFlag(flags, 'question'),
-      options: getOptionalStringFlag(flags, 'options')
+      options: getOptionalStringFlag(flags, 'options'),
+      // Why: gates are Run-scoped, so the coordinator handle is the caller identity the runtime authorizes against.
+      from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })
     printResult(
       result,
@@ -1090,23 +1110,30 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     )
   },
 
-  'orchestration gate-resolve': async ({ flags, client, json }) => {
+  'orchestration gate-resolve': async ({ flags, client, cwd, json }) => {
     const result = await callMutation<{
       gate: { id: string; task_id: string; status: string; resolution: string }
     }>(client, flags, 'orchestration.gateResolve', {
       id: getRequiredStringFlag(flags, 'id'),
-      resolution: getRequiredStringFlag(flags, 'resolution')
+      resolution: getRequiredStringFlag(flags, 'resolution'),
+      from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })
     printResult(result, json, (r) => `Gate ${r.gate.id} resolved: ${r.gate.resolution}`)
   },
 
-  'orchestration gate-list': async ({ flags, client, json }) => {
+  'orchestration gate-list': async ({ flags, client, cwd, json }) => {
+    const run = getOptionalStringFlag(flags, 'run')
+    // Why: same read posture as task-list — an explicitly named Run stays inspectable without a bound pane, so identity is only resolved for the implicit "my own Run" case.
+    const from = run ? undefined : await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
       gates: { id: string; task_id: string; question: string; status: string }[]
       count: number
+      runId?: string
     }>('orchestration.gateList', {
       task: getOptionalStringFlag(flags, 'task'),
-      status: getOptionalStringFlag(flags, 'status')
+      status: getOptionalStringFlag(flags, 'status'),
+      run,
+      from
     })
     printResult(result, json, (r) => {
       if (r.gates.length === 0) {

@@ -2,9 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   applyBrowserPageZoom,
   browserPageZoomLevelToPercent,
+  forgetExplicitBrowserPageZoomLevel,
   getBrowserPageZoomIndicatorState,
+  getExplicitBrowserPageZoomLevel,
   nextBrowserPageZoomLevel,
   normalizeBrowserPageZoomLevel,
+  rememberExplicitBrowserPageZoomLevel,
   setBrowserPageZoomLevel
 } from './browser-page-zoom'
 
@@ -108,15 +111,73 @@ describe('setBrowserPageZoomLevel', () => {
   })
 
   it('restores the configured level when Chromium carries zoom across reloads', () => {
+    let live = 0.5
     const webview = {
-      getZoomLevel: vi.fn(() => 0.5),
+      getZoomLevel: vi.fn(() => live),
+      setZoomLevel: vi.fn((level: number) => {
+        live = level
+      })
+    }
+
+    expect(setBrowserPageZoomLevel(webview, 0)).toBe(0)
+    expect(webview.setZoomLevel).toHaveBeenNthCalledWith(1, 0)
+    // Chromium hands the stale level back again on the next load.
+    live = 0.5
+    expect(setBrowserPageZoomLevel(webview, 0)).toBe(0)
+    expect(webview.setZoomLevel).toHaveBeenNthCalledWith(2, 0)
+  })
+
+  // Why: HostZoomMap is keyed by host per partition, so even a no-op write
+  // overwrites the host-wide zoom a sibling tab on the same hostname set.
+  it('does not write when the webview already holds the level', () => {
+    const webview = {
+      getZoomLevel: vi.fn(() => 0),
       setZoomLevel: vi.fn()
     }
 
     expect(setBrowserPageZoomLevel(webview, 0)).toBe(0)
-    expect(setBrowserPageZoomLevel(webview, 0)).toBe(0)
-    expect(webview.setZoomLevel).toHaveBeenNthCalledWith(1, 0)
-    expect(webview.setZoomLevel).toHaveBeenNthCalledWith(2, 0)
+    expect(webview.setZoomLevel).not.toHaveBeenCalled()
+  })
+
+  it('treats an unnormalized held level as already applied', () => {
+    const webview = {
+      getZoomLevel: vi.fn(() => 1.26),
+      setZoomLevel: vi.fn()
+    }
+
+    expect(setBrowserPageZoomLevel(webview, 1.5)).toBe(1.5)
+    expect(webview.setZoomLevel).not.toHaveBeenCalled()
+  })
+})
+
+// A guest webview outlives its React pane (worktree switch, Settings visit), so
+// the level the USER applied has to outlive the pane too — otherwise the pane
+// re-seeds from the shared Settings default and hijacks an already-zoomed tab.
+describe('explicit pane zoom levels', () => {
+  it('reports null until the user zooms the tab', () => {
+    forgetExplicitBrowserPageZoomLevel('page-1')
+    expect(getExplicitBrowserPageZoomLevel('page-1')).toBeNull()
+  })
+
+  it('survives a pane remount so a later Settings default cannot hijack the tab', () => {
+    forgetExplicitBrowserPageZoomLevel('page-1')
+    rememberExplicitBrowserPageZoomLevel('page-1', 1.5)
+
+    // Remount: the pane seeds from the explicit level, not the shared default.
+    const settingsDefault = 0
+    expect(getExplicitBrowserPageZoomLevel('page-1') ?? settingsDefault).toBe(1.5)
+  })
+
+  it('is dropped when the guest is destroyed so a reused id cannot inherit it', () => {
+    rememberExplicitBrowserPageZoomLevel('page-1', 1.5)
+    forgetExplicitBrowserPageZoomLevel('page-1')
+    expect(getExplicitBrowserPageZoomLevel('page-1')).toBeNull()
+  })
+
+  it('keeps tabs independent', () => {
+    forgetExplicitBrowserPageZoomLevel('page-2')
+    rememberExplicitBrowserPageZoomLevel('page-1', 1.5)
+    expect(getExplicitBrowserPageZoomLevel('page-2')).toBeNull()
   })
 })
 
@@ -220,6 +281,34 @@ describe('browser pane zoom across reloads', () => {
     expect(pane.level).toBe(0.5)
     pane.load('https://b.example')
     expect(pane.level).toBe(0.5)
+  })
+})
+
+/**
+ * Chromium's HostZoomMap is keyed by HOST per partition, so two tabs on one
+ * hostname share live zoom and a reassert by either moves both. Suppressing the
+ * reassert to protect the sibling is exactly what #10800 fixed (an
+ * externally-changed level must snap back on reload), so the two requirements
+ * are the same write seen from opposite sides. What IS in our control is not
+ * emitting a redundant host-wide write.
+ */
+describe('browser panes sharing one hostname', () => {
+  it('skips the host-wide write when the pane already holds its level', () => {
+    let hostLevel = 0
+    const webviewFor = (): { getZoomLevel: () => number; setZoomLevel: (n: number) => void } => ({
+      getZoomLevel: () => hostLevel,
+      setZoomLevel: (level: number) => {
+        hostLevel = level
+      }
+    })
+    const tabA = webviewFor()
+    const tabB = webviewFor()
+
+    expect(applyBrowserPageZoom(tabA, 'in')).toBe(0.5)
+    // Tab B reasserts the level the host already carries: no write at all.
+    setBrowserPageZoomLevel(tabB, 0.5)
+
+    expect(hostLevel).toBe(0.5)
   })
 })
 

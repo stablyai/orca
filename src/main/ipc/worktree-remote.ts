@@ -17,6 +17,7 @@ import type {
   LocalBaseRefUpdateSuggestion,
   Repo,
   Worktree,
+  WorktreeCreateBaseFallback,
   WorktreeHeadIdentity,
   WorktreeMeta
 } from '../../shared/types'
@@ -99,9 +100,14 @@ import {
   prepareWorktreePushTargetWithExec
 } from './worktree-push-target-setup'
 import { isENOENT, registerWorktreeRootsForRepo } from './filesystem-auth'
-import { createWorktreeCopiedPaths, createWorktreeLinkedPaths } from './worktree-symlinks'
+import {
+  createWorktreeCopiedPaths,
+  createWorktreeLinkedPaths,
+  createWorktreeSharedPaths
+} from './worktree-symlinks'
 import { formatWorktreeIncludeCopyWarning } from './worktree-include-copy-budget'
 import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
+import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import type { IFilesystemProvider } from '../providers/types'
@@ -297,6 +303,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
       env: sequencedStartup.env,
       ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
       ...(isTuiAgent(createdWithAgent) ? { launchAgent: createdWithAgent } : {}),
+      ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
       startupCommandDelivery: sequencedStartup.startupCommandDelivery,
       telemetry: sequencedStartup.telemetry,
       activate: true
@@ -1569,8 +1576,32 @@ export async function createRemoteWorktree(
       'Could not resolve a default base ref for this repo. Pick a base branch explicitly and try again.'
     )
   }
-  const { baseBranch } = basePlan
+  let { baseBranch } = basePlan
   let { remoteTrackingBase } = basePlan
+  let baseFallback: WorktreeCreateBaseFallback | undefined
+
+  if (remoteTrackingBase) {
+    const hasRemoteTrackingBaseRef = await hasRemoteTrackingRefSsh(
+      provider,
+      repo.path,
+      remoteTrackingBase.ref
+    )
+    const hasNamedLocalBaseRef = await hasRemoteWorktreeBaseRef(provider, repo.path, baseBranch)
+    const hasFallbackLocalBaseRef =
+      !hasNamedLocalBaseRef &&
+      (await hasRemoteWorktreeBaseRef(provider, repo.path, remoteTrackingBase.branch))
+    if (!hasRemoteTrackingBaseRef && (hasNamedLocalBaseRef || hasFallbackLocalBaseRef)) {
+      // Why: branch reuse and conflict checks must see the local fallback too.
+      if (hasFallbackLocalBaseRef) {
+        baseBranch = remoteTrackingBase.branch
+      }
+      baseFallback = {
+        requestedRef: remoteTrackingBase.base,
+        localRef: baseBranch
+      }
+      remoteTrackingBase = null
+    }
+  }
 
   let branchName = ''
   let checkoutExistingBranch = false
@@ -1676,19 +1707,6 @@ export async function createRemoteWorktree(
 
   // Why: addWorktree/setup probes run inside the new path; older relays need that root registered before accepting git/fs ops there.
   await registerRequiredSshWorktreeCreateRoots(repo.connectionId!, [remotePath])
-
-  if (remoteTrackingBase) {
-    const hasRemoteTrackingBaseRef = await hasRemoteTrackingRefSsh(
-      provider,
-      repo.path,
-      remoteTrackingBase.ref
-    )
-    const hasLocalBaseRef =
-      hasRemoteTrackingBaseRef || (await hasRemoteWorktreeBaseRef(provider, repo.path, baseBranch))
-    if (!hasRemoteTrackingBaseRef && hasLocalBaseRef) {
-      remoteTrackingBase = null
-    }
-  }
 
   if (remoteTrackingBase) {
     try {
@@ -1864,6 +1882,10 @@ export async function createRemoteWorktree(
       ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
       : {}),
     ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
+    ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
+    ...(args.linkedTaskSourceContext !== undefined
+      ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
+      : {}),
     ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
   }
   const { worktree } = timing.timeSync('persist_metadata', () => {
@@ -1872,7 +1894,7 @@ export async function createRemoteWorktree(
   })
   const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
 
-  // Why: shared/symlink paths and `.worktreeinclude` copies are local-only; remote (SSH) support needs a new relay method + auth surface, so both are skipped here.
+  // Why: shared/symlink paths, `orca.yaml` shared directories, and `.worktreeinclude` copies are local-only; remote (SSH) support needs a new relay method + auth surface, so all are skipped here.
 
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
@@ -1923,6 +1945,7 @@ export async function createRemoteWorktree(
     ...(defaultTabs ? { defaultTabs } : {}),
     ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
     ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {}),
+    ...(baseFallback ? { baseFallback } : {}),
     timing: timing.finish()
   }
 }
@@ -1961,7 +1984,7 @@ export async function createLocalWorktree(
       ? await resolveLocalGitUsername(repo.path)
       : ''
 
-  const baseBranch = await resolveWorktreeCreateBase({
+  let baseBranch = await resolveWorktreeCreateBase({
     requestedBaseBranch: args.baseBranch,
     repoWorktreeBaseRef: repo.worktreeBaseRef,
     resolveDefaultBaseRef: () => resolveDefaultBaseRefWithLocalGit(localGitExecOptions),
@@ -2000,6 +2023,7 @@ export async function createLocalWorktree(
   }
 
   let remoteTrackingBase: RemoteTrackingBase | null = null
+  let baseFallback: WorktreeCreateBaseFallback | undefined
   let remoteTrackingRefresh: {
     base: RemoteTrackingBase
     hadLocalBaseRef: boolean
@@ -2019,10 +2043,29 @@ export async function createLocalWorktree(
         remoteTrackingBase,
         ...localWorktreeGitOptionArgs
       )
+      const hasNamedLocalBaseRef = await hasLocalWorktreeBaseRefWithOptions(
+        repo.path,
+        baseBranch,
+        localGitExecOptions
+      )
+      const hasFallbackLocalBaseRef =
+        !hasNamedLocalBaseRef &&
+        (await hasLocalWorktreeBaseRefWithOptions(
+          repo.path,
+          remoteTrackingBase.branch,
+          localGitExecOptions
+        ))
       const hasLocalBaseRef =
-        hasRemoteTrackingBaseRef ||
-        (await hasLocalWorktreeBaseRefWithOptions(repo.path, baseBranch, localGitExecOptions))
+        hasRemoteTrackingBaseRef || hasNamedLocalBaseRef || hasFallbackLocalBaseRef
       if (!hasRemoteTrackingBaseRef && hasLocalBaseRef) {
+        // Why: use the usable local branch when offline refresh cannot create its tracking ref.
+        if (hasFallbackLocalBaseRef) {
+          baseBranch = remoteTrackingBase.branch
+        }
+        baseFallback = {
+          requestedRef: remoteTrackingBase.base,
+          localRef: baseBranch
+        }
         remoteTrackingBase = null
       } else {
         emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
@@ -2447,6 +2490,10 @@ export async function createLocalWorktree(
       ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
       : {}),
     ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
+    ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
+    ...(args.linkedTaskSourceContext !== undefined
+      ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
+      : {}),
     ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
   }
   const { worktree } = timing.timeSync('persist_metadata', () => {
@@ -2465,6 +2512,17 @@ export async function createLocalWorktree(
   if (symlinkPaths.length > 0) {
     await timing.time('create_symlinks', async () => {
       await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths)
+    })
+  }
+
+  // Why: project-level `orca.yaml` shared directories add to (never replace) the per-user
+  // setting, so a repo's shared dirs reach every teammate (issue #10451).
+  const sharedDirectories = await timing.time('resolve_shared_directories', () =>
+    resolveWorktreeSharedDirectories(repo.path, localWorktreeGitOptions)
+  )
+  if (sharedDirectories.length > 0) {
+    await timing.time('create_shared_directories', async () => {
+      await createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
     })
   }
 
@@ -2558,6 +2616,7 @@ export async function createLocalWorktree(
       ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
       : {}),
     ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
+    ...(baseFallback ? { baseFallback } : {}),
     ...(stagedStartup.warning
       ? { warning: appendWorktreeCreateWarning(includeCopyWarning, stagedStartup.warning) }
       : includeCopyWarning

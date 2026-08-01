@@ -65,7 +65,11 @@ export function mergeNativeChatLiveSession(input: NativeChatLiveMergeInput): Nat
     transcriptLifecycle,
     hookHasWorkingSubagents ?? false
   )
-  if (loading && (sessionId !== null || status !== 'working')) {
+  // Why live work still wins: 'working' is what drives Stop-vs-Send, the typing
+  // indicator and the streaming preview, so forcing 'loading' over it renders an
+  // idle pane while the agent works. A known session with nothing to show yet is
+  // held on the loading surface by selectNativeChatViewState instead.
+  if (loading && status !== 'working') {
     return assembleNativeChatSession({ sources, sessionId, agent, status: 'loading' })
   }
   return assembleNativeChatSession({
@@ -77,7 +81,7 @@ export function mergeNativeChatLiveSession(input: NativeChatLiveMergeInput): Nat
 }
 
 /** Slack for comparing transcript timestamps to hook receipt times across hosts. */
-const LIFECYCLE_CLOCK_SKEW_SLACK_MS = 2_000
+export const LIFECYCLE_CLOCK_SKEW_SLACK_MS = 2_000
 
 function liveStatusOverride(
   hookState: AgentStatusState | null,

@@ -181,7 +181,7 @@ export function useHostedReviewActions({
           toast.success(
             isClosing
               ? translate(
-                  'auto.components.right.sidebar.HostedReviewActions.fa3ee9a515',
+                  'auto.components.right.sidebar.HostedReviewActions.closedToast',
                   '{{value0}} closed',
                   { value0: shortLabel }
                 )

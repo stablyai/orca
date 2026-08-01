@@ -36,6 +36,7 @@ import { useContextualTour } from '@/components/contextual-tours/use-contextual-
 import type {
   GitHubWorkItem,
   GitLabWorkItem,
+  JiraIssue,
   LinearIssue,
   SetupAgentStartupPolicy,
   OrcaHooks,
@@ -113,6 +114,8 @@ type NewWorkspaceComposerCardProps = {
   onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartNameModeChange?: (mode: SmartNameMode) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
+  onSmartJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  onOpenJiraSettings?: () => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
   /** True when an existing local branch is selected and can be reused. */
@@ -124,6 +127,7 @@ type NewWorkspaceComposerCardProps = {
   createMultiple?: boolean
   onCreateMultipleChange?: (next: boolean) => void
   smartNameGitHubSourceContext?: TaskSourceContext | null
+  smartNameJiraSourceContext?: TaskSourceContext | null
   /** Advisory shown under the name field when a fork PR can't accept maintainer pushes. */
   forkPushWarning: string | null
   detectedAgentIds: Set<TuiAgent> | null
@@ -354,6 +358,8 @@ export default function NewWorkspaceComposerCard({
   onSmartBranchSelect,
   onSmartNameModeChange,
   onSmartLinearIssueSelect,
+  onSmartJiraIssueSelect,
+  onOpenJiraSettings,
   smartNameSelection,
   onClearSmartNameSelection,
   canReuseSelectedBranch,
@@ -363,6 +369,7 @@ export default function NewWorkspaceComposerCard({
   createMultiple = false,
   onCreateMultipleChange,
   smartNameGitHubSourceContext,
+  smartNameJiraSourceContext,
   forkPushWarning,
   detectedAgentIds,
   onOpenAgentSettings,
@@ -795,9 +802,12 @@ export default function NewWorkspaceComposerCard({
             onGitLabItemSelect={onSmartGitLabItemSelect}
             onBranchSelect={onSmartBranchSelect}
             onLinearIssueSelect={onSmartLinearIssueSelect}
+            onJiraIssueSelect={onSmartJiraIssueSelect}
+            onOpenJiraSettings={onOpenJiraSettings}
             selectedSource={smartNameSelection}
             onClearSelectedSource={onClearSmartNameSelection}
             githubSourceContext={smartNameGitHubSourceContext}
+            jiraSourceContext={smartNameJiraSourceContext}
             disabled={selectedRepoRequiresConnection}
             disabledPlaceholder={translate(
               'auto.components.NewWorkspaceComposerCard.connectProjectFirst',

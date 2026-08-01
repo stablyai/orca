@@ -31,8 +31,10 @@ import {
   claudeRosterToSnapshots,
   claudeTeammateIdMatchesName,
   foldClaudeBackgroundTasksIntoRoster,
+  hasActiveClaudeNonAgentBackgroundWork,
   idleClaudeTeammateByName,
   readClaudeBackgroundAgentTasks,
+  reapRestoredClaudeSubagentsWithoutLiveAgent,
   stopClaudeSubagent,
   upsertWorkingClaudeSubagent,
   type ClaudeSubagentRoster
@@ -2483,9 +2485,30 @@ export function seedClaudeSubagentRosterFromSnapshots(
       agentType: snapshot.agentType,
       description: snapshot.description,
       // Why: the seed can be a phantom (child finished while Orca was down, SubagentStop lost); let a PRESENT background_tasks list omitting the id remove it, not gate the pane 'working' forever.
-      backgroundTasksAuthoritative: true
+      backgroundTasksAuthoritative: true,
+      // Why: an idle parent never emits that list, so the inventory reap alone can strand the seed; mark it for the liveness reap below.
+      restoredFromSnapshot: true
     })
   }
+}
+
+/** Reap this pane's unconfirmed restored seeds because no live agent process backs
+ *  the pane any more (its PTY died while Orca was down, so no finish hook could
+ *  arrive). Callers must have proven the pane is LOCAL-launched — a remote/SSH
+ *  agent runs on the far host and can never appear in a local process index.
+ *  Returns whether the roster changed. */
+export function reapRestoredClaudeSubagentsForDeadPane(
+  state: HookListenerState,
+  paneKey: string
+): boolean {
+  const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+  if (!roster || !reapRestoredClaudeSubagentsWithoutLiveAgent(roster)) {
+    return false
+  }
+  if (roster.size === 0) {
+    state.claudeSubagentRosterByPaneKey.delete(paneKey)
+  }
+  return true
 }
 
 /** Drop a child-owned waiting state when the child stops/idles, restoring the displaced lead state; without a stash, fall back to 'working' (a transient spinner beats a permanently stuck card). */
@@ -2578,6 +2601,9 @@ function normalizeClaudeEvent(
   if (!stateName) {
     return null
   }
+  const hasActiveNonAgentBackgroundWork =
+    (eventName === 'Stop' || eventName === 'StopFailure') &&
+    hasActiveClaudeNonAgentBackgroundWork(hookPayload)
 
   const eventAgentId = readString(hookPayload, 'agent_id')
   // Why: subagent/teammate events carry `agent_id` (lead's don't); child tool activity keeps its row live but must not become the lead's state or overwrite its tool/prompt caches (a live card would vanish).
@@ -2660,10 +2686,13 @@ function normalizeClaudeEvent(
     ...(stateBeforeWait ? { stateBeforeWait } : {})
   })
 
-  // Why: a lead Stop isn't "done" while subagents/teammates run (would show a finished row mid-flight); Claude re-wakes the lead, so a later empty-roster Stop resolves to done.
+  // Why: a lead Stop isn't done while children, shells, or crons remain live; a later drained Stop resolves it.
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
   const effectiveState =
-    stateName === 'done' && claudeRosterHasWorkingSubagent(roster) ? 'working' : stateName
+    stateName === 'done' &&
+    (hasActiveNonAgentBackgroundWork || claudeRosterHasWorkingSubagent(roster))
+      ? 'working'
+      : stateName
 
   return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     stateName: effectiveState,

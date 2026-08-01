@@ -159,6 +159,48 @@ describe('CodexRestartChip helpers', () => {
     ).toEqual(['Keep old account', 'Restart'])
   })
 
+  it('uses configuration wording for a home-route restart', async () => {
+    useAppStore.setState({
+      tabsByWorktree: {
+        'worktree-1': [
+          {
+            id: 'tab-1',
+            worktreeId: 'worktree-1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      codexRestartNoticeByPtyId: {
+        'pty-1': {
+          previousAccountLabel: 'System default',
+          nextAccountLabel: 'System default',
+          previousAccountId: null,
+          nextAccountId: null,
+          homeRouteChanged: true
+        }
+      }
+    })
+
+    await act(async () => {
+      root.render(React.createElement(CodexRestartChip, { worktreeId: 'worktree-1' }))
+    })
+
+    expect(container.textContent).toContain('Codex setup changed')
+    expect(container.textContent).toContain('This Codex session is using an outdated configuration')
+    expect(container.textContent).toContain(
+      'Restart this session to load your current Codex configuration.'
+    )
+    expect(
+      Array.from(container.querySelectorAll('button'), (button) => button.textContent?.trim())
+    ).toEqual(['Keep current session', 'Restart'])
+  })
+
   it('forgets the launch record when the user keeps the old account', async () => {
     const forgetStalePanes = vi.fn(() => Promise.resolve())
     Object.defineProperty(window, 'api', {

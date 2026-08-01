@@ -13,20 +13,11 @@ import { closeApp, resolveElectronMainPid } from '../../tools/win-update-e2e/app
 import { isPidAlive } from '../../tools/win-update-e2e/daemon-processes.mjs'
 
 describe('win-crash-survival-e2e proof contracts', () => {
-  it('keeps the packaged proof wired as a targeted pull-request gate', () => {
+  it('keeps the packaged proof manually dispatchable without a PR trigger', () => {
     const workflow = readFileSync('.github/workflows/win-crash-survival-e2e.yml', 'utf8')
-    expect(workflow).toMatch(/^  pull_request:/m)
+    expect(workflow).not.toMatch(/^  pull_request:/m)
+    expect(workflow).toMatch(/^  workflow_dispatch:/m)
     expect(workflow).not.toMatch(/^  push:/m)
-    expect(workflow).toContain("- 'src/main/daemon/**'")
-    expect(workflow).toContain("- 'src/main/index.ts'")
-    expect(workflow).toContain("- 'src/main/ipc/pty*.ts'")
-    expect(workflow).toContain("- 'src/main/startup/first-window-startup-services.ts'")
-    expect(workflow).toContain("- 'src/main/window/attach-main-window-services.ts'")
-    expect(workflow).toContain("- 'src/preload/**'")
-    expect(workflow).toContain("- 'src/renderer/src/components/terminal-pane/**'")
-    expect(workflow).toContain("- 'src/renderer/src/store/slices/terminals.ts'")
-    expect(workflow).toContain("- '!src/**/*.test.*'")
-    expect(workflow).toContain("- '!src/**/*.bench.*'")
     expect(workflow).toContain('--expect "$env:EXPECT"')
     expect(workflow).toContain('exit $LASTEXITCODE')
     expect(workflow).toContain("'!config/**/*.test.*'")

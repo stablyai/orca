@@ -96,7 +96,7 @@ export function AgentTerminalDialog({
             </DialogClose>
           </div>
           {card.ptyId ? (
-            <AgentTerminalPreview ptyId={card.ptyId} />
+            <AgentTerminalPreview ptyId={card.ptyId} terminalInput={card.terminalInput ?? null} />
           ) : (
             <div className="px-2.5 pb-2 text-[11px] text-muted-foreground">
               {translate(

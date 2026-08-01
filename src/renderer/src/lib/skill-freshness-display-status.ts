@@ -1,6 +1,7 @@
 import {
+  isSkillCopyNeedingAttention,
   isSkillScanIssueNeedingAttention,
-  SUPPORTED_GLOBAL_SKILL_TOPOLOGIES,
+  skillPlacementParticipatesInGlobalFreshness,
   type SkillFreshnessInventory
 } from '../../../shared/skill-freshness'
 
@@ -23,9 +24,20 @@ export function getSkillFreshnessDisplayStatus(
     if (installation.name !== skillName) {
       continue
     }
+    // Why: a project-owned copy is outside the global updater's reach, so it can neither
+    // stand in as evidence this skill is installed globally nor make the badge amber over
+    // drift Orca has no way to fix. Skipped before `hasPlacement` so a repo-only skill
+    // reports presence, not a freshness claim about a copy Orca does not manage.
+    if (!skillPlacementParticipatesInGlobalFreshness(installation)) {
+      continue
+    }
     hasPlacement = true
+    // Why: 'newer-known' is recognized official content ahead of this build — the
+    // updater's own install or a newer release's bytes. There is nothing to fix and
+    // nothing to update to, so amber would send the user chasing a phantom edit.
     if (
       installation.status !== 'current' &&
+      installation.status !== 'newer-known' &&
       !(installation.status === 'unrecognized' && installation.topology === 'plugin-cache')
     ) {
       hasBlockedCopy = true
@@ -57,21 +69,15 @@ export function hasSkillCopyNeedingAttention(
   inventory: SkillFreshnessInventory | null,
   skillName: string
 ): boolean {
+  // Why: the same participation filter the status above applies, or an unreadable plugin
+  // folder flags a repo-only skill the status calls merely installed.
   const placements = (inventory?.installations ?? []).filter(
-    (installation) => installation.name === skillName
+    (installation) =>
+      installation.name === skillName && skillPlacementParticipatesInGlobalFreshness(installation)
   )
   return (
     (placements.length > 0 &&
       Boolean(inventory?.scanIssues.some(isSkillScanIssueNeedingAttention))) ||
-    placements.some(
-      (installation) =>
-        installation.status !== 'current' &&
-        !(installation.status === 'unrecognized' && installation.topology === 'plugin-cache') &&
-        // Why: an out-of-date copy the command converges is ordinary work, not a problem.
-        !(
-          SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&
-          installation.status === 'outdated'
-        )
-    )
+    placements.some(isSkillCopyNeedingAttention)
   )
 }

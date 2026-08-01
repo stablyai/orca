@@ -48,6 +48,9 @@ describe('markLiveCodexSessionsForRestart', () => {
       return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
     })
     useAppStore.setState({
+      // Why: a prior test's remote-runtime selection must not silently move
+      // every later local pane out of the switch's lane.
+      settings: null as never,
       tabsByWorktree: {
         wt1: [
           {
@@ -78,7 +81,8 @@ describe('markLiveCodexSessionsForRestart', () => {
           ...originalWindow?.api?.pty,
           getForegroundProcess: vi.fn(),
           hasChildProcesses: vi.fn().mockResolvedValue(false),
-          inspectProcess: vi.fn()
+          inspectProcess: vi.fn(),
+          confirmForegroundProcess: vi.fn().mockResolvedValue(null)
         },
         codexAccounts: {
           ...originalWindow?.api?.codexAccounts,
@@ -120,6 +124,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
+    expect(window.api.codexAccounts.listStalePanes).not.toHaveBeenCalled()
   })
 
   it('marks every live Codex split pane and ignores non-Codex panes', async () => {
@@ -760,7 +765,8 @@ describe('markRestoredStaleCodexSessionsForRestart', () => {
           hasChildProcesses: vi.fn().mockResolvedValue(false),
           inspectProcess: vi
             .fn()
-            .mockResolvedValue({ foregroundProcess: 'codex', hasChildProcesses: false })
+            .mockResolvedValue({ foregroundProcess: 'codex', hasChildProcesses: false }),
+          confirmForegroundProcess: vi.fn().mockResolvedValue(null)
         },
         codexAccounts: {
           ...originalWindow?.api?.codexAccounts,
@@ -795,7 +801,30 @@ describe('markRestoredStaleCodexSessionsForRestart', () => {
     expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledWith({ ptyIds: ['pty-1'] })
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
       previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
+      nextAccountLabel: ACCOUNT_B,
+      previousAccountId: 'account-a',
+      nextAccountId: 'account-b'
+    })
+  })
+
+  it('keeps a system-default home-route change as a restart notice', async () => {
+    vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([
+      {
+        ptyId: 'pty-1',
+        launchAccountId: null,
+        activeAccountId: null,
+        reason: 'home-route-change'
+      }
+    ])
+
+    await markRestoredStaleCodexSessionsForRestart()
+
+    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
+      previousAccountLabel: 'System default',
+      nextAccountLabel: 'System default',
+      previousAccountId: null,
+      nextAccountId: null,
+      homeRouteChanged: true
     })
   })
 

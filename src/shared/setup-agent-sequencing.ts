@@ -1,3 +1,4 @@
+import { encodePowerShellCommand } from './powershell-command-encoding'
 import {
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
@@ -45,7 +46,11 @@ export function createSequencedSetupAgentCommands(args: {
 
   if (resolution.shell === 'windows') {
     return {
-      setupCommand: buildWindowsSetupCommand(resolution.command, markerPath, nonce),
+      setupCommand: buildWindowsSetupCommand(
+        resolution.runnerScriptPathForShell,
+        markerPath,
+        nonce
+      ),
       startupCommand: buildWindowsStartupCommand(markerPath, nonce, waitTimeoutSeconds),
       startupEnv: {
         [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand
@@ -165,17 +170,33 @@ function hasUnquotedPosixCommandSeparator(command: string): boolean {
   return false
 }
 
-function buildWindowsSetupCommand(setupCommand: string, markerPath: string, nonce: string): string {
-  return wrapCmd([
-    `set "ORCA_SETUP_MARKER=${escapeCmdSetValue(markerPath)}"`,
-    `set "ORCA_SETUP_NONCE=${escapeCmdSetValue(nonce)}"`,
-    'del /f /q "!ORCA_SETUP_MARKER!" "!ORCA_SETUP_MARKER!.tmp" 2>nul',
-    `call ${setupCommand}`,
-    'set "ORCA_SETUP_STATUS=!ERRORLEVEL!"',
-    '> "!ORCA_SETUP_MARKER!.tmp" echo !ORCA_SETUP_NONCE!:!ORCA_SETUP_STATUS!',
-    'move /y "!ORCA_SETUP_MARKER!.tmp" "!ORCA_SETUP_MARKER!" >nul',
-    'exit /b !ORCA_SETUP_STATUS!'
-  ])
+function buildWindowsSetupCommand(
+  runnerScriptPath: string,
+  markerPath: string,
+  nonce: string
+): string {
+  // Why: delayed expansion keeps path metacharacters as data when cmd invokes the batch runner.
+  const script = [
+    `$runner = ${quotePowerShellString(runnerScriptPath)}`,
+    `$marker = ${quotePowerShellString(markerPath)}`,
+    '$tmp = $marker + ".tmp"',
+    `$nonce = ${quotePowerShellString(nonce)}`,
+    'Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue',
+    '$processInfo = [System.Diagnostics.ProcessStartInfo]::new()',
+    '$processInfo.FileName = $env:ComSpec',
+    '$processInfo.Arguments = \'/d /s /v:on /c ""!ORCA_SETUP_RUNNER!""\'',
+    '$processInfo.UseShellExecute = $false',
+    '$processInfo.EnvironmentVariables["ORCA_SETUP_RUNNER"] = $runner',
+    '$process = [System.Diagnostics.Process]::Start($processInfo)',
+    '$process.WaitForExit()',
+    '$setupStatus = $process.ExitCode',
+    '$utf8 = [System.Text.UTF8Encoding]::new($false)',
+    '[System.IO.File]::WriteAllText($tmp, ($nonce + ":" + $setupStatus + [Environment]::NewLine), $utf8)',
+    'Move-Item -LiteralPath $tmp -Destination $marker -Force',
+    'exit $setupStatus'
+  ].join('; ')
+
+  return encodePowerShellInvocation(script)
 }
 
 function buildWindowsStartupCommand(
@@ -187,10 +208,15 @@ function buildWindowsStartupCommand(
   // Why: native Windows setup runners launch through cmd.exe, but PowerShell
   // gives us safe bounded file polling/parsing without a fragile batch label loop.
   const script = [
-    '$marker = $env:ORCA_SETUP_MARKER',
+    `$marker = ${quotePowerShellString(markerPath)}`,
+    'if ([string]::IsNullOrWhiteSpace($marker)) {',
+    '  [Console]::Error.WriteLine("Missing setup marker path.")',
+    '  exit 1',
+    '}',
     '$tmp = $marker + ".tmp"',
-    '$nonce = $env:ORCA_SETUP_NONCE',
+    `$nonce = ${quotePowerShellString(nonce)}`,
     `$deadline = (Get-Date).AddSeconds(${timeout})`,
+    '[Console]::Error.WriteLine("Waiting for setup to finish before starting agent...")',
     'while ($true) {',
     '  if (Test-Path -LiteralPath $marker) {',
     '    $content = Get-Content -LiteralPath $marker -TotalCount 1',
@@ -220,18 +246,11 @@ function buildWindowsStartupCommand(
     '}'
   ].join('; ')
 
-  return wrapCmd([
-    `set "ORCA_SETUP_MARKER=${escapeCmdSetValue(markerPath)}"`,
-    `set "ORCA_SETUP_NONCE=${escapeCmdSetValue(nonce)}"`,
-    'echo Waiting for setup to finish before starting agent... 1>&2',
-    `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ${quoteWindowsArg(script)}`,
-    'set "ORCA_SETUP_STATUS=!ERRORLEVEL!"',
-    'exit /b !ORCA_SETUP_STATUS!'
-  ])
+  return encodePowerShellInvocation(script)
 }
 
-function wrapCmd(parts: string[]): string {
-  return `cmd.exe /d /s /v:on /c ${quoteWindowsArg(parts.join(' & '))}`
+function encodePowerShellInvocation(script: string): string {
+  return `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encodePowerShellCommand(script)}`
 }
 
 function quotePosixArg(value: string): string {
@@ -241,12 +260,8 @@ function quotePosixArg(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
-function quoteWindowsArg(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`
-}
-
-function escapeCmdSetValue(value: string): string {
-  return value.replace(/"/g, '""').replace(/[%!^]/g, (char) => `^${char}`)
+function quotePowerShellString(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`
 }
 
 export function getSetupAgentSequenceShellForTests(

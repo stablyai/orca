@@ -1610,8 +1610,17 @@ export class BrowserManager {
     guest: Electron.WebContents
   ): Promise<boolean> {
     if (!enabled) {
+      const hadActiveGrabOp = this.hasActiveGrabOp(browserTabId)
       this.cancelGrabOp(browserTabId, 'user')
-      return true
+      if (hadActiveGrabOp) {
+        return true
+      }
+      try {
+        await guest.executeJavaScript(buildGuestOverlayScript('teardown'))
+        return true
+      } catch {
+        return false
+      }
     }
     // Why: inject the overlay runtime eagerly on arm so the hover UI appears instantly; re-injection is idempotent/safe.
     try {
@@ -1714,7 +1723,9 @@ export class BrowserManager {
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
         shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
         isMobileEmulatorEnabled: () => this.settingsResolver?.().mobileEmulatorEnabled !== false,
-        getKeybindings: () => this.settingsResolver?.().keybindings
+        getKeybindings: () => this.settingsResolver?.().keybindings,
+        resolveWorktreeId: (tabId) => this.worktreeIdByTabId.get(tabId) ?? null,
+        resolveWorkspaceId: (tabId) => this.workspaceIdByPageId.get(tabId) ?? null
       })
     )
   }

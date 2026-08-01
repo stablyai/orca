@@ -21,16 +21,10 @@ import {
   isWindowsSignatureCheckUnavailableFailure,
   isWindowsSignatureMismatchFailure
 } from '../../../shared/updater-windows-signature-check'
+import { getReleaseNotesUrlForVersion } from '../../../shared/release-channel'
 import { translate } from '@/i18n/i18n'
 
 // ── Helpers ──────────────────────────────────────────────────────────
-
-function releaseUrlForVersion(version: string | null): string {
-  // Why: fall back to the plain releases listing (not /releases/latest) — /latest also breaks when GitHub's API is degraded.
-  return version
-    ? `https://github.com/stablyai/orca/releases/tag/v${version}`
-    : 'https://github.com/stablyai/orca/releases'
-}
 
 function isAnimatedGif(url: string | undefined): boolean {
   return typeof url === 'string' && url.toLowerCase().endsWith('.gif')
@@ -357,7 +351,7 @@ export function UpdateCard() {
                 'This turns on a process-wide Electron networking switch after restart. Use it for corporate VPNs or proxies that reject HTTP/2 update downloads.'
               ),
               detail: compatibilitySetupError ?? status.message,
-              releaseUrl: releaseUrlForVersion(cachedVersion),
+              releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
               primaryAction: {
                 label: translate('auto.components.UpdateCard.933c6fdf5b', 'Enable & Restart'),
                 pendingLabel: 'Restarting...',
@@ -379,7 +373,7 @@ export function UpdateCard() {
                 ),
                 detail: status.message,
                 // Why: linking the rejected version would let users bypass the publisher check by re-running it.
-                releaseUrl: releaseUrlForVersion(null),
+                releaseUrl: getReleaseNotesUrlForVersion(null),
                 manualLabel: translate(
                   'auto.components.UpdateCard.c9ff9b9ec2',
                   'Check official releases'
@@ -396,7 +390,7 @@ export function UpdateCard() {
                     "The signature check couldn't run — usually because antivirus software blocked it. Retry the download, or get the installer from our official releases."
                   ),
                   detail: status.message,
-                  releaseUrl: releaseUrlForVersion(cachedVersion),
+                  releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
                   primaryAction: {
                     label: translate('auto.components.UpdateCard.48565a32bc', 'Retry Download'),
                     onClick: handleUpdate
@@ -409,7 +403,7 @@ export function UpdateCard() {
                     ? 'Could not complete the update.'
                     : 'Could not check for updates.',
                   detail: status.message,
-                  releaseUrl: releaseUrlForVersion(cachedVersion),
+                  releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
                   // Why: check-time failures are often transient, so offer a Re-check instead of forcing manual download.
                   primaryAction: cachedVersion
                     ? {
@@ -428,7 +422,7 @@ export function UpdateCard() {
             title: translate('auto.components.UpdateCard.4cf109845a', 'Update Error'),
             summary: 'Could not restart to install the update.',
             detail: installError,
-            releaseUrl: releaseUrlForVersion(cachedVersion),
+            releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
             primaryAction: {
               label: translate('auto.components.UpdateCard.2c2d3e03ca', 'Try Again'),
               onClick: handleInstallRetry
@@ -598,7 +592,7 @@ export function UpdateCard() {
     const releaseUrl = isLocalBuild
       ? undefined
       : (('releaseUrl' in status ? status.releaseUrl : undefined) ??
-        releaseUrlForVersion(status.version))
+        getReleaseNotesUrlForVersion(status.version))
 
     if (isRichMode && changelog) {
       return (
@@ -914,7 +908,7 @@ function DownloadingContent({
           className="text-xs text-muted-foreground underline hover:text-foreground self-start"
           onClick={() =>
             void window.api.shell.openUrl(
-              release ? release.releaseNotesUrl : releaseUrlForVersion(version)
+              release ? release.releaseNotesUrl : getReleaseNotesUrlForVersion(version)
             )
           }
         >

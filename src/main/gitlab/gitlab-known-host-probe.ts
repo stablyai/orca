@@ -32,13 +32,30 @@ export function rememberGlabKnownHost(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): void {
-  const normalizedHost = normalizeGitLabHost(host)
+  rememberGlabKnownHosts([host], connectionId, localGitOptions)
+}
+
+export function rememberGlabKnownHosts(
+  hosts: readonly string[],
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): void {
   const key = knownHostsExecutionKey(connectionId, localGitOptions)
-  const cached = knownHostsCacheByExecutionContext.get(key)
-  if (!cached || cached.map(normalizeGitLabHost).includes(normalizedHost)) {
+  const cached = knownHostsCacheByExecutionContext.get(key) ?? DEFAULT_GITLAB_HOSTS
+  const seen = new Set(cached.map(normalizeGitLabHost))
+  const additions: string[] = []
+  for (const host of hosts) {
+    const normalizedHost = normalizeGitLabHost(host)
+    if (seen.has(normalizedHost)) {
+      continue
+    }
+    seen.add(normalizedHost)
+    additions.push(normalizedHost)
+  }
+  if (additions.length === 0) {
     return
   }
-  knownHostsCacheByExecutionContext.set(key, [...cached, normalizedHost])
+  knownHostsCacheByExecutionContext.set(key, [...cached, ...additions])
 }
 
 export async function getGlabKnownHosts(
@@ -80,12 +97,13 @@ async function probeGlabKnownHosts(
         : {})
     })
     const hosts = parseGlabAuthStatusHosts(`${stdout}\n${stderr}`)
-    const merged = Array.from(new Set([...DEFAULT_GITLAB_HOSTS, ...hosts]))
+    const remembered = knownHostsCacheByExecutionContext.get(key) ?? []
+    const merged = Array.from(new Set([...DEFAULT_GITLAB_HOSTS, ...remembered, ...hosts]))
     knownHostsCacheByExecutionContext.set(key, merged)
     return merged
   } catch {
     // Keep failures uncached so auth or tunnel recovery is discovered later.
-    return [...DEFAULT_GITLAB_HOSTS]
+    return knownHostsCacheByExecutionContext.get(key) ?? [...DEFAULT_GITLAB_HOSTS]
   }
 }
 

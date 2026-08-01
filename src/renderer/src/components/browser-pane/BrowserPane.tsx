@@ -141,7 +141,9 @@ import {
   browserPageZoomLevelToPercent,
   DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
   getBrowserPageZoomIndicatorState,
+  getExplicitBrowserPageZoomLevel,
   normalizeBrowserPageZoomLevel,
+  rememberExplicitBrowserPageZoomLevel,
   setBrowserPageZoomLevel,
   type BrowserPageZoomDirection
 } from './browser-page-zoom'
@@ -751,13 +753,31 @@ function retryBrowserTabLoad(
   webview.src = retryUrl
 }
 
+export type BrowserFindShortcutScope = 'focused' | 'inactive' | 'owned-target'
+
+function browserOverlayOwnsShortcutTarget(
+  target: EventTarget | null,
+  browserTabId: string
+): boolean {
+  if (!(target instanceof Element)) {
+    return false
+  }
+  return (
+    target.closest('[data-browser-overlay-tab-id]')?.getAttribute('data-browser-overlay-tab-id') ===
+    browserTabId
+  )
+}
+
 export default function BrowserPane({
   browserTab,
-  isActive
+  isActive,
+  findShortcutScope
 }: {
   browserTab: BrowserWorkspaceState
   isActive: boolean
+  findShortcutScope?: BrowserFindShortcutScope
 }): React.JSX.Element {
+  const resolvedFindShortcutScope = findShortcutScope ?? (isActive ? 'focused' : 'inactive')
   const activeRuntimeEnvironmentId = useAppStore((s) =>
     getRuntimeEnvironmentIdForWorktree(s, browserTab.worktreeId)
   )
@@ -850,6 +870,9 @@ export default function BrowserPane({
               sessionProfileId={browserTab.sessionProfileId ?? null}
               sessionPartition={browserTab.sessionPartition ?? null}
               isActive={isActive && page.id === activeBrowserPage?.id}
+              findShortcutScope={
+                page.id === activeBrowserPage?.id ? resolvedFindShortcutScope : 'inactive'
+              }
               isAutomationVisible={automationVisiblePageIds.has(page.id)}
               isMobileDriven={mobileDrivenPageIds.has(page.id)}
               inputLocked={activeBrowserDriver.kind === 'mobile'}
@@ -2753,6 +2776,7 @@ function BrowserPagePane({
   sessionProfileId,
   sessionPartition,
   isActive,
+  findShortcutScope,
   isAutomationVisible,
   isMobileDriven,
   inputLocked,
@@ -2765,6 +2789,7 @@ function BrowserPagePane({
   sessionProfileId: string | null
   sessionPartition: string | null
   isActive: boolean
+  findShortcutScope: BrowserFindShortcutScope
   isAutomationVisible: boolean
   isMobileDriven: boolean
   inputLocked: boolean
@@ -2827,10 +2852,14 @@ function BrowserPagePane({
   const setBrowserDefaultZoomLevel = useAppStore((state) => state.setBrowserDefaultZoomLevel)
   const normalizedBrowserDefaultZoomLevel = normalizeBrowserPageZoomLevel(browserDefaultZoomLevel)
   const browserDefaultZoomPercent = browserPageZoomLevelToPercent(normalizedBrowserDefaultZoomLevel)
-  // Why: the level THIS pane should hold. Seeded once from the configured default ("applied to newly
+  // Why: the level THIS pane should hold. Seeded from the configured default ("applied to newly
   // opened browser tabs") and moved only by zooming this pane, so a reload can't broadcast another
-  // tab's zoom through the shared setting.
-  const paneZoomLevelRef = useRef(normalizedBrowserDefaultZoomLevel)
+  // tab's zoom through the shared setting. Why the module-level lookup: the guest webview outlives
+  // this component (worktree switch, Settings visit), so re-seeding on remount would let a later
+  // Settings change retroactively hijack a tab the user already zoomed.
+  const paneZoomLevelRef = useRef(
+    getExplicitBrowserPageZoomLevel(browserTab.id) ?? normalizedBrowserDefaultZoomLevel
+  )
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
   const faviconUrlRef = useRef<string | null>(browserTab.faviconUrl)
   const initialBrowserUrlRef = useRef(browserTab.url)
@@ -3441,12 +3470,18 @@ function BrowserPagePane({
   // Cmd/Ctrl+F — find in page (renderer path: focus on browser chrome)
   // Why: unlike bare C/S grab shortcuts, Cmd+F should always open find even from the address bar (matches Chrome/Safari).
   useEffect(() => {
-    if (!isActive) {
+    if (findShortcutScope === 'inactive') {
       return
     }
     const shortcutPlatform = getShortcutPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (!keybindingMatchesAction('browser.find', e, shortcutPlatform, keybindings)) {
+        return
+      }
+      if (
+        findShortcutScope === 'owned-target' &&
+        !browserOverlayOwnsShortcutTarget(e.target, workspaceId)
+      ) {
         return
       }
       e.preventDefault()
@@ -3455,7 +3490,7 @@ function BrowserPagePane({
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isActive, keybindings])
+  }, [findShortcutScope, keybindings, workspaceId])
 
   // Cmd/Ctrl+F — find in page (IPC path: focus inside webview guest)
   // Why: a focused guest is a separate Chromium process, so main forwards the chord back here.
@@ -3463,10 +3498,13 @@ function BrowserPagePane({
     if (!isActive) {
       return
     }
-    return window.api.ui.onFindInBrowserPage(() => {
-      setFindOpen(true)
-    })
-  }, [isActive])
+    return window.api.ui.onFindInBrowserPage(
+      { browserPageId: browserTab.id, browserWorkspaceId: workspaceId },
+      () => {
+        setFindOpen(true)
+      }
+    )
+  }, [browserTab.id, isActive, workspaceId])
 
   // Browser history shortcuts (renderer path: focus on browser chrome)
   // Why: macOS can't deliver Logitech side-buttons to Electron; Logi Options+ remaps them to history chords, handled here when chrome is focused.
@@ -3566,6 +3604,7 @@ function BrowserPagePane({
       const nextLevel = applyBrowserPageZoom(webviewRef.current, direction)
       if (nextLevel !== null) {
         paneZoomLevelRef.current = nextLevel
+        rememberExplicitBrowserPageZoomLevel(browserTabIdRef.current, nextLevel)
         setBrowserDefaultZoomLevel(nextLevel)
         showBrowserZoomFeedback(nextLevel)
       }

@@ -403,6 +403,80 @@ describe('ProjectCombobox', () => {
     expect(field().getAttribute('aria-describedby')).toBe('project-error')
   })
 
+  // Empty query + >=6 matches + a folder group triggers sectioning, which sinks
+  // folders below Projects. Arming raw rank order armed the BOTTOM row, so Enter
+  // on open created the workspace in the folder group.
+  const sectionedOptions: NewWorkspaceProjectOption[] = [
+    ...Array.from({ length: 5 }, (_, index) => ({
+      kind: 'project' as const,
+      id: `project-${index}`,
+      projectId: `project-${index}`,
+      displayName: `svc-${index}`,
+      badgeColor: '#111111',
+      detail: `stablyai/svc-${index}`
+    })),
+    {
+      kind: 'project-group',
+      id: 'project-group:apps',
+      projectGroupId: 'apps',
+      displayName: 'Apps',
+      badgeColor: '#333333',
+      detail: '/tmp/apps',
+      parentPath: '/tmp/apps',
+      connectionId: null
+    }
+  ]
+
+  it('arms the first rendered row when sections reorder the list', () => {
+    act(() => {
+      root.render(
+        <ProjectCombobox options={sectionedOptions} value={null} onValueChange={vi.fn()} />
+      )
+    })
+    openList()
+
+    const rows = Array.from(container.querySelectorAll<HTMLElement>('[role="option"]'))
+    expect(rows.length).toBeGreaterThan(1)
+    expect(rows[0]?.getAttribute('data-armed')).toBe('true')
+    expect(rows.filter((row) => row.getAttribute('data-armed') === 'true')).toHaveLength(1)
+  })
+
+  it('commits the top row on Enter rather than the folder group sectioned to the bottom', () => {
+    const onValueChange = vi.fn()
+
+    act(() => {
+      root.render(
+        <ProjectCombobox options={sectionedOptions} value={null} onValueChange={onValueChange} />
+      )
+    })
+    act(() => {
+      container
+        .querySelector<HTMLElement>('[data-project-combobox-root="true"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    act(() => {
+      field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+
+    expect(onValueChange).toHaveBeenCalledWith('project-0')
+    expect(onValueChange).not.toHaveBeenCalledWith('project-group:apps')
+  })
+
+  it('steps ArrowDown to the next rendered row instead of jumping across sections', () => {
+    act(() => {
+      root.render(
+        <ProjectCombobox options={sectionedOptions} value={null} onValueChange={vi.fn()} />
+      )
+    })
+    openList()
+    act(() => {
+      field().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    })
+
+    const rows = Array.from(container.querySelectorAll<HTMLElement>('[role="option"]'))
+    expect(rows[1]?.getAttribute('data-armed')).toBe('true')
+  })
+
   it('owns every option from the listbox, with no unroled wrapper in between', () => {
     act(() => {
       root.render(

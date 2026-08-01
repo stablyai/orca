@@ -1,5 +1,6 @@
 import {
   findKilledPlugin,
+  isPluginKillListTooFarInFuture,
   pluginKillListSchema,
   type PluginKillList,
   type PluginKillListEntry
@@ -75,6 +76,9 @@ export class PluginKillListService {
   private async performRefresh(): Promise<PluginKillList> {
     await this.initialize()
     const fetched = pluginKillListSchema.parse(await this.fetcher())
+    if (isPluginKillListTooFarInFuture(fetched)) {
+      throw new Error('refusing a plugin kill list generated too far in the future')
+    }
     if (
       this.currentList &&
       Date.parse(fetched.generatedAt) < Date.parse(this.currentList.generatedAt)
@@ -127,7 +131,11 @@ export async function fetchPluginKillList(
     offset += chunk.byteLength
   }
   try {
-    return pluginKillListSchema.parse(JSON.parse(new TextDecoder().decode(bytes)))
+    const parsed = pluginKillListSchema.parse(JSON.parse(new TextDecoder().decode(bytes)))
+    if (isPluginKillListTooFarInFuture(parsed)) {
+      throw new Error('generatedAt is too far in the future')
+    }
+    return parsed
   } catch (error) {
     throw new Error(
       `invalid plugin kill-list response: ${error instanceof Error ? error.message : String(error)}`

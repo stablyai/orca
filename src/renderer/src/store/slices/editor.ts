@@ -39,6 +39,10 @@ import type {
 } from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
+import {
+  clampCombinedDiffFileTreeWidth,
+  COMBINED_DIFF_FILE_TREE_DEFAULT_WIDTH
+} from '../../../../shared/combined-diff-file-tree-width'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
 import { invalidateAutomaticPushTargetUpstreamStatusCache } from '@/components/right-sidebar/push-target-upstream-refresh-cache'
@@ -404,6 +408,10 @@ export type EditorSlice = {
   // Markdown table of contents panel sizing
   markdownTocPanelWidth: number
   setMarkdownTocPanelWidth: (width: number) => void
+
+  // Combined diff file tree sizing
+  combinedDiffFileTreeWidth: number
+  setCombinedDiffFileTreeWidth: (width: number) => void
 
   // Right sidebar
   rightSidebarOpen: boolean
@@ -1432,6 +1440,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   setMarkdownTocPanelWidth: (width) =>
     set((s) => ({
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(width, undefined, s.markdownTocPanelWidth)
+    })),
+
+  // Combined diff file tree sizing
+  combinedDiffFileTreeWidth: COMBINED_DIFF_FILE_TREE_DEFAULT_WIDTH,
+  setCombinedDiffFileTreeWidth: (width) =>
+    set((s) => ({
+      combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
+        width,
+        undefined,
+        s.combinedDiffFileTreeWidth
+      )
     })),
 
   // Right sidebar

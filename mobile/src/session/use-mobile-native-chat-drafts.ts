@@ -8,6 +8,8 @@ import {
   type UnconfirmedSend
 } from './mobile-native-chat-draft-reconcile'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
+import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 
 export type MobileNativeChatPendingMessage = {
   id: string
@@ -41,11 +43,26 @@ export function useMobileNativeChatDrafts(args: {
   tabId: string | null
   sessionId: string | null
   messages: readonly NativeChatMessage[]
+  /** Host-provided launch context still parked as an unsent TUI-input draft. */
+  launchDraft?: string | null
+  launchDraftCreatedAt?: number | null
+  /** Whether the tab is currently resolved to the chat view. Off-chat the
+   *  launch-draft effects hold their state instead of acting on it. */
+  chatActive?: boolean
+  /** `messages` is not yet this session's real history (read in flight, or the
+   *  transcript still belongs to the previously active tab), so it cannot be
+   *  trusted to decline or retire the seed. */
+  transcriptLoading?: boolean
 }): {
   composerText: string
   setComposerText: Dispatch<SetStateAction<string>>
   pending: MobileNativeChatPendingMessage[]
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
+  /** Launch-context text still believed to be parked on the agent's TUI input
+   *  line, or null once it has been declined or retired. Send paths size their
+   *  pre-clear from it, since one Ctrl+U clears only one logical line. */
+  readSeededLaunchDraft: () => string | null
+  readSeededLaunchDraftSeed: () => MobileNativeChatLaunchDraftSeed | null
   /** Clear the composer at send time, before the RPC settles. */
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   /** Put the text back after a definite rejection, unless newer edits exist. */
@@ -57,7 +74,17 @@ export function useMobileNativeChatDrafts(args: {
     onUnconfirmed: () => void
   ) => void
 } {
-  const { hostId, worktreeId, tabId, sessionId, messages } = args
+  const {
+    hostId,
+    worktreeId,
+    tabId,
+    sessionId,
+    messages,
+    launchDraft,
+    launchDraftCreatedAt,
+    chatActive = true,
+    transcriptLoading
+  } = args
   const draftKey = mobileNativeChatScopeKey(hostId, worktreeId, tabId)
   const pendingKey = draftKey && sessionId ? `${draftKey}\0${sessionId}` : null
   const [drafts, setDrafts] = useState<Record<string, string>>({})
@@ -72,6 +99,16 @@ export function useMobileNativeChatDrafts(args: {
   const activePendingKeyRef = useRef(pendingKey)
   activePendingKeyRef.current = pendingKey
   const mountedRef = useRef(false)
+
+  const { readSeededLaunchDraft, readSeededLaunchDraftSeed } = useMobileNativeChatLaunchDraftSeed({
+    draftKey,
+    messages,
+    launchDraft,
+    launchDraftCreatedAt,
+    chatActive,
+    transcriptLoading,
+    setDrafts
+  })
 
   const setComposerText: Dispatch<SetStateAction<string>> = useCallback(
     (value) => {
@@ -283,6 +320,8 @@ export function useMobileNativeChatDrafts(args: {
     setComposerText,
     pending,
     captureSendOrigin,
+    readSeededLaunchDraft,
+    readSeededLaunchDraftSeed,
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,

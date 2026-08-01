@@ -23,7 +23,6 @@ import {
   CommandEmpty,
   CommandItem
 } from '@/components/ui/command'
-import { branchName } from '@/lib/git-utils'
 import { parseGitHubIssueOrPRNumber, parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import { getLinkedWorkItemSuggestedName, getLinkedWorkItemWorkspaceName } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
@@ -48,6 +47,10 @@ import {
   type MatchRange,
   type PaletteSearchResult
 } from '@/lib/worktree-palette-search'
+import {
+  resolveWorktreeBranchLabel,
+  resolveWorktreeDisplayName
+} from '@/lib/worktree-default-display-name'
 import {
   CREATE_WORKTREE_ITEM_ID,
   createWorktreePaletteRequestGuard,
@@ -1264,22 +1267,25 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   )
 
   const handleSelectWorktree = useCallback(
-    (worktreeId: string) => {
-      const worktree = findWorktreeById(useAppStore.getState().worktreesByRepo, worktreeId)
-      if (!worktree) {
+    (worktree: Worktree) => {
+      const current = useAppStore.getState().getKnownWorktreeById(worktree.id, worktree.hostId)
+      if (!current) {
         toast.error(
           translate('auto.components.WorktreeJumpPalette.2c38630a01', 'Workspace no longer exists')
         )
         return
       }
-      const activation = activateAndRevealWorktree(worktreeId)
+      const activation = activateAndRevealWorktree(
+        worktree.id,
+        worktree.hostId ? { executionHostId: worktree.hostId } : {}
+      )
       recordFeatureInteraction('cmd-j-workspace-open')
       skipRestoreFocusRef.current = true
       closeModal()
       setSelectedItemId('')
       // Why: #9939 — the unscoped fallback grabs the first terminal in the document, which is
       // often the worktree we just left, now hidden. Focus the destination's own tab instead.
-      if (!queueWorkspaceActivationTerminalFocus(worktreeId, activation)) {
+      if (!queueWorkspaceActivationTerminalFocus(worktree.id, activation)) {
         focusFallbackSurface()
       }
     },
@@ -1301,7 +1307,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }
       // Why: capture page info before activateAndRevealWorktree mutates store state — a later findBrowserSelection would be unreliable.
       const { worktree, workspace, page } = selection
-      const activated = activateAndRevealWorktree(worktree.id)
+      const activated = activateAndRevealWorktree(
+        worktree.id,
+        worktree.hostId ? { executionHostId: worktree.hostId } : {}
+      )
       if (!activated) {
         toast.error(
           translate('auto.components.WorktreeJumpPalette.2c38630a01', 'Workspace no longer exists')
@@ -1467,7 +1476,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const handleSelectItem = useCallback(
     (item: PaletteItem) => {
       if (item.type === 'worktree') {
-        handleSelectWorktree(item.worktree.id)
+        handleSelectWorktree(item.worktree)
       } else if (item.type === 'project-target') {
         handleSelectProjectTarget(item.result)
       } else if (item.type === 'browser-page') {
@@ -1794,7 +1803,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 const worktree = entry.worktree
                 const repo = repoMap.get(worktree.repoId)
                 const repoName = repo?.displayName ?? ''
-                const branch = branchName(worktree.branch)
+                // Why: both must match searchWorktrees' resolution, or highlight ranges land on
+                // the wrong text — and a branch-less row would throw here before search ever ran.
+                const branch = resolveWorktreeBranchLabel(worktree)
+                const worktreeLabel = resolveWorktreeDisplayName(worktree)
                 const status = getWorktreeStatus(
                   tabsByWorktree[worktree.id] ?? [],
                   browserTabsByWorktree[worktree.id] ?? [],
@@ -1862,11 +1874,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                             <span className="truncate text-[14px] font-semibold text-foreground">
                               {entry.match.displayNameRange ? (
                                 <HighlightedText
-                                  text={worktree.displayName}
+                                  text={worktreeLabel}
                                   matchRange={entry.match.displayNameRange}
                                 />
                               ) : (
-                                worktree.displayName
+                                worktreeLabel
                               )}
                             </span>
                             {isCurrentWorktree && (

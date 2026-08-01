@@ -38,6 +38,7 @@ import {
   gitStreamStdout
 } from './runner'
 import { StatusPorcelainParser } from '../../shared/git-status-porcelain-parser'
+import { findExistingWorktreeSymlinkPaths } from './worktree-symlink-detection'
 import { capGitStatusEntries, resolveGitStatusLimit } from '../../shared/git-status-limit'
 import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from './max-buffer-overflow'
 import {
@@ -51,6 +52,7 @@ import { getLargeDiffRenderLimit } from '../../shared/large-diff-render-limit'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
+import { GitStatusReadLeaseOwner } from './git-status-read-lease-owner'
 import { parseGitRevListFirstParentOid } from '../../shared/git-rev-list-output'
 import {
   beginGitStatusLineStatsCacheWrite,
@@ -91,12 +93,12 @@ const effectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatu
 const retiredEffectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
 const gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult>()
 const effectiveUpstreamStatusWriteGeneration = new Map<string, number>()
-const statusReadsInFlight = new Map<string, Promise<GitStatusResult>>()
+const statusReadLeaseOwner = new GitStatusReadLeaseOwner<GitStatusResult>()
 
 // Why: clear both diff and status in-flight caches; clearing only diff would let getStatus() join a pre-mutation read.
 export function invalidateGitReadCaches(): void {
   gitDiffReadDedupe.clear()
-  statusReadsInFlight.clear()
+  statusReadLeaseOwner.invalidate()
   clearGitStatusLineStatsCache()
   clearSubmodulePathsCache()
   resolvedUpstreamNameCache.clear()
@@ -199,6 +201,12 @@ export type GetStatusOptions = GitRuntimeOptions & {
    */
   limit?: number
   bypassEffectiveUpstreamNegativeCache?: boolean
+  /** Paths Orca may have symlinked into this worktree (per-user shared paths
+   *  plus `orca.yaml` shared directories). Untracked entries that are one of
+   *  these *and* really symlinks are dropped: Git cannot ignore them when the
+   *  repo's rule is directory-only (`node_modules/`), but they are Orca's own
+   *  artifacts, not user work. */
+  sharedLinkPaths?: readonly string[]
 }
 
 /**
@@ -209,38 +217,58 @@ export async function getStatus(
   options: GetStatusOptions = {}
 ): Promise<GitStatusResult> {
   gitDiffReadDedupe.clear()
-  if (options.signal) {
-    return runGetStatus(worktreePath, options)
-  }
   // Why: dedupe only concurrent identical reads; after settle, callers must run a fresh read.
   const cacheKey = getStatusReadKey(worktreePath, options)
-  const inFlightStatus = statusReadsInFlight.get(cacheKey)
-  if (inFlightStatus) {
-    return inFlightStatus
-  }
-
-  const statusPromise = runGetStatus(worktreePath, options)
-  statusReadsInFlight.set(cacheKey, statusPromise)
-  try {
-    return await statusPromise
-  } finally {
-    if (statusReadsInFlight.get(cacheKey) === statusPromise) {
-      statusReadsInFlight.delete(cacheKey)
-    }
-  }
+  return statusReadLeaseOwner.lease(cacheKey, options.signal, (sharedSignal) =>
+    runGetStatus(worktreePath, { ...options, signal: sharedSignal })
+  )
 }
 
 function getStatusReadKey(worktreePath: string, options: GetStatusOptions): string {
   // Why: each key part can change the output shape or runtime routing.
   const limit = resolveGitStatusLimit(options.limit)
-  return [
+  return stableInFlightKey([
     worktreePath,
     options.wslDistro ?? '',
     options.includeIgnored === true,
     options.reuseLineStats === true,
     options.bypassEffectiveUpstreamNegativeCache === true,
-    limit
-  ].join('\0')
+    limit,
+    // Why: this changes which entries survive, so it must not share a cache slot.
+    options.sharedLinkPaths ?? []
+  ])
+}
+
+/** Remove untracked entries that are shared symlinks Orca created.
+ *
+ *  Why this can't be left to Git: a directory-only ignore rule (`node_modules/`)
+ *  matches the primary checkout's real directory but never the worktree's
+ *  symlink, so Git reports it untracked forever — a phantom row in the diff and
+ *  a permanently "dirty" worktree.
+ *
+ *  Tight on both axes: an entry must be configured as shared *and* actually be a
+ *  symlink. A regular file the user created at a configured name still shows up,
+ *  and so does a symlink at a path nobody declared shared. Mutates `entries`. */
+async function dropSharedSymlinkUntrackedEntries(
+  worktreePath: string,
+  entries: GitStatusEntry[],
+  sharedLinkPaths: readonly string[]
+): Promise<void> {
+  // Why: a clean tree has no untracked entries, so this costs nothing on the
+  // common status-poll path — no syscall, no config read, no subprocess.
+  if (sharedLinkPaths.length === 0 || !entries.some((entry) => entry.area === 'untracked')) {
+    return
+  }
+  const sharedLinks = new Set(await findExistingWorktreeSymlinkPaths(worktreePath, sharedLinkPaths))
+  if (sharedLinks.size === 0) {
+    return
+  }
+  for (let index = entries.length - 1; index >= 0; index--) {
+    const entry = entries[index]
+    if (entry.area === 'untracked' && sharedLinks.has(entry.path)) {
+      entries.splice(index, 1)
+    }
+  }
 }
 
 async function runGetStatus(
@@ -314,6 +342,8 @@ async function runGetStatus(
       }
     }
   }
+
+  await dropSharedSymlinkUntrackedEntries(worktreePath, entries, options.sharedLinkPaths ?? [])
 
   if (statusSucceeded && !didHitLimit && shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
     const branchName = getShortBranchName(branch)

@@ -1,5 +1,5 @@
 import type { SshConnection } from './ssh-connection'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-deploy-helpers'
 import { RELAY_DEPLOY_TIMEOUT_MS } from './ssh-relay-deploy-timing'
 import { isRelayGcClaimed, waitForRelayGcClaimRelease } from './ssh-relay-gc-claim'
 import {
@@ -101,7 +101,10 @@ export async function acquireInstallLock(
         await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch(() => {})
         options?.signal?.throwIfAborted()
       }
-    } catch {
+    } catch (err) {
+      if (isUnconfirmedSshCommandTermination(err)) {
+        throw err
+      }
       options?.signal?.throwIfAborted()
       // A failed mkdir is lock contention; keep the connection-specific error
       // out of the user path until the bounded wait expires.

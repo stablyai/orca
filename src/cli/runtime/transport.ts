@@ -188,7 +188,9 @@ export async function sendRequest<TResult>(
           params,
           orchestrationCapability: envelope?.orchestrationCapability,
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
-          orchestrationRequestId: envelope?.orchestrationRequestId
+          orchestrationRequestId: envelope?.orchestrationRequestId,
+          compatibilityInvocationId: envelope?.compatibilityInvocationId,
+          orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence
         })}\n`
       )
     })

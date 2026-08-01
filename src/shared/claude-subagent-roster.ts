@@ -36,6 +36,13 @@ export type TrackedClaudeSubagent = {
    *  removes it even when teammate-shaped, so it can't gate the pane
    *  'working' forever. Cleared once live activity re-tracks the id. */
   backgroundTasksAuthoritative?: boolean
+  /** The row was rebuilt from a persisted snapshot at restore and no live event
+   *  has confirmed it since, so the only thing backing it is a claim written by
+   *  an agent process that may no longer exist. Cleared by any live activity on
+   *  the id. Lets a liveness check reap it when that process is gone — the
+   *  inventory reap alone needs the parent to speak, and an idle parent never
+   *  does. */
+  restoredFromSnapshot?: boolean
   /** A subagent-typed background task listed this lifecycle id id-exact
    *  (workflow/named lanes) — proof the task list tracks this id, so a later
    *  complete list omitting it means finished/killed even though the id is
@@ -84,6 +91,9 @@ export function upsertWorkingClaudeSubagent(
     // background_tasks omission must stop reaping it (teammate-shaped ids
     // never appear there). The fold re-tags its own recreations after this.
     existing.backgroundTasksAuthoritative = undefined
+    // Why: the live event proves the agent process behind the restored row is
+    // still running it, so the liveness reap must stop treating it as a claim.
+    existing.restoredFromSnapshot = undefined
     return
   }
   // Why: beyond the wire cap extra rows would be invisible anyway; idle
@@ -130,6 +140,27 @@ export function stopClaudeSubagent(roster: ClaudeSubagentRoster, id: string): vo
     return
   }
   tracked.state = 'idle'
+}
+
+/** Shell tasks and session crons outlive a lead Stop but do not belong in the agent roster. */
+export function hasActiveClaudeNonAgentBackgroundWork(
+  hookPayload: Record<string, unknown>
+): boolean {
+  const sessionCrons = hookPayload['session_crons']
+  if (Array.isArray(sessionCrons) && sessionCrons.length > 0) {
+    return true
+  }
+  const backgroundTasks = hookPayload['background_tasks']
+  return (
+    Array.isArray(backgroundTasks) &&
+    backgroundTasks.some((item) => {
+      if (typeof item !== 'object' || item === null) {
+        return false
+      }
+      const task = item as Record<string, unknown>
+      return task.status === 'running' && task.type !== 'subagent' && task.type !== 'teammate'
+    })
+  )
 }
 
 /** Read the agent-typed entries of a hook payload's `background_tasks` field.
@@ -227,6 +258,9 @@ export function foldClaudeBackgroundTasksIntoRoster(
       existing.agentType = task.agentType ?? existing.agentType
       existing.description = task.description ?? existing.description
       existing.listedAsSubagentTask = true
+      // Why: a live inventory listed the id as running — the restored claim is
+      // now confirmed by the current process, so liveness can't reap it.
+      existing.restoredFromSnapshot = undefined
       continue
     }
     if (!task.running) {
@@ -285,6 +319,37 @@ export function foldClaudeBackgroundTasksIntoRoster(
       created.listedAsSubagentTask = true
     }
   }
+}
+
+/** Second reap path for restored rows, used when the agent process that wrote
+ *  the snapshot is gone. The inventory reap needs the parent to emit a complete
+ *  `background_tasks` list; a parent that went idle before Orca restarted never
+ *  emits one, so an unconfirmed row would gate the pane 'working' forever and
+ *  keep it out of hibernation. Rows confirmed by live activity are untouched.
+ *  Returns whether anything was dropped. */
+export function reapRestoredClaudeSubagentsWithoutLiveAgent(roster: ClaudeSubagentRoster): boolean {
+  let changed = false
+  for (const [id, tracked] of roster) {
+    if (tracked.restoredFromSnapshot === true) {
+      roster.delete(id)
+      changed = true
+    }
+  }
+  return changed
+}
+
+export function claudeRosterHasRestoredSnapshotSubagent(
+  roster: ClaudeSubagentRoster | undefined
+): boolean {
+  if (!roster) {
+    return false
+  }
+  for (const tracked of roster.values()) {
+    if (tracked.restoredFromSnapshot === true) {
+      return true
+    }
+  }
+  return false
 }
 
 /** Whether a lifecycle agent id belongs to the named teammate. Teammate ids

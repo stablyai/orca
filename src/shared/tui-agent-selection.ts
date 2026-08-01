@@ -13,6 +13,7 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'opencode',
   'mimo-code',
   'ante',
+  'trae',
   'pi',
   'omp',
   'gemini',
@@ -76,6 +77,12 @@ export function normalizeDisabledTuiAgents(value: unknown): TuiAgent[] {
     }
   }
   return [...seen]
+}
+
+export function haveSameDisabledTuiAgents(left: unknown, right: unknown): boolean {
+  const leftSet = new Set(normalizeDisabledTuiAgents(left))
+  const rightSet = new Set(normalizeDisabledTuiAgents(right))
+  return leftSet.size === rightSet.size && [...leftSet].every((agent) => rightSet.has(agent))
 }
 
 export function isTuiAgentEnabled(agent: TuiAgent, disabled?: Iterable<unknown> | null): boolean {

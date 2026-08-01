@@ -132,6 +132,14 @@ export function buildSkillDiscoverySources(
       'pi'
     ),
     source(
+      'home-omp',
+      'OMP home',
+      pathApi.join(home, '.omp', 'agent', 'skills'),
+      'home',
+      ['agent-skills'],
+      'omp'
+    ),
+    source(
       'home-gemini',
       'Gemini home',
       pathApi.join(home, '.gemini', 'skills'),

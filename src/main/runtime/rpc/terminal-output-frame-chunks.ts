@@ -4,6 +4,7 @@ import {
   encodeTerminalStreamText
 } from '../../../shared/terminal-stream-protocol'
 import { TERMINAL_STREAM_CHUNK_BYTES } from '../../../shared/terminal-multiplex-flow-control'
+import type { TerminalOutputSourceRange } from '../../../shared/terminal-output-source-range'
 import { terminalStreamByteLength } from './terminal-stream-byte-length'
 
 export type TerminalOutputMeta = {
@@ -11,12 +12,15 @@ export type TerminalOutputMeta = {
   rawLength?: number
   transformed?: boolean
   cwd?: string
+  sourceRanges?: readonly TerminalOutputSourceRange[]
 }
 
 export type TerminalOutputFrameChunk = {
   bytes: Uint8Array<ArrayBufferLike>
+  displayLength: number
   seq?: number
   opcode?: TerminalStreamOpcode
+  sourceRanges?: readonly TerminalOutputSourceRange[]
 }
 
 export const TERMINAL_STREAM_BYTE_PROBE_CODE_UNITS = 8 * 1024
@@ -55,12 +59,19 @@ export function* iterateTerminalOutputFrameChunks(
     yield {
       opcode: TerminalStreamOpcode.OutputSpan,
       bytes: encodeTerminalStreamJson({ data, rawLength, transformed: true }),
-      seq: meta?.seq
+      displayLength: data.length,
+      seq: meta?.seq,
+      sourceRanges: meta?.sourceRanges
     }
     return
   }
   if (!exceedsTerminalStreamChunkBytes(data)) {
-    yield { bytes: encodeTerminalStreamText(data), seq: meta?.seq }
+    yield {
+      bytes: encodeTerminalStreamText(data),
+      displayLength: data.length,
+      seq: meta?.seq,
+      sourceRanges: meta?.sourceRanges
+    }
     return
   }
   const canPreserveChunkSeq = typeof meta?.seq === 'number' && rawLength === data.length
@@ -109,11 +120,23 @@ export function* iterateTerminalOutputFrameChunks(
       const nextChunk = takeChunk(index)
       if (shouldDelayFinalSeq) {
         if (delayedChunk) {
-          yield { bytes: encodeTerminalStreamText(delayedChunk.text) }
+          yield {
+            bytes: encodeTerminalStreamText(delayedChunk.text),
+            displayLength: delayedChunk.text.length
+          }
         }
         delayedChunk = nextChunk
       } else {
-        yield { bytes: encodeTerminalStreamText(nextChunk.text), seq: nextChunk.seq }
+        yield {
+          bytes: encodeTerminalStreamText(nextChunk.text),
+          displayLength: nextChunk.text.length,
+          seq: nextChunk.seq,
+          sourceRanges: sliceTerminalOutputSourceRanges(
+            meta?.sourceRanges,
+            chunkStart - nextChunk.text.length,
+            chunkStart
+          )
+        }
       }
     }
     chunkBytes += partBytes
@@ -124,10 +147,65 @@ export function* iterateTerminalOutputFrameChunks(
   if (shouldDelayFinalSeq) {
     // Why: only the final frame can safely carry the high-water mark when rawLength can't map back to UTF-16 offsets.
     if (delayedChunk) {
-      yield { bytes: encodeTerminalStreamText(delayedChunk.text) }
+      yield {
+        bytes: encodeTerminalStreamText(delayedChunk.text),
+        displayLength: delayedChunk.text.length
+      }
     }
-    yield { bytes: encodeTerminalStreamText(finalChunk.text), seq: meta.seq }
+    yield {
+      bytes: encodeTerminalStreamText(finalChunk.text),
+      displayLength: finalChunk.text.length,
+      seq: meta.seq
+    }
     return
   }
-  yield { bytes: encodeTerminalStreamText(finalChunk.text), seq: finalChunk.seq }
+  yield {
+    bytes: encodeTerminalStreamText(finalChunk.text),
+    displayLength: finalChunk.text.length,
+    seq: finalChunk.seq,
+    sourceRanges: sliceTerminalOutputSourceRanges(
+      meta?.sourceRanges,
+      data.length - finalChunk.text.length,
+      data.length
+    )
+  }
+}
+
+export function sliceTerminalOutputSourceRanges(
+  sourceRanges: readonly TerminalOutputSourceRange[] | undefined,
+  displayStartOffset: number,
+  displayEndOffset: number
+): readonly TerminalOutputSourceRange[] | undefined {
+  if (!sourceRanges || sourceRanges.length === 0) {
+    return undefined
+  }
+  const baseDisplayStart = sourceRanges[0]!.displayStart
+  const sliceStart = baseDisplayStart + displayStartOffset
+  const sliceEnd = baseDisplayStart + displayEndOffset
+  const selected: TerminalOutputSourceRange[] = []
+  for (const range of sourceRanges) {
+    const start = Math.max(sliceStart, range.displayStart)
+    const end = Math.min(sliceEnd, range.displayEnd)
+    if (end <= start) {
+      continue
+    }
+    if (!range.splittable && (start !== range.displayStart || end !== range.displayEnd)) {
+      throw new Error('terminal_source_range_indivisible_split')
+    }
+    const sourceStartSu = range.sourceStartSu + (start - range.displayStart)
+    selected.push(
+      Object.freeze({
+        ...range,
+        displayStart: start,
+        displayEnd: end,
+        sourceStartSu,
+        sourceEndSu: sourceStartSu + (end - start),
+        transform: Object.freeze({
+          ...range.transform,
+          rawLengthSu: end - start
+        })
+      })
+    )
+  }
+  return Object.freeze(selected)
 }

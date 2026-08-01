@@ -1,4 +1,6 @@
 import { isIP } from 'node:net'
+import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../../shared/mobile-pairing-protocol-limits'
+import { isPairingWildcardHostname, normalizePairingUrl } from '../../shared/network/pairing-url'
 
 export const INVALID_PAIRING_ENDPOINT_GUIDANCE =
   'Use a reachable hostname, host:port, IPv4/IPv6 literal, or ws(s):// URL. HTTP(S) URLs are normalized to WebSocket URLs.'
@@ -39,29 +41,8 @@ export function resolveAdvertisedPairingEndpoint(
 }
 
 function resolveFullUrl(value: string): PairingEndpointResolution {
-  let endpoint: URL
-  try {
-    endpoint = new URL(value)
-  } catch {
-    return invalid()
-  }
-  if (endpoint.protocol === 'http:') {
-    endpoint.protocol = 'ws:'
-  } else if (endpoint.protocol === 'https:') {
-    endpoint.protocol = 'wss:'
-  }
-  if (
-    (endpoint.protocol !== 'ws:' && endpoint.protocol !== 'wss:') ||
-    !endpoint.hostname ||
-    endpoint.username ||
-    endpoint.password ||
-    endpoint.hash ||
-    endpoint.port === '0' ||
-    isWildcardHost(endpoint.hostname)
-  ) {
-    return invalid()
-  }
-  return valid(formatWebSocketUrl(endpoint))
+  const endpoint = normalizePairingUrl(value)
+  return endpoint ? valid(endpoint) : invalid()
 }
 
 function parseHostOverride(value: string): { hostname: string; port: string } | null {
@@ -98,9 +79,7 @@ function getExplicitPort(value: string): string | null {
 }
 
 function isWildcardHost(hostname: string): boolean {
-  const normalized = unbracketIpv6(hostname).toLowerCase()
-  // Why: wildcard bind addresses identify local interfaces, not a route a client can connect to.
-  return normalized === '*' || normalized === '0.0.0.0' || normalized === '::'
+  return isPairingWildcardHostname(hostname)
 }
 
 function bracketIpv6(hostname: string): string {
@@ -118,6 +97,9 @@ function formatWebSocketUrl(url: URL): string {
 }
 
 function valid(endpoint: string): PairingEndpointResolution {
+  if (endpoint.length > PAIRING_ENDPOINT_MAX_CHARACTERS) {
+    return invalid()
+  }
   return { ok: true, endpoint }
 }
 

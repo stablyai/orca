@@ -1,5 +1,8 @@
-import { branchName } from '@/lib/git-utils'
 import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
+import {
+  resolveWorktreeBranchLabel,
+  resolveWorktreeDisplayName
+} from './worktree-default-display-name'
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
 import type { Repo, Worktree } from '../../../shared/types'
 import { extractWorktreePaletteCommentSnippet } from './worktree-palette-comment-snippet'
@@ -101,7 +104,7 @@ export function searchWorktrees(
   for (const worktree of worktrees) {
     if (composite) {
       const repoName = repoMap.get(worktree.repoId)?.displayName ?? ''
-      const branch = branchName(worktree.branch)
+      const branch = resolveWorktreeBranchLabel(worktree)
       const repoIdx = repoName.toLowerCase().indexOf(composite.repoPart)
       const branchIdx = branch.toLowerCase().indexOf(composite.branchPart)
       if (repoIdx !== -1 && branchIdx !== -1) {
@@ -117,7 +120,7 @@ export function searchWorktrees(
       // that happens to contain a slash (e.g. "feature/foo") still get hits.
     }
 
-    const nameIndex = worktree.displayName.toLowerCase().indexOf(q)
+    const nameIndex = resolveWorktreeDisplayName(worktree).toLowerCase().indexOf(q)
     if (nameIndex !== -1) {
       results.push(
         makeResult(worktree.id, 'displayName', {
@@ -127,7 +130,7 @@ export function searchWorktrees(
       continue
     }
 
-    const branch = branchName(worktree.branch)
+    const branch = resolveWorktreeBranchLabel(worktree)
     const branchIndex = branch.toLowerCase().indexOf(q)
     if (branchIndex !== -1) {
       results.push(

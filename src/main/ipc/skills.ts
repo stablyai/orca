@@ -13,6 +13,7 @@ import type {
 import { inventorySkillFreshness } from '../skills/skill-freshness-inventory'
 import { SkillUpdateRunner } from '../skills/skill-update-run'
 import { skillUpdateFailedNames } from '../skills/skill-update-outcome'
+import { readGloballyUpdatableSkillLocks } from '../skills/skill-update-registration'
 import {
   discoverSkillsOnTarget,
   resolveSkillDiscoveryTarget
@@ -31,8 +32,13 @@ export function registerSkillsHandlers(store: Store): void {
     // Why: per-skill outcomes come from re-hashing what is actually on disk, not
     // from scraping stdout.
     rescanOutdatedNames: async (names) => {
-      const inventory = await scanInventory()
-      return skillUpdateFailedNames(names, inventory.installations)
+      // The lock read is fresh on purpose: the run just rewrote it, and the
+      // verdict accepts unrecognized content only when disk matches that record.
+      const [inventory, globalSkillLocks] = await Promise.all([
+        scanInventory(),
+        readGloballyUpdatableSkillLocks()
+      ])
+      return skillUpdateFailedNames(names, inventory.installations, globalSkillLocks)
     },
     onState: (run: SkillUpdateRun) => {
       for (const window of BrowserWindow.getAllWindows()) {

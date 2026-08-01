@@ -1,9 +1,10 @@
 import { lstat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Repo } from '../../shared/types'
-import type {
-  SkillFreshnessInstallation,
-  SkillFreshnessInventory
+import {
+  SUPPORTED_GLOBAL_SKILL_TOPOLOGIES,
+  type SkillFreshnessInstallation,
+  type SkillFreshnessInventory
 } from '../../shared/skill-freshness'
 import { buildSkillDiscoverySources, type SkillScanRoot } from './skill-discovery-sources'
 import { loadSkillBundleArtifacts } from './skill-bundle-artifacts'
@@ -21,6 +22,24 @@ import { convergableSkillNames } from './skill-update-convergence'
 import { readGloballyUpdatableSkillLocks } from './skill-update-registration'
 
 export const MAXIMUM_REPOSITORY_SKILL_ROOTS = 128
+
+// Why: the updater installs source-repo HEAD, which legitimately runs ahead of the
+// bundled registry — content the bundle has never seen is the steady state right
+// after an update. Bytes whose git tree sha equals the lock's recorded hash are the
+// CLI's own install, not a user edit, so calling them "unrecognized" (modified) is
+// false. Judged only over the placements the update command writes; a same-name
+// copy elsewhere earns no trust from someone else's lock entry.
+function trustLockInstalledRevision(
+  installation: SkillFreshnessInstallation,
+  globalSkillLocks: ReadonlyMap<string, string>
+): SkillFreshnessInstallation {
+  return installation.status === 'unrecognized' &&
+    SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&
+    installation.observedGitTreeSha != null &&
+    installation.observedGitTreeSha === globalSkillLocks.get(installation.name)
+    ? { ...installation, status: 'newer-known' }
+    : installation
+}
 
 export function boundRepositorySkillRoots(roots: readonly SkillScanRoot[]): {
   scanned: SkillScanRoot[]
@@ -160,11 +179,13 @@ export async function inventorySkillFreshness(args: {
   const installations = dedupeSkillFreshnessPlacements([
     ...homeInstallations,
     ...unsupportedInstallations
-  ]).sort(
-    (left, right) =>
-      left.name.localeCompare(right.name, 'en') ||
-      left.unresolvedPath.localeCompare(right.unresolvedPath, 'en')
-  )
+  ])
+    .map((installation) => trustLockInstalledRevision(installation, globalSkillLocks))
+    .sort(
+      (left, right) =>
+        left.name.localeCompare(right.name, 'en') ||
+        left.unresolvedPath.localeCompare(right.unresolvedPath, 'en')
+    )
 
   return {
     schemaVersion: 1,
