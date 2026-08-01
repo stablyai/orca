@@ -2229,6 +2229,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             ) {
               return
             }
+            // Why: no peer floor claim here on purpose — terminal.multiplex is not
+            // peer-allowlisted, so peers ride the legacy subscribe path where the
+            // exclusive peer floor is claimed; align the two if that ever changes.
             return sendTerminalStreamInput(runtime, {
               terminal: stream.terminal,
               text,
@@ -2478,6 +2481,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           assertPeerTerminalGranted({ isPeerDevice, getGrantedTerminals }, request.terminal)
         } catch {
           sendStreamError(request.streamId, 'peer_terminal_not_granted')
+          emit({ type: 'end', streamId: request.streamId })
+          return
+        }
+        // Why: client.type is caller-declared; a peer asserting 'mobile' would take
+        // the mobile floor/fit paths below. Unreachable today (terminal.multiplex is
+        // not peer-allowlisted) — kept as defense-in-depth with the subscribe guard.
+        if (isPeerDevice && request.client?.type !== 'desktop') {
+          sendStreamError(request.streamId, 'peer_terminal_subscribe_requires_desktop_client')
           emit({ type: 'end', streamId: request.streamId })
           return
         }
