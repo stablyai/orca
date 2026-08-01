@@ -37,6 +37,16 @@ describe('useMobileNativeChatPrompts', () => {
     render({ state, interactivePrompt: APPROVAL })
   }
 
+  function updateState(state: AgentStatusEntry['state']): void {
+    act(() => {
+      renderer?.update(
+        createElement(Harness, {
+          status: { state, interactivePrompt: APPROVAL } as unknown as AgentStatusEntry
+        })
+      )
+    })
+  }
+
   it('offers the approval card while the agent is waiting on it', () => {
     renderWithState('waiting')
 
@@ -57,6 +67,17 @@ describe('useMobileNativeChatPrompts', () => {
 
   it('drops the approval card once the turn is done', () => {
     renderWithState('done')
+
+    expect(prompts?.permission).toBeNull()
+  })
+
+  // The envelope survives the wait it belongs to, so the card has to go on the
+  // transition itself, not only when the pane is mounted fresh in a later state.
+  it('drops the approval card when a waiting agent resumes on the same pane', () => {
+    renderWithState('waiting')
+    expect(prompts?.permission).toMatchObject({ title: 'Allow Bash?' })
+
+    updateState('working')
 
     expect(prompts?.permission).toBeNull()
   })
