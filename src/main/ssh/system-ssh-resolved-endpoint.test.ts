@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { existsSyncMock, spawnMock } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
@@ -70,67 +70,102 @@ describe('system SSH resolved endpoints', () => {
     ['ProxyCommand', { proxyCommand: 'cloudflared access ssh --hostname %h' }],
     ['ProxyJump', { proxyJump: 'bastion' }],
     ['ProxyUseFdpass', { proxyUseFdpass: true }]
-  ] as const)(
-    'passes the effective ssh -G endpoint through wildcard %s system SSH',
-    (_name, proxy) => {
-      spawnSystemSshCommand(
-        createTarget({
-          source: 'ssh-config',
-          configHost: 'prod',
-          host: 'stale.example.com',
+  ] as const)('uses the stored endpoint through wildcard %s system SSH', (_name, proxy) => {
+    spawnSystemSshCommand(
+      createTarget({
+        source: 'ssh-config',
+        configHost: 'prod',
+        host: '10.0.0.5',
+        port: 2222,
+        username: 'deploy'
+      }),
+      'echo ready',
+      {
+        wrapCommand: false,
+        resolvedConfig: createResolvedConfig({
+          hostname: 'prod',
           port: 22,
-          username: 'deploy',
-          proxyCommand: 'ssh -W %h:%p stale-bastion'
-        }),
-        'echo ready',
-        {
-          wrapCommand: false,
-          resolvedConfig: createResolvedConfig({
-            hostname: 'resolved.example.com',
-            port: 2222,
-            user: 'vpnuser',
-            ...proxy
-          })
-        }
-      )
+          user: 'ops',
+          ...proxy
+        })
+      }
+    )
 
-      const args = spawnMock.mock.calls[0][1] as string[]
-      expect(args).toEqual(
-        expect.arrayContaining([
-          '-o',
-          'Hostname=resolved.example.com',
-          '-p',
-          '2222',
-          '-l',
-          'vpnuser',
-          '--',
-          'prod',
-          'echo ready'
-        ])
-      )
-      expect(args).not.toContain('22')
-      expect(args).not.toContain('deploy')
-    }
-  )
+    const args = spawnMock.mock.calls[0][1] as string[]
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '-o',
+        'Hostname=10.0.0.5',
+        '-p',
+        '2222',
+        '-l',
+        'deploy',
+        '--',
+        'prod',
+        'echo ready'
+      ])
+    )
+    expect(args).not.toContain('ops')
+  })
 
-  it('lets fresh wildcard and Match defaults own the default port and imported user', () => {
+  it('keeps alias-only arguments when the stored endpoint already matches the result', () => {
     const args = buildSshArgs(
       createTarget({
         source: 'ssh-config',
         configHost: 'prod',
-        host: 'stale.example.com',
+        host: 'prod',
         port: 22,
-        username: 'deploy'
+        username: 'ops'
       }),
       {
-        resolvedConfig: createResolvedConfig({ hostname: 'prod', port: 22, user: 'vpnuser' })
+        resolvedConfig: createResolvedConfig({
+          hostname: 'prod',
+          port: 22,
+          user: 'ops',
+          proxyCommand: 'cloudflared access ssh --hostname %h'
+        })
       }
     )
 
+    expect(args).toContain('--')
+    expect(args).toContain('prod')
+    expect(args).not.toContain('Hostname=prod')
     expect(args).not.toContain('-p')
-    expect(args).not.toContain('22')
-    expect(args).toContain('-l')
-    expect(args).toContain('vpnuser')
+    expect(args).not.toContain('-l')
+  })
+
+  it('keeps a concrete resolved HostName authoritative', () => {
+    const args = buildSshArgs(
+      createTarget({
+        source: 'ssh-config',
+        configHost: 'prod',
+        host: '10.0.0.5',
+        port: 2222,
+        username: 'deploy'
+      }),
+      {
+        resolvedConfig: createResolvedConfig({
+          hostname: 'current.example.com',
+          port: 2200,
+          user: 'current-user',
+          proxyJump: 'bastion'
+        })
+      }
+    )
+
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '-o',
+        'Hostname=current.example.com',
+        '-p',
+        '2200',
+        '-l',
+        'current-user',
+        '--',
+        'prod'
+      ])
+    )
+    expect(args).not.toContain('10.0.0.5')
     expect(args).not.toContain('deploy')
   })
 })

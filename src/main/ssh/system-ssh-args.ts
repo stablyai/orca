@@ -52,20 +52,21 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
   const useConfigHost = shouldUseOpenSshConfigHost(target)
   const resolvedEndpoint = getResolvedEndpoint(target, options)
   const configHost = target.configHost || target.host
+  const useStoredEndpoint = shouldUseStoredEndpoint(target, resolvedEndpoint)
+  const endpoint = useStoredEndpoint
+    ? { hostname: target.host, port: target.port, user: target.username }
+    : resolvedEndpoint
 
-  if (
-    (!useConfigHost && target.port !== 22) ||
-    (resolvedEndpoint !== undefined && resolvedEndpoint.port !== 22)
-  ) {
-    args.push('-p', String(resolvedEndpoint?.port ?? target.port))
+  if ((!useConfigHost && target.port !== 22) || (endpoint !== undefined && endpoint.port !== 22)) {
+    args.push('-p', String(endpoint?.port ?? target.port))
   }
 
-  if (resolvedEndpoint) {
-    if (resolvedEndpoint.hostname && resolvedEndpoint.hostname !== configHost) {
-      args.push('-o', `Hostname=${resolvedEndpoint.hostname}`)
+  if (endpoint) {
+    if (endpoint.hostname && endpoint.hostname !== configHost) {
+      args.push('-o', `Hostname=${endpoint.hostname}`)
     }
-    if (resolvedEndpoint.user && resolvedEndpoint.user !== target.username) {
-      args.push('-l', resolvedEndpoint.user)
+    if (endpoint.user && (useStoredEndpoint || endpoint.user !== target.username)) {
+      args.push('-l', endpoint.user)
     }
   }
 
@@ -207,6 +208,33 @@ function getResolvedEndpoint(
   // Why: ssh -G is the current OpenSSH authority for config-backed targets;
   // imported fields may contain schema defaults or stale concrete-block values.
   return options.resolvedConfig
+}
+
+function shouldUseStoredEndpoint(
+  target: SshTarget,
+  resolvedEndpoint: SystemSshResolvedConfig | undefined
+): boolean {
+  if (!resolvedEndpoint || !shouldUseOpenSshConfigHost(target)) {
+    return false
+  }
+
+  const alias = (target.configHost || target.host).trim().toLowerCase()
+  const resolvedHostname = resolvedEndpoint.hostname.trim().toLowerCase()
+  const hasEffectiveProxy =
+    resolvedEndpoint.proxyUseFdpass === true ||
+    resolvedEndpoint.proxyCommand != null ||
+    resolvedEndpoint.proxyJump != null
+  if (!hasEffectiveProxy || resolvedHostname !== alias) {
+    return false
+  }
+
+  // Why: a wildcard proxy can keep system SSH active after the concrete alias
+  // block disappears; in that shape ssh -G returns the alias/default endpoint.
+  return (
+    target.host.trim().toLowerCase() !== resolvedHostname ||
+    target.port !== resolvedEndpoint.port ||
+    target.username.trim() !== (resolvedEndpoint.user?.trim() ?? '')
+  )
 }
 
 export function isOpenSshConfigBackedTarget(
