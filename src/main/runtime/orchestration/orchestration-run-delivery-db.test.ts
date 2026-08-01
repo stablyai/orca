@@ -25,6 +25,99 @@ describe('OrchestrationDb Run state', () => {
   }
 
   describe('Run deliveries', () => {
+    it('resolves current Run mail to its coordinator while preserving direct terminal mail', () => {
+      const d = createDb()
+      const run = createBoundRun(d)
+      const runMessage = d.insertMessage({
+        from: 'term_worker',
+        to: `run:${run.id}`,
+        subject: 'worker done',
+        type: 'worker_done',
+        runId: run.id
+      })
+      const terminalMessage = d.insertMessage({
+        from: 'term_sender',
+        to: 'term_coord',
+        subject: 'direct terminal mail',
+        runId: run.id
+      })
+      const otherRun = d.createRun({
+        objective: 'Other Run',
+        coordinatorHandle: 'term_other',
+        coordinatorPaneKey: 'tab_other:44444444-4444-4444-8444-444444444444'
+      })
+      d.insertMessage({
+        from: 'term_worker',
+        to: `run:${otherRun.id}`,
+        subject: 'other terminal',
+        type: 'escalation',
+        runId: otherRun.id
+      })
+
+      expect(d.getUndeliveredUnreadMessages('term_coord').map((message) => message.id)).toEqual([
+        runMessage.id,
+        terminalMessage.id
+      ])
+    })
+
+    it('leaves Run mail pending when its coordinator binding is gone', () => {
+      const d = createDb()
+      const paneKey = 'tab_coord:22222222-2222-4222-9222-222222222222'
+      const run = d.createRun({
+        objective: 'Unbound Run mail',
+        coordinatorHandle: 'term_old',
+        coordinatorPaneKey: paneKey
+      })
+      const message = d.insertMessage({
+        from: 'term_worker',
+        to: `run:${run.id}`,
+        subject: 'pending',
+        runId: run.id
+      })
+      d.createRun({
+        objective: 'Replacement Run',
+        coordinatorHandle: 'term_new',
+        coordinatorPaneKey: paneKey
+      })
+
+      expect(d.getUndeliveredUnreadMessages('term_old')).toEqual([])
+      expect(d.getMessageById(message.id)).toMatchObject({ read: 0, delivered_at: null })
+    })
+
+    it('keeps delivered Run mail suppressed after database restart without changing read state', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'orca-run-push-'))
+      const dbPath = join(dir, 'orchestration.db')
+      try {
+        const firstDb = new OrchestrationDb(dbPath)
+        const run = firstDb.createRun({
+          objective: 'Restart delivery',
+          coordinatorHandle: 'term_coord',
+          coordinatorPaneKey: 'tab_coord:33333333-3333-4333-8333-333333333333'
+        })
+        const message = firstDb.insertMessage({
+          from: 'term_worker',
+          to: `run:${run.id}`,
+          subject: 'once',
+          runId: run.id
+        })
+        expect(firstDb.getUndeliveredUnreadMessages('term_coord')).toHaveLength(1)
+        firstDb.markAsDelivered([message.id])
+        expect(firstDb.getMessageById(message.id)).toMatchObject({ read: 0 })
+        firstDb.close()
+
+        const reopened = new OrchestrationDb(dbPath)
+        db = reopened
+        expect(reopened.getUndeliveredUnreadMessages('term_coord')).toEqual([])
+        expect(reopened.getUnreadMessages(`run:${run.id}`)).toMatchObject([
+          { id: message.id, read: 0 }
+        ])
+      } finally {
+        db?.close()
+        db = undefined
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+
     it('returns one bounded FIFO batch and replays it until acknowledgment', () => {
       const d = createDb()
       const run = createBoundRun(d)

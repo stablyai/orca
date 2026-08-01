@@ -3408,28 +3408,38 @@ export class OrchestrationDb {
 
   // Why: delivered_at IS NULL filter — push-on-idle delivers each row at most once; read (set only by check) wouldn't prevent replay.
   getUndeliveredUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {
+    // Why: a current Run mailbox is lifecycle-owned by its bound coordinator; direct terminal mail remains handle-owned.
+    const recipientPredicate = `(
+      m.to_handle = ? OR (
+        m.to_handle = 'run:' || r.id
+        AND r.legacy = 0
+        AND r.coordinator_handle = ?
+      )
+    )`
     if (types && types.length > 0) {
       const placeholders = types.map(() => '?').join(',')
       return exposeMessageListTimestamps(
         this.db
           .prepare(
-            `SELECT * FROM messages
-             WHERE to_handle = ? AND read = 0 AND delivered_at IS NULL
-               AND delivery_contract = 'current_delivery'
-               AND type IN (${placeholders}) ORDER BY sequence`
+            `SELECT m.* FROM messages m
+             LEFT JOIN runs r ON r.id = m.run_id
+             WHERE ${recipientPredicate} AND m.read = 0 AND m.delivered_at IS NULL
+               AND m.delivery_contract = 'current_delivery'
+               AND m.type IN (${placeholders}) ORDER BY m.sequence`
           )
-          .all(toHandle, ...types) as MessageRow[]
+          .all(toHandle, toHandle, ...types) as MessageRow[]
       )
     }
     return exposeMessageListTimestamps(
       this.db
         .prepare(
-          `SELECT * FROM messages
-           WHERE to_handle = ? AND read = 0 AND delivered_at IS NULL
-             AND delivery_contract = 'current_delivery'
-           ORDER BY sequence`
+          `SELECT m.* FROM messages m
+           LEFT JOIN runs r ON r.id = m.run_id
+           WHERE ${recipientPredicate} AND m.read = 0 AND m.delivered_at IS NULL
+             AND m.delivery_contract = 'current_delivery'
+           ORDER BY m.sequence`
         )
-        .all(toHandle) as MessageRow[]
+        .all(toHandle, toHandle) as MessageRow[]
     )
   }
 

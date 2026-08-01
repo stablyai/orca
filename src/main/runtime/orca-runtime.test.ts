@@ -17277,6 +17277,65 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('delivers current Run-mailbox and direct terminal mail through the idle runtime path', async () => {
+    vi.useFakeTimers()
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const write = vi.fn().mockReturnValue(true)
+      runtime.setOrchestrationDb(db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      const run = db.createRun({
+        objective: 'Runtime Run mailbox delivery',
+        coordinatorHandle: terminal.handle,
+        coordinatorPaneKey: 'tab-1:pane:1'
+      })
+      const runMessage = db.insertMessage({
+        from: 'term_worker',
+        to: `run:${run.id}`,
+        subject: 'worker done',
+        type: 'worker_done',
+        runId: run.id
+      })
+      const terminalMessage = db.insertMessage({
+        from: 'term_sender',
+        to: terminal.handle,
+        subject: 'terminal status',
+        runId: run.id
+      })
+
+      runtime.deliverPendingMessagesForHandle(terminal.handle)
+
+      const payload = write.mock.calls.find(
+        ([, text]) => typeof text === 'string' && text.includes('Subject: worker done')
+      )?.[1]
+      expect(payload).toEqual(expect.stringContaining('Subject: terminal status'))
+      await vi.advanceTimersByTimeAsync(500)
+      expect(write).toHaveBeenCalledWith('pty-1', '\r')
+      expect(db.getMessageById(runMessage.id)).toMatchObject({
+        read: 0,
+        delivered_at: expect.any(String)
+      })
+      expect(db.getMessageById(terminalMessage.id)).toMatchObject({
+        read: 0,
+        delivered_at: expect.any(String)
+      })
+      expect(db.getUndeliveredUnreadMessages(terminal.handle)).toEqual([])
+    } finally {
+      db.close()
+      vi.useRealTimers()
+    }
+  })
+
   it('injects pending orchestration messages into the active coordinator without auto-submitting', async () => {
     vi.useFakeTimers()
     try {
