@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { SearchableSetting } from './SearchableSetting'
 import { Button } from '../ui/button'
 import { NetworkInterfacePicker } from '../mobile/NetworkInterfacePicker'
@@ -44,6 +45,12 @@ export function PeerCollabHostShareSection({
   onCodeCopiedChange,
   onClearCodeCopiedTimer
 }: PeerCollabHostShareSectionProps): React.JSX.Element {
+  // Why: session-scoped, unlike mobile's persisted custom addresses — the mobile
+  // preference hook writes mobile settings keys, and sharing those would let a
+  // peer-side pick silently change the phone pairing address. A custom address
+  // still flows into the pairing code via onSelectedAddressChange like any
+  // interface pick; persistence parity is a follow-up.
+  const [customAddresses, setCustomAddresses] = useState<string[]>([])
   return (
     <SearchableSetting
       title={getPeerCollabOverviewSearchEntry().title}
@@ -88,8 +95,25 @@ export function PeerCollabHostShareSection({
         </p>
         <NetworkInterfacePicker
           networkInterfaces={networkInterfaces}
+          customAddresses={customAddresses}
           selectedAddress={selectedAddress}
+          selectedAddressIsCustom={
+            selectedAddress !== undefined && customAddresses.includes(selectedAddress)
+          }
           onSelectedAddressChange={onSelectedAddressChange}
+          onCustomAddressSelect={(address) => {
+            setCustomAddresses((current) =>
+              current.includes(address) ? current : [...current, address]
+            )
+            onSelectedAddressChange(address)
+          }}
+          onCustomAddressRemove={(address) => {
+            setCustomAddresses((current) => current.filter((entry) => entry !== address))
+            const fallback = networkInterfaces[0]?.address
+            if (selectedAddress === address && fallback) {
+              onSelectedAddressChange(fallback)
+            }
+          }}
           disabled={!hostEnabled}
           className="min-w-[220px] justify-between font-normal"
         />
@@ -137,6 +161,10 @@ export function PeerCollabHostShareSection({
       {hostEnabled ? (
         <MobilePairingQrSection
           qrDataUrl={qrDataUrl}
+          // Why: the peer offer IPC either returns a complete offer (QR included)
+          // or fails as a whole, which the pane already surfaces as a toast —
+          // there is no partial "offer without QR" state to render here.
+          qrError={false}
           pairingUrl={pairingUrl}
           endpoint={endpoint}
           qrEnlarged={qrEnlarged}

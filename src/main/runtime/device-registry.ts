@@ -159,25 +159,31 @@ export class DeviceRegistry {
   }
 
   setGrantedTerminals(deviceId: string, terminals: string[]): boolean {
-    const device = this.devices.find((candidate) => candidate.deviceId === deviceId)
-    if (!device || device.scope !== 'peer') {
+    const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
+    if (index < 0 || this.devices[index]?.scope !== 'peer') {
       return false
     }
-    device.grantedTerminalHandles = terminals
-    this.save()
+    const nextDevices = this.devices.map((device, candidateIndex) =>
+      candidateIndex === index ? { ...device, grantedTerminalHandles: terminals } : device
+    )
+    this.save(nextDevices)
+    this.devices = nextDevices
     return true
   }
 
   // Why: called on every peer handshake so the paired-devices list reflects
   // the name the client is currently presenting, not the one-time pairing name.
   setLastConnectedName(deviceId: string, name: string): boolean {
-    const device = this.devices.find((candidate) => candidate.deviceId === deviceId)
+    const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
     const trimmed = name.trim()
-    if (!device || device.scope !== 'peer' || !trimmed) {
+    if (index < 0 || this.devices[index]?.scope !== 'peer' || !trimmed) {
       return false
     }
-    device.lastConnectedName = trimmed
-    this.save()
+    const nextDevices = this.devices.map((device, candidateIndex) =>
+      candidateIndex === index ? { ...device, lastConnectedName: trimmed } : device
+    )
+    this.save(nextDevices)
+    this.devices = nextDevices
     return true
   }
 

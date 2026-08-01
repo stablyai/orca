@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Eye, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -6,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import type { ConnectedPeerClient } from '@/components/settings/PeerCollabConnectedClientsSection'
-import { resolveTerminalHandleForPane } from './terminal-handle-copy'
+import { usePaneTerminalHandle } from './use-pane-terminal-handle'
 import { TerminalPaneViewerBadgeClientRow } from './TerminalPaneViewerBadgeClientRow'
 
 type TerminalPaneViewerBadgeProps = {
@@ -22,53 +21,13 @@ type TerminalPaneViewerBadgeProps = {
  * see who is currently watching it. Renders nothing when no client is
  * connected (or peer collab is inactive).
  */
-// Why: a freshly opened pane's PTY registers in the runtime graph after this
-// badge mounts, so a single resolve attempt would come back empty and hide the
-// badge for the pane's lifetime — keep retrying until the pane resolves.
-const HANDLE_RESOLVE_RETRY_MS = 2000
-
 export function TerminalPaneViewerBadge({
   tabId,
   leafId,
   connectedClients,
   onConnectedClientsChanged
 }: TerminalPaneViewerBadgeProps): React.JSX.Element | null {
-  const [handle, setHandle] = useState<string | null>(null)
-
-  useEffect(() => {
-    let disposed = false
-    let timer: number | null = null
-    const callRuntime = window.api?.runtime?.call
-    if (!callRuntime) {
-      return
-    }
-    setHandle(null)
-    const attempt = (): void => {
-      void resolveTerminalHandleForPane({ tabId, leafId, callRuntime })
-        .then((resolved) => {
-          if (disposed) {
-            return
-          }
-          if (resolved) {
-            setHandle(resolved)
-          } else {
-            timer = window.setTimeout(attempt, HANDLE_RESOLVE_RETRY_MS)
-          }
-        })
-        .catch(() => {
-          if (!disposed) {
-            timer = window.setTimeout(attempt, HANDLE_RESOLVE_RETRY_MS)
-          }
-        })
-    }
-    attempt()
-    return () => {
-      disposed = true
-      if (timer !== null) {
-        window.clearTimeout(timer)
-      }
-    }
-  }, [tabId, leafId])
+  const handle = usePaneTerminalHandle({ tabId, leafId, enabled: true })
 
   if (connectedClients.length === 0 || !handle) {
     return null

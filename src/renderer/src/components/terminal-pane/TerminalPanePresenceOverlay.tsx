@@ -15,7 +15,7 @@ import type {
   PeerPresenceState
 } from '../../../../shared/peer-presence-event'
 import { RemoteTerminalPresenceOverlay } from '@/components/peer-collab/RemoteTerminalPresenceOverlay'
-import { resolveTerminalHandleForPane } from './terminal-handle-copy'
+import { usePaneTerminalHandle } from './use-pane-terminal-handle'
 import { usePeerCollabConnectedClients } from './use-peer-collab-connected-clients'
 
 const HOST_PRESENCE_CLIENT_ID = 'host'
@@ -40,7 +40,7 @@ export function TerminalPanePresenceOverlay({
   const { clients: connectedClients } = usePeerCollabConnectedClients()
   const hasViewers = connectedClients.length > 0
   const settings = useAppStore((state) => state.settings)
-  const [handle, setHandle] = useState<string | null>(null)
+  const handle = usePaneTerminalHandle({ tabId, leafId: pane.leafId, enabled: hasViewers })
   // Why: only this pane's own subscribers should trigger presence wiring —
   // "any peer connected anywhere" would mount listeners on every open pane.
   const isWatchedByPeer =
@@ -59,28 +59,6 @@ export function TerminalPanePresenceOverlay({
     originLeft: 0,
     originTop: 0
   })
-
-  useEffect(() => {
-    if (!hasViewers) {
-      setHandle(null)
-      return
-    }
-    let disposed = false
-    const callRuntime = window.api?.runtime?.call
-    if (!callRuntime) {
-      return
-    }
-    void resolveTerminalHandleForPane({ tabId, leafId: pane.leafId, callRuntime })
-      .then((resolved) => {
-        if (!disposed) {
-          setHandle(resolved)
-        }
-      })
-      .catch(() => undefined)
-    return () => {
-      disposed = true
-    }
-  }, [tabId, pane.leafId, hasViewers])
 
   useEffect(() => {
     if (!isWatchedByPeer || !handle) {
