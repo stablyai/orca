@@ -27,6 +27,12 @@ const { homedirMock, grantMock } = vi.hoisted(() => ({
   grantMock: vi.fn()
 }))
 
+const { pendingMock } = vi.hoisted(() => ({ pendingMock: vi.fn<() => boolean>() }))
+
+vi.mock('./codex-state-db', () => ({
+  isCodexBackfillIndexPending: pendingMock
+}))
+
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
   return { ...actual, homedir: homedirMock }
@@ -40,6 +46,7 @@ vi.mock('./codex-hook-trust-grant', () => ({
 import {
   ensureRealHomeCodexHookState,
   getRealHomeCodexHookLane,
+  isRealHomeCodexHookLaneUsable,
   _internals
 } from './codex-real-home-hook-install'
 import { getCodexManagedHookInstallMaterial } from './hook-service'
@@ -82,6 +89,7 @@ beforeEach(() => {
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
   process.env.ORCA_USER_DATA_PATH = userDataDir
   homedirMock.mockReturnValue(fakeHomeDir)
+  pendingMock.mockReturnValue(false)
   mkdirSync(join(fakeHomeDir, '.codex'), { recursive: true })
   _internals.setLaneForTesting('pending')
 })
@@ -537,5 +545,77 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
     const trust = readHookTrustEntries(getRealConfigTomlPath())
     expect(trust.has(computeTrustKey(entries[0]!))).toBe(true)
     expect(trust.has(computeTrustKey(entries[1]!))).toBe(false)
+  })
+})
+
+describe('backfill deferral (#11828)', () => {
+  it('defers the grant while the system home backfill is pending', () => {
+    pendingMock.mockReturnValue(true)
+    grantSucceeds()
+
+    const lane = ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('pending-index')
+    expect(grantMock).not.toHaveBeenCalled()
+    // Why: deferral must be side-effect free — no half-installed hook entry.
+    expect(existsSync(getRealHooksJsonPath())).toBe(false)
+    expect(pendingMock).toHaveBeenCalledWith(join(fakeHomeDir, '.codex'))
+  })
+
+  it('keeps the lane usable (scheduler-eligible) while pending-index', () => {
+    pendingMock.mockReturnValue(true)
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    expect(isRealHomeCodexHookLaneUsable()).toBe(true)
+  })
+
+  it('grants normally once the backfill completes', () => {
+    pendingMock.mockReturnValue(true)
+    grantSucceeds()
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+
+    pendingMock.mockReturnValue(false)
+    const lane = ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('installed')
+    expect(grantMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not defer an already-installed lane', () => {
+    // Why: an installed lane holds a valid grant ledger; repeat ensures skip the
+    // RPC and spawn nothing, so there is no doomed codex to avoid.
+    grantSucceeds()
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    pendingMock.mockReturnValue(true)
+
+    const lane = ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('installed')
+  })
+
+  it('still sweeps on opt-out while pending-index', () => {
+    pendingMock.mockReturnValue(true)
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+
+    const lane = ensureRealHomeCodexHookState({ hooksEnabled: false, userDataPath: userDataDir })
+
+    expect(lane).toBe('removed')
+  })
+
+  it('does not un-latch a genuinely failed lane while the backfill is pending', () => {
+    // Why: 'unavailable' latches a REAL grant failure behind installRetryAfterMs
+    // (Number.POSITIVE_INFINITY for unsupported binaries, :266-270). If the
+    // deferral converted it to 'pending-index', isRealHomeCodexHookLaneUsable()
+    // would flip false→true on the next per-pane ensure call (index.ts:847/:973),
+    // re-opening real-home routing and bypassing the cooldown gate. Genuine
+    // failures must keep today's semantics even while the index is pending.
+    grantUnavailable()
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    pendingMock.mockReturnValue(true)
+
+    const lane = ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('unavailable')
+    expect(isRealHomeCodexHookLaneUsable()).toBe(false)
+    expect(grantMock).toHaveBeenCalledTimes(1)
   })
 })

@@ -2,7 +2,6 @@ import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync } from 'node:
 import { join } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import {
-  buildManagedCommandHook,
   createManagedCommandMatcher,
   MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJsonWithRaw,
@@ -12,6 +11,7 @@ import {
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
+import { reconcileManagedHookDefinition } from './codex-managed-hook-slot-reconciliation'
 import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
 import { getCodexManagedScriptFileName } from './codex-hook-identity'
 import {
@@ -22,6 +22,7 @@ import {
 import { removeCodexManagedHookTrustEntries } from './codex-managed-trust-reconciliation'
 import { getCodexManagedHookInstallMaterial } from './hook-service'
 import { getSystemCodexHomePath } from './codex-home-paths'
+import { isCodexBackfillIndexPending } from './codex-state-db'
 import type { CodexTrustEntry } from './config-toml-trust'
 import { restoreCodexTrustConfig } from './codex-trust-config-rollback'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-rebase'
@@ -37,8 +38,17 @@ import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-
  *   unsupported RPC, verify failure). The entry is rolled back and the host
  *   stays on the managed-home lane.
  * - 'removed': hooks are opted out; Orca entries are swept from the real home.
+ * - 'pending-index': the target home's codex session index is not complete, so the
+ *   10s grant codex would die in the #11828 backfill wait. Non-latching: routing
+ *   and the migration scheduler treat it as usable; the grant re-runs after the
+ *   prewarm finishes the index.
  */
-export type RealHomeCodexHookLane = 'pending' | 'installed' | 'unavailable' | 'removed'
+export type RealHomeCodexHookLane =
+  | 'pending'
+  | 'pending-index'
+  | 'installed'
+  | 'unavailable'
+  | 'removed'
 
 let currentLane: RealHomeCodexHookLane = 'pending'
 let installRetryAfterMs = 0
@@ -93,6 +103,29 @@ export function ensureRealHomeCodexHookState(args: {
   hooksEnabled: boolean
   userDataPath: string
 }): RealHomeCodexHookLane {
+  // Why: #11828 — against an unindexed large home the 10s grant codex hits the
+  // backfill wait and dies, and its failure used to latch 'unavailable', which
+  // silently disabled the very scheduler/prewarm that would finish the index.
+  // Skip when already installed: a valid grant ledger spawns nothing anyway.
+  // Skip when 'unavailable': that lane latches a GENUINE grant failure behind
+  // installRetryAfterMs (permanent for unsupported binaries, :266-270);
+  // rewriting it to 'pending-index' would flip isRealHomeCodexHookLaneUsable()
+  // back to true and bypass the cooldown gate below — un-latching a real
+  // failure just because an index happens to be pending.
+  if (
+    args.hooksEnabled &&
+    currentLane !== 'installed' &&
+    currentLane !== 'unavailable' &&
+    isCodexBackfillIndexPending(getSystemCodexHomePath())
+  ) {
+    if (currentLane !== 'pending-index') {
+      console.info(
+        '[codex-real-home-hooks] deferring trust grant until codex session index completes'
+      )
+    }
+    currentLane = 'pending-index'
+    return currentLane
+  }
   // Why: the grant client caches failed probes, but mutating and rolling back
   // hooks.json before consulting it still adds synchronous work to every pane.
   if (args.hooksEnabled && currentLane === 'unavailable' && Date.now() < installRetryAfterMs) {
@@ -221,46 +254,6 @@ function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
     `[codex-real-home-hooks] trust grant unavailable (${grant.reason}); entry rolled back, managed lane kept`
   )
   return 'unavailable'
-}
-
-function reconcileManagedHookDefinition(
-  current: HookDefinition[],
-  isManagedCommand: (command: string | undefined) => boolean,
-  command: string
-): { definitions: HookDefinition[]; groupIndex: number; handlerIndex: number } {
-  const directCommandKeys = ['command', 'bash', 'powershell'] as const
-  const hasManagedDirectCommand = current.some((definition) =>
-    directCommandKeys.some((key) => isManagedCommand(definition[key]))
-  )
-  const nestedLocations = current.flatMap((definition, groupIndex) =>
-    Array.isArray(definition.hooks)
-      ? definition.hooks.flatMap((hook, handlerIndex) =>
-          isManagedCommand(hook.command) ? [{ groupIndex, handlerIndex }] : []
-        )
-      : []
-  )
-  if (!hasManagedDirectCommand && nestedLocations.length === 1) {
-    const { groupIndex, handlerIndex } = nestedLocations[0]!
-    const definition = current[groupIndex]!
-    const hasDirectCommand = directCommandKeys.some((key) => typeof definition[key] === 'string')
-    if (definition.matcher === undefined && !hasDirectCommand) {
-      const definitions = [...current]
-      // Why: users can append groups or handlers after Orca's first install.
-      // Reusing the exact slot preserves all later positional trust keys.
-      const hooks = [...definition.hooks!]
-      hooks[handlerIndex] = buildManagedCommandHook(command)
-      definitions[groupIndex] = { ...definition, hooks }
-      return { definitions, groupIndex, handlerIndex }
-    }
-  }
-
-  const cleaned = removeManagedCommands(current, isManagedCommand)
-  // Why: first install appends LAST so no existing user trust position shifts.
-  return {
-    definitions: [...cleaned, { hooks: [buildManagedCommandHook(command)] }],
-    groupIndex: cleaned.length,
-    handlerIndex: 0
-  }
 }
 
 function getInstallRetryAfterMs(reason: CodexTrustGrantFallbackReason): number {
