@@ -71,7 +71,9 @@ export function launchAiVaultSessionInNewTab(args: {
     command: args.command,
     ...(args.env ? { env: args.env } : {}),
     ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
-    ...(args.launchConfig ? { launchConfig: args.launchConfig, launchAgent: args.agent } : {}),
+    ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
+    // Why unconditional: launchConfig-absent codex resumes must still carry launchAgent to pty:spawn for the #11828 main-side gate; raw user-authored command strings (quick commands, template tabs, setup/issue splits) remain ungated by design — the backfill-error detector + amber toast stay their net.
+    launchAgent: args.agent,
     telemetry: {
       agent_kind: tuiAgentToAgentKind(args.agent),
       launch_source: 'sidebar',

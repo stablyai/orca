@@ -1,5 +1,6 @@
 import type { CodexBackfillPaneHoldState } from '../../../../shared/codex-backfill-status-types'
-import type { CodexIndexingPaneState } from './codex-backfill-spawn-gate'
+
+export type CodexIndexingPaneState = { lastWatermark: string | null }
 
 function toIndexingState(state: CodexBackfillPaneHoldState | null): CodexIndexingPaneState | null {
   if (!state || state.phase !== 'indexing') {

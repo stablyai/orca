@@ -82,6 +82,7 @@ describe('launchAiVaultSessionInNewTab', () => {
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-1')
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
       command: 'claude --resume session-1',
+      launchAgent: 'claude',
       telemetry: {
         agent_kind: 'claude',
         launch_source: 'sidebar',
@@ -123,6 +124,21 @@ describe('launchAiVaultSessionInNewTab', () => {
         request_kind: 'resume'
       }
     })
+  })
+
+  it('queues launchAgent for launchConfig-absent codex resumes (main-side gate detection, #11828)', () => {
+    // Older-serializer drag-drop payloads and the sidebar-resume fallback carry no
+    // launchConfig; launchAgent must still reach pty:spawn or main's gate misses them.
+    launchAiVaultSessionInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      command: "codex resume 'session-3'"
+    })
+
+    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({ launchAgent: 'codex' })
+    )
   })
 
   it('creates a split group before launching when a split direction is provided', () => {

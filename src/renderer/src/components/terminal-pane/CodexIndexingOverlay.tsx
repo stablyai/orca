@@ -1,6 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import type { CodexIndexingPaneState } from './codex-backfill-spawn-gate'
+import type { CodexIndexingPaneState } from './codex-backfill-pane-hold'
 
 /** Extracts a YYYY-MM-DD hint from the backfill cursor (sessions/YYYY/MM/DD/rollout-*.jsonl). */
 export function formatCodexIndexingProgress(lastWatermark: string | null): string | null {

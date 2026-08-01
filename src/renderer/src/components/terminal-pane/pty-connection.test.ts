@@ -23612,55 +23612,39 @@ describe('connectPanePty', () => {
   })
 
   describe('codex backfill spawn gate (#11828)', () => {
-    function stubCodexBackfillApi(initial: { pending: boolean; lastWatermark: string | null }): {
+    type PaneHoldState = {
+      paneKey: string
+      phase: 'indexing' | 'launched'
+      lastWatermark: string | null
+    }
+    function stubCodexBackfillApi(
+      initial: { pending: boolean; lastWatermark: string | null },
+      paneHold: PaneHoldState | null = null
+    ): {
       emit: (status: { pending: boolean; lastWatermark: string | null }) => void
+      emitPaneHold: (state: PaneHoldState) => void
     } {
       let listener: ((s: { pending: boolean; lastWatermark: string | null }) => void) | null = null
+      let paneHoldListener: ((s: PaneHoldState) => void) | null = null
       window.api.codexBackfill = {
         status: vi.fn(() => Promise.resolve(initial)),
         onStatusChanged: (cb: (s: { pending: boolean; lastWatermark: string | null }) => void) => {
           listener = cb
           return () => {}
+        },
+        paneHoldStatus: vi.fn(() => Promise.resolve(paneHold)),
+        onPaneHoldChanged: (cb: (s: PaneHoldState) => void) => {
+          paneHoldListener = cb
+          return () => {
+            paneHoldListener = null
+          }
         }
       } as never
-      return { emit: (status) => listener?.(status) }
-    }
-
-    it('defers a fresh codex spawn while the backfill is pending, then spawns on clear', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport()
-      transportFactoryQueue.push(transport)
-      const { emit } = stubCodexBackfillApi({
-        pending: true,
-        lastWatermark: 'sessions/2026/07/02/r.jsonl'
-      })
-      // Why ptyId null: the harness default ('tab-pty') routes into the reattach
-      // path (connect({ sessionId })), which the gate deliberately never guards.
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-        ptyIdsByTabId: { 'tab-1': [] }
+      return {
+        emit: (status) => listener?.(status),
+        emitPaneHold: (state) => paneHoldListener?.(state)
       }
-      const onCodexIndexingStateRef = { current: vi.fn() }
-      const deps = createDeps({
-        startup: { command: 'codex', launchAgent: 'codex' },
-        onCodexIndexingStateRef
-      })
-
-      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
-      await flushAsyncTicks()
-
-      expect(transport.connect).not.toHaveBeenCalled()
-      expect(onCodexIndexingStateRef.current).toHaveBeenCalledWith(expect.anything(), {
-        lastWatermark: 'sessions/2026/07/02/r.jsonl'
-      })
-
-      emit({ pending: false, lastWatermark: null })
-      await flushAsyncTicks()
-
-      expect(onCodexIndexingStateRef.current).toHaveBeenCalledWith(expect.anything(), null)
-      expect(transport.connect).toHaveBeenCalledTimes(1)
-    })
+    }
 
     it('does not gate non-codex panes', async () => {
       const { connectPanePty } = await import('./pty-connection')
@@ -23782,6 +23766,179 @@ describe('connectPanePty', () => {
       await flushAsyncTicks()
 
       expect(transport.connect).toHaveBeenCalledTimes(1)
+    })
+
+    it('drives the indexing overlay for a pane adopted via attach (existingPtyId)', async () => {
+      // Why adoption arm: main can already hold a worktree-creation codex spawn
+      // when its pane mounts and adopts the PTY (the np-task-8 gap) — the
+      // subscription must cover attach, not just fresh spawns.
+      const eagerPtyId = 'held-eager-pty'
+      vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
+        ptyId === eagerPtyId ? { flush: () => '', dispose: () => {} } : undefined
+      )
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      const { emitPaneHold } = stubCodexBackfillApi({ pending: false, lastWatermark: null })
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: eagerPtyId }] },
+        ptyIdsByTabId: { 'tab-1': [eagerPtyId] },
+        terminalLayoutsByTabId: {
+          'tab-1': {
+            root: { type: 'leaf', leafId: LEAF_1 },
+            activeLeafId: LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEAF_1]: eagerPtyId }
+          }
+        }
+      } as StoreState
+      const onCodexIndexingStateRef = { current: vi.fn() }
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: eagerPtyId },
+        onCodexIndexingStateRef
+      })
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks()
+
+      expect(transport.attach).toHaveBeenCalledWith(
+        expect.objectContaining({ existingPtyId: eagerPtyId })
+      )
+      emitPaneHold({
+        paneKey: makePaneKey('tab-1', LEAF_1),
+        phase: 'indexing',
+        lastWatermark: 'w1'
+      })
+      expect(onCodexIndexingStateRef.current).toHaveBeenCalledWith(expect.anything(), {
+        lastWatermark: 'w1'
+      })
+    })
+
+    it('shows and clears the overlay for a fresh-spawned pane from pane hold events', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      const { emitPaneHold } = stubCodexBackfillApi({ pending: false, lastWatermark: null })
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+        ptyIdsByTabId: { 'tab-1': [] }
+      }
+      const onCodexIndexingStateRef = { current: vi.fn() }
+      const deps = createDeps({
+        startup: { command: 'codex', launchAgent: 'codex' },
+        onCodexIndexingStateRef
+      })
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks()
+
+      emitPaneHold({
+        paneKey: makePaneKey('tab-1', LEAF_1),
+        phase: 'indexing',
+        lastWatermark: 'w1'
+      })
+      expect(onCodexIndexingStateRef.current).toHaveBeenLastCalledWith(expect.anything(), {
+        lastWatermark: 'w1'
+      })
+
+      emitPaneHold({
+        paneKey: makePaneKey('tab-1', LEAF_1),
+        phase: 'launched',
+        lastWatermark: null
+      })
+      expect(onCodexIndexingStateRef.current).toHaveBeenLastCalledWith(expect.anything(), null)
+    })
+
+    it('never parks a fresh codex spawn on the global backfill status (main owns enforcement)', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      stubCodexBackfillApi({ pending: true, lastWatermark: 'sessions/2026/07/02/r.jsonl' })
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+        ptyIdsByTabId: { 'tab-1': [] }
+      }
+      const deps = createDeps({ startup: { command: 'codex', launchAgent: 'codex' } })
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks()
+
+      expect(transport.connect).toHaveBeenCalledTimes(1)
+    })
+
+    it('replays a pre-existing hold from paneHoldStatus on mount (no push event)', async () => {
+      // Why: a hold broadcast can fire before the pane subscribes (the
+      // worktree-creation adoption race); the pull must still drive the overlay.
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      stubCodexBackfillApi(
+        { pending: false, lastWatermark: null },
+        { paneKey: makePaneKey('tab-1', LEAF_1), phase: 'indexing', lastWatermark: 'w2' }
+      )
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+        ptyIdsByTabId: { 'tab-1': [] }
+      }
+      const onCodexIndexingStateRef = { current: vi.fn() }
+      const deps = createDeps({
+        startup: { command: 'codex', launchAgent: 'codex' },
+        onCodexIndexingStateRef
+      })
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks()
+
+      expect(onCodexIndexingStateRef.current).toHaveBeenCalledWith(expect.anything(), {
+        lastWatermark: 'w2'
+      })
+    })
+
+    it('stops mirroring pane hold events after pane dispose', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      const { emitPaneHold } = stubCodexBackfillApi({ pending: false, lastWatermark: null })
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+        ptyIdsByTabId: { 'tab-1': [] }
+      }
+      const onCodexIndexingStateRef = { current: vi.fn() }
+      const deps = createDeps({
+        startup: { command: 'codex', launchAgent: 'codex' },
+        onCodexIndexingStateRef
+      })
+
+      const binding = connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        deps as never
+      ) as unknown as { dispose: () => void }
+      await flushAsyncTicks()
+
+      emitPaneHold({
+        paneKey: makePaneKey('tab-1', LEAF_1),
+        phase: 'indexing',
+        lastWatermark: 'w1'
+      })
+      expect(onCodexIndexingStateRef.current).toHaveBeenCalledWith(expect.anything(), {
+        lastWatermark: 'w1'
+      })
+
+      binding.dispose()
+      onCodexIndexingStateRef.current.mockClear()
+      emitPaneHold({
+        paneKey: makePaneKey('tab-1', LEAF_1),
+        phase: 'indexing',
+        lastWatermark: 'w2'
+      })
+      expect(onCodexIndexingStateRef.current).not.toHaveBeenCalled()
     })
   })
 })

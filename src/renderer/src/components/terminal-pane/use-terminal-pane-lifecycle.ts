@@ -105,7 +105,7 @@ import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-optio
 import { connectPanePty } from './pty-connection'
 import type { PtyTransport } from './pty-transport'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
-import type { CodexIndexingPaneState } from './codex-backfill-spawn-gate'
+import type { CodexIndexingPaneState } from './codex-backfill-pane-hold'
 import {
   reconcileMissingSessions,
   type ReconcilableBinding

@@ -186,7 +186,7 @@ import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './ter
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { CodexIndexingOverlay } from './CodexIndexingOverlay'
-import type { CodexIndexingPaneState } from './codex-backfill-spawn-gate'
+import type { CodexIndexingPaneState } from './codex-backfill-pane-hold'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
