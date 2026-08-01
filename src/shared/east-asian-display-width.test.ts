@@ -7,6 +7,13 @@ const VARIATION_SELECTOR_16 = String.fromCodePoint(0xfe0f)
 const COMBINING_ACUTE = String.fromCodePoint(0x0301)
 const UNIT_SEPARATOR = String.fromCodePoint(0x001f)
 const ROCKET = String.fromCodePoint(0x1f680)
+const HANGUL_CHOSEONG_KIYEOK = String.fromCodePoint(0x1100)
+const HANGUL_JUNGSEONG_A = String.fromCodePoint(0x1161)
+const HANGUL_JONGSEONG_KIYEOK = String.fromCodePoint(0x11a8)
+const HANGUL_JUNGSEONG_EXTENDED_B = String.fromCodePoint(0xd7b0)
+const ZERO_WIDTH_JOINER = String.fromCodePoint(0x200d)
+const WOMAN = String.fromCodePoint(0x1f469)
+const LAPTOP = String.fromCodePoint(0x1f4bb)
 
 describe('getEastAsianDisplayWidth', () => {
   it('counts ASCII as one column each', () => {
@@ -46,6 +53,37 @@ describe('getEastAsianDisplayWidth', () => {
 
   it('ignores control characters', () => {
     expect(getEastAsianDisplayWidth(`a${UNIT_SEPARATOR}b`)).toBe(2)
+  })
+
+  it('counts conjoining Hangul jamo as zero, not as separate syllables', () => {
+    // U+1100 choseong is wide; the medial and final that combine onto it are not.
+    expect(getEastAsianDisplayWidth(HANGUL_CHOSEONG_KIYEOK)).toBe(2)
+    expect(
+      getEastAsianDisplayWidth(
+        `${HANGUL_CHOSEONG_KIYEOK}${HANGUL_JUNGSEONG_A}${HANGUL_JONGSEONG_KIYEOK}`
+      )
+    ).toBe(2)
+  })
+
+  it('counts Hangul Jamo Extended-B as one column', () => {
+    // Neither wide nor zero in the provider Orca renders with.
+    expect(getEastAsianDisplayWidth(HANGUL_JUNGSEONG_EXTENDED_B)).toBe(1)
+  })
+
+  it('collapses a ZWJ emoji sequence to the single glyph a terminal draws', () => {
+    const sequence = `${WOMAN}${ZERO_WIDTH_JOINER}${LAPTOP}`
+
+    // Summing the parts would give 2 + 0 + 2; the terminal renders one glyph.
+    expect(getEastAsianDisplayWidth(WOMAN)).toBe(2)
+    expect(getEastAsianDisplayWidth(LAPTOP)).toBe(2)
+    expect(getEastAsianDisplayWidth(sequence)).toBe(2)
+  })
+
+  it('aligns a ZWJ emoji name against a Latin one', () => {
+    const emoji = padEndToEastAsianDisplayWidth(`${WOMAN}${ZERO_WIDTH_JOINER}${LAPTOP}`, 10)
+    const latin = padEndToEastAsianDisplayWidth('ab', 10)
+
+    expect(getEastAsianDisplayWidth(emoji)).toBe(getEastAsianDisplayWidth(latin))
   })
 })
 
