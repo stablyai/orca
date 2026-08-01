@@ -29,7 +29,14 @@ function isWorkspaceSessionCheckpoint(value: unknown): value is WorkspaceSession
     isNullableString(value.activeWorktreeId) &&
     isNullableString(value.activeTabId) &&
     isPlainRecord(value.tabsByWorktree) &&
-    isPlainRecord(value.terminalLayoutsByTabId)
+    // Why: one-level container checks so a renderer serialization bug cannot
+    // flush scalar garbage where hydration expects tab arrays and layout
+    // records; the trusted sender bounds how deep validation needs to go.
+    Object.values(value.tabsByWorktree).every(
+      (tabs) => Array.isArray(tabs) && tabs.every(isPlainRecord)
+    ) &&
+    isPlainRecord(value.terminalLayoutsByTabId) &&
+    Object.values(value.terminalLayoutsByTabId).every(isPlainRecord)
   )
 }
 

@@ -4891,7 +4891,26 @@ export function connectPanePty(
         const entryTabId = entry.tabId ?? parsePaneKey(entry.paneKey)?.tabId
         return entryTabId === deps.tabId
       })
-      return candidates.length === 1 ? candidates[0] : undefined
+      if (candidates.length === 0) {
+        return undefined
+      }
+      // Why: a prior crash-adopt cycle leaves the old leaf's row beside the
+      // resumed leaf's row for the same provider session; that is one recovery
+      // identity, so use the freshest row. Distinct sessions stay ambiguous.
+      const [reference] = candidates
+      const allSameSession = candidates.every(
+        (entry) =>
+          entry.agentType === reference.agentType &&
+          agentProviderSessionsEqual(
+            reference.agentType,
+            entry.providerSession,
+            reference.providerSession
+          )
+      )
+      if (!allSameSession) {
+        return undefined
+      }
+      return candidates.reduce((best, entry) => (entry.updatedAt > best.updatedAt ? entry : best))
     }
     const buildColdRestoreAgentResumeStartup = (): ColdRestoreAgentResumeStartup | null => {
       if (pendingStartupCommand) {

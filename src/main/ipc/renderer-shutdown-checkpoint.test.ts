@@ -168,6 +168,26 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     expect(store.setWorkspaceSession).not.toHaveBeenCalled()
     expect(store.flushOrThrow).not.toHaveBeenCalled()
     expect(untrustedEvent.returnValue).toEqual({ ok: false })
+
+    const scalarTabsEvent = makeRendererEvent()
+    handler?.(scalarTabsEvent, {
+      sessions: [{ state: { ...makeSession('worktree-1'), tabsByWorktree: { 'worktree-1': 5 } } }],
+      ui: {}
+    })
+    expect(store.setWorkspaceSession).not.toHaveBeenCalled()
+    expect(store.flushOrThrow).not.toHaveBeenCalled()
+    expect(scalarTabsEvent.returnValue).toEqual({ ok: false })
+
+    const scalarLayoutEvent = makeRendererEvent()
+    handler?.(scalarLayoutEvent, {
+      sessions: [
+        { state: { ...makeSession('worktree-1'), terminalLayoutsByTabId: { 'tab-1': 'oops' } } }
+      ],
+      ui: {}
+    })
+    expect(store.setWorkspaceSession).not.toHaveBeenCalled()
+    expect(store.flushOrThrow).not.toHaveBeenCalled()
+    expect(scalarLayoutEvent.returnValue).toEqual({ ok: false })
   })
 
   it('accepts the latest trusted renderer after the main window is recreated', () => {

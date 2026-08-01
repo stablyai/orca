@@ -110,5 +110,42 @@ describe('preserved sleeping-agent pane ownership', () => {
     } as never
     expect(recordPaneIsOwnedByPreservedPane(first, withCompletedSibling)).toBe(true)
     expect(recordPaneIsOwnedByPreservedPane(completed, withCompletedSibling)).toBe(false)
+
+    // Duplicate rows for one provider session are a single recovery identity:
+    // the freshest row claims the pane, older duplicates defer to it.
+    const sharedSession = { key: 'session_id', id: 'sess-shared' } as const
+    const olderDuplicate = makeRecord('11111111-1111-4111-8111-111111111111', {
+      providerSession: sharedSession,
+      updatedAt: 1
+    })
+    const newerDuplicate = makeRecord('22222222-2222-4222-8222-222222222222', {
+      providerSession: sharedSession,
+      updatedAt: 2
+    })
+    const withDuplicates = {
+      ...baseState,
+      sleepingAgentSessionsByPaneKey: {
+        [olderDuplicate.paneKey]: olderDuplicate,
+        [newerDuplicate.paneKey]: newerDuplicate
+      }
+    } as never
+    expect(recordPaneIsOwnedByPreservedPane(newerDuplicate, withDuplicates)).toBe(true)
+    expect(recordPaneIsOwnedByPreservedPane(olderDuplicate, withDuplicates)).toBe(false)
+
+    // A legacy-numeric row on the tab defers rebuilt-leaf adoption entirely:
+    // connectPanePty resolves legacy selection separately, so stable records
+    // keep the fork-a-new-tab recovery instead of racing it.
+    const legacyRecord: SleepingAgentSessionRecord = {
+      ...makeRecord('11111111-1111-4111-8111-111111111111'),
+      paneKey: `${TAB_ID}:2`
+    }
+    const withLegacySibling = {
+      ...baseState,
+      sleepingAgentSessionsByPaneKey: {
+        [first.paneKey]: first,
+        [legacyRecord.paneKey]: legacyRecord
+      }
+    } as never
+    expect(recordPaneIsOwnedByPreservedPane(first, withLegacySibling)).toBe(false)
   })
 })

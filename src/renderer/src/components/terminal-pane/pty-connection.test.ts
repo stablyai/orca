@@ -10075,6 +10075,71 @@ describe('connectPanePty', () => {
     expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(workingPaneKey)
   })
 
+  it('collapses duplicate live rows of one provider session to the freshest for cold restore', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const spawn = createDeferred<string>()
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(() => spawn.promise)
+    transportFactoryQueue.push(transport)
+    const staleLeafPaneKey = makePaneKey('tab-1', LEAF_1)
+    const previousResumePaneKey = makePaneKey('tab-1', '33333333-3333-4333-8333-333333333333')
+    const rebuiltPaneKey = makePaneKey('tab-1', LEAF_2)
+    const makeLiveEntry = (paneKey: string, updatedAt: number) => ({
+      state: 'working',
+      prompt: 'recover from hook cache',
+      agentType: 'codex',
+      paneKey,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      updatedAt,
+      stateStartedAt: updatedAt,
+      stateHistory: [],
+      providerSession: { key: 'session_id', id: 'codex-session-1' }
+    })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: null }]
+      },
+      ptyIdsByTabId: {
+        'tab-1': []
+      },
+      terminalLayoutsByTabId: {},
+      settings: {
+        ...mockStoreState.settings,
+        agentCmdOverrides: {}
+      },
+      agentStatusByPaneKey: {
+        [staleLeafPaneKey]: makeLiveEntry(staleLeafPaneKey, 1),
+        [previousResumePaneKey]: makeLiveEntry(previousResumePaneKey, 2)
+      },
+      sleepingAgentSessionsByPaneKey: {}
+    } as StoreState
+
+    const pane = createPane(2)
+    const manager = createManager(2)
+    const deps = createDeps({ restoredLeafId: undefined, restoredPtyIdByLeafId: {} })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(4)
+
+    // Both rows carry the same provider session from a prior crash-adopt
+    // cycle; a second crash must still recover instead of failing closed.
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+        launchAgent: 'codex',
+        resumeProviderSession: { key: 'session_id', id: 'codex-session-1' },
+        env: expect.objectContaining({
+          ORCA_PANE_KEY: rebuiltPaneKey
+        })
+      })
+    )
+
+    spawn.resolve('fresh-pty')
+    await flushAsyncTicks(10)
+  })
+
   it('does not choose a non-exact legacy record when same-tab provider sessions differ', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('fresh-pty')

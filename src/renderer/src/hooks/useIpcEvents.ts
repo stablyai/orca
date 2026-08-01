@@ -3316,6 +3316,11 @@ export function useIpcEvents(): void {
       if (agentStatusEffectDisposed) {
         return
       }
+      // Why: a prior ready-window request can settle after a newer one; its
+      // stale migration rows must not land on the replacement workspace.
+      if (options?.requestId !== undefined && options.requestId !== snapshotRequestId) {
+        return
+      }
       const unsupportedStore = useAppStore.getState()
       if (!unsupportedStore.workspaceSessionReady && options?.allowBeforeWorkspaceReady !== true) {
         return

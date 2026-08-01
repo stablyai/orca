@@ -61,10 +61,19 @@ export function findUniqueAdoptableRebuiltPaneRecord(
       isAdoptableRebuiltPaneRecord(record)
     )
   })
-  if (matches.length !== 1) {
+  if (matches.length === 0) {
     return null
   }
-  const [paneKey, record] = matches[0]
+  // Why: repeated crash/adopt cycles can leave several rows for one provider
+  // session; they are a single recovery identity, so adopt the freshest row.
+  // Distinct sessions remain ambiguous and fail closed.
+  const claimKey = getProviderSessionClaimKey(matches[0][1])
+  if (!matches.every(([, record]) => getProviderSessionClaimKey(record) === claimKey)) {
+    return null
+  }
+  const [paneKey, record] = matches.reduce((best, candidate) =>
+    candidate[1].updatedAt > best[1].updatedAt ? candidate : best
+  )
   return { paneKey, record }
 }
 

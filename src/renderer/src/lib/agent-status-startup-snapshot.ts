@@ -41,33 +41,47 @@ export function registerAgentStatusStartupSnapshotLoader(
 }
 
 export function requestAgentStatusStartupSnapshot(): Promise<void> {
-  const loader = activeLoader
-  if (loader) {
-    return loader()
-  }
-
   return new Promise<void>((resolve, reject) => {
+    let settled = false
     let timeout: ReturnType<typeof setTimeout>
     const complete = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
       clearTimeout(timeout)
       resolve()
     }
     const fail = (reason: unknown): void => {
+      if (settled) {
+        return
+      }
+      settled = true
       clearTimeout(timeout)
       reject(reason)
     }
     const request: PendingStartupSnapshotRequest = { resolve: complete, reject: fail }
-    pendingRequests.push(request)
 
-    // The snapshot is fail-open: startup must never be held forever by a
-    // renderer hook that failed to mount. The normal post-ready retry remains
-    // responsible for applying a late snapshot.
+    // The snapshot is fail-open on every path: startup must never wait forever
+    // on a missing loader or a hung snapshot IPC. The normal post-ready retry
+    // remains responsible for applying a late snapshot.
     timeout = setTimeout(() => {
       const index = pendingRequests.indexOf(request)
       if (index >= 0) {
         pendingRequests.splice(index, 1)
       }
-      resolve()
+      complete()
     }, STARTUP_SNAPSHOT_REQUEST_TIMEOUT_MS)
+
+    const loader = activeLoader
+    if (loader) {
+      try {
+        void Promise.resolve(loader()).then(complete, fail)
+      } catch (error) {
+        fail(error)
+      }
+      return
+    }
+    pendingRequests.push(request)
   })
 }
