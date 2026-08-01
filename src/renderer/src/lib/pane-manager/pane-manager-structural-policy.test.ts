@@ -12,6 +12,7 @@ const beginPaneDragFromPointerDown = vi.hoisted(() => vi.fn())
 const closeManagedPane = vi.hoisted(() => vi.fn())
 const detachManagedPaneForExternalMove = vi.hoisted(() => vi.fn(() => true))
 const arrangeMountedPanesAsOrchestrationGrid = vi.hoisted(() => vi.fn())
+const linkOpenHint = vi.hoisted(() => vi.fn(() => ''))
 
 vi.mock('./pane-split-close', () => ({
   closeManagedPane,
@@ -59,6 +60,7 @@ describe('PaneManager maintained-grid structural policy', () => {
   it('ignores manual split, equalize, pane move, and title drag while grid maintenance owns structure', () => {
     const onLayoutChanged = vi.fn()
     const manager = new PaneManager(document.createElement('div'), {
+      linkOpenHint,
       maintainOrchestrationGrid: true,
       onLayoutChanged
     })
@@ -82,7 +84,10 @@ describe('PaneManager maintained-grid structural policy', () => {
 
   it('keeps the same structural actions available on ordinary terminal tabs', () => {
     const onLayoutChanged = vi.fn()
-    const manager = new PaneManager(document.createElement('div'), { onLayoutChanged })
+    const manager = new PaneManager(document.createElement('div'), {
+      linkOpenHint,
+      onLayoutChanged
+    })
     seedTwoPanes(manager)
 
     expect(manager.splitPane(1, 'vertical')).toEqual({ id: 3 })
@@ -105,6 +110,7 @@ describe('PaneManager maintained-grid structural policy', () => {
 
   it('allows an explicitly sanctioned orchestration insertion to reach the split owner', () => {
     const manager = new PaneManager(document.createElement('div'), {
+      linkOpenHint,
       maintainOrchestrationGrid: true
     })
     seedTwoPanes(manager)
@@ -129,6 +135,7 @@ describe('PaneManager maintained-grid structural policy', () => {
 
   it('allows maintained-grid title drag when it can detach to an external tab target', () => {
     const manager = new PaneManager(document.createElement('div'), {
+      linkOpenHint,
       maintainOrchestrationGrid: true,
       resolveExternalPaneDropTarget: vi.fn(() => null),
       onExternalPaneDrop: vi.fn()
@@ -147,7 +154,7 @@ describe('PaneManager maintained-grid structural policy', () => {
   it.each(['close', 'detach'] as const)(
     'reflows a canonical grid after an ordinary mount changes live ownership and then %s runs',
     (operation) => {
-      const manager = new PaneManager(document.createElement('div'), {})
+      const manager = new PaneManager(document.createElement('div'), { linkOpenHint })
 
       expect(manager.setMaintainOrchestrationGrid(true)).toBe(true)
       expect(arrangeMountedPanesAsOrchestrationGrid).toHaveBeenCalledOnce()
@@ -168,6 +175,7 @@ describe('PaneManager maintained-grid structural policy', () => {
     'does not rebuild a maintained grid around a retained pane when %s cleanup pauses',
     (operation) => {
       const manager = new PaneManager(document.createElement('div'), {
+        linkOpenHint,
         maintainOrchestrationGrid: true
       })
       seedTwoPanes(manager)
@@ -191,6 +199,7 @@ describe('PaneManager maintained-grid structural policy', () => {
 
   it('rebuilds a maintained grid when close post-cleanup fails after releasing structure', () => {
     const manager = new PaneManager(document.createElement('div'), {
+      linkOpenHint,
       maintainOrchestrationGrid: true
     })
     seedTwoPanes(manager)
@@ -216,7 +225,7 @@ describe('PaneManager maintained-grid structural policy', () => {
     const second = document.createElement('div')
     split.append(first, maintainedDivider, second)
     root.append(split)
-    const manager = new PaneManager(root, { maintainOrchestrationGrid: true })
+    const manager = new PaneManager(root, { linkOpenHint, maintainOrchestrationGrid: true })
 
     expect(manager.setMaintainOrchestrationGrid(false)).toBe(true)
 
@@ -228,7 +237,10 @@ describe('PaneManager maintained-grid structural policy', () => {
 
   it('publishes the surviving active pane only after close selects it', () => {
     const onActivePaneChange = vi.fn()
-    const manager = new PaneManager(document.createElement('div'), { onActivePaneChange })
+    const manager = new PaneManager(document.createElement('div'), {
+      linkOpenHint,
+      onActivePaneChange
+    })
     const panes = (manager as unknown as { panes: Map<number, ManagedPaneInternal> }).panes
     const createPane = (id: number, leafId: string): ManagedPaneInternal =>
       ({
@@ -255,7 +267,7 @@ describe('PaneManager maintained-grid structural policy', () => {
   })
 
   it('retains leaf ownership for a partial split pane that still needs cleanup', () => {
-    const manager = new PaneManager(document.createElement('div'), {})
+    const manager = new PaneManager(document.createElement('div'), { linkOpenHint })
     const leafId = '40000000-0000-4000-8000-000000000003'
     const internal = manager as unknown as {
       panes: Map<number, ManagedPaneInternal>

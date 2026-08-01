@@ -17,6 +17,7 @@ import {
 import { isHostAuthoritativeLayout } from './terminal-live-layout-reconciliation'
 import { finalizeTerminalLiveLayoutInsertions } from './terminal-live-orchestration-grid'
 import { collectLeafIdsInOrder } from './terminal-layout-leaf-ids'
+const linkOpenHint = vi.hoisted(() => vi.fn(() => ''))
 
 vi.mock('@/lib/pane-manager/pane-split-scroll', () => ({
   clearPendingSplitScrollRestore: vi.fn(),
@@ -193,7 +194,7 @@ describe('finalizeTerminalLiveLayoutInsertions', () => {
         panes,
         root,
         styleOptions: { dividerThicknessPx: 4 },
-        managerOptions: { onLayoutChanged },
+        managerOptions: { linkOpenHint, onLayoutChanged },
         createPaneInternal: () => {
           const pane = createPane(nextPaneId, leafId)
           nextPaneId += 1
@@ -346,6 +347,7 @@ describe('maintained orchestration-grid teardown', () => {
         root,
         styleOptions: { dividerThicknessPx: 4 },
         managerOptions: {
+          linkOpenHint,
           maintainOrchestrationGrid: true,
           onPaneClosed: () => events.push('closed'),
           onLayoutChanged
@@ -404,7 +406,7 @@ describe('maintained orchestration-grid teardown', () => {
       panes,
       root,
       styleOptions: {},
-      managerOptions: { onLayoutChanged },
+      managerOptions: { linkOpenHint, onLayoutChanged },
       getDragCallbacks: () =>
         ({
           getPanes: () => panes,

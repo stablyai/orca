@@ -29,6 +29,7 @@ const disposeWebgl = vi.hoisted(() =>
     pane.webglAddon = null
   })
 )
+const linkOpenHint = vi.hoisted(() => vi.fn(() => ''))
 
 vi.mock('./pane-scroll', () => ({
   captureScrollState,
@@ -144,7 +145,7 @@ describe('orchestration-grid restore WebGL lifecycle', () => {
             panes,
             root,
             styleOptions: {},
-            managerOptions: {},
+            managerOptions: { linkOpenHint },
             createPaneInternal: () => {
               panes.set(createdPane.id, createdPane)
               return createdPane
