@@ -1682,12 +1682,7 @@ async function resolveCreatePRTopology(
     connectionId,
     localGitOptions
   )
-  const { ghOptions } = await resolveGitHubRepoExecution(
-    repoPath,
-    undefined,
-    connectionId,
-    localGitOptions
-  )
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
 
   let data: { isFork?: boolean; parent?: { name?: string; owner?: { login?: string } } | null }
   await acquire()
@@ -1723,7 +1718,8 @@ async function resolveCreatePRTopology(
       return {
         ok: false,
         code: 'validation',
-        error: 'Create PR failed: the upstream remote is not the verified fork parent.'
+        error:
+          'Create PR failed: the upstream remote does not match the verified origin repository.'
       }
     }
     return { ok: true, targetRepo: headRepo }
