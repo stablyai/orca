@@ -118,7 +118,7 @@ export class RuntimeClient {
         )
       }
       if (response.ok === false) {
-        throw new RuntimeRpcFailureError(response)
+        throw attachSlowMutationCompletionWarning(new RuntimeRpcFailureError(response), method)
       }
       if (this.environmentSelector) {
         markEnvironmentUsed(this.userDataPath, this.environmentSelector, {
@@ -138,7 +138,7 @@ export class RuntimeClient {
       )
     }
     if (response.ok === false) {
-      throw new RuntimeRpcFailureError(response)
+      throw attachSlowMutationCompletionWarning(new RuntimeRpcFailureError(response), method)
     }
     return response
   }

@@ -169,6 +169,19 @@ export class UnixSocketTransport implements RpcTransport {
     let replied = false
     let keepaliveTimer: NodeJS.Timeout | null = null
     let keepaliveExpiryTimer: NodeJS.Timeout | null = null
+    let requestId = 'unknown'
+    let requestMethod = 'unknown'
+    try {
+      const request = JSON.parse(rawMessage) as { id?: unknown; method?: unknown }
+      if (typeof request.id === 'string' && request.id.length > 0) {
+        requestId = request.id
+      }
+      if (typeof request.method === 'string' && request.method.length > 0) {
+        requestMethod = request.method
+      }
+    } catch {
+      // Why: handleMessage owns request validation; transport expiry only needs best-effort frame metadata.
+    }
     // Why: each dispatch needs its own abort signal and keepalive timer
     // cleanup. Socket close runs every cleanup without touching sibling
     // dispatches that already replied on the same connection.
@@ -228,9 +241,23 @@ export class UnixSocketTransport implements RpcTransport {
             keepaliveTimer = null
           }
           keepaliveExpiryTimer = null
-          // Why: reclaim the connection at the bound even when socket activity
-          // from another dispatch would otherwise keep the shared idle timer alive.
-          socket.destroy()
+          // Why: a shared socket can carry a sibling request; return a terminal
+          // failure for this dispatch instead of destroying that sibling's channel.
+          if (inflight.size > 1) {
+            reply(
+              JSON.stringify({
+                id: requestId,
+                ok: false,
+                error: {
+                  code: 'runtime_unavailable',
+                  message: 'The runtime stopped sending keepalive frames before responding.',
+                  data: { requestPhase: 'awaiting_response', method: requestMethod }
+                }
+              })
+            )
+          } else {
+            socket.destroy()
+          }
         }, maxDurationMs)
         if (typeof keepaliveExpiryTimer.unref === 'function') {
           keepaliveExpiryTimer.unref()

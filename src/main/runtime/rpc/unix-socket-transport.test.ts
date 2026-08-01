@@ -99,4 +99,36 @@ describe('UnixSocketTransport', () => {
     vi.advanceTimersByTime(300)
     expect(socket.writes).toHaveLength(2)
   })
+
+  it('returns a bounded failure without destroying sibling dispatches', () => {
+    const transport = new UnixSocketTransport({
+      endpoint: '/tmp/orca-runtime-rpc-test.sock',
+      kind: 'unix',
+      keepaliveIntervalMs: 100
+    })
+    const socket = new FakeSocket()
+    let dispatchCount = 0
+
+    transport.onMessage((_msg, reply, context) => {
+      dispatchCount += 1
+      if (dispatchCount === 1) {
+        context?.startKeepalive(250)
+      } else {
+        void reply
+      }
+    })
+
+    ;(transport as unknown as UnixSocketTransportInternals).handleConnection(
+      socket as unknown as Socket
+    )
+    socket.emit(
+      'data',
+      '{"id":"slow","method":"worktree.create"}\n{"id":"sibling","method":"status.get"}\n'
+    )
+
+    vi.advanceTimersByTime(300)
+    expect(socket.destroyed).toBe(false)
+    expect(socket.writes.at(-1)).toContain('"id":"slow"')
+    expect(socket.writes.at(-1)).toContain('"requestPhase":"awaiting_response"')
+  })
 })

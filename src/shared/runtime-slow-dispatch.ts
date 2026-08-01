@@ -1,12 +1,12 @@
 // Why: these local RPC methods can spend longer than the transport idle window
 // in I/O-bound work, so the connection needs liveness frames while they run.
-const SLOW_DISPATCH_METHODS: ReadonlySet<string> = new Set([
+export const SLOW_DISPATCH_METHODS: ReadonlySet<string> = new Set([
   'worktree.create',
   'browser.tabCreate',
   'browser.snapshot'
 ])
 
-const SLOW_DISPATCH_MUTATION_METHODS: ReadonlySet<string> = new Set([
+export const SLOW_DISPATCH_MUTATION_METHODS: ReadonlySet<string> = new Set([
   'worktree.create',
   'browser.tabCreate'
 ])
