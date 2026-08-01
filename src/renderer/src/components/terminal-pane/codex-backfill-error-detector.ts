@@ -12,8 +12,8 @@ export const CODEX_BACKFILL_INDEXING_NOTICE = [
 ].join('\n')
 
 // Why: strip CSI/OSC escapes so a redraw-heavy TUI cannot split the signature text.
-// eslint-disable-next-line no-control-regex
 const ANSI_ESCAPE_PATTERN =
+  // eslint-disable-next-line no-control-regex -- terminal escape sequences require control chars
   /\u001b(?:\[[0-9;?]*[ -/]*[@-~]|\][^\u0007\u001b]*(?:\u0007|\u001b\\)?)/g
 const DETECTOR_BUFFER_MAX_CHARS = 4096
 
