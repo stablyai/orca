@@ -6,6 +6,8 @@ import {
   upsertCodexSubagent,
   type CodexSubagentRoster
 } from './codex-subagent-roster'
+import { readCodexRolloutContextUsage } from './codex-rollout-context-usage'
+import type { AgentContextUsage } from './agent-context-pressure'
 
 const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
 const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
@@ -29,6 +31,8 @@ type TrackedTranscriptSubagent = JsonlCursor & {
 export type CodexSubagentTranscriptState = {
   parent: JsonlCursor
   subagents: Map<string, TrackedTranscriptSubagent>
+  /** Latest token_count occupancy reading seen in the parent rollout. */
+  contextUsage?: AgentContextUsage
 }
 
 type JsonRecord = Record<string, unknown>
@@ -243,8 +247,14 @@ export function reconcileCodexSubagentTranscript(
     }
     state.parent = { filePath: normalizedPath, offset: 0, carry: '' }
     state.subagents.clear()
+    state.contextUsage = undefined
   }
   for (const recordValue of readJsonlCursor(state.parent) ?? []) {
+    const usage = readCodexRolloutContextUsage(recordValue)
+    if (usage) {
+      state.contextUsage = usage
+      continue
+    }
     const activity = readActivity(recordValue)
     if (!activity) {
       continue

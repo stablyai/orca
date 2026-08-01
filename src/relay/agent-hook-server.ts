@@ -30,6 +30,9 @@ import {
   type AgentHookRelayEnvelope,
   type AgentHookSource
 } from '../shared/agent-hook-relay'
+import { agentContextUsageEqual } from '../shared/agent-context-pressure'
+import { parseClaudeStatusLineContextUsage } from '../shared/claude-statusline-context-window'
+import { CLAUDE_STATUSLINE_PATHNAME } from '../shared/claude-statusline-rate-limits'
 
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 
@@ -95,6 +98,7 @@ export class RelayAgentHookServer {
   private endpointDir: string
   private endpointFilePath: string
   private endpointFileWritten = false
+  private contextPressureEnabled = false
   private state: HookListenerState = createHookListenerState()
   // Why: shared status cache drops wire-envelope fields; this sidecar holds source/env/version so replay matches the live POST path.
   // Invariant: keys mirror state.lastStatusByPaneKey, populated/cleared in lockstep.
@@ -181,9 +185,20 @@ export class RelayAgentHookServer {
       port: this.port,
       token: this.token,
       env: this.env,
-      version: ORCA_HOOK_PROTOCOL_VERSION
+      version: ORCA_HOOK_PROTOCOL_VERSION,
+      contextPressureEnabled: this.contextPressureEnabled
     })
     return this.endpointFileWritten
+  }
+
+  setContextPressureEnabled(enabled: boolean): void {
+    if (this.contextPressureEnabled === enabled) {
+      return
+    }
+    this.contextPressureEnabled = enabled
+    if (this.server) {
+      this.publishEndpointFile()
+    }
   }
 
   stop(): void {
@@ -269,6 +284,21 @@ export class RelayAgentHookServer {
     try {
       const body = await readRequestBody(req)
       const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
+      if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
+        const reading = this.contextPressureEnabled ? parseClaudeStatusLineContextUsage(body) : null
+        if (reading) {
+          this.forward({
+            source: 'claude',
+            paneKey: reading.paneKey,
+            connectionId: null,
+            contextUsage: reading.usage,
+            contextSessionId: reading.sessionId
+          })
+        }
+        res.writeHead(204)
+        res.end()
+        return
+      }
       const source = resolveHookSource(pathname)
       if (!source) {
         res.writeHead(404)
@@ -394,8 +424,13 @@ export class RelayAgentHookServer {
       }
       const subagentsChanged =
         JSON.stringify(event.payload.subagents) !== JSON.stringify(original.payload.subagents)
-      const next = subagentsChanged ? event : original
-      if (subagentsChanged) {
+      // Why: the poll's rollout re-read can surface a fresh token_count between hook events.
+      const contextChanged =
+        event.payload.contextUsage !== undefined &&
+        !agentContextUsageEqual(event.payload.contextUsage, original.payload.contextUsage)
+      const changed = subagentsChanged || contextChanged
+      const next = changed ? event : original
+      if (changed) {
         this.applyEvent(event, source, env, version)
       }
       this.scheduleCodexSubagentPoll(source, body, next, env, version)

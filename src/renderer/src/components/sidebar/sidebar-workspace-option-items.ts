@@ -173,14 +173,29 @@ const ISSUE_WORKTREE_CARD_PROPERTY_OPTIONS: WorktreeCardPropertyOption[] = [
   }
 ]
 
+// Why gated: the property renders nothing while experimentalContextPressure is
+// off, and a checkbox with no visible effect reads as broken.
+const CONTEXT_PRESSURE_WORKTREE_CARD_PROPERTY_OPTION: WorktreeCardPropertyOption = {
+  id: 'context-pressure',
+  properties: ['context-pressure'],
+  get label() {
+    return translate(
+      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.contextPressure',
+      'Context pressure'
+    )
+  }
+}
+
 type WorktreeCardPropertyOptionsInput = {
   newCardStyle?: boolean
   hasProjectGroups?: boolean
+  contextPressureEnabled?: boolean
 }
 
 export function getWorktreeCardPropertyOptions({
   newCardStyle = false,
-  hasProjectGroups = false
+  hasProjectGroups = false,
+  contextPressureEnabled = false
 }: WorktreeCardPropertyOptionsInput = {}): WorktreeCardPropertyOption[] {
   const issueOptions = newCardStyle
     ? ISSUE_WORKTREE_CARD_PROPERTY_OPTIONS
@@ -199,14 +214,21 @@ export function getWorktreeCardPropertyOptions({
         : translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.219ebf1961', 'Branch name')
     }
   }
+  const trailingOptions = contextPressureEnabled
+    ? [branchOption, CONTEXT_PRESSURE_WORKTREE_CARD_PROPERTY_OPTION]
+    : [branchOption]
   if (newCardStyle) {
-    return [...issueOptions, ...BASE_WORKTREE_CARD_PROPERTY_OPTIONS.slice(1, -1), branchOption]
+    return [
+      ...issueOptions,
+      ...BASE_WORKTREE_CARD_PROPERTY_OPTIONS.slice(1, -1),
+      ...trailingOptions
+    ]
   }
   return [
     BASE_WORKTREE_CARD_PROPERTY_OPTIONS[0],
     ...issueOptions,
     ...BASE_WORKTREE_CARD_PROPERTY_OPTIONS.slice(1, -1),
-    branchOption
+    ...trailingOptions
   ]
 }
 

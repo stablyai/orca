@@ -3285,7 +3285,12 @@ function buildCodexStatusPayload(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
-    subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey))
+    subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey)),
+    // Why: SessionStart re-read the rollout just above; nothing found means a fresh
+    // session, so null explicitly clears the pane's previous-session reading.
+    contextUsage:
+      state.codexSubagentTranscriptByPaneKey.get(paneKey)?.contextUsage ??
+      (eventName === 'SessionStart' ? null : undefined)
   })
 }
 
@@ -4134,6 +4139,7 @@ export type EndpointFileFields = {
   token: string
   env: string
   version: string
+  contextPressureEnabled?: boolean
 }
 
 /** Atomically write the endpoint file at `endpointDir/<getEndpointFileName()>`.
@@ -4150,7 +4156,13 @@ export function writeEndpointFile(
     ['ORCA_AGENT_HOOK_PORT', String(fields.port)],
     ['ORCA_AGENT_HOOK_TOKEN', fields.token],
     ['ORCA_AGENT_HOOK_ENV', fields.env],
-    ['ORCA_AGENT_HOOK_VERSION', fields.version]
+    ['ORCA_AGENT_HOOK_VERSION', fields.version],
+    ...(fields.contextPressureEnabled === undefined
+      ? []
+      : ([['ORCA_CONTEXT_PRESSURE_ENABLED', fields.contextPressureEnabled ? '1' : '0']] as [
+          string,
+          string
+        ][]))
   ]
   for (const [key, value] of valuesToWrite) {
     if (!isShellSafeEndpointValue(value)) {

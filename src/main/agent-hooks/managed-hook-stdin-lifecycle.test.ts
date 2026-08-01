@@ -378,7 +378,9 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   it('captures stdin before every possible whole-script success exit', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
-      const captureIndex = script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)
+      const readerIndex = script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)
+      const builtinReaderIndex = script.indexOf('payload=\nwhile IFS= read -r orca_statusline_line')
+      const captureIndex = Math.max(readerIndex, builtinReaderIndex)
       const firstExitIndex = script.indexOf('exit 0')
       expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)
       expect(firstExitIndex, `${agent} first success exit`).toBeGreaterThan(captureIndex)

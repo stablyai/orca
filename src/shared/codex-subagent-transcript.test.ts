@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -25,6 +25,32 @@ function activity(kind: string, occurredAtMs = 1234): unknown {
       agent_thread_id: CHILD_ID,
       agent_path: '/root/sidebar_repro',
       kind
+    }
+  }
+}
+
+function tokenCount(inputTokens: number, outputTokens: number): unknown {
+  return {
+    type: 'event_msg',
+    payload: {
+      type: 'token_count',
+      info: {
+        total_token_usage: {
+          input_tokens: inputTokens,
+          cached_input_tokens: 0,
+          output_tokens: outputTokens,
+          reasoning_output_tokens: 0,
+          total_tokens: inputTokens + outputTokens
+        },
+        last_token_usage: {
+          input_tokens: inputTokens,
+          cached_input_tokens: 0,
+          output_tokens: outputTokens,
+          reasoning_output_tokens: 0,
+          total_tokens: inputTokens + outputTokens
+        },
+        model_context_window: 272_000
+      }
     }
   }
 }
@@ -154,5 +180,51 @@ describe('Codex subagent transcript reconciliation', () => {
 
     expect(hasTrackedCodexTranscriptSubagents(state)).toBe(false)
     expect(roster.size).toBe(0)
+  })
+
+  it('tracks the latest token_count context reading from incremental parent reads', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'codex-subagent-transcript-'))
+    dirs.push(dir)
+    const parentPath = join(dir, 'rollout-parent.jsonl')
+    writeFileSync(parentPath, jsonl([tokenCount(10_000, 500), tokenCount(24_000, 800)]))
+    const state = createCodexSubagentTranscriptState()
+    const roster: CodexSubagentRoster = new Map()
+
+    reconcileCodexSubagentTranscript(state, roster, parentPath)
+    expect(state.contextUsage).toEqual({
+      usedTokens: 24_800,
+      maxTokens: 272_000,
+      providerId: 'openai'
+    })
+
+    appendFileSync(parentPath, jsonl([tokenCount(60_000, 1_000)]))
+    reconcileCodexSubagentTranscript(state, roster, parentPath)
+    expect(state.contextUsage).toEqual({
+      usedTokens: 61_000,
+      maxTokens: 272_000,
+      providerId: 'openai'
+    })
+  })
+
+  it('drops the previous reading when the parent rollout path changes', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'codex-subagent-transcript-'))
+    dirs.push(dir)
+    const firstPath = join(dir, 'rollout-first.jsonl')
+    const secondPath = join(dir, 'rollout-second.jsonl')
+    writeFileSync(firstPath, jsonl([tokenCount(40_000, 900)]))
+    // A fresh session's rollout has no token_count yet — the stale reading must not survive.
+    writeFileSync(secondPath, jsonl([{ type: 'turn_context', payload: { cwd: '/w' } }]))
+    const state = createCodexSubagentTranscriptState()
+    const roster: CodexSubagentRoster = new Map()
+
+    reconcileCodexSubagentTranscript(state, roster, firstPath)
+    expect(state.contextUsage).toEqual({
+      usedTokens: 40_900,
+      maxTokens: 272_000,
+      providerId: 'openai'
+    })
+
+    reconcileCodexSubagentTranscript(state, roster, secondPath)
+    expect(state.contextUsage).toBeUndefined()
   })
 })

@@ -27,6 +27,7 @@ import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD,
+  AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD,
   isRemoteAgentHooksEnabled
 } from '../../shared/agent-hook-relay'
 import { _internals as openCodeInternals } from '../opencode/hook-service'
@@ -271,6 +272,7 @@ export class SshRelaySession {
   private readonly ptyConsumerClientInstanceId: string
   private ptyConsumerSessionState: SshPtyConsumerSessionState | null = null
   private activeCompatibilityAttachmentIds = new Set<string>()
+  private settingsCleanup: (() => void) | null = null
 
   constructor(
     readonly targetId: string,
@@ -285,6 +287,7 @@ export class SshRelaySession {
     ) => void
   ) {
     this.ptyConsumerClientInstanceId = claimSshPtyConsumerRecovery(targetId, store).clientInstanceId
+    this.bindContextPressureSettings()
   }
 
   refreshEnvironment(
@@ -294,11 +297,38 @@ export class SshRelaySession {
     runtime?: OrcaRuntimeService,
     onDetectedPortsChanged?: (targetId: string, ports: DetectedPort[], platform: string) => void
   ): void {
+    if (this.store !== store) {
+      this.settingsCleanup?.()
+      this.settingsCleanup = null
+    }
     this.getMainWindow = getMainWindow
     this.store = store
     this.portForwardManager = portForwardManager
     this.runtime = runtime
     this.onDetectedPortsChanged = onDetectedPortsChanged
+    this.bindContextPressureSettings()
+  }
+
+  private bindContextPressureSettings(): void {
+    if (this.settingsCleanup) {
+      return
+    }
+    const store = this.store as Partial<Pick<Store, 'getSettings' | 'onSettingsChanged'>>
+    this.settingsCleanup =
+      store.onSettingsChanged?.((updates, settings) => {
+        if ('experimentalContextPressure' in updates) {
+          this.sendContextPressureSetting(settings.experimentalContextPressure === true)
+        }
+      }) ?? null
+  }
+
+  private sendContextPressureSetting(enabled: boolean): void {
+    this.mux?.notify(AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD, { enabled })
+  }
+
+  private contextPressureSettingEnabled(): boolean {
+    const store = this.store as Partial<Pick<Store, 'getSettings'>>
+    return store.getSettings?.().experimentalContextPressure === true
   }
 
   setOnRelayLost(cb: (targetId: string) => void): void {
@@ -625,6 +655,8 @@ export class SshRelaySession {
       return
     }
     this.abortController?.abort()
+    this.settingsCleanup?.()
+    this.settingsCleanup = null
     this.stopPortScanning()
     // Why: fire-and-forget — nothing rebinds after dispose, so no need to await port release.
     void this.portForwardManager.removeAllForwards(this.targetId)
@@ -641,6 +673,8 @@ export class SshRelaySession {
       return
     }
     this.abortController?.abort()
+    this.settingsCleanup?.()
+    this.settingsCleanup = null
     this.stopPortScanning()
     this.broadcastEmptyLists()
     // Why: window disconnect is non-destructive — unregister local providers but keep PTY ownership so reattach works (relay owns the grace timer).
@@ -672,6 +706,7 @@ export class SshRelaySession {
     shouldContinue: (() => boolean) | undefined,
     connectionIncarnation: string
   ): Promise<boolean> {
+    this.sendContextPressureSetting(this.contextPressureSettingEnabled())
     await this.registerRelayRoots(mux)
     if (shouldContinue && !shouldContinue()) {
       return false
@@ -1139,6 +1174,8 @@ export class SshRelaySession {
         providerSession?: unknown
         providerSessionOnly?: unknown
         payload?: unknown
+        contextUsage?: unknown
+        contextSessionId?: unknown
       }
       if (typeof envelope.paneKey !== 'string') {
         return
@@ -1166,7 +1203,9 @@ export class SshRelaySession {
           isReplay: envelope.isReplay === true ? true : undefined,
           providerSession: envelope.providerSession,
           providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
-          payload: envelope.payload
+          payload: envelope.payload,
+          contextUsage: envelope.contextUsage,
+          contextSessionId: envelope.contextSessionId
         },
         this.targetId
       )

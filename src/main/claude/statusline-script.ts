@@ -9,12 +9,16 @@ import {
 } from '../../shared/claude-statusline-rate-limits'
 
 const STATUSLINE_CLEANUP_LABEL = 'orca_statusline_cleanup'
+const STATUSLINE_MATCH_LABEL = 'orca_statusline_match'
 const STATUSLINE_PROBE_LABEL = 'orca_statusline_probe'
 
-// Why: Claude Code pipes `rate_limits` to the statusLine command on every turn; forwarding
-// it gives Orca live usage without spending the OAuth usage endpoint's tight budget.
-// Emits no stdout so the in-terminal status line stays visually unchanged.
-export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'): string {
+// Why: Claude Code pipes `rate_limits`/`context_window` to the statusLine command on every
+// turn; forwarding them gives Orca live usage without spending the OAuth usage endpoint's
+// tight budget. Emits no stdout so the in-terminal status line stays visually unchanged.
+export function getManagedStatusLineScript(
+  target: 'local' | 'posix' = 'local',
+  contextPressureEnabled = true
+): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
@@ -41,11 +45,17 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
       `if not defined ORCA_STATUSLINE_ELAPSED goto :${STATUSLINE_PROBE_LABEL}`,
       `if %ORCA_STATUSLINE_ELAPSED% GEQ 0 if %ORCA_STATUSLINE_ELAPSED% LSS ${CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS} goto :${STATUSLINE_CLEANUP_LABEL}`,
       `:${STATUSLINE_PROBE_LABEL}`,
-      // Why: rate_limits appears only for Claude.ai-subscriber sessions after the first API response; the
-      // statusline ticks ~3x/sec during streaming, so skip the endpoint call and curl spawn otherwise.
+      // Separate probes avoid findstr's unreliable multi-literal matching.
       // Why: \" is the MSVC argv escape — findstr sees the quoted JSON key, so a cwd containing rate_limits can't false-match (POSIX guard parity).
-      '"%SystemRoot%\\System32\\findstr.exe" /c:\\"rate_limits\\" "%ORCA_STATUSLINE_PAYLOAD_FILE%" >nul 2>nul',
-      `if errorlevel 1 goto :${STATUSLINE_CLEANUP_LABEL}`,
+      `"%SystemRoot%\\System32\\findstr.exe" /c:\\"rate_limits\\" "%ORCA_STATUSLINE_PAYLOAD_FILE%" >nul 2>nul`,
+      `if not errorlevel 1 goto :${STATUSLINE_MATCH_LABEL}`,
+      ...(contextPressureEnabled
+        ? [
+            `"%SystemRoot%\\System32\\findstr.exe" /c:\\"context_window\\" "%ORCA_STATUSLINE_PAYLOAD_FILE%" >nul 2>nul`,
+            `if errorlevel 1 goto :${STATUSLINE_CLEANUP_LABEL}`
+          ]
+        : [`goto :${STATUSLINE_CLEANUP_LABEL}`]),
+      `:${STATUSLINE_MATCH_LABEL}`,
       // Why: call the endpoint file to refresh port/token — a PTY that survived an Orca restart carries stale env; falls through to PTY env if missing.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       `if "%ORCA_AGENT_HOOK_PORT%"=="" goto :${STATUSLINE_CLEANUP_LABEL}`,
@@ -88,14 +98,34 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
     'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
-    // Why: rate_limits appears only for Claude.ai-subscriber sessions after the first API response; skip the post (and its curl spawn) otherwise.
+    // Remote POSIX reads the live relay flag; local scripts bake in the setting.
+    ...(target === 'posix'
+      ? [
+          'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
+          '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
+          'fi'
+        ]
+      : []),
+    // Why: post only payloads the receiver uses; skip the post (and its curl spawn) otherwise.
+    // Remote posts only gated context_window: the relay drops rate_limits by design (account
+    // identity stays host-local), so posting it would be per-turn subprocess churn for nothing.
     'case "$payload" in',
-    '  *\'"rate_limits"\'*) ;;',
+    ...(target === 'posix'
+      ? ['  *\'"context_window"\'*) [ "$ORCA_CONTEXT_PRESSURE_ENABLED" = "1" ] || exit 0 ;;']
+      : [
+          contextPressureEnabled
+            ? '  *\'"rate_limits"\'*|*\'"context_window"\'*) ;;'
+            : '  *\'"rate_limits"\'*) ;;'
+        ]),
     '  *) exit 0 ;;',
     'esac',
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
-    'fi',
+    ...(target === 'posix'
+      ? []
+      : [
+          'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
+          '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
+          'fi'
+        ]),
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  exit 0',
     'fi',

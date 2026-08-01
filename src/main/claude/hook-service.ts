@@ -20,6 +20,7 @@ import {
   WINDOWS_HOOK_STDIN_DRAIN_LABEL
 } from '../agent-hooks/hook-stdin-contract'
 import { getManagedStatusLineScript } from './statusline-script'
+import { installRemoteClaudeStatusLine, rewriteManagedClaudeStatusLine } from './statusline-toggle'
 import {
   applyManagedHooks,
   applyManagedStatusLine,
@@ -117,9 +118,20 @@ function getManagedScript(
 
 export class ClaudeHookService {
   private readonly options: ClaudeHookServiceOptions
+  private contextPressureEnabled = true
 
   constructor(options: ClaudeHookServiceOptions = DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS) {
     this.options = options
+  }
+
+  setContextPressureEnabled(enabled: boolean, reinstall = true): void {
+    if (this.contextPressureEnabled === enabled) {
+      return
+    }
+    this.contextPressureEnabled = enabled
+    if (reinstall && this.options.agent === 'claude') {
+      rewriteManagedClaudeStatusLine(this.options.settings, enabled)
+    }
   }
 
   getStatus(): AgentHookInstallStatus {
@@ -211,7 +223,10 @@ export class ClaudeHookService {
       return config
     }
     const statusLineScriptPath = getStatusLineScriptPath(this.options.settings)
-    writeManagedScript(statusLineScriptPath, getManagedStatusLineScript('local'))
+    writeManagedScript(
+      statusLineScriptPath,
+      getManagedStatusLineScript('local', this.contextPressureEnabled)
+    )
     const next = applyManagedStatusLine(
       config,
       getManagedCommand(statusLineScriptPath),
@@ -231,6 +246,8 @@ export class ClaudeHookService {
     const remoteConfigPath = getRemoteConfigPath(remoteHome, this.options.settings)
     const remoteScriptFileName = getPosixManagedScriptFileName(this.options.settings)
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
+    const remoteStatusLineFileName = getStatusLineScriptFileName(this.options.settings)
+    const remoteStatusLinePath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteStatusLineFileName}`
     // Why: SFTP I/O fails often (network/EACCES/disk); wrap install so transient failures surface as structured state:'error' rather than an unhandled rejection.
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
@@ -246,7 +263,7 @@ export class ClaudeHookService {
 
       // Why: the POSIX wrapper is identical regardless of where the script lands; only the path differs.
       const command = getRemoteManagedCommand(remoteScriptPath)
-      const nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
+      let nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
 
       // Why: write script before settings — a mid-install failure then leaves a harmless orphan script, not settings.json pointing at a missing one.
       // Why: SSH remotes use POSIX `.sh` paths even when Orca runs on Windows; never derive remote script syntax from the local OS.
@@ -255,9 +272,15 @@ export class ClaudeHookService {
         remoteScriptPath,
         getManagedScript('posix', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
       )
-      // Why: no statusline install here — this path serves SSH remotes and WSL guests, whose relay hook
-      // listener doesn't route /statusline/claude, and an SSH box's Claude login can be a different
-      // account than the locally selected one, so its usage must not feed the local bar (live feed is host-local only).
+      if (this.options.agent === 'claude') {
+        nextConfig = await installRemoteClaudeStatusLine(
+          sftp,
+          nextConfig,
+          remoteStatusLinePath,
+          remoteStatusLineFileName,
+          this.contextPressureEnabled
+        )
+      }
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
 
       return {

@@ -3038,6 +3038,15 @@ export type GlobalSettings = {
   experimentalNewWorktreeCardStyle?: boolean
   /** Experimental: per-workspace on-demand environment recipes and setup surface. */
   experimentalEphemeralVms?: boolean
+  /** Experimental: per-agent-session context-window pressure tracking with a traffic-light indicator. */
+  experimentalContextPressure?: boolean
+  /** Percent of the effective context limit at which the pressure indicator turns yellow. */
+  contextPressureWarnPercent?: number
+  /** Percent of the effective context limit at which the pressure indicator turns red. */
+  contextPressureCriticalPercent?: number
+  /** Token caps keyed by `global`, `provider:<id>`, `agent:<type>`, or `model:<id>`.
+   *  Every key requires an explicit scope; unprefixed keys are dropped at sanitation. */
+  contextPressureSoftLimits?: Record<string, number>
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */
   compactWorktreeCards: boolean
   /** Legacy persisted key from the Experimental rollout; new writes use compactWorktreeCards. */
@@ -3247,6 +3256,8 @@ export type WorktreeCardProperty =
   | 'ports'
   // Inline agent-activity list rendered in each workspace card; on by default (see DEFAULT_WORKTREE_CARD_PROPERTIES in shared/constants.ts).
   | 'inline-agents'
+  // Worst-of context-pressure dot on workspace cards; inert unless experimentalContextPressure is enabled.
+  | 'context-pressure'
 
 export type WorktreeCardMode = 'Default' | 'Compact'
 
@@ -3455,6 +3466,8 @@ export type PersistedUIState = {
   _expandedWorktreeCardPropertiesDefaulted?: boolean
   /** One-shot backfill flag for 'jira-issue', which joined the defaults after the expansion migration had already stamped upgraded profiles. */
   _jiraIssueWorktreeCardPropertyDefaulted?: boolean
+  /** One-shot migration flag for adding context pressure to the auto-issued Default card preset. */
+  _contextPressureWorktreeCardPropertyDefaulted?: boolean
   /** totalAgentsSpawned snapshot at first sighting of the current app version, so the nag counts agents since last update (not from zero). */
   starNagBaselineAgents?: number | null
   /** App version that set the current baseline; a version change re-captures the baseline on next spawn, restarting the nag countdown. */

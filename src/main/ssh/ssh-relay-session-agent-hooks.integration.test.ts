@@ -9,6 +9,7 @@ import { RelayDispatcher } from '../../relay/dispatcher'
 import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD,
+  AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD,
   ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV,
   REMOTE_AGENT_HOOK_ENV
 } from '../../shared/agent-hook-relay'
@@ -59,6 +60,7 @@ type FakeRelay = {
   dispatcher: RelayDispatcher
   ptySpawnRequests: Record<string, unknown>[]
   replayEnvelopes: AgentHookRelayEnvelope[]
+  contextPressureSettings: boolean[]
   notifyAgentHook: (envelope: AgentHookRelayEnvelope | Record<string, unknown>) => void
   dispose: () => void
 }
@@ -71,6 +73,7 @@ function createFakeRelay(): FakeRelay {
   const clientCloseCallbacks: (() => void)[] = []
   const ptySpawnRequests: Record<string, unknown>[] = []
   const replayEnvelopes: AgentHookRelayEnvelope[] = []
+  const contextPressureSettings: boolean[] = []
 
   const transport: MultiplexerTransport = {
     write: (data) => {
@@ -133,12 +136,16 @@ function createFakeRelay(): FakeRelay {
     }
     return { replayed: replayEnvelopes.length }
   })
+  dispatcher.onNotification(AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD, (params) => {
+    contextPressureSettings.push(params.enabled === true)
+  })
 
   return {
     transport,
     dispatcher,
     ptySpawnRequests,
     replayEnvelopes,
+    contextPressureSettings,
     notifyAgentHook: (envelope) => {
       dispatcher.notify(AGENT_HOOK_NOTIFICATION_METHOD, envelope as Record<string, unknown>)
     },
@@ -146,7 +153,15 @@ function createFakeRelay(): FakeRelay {
   }
 }
 
-function createSession(targetId: string): InstanceType<typeof SshRelaySession> {
+type ContextPressureSettingsHarness = {
+  enabled: boolean
+  listener?: (updates: Record<string, unknown>, settings: Record<string, unknown>) => void
+}
+
+function createSession(
+  targetId: string,
+  contextPressure?: ContextPressureSettingsHarness
+): InstanceType<typeof SshRelaySession> {
   const store = {
     getRepos: vi.fn().mockReturnValue([]),
     getSshPtyConsumerRecovery: vi.fn().mockReturnValue(null),
@@ -154,7 +169,16 @@ function createSession(targetId: string): InstanceType<typeof SshRelaySession> {
     removeSshPtyConsumerRecovery: vi.fn(),
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
     markSshRemotePtyLease: vi.fn(),
-    markSshRemotePtyLeases: vi.fn()
+    markSshRemotePtyLeases: vi.fn(),
+    ...(contextPressure
+      ? {
+          getSettings: vi.fn(() => ({ experimentalContextPressure: contextPressure.enabled })),
+          onSettingsChanged: vi.fn((listener) => {
+            contextPressure.listener = listener
+            return vi.fn()
+          })
+        }
+      : {})
   } as unknown as Store
   const portForwardManager = {
     removeAllForwards: vi.fn().mockResolvedValue(undefined)
@@ -221,6 +245,24 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     agentHookServer.setListener(null)
     agentHookInternals.resetCachesForTests()
+  })
+
+  it('synchronizes context-pressure settings to the remote relay live', async () => {
+    const settings: ContextPressureSettingsHarness = { enabled: false }
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: relay.transport,
+      serverBuildId: 'test-relay-build'
+    } as never)
+    session = createSession('target-live-setting', settings)
+    await session.establish({} as SshConnection)
+    await vi.waitFor(() => expect(relay?.contextPressureSettings).toEqual([false]))
+    settings.enabled = true
+    settings.listener?.(
+      { experimentalContextPressure: true },
+      { experimentalContextPressure: true }
+    )
+    await vi.waitFor(() => expect(relay?.contextPressureSettings).toEqual([false, true]))
   })
 
   afterEach(() => {

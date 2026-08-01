@@ -24,13 +24,30 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   // Why: agent activity is the primary reason users opt into the feature, so
   // the Default mode keeps it inline on each card while Compact removes the
   // extra row.
-  'inline-agents'
+  'inline-agents',
+  // Why: on by default in both presets — the experimental master flag already
+  // gates rendering, so the property costs nothing until a user opts in.
+  'context-pressure'
 ]
 
 // Why: compact cards default to the quiet preset; metadata icons remain opt-in
 // through Show properties instead of appearing automatically.
-export const COMPACT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = ['status']
-const NORMALIZED_COMPACT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = ['status', 'unread']
+export const COMPACT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
+  'status',
+  'context-pressure'
+]
+const NORMALIZED_COMPACT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
+  'status',
+  'unread',
+  'context-pressure'
+]
+
+// Legacy compact presets from before the context-pressure property existed.
+const LEGACY_COMPACT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = ['status']
+const LEGACY_NORMALIZED_COMPACT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
+  'status',
+  'unread'
+]
 
 const LEGACY_COMPACT_WORKTREE_CARD_PROPERTIES_WITH_AUTOMATION: WorktreeCardProperty[] = [
   'status',
@@ -58,7 +75,8 @@ export const WORKTREE_CARD_PROPERTIES = [
   'cli',
   'comment',
   'ports',
-  'inline-agents'
+  'inline-agents',
+  'context-pressure'
 ] as const satisfies readonly WorktreeCardProperty[]
 
 export function normalizeWorktreeCardProperties(
@@ -99,6 +117,8 @@ export function isDefaultedCompactWorktreeCardProperties(
   return (
     matchesWorktreeCardProperties(properties, COMPACT_WORKTREE_CARD_PROPERTIES) ||
     matchesWorktreeCardProperties(properties, NORMALIZED_COMPACT_WORKTREE_CARD_PROPERTIES) ||
+    matchesWorktreeCardProperties(properties, LEGACY_COMPACT_WORKTREE_CARD_PROPERTIES) ||
+    matchesWorktreeCardProperties(properties, LEGACY_NORMALIZED_COMPACT_WORKTREE_CARD_PROPERTIES) ||
     matchesWorktreeCardProperties(
       properties,
       LEGACY_COMPACT_WORKTREE_CARD_PROPERTIES_WITH_AUTOMATION

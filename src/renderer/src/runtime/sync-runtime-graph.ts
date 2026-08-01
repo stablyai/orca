@@ -533,7 +533,9 @@ function serializeRuntimeMobileAgentStatusEntry(
     // Why: include so a newly-captured AskUserQuestion prompt re-fires the mobile republish even when no other field changed.
     interactivePrompt: entry.interactivePrompt ?? null,
     lastAssistantMessage: entry.lastAssistantMessage ?? null,
-    interrupted: entry.interrupted ?? null
+    interrupted: entry.interrupted ?? null,
+    // Why: context-pressure readings arrive on otherwise-unchanged entries; without this the mobile republish never fires.
+    contextUsage: entry.contextUsage ?? null
   })
 }
 

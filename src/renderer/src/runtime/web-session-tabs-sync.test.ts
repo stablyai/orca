@@ -1896,6 +1896,57 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.sortEpoch).toBe(1)
   })
 
+  it('mirrors a context-usage-only change instead of skipping it as equal', () => {
+    const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+    const buildSnapshot = (usedTokens: number, snapshotVersion: number) => ({
+      ...makeSnapshot([
+        {
+          type: 'terminal' as const,
+          id: HOST_SURFACE_ID,
+          title: 'claude [working]',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready' as const,
+          terminal: 'terminal-1',
+          agentStatus: {
+            state: 'working' as const,
+            prompt: 'fix web parity',
+            updatedAt: NOW - 100,
+            stateStartedAt: NOW - 1_000,
+            agentType: 'claude',
+            paneKey: hostPaneKey,
+            stateHistory: [],
+            contextUsage: { usedTokens, maxTokens: 200_000 }
+          }
+        }
+      ]),
+      snapshotVersion
+    })
+    const initial = applyWebSessionTabsSnapshot(
+      makeState(),
+      buildSnapshot(50_000, 1),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    const mirroredPaneKey = Object.keys(initial.agentStatusByPaneKey ?? {})[0]!
+    expect(initial.agentStatusByPaneKey?.[mirroredPaneKey]?.contextUsage).toEqual({
+      usedTokens: 50_000,
+      maxTokens: 200_000
+    })
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({ ...initial }),
+      buildSnapshot(150_000, 2),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    expect(patch.agentStatusByPaneKey?.[mirroredPaneKey]?.contextUsage).toEqual({
+      usedTokens: 150_000,
+      maxTokens: 200_000
+    })
+  })
+
   it('repairs mirrored same-state attribution and retains identity from an older snapshot', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
     const snapshot = makeSnapshot([

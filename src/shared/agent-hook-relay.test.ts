@@ -28,7 +28,7 @@ describe('agent-hook-relay wire shape', () => {
     const decoded = JSON.parse(JSON.stringify(envelope)) as AgentHookRelayEnvelope
     expect(decoded).toEqual(envelope)
     expect(decoded.connectionId).toBeNull()
-    expect(decoded.payload.prompt).toBe('roundtrip')
+    expect(decoded.payload!.prompt).toBe('roundtrip')
   })
 
   it('exposes stable JSON-RPC method names', () => {

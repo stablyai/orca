@@ -166,4 +166,52 @@ describe('areWorktreeListsEqual', () => {
 
     expect(areWorktreeListsEqual(first, second)).toBe(true)
   })
+
+  it('detects agent context-pressure changes', () => {
+    const base = [
+      worktree({ agents: [agent({ contextPressure: { level: 'warning', usedPercent: 75 } })] })
+    ]
+
+    // Unchanged reading (host pre-clamps to integers) compares equal across polls.
+    expect(
+      areWorktreeListsEqual(base, [
+        worktree({ agents: [agent({ contextPressure: { level: 'warning', usedPercent: 75 } })] })
+      ])
+    ).toBe(true)
+    expect(
+      areWorktreeListsEqual(base, [
+        worktree({ agents: [agent({ contextPressure: { level: 'critical', usedPercent: 92 } })] })
+      ])
+    ).toBe(false)
+    expect(
+      areWorktreeListsEqual(base, [
+        worktree({ agents: [agent({ contextPressure: { level: 'warning', usedPercent: 80 } })] })
+      ])
+    ).toBe(false)
+    // Reading disappearing (gate turned off host-side) must clear the indicator.
+    expect(areWorktreeListsEqual(base, [worktree({ agents: [agent()] })])).toBe(false)
+  })
+
+  it('detects exact pressure detail changes at the same rounded percentage', () => {
+    const pressure = {
+      level: 'critical' as const,
+      usedPercent: 95,
+      usedTokens: 190_000,
+      limitTokens: 200_000,
+      limitSource: 'model' as const,
+      usedTokensSource: 'provider' as const
+    }
+    const base = [worktree({ agents: [agent({ contextPressure: pressure })] })]
+
+    for (const contextPressure of [
+      { ...pressure, usedTokens: 950_000 },
+      { ...pressure, limitTokens: 1_000_000 },
+      { ...pressure, limitSource: 'soft-cap' as const },
+      { ...pressure, usedTokensSource: 'derived-percent' as const }
+    ]) {
+      expect(
+        areWorktreeListsEqual(base, [worktree({ agents: [agent({ contextPressure })] })])
+      ).toBe(false)
+    }
+  })
 })

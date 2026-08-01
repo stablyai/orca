@@ -3,6 +3,7 @@
 // a narrow interrupt fallback synthesizes a final `done` when an agent misses its cancellation hook.
 
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import { normalizeAgentContextUsage, type AgentContextUsage } from './agent-context-pressure'
 import {
   normalizeInteractivePromptField,
   normalizeOptionalField,
@@ -137,6 +138,8 @@ export type AgentStatusEntry = {
   providerSession?: AgentProviderSessionMetadata
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** Provider-reported context-window usage; null = explicitly cleared, absent = never reported. */
+  contextUsage?: AgentContextUsage | null
 }
 
 export type MigrationUnsupportedPtyEntry = {
@@ -168,6 +171,8 @@ export type AgentStatusPayload = {
   interrupted?: boolean
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
+  /** Context-window usage reading; undefined = no update, null = explicit clear. */
+  contextUsage?: AgentContextUsage | null
 }
 
 /**
@@ -364,7 +369,8 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     ),
     // Why: only meaningful on `done`; coerce to undefined elsewhere so it can't leak stale truth across transitions.
     interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
-    subagents: normalizeSubagentsField(obj.subagents)
+    subagents: normalizeSubagentsField(obj.subagents),
+    contextUsage: normalizeAgentContextUsage(obj.contextUsage)
   }
 }
 

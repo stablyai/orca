@@ -9,6 +9,7 @@ import {
   type AgentStatusEntry
 } from '../../../shared/agent-status-types'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
+import { agentContextUsageEqual } from '../../../shared/agent-context-pressure'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionBrowserTab,
@@ -1396,6 +1397,7 @@ function agentStatusEntryEqual(a: AgentStatusEntry | undefined, b: AgentStatusEn
     a.interrupted === b.interrupted &&
     a.promptInteractionKey === b.promptInteractionKey &&
     agentProviderSessionsEqual(a.agentType, a.providerSession, b.providerSession) &&
+    agentContextUsageEqual(a.contextUsage, b.contextUsage) &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
   )
 }

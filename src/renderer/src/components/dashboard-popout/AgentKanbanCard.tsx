@@ -11,6 +11,7 @@ import {
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { AgentStateDot } from '@/components/AgentStateDot'
+import { ContextPressureIndicator } from '@/components/ContextPressureIndicator'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -101,6 +102,12 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.stateChangedAt === b.stateChangedAt &&
     a.unseen === b.unseen &&
     a.askSummary === b.askSummary &&
+    a.contextPressure?.level === b.contextPressure?.level &&
+    a.contextPressure?.usedPercent === b.contextPressure?.usedPercent &&
+    a.contextPressure?.usedTokens === b.contextPressure?.usedTokens &&
+    a.contextPressure?.limitTokens === b.contextPressure?.limitTokens &&
+    a.contextPressure?.limitSource === b.contextPressure?.limitSource &&
+    a.contextPressure?.usedTokensSource === b.contextPressure?.usedTokensSource &&
     a.conversationName === b.conversationName
   )
 }
@@ -240,7 +247,22 @@ export const AgentKanbanCard = memo(
             >
               {heading}
             </span>
-            {card.askSummary ? null : <AgentStateDot state={card.dotState} className="ml-auto" />}
+            {card.contextPressure || !card.askSummary ? (
+              <span className="ml-auto inline-flex shrink-0 items-center gap-1">
+                {card.contextPressure ? (
+                  <ContextPressureIndicator
+                    level={card.contextPressure.level}
+                    usedPercent={card.contextPressure.usedPercent}
+                    usedTokens={card.contextPressure.usedTokens}
+                    limitTokens={card.contextPressure.limitTokens}
+                    limitSource={card.contextPressure.limitSource}
+                    usedTokensSource={card.contextPressure.usedTokensSource}
+                    size="sm"
+                  />
+                ) : null}
+                {card.askSummary ? null : <AgentStateDot state={card.dotState} />}
+              </span>
+            ) : null}
           </div>
 
           {card.lastUserMessage || card.lastAgentMessage ? (

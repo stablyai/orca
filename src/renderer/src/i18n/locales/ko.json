@@ -817,6 +817,18 @@
         "9375620cc3": "{{value0}}을(를) 사용하려면 이 세션을 다시 시작하세요. 다시 시작하기 전까지는 이전 계정이 유지됩니다.",
         "6133594b12": "이전 계정 유지"
       },
+      "ContextPressureIndicator": {
+        "usageDetail": "컨텍스트 창: {{value0}}{{value1}} / {{value2}}토큰 ({{value3}}%)",
+        "usagePercent": "컨텍스트 창: {{value0}}% 사용됨",
+        "limitSource": "유효 컨텍스트 한도: {{value0}}",
+        "sourceProvider": "공급자 보고 값",
+        "sourceModel": "모델 최대값",
+        "sourceSoftCap": "소프트 한도",
+        "derivedUsage": "공급자가 보고한 백분율에서 계산한 토큰 사용량",
+        "levelOk": "정상",
+        "levelWarning": "제한에 근접",
+        "levelCritical": "제한 임박"
+      },
       "FirstLaunchBanner": {
         "b9e1b966c7": "알림 닫기",
         "94cc673726": "확인",
@@ -4328,7 +4340,8 @@
           "219ebf1961": "브랜치 이름",
           "automation": "자동화",
           "folderPathIdentity": "브랜치 / 폴더 경로",
-          "cli": "Orca CLI"
+          "cli": "Orca CLI",
+          "contextPressure": "컨텍스트 압박"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "연결 중...",
@@ -5732,6 +5745,28 @@
             "modeAriaLabel": "에이전트 대시보드 열기 모드",
             "modeInWindow": "윈도우 내",
             "modePopout": "팝업"
+          },
+          "contextPressure": {
+            "title": "컨텍스트 압박",
+            "copy": "에이전트 행, 카드, 탭에 컨텍스트 창 사용량을 녹색/노란색/빨간색 표시기로 보여줍니다. 공급자가 사용량을 보고하지 않는 세션에는 표시기를 표시하지 않습니다.",
+            "toggleLabel": "컨텍스트 압박 전환",
+            "warnLabel": "경고 임계값",
+            "warnDescription": "표시기가 노란색으로 바뀌는 시점의 유효 컨텍스트 한도 대비 비율(%)입니다.",
+            "criticalLabel": "위험 임계값",
+            "criticalDescription": "표시기가 빨간색으로 바뀌는 시점의 유효 컨텍스트 한도 대비 비율(%)입니다.",
+            "softLimitsLabel": "소프트 한도",
+            "softLimitsDescription": "global, provider:<id>, agent:<type>, model:<id>별 절대 토큰 제한입니다. 가장 구체적으로 일치하는 제한이 우선합니다.",
+            "softLimitKeyPlaceholder": "global, provider:id, model:id 또는 agent:type",
+            "softLimitKeyAriaLabel": "소프트 한도 키: global, provider:id, model:id 또는 agent:type",
+            "softLimitTokensPlaceholder": "토큰",
+            "softLimitTokensAriaLabel": "소프트 한도(토큰)",
+            "softLimitTokensSuffix": "토큰",
+            "addLimit": "한도 추가",
+            "confirmAddLimit": "추가",
+            "cancelAddLimit": "소프트 한도 추가 취소",
+            "removeLimit": "{{value0}}의 소프트 한도 제거",
+            "duplicateLimit": "이 키의 소프트 한도가 이미 있습니다.",
+            "invalidLimitKey": "global, provider:<id>, agent:<type> 또는 model:<id>를 사용하세요."
           }
         },
         "FloatingWorkspacePane": {
@@ -7980,6 +8015,17 @@
             "agentDashboard": {
               "title": "에이전트 대시보드",
               "description": "워크트리 전반에 걸친 에이전트를 모니터링하는 칸반 보드. 윈도우 내 또는 팝업으로 표시됩니다."
+            },
+            "contextPressure": {
+              "title": "컨텍스트 압박",
+              "description": "에이전트의 컨텍스트 창 사용량을 신호등 방식 표시기로 보여줍니다. 임계값과 소프트 토큰 한도를 설정할 수 있습니다.",
+              "context": "컨텍스트",
+              "tokens": "토큰",
+              "usage": "사용량",
+              "limit": "한도",
+              "window": "창",
+              "pressure": "압박",
+              "compaction": "압축"
             }
           }
         },

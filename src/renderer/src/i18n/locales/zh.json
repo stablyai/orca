@@ -817,6 +817,18 @@
         "9375620cc3": "重启此会话以使用 {{value0}}。在重启之前，它将继续使用旧账户。",
         "6133594b12": "保留旧账户"
       },
+      "ContextPressureIndicator": {
+        "usageDetail": "上下文窗口：{{value0}}{{value1}} / {{value2}} 个令牌（{{value3}}%）",
+        "usagePercent": "上下文窗口：已使用 {{value0}}%",
+        "limitSource": "有效上下文上限：{{value0}}",
+        "sourceProvider": "提供方报告值",
+        "sourceModel": "模型最大值",
+        "sourceSoftCap": "软性上限",
+        "derivedUsage": "令牌用量根据提供商报告的百分比推算",
+        "levelOk": "正常",
+        "levelWarning": "接近上限",
+        "levelCritical": "即将达到上限"
+      },
       "FirstLaunchBanner": {
         "b9e1b966c7": "关闭通知",
         "94cc673726": "知道了",
@@ -4328,7 +4340,8 @@
           "219ebf1961": "分支名称",
           "automation": "自动化",
           "folderPathIdentity": "分支 / 文件夹路径",
-          "cli": "Orca CLI"
+          "cli": "Orca CLI",
+          "contextPressure": "上下文压力"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "正在连接...",
@@ -5732,6 +5745,28 @@
             "modeAriaLabel": "智能体仪表盘打开模式",
             "modeInWindow": "窗口内",
             "modePopout": "弹出窗口"
+          },
+          "contextPressure": {
+            "title": "上下文压力",
+            "copy": "在智能体行、卡片和标签页上以绿/黄/红指示器显示上下文窗口使用量。没有提供方使用量数据的会话不显示指示器。",
+            "toggleLabel": "切换上下文压力",
+            "warnLabel": "警告阈值",
+            "warnDescription": "指示器变为黄色时占有效上下文上限的百分比。",
+            "criticalLabel": "严重阈值",
+            "criticalDescription": "指示器变为红色时占有效上下文上限的百分比。",
+            "softLimitsLabel": "软性上限",
+            "softLimitsDescription": "按 global、provider:<id>、agent:<type> 或 model:<id> 设置绝对令牌上限。最具体的匹配优先。",
+            "softLimitKeyPlaceholder": "global、provider:id、model:id 或 agent:type",
+            "softLimitKeyAriaLabel": "软性上限键：global、provider:id、model:id 或 agent:type",
+            "softLimitTokensPlaceholder": "令牌",
+            "softLimitTokensAriaLabel": "软性上限（令牌）",
+            "softLimitTokensSuffix": "令牌",
+            "addLimit": "添加上限",
+            "confirmAddLimit": "添加",
+            "cancelAddLimit": "取消添加软性上限",
+            "removeLimit": "移除 {{value0}} 的软性上限",
+            "duplicateLimit": "已存在使用此键的软限制。",
+            "invalidLimitKey": "请使用 global、provider:<id>、agent:<type> 或 model:<id>。"
           }
         },
         "FloatingWorkspacePane": {
@@ -7980,6 +8015,17 @@
             "agentDashboard": {
               "title": "智能体仪表盘",
               "description": "用于监控跨工作树的智能体的看板，支持窗口内或弹出窗口显示。"
+            },
+            "contextPressure": {
+              "title": "上下文压力",
+              "description": "以红绿灯样式显示智能体上下文窗口使用量，可配置阈值和软性令牌上限。",
+              "context": "上下文",
+              "tokens": "令牌",
+              "usage": "用量",
+              "limit": "上限",
+              "window": "窗口",
+              "pressure": "压力",
+              "compaction": "压缩"
             }
           }
         },

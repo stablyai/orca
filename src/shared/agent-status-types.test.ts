@@ -1,4 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
+import { AGENT_CONTEXT_USAGE_MAX_TOKENS } from './agent-context-pressure'
 import {
   agentSubagentsEqual,
   parseAgentStatusPayload,
@@ -494,6 +495,47 @@ Fix dispatch fallback preview for normalized status prompts`
     expect(parseAgentStatusPayload('{"state":"done"}')?.subagents).toBeUndefined()
     expect(parseAgentStatusPayload('{"state":"done","subagents":[]}')?.subagents).toBeUndefined()
   })
+
+  it('normalizes contextUsage: valid readings floored, invalid dropped, null preserved', () => {
+    expect(
+      parseAgentStatusPayload(
+        '{"state":"working","contextUsage":{"usedTokens":123456,"maxTokens":200000}}'
+      )?.contextUsage
+    ).toEqual({ usedTokens: 123456, maxTokens: 200000 })
+    expect(
+      parseAgentStatusPayload('{"state":"working","contextUsage":{"usedTokens":10.9}}')
+        ?.contextUsage
+    ).toEqual({ usedTokens: 10 })
+    // null = explicit clear; must survive normalization distinct from "absent".
+    expect(
+      parseAgentStatusPayload('{"state":"working","contextUsage":null}')?.contextUsage
+    ).toBeNull()
+    expect(parseAgentStatusPayload('{"state":"working"}')?.contextUsage).toBeUndefined()
+    // Invalid shapes/numbers are dropped, never guessed.
+    expect(
+      parseAgentStatusPayload('{"state":"working","contextUsage":{"usedTokens":-5}}')?.contextUsage
+    ).toBeUndefined()
+    expect(
+      parseAgentStatusPayload('{"state":"working","contextUsage":"90%"}')?.contextUsage
+    ).toBeUndefined()
+    expect(
+      parseAgentStatusPayload('{"state":"working","contextUsage":{"maxTokens":1000}}')?.contextUsage
+    ).toBeUndefined()
+  })
+
+  it('caps contextUsage token counts and drops only an invalid maxTokens', () => {
+    const capped = parseAgentStatusPayload(
+      `{"state":"working","contextUsage":{"usedTokens":${AGENT_CONTEXT_USAGE_MAX_TOKENS * 3},"maxTokens":${AGENT_CONTEXT_USAGE_MAX_TOKENS * 2}}}`
+    )
+    expect(capped?.contextUsage).toEqual({
+      usedTokens: AGENT_CONTEXT_USAGE_MAX_TOKENS,
+      maxTokens: AGENT_CONTEXT_USAGE_MAX_TOKENS
+    })
+    expect(
+      parseAgentStatusPayload('{"state":"working","contextUsage":{"usedTokens":10,"maxTokens":0}}')
+        ?.contextUsage
+    ).toEqual({ usedTokens: 10 })
+  })
 })
 
 describe('agentSubagentsEqual', () => {
@@ -566,7 +608,14 @@ describe('normalizeAgentStatusPayload matches the JSON round trip', () => {
       lastAssistantMessage: 'tail with \u001b[0m escape codes'
     },
     // a lone surrogate is the case where stringify and a raw read could diverge
-    { state: 'working', prompt: 'p', agentType: 'grok', lastAssistantMessage: 'lone \ud800 pair' }
+    { state: 'working', prompt: 'p', agentType: 'grok', lastAssistantMessage: 'lone \ud800 pair' },
+    {
+      state: 'working',
+      prompt: 'p',
+      agentType: 'claude',
+      contextUsage: { usedTokens: 155_000, maxTokens: 200_000 }
+    },
+    { state: 'working', prompt: 'p', agentType: 'claude', contextUsage: null }
   ]
 
   it('produces identical output for every normalizer literal shape', () => {

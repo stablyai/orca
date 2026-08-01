@@ -2,7 +2,6 @@
 // (STA-1515): one relay per distro per instance, ensured from every WSL PTY
 // spawn, forwarding envelopes into ingestRemote and installing guest hooks.
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-
 import { installWslGuestHooks } from './wsl-hook-fs-adapter'
 import { buildWslRelaySpawnEnv, launchWslRelayWithInstall } from './wsl-hook-relay-launch'
 import {
@@ -23,27 +22,14 @@ import { requestGuestOpenCodeOverlayDir } from './wsl-guest-plugin-install'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_REQUEST_REPLAY_METHOD } from '../../shared/agent-hook-relay'
 import {
+  WslContextPressureRelayState,
+  type WslHookRelayState as DistroState
+} from './wsl-hook-relay-state'
+import {
   sanitizeWslHookInstanceKey,
   WSL_HOOK_FS_METHODS,
   wslHookRelayEndpointFilePath
 } from '../../shared/wsl-hook-relay-contract'
-
-type DistroState = {
-  /** Original casing for wsl.exe argv and breadcrumbs; map keys are lowercased. */
-  distro: string
-  phase: 'starting' | 'running' | 'failed'
-  child?: ChildProcessWithoutNullStreams
-  mux?: SshChannelMultiplexer
-  guestHome?: string
-  guestEndpointFilePath?: string
-  opencodeOverlayDir?: string
-  failures: number
-  cooldownUntil: number
-  connectedAt?: number
-  restartTimer?: ReturnType<typeof setTimeout>
-  reinstallTimer?: ReturnType<typeof setTimeout>
-  lastInstallAt?: number
-}
 
 export class WslHookRelayManager {
   private deps: WslHookRelayManagerDeps
@@ -52,6 +38,7 @@ export class WslHookRelayManager {
   private defaultDistro: string | null = null
   private disposed = false
   private warnedBundleMissing = false
+  private contextPressure = new WslContextPressureRelayState()
 
   constructor(deps: Partial<WslHookRelayManagerDeps> = {}) {
     this.deps = { ...defaultWslHookRelayDeps, ...deps }
@@ -104,6 +91,10 @@ export class WslHookRelayManager {
    *  OPENCODE_CONFIG_DIR while null so no Windows overlay path crosses into WSL. */
   getOpenCodeOverlayDir(distro: string | null): string | null {
     return this.stateFor(distro)?.opencodeOverlayDir ?? null
+  }
+
+  setContextPressureEnabled(enabled: boolean): void {
+    this.contextPressure.setEnabled(enabled, this.states.values())
   }
 
   disposeAll(): void {
@@ -252,6 +243,7 @@ export class WslHookRelayManager {
     }
     state.guestHome = homeResult.home
     state.guestEndpointFilePath = wslHookRelayEndpointFilePath(homeResult.home, instanceKey)
+    this.contextPressure.sync(mux)
     await this.runInstallers(state, mux, homeResult.home)
 
     if (state.phase === 'failed' || state.mux !== mux) {

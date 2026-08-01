@@ -20,10 +20,12 @@ describe('worktree card properties', () => {
     expect(props).toEqual(DEFAULT_WORKTREE_CARD_PROPERTIES)
   })
 
-  it('defines Compact as the status-only quiet preset', () => {
+  it('defines Compact as the quiet preset (status + gated context pressure)', () => {
     const props = getWorktreeCardModeProperties('Compact')
 
-    expect(props).toEqual(['status'])
+    // context-pressure is inert until experimentalContextPressure is enabled,
+    // so the preset stays visually status-only by default.
+    expect(props).toEqual(['status', 'context-pressure'])
     expect(props).toEqual(COMPACT_WORKTREE_CARD_PROPERTIES)
     expect(props).not.toContain('inline-agents')
     expect(props).not.toContain('issue')
@@ -69,6 +71,10 @@ describe('worktree card properties', () => {
     expect(isDefaultedCompactWorktreeCardProperties(['status', 'unread'])).toBe(true)
     expect(isDefaultedCompactWorktreeCardProperties(['status', 'automation'])).toBe(true)
     expect(isDefaultedCompactWorktreeCardProperties(['status', 'unread', 'automation'])).toBe(true)
+    expect(isDefaultedCompactWorktreeCardProperties(['status', 'context-pressure'])).toBe(true)
+    expect(isDefaultedCompactWorktreeCardProperties(['status', 'unread', 'context-pressure'])).toBe(
+      true
+    )
     expect(isDefaultedCompactWorktreeCardProperties(['automation', 'status'])).toBe(false)
     expect(isDefaultedCompactWorktreeCardProperties(['status', 'automation', 'pr'])).toBe(false)
   })

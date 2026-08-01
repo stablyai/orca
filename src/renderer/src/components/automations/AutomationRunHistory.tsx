@@ -15,6 +15,7 @@ import {
 } from './automation-usage-model'
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import { translate } from '@/i18n/i18n'
+import { AutomationRunContextPressure } from './AutomationRunContextPressure'
 
 type AutomationRunHistoryProps = {
   runs: AutomationRun[]
@@ -134,7 +135,8 @@ export function AutomationRunHistory({
                         'n/a'
                       )}
                 </div>
-                <div className="flex justify-start">
+                <div className="flex items-center justify-start gap-1.5">
+                  <AutomationRunContextPressure paneKey={run.terminalPaneKey} />
                   <Badge variant={getAutomationRunStatusVariant(run.status)}>
                     {getAutomationRunStatusLabel(run.status)}
                   </Badge>

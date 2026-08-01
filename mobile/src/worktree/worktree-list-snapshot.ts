@@ -109,7 +109,14 @@ function areAgentRowsEqual(
       a.toolInput !== b.toolInput ||
       a.interrupted !== b.interrupted ||
       a.stateStartedAt !== b.stateStartedAt ||
-      a.updatedAt !== b.updatedAt
+      a.updatedAt !== b.updatedAt ||
+      (a.contextPressure?.level ?? null) !== (b.contextPressure?.level ?? null) ||
+      (a.contextPressure?.usedPercent ?? null) !== (b.contextPressure?.usedPercent ?? null) ||
+      (a.contextPressure?.usedTokens ?? null) !== (b.contextPressure?.usedTokens ?? null) ||
+      (a.contextPressure?.limitTokens ?? null) !== (b.contextPressure?.limitTokens ?? null) ||
+      (a.contextPressure?.limitSource ?? null) !== (b.contextPressure?.limitSource ?? null) ||
+      (a.contextPressure?.usedTokensSource ?? null) !==
+        (b.contextPressure?.usedTokensSource ?? null)
     ) {
       return false
     }

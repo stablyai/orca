@@ -107,6 +107,14 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').experimentalEphemeralVms).toBe(false)
   })
 
+  it('keeps context-pressure tracking off with 70/90 thresholds and no soft caps', () => {
+    const settings = getDefaultSettings('/tmp')
+    expect(settings.experimentalContextPressure).toBe(false)
+    expect(settings.contextPressureWarnPercent).toBe(70)
+    expect(settings.contextPressureCriticalPercent).toBe(90)
+    expect(settings.contextPressureSoftLimits).toEqual({})
+  })
+
   it('keeps the agent dashboard popout disabled by default', () => {
     expect(getDefaultSettings('/tmp').experimentalAgentDashboardPopout).toBe(false)
     expect(getDefaultSettings('/tmp').experimentalAgentDashboardShowIdle).toBe(false)

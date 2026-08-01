@@ -37,7 +37,8 @@ import { PluginOverlayManager } from './plugin-overlay'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
-  AGENT_HOOK_REQUEST_REPLAY_METHOD
+  AGENT_HOOK_REQUEST_REPLAY_METHOD,
+  AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD
 } from '../shared/agent-hook-relay'
 import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
@@ -705,6 +706,17 @@ async function main(): Promise<void> {
       )
     }
   })
+  const setContextPressure = (params: Record<string, unknown>): { enabled: boolean } => {
+    const enabled = params.enabled === true
+    hookServer.setContextPressureEnabled(enabled)
+    return { enabled }
+  }
+  dispatcher.onNotification(AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD, (params) => {
+    setContextPressure(params)
+  })
+  dispatcher.onRequest(AGENT_HOOK_SET_CONTEXT_PRESSURE_METHOD, async (params) =>
+    setContextPressure(params)
+  )
   // Why: await the bind before announcing readiness so the first PTY spawn already sees ORCA_AGENT_HOOK_* env; bind failure is soft (log and continue).
   try {
     await hookServer.start({ publishEndpoint: false })

@@ -2191,7 +2191,8 @@ describe('web UI preload API', () => {
     await globals.window.api.settings.get()
     const ui = await globals.window.api.ui.get()
 
-    expect(ui.worktreeCardProperties).toEqual(['status', 'unread'])
+    // context-pressure rides the compact preset (inert until the experimental flag).
+    expect(ui.worktreeCardProperties).toEqual(['status', 'unread', 'context-pressure'])
     expect(ui.worktreeCardProperties).not.toContain('ports')
     expect(ui.worktreeCardProperties).not.toContain('inline-agents')
     expect(runtimeCalls.map((call) => call.method)).toEqual(['settings.get', 'ui.get'])

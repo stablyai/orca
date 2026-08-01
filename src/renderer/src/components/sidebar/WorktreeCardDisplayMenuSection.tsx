@@ -16,7 +16,10 @@ import {
   CARD_LAYOUT_OPTIONS,
   getWorktreeCardPropertyOptions
 } from './sidebar-workspace-option-items'
-import { PROPERTY_OPTIONS } from './worktree-card-display-property-options'
+import {
+  CONTEXT_PRESSURE_PROPERTY_OPTION,
+  PROPERTY_OPTIONS
+} from './worktree-card-display-property-options'
 import { translate } from '@/i18n/i18n'
 
 type WorktreeCardDisplayMenuSectionProps = {
@@ -34,16 +37,25 @@ export function WorktreeCardDisplayMenuSection({
   const setAgentActivityDisplayMode = useAppStore((s) => s.setAgentActivityDisplayMode)
   const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
+  const contextPressureEnabled = settings?.experimentalContextPressure === true
   const cardLayout = settings?.compactWorktreeCards ? 'compact' : 'detailed'
   const cardLayoutLabel =
     CARD_LAYOUT_OPTIONS.find((opt) => opt.id === cardLayout)?.label ?? 'Detailed'
-  const visiblePropertyCount = PROPERTY_OPTIONS.filter((opt) =>
+  const propertyOptions = useMemo(
+    () =>
+      contextPressureEnabled
+        ? [...PROPERTY_OPTIONS, CONTEXT_PRESSURE_PROPERTY_OPTION]
+        : PROPERTY_OPTIONS,
+    [contextPressureEnabled]
+  )
+  const visiblePropertyCount = propertyOptions.filter((opt) =>
     worktreeCardProperties.includes(opt.id)
   ).length
   const hasProjectGroups = projectGroups.length > 0
   const worktreeCardPropertyOptions = useMemo(
-    () => getWorktreeCardPropertyOptions({ newCardStyle, hasProjectGroups }),
-    [newCardStyle, hasProjectGroups]
+    () =>
+      getWorktreeCardPropertyOptions({ newCardStyle, hasProjectGroups, contextPressureEnabled }),
+    [newCardStyle, hasProjectGroups, contextPressureEnabled]
   )
   const handleWorktreeCardPropertyChange = useCallback(
     (properties: readonly WorktreeCardProperty[], checked: boolean): void => {
@@ -155,7 +167,7 @@ export function WorktreeCardDisplayMenuSection({
           className="w-48"
           data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
         >
-          {PROPERTY_OPTIONS.map((opt) => (
+          {propertyOptions.map((opt) => (
             <DropdownMenuCheckboxItem
               key={opt.id}
               checked={worktreeCardProperties.includes(opt.id)}

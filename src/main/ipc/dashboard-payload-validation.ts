@@ -3,6 +3,7 @@ import {
   type DashboardRevealAgentArgs,
   type DashboardSnapshot
 } from '../../shared/dashboard-snapshot'
+import { AGENT_CONTEXT_USAGE_MAX_TOKENS } from '../../shared/agent-context-pressure'
 import { BoundedMap } from '../../shared/bounded-map'
 import { sanitizeRepoIcon } from '../../shared/repo-icon'
 import {
@@ -43,6 +44,10 @@ const DASHBOARD_HOST_PLATFORMS = new Set([
   'win32'
 ])
 const WINDOWS_SHIFT_ENTER_ENCODINGS = new Set(['alt-enter', 'csi-u'])
+// Dashboard snapshots may emit every traffic-light level.
+const DASHBOARD_CONTEXT_PRESSURE_LEVELS = new Set(['ok', 'warning', 'critical'])
+const DASHBOARD_CONTEXT_PRESSURE_LIMIT_SOURCES = new Set(['provider', 'model', 'soft-cap'])
+const DASHBOARD_CONTEXT_USAGE_SOURCES = new Set(['provider', 'derived-percent'])
 
 function isBoundedString(value: unknown, maxLength: number, allowEmpty = false): value is string {
   return typeof value === 'string' && value.length <= maxLength && (allowEmpty || value.length > 0)
@@ -190,6 +195,36 @@ function isDashboardReview(value: unknown): boolean {
   )
 }
 
+function isDashboardContextPressure(value: unknown): boolean {
+  if (value === undefined) {
+    return true
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  const pressure = value as Record<string, unknown>
+  return (
+    typeof pressure.level === 'string' &&
+    DASHBOARD_CONTEXT_PRESSURE_LEVELS.has(pressure.level) &&
+    isFiniteNumber(pressure.usedPercent) &&
+    pressure.usedPercent >= 0 &&
+    pressure.usedPercent <= 100 &&
+    isFiniteNumber(pressure.usedTokens) &&
+    Number.isInteger(pressure.usedTokens) &&
+    pressure.usedTokens >= 0 &&
+    pressure.usedTokens <= AGENT_CONTEXT_USAGE_MAX_TOKENS &&
+    isFiniteNumber(pressure.limitTokens) &&
+    Number.isInteger(pressure.limitTokens) &&
+    pressure.limitTokens >= 1 &&
+    pressure.limitTokens <= AGENT_CONTEXT_USAGE_MAX_TOKENS &&
+    typeof pressure.limitSource === 'string' &&
+    DASHBOARD_CONTEXT_PRESSURE_LIMIT_SOURCES.has(pressure.limitSource) &&
+    (pressure.usedTokensSource === undefined ||
+      (typeof pressure.usedTokensSource === 'string' &&
+        DASHBOARD_CONTEXT_USAGE_SOURCES.has(pressure.usedTokensSource)))
+  )
+}
+
 function isDashboardSubagents(value: unknown): boolean {
   if (value === undefined) {
     return true
@@ -277,6 +312,7 @@ function isDashboardCard(value: unknown): boolean {
     isFiniteNumber(card.stateChangedAt) &&
     typeof card.unseen === 'boolean' &&
     isOptionalBoundedString(card.askSummary, AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH) &&
+    isDashboardContextPressure(card.contextPressure) &&
     isOptionalBoundedString(card.conversationName, MAX_LABEL_LENGTH) &&
     isDashboardTerminalInput(card.terminalInput)
   )

@@ -1,11 +1,13 @@
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import { Bell, ChevronDown, ChevronRight, GitBranch, GitPullRequest } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { RepoIcon } from '../../../src/shared/repo-icon'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { triggerMediumImpact } from '../platform/haptics'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { worstAgentContextPressure } from '../worktree/context-pressure-display'
 import { AgentSpinner } from './AgentSpinner'
+import { ContextPressureDot } from './ContextPressureDot'
 import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
@@ -75,6 +77,9 @@ function WorktreeListRowComponent<T extends WorktreeListRowItem>({
   const metaText = isFolderWorkspace ? folderMeta : displayBranch(item.branch)
   const lineageDepth = Math.max(0, item.lineageDepth ?? 0)
   const lineageChildCount = item.lineageChildCount ?? 0
+  const agents = item.agents
+  // Worktree rollups show only the worst warning or critical child.
+  const contextPressure = useMemo(() => worstAgentContextPressure(agents ?? []), [agents])
 
   return (
     <Pressable
@@ -162,6 +167,7 @@ function WorktreeListRowComponent<T extends WorktreeListRowItem>({
           <Text style={styles.branchName} numberOfLines={1}>
             {metaText}
           </Text>
+          {contextPressure ? <ContextPressureDot pressure={contextPressure} /> : null}
         </View>
         {/* Only agents get a secondary activity line, matching desktop. A plain
             terminal's shell-output tail is intentionally not surfaced here. */}

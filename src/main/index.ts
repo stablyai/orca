@@ -228,6 +228,7 @@ import {
 } from './claude-accounts/live-pty-gate'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer, type AgentHookProviderSessionIdentity } from './agent-hooks/server'
+import { claudeHookService } from './claude/hook-service'
 import { createHookProviderSessionInvalidator } from './agent-hooks/hook-provider-session-invalidation'
 import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
@@ -2042,10 +2043,25 @@ void app.whenReady().then(async () => {
   const activeOrcaProfile = ensureActiveOrcaProfile()
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
   wslHookRelayManager.setManagedHookSettingsResolver(() => store?.getSettings() ?? null)
+  agentHookServer.setContextPressureEnabled(
+    store.getSettings().experimentalContextPressure === true
+  )
+  claudeHookService.setContextPressureEnabled(
+    store.getSettings().experimentalContextPressure === true
+  )
+  wslHookRelayManager.setContextPressureEnabled(
+    store.getSettings().experimentalContextPressure === true
+  )
   logStartupMilestone('store-loaded')
   // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
   store.onSettingsChanged((updates, settings) => {
+    if ('experimentalContextPressure' in updates) {
+      const enabled = settings.experimentalContextPressure === true
+      agentHookServer.setContextPressureEnabled(enabled)
+      claudeHookService.setContextPressureEnabled(enabled)
+      wslHookRelayManager.setContextPressureEnabled(enabled)
+    }
     if ('terminalWindowsWslDistro' in updates) {
       // Why: synchronize fallback WSL distro updates to runner.
       setDefaultWslDistroOverride(settings.terminalWindowsWslDistro ?? null)

@@ -11,6 +11,8 @@ import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
+import { ContextPressureIndicator } from '@/components/ContextPressureIndicator'
+import { resolveEntryContextPressure, useContextPressureConfig } from './context-pressure-selection'
 
 function formatShortTimeAgo(ts: number, now: number): string {
   const delta = now - ts
@@ -127,6 +129,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
+  const contextPressureConfig = useContextPressureConfig()
+  // Per-agent rows show all three levels; no data (or flag off) renders nothing.
+  const contextPressure = resolveEntryContextPressure(agent.entry, contextPressureConfig)
 
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
@@ -235,6 +240,18 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         >
           +{childAgentCount}
         </span>
+      )}
+      {contextPressure && (
+        <ContextPressureIndicator
+          level={contextPressure.level}
+          usedPercent={contextPressure.usedPercent}
+          usedTokens={contextPressure.usedTokens}
+          limitTokens={contextPressure.limitTokens}
+          limitSource={contextPressure.limitSource}
+          usedTokensSource={contextPressure.usedTokensSource}
+          size="sm"
+          tooltipSide="right"
+        />
       )}
       {cacheTimer && <CacheTimer startedAt={cacheTimer.startedAt} ttlMs={cacheTimer.ttlMs} />}
       {shortTime && (

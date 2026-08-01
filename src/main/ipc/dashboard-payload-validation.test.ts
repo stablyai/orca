@@ -104,6 +104,53 @@ describe('dashboard payload validation', () => {
     ).toBe(false)
   })
 
+  it('accepts complete context pressure details and rejects invalid payloads', () => {
+    const withPressure = (contextPressure: unknown): unknown => ({
+      ...SNAPSHOT,
+      cards: [{ ...SNAPSHOT.cards[0], contextPressure }]
+    })
+
+    const pressure = {
+      usedTokens: 160_000,
+      limitTokens: 200_000,
+      limitSource: 'provider'
+    }
+    expect(isDashboardSnapshot(withPressure(undefined))).toBe(true)
+    expect(isDashboardSnapshot(withPressure({ ...pressure, level: 'ok', usedPercent: 50 }))).toBe(
+      true
+    )
+    expect(
+      isDashboardSnapshot(withPressure({ ...pressure, level: 'warning', usedPercent: 80 }))
+    ).toBe(true)
+    expect(
+      isDashboardSnapshot(withPressure({ ...pressure, level: 'critical', usedPercent: 100 }))
+    ).toBe(true)
+
+    expect(
+      isDashboardSnapshot(withPressure({ ...pressure, level: 'critical', usedPercent: 101 }))
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot(withPressure({ ...pressure, level: 'critical', usedPercent: -1 }))
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot(withPressure({ ...pressure, level: 'critical', usedPercent: Number.NaN }))
+    ).toBe(false)
+    expect(isDashboardSnapshot(withPressure({ level: 'critical' }))).toBe(false)
+    expect(isDashboardSnapshot(withPressure(null))).toBe(false)
+    expect(isDashboardSnapshot(withPressure('critical'))).toBe(false)
+
+    // Enum strings and token bounds: reject unknown values, fractional counts,
+    // and counts past the shared 1e9 clamp (parity with ingestion sanitation).
+    const valid = { ...pressure, level: 'ok', usedPercent: 50 }
+    expect(isDashboardSnapshot(withPressure({ ...valid, level: 'purple' }))).toBe(false)
+    expect(isDashboardSnapshot(withPressure({ ...valid, limitSource: 'vibes' }))).toBe(false)
+    expect(isDashboardSnapshot(withPressure({ ...valid, usedTokensSource: 'guess' }))).toBe(false)
+    expect(isDashboardSnapshot(withPressure({ ...valid, usedTokensSource: 'provider' }))).toBe(true)
+    expect(isDashboardSnapshot(withPressure({ ...valid, usedTokens: 1.5 }))).toBe(false)
+    expect(isDashboardSnapshot(withPressure({ ...valid, limitTokens: 2_000_000_000 }))).toBe(false)
+    expect(isDashboardSnapshot(withPressure({ ...valid, usedTokens: 2_000_000_000 }))).toBe(false)
+  })
+
   it('accepts repo icons a pop-out can safely render, and rejects the rest', () => {
     expect(
       isDashboardSnapshot({
