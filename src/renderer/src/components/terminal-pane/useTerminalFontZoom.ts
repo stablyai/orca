@@ -41,7 +41,11 @@ export function useTerminalFontZoom({
         return
       }
 
-      const currentSize = settingsRef.current?.terminalFontSize ?? DEFAULT_FONT_SIZE
+      const settings = settingsRef.current
+      if (!settings) {
+        return
+      }
+      const currentSize = settings.terminalFontSize ?? DEFAULT_FONT_SIZE
 
       let nextSize: number
       if (direction === 'reset') {
@@ -52,9 +56,7 @@ export function useTerminalFontZoom({
         nextSize = Math.max(MIN_FONT_SIZE, currentSize - 1)
       }
 
-      if (settingsRef.current) {
-        settingsRef.current = { ...settingsRef.current, terminalFontSize: nextSize }
-      }
+      settingsRef.current = { ...settings, terminalFontSize: nextSize }
       for (const pane of panes) {
         pane.terminal.options.fontSize = nextSize
         safeFit(pane)

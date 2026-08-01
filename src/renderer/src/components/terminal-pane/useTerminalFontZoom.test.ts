@@ -49,7 +49,7 @@ describe('useTerminalFontZoom', () => {
 
   function useMountedTerminalFontZoom(
     activeElement: HTMLElement,
-    terminalFontSize = 14
+    terminalFontSize: number | null = 14
   ): {
     terminals: { options: { fontSize?: number } }[]
     listener: (direction: 'in' | 'out' | 'reset') => void
@@ -70,7 +70,9 @@ describe('useTerminalFontZoom', () => {
           getPanes: () => panes
         }
       } as never,
-      settingsRef: { current: { terminalFontSize } },
+      settingsRef: {
+        current: terminalFontSize === null ? null : { terminalFontSize }
+      },
       updateSettings
     })
     const listener = terminalZoomListeners.at(-1)
@@ -92,6 +94,18 @@ describe('useTerminalFontZoom', () => {
     expect(mocks.safeFit).not.toHaveBeenCalled()
     expect(updateSettings).not.toHaveBeenCalled()
     expect(mocks.dispatchZoomLevelChanged).not.toHaveBeenCalled()
+  })
+
+  it('does not apply or persist zoom before settings load', () => {
+    const helper = document.createElement('textarea')
+    helper.className = 'xterm-helper-textarea'
+    const { listener, terminals, updateSettings } = useMountedTerminalFontZoom(helper, null)
+
+    listener('in')
+
+    expect(terminals.map((terminal) => terminal.options.fontSize)).toEqual([12, 18])
+    expect(mocks.safeFit).not.toHaveBeenCalled()
+    expect(updateSettings).not.toHaveBeenCalled()
   })
 
   it('applies and persists the global font size to every pane while terminal owns focus', () => {
