@@ -56,10 +56,6 @@ When adding or changing a Git command:
 
 Source-control and review changes must consider GitLab and other supported git providers, not only GitHub. Keep provider-specific behavior behind explicit checks, and avoid GitHub-only naming for generic review concepts.
 
-## Localization Terminology
-
-Keep workspace ≠ worktree and primary ≠ default in every locale. Catalogs are generated — edit phrase-fixes / key-overrides, then `pnpm repair:locale-catalog --locale <code>`. See [`.github/CONTRIBUTING.md`](./.github/CONTRIBUTING.md).
-
 ## GitHub CLI Usage
 
 Be mindful of the user's `gh` CLI API rate limit — batch requests where possible and avoid unnecessary calls. All code, commands, and scripts must be compatible with macOS, Linux, and Windows.
