@@ -821,7 +821,12 @@ it('holds a worktree-creation startup terminal spawned through the runtime contr
     lastWatermark: 'sessions/2026/07/25/rollout-a.jsonl'
   })
   // Mirror the arg shape OrcaRuntimeService.createTerminal sends for a codex worktree startup
-  // terminal (orca-runtime.ts:23548): provider commandDelivery, main-minted paneKey, launchAgent.
+  // terminal (orca-runtime.ts:23548): provider commandDelivery, launchAgent, and a REAL UUID
+  // leafId. paneKey is only minted on the controller path (pty.ts:3588-3603) when
+  // isTerminalLeafId(args.leafId) passes its strict UUID check (stable-pane-id.ts:4); tabId only
+  // needs to be non-empty without ':'. Main-minted leaf ids ARE UUIDs, so a non-UUID literal like
+  // 'leaf-wt' would silently skip paneKey minting, the gate's `spawnOptions.paneKey && ...` guard
+  // would never engage, and this test could never pass regardless of Task 2's placement.
   await controller.spawn({
     cols: 80,
     rows: 24,
@@ -829,7 +834,7 @@ it('holds a worktree-creation startup terminal spawned through the runtime contr
     launchAgent: 'codex',
     commandDelivery: 'provider',
     tabId: 'tab-wt',
-    leafId: 'leaf-wt',
+    leafId: '11111111-1111-4111-8111-111111111111',
     cwd: '/home/user/repo/.orca/worktrees/repo/branch'
   })
   // shell spawned, codex command withheld, hold broadcast with the paneKey main minted
@@ -848,6 +853,7 @@ it('auto-launches the held worktree-creation pane when the backfill completes', 
 
 it('holds the agentSessionEnsure controller arm the same way', async () => {
   // same as the first test but with the resume-shaped args from the existing test at ~:3102
+  // PLUS tabId + a UUID leafId (that test passes neither — see the note after this block)
   // (command: 'codex resume session-a', resumeProviderSession: {...}) and a stubbed
   // prepareCodexSessionResume returning a codexHomePath — assert the hold uses THAT home
   // (resume-pinned home takes precedence over lane selection).
@@ -863,14 +869,19 @@ it('does not hold when the ensure arm adopts a live owner instead of spawning', 
 
 it('passes a remote controller spawn through untouched', async () => {
   backfillPendingMock.mockReturnValue(true)
+  // Valid UUID leafId so paneKey IS minted for this remote spawn — minting (pty.ts:3588-3603)
+  // never consults connectionId, so with a real paneKey in place the passthrough below is proven
+  // by shouldHoldCodexSpawnForBackfill's connectionId arm ALONE. With a non-UUID leafId this test
+  // would pass vacuously (gate skipped for lack of a paneKey) and prove nothing about SSH
+  // exclusion. Fixture mirrors the existing SSH controller-spawn test at ~pty.test.ts:7924-7934.
   await controller.spawn({
     cols: 80,
     rows: 24,
     command: 'codex',
     launchAgent: 'codex',
     connectionId: 'ssh-1',
-    tabId: 't',
-    leafId: 'l'
+    tabId: 'tab-remote',
+    leafId: '22222222-2222-4222-8222-222222222222'
   })
   expect(
     mainWindowWebContentsSendMock.mock.calls.filter(([ch]) => ch === 'codexBackfill:paneHoldChanged')
@@ -878,12 +889,15 @@ it('passes a remote controller spawn through untouched', async () => {
 })
 ```
 
-Adapt mock names (`mainWindowWebContentsSendMock`, controller extraction, fake pty write capture) to the file's actual harness; the four behaviors above are the contract. Copy the exact resume-arm arg shape from the existing test at ~`:3102` rather than inventing one.
+Adapt mock names (`mainWindowWebContentsSendMock`, controller extraction, fake pty write capture) to the file's actual harness; the behaviors above are the contract. Two hard requirements the harness will NOT supply for you:
+
+1. EVERY spawn in this block must pass a `leafId` that is a real UUID plus a non-empty `tabId` without `':'` — paneKey minting (`pty.ts:3588-3603`) requires `isTerminalLeafId(args.leafId)` (strict UUID, `stable-pane-id.ts:4`) and `isValidTerminalTabId(args.tabId)`; without both, the gate is silently skipped and the positive tests can never go green while the negative ones pass vacuously.
+2. The existing controller-path test at ~`:3120-3132` passes NO `tabId`/`leafId` at all, and its local `RuntimeSpawnController` type (~`:3076-3092`) does not declare those fields. For the resume-arm tests, copy its exact resume-arm arg shape (`command`, `resumeProviderSession`, ...) rather than inventing one, but ADD `tabId` + a UUID `leafId` (widening the local `RuntimeSpawnController` type as needed) — otherwise the resume-arm tests inherit the same silent no-paneKey skip.
 
 - [ ] **Step 3: Run to verify current state**
 
 Run: `pnpm exec vitest run src/main/ipc/pty.test.ts -t 'codex backfill spawn hold'`
-Expected: the new controller-arm tests PASS if Task 2's hoisted placement is correct (they are regression armor for the reporter's primary flow); if any FAIL, the placement missed an arm — fix `pty.ts` (hoist above the `agentSessionEnsure` branch) until green. Do not weaken assertions to pass.
+Expected: the new controller-arm tests PASS if Task 2's hoisted placement is correct (they are regression armor for the reporter's primary flow). If any FAIL, FIRST confirm the failing test passes a real-UUID `leafId` and a valid `tabId` (a non-UUID leafId means no paneKey was minted and the gate was silently skipped — a test bug, not a placement bug); only then treat the failure as a missed arm and fix `pty.ts` (hoist above the `agentSessionEnsure` branch) until green. Do not weaken assertions to pass.
 
 - [ ] **Step 4: Run the whole pty suite**
 
