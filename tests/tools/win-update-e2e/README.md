@@ -7,7 +7,7 @@ the update — and whether any console/terminal window flashes.
 
 > **Companion harness:** proving the daemon survives a **crash** of the main
 > process (GitHub #7742), rather than an update, lives in
-> [`tools/win-crash-survival-e2e`](../win-crash-survival-e2e/README.md). It reuses
+> [`tests/tools/win-crash-survival-e2e`](../win-crash-survival-e2e/README.md). It reuses
 > the shared modules in this directory (app driver, daemon discovery, PowerShell
 > runner, platform guard, table renderer).
 
@@ -42,7 +42,7 @@ pnpm win-update-e2e --from <setup.exe> --to <setup.exe> --expect <profile>
 pnpm win-update-e2e --from-release v1.4.124-rc.9 --to-release v1.4.125-rc.1 --expect cold-restore
 ```
 
-Or directly: `node tools/win-update-e2e/run.mjs --from ... --to ... --expect ...`
+Or directly: `node tests/tools/win-update-e2e/run.mjs --from ... --to ... --expect ...`
 
 ### Flags
 
@@ -146,7 +146,7 @@ pnpm win-update-e2e \
 Read-only, touches nothing — print what isolated mode would snapshot on this machine:
 
 ```
-node tools/win-update-e2e/registry-shortcut-backup.mjs
+node tests/tools/win-update-e2e/registry-shortcut-backup.mjs
 ```
 
 ## What it does
@@ -180,13 +180,13 @@ Each probe module runs on its own so the harness's own instruments are testable:
 
 ```
 # Opens a real transient console window and asserts the watch catches it:
-node tools/win-update-e2e/window-watch.mjs --selftest
+node tests/tools/win-update-e2e/window-watch.mjs --selftest
 
 # Read-only: list daemon processes + PID files on this machine:
-node tools/win-update-e2e/daemon-processes.mjs [--user-data <dir>] [--scope <substr>]
+node tests/tools/win-update-e2e/daemon-processes.mjs [--user-data <dir>] [--scope <substr>]
 
 # Emit the current visible-window snapshot as JSON:
-powershell -File tools/win-update-e2e/window-enum.ps1
+powershell -File tests/tools/win-update-e2e/window-enum.ps1
 ```
 
 ## Files

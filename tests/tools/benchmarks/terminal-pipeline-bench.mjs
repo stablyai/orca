@@ -19,12 +19,12 @@
  *                        agent floods output" complaint, quantified.
  *
  * Usage (run in EACH terminal being compared, same machine, on AC power):
- *   node tools/benchmarks/terminal-pipeline-bench.mjs --label m2max-2026-07-02
+ *   node tests/tools/benchmarks/terminal-pipeline-bench.mjs --label m2max-2026-07-02
  *     [--size-mb 10] [--iterations 5] [--dsr-count 200] [--skip-load]
  *     [--fixtures ascii-log,cjk-emoji,agent-tui,styles-stress]
  *
  * Aggregate results from all terminals into one comparison table:
- *   node tools/benchmarks/terminal-pipeline-bench.mjs report [--label <filter>]
+ *   node tests/tools/benchmarks/terminal-pipeline-bench.mjs report [--label <filter>]
  *
  * Protocol notes: keep hands off the keyboard during a run (stdin is parsed
  * for DSR replies), use a comparable window size everywhere, avoid tmux/screen
@@ -32,7 +32,7 @@
  * deliberately pathological (every cell restyled); read it as a ceiling probe,
  * not a realistic workload. Complementary manual metric: Typometer for true
  * keypress->pixel latency — this probe stops at the parser reply.
- * Results: tools/benchmarks/results/terminal-pipeline-<label>-<timestamp>.json
+ * Results: tests/tools/benchmarks/results/terminal-pipeline-<label>-<timestamp>.json
  */
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -552,7 +552,7 @@ async function main() {
     }
   }
   console.log(`\nSaved: ${outPath}`)
-  console.log('Compare terminals: node tools/benchmarks/terminal-pipeline-bench.mjs report')
+  console.log('Compare terminals: node tests/tools/benchmarks/terminal-pipeline-bench.mjs report')
   process.exit(0)
 }
 

@@ -10,7 +10,7 @@
  * to xterm.js's parser/buffer for that byte pattern.
  *
  * Usage:
- *   node tools/benchmarks/terminal-headless-parse-bench.mjs
+ *   node tests/tools/benchmarks/terminal-headless-parse-bench.mjs
  *     [--size-mb 10] [--cols 114] [--rows 85] [--scrollback 5000]
  */
 import { performance } from 'node:perf_hooks'

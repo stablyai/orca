@@ -100,7 +100,7 @@ function parseArgs() {
 
 function printHelp() {
   console.log(`Usage:
-  node tools/benchmarks/terminal-perf-bench.mjs [options]
+  node tests/tools/benchmarks/terminal-perf-bench.mjs [options]
 
 Options:
   --label=NAME             Label recorded in the report filename/JSON. Default: run.
@@ -109,7 +109,7 @@ Options:
   --cycles=N               Workspace switch cycles. Default: ${defaultCycles}.
   --shell=PATH             Shell override for created tabs (e.g. cmd.exe). Default: app default.
   --scenarios=a,b          Subset of tab-create,tab-switch,workspace-switch.
-  --report=PATH            Report JSON path. Default: tools/benchmarks/results/terminal-perf-<label>-<ts>.json.
+  --report=PATH            Report JSON path. Default: tests/tools/benchmarks/results/terminal-perf-<label>-<ts>.json.
   --keep                   Keep the temp fixture and user data dir.`)
 }
 
@@ -591,7 +591,7 @@ async function main() {
       args.reportPath ??
         path.join(
           rootDir,
-          'tools',
+          'tests', 'tools',
           'benchmarks',
           'results',
           `terminal-perf-${args.label}-${stamp}.json`

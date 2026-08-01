@@ -3106,11 +3106,11 @@
       "oracle": "Resolve the launched instance's real main PID from inside Electron, force-kill only that PID, require it to die, require one command-line-scoped daemon PID and the stamped interactive shell PID to remain live, relaunch with persisted state, require the daemon PID to remain identical, read the exact shell PID and a per-shell environment sentinel back through the exact restored tab, then require a successful Windows Application event-log query with zero matching pwsh FailFast events across the full crash-to-input window.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts config/scripts/win-crash-survival-e2e.test.mjs",
-        "node tools/win-crash-survival-e2e/run.mjs --expect survival --exe-path \"$env:ORCA_EXE\" --soak-seconds 8"
+        "node tests/tools/win-crash-survival-e2e/run.mjs --expect survival --exe-path \"$env:ORCA_EXE\" --soak-seconds 8"
       ],
       "testFiles": [
         "config/scripts/win-crash-survival-e2e.test.mjs",
-        "tools/win-crash-survival-e2e/run.mjs"
+        "tests/tools/win-crash-survival-e2e/run.mjs"
       ],
       "assertionRefs": [
         {
@@ -3124,7 +3124,7 @@
           ]
         },
         {
-          "file": "tools/win-crash-survival-e2e/run.mjs",
+          "file": "tests/tools/win-crash-survival-e2e/run.mjs",
           "assertions": [
             "force-killing only the real Electron main leaves the exact scoped daemon and stamped interactive shell alive",
             "packaged relaunch adopts the unchanged daemon and reads the survivor shell's environment sentinel through the restored terminal"
@@ -3136,7 +3136,7 @@
           "date": "2026-07-18",
           "runner": "ci",
           "platform": "windows",
-          "command": "node tools/win-crash-survival-e2e/run.mjs --expect survival --exe-path \"$env:ORCA_EXE\" --soak-seconds 8",
+          "command": "node tests/tools/win-crash-survival-e2e/run.mjs --expect survival --exe-path \"$env:ORCA_EXE\" --soak-seconds 8",
           "result": "passed",
           "durationSeconds": 61,
           "summary": "The packaged branch build's real main died; the same daemon and shell PIDs survived; the event-log scan found zero FailFast events; relaunch adopted the unchanged daemon; and terminal input read the survivor shell sentinel back."
@@ -6004,14 +6004,14 @@
       "oracle": "Runtime tests assert the exact PTY write sequence and failure cleanup; orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness dispatches a 32KB task to a fake Codex-like TUI and requires marker present, bracketed paste present, zero unframed line breaks, and submit observed.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/runtime/orchestration/coordinator.test.ts",
-        "node tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000"
+        "node tests/tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000"
       ],
       "testFiles": [
         "src/shared/agent-prompt-injection.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/rpc/methods/orchestration.test.ts",
         "src/main/runtime/orchestration/coordinator.test.ts",
-        "tools/repro-orchestration-long-prompt.mjs"
+        "tests/tools/repro-orchestration-long-prompt.mjs"
       ],
       "assertionRefs": [
         {
@@ -6047,7 +6047,7 @@
           ]
         },
         {
-          "file": "tools/repro-orchestration-long-prompt.mjs",
+          "file": "tests/tools/repro-orchestration-long-prompt.mjs",
           "assertions": [
             "fake Codex-like worker observes submit after long orchestration dispatch",
             "32KB task marker survives before submit",
@@ -6069,7 +6069,7 @@
           "date": "2026-07-07",
           "runner": "local",
           "platform": "macos",
-          "command": "node tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000",
+          "command": "node tests/tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000",
           "result": "passed",
           "durationSeconds": 2.2,
           "summary": "Live dev-runtime repro passed: expectedSpecBytes=32830, hasSubmit=true, rawContainsMarker=true, hasBracketedPasteFrame=true, unframedLineBreaks=0, contractOk=true."

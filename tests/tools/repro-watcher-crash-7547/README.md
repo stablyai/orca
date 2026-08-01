@@ -10,7 +10,7 @@ All watched/churned directories live under `os.tmpdir()`, never the repo.
 ## Reproduce the bug (in-process watcher, pre-fix architecture)
 
 ```
-node tools/repro-watcher-crash-7547/run.cjs delete-root 3 15000
+node tests/tools/repro-watcher-crash-7547/run.cjs delete-root 3 15000
 ```
 
 Spawns `child.cjs`, which uses `@parcel/watcher` **in-process** the way
@@ -37,7 +37,7 @@ Build first so the forked entry exists, then run from the repo root:
 
 ```
 npx electron-vite build
-node tools/repro-watcher-crash-7547/fixed-child.cjs 15000
+node tests/tools/repro-watcher-crash-7547/fixed-child.cjs 15000
 ```
 
 `fixed-child.cjs` esbuild-bundles the real `src/main/ipc/parcel-watcher-process.ts`

@@ -56,7 +56,7 @@ function parseArgs() {
   for (const arg of process.argv.slice(2)) {
     if (arg === '--help' || arg === '-h') {
       console.log(
-        'Usage: node tools/benchmarks/terminal-cold-park-resource-bench.mjs [--label=name] [--worktrees=N] [--scrollback-lines=N] [--report=path] [--keep]'
+        'Usage: node tests/tools/benchmarks/terminal-cold-park-resource-bench.mjs [--label=name] [--worktrees=N] [--scrollback-lines=N] [--report=path] [--keep]'
       )
       process.exit(0)
     }
@@ -454,7 +454,7 @@ async function main() {
       args.reportPath ??
         path.join(
           rootDir,
-          'tools',
+          'tests', 'tools',
           'benchmarks',
           'results',
           `cold-park-res-${args.label}-${stamp}.json`

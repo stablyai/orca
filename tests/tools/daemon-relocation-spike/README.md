@@ -34,14 +34,14 @@ This spike does **not** reintroduce stock node.
 
 ```
 # Real run (Windows, needs a packaged win-unpacked build):
-node tools/daemon-relocation-spike/spike.mjs \
+node tests/tools/daemon-relocation-spike/spike.mjs \
   --app-dir <path-to-win-unpacked> \
   --work-dir <scratch-dir> \
   [--tier full|no-gpu|minimal] \
   [--keep-work-dir]
 
 # Offline logic validation (any OS, no build, no launch):
-node tools/daemon-relocation-spike/spike.mjs --selftest
+node tests/tools/daemon-relocation-spike/spike.mjs --selftest
 ```
 
 Exit code is `0` only when the run **PASSES**: daemon ready, PTY echo

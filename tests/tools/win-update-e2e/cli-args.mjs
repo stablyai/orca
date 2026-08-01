@@ -13,8 +13,8 @@ const USAGE = `
 win-update-e2e — packaged NSIS update proof harness (Windows only)
 
 Usage:
-  node tools/win-update-e2e/run.mjs --from <setup.exe> --to <setup.exe> --expect <profile> [options]
-  node tools/win-update-e2e/run.mjs --from-release <tag> --to-release <tag> --expect <profile>
+  node tests/tools/win-update-e2e/run.mjs --from <setup.exe> --to <setup.exe> --expect <profile> [options]
+  node tests/tools/win-update-e2e/run.mjs --from-release <tag> --to-release <tag> --expect <profile>
 
 Installer source (version N, then N+1) — path or release tag on each side:
   --from <path>            Local orca-windows-setup.exe for the base version (N)

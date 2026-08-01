@@ -19,7 +19,7 @@ The fix re-architected the daemon into a standalone, relocated
 that is spawned **detached** and **survives main-process death**.
 
 There is already a harness proving the daemon survives a Windows **update**
-([`tools/win-update-e2e`](../win-update-e2e/README.md)). This harness proves the
+([`tests/tools/win-update-e2e`](../win-update-e2e/README.md)). This harness proves the
 daemon survives a **crash** of the main process, so that guarantee can't silently
 regress. It **reuses win-update-e2e's shared modules** (app driver, daemon
 discovery, onboarding seed, PowerShell runner, platform guard, table renderer)
@@ -70,7 +70,7 @@ a CLI usage error).
 ```powershell
 pnpm win-crash-survival-e2e --expect survival
 # or explicitly point at an installed exe:
-node tools/win-crash-survival-e2e/run.mjs --expect survival --exe-path "C:\Users\<you>\AppData\Local\Programs\orca\Orca.exe"
+node tests/tools/win-crash-survival-e2e/run.mjs --expect survival --exe-path "C:\Users\<you>\AppData\Local\Programs\orca\Orca.exe"
 ```
 
 ### Flags

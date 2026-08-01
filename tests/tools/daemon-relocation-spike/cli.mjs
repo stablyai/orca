@@ -11,8 +11,8 @@ const USAGE = `
 daemon-relocation-spike — minimal relocated daemon-host file-set probe (Windows)
 
 Usage:
-  node tools/daemon-relocation-spike/spike.mjs --app-dir <win-unpacked> --work-dir <temp out> [--tier <t>]
-  node tools/daemon-relocation-spike/spike.mjs --selftest
+  node tests/tools/daemon-relocation-spike/spike.mjs --app-dir <win-unpacked> --work-dir <temp out> [--tier <t>]
+  node tests/tools/daemon-relocation-spike/spike.mjs --selftest
 
 Required (launch mode):
   --app-dir <path>    Path to a packaged win-unpacked build (contains Orca.exe)

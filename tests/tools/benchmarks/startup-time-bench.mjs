@@ -9,7 +9,7 @@
  * reports per-phase timings across iterations.
  *
  * Usage:
- *   node tools/benchmarks/startup-time-bench.mjs --label baseline
+ *   node tests/tools/benchmarks/startup-time-bench.mjs --label baseline
  *     [--iterations 5] [--files 28000] [--fixture-dir <path>]
  *     [--state-profile none|restored-local-tabs] [--session-tabs 200]
  *     [--github-repos 3] [--gh-hang-ms 30000]
@@ -24,7 +24,7 @@
  * turns a 2.5s execSync timeout into a minutes-long main-thread stall.
  *
  * Prereq (when not using --exe): `pnpm build:electron-vite` so out/ exists.
- * Results: tools/benchmarks/results/startup-<label>-<timestamp>.json
+ * Results: tests/tools/benchmarks/results/startup-<label>-<timestamp>.json
  */
 import { spawn, spawnSync } from 'node:child_process'
 import {

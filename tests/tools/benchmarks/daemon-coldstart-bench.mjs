@@ -11,12 +11,12 @@
  * (event-loop-stall probe) while pid identity checks run.
  *
  * Usage:
- *   node tools/benchmarks/daemon-coldstart-bench.mjs --label baseline
+ *   node tests/tools/benchmarks/daemon-coldstart-bench.mjs --label baseline
  *     [--iterations 3] [--linger-ms 15000] [--timeout-ms 240000]
  *     [--exe <path-to-packaged-Orca.exe>]
  *
  * Prereq (when not using --exe): `pnpm build:electron-vite` so out/ exists.
- * Results: tools/benchmarks/results/daemon-coldstart-<label>-<timestamp>.json
+ * Results: tests/tools/benchmarks/results/daemon-coldstart-<label>-<timestamp>.json
  */
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'

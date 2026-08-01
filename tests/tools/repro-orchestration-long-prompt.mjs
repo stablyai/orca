@@ -472,7 +472,7 @@ function fakeCoordinatorMain() {
 async function main() {
   if (hasFlag('help')) {
     console.log(`Usage:
-  node tools/repro-orchestration-long-prompt.mjs [--mode codex-like|wire] [--size-kb 80]
+  node tests/tools/repro-orchestration-long-prompt.mjs [--mode codex-like|wire] [--size-kb 80]
 
 The parent mode requires a running Orca runtime and creates temporary Orca
 terminals. The fake worker records whether orchestration dispatch delivered a

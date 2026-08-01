@@ -32,7 +32,7 @@ const MODIFIER = process.platform === 'darwin' ? 'Meta' : 'Control'
 const replayRoot = path.join(os.tmpdir(), 'garble-rig')
 const REPLAY_A = path.join(replayRoot, 'frames-A.jsonl')
 const REPLAY_B = path.join(replayRoot, 'frames-B.jsonl')
-const REPLAY_SCRIPT = path.resolve('tools/terminal-garble-session-replay.mjs')
+const REPLAY_SCRIPT = path.resolve('tests/tools/terminal-garble-session-replay.mjs')
 const PANE_COUNT = Number(argValue('--panes', '2'))
 const TAB_COUNT = Number(argValue('--tabs', '1'))
 const CLICK_COUNT = Number(argValue('--clicks', '3'))

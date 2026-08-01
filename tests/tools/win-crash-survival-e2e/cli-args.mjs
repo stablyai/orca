@@ -21,7 +21,7 @@ leaves the detached terminal daemon + its pwsh shell alive, with no pwsh FailFas
 the surviving daemon instead of forking a new one. See #7742.
 
 Usage:
-  node tools/win-crash-survival-e2e/run.mjs --expect <profile> [--exe-path <Orca.exe>] [options]
+  node tests/tools/win-crash-survival-e2e/run.mjs --expect <profile> [--exe-path <Orca.exe>] [options]
 
 Required:
   --expect <profile>       Assertion profile:

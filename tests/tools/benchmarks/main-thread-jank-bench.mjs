@@ -15,7 +15,7 @@
  * emitted them, so spawn churn and OS warnings can be correlated by timestamp.
  *
  * Usage:
- *   node tools/benchmarks/main-thread-jank-bench.mjs --label baseline
+ *   node tests/tools/benchmarks/main-thread-jank-bench.mjs --label baseline
  *     [--duration-s 120] [--warmup-s 20] [--fixture-dir <path>]
  *     [--exe <path-to-packaged-Orca>] [--headless] [--no-log-stream]
  *
@@ -24,7 +24,7 @@
  * --headless exists only for smoke-testing the harness itself.
  *
  * Prereq (when not using --exe): `pnpm build:electron-vite` so out/ exists.
- * Results: tools/benchmarks/results/main-thread-jank-<label>-<timestamp>.json
+ * Results: tests/tools/benchmarks/results/main-thread-jank-<label>-<timestamp>.json
  */
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
