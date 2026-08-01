@@ -2,7 +2,7 @@
 // `posix.resolve` against a POSIX guest home. On win32 `posix.resolve` of a
 // Windows tmpdir yields an invalid path, so the whole suite is skipped there
 // (the bridge only ever runs inside a Linux WSL guest).
-import { mkdtempSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { posix } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -118,6 +118,22 @@ describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs
       dst: posix.join(home, 'stolen.txt')
     })
     expect(inbound).toMatchObject({ ok: false, errno: 'EACCES' })
+  })
+
+  it('publishes hardlinks without replacing an existing destination', async () => {
+    const first = posix.join(home, 'first.txt')
+    const second = posix.join(home, 'second.txt')
+    const destination = posix.join(home, 'published.txt')
+    await call(WSL_HOOK_FS_METHODS.writeFile, { path: first, content: 'first' })
+    await call(WSL_HOOK_FS_METHODS.writeFile, { path: second, content: 'second' })
+
+    expect(await call(WSL_HOOK_FS_METHODS.hardlink, { src: first, dst: destination })).toEqual({
+      ok: true
+    })
+    expect(
+      await call(WSL_HOOK_FS_METHODS.hardlink, { src: second, dst: destination })
+    ).toMatchObject({ ok: false, errno: 'EEXIST' })
+    expect(readFileSync(destination, 'utf8')).toBe('first')
   })
 
   it('refuses a relative path (resolved against cwd, which lands outside home)', async () => {

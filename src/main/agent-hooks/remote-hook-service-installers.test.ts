@@ -130,6 +130,7 @@ function createFakeSftp(initialFiles: Record<string, string> = {}): {
       cb(null)
     }
   } as unknown as SFTPWrapper
+  sftp.ext_openssh_hardlink = sftp.rename.bind(sftp)
   return { sftp, fs }
 }
 

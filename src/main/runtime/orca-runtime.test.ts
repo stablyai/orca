@@ -22181,6 +22181,7 @@ describe('OrcaRuntimeService', () => {
 
   it('publishes the hook provider session on a headless mobile tab so native chat can address the transcript', async () => {
     const paneKey = makePaneKey('claude-tab', HEADLESS_LEAF_ID)
+    const configDir = '/home/dev/.claude-grok'
     const providerSession = {
       key: 'session_id' as const,
       id: '7dd0c22c-0ff6-45bf-b88a-cea11c34d073',
@@ -22199,6 +22200,7 @@ describe('OrcaRuntimeService', () => {
           stateStartedAt: Date.now(),
           tabId: 'claude-tab',
           worktreeId: TEST_WORKTREE_ID,
+          configDir,
           providerSession
         }
       ]
@@ -22224,7 +22226,7 @@ describe('OrcaRuntimeService', () => {
     expect(result.tabs[0]).toEqual(
       expect.objectContaining({
         type: 'terminal',
-        agentStatus: expect.objectContaining({ agentType: 'claude', providerSession })
+        agentStatus: expect.objectContaining({ agentType: 'claude', configDir, providerSession })
       })
     )
   })

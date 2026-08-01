@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   existsSync,
   lstatSync,
@@ -33,6 +33,22 @@ import {
   type HooksConfig
 } from './installer-utils'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
+import type * as RollingFileBackupModule from '../rolling-file-backup'
+
+const rollingBackupTestState = vi.hoisted(() => ({
+  afterBackup: null as (() => void) | null
+}))
+
+vi.mock('../rolling-file-backup', async (importOriginal) => {
+  const actual = await importOriginal<typeof RollingFileBackupModule>()
+  return {
+    ...actual,
+    writeRollingFileBackup: (...args: Parameters<typeof actual.writeRollingFileBackup>): void => {
+      actual.writeRollingFileBackup(...args)
+      rollingBackupTestState.afterBackup?.()
+    }
+  }
+})
 
 let tmpDir: string
 let configPath: string
@@ -43,6 +59,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  rollingBackupTestState.afterBackup = null
   rmSync(tmpDir, { recursive: true, force: true })
 })
 
@@ -245,6 +262,24 @@ describe('updateHooksJsonWithRetry', () => {
     expect(mutateCalls).toBe(2)
     expect(result).toBeNull()
     expect(JSON.parse(readFileSync(configPath, 'utf-8'))).toEqual({ v: 2 })
+  })
+
+  it('re-merges a settings change made while publishing the rolling backup', () => {
+    const original = `${JSON.stringify({ userKey: 'keep' }, null, 2)}\n`
+    const concurrent = `${JSON.stringify({ userKey: 'keep', concurrentKey: 'also-keep' }, null, 2)}\n`
+    writeFileSync(configPath, original, 'utf-8')
+    rollingBackupTestState.afterBackup = () => {
+      rollingBackupTestState.afterBackup = null
+      writeFileSync(configPath, concurrent, 'utf-8')
+    }
+
+    const result = updateHooksJsonWithRetry(configPath, (config) => ({
+      ...config,
+      managed: true
+    }))
+
+    expect(result).toEqual({ userKey: 'keep', concurrentKey: 'also-keep', managed: true })
+    expect(JSON.parse(readFileSync(configPath, 'utf-8'))).toEqual(result)
   })
 })
 

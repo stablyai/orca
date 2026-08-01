@@ -22,6 +22,7 @@ function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
         updatedAtBucket: Math.floor(entry.updatedAt / BUCKET_MS),
         stateStartedAt: entry.stateStartedAt,
         agentType: entry.agentType ?? null,
+        configDir: entry.configDir ?? null,
         terminalTitle: entry.terminalTitle ?? null,
         stateHistory: entry.stateHistory.map((history) => ({
           state: history.state,
@@ -46,6 +47,7 @@ function makeEntry(index: number, overrides: Record<string, unknown> = {}): neve
     updatedAt: 1740000000000 + index * 17,
     stateStartedAt: 1740000000000,
     agentType: 'claude',
+    configDir: `/home/dev/.claude-flavor-${index}`,
     terminalTitle: `agent ${index} 日本 \u{1f389}`,
     stateHistory: Array.from({ length: 3 }, (_value, h) => ({
       state: 'working',
@@ -74,6 +76,7 @@ describe('mobile agent-status projection equivalence', () => {
     shapes.push({
       'tab-9:leaf-1': makeEntry(9, {
         agentType: undefined,
+        configDir: undefined,
         terminalTitle: undefined,
         toolName: undefined,
         toolInput: undefined,
@@ -116,5 +119,18 @@ describe('mobile agent-status projection equivalence', () => {
         projection: buildRuntimeMobileAgentStatusProjectionForTests(current)
       }).toEqual({ round, projection: referenceProjection(current) })
     }
+  })
+
+  it('changes when only configDir changes', () => {
+    resetRuntimeMobileAgentStatusProjectionCacheForTests()
+    const paneKey = 'tab-0:leaf-0'
+    const first = { [paneKey]: makeEntry(0, { configDir: '/home/dev/.claude-first' }) }
+    const second = {
+      [paneKey]: makeEntry(0, { configDir: '/home/dev/.claude-second' })
+    }
+
+    expect(buildRuntimeMobileAgentStatusProjectionForTests(second)).not.toBe(
+      buildRuntimeMobileAgentStatusProjectionForTests(first)
+    )
   })
 })

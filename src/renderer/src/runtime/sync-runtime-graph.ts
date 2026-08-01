@@ -516,6 +516,7 @@ function serializeRuntimeMobileAgentStatusEntry(
     updatedAtBucket: Math.floor(entry.updatedAt / AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS),
     stateStartedAt: entry.stateStartedAt,
     agentType: entry.agentType ?? null,
+    configDir: entry.configDir ?? null,
     terminalTitle: entry.terminalTitle ?? null,
     stateHistory: entry.stateHistory.map((history) => ({
       state: history.state,

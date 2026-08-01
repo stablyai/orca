@@ -113,6 +113,11 @@ describe.skipIf(process.platform === 'win32')(
           e ? reject(e) : resolve()) as never)
       })
       expect(existsSync(`${home}/b.txt`)).toBe(true)
+      await new Promise<void>((resolve, reject) => {
+        adapter.ext_openssh_hardlink(`${home}/b.txt`, `${home}/c.txt`, ((e: Error | null) =>
+          e ? reject(e) : resolve()) as never)
+      })
+      expect(readFileSync(`${home}/c.txt`, 'utf8')).toBe('hello')
 
       const outside = await new Promise<Error & { code?: number }>((resolve) => {
         adapter.readFile('/etc/passwd', 'utf8', ((e: Error) => resolve(e)) as never)

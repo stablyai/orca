@@ -113,6 +113,15 @@ export function registerWslHookFsHandlers(
     }
   })
 
+  dispatcher.onRequest(WSL_HOOK_FS_METHODS.hardlink, async (params): Promise<WslFsResult> => {
+    try {
+      await fs.link(scoped(params.src), scoped(params.dst))
+      return { ok: true }
+    } catch (err) {
+      return failure(err)
+    }
+  })
+
   dispatcher.onRequest(WSL_HOOK_FS_METHODS.unlink, async (params): Promise<WslFsResult> => {
     try {
       await fs.unlink(scoped(params.path))

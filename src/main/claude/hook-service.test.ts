@@ -108,6 +108,23 @@ function createFakeSftp(): { sftp: SFTPWrapper; fs: FakeFs } {
       }
       cb(null)
     },
+    ext_openssh_hardlink: (src: string, dst: string, cb: (err: unknown) => void): void => {
+      const value = fs.files.get(src)
+      if (value === undefined) {
+        cb(noEntryError(src))
+        return
+      }
+      if (fs.files.has(dst)) {
+        cb({ code: 4, message: `EEXIST ${dst}` })
+        return
+      }
+      fs.files.set(dst, value)
+      const mode = fs.modes.get(src)
+      if (mode !== undefined) {
+        fs.modes.set(dst, mode)
+      }
+      cb(null)
+    },
     unlink: (path: string, cb: (err: unknown) => void): void => {
       fs.files.delete(path)
       fs.modes.delete(path)

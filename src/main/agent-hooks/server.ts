@@ -1685,11 +1685,17 @@ export class AgentHookServer {
       event.payload.agentType && event.payload.agentType !== 'unknown'
         ? event.payload.agentType
         : undefined
-    const preservedProviderSession =
-      previous?.providerSession &&
+    const canPreservePreviousIdentity =
+      previous !== undefined &&
       (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType) &&
       (previous.payload.state !== 'done' || event.payload.state === 'done')
-        ? previous.providerSession
+    const preservedProviderSession =
+      canPreservePreviousIdentity && previous.providerSession ? previous.providerSession : undefined
+    const preservedConfigDir =
+      canPreservePreviousIdentity &&
+      previous.payload.agentType === 'claude' &&
+      event.payload.configDir === undefined
+        ? previous.payload.configDir
         : undefined
     // Why: OSC status is a runtime observation, not a prompt boundary; keep prompt-sent telemetry tied to native hooks.
     this.applyNormalizedStatus({
@@ -1698,7 +1704,9 @@ export class AgentHookServer {
       worktreeId,
       connectionId,
       ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
-      payload: event.payload
+      payload: preservedConfigDir
+        ? { ...event.payload, configDir: preservedConfigDir }
+        : event.payload
     })
   }
 

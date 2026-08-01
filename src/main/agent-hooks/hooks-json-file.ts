@@ -155,6 +155,12 @@ export function writeHooksJson(
     if (existsSync(writePath)) {
       writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
+    if (
+      options.expectedDiskContent !== undefined &&
+      readRawHooksFile(writePath) !== options.expectedDiskContent
+    ) {
+      return false
+    }
     renameSync(tmpPath, writePath)
   } finally {
     // Clean up temp file if rename failed (or the stale check aborted).

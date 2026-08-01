@@ -134,6 +134,9 @@ export function createWslHookSftpAdapter(mux: SshChannelMultiplexer): SFTPWrappe
     ext_openssh_rename(src: string, dst: string, callback: SftpCallback): void {
       callVoid(WSL_HOOK_FS_METHODS.rename, { src, dst }, callback)
     },
+    ext_openssh_hardlink(src: string, dst: string, callback: SftpCallback): void {
+      callVoid(WSL_HOOK_FS_METHODS.hardlink, { src, dst }, callback)
+    },
     rename(src: string, dst: string, callback: SftpCallback): void {
       callVoid(WSL_HOOK_FS_METHODS.rename, { src, dst }, callback)
     },

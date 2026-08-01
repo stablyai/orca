@@ -1336,6 +1336,7 @@ function agentStatusEntryEqual(a: AgentStatusEntry | undefined, b: AgentStatusEn
     a.updatedAt === b.updatedAt &&
     a.stateStartedAt === b.stateStartedAt &&
     a.agentType === b.agentType &&
+    a.configDir === b.configDir &&
     a.paneKey === b.paneKey &&
     a.worktreeId === b.worktreeId &&
     a.tabId === b.tabId &&

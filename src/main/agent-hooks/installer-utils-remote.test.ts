@@ -3,6 +3,7 @@ import type { SFTPWrapper } from 'ssh2'
 
 import {
   readHooksJsonRemote,
+  REMOTE_HOOKS_BACKUP_SUFFIX,
   updateHooksJsonRemoteWithRetry,
   writeHooksJsonRemote,
   writeManagedScriptRemote,
@@ -13,6 +14,7 @@ type FakeFs = {
   files: Map<string, string>
   dirs: Set<string>
   modes: Map<string, number>
+  openSshHardlinkCount: number
   openSshRenameCount: number
 }
 
@@ -20,17 +22,21 @@ function createFakeSftp(
   opts: {
     plainRenameOverwrites?: boolean
     openSshRename?: boolean
+    openSshHardlink?: boolean
     failDotFileWrites?: boolean
+    failBackupTempWrites?: boolean | 'once'
   } = {}
 ): {
   sftp: SFTPWrapper
   fs: FakeFs
 } {
   const plainRenameOverwrites = opts.plainRenameOverwrites ?? true
+  let backupTempWriteFailures = 0
   const fs: FakeFs = {
     files: new Map(),
     dirs: new Set(['/']),
     modes: new Map(),
+    openSshHardlinkCount: 0,
     openSshRenameCount: 0
   }
   const noEntryError = (path: string): { code: number; message: string } => ({
@@ -54,6 +60,16 @@ function createFakeSftp(
       options: string | { mode?: number },
       cb: (err: unknown) => void
     ): void => {
+      if (
+        opts.failBackupTempWrites &&
+        path.includes(`${REMOTE_HOOKS_BACKUP_SUFFIX}.`) &&
+        (opts.failBackupTempWrites !== 'once' || backupTempWriteFailures === 0)
+      ) {
+        backupTempWriteFailures += 1
+        fs.files.set(path, content.slice(0, Math.max(1, Math.floor(content.length / 2))))
+        cb({ code: 4, message: `interrupted write ${path}` })
+        return
+      }
       if (opts.failDotFileWrites && path.includes('/.')) {
         cb({ code: 4, message: `write failed ${path}` })
         return
@@ -114,6 +130,28 @@ function createFakeSftp(
       fs.dirs.add(path)
       cb(null)
     },
+    ...(opts.openSshHardlink !== false
+      ? {
+          ext_openssh_hardlink: (src: string, dst: string, cb: (err: unknown) => void): void => {
+            fs.openSshHardlinkCount += 1
+            const value = fs.files.get(src)
+            if (value === undefined) {
+              cb(noEntryError(src))
+              return
+            }
+            if (fs.files.has(dst)) {
+              cb({ code: 4, message: `EEXIST ${dst}` })
+              return
+            }
+            fs.files.set(dst, value)
+            const mode = fs.modes.get(src)
+            if (mode !== undefined) {
+              fs.modes.set(dst, mode)
+            }
+            cb(null)
+          }
+        }
+      : {}),
     ...(opts.openSshRename
       ? {
           ext_openssh_rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
@@ -232,6 +270,81 @@ describe('installer-utils-remote', () => {
     expect(fs.files.get(`${path}.orca-backup`)).toBe(original)
   })
 
+  it('preserves a pre-existing one-shot backup', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const path = '/home/u/.claude/settings.json'
+    const original = `${JSON.stringify({ userKey: 'current' }, null, 2)}\n`
+    const existingBackup = `${JSON.stringify({ userKey: 'pre-orca' }, null, 2)}\n`
+    fs.files.set(path, original)
+    fs.files.set(`${path}.orca-backup`, existingBackup)
+
+    await writeHooksJsonRemote(sftp, path, { managed: true })
+
+    expect(fs.files.get(`${path}.orca-backup`)).toBe(existingBackup)
+  })
+
+  it('lets only one simultaneous creator publish the one-shot backup', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const path = '/home/u/.claude/settings.json'
+    const original = `${JSON.stringify({ userKey: 'pristine' }, null, 2)}\n`
+    fs.files.set(path, original)
+    const hardlink = sftp.ext_openssh_hardlink.bind(sftp)
+    const claims: { src: string; dst: string; callback: (error?: Error | null) => void }[] = []
+    sftp.ext_openssh_hardlink = ((src, dst, callback): void => {
+      claims.push({ src, dst, callback })
+      if (claims.length === 2) {
+        for (const claim of claims) {
+          hardlink(claim.src, claim.dst, claim.callback)
+        }
+      }
+    }) as SFTPWrapper['ext_openssh_hardlink']
+
+    await Promise.all([
+      writeHooksJsonRemote(sftp, path, { managed: true }),
+      writeHooksJsonRemote(sftp, path, { managed: true })
+    ])
+
+    expect(fs.openSshHardlinkCount).toBe(2)
+    expect(fs.files.get(`${path}.orca-backup`)).toBe(original)
+    expect(JSON.parse(fs.files.get(path)!)).toEqual({ managed: true })
+    expect(Array.from(fs.files.keys()).some((key) => key.includes('.tmp'))).toBe(false)
+  })
+
+  it('retries safely after an interrupted one-shot backup write', async () => {
+    const { sftp, fs } = createFakeSftp({ failBackupTempWrites: 'once' })
+    const path = '/home/u/.claude/settings.json'
+    const original = `${JSON.stringify({ userKey: 'pristine' }, null, 2)}\n`
+    fs.files.set(path, original)
+
+    await expect(writeHooksJsonRemote(sftp, path, { managed: true })).rejects.toMatchObject({
+      code: 4
+    })
+
+    expect(fs.files.get(path)).toBe(original)
+    expect(fs.files.has(`${path}.orca-backup`)).toBe(false)
+    expect(Array.from(fs.files.keys()).some((key) => key.includes('.tmp'))).toBe(false)
+
+    await writeHooksJsonRemote(sftp, path, { managed: true })
+
+    expect(fs.files.get(`${path}.orca-backup`)).toBe(original)
+    expect(JSON.parse(fs.files.get(path)!)).toEqual({ managed: true })
+  })
+
+  it('fails closed when atomic no-replace backup publication is unavailable', async () => {
+    const { sftp, fs } = createFakeSftp({ openSshHardlink: false })
+    const path = '/home/u/.claude/settings.json'
+    const original = `${JSON.stringify({ userKey: 'pristine' }, null, 2)}\n`
+    fs.files.set(path, original)
+
+    await expect(writeHooksJsonRemote(sftp, path, { managed: true })).rejects.toThrow(
+      'Remote filesystem does not support atomic no-replace publication'
+    )
+
+    expect(fs.files.get(path)).toBe(original)
+    expect(fs.files.has(`${path}.orca-backup`)).toBe(false)
+    expect(Array.from(fs.files.keys()).some((key) => key.includes('.tmp'))).toBe(false)
+  })
+
   it('preserves an existing settings file when its pre-write read fails', async () => {
     const { sftp, fs } = createFakeSftp()
     const path = '/home/u/.claude/settings.json'
@@ -320,6 +433,31 @@ describe('installer-utils-remote', () => {
     expect(JSON.parse(fs.files.get(path)!)).toEqual({ concurrentVersion: 3 })
     expect(fs.files.has(`${path}.orca-backup`)).toBe(false)
     expect(Array.from(fs.files.keys()).some((key) => key.includes('.tmp'))).toBe(false)
+  })
+
+  it('re-merges a settings change made while publishing the one-shot backup', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const path = '/home/u/.claude/settings.json'
+    const original = `${JSON.stringify({ original: true }, null, 2)}\n`
+    fs.files.set(path, original)
+    const chmod = sftp.chmod.bind(sftp)
+    let injected = false
+    sftp.chmod = ((tmpPath, mode, callback): void => {
+      if (!injected && tmpPath.includes(`${REMOTE_HOOKS_BACKUP_SUFFIX}.`)) {
+        injected = true
+        fs.files.set(path, `${JSON.stringify({ original: true, concurrent: true }, null, 2)}\n`)
+      }
+      chmod(tmpPath, mode, callback)
+    }) as SFTPWrapper['chmod']
+
+    const result = await updateHooksJsonRemoteWithRetry(sftp, path, (config) => ({
+      ...config,
+      managed: true
+    }))
+
+    expect(result).toEqual({ original: true, concurrent: true, managed: true })
+    expect(JSON.parse(fs.files.get(path)!)).toEqual(result)
+    expect(fs.files.get(`${path}.orca-backup`)).toBe(original)
   })
 
   it('uses OpenSSH overwrite rename when an atomic write updates an existing file', async () => {

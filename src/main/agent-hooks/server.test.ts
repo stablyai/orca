@@ -7806,6 +7806,31 @@ describe('AgentHookServer ingestTerminalStatus', () => {
     expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', providerSession })
   })
 
+  it('keeps the cached Claude configDir when an OSC status completes the turn', () => {
+    const server = new AgentHookServer()
+    const configDir = '/home/dev/.claude-grok'
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        payload: {
+          state: 'working',
+          prompt: 'summarize the diff',
+          agentType: 'claude',
+          configDir
+        }
+      },
+      'conn-1'
+    )
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      connectionId: 'conn-1',
+      payload: { state: 'done', prompt: 'summarize the diff', agentType: 'claude' }
+    })
+
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', configDir })
+  })
+
   // Why: an OSC ping that names no agent — or the literal 'unknown', which
   // resolveAgentStatusIdentity treats identically — makes no claim about the pane's identity, so it
   // must not read as a mismatch. Missing this stripped the session from persisted and headless rows

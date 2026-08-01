@@ -1,4 +1,15 @@
-import { chmod, lstat, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs'
+import {
+  chmod,
+  link,
+  lstat,
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  stat,
+  unlink,
+  writeFile
+} from 'node:fs'
 import type { SFTPWrapper } from 'ssh2'
 
 type Callback<T = void> = (error: Error | null, value?: T) => void
@@ -56,6 +67,9 @@ export function createManagedHookLocalFilesystem(): SFTPWrapper {
     },
     ext_openssh_rename(source: string, destination: string, callback: Callback): void {
       rename(source, destination, (error) => finish(callback, error))
+    },
+    ext_openssh_hardlink(source: string, destination: string, callback: Callback): void {
+      link(source, destination, (error) => finish(callback, error))
     },
     unlink(path: string, callback: Callback): void {
       unlink(path, (error) => finish(callback, error))

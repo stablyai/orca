@@ -19,6 +19,7 @@ import {
   chmod,
   dirnamePosix,
   getRemoteFileModeOrDefault,
+  hardlinkNoReplace,
   isNoEntryError,
   mkdirpRemote,
   readFile,
@@ -148,6 +149,12 @@ export async function writeHooksJsonRemote(
     if (existingContent !== null) {
       await writeOneShotBackup(sftp, remotePath, existingContent)
     }
+    if (options.expectedDiskContent !== undefined) {
+      const currentContent = await readRemoteRawFile(sftp, remotePath)
+      if (currentContent !== options.expectedDiskContent) {
+        return false
+      }
+    }
     await rename(sftp, tmp, remotePath)
   } finally {
     // Best-effort cleanup if rename failed.
@@ -263,14 +270,32 @@ async function writeOneShotBackup(
   content: string
 ): Promise<void> {
   const backupPath = `${remotePath}${REMOTE_HOOKS_BACKUP_SUFFIX}`
-  try {
-    await statMode(sftp, backupPath)
+  if (await remoteFileExists(sftp, backupPath)) {
     return
-  } catch (err) {
-    if (!isNoEntryError(err)) {
-      throw err
+  }
+  const tmp = `${backupPath}.${Date.now()}-${randomUUID()}.tmp`
+  try {
+    const mode = await getRemoteFileModeOrDefault(sftp, remotePath, DEFAULT_REMOTE_CONFIG_MODE)
+    await writeFile(sftp, tmp, content, mode)
+    await chmod(sftp, tmp, mode)
+    await hardlinkNoReplace(sftp, tmp, backupPath)
+  } finally {
+    try {
+      await unlink(sftp, tmp)
+    } catch {
+      // already gone or never created
     }
   }
-  const mode = await getRemoteFileModeOrDefault(sftp, remotePath, DEFAULT_REMOTE_CONFIG_MODE)
-  await writeFile(sftp, backupPath, content, mode)
+}
+
+async function remoteFileExists(sftp: SFTPWrapper, remotePath: string): Promise<boolean> {
+  try {
+    await statMode(sftp, remotePath)
+    return true
+  } catch (error) {
+    if (isNoEntryError(error)) {
+      return false
+    }
+    throw error
+  }
 }

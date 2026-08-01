@@ -108,6 +108,33 @@ export async function rename(sftp: SFTPWrapper, src: string, dst: string): Promi
   await renamePlain(sftp, src, dst)
 }
 
+/** Publishes a fully-written file without replacing an existing destination. */
+export async function hardlinkNoReplace(
+  sftp: SFTPWrapper,
+  src: string,
+  dst: string
+): Promise<boolean> {
+  if (typeof sftp.ext_openssh_hardlink !== 'function') {
+    throw new Error('Remote filesystem does not support atomic no-replace publication')
+  }
+  try {
+    await sftpOperation<void>(`openssh_hardlink ${src}`, (callback) => {
+      sftp.ext_openssh_hardlink(src, dst, callback)
+    })
+    return true
+  } catch (error) {
+    try {
+      await statMode(sftp, dst)
+      return false
+    } catch (statError) {
+      if (!isNoEntryError(statError)) {
+        throw statError
+      }
+    }
+    throw error
+  }
+}
+
 async function renamePlain(sftp: SFTPWrapper, src: string, dst: string): Promise<void> {
   await sftpOperation<void>(`rename ${src}`, (callback) => {
     sftp.rename(src, dst, callback)

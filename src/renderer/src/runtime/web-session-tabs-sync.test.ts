@@ -1889,6 +1889,65 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.sortEpoch).toBe(1)
   })
 
+  it('applies an agent-status update when only configDir changes', () => {
+    const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+    const snapshot = makeSnapshot([
+      {
+        type: 'terminal',
+        id: HOST_SURFACE_ID,
+        title: 'Claude',
+        parentTabId: 'host-tab-1',
+        leafId: LEAF_ID,
+        isActive: true,
+        status: 'ready',
+        terminal: 'terminal-1',
+        agentStatus: {
+          state: 'working',
+          prompt: 'fix web parity',
+          updatedAt: NOW - 100,
+          stateStartedAt: NOW - 1_000,
+          agentType: 'claude',
+          configDir: '/home/dev/.claude-first',
+          paneKey: hostPaneKey,
+          tabId: 'host-tab-1',
+          worktreeId: WT,
+          stateHistory: []
+        }
+      }
+    ])
+    const initial = applyWebSessionTabsSnapshot(
+      makeState(),
+      snapshot,
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    const changed = {
+      ...snapshot,
+      snapshotVersion: 2,
+      tabs: snapshot.tabs.map((tab) =>
+        tab.type === 'terminal' && tab.agentStatus
+          ? {
+              ...tab,
+              agentStatus: { ...tab.agentStatus, configDir: '/home/dev/.claude-second' }
+            }
+          : tab
+      )
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(initial),
+      changed,
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    const mirroredPaneKey = Object.keys(initial.agentStatusByPaneKey ?? {})[0]!
+
+    expect(patch.agentStatusByPaneKey?.[mirroredPaneKey]?.configDir).toBe(
+      '/home/dev/.claude-second'
+    )
+    expect(patch.agentStatusByPaneKey).toBeDefined()
+  })
+
   it('bumps aggregate epochs when a mirrored same-state entry gains attribution', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
     const snapshot = makeSnapshot([
