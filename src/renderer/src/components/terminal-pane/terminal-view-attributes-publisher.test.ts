@@ -169,7 +169,6 @@ describe('applyTerminalAppearance publication', () => {
       settings,
       true,
       new Map(),
-      new Map(),
       'false',
       new Map(),
       new Map()
@@ -178,7 +177,6 @@ describe('applyTerminalAppearance publication', () => {
       makeManager([makePane(3)]),
       settings,
       true,
-      new Map(),
       new Map(),
       'false',
       new Map(),
@@ -195,7 +193,6 @@ describe('applyTerminalAppearance publication', () => {
       { ...settings, terminalFontSize: settings.terminalFontSize + 2 },
       true,
       new Map(),
-      new Map(),
       'false',
       new Map(),
       new Map()
@@ -207,7 +204,6 @@ describe('applyTerminalAppearance publication', () => {
       makeManager([makePane(1)]),
       { ...settings, terminalCursorStyle: 'underline' },
       true,
-      new Map(),
       new Map(),
       'false',
       new Map(),
@@ -225,7 +221,6 @@ describe('applyTerminalAppearance publication', () => {
       settings,
       true,
       new Map(),
-      new Map(),
       'false',
       new Map(),
       new Map()
@@ -234,7 +229,6 @@ describe('applyTerminalAppearance publication', () => {
       makeManager([makePane(1)]),
       settings,
       false,
-      new Map(),
       new Map(),
       'false',
       new Map(),

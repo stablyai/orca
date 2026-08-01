@@ -47,52 +47,82 @@ describe('useTerminalFontZoom', () => {
     })
   })
 
-  function useMountedTerminalFontZoom(activeElement: HTMLElement): {
-    terminal: { options: { fontSize?: number } }
+  function useMountedTerminalFontZoom(
+    activeElement: HTMLElement,
+    terminalFontSize = 14
+  ): {
+    terminals: { options: { fontSize?: number } }[]
     listener: (direction: 'in' | 'out' | 'reset') => void
+    updateSettings: ReturnType<typeof vi.fn>
   } {
     const container = document.createElement('div')
     document.body.appendChild(container)
     container.appendChild(activeElement)
     activeElement.focus()
-    const terminal = { options: { fontSize: 14 } }
+    const terminals = [{ options: { fontSize: 12 } }, { options: { fontSize: 18 } }]
+    const panes = terminals.map((terminal, index) => ({ id: index + 1, terminal }))
+    const updateSettings = vi.fn()
     useTerminalFontZoom({
       isActive: true,
       containerRef: { current: container },
       managerRef: {
         current: {
-          getActivePane: () => ({ id: 1, terminal })
+          getPanes: () => panes
         }
       } as never,
-      paneFontSizesRef: { current: new Map() },
-      settingsRef: { current: { terminalFontSize: 14 } }
+      settingsRef: { current: { terminalFontSize } },
+      updateSettings
     })
     const listener = terminalZoomListeners.at(-1)
     expect(listener).toBeTypeOf('function')
-    return { terminal, listener: listener as (direction: 'in' | 'out' | 'reset') => void }
+    return {
+      terminals,
+      listener: listener as (direction: 'in' | 'out' | 'reset') => void,
+      updateSettings
+    }
   }
 
   it('ignores zoom events when terminal input no longer owns focus', () => {
     const button = document.createElement('button')
-    const { listener, terminal } = useMountedTerminalFontZoom(button)
+    const { listener, terminals, updateSettings } = useMountedTerminalFontZoom(button)
 
     listener('in')
 
-    expect(terminal.options.fontSize).toBe(14)
+    expect(terminals.map((terminal) => terminal.options.fontSize)).toEqual([12, 18])
     expect(mocks.safeFit).not.toHaveBeenCalled()
+    expect(updateSettings).not.toHaveBeenCalled()
     expect(mocks.dispatchZoomLevelChanged).not.toHaveBeenCalled()
   })
 
-  it('applies terminal font zoom while the xterm helper textarea owns focus', () => {
+  it('applies and persists the global font size to every pane while terminal owns focus', () => {
     const helper = document.createElement('textarea')
     helper.className = 'xterm-helper-textarea'
-    const { listener, terminal } = useMountedTerminalFontZoom(helper)
+    const { listener, terminals, updateSettings } = useMountedTerminalFontZoom(helper)
 
     listener('in')
 
-    expect(terminal.options.fontSize).toBe(15)
-    expect(mocks.safeFit).toHaveBeenCalledTimes(1)
+    expect(terminals.map((terminal) => terminal.options.fontSize)).toEqual([15, 15])
+    expect(mocks.safeFit).toHaveBeenCalledTimes(2)
+    expect(updateSettings).toHaveBeenCalledOnce()
+    expect(updateSettings).toHaveBeenCalledWith({ terminalFontSize: 15 })
     expect(mocks.dispatchZoomLevelChanged).toHaveBeenCalledWith('terminal', 107)
+  })
+
+  it('clamps zoom out and resets the persisted size to the global default', () => {
+    const helper = document.createElement('textarea')
+    helper.className = 'xterm-helper-textarea'
+    const { listener, terminals, updateSettings } = useMountedTerminalFontZoom(helper)
+
+    for (let step = 0; step < 10; step += 1) {
+      listener('out')
+    }
+    expect(terminals.map((terminal) => terminal.options.fontSize)).toEqual([8, 8])
+    expect(updateSettings).toHaveBeenLastCalledWith({ terminalFontSize: 8 })
+
+    listener('reset')
+    expect(terminals.map((terminal) => terminal.options.fontSize)).toEqual([14, 14])
+    expect(updateSettings).toHaveBeenLastCalledWith({ terminalFontSize: 14 })
+    expect(mocks.dispatchZoomLevelChanged).toHaveBeenLastCalledWith('terminal', 100)
   })
 
   it('only lets the pane owning the focused helper apply terminal font zoom', () => {
@@ -105,28 +135,28 @@ describe('useTerminalFontZoom', () => {
     focusedHelper.focus()
 
     const inactiveTerminal = { options: { fontSize: 14 } }
-    const activeTerminal = { options: { fontSize: 14 } }
+    const activeTerminals = [{ options: { fontSize: 12 } }, { options: { fontSize: 18 } }]
     useTerminalFontZoom({
       isActive: true,
       containerRef: { current: inactiveContainer },
       managerRef: {
         current: {
-          getActivePane: () => ({ id: 1, terminal: inactiveTerminal })
+          getPanes: () => [{ id: 1, terminal: inactiveTerminal }]
         }
       } as never,
-      paneFontSizesRef: { current: new Map() },
-      settingsRef: { current: { terminalFontSize: 14 } }
+      settingsRef: { current: { terminalFontSize: 14 } },
+      updateSettings: vi.fn()
     })
     useTerminalFontZoom({
       isActive: true,
       containerRef: { current: activeContainer },
       managerRef: {
         current: {
-          getActivePane: () => ({ id: 2, terminal: activeTerminal })
+          getPanes: () => activeTerminals.map((terminal, index) => ({ id: index + 2, terminal }))
         }
       } as never,
-      paneFontSizesRef: { current: new Map() },
-      settingsRef: { current: { terminalFontSize: 14 } }
+      settingsRef: { current: { terminalFontSize: 14 } },
+      updateSettings: vi.fn()
     })
 
     for (const listener of terminalZoomListeners) {
@@ -134,7 +164,7 @@ describe('useTerminalFontZoom', () => {
     }
 
     expect(inactiveTerminal.options.fontSize).toBe(14)
-    expect(activeTerminal.options.fontSize).toBe(15)
-    expect(mocks.safeFit).toHaveBeenCalledTimes(1)
+    expect(activeTerminals.map((terminal) => terminal.options.fontSize)).toEqual([15, 15])
+    expect(mocks.safeFit).toHaveBeenCalledTimes(2)
   })
 })

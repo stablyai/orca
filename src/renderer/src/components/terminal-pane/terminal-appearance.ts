@@ -131,7 +131,6 @@ export function applyTerminalAppearance(
   manager: PaneManager,
   settings: GlobalSettings,
   systemPrefersDark: boolean,
-  paneFontSizes: Map<number, number>,
   paneTransports: Map<number, PtyTransport>,
   effectiveMacOptionAsAlt: EffectiveMacOptionAsAlt,
   paneMode2031: Map<number, boolean>,
@@ -173,8 +172,7 @@ export function applyTerminalAppearance(
     pane.terminal.options.cursorStyle = cursorStyle
     pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)
     pane.terminal.options.cursorBlink = settings.terminalCursorBlink
-    const paneSize = paneFontSizes.get(pane.id)
-    pane.terminal.options.fontSize = paneSize ?? settings.terminalFontSize
+    pane.terminal.options.fontSize = settings.terminalFontSize
     pane.terminal.options.fontFamily = buildFontFamily(settings.terminalFontFamily)
     pane.terminal.options.fontWeight = terminalFontWeights.fontWeight
     pane.terminal.options.fontWeightBold = terminalFontWeights.fontWeightBold

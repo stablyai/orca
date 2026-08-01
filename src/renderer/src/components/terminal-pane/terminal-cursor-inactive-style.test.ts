@@ -25,16 +25,7 @@ describe('terminal inactive cursor style', () => {
       terminalCursorStyle: 'bar' as const
     }
 
-    applyTerminalAppearance(
-      manager,
-      settings,
-      false,
-      new Map(),
-      new Map(),
-      'false',
-      new Map(),
-      new Map()
-    )
+    applyTerminalAppearance(manager, settings, false, new Map(), 'false', new Map(), new Map())
 
     expect(options.cursorStyle).toBe('bar')
     expect(options.cursorInactiveStyle).toBe('bar')
